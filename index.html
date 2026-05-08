@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Pacific Northwest drought, hydrology, and Tribal Treaty regional mapping. ATNI Climate." />
+  <meta name="color-scheme" content="dark" />
+  <title>Dynamic Drought Module · ATNI Climate</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@500;600&family=Lexend:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="app-body">
+  <div id="app" class="app-shell">
+
+    <aside id="sidebar" class="sidebar" aria-label="Map controls">
+      <header class="sidebar-header">
+        <div class="brand">
+          <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+            <defs>
+              <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#0891b2" />
+                <stop offset="100%" stop-color="#155e75" />
+              </linearGradient>
+            </defs>
+            <rect x="1" y="1" width="30" height="30" rx="6" fill="url(#bg)" />
+            <path d="M6 22 Q11 16 16 22 T26 22" stroke="#e0f2fe" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+            <path d="M6 18 Q11 12 16 18 T26 18" stroke="#e0f2fe" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.65"/>
+            <path d="M6 14 Q11 8 16 14 T26 14" stroke="#e0f2fe" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.35"/>
+          </svg>
+          <div class="brand-text">
+            <h1>Dynamic Drought Module</h1>
+            <p>Regional climate &amp; water indicators</p>
+          </div>
+        </div>
+        <button id="sidebar-collapse" class="icon-btn" aria-label="Collapse sidebar" title="Collapse sidebar">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+      </header>
+
+      <div class="sidebar-scroll">
+
+        <section class="panel">
+          <h2 class="panel-title">Region</h2>
+          <div id="region-buttons" class="region-grid" role="radiogroup" aria-label="Select region"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title-row">
+            <h2 class="panel-title">Layers</h2>
+            <span id="layer-status" class="status-pill" aria-live="polite"></span>
+          </div>
+          <div id="layer-toggles" class="layer-list"></div>
+        </section>
+
+        <section class="panel">
+          <h2 class="panel-title">Telemetry</h2>
+          <div id="telemetry-list" class="telemetry-list"></div>
+        </section>
+
+        <section class="panel legend-panel" id="legend-panel" hidden>
+          <h2 class="panel-title">Drought outlook key</h2>
+          <ul class="legend">
+            <li><span class="swatch" style="background:#cd853f"></span>Drought persists</li>
+            <li><span class="swatch" style="background:#daa520"></span>Drought develops</li>
+            <li><span class="swatch" style="background:#9acd32"></span>Drought improves</li>
+            <li><span class="swatch" style="background:#3cb371"></span>Drought removal likely</li>
+          </ul>
+          <p class="legend-note">NOAA CPC Seasonal Drought Outlook · 3-month window</p>
+        </section>
+
+        <section class="panel legend-panel" id="ecoregion-legend-panel" hidden>
+          <h2 class="panel-title">Ecoregion key</h2>
+          <ul id="ecoregion-legend" class="legend ecoregion-legend"></ul>
+          <p class="legend-note">EPA Level III Ecoregions</p>
+        </section>
+
+      </div>
+
+      <footer class="sidebar-footer">
+        <p>Data: OpenStreetMap · OpenTopoMap · NOAA · USGS · BIA · EPA</p>
+        <p class="muted">
+          <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">atniclimate/dynamic-drought-module</a>
+          · v0.1.1
+        </p>
+      </footer>
+    </aside>
+
+    <button id="sidebar-expand" class="icon-btn sidebar-expand-btn" aria-label="Expand sidebar" title="Expand sidebar" hidden>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+
+    <main id="map-container" class="map-container">
+      <div id="map" role="application" aria-label="Interactive regional map"></div>
+
+      <div id="loading-indicator" class="loading-indicator" hidden>
+        <div class="spinner" aria-hidden="true"></div>
+        <span id="loading-text">Loading…</span>
+      </div>
+
+      <div class="map-overlay-controls">
+        <button id="share-btn" class="overlay-btn" title="Copy embed-ready link to clipboard">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+          <span>Share view</span>
+        </button>
+        <button id="reset-btn" class="overlay-btn" title="Reset to selected region bounds">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+          <span>Reset</span>
+        </button>
+      </div>
+
+      <div id="copy-toast" class="copy-toast" hidden>Link copied to clipboard</div>
+
+      <div class="attribution-overlay">
+        <span>© OpenStreetMap · © OpenTopoMap (CC-BY-SA) · NOAA CPC</span>
+      </div>
+    </main>
+
+  </div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script src="app.js"></script>
+</body>
+</html>

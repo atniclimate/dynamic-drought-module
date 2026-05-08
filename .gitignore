@@ -1,0 +1,22 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.log
+*.swp
+*~
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Phase B handoff bundle (kept local; relocated into place during Phase B)
+.handoff/
+
+# Session-specific handoff prompt (not part of the shipped baseline)
+KICKOFF.md
+
+# Build output / dependencies (Phase B; harmless to set early)
+node_modules/
+dist/
+.vite/
