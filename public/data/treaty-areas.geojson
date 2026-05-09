@@ -1,0 +1,6 @@
+{
+  "type": "FeatureCollection",
+  "name": "Treaty Cession Areas",
+  "_comment": "Placeholder: replace with authoritative Treaty boundary GeoJSON (Medicine Creek 1854, Yakama 1855, Nez Perce 1855, Walla Walla 1855, etc.). See data/README.md. Expected per-feature properties: name, treaty_year, tribe.",
+  "features": []
+}

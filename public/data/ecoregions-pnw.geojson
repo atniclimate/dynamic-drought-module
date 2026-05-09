@@ -1,0 +1,6 @@
+{
+  "type": "FeatureCollection",
+  "name": "EPA Level III Ecoregions (PNW)",
+  "_comment": "Placeholder: replace with authoritative EPA Level III Ecoregions GeoJSON. See data/README.md for download and conversion steps. Expected per-feature property: US_L3NAME (or NA_L3NAME).",
+  "features": []
+}

@@ -1,0 +1,6 @@
+{
+  "type": "FeatureCollection",
+  "name": "Tribal Lands (PNW)",
+  "_comment": "Placeholder: replace with authoritative BIA AIAN-LAR GeoJSON, clipped to PNW. See data/README.md for download and conversion steps. Expected per-feature property: LARNAME or name.",
+  "features": []
+}

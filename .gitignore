@@ -16,7 +16,10 @@ Thumbs.db
 # Session-specific handoff prompt (not part of the shipped baseline)
 KICKOFF.md
 
-# Build output / dependencies (Phase B; harmless to set early)
+# Build output / dependencies
 node_modules/
 dist/
 .vite/
+
+# Background-task transcripts (when running with subagents)
+*.tasks.output

@@ -13,15 +13,6 @@
     href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@500;600&family=Lexend:wght@400;500&display=swap"
     rel="stylesheet"
   />
-
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
-  />
-
-  <link rel="stylesheet" href="style.css" />
 </head>
 <body class="app-body">
   <div id="app" class="app-shell">
@@ -94,7 +85,7 @@
         <p>Data: OpenStreetMap · OpenTopoMap · NOAA · USGS · BIA · EPA</p>
         <p class="muted">
           <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">atniclimate/dynamic-drought-module</a>
-          · v0.1.2
+          · v0.2.0-pre
         </p>
       </footer>
     </aside>
@@ -131,11 +122,6 @@
 
   </div>
 
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""
-  ></script>
-  <script src="app.js"></script>
+  <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
