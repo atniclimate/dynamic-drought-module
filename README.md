@@ -109,7 +109,7 @@ All non-basemap layers are lazy-loaded on first toggle-on. Each reports its load
 | `loading...`                    | Fetching from the network                                                                                     |
 | `live`                          | Loaded successfully                                                                                           |
 | `zoom in to load`               | Hydrography is active but the current zoom is below z=7. Pan or zoom in to trigger an Overpass query for the visible area |
-| `no data (see data/README.md)`  | The local GeoJSON file is an empty placeholder; populate it with authoritative data (see [`data/README.md`](data/README.md)) |
+| `empty placeholder (see data/README.md)`  | The local GeoJSON file is an empty placeholder; populate it with authoritative data (see [`data/README.md`](data/README.md)) |
 | `unavailable`                   | The endpoint failed (network error, rate limit, 404). Toggle off and back on to retry                         |
 
 ### About hydrography
