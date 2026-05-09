@@ -863,3 +863,46 @@ a:hover {
   }
   .map-overlay-controls { top: 8px; right: 8px; }
 }
+
+/* ----------------------------------------------------------------------------
+   Accessibility utilities
+   M8 [next-polish]: visually-hidden polite live region + focus rings.
+   The `.sr-only` class hides the element from sighted users while keeping
+   it readable by assistive tech. Focus rings use the cyan accent at 2px
+   with a small offset so the keyboard-navigation path is unambiguous.
+   ---------------------------------------------------------------------------- */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.region-btn:focus-visible,
+.telemetry-item:focus-visible,
+.overlay-btn:focus-visible,
+.icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.layer-toggle input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Make the .telemetry-item button match its prior <div> presentation. */
+button.telemetry-item {
+  appearance: none;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+

@@ -56,6 +56,45 @@ export const URLS = Object.freeze({
   // ---------- USGS Water Services (open data, CORS-OK) ----------
   usgsIV: 'https://waterservices.usgs.gov/nwis/iv/',
 
+  // ---------- United States Drought Monitor (USDM) -----------
+  // Joint product of National Drought Mitigation Center (NDMC) at the
+  // University of Nebraska-Lincoln (UNL), the National Oceanic and
+  // Atmospheric Administration (NOAA), and the United States Department of
+  // Agriculture (USDA). Hosted as an Environmental Systems Research
+  // Institute (ESRI) Representational State Transfer (REST) FeatureServer
+  // by NDMC on ArcGIS Online. The `/0/query` path with `f=geojson` returns
+  // a polygon FeatureCollection with the five USDM categories (D0-D4) in
+  // the `DM` integer attribute.
+  // Verified 2026-05-09: HTTP 200, Content-Type
+  // `application/json; charset=utf-8`, `Access-Control-Allow-Origin: *`.
+  usdmFeatureServer:
+    'https://services5.arcgis.com/0OTVzJS4K09zlixn/arcgis/rest/services/USDM_current/FeatureServer/0',
+
+  // ---------- National Interagency Fire Center (NIFC) active perimeters --
+  // Wildland Fire Interagency Geospatial Services (WFIGS) Current
+  // Interagency Fire Perimeters, hosted as an ESRI REST FeatureServer on
+  // the NIFC Open Data Hub. Refreshed approximately every 5 minutes. The
+  // `/0/query` path with `f=geojson` returns a polygon FeatureCollection
+  // with attributes prefixed `poly_*` (geometry source) and `attr_*`
+  // (incident metadata).
+  // Verified 2026-05-09: HTTP 200, Content-Type
+  // `application/json; charset=utf-8`, `Access-Control-Allow-Origin: *`.
+  nifcFires:
+    'https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0',
+
+  // ---------- USDA Forest Service (USFS) Wildfire Hazard Potential ------
+  // Wildfire Hazard Potential (WHP), classified five-class raster
+  // (1=Very Low through 5=Very High; values 6-7 cover non-burnable
+  // developed and water classes). Published as an ESRI ImageServer on
+  // the federal GeoPlatform imagery host. We do not consume an XYZ tile
+  // template; instead, MapLibre's raster source pulls per-tile PNGs via
+  // the ImageServer `exportImage` operation with `{bbox-epsg-3857}`.
+  // Verified 2026-05-09: HTTP 200 from `exportImage`, Content-Type
+  // `image/png`, `Access-Control-Allow-Origin: https://atniclimate.github.io`
+  // (origin-echoed under `Vary: Origin`; the deploy origin is allowed).
+  usfsWhp:
+    'https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer',
+
   // ---------- Static reference layers (bundled GeoJSON in public/data/) ----------
   // Vite serves the `public/` directory at the site root, so the runtime
   // URLs are `/data/<file>.geojson` (leading slash). The placeholder files

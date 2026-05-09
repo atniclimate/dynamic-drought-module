@@ -1,0 +1,80 @@
+# Build the Dynamic Drought Module (DDM) with Vite and deploy the
+# resulting dist/ folder to GitHub Pages.
+#
+# This workflow is committed in Phase B (after package.json exists from
+# `npm create vite@latest`). Committing it before package.json exists will
+# cause `npm ci` to fail and surface a red X in the Actions tab.
+#
+# Before this workflow can deploy successfully, the maintainer must:
+#   1. In the repository Settings, navigate to Pages.
+#   2. Change the Source from "Deploy from a branch" to "GitHub Actions".
+#
+# Without that switch, this workflow runs and produces an artifact, but
+# Pages keeps serving from the previous branch source and the deploy
+# step will fail with a permissions or environment error.
+
+name: Build and deploy DDM to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Required for the deploy-pages action to authenticate with the Pages
+# OIDC token issuer and write the deployment.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, but do not cancel in-progress
+# runs (we want the latest commit to deploy after the current one
+# finishes, not interrupt mid-build).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build (Node.js 22, Vite)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify build output
+        run: |
+          ls -la dist
+          test -f dist/index.html
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -2,75 +2,51 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import './styles/app.css';
 
 import { createMap } from './map/init';
-import { REGIONS, DEFAULT_REGION, regionToMapLibreBounds } from './config/regions';
-
-import * as ecoregions from './layers/ecoregions';
-import * as tribal from './layers/tribal';
-import * as treaty from './layers/treaty';
-import * as drought from './layers/drought';
+import { LAYER_DEFS } from './config/layers';
+import { buildSidebar } from './ui/sidebar';
 
 /**
- * Phase B boot.
+ * Dynamic Drought Module (DDM) boot.
  *
- * M1 scaffold + M2 map init + M3 (Ecoregions, Tribal, Treaty) + M4 (Drought)
- * landed. Region selection, telemetry markers, hydrography, full URL state,
- * and the sidebar UI are pending in M5-M8; for the milestone-tranche check-in
- * we boot the map, fit the default region, and pre-activate the four ported
- * layers + their popups so a maintainer running `npm run dev` can verify
- * each layer behaves as expected before later milestones touch them.
- *
- * Default-on follows the vanilla baseline (Tribal Lands), plus the toggle-
- * only Drought Outlook (so the tranche-1 reviewer can see drought tiles
- * without needing the sidebar UI). Ecoregions and Treaty layers stay
- * inactive at boot per the vanilla `defaultOn: false`; their popup handlers
- * are still wired so they light up on toggle (which arrives in M8).
+ * The orchestrator is intentionally thin: create the MapLibre instance,
+ * wait for it to load, attach popup click handlers for any layer that
+ * declares one, then hand off to the sidebar. The sidebar reads the URL
+ * parameters, applies the region selection, activates default-on layers,
+ * and wires every event the user can trigger from the chrome (region
+ * radiogroup, layer toggles, telemetry list, share button, reset button,
+ * sidebar collapse and expand, viewport resize). The layer registry
+ * (`src/state/registry.ts`) is the single source of truth for "which
+ * layers are on" and propagates changes to the URL sync layer and the
+ * sidebar pills.
  */
 
 async function boot(): Promise<void> {
   const map = createMap('map');
 
   await new Promise<void>((resolve) => {
-    if (map.loaded()) resolve();
-    else map.once('load', () => resolve());
+    if (map.loaded()) {
+      resolve();
+      return;
+    }
+    map.once('load', () => resolve());
   });
 
-  const region = REGIONS[DEFAULT_REGION];
-  const [west, south, east, north] = regionToMapLibreBounds(region);
-  map.fitBounds(
-    [
-      [west, south],
-      [east, north]
-    ],
-    { padding: 20, animate: false }
-  );
+  // Bind popup click handlers up front. MapLibre tolerates binding against
+  // a layer ID that does not yet exist; the handlers fire once the matching
+  // layer is added by the layer module's `activate`. Calling once at boot
+  // means a layer can be toggled on, off, and on again without re-binding.
+  for (const def of LAYER_DEFS) {
+    if (def.module.bindPopups) {
+      def.module.bindPopups(map);
+    }
+  }
 
-  // Bind popup click handlers up front; MapLibre tolerates binding against
-  // a layer ID that does not yet exist, and the handlers no-op when the
-  // associated layer has not been activated.
-  ecoregions.bindPopups(map);
-  tribal.bindPopups(map);
-  treaty.bindPopups(map);
-
-  // Pre-activate the layers we want visible on first paint. Default-on per
-  // the vanilla baseline + Drought as a tranche-1 verification surface.
-  // Failures are reported to the layer's own console.info; do not let a
-  // single layer reject break the rest of the boot.
-  await Promise.allSettled([
-    tribal.activate(map),
-    drought.activate(map)
-  ]);
-
-  // Ecoregions and Treaty are toggle-only per the vanilla `defaultOn: false`.
-  // Calling activate here is a developer affordance during the M2-M4 review;
-  // it can be removed once M8 wires the real toggle UI.
-  await Promise.allSettled([
-    ecoregions.activate(map),
-    treaty.activate(map)
-  ]);
-
-  // Expose for ad-hoc DevTools poking during the tranche review. Removed
-  // once M7 wires the LayerRegistry.
-  (window as unknown as { __ddmMap?: unknown }).__ddmMap = map;
+  buildSidebar(map, () => {
+    // Region-change observer hook. The sidebar handles fitBounds, the
+    // active radio button, and URL sync internally; this callback is here
+    // for any future analytics or cross-module subscriber that wants to
+    // observe region transitions without coupling to the sidebar.
+  });
 }
 
 if (document.readyState === 'loading') {

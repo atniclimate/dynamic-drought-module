@@ -1,0 +1,34 @@
+# Cloudflare Workers configuration for the Dynamic Drought Module (DDM) CORS proxy.
+#
+# This Worker exists solely to inject Cross-Origin Resource Sharing (CORS) headers
+# onto responses from a small allow-list of public agency telemetry endpoints
+# (NRCS Air-Water Database, USACE Dataquery 2.0, USBR Hydromet, NWRFC). It does
+# not transform response bodies, does not authenticate, does not log requests,
+# and does not collect telemetry. See workers/proxy/src/index.ts for the logic
+# and CLAUDE.md section 4 rule 3 for the no-tracking, no-analytics policy.
+#
+# Deployer notes:
+#   1. Run `npm install` inside `workers/proxy/` before the first `npm run dev`.
+#   2. The published Worker URL goes into `URLS.workerProxy` in
+#      `src/config/urls.ts` (root project). Format expected by the client:
+#      `https://<worker-name>.<account-subdomain>.workers.dev`
+#   3. If the deployer prefers a custom route on a Cloudflare-managed zone,
+#      uncomment and edit the `[[routes]]` block at the bottom of this file.
+#   4. There are no production secrets. Do not add any.
+
+name = "ddm-proxy"
+main = "src/index.ts"
+compatibility_date = "2026-05-09"
+
+# No KV, no D1, no Durable Objects, no R2. The Worker is stateless except for
+# the per-edge response cache exposed via `caches.default`.
+
+[vars]
+# Public, non-secret deployer-facing values only. Empty by default; the Worker
+# does not currently need any environment values to function. If a deployer
+# wants to override the User-Agent string, add a `UA_OVERRIDE` here and read
+# it in `src/index.ts` from `env`.
+
+# [[routes]]
+# pattern = "proxy.example.org/*"
+# zone_name = "example.org"
