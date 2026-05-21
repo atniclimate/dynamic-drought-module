@@ -40,6 +40,7 @@ import {
   buildTelemetryPopupSkeleton,
   hydrateTelemetryPopupData
 } from '../ui/popups';
+import { registry } from '../state/registry';
 
 // ---------------------------------------------------------------------------
 // Module-level state
@@ -63,12 +64,12 @@ const stationByMarker = new WeakMap<maplibregl.Marker, TelemetryStation>();
  */
 const abortControllers = new WeakMap<maplibregl.Marker, AbortController>();
 
+const LAYER_KEY = 'telemetry';
+
 type TelemetryStatus = 'loading' | 'ready' | 'error';
 
 function reportStatus(state: TelemetryStatus): void {
-  // Placeholder until M7 wires the LayerRegistry; matches the convention
-  // used by the other layer modules.
-  console.info('[telemetry]', state);
+  registry.setStatus(LAYER_KEY, state);
 }
 
 // ---------------------------------------------------------------------------

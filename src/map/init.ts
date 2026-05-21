@@ -26,9 +26,9 @@ const SCALE_MAX_WIDTH_PX = 160;
  * stays a single, side-effect-light call.
  *
  * Open-data invariant: per CLAUDE.md section 4 rule 2, no proprietary tile
- * providers are configured. The base style uses OpenTopoMap raster tiles
- * (see `buildBaseStyle()`), and any future fallback must remain an
- * open-data source.
+ * providers are configured. The base style uses OpenStreetMap standard
+ * raster tiles, subdued via raster paint (see `buildBaseStyle()`); any
+ * future basemap must remain an open-data source.
  */
 export function createMap(containerId: string): maplibregl.Map {
   const map = new maplibregl.Map({

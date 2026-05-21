@@ -3,9 +3,9 @@
  * change.
  *
  * Open-source design notes:
- *   - Basemap is OpenTopoMap (CC-BY-SA, OpenStreetMap (OSM) plus Shuttle
- *     Radar Topography Mission (SRTM) topography). OSM standard tiles are
- *     kept as a fallback for resilience.
+ *   - Basemap is the OpenStreetMap (OSM) standard raster, subdued via
+ *     raster paint in `src/map/style.ts` so the drought layers dominate.
+ *     OpenTopoMap is retained below as a pre-approved alternative.
  *   - Hydrography is queried live from OSM via the Overpass Application
  *     Programming Interface (API). No API key required; fair-use rate
  *     limits apply.
@@ -35,8 +35,9 @@ export const URLS = Object.freeze({
     'https://c.tile.opentopomap.org/{z}/{x}/{y}.png'
   ],
 
-  // OSM standard tiles, used as a basemap fallback. Same `{s}` caveat as
-  // above; pin to `a` for the MapLibre raster source.
+  // OSM standard tiles: the active basemap, subdued via raster paint in
+  // `src/map/style.ts`. Pin to `a` for the MapLibre raster source (MapLibre
+  // does not expand the Leaflet `{s}` subdomain placeholder).
   basemapOSM: 'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
 
   // ---------- Hydrography (live OSM via Overpass API) ----------

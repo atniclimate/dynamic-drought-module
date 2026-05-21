@@ -35,7 +35,9 @@
 
 import type maplibregl from 'maplibre-gl';
 import { URLS } from '../config/urls';
+import { registry } from '../state/registry';
 
+const LAYER_KEY = 'drought';
 const SOURCE_ID = 'drought-outlook';
 const LAYER_ID = 'drought-outlook';
 const LEGEND_ID = 'legend-panel';
@@ -107,9 +109,9 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     }
 
     setLegendVisibility(true);
-    console.info('[drought]', 'ready');
+    registry.setStatus(LAYER_KEY, 'ready');
   } catch (err) {
-    console.info('[drought]', 'error');
+    registry.setStatus(LAYER_KEY, 'error');
     throw err;
   }
 }

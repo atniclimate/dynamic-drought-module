@@ -31,7 +31,7 @@
  *
  * Render. WFIGS perimeters are polygons; we draw a translucent red fill
  * (`#dc2626` at 0.45 opacity) plus a darker outline (`#7f1d1d`) so the
- * shapes read clearly against both the OpenTopoMap basemap and over the
+ * shapes read clearly against both the basemap and over the
  * USDM and Wildfire Hazard Potential overlays. Click handlers expose
  * incident name, type category, size, discovery date, and state of
  * origin in the popup.
@@ -42,7 +42,9 @@ import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
 import { escapeHtml } from '../util/escape';
+import { registry } from '../state/registry';
 
+const LAYER_KEY = 'nifc-fires';
 const SOURCE_ID = 'nifc-fires';
 const FILL_LAYER_ID = 'nifc-fires-fill';
 const OUTLINE_LAYER_ID = 'nifc-fires-outline';
@@ -55,10 +57,10 @@ const OUTLINE_LAYER_ID = 'nifc-fires-outline';
  */
 const BEFORE_ID = 'first-symbol';
 
-type NifcStatus = 'loading' | 'live' | 'unavailable' | 'no-data';
+type NifcStatus = 'loading' | 'ready' | 'error' | 'no-data';
 
 function reportStatus(state: NifcStatus): void {
-  console.info('[nifc-fires]', state);
+  registry.setStatus(LAYER_KEY, state);
 }
 
 function resolveBeforeId(map: maplibregl.Map): string | undefined {
@@ -104,7 +106,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     geojson = (await response.json()) as FeatureCollection;
   } catch (err) {
     console.warn('[nifc-fires] WFIGS perimeters fetch failed.', err);
-    reportStatus('unavailable');
+    reportStatus('error');
     return;
   }
 
@@ -150,7 +152,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     beforeId
   );
 
-  reportStatus('live');
+  reportStatus('ready');
 }
 
 /**

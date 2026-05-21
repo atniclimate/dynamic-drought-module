@@ -96,7 +96,7 @@ Per-region padding lives in `REGIONS[key].padding` in `src/config/regions.ts` (c
 
 | Layer                           | Source                                                               | Endpoint                                | Lives where                       |
 | ------------------------------- | -------------------------------------------------------------------- | --------------------------------------- | --------------------------------- |
-| Base map                        | OpenTopoMap (over OpenStreetMap plus SRTM)                           | XYZ raster tiles                        | upstream tile server              |
+| Base map                        | OpenStreetMap standard (subdued via raster paint)                    | XYZ raster tiles                        | upstream tile server              |
 | Hydrography                     | OpenStreetMap, via Overpass API                                      | live JSON                               | three-mirror failover             |
 | Ecoregions                      | EPA Level III                                                        | GeoJSON                                 | bundled in `public/data/`         |
 | Seasonal Drought Outlook        | NOAA CPC                                                             | OGC WMS                                 | live                              |
@@ -125,7 +125,7 @@ The Overpass API is volunteer-operated. Mirrors are tried in order with a 12-sec
 
 ### About the basemap
 
-OpenTopoMap is a free, open-source raster basemap operated by volunteers. Light-to-moderate use is fine for an embedded module; heavier traffic should host its own tile server.
+The basemap is OpenStreetMap standard raster tiles, subdued with MapLibre raster paint (desaturated, brightened, and drawn at partial opacity over a light background layer) so the drought layers stand out. OpenStreetMap tiles are free and open; light-to-moderate use is fine for an embedded module, but heavier traffic should host its own tile server. The basemap stays an open provider; no proprietary tiles (CLAUDE.md rule 2). OpenTopoMap is retained in `src/config/urls.ts` as a pre-approved alternative.
 
 ### About the placeholders
 

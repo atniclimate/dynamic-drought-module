@@ -4,44 +4,71 @@ import { URLS } from '../config/urls';
 /**
  * Build the base MapLibre GL JavaScript style specification.
  *
- * Returns the minimal style: a single OpenTopoMap raster source and its
- * matching layer. Per-feature layer modules (M3 through M9) append their
- * own sources and layers to this style at runtime via
- * `map.addSource()` / `map.addLayer()`. That keeps the style file small and
- * lets each layer module own its own glyphs, paint, and visibility logic.
+ * Returns a minimal style: a light background layer plus the OpenStreetMap
+ * (OSM) standard raster basemap. Per-feature layer modules append their own
+ * sources and layers on top at runtime via `map.addSource()` /
+ * `map.addLayer()`, so the style file stays small and each layer owns its
+ * own paint and visibility logic.
+ *
+ * Subdued basemap. The drought layers (especially the bright USDM D0-D4
+ * ramp) are the focus, so the basemap is deliberately muted: OSM standard
+ * tiles desaturated and flattened with raster paint, drawn at partial
+ * opacity, so the result reads as a near-neutral light backdrop while roads
+ * and labels still give spatial reference for watersheds, reservations, and
+ * reservoirs. The basemap stays an open, pre-approved provider (CLAUDE.md
+ * rule 2; no proprietary tiles). The paint values below are tuned starting
+ * points; iterate them in the browser with USDM on over the Columbia
+ * headwaters, Yakima, and Klamath, where the warm ramp sits over both
+ * forested and arid OSM tones.
+ *
+ * The light background layer is load-bearing: the app chrome behind the map
+ * is dark slate, so a partly-transparent basemap composited directly over it
+ * would look muddy. Compositing over a light background instead pushes the
+ * basemap toward a clean light gray.
  *
  * Glyphs note: the `glyphs` field points to the public MapLibre demotiles
- * font endpoint. This is the open-data default and is fine for the current
- * basemap (which is raster, so glyphs are not consulted). Once a vector
- * tile bundle ships, that bundle should host its own glyph PBF files and
- * this URL should be repointed to it; relying on a third-party glyph host
- * in production is a long-term reliability risk.
+ * font endpoint, the open-data default. The raster basemap does not consult
+ * glyphs; once a vector tile bundle ships it should host its own glyph PBF
+ * files and this URL should be repointed to it.
  *
- * Attribution covers OpenTopoMap (CC-BY-SA), OpenStreetMap (OSM)
- * contributors, and the Shuttle Radar Topography Mission (SRTM) elevation
- * underlay. MapLibre surfaces it through the AttributionControl which is
- * added in `createMap` (see `src/map/init.ts`).
+ * Attribution covers OpenStreetMap (OSM) contributors. MapLibre surfaces it
+ * through the AttributionControl added in `createMap` (see `src/map/init.ts`).
  */
 export function buildBaseStyle(): maplibregl.StyleSpecification {
   return {
     version: 8,
     glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
     sources: {
-      'basemap-topo': {
+      basemap: {
         type: 'raster',
-        tiles: [URLS.basemapTopo],
+        tiles: [URLS.basemapOSM],
         tileSize: 256,
-        attribution:
-          'OpenTopoMap (CC-BY-SA), OpenStreetMap contributors, SRTM',
+        attribution: '© OpenStreetMap contributors',
         minzoom: 0,
-        maxzoom: 17
+        maxzoom: 19
       }
     },
     layers: [
       {
-        id: 'basemap-topo',
+        id: 'background',
+        type: 'background',
+        paint: {
+          'background-color': '#e9eef3'
+        }
+      },
+      {
+        id: 'basemap',
         type: 'raster',
-        source: 'basemap-topo'
+        source: 'basemap',
+        paint: {
+          // Subdue OSM so the drought ramp dominates. Tuned starting values
+          // (maintainer, 2026-05-21); iterate in the browser with USDM on.
+          'raster-saturation': -0.8,
+          'raster-brightness-min': 0.6,
+          'raster-brightness-max': 1.0,
+          'raster-contrast': -0.3,
+          'raster-opacity': 0.7
+        }
       }
     ]
   };

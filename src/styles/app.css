@@ -524,39 +524,22 @@ a:hover {
 #map {
   width: 100%;
   height: 100%;
-  background: #0a1018;
+  /* Light placeholder matching the style's background layer, so the first
+     paint before tiles arrive does not flash dark. */
+  background: #e9eef3;
 }
 
-/* Leaflet overrides: match the cartographic chrome */
-.leaflet-container {
+/* MapLibre chrome theming. The migration's earlier `.leaflet-*` selectors
+   never matched MapLibre's DOM (MapLibre uses `.maplibregl-*`), so popups
+   and controls were rendering with the library defaults (a white popup with
+   near-white text was effectively invisible). These rules restore the
+   intended slate-cartographic chrome. */
+.maplibregl-map {
   font-family: var(--font-body);
   font-size: 12px;
-  background: #0a1018;
 }
 
-.leaflet-control-zoom {
-  border: 1px solid var(--line-strong) !important;
-  border-radius: var(--radius-sm) !important;
-  overflow: hidden;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
-}
-.leaflet-control-zoom a {
-  background: var(--bg-1) !important;
-  color: var(--fg-1) !important;
-  border-bottom: 1px solid var(--line) !important;
-  width: 28px !important;
-  height: 28px !important;
-  line-height: 28px !important;
-  font-size: 16px !important;
-  font-weight: 500 !important;
-}
-.leaflet-control-zoom a:hover {
-  background: var(--bg-2) !important;
-  color: var(--fg-0) !important;
-}
-.leaflet-control-zoom a:last-child { border-bottom: none !important; }
-
-.leaflet-control-attribution {
+.maplibregl-ctrl-attrib {
   background: rgba(15, 23, 42, 0.85) !important;
   color: var(--fg-2) !important;
   font-size: 10px !important;
@@ -565,11 +548,9 @@ a:hover {
   font-family: var(--font-body);
   letter-spacing: 0.01em;
 }
-.leaflet-control-attribution a {
-  color: var(--fg-1) !important;
-}
+.maplibregl-ctrl-attrib a { color: var(--fg-1) !important; }
 
-.leaflet-control-scale-line {
+.maplibregl-ctrl-scale {
   background: rgba(15, 23, 42, 0.85) !important;
   color: var(--fg-1) !important;
   border: 1px solid var(--line-strong) !important;
@@ -583,33 +564,46 @@ a:hover {
 }
 
 /* Popups */
-.leaflet-popup-content-wrapper {
+.maplibregl-popup-content {
   background: var(--bg-1) !important;
   color: var(--fg-0) !important;
   border: 1px solid var(--line-strong) !important;
   border-radius: var(--radius-md) !important;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55) !important;
-  padding: 0 !important;
-}
-.leaflet-popup-content {
-  margin: 0 !important;
-  padding: 14px 16px 14px !important;
+  padding: 14px 16px !important;
   font-family: var(--font-body);
   font-weight: var(--fw-body);
   font-size: 12.5px;
   line-height: 1.55;
-  width: 280px !important;
-  max-width: 280px !important;
 }
-.leaflet-popup-tip {
-  background: var(--bg-1) !important;
-  border: 1px solid var(--line-strong) !important;
-}
-.leaflet-popup-close-button {
+.maplibregl-popup-close-button {
   color: var(--fg-2) !important;
-  padding: 8px 8px 0 0 !important;
+  font-size: 16px;
+  line-height: 1;
+  padding: 6px 9px 0 0 !important;
+  background: transparent !important;
 }
-.leaflet-popup-close-button:hover { color: var(--fg-0) !important; }
+.maplibregl-popup-close-button:hover {
+  color: var(--fg-0) !important;
+  background: transparent !important;
+}
+/* Tip triangle: tint the visible edge to match the popup body per anchor. */
+.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: var(--bg-1) !important;
+}
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: var(--bg-1) !important;
+}
+.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: var(--bg-1) !important;
+}
+.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: var(--bg-1) !important;
+}
 
 .popup-title {
   font-family: var(--font-display);

@@ -27,11 +27,13 @@ import { ECOREGION_COLORS, ECOREGION_DEFAULT_COLOR } from '../config/palette';
 import { URLS } from '../config/urls';
 import { buildEcoregionPopupHtml } from '../ui/popups';
 import { escapeHtml } from '../util/escape';
+import { registry } from '../state/registry';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
+const LAYER_KEY = 'ecoregions';
 const SOURCE_ID = 'ecoregions';
 const FILL_LAYER_ID = 'ecoregions-fill';
 const OUTLINE_LAYER_ID = 'ecoregions-outline';
@@ -317,10 +319,10 @@ function hideLegend(): void {
 }
 
 /**
- * Status reporting placeholder. Milestone 7 (M7) wires real reporting
- * through the LayerRegistry; for now we log the canonical state names so
- * regressions are visible in the developer console.
+ * Report the layer's load status to the LayerRegistry. The sidebar
+ * subscribes to the registry's status-change event and renders the
+ * per-layer status pill.
  */
 function setStatus(status: EcoregionStatus): void {
-  console.info(`[ecoregions] status=${status}`);
+  registry.setStatus(LAYER_KEY, status);
 }

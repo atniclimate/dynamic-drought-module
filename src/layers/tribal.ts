@@ -25,6 +25,7 @@ import maplibregl from 'maplibre-gl';
 import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 import { URLS } from '../config/urls';
 import { buildTribalPopupHtml } from '../ui/popups';
+import { registry } from '../state/registry';
 
 /* ---------------------------------------------------------------------------
  * Identifiers
@@ -34,6 +35,7 @@ import { buildTribalPopupHtml } from '../ui/popups';
  * means the registry can clean up by name without re-importing the module.
  * ------------------------------------------------------------------------- */
 
+const LAYER_KEY = 'tribal';
 const SOURCE_ID = 'tribal-lands';
 const FILL_LAYER_ID = 'tribal-lands-fill';
 const OUTLINE_LAYER_ID = 'tribal-lands-outline';
@@ -50,8 +52,7 @@ const BEFORE_ID = 'first-symbol';
 type Status = 'loading' | 'ready' | 'error' | 'no-data';
 
 function reportStatus(state: Status): void {
-  // Placeholder until M7 wires the LayerRegistry; see module header.
-  console.info('[tribal]', state);
+  registry.setStatus(LAYER_KEY, state);
 }
 
 function resolveBeforeId(map: maplibregl.Map): string | undefined {

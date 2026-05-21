@@ -1,5 +1,6 @@
 import { REGIONS, DEFAULT_REGION } from '../config/regions';
 import type { RegionKey } from '../config/regions';
+import { DEFAULT_ON_KEYS } from '../config/layers';
 
 /**
  * URL parameterization for the Dynamic Drought Module (DDM).
@@ -17,22 +18,6 @@ import type { RegionKey } from '../config/regions';
  * syncUrl functions (~lines 342-378 of the v0.1.x baseline). See CLAUDE.md
  * section 8 for the named-export contract.
  */
-
-/**
- * Default-on layer keys used when the `layers` URL parameter is missing.
- *
- * TODO(M8): replace this hard-coded set with a derivation from
- * `LAYER_DEFS.filter(l => l.defaultOn).map(l => l.key)` once
- * `src/config/layers.ts` lands. Keeping the values in lockstep with the
- * vanilla baseline (Tribal Lands as the single default-on layer; the M2-M4
- * tranche additionally pre-activated Drought, Hydrography, and Telemetry
- * for tranche review) until then.
- */
-const DEFAULT_ON_LAYER_KEYS: ReadonlySet<string> = new Set([
-  'hydrography',
-  'tribal',
-  'telemetry'
-]);
 
 export interface ParsedUrlParams {
   readonly region: RegionKey;
@@ -72,7 +57,7 @@ export function parseUrlParams(): ParsedUrlParams {
       );
     }
   } else {
-    layers = new Set(DEFAULT_ON_LAYER_KEYS);
+    layers = new Set(DEFAULT_ON_KEYS);
   }
 
   const rawEmbed = params.get('embed');

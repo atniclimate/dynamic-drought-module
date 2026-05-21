@@ -47,11 +47,13 @@ import type { Feature, FeatureCollection, LineString } from 'geojson';
 import { URLS } from '../config/urls';
 import { quantizeBbox } from '../util/bbox';
 import { fetchWithBudget, sleepUnlessAborted } from '../util/fetch';
+import { registry } from '../state/registry';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
+const LAYER_KEY = 'hydrography';
 const SOURCE_ID = 'hydrography';
 const LAYER_ID = 'hydrography';
 
@@ -509,12 +511,13 @@ function emptyFeatureCollection(): FeatureCollection<LineString> {
 }
 
 /**
- * Status reporting placeholder. Milestone 7 (M7) wires this through the
- * real LayerRegistry; for now, log the canonical state names so any
- * regression is visible in the developer console.
+ * Report the layer's load status to the LayerRegistry. The sidebar renders
+ * the per-layer status pill from the registry's status-change event. Called
+ * from both activation and the moveend fetch driver (for example to surface
+ * 'zoom-in' when the user zooms out below the Overpass threshold).
  */
 function setStatus(status: HydroStatus): void {
-  console.info('[hydrography]', status);
+  registry.setStatus(LAYER_KEY, status);
 }
 
 // ---------------------------------------------------------------------------

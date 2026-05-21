@@ -27,15 +27,16 @@ import type { Feature, FeatureCollection, GeoJsonProperties, Geometry } from 'ge
 import { URLS } from '../config/urls';
 import { TREATY_COLOR_DEFAULT, pickTreatyColor } from '../config/palette';
 import { buildTreatyPopupHtml } from '../ui/popups';
+import { registry } from '../state/registry';
 
+const LAYER_KEY = 'treaty';
 const SOURCE_ID = 'treaty-areas';
 const OUTLINE_LAYER_ID = 'treaty-areas-outline';
 
-type TreatyStatus = 'loading' | 'live' | 'unavailable' | 'no-data';
+type TreatyStatus = 'loading' | 'ready' | 'error' | 'no-data';
 
 function reportStatus(state: TreatyStatus): void {
-  // Placeholder until M7 wires the LayerRegistry.
-  console.info('[treaty]', state);
+  registry.setStatus(LAYER_KEY, state);
 }
 
 /**
@@ -83,7 +84,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     geojson = (await response.json()) as FeatureCollection;
   } catch (err) {
     console.warn('[treaty] Treaty Areas file fetch failed.', err);
-    reportStatus('unavailable');
+    reportStatus('error');
     return;
   }
 
@@ -139,7 +140,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     }
   });
 
-  reportStatus('live');
+  reportStatus('ready');
 }
 
 /**

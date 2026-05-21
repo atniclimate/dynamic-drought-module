@@ -47,12 +47,18 @@ export interface LayerDef {
  * stacking on the map is owed to insertion order plus each layer's own
  * `beforeId` strategy (most layers anchor to `'first-symbol'` if present,
  * otherwise append).
+ *
+ * Default-on is the demo-ready set: US Drought Monitor (the headline drought
+ * layer), Tribal Lands (intentional empty placeholder per stewardship), and
+ * Telemetry. Hydrography is intentionally off by default; the live Overpass
+ * query is slow and fragile, so leading the bare URL with it produced a
+ * flaky first paint. Users can still toggle it on.
  */
 export const LAYER_DEFS: readonly LayerDef[] = [
-  { key: 'hydrography', name: 'Hydrography',                source: 'OpenStreetMap (Overpass)',  defaultOn: true,  module: hydrography },
+  { key: 'hydrography', name: 'Hydrography',                source: 'OpenStreetMap (Overpass)',  defaultOn: false, module: hydrography },
   { key: 'ecoregions',  name: 'Ecoregions (Level III)',     source: 'EPA · bundled GeoJSON',     defaultOn: false, module: ecoregions },
   { key: 'drought',     name: 'Seasonal Drought Outlook',   source: 'NOAA CPC · WMS',            defaultOn: false, module: drought },
-  { key: 'usdm',        name: 'US Drought Monitor',         source: 'NDMC · FeatureServer',      defaultOn: false, module: usdm },
+  { key: 'usdm',        name: 'US Drought Monitor',         source: 'NDMC · FeatureServer',      defaultOn: true,  module: usdm },
   { key: 'tribal',      name: 'Tribal Lands',               source: 'BIA · bundled GeoJSON',     defaultOn: true,  module: tribal },
   { key: 'treaty',      name: 'Treaty Areas',               source: 'WA DAHP · bundled GeoJSON', defaultOn: false, module: treaty },
   { key: 'nifc-fires',  name: 'Active Wildfires (NIFC)',    source: 'NIFC WFIGS · FeatureServer', defaultOn: false, module: nifcFires },

@@ -51,10 +51,13 @@ import type { GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
 import { escapeHtml } from '../util/escape';
+import { registry } from '../state/registry';
 
+const LAYER_KEY = 'usdm';
 const SOURCE_ID = 'usdm-current';
 const FILL_LAYER_ID = 'usdm-current-fill';
 const OUTLINE_LAYER_ID = 'usdm-current-outline';
+const LEGEND_ID = 'usdm-legend-panel';
 
 /**
  * Symbol layer ID used as the `beforeId` anchor when inserting the fill
@@ -91,16 +94,24 @@ const USDM_LABELS: ReadonlyArray<string> = [
   'D4 - Exceptional Drought'
 ];
 
-type UsdmStatus = 'loading' | 'live' | 'unavailable' | 'no-data';
+type UsdmStatus = 'loading' | 'ready' | 'error' | 'no-data';
 
 function reportStatus(state: UsdmStatus): void {
-  // Placeholder until M7 wires the LayerRegistry; mirrors the convention
-  // used by `treaty.ts` and `tribal.ts`.
-  console.info('[usdm]', state);
+  registry.setStatus(LAYER_KEY, state);
 }
 
 function resolveBeforeId(map: maplibregl.Map): string | undefined {
   return map.getLayer(BEFORE_ID) ? BEFORE_ID : undefined;
+}
+
+/**
+ * Show or hide the USDM legend panel in the sidebar (the D0-D4 color key).
+ * Mirrors the drought.ts pattern: toggle the `hidden` attribute so the
+ * panel returns to its CSS layout when revealed.
+ */
+function setLegendVisibility(visible: boolean): void {
+  const el = document.getElementById(LEGEND_ID);
+  if (el) el.hidden = !visible;
 }
 
 /**
@@ -124,9 +135,9 @@ function buildQueryUrl(): string {
  * source already exists, the function exits after re-reporting status so
  * the registry observes a terminal state on a re-activation.
  *
- * Network failures surface as `'unavailable'` rather than throwing; the
- * caller (LayerRegistry, M7) is responsible for surfacing this in the
- * sidebar status pill.
+ * Network failures surface as `'error'` rather than throwing; the caller
+ * (LayerRegistry) is responsible for surfacing this in the sidebar status
+ * pill.
  */
 export async function activate(map: maplibregl.Map): Promise<void> {
   if (map.getSource(SOURCE_ID)) {
@@ -144,7 +155,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     geojson = (await response.json()) as GeoJSON.FeatureCollection;
   } catch (err) {
     console.warn('[usdm] Drought Monitor fetch failed.', err);
-    reportStatus('unavailable');
+    reportStatus('error');
     return;
   }
 
@@ -209,7 +220,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     beforeId
   );
 
-  reportStatus('live');
+  setLegendVisibility(true);
+  reportStatus('ready');
 }
 
 /**
@@ -227,6 +239,7 @@ export function deactivate(map: maplibregl.Map): void {
   if (map.getSource(SOURCE_ID)) {
     map.removeSource(SOURCE_ID);
   }
+  setLegendVisibility(false);
 }
 
 /**

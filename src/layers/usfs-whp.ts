@@ -44,7 +44,7 @@
  *     - Access-Control-Allow-Origin: https://atniclimate.github.io
  *     - Body: 256x256 PNG.
  *
- * Render. Raster source at 0.55 opacity so OpenTopoMap topography and
+ * Render. Raster source at 0.55 opacity so the basemap and
  * the USDM/Treaty/Tribal overlays remain legible underneath. The
  * conventional five-class palette is encoded server-side in the
  * `WHP_CLS_2023_8bit` raster function, so we do not need to recolor on
@@ -57,14 +57,16 @@
 import type maplibregl from 'maplibre-gl';
 
 import { URLS } from '../config/urls';
+import { registry } from '../state/registry';
 
+const LAYER_KEY = 'usfs-whp';
 const SOURCE_ID = 'usfs-whp';
 const LAYER_ID = 'usfs-whp';
 
-type WhpStatus = 'loading' | 'live' | 'unavailable';
+type WhpStatus = 'loading' | 'ready' | 'error';
 
 function reportStatus(state: WhpStatus): void {
-  console.info('[usfs-whp]', state);
+  registry.setStatus(LAYER_KEY, state);
 }
 
 /**
@@ -97,7 +99,7 @@ function buildImageTileTemplate(): string {
  *
  * Network failures during the synchronous source addition are extremely
  * uncommon (MapLibre defers actual tile requests) but we still wrap the
- * setup in try/catch so a misconfiguration surfaces as `'unavailable'`
+ * setup in try/catch so a misconfiguration surfaces as `'error'`
  * instead of throwing into the caller's activation flow.
  */
 export async function activate(map: maplibregl.Map): Promise<void> {
@@ -126,10 +128,10 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       });
     }
 
-    reportStatus('live');
+    reportStatus('ready');
   } catch (err) {
     console.warn('[usfs-whp] activation failed.', err);
-    reportStatus('unavailable');
+    reportStatus('error');
   }
 }
 
