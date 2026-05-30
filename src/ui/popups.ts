@@ -59,6 +59,49 @@ export function buildTribalPopupHtml(props: GeoJsonProperties): string {
   `;
 }
 
+/**
+ * Popup for a Bureau of Indian Affairs (BIA) reservation-boundary feature from
+ * the American Indian and Alaska Native Land Area Representation (AIAN-LAR).
+ * Reads `LARNAME`, `CLASSIFICATION`, `REGION`, and `GISACRES`, all interpolated
+ * through `escapeHtml`.
+ *
+ * Stewardship (CLAUDE.md sections 2 and 4; ddm-tribal-boundary-mapping #11):
+ * the AIAN-LAR is the federal administrative depiction for general spatial
+ * reference. It is a representation, not a definitive depiction of Tribal
+ * jurisdiction; Tribal sovereignty and a Tribe's own understanding of its
+ * territory are matters of sovereign authority. That caveat is mandatory and
+ * lives in the description below.
+ */
+export function buildBiaReservationPopupHtml(props: GeoJsonProperties): string {
+  const p = props ?? {};
+  const name = p.LARNAME || p.LARName || p.NAME || p.name || 'Reservation land area';
+  const classification = p.CLASSIFICATION || p.Classification || '';
+  const region = p.REGION || p.Region || '';
+  const acresRaw = p.GISACRES ?? p.GISAcres ?? p.ACRES ?? '';
+
+  const acresNumber =
+    acresRaw === '' || acresRaw === null || acresRaw === undefined
+      ? null
+      : Number(acresRaw);
+  const acresStr =
+    acresNumber !== null && Number.isFinite(acresNumber)
+      ? acresNumber.toLocaleString(undefined, { maximumFractionDigits: 0 })
+      : '';
+
+  return `
+    <div class="popup-title">${escapeHtml(String(name))}</div>
+    <div class="popup-agency">BIA · AIAN Land Area Representation</div>
+    ${classification ? `<div class="popup-treaty-meta">Classification: ${escapeHtml(String(classification))}</div>` : ''}
+    ${region ? `<div class="popup-treaty-meta">BIA region: ${escapeHtml(String(region))}</div>` : ''}
+    ${acresStr ? `<div class="popup-treaty-meta">Acres: ${escapeHtml(acresStr)}</div>` : ''}
+    <div class="popup-description">This boundary is the Bureau of Indian Affairs (BIA) administrative representation of reservation and trust land extent, published for general spatial reference. It is a representation, not a definitive depiction of Tribal jurisdiction; Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority.</div>
+    <div class="popup-links">
+      <a href="https://biamaps.geoplatform.gov/" target="_blank" rel="noopener">BIA GeoPlatform</a>
+      <a href="https://onemap-bia-geospatial.hub.arcgis.com/" target="_blank" rel="noopener">BIA OneMap</a>
+    </div>
+  `;
+}
+
 export function buildTreatyPopupHtml(props: GeoJsonProperties, featureName: string): string {
   const p = props ?? {};
   const year = p.treaty_year || p.TREATY_DAT || p.TREATY_DATE || p.SIGNED_DAT || p.YEAR_SIGNED || p.year || '';

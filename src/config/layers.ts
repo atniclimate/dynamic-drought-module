@@ -1,5 +1,6 @@
 import type maplibregl from 'maplibre-gl';
 
+import * as biaReservations from '../layers/bia-reservations';
 import * as drought from '../layers/drought';
 import * as ecoregions from '../layers/ecoregions';
 import * as hydrography from '../layers/hydrography';
@@ -61,6 +62,7 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'usdm',        name: 'US Drought Monitor',         source: 'NDMC · FeatureServer',      defaultOn: true,  module: usdm },
   { key: 'tribal',      name: 'Tribal Lands',               source: 'BIA · bundled GeoJSON',     defaultOn: true,  module: tribal },
   { key: 'treaty',      name: 'Treaty Areas',               source: 'WA DAHP · bundled GeoJSON', defaultOn: false, module: treaty },
+  { key: 'bia-reservations', name: 'Reservation Boundaries', source: 'BIA · AIAN-LAR (live)',     defaultOn: false, module: biaReservations },
   { key: 'nifc-fires',  name: 'Active Wildfires (NIFC)',    source: 'NIFC WFIGS · FeatureServer', defaultOn: false, module: nifcFires },
   { key: 'usfs-whp',    name: 'Wildfire Hazard Potential',  source: 'USFS · GeoPlatform',         defaultOn: false, module: usfsWhp },
   { key: 'telemetry',   name: 'Telemetry Stations',         source: 'USGS · USBR · NRCS · USACE', defaultOn: true,  module: telemetry }

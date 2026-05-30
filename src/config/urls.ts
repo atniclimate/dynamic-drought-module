@@ -96,6 +96,28 @@ export const URLS = Object.freeze({
   usfsWhp:
     'https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer',
 
+  // ---------- Bureau of Indian Affairs (BIA) reservation boundaries ----------
+  // American Indian and Alaska Native Land Area Representation (AIAN-LAR): the
+  // authoritative federal depiction of reservation and trust land extent for
+  // federally recognized Tribes, hosted as an Environmental Systems Research
+  // Institute (ESRI) FeatureServer. The `/0/query` path with `f=geojson` and a
+  // spatial envelope (esriGeometryEnvelope, inSR=4326) returns a polygon
+  // FeatureCollection clipped to the requested extent, with fields LARID,
+  // LARNAME, CLASSIFICATION, GISACRES, REGION. Consumed live, not bundled:
+  // live consumption commits no sovereign polygons to the repository (exactly
+  // like USDM and NIFC), the stance reconciled in the ddm-tribal-boundary-
+  // mapping skill against CLAUDE.md hard rule 1. The bundled empty
+  // `tribal-lands.geojson` placeholder remains the deployer's own-data slot.
+  // The `biamaps.doi.gov` host returned HTTP 500 at verification; use the
+  // `biamaps.geoplatform.gov` host below.
+  // Verified 2026-05-30: HTTP 200, Content-Type application/geo+json,
+  // Access-Control-Allow-Origin: <reflected request origin> (verified against
+  // https://atniclimate.github.io, so a browser fetch needs no proxy).
+  // Access method: ESRI FeatureServer query, f=geojson, spatial envelope clip.
+  // Anti-scrape note: the BIA AIAN-LAR FeatureServer, not the OneMap HTML hub.
+  biaLarFeatureServer:
+    'https://biamaps.geoplatform.gov/server/rest/services/DivLTR/BIA_AIAN_National_LAR/FeatureServer/0',
+
   // ---------- Static reference layers (bundled GeoJSON in public/data/) ----------
   // Vite serves the `public/` directory at the site root, so the runtime
   // URLs are `/data/<file>.geojson` (leading slash). The placeholder files

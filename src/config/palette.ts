@@ -97,3 +97,20 @@ export function pickTreatyColor(name: string | null | undefined): string {
   const entry = pickTreatyEntry(name);
   return entry ? entry.color : TREATY_COLOR_DEFAULT;
 }
+
+/* ---------------------------------------------------------------------------
+ * Bureau of Indian Affairs (BIA) reservation boundaries (AIAN-LAR)
+ *
+ * The American Indian and Alaska Native Land Area Representation (AIAN-LAR) is
+ * fetched live from the authoritative BIA FeatureServer (CLAUDE.md hard rule 1:
+ * live consumption, not redistribution). A single administrative-boundary color
+ * is used for every classification; the popup surfaces the per-feature
+ * CLASSIFICATION value. The indigo hue is chosen to read as an administrative
+ * extent and to stay distinct from the Tribal-lands placeholder (deployer-owned,
+ * warm orange) and the Treaty outlines (hollow, dashed, violet family).
+ * On-map palette tuning is ddm-visual-styling-and-readability territory; these
+ * are reasonable starting values, best refined in the browser.
+ * ------------------------------------------------------------------------- */
+
+export const RESERVATION_FILL_COLOR = '#6366f1';
+export const RESERVATION_OUTLINE_COLOR = '#4f46e5';
