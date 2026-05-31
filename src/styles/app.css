@@ -507,6 +507,55 @@ a:hover {
   overflow-y: auto;
   padding-right: 4px;
 }
+
+/* Gridded drought-index (SPI) legend: product selector + orientation ramp.
+   The ramp is an approximate dry-to-wet orientation aid; the authoritative
+   color scale is baked into the NIDIS tiles and linked from drought.gov, so we
+   deliberately do not claim an exact SPI-to-color mapping here. */
+.gridded-index-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.gridded-index-control-label {
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.04em;
+  color: var(--fg-2);
+}
+.gridded-index-select {
+  flex: 1;
+  appearance: none;
+  background: var(--bg-2);
+  color: var(--fg-0);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.gridded-index-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.gridded-index-ramp-bar {
+  display: block;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  background: linear-gradient(to right, #a8763e, #d8c8a8, #eef0ee, #7fb89a, #2e8b6b);
+}
+.gridded-index-ramp-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--fg-2);
+  letter-spacing: 0.02em;
+}
 .ecoregion-legend::-webkit-scrollbar { width: 6px; }
 .ecoregion-legend::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 3px; }
 
@@ -823,6 +872,18 @@ a:hover {
   -webkit-backdrop-filter: blur(6px);
 }
 
+/*
+ * The `.loading-indicator` author rule above sets `display: inline-flex`, which
+ * (being an author rule) outranks the user-agent `[hidden] { display: none }`
+ * rule of equal specificity. Without this guard the overlay never actually
+ * hides, so `hideLoading()` left a stuck "Loading ..." pill on screen after
+ * every layer finished loading. This restores the hidden semantics. (Baseline
+ * bug found during the Phase D Phase 8 browser verification; not in TODO.md.)
+ */
+.loading-indicator[hidden] {
+  display: none;
+}
+
 .spinner {
   width: 12px;
   height: 12px;
@@ -898,5 +959,386 @@ button.telemetry-item {
   font: inherit;
   color: inherit;
   text-align: left;
+}
+
+/* ----------------------------------------------------------------------------
+   Drought-impact briefing panel
+   The headline kernel-integration feature: a slide-in panel over the map that
+   turns a boundary selection into a sourced, three-horizon impact read plus
+   routed resources. Appended to <body>, positioned over the map, so it is
+   embed-safe (independent of the sidebar) and works under ?embed=true. Below
+   720px it becomes a bottom sheet. Themed entirely from the :root tokens.
+   ---------------------------------------------------------------------------- */
+
+.impact-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 440px;
+  max-width: 92vw;
+  z-index: 1400;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-1);
+  border-left: 1px solid var(--line-strong);
+  box-shadow: -10px 0 32px rgba(0, 0, 0, 0.55);
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+}
+.impact-panel.open {
+  transform: translateX(0);
+}
+
+.impact-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 14px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.impact-panel-heading {
+  min-width: 0;
+}
+.impact-panel-kicker {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.impact-panel-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: var(--fw-title);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--fg-0);
+}
+.impact-panel-kind {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--fg-2);
+  letter-spacing: 0.02em;
+}
+.impact-panel-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.impact-panel-close:hover {
+  background: var(--bg-2);
+  color: var(--fg-0);
+  border-color: var(--line-strong);
+}
+
+.impact-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 18px 22px;
+}
+.impact-panel-body::-webkit-scrollbar { width: 8px; }
+.impact-panel-body::-webkit-scrollbar-track { background: transparent; }
+.impact-panel-body::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 4px; }
+
+.impact-land-caveat {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent-strong);
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--fg-1);
+}
+
+.impact-section-title {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+.impact-horizons { margin-bottom: 22px; }
+
+.impact-horizon {
+  padding: 12px;
+  margin-bottom: 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+.impact-horizon-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.impact-horizon-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: var(--fw-subtitle);
+  color: var(--fg-0);
+  letter-spacing: 0.01em;
+}
+.impact-horizon-sub {
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  font-weight: var(--fw-body);
+  color: var(--fg-3);
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+.impact-horizon-pill {
+  flex-shrink: 0;
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+  font-size: 9.5px;
+  color: var(--fg-3);
+  padding: 2px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.impact-horizon-pill-loading { color: var(--warn); border-color: var(--warn); }
+.impact-horizon-pill-ready { color: var(--good); border-color: var(--good); }
+.impact-horizon-pill-partial { color: var(--accent); border-color: var(--accent-strong); }
+.impact-horizon-pill-unavailable { color: var(--fg-3); font-style: italic; }
+
+.impact-horizon-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--fg-2);
+  padding: 4px 0;
+}
+.impact-spinner {
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+.impact-horizon-note {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--fg-2);
+  font-style: italic;
+}
+
+.impact-claim {
+  padding: 8px 0;
+}
+.impact-claim + .impact-claim {
+  border-top: 1px dashed var(--line);
+}
+.impact-claim-badge {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 4px;
+}
+/* Observation vs outlook are visually distinct so a probabilistic outlook can
+   never read as an observed fact (the honest-feedback invariant). */
+.impact-claim-observation .impact-claim-badge {
+  color: var(--good);
+  background: rgba(16, 185, 129, 0.12);
+}
+.impact-claim-outlook .impact-claim-badge {
+  color: var(--warn);
+  background: rgba(245, 158, 11, 0.12);
+}
+.impact-claim-text {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg-0);
+}
+.impact-claim-source {
+  margin: 0;
+  font-size: 10.5px;
+  color: var(--fg-2);
+  letter-spacing: 0.01em;
+}
+.impact-claim-source a {
+  color: var(--accent);
+  border-bottom: none;
+}
+.impact-claim-source a:hover { color: var(--fg-0); }
+
+.impact-resources-framing {
+  margin: 0 0 14px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+.impact-resource-group { margin-bottom: 14px; }
+.impact-resource-group-title {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.02em;
+  color: var(--fg-1);
+}
+.impact-resource {
+  padding: 9px 11px;
+  margin-bottom: 6px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.impact-resource-empty {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--line-strong);
+}
+.impact-resource-label {
+  display: block;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: var(--fw-subtitle);
+  color: var(--fg-0);
+  letter-spacing: 0.01em;
+}
+a.impact-resource-link {
+  color: var(--accent);
+  border-bottom: none;
+}
+a.impact-resource-link:hover { color: var(--fg-0); }
+a.impact-resource-link::after {
+  content: ' ↗';
+  font-size: 10px;
+  opacity: 0.7;
+}
+.impact-resource-desc {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--fg-1);
+}
+.impact-resource-agency {
+  margin: 4px 0 0;
+  font-size: 10px;
+  color: var(--fg-3);
+  letter-spacing: 0.02em;
+}
+
+/* Popup briefing trigger button */
+.popup-impact-btn {
+  appearance: none;
+  display: block;
+  width: 100%;
+  margin: 4px 0 2px;
+  padding: 8px 12px;
+  background: var(--accent-soft);
+  color: var(--fg-0);
+  border: 1px solid var(--accent-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.popup-impact-btn:hover {
+  background: rgba(6, 182, 212, 0.24);
+  border-color: var(--accent);
+}
+
+.impact-panel-close:focus-visible,
+.popup-impact-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .impact-panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    max-width: 100vw;
+    height: 82vh;
+    border-left: none;
+    border-top: 1px solid var(--line-strong);
+    border-top-left-radius: var(--radius-lg);
+    border-top-right-radius: var(--radius-lg);
+    transform: translateY(100%);
+    box-shadow: 0 -10px 32px rgba(0, 0, 0, 0.55);
+  }
+  .impact-panel.open {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .impact-panel { transition: none; }
+  .impact-spinner { animation: none; }
+}
+
+/* ----------------------------------------------------------------------------
+   Charts (dependency-light inline SVG from src/ui/charts.ts)
+   The SVG inherits the :root custom properties via var() in its fill/stroke
+   attributes; these rules only handle layout. No animation, so reduced motion
+   needs no special case.
+   ---------------------------------------------------------------------------- */
+
+.ddm-chart-fig {
+  margin: 8px 0 2px;
+  padding: 0;
+}
+.ddm-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+}
+.ddm-chart text {
+  font-family: var(--font-body);
+}
+.impact-claim-chart {
+  margin: 2px 0 4px;
+}
+/* Sparkline inside a telemetry popup data block. */
+.popup-data .ddm-chart-fig {
+  margin-top: 8px;
+  border-top: 1px dashed var(--line);
+  padding-top: 6px;
 }
 

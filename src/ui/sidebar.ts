@@ -56,6 +56,7 @@ import {
 import type { RegionKey, Region } from '../config/regions';
 import { TELEMETRY_STATIONS } from '../config/telemetry';
 import { registry } from '../state/registry';
+import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
 import { parseUrlParams, syncUrl } from '../state/url';
 import { flyToStation } from '../layers/telemetry';
@@ -231,6 +232,10 @@ function selectRegion(
   if (!region) return;
 
   STATE.currentRegion = key;
+  // Mirror the active region into the shared store so the impact panel (and
+  // any future consumer) can read it without threading it through every
+  // layer signature. See src/state/region-store.ts.
+  setCurrentRegion(key);
 
   const [west, south, east, north] = regionToMapLibreBounds(region);
   const pad = region.padding;

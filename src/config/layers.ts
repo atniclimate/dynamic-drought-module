@@ -3,6 +3,7 @@ import type maplibregl from 'maplibre-gl';
 import * as biaReservations from '../layers/bia-reservations';
 import * as drought from '../layers/drought';
 import * as ecoregions from '../layers/ecoregions';
+import * as griddedIndex from '../layers/gridded-index';
 import * as hydrography from '../layers/hydrography';
 import * as nifcFires from '../layers/nifc-fires';
 import * as telemetry from '../layers/telemetry';
@@ -57,8 +58,9 @@ export interface LayerDef {
  */
 export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'hydrography', name: 'Hydrography',                source: 'OpenStreetMap (Overpass)',  defaultOn: false, module: hydrography },
-  { key: 'ecoregions',  name: 'Ecoregions (Level III)',     source: 'EPA · bundled GeoJSON',     defaultOn: false, module: ecoregions },
+  { key: 'ecoregions',  name: 'Ecoregions (Level III/IV)',  source: 'EPA Omernik · PMTiles',      defaultOn: false, module: ecoregions },
   { key: 'drought',     name: 'Seasonal Drought Outlook',   source: 'NOAA CPC · WMS',            defaultOn: false, module: drought },
+  { key: 'gridded-index', name: 'Gridded Drought Index (SPI)', source: 'NOAA NIDIS · raster tiles', defaultOn: false, module: griddedIndex },
   { key: 'usdm',        name: 'US Drought Monitor',         source: 'NDMC · FeatureServer',      defaultOn: true,  module: usdm },
   { key: 'tribal',      name: 'Tribal Lands',               source: 'BIA · bundled GeoJSON',     defaultOn: true,  module: tribal },
   { key: 'treaty',      name: 'Treaty Areas',               source: 'WA DAHP · bundled GeoJSON', defaultOn: false, module: treaty },

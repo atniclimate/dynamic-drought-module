@@ -25,6 +25,8 @@ import maplibregl from 'maplibre-gl';
 import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 import { URLS } from '../config/urls';
 import { buildTribalPopupHtml } from '../ui/popups';
+import { attachImpactTrigger } from '../ui/impact-panel';
+import { buildBoundaryContext } from '../impact/context';
 import { registry } from '../state/registry';
 
 /* ---------------------------------------------------------------------------
@@ -173,9 +175,13 @@ export function bindPopups(map: maplibregl.Map): void {
     if (!feature) return;
     const props: GeoJsonProperties = feature.properties ?? null;
 
-    new maplibregl.Popup({ closeOnClick: true })
+    const popup = new maplibregl.Popup({ closeOnClick: true })
       .setLngLat(e.lngLat)
       .setHTML(buildTribalPopupHtml(props))
       .addTo(map);
+    attachImpactTrigger(
+      popup,
+      buildBoundaryContext('tribal', props, feature.geometry, e.lngLat)
+    );
   });
 }

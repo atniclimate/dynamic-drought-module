@@ -26,3 +26,12 @@ dist/
 
 # Claude Code transient scheduled-task lock
 .claude/scheduled_tasks.lock
+
+# Python build-time toolchain for the P9 landscape signature (build-time only,
+# never shipped to the browser; the client consumes only the baked JSON snapshot)
+.venv/
+__pycache__/
+*.pyc
+
+# P9 raster download / windowed-read cache (large; fetched at build time, not committed)
+scripts/.cache/

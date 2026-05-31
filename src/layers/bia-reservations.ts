@@ -41,6 +41,8 @@ import {
   RESERVATION_OUTLINE_COLOR
 } from '../config/palette';
 import { buildBiaReservationPopupHtml } from '../ui/popups';
+import { attachImpactTrigger } from '../ui/impact-panel';
+import { buildBoundaryContext } from '../impact/context';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 
@@ -215,10 +217,14 @@ export function bindPopups(map: maplibregl.Map): void {
     const feature = e.features?.[0];
     if (!feature) return;
     const props: GeoJsonProperties = feature.properties ?? null;
-    new maplibregl.Popup({ closeButton: true, closeOnClick: true })
+    const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true })
       .setLngLat(e.lngLat)
       .setHTML(buildBiaReservationPopupHtml(props))
       .addTo(map);
+    attachImpactTrigger(
+      popup,
+      buildBoundaryContext('bia-reservation', props, feature.geometry, e.lngLat)
+    );
   });
 
   map.on('mouseenter', FILL_LAYER_ID, () => {

@@ -4,6 +4,8 @@ import { URLS } from '../config/urls';
 import type { TelemetryStation } from '../types/station';
 import { fetchWithBudget } from '../util/fetch';
 import { escapeHtml } from '../util/escape';
+import { isObject } from '../util/guards';
+import { sparklineSvg } from './charts';
 
 /**
  * Popup HTML factories. Each takes either a pre-extracted name (where the
@@ -18,14 +20,56 @@ import { escapeHtml } from '../util/escape';
  */
 
 // =============================================================================
+// Impact-briefing trigger
+// =============================================================================
+
+/**
+ * The "Drought impact briefing" button appended to every boundary popup. The
+ * `data-ddm-impact-trigger` attribute is the hook the impact panel wires to
+ * (`attachImpactTrigger` in src/ui/impact-panel.ts), keeping the popup a
+ * lightweight identity card while the rich briefing lives in the slide-in
+ * panel. Static markup, no interpolation, so it is safe to inline.
+ */
+export const IMPACT_TRIGGER_BUTTON_HTML =
+  '<button type="button" class="popup-impact-btn" data-ddm-impact-trigger>Drought impact briefing</button>';
+
+/**
+ * Format a raw acres value (string or number) as a thousands-separated whole
+ * number, or '' when it is empty or not finite. Shared by the Tribal and BIA
+ * reservation popups, which carry the identical parse-and-format idiom.
+ */
+function formatAcres(raw: unknown): string {
+  if (raw === '' || raw === null || raw === undefined) return '';
+  const n = Number(raw);
+  return Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '';
+}
+
+// =============================================================================
 // M3: static popup factories
 // =============================================================================
 
-export function buildEcoregionPopupHtml(name: string): string {
+/**
+ * Popup for an EPA Omernik ecoregion feature. `opts.level` selects the Level III
+ * or Level IV framing; for Level IV, `opts.parentL3` names the containing Level
+ * III ecoregion (Level IV is a finer subdivision of Level III). Ecoregions are a
+ * landscape representation, not a jurisdiction, so no sovereignty caveat applies.
+ */
+export function buildEcoregionPopupHtml(
+  name: string,
+  opts?: { level?: 'III' | 'IV'; parentL3?: string }
+): string {
+  const level = opts?.level ?? 'III';
+  const agency = level === 'IV' ? 'EPA · Level IV Ecoregion' : 'EPA · Level III Ecoregion';
+  const withinHtml =
+    level === 'IV' && opts?.parentL3
+      ? `<div class="popup-treaty-meta">Within: ${escapeHtml(opts.parentL3)} (Level III)</div>`
+      : '';
   return `
     <div class="popup-title">${escapeHtml(name)}</div>
-    <div class="popup-agency">EPA · Level III Ecoregion</div>
+    <div class="popup-agency">${agency}</div>
+    ${withinHtml}
     <div class="popup-description">Ecoregions denote areas of general similarity in ecosystems and in the type, quality, and quantity of environmental resources.</div>
+    ${IMPACT_TRIGGER_BUTTON_HTML}
     <div class="popup-links">
       <a href="https://www.epa.gov/eco-research/level-iii-and-iv-ecoregions-continental-united-states" target="_blank" rel="noopener">EPA Ecoregions</a>
     </div>
@@ -37,14 +81,7 @@ export function buildTribalPopupHtml(props: GeoJsonProperties): string {
   const name = p.LARName || p.LARNAME || p.NAME || p.name || p.TRIBE || p.RESERV_NAM || 'Tribal Land Area';
   const govt = p.LARGovernment || p.GOVT || p.tribe || '';
   const type = p.LARType || p.TYPE || '';
-  const acresRaw = p.GISAcres || p.ACRES || '';
-
-  const acresNumber = acresRaw === '' || acresRaw === null || acresRaw === undefined
-    ? null
-    : Number(acresRaw);
-  const acresStr = acresNumber !== null && Number.isFinite(acresNumber)
-    ? acresNumber.toLocaleString(undefined, { maximumFractionDigits: 0 })
-    : '';
+  const acresStr = formatAcres(p.GISAcres || p.ACRES || '');
 
   return `
     <div class="popup-title">${escapeHtml(String(name))}</div>
@@ -52,6 +89,7 @@ export function buildTribalPopupHtml(props: GeoJsonProperties): string {
     ${govt ? `<div class="popup-description"><strong>Government:</strong> ${escapeHtml(String(govt))}</div>` : ''}
     ${type ? `<div class="popup-treaty-meta">Type: ${escapeHtml(String(type))}</div>` : ''}
     ${acresStr ? `<div class="popup-treaty-meta">Acres: ${escapeHtml(acresStr)}</div>` : ''}
+    ${IMPACT_TRIGGER_BUTTON_HTML}
     <div class="popup-links">
       <a href="https://catalog.data.gov/dataset/american-indian-and-alaska-native-areas" target="_blank" rel="noopener">BIA AIAN-LAR (data.gov)</a>
       <a href="https://geo.wa.gov/" target="_blank" rel="noopener">WA Geospatial Open Data</a>
@@ -77,16 +115,7 @@ export function buildBiaReservationPopupHtml(props: GeoJsonProperties): string {
   const name = p.LARNAME || p.LARName || p.NAME || p.name || 'Reservation land area';
   const classification = p.CLASSIFICATION || p.Classification || '';
   const region = p.REGION || p.Region || '';
-  const acresRaw = p.GISACRES ?? p.GISAcres ?? p.ACRES ?? '';
-
-  const acresNumber =
-    acresRaw === '' || acresRaw === null || acresRaw === undefined
-      ? null
-      : Number(acresRaw);
-  const acresStr =
-    acresNumber !== null && Number.isFinite(acresNumber)
-      ? acresNumber.toLocaleString(undefined, { maximumFractionDigits: 0 })
-      : '';
+  const acresStr = formatAcres(p.GISACRES ?? p.GISAcres ?? p.ACRES ?? '');
 
   return `
     <div class="popup-title">${escapeHtml(String(name))}</div>
@@ -95,6 +124,7 @@ export function buildBiaReservationPopupHtml(props: GeoJsonProperties): string {
     ${region ? `<div class="popup-treaty-meta">BIA region: ${escapeHtml(String(region))}</div>` : ''}
     ${acresStr ? `<div class="popup-treaty-meta">Acres: ${escapeHtml(acresStr)}</div>` : ''}
     <div class="popup-description">This boundary is the Bureau of Indian Affairs (BIA) administrative representation of reservation and trust land extent, published for general spatial reference. It is a representation, not a definitive depiction of Tribal jurisdiction; Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority.</div>
+    ${IMPACT_TRIGGER_BUTTON_HTML}
     <div class="popup-links">
       <a href="https://biamaps.geoplatform.gov/" target="_blank" rel="noopener">BIA GeoPlatform</a>
       <a href="https://onemap-bia-geospatial.hub.arcgis.com/" target="_blank" rel="noopener">BIA OneMap</a>
@@ -118,6 +148,7 @@ export function buildTreatyPopupHtml(props: GeoJsonProperties, featureName: stri
     ${year ? `<div class="popup-treaty-meta">Signed: ${escapeHtml(String(year))}</div>` : ''}
     ${tribe ? `<div class="popup-treaty-meta">Tribe: ${escapeHtml(tribe)}</div>` : ''}
     <div class="popup-description">Agency polygons are a representation of Treaty cession areas, not a definitive depiction of Tribal jurisdiction. Treaty rights and Tribal sovereignty are matters of sovereign authority.</div>
+    ${IMPACT_TRIGGER_BUTTON_HTML}
     <div class="popup-links">
       <a href="https://wisaard.dahp.wa.gov/" target="_blank" rel="noopener">WA DAHP WISAARD</a>
       <a href="https://native-land.ca/" target="_blank" rel="noopener">Native Land Digital</a>
@@ -155,7 +186,7 @@ export function buildTelemetryPopupSkeleton(station: TelemetryStation): string {
   const dataBlockHtml =
     station.usgsSite || station.awdbStation
       ? `<div class="popup-data" data-station-data="${escapeHtml(station.id)}">
-           <div class="popup-data-loading">Fetching live data…</div>
+           <div class="popup-data-loading">Fetching live data...</div>
          </div>`
       : '';
 
@@ -242,11 +273,50 @@ async function fetchUsgsIV(siteId: string, signal: AbortSignal | null): Promise<
     format: 'json',
     sites: siteId,
     parameterCd: '00060,00065',
+    // A 7-day window so the popup can draw a recent-trend sparkline, not just
+    // the latest reading. The most recent value is still the series tail.
+    period: 'P7D',
     siteStatus: 'all'
   });
   const resp = await fetchWithBudget(URLS.usgsIV + '?' + params.toString(), {}, signal, 8000);
   if (!resp.ok) throw new Error('USGS HTTP ' + resp.status);
   return resp.json();
+}
+
+/**
+ * Build a 7-day sparkline from the richest USGS series (discharge preferred,
+ * then gage height). Returns an empty string when no series has enough points.
+ * The reading values are downsampled to keep the inline SVG light.
+ */
+function buildUsgsSparkline(series: UsgsSeries[]): string {
+  const chosen =
+    series.find((s) => readVariableCode(s) === '00060') ??
+    series.find((s) => readVariableCode(s) === '00065') ??
+    series[0];
+  if (!chosen) return '';
+
+  const code = readVariableCode(chosen);
+  const unit = readUnitCode(chosen) ?? '';
+  const label = code === '00060' ? 'Discharge' : code === '00065' ? 'Gage height' : readVariableName(chosen) || 'Value';
+
+  const nums: number[] = [];
+  for (const r of readValueArray(chosen)) {
+    if (r.value === '-999999') continue;
+    const n = Number(r.value);
+    if (Number.isFinite(n)) nums.push(n);
+  }
+  if (nums.length < 2) return '';
+
+  // Downsample to at most ~120 points so the polyline stays light.
+  const maxPoints = 120;
+  const step = Math.max(1, Math.ceil(nums.length / maxPoints));
+  const sampled = nums.filter((_, i) => i % step === 0 || i === nums.length - 1);
+
+  return sparklineSvg(sampled, {
+    title: `${label} over the past 7 days (USGS)`,
+    unit,
+    source: 'USGS Water Services, past 7 days'
+  });
 }
 
 /**
@@ -313,7 +383,8 @@ function renderUsgsRows(payload: unknown): string {
       <span class="popup-data-label">As of</span>
       <span class="popup-data-value">${escapeHtml(tsStr)}</span>
     </div>`
-      : '')
+      : '') +
+    buildUsgsSparkline(series)
   );
 }
 
@@ -330,10 +401,6 @@ interface UsgsReading {
 }
 
 type UsgsSeries = Record<string, unknown>;
-
-function isObject(v: unknown): v is Record<string, unknown> {
-  return v !== null && typeof v === 'object';
-}
 
 function extractTimeSeries(payload: unknown): UsgsSeries[] {
   if (!isObject(payload)) return [];

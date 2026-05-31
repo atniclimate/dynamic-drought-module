@@ -27,6 +27,8 @@ import type { Feature, FeatureCollection, GeoJsonProperties, Geometry } from 'ge
 import { URLS } from '../config/urls';
 import { TREATY_COLOR_DEFAULT, pickTreatyColor } from '../config/palette';
 import { buildTreatyPopupHtml } from '../ui/popups';
+import { attachImpactTrigger } from '../ui/impact-panel';
+import { buildBoundaryContext } from '../impact/context';
 import { registry } from '../state/registry';
 
 const LAYER_KEY = 'treaty';
@@ -176,10 +178,14 @@ export function bindPopups(map: maplibregl.Map): void {
     const featureName = pickTreatyName(props) ?? 'Treaty Area';
     const html = buildTreatyPopupHtml(props, featureName);
 
-    new maplibregl.Popup({ closeButton: true, closeOnClick: true })
+    const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true })
       .setLngLat(e.lngLat)
       .setHTML(html)
       .addTo(map);
+    attachImpactTrigger(
+      popup,
+      buildBoundaryContext('treaty', props, feature.geometry, e.lngLat, featureName)
+    );
   });
 
   map.on('mouseenter', OUTLINE_LAYER_ID, () => {

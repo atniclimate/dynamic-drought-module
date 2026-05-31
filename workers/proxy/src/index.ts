@@ -16,6 +16,14 @@
  *     `usbr.gov` or `www.usbr.gov`.
  *   - Northwest River Forecast Center (NWRFC) of the National Oceanic and
  *     Atmospheric Administration (NOAA): `nwrfc.noaa.gov` or `www.nwrfc.noaa.gov`.
+ *   - NOAA Climate Prediction Center (CPC): any subdomain of `cpc.ncep.noaa.gov`
+ *     (the Oceanic Nino Index and other indices are served without Cross-Origin
+ *     Resource Sharing headers; the default path is a build-time snapshot, but
+ *     the host is allow-listed for anything that must be fetched live).
+ *   - Bureau of Indian Affairs (BIA) map hosts: `biamaps.geoplatform.gov`
+ *     (the live American Indian and Alaska Native Land Area Representation host)
+ *     and `biamaps.doi.gov` (the fallback host). The geoplatform host serves
+ *     reflective CORS today; the allow-list entry is a resilience path.
  *
  * Anything outside the allow-list is rejected with 403 Forbidden.
  *
@@ -51,7 +59,14 @@ const ALLOW_LIST: ReadonlyArray<RegExp> = [
   /^(www\.)?usbr\.gov$/i,
   // NWRFC. `www.nwrfc.noaa.gov` is the canonical host; bare `nwrfc.noaa.gov`
   // is accepted for resilience to redirect chains.
-  /^(www\.)?nwrfc\.noaa\.gov$/i
+  /^(www\.)?nwrfc\.noaa\.gov$/i,
+  // NOAA CPC. Indices (the Oceanic Nino Index, Relative ONI, Southern
+  // Oscillation Index, detrended Nino 3.4) and the analysis pages live under
+  // `cpc.ncep.noaa.gov`; the regex matches any subdomain (and the apex).
+  /^([a-z0-9-]+\.)*cpc\.ncep\.noaa\.gov$/i,
+  // BIA map hosts: the live AIAN-LAR host (`biamaps.geoplatform.gov`) and the
+  // fallback (`biamaps.doi.gov`).
+  /^biamaps\.(geoplatform\.gov|doi\.gov)$/i
 ];
 
 const USER_AGENT =
@@ -150,7 +165,11 @@ function buildUpstreamRequest(inbound: Request, upstreamUrl: URL): Request {
   const init: RequestInit = {
     method: inbound.method,
     headers: upstreamHeaders,
-    redirect: "follow"
+    // Redirects are NOT followed automatically: the runtime would chase a 3xx
+    // Location to any host, bypassing the allow-list (a server-side request
+    // forgery amplification). `fetchUpstreamWithTimeout` follows redirects
+    // manually, re-validating each hop's host against the allow-list.
+    redirect: "manual"
   };
 
   // GET and HEAD requests must not carry a body. For other methods, forward
@@ -236,9 +255,19 @@ function parseAndValidateUpstream(request: Request): URL | Response {
   return upstreamUrl;
 }
 
+// Maximum redirect hops to follow before failing closed.
+const MAX_REDIRECT_HOPS = 5;
+
 /**
- * Fetch the upstream with a hard timeout. AbortController is wired so the
- * Workers runtime tears down the request cleanly when the deadline expires.
+ * Fetch the upstream with a hard timeout, following redirects MANUALLY so each
+ * hop's host is re-validated against the allow-list. A 3xx whose Location is
+ * off the allow-list (or not http/https, or malformed) fails closed with a
+ * 403/502 rather than being chased; this closes the redirect-bypass SSRF hole
+ * that `redirect: "follow"` would open. Request bodies are not replayed across
+ * redirects (the allow-listed upstreams are read endpoints), so a followed hop
+ * is re-issued as GET (or HEAD) with the same headers. AbortController is wired
+ * so the runtime tears down the request cleanly when the deadline expires; the
+ * timeout spans all hops.
  */
 async function fetchUpstreamWithTimeout(
   upstreamRequest: Request,
@@ -247,7 +276,49 @@ async function fetchUpstreamWithTimeout(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(upstreamRequest, { signal: controller.signal });
+    let request = upstreamRequest;
+    for (let hop = 0; ; hop++) {
+      const resp = await fetch(request, { signal: controller.signal });
+      const isRedirect = resp.status >= 300 && resp.status < 400;
+      const location = isRedirect ? resp.headers.get("location") : null;
+      if (!location) {
+        return resp;
+      }
+      if (hop >= MAX_REDIRECT_HOPS) {
+        return jsonError(
+          508,
+          "too_many_redirects",
+          "Upstream exceeded the redirect hop limit."
+        );
+      }
+      let next: URL;
+      try {
+        next = new URL(location, request.url);
+      } catch {
+        return jsonError(
+          502,
+          "invalid_redirect",
+          "Upstream returned a redirect with an invalid Location."
+        );
+      }
+      if (
+        (next.protocol !== "http:" && next.protocol !== "https:") ||
+        !isAllowedHost(next.hostname)
+      ) {
+        return jsonError(
+          403,
+          "redirect_not_allowed",
+          `Upstream redirected to '${next.hostname}', which is not on the proxy allow-list.`
+        );
+      }
+      const followHeaders = new Headers(request.headers);
+      followHeaders.set("Host", next.host);
+      request = new Request(next.toString(), {
+        method: request.method.toUpperCase() === "HEAD" ? "HEAD" : "GET",
+        headers: followHeaders,
+        redirect: "manual"
+      });
+    }
   } finally {
     clearTimeout(timer);
   }

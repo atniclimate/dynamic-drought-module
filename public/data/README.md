@@ -91,6 +91,25 @@ Treaty cession boundaries (Medicine Creek 1854, Yakama 1855, Nez Perce 1855, Wal
 
 ---
 
+## `enso-indices.json` (committed snapshot, not a placeholder)
+
+Unlike the three GeoJSON files above, `enso-indices.json` is a committed data snapshot, not a deployer-populated placeholder. It holds a recent window of two National Oceanic and Atmospheric Administration (NOAA) Climate Prediction Center (CPC) El Nino / Southern Oscillation (ENSO) indices:
+
+- the Oceanic Nino Index (ONI), the standard three-month running mean of the Nino 3.4 sea surface temperature anomaly; and
+- the Relative ONI (RONI), the ONI with the tropical-mean ocean warming background removed, a useful corroborating index in a warming climate (in a warming ocean the raw ONI drifts warm, so RONI often reads cooler).
+
+They drive the drought-impact briefing's long-range ENSO tilt and its ONI-and-RONI chart.
+
+Both CPC sources are served without Cross-Origin Resource Sharing (CORS) headers, so a browser cannot fetch them directly. Per the climate-data-sources doctrine, a slow monthly index is snapshotted at build or commit time rather than proxied at runtime; there is no cleaner JSON application programming interface (API) for the CPC indices (the whitespace-delimited ascii table is the canonical machine source). Refresh the snapshot (about monthly, when CPC updates the indices) with:
+
+```bash
+npm run build:enso
+```
+
+That runs `scripts/build-enso-snapshot.mjs`, which fetches both indices, parses each table, determines each ENSO phase, and rewrites `enso-indices.json` with its retrieval date. Commit the regenerated file. There is no deployer authorization concern here; this is public federal climate data.
+
+---
+
 ## Quick verification
 
 After converting and dropping a file in this folder, test locally. From the repo root:

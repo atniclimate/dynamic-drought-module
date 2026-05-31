@@ -1,6 +1,7 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './styles/app.css';
 
+import type maplibregl from 'maplibre-gl';
 import { createMap } from './map/init';
 import { LAYER_DEFS } from './config/layers';
 import { buildSidebar } from './ui/sidebar';
@@ -22,6 +23,15 @@ import { buildSidebar } from './ui/sidebar';
 
 async function boot(): Promise<void> {
   const map = createMap('map');
+
+  // Development-only handle for manual and automated testing in the browser
+  // console (for example projecting a feature to a pixel, or driving the map
+  // during a Playwright verification). `import.meta.env.DEV` is statically
+  // replaced with `false` in the production build, so this block is dead-code
+  // eliminated from `dist/`; no debug handle ships. Not application logic.
+  if (import.meta.env.DEV) {
+    (window as unknown as { __ddmMap?: maplibregl.Map }).__ddmMap = map;
+  }
 
   await new Promise<void>((resolve) => {
     if (map.loaded()) {

@@ -74,9 +74,39 @@
         </section>
 
         <section class="panel legend-panel" id="ecoregion-legend-panel" hidden>
-          <h2 class="panel-title">Ecoregion key</h2>
+          <div class="panel-title-row">
+            <h2 class="panel-title">Ecoregion key</h2>
+          </div>
+          <label class="gridded-index-control">
+            <span class="gridded-index-control-label">Detail level</span>
+            <select id="ecoregion-level" class="gridded-index-select" aria-label="Ecoregion detail level">
+              <option value="ecoregions-l3" selected>Level III (broad)</option>
+              <option value="ecoregions-l4">Level IV (detailed)</option>
+            </select>
+          </label>
           <ul id="ecoregion-legend" class="legend ecoregion-legend"></ul>
-          <p class="legend-note">EPA Level III Ecoregions</p>
+          <p class="legend-note" id="ecoregion-legend-note">EPA Omernik Level III ecoregions; 2012 delineation, simplified for display.</p>
+        </section>
+
+        <section class="panel legend-panel" id="gridded-index-legend-panel" hidden>
+          <div class="panel-title-row">
+            <h2 class="panel-title">Gridded index key</h2>
+          </div>
+          <label class="gridded-index-control">
+            <span class="gridded-index-control-label">Product</span>
+            <select id="gridded-index-product" class="gridded-index-select" aria-label="Gridded drought index product"></select>
+          </label>
+          <div class="gridded-index-ramp" role="img" aria-label="Standardized Precipitation Index scale: drier on the left, wetter on the right">
+            <span class="gridded-index-ramp-bar"></span>
+            <div class="gridded-index-ramp-labels">
+              <span>Drier</span>
+              <span>Wetter</span>
+            </div>
+          </div>
+          <p class="legend-note">
+            <span id="gridded-index-product-label">SPI, 90 day</span> · NOAA NIDIS. The exact color scale is baked into the tiles;
+            <a href="https://www.drought.gov/current-conditions" target="_blank" rel="noopener">see the drought.gov legend</a>.
+          </p>
         </section>
 
         <section class="panel legend-panel" id="usdm-legend-panel" hidden>
@@ -111,7 +141,7 @@
 
       <div id="loading-indicator" class="loading-indicator" hidden>
         <div class="spinner" aria-hidden="true"></div>
-        <span id="loading-text">Loading…</span>
+        <span id="loading-text">Loading...</span>
       </div>
 
       <div class="map-overlay-controls">
