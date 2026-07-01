@@ -1,21 +1,16 @@
 {
-  "retrieved": "2026-05-30",
+  "retrieved": "2026-07-01",
   "oni": {
     "source": "NOAA CPC Oceanic Nino Index (ONI)",
     "sourceUrl": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_v5.php",
     "description": "Three-month running mean of the Nino 3.4 sea surface temperature anomaly (ERSSTv5). El Nino at ONI >= +0.5 and La Nina at ONI <= -0.5, each sustained over five consecutive overlapping seasons; between is neutral.",
     "phase": "neutral",
     "latest": {
-      "seas": "FMA",
+      "seas": "MAM",
       "year": 2026,
-      "anom": 0.11
+      "anom": 0.48
     },
     "values": [
-      {
-        "seas": "MAM",
-        "year": 2023,
-        "anom": 0.27
-      },
       {
         "seas": "AMJ",
         "year": 2023,
@@ -184,12 +179,17 @@
       {
         "seas": "JFM",
         "year": 2026,
-        "anom": -0.15
+        "anom": -0.14
       },
       {
         "seas": "FMA",
         "year": 2026,
-        "anom": 0.11
+        "anom": 0.13
+      },
+      {
+        "seas": "MAM",
+        "year": 2026,
+        "anom": 0.48
       }
     ]
   },
@@ -199,16 +199,11 @@
     "description": "The ONI with the tropical-mean sea surface temperature trend removed, so it is not biased warm by background ocean warming. A useful corroborating index in a warming climate; same thresholds as ONI.",
     "phase": "neutral",
     "latest": {
-      "seas": "FMA",
+      "seas": "MAM",
       "year": 2026,
-      "anom": -0.48
+      "anom": -0.06
     },
     "values": [
-      {
-        "seas": "MAM",
-        "year": 2023,
-        "anom": -0.21
-      },
       {
         "seas": "AMJ",
         "year": 2023,
@@ -382,7 +377,12 @@
       {
         "seas": "FMA",
         "year": 2026,
-        "anom": -0.48
+        "anom": -0.45
+      },
+      {
+        "seas": "MAM",
+        "year": 2026,
+        "anom": -0.06
       }
     ]
   }
