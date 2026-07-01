@@ -40,10 +40,11 @@ scripts/.cache/
 # baseline (a copy of the separate drought-region-maps repository) and
 # research PDFs whose licenses do not permit redistribution. The canonical
 # skills live under .claude/skills/; the root skills/ path holds only
-# local reference files.
+# local reference files. The pattern is anchored to the repository root so
+# it does not swallow new files under .claude/skills/.
 drought-region-maps/
 research/
-skills/
+/skills/
 
 # Playwright browser-verification session artifacts
 .playwright-cli/
