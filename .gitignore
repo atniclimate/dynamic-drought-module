@@ -35,3 +35,15 @@ __pycache__/
 
 # P9 raster download / windowed-read cache (large; fetched at build time, not committed)
 scripts/.cache/
+
+# Local reference material, never published: the pre-migration Leaflet
+# baseline (a copy of the separate drought-region-maps repository) and
+# research PDFs whose licenses do not permit redistribution. The canonical
+# skills live under .claude/skills/; the root skills/ path holds only
+# local reference files.
+drought-region-maps/
+research/
+skills/
+
+# Playwright browser-verification session artifacts
+.playwright-cli/
