@@ -157,6 +157,51 @@ export function buildTreatyPopupHtml(props: GeoJsonProperties, featureName: stri
 }
 
 /**
+ * Popup for a National Weather Service (NWS) heat or fire-weather alert
+ * polygon from the NOAA Watch/Warning/Advisory MapServer. The valid window is
+ * always shown (an alert without its window would read as a permanent
+ * condition), and the link routes to the NWS active-alerts page rather than
+ * the raw Common Alerting Protocol JSON the feature's `url` attribute carries.
+ */
+export function buildNwsAlertPopupHtml(props: GeoJsonProperties): string {
+  const p = props ?? {};
+  const event = p.prod_type || 'Weather alert';
+  const onset = p.onset || '';
+  const ends = p.ends || p.expiration || '';
+  const wfo = p.wfo || '';
+
+  return `
+    <div class="popup-title">${escapeHtml(String(event))}</div>
+    <div class="popup-agency">NOAA NWS · Active Alert</div>
+    ${onset ? `<div class="popup-treaty-meta">From: ${escapeHtml(formatAlertTime(onset))}</div>` : ''}
+    ${ends ? `<div class="popup-treaty-meta">Until: ${escapeHtml(formatAlertTime(ends))}</div>` : ''}
+    ${wfo ? `<div class="popup-treaty-meta">Issued by: NWS office ${escapeHtml(String(wfo).replace(/^K/, ''))}</div>` : ''}
+    <div class="popup-description">Active National Weather Service watch, warning, or advisory for extreme heat or fire weather. Polygons are NWS forecast-zone shapes, updated about every five minutes.</div>
+    <div class="popup-links">
+      <a href="https://alerts.weather.gov/" target="_blank" rel="noopener">NWS Active Alerts</a>
+      <a href="https://www.weather.gov/safety/heat" target="_blank" rel="noopener">NWS Heat Safety</a>
+    </div>
+  `;
+}
+
+/**
+ * Format an alert timestamp (ISO 8601 with offset, from the WWA MapServer)
+ * as a readable local date and time. Falls back to the raw string when the
+ * value does not parse, rather than hiding the window.
+ */
+function formatAlertTime(value: unknown): string {
+  if (typeof value !== 'string' || value === '') return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+}
+
+/**
  * Popup for a United States state boundary from the bundled Census Bureau
  * cartographic boundary file. States are public administrative reference
  * boundaries (no sovereignty caveat applies); the generalization note keeps

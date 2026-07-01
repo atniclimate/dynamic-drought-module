@@ -13,7 +13,9 @@ export type RegionKey =
   | 'central_oregon'
   | 'southwest_washington'
   | 'south_puget_sound'
-  | 'national';
+  | 'national'
+  | 'alaska'
+  | 'hawaii';
 
 export type { Region } from '../types/region';
 
@@ -91,6 +93,24 @@ export const REGIONS: Record<RegionKey, Region> = {
     bounds: [[24.4, -125.0], [49.4, -66.9]],
     padding: 0.5,
     description: 'Contiguous United States explore framing.'
+  },
+  alaska: {
+    // The west bound stops short of the Aleutian antimeridian crossing;
+    // geometryBbox in src/impact/context.ts does not normalize longitudes
+    // across it (documented there), and the mainland framing serves the
+    // planning use case.
+    label: 'Alaska',
+    short: 'AK',
+    bounds: [[51.0, -170.0], [71.5, -129.5]],
+    padding: 1.0,
+    description: 'Alaska statewide framing; layer coverage varies.'
+  },
+  hawaii: {
+    label: 'Hawaii',
+    short: 'HI',
+    bounds: [[18.5, -160.5], [22.5, -154.5]],
+    padding: 0.3,
+    description: 'Hawaiian Islands framing; layer coverage varies.'
   }
 };
 

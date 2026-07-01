@@ -1,0 +1,57 @@
+# Snapshot freshness automation: scheduled rebuild of the committed data
+# snapshots so they never age into their staleness hedges unnoticed.
+#
+# Today this covers the El Nino / Southern Oscillation (ENSO) index snapshot
+# (public/data/enso-indices.json, built by scripts/build-enso-snapshot.mjs).
+# The impact briefing's long-range horizon starts hedging when the snapshot
+# is more than 45 days old; a weekly rebuild keeps it far inside that window.
+# Future committed snapshots (the landscape signature, USDM archive frames)
+# join this workflow as they land.
+#
+# The commit lands on main, which triggers the Pages deploy, so the live
+# embed serves the fresh snapshot without any manual step. Scheduled
+# workflows run only from the default branch, so this is inert until the
+# branch carrying it merges to main.
+
+name: Refresh committed data snapshots
+
+on:
+  schedule:
+    # Mondays 14:17 UTC.
+    - cron: '17 14 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    name: Rebuild and commit snapshots
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild the ENSO snapshot
+        run: npm run build:enso
+
+      - name: Commit when the snapshot changed
+        run: |
+          if git diff --quiet public/data/enso-indices.json; then
+            echo "Snapshot unchanged; nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data/enso-indices.json
+          git commit -m "Refresh ENSO snapshot (scheduled)"
+          git push

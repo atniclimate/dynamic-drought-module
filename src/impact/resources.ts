@@ -117,6 +117,10 @@ function regionPrimaryState(regionKey: RegionKey | null): StateCode | null {
   switch (regionKey) {
     case 'central_oregon':
       return 'OR';
+    case 'alaska':
+      return 'AK';
+    case 'hawaii':
+      return 'HI';
     case 'national':
       return null;
     default:

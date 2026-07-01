@@ -93,6 +93,20 @@ export const URLS = Object.freeze({
   // fetch confirmed from the app origin). Access method: REST GeoJSON, direct.
   nwsApi: 'https://api.weather.gov',
 
+  // NOAA NWS event-driven Watch/Warning/Advisory (WWA) MapServer, layer 1
+  // (WatchesWarnings). Used by the heat and fire-weather alerts map layer:
+  // unlike `${nwsApi}/alerts/active` (whose zone-based alerts carry null
+  // geometry), this service resolves zone geometry server-side and emits
+  // polygon GeoJSON. Updated every 5 minutes per the service description.
+  // Verified 2026-07-01: query with prod_type filter returned HTTP 200,
+  // Content-Type application/geo+json, reflected-origin CORS
+  // (Access-Control-Allow-Origin echoed the requesting Origin, like the BIA
+  // FeatureServer), polygon features with prod_type / onset / ends /
+  // expiration / wfo / url attributes. Access method: ESRI REST query,
+  // f=geojson, direct.
+  nwsWwaMapServer:
+    'https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/1',
+
   // ---------- United States Drought Monitor (USDM) -----------
   // Joint product of National Drought Mitigation Center (NDMC) at the
   // University of Nebraska-Lincoln (UNL), the National Oceanic and

@@ -126,3 +126,26 @@ export const RESERVATION_OUTLINE_COLOR = '#4f46e5';
  * ------------------------------------------------------------------------- */
 
 export const STATE_OUTLINE_COLOR = '#64748b';
+
+/* ---------------------------------------------------------------------------
+ * NWS heat and fire-weather alert polygons
+ *
+ * Colors follow the National Weather Service watch/warning/advisory display
+ * standard (the weather.gov map colors users already know), so the module
+ * never invents its own severity language. The NWS Hazard Simplification
+ * project renamed Excessive Heat Warning to Extreme Heat Warning in 2025;
+ * both names are carried so archived or transitional products still color
+ * correctly.
+ * ------------------------------------------------------------------------- */
+
+export const NWS_ALERT_COLORS: Readonly<Record<string, string>> = {
+  'Extreme Heat Warning': '#c71585',
+  'Excessive Heat Warning': '#c71585',
+  'Extreme Heat Watch': '#800000',
+  'Excessive Heat Watch': '#800000',
+  'Heat Advisory': '#ff7f50',
+  'Red Flag Warning': '#ff1493',
+  'Fire Weather Watch': '#ffdead'
+};
+
+export const NWS_ALERT_DEFAULT_COLOR = '#9ca3af';
