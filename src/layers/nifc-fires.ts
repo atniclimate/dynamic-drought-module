@@ -42,6 +42,7 @@ import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
 import { escapeHtml } from '../util/escape';
+import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 
 const LAYER_KEY = 'nifc-fires';
@@ -56,6 +57,16 @@ const OUTLINE_LAYER_ID = 'nifc-fires-outline';
  * basemap label glyphs.
  */
 const BEFORE_ID = 'first-symbol';
+
+/** Per-call network budget for the WFIGS perimeters query. */
+const FETCH_TIMEOUT_MS = 15_000;
+
+/**
+ * Master cancellation controller for the in-flight fetch. Aborted on
+ * `deactivate` and replaced on each `activate` so a superseded request can
+ * never render into a torn-down layer (CLAUDE.md section 6 invariant 5).
+ */
+let masterController: AbortController | null = null;
 
 type NifcStatus = 'loading' | 'ready' | 'error' | 'no-data';
 
@@ -95,20 +106,35 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     return;
   }
 
+  // Supersede any prior in-flight fetch before starting a new one.
+  if (masterController) masterController.abort();
+  masterController = new AbortController();
+  const signal = masterController.signal;
+
   reportStatus('loading');
 
   let geojson: FeatureCollection;
   try {
-    const response = await fetch(buildQueryUrl());
+    const response = await fetchWithBudget(
+      buildQueryUrl(),
+      null,
+      signal,
+      FETCH_TIMEOUT_MS
+    );
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} ${response.statusText}`);
     }
     geojson = (await response.json()) as FeatureCollection;
   } catch (err) {
+    // Aborted means superseded or deactivated; drop silently per invariant 5.
+    if (signal.aborted) return;
     console.warn('[nifc-fires] WFIGS perimeters fetch failed.', err);
     reportStatus('error');
     return;
   }
+
+  // A late response to a torn-down activation must not render.
+  if (signal.aborted) return;
 
   const features = geojson?.features ?? [];
 
@@ -156,10 +182,15 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 }
 
 /**
- * Remove the fill, outline, and source. All three are guarded so callers
- * can invoke `deactivate` without first verifying activation state.
+ * Abort any in-flight fetch and remove the fill, outline, and source. All
+ * guards are defensive so callers can invoke `deactivate` without first
+ * verifying activation state.
  */
 export function deactivate(map: maplibregl.Map): void {
+  if (masterController) {
+    masterController.abort();
+    masterController = null;
+  }
   if (map.getLayer(FILL_LAYER_ID)) {
     map.removeLayer(FILL_LAYER_ID);
   }
