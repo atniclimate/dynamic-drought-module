@@ -4,9 +4,11 @@ import * as biaReservations from '../layers/bia-reservations';
 import * as drought from '../layers/drought';
 import * as ecoregions from '../layers/ecoregions';
 import * as griddedIndex from '../layers/gridded-index';
+import * as heatrisk from '../layers/heatrisk';
 import * as hydrography from '../layers/hydrography';
 import * as nifcFires from '../layers/nifc-fires';
 import * as nwsAlerts from '../layers/nws-alerts';
+import * as spcFireWeather from '../layers/spc-fire-weather';
 import * as states from '../layers/states';
 import * as telemetry from '../layers/telemetry';
 import * as treaty from '../layers/treaty';
@@ -70,6 +72,8 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'states',      name: 'State Boundaries',           source: 'US Census · bundled GeoJSON', defaultOn: false, module: states },
   { key: 'nifc-fires',  name: 'Active Wildfires (NIFC)',    source: 'NIFC WFIGS · FeatureServer', defaultOn: false, module: nifcFires },
   { key: 'nws-alerts',  name: 'Heat & Fire Weather Alerts', source: 'NOAA NWS · MapServer',       defaultOn: false, module: nwsAlerts },
+  { key: 'heatrisk',    name: 'HeatRisk · Today (Experimental)', source: 'NOAA NWS/WPC · ImageServer', defaultOn: false, module: heatrisk },
+  { key: 'spc-fire-weather', name: 'Fire Weather Outlook (Day 1)', source: 'NOAA SPC · MapServer', defaultOn: false, module: spcFireWeather },
   { key: 'usfs-whp',    name: 'Wildfire Hazard Potential',  source: 'USFS · GeoPlatform',         defaultOn: false, module: usfsWhp },
   { key: 'telemetry',   name: 'Telemetry Stations',         source: 'USGS · USBR · NRCS · USACE', defaultOn: true,  module: telemetry }
 ];

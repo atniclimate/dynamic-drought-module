@@ -107,6 +107,55 @@ export const URLS = Object.freeze({
   nwsWwaMapServer:
     'https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/1',
 
+  // ---------- NOAA Storm Prediction Center (SPC) Fire Weather Outlook ------
+  // The SPC Fire Weather Outlooks MapServer, same NOAA mapservices cloud host
+  // as `nwsWwaMapServer`. Layer 1 ("Day 1 Outlook") and layer 4 ("Day 2
+  // Outlook") are the categorical fire-weather THREAT forecasts (pre-existing
+  // fuel dryness combined with forecast wind, relative humidity, and dry
+  // lightning over the next one to two days). This is not the NFDRS
+  // fuel-dryness fire danger rating and not an active-fire product; the popup
+  // carries that framing. Layers 2 and 5 are separate dry-thunderstorm
+  // sub-layers, not wired. The categorical field is `dn` (Data Number), an
+  // INTEGER with no string sibling: 5 = Elevated, 8 = Critical, 10 = Extreme
+  // (per the service's documented risk classification; the consumer maps the
+  // value client-side). `valid` / `expire` carry the validity window as
+  // `YYYYMMDDHHMM` UTC strings. An empty FeatureCollection is a legitimate
+  // "no elevated fire weather today" result, not an error (confirmed live:
+  // the nationwide Day 1 pull returned two Southwest features on the
+  // verification date while a PNW envelope returned zero). Updated up to five
+  // times daily (Day 1) and twice daily (Day 2).
+  // Verified 2026-07-01: HTTP 200, Content-Type application/geo+json,
+  // Access-Control-Allow-Origin reflected the request origin (confirmed
+  // against the app origin; absent without an Origin header), so a browser
+  // fetch needs no proxy. Access method: ESRI REST MapServer query,
+  // f=geojson, direct (the SPC graphical page is not scraped).
+  spcFireWeatherOutlookMapServer:
+    'https://mapservices.weather.noaa.gov/vector/rest/services/fire_weather/SPC_firewx/MapServer',
+
+  // ---------- NWS HeatRisk (experimental) ----------
+  // The NWS / Weather Prediction Center HeatRisk index: five classes (0
+  // little-to-none, 1 minor, 2 moderate, 3 major, 4 extreme) of expected
+  // heat impact, one value per day across a rolling 7-day forecast, CONUS.
+  // NWS flags the product as EXPERIMENTAL (no availability guarantee;
+  // changes without notice); the sidebar label carries that word.
+  // Verified 2026-07-01: HTTP 200; exportImage returns image/png (confirmed
+  // by PNG magic bytes and a pixel decode showing the published class
+  // colors, not a blank tile); Access-Control-Allow-Origin reflected the
+  // request origin (confirmed against the app origin, localhost, and an
+  // unrelated origin), so no Worker proxy is needed. Access method: ESRI
+  // ImageServer exportImage raster tiles, MapLibre bbox template, direct.
+  // CAVEAT (load-bearing, found in adversarial verification): this is a
+  // 6-day rolling forecast mosaic keyed on idp_validtime. Omitting `time`
+  // is stable but WRONG: a no-time exportImage matched the +2-day raster,
+  // not today (confirmed via identify catalogItemVisibilities). The
+  // consumer MUST read timeInfo.timeExtent[0] from the service metadata at
+  // activation and pass it as `time=<epoch ms>`; a static URL template is
+  // not sufficient. The WMS sibling is not exposed (HTTP 400); do not use
+  // it as a fallback. The raw pixel values are a single-band float 0 to 4;
+  // the class colors are applied server-side, so no client recoloring.
+  nwsHeatRisk:
+    'https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer',
+
   // ---------- United States Drought Monitor (USDM) -----------
   // Joint product of National Drought Mitigation Center (NDMC) at the
   // University of Nebraska-Lincoln (UNL), the National Oceanic and

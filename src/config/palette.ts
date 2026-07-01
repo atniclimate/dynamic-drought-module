@@ -149,3 +149,24 @@ export const NWS_ALERT_COLORS: Readonly<Record<string, string>> = {
 };
 
 export const NWS_ALERT_DEFAULT_COLOR = '#9ca3af';
+
+/* ---------------------------------------------------------------------------
+ * SPC Fire Weather Outlook categories
+ *
+ * Keyed by the MapServer's integer `dn` (Data Number) field. Colors follow
+ * the Storm Prediction Center's own fire-weather display convention
+ * (Elevated orange, Critical red, Extreme magenta), so the module never
+ * invents its own severity language.
+ * ------------------------------------------------------------------------- */
+
+export const SPC_FIREWX_CATEGORIES: ReadonlyArray<{
+  readonly dn: number;
+  readonly label: string;
+  readonly color: string;
+}> = [
+  { dn: 5, label: 'Elevated', color: '#e69800' },
+  { dn: 8, label: 'Critical', color: '#e60000' },
+  { dn: 10, label: 'Extreme', color: '#ff00ff' }
+];
+
+export const SPC_FIREWX_DEFAULT_COLOR = '#9ca3af';

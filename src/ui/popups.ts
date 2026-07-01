@@ -202,6 +202,57 @@ function formatAlertTime(value: unknown): string {
 }
 
 /**
+ * Popup for a Storm Prediction Center (SPC) Fire Weather Outlook polygon.
+ * The category label is resolved from the integer `dn` field by the caller
+ * (the palette owns the mapping); the description carries the mandatory
+ * honest framing: this is a forecast of fire-WEATHER threat (wind, humidity,
+ * fuel dryness), not the NFDRS fire danger rating and not an active fire.
+ */
+export function buildSpcFireWeatherPopupHtml(
+  categoryLabel: string,
+  props: GeoJsonProperties
+): string {
+  const p = props ?? {};
+  const valid = formatSpcTime(p.valid);
+  const expire = formatSpcTime(p.expire);
+
+  return `
+    <div class="popup-title">Fire Weather Outlook: ${escapeHtml(categoryLabel)}</div>
+    <div class="popup-agency">NOAA SPC · Day 1 Outlook</div>
+    ${valid ? `<div class="popup-treaty-meta">From: ${escapeHtml(valid)}</div>` : ''}
+    ${expire ? `<div class="popup-treaty-meta">Until: ${escapeHtml(expire)}</div>` : ''}
+    <div class="popup-description">Storm Prediction Center forecast of fire-weather threat: pre-existing fuel dryness combined with forecast wind, relative humidity, and dry lightning. An outlook of conditions favorable for fire, not a fire danger rating and not an active fire.</div>
+    <div class="popup-links">
+      <a href="https://www.spc.noaa.gov/products/fire_wx/" target="_blank" rel="noopener">SPC Fire Weather Outlooks</a>
+    </div>
+  `;
+}
+
+/**
+ * Format the SPC `valid` / `expire` field (`YYYYMMDDHHMM`, UTC) as a
+ * readable local date and time. Returns the raw string when it does not
+ * parse, rather than hiding the window.
+ */
+function formatSpcTime(value: unknown): string {
+  if (typeof value !== 'string' || !/^\d{12}$/.test(value)) {
+    return typeof value === 'string' ? value : '';
+  }
+  const ms = Date.UTC(
+    Number(value.slice(0, 4)),
+    Number(value.slice(4, 6)) - 1,
+    Number(value.slice(6, 8)),
+    Number(value.slice(8, 10)),
+    Number(value.slice(10, 12))
+  );
+  return new Date(ms).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+}
+
+/**
  * Popup for a United States state boundary from the bundled Census Bureau
  * cartographic boundary file. States are public administrative reference
  * boundaries (no sovereignty caveat applies); the generalization note keeps
