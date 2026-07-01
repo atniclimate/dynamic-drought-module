@@ -4,6 +4,8 @@ import './styles/app.css';
 import type maplibregl from 'maplibre-gl';
 import { createMap } from './map/init';
 import { LAYER_DEFS } from './config/layers';
+import { applyDeepLink } from './state/deep-link';
+import { parseSelectParam } from './state/url';
 import { buildSidebar } from './ui/sidebar';
 
 /**
@@ -51,12 +53,21 @@ async function boot(): Promise<void> {
     }
   }
 
+  // Capture the one-shot `select` deep link BEFORE the sidebar boots: the
+  // sidebar's first syncUrl rewrites the URL and deliberately drops the
+  // parameter, so it must be read first (order is load-bearing).
+  const select = parseSelectParam();
+
   buildSidebar(map, () => {
     // Region-change observer hook. The sidebar handles fitBounds, the
     // active radio button, and URL sync internally; this callback is here
     // for any future analytics or cross-module subscriber that wants to
     // observe region transitions without coupling to the sidebar.
   });
+
+  // Applied after the sidebar so the deep link's fitBounds supersedes the
+  // region framing; async, so a slow bundled-data fetch never blocks boot.
+  void applyDeepLink(map, select);
 }
 
 if (document.readyState === 'loading') {

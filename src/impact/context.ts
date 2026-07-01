@@ -76,9 +76,10 @@ function resolveTitle(kind: BoundaryKind, props: GeoJsonProperties): string {
  * bounding box. Returns null for geometries without positional coordinates
  * (an empty geometry or a `GeometryCollection`, which the boundary layers do
  * not emit). Longitudes are not normalized across the antimeridian; the PNW
- * framings do not cross it.
+ * framings do not cross it (and the Alaska deep link inherits this
+ * limitation; documented at the caller).
  */
-function geometryBbox(
+export function geometryBbox(
   geometry: Geometry | undefined | null
 ): [number, number, number, number] | null {
   if (!geometry || geometry.type === 'GeometryCollection') return null;

@@ -67,6 +67,33 @@ export function parseUrlParams(): ParsedUrlParams {
 }
 
 /**
+ * A parsed `select` deep-link parameter (E2 embed deep-linking). Format is
+ * `select=<kind>:<id>`; the only kind wired so far is `state` with a
+ * two-letter postal code (`select=state:WA`). The parameter is applied once
+ * at boot (zoom to the boundary and open the impact briefing) and is
+ * deliberately NOT re-emitted by `syncUrl`: the URL must never keep claiming
+ * a briefing the user has since closed. An embedding site keeps the
+ * parameter in its iframe `src`, which re-applies it on every load; that is
+ * the deep-link use case.
+ */
+export interface SelectParam {
+  readonly kind: 'state';
+  readonly id: string;
+}
+
+/** Parse the `select` parameter, or null when absent or malformed. */
+export function parseSelectParam(): SelectParam | null {
+  const raw = new URLSearchParams(window.location.search).get('select');
+  if (!raw) return null;
+  const idx = raw.indexOf(':');
+  if (idx <= 0) return null;
+  const kind = raw.slice(0, idx).trim().toLowerCase();
+  const id = raw.slice(idx + 1).trim();
+  if (kind !== 'state' || id === '') return null;
+  return { kind: 'state', id };
+}
+
+/**
  * Snapshot of the application state that drives the URL. Mirrors the
  * subset of fields written by the vanilla syncUrl: the active region,
  * the active layer set, and the sticky embed flag.
