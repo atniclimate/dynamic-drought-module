@@ -326,9 +326,13 @@ export const URLS = Object.freeze({
   ensoIndicesLocal: import.meta.env.BASE_URL + 'data/enso-indices.json',
 
   // ---------- Cloudflare Worker proxy ----------
-  // Filled in during M10 once the Worker is deployed. While empty, callers
-  // that need CORS-restricted endpoints (NRCS Air-Water Database (AWDB),
-  // USACE Dataquery, USBR Hydromet, NWRFC) should detect the empty string
-  // and fail gracefully with the layer's `unavailable` status.
-  workerProxy: '' as string
+  // The deployed DDM CORS proxy (workers/proxy/, `npm run deploy` there).
+  // Request format: `${workerProxy}/proxy?url=<encoded_upstream_url>`;
+  // upstreams outside the Worker's allow-list (NRCS Air-Water Database
+  // (AWDB), USACE Dataquery, USBR Hydromet, NWRFC, CPC, BIA map hosts) are
+  // rejected with 403. Deployed 2026-07-01 to the atniclimate workers.dev
+  // subdomain; health check at `${workerProxy}/healthz`. Callers must still
+  // detect an empty string and fail gracefully so a fork without a deployed
+  // Worker degrades to the layer's `unavailable` status.
+  workerProxy: 'https://ddm-proxy.atniclimate.workers.dev' as string
 });
