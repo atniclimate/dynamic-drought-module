@@ -249,6 +249,14 @@ export const URLS = Object.freeze({
   ecoregionsPmtilesLocal: import.meta.env.BASE_URL + 'data/ecoregions-pnw.pmtiles',
   tribalLandsLocal: import.meta.env.BASE_URL + 'data/tribal-lands.geojson',
   treatyAreasLocal: import.meta.env.BASE_URL + 'data/treaty-areas.geojson',
+  // United States state boundaries, baked from the Census Bureau cartographic
+  // boundary file (1:20,000,000 generalization, 2023 vintage, public domain)
+  // by scripts/build-states.mjs (`npm run build:states`; source download
+  // verified HTTP 200 on 2026-07-01). Public administrative reference data,
+  // not sovereign-jurisdiction polygons, so bundling is consistent with
+  // CLAUDE.md hard rule 1. Provenance is recorded in the file's `metadata`
+  // foreign member.
+  usStatesLocal: import.meta.env.BASE_URL + 'data/us-states.geojson',
   // ENSO index snapshot (the Oceanic Nino Index and the Relative ONI; built by
   // scripts/build-enso-snapshot.mjs, `npm run build:enso`). Bundled, so the
   // no-CORS CPC sources are read at build time, not by the browser at runtime.

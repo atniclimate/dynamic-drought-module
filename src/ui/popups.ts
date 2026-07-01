@@ -156,6 +156,29 @@ export function buildTreatyPopupHtml(props: GeoJsonProperties, featureName: stri
   `;
 }
 
+/**
+ * Popup for a United States state boundary from the bundled Census Bureau
+ * cartographic boundary file. States are public administrative reference
+ * boundaries (no sovereignty caveat applies); the generalization note keeps
+ * the coarse 1:20,000,000 source honest.
+ */
+export function buildStatePopupHtml(props: GeoJsonProperties): string {
+  const p = props ?? {};
+  const name = p.NAME || p.name || 'State';
+  const postal = p.STUSPS || '';
+
+  return `
+    <div class="popup-title">${escapeHtml(String(name))}</div>
+    <div class="popup-agency">US Census Bureau · State Boundary</div>
+    ${postal ? `<div class="popup-treaty-meta">Postal code: ${escapeHtml(String(postal))}</div>` : ''}
+    <div class="popup-description">State boundary from the United States Census Bureau cartographic boundary file (1:20,000,000 generalization); a reference frame for conditions and resources, not a survey-grade line.</div>
+    ${IMPACT_TRIGGER_BUTTON_HTML}
+    <div class="popup-links">
+      <a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html" target="_blank" rel="noopener">Census cartographic boundary files</a>
+    </div>
+  `;
+}
+
 // =============================================================================
 // M5: telemetry popup skeleton + live data hydration
 // =============================================================================

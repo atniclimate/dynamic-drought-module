@@ -12,7 +12,8 @@ export type RegionKey =
   | 'cascades'
   | 'central_oregon'
   | 'southwest_washington'
-  | 'south_puget_sound';
+  | 'south_puget_sound'
+  | 'national';
 
 export type { Region } from '../types/region';
 
@@ -76,6 +77,20 @@ export const REGIONS: Record<RegionKey, Region> = {
     bounds: [[46.9, -123.2], [47.5, -122.1]],
     padding: 0.10,
     description: 'Inland marine waters & WRIAs.'
+  },
+  national: {
+    // The national explore framing (E1 of the national roadmap). The curated
+    // PNW framings above remain the deployment's identity and default; this
+    // entry lets a user pull back to the contiguous United States, where the
+    // national layers (USDM, NIFC, WHP, BIA AIAN-LAR, gridded SPI) already
+    // cover the whole view. The bundled telemetry stations and the ecoregion
+    // tile bundle remain PNW-scoped for now; their status pills stay honest
+    // outside the PNW.
+    label: 'United States',
+    short: 'US',
+    bounds: [[24.4, -125.0], [49.4, -66.9]],
+    padding: 0.5,
+    description: 'Contiguous United States explore framing.'
   }
 };
 

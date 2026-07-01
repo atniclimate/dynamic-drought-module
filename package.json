@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "build:enso": "node scripts/build-enso-snapshot.mjs",
-    "build:ecoregion-tiles": "node scripts/build-ecoregion-tiles.mjs"
+    "build:ecoregion-tiles": "node scripts/build-ecoregion-tiles.mjs",
+    "build:states": "node scripts/build-states.mjs"
   },
   "dependencies": {
     "maplibre-gl": "^4.7.0",

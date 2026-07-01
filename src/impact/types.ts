@@ -107,7 +107,7 @@ export interface ResourceLink {
 }
 
 /** The kind of boundary that was selected; drives the land title and caveat. */
-export type BoundaryKind = 'ecoregion' | 'tribal' | 'treaty' | 'bia-reservation';
+export type BoundaryKind = 'ecoregion' | 'tribal' | 'treaty' | 'bia-reservation' | 'state';
 
 /**
  * The context handed from a boundary click to the briefing composer. Carries

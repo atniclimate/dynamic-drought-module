@@ -31,7 +31,8 @@ const KIND_LABEL: Record<BoundaryKind, string> = {
   ecoregion: 'EPA Omernik ecoregion',
   tribal: 'Tribal Lands (deployer data)',
   treaty: 'Historical Treaty area',
-  'bia-reservation': 'BIA reservation boundary (AIAN-LAR)'
+  'bia-reservation': 'BIA reservation boundary (AIAN-LAR)',
+  state: 'State (Census cartographic boundary)'
 };
 
 /** First non-empty string property among `keys`, else null. */
@@ -65,6 +66,8 @@ function resolveTitle(kind: BoundaryKind, props: GeoJsonProperties): string {
       );
     case 'bia-reservation':
       return firstString(props, ['LARNAME', 'LARName', 'NAME', 'name']) ?? 'Reservation land area';
+    case 'state':
+      return firstString(props, ['NAME', 'name', 'STUSPS']) ?? 'State';
   }
 }
 
@@ -136,5 +139,8 @@ export function kindLabel(kind: BoundaryKind): string {
 
 /** Whether a boundary kind carries the representation caveat. */
 export function caveatFor(kind: BoundaryKind): string {
-  return kind === 'ecoregion' ? '' : REPRESENTATION_CAVEAT;
+  // Ecoregions are ecological classifications and states are public
+  // administrative boundaries; neither is a sovereign-jurisdiction
+  // representation, so neither carries the caveat.
+  return kind === 'ecoregion' || kind === 'state' ? '' : REPRESENTATION_CAVEAT;
 }

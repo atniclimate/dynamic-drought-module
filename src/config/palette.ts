@@ -114,3 +114,15 @@ export function pickTreatyColor(name: string | null | undefined): string {
 
 export const RESERVATION_FILL_COLOR = '#6366f1';
 export const RESERVATION_OUTLINE_COLOR = '#4f46e5';
+
+/* ---------------------------------------------------------------------------
+ * United States state boundaries (Census cartographic boundary file)
+ *
+ * A neutral slate administrative line, deliberately quieter than every
+ * thematic layer: the state layer exists as a selectable reference frame for
+ * the impact briefing and resource routing, not as a subject of the map. The
+ * fill is a fully transparent hit area (MapLibre still hit-tests a fill layer
+ * at opacity zero) so a click anywhere inside a state can open the briefing.
+ * ------------------------------------------------------------------------- */
+
+export const STATE_OUTLINE_COLOR = '#64748b';

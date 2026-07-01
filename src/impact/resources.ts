@@ -29,65 +29,137 @@
 import type { RegionKey } from '../config/regions';
 import type { BoundarySelectionContext, ResourceLink } from './types';
 
-/** Two-letter state code used to select state resources and the drought.gov slug. */
-export type StateCode = 'WA' | 'OR' | 'ID';
+/**
+ * Two-letter state, district, or territory postal code used for resource
+ * routing. Covers the 52 features in the bundled Census cartographic boundary
+ * file (public/data/us-states.geojson): the 50 states, the District of
+ * Columbia, and Puerto Rico.
+ */
+export type StateCode =
+  | 'AL' | 'AK' | 'AZ' | 'AR' | 'CA' | 'CO' | 'CT' | 'DE' | 'FL' | 'GA'
+  | 'HI' | 'ID' | 'IL' | 'IN' | 'IA' | 'KS' | 'KY' | 'LA' | 'ME' | 'MD'
+  | 'MA' | 'MI' | 'MN' | 'MS' | 'MO' | 'MT' | 'NE' | 'NV' | 'NH' | 'NJ'
+  | 'NM' | 'NY' | 'NC' | 'ND' | 'OH' | 'OK' | 'OR' | 'PA' | 'RI' | 'SC'
+  | 'SD' | 'TN' | 'TX' | 'UT' | 'VT' | 'VA' | 'WA' | 'WV' | 'WI' | 'WY'
+  | 'DC' | 'PR';
 
-/** Federal Information Processing Standards (FIPS) codes for the PNW states. */
-const STATE_FIPS: Record<StateCode, number> = { WA: 53, OR: 41, ID: 16 };
+/** Federal Information Processing Standards (FIPS) state codes. */
+const STATE_FIPS: Record<StateCode, number> = {
+  AL: 1, AK: 2, AZ: 4, AR: 5, CA: 6, CO: 8, CT: 9, DE: 10, FL: 12, GA: 13,
+  HI: 15, ID: 16, IL: 17, IN: 18, IA: 19, KS: 20, KY: 21, LA: 22, ME: 23,
+  MD: 24, MA: 25, MI: 26, MN: 27, MS: 28, MO: 29, MT: 30, NE: 31, NV: 32,
+  NH: 33, NJ: 34, NM: 35, NY: 36, NC: 37, ND: 38, OH: 39, OK: 40, OR: 41,
+  PA: 42, RI: 44, SC: 45, SD: 46, TN: 47, TX: 48, UT: 49, VT: 50, VA: 51,
+  WA: 53, WV: 54, WI: 55, WY: 56, DC: 11, PR: 72
+};
 
-/** The FIPS code for a region's primary state (for the USDM Data Services API). */
-export function regionStateFips(regionKey: RegionKey | null): number {
-  return STATE_FIPS[regionToStateCode(regionKey)];
+const STATE_LABEL: Record<StateCode, string> = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
+  CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida',
+  GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana',
+  IA: 'Iowa', KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine',
+  MD: 'Maryland', MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota',
+  MS: 'Mississippi', MO: 'Missouri', MT: 'Montana', NE: 'Nebraska',
+  NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey', NM: 'New Mexico',
+  NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio',
+  OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island',
+  SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas',
+  UT: 'Utah', VT: 'Vermont', VA: 'Virginia', WA: 'Washington',
+  WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
+  DC: 'District of Columbia', PR: 'Puerto Rico'
+};
+
+/**
+ * Resolve the state for a selection. A clicked state boundary carries its own
+ * postal code (`STUSPS` from the Census file); every other boundary kind falls
+ * back to the active region framing. The national explore framing has no
+ * primary state, so a non-state selection there resolves to null and the
+ * routing degrades honestly to the national federal set. (Point-in-state
+ * resolution for non-state clicks under the national framing is a tracked
+ * follow-up; see TODO.md.)
+ */
+export function resolveStateCode(
+  context: BoundarySelectionContext
+): StateCode | null {
+  if (context.kind === 'state') {
+    const raw = context.properties?.['STUSPS'];
+    if (typeof raw === 'string') {
+      const code = raw.toUpperCase();
+      if (code in STATE_FIPS) return code as StateCode;
+    }
+  }
+  return regionPrimaryState(context.regionKey);
 }
 
-/** The display label for a region's primary state. */
-export function regionStateName(regionKey: RegionKey | null): string {
-  return STATE_LABEL[regionToStateCode(regionKey)];
+/** The FIPS code for a selection's state (USDM Data Services), or null. */
+export function contextStateFips(
+  context: BoundarySelectionContext
+): number | null {
+  const code = resolveStateCode(context);
+  return code === null ? null : STATE_FIPS[code];
+}
+
+/** The display label for a selection's state, or null. */
+export function contextStateName(
+  context: BoundarySelectionContext
+): string | null {
+  const code = resolveStateCode(context);
+  return code === null ? null : STATE_LABEL[code];
 }
 
 /**
- * Map a region key to its primary state for resource framing. Most PNW
+ * Map a region key to its primary state for resource framing. The PNW
  * framings are Washington-centric (the deployer context is ATNI Climate);
- * Central Oregon routes to Oregon. The Columbia and Snake basin spans several
- * states but its resource framing leans Washington, matching the cataloged
- * resource set. Regional generalization (ROADMAP) will broaden this.
+ * Central Oregon routes to Oregon. The national explore framing has no
+ * primary state.
  */
-function regionToStateCode(regionKey: RegionKey | null): StateCode {
+function regionPrimaryState(regionKey: RegionKey | null): StateCode | null {
   switch (regionKey) {
     case 'central_oregon':
       return 'OR';
+    case 'national':
+      return null;
     default:
       return 'WA';
   }
 }
 
-/** drought.gov publishes a per-state page; map the state code to its slug. */
-const DROUGHT_GOV_SLUG: Record<StateCode, string> = {
-  WA: 'washington',
-  OR: 'oregon',
-  ID: 'idaho'
-};
-
-const STATE_LABEL: Record<StateCode, string> = {
-  WA: 'Washington',
-  OR: 'Oregon',
-  ID: 'Idaho'
-};
+/**
+ * drought.gov publishes a per-state page at a hyphenated-name slug. The
+ * pattern was spot-verified live on 2026-07-01 (Texas, New Mexico, North
+ * Carolina, Alaska, Hawaii all HTTP 200); the District of Columbia page does
+ * not exist (HTTP 404) and Puerto Rico is unverified, so both fall back to
+ * the national portal.
+ */
+function droughtGovStateUrl(state: StateCode): string {
+  if (state === 'DC' || state === 'PR') return 'https://www.drought.gov/';
+  return `https://www.drought.gov/states/${STATE_LABEL[state].toLowerCase().replace(/ /g, '-')}`;
+}
 
 /**
- * Federal resources. The drought.gov page is state-aware; the U.S. Drought
- * Monitor and the United States Department of Agriculture drought-relief hub
- * are national.
+ * Federal resources. The drought.gov page is state-aware when a state can be
+ * resolved for the selection and falls back to the national portal otherwise;
+ * the U.S. Drought Monitor and the United States Department of Agriculture
+ * drought-relief hub are national.
  */
-function federalResources(state: StateCode): ResourceLink[] {
+function federalResources(state: StateCode | null): ResourceLink[] {
+  const droughtGov: ResourceLink = state
+    ? {
+        label: `Drought.gov: ${STATE_LABEL[state]} state conditions`,
+        url: droughtGovStateUrl(state),
+        agency: 'National Integrated Drought Information System (NIDIS)',
+        tier: 'federal',
+        description: 'Federal drought portal: current conditions, outlooks, and impacts for the state.'
+      }
+    : {
+        label: 'Drought.gov: national conditions and outlooks',
+        url: 'https://www.drought.gov/',
+        agency: 'National Integrated Drought Information System (NIDIS)',
+        tier: 'federal',
+        description: 'Federal drought portal: national current conditions, outlooks, and impacts.'
+      };
   return [
-    {
-      label: `Drought.gov: ${STATE_LABEL[state]} state conditions`,
-      url: `https://www.drought.gov/states/${DROUGHT_GOV_SLUG[state]}`,
-      agency: 'National Integrated Drought Information System (NIDIS)',
-      tier: 'federal',
-      description: 'Federal drought portal: current conditions, outlooks, and impacts for the state.'
-    },
+    droughtGov,
     {
       label: 'U.S. Drought Monitor',
       url: 'https://droughtmonitor.unl.edu/',
@@ -111,8 +183,15 @@ function federalResources(state: StateCode): ResourceLink[] {
  * drought relief); Oregon and Idaho carry their water-resources drought
  * programs. Each is plainly attributed to its agency and is regional context,
  * never framed as governing a Tribal Nation.
+ *
+ * The table is deliberately partial: only strongly verified state programs
+ * enter it. A state without an entry gets no state tier (the drought.gov
+ * state page in the federal tier still carries state-specific conditions);
+ * this never fabricates a link. The state-by-state catalog campaign (E4 of
+ * the national roadmap) fills the table via the ddm-data-scout and
+ * ddm-source-verifier pipeline.
  */
-const STATE_RESOURCES: Record<StateCode, ResourceLink[]> = {
+const STATE_RESOURCES: Partial<Record<StateCode, ResourceLink[]>> = {
   WA: [
     {
       label: 'Drinking-water drought guidance',
@@ -199,12 +278,14 @@ function biaRegionalResource(
 
 /**
  * Compose the ordered resource list for a selection. Order is the stewardship
- * order: Tribe's-own slot first, then federal, then state (by region's primary
- * state), then the BIA regional entry for a reservation boundary.
+ * order: Tribe's-own slot first, then federal, then state (resolved from the
+ * clicked state boundary or the region's primary state), then the BIA regional
+ * entry for a reservation boundary.
  */
 export function buildResources(context: BoundarySelectionContext): ResourceLink[] {
-  const state = regionToStateCode(context.regionKey);
-  const out: ResourceLink[] = [tribeOwnSlot(), ...federalResources(state), ...STATE_RESOURCES[state]];
+  const state = resolveStateCode(context);
+  const out: ResourceLink[] = [tribeOwnSlot(), ...federalResources(state)];
+  if (state) out.push(...(STATE_RESOURCES[state] ?? []));
   const bia = biaRegionalResource(context);
   if (bia) out.push(bia);
   return out;

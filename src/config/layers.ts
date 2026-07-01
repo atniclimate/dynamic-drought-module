@@ -6,6 +6,7 @@ import * as ecoregions from '../layers/ecoregions';
 import * as griddedIndex from '../layers/gridded-index';
 import * as hydrography from '../layers/hydrography';
 import * as nifcFires from '../layers/nifc-fires';
+import * as states from '../layers/states';
 import * as telemetry from '../layers/telemetry';
 import * as treaty from '../layers/treaty';
 import * as tribal from '../layers/tribal';
@@ -65,6 +66,7 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'tribal',      name: 'Tribal Lands',               source: 'BIA · bundled GeoJSON',     defaultOn: true,  module: tribal },
   { key: 'treaty',      name: 'Treaty Areas',               source: 'WA DAHP · bundled GeoJSON', defaultOn: false, module: treaty },
   { key: 'bia-reservations', name: 'Reservation Boundaries', source: 'BIA · AIAN-LAR (live)',     defaultOn: false, module: biaReservations },
+  { key: 'states',      name: 'State Boundaries',           source: 'US Census · bundled GeoJSON', defaultOn: false, module: states },
   { key: 'nifc-fires',  name: 'Active Wildfires (NIFC)',    source: 'NIFC WFIGS · FeatureServer', defaultOn: false, module: nifcFires },
   { key: 'usfs-whp',    name: 'Wildfire Hazard Potential',  source: 'USFS · GeoPlatform',         defaultOn: false, module: usfsWhp },
   { key: 'telemetry',   name: 'Telemetry Stations',         source: 'USGS · USBR · NRCS · USACE', defaultOn: true,  module: telemetry }

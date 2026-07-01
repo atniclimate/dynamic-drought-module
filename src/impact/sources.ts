@@ -26,7 +26,7 @@ import { fetchWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
 import { cpcOutlookBarsSvg, trendLineSvg, type TrendPoint } from '../ui/charts';
 import { categoryImpact } from './category-impacts';
-import { regionStateFips, regionStateName } from './resources';
+import { contextStateFips, contextStateName } from './resources';
 import type { BoundarySelectionContext, SourcedClaim } from './types';
 
 /** The outcome of one source fetch. */
@@ -216,8 +216,17 @@ export async function fetchDsciTrendClaims(
   context: BoundarySelectionContext,
   signal: AbortSignal
 ): Promise<SourceResult> {
-  const fips = regionStateFips(context.regionKey);
-  const stateName = regionStateName(context.regionKey);
+  const fips = contextStateFips(context);
+  const stateName = contextStateName(context);
+  if (fips === null || stateName === null) {
+    // The national explore framing has no primary state; the statewide DSCI
+    // series is shown once a state can be identified for the selection.
+    return {
+      claims: [],
+      ok: false,
+      note: 'The statewide drought-severity trend is available for a state selection or a regional framing.'
+    };
+  }
   const end = new Date();
   const start = new Date(end);
   start.setMonth(start.getMonth() - 14);
