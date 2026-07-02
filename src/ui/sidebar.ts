@@ -50,6 +50,8 @@ import {
 } from '../config/layers';
 import type { LayerDef } from '../config/layers';
 import type { LayerRole } from '../types/layer';
+import { VIEW_PRESETS } from '../config/presets';
+import type { ViewPreset } from '../config/presets';
 import {
   REGIONS,
   DEFAULT_REGION,
@@ -570,6 +572,73 @@ function clearLayerStatusPill(key: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// View preset chips (UX-2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the question-first preset chip row from `VIEW_PRESETS`. Each chip
+ * is a plain button (not a toggle: presets set state without locking it,
+ * so no chip carries a pressed state) whose click applies the preset's
+ * layer-set. The tooltip carries the question the preset answers.
+ */
+function buildPresetChips(map: maplibregl.Map): void {
+  const container = document.getElementById('preset-chips');
+  if (!container) return;
+  container.innerHTML = '';
+
+  for (const preset of VIEW_PRESETS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'preset-chip';
+    btn.textContent = preset.label;
+    btn.title = preset.description;
+    btn.addEventListener('click', () => {
+      applyPreset(map, preset);
+    });
+    container.appendChild(btn);
+  }
+}
+
+/**
+ * Apply a preset: make the active layer set equal the preset's list,
+ * routing every transition through the same activation and deactivation
+ * paths a manual toggle takes (registry, URL sync, pills, and the UX-1
+ * surface exclusivity all hold for free; a preset names at most one
+ * surface by construction). Layers already on and named by the preset
+ * are left untouched. After application the user is free to adjust;
+ * the chip does not lock anything.
+ */
+function applyPreset(map: maplibregl.Map, preset: ViewPreset): void {
+  const wanted = new Set(preset.layers);
+  const active = registry.getActiveKeys();
+
+  for (const def of LAYER_DEFS) {
+    if (wanted.has(def.key)) continue;
+    const cb = document.querySelector<HTMLInputElement>(
+      `input[data-layer-key="${cssAttrEscape(def.key)}"]`
+    );
+    const isOn = active.has(def.key) || (cb?.checked ?? false);
+    if (!isOn) continue;
+    if (cb) cb.checked = false;
+    deactivateLayer(map, def);
+  }
+
+  for (const key of preset.layers) {
+    const def = getLayerDef(key);
+    if (!def) continue;
+    const cb = document.querySelector<HTMLInputElement>(
+      `input[data-layer-key="${cssAttrEscape(key)}"]`
+    );
+    const isOn = registry.getActiveKeys().has(key) || (cb?.checked ?? false);
+    if (isOn) continue;
+    if (cb) cb.checked = true;
+    void activateLayerWithIndicator(map, def, cb ?? createDetachedCheckbox());
+  }
+
+  announce(`View: ${preset.label}`);
+}
+
+// ---------------------------------------------------------------------------
 // Telemetry list builder
 // ---------------------------------------------------------------------------
 
@@ -766,6 +835,7 @@ export function buildSidebar(
   };
 
   buildRegionButtons(map, handleRegion);
+  buildPresetChips(map);
   buildLayerToggles(map);
   buildTelemetryList(map);
   wireTopLevelEvents(map);

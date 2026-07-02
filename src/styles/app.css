@@ -325,6 +325,42 @@ a:hover {
 }
 
 /* ----------------------------------------------------------------------------
+   View preset chips (UX-2)
+   ---------------------------------------------------------------------------- */
+
+.preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preset-chip {
+  appearance: none;
+  background: var(--bg-2);
+  color: var(--fg-1);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  line-height: 1.2;
+}
+.preset-chip:hover {
+  background: var(--bg-3);
+  border-color: var(--line-strong);
+  color: var(--fg-0);
+}
+.preset-chip:active {
+  background: var(--accent-soft);
+  border-color: var(--accent-strong);
+  color: var(--fg-0);
+}
+
+/* ----------------------------------------------------------------------------
    Layer toggles
    ---------------------------------------------------------------------------- */
 
@@ -972,6 +1008,7 @@ a:hover {
 }
 
 .region-btn:focus-visible,
+.preset-chip:focus-visible,
 .telemetry-item:focus-visible,
 .overlay-btn:focus-visible,
 .icon-btn:focus-visible {
