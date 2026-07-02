@@ -99,6 +99,29 @@ export const URLS = Object.freeze({
   // daily reading observed was the prior calendar day.
   nrcsAwdbRest: 'https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/data',
 
+  // ---------- NWRFC Water Supply Forecast Report (bulk CSV) ----------
+  // Northwest River Forecast Center seasonal water-supply forecasts for the
+  // Columbia Basin and PNW coastal rivers. Consumer appends
+  // `?Type=ALL&Source=ALL&Wyr=<water_year>&WyrDate=<YYYY-MM-DD>&Flavor=ESP10`.
+  // Columns: ID, Location, FcstPeriod, then Min/90/75/50/25/10/Max forecast
+  // (KAF) each paired with a percent-of-average column (1991-2020 normals),
+  // PeriodAvg, PrevRO, CurRO, CurPerAvg, FcstDate.
+  // Verified 2026-07-01 (scout-and-verify pipeline): HTTP 200, Content-Type
+  // text/html; charset=UTF-8, Access-Control-Allow-Origin ABSENT (confirmed
+  // both with and without an Origin header), so browser consumption is
+  // Worker-proxy ONLY; the proxied request returned 200 with a byte-identical
+  // body. Access method: bulk download (CGI CSV endpoint).
+  // Anti-scrape note: this is the machine CSV twin of ws_report.cgi (HTML);
+  // do not parse the per-station ws_forecasts.php pages.
+  // CAVEAT (load-bearing): the body is CSV wrapped in a bare HTML shell
+  // (<title>, <body>, <pre> ... </pre>, </body>); strip markup lines before
+  // parsing. CAVEAT: Source=<id> does NOT filter (byte-identical to ALL);
+  // fetch the full table (123 stations, ~740 rows observed) and filter
+  // client-side by ID. CAVEAT: FcstDate echoes the requested WyrDate; pass
+  // today's date, there is no "latest" default. Wyr is the water year
+  // (October through December roll to the next calendar year).
+  nwrfcWsReportCsv: 'https://www.nwrfc.noaa.gov/water_supply/ws_report_csv.cgi',
+
   // ---------- National Weather Service (NWS) API ----------
   // api.weather.gov: the public National Oceanic and Atmospheric
   // Administration (NOAA) NWS Application Programming Interface (API). Used by

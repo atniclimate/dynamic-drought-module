@@ -29,6 +29,7 @@ import {
   type SourceResult
 } from './sources';
 import { fetchEnsoClaims } from './enso';
+import { fetchWaterSupplyClaims } from './water-supply';
 import type { Horizon, ImpactBriefing, SourcedClaim } from './types';
 
 /** Re-render hook; the panel passes `refreshOpenBriefing` bound to its token. */
@@ -89,10 +90,16 @@ export async function hydrateBriefing(
   const { context, horizons } = briefing;
 
   const longRange = (async (): Promise<void> => {
-    // The ENSO phase tilt leads, then the cited CPC Seasonal Drought Outlook.
-    const enso = await fetchEnsoClaims(context, signal);
+    // The ENSO phase tilt leads, then the NWRFC water-supply pairing
+    // (observed runoff to date plus the seasonal volume forecast; the
+    // projection partner to the snowpack observations), then the cited CPC
+    // Seasonal Drought Outlook.
+    const [enso, waterSupply] = await Promise.all([
+      fetchEnsoClaims(context, signal),
+      fetchWaterSupplyClaims(context, signal)
+    ]);
     if (signal.aborted) return;
-    fillHorizon(horizons.longRange, [enso], [CPC_SEASONAL_OUTLOOK]);
+    fillHorizon(horizons.longRange, [enso, waterSupply], [CPC_SEASONAL_OUTLOOK]);
     onUpdate();
   })();
 
