@@ -39,6 +39,12 @@ export const TELEMETRY_STATIONS: readonly TelemetryStation[] = [
     color: '#06b6d4',
     description:
       'Lower Snake River dam. Forebay/tailwater elevation and total dissolved gas (TDG) drive salmonid passage management.',
+    cwms: {
+      office: 'NWDP',
+      tsId: 'IHR.Elev-Forebay.Inst.1Hour.0.Best',
+      catalogLike: 'IHR.*Forebay.*',
+      label: 'Forebay'
+    },
     links: [
       { label: 'USACE Dataquery 2.0', url: 'https://www.nwd-wc.usace.army.mil/dd/common/dataquery/www/' },
       { label: 'DART River Environment', url: 'https://www.cbr.washington.edu/dart/query/river_daily' }
@@ -104,6 +110,7 @@ export const TELEMETRY_STATIONS: readonly TelemetryStation[] = [
     color: '#f59e0b',
     description:
       'Crop water-use station. Air temperature, RH, solar radiation drive evapotranspiration estimates.',
+    hydrometParams: ['MRSO ET', 'MRSO MM', 'MRSO MX'],
     links: [
       { label: 'AgriMet daily / hourly', url: 'https://www.usbr.gov/pn/agrimet/agrimetmap/mrsoda.html' }
     ]
@@ -117,6 +124,7 @@ export const TELEMETRY_STATIONS: readonly TelemetryStation[] = [
     agency: 'USBR',
     color: '#f59e0b',
     description: 'Climate observations for irrigated agriculture in the Deschutes basin.',
+    hydrometParams: ['POBO ET', 'POBO MM', 'POBO MX'],
     links: [
       { label: 'AgriMet daily / hourly', url: 'https://www.usbr.gov/pn/agrimet/agrimetmap/poboda.html' }
     ]
@@ -131,6 +139,7 @@ export const TELEMETRY_STATIONS: readonly TelemetryStation[] = [
     color: '#a855f7',
     description:
       'Primary storage facility for the Deschutes basin. Real-time capacity is a leading drought indicator.',
+    hydrometParams: ['WIC AF'],
     links: [
       { label: 'USBR Hydromet "Teacup" diagrams', url: 'https://www.usbr.gov/pn/hydromet/select.html' }
     ]

@@ -8,6 +8,10 @@ import {
   SNOTEL_ELEMENTS
 } from '../util/awdb';
 import type { AwdbElementSeries } from '../util/awdb';
+import { fetchCwmsLatest, cwmsStationValue } from '../util/cwms';
+import type { CwmsLatest } from '../util/cwms';
+import { fetchHydrometDaily, hydrometStationValue } from '../util/hydromet';
+import type { HydrometSeries } from '../util/hydromet';
 import { fetchWithBudget } from '../util/fetch';
 import { escapeHtml } from '../util/escape';
 import { isObject } from '../util/guards';
@@ -309,7 +313,7 @@ export function buildTelemetryPopupSkeleton(station: TelemetryStation): string {
     .join('');
 
   const dataBlockHtml =
-    station.usgsSite || station.awdbStation
+    station.usgsSite || station.awdbStation || station.hydrometParams || station.cwms
       ? `<div class="popup-data" data-station-data="${escapeHtml(station.id)}">
            <div class="popup-data-loading">Fetching live data...</div>
          </div>`
@@ -372,6 +376,18 @@ export async function hydrateTelemetryPopupData(
       );
       if (signal.aborted) return;
       slot.innerHTML = renderAwdbRows(station, series);
+    } else if (station.hydrometParams && station.hydrometParams.length > 0) {
+      // USBR Hydromet/AgriMet daily arc through the Worker (verified
+      // 2026-07-01; see src/util/hydromet.ts and URLS.usbrHydrometArcCsv).
+      const series = await fetchHydrometDaily(station.hydrometParams, 7, signal);
+      if (signal.aborted) return;
+      slot.innerHTML = renderHydrometRows(station, series);
+    } else if (station.cwms) {
+      // USACE CWMS Data API, direct fetch (wildcard CORS verified
+      // 2026-07-01; see src/util/cwms.ts and URLS.usaceCwmsData).
+      const latest = await fetchCwmsLatest(station.cwms, signal);
+      if (signal.aborted) return;
+      slot.innerHTML = renderCwmsRow(station, latest);
     }
   } catch (_err) {
     // AbortError is the expected close path; swallow silently. Anything else
@@ -438,6 +454,88 @@ function renderAwdbRows(
       : '';
 
   return rows.join('') + asOf + spark;
+}
+
+// =============================================================================
+// Internal: USBR Hydromet and USACE CWMS render
+// =============================================================================
+
+/**
+ * Render popup-data rows for a USBR Hydromet/AgriMet station: one row per
+ * configured parameter (latest value), an "As of" date with a staleness
+ * note, and a 7-day sparkline of the primary parameter.
+ */
+function renderHydrometRows(
+  station: TelemetryStation,
+  series: HydrometSeries[]
+): string {
+  const values = series
+    .map((s) => hydrometStationValue(station.id, s))
+    .filter((v): v is NonNullable<typeof v> => v !== null && v.value !== null);
+
+  if (values.length === 0) {
+    return '<div class="popup-data-error">No recent USBR values for this station.</div>';
+  }
+
+  const rows = values.map((v) => {
+    const num =
+      v.parameter === 'reservoir_storage_acft' && v.value !== null
+        ? v.value.toLocaleString('en-US', { maximumFractionDigits: 0 })
+        : String(v.value);
+    return `
+      <div class="popup-data-row">
+        <span class="popup-data-label">${escapeHtml(v.label)}</span>
+        <span class="popup-data-value">${escapeHtml(num)} ${escapeHtml(v.unit)}</span>
+      </div>
+    `;
+  });
+
+  const latest = values[0];
+  const asOf = latest
+    ? `
+    <div class="popup-data-row" style="margin-top:4px;">
+      <span class="popup-data-label">As of</span>
+      <span class="popup-data-value">${escapeHtml(latest.timestamp)}${latest.freshness === 'stale' ? ' (stale)' : ''}</span>
+    </div>`
+    : '';
+
+  const primary = series[0];
+  const nums = primary ? primary.readings.map((r) => r.value) : [];
+  const spark =
+    primary && latest && nums.length >= 2
+      ? sparklineSvg(nums, {
+          title: `${latest.label} over the past 7 days (USBR Hydromet)`,
+          unit: latest.unit,
+          source: 'USBR Hydromet, past 7 days'
+        })
+      : '';
+
+  return rows.join('') + asOf + spark;
+}
+
+/**
+ * Render the popup-data row for a USACE CWMS reading: the labeled latest
+ * value with its unit as the API reported it, plus an "As of" timestamp.
+ */
+function renderCwmsRow(station: TelemetryStation, latest: CwmsLatest | null): string {
+  const cwms = station.cwms;
+  if (!cwms) return '';
+  const value = cwmsStationValue(station.id, cwms.label, latest);
+  if (value.value === null) {
+    return '<div class="popup-data-error">No recent USACE values for this station.</div>';
+  }
+  const ts = new Date(value.timestamp);
+  const tsStr = Number.isNaN(ts.getTime()) ? value.timestamp : ts.toLocaleString();
+  return `
+    <div class="popup-data-row">
+      <span class="popup-data-label">${escapeHtml(value.label)}</span>
+      <span class="popup-data-value">${escapeHtml(String(value.value))} ${escapeHtml(value.unit)}</span>
+    </div>
+    <div class="popup-data-row" style="margin-top:4px;">
+      <span class="popup-data-label">As of</span>
+      <span class="popup-data-value">${escapeHtml(tsStr)}${value.freshness === 'stale' ? ' (stale)' : ''}</span>
+    </div>
+  `;
 }
 
 // =============================================================================

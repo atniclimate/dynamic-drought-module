@@ -14,6 +14,20 @@ export interface TelemetryLink {
   readonly url: string;
 }
 
+/**
+ * A station's USACE CWMS Data API source: the office, the verified
+ * timeseries id, and the catalog `like` pattern used for one discovery
+ * retry when the id returns 200-with-empty (ids' version suffixes drift;
+ * only the catalog confirms which sibling carries data).
+ */
+export interface CwmsSource {
+  readonly office: string;
+  readonly tsId: string;
+  readonly catalogLike: string;
+  /** Display label for the reading, for example 'Forebay'. */
+  readonly label: string;
+}
+
 export interface TelemetryStation {
   readonly id: string;
   readonly name: string;
@@ -25,6 +39,10 @@ export interface TelemetryStation {
   readonly description: string;
   readonly awdbStation?: string;
   readonly usgsSite?: string;
+  /** USBR Hydromet/AgriMet daily parameters ("SITE PCODE"), primary first. */
+  readonly hydrometParams?: readonly string[];
+  /** USACE CWMS timeseries source. */
+  readonly cwms?: CwmsSource;
   readonly links: ReadonlyArray<TelemetryLink>;
 }
 
@@ -60,5 +78,11 @@ export interface StationValue {
   /** ISO 8601 date or datetime of the latest reading. */
   readonly timestamp: string;
   readonly freshness: TelemetryFreshness;
-  readonly source: 'nrcs-awdb' | 'usace-dataquery' | 'usbr-hydromet' | 'nwrfc' | 'usgs-iv';
+  readonly source:
+    | 'nrcs-awdb'
+    | 'usace-cwms'
+    | 'usace-dataquery'
+    | 'usbr-hydromet'
+    | 'nwrfc'
+    | 'usgs-iv';
 }

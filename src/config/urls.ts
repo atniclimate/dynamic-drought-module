@@ -122,6 +122,44 @@ export const URLS = Object.freeze({
   // (October through December roll to the next calendar year).
   nwrfcWsReportCsv: 'https://www.nwrfc.noaa.gov/water_supply/ws_report_csv.cgi',
 
+  // ---------- USBR Hydromet / AgriMet daily-arc CSV (PN region CGI) ----------
+  // Consumer appends `?parameter=<SITE%20PCODE[,...]>&syer=<Y>&smnth=<M>
+  // &sdy=<D>&eyer=<Y>&emnth=<M>&edy=<D>&format=2`. PCODEs in use: AF
+  // (reservoir storage, acre-feet), ET (daily reference evapotranspiration,
+  // inches), MM / MX / MN (mean / max / min daily air temperature, F).
+  // Verified 2026-07-01 (scout-and-verify pipeline): HTTP 200, Content-Type
+  // text/html; charset=UTF-8, Access-Control-Allow-Origin ABSENT (confirmed
+  // with and without an Origin header), so browser consumption is
+  // Worker-proxy ONLY; the proxied request returned 200 with a byte-identical
+  // body. Access method: bulk download (CGI CSV endpoint).
+  // Anti-scrape note: the machine CSV-table twin of the Hydromet and AgriMet
+  // report pages; do not scrape the HTML graphing UI or teacup diagrams.
+  // CAVEAT (load-bearing): the body is CSV inside an HTML shell with
+  // BEGIN DATA / END DATA markers; parse only between the markers. Fields
+  // are comma-delimited and space-padded; trim each. The most recent day
+  // commonly reads the literal "NO RECORD" (not yet posted; about one
+  // calendar day of lag observed); treat as missing, not as an error.
+  usbrHydrometArcCsv: 'https://www.usbr.gov/pn-bin/webarccsv.pl',
+
+  // ---------- USACE CWMS Data API ----------
+  // Corps Water Management System Data API v2. Consumer appends
+  // `/timeseries?name=<id>&office=<office>&begin=<ISO>&end=<ISO>` or
+  // `/catalog/TIMESERIES?office=<office>&like=<regex>`.
+  // Verified 2026-07-01 (scout-and-verify pipeline): HTTP 200, Content-Type
+  // application/json;version=2, Access-Control-Allow-Origin: * (a genuine
+  // wildcard, confirmed with and without an Origin header), so the DIRECT
+  // fetch is the route; the Worker path was also confirmed byte-identical as
+  // resilience. Access method: API (REST JSON).
+  // CAVEAT (load-bearing): every request needs an explicit
+  // `Accept: application/json;version=2` header. A wrong timeseries id
+  // returns HTTP 200 with an EMPTY values array, not an error; consumers
+  // must not treat 200-with-empty as success and should fall back to
+  // /catalog/TIMESERIES discovery. Working example: office NWDP,
+  // `IHR.Elev-Forebay.Inst.1Hour.0.Best` (hourly, units ft); the sibling
+  // `...Ave.~1Day.1Day.CBT-REV` reports in meters. Read the response's
+  // `units` field per series, never assume.
+  usaceCwmsData: 'https://cwms-data.usace.army.mil/cwms-data',
+
   // ---------- National Weather Service (NWS) API ----------
   // api.weather.gov: the public National Oceanic and Atmospheric
   // Administration (NOAA) NWS Application Programming Interface (API). Used by

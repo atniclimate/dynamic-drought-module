@@ -65,6 +65,9 @@ import {
   toStationValue,
   SNOTEL_ELEMENTS
 } from '../util/awdb';
+import { fetchCwmsLatest, cwmsStationValue } from '../util/cwms';
+import { fetchHydrometDaily, hydrometStationValue } from '../util/hydromet';
+import type { StationValue, TelemetryStation } from '../types/station';
 import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
 import { parseUrlParams, syncUrl } from '../state/url';
@@ -701,24 +704,67 @@ function shortReadingDate(iso: string): string {
 }
 
 /**
- * Hydrate the sidebar station rows that have a live-value source wired.
- * Today that is the NRCS SNOTEL stations (`awdbStation`); reservoir and
- * forecast sources join as their fetchers land. Stations without a
+ * The primary StationValue for one station, by whichever live source it
+ * carries: NRCS SNOTEL Snow Water Equivalent (`awdbStation`), the first
+ * configured USBR Hydromet parameter (`hydrometParams`), or the USACE
+ * CWMS reading (`cwms`). Null when the station has no wired source.
+ */
+async function fetchPrimaryStationValue(
+  station: TelemetryStation,
+  signal: AbortSignal
+): Promise<StationValue | null> {
+  if (station.awdbStation) {
+    const series = await fetchAwdbDailySeries(station.awdbStation, SNOTEL_ELEMENTS, 7, signal);
+    const swe = series.find((s) => s.element === 'WTEQ');
+    return swe ? toStationValue(station.id, swe) : null;
+  }
+  if (station.hydrometParams && station.hydrometParams.length > 0) {
+    const series = await fetchHydrometDaily(station.hydrometParams, 7, signal);
+    const primary = series[0];
+    return primary ? hydrometStationValue(station.id, primary) : null;
+  }
+  if (station.cwms) {
+    const latest = await fetchCwmsLatest(station.cwms, signal);
+    return cwmsStationValue(station.id, station.cwms.label, latest);
+  }
+  return null;
+}
+
+/**
+ * Compact display label for a station's primary value. Snow Water
+ * Equivalent keeps its conventional SWE shorthand; storage readings get a
+ * thousands separator; everything else renders label, value, and unit as
+ * the source reported them.
+ */
+function formatStationValue(value: StationValue): string {
+  const label = value.parameter === 'snow_water_equivalent_in' ? 'SWE' : value.label;
+  const num =
+    value.parameter === 'reservoir_storage_acft' && value.value !== null
+      ? value.value.toLocaleString('en-US', { maximumFractionDigits: 0 })
+      : String(value.value);
+  const day = value.timestamp ? ` · ${shortReadingDate(value.timestamp.slice(0, 10))}` : '';
+  const staleNote = value.freshness === 'stale' ? ' (stale)' : '';
+  return `${label} ${num} ${value.unit}${day}${staleNote}`;
+}
+
+/**
+ * Hydrate the sidebar station rows that have a live-value source wired
+ * (NRCS SNOTEL, USBR Hydromet/AgriMet, USACE CWMS). Stations without a
  * fetcher keep the `unknown` state (an empty slot), which is honest:
  * nothing was attempted.
  *
  * Each station renders its primary parameter compactly (the 400 pixel
- * embed is first-class): Snow Water Equivalent with the reading date,
- * "(stale)" appended when the latest daily value is older than
- * yesterday, or "values unavailable" on fetch failure. A zero reading
- * renders as 0; summer snowpack is legitimately zero.
+ * embed is first-class), with the reading date, "(stale)" appended when
+ * the reading is older than its freshness window, or "values
+ * unavailable" on fetch failure. A zero reading renders as 0; summer
+ * snowpack is legitimately zero.
  */
 function hydrateStationValues(): void {
   stationValuesController = new AbortController();
   const signal = stationValuesController.signal;
 
   for (const station of TELEMETRY_STATIONS) {
-    if (!station.awdbStation) continue;
+    if (!station.awdbStation && !station.hydrometParams && !station.cwms) continue;
     const slot = document.querySelector<HTMLElement>(
       `[data-station-values="${cssAttrEscape(station.id)}"]`
     );
@@ -727,18 +773,15 @@ function hydrateStationValues(): void {
     slot.textContent = 'loading...';
     slot.className = 'telemetry-values loading';
 
-    void fetchAwdbDailySeries(station.awdbStation, SNOTEL_ELEMENTS, 7, signal)
-      .then((series) => {
+    void fetchPrimaryStationValue(station, signal)
+      .then((value) => {
         if (signal.aborted || !slot.isConnected) return;
-        const swe = series.find((s) => s.element === 'WTEQ');
-        const value = swe ? toStationValue(station.id, swe) : null;
         if (!value || value.value === null) {
           slot.textContent = 'values unavailable';
           slot.className = 'telemetry-values unavailable';
           return;
         }
-        const staleNote = value.freshness === 'stale' ? ' (stale)' : '';
-        slot.textContent = `SWE ${value.value} ${value.unit} · ${shortReadingDate(value.timestamp)}${staleNote}`;
+        slot.textContent = formatStationValue(value);
         slot.className = `telemetry-values ${value.freshness}`;
       })
       .catch(() => {
