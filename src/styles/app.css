@@ -334,6 +334,38 @@ a:hover {
   gap: 2px;
 }
 
+/* Role groups (UX-1): surfaces, references, events, stations. */
+.layer-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.layer-group + .layer-group {
+  margin-top: 10px;
+}
+
+.layer-group-title {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  padding: 0 10px;
+  margin-bottom: 2px;
+}
+
+.layer-group-hint {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: var(--fw-body);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--fg-3);
+  opacity: 0.8;
+}
+.layer-group-hint::before { content: '· '; }
+
 .layer-toggle {
   display: flex;
   align-items: flex-start;

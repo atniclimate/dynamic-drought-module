@@ -45,9 +45,11 @@ import maplibregl from 'maplibre-gl';
 
 import {
   LAYER_DEFS,
+  LAYER_ROLE_ORDER,
   getLayerDef
 } from '../config/layers';
 import type { LayerDef } from '../config/layers';
+import type { LayerRole } from '../types/layer';
 import {
   REGIONS,
   DEFAULT_REGION,
@@ -381,10 +383,31 @@ function handleRadiogroupKey(
 // ---------------------------------------------------------------------------
 
 /**
- * Build the layer toggle list from `LAYER_DEFS`. Each entry is a
+ * User-facing labels for the four role groups (UX-1). The headings carry
+ * the ratified place/state taxonomy into the sidebar: condition surfaces
+ * describe the state a place is in (one at a time); references are the
+ * tactile anchor for place; events and stations sit on top.
+ */
+const ROLE_GROUP_LABELS: Record<LayerRole, { title: string; hint: string | null }> = {
+  surface: { title: 'Conditions', hint: 'one at a time' },
+  reference: { title: 'Place', hint: 'boundaries & rivers' },
+  event: { title: 'Events', hint: null },
+  stations: { title: 'Stations', hint: null }
+};
+
+/**
+ * Build the layer toggle list from `LAYER_DEFS`, grouped by role in
+ * `LAYER_ROLE_ORDER` (surfaces, references, events, stations; UX-1).
+ * Within a group, entries keep their `LAYER_DEFS` order. Each entry is a
  * `<label>` wrapping a checkbox plus three text spans (name, source,
  * status pill). The checkbox `change` handler activates or deactivates
  * the corresponding layer module and updates the registry.
+ *
+ * Surfaces are mutually exclusive: checking a surface first deactivates
+ * whichever surface is on, through the same `deactivateLayer` path a
+ * manual off-toggle takes, so the registry (and with it the URL sync and
+ * the pills) stays honest. All four groups keep checkbox semantics
+ * because, unlike a radio group, every surface may be off at once.
  *
  * The activation path wraps the layer module's `activate` in a
  * `showLoading` / `hideLoading` token so parallel toggles do not stomp
@@ -396,32 +419,85 @@ function buildLayerToggles(map: maplibregl.Map): void {
   if (!container) return;
   container.innerHTML = '';
 
-  for (const def of LAYER_DEFS) {
-    const id = `layer-toggle-${def.key}`;
-    const wrapper = document.createElement('label');
-    wrapper.className = 'layer-toggle';
-    wrapper.htmlFor = id;
-    wrapper.innerHTML = `
-      <input type="checkbox" id="${escapeHtml(id)}" data-layer-key="${escapeHtml(def.key)}" />
-      <span class="layer-toggle-text">
-        <span class="layer-toggle-name">${escapeHtml(def.name)}</span>
-        <span class="layer-toggle-source">${escapeHtml(def.source)}</span>
-        <span class="layer-toggle-status" data-layer-status="${escapeHtml(def.key)}"></span>
-      </span>
-    `;
+  for (const role of LAYER_ROLE_ORDER) {
+    const defs = LAYER_DEFS.filter((def) => def.role === role);
+    if (defs.length === 0) continue;
 
-    const cb = wrapper.querySelector<HTMLInputElement>('input[type="checkbox"]');
-    if (cb) {
-      cb.addEventListener('change', () => {
-        if (cb.checked) {
-          void activateLayerWithIndicator(map, def, cb);
-        } else {
-          deactivateLayer(map, def);
-        }
-      });
+    const group = document.createElement('div');
+    group.className = 'layer-group';
+    group.setAttribute('role', 'group');
+
+    const label = ROLE_GROUP_LABELS[role];
+    const heading = document.createElement('div');
+    heading.className = 'layer-group-title';
+    heading.id = `layer-group-${role}`;
+    heading.innerHTML = label.hint
+      ? `${escapeHtml(label.title)} <span class="layer-group-hint">${escapeHtml(label.hint)}</span>`
+      : escapeHtml(label.title);
+    group.setAttribute('aria-labelledby', heading.id);
+    group.appendChild(heading);
+
+    for (const def of defs) {
+      group.appendChild(buildLayerToggle(map, def));
     }
+    container.appendChild(group);
+  }
+}
 
-    container.appendChild(wrapper);
+/**
+ * Build a single layer toggle row. Split out of `buildLayerToggles` when
+ * UX-1 introduced role groups; behavior is unchanged from the flat list.
+ */
+function buildLayerToggle(map: maplibregl.Map, def: LayerDef): HTMLLabelElement {
+  const id = `layer-toggle-${def.key}`;
+  const wrapper = document.createElement('label');
+  wrapper.className = 'layer-toggle';
+  wrapper.htmlFor = id;
+  wrapper.innerHTML = `
+    <input type="checkbox" id="${escapeHtml(id)}" data-layer-key="${escapeHtml(def.key)}" />
+    <span class="layer-toggle-text">
+      <span class="layer-toggle-name">${escapeHtml(def.name)}</span>
+      <span class="layer-toggle-source">${escapeHtml(def.source)}</span>
+      <span class="layer-toggle-status" data-layer-status="${escapeHtml(def.key)}"></span>
+    </span>
+  `;
+
+  const cb = wrapper.querySelector<HTMLInputElement>('input[type="checkbox"]');
+  if (cb) {
+    cb.addEventListener('change', () => {
+      if (cb.checked) {
+        if (def.role === 'surface') {
+          deactivateOtherSurfaces(map, def.key);
+        }
+        void activateLayerWithIndicator(map, def, cb);
+      } else {
+        deactivateLayer(map, def);
+      }
+    });
+  }
+
+  return wrapper;
+}
+
+/**
+ * Enforce the one-surface-at-a-time invariant (UX-1): deactivate every
+ * surface other than `exceptKey` that is currently on. "On" means either
+ * registered active or checked in the DOM; the DOM check covers a surface
+ * whose activation is still in flight (the registry only records it after
+ * `activate` resolves), and `deactivateLayer` aborts that in-flight work
+ * through the layer module's cancellation contract.
+ */
+function deactivateOtherSurfaces(map: maplibregl.Map, exceptKey: string): void {
+  const active = registry.getActiveKeys();
+  for (const def of LAYER_DEFS) {
+    if (def.role !== 'surface' || def.key === exceptKey) continue;
+    const cb = document.querySelector<HTMLInputElement>(
+      `input[data-layer-key="${cssAttrEscape(def.key)}"]`
+    );
+    const isOn = active.has(def.key) || (cb?.checked ?? false);
+    if (!isOn) continue;
+    if (cb) cb.checked = false;
+    deactivateLayer(map, def);
   }
 }
 
@@ -459,6 +535,12 @@ async function activateLayerWithIndicator(
  * Deactivate a layer: call the module's `deactivate` and remove the key
  * from the registry. Synchronous; the deactivate contract is "remove
  * sources/layers and abort in-flight network operations."
+ *
+ * The status pill is cleared back to its pre-activation empty state: an
+ * off layer has no load status, and leaving a stale "live" pill on a row
+ * the surface radio behavior just unchecked (UX-1) would misreport the
+ * map. The polite live region announces the off transition so a
+ * screen-reader user hears why a checkbox they did not touch changed.
  */
 function deactivateLayer(map: maplibregl.Map, def: LayerDef): void {
   try {
@@ -467,6 +549,24 @@ function deactivateLayer(map: maplibregl.Map, def: LayerDef): void {
     console.error(`Layer "${def.key}" failed to deactivate cleanly:`, err);
   }
   registry.deactivate(def.key);
+  clearLayerStatusPill(def.key);
+  announce(`${def.name}: off`);
+}
+
+/**
+ * Reset a layer's status pill to the empty pre-activation state (no text,
+ * no status class). The five canonical states describe load progress; an
+ * intentionally-off layer is none of them.
+ */
+function clearLayerStatusPill(key: string): void {
+  const el = document.querySelector<HTMLElement>(
+    `[data-layer-status="${cssAttrEscape(key)}"]`
+  );
+  if (!el) return;
+  for (const cls of STATUS_CSS_CLASSES) {
+    el.classList.remove(cls);
+  }
+  el.textContent = '';
 }
 
 // ---------------------------------------------------------------------------

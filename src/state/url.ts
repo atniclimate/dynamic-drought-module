@@ -1,6 +1,6 @@
 import { REGIONS, DEFAULT_REGION } from '../config/regions';
 import type { RegionKey } from '../config/regions';
-import { DEFAULT_ON_KEYS } from '../config/layers';
+import { DEFAULT_ON_KEYS, resolveExclusiveSurface } from '../config/layers';
 
 /**
  * URL parameterization for the Dynamic Drought Module (DDM).
@@ -28,9 +28,16 @@ export interface ParsedUrlParams {
 /**
  * Read the current `window.location.search` and resolve the application's
  * restorable view. Unknown region keys silently fall back to
- * `DEFAULT_REGION`. Layer keys are passed through unfiltered: the calling
- * code (the LayerRegistry, on activation) is responsible for rejecting
- * unknown keys, mirroring the vanilla baseline behavior.
+ * `DEFAULT_REGION`. Unknown layer keys are passed through unfiltered: the
+ * calling code (the LayerRegistry, on activation) is responsible for
+ * rejecting them, mirroring the vanilla baseline behavior.
+ *
+ * One-surface-at-a-time (UX-1): an inbound `?layers=` naming several
+ * condition surfaces (an old shared link from before surfaces became
+ * mutually exclusive) resolves deterministically via
+ * `resolveExclusiveSurface`: the first surface named in the list is kept,
+ * later surfaces are dropped. The default-on set already conforms (exactly
+ * one surface), so the no-parameter path needs no resolution.
  */
 export function parseUrlParams(): ParsedUrlParams {
   const params = new URLSearchParams(window.location.search);
@@ -49,12 +56,11 @@ export function parseUrlParams(): ParsedUrlParams {
       // every layer off; preserve that intent across reloads.
       layers = new Set<string>();
     } else {
-      layers = new Set(
-        raw
-          .split(',')
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0)
-      );
+      const keys = raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      layers = new Set(resolveExclusiveSurface(keys));
     }
   } else {
     layers = new Set(DEFAULT_ON_KEYS);
