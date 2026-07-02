@@ -49,6 +49,35 @@ export const DROUGHT_COLORS: Readonly<Record<string, string>> = {
 };
 
 /* ---------------------------------------------------------------------------
+ * US Drought Monitor (USDM) category palette
+ *
+ * Indexed by the integer `DM` attribute the National Drought Mitigation
+ * Center publishes (0 = D0 Abnormally Dry through 4 = D4 Exceptional Drought).
+ * These are the official USDM display colors. One table drives the map fill
+ * (src/layers/usdm.ts), the unified legend, and the conditions strip, so the
+ * color and label for a category live in exactly one place. The `label` is
+ * sentence case for inline reading ("Extreme drought in view"); popups that
+ * want the full "D3 - Extreme Drought" form compose `code` and `label`.
+ * ------------------------------------------------------------------------- */
+
+export interface UsdmCategory {
+  /** Short code shown as the headline value: D0 through D4. */
+  readonly code: string;
+  /** Human-readable category name, sentence case. */
+  readonly label: string;
+  /** Official USDM display color. */
+  readonly color: string;
+}
+
+export const USDM_CATEGORIES: ReadonlyArray<UsdmCategory> = [
+  { code: 'D0', label: 'Abnormally dry',      color: '#FFFF00' },
+  { code: 'D1', label: 'Moderate drought',    color: '#FCD37F' },
+  { code: 'D2', label: 'Severe drought',      color: '#FFAA00' },
+  { code: 'D3', label: 'Extreme drought',     color: '#E60000' },
+  { code: 'D4', label: 'Exceptional drought', color: '#730000' }
+];
+
+/* ---------------------------------------------------------------------------
  * Treaty area styling
  *
  * The `match` field is a substring tested against the GeoJSON feature name

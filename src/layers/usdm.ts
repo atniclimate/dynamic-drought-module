@@ -53,12 +53,13 @@ import { URLS } from '../config/urls';
 import { escapeHtml } from '../util/escape';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
+import { USDM_CATEGORIES } from '../config/palette';
+import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
 
 const LAYER_KEY = 'usdm';
 const SOURCE_ID = 'usdm-current';
 const FILL_LAYER_ID = 'usdm-current-fill';
 const OUTLINE_LAYER_ID = 'usdm-current-outline';
-const LEGEND_ID = 'usdm-legend-panel';
 
 /**
  * Symbol layer ID used as the `beforeId` anchor when inserting the fill
@@ -80,17 +81,12 @@ const FETCH_TIMEOUT_MS = 15_000;
 let masterController: AbortController | null = null;
 
 /**
- * Canonical USDM category palette. Indices align with the integer `DM`
- * attribute that NDMC publishes (0=D0 Abnormally Dry through 4=D4
- * Exceptional Drought).
+ * Canonical USDM category colors, indexed by the integer `DM` attribute NDMC
+ * publishes (0=D0 through 4=D4). Derived from the single USDM_CATEGORIES table
+ * in palette.ts so the map fill, the unified legend, and the conditions strip
+ * cannot drift apart.
  */
-const USDM_COLORS: ReadonlyArray<string> = [
-  '#FFFF00', // D0 Abnormally Dry
-  '#FCD37F', // D1 Moderate Drought
-  '#FFAA00', // D2 Severe Drought
-  '#E60000', // D3 Extreme Drought
-  '#730000'  // D4 Exceptional Drought
-];
+const USDM_COLORS: ReadonlyArray<string> = USDM_CATEGORIES.map((c) => c.color);
 
 /**
  * Human-readable label per USDM category, indexed by `DM` value. Used by
@@ -113,16 +109,6 @@ function reportStatus(state: UsdmStatus): void {
 
 function resolveBeforeId(map: maplibregl.Map): string | undefined {
   return map.getLayer(BEFORE_ID) ? BEFORE_ID : undefined;
-}
-
-/**
- * Show or hide the USDM legend panel in the sidebar (the D0-D4 color key).
- * Mirrors the drought.ts pattern: toggle the `hidden` attribute so the
- * panel returns to its CSS layout when revealed.
- */
-function setLegendVisibility(visible: boolean): void {
-  const el = document.getElementById(LEGEND_ID);
-  if (el) el.hidden = !visible;
 }
 
 /**
@@ -246,7 +232,16 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     beforeId
   );
 
-  setLegendVisibility(true);
+  showLegend(LAYER_KEY, {
+    order: LEGEND_ORDER.surface,
+    render: (body) =>
+      renderSwatchLegend(
+        body,
+        'Drought monitor key',
+        USDM_CATEGORIES.map((c) => ({ color: c.color, label: `${c.code} · ${c.label}` })),
+        'U.S. Drought Monitor · current week (NDMC / NOAA / USDA)'
+      )
+  });
   reportStatus('ready');
 }
 
@@ -269,7 +264,7 @@ export function deactivate(map: maplibregl.Map): void {
   if (map.getSource(SOURCE_ID)) {
     map.removeSource(SOURCE_ID);
   }
-  setLegendVisibility(false);
+  hideLegend(LAYER_KEY);
 }
 
 /**

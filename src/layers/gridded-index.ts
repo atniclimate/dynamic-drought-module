@@ -31,12 +31,11 @@ import type maplibregl from 'maplibre-gl';
 import { URLS } from '../config/urls';
 import { registry } from '../state/registry';
 import { escapeHtml } from '../util/escape';
+import { showLegend, hideLegend, LEGEND_ORDER } from '../ui/legend-registry';
 
 const LAYER_KEY = 'gridded-index';
 const SOURCE_ID = 'gridded-index';
 const LAYER_ID = 'gridded-index-raster';
-const LEGEND_ID = 'gridded-index-legend-panel';
-const SELECT_ID = 'gridded-index-product';
 
 /** The symbol layer to insert beneath, so basemap labels stay readable. */
 const BEFORE_ID = 'first-symbol';
@@ -71,9 +70,6 @@ const RASTER_OPACITY = 0.72;
 
 /** The currently selected product slug, preserved across deactivate cycles. */
 let currentSlug: string = DEFAULT_PRODUCT;
-
-/** Guard so the legend selector is wired exactly once. */
-let controlsWired = false;
 
 function resolveBeforeId(map: maplibregl.Map): string | undefined {
   return map.getLayer(BEFORE_ID) ? BEFORE_ID : undefined;
@@ -118,11 +114,6 @@ function addRasterSourceAndLayer(map: maplibregl.Map): void {
   }
 }
 
-function setLegendVisibility(visible: boolean): void {
-  const el = document.getElementById(LEGEND_ID);
-  if (el) el.hidden = !visible;
-}
-
 /** Reflect the active product in the legend label. */
 function updateLegendLabel(): void {
   const el = document.getElementById('gridded-index-product-label');
@@ -136,10 +127,11 @@ function updateLegendLabel(): void {
  * there is no fetch to await; status goes straight to `ready`.
  */
 export async function activate(map: maplibregl.Map): Promise<void> {
-  wireControls(map);
   addRasterSourceAndLayer(map);
-  setLegendVisibility(true);
-  updateLegendLabel();
+  showLegend(LAYER_KEY, {
+    order: LEGEND_ORDER.surface,
+    render: (body) => renderLegendSection(map, body)
+  });
   registry.setStatus(LAYER_KEY, 'ready');
 }
 
@@ -147,7 +139,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 export function deactivate(map: maplibregl.Map): void {
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
-  setLegendVisibility(false);
+  hideLegend(LAYER_KEY);
 }
 
 /**
@@ -172,21 +164,29 @@ function setProduct(map: maplibregl.Map, slug: string): void {
 }
 
 /**
- * Wire the legend's product selector once. The selector is rendered in
- * index.html inside the gridded-index legend panel; this populates its options
- * from PRODUCTS and swaps the tiles on change.
+ * Build the gridded-index legend section: the product selector, the dry-to-wet
+ * orientation ramp, and the source note. The unified legend registry creates
+ * and destroys this section per activation, so the selector is populated and
+ * its change handler bound here (each show) rather than once at boot.
  */
-function wireControls(map: maplibregl.Map): void {
-  if (controlsWired) return;
-  const select = document.getElementById(SELECT_ID) as HTMLSelectElement | null;
+function renderLegendSection(map: maplibregl.Map, body: HTMLElement): void {
+  body.innerHTML =
+    '<h3 class="legend-section-title">Gridded index key</h3>' +
+    '<label class="legend-control">' +
+    '<span class="legend-control-label">Product</span>' +
+    '<select id="gridded-index-product" class="legend-select" aria-label="Gridded drought index product"></select>' +
+    '</label>' +
+    '<div class="gridded-index-ramp" role="img" aria-label="Standardized Precipitation Index scale: drier on the left, wetter on the right">' +
+    '<span class="gridded-index-ramp-bar"></span>' +
+    '<div class="gridded-index-ramp-labels"><span>Drier</span><span>Wetter</span></div>' +
+    '</div>' +
+    `<p class="legend-note"><span id="gridded-index-product-label">${escapeHtml(productLabel(currentSlug))}</span> · NOAA NIDIS. The exact color scale is baked into the tiles; <a href="https://www.drought.gov/current-conditions" target="_blank" rel="noopener">see the drought.gov legend</a>.</p>`;
+
+  const select = body.querySelector<HTMLSelectElement>('#gridded-index-product');
   if (!select) return;
-  // Populate options from the verified product table.
   select.innerHTML = PRODUCTS.map(
     (p) =>
       `<option value="${escapeHtml(p.slug)}"${p.slug === currentSlug ? ' selected' : ''}>${escapeHtml(p.label)}</option>`
   ).join('');
-  select.addEventListener('change', () => {
-    setProduct(map, select.value);
-  });
-  controlsWired = true;
+  select.addEventListener('change', () => setProduct(map, select.value));
 }

@@ -44,6 +44,7 @@ import { URLS } from '../config/urls';
 import { escapeHtml } from '../util/escape';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
+import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
 
 const LAYER_KEY = 'nifc-fires';
 const SOURCE_ID = 'nifc-fires';
@@ -178,6 +179,16 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     beforeId
   );
 
+  showLegend(LAYER_KEY, {
+    order: LEGEND_ORDER.event + 1,
+    render: (body) =>
+      renderSwatchLegend(
+        body,
+        'Active wildfires',
+        [{ color: '#dc2626', label: 'Active fire perimeter' }],
+        'NIFC WFIGS current interagency perimeters.'
+      )
+  });
   reportStatus('ready');
 }
 
@@ -200,6 +211,7 @@ export function deactivate(map: maplibregl.Map): void {
   if (map.getSource(SOURCE_ID)) {
     map.removeSource(SOURCE_ID);
   }
+  hideLegend(LAYER_KEY);
 }
 
 /**

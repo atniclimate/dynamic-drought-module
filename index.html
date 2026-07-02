@@ -44,6 +44,14 @@
 
       <div class="sidebar-scroll">
 
+        <section class="panel conditions-strip" id="conditions-strip" aria-label="Conditions in view" hidden>
+          <div class="conditions-head">
+            <span class="conditions-title">Conditions in view</span>
+            <span class="conditions-date" id="conditions-date"></span>
+          </div>
+          <div class="conditions-metrics" id="conditions-metrics"></div>
+        </section>
+
         <section class="panel">
           <h2 class="panel-title">Region</h2>
           <div id="region-buttons" class="region-grid" role="radiogroup" aria-label="Select region"></div>
@@ -68,62 +76,8 @@
         </section>
 
         <section class="panel legend-panel" id="legend-panel" hidden>
-          <h2 class="panel-title">Drought outlook key</h2>
-          <ul class="legend">
-            <li><span class="swatch" style="background:#cd853f"></span>Drought persists</li>
-            <li><span class="swatch" style="background:#daa520"></span>Drought develops</li>
-            <li><span class="swatch" style="background:#9acd32"></span>Drought improves</li>
-            <li><span class="swatch" style="background:#3cb371"></span>Drought removal likely</li>
-          </ul>
-          <p class="legend-note">NOAA CPC Seasonal Drought Outlook · 3-month window</p>
-        </section>
-
-        <section class="panel legend-panel" id="ecoregion-legend-panel" hidden>
-          <div class="panel-title-row">
-            <h2 class="panel-title">Ecoregion key</h2>
-          </div>
-          <label class="gridded-index-control">
-            <span class="gridded-index-control-label">Detail level</span>
-            <select id="ecoregion-level" class="gridded-index-select" aria-label="Ecoregion detail level">
-              <option value="ecoregions-l3" selected>Level III (broad)</option>
-              <option value="ecoregions-l4">Level IV (detailed)</option>
-            </select>
-          </label>
-          <ul id="ecoregion-legend" class="legend ecoregion-legend"></ul>
-          <p class="legend-note" id="ecoregion-legend-note">EPA Omernik Level III ecoregions; 2012 delineation, simplified for display.</p>
-        </section>
-
-        <section class="panel legend-panel" id="gridded-index-legend-panel" hidden>
-          <div class="panel-title-row">
-            <h2 class="panel-title">Gridded index key</h2>
-          </div>
-          <label class="gridded-index-control">
-            <span class="gridded-index-control-label">Product</span>
-            <select id="gridded-index-product" class="gridded-index-select" aria-label="Gridded drought index product"></select>
-          </label>
-          <div class="gridded-index-ramp" role="img" aria-label="Standardized Precipitation Index scale: drier on the left, wetter on the right">
-            <span class="gridded-index-ramp-bar"></span>
-            <div class="gridded-index-ramp-labels">
-              <span>Drier</span>
-              <span>Wetter</span>
-            </div>
-          </div>
-          <p class="legend-note">
-            <span id="gridded-index-product-label">SPI, 90 day</span> · NOAA NIDIS. The exact color scale is baked into the tiles;
-            <a href="https://www.drought.gov/current-conditions" target="_blank" rel="noopener">see the drought.gov legend</a>.
-          </p>
-        </section>
-
-        <section class="panel legend-panel" id="usdm-legend-panel" hidden>
-          <h2 class="panel-title">Drought monitor key</h2>
-          <ul class="legend">
-            <li><span class="swatch" style="background:#FFFF00"></span>D0 · Abnormally dry</li>
-            <li><span class="swatch" style="background:#FCD37F"></span>D1 · Moderate drought</li>
-            <li><span class="swatch" style="background:#FFAA00"></span>D2 · Severe drought</li>
-            <li><span class="swatch" style="background:#E60000"></span>D3 · Extreme drought</li>
-            <li><span class="swatch" style="background:#730000"></span>D4 · Exceptional drought</li>
-          </ul>
-          <p class="legend-note">U.S. Drought Monitor · current week (NDMC / NOAA / USDA)</p>
+          <h2 class="panel-title">Legend</h2>
+          <div id="legend-sections"></div>
         </section>
 
       </div>

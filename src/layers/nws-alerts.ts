@@ -37,6 +37,7 @@ import {
 import { buildNwsAlertPopupHtml } from '../ui/popups';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
+import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
 
 const LAYER_KEY = 'nws-alerts';
 const SOURCE_ID = 'nws-alerts';
@@ -64,6 +65,19 @@ const ALERT_EVENTS: readonly string[] = [
   'Heat Advisory',
   'Red Flag Warning',
   'Fire Weather Watch'
+];
+
+/**
+ * Legend rows for the alert layer: the distinct hazards it requests, collapsing
+ * the Extreme/Excessive heat pairs (which share a color) into one row each.
+ * Colors come from the official NWS display palette in NWS_ALERT_COLORS.
+ */
+const ALERT_LEGEND: ReadonlyArray<{ color: string; label: string }> = [
+  { color: NWS_ALERT_COLORS['Extreme Heat Warning'], label: 'Extreme Heat Warning' },
+  { color: NWS_ALERT_COLORS['Extreme Heat Watch'], label: 'Extreme Heat Watch' },
+  { color: NWS_ALERT_COLORS['Heat Advisory'], label: 'Heat Advisory' },
+  { color: NWS_ALERT_COLORS['Red Flag Warning'], label: 'Red Flag Warning' },
+  { color: NWS_ALERT_COLORS['Fire Weather Watch'], label: 'Fire Weather Watch' }
 ];
 
 type Status = 'loading' | 'ready' | 'error' | 'no-data';
@@ -195,6 +209,16 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     beforeId
   );
 
+  showLegend(LAYER_KEY, {
+    order: LEGEND_ORDER.event,
+    render: (body) =>
+      renderSwatchLegend(
+        body,
+        'Heat & fire weather alerts',
+        ALERT_LEGEND,
+        'Active NWS watches, warnings, and advisories (heat and fire weather).'
+      )
+  });
   reportStatus('ready');
 }
 
@@ -211,6 +235,7 @@ export function deactivate(map: maplibregl.Map): void {
   if (map.getLayer(FILL_LAYER_ID)) map.removeLayer(FILL_LAYER_ID);
   if (map.getLayer(OUTLINE_LAYER_ID)) map.removeLayer(OUTLINE_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+  hideLegend(LAYER_KEY);
 }
 
 /**

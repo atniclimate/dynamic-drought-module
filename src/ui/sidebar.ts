@@ -73,6 +73,7 @@ import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
 import { parseUrlParams, syncUrl } from '../state/url';
 import { flyToStation } from '../layers/telemetry';
+import { buildConditionsStrip } from './conditions-strip';
 import { wireShareButton } from './share';
 import { showLoading, hideLoading, showToast } from './overlay';
 import { escapeHtml } from '../util/escape';
@@ -979,6 +980,7 @@ export function buildSidebar(
     onRegionSelect(key);
   };
 
+  buildConditionsStrip(map);
   buildRegionButtons(map, handleRegion);
   buildPresetChips(map);
   buildLayerToggles(map);

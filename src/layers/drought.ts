@@ -36,11 +36,24 @@
 import type maplibregl from 'maplibre-gl';
 import { URLS } from '../config/urls';
 import { registry } from '../state/registry';
+import { DROUGHT_COLORS } from '../config/palette';
+import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
 
 const LAYER_KEY = 'drought';
 const SOURCE_ID = 'drought-outlook';
 const LAYER_ID = 'drought-outlook';
-const LEGEND_ID = 'legend-panel';
+
+/**
+ * The CPC Seasonal Drought Outlook forecast categories, in legend order. The
+ * swatch colors come from DROUGHT_COLORS so the legend and any future on-map
+ * use share one source; the labels carry the outlook's four-way categorical read.
+ */
+const OUTLOOK_LEGEND: ReadonlyArray<{ color: string; label: string }> = [
+  { color: DROUGHT_COLORS['PERSISTS'], label: 'Drought persists' },
+  { color: DROUGHT_COLORS['DEVELOPS'], label: 'Drought develops' },
+  { color: DROUGHT_COLORS['IMPROVES'], label: 'Drought improves' },
+  { color: DROUGHT_COLORS['REMOVAL'], label: 'Drought removal likely' }
+];
 
 /**
  * Build the WMS GetMap URL template that MapLibre will expand per tile.
@@ -64,18 +77,6 @@ function buildWmsTileTemplate(): string {
     'BBOX={bbox-epsg-3857}'
   ].join('&');
   return `${URLS.cpcDroughtWMS}?${params}`;
-}
-
-/**
- * Show or hide the sidebar legend panel that documents the CPC drought
- * forecast categories. Toggles the `hidden` HTML attribute (matching the
- * vanilla baseline) so the panel returns to its CSS-defined layout when
- * revealed.
- */
-function setLegendVisibility(visible: boolean): void {
-  const el = document.getElementById(LEGEND_ID);
-  if (!el) return;
-  el.hidden = !visible;
 }
 
 /**
@@ -108,7 +109,16 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       });
     }
 
-    setLegendVisibility(true);
+    showLegend(LAYER_KEY, {
+      order: LEGEND_ORDER.surface,
+      render: (body) =>
+        renderSwatchLegend(
+          body,
+          'Drought outlook key',
+          OUTLOOK_LEGEND,
+          'NOAA CPC Seasonal Drought Outlook · 3-month window'
+        )
+    });
     registry.setStatus(LAYER_KEY, 'ready');
   } catch (err) {
     registry.setStatus(LAYER_KEY, 'error');
@@ -128,5 +138,5 @@ export function deactivate(map: maplibregl.Map): void {
   if (map.getSource(SOURCE_ID)) {
     map.removeSource(SOURCE_ID);
   }
-  setLegendVisibility(false);
+  hideLegend(LAYER_KEY);
 }

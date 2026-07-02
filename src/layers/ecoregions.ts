@@ -31,6 +31,7 @@ import { attachImpactTrigger } from '../ui/impact-panel';
 import { buildBoundaryContext } from '../impact/context';
 import { escapeHtml } from '../util/escape';
 import { registry } from '../state/registry';
+import { showLegend, hideLegend, LEGEND_ORDER } from '../ui/legend-registry';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -54,9 +55,6 @@ const ALL_LAYER_IDS = [L3_FILL_ID, L3_OUTLINE_ID, L4_FILL_ID, L4_OUTLINE_ID] as 
 /** The MapLibre source URL: the PMTiles protocol over the bundled archive. */
 const PMTILES_URL = 'pmtiles://' + URLS.ecoregionsPmtilesLocal;
 
-/** The legend-panel level selector (declared in index.html). */
-const SELECT_ID = 'ecoregion-level';
-
 const LEVEL_NOTE: Record<EcoregionLevel, string> = {
   [L3_SOURCE_LAYER]: 'EPA Omernik Level III ecoregions; 2012 delineation, simplified for display.',
   [L4_SOURCE_LAYER]:
@@ -71,8 +69,6 @@ type EcoregionStatus = 'loading' | 'ready' | 'no-data' | 'error';
 
 /** Which level is currently drawn and clickable. Level III is the default. */
 let activeLevel: EcoregionLevel = L3_SOURCE_LAYER;
-/** Guard so the legend selector is wired exactly once. */
-let controlsWired = false;
 /** Level III names seen in loaded tiles, accumulated for the legend. */
 const legendNames = new Set<string>();
 /** The idle handler that refreshes the legend while the layer is active. */
@@ -90,14 +86,16 @@ let idleHandler: (() => void) | null = null;
  */
 export async function activate(map: maplibregl.Map): Promise<void> {
   setStatus('loading');
-  wireControls(map);
 
   if (!map.getSource(SOURCE_ID)) {
     map.addSource(SOURCE_ID, { type: 'vector', url: PMTILES_URL });
   }
   ensureLayers(map);
   applyLevelVisibility(map);
-  showLegendPanel(true);
+  showLegend(LAYER_KEY, {
+    order: LEGEND_ORDER.reference,
+    render: (body) => renderLegendSection(map, body)
+  });
   startLegendUpdates(map);
   markReadyWhenLoaded(map);
 }
@@ -113,7 +111,7 @@ export function deactivate(map: maplibregl.Map): void {
   }
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   legendNames.clear();
-  showLegendPanel(false);
+  hideLegend(LAYER_KEY);
 }
 
 /**
@@ -280,24 +278,35 @@ function buildFillColorExpression(): maplibregl.ExpressionSpecification {
 // ---------------------------------------------------------------------------
 
 /**
- * Wire the legend's level selector once. Switching the level toggles which
- * level's layers are visible (and therefore clickable) and updates the legend
- * note. The selector is the drill-down affordance that puts ecoregion selection
- * on equal footing with the region radiogroup.
+ * Build the ecoregion legend section: the Level III/IV detail selector, the
+ * (initially empty) name list, and the level note. The unified legend registry
+ * creates and destroys this section per activation, so the selector is built
+ * and its change handler bound here (each show). The idle-driven refreshLegend
+ * fills the list, which is why it ships empty; switching the level toggles
+ * which level's layers are visible (and clickable) and refreshes the list.
  */
-function wireControls(map: maplibregl.Map): void {
-  if (controlsWired) return;
-  const select = document.getElementById(SELECT_ID) as HTMLSelectElement | null;
+function renderLegendSection(map: maplibregl.Map, body: HTMLElement): void {
+  body.innerHTML =
+    '<h3 class="legend-section-title">Ecoregion key</h3>' +
+    '<label class="legend-control">' +
+    '<span class="legend-control-label">Detail level</span>' +
+    '<select id="ecoregion-level" class="legend-select" aria-label="Ecoregion detail level">' +
+    `<option value="${L3_SOURCE_LAYER}">Level III (broad)</option>` +
+    `<option value="${L4_SOURCE_LAYER}">Level IV (detailed)</option>` +
+    '</select>' +
+    '</label>' +
+    '<ul id="ecoregion-legend" class="legend ecoregion-legend"></ul>' +
+    `<p class="legend-note" id="ecoregion-legend-note">${escapeHtml(LEVEL_NOTE[activeLevel])}</p>`;
+
+  const select = body.querySelector<HTMLSelectElement>('#ecoregion-level');
   if (!select) return;
   select.value = activeLevel;
   select.addEventListener('change', () => {
-    const next = select.value === L4_SOURCE_LAYER ? L4_SOURCE_LAYER : L3_SOURCE_LAYER;
-    activeLevel = next;
+    activeLevel = select.value === L4_SOURCE_LAYER ? L4_SOURCE_LAYER : L3_SOURCE_LAYER;
     applyLevelVisibility(map);
     updateLegendNote();
     refreshLegend(map);
   });
-  controlsWired = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -355,15 +364,6 @@ function renderLegend(): void {
 function updateLegendNote(): void {
   const note = document.getElementById('ecoregion-legend-note');
   if (note) note.textContent = LEVEL_NOTE[activeLevel];
-}
-
-function showLegendPanel(visible: boolean): void {
-  const panel = document.getElementById('ecoregion-legend-panel');
-  if (panel) panel.hidden = !visible;
-  if (!visible) {
-    const list = document.getElementById('ecoregion-legend');
-    if (list) list.innerHTML = '';
-  }
 }
 
 // ---------------------------------------------------------------------------
