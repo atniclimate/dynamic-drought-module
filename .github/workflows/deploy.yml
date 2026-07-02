@@ -27,12 +27,18 @@ permissions:
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment, but do not cancel in-progress
-# runs (we want the latest commit to deploy after the current one
-# finishes, not interrupt mid-build).
+# Serialize deploys on a single "pages" group and cancel any superseded
+# in-progress run. GitHub Pages serves "latest commit wins", so when
+# several commits land in a burst there is no value in deploying the
+# intermediate states; collapsing to the newest commit also avoids the
+# back-to-back deployments that can trip the Pages backend into a
+# transient "Deployment failed, try again later" (observed 2026-07-02 on
+# a burst of docs commits). A superseded run reads as intentionally
+# cancelled rather than emailing a failure, which `false` would do for
+# every extra deploy it ran to completion.
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
