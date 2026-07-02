@@ -67,6 +67,7 @@ import {
 } from '../util/awdb';
 import { fetchCwmsLatest, cwmsStationValue } from '../util/cwms';
 import { fetchHydrometDaily, hydrometStationValue } from '../util/hydromet';
+import { fetchUsgsIV, usgsLatestStationValue } from '../util/usgs';
 import type { StationValue, TelemetryStation } from '../types/station';
 import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
@@ -706,8 +707,9 @@ function shortReadingDate(iso: string): string {
 /**
  * The primary StationValue for one station, by whichever live source it
  * carries: NRCS SNOTEL Snow Water Equivalent (`awdbStation`), the first
- * configured USBR Hydromet parameter (`hydrometParams`), or the USACE
- * CWMS reading (`cwms`). Null when the station has no wired source.
+ * configured USBR Hydromet parameter (`hydrometParams`), the USACE
+ * CWMS reading (`cwms`), or the latest USGS Instantaneous Values reading
+ * (`usgsSite`). Null when the station has no wired source.
  */
 async function fetchPrimaryStationValue(
   station: TelemetryStation,
@@ -727,6 +729,10 @@ async function fetchPrimaryStationValue(
     const latest = await fetchCwmsLatest(station.cwms, signal);
     return cwmsStationValue(station.id, station.cwms.label, latest);
   }
+  if (station.usgsSite) {
+    const payload = await fetchUsgsIV(station.usgsSite, signal);
+    return usgsLatestStationValue(station.id, payload);
+  }
   return null;
 }
 
@@ -738,8 +744,10 @@ async function fetchPrimaryStationValue(
  */
 function formatStationValue(value: StationValue): string {
   const label = value.parameter === 'snow_water_equivalent_in' ? 'SWE' : value.label;
+  const wantsThousands =
+    value.parameter === 'reservoir_storage_acft' || value.parameter === 'discharge_cfs';
   const num =
-    value.parameter === 'reservoir_storage_acft' && value.value !== null
+    wantsThousands && value.value !== null
       ? value.value.toLocaleString('en-US', { maximumFractionDigits: 0 })
       : String(value.value);
   const day = value.timestamp ? ` · ${shortReadingDate(value.timestamp.slice(0, 10))}` : '';
@@ -749,9 +757,9 @@ function formatStationValue(value: StationValue): string {
 
 /**
  * Hydrate the sidebar station rows that have a live-value source wired
- * (NRCS SNOTEL, USBR Hydromet/AgriMet, USACE CWMS). Stations without a
- * fetcher keep the `unknown` state (an empty slot), which is honest:
- * nothing was attempted.
+ * (NRCS SNOTEL, USBR Hydromet/AgriMet, USACE CWMS, USGS Instantaneous
+ * Values). Stations without a fetcher keep the `unknown` state (an empty
+ * slot), which is honest: nothing was attempted.
  *
  * Each station renders its primary parameter compactly (the 400 pixel
  * embed is first-class), with the reading date, "(stale)" appended when
@@ -764,7 +772,8 @@ function hydrateStationValues(): void {
   const signal = stationValuesController.signal;
 
   for (const station of TELEMETRY_STATIONS) {
-    if (!station.awdbStation && !station.hydrometParams && !station.cwms) continue;
+    if (!station.awdbStation && !station.hydrometParams && !station.cwms && !station.usgsSite)
+      continue;
     const slot = document.querySelector<HTMLElement>(
       `[data-station-values="${cssAttrEscape(station.id)}"]`
     );

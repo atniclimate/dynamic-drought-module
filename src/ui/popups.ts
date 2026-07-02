@@ -1,6 +1,5 @@
 import type { GeoJsonProperties } from 'geojson';
 import { pickTreatyEntry } from '../config/palette';
-import { URLS } from '../config/urls';
 import type { TelemetryStation } from '../types/station';
 import {
   fetchAwdbDailySeries,
@@ -12,9 +11,16 @@ import { fetchCwmsLatest, cwmsStationValue } from '../util/cwms';
 import type { CwmsLatest } from '../util/cwms';
 import { fetchHydrometDaily, hydrometStationValue } from '../util/hydromet';
 import type { HydrometSeries } from '../util/hydromet';
-import { fetchWithBudget } from '../util/fetch';
 import { escapeHtml } from '../util/escape';
-import { isObject } from '../util/guards';
+import {
+  fetchUsgsIV,
+  extractTimeSeries,
+  readVariableCode,
+  readUnitCode,
+  readVariableName,
+  readValueArray
+} from '../util/usgs';
+import type { UsgsSeries } from '../util/usgs';
 import { sparklineSvg } from './charts';
 
 /**
@@ -331,14 +337,11 @@ export function buildTelemetryPopupSkeleton(station: TelemetryStation): string {
 /**
  * Hydrate the data slot inside an open telemetry popup. Looks up the slot
  * via the `data-station-data="<id>"` attribute (escaped to match the
- * skeleton) and either:
- *
- *   - fetches the most recent United States Geological Survey (USGS)
- *     Instantaneous Values (IV) reading for `usgsSite` stations, or
- *   - surfaces an honest "live data not available in-browser" message for
- *     `awdbStation` (NRCS Snow Telemetry (SNOTEL)) stations, since the NRCS
- *     Air-Water Database (AWDB) endpoint does not respond with the
- *     Cross-Origin Resource Sharing (CORS) headers a browser fetch needs.
+ * skeleton) and fetches whichever live source the station carries: USGS
+ * Instantaneous Values (`usgsSite`), NRCS SNOTEL daily series
+ * (`awdbStation`), USBR Hydromet/AgriMet daily arcs (`hydrometParams`),
+ * or the USACE CWMS timeseries (`cwms`). Failure renders the honest
+ * "open the source link" fallback.
  *
  * The `signal` is the per-marker AbortController set up in
  * `src/layers/telemetry.ts`. It fires on popup-close so a quick close-and-
@@ -539,33 +542,8 @@ function renderCwmsRow(station: TelemetryStation, latest: CwmsLatest | null): st
 }
 
 // =============================================================================
-// Internal: USGS IV fetch + render
+// Internal: USGS IV render (fetch and parse guards live in src/util/usgs.ts)
 // =============================================================================
-
-/**
- * Pull the most recent instantaneous values for discharge (parameter code
- * 00060) and gage height (00065) from USGS Water Services. The optional
- * `signal` is the per-marker AbortController set up by the layer module so
- * popup-close cancels the in-flight fetch. The `8000` budget is the
- * vanilla-baseline timeout (8 seconds) carried over verbatim.
- *
- * Returns the raw JSON payload as `unknown`; `renderUsgsRows` does the
- * structural validation. This keeps the parse boundary in one place.
- */
-async function fetchUsgsIV(siteId: string, signal: AbortSignal | null): Promise<unknown> {
-  const params = new URLSearchParams({
-    format: 'json',
-    sites: siteId,
-    parameterCd: '00060,00065',
-    // A 7-day window so the popup can draw a recent-trend sparkline, not just
-    // the latest reading. The most recent value is still the series tail.
-    period: 'P7D',
-    siteStatus: 'all'
-  });
-  const resp = await fetchWithBudget(URLS.usgsIV + '?' + params.toString(), {}, signal, 8000);
-  if (!resp.ok) throw new Error('USGS HTTP ' + resp.status);
-  return resp.json();
-}
 
 /**
  * Build a 7-day sparkline from the richest USGS series (discharge preferred,
@@ -670,79 +648,6 @@ function renderUsgsRows(payload: unknown): string {
       : '') +
     buildUsgsSparkline(series)
   );
-}
-
-/* ---------------------------------------------------------------------------
- * Defensive type guards over the USGS IV JSON shape. Each helper takes the
- * `unknown` payload (or a node from it) and returns either a typed value or
- * a sensible empty default. These keep `renderUsgsRows` readable without
- * sprinkling `as` casts through it.
- * ------------------------------------------------------------------------- */
-
-interface UsgsReading {
-  readonly value: string;
-  readonly dateTime?: string;
-}
-
-type UsgsSeries = Record<string, unknown>;
-
-function extractTimeSeries(payload: unknown): UsgsSeries[] {
-  if (!isObject(payload)) return [];
-  const value = payload.value;
-  if (!isObject(value)) return [];
-  const ts = value.timeSeries;
-  if (!Array.isArray(ts)) return [];
-  return ts.filter(isObject) as UsgsSeries[];
-}
-
-function readVariableCode(series: UsgsSeries): string | null {
-  const variable = series.variable;
-  if (!isObject(variable)) return null;
-  const codes = variable.variableCode;
-  if (!Array.isArray(codes) || codes.length === 0) return null;
-  const first = codes[0];
-  if (!isObject(first)) return null;
-  const v = first.value;
-  return typeof v === 'string' ? v : null;
-}
-
-function readUnitCode(series: UsgsSeries): string | null {
-  const variable = series.variable;
-  if (!isObject(variable)) return null;
-  const unit = variable.unit;
-  if (!isObject(unit)) return null;
-  const code = unit.unitCode;
-  return typeof code === 'string' ? code : null;
-}
-
-function readVariableName(series: UsgsSeries): string | null {
-  const variable = series.variable;
-  if (!isObject(variable)) return null;
-  const name = variable.variableName;
-  return typeof name === 'string' ? name : null;
-}
-
-function readValueArray(series: UsgsSeries): UsgsReading[] {
-  const values = series.values;
-  if (!Array.isArray(values) || values.length === 0) return [];
-  const first = values[0];
-  if (!isObject(first)) return [];
-  const arr = first.value;
-  if (!Array.isArray(arr)) return [];
-
-  const out: UsgsReading[] = [];
-  for (const r of arr) {
-    if (!isObject(r)) continue;
-    const v = r.value;
-    if (typeof v !== 'string') continue;
-    const dt = r.dateTime;
-    if (typeof dt === 'string') {
-      out.push({ value: v, dateTime: dt });
-    } else {
-      out.push({ value: v });
-    }
-  }
-  return out;
 }
 
 /**

@@ -60,6 +60,24 @@ export const TELEMETRY_STATIONS: readonly TelemetryStation[] = [
     color: '#06b6d4',
     description:
       'Lowermost Columbia River dam. NWRFC stage and discharge plotted alongside USACE operations.',
+    // Verified 2026-07-02: HTTP 200, Content-Type application/json;version=2,
+    // Access-Control-Allow-Origin: * (confirmed on /catalog/TIMESERIES and
+    // /timeseries, matching the usaceCwmsData wildcard contract). Office
+    // NWDP, hourly, units ft as returned by /timeseries (the catalog's own
+    // units field says m; trust the response, not the catalog). No .Best
+    // alias exists for BON (unlike Ice Harbor's IHR...Best); querying .Best
+    // returns a genuine HTTP 404, not 200-with-empty, which is why
+    // fetchCwmsLatest treats 404 like the empty case and falls back to
+    // catalog discovery. The catalogLike pattern is pinned to the hourly
+    // instantaneous series so discovery cannot land on the BON-PH1 daily
+    // average or the dead BON-PH2 series (stale since 2013). Sample:
+    // 75.4 ft at 2026-07-02T08:00:00Z, quality-code 0.
+    cwms: {
+      office: 'NWDP',
+      tsId: 'BON.Elev-Forebay.Inst.1Hour.0.CBT-REV',
+      catalogLike: 'BON.Elev-Forebay.Inst.1Hour.*',
+      label: 'Forebay'
+    },
     links: [
       { label: 'NWRFC flowplot (BONO3)', url: 'https://www.nwrfc.noaa.gov/river/station/flowplot/flowplot.cgi?id=BONO3' },
       { label: 'DART quick-look', url: 'https://www.cbr.washington.edu/dart/' }

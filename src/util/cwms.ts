@@ -15,6 +15,10 @@
  *     not an error; 200-with-empty triggers one catalog-discovery retry
  *     (`/catalog/TIMESERIES?office=<office>&like=<pattern>`) before giving
  *     up, per the verifier's discovery doctrine.
+ *   - A NONEXISTENT id returns a genuine HTTP 404 (observed live for the
+ *     Bonneville forebay, which has no `.Best` alias; verified 2026-07-02).
+ *     404 takes the same catalog-discovery retry as 200-with-empty rather
+ *     than throwing; only unexpected statuses are errors.
  *   - Units vary per series (`ft` vs `m` siblings); the response's own
  *     `units` field is always used, never assumed.
  */
@@ -70,6 +74,9 @@ async function fetchTimeseriesWindow(
     signal,
     FETCH_TIMEOUT_MS
   );
+  // A nonexistent id is a 404, not the 200-with-empty trap; both mean
+  // "this id carries no data, ask the catalog" (see the header caveats).
+  if (resp.status === 404) return null;
   if (!resp.ok) throw new Error(`CWMS HTTP ${resp.status}`);
   return parseTimeseries(await resp.json());
 }
