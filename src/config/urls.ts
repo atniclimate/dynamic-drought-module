@@ -79,6 +79,26 @@ export const URLS = Object.freeze({
   // ---------- USGS Water Services (open data, CORS-OK) ----------
   usgsIV: 'https://waterservices.usgs.gov/nwis/iv/',
 
+  // ---------- NRCS AWDB REST (SNOTEL / SCAN station data) ----------
+  // Natural Resources Conservation Service Air-Water Database REST service.
+  // Data endpoint: `${nrcsAwdbRest}?stationTriplets=<id:state:network>
+  // &elements=WTEQ,SNWD,PREC&duration=DAILY&beginDate=<Y-M-D>&endDate=<Y-M-D>`
+  // returns a JSON array of { stationTriplet, data: [{ stationElement
+  // { elementCode, storedUnitCode, durationName, dataPrecision }, values:
+  // [{ date, value }] }] }. Element codes: WTEQ (Snow Water Equivalent,
+  // inches), SNWD (snow depth), PREC (water-year precipitation accumulation).
+  // Verified 2026-07-01: HTTP 200, Content-Type application/json,
+  // Access-Control-Allow-Origin: * observed WITHOUT an Origin header (a
+  // wildcard posture, so direct browser fetch works; this supersedes the
+  // older "CORS restricted, proxy required" note in the agency-data skill,
+  // which described the SOAP-era service). Access method: API (REST JSON).
+  // Route: direct fetch primary; the host stays on the Worker allow-list and
+  // the same request through `${workerProxy}/proxy?url=...` was verified the
+  // same day (HTTP 200, body unchanged) as the resilience path if the
+  // agency's CORS posture drifts. Daily values post once per day; the latest
+  // daily reading observed was the prior calendar day.
+  nrcsAwdbRest: 'https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/data',
+
   // ---------- National Weather Service (NWS) API ----------
   // api.weather.gov: the public National Oceanic and Atmospheric
   // Administration (NOAA) NWS Application Programming Interface (API). Used by

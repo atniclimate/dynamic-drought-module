@@ -60,6 +60,11 @@ import {
 import type { RegionKey, Region } from '../config/regions';
 import { TELEMETRY_STATIONS } from '../config/telemetry';
 import { registry } from '../state/registry';
+import {
+  fetchAwdbDailySeries,
+  toStationValue,
+  SNOTEL_ELEMENTS
+} from '../util/awdb';
 import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
 import { parseUrlParams, syncUrl } from '../state/url';
@@ -663,6 +668,7 @@ function buildTelemetryList(map: maplibregl.Map): void {
       <span class="telemetry-meta">
         <span class="telemetry-name">${escapeHtml(station.name)}</span>
         <span class="telemetry-agency">${escapeHtml(station.agency)} (${escapeHtml(station.type)})</span>
+        <span class="telemetry-values" data-station-values="${escapeHtml(station.id)}"></span>
       </span>
     `;
     item.addEventListener('click', () => {
@@ -670,6 +676,93 @@ function buildTelemetryList(map: maplibregl.Map): void {
       flyToStation(map, station.id);
     });
     container.appendChild(item);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Telemetry live values (Tier 2, through src/util/awdb.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * One-shot-per-session guard for the station-value hydration. The skill
+ * vocabulary's `unknown` state is "not yet fetched in this session"; the
+ * first telemetry-layer activation triggers the fetch round trip.
+ */
+let stationValuesHydrated = false;
+
+/** Master abort for in-flight value fetches; fired on telemetry layer-off. */
+let stationValuesController: AbortController | null = null;
+
+/** Compact display date for a YYYY-MM-DD reading ("Jun 30"). */
+function shortReadingDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+/**
+ * Hydrate the sidebar station rows that have a live-value source wired.
+ * Today that is the NRCS SNOTEL stations (`awdbStation`); reservoir and
+ * forecast sources join as their fetchers land. Stations without a
+ * fetcher keep the `unknown` state (an empty slot), which is honest:
+ * nothing was attempted.
+ *
+ * Each station renders its primary parameter compactly (the 400 pixel
+ * embed is first-class): Snow Water Equivalent with the reading date,
+ * "(stale)" appended when the latest daily value is older than
+ * yesterday, or "values unavailable" on fetch failure. A zero reading
+ * renders as 0; summer snowpack is legitimately zero.
+ */
+function hydrateStationValues(): void {
+  stationValuesController = new AbortController();
+  const signal = stationValuesController.signal;
+
+  for (const station of TELEMETRY_STATIONS) {
+    if (!station.awdbStation) continue;
+    const slot = document.querySelector<HTMLElement>(
+      `[data-station-values="${cssAttrEscape(station.id)}"]`
+    );
+    if (!slot) continue;
+
+    slot.textContent = 'loading...';
+    slot.className = 'telemetry-values loading';
+
+    void fetchAwdbDailySeries(station.awdbStation, SNOTEL_ELEMENTS, 7, signal)
+      .then((series) => {
+        if (signal.aborted || !slot.isConnected) return;
+        const swe = series.find((s) => s.element === 'WTEQ');
+        const value = swe ? toStationValue(station.id, swe) : null;
+        if (!value || value.value === null) {
+          slot.textContent = 'values unavailable';
+          slot.className = 'telemetry-values unavailable';
+          return;
+        }
+        const staleNote = value.freshness === 'stale' ? ' (stale)' : '';
+        slot.textContent = `SWE ${value.value} ${value.unit} · ${shortReadingDate(value.timestamp)}${staleNote}`;
+        slot.className = `telemetry-values ${value.freshness}`;
+      })
+      .catch(() => {
+        if (signal.aborted || !slot.isConnected) return;
+        slot.textContent = 'values unavailable';
+        slot.className = 'telemetry-values unavailable';
+      });
+  }
+}
+
+/**
+ * Registry hook for the value lifecycle: first telemetry activation
+ * hydrates once per session; a telemetry layer-off aborts anything still
+ * in flight (CLAUDE.md section 6 invariant 5). Values already rendered
+ * stay rendered; the list is catalog metadata plus last-known readings,
+ * not something to blank on toggle.
+ */
+function onActiveChangeForStationValues(active: ReadonlySet<string>): void {
+  if (active.has('telemetry') && !stationValuesHydrated) {
+    stationValuesHydrated = true;
+    hydrateStationValues();
+  } else if (!active.has('telemetry') && stationValuesController) {
+    stationValuesController.abort();
+    stationValuesController = null;
   }
 }
 
@@ -845,6 +938,7 @@ export function buildSidebar(
   registry.on('change', (active) => {
     pushUrl();
     updateActiveCountPill(active);
+    onActiveChangeForStationValues(active);
   });
   registry.on('status-change', (key, status) => {
     setLayerStatusInPill(key, status);

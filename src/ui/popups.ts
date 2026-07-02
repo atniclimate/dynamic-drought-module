@@ -2,6 +2,12 @@ import type { GeoJsonProperties } from 'geojson';
 import { pickTreatyEntry } from '../config/palette';
 import { URLS } from '../config/urls';
 import type { TelemetryStation } from '../types/station';
+import {
+  fetchAwdbDailySeries,
+  toStationValue,
+  SNOTEL_ELEMENTS
+} from '../util/awdb';
+import type { AwdbElementSeries } from '../util/awdb';
 import { fetchWithBudget } from '../util/fetch';
 import { escapeHtml } from '../util/escape';
 import { isObject } from '../util/guards';
@@ -355,11 +361,17 @@ export async function hydrateTelemetryPopupData(
       if (signal.aborted) return;
       slot.innerHTML = renderUsgsRows(data);
     } else if (station.awdbStation) {
+      // NRCS AWDB REST, direct fetch with the Worker as the resilience
+      // path (both routes verified 2026-07-01; see src/util/awdb.ts and
+      // URLS.nrcsAwdbRest).
+      const series = await fetchAwdbDailySeries(
+        station.awdbStation,
+        SNOTEL_ELEMENTS,
+        7,
+        signal
+      );
       if (signal.aborted) return;
-      slot.innerHTML = `
-        <div class="popup-data-error">
-          Live SWE not available in-browser. Use the station link below for the current reading.
-        </div>`;
+      slot.innerHTML = renderAwdbRows(station, series);
     }
   } catch (_err) {
     // AbortError is the expected close path; swallow silently. Anything else
@@ -371,6 +383,61 @@ export async function hydrateTelemetryPopupData(
         Live data unavailable in-browser. Open the source link for current values.
       </div>`;
   }
+}
+
+// =============================================================================
+// Internal: NRCS AWDB render
+// =============================================================================
+
+/**
+ * Render popup-data rows for a SNOTEL station from AWDB daily series:
+ * latest value per element, an "As of" date, a staleness note when the
+ * latest daily reading is older than yesterday, and a 7-day Snow Water
+ * Equivalent sparkline. A reading of 0 renders as 0 (a real summer
+ * observation), never as missing.
+ */
+function renderAwdbRows(
+  station: TelemetryStation,
+  series: AwdbElementSeries[]
+): string {
+  const values = series
+    .map((s) => toStationValue(station.id, s))
+    .filter((v): v is NonNullable<typeof v> => v !== null && v.value !== null);
+
+  if (values.length === 0) {
+    return '<div class="popup-data-error">No recent NRCS values for this station.</div>';
+  }
+
+  const rows = values.map(
+    (v) => `
+      <div class="popup-data-row">
+        <span class="popup-data-label">${escapeHtml(v.label)}</span>
+        <span class="popup-data-value">${escapeHtml(String(v.value))} ${escapeHtml(v.unit)}</span>
+      </div>
+    `
+  );
+
+  const latest = values[0];
+  const asOf = latest
+    ? `
+    <div class="popup-data-row" style="margin-top:4px;">
+      <span class="popup-data-label">As of</span>
+      <span class="popup-data-value">${escapeHtml(latest.timestamp)}${latest.freshness === 'stale' ? ' (stale)' : ''}</span>
+    </div>`
+    : '';
+
+  const swe = series.find((s) => s.element === 'WTEQ');
+  const sweNums = swe ? swe.readings.map((r) => r.value) : [];
+  const spark =
+    sweNums.length >= 2
+      ? sparklineSvg(sweNums, {
+          title: 'Snow water equivalent over the past 7 days (NRCS SNOTEL)',
+          unit: swe?.unit ?? 'in',
+          source: 'NRCS AWDB, past 7 days'
+        })
+      : '';
+
+  return rows.join('') + asOf + spark;
 }
 
 // =============================================================================
