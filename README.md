@@ -1,14 +1,71 @@
 # Dynamic Drought Module (DDM)
 
-`atniclimate/dynamic-drought-module`
+`atniclimate/dynamic-drought-module` · v0.2.1
 
-An embeddable, serverless web map for visualizing drought conditions, hydrography, ecological boundaries, wildfire activity, and live water and snowpack telemetry. Initial focus is the Pacific Northwest (PNW); regional generalization is planned (see [`ROADMAP.md`](ROADMAP.md)).
+An embeddable, serverless web map for seeing drought conditions anywhere
+in the United States and understanding what they mean for a place: current
+drought status, wildfire and extreme heat risk, water and snowpack
+telemetry, and the public resources that address the impacts, routed by
+the place a user selects. Built by ATNI Climate (Affiliated Tribes of
+Northwest Indians) with a Pacific Northwest (PNW) focus and a national
+framing.
 
-The build is TypeScript plus Vite, the map renderer is MapLibre GL JavaScript, and the optional Cloudflare Worker in `workers/proxy/` adds Cross-Origin Resource Sharing (CORS) headers to non-CORS agency endpoints (NRCS Air-Water Database (AWDB), USACE Dataquery, USBR Hydromet, NWRFC). Output is a static `dist/` folder served via GitHub Pages.
+**For a deployer, the module is a static folder.** Build it once, serve it
+from any web host, embed it in any page with an `<iframe>`. There is no
+backend, no account, no tracking, no analytics, and no proprietary tile
+provider. Every view is a shareable URL.
 
-License: Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0).
+**Stewardship comes first.** The module is built so each deployer (a
+Tribal Nation, a state agency, a partner) controls its own copy on its own
+infrastructure. Sovereign-jurisdiction data is never redistributed by this
+repository: the Tribal Lands and Treaty Areas layers ship as empty
+placeholders that each deployer populates under its own authorizations.
 
-> Looking for the previous vanilla Leaflet baseline (no build step, single `app.js` + `style.css` + `index.html`)? See the `v0.1.2` tag: `git checkout v0.1.2`.
+> **Treaty boundaries.** Agency polygons are a representation of Treaty
+> cession areas, not a definitive depiction of Tribal jurisdiction. Treaty
+> rights and Tribal sovereignty are matters of sovereign authority. Verify
+> with the relevant Tribal Nation before using these polygons for any
+> decision-making.
+
+License: Creative Commons Attribution-NonCommercial-ShareAlike 4.0
+International (CC BY-NC-SA 4.0).
+
+---
+
+## What the module shows
+
+- **Condition surfaces** (one at a time, so they never fight visually):
+  the US Drought Monitor (USDM), the gridded Standardized Precipitation
+  Index (SPI) with a 30-to-365-day window selector, the NOAA Climate
+  Prediction Center (CPC) Seasonal Drought Outlook, NWS HeatRisk, the
+  Storm Prediction Center fire-weather outlook, and USDA Forest Service
+  Wildfire Hazard Potential.
+- **Place** (the reference boundaries that say where you are and whose
+  land you are looking at): state boundaries, EPA Omernik Level III and
+  Level IV ecoregions, Tribal Lands, Treaty Areas, Bureau of Indian
+  Affairs (BIA) reservation boundaries (live from the authoritative
+  AIAN-LAR service), and rivers.
+- **Events**: active wildfire perimeters (National Interagency Fire
+  Center) and active National Weather Service (NWS) heat and fire-weather
+  alerts.
+- **Stations**: live water and snowpack telemetry with values in the
+  sidebar and popups: USGS streamgages, NRCS SNOTEL snowpack, USBR
+  Hydromet reservoir storage and AgriMet agricultural observations, and
+  USACE reservoir forebay elevations.
+- **The impact briefing**: click any boundary (a state, an ecoregion, a
+  Tribal or reservation boundary) and the module composes a briefing for
+  that place: land identity, current / near-term / long-range drought
+  impact with wildfire and extreme heat foregrounded, the seasonal
+  water-supply outlook, the El Nino / Southern Oscillation (ENSO) tilt,
+  and public resources routed in stewardship order (the Tribe's own
+  resources first, then federal, then state).
+- **View presets**: five question-first chips ("Right now", "This week",
+  "Season ahead", "Fire risk", "Whose land") that set the layer stack for
+  the question being asked, without locking it.
+
+Every layer reports an honest status in the sidebar (`loading`, `live`,
+`unavailable`, `no data`, `zoom in to load`); a failed upstream shows an
+honest pill, never a silent blank.
 
 ---
 
@@ -31,197 +88,165 @@ npm run preview
 # preview the production build at http://localhost:4173/
 ```
 
-Type checking only (no emit):
-
-```powershell
-npm run typecheck
-```
-
-The deployed site lives at `https://atniclimate.github.io/dynamic-drought-module/` and is rebuilt on every push to `main` via `.github/workflows/deploy.yml`. Deployers self-hosting on their own infrastructure can run `npm run build` and serve the resulting `dist/` from any static web host.
+The deployed site lives at
+`https://atniclimate.github.io/dynamic-drought-module/` and is rebuilt on
+every push to `main` via `.github/workflows/deploy.yml`. Deployers
+self-hosting on their own infrastructure run `npm run build` and serve the
+resulting `dist/` from any static web host.
 
 ---
 
-## URL parameters
+## URL parameters (URL-as-state)
 
-The application reads `window.location.search` on load, both for direct visits and for embedded iframes.
+The application reads `window.location.search` on load, both for direct
+visits and for embedded iframes. The **Share view** button copies the
+current URL.
 
-| Param    | Values                                                                                                                       | Default            |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| `region` | `washington_state`, `columbia_snake_basin`, `cascades`, `central_oregon`, `southwest_washington`, `south_puget_sound`        | `washington_state` |
-| `layers` | comma-separated keys: `hydrography`, `ecoregions`, `drought`, `usdm`, `tribal`, `treaty`, `nifc-fires`, `usfs-whp`, `telemetry` | `hydrography,tribal,telemetry` |
-| `embed`  | `true` or `1` (hides the sidebar for clean iframe presentation)                                                              | `false`            |
+| Param | Values | Default |
+| ----- | ------ | ------- |
+| `region` | `washington_state`, `columbia_snake_basin`, `cascades`, `central_oregon`, `southwest_washington`, `south_puget_sound`, `national`, `alaska`, `hawaii` | `washington_state` |
+| `layers` | comma-separated keys from the table below | `usdm,tribal,telemetry` |
+| `select` | `state:<postal code>` (for example `state:WA`): opens the map focused on that boundary with its impact briefing open; applied once, then dropped from the URL | none |
+| `embed` | `true` or `1` (hides the sidebar for clean iframe presentation) | `false` |
 
-### Examples
-
-```
-?region=central_oregon&layers=hydrography,drought,telemetry
-?region=south_puget_sound&layers=tribal,treaty
-?region=columbia_snake_basin&layers=drought,usdm,nifc-fires&embed=true
-```
+Because condition surfaces render one at a time, a `layers` list naming
+several surfaces resolves deterministically to the first surface named
+(older shared links keep working).
 
 ### Embedding
 
 ```html
 <iframe
-  src="https://atniclimate.github.io/dynamic-drought-module/?region=cascades&layers=drought,usdm,telemetry&embed=true"
+  src="https://atniclimate.github.io/dynamic-drought-module/?select=state:WA&embed=true"
   width="100%" height="600"
   style="border:1px solid #243049; border-radius:6px;"
   loading="lazy"
-  title="PNW Drought + Wildfire Outlook">
+  title="Drought, wildfire, and heat conditions">
 </iframe>
 ```
-
-A **Share view** button in the top-right of the map copies the current URL (region, active layers, and embed flag) to the clipboard.
-
----
-
-## Regions
-
-Bounding boxes are in WGS 84.
-
-| Key                    | Bounds                                  | Notes                                |
-| ---------------------- | --------------------------------------- | ------------------------------------ |
-| `washington_state`     | (45.54, -124.76) to (49.00, -116.92)    | statewide                            |
-| `columbia_snake_basin` | (45.35, -126.17) to (50.22, -111.04)    | seven-state drainage                 |
-| `cascades`             | (46.50, -122.50) to (49.00, -120.50)    | high-elevation snowpack              |
-| `central_oregon`       | (43.50, -122.00) to (45.65, -120.30)    | Deschutes basin and named telemetry  |
-| `southwest_washington` | (45.50, -124.30) to (47.00, -122.00)    | lower Columbia estuary               |
-| `south_puget_sound`    | (46.90, -123.20) to (47.50, -122.10)    | inland marine waters                 |
-
-Per-region padding lives in `REGIONS[key].padding` in `src/config/regions.ts` (currently 0.10 to 0.25 degrees).
 
 ---
 
 ## Layers and data sources
 
-| Layer                           | Source                                                               | Endpoint                                | Lives where                       |
-| ------------------------------- | -------------------------------------------------------------------- | --------------------------------------- | --------------------------------- |
-| Base map                        | OpenStreetMap standard (subdued via raster paint)                    | XYZ raster tiles                        | upstream tile server              |
-| Hydrography                     | OpenStreetMap, via Overpass API                                      | live JSON                               | three-mirror failover             |
-| Ecoregions                      | EPA Level III                                                        | GeoJSON                                 | bundled in `public/data/`         |
-| Seasonal Drought Outlook        | NOAA CPC                                                             | OGC WMS                                 | live                              |
-| US Drought Monitor (USDM)       | NDMC / UNL / NOAA / USDA                                             | ArcGIS REST FeatureServer (`f=geojson`) | live                              |
-| Tribal Lands                    | BIA AIAN-LAR (or Census AIANNH, or state portals)                    | GeoJSON                                 | bundled in `public/data/`         |
-| Treaty Areas                    | WA DAHP, or Native Land Digital                                      | GeoJSON                                 | bundled in `public/data/`         |
-| Active Wildfires (NIFC)         | National Interagency Fire Center, WFIGS Current Interagency Fire Perimeters | ArcGIS REST FeatureServer       | live                              |
-| Wildfire Hazard Potential (WHP) | USFS / Federal GeoPlatform                                           | ArcGIS ImageServer (`exportImage`)      | live                              |
-| Telemetry                       | USGS Water Services live, plus deep links to NRCS, USACE, USBR portals; SNOTEL via the Cloudflare Worker proxy | live JSON | live              |
+| Key | Layer | Role | Source |
+| --- | ----- | ---- | ------ |
+| `usdm` | US Drought Monitor | surface | NDMC FeatureServer (live) |
+| `gridded-index` | Gridded Drought Index (SPI) | surface | NOAA NIDIS raster tiles (live) |
+| `drought` | Seasonal Drought Outlook | surface | NOAA CPC WMS (live) |
+| `heatrisk` | HeatRisk · Today (Experimental) | surface | NOAA NWS/WPC ImageServer (live) |
+| `spc-fire-weather` | Fire Weather Outlook (Day 1) | surface | NOAA SPC MapServer (live) |
+| `usfs-whp` | Wildfire Hazard Potential | surface | USFS GeoPlatform ImageServer (live) |
+| `states` | State Boundaries | reference | US Census, bundled GeoJSON |
+| `ecoregions` | Ecoregions (Level III/IV) | reference | EPA Omernik, bundled PMTiles |
+| `tribal` | Tribal Lands | reference | bundled GeoJSON, EMPTY PLACEHOLDER |
+| `treaty` | Treaty Areas | reference | bundled GeoJSON, EMPTY PLACEHOLDER |
+| `bia-reservations` | Reservation Boundaries | reference | BIA AIAN-LAR FeatureServer (live) |
+| `hydrography` | Rivers | reference | OpenStreetMap via Overpass (live) |
+| `nifc-fires` | Active Wildfires | event | NIFC WFIGS FeatureServer (live) |
+| `nws-alerts` | Heat & Fire Weather Alerts | event | NOAA NWS MapServer (live) |
+| `telemetry` | Telemetry Stations | stations | USGS, NRCS, USBR, USACE (live) |
 
-All non-basemap layers are lazy-loaded on first toggle-on. Each reports its load state inline in the sidebar:
-
-| Status                                   | Meaning                                                                                              |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `loading...`                             | Fetching from the network                                                                            |
-| `live`                                   | Loaded successfully                                                                                  |
-| `zoom in to load`                        | Hydrography is active but the current zoom is below z=7                                              |
-| `empty placeholder (see data/README.md)` | The local GeoJSON file is an empty placeholder; populate it with authoritative data                  |
-| `unavailable`                            | The endpoint failed (network error, rate limit, 404). Toggle off and back on to retry                |
-
-### About hydrography
-
-On toggle-on, and on every debounced `moveend`, the application issues an Overpass Query Language request for `waterway=river|canal` within the current viewport. Results are cached by quantized bounding box. Below zoom level 7, the layer is intentionally dormant. Mainstems (Columbia, Snake) render thicker than tributaries.
-
-The Overpass API is volunteer-operated. Mirrors are tried in order with a 12-second per-call timeout: `overpass-api.de`, `overpass.kumi.systems`, `overpass.openstreetmap.fr`. For institutional deployments expecting concurrent users in the dozens or higher, consider running a dedicated Overpass instance or replacing this layer with a National Hydrography Dataset (NHD) PMTiles bundle (see [`ROADMAP.md`](ROADMAP.md)).
-
-### About the basemap
-
-The basemap is OpenStreetMap standard raster tiles, subdued with MapLibre raster paint (desaturated, brightened, and drawn at partial opacity over a light background layer) so the drought layers stand out. OpenStreetMap tiles are free and open; light-to-moderate use is fine for an embedded module, but heavier traffic should host its own tile server. The basemap stays an open provider; no proprietary tiles (CLAUDE.md rule 2). OpenTopoMap is retained in `src/config/urls.ts` as a pre-approved alternative.
+Every live endpoint in `src/config/urls.ts` carries a verification
+metadata block (HTTP status, content type, CORS posture, response-shape
+caveats, verification date). Read it before touching a fetcher.
 
 ### About the placeholders
 
-The three reference polygon layers (Ecoregions, Tribal Lands, Treaty Areas) load from bundled GeoJSON in `public/data/`. They ship as empty `FeatureCollection` placeholders, so the application is functional on first deploy without redistributing any agency or sovereign-jurisdiction data. To enable a layer, replace the corresponding file with authoritative GeoJSON. Conversion commands and download URLs are documented in [`public/data/README.md`](public/data/README.md).
+Tribal Lands and Treaty Areas load from bundled GeoJSON in `public/data/`
+and ship as empty `FeatureCollection` placeholders, so the application is
+functional on first deploy without redistributing any sovereign-
+jurisdiction data. To enable a layer, replace the corresponding file with
+authoritative GeoJSON under your own authorization. Conversion commands
+and download URLs are documented in
+[`public/data/README.md`](public/data/README.md). The BIA reservation
+layer takes the other path: it fetches the authoritative federal service
+live and redistributes nothing.
 
-> **Treaty boundaries.** Agency polygons are a representation of Treaty cession areas, not a definitive depiction of Tribal jurisdiction. Treaty rights and Tribal sovereignty are matters of sovereign authority. Verify with the relevant Tribal Nation before using these polygons for any decision-making.
+### About the basemap and hydrography
+
+The basemap is OpenStreetMap standard raster tiles, subdued via raster
+paint so the condition surfaces dominate. No proprietary tile providers,
+ever. Hydrography queries the volunteer-run Overpass API (three-mirror
+failover, viewport-driven, dormant below zoom 7); institutional
+deployments expecting heavy concurrency should plan for the National
+Hydrography Dataset PMTiles bundle tracked in
+[`ROADMAP.md`](ROADMAP.md).
+
+### The Cloudflare Worker proxy (optional)
+
+Most sources serve the browser directly. Two do not (USBR Hydromet and
+the NWRFC water-supply CSV have no CORS), and one is flaky enough to want
+a retry path (NRCS AWDB). The Worker in `workers/proxy/` is a CORS shim
+with a strict allow-list; it adds a header and changes nothing else.
+Deploy it with `wrangler` and set `URLS.workerProxy` to enable those
+sources; without it, the module still runs and reports those values
+honestly as unavailable.
 
 ---
 
-## Telemetry stations
+## Architecture invariants
 
-Each station renders as a colored marker. Clicking the marker (or the matching item in the sidebar) opens a popup. For USGS streamgages the popup fetches live instantaneous values (discharge code 00060, gage height code 00065). Stations whose agencies do not currently expose CORS-friendly JSON (USACE Dataquery, NRCS AWDB, USBR AgriMet, NWRFC) surface an honest "open the source link" message rather than fake fetches that would fail in the browser.
-
-Live SNOTEL Snow Water Equivalent (SWE) values can be fetched in-browser when the deployer has the Cloudflare Worker proxy in `workers/proxy/` deployed and `URLS.workerProxy` populated. See `workers/proxy/wrangler.toml` and the deploy steps in [`workers/proxy/`](workers/proxy/).
-
-To add a station, append an entry to `TELEMETRY_STATIONS` in `src/config/telemetry.ts` with `coords`, `agency`, `description`, optional `usgsSite` (for live data), and `links`.
+- **No backend.** The static `dist/` folder is the entire production
+  deployment; the optional Worker is a CORS shim, not application logic.
+- **URL-as-state.** Region, active layers, selection, and the embed flag
+  round-trip through the URL; every view is shareable and embeddable.
+- **One surface at a time.** Condition surfaces are mutually exclusive by
+  construction; place, events, and stations stack over the active surface.
+- **Lazy loading with honest status.** Layers load on first toggle-on and
+  report five canonical states; a data failure keeps the layer checked
+  with an honest `unavailable` pill (a shared link never silently loses a
+  layer because an upstream blipped).
+- **Cancellable network operations.** Master abort signal plus per-call
+  timeout on every non-trivial fetch; late responses to superseded
+  operations are dropped, not rendered.
+- **Empty-placeholder stewardship.** Sovereign-jurisdiction layers ship
+  empty; deployers populate them under their own authorizations.
+- **Mobile and accessibility.** The sidebar stacks above the map below
+  720 pixels; region selection is arrow-key navigable; status changes are
+  announced through a polite live region; embed semantics survive
+  collapse and expand.
 
 ---
 
 ## Customization quick reference
 
-| Want to change...           | Edit in                                    |
-| --------------------------- | ------------------------------------------ |
-| Region bounds or names      | `src/config/regions.ts` (`REGIONS`)        |
-| Layer registry              | `src/config/layers.ts` (`LAYER_DEFS`)      |
-| Ecoregion fill colors       | `src/config/palette.ts`                    |
-| Drought outlook colors      | `src/config/palette.ts`                    |
-| Treaty stroke colors        | `src/config/palette.ts` (`TREATY_COLORS`)  |
-| Telemetry stations          | `src/config/telemetry.ts`                  |
-| Endpoint URLs               | `src/config/urls.ts`                       |
-| Default-on layers           | `LAYER_DEFS[i].defaultOn`                  |
-| Brand text and colors       | `index.html` header, `src/styles/app.css`  |
+| Want to change... | Edit in |
+| ----------------- | ------- |
+| Region bounds or names | `src/config/regions.ts` (`REGIONS`) |
+| Layer registry and default-on set | `src/config/layers.ts` (`LAYER_DEFS`) |
+| View presets | `src/config/presets.ts` (`VIEW_PRESETS`) |
+| Colors and palettes | `src/config/palette.ts` |
+| Telemetry stations | `src/config/telemetry.ts` |
+| Endpoint URLs and the Worker base | `src/config/urls.ts` |
+| Brand text and styles | `index.html` header, `src/styles/app.css` |
 
 ---
 
-## Architecture notes
+## Project documents
 
-- **No backend.** The static `dist/` folder served via GitHub Pages is the entire production deployment. The optional Cloudflare Worker in `workers/proxy/` is a CORS shim, not application logic.
-- **URL-as-state.** Region, active layers, and embed flag round-trip through `window.location.search`. The `embed` flag is preserved across syncs so the share-from-embed flow stays consistent.
-- **Lazy-loaded layers.** Each layer is loaded on first toggle-on. Subsequent toggles flip visibility on a cached source / layer set.
-- **Empty-FeatureCollection placeholders.** Reference-polygon layers default to empty placeholders. An empty placeholder renders as `empty placeholder (see data/README.md)` rather than as an error.
-- **Cancellable network operations.** Hydrography and telemetry both use a master abort signal plus per-call timeout. Hung connections do not block the application. Late-arriving responses to superseded operations are dropped, not rendered.
-- **Honest user feedback.** The clipboard helper returns a real boolean. The popup data block shows real values or an honest "open the source link" message; it never fakes a fetch that would fail in production.
-- **Mobile.** Sidebar stacks above the map below 720 pixels viewport. The collapse and expand buttons preserve embed semantics. `map.resize()` is called on viewport changes (rotation, browser resize, address-bar collapse).
-- **Accessibility.** Region radiogroup supports arrow-key navigation; layer status changes are announced through a polite live region; telemetry list items are keyboard-activatable buttons with `:focus-visible` rings.
-
----
-
-## File structure
-
-```
-/
-├── .github/workflows/deploy.yml        # Build -> GitHub Pages
-├── public/data/                        # Empty-FeatureCollection placeholders
-├── src/
-│   ├── main.ts                         # Boot
-│   ├── styles/app.css
-│   ├── config/                         # REGIONS, LAYER_DEFS, palette, telemetry, urls
-│   ├── map/                            # createMap, base style spec
-│   ├── layers/                         # One file per layer module
-│   ├── state/                          # url, registry
-│   ├── ui/                             # sidebar, popups, share, overlay
-│   ├── util/                           # fetch, clipboard, escape, bbox
-│   └── types/                          # region, layer, station
-├── workers/proxy/                      # Cloudflare Worker CORS proxy
-├── CLAUDE.md                           # Authoritative project context
-├── README.md                           # This file
-├── ROADMAP.md                          # PMTiles + regional generalization
-├── CHANGES.md                          # Session-by-session change log
-├── TODO.md                             # Deferred items
-└── LICENSE                             # CC BY-NC-SA 4.0 full text
-```
-
-For the full named-export contract per module see `CLAUDE.md` section 8.
-
----
+- [`docs/PHASE_PLAN_090.md`](docs/PHASE_PLAN_090.md): the ratified phase
+  plan to the 0.9.0 pre-release (one minor version per phase).
+- [`ROADMAP.md`](ROADMAP.md): what remains, organized by phase.
+- [`CHANGES.md`](CHANGES.md): the session-by-session change log.
+- [`TODO.md`](TODO.md): deferred items, bucketed by phase.
+- `CLAUDE.md`: authoritative project context and hard rules.
+- [`SKILLS_SUITE.md`](SKILLS_SUITE.md): the agent-and-skills architecture
+  behind the scout-and-verify sourcing pipeline.
 
 ## Browser support
 
-Tested mental model: any evergreen browser (Chrome, Edge, Firefox, Safari version 14 or newer). MapLibre GL JavaScript requires WebGL 1; almost all current devices satisfy that.
-
----
+Any evergreen browser (Chrome, Edge, Firefox, Safari 14 or newer).
+MapLibre GL JavaScript requires WebGL 1.
 
 ## Attribution and licensing
 
-This project is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0) license.
+This project is licensed CC BY-NC-SA 4.0: free to copy, redistribute,
+remix, and build upon; give appropriate credit to ATNI Climate, link the
+license, indicate changes; no commercial use; distribute remixes under the
+same license.
 
-- **Free to use and edit:** copy, redistribute, remix, and build upon this module.
-- **Attribution:** give appropriate credit to ATNI Climate, link the license, indicate changes.
-- **Non-commercial:** do not use the material for commercial purposes.
-- **ShareAlike:** distribute remixes under this same license.
-
-Data layers provided by sovereign Tribal Nations, state agencies, and federal entities retain their respective public-domain or specific-use licenses. Ensure you have authorization to redistribute any bundled reference polygons.
-
----
-
-## Roadmap
-
-PMTiles for hydrography (replacing the live Overpass dependency with a static NHD-derived bundle) and regional generalization beyond the Pacific Northwest are the next major work items. See [`ROADMAP.md`](ROADMAP.md).
+Data layers provided by sovereign Tribal Nations, state agencies, and
+federal entities retain their respective public-domain or specific-use
+licenses. Ensure you have authorization to redistribute any bundled
+reference polygons.
