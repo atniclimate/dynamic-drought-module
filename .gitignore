@@ -48,3 +48,9 @@ research/
 
 # Playwright browser-verification session artifacts
 .playwright-cli/
+
+# graphify: graph outputs are committed; machine-local state is not
+graphify-out/.graphify_python
+graphify-out/.graphify_root
+graphify-out/cache/
+graphify-out/cost.json
