@@ -49,6 +49,12 @@ research/
 # Playwright browser-verification session artifacts
 .playwright-cli/
 
+# Playwright smoke-suite run artifacts (browsers install to a global cache,
+# not into the repository; only per-run output lands here)
+test-results/
+playwright-report/
+blob-report/
+
 # graphify: graph outputs are committed; machine-local state is not
 graphify-out/.graphify_python
 graphify-out/.graphify_root

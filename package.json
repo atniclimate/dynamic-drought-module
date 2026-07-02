@@ -10,6 +10,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "test": "playwright test",
+    "test:report": "playwright show-report",
     "build:enso": "node scripts/build-enso-snapshot.mjs",
     "build:ecoregion-tiles": "node scripts/build-ecoregion-tiles.mjs",
     "build:states": "node scripts/build-states.mjs"
@@ -19,6 +21,7 @@
     "pmtiles": "^4.4.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.1",
     "@types/geojson": "^7946.0.14",
     "geojson-vt": "^4.0.3",
     "mapshaper": "^0.7.22",
