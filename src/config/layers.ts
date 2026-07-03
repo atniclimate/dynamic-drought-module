@@ -81,7 +81,7 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'heatrisk',    name: 'HeatRisk · Today (Experimental)', source: 'NOAA NWS/WPC · ImageServer', role: 'surface', defaultOn: false, module: heatrisk },
   { key: 'spc-fire-weather', name: 'Fire Weather Outlook (Day 1)', source: 'NOAA SPC · MapServer', role: 'surface', defaultOn: false, module: spcFireWeather },
   { key: 'usfs-whp',    name: 'Wildfire Hazard Potential',  source: 'USFS · GeoPlatform',         role: 'surface',   defaultOn: false, module: usfsWhp },
-  { key: 'telemetry',   name: 'Telemetry Stations',         source: 'USGS · USBR · NRCS · USACE', role: 'stations',  defaultOn: true,  module: telemetry }
+  { key: 'telemetry',   name: 'Monitoring stations',        source: 'USGS · USBR · NRCS · USACE', role: 'stations',  defaultOn: true,  module: telemetry }
 ];
 
 /**

@@ -67,14 +67,53 @@ export interface UsdmCategory {
   readonly label: string;
   /** Official USDM display color. */
   readonly color: string;
+  /**
+   * Plain-language read of what the category means on the ground, water and
+   * agriculture and fire foregrounded. Adapted from the USDM's own published
+   * "Possible Impacts" so a non-specialist learns what "D2" means without a
+   * glossary (personas: decision-makers, community members). Calm and factual,
+   * never alarm language, honest about severity (UX heuristic: agency over
+   * alarm).
+   */
+  readonly impact: string;
 }
 
 export const USDM_CATEGORIES: ReadonlyArray<UsdmCategory> = [
-  { code: 'D0', label: 'Abnormally dry',      color: '#FFFF00' },
-  { code: 'D1', label: 'Moderate drought',    color: '#FCD37F' },
-  { code: 'D2', label: 'Severe drought',      color: '#FFAA00' },
-  { code: 'D3', label: 'Extreme drought',     color: '#E60000' },
-  { code: 'D4', label: 'Exceptional drought', color: '#730000' }
+  {
+    code: 'D0',
+    label: 'Abnormally dry',
+    color: '#FFFF00',
+    impact:
+      'Short-term dryness slows planting and crop growth, or lingering deficits remain while coming out of drought. Fire risk begins to rise.'
+  },
+  {
+    code: 'D1',
+    label: 'Moderate drought',
+    color: '#FCD37F',
+    impact:
+      'Some damage to crops and pastures; streams, reservoirs, or wells run low. Voluntary water conservation is often requested and fire risk is elevated.'
+  },
+  {
+    code: 'D2',
+    label: 'Severe drought',
+    color: '#FFAA00',
+    impact:
+      'Crop or pasture losses are likely and water shortages are common; water-use restrictions may be imposed. Fire risk is high.'
+  },
+  {
+    code: 'D3',
+    label: 'Extreme drought',
+    color: '#E60000',
+    impact:
+      'Major crop and pasture losses occur, with widespread water shortages or restrictions. Large fires become more likely.'
+  },
+  {
+    code: 'D4',
+    label: 'Exceptional drought',
+    color: '#730000',
+    impact:
+      'Exceptional and widespread crop and pasture losses, with water emergencies from depleted reservoirs, streams, and wells. Fire danger is extreme.'
+  }
 ];
 
 /* ---------------------------------------------------------------------------

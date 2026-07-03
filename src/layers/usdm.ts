@@ -282,6 +282,19 @@ function formatCategoryLabel(dm: unknown): string {
 }
 
 /**
+ * The plain-language impact read for a category, so a non-specialist learns
+ * what the classification means without a glossary (personas: decision-makers,
+ * community members). Falls back to the neutral range description for an
+ * out-of-domain value rather than guessing.
+ */
+function categoryImpact(dm: unknown): string {
+  if (typeof dm === 'number' && Number.isInteger(dm) && dm >= 0 && dm <= 4) {
+    return USDM_CATEGORIES[dm]!.impact;
+  }
+  return 'U.S. Drought Monitor categories range from D0 (abnormally dry) through D4 (exceptional drought).';
+}
+
+/**
  * Format an NDMC date field. The FeatureServer emits dates as
  * milliseconds-since-epoch integers; we render `YYYY-MM-DD` in UTC to
  * avoid the local-time day rollover that confuses end-users in Pacific
@@ -315,10 +328,11 @@ function buildUsdmPopupHtml(props: GeoJsonProperties): string {
 
   return `
     <div class="popup-title">${escapeHtml(category)}</div>
-    <div class="popup-agency">USDM (NDMC / NOAA / USDA)</div>
+    <div class="popup-agency">U.S. Drought Monitor (NDMC / NOAA / USDA)</div>
     ${mapDate ? `<div class="popup-treaty-meta">Map date: ${escapeHtml(mapDate)}</div>` : ''}
     ${validStart && validEnd ? `<div class="popup-treaty-meta">Valid: ${escapeHtml(validStart)} to ${escapeHtml(validEnd)}</div>` : ''}
-    <div class="popup-description">United States Drought Monitor categories range from D0 (abnormally dry) through D4 (exceptional drought). Updated weekly each Thursday morning Eastern Time.</div>
+    <div class="popup-description">${escapeHtml(categoryImpact(dm))}</div>
+    <div class="popup-treaty-meta">Updated weekly each Thursday.</div>
     <div class="popup-links">
       <a href="https://droughtmonitor.unl.edu/" target="_blank" rel="noopener">U.S. Drought Monitor</a>
       <a href="https://www.drought.gov/" target="_blank" rel="noopener">Drought.gov</a>
