@@ -32,11 +32,19 @@ export default defineConfig({
     // itself and the PMTiles protocol handler is separate; both are stable
     // across app edits, while the app chunk changes on nearly every commit. On
     // a repeat load only the small app chunk is re-fetched.
-    rollupOptions: {
+    //
+    // Vite 8 ships Rolldown as the bundler; the Rollup-era
+    // `rollupOptions.output.manualChunks` object form was removed, and
+    // `codeSplitting.groups` is its more flexible replacement. The @maplibre
+    // scope is matched explicitly so the style-spec helper packages ride in
+    // the maplibre chunk rather than falling to default chunking.
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          maplibre: ['maplibre-gl'],
-          pmtiles: ['pmtiles']
+        codeSplitting: {
+          groups: [
+            { name: 'maplibre', test: /node_modules[\\/](maplibre-gl|@maplibre)[\\/]/ },
+            { name: 'pmtiles', test: /node_modules[\\/]pmtiles[\\/]/ }
+          ]
         }
       }
     },
