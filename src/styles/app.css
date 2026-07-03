@@ -71,11 +71,27 @@
   --font-display: 'League Spartan', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-body: 'Lexend', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  /* Weight tokens */
-  --fw-title: 600;     /* League Spartan Semibold (titles) */
-  --fw-subtitle: 500;  /* League Spartan Medium (subtitles, labels) */
-  --fw-body: 400;      /* Lexend Normal (body) */
-  --fw-strong: 500;    /* Lexend Medium (emphasized body) */
+  /* Weight tokens. Both families are variable (wght 100-900), so weights are
+     shaved slightly below their nominal steps: light-on-dark text halates and
+     reads one notch heavier than the same weight dark-on-light, and this UI
+     is permanently dark (0.3.0 typography pass; CSS-Tricks "Dark mode and
+     variable fonts", CHI 2023 polarity study). The hierarchy steps are
+     preserved: 580 titles, 490 subtitles/emphasis, 385 body. */
+  --fw-title: 580;     /* League Spartan Semibold, optically corrected for dark */
+  --fw-subtitle: 490;  /* League Spartan Medium, optically corrected */
+  --fw-body: 385;      /* Lexend Normal, optically corrected */
+  --fw-strong: 490;    /* Lexend Medium (emphasized body) */
+
+  /* Tracking tokens (0.3.0 typography pass). Kerning is the font's job
+     (font-kerning below keeps the kern tables on at small sizes); tracking is
+     ours. Uppercase micro-headings need opened tracking (Butterick: 5-12% for
+     caps), tiny lowercase status text gets a little air, and large display
+     figures tighten. Lexend body text deliberately gets NO added tracking:
+     its expanded spacing is designed in. */
+  --track-overline: 0.12em;  /* uppercase panel/section headings */
+  --track-caps-sm: 0.08em;   /* small uppercase labels and badges */
+  --track-pill: 0.03em;      /* tiny lowercase status text */
+  --track-display: -0.01em;  /* 17-20px display values */
 
   /* Layout */
   --sidebar-w: 340px;
@@ -100,7 +116,17 @@ html, body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
+  /* Keep the fonts' kern tables active at every size: the initial value
+     (auto) explicitly permits engines to drop kerning on small text, and
+     this UI lives at 9.5 to 12px. Replaces the legacy text-rendering:
+     optimizeLegibility switch (same intent, pre-2014 spelling, documented
+     performance caveats). This one line is the honest answer to "JavaScript
+     kerning": the OpenType kern data in the self-hosted fonts does the
+     per-pair work; no script needed. */
+  font-kerning: normal;
+  /* Size fallback fonts to Lexend's x-height so the pre-swap frame does not
+     jump (Baseline 2024). */
+  font-size-adjust: from-font;
 }
 
 strong, b {
@@ -184,12 +210,33 @@ a:hover {
   gap: 12px;
   min-width: 0;
 }
-.brand-mark {
+/* The organizational seal on a light circular chip. The chip color matches
+   the seal asset's own background (#e9edf0, sampled from the source PNG) so
+   the crop edge is invisible; a plain ring, no glow (a glow under a formal
+   seal reads gimmicky). It is a button: activating it opens the about card
+   with the full lockup. */
+.brand-seal {
+  appearance: none;
   width: 32px;
   height: 32px;
+  padding: 0;
   flex-shrink: 0;
-  border-radius: var(--radius-md);
-  box-shadow: 0 0 0 1px var(--line-strong), 0 4px 12px rgba(8, 145, 178, 0.18);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e9edf0;
+  border: none;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--line-strong);
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+.brand-seal:hover { box-shadow: 0 0 0 1px var(--accent-strong); }
+.brand-seal img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: block;
 }
 .brand-text { min-width: 0; }
 .brand-text h1 {
@@ -262,12 +309,10 @@ a:hover {
 
 .sidebar-expand-btn {
   position: absolute;
-  /* Leaflet 1.9's default zoom control stack sits at top-left, occupying
-     roughly 12px..72px (two 28-30px buttons with internal margin). The
-     expand button is positioned below the stack so the +/- controls remain
-     reachable in embed mode; the elevated z-index protects against any
-     future Leaflet UI that might also default to z-index 1000. */
-  top: 80px;
+  /* On the same 12px corner grid as the Share view / Reset stack top-right.
+     (An earlier 80px offset dodged the Leaflet zoom control, which does not
+     exist in the MapLibre build; it left the button stranded mid-edge.) */
+  top: 12px;
   left: 12px;
   z-index: 1001;
   background: var(--bg-1);
@@ -302,7 +347,7 @@ a:hover {
   font-family: var(--font-display);
   font-size: 11px;
   font-weight: var(--fw-subtitle);
-  letter-spacing: 0.14em;
+  letter-spacing: var(--track-overline);
   text-transform: uppercase;
   color: var(--fg-2);
 }
@@ -317,7 +362,7 @@ a:hover {
   padding: 2px 7px;
   border: 1px solid var(--line-strong);
   border-radius: 999px;
-  letter-spacing: 0.02em;
+  letter-spacing: var(--track-pill);
   white-space: nowrap;
 }
 .status-pill.active { color: var(--accent); border-color: var(--accent-strong); }
@@ -338,7 +383,7 @@ a:hover {
   font-family: var(--font-display);
   font-size: 11px;
   font-weight: var(--fw-subtitle);
-  letter-spacing: 0.14em;
+  letter-spacing: var(--track-overline);
   text-transform: uppercase;
   color: var(--fg-2);
 }
@@ -374,6 +419,7 @@ a:hover {
   font-feature-settings: 'tnum' 1;
   font-size: 20px;
   line-height: 1;
+  letter-spacing: var(--track-display);
   color: var(--fg-0);
 }
 
@@ -390,8 +436,15 @@ a:hover {
 .conditions-metric[data-tone='off'] {
   opacity: 0.6;
 }
+/* The off value reads as a deliberate small-caps state word, not a dash that
+   could be mistaken for missing data. The 20px line height is kept so the
+   three tiles stay equal-height whatever their tones. */
 .conditions-metric[data-tone='off'] .conditions-value {
   color: var(--fg-3);
+  font-size: 11px;
+  line-height: 20px;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
 }
 .conditions-metric[data-tone='none'] .conditions-value {
   color: var(--fg-1);
@@ -498,7 +551,7 @@ a:hover {
   font-family: var(--font-display);
   font-size: 10px;
   font-weight: var(--fw-subtitle);
-  letter-spacing: 0.12em;
+  letter-spacing: var(--track-overline);
   text-transform: uppercase;
   color: var(--fg-3);
   padding: 0 10px;
@@ -582,7 +635,7 @@ a:hover {
   color: var(--fg-3);
   margin-top: 2px;
   display: block;
-  letter-spacing: 0.02em;
+  letter-spacing: var(--track-pill);
 }
 .layer-toggle-status.loading { color: var(--warn); }
 .layer-toggle-status.error { color: var(--danger); }
@@ -680,7 +733,7 @@ a:hover {
   font-family: var(--font-display);
   font-size: 11px;
   font-weight: var(--fw-subtitle);
-  letter-spacing: 0.08em;
+  letter-spacing: var(--track-caps-sm);
   text-transform: uppercase;
   color: var(--fg-2);
 }
@@ -883,7 +936,7 @@ a:hover {
   font-size: 10px;
   font-weight: var(--fw-strong);
   color: var(--accent);
-  letter-spacing: 0.08em;
+  letter-spacing: var(--track-caps-sm);
   margin: 0 0 8px;
   text-transform: uppercase;
 }
@@ -1024,7 +1077,7 @@ a:hover {
   font-family: var(--font-display);
   font-weight: var(--fw-subtitle);
   font-size: 9.5px;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--track-caps-sm);
   text-transform: uppercase;
   color: var(--fg-3);
 }
@@ -1065,20 +1118,10 @@ a:hover {
   border-color: var(--accent-strong);
 }
 
-.attribution-overlay {
-  position: absolute;
-  bottom: 6px;
-  left: 12px;
-  z-index: 500;
-  font-family: var(--font-body);
-  font-size: 9.5px;
-  font-weight: var(--fw-body);
-  color: var(--fg-3);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  pointer-events: none;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
-}
+/* (The static attribution overlay was removed in the 0.3.0 design pass: it
+   was the third statement of the same credits on one screen and collided
+   with the scale bar. The live MapLibre attribution control carries the
+   OpenStreetMap and per-layer credits dynamically.) */
 
 .copy-toast {
   position: absolute;
@@ -1143,17 +1186,27 @@ a:hover {
   display: none;
 }
 
-.spinner {
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--line-strong);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+/* The three-wave motif from the retired header mark, now the working pulse:
+   the strokes breathe in the same 1.0 / 0.65 / 0.35 opacity stagger the old
+   brand mark carried. Appears only while the module is genuinely loading. */
+.spinner-waves {
+  width: 18px;
+  height: 13px;
+  flex-shrink: 0;
 }
+.spinner-waves path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  animation: wave-pulse 1.2s ease-in-out infinite;
+}
+.spinner-waves path:nth-child(2) { animation-delay: 0.15s; opacity: 0.65; }
+.spinner-waves path:nth-child(3) { animation-delay: 0.3s; opacity: 0.35; }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+@keyframes wave-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
 }
 
 /* ----------------------------------------------------------------------------
@@ -1267,7 +1320,7 @@ button.telemetry-item {
   font-family: var(--font-display);
   font-size: 10px;
   font-weight: var(--fw-subtitle);
-  letter-spacing: 0.14em;
+  letter-spacing: var(--track-overline);
   text-transform: uppercase;
   color: var(--accent);
 }
@@ -1333,7 +1386,7 @@ button.telemetry-item {
   font-family: var(--font-display);
   font-size: 11px;
   font-weight: var(--fw-subtitle);
-  letter-spacing: 0.14em;
+  letter-spacing: var(--track-overline);
   text-transform: uppercase;
   color: var(--fg-2);
 }
@@ -1423,7 +1476,7 @@ button.telemetry-item {
   font-family: var(--font-display);
   font-size: 9px;
   font-weight: var(--fw-subtitle);
-  letter-spacing: 0.1em;
+  letter-spacing: var(--track-caps-sm);
   text-transform: uppercase;
   padding: 1px 6px;
   border-radius: var(--radius-sm);
@@ -1569,6 +1622,8 @@ a.impact-resource-link::after {
 @media (prefers-reduced-motion: reduce) {
   .impact-panel { transition: none; }
   .impact-spinner { animation: none; }
+  /* The wave pulse falls back to the static three-stroke glyph. */
+  .spinner-waves path { animation: none; }
 }
 
 /* ----------------------------------------------------------------------------
@@ -1602,3 +1657,137 @@ a.impact-resource-link::after {
   padding-top: 6px;
 }
 
+
+/* ----------------------------------------------------------------------------
+   0.3.0 design pass: typographic finish, brand surfaces, on-map key
+   ---------------------------------------------------------------------------- */
+
+/* Cap-height trim (progressive enhancement; Chrome/Edge 133+, Safari 18.2+,
+   Firefox ignores harmlessly). Half-leading is why text never looks truly
+   centered inside a snug capsule; trimming to cap height and baseline makes
+   the pill, chip, and button padding optically honest, and aligns the three
+   conditions values to one cap line so the strip reads as one instrument. */
+@supports (text-box: trim-both cap alphabetic) {
+  .status-pill,
+  .layer-toggle-status,
+  .preset-chip,
+  .region-btn,
+  .conditions-value {
+    text-box: trim-both cap alphabetic;
+  }
+}
+
+/* Wrapping quality (progressive). Short one-to-two-line labels balance their
+   rag; footer prose avoids single-word orphans. */
+.layer-toggle-source,
+.conditions-sublabel,
+.layer-group-hint {
+  text-wrap: balance;
+}
+.sidebar-footer p {
+  text-wrap: pretty;
+}
+
+/* A lone odd region button spans both columns instead of leaving a void. */
+.region-grid > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+/* Bottom fade on the sidebar scroller: a row cut by the fold reads as
+   "more below" rather than as a rendering accident. */
+.sidebar-scroll {
+  mask-image: linear-gradient(to bottom, black calc(100% - 16px), transparent);
+}
+
+/* The about card (native popover; the one place the full red-and-black
+   lockup can live without fighting the dark UI: a white card). */
+.about-card {
+  max-width: 400px;
+  padding: 20px 22px;
+  background: #f8fafc;
+  color: #0b1220;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.about-card::backdrop {
+  background: rgba(11, 18, 32, 0.55);
+}
+.about-card .about-lockup {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+}
+.about-card p { margin: 0 0 8px; }
+.about-card .about-links { margin: 0; font-size: 12px; }
+.about-card a { color: #0e7490; }
+
+/* Embed provenance chip: in an iframe there is no sidebar, so the seal and
+   name travel with the map. Hidden outside embed mode. */
+.embed-brand {
+  display: none;
+  position: absolute;
+  bottom: 34px;
+  right: 10px;
+  z-index: 600;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px 4px 5px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--fg-1);
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-pill);
+  text-decoration: none;
+}
+.embed-brand img { border-radius: 50%; background: #e9edf0; }
+.embed-brand:hover { color: var(--fg-0); border-color: var(--accent-strong); }
+.app-shell.embed .embed-brand { display: inline-flex; }
+
+/* On-map drought key (see src/ui/map-key.ts): bottom-left above the scale
+   bar, same chrome as the overlay buttons. */
+.map-key {
+  position: absolute;
+  bottom: 34px;
+  left: 12px;
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: 9.5px;
+  color: var(--fg-2);
+  pointer-events: none;
+}
+.map-key[hidden] { display: none; }
+.map-key-label {
+  font-family: var(--font-display);
+  font-weight: var(--fw-subtitle);
+  font-size: 9px;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+.map-key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.map-key-swatch {
+  width: 12px;
+  height: 9px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(11, 18, 32, 0.6);
+}

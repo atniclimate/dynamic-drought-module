@@ -139,7 +139,9 @@ function pendingSublabel(key: string): string {
 function droughtMetric(map: maplibregl.Map): { metric: Metric; dateMs: number | null } {
   const active = registry.getActiveKeys().has(USDM_KEY);
   if (!active) {
-    return { metric: { value: '-', sublabel: 'US Drought Monitor off', tone: 'off' }, dateMs: null };
+    // "Off" as a deliberate small-caps state word (styled via data-tone), not
+    // a dash that could read as missing data; the sublabel names the layer.
+    return { metric: { value: 'Off', sublabel: 'US Drought Monitor', tone: 'off' }, dateMs: null };
   }
   if (!map.getLayer(USDM_FILL)) {
     return { metric: { value: '-', sublabel: pendingSublabel(USDM_KEY), tone: 'off' }, dateMs: null };
@@ -173,7 +175,7 @@ function droughtMetric(map: maplibregl.Map): { metric: Metric; dateMs: number | 
 
 function alertsMetric(map: maplibregl.Map): Metric {
   if (!registry.getActiveKeys().has(ALERTS_KEY) || !map.getLayer(ALERTS_FILL)) {
-    return { value: '-', sublabel: 'alerts layer off', tone: 'off' };
+    return { value: 'Off', sublabel: 'alerts', tone: 'off' };
   }
   const feats = map.queryRenderedFeatures({ layers: [ALERTS_FILL] });
   const n = countDistinct(feats, (p) =>
@@ -188,7 +190,7 @@ function alertsMetric(map: maplibregl.Map): Metric {
 
 function firesMetric(map: maplibregl.Map): Metric {
   if (!registry.getActiveKeys().has(FIRES_KEY) || !map.getLayer(FIRES_FILL)) {
-    return { value: '-', sublabel: 'wildfire layer off', tone: 'off' };
+    return { value: 'Off', sublabel: 'wildfires', tone: 'off' };
   }
   // Count wildfire (WF) and complex (CX) incidents; exclude prescribed burns
   // (RX), which are intentional and not "active wildfires" in the hazard read.

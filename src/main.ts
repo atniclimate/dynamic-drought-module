@@ -7,6 +7,7 @@ import { applyDeepLink } from './state/deep-link';
 import { parseSelectParam } from './state/url';
 import { buildSidebar } from './ui/sidebar';
 import { initHoverInspector } from './ui/hover-inspector';
+import { initMapKey } from './ui/map-key';
 
 /**
  * Dynamic Drought Module (DDM) boot.
@@ -65,6 +66,10 @@ async function boot(): Promise<void> {
   // The hover inspector (UX-4) reads what is under the cursor from the active
   // layers. Pointer-only; it is inert on touch devices.
   initHoverInspector(map);
+
+  // The on-map drought key (0.3.0 design pass): the opening view and the
+  // embed answer "what do the colors mean" without the sidebar legend.
+  initMapKey();
 
   // Applied after the sidebar so the deep link's fitBounds supersedes the
   // region framing; async, so a slow bundled-data fetch never blocks boot.

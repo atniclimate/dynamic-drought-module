@@ -16,18 +16,9 @@
     <aside id="sidebar" class="sidebar" aria-label="Map controls">
       <header class="sidebar-header">
         <div class="brand">
-          <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
-            <defs>
-              <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#0891b2" />
-                <stop offset="100%" stop-color="#155e75" />
-              </linearGradient>
-            </defs>
-            <rect x="1" y="1" width="30" height="30" rx="6" fill="url(#bg)" />
-            <path d="M6 22 Q11 16 16 22 T26 22" stroke="#e0f2fe" stroke-width="1.6" fill="none" stroke-linecap="round"/>
-            <path d="M6 18 Q11 12 16 18 T26 18" stroke="#e0f2fe" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.65"/>
-            <path d="M6 14 Q11 8 16 14 T26 14" stroke="#e0f2fe" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.35"/>
-          </svg>
+          <button class="brand-seal" popovertarget="about-atni" aria-label="About ATNI Climate" title="About ATNI Climate">
+            <img src="/brand/atni-seal.png" alt="Seal of the Affiliated Tribes of Northwest Indians" width="28" height="28" />
+          </button>
           <div class="brand-text">
             <h1>Dynamic Drought Module</h1>
             <p>Regional climate &amp; water indicators</p>
@@ -79,6 +70,7 @@
       </div>
 
       <footer class="sidebar-footer">
+        <p>A project of ATNI Climate (Affiliated Tribes of Northwest Indians)</p>
         <p>Data: OpenStreetMap · NOAA · USGS · BIA · EPA</p>
         <p class="muted">
           <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">atniclimate/dynamic-drought-module</a>
@@ -97,7 +89,13 @@
       <div id="hover-inspector" class="hover-inspector" aria-hidden="true" hidden></div>
 
       <div id="loading-indicator" class="loading-indicator" hidden>
-        <div class="spinner" aria-hidden="true"></div>
+        <!-- The three-wave motif from the retired header mark, now the working
+             pulse: it appears only while the module is genuinely loading. -->
+        <svg class="spinner-waves" viewBox="0 0 24 17" aria-hidden="true">
+          <path d="M2 14 Q7 9 12 14 T22 14" />
+          <path d="M2 9.5 Q7 4.5 12 9.5 T22 9.5" />
+          <path d="M2 5 Q7 0 12 5 T22 5" />
+        </svg>
         <span id="loading-text">Loading...</span>
       </div>
 
@@ -114,11 +112,23 @@
 
       <div id="copy-toast" class="copy-toast" hidden>Link copied to clipboard</div>
 
-      <div class="attribution-overlay">
-        <span>© OpenStreetMap contributors · NOAA CPC</span>
-      </div>
+      <div id="map-key" class="map-key" role="img" aria-label="Drought category key, D0 abnormally dry through D4 exceptional drought" hidden></div>
+
+      <a class="embed-brand" href="https://atniclimate.github.io/dynamic-drought-module/" target="_blank" rel="noopener" aria-label="Open the full Dynamic Drought Module by ATNI Climate">
+        <img src="/brand/atni-seal.png" alt="" width="18" height="18" />
+        <span>ATNI Climate</span>
+      </a>
     </main>
 
+  </div>
+
+  <div id="about-atni" popover class="about-card">
+    <img class="about-lockup" src="/brand/atni-climate-lockup.png" alt="Affiliated Tribes of Northwest Indians, ATNI Climate" />
+    <p>The Dynamic Drought Module is a project of ATNI Climate, the climate resilience program of the Affiliated Tribes of Northwest Indians (ATNI).</p>
+    <p class="about-links">
+      <a href="https://atnitribes.org" target="_blank" rel="noopener">atnitribes.org</a>
+      · <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">source repository</a>
+    </p>
   </div>
 
   <script type="module" src="/src/main.ts"></script>

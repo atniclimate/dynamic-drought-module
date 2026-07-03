@@ -51,13 +51,26 @@ const SCALE_MAX_WIDTH_PX = 160;
 export function createMap(containerId: string): maplibregl.Map {
   registerPmtilesProtocol();
 
+  // atni-geobase: map-initialization seam. A 3D geospatial baseline (the
+  // ATNI-GeoBase T0 terrain layer) attaches HERE and at the terrain-source
+  // seam in src/map/style.ts, with no other DDM surface involved: enabling
+  // 3D is `map.setPitch(..)` plus `map.setTerrain({ source: <raster-dem> })`
+  // after this constructor returns. The lightest honest option is MapLibre's
+  // native terrain over a LOCAL raster-dem source (no cloud terrain
+  // dependency), which is also the GeoBase Light Engine's own render path
+  // (C:\dev\GeoBase, docs/ROADMAP.md phase 0.2), so the seam and GeoBase
+  // converge on one stack. Contract details: docs/interop/GEOBASE-BRIDGE.md.
   const map = new maplibregl.Map({
     container: containerId,
     style: buildBaseStyle(),
     center: DEFAULT_CENTER,
     zoom: DEFAULT_ZOOM,
     minZoom: DEFAULT_MIN_ZOOM,
-    maxZoom: DEFAULT_MAX_ZOOM
+    maxZoom: DEFAULT_MAX_ZOOM,
+    // The explicit control below is the single attribution surface; without
+    // this flag the constructor adds its own default control and the two
+    // stack as duplicate bars in the corner.
+    attributionControl: false
   });
 
   map.addControl(new maplibregl.AttributionControl({ compact: false }));

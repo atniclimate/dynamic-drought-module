@@ -39,6 +39,14 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
     version: 8,
     glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
     sources: {
+      // atni-geobase: terrain-source seam. The ATNI-GeoBase T0 elevation
+      // baseline registers here as a `raster-dem` source (a LOCAL tile set
+      // or a PMTiles archive; never a cloud terrain service), for example:
+      //   terrain: { type: 'raster-dem', tiles: [...], tileSize: 512 }
+      // and is enabled at the map-init seam in src/map/init.ts via
+      // `map.setTerrain({ source: 'terrain' })`. Nothing else in the DDM
+      // needs to change; the layer modules and UI are terrain-agnostic.
+      // Contract details: docs/interop/GEOBASE-BRIDGE.md.
       basemap: {
         type: 'raster',
         tiles: [URLS.basemapOSM],
