@@ -7,6 +7,7 @@ import { LAYER_DEFS } from './config/layers';
 import { applyDeepLink } from './state/deep-link';
 import { parseSelectParam } from './state/url';
 import { buildSidebar } from './ui/sidebar';
+import { initHoverInspector } from './ui/hover-inspector';
 
 /**
  * Dynamic Drought Module (DDM) boot.
@@ -64,6 +65,10 @@ async function boot(): Promise<void> {
     // for any future analytics or cross-module subscriber that wants to
     // observe region transitions without coupling to the sidebar.
   });
+
+  // The hover inspector (UX-4) reads what is under the cursor from the active
+  // layers. Pointer-only; it is inert on touch devices.
+  initHoverInspector(map);
 
   // Applied after the sidebar so the deep link's fitBounds supersedes the
   // region framing; async, so a slow bundled-data fetch never blocks boot.

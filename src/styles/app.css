@@ -945,6 +945,51 @@ a:hover {
    Map overlay controls
    ---------------------------------------------------------------------------- */
 
+/* ----------------------------------------------------------------------------
+   Hover inspector (UX-4): what-is-under-the-cursor readout
+   ---------------------------------------------------------------------------- */
+
+.hover-inspector {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
+  max-width: min(82%, 520px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 5px 14px;
+  padding: 6px 13px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  pointer-events: none;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  color: var(--fg-0);
+}
+/* The element carries the `hidden` attribute; override the flex display so
+   hidden actually hides. */
+.hover-inspector[hidden] { display: none; }
+
+.hover-item {
+  white-space: nowrap;
+  font-feature-settings: 'tnum' 1;
+}
+.hover-label {
+  margin-right: 5px;
+  font-family: var(--font-display);
+  font-weight: var(--fw-subtitle);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
 .map-overlay-controls {
   position: absolute;
   top: 12px;
