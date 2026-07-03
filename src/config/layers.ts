@@ -1,21 +1,6 @@
 import type maplibregl from 'maplibre-gl';
 
 import type { LayerRole } from '../types/layer';
-import * as biaReservations from '../layers/bia-reservations';
-import * as drought from '../layers/drought';
-import * as ecoregions from '../layers/ecoregions';
-import * as griddedIndex from '../layers/gridded-index';
-import * as heatrisk from '../layers/heatrisk';
-import * as hydrography from '../layers/hydrography';
-import * as nifcFires from '../layers/nifc-fires';
-import * as nwsAlerts from '../layers/nws-alerts';
-import * as spcFireWeather from '../layers/spc-fire-weather';
-import * as states from '../layers/states';
-import * as telemetry from '../layers/telemetry';
-import * as treaty from '../layers/treaty';
-import * as tribal from '../layers/tribal';
-import * as usdm from '../layers/usdm';
-import * as usfsWhp from '../layers/usfs-whp';
 
 /**
  * Layer module contract: every layer file under `src/layers/` exports
@@ -32,13 +17,14 @@ export interface LayerModule {
 /**
  * Per-layer registry entry.
  *
- * Deviation from CLAUDE.md section 8: the kickoff prescribed
- * `lazyLoad: () => Promise<void>` (a single function reference). We carry
- * the full module instead so `deactivate` and `bindPopups` are reachable
- * from the same registry entry; this matches how the boot wires region
- * change, embed-flag transitions, and per-layer popup binding without
- * each consumer needing to import each layer module separately. Documented
- * in CHANGES.md under "Phase B".
+ * `load` is a dynamic import of the layer module, so each layer's code is its
+ * own chunk fetched on first activation rather than shipped in the initial
+ * bundle. This honors CLAUDE.md section 6 invariant 3 (lazy-loaded layers) at
+ * the CODE level, not just the data level: before this, activation was lazy but
+ * all fifteen modules were eagerly imported into the main chunk. The default-on
+ * layers load at boot as before; the rest arrive on first toggle.
+ * `loadLayerModule` caches the resolved module so `deactivate` and `bindPopups`
+ * reach the same instance a later toggle uses.
  */
 export interface LayerDef {
   readonly key: string;
@@ -50,7 +36,7 @@ export interface LayerDef {
    */
   readonly role: LayerRole;
   readonly defaultOn: boolean;
-  readonly module: LayerModule;
+  readonly load: () => Promise<LayerModule>;
 }
 
 /**
@@ -67,21 +53,21 @@ export interface LayerDef {
  * flaky first paint. Users can still toggle it on.
  */
 export const LAYER_DEFS: readonly LayerDef[] = [
-  { key: 'hydrography', name: 'Hydrography',                source: 'OpenStreetMap (Overpass)',  role: 'reference', defaultOn: false, module: hydrography },
-  { key: 'ecoregions',  name: 'Ecoregions (Level III/IV)',  source: 'EPA Omernik · PMTiles',      role: 'reference', defaultOn: false, module: ecoregions },
-  { key: 'drought',     name: 'Seasonal Drought Outlook',   source: 'NOAA CPC · WMS',            role: 'surface',   defaultOn: false, module: drought },
-  { key: 'gridded-index', name: 'Gridded Drought Index (SPI)', source: 'NOAA NIDIS · raster tiles', role: 'surface',   defaultOn: false, module: griddedIndex },
-  { key: 'usdm',        name: 'US Drought Monitor',         source: 'NDMC · FeatureServer',      role: 'surface',   defaultOn: true,  module: usdm },
-  { key: 'tribal',      name: 'Tribal Lands',               source: 'BIA · bundled GeoJSON',     role: 'reference', defaultOn: true,  module: tribal },
-  { key: 'treaty',      name: 'Treaty Areas',               source: 'WA DAHP · bundled GeoJSON', role: 'reference', defaultOn: false, module: treaty },
-  { key: 'bia-reservations', name: 'Reservation Boundaries', source: 'BIA · AIAN-LAR (live)',     role: 'reference', defaultOn: false, module: biaReservations },
-  { key: 'states',      name: 'State Boundaries',           source: 'US Census · bundled GeoJSON', role: 'reference', defaultOn: false, module: states },
-  { key: 'nifc-fires',  name: 'Active Wildfires (NIFC)',    source: 'NIFC WFIGS · FeatureServer', role: 'event',     defaultOn: false, module: nifcFires },
-  { key: 'nws-alerts',  name: 'Heat & Fire Weather Alerts', source: 'NOAA NWS · MapServer',       role: 'event',     defaultOn: false, module: nwsAlerts },
-  { key: 'heatrisk',    name: 'HeatRisk · Today (Experimental)', source: 'NOAA NWS/WPC · ImageServer', role: 'surface', defaultOn: false, module: heatrisk },
-  { key: 'spc-fire-weather', name: 'Fire Weather Outlook (Day 1)', source: 'NOAA SPC · MapServer', role: 'surface', defaultOn: false, module: spcFireWeather },
-  { key: 'usfs-whp',    name: 'Wildfire Hazard Potential',  source: 'USFS · GeoPlatform',         role: 'surface',   defaultOn: false, module: usfsWhp },
-  { key: 'telemetry',   name: 'Monitoring stations',        source: 'USGS · USBR · NRCS · USACE', role: 'stations',  defaultOn: true,  module: telemetry }
+  { key: 'hydrography', name: 'Hydrography', source: 'OpenStreetMap (Overpass)', role: 'reference', defaultOn: false, load: () => import('../layers/hydrography') },
+  { key: 'ecoregions', name: 'Ecoregions (Level III/IV)', source: 'EPA Omernik · PMTiles', role: 'reference', defaultOn: false, load: () => import('../layers/ecoregions') },
+  { key: 'drought', name: 'Seasonal Drought Outlook', source: 'NOAA CPC · WMS', role: 'surface', defaultOn: false, load: () => import('../layers/drought') },
+  { key: 'gridded-index', name: 'Gridded Drought Index (SPI)', source: 'NOAA NIDIS · raster tiles', role: 'surface', defaultOn: false, load: () => import('../layers/gridded-index') },
+  { key: 'usdm', name: 'US Drought Monitor', source: 'NDMC · FeatureServer', role: 'surface', defaultOn: true, load: () => import('../layers/usdm') },
+  { key: 'tribal', name: 'Tribal Lands', source: 'BIA · bundled GeoJSON', role: 'reference', defaultOn: true, load: () => import('../layers/tribal') },
+  { key: 'treaty', name: 'Treaty Areas', source: 'WA DAHP · bundled GeoJSON', role: 'reference', defaultOn: false, load: () => import('../layers/treaty') },
+  { key: 'bia-reservations', name: 'Reservation Boundaries', source: 'BIA · AIAN-LAR (live)', role: 'reference', defaultOn: false, load: () => import('../layers/bia-reservations') },
+  { key: 'states', name: 'State Boundaries', source: 'US Census · bundled GeoJSON', role: 'reference', defaultOn: false, load: () => import('../layers/states') },
+  { key: 'nifc-fires', name: 'Active Wildfires (NIFC)', source: 'NIFC WFIGS · FeatureServer', role: 'event', defaultOn: false, load: () => import('../layers/nifc-fires') },
+  { key: 'nws-alerts', name: 'Heat & Fire Weather Alerts', source: 'NOAA NWS · MapServer', role: 'event', defaultOn: false, load: () => import('../layers/nws-alerts') },
+  { key: 'heatrisk', name: 'HeatRisk · Today (Experimental)', source: 'NOAA NWS/WPC · ImageServer', role: 'surface', defaultOn: false, load: () => import('../layers/heatrisk') },
+  { key: 'spc-fire-weather', name: 'Fire Weather Outlook (Day 1)', source: 'NOAA SPC · MapServer', role: 'surface', defaultOn: false, load: () => import('../layers/spc-fire-weather') },
+  { key: 'usfs-whp', name: 'Wildfire Hazard Potential', source: 'USFS · GeoPlatform', role: 'surface', defaultOn: false, load: () => import('../layers/usfs-whp') },
+  { key: 'telemetry', name: 'Monitoring stations', source: 'USGS · USBR · NRCS · USACE', role: 'stations', defaultOn: true, load: () => import('../layers/telemetry') }
 ];
 
 /**
@@ -136,4 +122,26 @@ export const DEFAULT_ON_KEYS: ReadonlySet<string> = new Set(
  */
 export function getLayerDef(key: string): LayerDef | null {
   return LAYER_DEFS.find((def) => def.key === key) ?? null;
+}
+
+/**
+ * Cache of loaded layer modules. The first activation of a layer awaits its
+ * dynamic import (fetching that layer's chunk); subsequent activations, and
+ * every deactivate, reuse the cached instance, so a layer that has been toggled
+ * on once behaves exactly like the previous eager-module design.
+ */
+const moduleCache = new Map<string, LayerModule>();
+
+/** Load (and cache) a layer's module, fetching its chunk on first call. */
+export async function loadLayerModule(def: LayerDef): Promise<LayerModule> {
+  const cached = moduleCache.get(def.key);
+  if (cached) return cached;
+  const mod = await def.load();
+  moduleCache.set(def.key, mod);
+  return mod;
+}
+
+/** The already-loaded module for a key, or undefined if it was never loaded. */
+export function getLoadedLayerModule(key: string): LayerModule | undefined {
+  return moduleCache.get(key);
 }

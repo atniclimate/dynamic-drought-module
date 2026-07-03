@@ -46,9 +46,11 @@ import maplibregl from 'maplibre-gl';
 import {
   LAYER_DEFS,
   LAYER_ROLE_ORDER,
-  getLayerDef
+  getLayerDef,
+  loadLayerModule,
+  getLoadedLayerModule
 } from '../config/layers';
-import type { LayerDef } from '../config/layers';
+import type { LayerDef, LayerModule } from '../config/layers';
 import type { LayerRole } from '../types/layer';
 import { VIEW_PRESETS } from '../config/presets';
 import type { ViewPreset } from '../config/presets';
@@ -531,7 +533,9 @@ async function activateLayerWithIndicator(
   const token = showLoading(`Loading ${def.name}...`);
   registry.setStatus(def.key, 'loading');
   try {
-    await def.module.activate(map);
+    const mod = await loadLayerModule(def);
+    ensurePopupsBound(map, def.key, mod);
+    await mod.activate(map);
     registry.activate(def.key);
   } catch (err) {
     console.error(`Layer "${def.key}" failed to load:`, err);
@@ -541,6 +545,21 @@ async function activateLayerWithIndicator(
   } finally {
     hideLoading(token);
   }
+}
+
+/** Layers whose bindPopups has already run (once, on first activation). */
+const popupsBound = new Set<string>();
+
+/**
+ * Bind a layer's popup click handlers on its first activation. Popups are no
+ * longer bound at boot (that would pull every layer module into the initial
+ * bundle); binding once here, guarded, matches the old survive-toggle-cycles
+ * behavior, and MapLibre tolerates a handler bound before its layer exists.
+ */
+function ensurePopupsBound(map: maplibregl.Map, key: string, mod: LayerModule): void {
+  if (popupsBound.has(key)) return;
+  if (mod.bindPopups) mod.bindPopups(map);
+  popupsBound.add(key);
 }
 
 /**
@@ -556,7 +575,9 @@ async function activateLayerWithIndicator(
  */
 function deactivateLayer(map: maplibregl.Map, def: LayerDef): void {
   try {
-    def.module.deactivate(map);
+    // A layer can only be active if it was loaded, so the cached module is
+    // present; the optional chain is a defensive no-op otherwise.
+    getLoadedLayerModule(def.key)?.deactivate(map);
   } catch (err) {
     console.error(`Layer "${def.key}" failed to deactivate cleanly:`, err);
   }

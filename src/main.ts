@@ -3,7 +3,6 @@ import './styles/app.css';
 
 import type maplibregl from 'maplibre-gl';
 import { createMap } from './map/init';
-import { LAYER_DEFS } from './config/layers';
 import { applyDeepLink } from './state/deep-link';
 import { parseSelectParam } from './state/url';
 import { buildSidebar } from './ui/sidebar';
@@ -44,15 +43,12 @@ async function boot(): Promise<void> {
     map.once('load', () => resolve());
   });
 
-  // Bind popup click handlers up front. MapLibre tolerates binding against
-  // a layer ID that does not yet exist; the handlers fire once the matching
-  // layer is added by the layer module's `activate`. Calling once at boot
-  // means a layer can be toggled on, off, and on again without re-binding.
-  for (const def of LAYER_DEFS) {
-    if (def.module.bindPopups) {
-      def.module.bindPopups(map);
-    }
-  }
+  // Popup click handlers are bound on a layer's FIRST activation (in the
+  // sidebar's activate path), not up front, so a layer's module and its popup
+  // wiring arrive together in the same lazy chunk. MapLibre tolerates a handler
+  // bound before its layer exists, and binding once (guarded in the sidebar)
+  // survives later toggle-off and toggle-on cycles, matching the old boot-time
+  // behavior without forcing every layer module into the initial bundle.
 
   // Capture the one-shot `select` deep link BEFORE the sidebar boots: the
   // sidebar's first syncUrl rewrites the URL and deliberately drops the
