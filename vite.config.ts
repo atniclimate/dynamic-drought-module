@@ -26,11 +26,27 @@ export default defineConfig({
     // show up in this codebase (network handlers, layer lifecycle).
     sourcemap: true,
 
-    // Vite's default chunkSizeWarningLimit is 500 kB. MapLibre GL JS is
-    // larger than that by itself, so the warning fires on every build
-    // even though the situation is fine. Bumping the limit avoids
-    // alarmism in the build log without changing behavior.
-    chunkSizeWarningLimit: 1000,
+    // Split the large, rarely-changing vendor libraries into their own chunks
+    // so an app-code change does not invalidate them in a returning visitor's
+    // (or an embedding page's) browser cache. MapLibre GL is roughly 788 kB by
+    // itself and the PMTiles protocol handler is separate; both are stable
+    // across app edits, while the app chunk changes on nearly every commit. On
+    // a repeat load only the small app chunk is re-fetched.
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          maplibre: ['maplibre-gl'],
+          pmtiles: ['pmtiles']
+        }
+      }
+    },
+
+    // The `maplibre` vendor chunk is legitimately large (a WebGL map renderer):
+    // that is expected and cache-friendly, not a code-health signal. With the
+    // vendor libraries split out the app chunk sits well under Vite's 500 kB
+    // default; keep the limit just high enough that the known vendor chunk does
+    // not cry wolf on every build.
+    chunkSizeWarningLimit: 900,
   },
 
   server: {
