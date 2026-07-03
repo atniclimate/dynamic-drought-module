@@ -61,6 +61,9 @@ const SOURCE_ID = 'usdm-current';
 const FILL_LAYER_ID = 'usdm-current-fill';
 const OUTLINE_LAYER_ID = 'usdm-current-outline';
 
+/** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
+export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID] as const;
+
 /**
  * Symbol layer ID used as the `beforeId` anchor when inserting the fill
  * and outline layers; matches the convention from `ecoregions.ts` and

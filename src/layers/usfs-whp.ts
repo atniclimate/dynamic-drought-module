@@ -64,6 +64,9 @@ const LAYER_KEY = 'usfs-whp';
 const SOURCE_ID = 'usfs-whp';
 const LAYER_ID = 'usfs-whp';
 
+/** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
+export const fadeLayerIds = [LAYER_ID] as const;
+
 /** The tile-load honesty watcher (util/raster-status.ts); null when inactive. */
 let tileWatch: RasterTileWatch | null = null;
 

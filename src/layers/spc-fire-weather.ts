@@ -40,6 +40,9 @@ const SOURCE_ID = 'spc-fire-weather';
 const FILL_LAYER_ID = 'spc-fire-weather-fill';
 const OUTLINE_LAYER_ID = 'spc-fire-weather-outline';
 
+/** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
+export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID] as const;
+
 /** Day 1 categorical outlook layer ID on the MapServer (4 would be Day 2). */
 const DAY1_LAYER_ID = 1;
 

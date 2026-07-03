@@ -44,6 +44,9 @@ const SOURCE_ID = 'nws-alerts';
 const FILL_LAYER_ID = 'nws-alerts-fill';
 const OUTLINE_LAYER_ID = 'nws-alerts-outline';
 
+/** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
+export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID] as const;
+
 /**
  * Symbol layer ID used as the `beforeId` anchor so alert polygons stack below
  * the basemap label glyphs, matching the other polygon overlay modules.

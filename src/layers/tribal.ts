@@ -42,6 +42,9 @@ const SOURCE_ID = 'tribal-lands';
 const FILL_LAYER_ID = 'tribal-lands-fill';
 const OUTLINE_LAYER_ID = 'tribal-lands-outline';
 
+/** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
+export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID] as const;
+
 /**
  * Symbol layer ID used as the `beforeId` anchor when inserting fill and
  * outline layers. Matches the ecoregions module so all reference-polygon

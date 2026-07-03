@@ -35,6 +35,9 @@ const LAYER_KEY = 'treaty';
 const SOURCE_ID = 'treaty-areas';
 const OUTLINE_LAYER_ID = 'treaty-areas-outline';
 
+/** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
+export const fadeLayerIds = [OUTLINE_LAYER_ID] as const;
+
 type TreatyStatus = 'loading' | 'ready' | 'error' | 'no-data';
 
 function reportStatus(state: TreatyStatus): void {

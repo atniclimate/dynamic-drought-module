@@ -52,6 +52,9 @@ const L4_FILL_ID = 'ecoregions-l4-fill';
 const L4_OUTLINE_ID = 'ecoregions-l4-outline';
 const ALL_LAYER_IDS = [L3_FILL_ID, L3_OUTLINE_ID, L4_FILL_ID, L4_OUTLINE_ID] as const;
 
+/** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
+export const fadeLayerIds = ALL_LAYER_IDS;
+
 /** The MapLibre source URL: the PMTiles protocol over the bundled archive. */
 const PMTILES_URL = 'pmtiles://' + URLS.ecoregionsPmtilesLocal;
 

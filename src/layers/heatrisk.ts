@@ -38,6 +38,9 @@ const LAYER_KEY = 'heatrisk';
 const SOURCE_ID = 'heatrisk';
 const LAYER_ID = 'heatrisk';
 
+/** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
+export const fadeLayerIds = [LAYER_ID] as const;
+
 /** Per-call network budget for the service-metadata fetch. */
 const FETCH_TIMEOUT_MS = 10_000;
 

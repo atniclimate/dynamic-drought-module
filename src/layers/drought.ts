@@ -44,6 +44,9 @@ const LAYER_KEY = 'drought';
 const SOURCE_ID = 'drought-outlook';
 const LAYER_ID = 'drought-outlook';
 
+/** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
+export const fadeLayerIds = [LAYER_ID] as const;
+
 /** The tile-load honesty watcher (util/raster-status.ts); null when inactive. */
 let tileWatch: RasterTileWatch | null = null;
 

@@ -57,6 +57,9 @@ const LAYER_KEY = 'hydrography';
 const SOURCE_ID = 'hydrography';
 const LAYER_ID = 'hydrography';
 
+/** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
+export const fadeLayerIds = [LAYER_ID] as const;
+
 /**
  * Layer ID before which the hydrography line layer should be inserted,
  * when present. Matches the convention used by `ecoregions.ts`: the base

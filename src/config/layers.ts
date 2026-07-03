@@ -12,6 +12,13 @@ export interface LayerModule {
   activate(map: maplibregl.Map): Promise<void>;
   deactivate(map: maplibregl.Map): void;
   bindPopups?(map: maplibregl.Map): void;
+  /**
+   * Map layer ids this module renders, consumed by the sidebar's fade
+   * transitions (src/util/layer-fade.ts) on toggle. Optional: a module
+   * that renders DOM markers instead of style layers (telemetry) omits it
+   * and owns its own presentation.
+   */
+  readonly fadeLayerIds?: readonly string[];
 }
 
 /**

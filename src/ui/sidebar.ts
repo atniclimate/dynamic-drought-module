@@ -74,6 +74,7 @@ import type { StationValue, TelemetryStation } from '../types/station';
 import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
 import { parseUrlParams, syncUrl } from '../state/url';
+import { fadeInLayers, fadeOutLayers } from '../util/layer-fade';
 import { flyToStation } from '../layers/telemetry';
 import { buildConditionsStrip } from './conditions-strip';
 import { wireShareButton } from './share';
@@ -589,6 +590,9 @@ function activateLayerWithIndicator(
         }
         return;
       }
+      // Ease the just-added layers in (no-op for reduced-motion users and
+      // for modules without map layers; src/util/layer-fade.ts).
+      fadeInLayers(map, mod.fadeLayerIds);
       registry.activate(def.key);
     } catch (err) {
       console.error(`Layer "${def.key}" failed to load:`, err);
@@ -618,9 +622,13 @@ function ensurePopupsBound(map: maplibregl.Map, key: string, mod: LayerModule): 
 }
 
 /**
- * Deactivate a layer: call the module's `deactivate` and remove the key
- * from the registry. Synchronous; the deactivate contract is "remove
- * sources/layers and abort in-flight network operations."
+ * Deactivate a layer: fade its map layers out (src/util/layer-fade.ts),
+ * call the module's `deactivate` (which removes sources/layers and aborts
+ * in-flight network operations), and remove the key from the registry.
+ * The fade runs inside the per-key op chain, so a queued re-activation
+ * waits for the fade plus removal instead of racing it; the registry,
+ * pill, and URL transition after the removal, at most one fade duration
+ * later than before.
  *
  * The status pill is cleared back to its pre-activation empty state: an
  * off layer has no load status, and leaving a stale "live" pill on a row
@@ -630,7 +638,7 @@ function ensurePopupsBound(map: maplibregl.Map, key: string, mod: LayerModule): 
  */
 function deactivateLayer(map: maplibregl.Map, def: LayerDef): void {
   desiredOn.set(def.key, false);
-  void enqueueLayerOp(def.key, () => {
+  void enqueueLayerOp(def.key, async () => {
     // The user re-toggled the layer on while this off waited in the queue;
     // the newer activation owns the outcome.
     if (desiredOn.get(def.key) !== false) return;
@@ -638,7 +646,11 @@ function deactivateLayer(map: maplibregl.Map, def: LayerDef): void {
       // A module that was never loaded has nothing on the map; the optional
       // chain is a no-op then, and the intent flip above makes any in-flight
       // activation stand down at its next checkpoint.
-      getLoadedLayerModule(def.key)?.deactivate(map);
+      const mod = getLoadedLayerModule(def.key);
+      if (mod) {
+        await fadeOutLayers(map, mod.fadeLayerIds);
+        mod.deactivate(map);
+      }
     } catch (err) {
       console.error(`Layer "${def.key}" failed to deactivate cleanly:`, err);
     }

@@ -51,6 +51,9 @@ const SOURCE_ID = 'bia-reservations';
 const FILL_LAYER_ID = 'bia-reservations-fill';
 const OUTLINE_LAYER_ID = 'bia-reservations-outline';
 
+/** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
+export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID] as const;
+
 /**
  * Symbol layer ID used as the `beforeId` anchor so the boundary stacks below
  * the basemap label glyphs, matching every other reference-polygon module. If

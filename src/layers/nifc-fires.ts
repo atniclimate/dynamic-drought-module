@@ -51,6 +51,9 @@ const SOURCE_ID = 'nifc-fires';
 const FILL_LAYER_ID = 'nifc-fires-fill';
 const OUTLINE_LAYER_ID = 'nifc-fires-outline';
 
+/** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
+export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID] as const;
+
 /**
  * Symbol layer ID used as the `beforeId` anchor when inserting fill and
  * outline layers. Matches the convention from `usdm.ts`, `ecoregions.ts`,

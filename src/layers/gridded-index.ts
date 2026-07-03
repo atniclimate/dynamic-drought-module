@@ -38,6 +38,9 @@ const LAYER_KEY = 'gridded-index';
 const SOURCE_ID = 'gridded-index';
 const LAYER_ID = 'gridded-index-raster';
 
+/** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
+export const fadeLayerIds = [LAYER_ID] as const;
+
 /** The symbol layer to insert beneath, so basemap labels stay readable. */
 const BEFORE_ID = 'first-symbol';
 

@@ -1021,6 +1021,13 @@ a:hover {
 .telemetry-marker {
   background: transparent;
   border: none;
+  /* Insert fade: markers are DOM elements, not style layers, so they take
+     the CSS half of the layer add/remove transitions (layer-fade.ts). */
+  animation: telemetry-marker-in 0.2s ease-out;
+}
+@keyframes telemetry-marker-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .telemetry-marker-inner {
   width: 100%;
@@ -1624,6 +1631,7 @@ a.impact-resource-link::after {
   .impact-spinner { animation: none; }
   /* The wave pulse falls back to the static three-stroke glyph. */
   .spinner-waves path { animation: none; }
+  .telemetry-marker { animation: none; }
 }
 
 /* ----------------------------------------------------------------------------

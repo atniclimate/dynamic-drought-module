@@ -37,6 +37,9 @@ const SOURCE_ID = 'us-states';
 const FILL_LAYER_ID = 'us-states-fill';
 const OUTLINE_LAYER_ID = 'us-states-outline';
 
+/** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
+export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID] as const;
+
 /**
  * Symbol layer ID used as the `beforeId` anchor so the boundary stacks below
  * the basemap label glyphs, matching every other reference-polygon module.
