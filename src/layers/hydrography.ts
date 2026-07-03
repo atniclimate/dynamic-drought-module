@@ -185,14 +185,20 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   // CHANGES.md note: river name tooltips on hover dropped in the
   // MapLibre port; can be re-added later as a `mousemove` popup if
   // required.
-  moveendHandler = (): void => {
-    if (moveendDebounce) clearTimeout(moveendDebounce);
-    moveendDebounce = setTimeout(() => {
-      moveendDebounce = null;
-      void runFetchForCurrentViewport(map);
-    }, MOVEEND_DEBOUNCE_MS);
-  };
-  map.on('moveend', moveendHandler);
+  // Guarded like the addSource/addLayer calls above: a double activation
+  // without an intervening deactivate (the sidebar serializes operations,
+  // but this module must not rely on its caller) would otherwise overwrite
+  // the reference and orphan the first listener forever.
+  if (!moveendHandler) {
+    moveendHandler = (): void => {
+      if (moveendDebounce) clearTimeout(moveendDebounce);
+      moveendDebounce = setTimeout(() => {
+        moveendDebounce = null;
+        void runFetchForCurrentViewport(map);
+      }, MOVEEND_DEBOUNCE_MS);
+    };
+    map.on('moveend', moveendHandler);
+  }
 
   // Initial fetch fires immediately, no debounce.
   await runFetchForCurrentViewport(map);

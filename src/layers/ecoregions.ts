@@ -105,6 +105,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
  * updater. Symmetric with `activate`; safe to call when never activated.
  */
 export function deactivate(map: maplibregl.Map): void {
+  detachReadyWatchers(map);
   stopLegendUpdates(map);
   for (const id of ALL_LAYER_IDS) {
     if (map.getLayer(id)) map.removeLayer(id);
@@ -371,11 +372,32 @@ function updateLegendNote(): void {
 // ---------------------------------------------------------------------------
 
 /**
+ * The pending ready-watcher pair, held at module level so a deactivation
+ * that lands BEFORE the source finishes loading can detach them. Without
+ * this, each toggle-on/off-before-ready cycle orphaned a listener pair on
+ * the shared map (and the orphans would react to the next activation's
+ * source, which reuses the same source id).
+ */
+let readyWatchers: {
+  onData: (e: maplibregl.MapSourceDataEvent) => void;
+  onError: (e: { error?: Error; sourceId?: string }) => void;
+} | null = null;
+
+function detachReadyWatchers(map: maplibregl.Map): void {
+  if (!readyWatchers) return;
+  map.off('sourcedata', readyWatchers.onData);
+  map.off('error', readyWatchers.onError);
+  readyWatchers = null;
+}
+
+/**
  * Flip the status pill to `ready` once the source has loaded its first tiles,
  * or to `error` if the source fails (a missing or malformed bundle). The
- * listeners are self-removing so a toggle cycle does not leak them.
+ * listeners self-remove on either outcome, and `deactivate` detaches a pair
+ * still pending, so a toggle cycle cannot leak them.
  */
 function markReadyWhenLoaded(map: maplibregl.Map): void {
+  detachReadyWatchers(map);
   if (map.isSourceLoaded(SOURCE_ID)) {
     setStatus('ready');
     return;
@@ -384,17 +406,16 @@ function markReadyWhenLoaded(map: maplibregl.Map): void {
     if (e.sourceId !== SOURCE_ID) return;
     if (map.isSourceLoaded(SOURCE_ID)) {
       setStatus('ready');
-      map.off('sourcedata', onData);
-      map.off('error', onError);
+      detachReadyWatchers(map);
     }
   };
   const onError = (e: { error?: Error; sourceId?: string }): void => {
     if (e.sourceId !== SOURCE_ID) return;
     console.warn('Ecoregion PMTiles source error.', e.error);
     setStatus('error');
-    map.off('sourcedata', onData);
-    map.off('error', onError);
+    detachReadyWatchers(map);
   };
+  readyWatchers = { onData, onError };
   map.on('sourcedata', onData);
   map.on('error', onError);
 }

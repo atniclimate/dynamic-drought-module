@@ -516,6 +516,34 @@ function deactivateOtherSurfaces(map: maplibregl.Map, exceptKey: string): void {
 }
 
 /**
+ * The latest per-layer user intent (on or off), recorded synchronously the
+ * moment a toggle, preset, or deep-link path asks for a change. The queued
+ * operations below consult it at every await boundary, so an operation the
+ * user has since reversed (toggled off while the chunk import or the
+ * activation fetch was in flight) becomes a no-op instead of resurrecting
+ * a turned-off layer into the registry and the URL.
+ */
+const desiredOn = new Map<string, boolean>();
+
+/**
+ * Per-layer operation chain: activations and deactivations for one key run
+ * strictly in sequence. Without this, a rapid off/on could overlap a
+ * module's `activate()` with itself (tribal and treaty throw on a duplicate
+ * source id) or with its own `deactivate()`. Chains are per key, so
+ * distinct layers still activate in parallel.
+ */
+const layerOpChain = new Map<string, Promise<void>>();
+
+function enqueueLayerOp(key: string, op: () => Promise<void> | void): Promise<void> {
+  const prev = layerOpChain.get(key) ?? Promise.resolve();
+  // Run after the prior op regardless of how it settled; each op carries its
+  // own error handling, so the chain itself never sticks in a rejected state.
+  const next = prev.then(op, op);
+  layerOpChain.set(key, next);
+  return next;
+}
+
+/**
  * Activate a layer with a loading-indicator token around the call.
  * Updates the registry on success; unchecks the checkbox on failure.
  *
@@ -524,27 +552,54 @@ function deactivateOtherSurfaces(map: maplibregl.Map, exceptKey: string): void {
  * pill updates immediately; the layer module is responsible for
  * setting its own `ready`, `error`, `no-data`, or `zoom-in` once it
  * finishes.
+ *
+ * Intent checks: the queued operation re-reads `desiredOn` after each
+ * await. A layer toggled off mid-import stops before activating; a layer
+ * toggled off mid-activation is deactivated before it can register. The
+ * matching queued deactivation (there is always one; only `deactivateLayer`
+ * flips the intent off) then clears the pill and announces the off state.
  */
-async function activateLayerWithIndicator(
+function activateLayerWithIndicator(
   map: maplibregl.Map,
   def: LayerDef,
   cb: HTMLInputElement
 ): Promise<void> {
-  const token = showLoading(`Loading ${def.name}...`);
-  registry.setStatus(def.key, 'loading');
-  try {
-    const mod = await loadLayerModule(def);
-    ensurePopupsBound(map, def.key, mod);
-    await mod.activate(map);
-    registry.activate(def.key);
-  } catch (err) {
-    console.error(`Layer "${def.key}" failed to load:`, err);
-    registry.setStatus(def.key, 'error');
-    cb.checked = false;
-    registry.deactivate(def.key);
-  } finally {
-    hideLoading(token);
-  }
+  desiredOn.set(def.key, true);
+  return enqueueLayerOp(def.key, async () => {
+    // The user reversed this toggle while it waited in the queue, or the
+    // layer is already fully active (an off/on flip whose off was skipped
+    // as stale); either way there is nothing to do.
+    if (desiredOn.get(def.key) !== true) return;
+    if (registry.getActiveKeys().has(def.key)) return;
+
+    const token = showLoading(`Loading ${def.name}...`);
+    registry.setStatus(def.key, 'loading');
+    try {
+      const mod = await loadLayerModule(def);
+      if (desiredOn.get(def.key) !== true) return;
+      ensurePopupsBound(map, def.key, mod);
+      await mod.activate(map);
+      if (desiredOn.get(def.key) !== true) {
+        // Turned off during activation: undo before anything registers. The
+        // queued deactivation clears the pill and announces.
+        try {
+          mod.deactivate(map);
+        } catch (err) {
+          console.error(`Layer "${def.key}" failed to deactivate cleanly:`, err);
+        }
+        return;
+      }
+      registry.activate(def.key);
+    } catch (err) {
+      console.error(`Layer "${def.key}" failed to load:`, err);
+      registry.setStatus(def.key, 'error');
+      cb.checked = false;
+      desiredOn.set(def.key, false);
+      registry.deactivate(def.key);
+    } finally {
+      hideLoading(token);
+    }
+  });
 }
 
 /** Layers whose bindPopups has already run (once, on first activation). */
@@ -574,16 +629,23 @@ function ensurePopupsBound(map: maplibregl.Map, key: string, mod: LayerModule): 
  * screen-reader user hears why a checkbox they did not touch changed.
  */
 function deactivateLayer(map: maplibregl.Map, def: LayerDef): void {
-  try {
-    // A layer can only be active if it was loaded, so the cached module is
-    // present; the optional chain is a defensive no-op otherwise.
-    getLoadedLayerModule(def.key)?.deactivate(map);
-  } catch (err) {
-    console.error(`Layer "${def.key}" failed to deactivate cleanly:`, err);
-  }
-  registry.deactivate(def.key);
-  clearLayerStatusPill(def.key);
-  announce(`${def.name}: off`);
+  desiredOn.set(def.key, false);
+  void enqueueLayerOp(def.key, () => {
+    // The user re-toggled the layer on while this off waited in the queue;
+    // the newer activation owns the outcome.
+    if (desiredOn.get(def.key) !== false) return;
+    try {
+      // A module that was never loaded has nothing on the map; the optional
+      // chain is a no-op then, and the intent flip above makes any in-flight
+      // activation stand down at its next checkpoint.
+      getLoadedLayerModule(def.key)?.deactivate(map);
+    } catch (err) {
+      console.error(`Layer "${def.key}" failed to deactivate cleanly:`, err);
+    }
+    registry.deactivate(def.key);
+    clearLayerStatusPill(def.key);
+    announce(`${def.name}: off`);
+  });
 }
 
 /**

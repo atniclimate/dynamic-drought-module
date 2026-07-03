@@ -132,13 +132,36 @@ export function getLayerDef(key: string): LayerDef | null {
  */
 const moduleCache = new Map<string, LayerModule>();
 
+/**
+ * In-flight imports, so concurrent calls for the same key share one chunk
+ * fetch (single-flight). Without this, a rapid toggle off/on while the
+ * first import was still resolving started a second import and a second
+ * independent activation. A failed import is removed from the map so the
+ * next toggle-on retries cleanly (a stale-chunk 404 after a redeploy must
+ * not poison the layer for the rest of the session).
+ */
+const moduleInFlight = new Map<string, Promise<LayerModule>>();
+
 /** Load (and cache) a layer's module, fetching its chunk on first call. */
-export async function loadLayerModule(def: LayerDef): Promise<LayerModule> {
+export function loadLayerModule(def: LayerDef): Promise<LayerModule> {
   const cached = moduleCache.get(def.key);
-  if (cached) return cached;
-  const mod = await def.load();
-  moduleCache.set(def.key, mod);
-  return mod;
+  if (cached) return Promise.resolve(cached);
+  let pending = moduleInFlight.get(def.key);
+  if (!pending) {
+    pending = def.load().then(
+      (mod) => {
+        moduleCache.set(def.key, mod);
+        moduleInFlight.delete(def.key);
+        return mod;
+      },
+      (err: unknown) => {
+        moduleInFlight.delete(def.key);
+        throw err;
+      }
+    );
+    moduleInFlight.set(def.key, pending);
+  }
+  return pending;
 }
 
 /** The already-loaded module for a key, or undefined if it was never loaded. */

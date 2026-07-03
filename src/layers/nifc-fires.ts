@@ -223,15 +223,16 @@ export function deactivate(map: maplibregl.Map): void {
  */
 function pickIncidentName(props: GeoJsonProperties): string {
   const p = props ?? {};
-  const candidate =
-    p.attr_IncidentName ??
-    p.poly_IncidentName ??
-    p.IncidentName ??
-    p.incidentName;
-  if (candidate === null || candidate === undefined || candidate === '') {
-    return 'Active Wildland Fire';
+  // Fall through on blank strings, not only on null/undefined: the IRWIN
+  // record (`attr_*`) and the perimeter collector (`poly_*`) can disagree,
+  // and a present-but-empty `attr_IncidentName` must not mask a real name
+  // in `poly_IncidentName`.
+  for (const candidate of [p.attr_IncidentName, p.poly_IncidentName, p.IncidentName, p.incidentName]) {
+    if (candidate === null || candidate === undefined) continue;
+    const s = String(candidate).trim();
+    if (s !== '') return s;
   }
-  return String(candidate);
+  return 'Active Wildland Fire';
 }
 
 /**

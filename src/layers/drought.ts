@@ -38,10 +38,14 @@ import { URLS } from '../config/urls';
 import { registry } from '../state/registry';
 import { DROUGHT_COLORS } from '../config/palette';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
+import { watchRasterTiles, type RasterTileWatch } from '../util/raster-status';
 
 const LAYER_KEY = 'drought';
 const SOURCE_ID = 'drought-outlook';
 const LAYER_ID = 'drought-outlook';
+
+/** The tile-load honesty watcher (util/raster-status.ts); null when inactive. */
+let tileWatch: RasterTileWatch | null = null;
 
 /**
  * The CPC Seasonal Drought Outlook forecast categories, in legend order. The
@@ -119,6 +123,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
           'NOAA CPC Seasonal Drought Outlook · 3-month window'
         )
     });
+    tileWatch?.detach();
+    tileWatch = watchRasterTiles(map, SOURCE_ID, (state) => registry.setStatus(LAYER_KEY, state));
     registry.setStatus(LAYER_KEY, 'ready');
   } catch (err) {
     registry.setStatus(LAYER_KEY, 'error');
@@ -132,6 +138,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
  * when the layer has not been activated.
  */
 export function deactivate(map: maplibregl.Map): void {
+  tileWatch?.detach();
+  tileWatch = null;
   if (map.getLayer(LAYER_ID)) {
     map.removeLayer(LAYER_ID);
   }

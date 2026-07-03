@@ -102,6 +102,22 @@ function countDistinct(
   return seen.size;
 }
 
+/**
+ * First candidate that is a non-blank string, else the empty string. The
+ * WFIGS attribute fields can be present-but-empty (the IRWIN record and the
+ * perimeter collector fall out of sync), and `??` stops at an empty string,
+ * so a plain nullish chain would key several fragments of one incident to
+ * distinct anonymous identities and overcount.
+ */
+function firstNonBlank(...candidates: unknown[]): string {
+  for (const c of candidates) {
+    if (c === null || c === undefined) continue;
+    const s = String(c).trim();
+    if (s !== '') return s;
+  }
+  return '';
+}
+
 // ---------------------------------------------------------------------------
 // Metric computation
 // ---------------------------------------------------------------------------
@@ -182,8 +198,16 @@ function firesMetric(map: maplibregl.Map): Metric {
       const cat = f.properties?.['attr_IncidentTypeCategory'];
       return cat === 'WF' || cat === 'CX';
     });
+  // Prefer the stable WFIGS identifiers over the incident name (names are
+  // reused across unrelated fires; identifiers are unique per incident).
   const n = countDistinct(feats, (p) =>
-    String(p?.['attr_IncidentName'] ?? p?.['poly_IncidentName'] ?? p?.['IncidentName'] ?? '')
+    firstNonBlank(
+      p?.['attr_UniqueFireIdentifier'],
+      p?.['attr_IrwinID'],
+      p?.['attr_IncidentName'],
+      p?.['poly_IncidentName'],
+      p?.['IncidentName']
+    )
   );
   return {
     value: String(n),

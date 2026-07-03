@@ -32,6 +32,7 @@ import { URLS } from '../config/urls';
 import { fetchWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
 import { registry } from '../state/registry';
+import { watchRasterTiles, type RasterTileWatch } from '../util/raster-status';
 
 const LAYER_KEY = 'heatrisk';
 const SOURCE_ID = 'heatrisk';
@@ -47,6 +48,9 @@ type Status = 'loading' | 'ready' | 'error';
  * `deactivate` and replaced on each `activate`.
  */
 let masterController: AbortController | null = null;
+
+/** The tile-load honesty watcher (util/raster-status.ts); null when inactive. */
+let tileWatch: RasterTileWatch | null = null;
 
 function reportStatus(state: Status): void {
   registry.setStatus(LAYER_KEY, state);
@@ -148,6 +152,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     }
   });
 
+  tileWatch?.detach();
+  tileWatch = watchRasterTiles(map, SOURCE_ID, reportStatus);
   reportStatus('ready');
 }
 
@@ -161,6 +167,8 @@ export function deactivate(map: maplibregl.Map): void {
     masterController.abort();
     masterController = null;
   }
+  tileWatch?.detach();
+  tileWatch = null;
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
 }

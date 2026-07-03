@@ -32,6 +32,7 @@ import { URLS } from '../config/urls';
 import { registry } from '../state/registry';
 import { escapeHtml } from '../util/escape';
 import { showLegend, hideLegend, LEGEND_ORDER } from '../ui/legend-registry';
+import { watchRasterTiles, type RasterTileWatch } from '../util/raster-status';
 
 const LAYER_KEY = 'gridded-index';
 const SOURCE_ID = 'gridded-index';
@@ -70,6 +71,9 @@ const RASTER_OPACITY = 0.72;
 
 /** The currently selected product slug, preserved across deactivate cycles. */
 let currentSlug: string = DEFAULT_PRODUCT;
+
+/** The tile-load honesty watcher (util/raster-status.ts); null when inactive. */
+let tileWatch: RasterTileWatch | null = null;
 
 function resolveBeforeId(map: maplibregl.Map): string | undefined {
   return map.getLayer(BEFORE_ID) ? BEFORE_ID : undefined;
@@ -124,10 +128,14 @@ function updateLegendLabel(): void {
  * Add the raster source and layer for the current product. Idempotent: a
  * re-activation with the source already present is a no-op (so the URL-restore
  * path cannot stack duplicates). Raster tiles load lazily through MapLibre, so
- * there is no fetch to await; status goes straight to `ready`.
+ * there is no fetch to await; status goes to `ready` and the tile watcher
+ * keeps it honest afterward (degrade on repeated tile failures, heal on the
+ * next successful load).
  */
 export async function activate(map: maplibregl.Map): Promise<void> {
   addRasterSourceAndLayer(map);
+  tileWatch?.detach();
+  tileWatch = watchRasterTiles(map, SOURCE_ID, (state) => registry.setStatus(LAYER_KEY, state));
   showLegend(LAYER_KEY, {
     order: LEGEND_ORDER.surface,
     render: (body) => renderLegendSection(map, body)
@@ -137,6 +145,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
 /** Remove the raster layer and source and hide the legend. Symmetric, safe. */
 export function deactivate(map: maplibregl.Map): void {
+  tileWatch?.detach();
+  tileWatch = null;
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   hideLegend(LAYER_KEY);
@@ -160,6 +170,9 @@ function setProduct(map: maplibregl.Map, slug: string): void {
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   addRasterSourceAndLayer(map);
+  // A product swap is a fresh evidence slate; old failures must not count
+  // against the new template.
+  tileWatch?.reset();
   updateLegendLabel();
 }
 

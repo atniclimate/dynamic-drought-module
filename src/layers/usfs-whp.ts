@@ -58,10 +58,14 @@ import type maplibregl from 'maplibre-gl';
 
 import { URLS } from '../config/urls';
 import { registry } from '../state/registry';
+import { watchRasterTiles, type RasterTileWatch } from '../util/raster-status';
 
 const LAYER_KEY = 'usfs-whp';
 const SOURCE_ID = 'usfs-whp';
 const LAYER_ID = 'usfs-whp';
+
+/** The tile-load honesty watcher (util/raster-status.ts); null when inactive. */
+let tileWatch: RasterTileWatch | null = null;
 
 type WhpStatus = 'loading' | 'ready' | 'error';
 
@@ -128,6 +132,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       });
     }
 
+    tileWatch?.detach();
+    tileWatch = watchRasterTiles(map, SOURCE_ID, reportStatus);
     reportStatus('ready');
   } catch (err) {
     console.warn('[usfs-whp] activation failed.', err);
@@ -140,6 +146,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
  * `activate`; safe to call when the layer was never activated.
  */
 export function deactivate(map: maplibregl.Map): void {
+  tileWatch?.detach();
+  tileWatch = null;
   if (map.getLayer(LAYER_ID)) {
     map.removeLayer(LAYER_ID);
   }

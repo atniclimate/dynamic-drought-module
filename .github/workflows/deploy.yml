@@ -79,8 +79,25 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
     steps:
+      # The Pages backend intermittently fails the status poll with an
+      # upstream "Deployment failed, try again later" even though the build
+      # and artifact are fine (observed 2026-07-02, twice). The manual remedy
+      # (`gh run rerun <id> --failed`) succeeds immediately, so encode that
+      # remedy here: one in-workflow retry after a short settle, with no
+      # third-party retry action (the minimal-dependency posture). The live
+      # site is never at risk; the prior deploy keeps serving throughout.
       - name: Deploy
         id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: Wait before retrying the transient Pages failure
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 30
+
+      - name: Deploy (retry after transient failure)
+        id: deployment_retry
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v4
