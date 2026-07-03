@@ -12,7 +12,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, extname } from 'node:path';
 
-const ROOTS = ['src', 'tests', 'docs', 'workers', 'scripts'];
+const ROOTS = ['src', 'tests', 'docs', 'workers', 'scripts', 'harness', '.claude'];
 const ROOT_FILES = ['index.html'];
 const SKIP_DIRS = new Set(['node_modules', '.git']);
 const SKIP_EXTS = new Set([
