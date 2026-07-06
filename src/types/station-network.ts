@@ -1,0 +1,68 @@
+import type { StationValue, TelemetryStation } from './station';
+
+export type StationNetworkKey = Extract<
+  StationValue['source'],
+  'usgs-iv' | 'nrcs-awdb' | 'usace-cwms' | 'usbr-hydromet' | 'nwrfc'
+>;
+
+export type PrimaryParameterCategory =
+  | 'streamflow'
+  | 'stage'
+  | 'snowpack'
+  | 'precipitation'
+  | 'soil-climate'
+  | 'reservoir-storage'
+  | 'evapotranspiration'
+  | 'temperature'
+  | 'forecast'
+  | 'unknown';
+
+export interface StationNetworkHandles {
+  readonly usgsSite?: string;
+  readonly awdbStation?: string;
+  readonly cwmsOffice?: string;
+  readonly cwmsTsId?: string;
+  readonly hydrometSite?: string;
+  readonly nwrfcId?: string;
+}
+
+export interface StationDiscoveryRecord {
+  readonly network: StationNetworkKey;
+  readonly station: TelemetryStation;
+  readonly value: StationValue;
+  readonly primaryParameterCategory: PrimaryParameterCategory;
+  readonly handles: StationNetworkHandles;
+}
+
+export interface StationNetworkAdapter<TRawRecord = unknown> {
+  readonly toDiscoveryRecord: (rawRecord: TRawRecord) => StationDiscoveryRecord | null;
+}
+
+export interface StationNetwork<TRawRecord = unknown> {
+  readonly key: StationNetworkKey;
+  readonly label: string;
+  readonly refreshWindowMs: number;
+  readonly adapter: StationNetworkAdapter<TRawRecord>;
+}
+
+export interface StationRegistryEntry {
+  readonly station: TelemetryStation;
+  readonly values: readonly StationValue[];
+  readonly primaryParameterCategory: PrimaryParameterCategory;
+  readonly handles: StationNetworkHandles;
+  readonly networks: readonly StationNetworkKey[];
+  readonly isCuratedSeed: boolean;
+}
+
+export interface ViewportBounds {
+  readonly west: number;
+  readonly south: number;
+  readonly east: number;
+  readonly north: number;
+}
+
+export interface StationViewportDiscoveryRequest {
+  readonly bounds: ViewportBounds;
+  readonly center: readonly [number, number];
+  readonly signal: AbortSignal | null;
+}
