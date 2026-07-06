@@ -1,8 +1,11 @@
 # Cloudflare Workers configuration for the Dynamic Drought Module (DDM) CORS proxy.
 #
 # This Worker exists solely to inject Cross-Origin Resource Sharing (CORS) headers
-# onto responses from a small allow-list of public agency telemetry endpoints
-# (NRCS Air-Water Database, USACE Dataquery 2.0, USBR Hydromet, NWRFC). It does
+# onto responses from a small allow-list of public agency endpoints. The
+# allow-list is defined in src/index.ts (ALLOW_LIST) and currently covers:
+# NRCS Air-Water Database, USACE Dataquery 2.0, USBR Hydromet, NWRFC (the
+# telemetry endpoints), plus NOAA CPC (El Nino / Southern Oscillation indices)
+# and the BIA map hosts (reservation boundaries). It does
 # not transform response bodies, does not authenticate, does not log requests,
 # and does not collect telemetry. See workers/proxy/src/index.ts for the logic
 # and CLAUDE.md section 4 rule 3 for the no-tracking, no-analytics policy.
