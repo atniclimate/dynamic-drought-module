@@ -53,7 +53,7 @@ export class LayerRegistry {
     // Clear the recorded load status too, so a `change` subscriber that
     // reads getStatus() after deactivate sees "off" (undefined) rather
     // than the layer's last terminal status (adversarial-review finding,
-    // docs/ddm-adversarial-review-activation-spine-2026-07-06.md).
+    // docs/archive/ddm-adversarial-review-activation-spine-2026-07-06.md).
     this.statusByKey.delete(key);
     this.emitChange();
   }
