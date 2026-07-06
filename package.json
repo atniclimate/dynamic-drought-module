@@ -20,7 +20,8 @@
     "gate": "npm run build && npm run scan:emdash",
     "build:enso": "node scripts/build-enso-snapshot.mjs",
     "build:ecoregion-tiles": "node scripts/build-ecoregion-tiles.mjs",
-    "build:states": "node scripts/build-states.mjs"
+    "build:states": "node scripts/build-states.mjs",
+    "check:drift": "node scripts/check-upstream-drift.mjs"
   },
   "dependencies": {
     "maplibre-gl": "^4.7.0",
