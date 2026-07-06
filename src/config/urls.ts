@@ -403,6 +403,17 @@ export const URLS = Object.freeze({
   // not sufficient. The WMS sibling is not exposed (HTTP 400); do not use
   // it as a fallback. The raw pixel values are a single-band float 0 to 4;
   // the class colors are applied server-side, so no client recoloring.
+  // MULTI-DAY CONFIRMED 2026-07-06 (ddm-source-verifier, closing a B3
+  // unknown): the time-keyed mosaic delivers real per-day signal, not a
+  // static frame. /identify at a PNW point (-120.5, 46.6) across the full
+  // timeInfo.timeExtent returned class 2 (day 1), 1 (day 4), 1 (day 7),
+  // each response's catalogItems idp_validtime matching the requested time
+  // and resolving to a distinct granule (HeatRisk_<1|4|7>_Mercator). A
+  // Phoenix point read 2 on all three days (plausible persistent risk, not
+  // a defect; not every point varies every window). CORS on /identify:
+  // reflected origin (confirmed for the deploy origin). Callers MUST pass
+  // time=<epoch ms> from timeInfo.timeExtent; omitting it is undefined.
+  // This is the verified basis for a Days 1-7 heat outlook read.
   nwsHeatRisk:
     'https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer',
 
@@ -627,6 +638,74 @@ export const URLS = Object.freeze({
   // against the Relative ONI.
   cpcEnsoProbabilities:
     'https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/probabilities/',
+
+  // ---------- B3 coupled-hazards slate (all five verified 2026-07-06) ----------
+  // Per the ratified B3 discipline: the pipeline ran against all five
+  // candidates; wiring is "verified N, wired M, never all." Stamps below are
+  // the verifier's findings; wiring status is noted per entry.
+
+  // NOAA Hazard Mapping System (HMS) satellite smoke plumes: polygons with a
+  // Light/Medium/Heavy Density class, GOES-East/West detection.
+  // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, application/json,
+  // Access-Control-Allow-Origin: * (genuine wildcard, Origin header set).
+  // ESRI FeatureServer query, f=geojson, direct. CAVEAT (load-bearing):
+  // Start/End_ are Julian "YYYYDDD HHMM" STRINGS (not ISO); parse
+  // client-side, and filter recent-only via `where=Start LIKE '<YYYYDDD>%'`
+  // (the filter was confirmed to genuinely discriminate; a stale-day control
+  // returned 0). maxRecordCount 1000; observed unfiltered count 85.
+  // UNVERIFIED: copyrightText is empty; do not assert a license in UI copy.
+  noaaHmsSmokeFeatureServer:
+    'https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/NOAA_Satellite_Smoke_Detection_(v1)/FeatureServer/0',
+
+  // EPA AirNow current monitor readings (the KEYLESS ArcGIS layer behind
+  // fire.airnow.gov; api.airnow.gov is keyed and correctly bypassed).
+  // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, application/json,
+  // Access-Control-Allow-Origin: * (genuine wildcard). FeatureServer query,
+  // f=geojson, direct; bbox envelope form confirmed. CAVEAT: the path
+  // segment carries literal spaces; keep them percent-encoded (%20) or the
+  // URL is rejected before it reaches the server. CAVEAT: PM25_AQI and
+  // OZONE_AQI are nullable per monitor; ValidTime is epoch ms (observed 37
+  // minutes stale). A PNW bbox pulls in British Columbia monitors near the
+  // border; do not word popups US-only. maxRecordCount 10000. Preliminary,
+  // not-fully-QA'd data per EPA; AQI-display framing only. NOT yet wired.
+  epaAirNowCurrentFeatureServer:
+    'https://services.arcgis.com/cJ9YHowT8TU7DUyn/arcgis/rest/services/Air%20Now%20Current%20Monitor%20Data%20Public/FeatureServer/0',
+
+  // NIFC Interagency Fire Perimeter History, all years (burned-context;
+  // the historic sibling of nifcFires, same trusted org).
+  // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, application/json,
+  // Access-Control-Allow-Origin: * (genuine wildcard). FeatureServer query,
+  // f=geojson, spatial envelope, direct. CAVEAT (load-bearing):
+  // FIRE_YEAR_INT carries a 9999 sentinel for unknown year (268 rows
+  // nationwide); filter `FIRE_YEAR_INT < 9000` before any max/latest-year
+  // computation. Real coverage confirmed through 2024 (2025 and 2026 counts
+  // are 0); current-year fires live in nifcFires, so a seamless timeline
+  // must stitch both. maxRecordCount 2000; a PNW-bbox+year query returned
+  // 11 records (payloads stay sane). NOT yet wired (0.8.0 burned-context).
+  nifcHistoricPerimetersFeatureServer:
+    'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/InterAgencyFirePerimeterHistory_All_Years_View/FeatureServer/0',
+
+  // USGS EROS VegDRI weekly vegetation drought stress (observed impact),
+  // GeoServer WMS. Verified 2026-07-06 (ddm-source-verifier): HTTP 200,
+  // image/png (magic bytes), Access-Control-Allow-Origin: * (genuine
+  // wildcard on a bare GeoServer; no Worker proxy needed). EPSG:3857 GetMap
+  // CONFIRMED working (native web-mercator; no reprojection). Layer
+  // (workspace:layer): quickdri_vegdri_conus_week_data:vegdri_conus_week_data.
+  // Weekly time dimension, default="current"; latest granule 2026-06-29 at
+  // verification (7-day lag on a weekly cadence). CAVEAT: the response sets
+  // an HttpOnly session cookie; fine for raster tiles, never fetch with
+  // credentials included. NOT yet wired.
+  usgsVegdriWeeklyWms:
+    'https://dmsdata.cr.usgs.gov/geoserver/quickdri_vegdri_conus_week_data/wms',
+
+  // USGS EROS QuickDRI composite (the faster-response sibling of VegDRI;
+  // confirmed ALIVE, closing the scout's open unknown). Same host, CORS,
+  // 3857 support, weekly cadence, and cookie caveat as usgsVegdriWeeklyWms;
+  // verified 2026-07-06 in the same pass (distinct 50,866-byte PNG for the
+  // same bbox, so genuinely different data). Layer:
+  // quickdri_quickdri_conus_week_data:quickdri_conus_week_data. NOT wired.
+  usgsQuickdriWeeklyWms:
+    'https://dmsdata.cr.usgs.gov/geoserver/quickdri_quickdri_conus_week_data/wms',
 
   // ---------- Cloudflare Worker proxy ----------
   // The deployed DDM CORS proxy (workers/proxy/, `npm run deploy` there).
