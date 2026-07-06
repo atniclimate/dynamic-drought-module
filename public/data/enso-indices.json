@@ -1,21 +1,16 @@
 {
-  "retrieved": "2026-07-01",
+  "retrieved": "2026-07-06",
   "oni": {
     "source": "NOAA CPC Oceanic Nino Index (ONI)",
     "sourceUrl": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_v5.php",
     "description": "Three-month running mean of the Nino 3.4 sea surface temperature anomaly (ERSSTv5). El Nino at ONI >= +0.5 and La Nina at ONI <= -0.5, each sustained over five consecutive overlapping seasons; between is neutral.",
     "phase": "neutral",
     "latest": {
-      "seas": "MAM",
+      "seas": "AMJ",
       "year": 2026,
-      "anom": 0.48
+      "anom": 0.98
     },
     "values": [
-      {
-        "seas": "AMJ",
-        "year": 2023,
-        "anom": 0.57
-      },
       {
         "seas": "MJJ",
         "year": 2023,
@@ -189,7 +184,12 @@
       {
         "seas": "MAM",
         "year": 2026,
-        "anom": 0.48
+        "anom": 0.51
+      },
+      {
+        "seas": "AMJ",
+        "year": 2026,
+        "anom": 0.98
       }
     ]
   },
@@ -199,16 +199,11 @@
     "description": "The ONI with the tropical-mean sea surface temperature trend removed, so it is not biased warm by background ocean warming. A useful corroborating index in a warming climate; same thresholds as ONI.",
     "phase": "neutral",
     "latest": {
-      "seas": "MAM",
+      "seas": "AMJ",
       "year": 2026,
-      "anom": -0.06
+      "anom": 0.47
     },
     "values": [
-      {
-        "seas": "AMJ",
-        "year": 2023,
-        "anom": 0.07
-      },
       {
         "seas": "MJJ",
         "year": 2023,
@@ -382,7 +377,74 @@
       {
         "seas": "MAM",
         "year": 2026,
-        "anom": -0.06
+        "anom": -0.04
+      },
+      {
+        "seas": "AMJ",
+        "year": 2026,
+        "anom": 0.47
+      }
+    ]
+  },
+  "probabilities": {
+    "source": "NOAA CPC official probabilistic ENSO outlook (CPC/IRI consensus)",
+    "sourceUrl": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/probabilities/",
+    "issued": "June 2026",
+    "baseline": "1991-2020 climatology, Nino 3.4 region (170-120W, 5S-5N), +/-0.5 C thresholds, verified against the Relative ONI",
+    "seasons": [
+      {
+        "seas": "MJJ",
+        "laNina": 0,
+        "neutral": 3,
+        "elNino": 97
+      },
+      {
+        "seas": "JJA",
+        "laNina": 0,
+        "neutral": 1,
+        "elNino": 99
+      },
+      {
+        "seas": "JAS",
+        "laNina": 0,
+        "neutral": 1,
+        "elNino": 99
+      },
+      {
+        "seas": "ASO",
+        "laNina": 0,
+        "neutral": 0,
+        "elNino": 100
+      },
+      {
+        "seas": "SON",
+        "laNina": 0,
+        "neutral": 0,
+        "elNino": 100
+      },
+      {
+        "seas": "OND",
+        "laNina": 0,
+        "neutral": 0,
+        "elNino": 100
+      },
+      {
+        "seas": "NDJ",
+        "laNina": 0,
+        "neutral": 0,
+        "elNino": 100
+      },
+      {
+        "seas": "DJF",
+        "laNina": 0,
+        "neutral": 1,
+        "elNino": 99
+      },
+      {
+        "seas": "JFM",
+        "laNina": 0,
+        "neutral": 2,
+        "elNino": 98
       }
     ]
   }

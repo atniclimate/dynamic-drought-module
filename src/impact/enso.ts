@@ -26,7 +26,7 @@
 import { URLS } from '../config/urls';
 import { fetchWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
-import { oniLineSvg, type OniPoint } from '../ui/charts';
+import { oniLineSvg, ensoPlumeSvg, type OniPoint, type EnsoPlumePoint } from '../ui/charts';
 import type { SourceResult } from './sources';
 import type { BoundarySelectionContext } from './types';
 
@@ -38,10 +38,20 @@ interface IndexSeries {
   readonly values: OniPoint[];
 }
 
+/** The optional CPC probabilities block (present when the build-time scrape
+ * succeeded; absent is an honest no-plume state, never an error). */
+interface EnsoProbabilities {
+  readonly sourceUrl: string;
+  readonly issued: string | null;
+  readonly baseline: string;
+  readonly seasons: EnsoPlumePoint[];
+}
+
 interface EnsoSnapshot {
   readonly retrieved: string;
   readonly oni: IndexSeries;
   readonly roni: IndexSeries;
+  readonly probabilities?: EnsoProbabilities;
 }
 
 const SOURCE = 'NOAA CPC Oceanic Nino Index and Relative ONI';
@@ -133,6 +143,44 @@ function isIndexSeries(v: unknown): v is IndexSeries {
   return isObject(v) && isObject(v.latest) && Array.isArray(v.values) && typeof v.phase === 'string';
 }
 
+function isPlumePoint(v: unknown): v is EnsoPlumePoint {
+  return (
+    isObject(v) &&
+    typeof v.seas === 'string' &&
+    typeof v.laNina === 'number' &&
+    typeof v.neutral === 'number' &&
+    typeof v.elNino === 'number'
+  );
+}
+
+function isProbabilities(v: unknown): v is EnsoProbabilities {
+  return (
+    isObject(v) &&
+    typeof v.sourceUrl === 'string' &&
+    typeof v.baseline === 'string' &&
+    (typeof v.issued === 'string' || v.issued === null) &&
+    Array.isArray(v.seasons) &&
+    v.seasons.length >= 2 &&
+    v.seasons.every(isPlumePoint)
+  );
+}
+
+/**
+ * One sentence naming the most likely ENSO state at the far end of the plume.
+ * Worded as odds, never as an outcome.
+ */
+function plumeHeadline(p: EnsoProbabilities): string {
+  const far = p.seasons[p.seasons.length - 1]!;
+  const categories = [
+    { name: 'El Nino', pct: far.elNino },
+    { name: 'ENSO-neutral', pct: far.neutral },
+    { name: 'La Nina', pct: far.laNina }
+  ].sort((a, b) => b.pct - a.pct);
+  const lead = categories[0]!;
+  const issued = p.issued ? ` (issued ${p.issued})` : '';
+  return `The official CPC probabilistic outlook${issued} puts the ${far.seas} odds at ${lead.pct}% ${lead.name}.`;
+}
+
 /**
  * Build the ENSO long-range claim from the bundled snapshot, with a chart that
  * plots ONI and RONI together. The snapshot is local (the no-CORS CPC sources
@@ -140,7 +188,9 @@ function isIndexSeries(v: unknown): v is IndexSeries {
  * `fetchWithBudget` with the master signal so a hung load cannot block the
  * horizon.
  */
-/** Load and validate the bundled ENSO snapshot. Throws on any malformation. */
+/** Load and validate the bundled ENSO snapshot. Throws on any malformation.
+ * The probabilities block is optional: a malformed one is dropped (indices
+ * still render), never fatal. */
 async function loadEnsoSnapshot(signal: AbortSignal): Promise<EnsoSnapshot> {
   const resp = await fetchWithBudget(URLS.ensoIndicesLocal, { headers: { Accept: 'application/json' } }, signal, 6000);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -148,7 +198,13 @@ async function loadEnsoSnapshot(signal: AbortSignal): Promise<EnsoSnapshot> {
   if (!isObject(json) || !isIndexSeries(json.oni) || !isIndexSeries(json.roni)) {
     throw new Error('malformed ENSO snapshot');
   }
-  return json as unknown as EnsoSnapshot;
+  const snap = json as unknown as EnsoSnapshot & { probabilities?: unknown };
+  if (snap.probabilities !== undefined && !isProbabilities(snap.probabilities)) {
+    console.warn('[enso] malformed probabilities block in snapshot; plume omitted.');
+    const { probabilities: _dropped, ...rest } = snap;
+    return rest as EnsoSnapshot;
+  }
+  return snap as EnsoSnapshot;
 }
 
 /** The compact read for the sidebar ENSO driver line (0.4.0 B2 slice 1). */
@@ -190,6 +246,7 @@ export async function fetchEnsoDriverSummary(
       shortTilt: SHORT_TILT[snap.oni.phase],
       detail:
         `${tiltText(snap.oni.phase, snap.oni.latest)} ${roniCorroboration(snap.oni, snap.roni)}` +
+        (snap.probabilities ? ` ${plumeHeadline(snap.probabilities)}` : '') +
         snapshotProvenance(snap.retrieved),
       retrieved: snap.retrieved,
       sourceUrl: SOURCE_URL
@@ -219,6 +276,28 @@ export async function fetchEnsoClaims(
       compare: { values: snap.roni.values, label: 'RONI' }
     });
 
+    // The forward plume (odds by season), when the build-time scrape landed.
+    // Absent probabilities are an honest no-plume state, not an error.
+    const plumeClaims = [];
+    if (snap.probabilities) {
+      const p = snap.probabilities;
+      const plumeSvg = ensoPlumeSvg(p.seasons, {
+        title: 'Official CPC odds of El Nino, neutral, and La Nina by season',
+        source: `NOAA CPC probabilistic ENSO outlook${p.issued ? `, issued ${p.issued}` : ''}`
+      });
+      if (plumeSvg) {
+        plumeClaims.push({
+          text:
+            `${plumeHeadline(p)} These are odds across overlapping three-month seasons, not a forecast of outcomes; ` +
+            `the categories are defined against the ${p.baseline}.`,
+          source: 'NOAA CPC official probabilistic ENSO outlook (CPC/IRI consensus)',
+          sourceUrl: p.sourceUrl,
+          kind: 'outlook' as const,
+          chartSvg: plumeSvg
+        });
+      }
+    }
+
     return {
       ok: true,
       claims: [
@@ -228,7 +307,8 @@ export async function fetchEnsoClaims(
           sourceUrl: SOURCE_URL,
           kind: 'outlook',
           ...(chartSvg ? { chartSvg } : {})
-        }
+        },
+        ...plumeClaims
       ]
     };
   } catch (err) {
