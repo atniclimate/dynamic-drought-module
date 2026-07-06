@@ -454,6 +454,69 @@ a:hover {
 }
 
 /* ----------------------------------------------------------------------------
+   ENSO driver line (0.4.0 B2): the one-line climate-driver read under the
+   conditions strip. Not a strip tile (the strip reflects the map; ENSO is a
+   driver). A native details/summary disclosure carries the full tilt text.
+   ---------------------------------------------------------------------------- */
+
+.enso-driver {
+  padding: 8px 12px;
+}
+.enso-driver-line {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+  cursor: pointer;
+  list-style: none;
+}
+.enso-driver-line::-webkit-details-marker {
+  display: none;
+}
+.enso-driver-line::after {
+  content: '+';
+  margin-left: auto;
+  color: var(--fg-3);
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1;
+}
+.enso-driver-details[open] .enso-driver-line::after {
+  content: '\2212'; /* minus sign */
+}
+.enso-driver-kicker {
+  font-family: var(--font-display);
+  font-weight: var(--fw-title);
+  font-size: 10px;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+.enso-driver-value {
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+  font-size: 11.5px;
+  font-weight: var(--fw-strong);
+  color: var(--fg-0);
+}
+.enso-driver-tilt {
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  color: var(--fg-3);
+}
+.enso-driver-detail {
+  margin: 8px 0 4px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--fg-1);
+}
+.enso-driver-source {
+  font-size: 10.5px;
+  color: var(--accent);
+}
+
+/* ----------------------------------------------------------------------------
    Region selector
    ---------------------------------------------------------------------------- */
 

@@ -140,20 +140,73 @@ function isIndexSeries(v: unknown): v is IndexSeries {
  * `fetchWithBudget` with the master signal so a hung load cannot block the
  * horizon.
  */
+/** Load and validate the bundled ENSO snapshot. Throws on any malformation. */
+async function loadEnsoSnapshot(signal: AbortSignal): Promise<EnsoSnapshot> {
+  const resp = await fetchWithBudget(URLS.ensoIndicesLocal, { headers: { Accept: 'application/json' } }, signal, 6000);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const json: unknown = await resp.json();
+  if (!isObject(json) || !isIndexSeries(json.oni) || !isIndexSeries(json.roni)) {
+    throw new Error('malformed ENSO snapshot');
+  }
+  return json as unknown as EnsoSnapshot;
+}
+
+/** The compact read for the sidebar ENSO driver line (0.4.0 B2 slice 1). */
+export interface EnsoDriverSummary {
+  /** "El Nino", "La Nina", or "neutral". */
+  readonly phaseName: string;
+  /** For example "ONI -0.48 (FMA 2026)". */
+  readonly latest: string;
+  /** A five-or-so-word Pacific Northwest tilt, phase-appropriate. */
+  readonly shortTilt: string;
+  /** The full tilt paragraph (odds-never-outcomes, modulators named). */
+  readonly detail: string;
+  /** Snapshot retrieval date, for provenance. */
+  readonly retrieved: string;
+  /** Source link for the details block. */
+  readonly sourceUrl: string;
+}
+
+const SHORT_TILT: Record<EnsoPhase, string> = {
+  'el-nino': 'winters tilt warmer and drier here',
+  'la-nina': 'winters tilt cooler and wetter here',
+  neutral: 'little long-range signal'
+};
+
+/**
+ * The one-line ENSO driver summary for the sidebar, from the bundled snapshot.
+ * Returns null on any failure (missing or malformed snapshot, abort); the
+ * caller hides the line rather than showing a faked phase.
+ */
+export async function fetchEnsoDriverSummary(
+  signal: AbortSignal
+): Promise<EnsoDriverSummary | null> {
+  try {
+    const snap = await loadEnsoSnapshot(signal);
+    if (signal.aborted) return null;
+    return {
+      phaseName: PHASE_NAME[snap.oni.phase],
+      latest: `ONI ${latestStr(snap.oni.latest)}`,
+      shortTilt: SHORT_TILT[snap.oni.phase],
+      detail:
+        `${tiltText(snap.oni.phase, snap.oni.latest)} ${roniCorroboration(snap.oni, snap.roni)}` +
+        snapshotProvenance(snap.retrieved),
+      retrieved: snap.retrieved,
+      sourceUrl: SOURCE_URL
+    };
+  } catch (err) {
+    if (!signal.aborted) console.warn('[enso] driver summary read failed.', err);
+    return null;
+  }
+}
+
 export async function fetchEnsoClaims(
   _context: BoundarySelectionContext,
   signal: AbortSignal
 ): Promise<SourceResult> {
   try {
-    const resp = await fetchWithBudget(URLS.ensoIndicesLocal, { headers: { Accept: 'application/json' } }, signal, 6000);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const json: unknown = await resp.json();
+    const snap = await loadEnsoSnapshot(signal);
     if (signal.aborted) return { claims: [], ok: false };
-
-    if (!isObject(json) || !isIndexSeries(json.oni) || !isIndexSeries(json.roni)) {
-      throw new Error('malformed ENSO snapshot');
-    }
-    const snap = json as unknown as EnsoSnapshot;
 
     const text =
       `${tiltText(snap.oni.phase, snap.oni.latest)} ${roniCorroboration(snap.oni, snap.roni)}` +
