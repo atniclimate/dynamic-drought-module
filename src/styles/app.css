@@ -1040,6 +1040,23 @@ a:hover {
 }
 .telemetry-marker-inner:hover { transform: scale(1.18); }
 
+.telemetry-marker[data-telemetry-freshness="fresh"] .telemetry-marker-inner {
+  opacity: 1;
+  border-style: solid;
+}
+
+.telemetry-marker[data-telemetry-freshness="stale"] .telemetry-marker-inner {
+  opacity: 0.7;
+  border-style: dashed;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.65), 0 2px 8px rgba(0,0,0,0.35);
+}
+
+.telemetry-marker[data-telemetry-freshness="unavailable"] .telemetry-marker-inner {
+  background: transparent !important;
+  border-color: var(--telemetry-marker-color, #ffffff);
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 3px rgba(15, 23, 42, 0.65), 0 2px 8px rgba(0,0,0,0.3);
+}
+
 .telemetry-discovery-note {
   position: absolute;
   left: 50%;

@@ -34,13 +34,15 @@
 
 import maplibregl from 'maplibre-gl';
 
-import type { TelemetryStation } from '../types/station';
+import type { TelemetryFreshness, TelemetryStation } from '../types/station';
 import {
   STATIC_TELEMETRY_STATION_REGISTRY,
   discoverStationsForViewport,
-  mergeTelemetryStations
+  mergeTelemetryStations,
+  stationNetworkByKey
 } from '../config/station-registry';
 import type {
+  PrimaryParameterCategory,
   StationRegistryEntry,
   ViewportBounds
 } from '../types/station-network';
@@ -82,6 +84,13 @@ const CAP_NOTE_TEXT =
 
 type TelemetryStatus = 'loading' | 'ready' | 'error' | 'no-data' | 'zoom-in';
 
+interface TelemetryMarkerView {
+  readonly station: TelemetryStation;
+  readonly freshness: TelemetryFreshness;
+  readonly primaryParameterCategory: PrimaryParameterCategory;
+  readonly networkLabel: string;
+}
+
 let currentDiscoveryController: AbortController | null = null;
 let moveendDebounce: ReturnType<typeof setTimeout> | null = null;
 let moveendHandler: (() => void) | null = null;
@@ -120,19 +129,26 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   await runDiscoveryForCurrentViewport(map);
 }
 
-function renderStations(map: maplibregl.Map, stations: readonly TelemetryStation[]): void {
+function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView[]): void {
   clearMarkers();
 
-  for (const station of stations) {
+  for (const view of views) {
+    const { station } = view;
     const el = document.createElement('div');
     el.className = 'telemetry-marker';
     el.dataset.telemetryStationId = station.id;
+    el.dataset.telemetryFreshness = view.freshness;
+    el.dataset.telemetryCategory = view.primaryParameterCategory;
+    const accessibleLabel = markerAccessibleLabel(view);
+    el.title = accessibleLabel;
+    el.setAttribute('aria-label', accessibleLabel);
 
     const inner = document.createElement('div');
     inner.className = 'telemetry-marker-inner';
     // station.color is a fixed palette value from the config; not user
     // input. Set via DOM property so the browser does the value
     // sanitization rather than us interpolating into an HTML string.
+    inner.style.setProperty('--telemetry-marker-color', station.color);
     inner.style.background = station.color;
     el.appendChild(inner);
 
@@ -275,7 +291,7 @@ async function runDiscoveryForCurrentViewport(map: maplibregl.Map): Promise<void
   currentDiscoveryController = controller;
   reportStatus('loading');
 
-  const curatedStations = curatedTelemetryStations();
+  const curatedEntries = curatedTelemetryEntries();
   try {
     const result = await discoverStationsForViewport({
       bounds: viewportBounds(map),
@@ -285,21 +301,24 @@ async function runDiscoveryForCurrentViewport(map: maplibregl.Map): Promise<void
     if (controller.signal.aborted || controller !== currentDiscoveryController) return;
 
     if (result.status === 'zoom-in') {
-      renderStations(map, curatedStations);
+      renderStations(map, curatedEntries.map(markerViewForEntry));
       hideCapNote();
       reportStatus('zoom-in');
       return;
     }
 
-    const merged = mergeTelemetryStations(curatedStations, result.records);
+    const merged = mergeTelemetryStations(
+      curatedEntries.map((entry) => entry.station),
+      result.records
+    );
     const capped = capDiscoveredStations(merged, viewportCenter(map));
-    renderStations(map, capped.entries.map((entry) => entry.station));
+    renderStations(map, capped.entries.map(markerViewForEntry));
     updateCapNote(map, capped.totalDiscovered);
     reportStatus(capped.entries.length > 0 ? 'ready' : 'no-data');
   } catch (err) {
     if (controller.signal.aborted || controller !== currentDiscoveryController) return;
     console.warn('[telemetry] USGS IV discovery failed.', err);
-    renderStations(map, curatedStations);
+    renderStations(map, curatedEntries.map(markerViewForEntry));
     hideCapNote();
     reportStatus('error');
   }
@@ -372,8 +391,43 @@ function viewportCenter(map: maplibregl.Map): readonly [number, number] {
   return [center.lat, center.lng];
 }
 
-function curatedTelemetryStations(): readonly TelemetryStation[] {
-  return STATIC_TELEMETRY_STATION_REGISTRY.map((entry) => entry.station);
+function curatedTelemetryEntries(): readonly StationRegistryEntry[] {
+  return STATIC_TELEMETRY_STATION_REGISTRY;
+}
+
+function markerViewForEntry(entry: StationRegistryEntry): TelemetryMarkerView {
+  return {
+    station: entry.station,
+    freshness: entry.values[0]?.freshness ?? 'unknown',
+    primaryParameterCategory: entry.primaryParameterCategory,
+    networkLabel: networkLabelForEntry(entry)
+  };
+}
+
+function networkLabelForEntry(entry: StationRegistryEntry): string {
+  if (entry.networks.length === 0) return entry.station.agency;
+  return entry.networks.map((network) => stationNetworkByKey(network).label).join(', ');
+}
+
+function markerAccessibleLabel(view: TelemetryMarkerView): string {
+  return `${view.station.name}. ${freshnessLabel(view.freshness)} telemetry from ${view.networkLabel}. Primary parameter: ${categoryLabel(view.primaryParameterCategory)}.`;
+}
+
+function freshnessLabel(freshness: TelemetryFreshness): string {
+  switch (freshness) {
+    case 'fresh':
+      return 'Fresh';
+    case 'stale':
+      return 'Stale';
+    case 'unavailable':
+      return 'Unavailable';
+    case 'unknown':
+      return 'Unknown condition';
+  }
+}
+
+function categoryLabel(category: PrimaryParameterCategory): string {
+  return category.replace(/-/g, ' ');
 }
 
 function distanceMeters(
