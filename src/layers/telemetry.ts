@@ -126,6 +126,7 @@ function renderStations(map: maplibregl.Map, stations: readonly TelemetryStation
   for (const station of stations) {
     const el = document.createElement('div');
     el.className = 'telemetry-marker';
+    el.dataset.telemetryStationId = station.id;
 
     const inner = document.createElement('div');
     inner.className = 'telemetry-marker-inner';
