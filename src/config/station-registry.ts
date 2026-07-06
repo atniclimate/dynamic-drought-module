@@ -9,7 +9,8 @@ import type {
   StationNetworkKey,
   StationRegistryEntry,
   StationViewportDiscoveryResult,
-  StationViewportDiscoveryRequest
+  StationViewportDiscoveryRequest,
+  ViewportBounds
 } from '../types/station-network';
 import { fetchWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
@@ -20,13 +21,35 @@ const DAY_MS = 24 * HOUR_MS;
 const PROXIMITY_MERGE_METERS = 100;
 const EARTH_RADIUS_METERS = 6_371_000;
 const USGS_DISCOVERY_TIMEOUT_MS = 8_000;
+const AWDB_DISCOVERY_TIMEOUT_MS = 12_000;
 const USGS_BBOX_AREA_CAP = 25;
 const USGS_EXTREME_AREA_FACTOR = 64;
 const USGS_DISCOVERY_PARAMETER_CODES = '00060,00065';
+const AWDB_DISCOVERY_NETWORKS = ['SNTL', 'SCAN'] as const;
+
+type AwdbDiscoveryNetwork = (typeof AWDB_DISCOVERY_NETWORKS)[number];
 
 type MutableStationNetworkHandles = {
   -readonly [K in keyof StationNetworkHandles]?: StationNetworkHandles[K];
 };
+
+interface AwdbStationMetadata {
+  readonly stationTriplet: string;
+  readonly name: string;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly network: AwdbDiscoveryNetwork;
+}
+
+interface AwdbStationCacheInflight {
+  readonly controller: AbortController;
+  readonly promise: Promise<readonly AwdbStationMetadata[]>;
+  readonly waiters: Set<AbortSignal>;
+  hasEverHadWaiter: boolean;
+}
+
+let awdbStationCache: readonly AwdbStationMetadata[] | null = null;
+let awdbStationCacheInflight: AwdbStationCacheInflight | null = null;
 
 const DISCOVERY_NOT_WIRED_ADAPTER = {
   toDiscoveryRecord: (_rawRecord: unknown): StationDiscoveryRecord | null => null
@@ -107,8 +130,31 @@ export async function discoverStationsForViewport(
   request: StationViewportDiscoveryRequest
 ): Promise<StationViewportDiscoveryResult> {
   const queryBounds = clampUsgsDiscoveryBounds(request.bounds, request.center);
-  if (!queryBounds) return { status: 'zoom-in', records: [] };
+  const [usgsRecords, awdbRecords] = await Promise.all([
+    queryBounds
+      ? discoveryRecordsOrEmpty(
+          'USGS IV station discovery',
+          discoverUsgsStations(queryBounds, request.signal),
+          request.signal
+        )
+      : Promise.resolve([]),
+    discoverAwdbStations(request)
+  ]);
 
+  const records = [...usgsRecords, ...awdbRecords];
+  if (!queryBounds) return { status: 'zoom-in', records };
+
+  return {
+    status: 'ok',
+    records,
+    queriedBounds: queryBounds
+  };
+}
+
+async function discoverUsgsStations(
+  queryBounds: StationViewportDiscoveryRequest['bounds'],
+  signal: AbortSignal | null
+): Promise<readonly StationDiscoveryRecord[]> {
   const params = new URLSearchParams({
     format: 'json',
     bBox: [
@@ -124,7 +170,7 @@ export async function discoverStationsForViewport(
   const response = await fetchWithBudget(
     `${URLS.usgsIV}?${params.toString()}`,
     {},
-    request.signal,
+    signal,
     USGS_DISCOVERY_TIMEOUT_MS
   );
   if (!response.ok) {
@@ -132,11 +178,21 @@ export async function discoverStationsForViewport(
   }
 
   const payload: unknown = await response.json();
-  return {
-    status: 'ok',
-    records: usgsDiscoveryRecordsFromPayload(payload),
-    queriedBounds: queryBounds
-  };
+  return usgsDiscoveryRecordsFromPayload(payload);
+}
+
+async function discoveryRecordsOrEmpty(
+  label: string,
+  promise: Promise<readonly StationDiscoveryRecord[]>,
+  signal: AbortSignal | null
+): Promise<readonly StationDiscoveryRecord[]> {
+  try {
+    return await promise;
+  } catch (err) {
+    if (isAbortError(err) || signal?.aborted) throw err;
+    console.warn(`[telemetry] ${label} failed.`, err);
+    return [];
+  }
 }
 
 export function stationNetworkByKey(key: StationNetworkKey): StationNetwork {
@@ -592,6 +648,240 @@ function usgsDiscoveryFreshness(timestampIso: string): TelemetryFreshness {
 
 function formatBboxNumber(value: number): string {
   return value.toFixed(5).replace(/\.?0+$/, '');
+}
+
+async function discoverAwdbStations(
+  request: StationViewportDiscoveryRequest
+): Promise<readonly StationDiscoveryRecord[]> {
+  try {
+    const stations = await getAwdbStationCache(request.signal);
+    if (request.signal?.aborted) return [];
+    return stations
+      .filter((station) => isCoordinateInBounds(station.latitude, station.longitude, request.bounds))
+      .map(awdbDiscoveryRecord);
+  } catch (err) {
+    if (isAbortError(err) || request.signal?.aborted) throw err;
+    console.warn('[telemetry] NRCS AWDB station discovery failed.', err);
+    return [];
+  }
+}
+
+async function getAwdbStationCache(
+  signal: AbortSignal | null
+): Promise<readonly AwdbStationMetadata[]> {
+  if (awdbStationCache) return awdbStationCache;
+  const inflight =
+    awdbStationCacheInflight && !awdbStationCacheInflight.controller.signal.aborted
+      ? awdbStationCacheInflight
+      : startAwdbStationCacheFetch();
+  if (signal) addAwdbCacheWaiter(inflight, signal);
+
+  try {
+    if (!signal) return await inflight.promise;
+    return await Promise.race([inflight.promise, abortPromise(signal)]);
+  } finally {
+    if (signal) removeAwdbCacheWaiter(inflight, signal);
+  }
+}
+
+function startAwdbStationCacheFetch(): AwdbStationCacheInflight {
+  const controller = new AbortController();
+  const waiters = new Set<AbortSignal>();
+  const promise = fetchAwdbStationLists(controller.signal)
+    .then((stations) => {
+      awdbStationCache = stations;
+      return stations;
+    })
+    .finally(() => {
+      awdbStationCacheInflight = null;
+    });
+  const inflight = { controller, promise, waiters, hasEverHadWaiter: false };
+  awdbStationCacheInflight = inflight;
+  return inflight;
+}
+
+function addAwdbCacheWaiter(inflight: AwdbStationCacheInflight, signal: AbortSignal): void {
+  if (signal.aborted) {
+    maybeAbortAwdbCacheFetch(inflight);
+    return;
+  }
+  inflight.hasEverHadWaiter = true;
+  inflight.waiters.add(signal);
+  signal.addEventListener('abort', () => removeAwdbCacheWaiter(inflight, signal), { once: true });
+}
+
+function removeAwdbCacheWaiter(inflight: AwdbStationCacheInflight, signal: AbortSignal): void {
+  inflight.waiters.delete(signal);
+  maybeAbortAwdbCacheFetch(inflight);
+}
+
+function maybeAbortAwdbCacheFetch(inflight: AwdbStationCacheInflight): void {
+  if (awdbStationCacheInflight !== inflight) return;
+  if (
+    inflight.hasEverHadWaiter &&
+    inflight.waiters.size === 0 &&
+    !inflight.controller.signal.aborted
+  ) {
+    inflight.controller.abort();
+  }
+}
+
+function abortPromise(signal: AbortSignal): Promise<never> {
+  return new Promise<never>((_resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'));
+      return;
+    }
+    signal.addEventListener(
+      'abort',
+      () => reject(new DOMException('Aborted', 'AbortError')),
+      { once: true }
+    );
+  });
+}
+
+async function fetchAwdbStationLists(
+  signal: AbortSignal
+): Promise<readonly AwdbStationMetadata[]> {
+  const settled = await Promise.allSettled(
+    AWDB_DISCOVERY_NETWORKS.map((network) => fetchAwdbStationsForNetwork(network, signal))
+  );
+  const stations: AwdbStationMetadata[] = [];
+  const failures: unknown[] = [];
+  for (const result of settled) {
+    if (result.status === 'fulfilled') {
+      stations.push(...result.value);
+    } else {
+      failures.push(result.reason);
+    }
+  }
+  const abortFailure = failures.find(isAbortError);
+  if (abortFailure || signal.aborted) {
+    throw abortFailure ?? new DOMException('Aborted', 'AbortError');
+  }
+  if (failures.length === AWDB_DISCOVERY_NETWORKS.length) {
+    throw new Error('NRCS AWDB station discovery failed for all requested networks');
+  }
+  if (failures.length > 0) {
+    console.warn('[telemetry] partial NRCS AWDB station discovery failed.', failures);
+  }
+  return stations;
+}
+
+async function fetchAwdbStationsForNetwork(
+  network: AwdbDiscoveryNetwork,
+  signal: AbortSignal
+): Promise<readonly AwdbStationMetadata[]> {
+  const params = new URLSearchParams({
+    stationTriplets: `*:*:${network}`,
+    activeOnly: 'true',
+    returnStationElements: 'false'
+  });
+  const response = await fetchWithBudget(
+    `${URLS.nrcsAwdbStations}?${params.toString()}`,
+    {},
+    signal,
+    AWDB_DISCOVERY_TIMEOUT_MS
+  );
+  if (!response.ok) {
+    throw new Error(`NRCS AWDB station discovery HTTP ${response.status}`);
+  }
+  const payload: unknown = await response.json();
+  return readAwdbStationList(payload, network);
+}
+
+function readAwdbStationList(
+  payload: unknown,
+  network: AwdbDiscoveryNetwork
+): readonly AwdbStationMetadata[] {
+  if (!Array.isArray(payload)) return [];
+  const stations: AwdbStationMetadata[] = [];
+  for (const raw of payload) {
+    if (!isObject(raw)) continue;
+    const stationTriplet = readNonEmptyString(raw.stationTriplet);
+    const name = readNonEmptyString(raw.name);
+    const latitude = readFiniteNumber(raw.latitude);
+    const longitude = readFiniteNumber(raw.longitude);
+    if (!stationTriplet || !name || latitude === null || longitude === null) continue;
+    stations.push({ stationTriplet, name, latitude, longitude, network });
+  }
+  return stations;
+}
+
+function awdbDiscoveryRecord(station: AwdbStationMetadata): StationDiscoveryRecord {
+  const stationIdPrefix = station.network === 'SNTL' ? 'snotel' : 'scan';
+  const parameter =
+    station.network === 'SNTL' ? 'snow_water_equivalent_in' : 'soil_moisture_pct';
+  const label = station.network === 'SNTL' ? 'Snow water equivalent' : 'Soil moisture';
+  const primaryParameterCategory: PrimaryParameterCategory =
+    station.network === 'SNTL' ? 'snowpack' : 'soil-climate';
+  const id = `${stationIdPrefix}-${station.stationTriplet.toLowerCase()}`;
+
+  return {
+    network: 'nrcs-awdb',
+    station: {
+      id,
+      name: station.name,
+      coords: [station.latitude, station.longitude],
+      region: 'discovered',
+      type: station.network === 'SNTL' ? 'snotel' : 'scan',
+      agency: 'NRCS',
+      color: station.network === 'SNTL' ? '#38bdf8' : '#84cc16',
+      description:
+        station.network === 'SNTL'
+          ? 'NRCS SNOTEL station discovered in the current viewport.'
+          : 'NRCS SCAN station discovered in the current viewport.',
+      awdbStation: station.stationTriplet,
+      links: []
+    },
+    value: {
+      stationId: id,
+      parameter,
+      label,
+      value: null,
+      unit: station.network === 'SNTL' ? 'in' : '%',
+      timestamp: '',
+      freshness: 'unknown',
+      source: 'nrcs-awdb'
+    },
+    primaryParameterCategory,
+    handles: { awdbStation: station.stationTriplet }
+  };
+}
+
+function readNonEmptyString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+function readFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isCoordinateInBounds(lat: number, lon: number, bounds: ViewportBounds): boolean {
+  const south = Math.min(bounds.south, bounds.north);
+  const north = Math.max(bounds.south, bounds.north);
+  if (lat < south || lat > north) return false;
+
+  const west = normalizeLongitude(bounds.west);
+  const east = normalizeLongitude(bounds.east);
+  const normalizedLon = normalizeLongitude(lon);
+  return west <= east
+    ? normalizedLon >= west && normalizedLon <= east
+    : normalizedLon >= west || normalizedLon <= east;
+}
+
+function normalizeLongitude(value: number): number {
+  if (value < -180 || value > 180) {
+    return ((((value + 180) % 360) + 360) % 360) - 180;
+  }
+  return value;
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'AbortError';
 }
 
 function clamp(value: number, min: number, max: number): number {

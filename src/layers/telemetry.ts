@@ -301,8 +301,13 @@ async function runDiscoveryForCurrentViewport(map: maplibregl.Map): Promise<void
     if (controller.signal.aborted || controller !== currentDiscoveryController) return;
 
     if (result.status === 'zoom-in') {
-      renderStations(map, curatedEntries.map(markerViewForEntry));
-      hideCapNote();
+      const merged = mergeTelemetryStations(
+        curatedEntries.map((entry) => entry.station),
+        result.records
+      );
+      const capped = capDiscoveredStations(merged, viewportCenter(map));
+      renderStations(map, capped.entries.map(markerViewForEntry));
+      updateCapNote(map, capped.totalDiscovered);
       reportStatus('zoom-in');
       return;
     }
@@ -317,7 +322,7 @@ async function runDiscoveryForCurrentViewport(map: maplibregl.Map): Promise<void
     reportStatus(capped.entries.length > 0 ? 'ready' : 'no-data');
   } catch (err) {
     if (controller.signal.aborted || controller !== currentDiscoveryController) return;
-    console.warn('[telemetry] USGS IV discovery failed.', err);
+    console.warn('[telemetry] station discovery failed.', err);
     renderStations(map, curatedEntries.map(markerViewForEntry));
     hideCapNote();
     reportStatus('error');

@@ -65,7 +65,7 @@ import { registry } from '../state/registry';
 import {
   fetchAwdbDailySeries,
   toStationValue,
-  SNOTEL_ELEMENTS
+  elementsForAwdbStationTriplet
 } from '../util/awdb';
 import { fetchCwmsLatest, cwmsStationValue } from '../util/cwms';
 import { fetchHydrometDaily, hydrometStationValue } from '../util/hydromet';
@@ -812,9 +812,10 @@ async function fetchPrimaryStationValue(
   signal: AbortSignal
 ): Promise<StationValue | null> {
   if (station.awdbStation) {
-    const series = await fetchAwdbDailySeries(station.awdbStation, SNOTEL_ELEMENTS, 7, signal);
-    const swe = series.find((s) => s.element === 'WTEQ');
-    return swe ? toStationValue(station.id, swe) : null;
+    const elements = elementsForAwdbStationTriplet(station.awdbStation);
+    const series = await fetchAwdbDailySeries(station.awdbStation, elements, 7, signal);
+    const primary = series.find((s) => s.element === elements[0]);
+    return primary ? toStationValue(station.id, primary) : null;
   }
   if (station.hydrometParams && station.hydrometParams.length > 0) {
     const series = await fetchHydrometDaily(station.hydrometParams, 7, signal);

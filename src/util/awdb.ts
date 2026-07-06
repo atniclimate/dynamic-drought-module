@@ -37,7 +37,8 @@ export interface AwdbElementSeries {
 const ELEMENT_LABELS: Readonly<Record<string, { parameter: string; label: string }>> = {
   WTEQ: { parameter: 'snow_water_equivalent_in', label: 'Snow water equivalent' },
   SNWD: { parameter: 'snow_depth_in', label: 'Snow depth' },
-  PREC: { parameter: 'precip_water_year_in', label: 'Precip (water year)' }
+  PREC: { parameter: 'precip_water_year_in', label: 'Precip (water year)' },
+  SMS: { parameter: 'soil_moisture_pct', label: 'Soil moisture' }
 };
 
 /** Format a Date as the YYYY-MM-DD string the AWDB REST API expects. */
@@ -184,3 +185,10 @@ export function toStationValue(
 
 /** The elements DDM requests for a SNOTEL station, in display order. */
 export const SNOTEL_ELEMENTS: readonly string[] = ['WTEQ', 'SNWD', 'PREC'];
+
+/** The elements DDM requests for a SCAN station, in display order. */
+export const SCAN_ELEMENTS: readonly string[] = ['SMS'];
+
+export function elementsForAwdbStationTriplet(triplet: string): readonly string[] {
+  return triplet.endsWith(':SCAN') ? SCAN_ELEMENTS : SNOTEL_ELEMENTS;
+}

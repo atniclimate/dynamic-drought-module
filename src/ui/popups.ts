@@ -4,7 +4,7 @@ import type { TelemetryStation } from '../types/station';
 import {
   fetchAwdbDailySeries,
   toStationValue,
-  SNOTEL_ELEMENTS
+  elementsForAwdbStationTriplet
 } from '../util/awdb';
 import type { AwdbElementSeries } from '../util/awdb';
 import { fetchCwmsLatest, cwmsStationValue } from '../util/cwms';
@@ -373,7 +373,7 @@ export async function hydrateTelemetryPopupData(
       // URLS.nrcsAwdbRest).
       const series = await fetchAwdbDailySeries(
         station.awdbStation,
-        SNOTEL_ELEMENTS,
+        elementsForAwdbStationTriplet(station.awdbStation),
         7,
         signal
       );
