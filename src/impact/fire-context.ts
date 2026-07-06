@@ -26,6 +26,9 @@ import { escapeHtml } from '../util/escape';
 /** The USDM current-conditions fill layer id (mirrors src/ui/conditions-strip.ts). */
 const USDM_FILL = 'usdm-current-fill';
 
+/** The USFS Wildfire Hazard Potential raster layer id (src/layers/usfs-whp.ts). */
+const WHP_LAYER = 'usfs-whp';
+
 /** How many nearest stations to name. */
 const NEAREST_STATION_COUNT = 3;
 
@@ -43,6 +46,7 @@ export function buildFireContextHtml(
     <div class="fire-context">
       <div class="fire-context-heading">Fire in context</div>
       ${droughtBeneathRow(map, point)}
+      ${fuelsRow(map)}
       ${nearestStationsBlock(lngLat)}
       <p class="fire-context-note">A read of current conditions around this perimeter, not a fire forecast. The computed fire outlook arrives in a later release.</p>
     </div>`;
@@ -72,6 +76,25 @@ function droughtBeneathRow(map: maplibregl.Map, point: maplibregl.PointLike): st
 
   const cat = maxDm < USDM_CATEGORIES.length ? USDM_CATEGORIES[maxDm] : undefined;
   return contextRow('Drought beneath', cat ? `${cat.code} ${cat.label}` : 'Unknown');
+}
+
+/**
+ * The fuels / hazard read. Wildfire Hazard Potential is a raster surface, so
+ * its class cannot be read at a point in-browser without a verified identify
+ * endpoint (that point-precise read lands with the 0.8.0 computed outlook).
+ * Until then this is an honest pointer: it reflects whether the WHP surface is
+ * on and directs the eye to it, and never fakes a hazard class.
+ */
+function fuelsRow(map: maplibregl.Map): string {
+  return map.getLayer(WHP_LAYER)
+    ? contextRow(
+        'Fuels and hazard',
+        'Wildfire Hazard Potential is on; read the class from the shaded surface beneath this perimeter.'
+      )
+    : contextRow(
+        'Fuels and hazard',
+        'Turn on Wildfire Hazard Potential to see the fuels hazard here.'
+      );
 }
 
 /** The nearest curated telemetry stations to the clicked point. */
