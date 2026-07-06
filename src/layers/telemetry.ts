@@ -34,8 +34,16 @@
 
 import maplibregl from 'maplibre-gl';
 
-import { TELEMETRY_STATIONS } from '../config/telemetry';
 import type { TelemetryStation } from '../types/station';
+import {
+  STATIC_TELEMETRY_STATION_REGISTRY,
+  discoverStationsForViewport,
+  mergeTelemetryStations
+} from '../config/station-registry';
+import type {
+  StationRegistryEntry,
+  ViewportBounds
+} from '../types/station-network';
 import {
   buildTelemetryPopupSkeleton,
   hydrateTelemetryPopupData
@@ -65,8 +73,18 @@ const stationByMarker = new WeakMap<maplibregl.Marker, TelemetryStation>();
 const abortControllers = new WeakMap<maplibregl.Marker, AbortController>();
 
 const LAYER_KEY = 'telemetry';
+const MOVEEND_DEBOUNCE_MS = 350;
+const DISCOVERED_STATION_RENDER_CAP = 50;
+const EARTH_RADIUS_METERS = 6_371_000;
+const CAP_NOTE_ID = 'telemetry-discovery-note';
+const CAP_NOTE_TEXT =
+  'Showing nearest 50 of {total} discovered stations in this view. Zoom in or pan to narrow the set.';
 
-type TelemetryStatus = 'loading' | 'ready' | 'error';
+type TelemetryStatus = 'loading' | 'ready' | 'error' | 'no-data' | 'zoom-in';
+
+let currentDiscoveryController: AbortController | null = null;
+let moveendDebounce: ReturnType<typeof setTimeout> | null = null;
+let moveendHandler: (() => void) | null = null;
 
 function reportStatus(state: TelemetryStatus): void {
   registry.setStatus(LAYER_KEY, state);
@@ -98,7 +116,14 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   reportStatus('loading');
 
-  for (const station of TELEMETRY_STATIONS) {
+  ensureMoveendHandler(map);
+  await runDiscoveryForCurrentViewport(map);
+}
+
+function renderStations(map: maplibregl.Map, stations: readonly TelemetryStation[]): void {
+  clearMarkers();
+
+  for (const station of stations) {
     const el = document.createElement('div');
     el.className = 'telemetry-marker';
 
@@ -136,7 +161,6 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   }
 
   bindPopups(map);
-  reportStatus('ready');
 }
 
 /**
@@ -147,7 +171,24 @@ export async function activate(map: maplibregl.Map): Promise<void> {
  * modules (which call `map.removeLayer` / `map.removeSource`); markers detach
  * via `Marker.remove()` so we do not need it today.
  */
-export function deactivate(_map: maplibregl.Map): void {
+export function deactivate(map: maplibregl.Map): void {
+  if (moveendDebounce) {
+    clearTimeout(moveendDebounce);
+    moveendDebounce = null;
+  }
+  if (currentDiscoveryController) {
+    currentDiscoveryController.abort();
+    currentDiscoveryController = null;
+  }
+  if (moveendHandler) {
+    map.off('moveend', moveendHandler);
+    moveendHandler = null;
+  }
+  hideCapNote();
+  clearMarkers();
+}
+
+function clearMarkers(): void {
   for (const marker of activeMarkers) {
     const controller = abortControllers.get(marker);
     if (controller) {
@@ -213,6 +254,145 @@ export function bindPopups(_map: maplibregl.Map): void {
       }
     });
   }
+}
+
+function ensureMoveendHandler(map: maplibregl.Map): void {
+  if (moveendHandler) return;
+  moveendHandler = (): void => {
+    if (moveendDebounce) clearTimeout(moveendDebounce);
+    moveendDebounce = setTimeout(() => {
+      moveendDebounce = null;
+      void runDiscoveryForCurrentViewport(map);
+    }, MOVEEND_DEBOUNCE_MS);
+  };
+  map.on('moveend', moveendHandler);
+}
+
+async function runDiscoveryForCurrentViewport(map: maplibregl.Map): Promise<void> {
+  if (currentDiscoveryController) currentDiscoveryController.abort();
+  const controller = new AbortController();
+  currentDiscoveryController = controller;
+  reportStatus('loading');
+
+  const curatedStations = curatedTelemetryStations();
+  try {
+    const result = await discoverStationsForViewport({
+      bounds: viewportBounds(map),
+      center: viewportCenter(map),
+      signal: controller.signal
+    });
+    if (controller.signal.aborted || controller !== currentDiscoveryController) return;
+
+    if (result.status === 'zoom-in') {
+      renderStations(map, curatedStations);
+      hideCapNote();
+      reportStatus('zoom-in');
+      return;
+    }
+
+    const merged = mergeTelemetryStations(curatedStations, result.records);
+    const capped = capDiscoveredStations(merged, viewportCenter(map));
+    renderStations(map, capped.entries.map((entry) => entry.station));
+    updateCapNote(map, capped.totalDiscovered);
+    reportStatus(capped.entries.length > 0 ? 'ready' : 'no-data');
+  } catch (err) {
+    if (controller.signal.aborted || controller !== currentDiscoveryController) return;
+    console.warn('[telemetry] USGS IV discovery failed.', err);
+    renderStations(map, curatedStations);
+    hideCapNote();
+    reportStatus('error');
+  }
+}
+
+function capDiscoveredStations(
+  entries: readonly StationRegistryEntry[],
+  center: readonly [number, number]
+): { readonly entries: readonly StationRegistryEntry[]; readonly totalDiscovered: number } {
+  const curated = entries.filter((entry) => entry.isCuratedSeed);
+  const discovered = entries.filter((entry) => !entry.isCuratedSeed);
+  const cappedDiscovered = discovered
+    .map((entry) => ({
+      entry,
+      distance: distanceMeters(center, entry.station.coords)
+    }))
+    .sort((left, right) => {
+      const byDistance = left.distance - right.distance;
+      if (byDistance !== 0) return byDistance;
+      return left.entry.station.id.localeCompare(right.entry.station.id);
+    })
+    .slice(0, DISCOVERED_STATION_RENDER_CAP)
+    .map((item) => item.entry);
+
+  return {
+    entries: [...curated, ...cappedDiscovered],
+    totalDiscovered: discovered.length
+  };
+}
+
+function updateCapNote(map: maplibregl.Map, totalDiscovered: number): void {
+  if (totalDiscovered <= DISCOVERED_STATION_RENDER_CAP) {
+    hideCapNote();
+    return;
+  }
+  const note = ensureCapNote(map);
+  note.textContent = CAP_NOTE_TEXT.replace('{total}', String(totalDiscovered));
+  note.hidden = false;
+}
+
+function ensureCapNote(map: maplibregl.Map): HTMLDivElement {
+  const container = map.getContainer();
+  const existing = container.querySelector<HTMLDivElement>(`#${CAP_NOTE_ID}`);
+  if (existing) return existing;
+  const note = document.createElement('div');
+  note.id = CAP_NOTE_ID;
+  note.className = 'telemetry-discovery-note';
+  note.hidden = true;
+  container.appendChild(note);
+  return note;
+}
+
+function hideCapNote(): void {
+  const note = document.getElementById(CAP_NOTE_ID);
+  if (note) note.hidden = true;
+}
+
+function viewportBounds(map: maplibregl.Map): ViewportBounds {
+  const bounds = map.getBounds();
+  return {
+    west: bounds.getWest(),
+    south: bounds.getSouth(),
+    east: bounds.getEast(),
+    north: bounds.getNorth()
+  };
+}
+
+function viewportCenter(map: maplibregl.Map): readonly [number, number] {
+  const center = map.getCenter();
+  return [center.lat, center.lng];
+}
+
+function curatedTelemetryStations(): readonly TelemetryStation[] {
+  return STATIC_TELEMETRY_STATION_REGISTRY.map((entry) => entry.station);
+}
+
+function distanceMeters(
+  a: readonly [number, number],
+  b: readonly [number, number]
+): number {
+  const [lat1, lon1] = a;
+  const [lat2, lon2] = b;
+  const dLat = radians(lat2 - lat1);
+  const dLon = radians(lon2 - lon1);
+  const rLat1 = radians(lat1);
+  const rLat2 = radians(lat2);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(rLat1) * Math.cos(rLat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_METERS * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+function radians(degrees: number): number {
+  return (degrees * Math.PI) / 180;
 }
 
 // ---------------------------------------------------------------------------

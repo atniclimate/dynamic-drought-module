@@ -66,3 +66,14 @@ export interface StationViewportDiscoveryRequest {
   readonly center: readonly [number, number];
   readonly signal: AbortSignal | null;
 }
+
+export type StationViewportDiscoveryResult =
+  | {
+      readonly status: 'ok';
+      readonly records: readonly StationDiscoveryRecord[];
+      readonly queriedBounds: ViewportBounds;
+    }
+  | {
+      readonly status: 'zoom-in';
+      readonly records: readonly StationDiscoveryRecord[];
+    };

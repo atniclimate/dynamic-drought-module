@@ -1040,6 +1040,27 @@ a:hover {
 }
 .telemetry-marker-inner:hover { transform: scale(1.18); }
 
+.telemetry-discovery-note {
+  position: absolute;
+  left: 50%;
+  bottom: 36px;
+  transform: translateX(-50%);
+  z-index: 950;
+  max-width: min(560px, calc(100% - 32px));
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: rgba(15, 23, 42, 0.9);
+  color: #ffffff;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: var(--fw-strong);
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.25);
+  pointer-events: none;
+}
+
 /* ----------------------------------------------------------------------------
    Map overlay controls
    ---------------------------------------------------------------------------- */
