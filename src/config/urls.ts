@@ -76,7 +76,43 @@ export const URLS = Object.freeze({
   cpc814OutlookMapServer:
     'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_8_14_day_outlk/MapServer',
 
-  // ---------- USGS Water Services (open data, CORS-OK) ----------
+  // ---------- USGS Water Services Instantaneous Values (open data, CORS-OK) ----------
+  // United States Geological Survey (USGS) Water Services, Instantaneous
+  // Values (IV). Two query shapes share this base URL:
+  //   - Single-site value fetch (existing use): `${usgsIV}?format=json
+  //     &sites=<siteCode>&parameterCd=<codes>&siteStatus=active`.
+  //   - Viewport DISCOVERY (unit A2 slice 2): `${usgsIV}?format=json
+  //     &bBox=<west,south,east,north>&parameterCd=00060,00065
+  //     &siteStatus=active` (no `sites`). With no period, the service
+  //     defaults to mode=LATEST (one instantaneous point per
+  //     site-parameter pair), which is what discovery needs.
+  // Response is WaterML JSON; the site list is at value.timeSeries[]:
+  //   .sourceInfo.siteName                              site name
+  //   .sourceInfo.siteCode[0].value                     USGS site code
+  //   .sourceInfo.geoLocation.geogLocation.latitude     decimal degrees (EPSG:4326)
+  //   .sourceInfo.geoLocation.geogLocation.longitude    decimal degrees
+  //   .variable.variableCode[0].value                   parameter code (00060, 00065)
+  //   .variable.unit.unitCode                           unit (ft3/s, ft)
+  //   .values[0].value[0].value                         latest reading (string; parse float)
+  //   .values[0].value[0].dateTime                      ISO 8601, station-local offset
+  // A gage reporting multiple parameters emits multiple timeSeries sharing
+  // one siteCode; group by `sourceInfo.siteCode[0].value` before applying
+  // the 50-nearest cap, or a station double-counts.
+  // CAVEAT (load-bearing): the bBox size limit varies by latitude (an
+  // equal-area cap, not a flat degree cap): roughly
+  // width_deg * cos(latitude) * height_deg <= 25. A box that exceeds it
+  // returns HTTP 400 with a `text/html` body (do not JSON-parse the error).
+  // A low-zoom viewport can exceed it, so the consumer must clamp the query
+  // bBox from the viewport center latitude, or fall back to "zoom in to
+  // load". CAVEAT: `siteStatus=active` does not guarantee a current reading
+  // (some active sites were months stale in testing); read `dateTime` per
+  // series and treat anything past a telemetry window (for example 24
+  // hours) as stale, not live.
+  // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, Content-Type
+  // application/json, Access-Control-Allow-Origin: * (genuine wildcard,
+  // confirmed with an unrelated test origin, not a reflection). Direct
+  // fetch; no Worker proxy needed (host is not on the allow-list and does
+  // not need to be).
   usgsIV: 'https://waterservices.usgs.gov/nwis/iv/',
 
   // ---------- NRCS AWDB REST (SNOTEL / SCAN station data) ----------
