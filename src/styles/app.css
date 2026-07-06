@@ -511,6 +511,26 @@ a:hover {
   line-height: 1.45;
   color: var(--fg-1);
 }
+.enso-driver-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 2px;
+}
+.enso-driver-pacific {
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  font-weight: var(--fw-strong);
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.enso-driver-pacific:hover {
+  border-color: var(--accent);
+}
 .enso-driver-source {
   font-size: 10.5px;
   color: var(--accent);

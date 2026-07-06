@@ -16,8 +16,16 @@
  */
 import { fetchEnsoDriverSummary } from '../impact/enso';
 import { escapeHtml } from '../util/escape';
+import { getMapRef } from './sidebar';
 
 const SECTION_ID = 'enso-driver';
+
+/**
+ * The Pacific basin framing for the "View the Pacific" action: wide enough
+ * to hold the whole ENSO tongue and the West Coast, so the eye can travel
+ * from the Nino 3.4 box to home. [west, south, east, north].
+ */
+const PACIFIC_BASIN_BOUNDS: [number, number, number, number] = [-190, -25, -100, 50];
 
 /** Build and reveal the ENSO driver line. Safe to call once at boot. */
 export function buildEnsoDriver(): void {
@@ -35,9 +43,28 @@ export function buildEnsoDriver(): void {
           <span class="enso-driver-tilt">${escapeHtml(summary.shortTilt)}</span>
         </summary>
         <p class="enso-driver-detail">${escapeHtml(summary.detail)}</p>
-        <a class="enso-driver-source" href="${escapeHtml(summary.sourceUrl)}" target="_blank" rel="noopener">NOAA CPC ONI and Relative ONI</a>
+        <div class="enso-driver-actions">
+          <button type="button" class="enso-driver-pacific" id="enso-view-pacific">View the Pacific</button>
+          <a class="enso-driver-source" href="${escapeHtml(summary.sourceUrl)}" target="_blank" rel="noopener">NOAA CPC ONI and Relative ONI</a>
+        </div>
       </details>
     `;
     section.hidden = false;
+
+    // "View the Pacific": turn on the ocean-temperature surface and frame the
+    // basin, so the driver line's number becomes a visible pattern. The layer
+    // is activated through the sidebar checkbox dispatch (the serialized
+    // activation path, the one true door); never by calling activate directly.
+    const btn = section.querySelector<HTMLButtonElement>('#enso-view-pacific');
+    btn?.addEventListener('click', () => {
+      const cb = document.querySelector<HTMLInputElement>(
+        'input[data-layer-key="sst-anomaly"]'
+      );
+      if (cb && !cb.checked) {
+        cb.checked = true;
+        cb.dispatchEvent(new Event('change'));
+      }
+      getMapRef()?.fitBounds(PACIFIC_BASIN_BOUNDS, { padding: 24, duration: 1200 });
+    });
   });
 }

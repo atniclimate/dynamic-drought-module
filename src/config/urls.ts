@@ -575,6 +575,59 @@ export const URLS = Object.freeze({
   // no-CORS CPC sources are read at build time, not by the browser at runtime.
   ensoIndicesLocal: import.meta.env.BASE_URL + 'data/enso-indices.json',
 
+  // ---------- NASA GIBS sea surface temperature anomaly (B2, keyless WMTS) ----------
+  // Global Imagery Browse Services (GIBS) GHRSST Level 4 MUR sea surface
+  // temperature (SST) anomaly, daily, ~1 km. The ENSO ocean surface: the
+  // equatorial warm/cool tongue rendered as map tiles. MapLibre raster tile
+  // template; the GIBS path order is {z}/{y}/{x} (TileMatrix/TileRow/TileCol),
+  // the REVERSE of the OSM z/x/y convention; MapLibre substitutes tokens by
+  // name so the template below is correct as written.
+  // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, Content-Type
+  // image/png, Access-Control-Allow-Origin: * (genuine wildcard, confirmed
+  // with an Origin header). Direct fetch, no Worker proxy. Confirmed at z=3
+  // tiles 3/3/1, 3/4/1, 3/2/2 (Pacific rows): all 200, PNG magic bytes.
+  // Layer-Time-Actual 2026-07-05 for the `default` segment (one-day lag,
+  // daily cadence; Time dimension runs 2019-07-23 to present in P1D blocks
+  // with rare short gaps). CAVEAT (load-bearing): TileMatrixSet
+  // GoogleMapsCompatible_Level7 tops out at TileMatrix 7; set maxzoom 7 on
+  // the source or tiles 404 beyond it. AccessConstraints: none.
+  // UNVERIFIED: the anomaly climatology baseline is NOT stated in
+  // GetCapabilities or the colormap XML; do not assert a baseline in UI copy.
+  gibsSstAnomalyWmts:
+    'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png',
+
+  // ---------- NOAA CPC weekly SST anomaly (B2 fallback, verified not wired) ----------
+  // Fallback SST anomaly raster (weekly cadence, coarser). Same host family
+  // as cpcDroughtWMS / nwsWwaMapServer. Kept as the verified fallback if the
+  // GIBS layer ever retires; not wired.
+  // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, image/png (PNG
+  // magic bytes, 256x256 RGBA), Access-Control-Allow-Origin reflected origin
+  // (Vary: Origin; same posture as usfsWhp already in this file). Layer 4 is
+  // "Weekly Global Sea Surface Temp Anomaly" (layer 0 is absolute SST).
+  // Updates weekly Monday 1100Z. CAVEAT: "This service is not time enabled"
+  // (current week only). UNVERIFIED: anomaly baseline not stated in metadata.
+  cpcWeeklySstAnomalyMapServer:
+    'https://mapservices.weather.noaa.gov/raster/rest/services/climate/cpc_wkly_sst/MapServer',
+
+  // ---------- CPC official ENSO probabilities (B2, build-time snapshot source) ----------
+  // The CPC/IRI consensus probabilistic ENSO outlook: 9 overlapping 3-month
+  // seasons, integer percent chances of La Nina / Neutral / El Nino. Consumed
+  // ONLY by scripts/build-enso-snapshot.mjs at build time (Node fetch; CORS
+  // not applicable); the browser reads the bundled snapshot.
+  // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, text/html.
+  // CAVEAT (load-bearing, adversarial finding): the sibling
+  // .../roni/probabilities.php URL returns 200 but is a META-REFRESH SHELL
+  // with no data (Node fetch does not follow meta-refresh); fetch THIS
+  // resolved URL, never the .php shell. Shape: server-rendered <table
+  // id="probabilities-table">, header row Season / La Nina / Neutral /
+  // El Nino, 9 rows (MJJ through JFM), 3 integer percent cells each; no
+  // inline JSON, no client-side fetch. Issued monthly (2nd Thursday, with
+  // the ENSO Diagnostics Discussion). Baseline stated on page: 1991-2020,
+  // Nino-3.4 region (170-120W, 5S-5N), +/-0.5 C thresholds, verified
+  // against the Relative ONI.
+  cpcEnsoProbabilities:
+    'https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/probabilities/',
+
   // ---------- Cloudflare Worker proxy ----------
   // The deployed DDM CORS proxy (workers/proxy/, `npm run deploy` there).
   // Request format: `${workerProxy}/proxy?url=<encoded_upstream_url>`;
