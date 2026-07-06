@@ -29,8 +29,14 @@ const USGS_BBOX_AREA_CAP = 25;
 const USGS_EXTREME_AREA_FACTOR = 64;
 const USGS_DISCOVERY_PARAMETER_CODES = '00060,00065';
 const AWDB_DISCOVERY_NETWORKS = ['SNTL', 'SCAN'] as const;
+const AGRIMET_DISCOVERY_TIMEOUT_MS = 12_000;
+const COCORAHS_DISCOVERY_TIMEOUT_MS = 15_000;
+// CoCoRaHS round-one scope is the Pacific Northwest core; the IEM mirror has
+// no combined-region call, so we fan out one state per fetch and merge.
+const COCORAHS_DISCOVERY_STATES = ['WA', 'OR', 'ID'] as const;
 
 type AwdbDiscoveryNetwork = (typeof AWDB_DISCOVERY_NETWORKS)[number];
+type CocorahsDiscoveryState = (typeof COCORAHS_DISCOVERY_STATES)[number];
 
 type MutableStationNetworkHandles = {
   -readonly [K in keyof StationNetworkHandles]?: StationNetworkHandles[K];
@@ -73,6 +79,23 @@ interface CoopsStationCacheInflight {
 let coopsStationCache: readonly CoopsStationMetadata[] | null = null;
 let coopsStationCacheInflight: CoopsStationCacheInflight | null = null;
 
+interface AgrimetStationMetadata {
+  readonly id: string;
+  readonly name: string;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly state: string | null;
+  readonly webpage: string | null;
+}
+
+interface CocorahsStationMetadata {
+  readonly sid: string;
+  readonly name: string;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly state: string | null;
+}
+
 const DISCOVERY_NOT_WIRED_ADAPTER = {
   toDiscoveryRecord: (_rawRecord: unknown): StationDiscoveryRecord | null => null
 };
@@ -83,6 +106,14 @@ const RAWS_STATION_ADAPTER = {
 
 const COOPS_STATION_ADAPTER = {
   toDiscoveryRecord: coopsDiscoveryRecordFromUnknown
+} satisfies StationNetworkAdapter<unknown>;
+
+const AGRIMET_STATION_ADAPTER = {
+  toDiscoveryRecord: agrimetDiscoveryRecordFromUnknown
+} satisfies StationNetworkAdapter<unknown>;
+
+const COCORAHS_STATION_ADAPTER = {
+  toDiscoveryRecord: cocorahsDiscoveryRecordFromUnknown
 } satisfies StationNetworkAdapter<unknown>;
 
 export const STATION_NETWORKS = [
@@ -126,13 +157,13 @@ export const STATION_NETWORKS = [
     key: 'usbr-agrimet',
     label: 'USBR AgriMet',
     refreshWindowMs: 2 * DAY_MS,
-    adapter: DISCOVERY_NOT_WIRED_ADAPTER
+    adapter: AGRIMET_STATION_ADAPTER
   },
   {
     key: 'cocorahs',
     label: 'CoCoRaHS (via Iowa Environmental Mesonet)',
     refreshWindowMs: 2 * DAY_MS,
-    adapter: DISCOVERY_NOT_WIRED_ADAPTER
+    adapter: COCORAHS_STATION_ADAPTER
   },
   {
     key: 'nwrfc',
@@ -184,24 +215,34 @@ export async function discoverStationsForViewport(
   request: StationViewportDiscoveryRequest
 ): Promise<StationViewportDiscoveryResult> {
   const queryBounds = clampUsgsDiscoveryBounds(request.bounds, request.center);
-  const [usgsRecords, awdbRecords, rawsRecords, coopsRecords] = await Promise.all([
-    queryBounds
-      ? discoveryRecordsOrEmpty(
-          'USGS IV station discovery',
-          discoverUsgsStations(queryBounds, request.signal),
-          request.signal
-        )
-      : Promise.resolve([]),
-    discoverAwdbStations(request),
-    discoveryRecordsOrEmpty(
-      'NIFC RAWS station discovery',
-      discoverRawsStations(request.bounds, request.signal),
-      request.signal
-    ),
-    discoverCoopsStations(request)
-  ]);
+  const [usgsRecords, awdbRecords, rawsRecords, coopsRecords, agrimetRecords, cocorahsRecords] =
+    await Promise.all([
+      queryBounds
+        ? discoveryRecordsOrEmpty(
+            'USGS IV station discovery',
+            discoverUsgsStations(queryBounds, request.signal),
+            request.signal
+          )
+        : Promise.resolve([]),
+      discoverAwdbStations(request),
+      discoveryRecordsOrEmpty(
+        'NIFC RAWS station discovery',
+        discoverRawsStations(request.bounds, request.signal),
+        request.signal
+      ),
+      discoverCoopsStations(request),
+      discoverAgrimetStations(request),
+      discoverCocorahsStations(request)
+    ]);
 
-  const records = [...usgsRecords, ...awdbRecords, ...rawsRecords, ...coopsRecords];
+  const records = [
+    ...usgsRecords,
+    ...awdbRecords,
+    ...rawsRecords,
+    ...coopsRecords,
+    ...agrimetRecords,
+    ...cocorahsRecords
+  ];
   if (!queryBounds) return { status: 'zoom-in', records };
 
   return {
@@ -480,6 +521,8 @@ function primaryCategoryForStation(station: TelemetryStation): PrimaryParameterC
   if (station.cwms) return station.cwms.tsId.toLowerCase().includes('elev') ? 'stage' : 'streamflow';
   if (station.rawsStationId) return 'fire-weather';
   if (station.noaaCoopsId) return 'stage';
+  if (station.agrimetSite) return 'evapotranspiration';
+  if (station.cocorahsSid) return 'precipitation';
   if (station.usgsSite) return 'streamflow';
   if (nwrfcIdForStation(station)) return 'forecast';
   return 'unknown';
@@ -824,6 +867,89 @@ function abortPromise(signal: AbortSignal): Promise<never> {
       { once: true }
     );
   });
+}
+
+interface StationListCache<T> {
+  get(signal: AbortSignal | null): Promise<readonly T[]>;
+}
+
+// Reference-counted, single-flight cache for a national or multi-state station
+// list. It generalizes the hand-rolled AWDB and CO-OPS caches above: at most
+// one fetch is in flight; concurrent callers share it; and if every waiter
+// aborts before it resolves, the shared fetch is aborted too. The AWDB and
+// CO-OPS caches predate this helper and are left in place; the newer AgriMet
+// and CoCoRaHS lists share it so the waiter bookkeeping lives in one spot.
+function createStationListCache<T>(
+  fetcher: (signal: AbortSignal) => Promise<readonly T[]>
+): StationListCache<T> {
+  interface Inflight {
+    readonly controller: AbortController;
+    readonly promise: Promise<readonly T[]>;
+    readonly waiters: Set<AbortSignal>;
+    hasEverHadWaiter: boolean;
+  }
+
+  let cache: readonly T[] | null = null;
+  let inflight: Inflight | null = null;
+
+  function maybeAbort(target: Inflight): void {
+    if (inflight !== target) return;
+    if (
+      target.hasEverHadWaiter &&
+      target.waiters.size === 0 &&
+      !target.controller.signal.aborted
+    ) {
+      target.controller.abort();
+    }
+  }
+
+  function removeWaiter(target: Inflight, signal: AbortSignal): void {
+    target.waiters.delete(signal);
+    maybeAbort(target);
+  }
+
+  function addWaiter(target: Inflight, signal: AbortSignal): void {
+    if (signal.aborted) {
+      maybeAbort(target);
+      return;
+    }
+    target.hasEverHadWaiter = true;
+    target.waiters.add(signal);
+    signal.addEventListener('abort', () => removeWaiter(target, signal), { once: true });
+  }
+
+  function start(): Inflight {
+    const controller = new AbortController();
+    const created: Inflight = {
+      controller,
+      waiters: new Set<AbortSignal>(),
+      hasEverHadWaiter: false,
+      promise: fetcher(controller.signal)
+        .then((list) => {
+          cache = list;
+          return list;
+        })
+        .finally(() => {
+          if (inflight === created) inflight = null;
+        })
+    };
+    inflight = created;
+    return created;
+  }
+
+  return {
+    async get(signal: AbortSignal | null): Promise<readonly T[]> {
+      if (cache) return cache;
+      const target = inflight && !inflight.controller.signal.aborted ? inflight : start();
+      if (signal) addWaiter(target, signal);
+      try {
+        if (!signal) return await target.promise;
+        return await Promise.race([target.promise, abortPromise(signal)]);
+      } finally {
+        if (signal) removeWaiter(target, signal);
+      }
+    }
+  };
 }
 
 async function fetchAwdbStationLists(
@@ -1200,6 +1326,280 @@ function coopsDiscoveryRecord(station: CoopsStationMetadata): StationDiscoveryRe
     primaryParameterCategory: 'stage',
     handles: { noaaCoopsId: station.id }
   };
+}
+
+const agrimetStationListCache = createStationListCache(fetchAgrimetStationList);
+
+async function discoverAgrimetStations(
+  request: StationViewportDiscoveryRequest
+): Promise<readonly StationDiscoveryRecord[]> {
+  try {
+    const stations = await agrimetStationListCache.get(request.signal);
+    if (request.signal?.aborted) return [];
+    return stations
+      .filter((station) =>
+        isCoordinateInBounds(station.latitude, station.longitude, request.bounds)
+      )
+      .map((station) => AGRIMET_STATION_ADAPTER.toDiscoveryRecord(station))
+      .filter(isDiscoveryRecord);
+  } catch (err) {
+    if (isAbortError(err) || request.signal?.aborted) throw err;
+    console.warn('[telemetry] USBR AgriMet station discovery failed.', err);
+    return [];
+  }
+}
+
+async function fetchAgrimetStationList(
+  signal: AbortSignal
+): Promise<readonly AgrimetStationMetadata[]> {
+  // The AgriMet origin sends no CORS header, so the request must go through the
+  // Worker proxy (www.usbr.gov is already on the allow-list). The response is a
+  // JavaScript data file (application/x-javascript), not JSON; read it as text
+  // and extract the single-quoted string assigned to `agrimet_sites`.
+  const proxied = `${URLS.workerProxy}/proxy?url=${encodeURIComponent(URLS.usbrAgrimetSitesJs)}`;
+  const response = await fetchWithBudget(proxied, {}, signal, AGRIMET_DISCOVERY_TIMEOUT_MS);
+  if (!response.ok) {
+    throw new Error(`USBR AgriMet station discovery HTTP ${response.status}`);
+  }
+  const text = await response.text();
+  return readAgrimetStationList(text);
+}
+
+function readAgrimetStationList(text: string): readonly AgrimetStationMetadata[] {
+  const match = /agrimet_sites\s*=\s*'([\s\S]*?)'\s*;/.exec(text);
+  if (!match || !match[1]) return [];
+  let payload: unknown;
+  try {
+    payload = JSON.parse(match[1]);
+  } catch {
+    return [];
+  }
+  if (!isObject(payload) || !Array.isArray(payload.features)) return [];
+  const stations: AgrimetStationMetadata[] = [];
+  for (const raw of payload.features) {
+    if (!isObject(raw)) continue;
+    const coords = readGeoJsonCoords(raw);
+    const properties = raw.properties;
+    if (!coords || !isObject(properties)) continue;
+    const id = readIdentifier(properties.StationID);
+    const name = readNonEmptyString(properties.StationName);
+    if (!id || !name) continue;
+    stations.push({
+      id,
+      name,
+      latitude: coords[0],
+      longitude: coords[1],
+      state: readNonEmptyString(properties.StationState),
+      webpage: readAbsoluteHttpUrl(properties.webpage)
+    });
+  }
+  return stations;
+}
+
+function agrimetDiscoveryRecordFromUnknown(rawRecord: unknown): StationDiscoveryRecord | null {
+  if (!isAgrimetStationMetadata(rawRecord)) return null;
+  return agrimetDiscoveryRecord(rawRecord);
+}
+
+function isAgrimetStationMetadata(value: unknown): value is AgrimetStationMetadata {
+  return (
+    isObject(value) &&
+    typeof value.id === 'string' &&
+    typeof value.name === 'string' &&
+    typeof value.latitude === 'number' &&
+    typeof value.longitude === 'number' &&
+    (typeof value.state === 'string' || value.state === null) &&
+    (typeof value.webpage === 'string' || value.webpage === null)
+  );
+}
+
+function agrimetDiscoveryRecord(station: AgrimetStationMetadata): StationDiscoveryRecord {
+  const id = `agrimet-${station.id}`;
+  return {
+    network: 'usbr-agrimet',
+    station: {
+      id,
+      name: station.name,
+      coords: [station.latitude, station.longitude],
+      region: station.state ?? 'discovered',
+      type: 'agrimet',
+      agency: 'USBR AgriMet',
+      color: '#f59e0b',
+      description: 'USBR AgriMet agricultural weather station discovered in the current viewport.',
+      agrimetSite: station.id,
+      links: [
+        station.webpage
+          ? { label: 'AgriMet station page', url: station.webpage }
+          : { label: 'USBR AgriMet', url: 'https://www.usbr.gov/pn/agrimet/' }
+      ]
+    },
+    value: {
+      stationId: id,
+      parameter: 'reference_evapotranspiration',
+      label: 'Reference evapotranspiration',
+      value: null,
+      unit: '',
+      timestamp: '',
+      freshness: 'unknown',
+      source: 'usbr-agrimet'
+    },
+    primaryParameterCategory: 'evapotranspiration',
+    handles: { agrimetSite: station.id }
+  };
+}
+
+const cocorahsStationListCache = createStationListCache(fetchCocorahsStationLists);
+
+async function discoverCocorahsStations(
+  request: StationViewportDiscoveryRequest
+): Promise<readonly StationDiscoveryRecord[]> {
+  try {
+    const stations = await cocorahsStationListCache.get(request.signal);
+    if (request.signal?.aborted) return [];
+    return stations
+      .filter((station) =>
+        isCoordinateInBounds(station.latitude, station.longitude, request.bounds)
+      )
+      .map((station) => COCORAHS_STATION_ADAPTER.toDiscoveryRecord(station))
+      .filter(isDiscoveryRecord);
+  } catch (err) {
+    if (isAbortError(err) || request.signal?.aborted) throw err;
+    console.warn('[telemetry] CoCoRaHS station discovery failed.', err);
+    return [];
+  }
+}
+
+async function fetchCocorahsStationLists(
+  signal: AbortSignal
+): Promise<readonly CocorahsStationMetadata[]> {
+  // The IEM mirror has no combined-region endpoint, so fetch each state and
+  // merge; a per-state failure is contained the same way the AWDB per-network
+  // fan-out is (partial results survive, a total failure throws).
+  const settled = await Promise.allSettled(
+    COCORAHS_DISCOVERY_STATES.map((state) => fetchCocorahsStationsForState(state, signal))
+  );
+  const stations: CocorahsStationMetadata[] = [];
+  const failures: unknown[] = [];
+  for (const result of settled) {
+    if (result.status === 'fulfilled') {
+      stations.push(...result.value);
+    } else {
+      failures.push(result.reason);
+    }
+  }
+  const abortFailure = failures.find(isAbortError);
+  if (abortFailure || signal.aborted) {
+    throw abortFailure ?? new DOMException('Aborted', 'AbortError');
+  }
+  if (failures.length === COCORAHS_DISCOVERY_STATES.length) {
+    throw new Error('CoCoRaHS station discovery failed for all requested states');
+  }
+  if (failures.length > 0) {
+    console.warn('[telemetry] partial CoCoRaHS station discovery failed.', failures);
+  }
+  return stations;
+}
+
+async function fetchCocorahsStationsForState(
+  state: CocorahsDiscoveryState,
+  signal: AbortSignal
+): Promise<readonly CocorahsStationMetadata[]> {
+  const params = new URLSearchParams({ network: `${state}_COCORAHS` });
+  const response = await fetchWithBudget(
+    `${URLS.iemCocorahsNetwork}?${params.toString()}`,
+    {},
+    signal,
+    COCORAHS_DISCOVERY_TIMEOUT_MS
+  );
+  if (!response.ok) {
+    throw new Error(`CoCoRaHS station discovery HTTP ${response.status} (${state})`);
+  }
+  const payload: unknown = await response.json();
+  return readCocorahsStationList(payload);
+}
+
+function readCocorahsStationList(payload: unknown): readonly CocorahsStationMetadata[] {
+  if (!isObject(payload) || !Array.isArray(payload.features)) return [];
+  const stations: CocorahsStationMetadata[] = [];
+  for (const raw of payload.features) {
+    if (!isObject(raw)) continue;
+    const coords = readGeoJsonCoords(raw);
+    const properties = raw.properties;
+    if (!coords || !isObject(properties)) continue;
+    // The mirror returns the full historical roster; only stations currently
+    // reporting (online === true) are surfaced, or dead sites would show.
+    if (properties.online !== true) continue;
+    const sid = readNonEmptyString(properties.sid);
+    const name = readNonEmptyString(properties.sname);
+    if (!sid || !name) continue;
+    stations.push({
+      sid,
+      name,
+      latitude: coords[0],
+      longitude: coords[1],
+      state: readNonEmptyString(properties.state)
+    });
+  }
+  return stations;
+}
+
+function cocorahsDiscoveryRecordFromUnknown(rawRecord: unknown): StationDiscoveryRecord | null {
+  if (!isCocorahsStationMetadata(rawRecord)) return null;
+  return cocorahsDiscoveryRecord(rawRecord);
+}
+
+function isCocorahsStationMetadata(value: unknown): value is CocorahsStationMetadata {
+  return (
+    isObject(value) &&
+    typeof value.sid === 'string' &&
+    typeof value.name === 'string' &&
+    typeof value.latitude === 'number' &&
+    typeof value.longitude === 'number' &&
+    (typeof value.state === 'string' || value.state === null)
+  );
+}
+
+function cocorahsDiscoveryRecord(station: CocorahsStationMetadata): StationDiscoveryRecord {
+  const id = `cocorahs-${station.sid}`;
+  return {
+    network: 'cocorahs',
+    station: {
+      id,
+      name: station.name,
+      coords: [station.latitude, station.longitude],
+      region: station.state ?? 'discovered',
+      type: 'cocorahs',
+      agency: 'CoCoRaHS (via Iowa Environmental Mesonet)',
+      color: '#22d3ee',
+      description:
+        'CoCoRaHS precipitation station discovered in the current viewport (round-one scope: Washington, Oregon, Idaho).',
+      cocorahsSid: station.sid,
+      links: [
+        {
+          label: 'CoCoRaHS',
+          url: 'https://www.cocorahs.org/'
+        }
+      ]
+    },
+    value: {
+      stationId: id,
+      parameter: 'daily_precipitation',
+      label: 'Daily precipitation',
+      value: null,
+      unit: '',
+      timestamp: '',
+      freshness: 'unknown',
+      source: 'cocorahs'
+    },
+    primaryParameterCategory: 'precipitation',
+    handles: { cocorahsSid: station.sid }
+  };
+}
+
+function readAbsoluteHttpUrl(value: unknown): string | null {
+  const raw = readNonEmptyString(value);
+  if (!raw) return null;
+  return /^https?:\/\//i.test(raw.trim()) ? raw.trim() : null;
 }
 
 function readGeoJsonCoords(feature: Record<string, unknown>): readonly [number, number] | null {
