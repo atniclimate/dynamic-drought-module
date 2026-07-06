@@ -205,11 +205,37 @@ function findMergeTarget(
   const handleIndex = entries.findIndex((entry) => hasMatchingHandle(entry.handles, recordHandles));
   if (handleIndex !== -1) return handleIndex;
 
+  // Proximity fallback is for cross-network co-location (one physical
+  // place observed by two networks), NOT for two distinct stations of the
+  // same network that happen to be within the merge radius. If the record
+  // and a candidate carry conflicting handles of the same network (two
+  // different USGS site codes, say), they are distinct stations and must
+  // not collapse into one marker (adversarial-review finding, 2026-07-06).
   return entries.findIndex(
     (entry) =>
       entry.primaryParameterCategory === record.primaryParameterCategory &&
-      distanceMeters(entry.station.coords, record.station.coords) <= PROXIMITY_MERGE_METERS
+      distanceMeters(entry.station.coords, record.station.coords) <= PROXIMITY_MERGE_METERS &&
+      !handlesConflict(entry.handles, recordHandles)
   );
+}
+
+/**
+ * True when two handle bags name the same network with different values
+ * (for example two different `usgsSite` codes). Such stations are distinct
+ * and must never merge by proximity.
+ */
+function handlesConflict(a: StationNetworkHandles, b: StationNetworkHandles): boolean {
+  return (
+    conflicts(a.usgsSite, b.usgsSite) ||
+    conflicts(a.awdbStation, b.awdbStation) ||
+    conflicts(a.cwmsTsId, b.cwmsTsId) ||
+    conflicts(a.hydrometSite, b.hydrometSite) ||
+    conflicts(a.nwrfcId, b.nwrfcId)
+  );
+}
+
+function conflicts(left: string | undefined, right: string | undefined): boolean {
+  return left !== undefined && right !== undefined && left !== right;
 }
 
 function handlesForStation(station: TelemetryStation): StationNetworkHandles {
@@ -367,6 +393,13 @@ function clampUsgsDiscoveryBounds(
   const centerLon = clamp(center[1], -180, 180);
   const south = clamp(Math.min(bounds.south, bounds.north), -90, 90);
   const north = clamp(Math.max(bounds.south, bounds.north), -90, 90);
+  // Known limitation (adversarial-review finding, 2026-07-06, deferred): a
+  // viewport crossing the anti-meridian (west 170, east -170) collapses to
+  // a 340-degree-wide box here and falls back to "zoom in to load". The
+  // bundled framings avoid the anti-meridian (the Alaska bounds stop short
+  // of the Aleutian crossing), and USGS Instantaneous Values coverage there
+  // is sparse, so splitting the query across the seam is not worth its cost
+  // yet.
   const west = clamp(Math.min(bounds.west, bounds.east), -180, 180);
   const east = clamp(Math.max(bounds.west, bounds.east), -180, 180);
   const width = Math.max(0, east - west);
