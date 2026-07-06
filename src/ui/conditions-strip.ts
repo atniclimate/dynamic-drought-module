@@ -58,8 +58,9 @@ interface Metric {
   readonly value: string;
   /** One-line context under the value. */
   readonly sublabel: string;
-  /** Visual tone: live data, a real zero/none, or the layer being off. */
-  readonly tone: 'data' | 'none' | 'off';
+  /** Visual tone: live data, a real zero/none, the layer being off, or a
+   * layer that is active but still fetching (the skeleton-shimmer tile). */
+  readonly tone: 'data' | 'none' | 'off' | 'loading';
   /** Optional value color (the drought category color). */
   readonly color?: string;
 }
@@ -144,7 +145,11 @@ function droughtMetric(map: maplibregl.Map): { metric: Metric; dateMs: number | 
     return { metric: { value: 'Off', sublabel: 'US Drought Monitor', tone: 'off' }, dateMs: null };
   }
   if (!map.getLayer(USDM_FILL)) {
-    return { metric: { value: '-', sublabel: pendingSublabel(USDM_KEY), tone: 'off' }, dateMs: null };
+    // Active but the fill has not been created yet: while the status is
+    // genuinely loading, the tile shimmers; any other pending status (no data,
+    // unavailable) reads as the muted off tone with its honest sublabel.
+    const tone = registry.getStatus(USDM_KEY) === 'loading' ? 'loading' : 'off';
+    return { metric: { value: '-', sublabel: pendingSublabel(USDM_KEY), tone }, dateMs: null };
   }
 
   const feats = map.queryRenderedFeatures({ layers: [USDM_FILL] });
@@ -236,8 +241,11 @@ function formatMapDate(ms: number): string {
 
 function renderMetric(key: string, m: Metric): string {
   const style = m.color ? ` style="color:${escapeHtml(m.color)}"` : '';
+  // The shimmer is additive on the loading tone; every other tone renders the
+  // tile without it, so a re-render into a terminal tone clears the sweep.
+  const shimmer = m.tone === 'loading' ? ' skeleton-shimmer' : '';
   return `
-    <div class="conditions-metric" data-metric="${escapeHtml(key)}" data-tone="${m.tone}">
+    <div class="conditions-metric${shimmer}" data-metric="${escapeHtml(key)}" data-tone="${m.tone}">
       <span class="conditions-value"${style}>${escapeHtml(m.value)}</span>
       <span class="conditions-sublabel">${escapeHtml(m.sublabel)}</span>
     </div>`;

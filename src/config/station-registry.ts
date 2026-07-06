@@ -121,54 +121,63 @@ export const STATION_NETWORKS = [
     key: 'usgs-iv',
     label: 'USGS Instantaneous Values',
     refreshWindowMs: 6 * HOUR_MS,
+    cadence: 'about every 15 to 60 minutes',
     adapter: DISCOVERY_NOT_WIRED_ADAPTER
   },
   {
     key: 'nrcs-awdb',
     label: 'NRCS AWDB SNOTEL and SCAN',
     refreshWindowMs: 2 * DAY_MS,
+    cadence: 'about daily',
     adapter: DISCOVERY_NOT_WIRED_ADAPTER
   },
   {
     key: 'usace-cwms',
     label: 'USACE Corps Water Management System',
     refreshWindowMs: 6 * HOUR_MS,
+    cadence: 'about hourly',
     adapter: DISCOVERY_NOT_WIRED_ADAPTER
   },
   {
     key: 'usbr-hydromet',
     label: 'USBR Hydromet',
     refreshWindowMs: 2 * DAY_MS,
+    cadence: 'about daily',
     adapter: DISCOVERY_NOT_WIRED_ADAPTER
   },
   {
     key: 'raws',
     label: 'NIFC Remote Automated Weather Stations',
     refreshWindowMs: 3 * HOUR_MS,
+    cadence: 'about hourly',
     adapter: RAWS_STATION_ADAPTER
   },
   {
     key: 'noaa-coops',
     label: 'NOAA Tides and Currents',
     refreshWindowMs: 6 * HOUR_MS,
+    cadence: 'about every 6 minutes',
     adapter: COOPS_STATION_ADAPTER
   },
   {
     key: 'usbr-agrimet',
     label: 'USBR AgriMet',
     refreshWindowMs: 2 * DAY_MS,
+    cadence: 'about daily',
     adapter: AGRIMET_STATION_ADAPTER
   },
   {
     key: 'cocorahs',
     label: 'CoCoRaHS (via Iowa Environmental Mesonet)',
     refreshWindowMs: 2 * DAY_MS,
+    cadence: 'daily (volunteer reports)',
     adapter: COCORAHS_STATION_ADAPTER
   },
   {
     key: 'nwrfc',
     label: 'Northwest River Forecast Center',
     refreshWindowMs: DAY_MS,
+    cadence: 'seasonal updates',
     adapter: DISCOVERY_NOT_WIRED_ADAPTER
   }
 ] as const satisfies readonly StationNetwork[];
@@ -502,6 +511,22 @@ function networksForStation(station: TelemetryStation): readonly StationNetworkK
   if (station.cocorahsSid) networks.push('cocorahs');
   if (nwrfcIdForStation(station)) networks.push('nwrfc');
   return uniqueNetworks(networks);
+}
+
+/**
+ * The custody read for a station's popup: its primary network's label and
+ * honest update cadence. Used for discovered stations that carry no in-browser
+ * hydration path (RAWS, NOAA CO-OPS, AgriMet, CoCoRaHS), so the popup can state
+ * the cadence and point to the source link instead of faking a live value.
+ * Returns null for a station with no network handle at all.
+ */
+export function stationCustody(
+  station: TelemetryStation
+): { readonly networkLabel: string; readonly cadence: string } | null {
+  const key = networksForStation(station)[0];
+  if (!key) return null;
+  const network = stationNetworkByKey(key);
+  return { networkLabel: network.label, cadence: network.cadence };
 }
 
 function uniqueNetworks(networks: readonly StationNetworkKey[]): readonly StationNetworkKey[] {

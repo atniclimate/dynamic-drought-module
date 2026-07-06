@@ -877,7 +877,9 @@ function hydrateStationValues(): void {
     if (!slot) continue;
 
     slot.textContent = 'loading...';
-    slot.className = 'telemetry-values loading';
+    // The skeleton-shimmer marks the network wait; each terminal branch below
+    // reassigns className without it, so the shimmer clears on its own.
+    slot.className = 'telemetry-values loading skeleton-shimmer';
 
     void fetchPrimaryStationValue(station, signal)
       .then((value) => {

@@ -1,6 +1,7 @@
 import type { GeoJsonProperties } from 'geojson';
 import { pickTreatyEntry } from '../config/palette';
-import type { TelemetryStation } from '../types/station';
+import { stationCustody } from '../config/station-registry';
+import type { TelemetryStation, TelemetryFreshness } from '../types/station';
 import {
   fetchAwdbDailySeries,
   toStationValue,
@@ -318,10 +319,24 @@ export function buildTelemetryPopupSkeleton(station: TelemetryStation): string {
     )
     .join('');
 
-  const dataBlockHtml =
-    station.usgsSite || station.awdbStation || station.hydrometParams || station.cwms
-      ? `<div class="popup-data" data-station-data="${escapeHtml(station.id)}">
-           <div class="popup-data-loading">Fetching live data...</div>
+  // A station hydrates in-browser if it carries one of the four wired live
+  // sources. The discovered networks without a hydration path (RAWS, NOAA
+  // CO-OPS, AgriMet, CoCoRaHS) instead show an honest custody block: the
+  // update cadence plus a pointer to the source link, never a faked reading.
+  const hydrates =
+    station.usgsSite || station.awdbStation || station.hydrometParams || station.cwms;
+  const custody = hydrates ? null : stationCustody(station);
+  const dataBlockHtml = hydrates
+    ? `<div class="popup-data" data-station-data="${escapeHtml(station.id)}">
+         <div class="popup-data-loading skeleton-shimmer">Fetching live data...</div>
+       </div>`
+    : custody
+      ? `<div class="popup-data">
+           <div class="popup-data-row">
+             <span class="popup-data-label">Updates</span>
+             <span class="popup-data-value">${escapeHtml(custody.cadence)}</span>
+           </div>
+           <div class="popup-data-note">Live readings open at the source link below.</div>
          </div>`
       : '';
 
@@ -405,6 +420,28 @@ export async function hydrateTelemetryPopupData(
 }
 
 // =============================================================================
+// Internal: shared popup rows
+// =============================================================================
+
+/**
+ * The shared "As of" row for a telemetry popup (0.4.0 A4 popup consistency).
+ * One freshness vocabulary across every source: the timestamp as the source
+ * reported it, with " (stale)" appended only when the reading is past its
+ * network's freshness window. USGS parses no window, so it passes no freshness
+ * and the row shows the timestamp plain. Every render function routes its
+ * timestamp through here so the wording never drifts between sources.
+ */
+function asOfRow(display: string, freshness?: TelemetryFreshness): string {
+  if (!display) return '';
+  const staleNote = freshness === 'stale' ? ' (stale)' : '';
+  return `
+    <div class="popup-data-row" style="margin-top:4px;">
+      <span class="popup-data-label">As of</span>
+      <span class="popup-data-value">${escapeHtml(display)}${staleNote}</span>
+    </div>`;
+}
+
+// =============================================================================
 // Internal: NRCS AWDB render
 // =============================================================================
 
@@ -437,13 +474,7 @@ function renderAwdbRows(
   );
 
   const latest = values[0];
-  const asOf = latest
-    ? `
-    <div class="popup-data-row" style="margin-top:4px;">
-      <span class="popup-data-label">As of</span>
-      <span class="popup-data-value">${escapeHtml(latest.timestamp)}${latest.freshness === 'stale' ? ' (stale)' : ''}</span>
-    </div>`
-    : '';
+  const asOf = asOfRow(latest?.timestamp ?? '', latest?.freshness);
 
   const swe = series.find((s) => s.element === 'WTEQ');
   const sweNums = swe ? swe.readings.map((r) => r.value) : [];
@@ -494,13 +525,7 @@ function renderHydrometRows(
   });
 
   const latest = values[0];
-  const asOf = latest
-    ? `
-    <div class="popup-data-row" style="margin-top:4px;">
-      <span class="popup-data-label">As of</span>
-      <span class="popup-data-value">${escapeHtml(latest.timestamp)}${latest.freshness === 'stale' ? ' (stale)' : ''}</span>
-    </div>`
-    : '';
+  const asOf = asOfRow(latest?.timestamp ?? '', latest?.freshness);
 
   const primary = series[0];
   const nums = primary ? primary.readings.map((r) => r.value) : [];
@@ -534,10 +559,7 @@ function renderCwmsRow(station: TelemetryStation, latest: CwmsLatest | null): st
       <span class="popup-data-label">${escapeHtml(value.label)}</span>
       <span class="popup-data-value">${escapeHtml(String(value.value))} ${escapeHtml(value.unit)}</span>
     </div>
-    <div class="popup-data-row" style="margin-top:4px;">
-      <span class="popup-data-label">As of</span>
-      <span class="popup-data-value">${escapeHtml(tsStr)}${value.freshness === 'stale' ? ' (stale)' : ''}</span>
-    </div>
+    ${asOfRow(tsStr, value.freshness)}
   `;
 }
 
@@ -637,17 +659,7 @@ function renderUsgsRows(payload: unknown): string {
   const ts = firstLast && typeof firstLast.dateTime === 'string' ? firstLast.dateTime : '';
   const tsStr = ts ? new Date(ts).toLocaleString() : '';
 
-  return (
-    rows.join('') +
-    (tsStr
-      ? `
-    <div class="popup-data-row" style="margin-top:4px;">
-      <span class="popup-data-label">As of</span>
-      <span class="popup-data-value">${escapeHtml(tsStr)}</span>
-    </div>`
-      : '') +
-    buildUsgsSparkline(series)
-  );
+  return rows.join('') + asOfRow(tsStr) + buildUsgsSparkline(series);
 }
 
 /**

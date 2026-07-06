@@ -433,13 +433,16 @@ a:hover {
 /* An off metric (its layer is not active) reads as muted, so the eye lands on
    the live numbers. A real zero ("no drought in view", "0 alerts") keeps full
    contrast: it is an answer, not an absence. */
-.conditions-metric[data-tone='off'] {
+.conditions-metric[data-tone='off'],
+.conditions-metric[data-tone='loading'] {
   opacity: 0.6;
 }
 /* The off value reads as a deliberate small-caps state word, not a dash that
-   could be mistaken for missing data. The 20px line height is kept so the
-   three tiles stay equal-height whatever their tones. */
-.conditions-metric[data-tone='off'] .conditions-value {
+   could be mistaken for missing data. The loading tile shares the muted,
+   equal-height treatment and adds the skeleton-shimmer sweep. The 20px line
+   height is kept so the three tiles stay equal-height whatever their tones. */
+.conditions-metric[data-tone='off'] .conditions-value,
+.conditions-metric[data-tone='loading'] .conditions-value {
   color: var(--fg-3);
   font-size: 11px;
   line-height: 20px;
@@ -987,6 +990,52 @@ a:hover {
   color: var(--warn);
   padding: 6px 0;
   line-height: 1.4;
+}
+/* The honest note under a discovered station's custody block: no live value is
+   fetched in-browser, so the popup states the cadence and points to the link. */
+.popup-data-note {
+  font-size: 10.5px;
+  color: var(--fg-3);
+  margin-top: 6px;
+  line-height: 1.35;
+}
+
+/* ----------------------------------------------------------------------------
+   Skeleton shimmer (0.4.0 A4): a calm loading affordance for telemetry
+   surfaces that wait on a network round trip (the sidebar value slot and the
+   map popup data block). Attention without alarmism: one 1600 ms ease-in-out
+   sweep left to right, looping only while the placeholder is on screen, with
+   an 8 to 12 percent luminance band (fg-2 at 0.10 alpha over the surface).
+   The band leaves the box between cycles, so it reads as a slow pulse, not a
+   racing spinner. Reduced motion drops the sweep for a static tint. The class
+   is additive: terminal states reassign className without it, clearing the
+   shimmer automatically.
+   ---------------------------------------------------------------------------- */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0) 0%,
+    rgba(148, 163, 184, 0.1) 50%,
+    rgba(148, 163, 184, 0) 100%
+  );
+  animation: skeleton-shimmer-sweep 1600ms ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes skeleton-shimmer-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
 }
 .popup-links {
   display: flex;
@@ -1670,6 +1719,12 @@ a.impact-resource-link::after {
   /* The wave pulse falls back to the static three-stroke glyph. */
   .spinner-waves path { animation: none; }
   .telemetry-marker { animation: none; }
+  /* The shimmer sweep falls back to a static faint tint (no motion). */
+  .skeleton-shimmer::after {
+    animation: none;
+    transform: none;
+    background: rgba(148, 163, 184, 0.06);
+  }
 }
 
 /* ----------------------------------------------------------------------------
