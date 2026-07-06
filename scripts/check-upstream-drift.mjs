@@ -53,7 +53,9 @@ const PROBE_SUFFIXES = new Map([
   // Tile ROOT with the template living in the consumer; probe one real tile.
   ['nidisGriddedTileRoot', '/ce-ACIS_NRCC_NN-spi-90d/3/1/2.png'],
   // The Worker's documented health check (urls.ts stamp).
-  ['workerProxy', '/healthz']
+  ['workerProxy', '/healthz'],
+  // Directory root; probe a known archive (AAFC retains all years, 2019+).
+  ['cdmDroughtAreasZipRoot', '/2026/cdm_2605_drought_areas_json.zip']
 ]);
 
 function extractUrls(source) {

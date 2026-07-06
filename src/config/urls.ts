@@ -707,6 +707,71 @@ export const URLS = Object.freeze({
   usgsQuickdriWeeklyWms:
     'https://dmsdata.cr.usgs.gov/geoserver/quickdri_quickdri_conus_week_data/wms',
 
+  // ---------- B4 transboundary slate (verified 2026-07-06; 0.7.0 wiring) ----------
+  // Per the ratified B4 scope these are VERIFIED, NOT WIRED; region-config
+  // and UI work is 0.7.0. Seam doctrine (phase LOG 2026-07-07): USDM weekly,
+  // NADM monthly consensus, and BC's 0-5 basin scale are three DIFFERENT
+  // products; any border view names the issuing agency per polygon, never
+  // blends them into one field.
+
+  // North American Drought Monitor (NADM) continental monthly snapshot
+  // (NOAA NCEI hosting; tri-national consensus). Build-time bulk download
+  // (the ensoIndicesLocal pattern). Regional cuts with an identical schema
+  // exist per basin (NADM-<Region>current.geojson; Columbia confirmed).
+  // Properties: DROUGHTCAT "d0".."d4", YEAR_MONTH "YYYYMM", POPULATION,
+  // POP_PCT, AREA_SQMI, AREA_PCT. NO per-feature issuing-agency attribute
+  // (labeling NDMC vs AAFC vs CONAGUA needs a spatial join; flagged for
+  // 0.7.0 honest framing). CAVEAT (extension trap): the sibling .json files
+  // are TopoJSON ("type":"Topology") despite HTTP 200 application/json;
+  // only fetch .geojson. The legacy NADM ArcGIS MapServer that search
+  // engines still index is DEAD (404); do not resurrect it.
+  // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, application/geo+json,
+  // Access-Control-Allow-Origin: * (wildcard, Origin set); YEAR_MONTH
+  // 202605, Last-Modified 2026-06-16 (monthly, 2-3 week publication lag).
+  nadmCurrentGeojson:
+    'https://www.ncei.noaa.gov/pub/data/nidis/geojson/na/nadm/NADM-current.geojson',
+
+  // Canadian Drought Monitor (CDM, Agriculture and Agri-Food Canada) monthly
+  // bulk archive. Consumer substitutes <year>/<yymm>: .../areasofDrought/
+  // <year>/cdm_<yymm>_drought_areas_json.zip. License: Open Government
+  // Licence - Canada (confirmed via open.canada.ca dataset
+  // 292646cd-619f-4200-afb1-8b2c52f984a2).
+  // CAVEAT (load-bearing): the zip holds ONE FILE PER OCCUPIED CLASS ONLY
+  // (CDM_<yymm>_D<n>_LR.geojson; May 2026 held D0/D1/D2, no D3/D4 file);
+  // never assume all five. Properties are ONLY {OBJECTID, DM 0-4, AREA_AC,
+  // Shape_Length, Shape_Area}: no region names, no per-feature date (the
+  // month lives in the filename). CAVEAT: geometry CRS is EPSG:3857, not
+  // WGS 84; reproject before use. STEWARDSHIP CHECK (explicit, per the
+  // ratified Canadian-Indigenous deferral): the May 2026 archive was
+  // downloaded, expanded, and grepped; NO First Nations, Metis, Inuit,
+  // reserve, or Treaty boundary data is bundled (re-check any future month
+  // used; the archive regenerates monthly).
+  // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, application/zip,
+  // 2,187,740 bytes; Access-Control-Allow-Origin ABSENT (Origin set), so
+  // browser use is Worker-proxy ONLY and agriculture.canada.ca is NOT yet
+  // on the Worker ALLOW_LIST (add at wire time); build-time is the cleaner
+  // route for a monthly product.
+  cdmDroughtAreasZipRoot:
+    'https://agriculture.canada.ca/atlas/data_donnees/canadianDroughtMonitor/data_donnees/geoJSON/areasofDrought',
+
+  // British Columbia drought levels by water basin (GeoBC / Water Management
+  // Branch), ArcGIS Online hosted feature view, layer 27
+  // (BC_Current_Drought_Levels; 41 basins; DroughtLevel 0-5 with a 99
+  // sentinel = "not updated outside core drought season"; weekly Thursday
+  // in season). Parentheses in the path are kept percent-encoded (%28 %29).
+  // LICENSE CAVEAT (LOAD-BEARING, wiring BLOCKED pending maintainer
+  // sign-off): the ArcGIS item metadata licenses this "Access Only" with
+  // "Copyright (c), Province of British Columbia. All rights reserved."
+  // This is NOT the Open Government Licence - British Columbia and needs an
+  // explicit compatibility decision (or an OGL-BC alternative source)
+  // before any wiring. Recorded in the phase LOG 2026-07-07.
+  // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, application/json,
+  // Access-Control-Allow-Origin: * (wildcard, Origin set) on both ?f=json
+  // and /query; capabilities "Query,Extract" only (no edit operations
+  // listed for the anonymous view; none attempted). maxRecordCount 2000.
+  bcDroughtLevelsFeatureServer:
+    'https://services1.arcgis.com/xeMpV7tU1t4KD3Ei/arcgis/rest/services/British_Columbia_Drought_Levels_%28Edit%29_view/FeatureServer/27',
+
   // ---------- Cloudflare Worker proxy ----------
   // The deployed DDM CORS proxy (workers/proxy/, `npm run deploy` there).
   // Request format: `${workerProxy}/proxy?url=<encoded_upstream_url>`;
