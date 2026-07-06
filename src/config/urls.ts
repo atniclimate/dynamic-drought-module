@@ -174,6 +174,100 @@ export const URLS = Object.freeze({
   // returned a byte-identical body the same day, as the resilience path).
   nrcsAwdbStations: 'https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/stations',
 
+  // ---------- NIFC RAWS station registry (A3, keyless) ----------
+  // Interagency Remote Automated Weather Stations (RAWS) discovery, the
+  // National Interagency Fire Center (NIFC) "Public View" ArcGIS
+  // FeatureServer (owner NIFC_Authoritative). Consumer appends
+  // `/1/query?where=1=1&geometry=<west,south,east,north>
+  // &geometryType=esriGeometryEnvelope&inSR=4326
+  // &spatialRel=esriSpatialRelIntersects&outFields=StationName,StationID,
+  // MesoWestStationID,Latitude,Longitude,State,Agency,Status,ObservedDate
+  // &f=geojson` (matches the usdmFeatureServer / biaLar pattern).
+  // GeoJSON: .features[].geometry.coordinates [lon,lat];
+  // .properties.StationID, .StationName, .MesoWestStationID (cross-ref to
+  // Synoptic if a deployer brings a key), .State/.Agency/.Status ("A" =
+  // active), .ObservedDate (epoch ms), plus live current-conditions
+  // strings (RelativeHumidity, AirTempStandPlace, WindSpeedMPH,
+  // FuelMoisture) with embedded units (parse the leading number).
+  // CAVEAT (load-bearing): the layer id is 1 (`/FeatureServer/1`), not 0.
+  // CAVEAT: maxRecordCount 2000; a nationwide no-geometry query silently
+  // truncates (exceededTransferLimit), so ALWAYS pass a spatial envelope
+  // (this endpoint DOES filter server-side by bbox, unlike the AWDB list).
+  // Filter Status "A" for active (3220 features nationwide include
+  // retired; a PNW bbox returned 737).
+  // KEY SITUATION: the Synoptic Data / MesoWest metadata API is the
+  // reputational RAWS source but is KEYED (live probe returned 401
+  // "Missing token"); this NIFC authoritative FeatureServer is the keyless
+  // substitute.
+  // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, application/json,
+  // Access-Control-Allow-Origin: * (genuine wildcard). Direct fetch; no
+  // Worker proxy.
+  nifcRawsFeatureServer:
+    'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/PublicView_RAWS/FeatureServer/1',
+
+  // ---------- NOAA CO-OPS tides and currents station metadata (A3, keyless) ----------
+  // National Oceanic and Atmospheric Administration (NOAA) Center for
+  // Operational Oceanographic Products and Services (CO-OPS) Metadata API
+  // (mdapi) station discovery. Consumer appends
+  // `/stations.json?type=waterlevels`. Envelope: { count, units, stations }.
+  //   .stations[].id / .name / .lat / .lng (WGS 84) / .state
+  //   .stations[].affiliations (e.g. "NWLON") / .tidal / .greatlakes
+  //   .stations[].products.self (per-station live-data link for hydration)
+  // CAVEAT (load-bearing): `state=<code>` is accepted but SILENTLY IGNORED
+  // (like nrcsAwdbStations); fetch the one national list (301 stations,
+  // ~775 kB), cache client-side, and filter to viewport in the browser
+  // (coastal WA+OR is 23 stations, well under the cap).
+  // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, application/json,
+  // Access-Control-Allow-Origin: * (genuine wildcard). Direct fetch; no
+  // Worker proxy.
+  noaaCoopsStations: 'https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json',
+
+  // ---------- USBR AgriMet station registry (A3, keyless, Worker-proxy route) ----------
+  // United States Bureau of Reclamation (USBR) AgriMet agricultural weather
+  // network (both regions), the discovery companion to usbrHydrometArcCsv.
+  // No REST/JSON API: the station list is a JavaScript data file backing
+  // the public station map. Fetch as TEXT, regex out the single-quoted
+  // string assigned to `agrimet_sites`, then JSON.parse it. Parsed shape is
+  // a GeoJSON-like FeatureCollection: .features[].geometry.coordinates
+  // [lon,lat]; .properties.StationID (5-char site code, the id
+  // usbrHydrometArcCsv's PCODE query expects), .StationName, .StationState,
+  // .StationElevation (feet), .webpage.
+  // CAVEAT (load-bearing): Content-Type is application/x-javascript, NOT
+  // JSON (do not response.json()). CAVEAT: Access-Control-Allow-Origin is
+  // ABSENT, so direct browser fetch fails; Worker-proxy ONLY. The host
+  // (www.usbr.gov) is ALREADY on the Worker allow-list (usbrHydrometArcCsv),
+  // so no allow-list change; the proxied request returned a byte-identical
+  // body. CAVEAT: single national file (199 stations; PNW core WA+OR+ID is
+  // 131), no region-scoped URL, filter client-side.
+  // Verified 2026-07-06 (ddm-source-verifier): HTTP 200,
+  // application/x-javascript, CORS absent; proxied body byte-identical.
+  usbrAgrimetSitesJs: 'https://www.usbr.gov/gp/agrimet/data_files/AgrimetSites.js',
+
+  // ---------- CoCoRaHS station registry via Iowa Environmental Mesonet (A3, keyless mirror) ----------
+  // Community Collaborative Rain, Hail and Snow Network (CoCoRaHS) station
+  // discovery. CoCoRaHS's own Web API (api2.cocorahs.org) requires HTTP
+  // Basic authentication (live probe returned 401), a per-registrant
+  // credential and a poor fit for a keyless static bundle. The Iowa
+  // Environmental Mesonet (IEM, Iowa State University) operates a keyless
+  // per-state GeoJSON mirror of the same registry. Consumer appends
+  // `?network=<STATE>_COCORAHS` (one two-letter state per call:
+  // WA_COCORAHS, OR_COCORAHS, ID_COCORAHS; no combined endpoint).
+  // GeoJSON: .features[].geometry.coordinates [lon,lat]; .properties.sid
+  // (e.g. "WA-AD-11"), .sname, .state/.county/.elevation (meters), .online
+  // (boolean, currently reporting), .archive_end (null = still active).
+  // CAVEAT (load-bearing): the list is the FULL historical roster, not just
+  // active (WA 1941 features, 1075 online); filter client-side on
+  // online:true before the viewport/cap or dead stations surface. CAVEAT:
+  // no combined-region call (three sequential fetches WA/OR/ID, merge
+  // client-side); heaviest payload of the four (WA ~1.1 MB), cache
+  // client-side. PROVENANCE CAVEAT: this is a THIRD-PARTY mirror (IEM), not
+  // CoCoRaHS's own infrastructure; treat as "verified reachable and shaped
+  // as claimed," re-verify if IEM sync cadence is ever in question.
+  // Verified 2026-07-06 (ddm-source-verifier): HTTP 200,
+  // application/vnd.geo+json, Access-Control-Allow-Origin: * (genuine
+  // wildcard). Direct fetch; no Worker proxy.
+  iemCocorahsNetwork: 'https://mesonet.agron.iastate.edu/geojson/network.php',
+
   // ---------- NWRFC Water Supply Forecast Report (bulk CSV) ----------
   // Northwest River Forecast Center seasonal water-supply forecasts for the
   // Columbia Basin and PNW coastal rivers. Consumer appends
