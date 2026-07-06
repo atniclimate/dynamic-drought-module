@@ -5,6 +5,7 @@ import type {
   PrimaryParameterCategory,
   StationDiscoveryRecord,
   StationNetwork,
+  StationNetworkAdapter,
   StationNetworkHandles,
   StationNetworkKey,
   StationRegistryEntry,
@@ -22,6 +23,8 @@ const PROXIMITY_MERGE_METERS = 100;
 const EARTH_RADIUS_METERS = 6_371_000;
 const USGS_DISCOVERY_TIMEOUT_MS = 8_000;
 const AWDB_DISCOVERY_TIMEOUT_MS = 12_000;
+const RAWS_DISCOVERY_TIMEOUT_MS = 10_000;
+const COOPS_DISCOVERY_TIMEOUT_MS = 12_000;
 const USGS_BBOX_AREA_CAP = 25;
 const USGS_EXTREME_AREA_FACTOR = 64;
 const USGS_DISCOVERY_PARAMETER_CODES = '00060,00065';
@@ -51,9 +54,36 @@ interface AwdbStationCacheInflight {
 let awdbStationCache: readonly AwdbStationMetadata[] | null = null;
 let awdbStationCacheInflight: AwdbStationCacheInflight | null = null;
 
+interface CoopsStationMetadata {
+  readonly id: string;
+  readonly name: string;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly state: string | null;
+  readonly productsSelf: string | null;
+}
+
+interface CoopsStationCacheInflight {
+  readonly controller: AbortController;
+  readonly promise: Promise<readonly CoopsStationMetadata[]>;
+  readonly waiters: Set<AbortSignal>;
+  hasEverHadWaiter: boolean;
+}
+
+let coopsStationCache: readonly CoopsStationMetadata[] | null = null;
+let coopsStationCacheInflight: CoopsStationCacheInflight | null = null;
+
 const DISCOVERY_NOT_WIRED_ADAPTER = {
   toDiscoveryRecord: (_rawRecord: unknown): StationDiscoveryRecord | null => null
 };
+
+const RAWS_STATION_ADAPTER = {
+  toDiscoveryRecord: rawsDiscoveryRecord
+} satisfies StationNetworkAdapter<unknown>;
+
+const COOPS_STATION_ADAPTER = {
+  toDiscoveryRecord: coopsDiscoveryRecordFromUnknown
+} satisfies StationNetworkAdapter<unknown>;
 
 export const STATION_NETWORKS = [
   {
@@ -77,6 +107,30 @@ export const STATION_NETWORKS = [
   {
     key: 'usbr-hydromet',
     label: 'USBR Hydromet',
+    refreshWindowMs: 2 * DAY_MS,
+    adapter: DISCOVERY_NOT_WIRED_ADAPTER
+  },
+  {
+    key: 'raws',
+    label: 'NIFC Remote Automated Weather Stations',
+    refreshWindowMs: 3 * HOUR_MS,
+    adapter: RAWS_STATION_ADAPTER
+  },
+  {
+    key: 'noaa-coops',
+    label: 'NOAA Tides and Currents',
+    refreshWindowMs: 6 * HOUR_MS,
+    adapter: COOPS_STATION_ADAPTER
+  },
+  {
+    key: 'usbr-agrimet',
+    label: 'USBR AgriMet',
+    refreshWindowMs: 2 * DAY_MS,
+    adapter: DISCOVERY_NOT_WIRED_ADAPTER
+  },
+  {
+    key: 'cocorahs',
+    label: 'CoCoRaHS (via Iowa Environmental Mesonet)',
     refreshWindowMs: 2 * DAY_MS,
     adapter: DISCOVERY_NOT_WIRED_ADAPTER
   },
@@ -130,7 +184,7 @@ export async function discoverStationsForViewport(
   request: StationViewportDiscoveryRequest
 ): Promise<StationViewportDiscoveryResult> {
   const queryBounds = clampUsgsDiscoveryBounds(request.bounds, request.center);
-  const [usgsRecords, awdbRecords] = await Promise.all([
+  const [usgsRecords, awdbRecords, rawsRecords, coopsRecords] = await Promise.all([
     queryBounds
       ? discoveryRecordsOrEmpty(
           'USGS IV station discovery',
@@ -138,10 +192,16 @@ export async function discoverStationsForViewport(
           request.signal
         )
       : Promise.resolve([]),
-    discoverAwdbStations(request)
+    discoverAwdbStations(request),
+    discoveryRecordsOrEmpty(
+      'NIFC RAWS station discovery',
+      discoverRawsStations(request.bounds, request.signal),
+      request.signal
+    ),
+    discoverCoopsStations(request)
   ]);
 
-  const records = [...usgsRecords, ...awdbRecords];
+  const records = [...usgsRecords, ...awdbRecords, ...rawsRecords, ...coopsRecords];
   if (!queryBounds) return { status: 'zoom-in', records };
 
   return {
@@ -286,6 +346,10 @@ function handlesConflict(a: StationNetworkHandles, b: StationNetworkHandles): bo
     conflicts(a.awdbStation, b.awdbStation) ||
     conflicts(a.cwmsTsId, b.cwmsTsId) ||
     conflicts(a.hydrometSite, b.hydrometSite) ||
+    conflicts(a.rawsStationId, b.rawsStationId) ||
+    conflicts(a.noaaCoopsId, b.noaaCoopsId) ||
+    conflicts(a.agrimetSite, b.agrimetSite) ||
+    conflicts(a.cocorahsSid, b.cocorahsSid) ||
     conflicts(a.nwrfcId, b.nwrfcId)
   );
 }
@@ -304,6 +368,10 @@ function handlesForStation(station: TelemetryStation): StationNetworkHandles {
   }
   const hydrometSite = hydrometSiteForStation(station);
   if (hydrometSite) handles.hydrometSite = hydrometSite;
+  if (station.rawsStationId) handles.rawsStationId = station.rawsStationId;
+  if (station.noaaCoopsId) handles.noaaCoopsId = station.noaaCoopsId;
+  if (station.agrimetSite) handles.agrimetSite = station.agrimetSite;
+  if (station.cocorahsSid) handles.cocorahsSid = station.cocorahsSid;
   const nwrfcId = nwrfcIdForStation(station);
   if (nwrfcId) handles.nwrfcId = nwrfcId;
   return handles;
@@ -323,7 +391,11 @@ function mergeStationHandles(
       ? { hydrometParams: sourceStation.hydrometParams }
       : handles.hydrometSite && !station.hydrometParams
         ? { hydrometParams: [handles.hydrometSite] }
-        : {})
+        : {}),
+    ...(handles.rawsStationId ? { rawsStationId: handles.rawsStationId } : {}),
+    ...(handles.noaaCoopsId ? { noaaCoopsId: handles.noaaCoopsId } : {}),
+    ...(handles.agrimetSite ? { agrimetSite: handles.agrimetSite } : {}),
+    ...(handles.cocorahsSid ? { cocorahsSid: handles.cocorahsSid } : {})
   };
 }
 
@@ -337,6 +409,10 @@ function mergeHandles(
   if (right.cwmsOffice) merged.cwmsOffice = right.cwmsOffice;
   if (right.cwmsTsId) merged.cwmsTsId = right.cwmsTsId;
   if (right.hydrometSite) merged.hydrometSite = right.hydrometSite;
+  if (right.rawsStationId) merged.rawsStationId = right.rawsStationId;
+  if (right.noaaCoopsId) merged.noaaCoopsId = right.noaaCoopsId;
+  if (right.agrimetSite) merged.agrimetSite = right.agrimetSite;
+  if (right.cocorahsSid) merged.cocorahsSid = right.cocorahsSid;
   if (right.nwrfcId) merged.nwrfcId = right.nwrfcId;
   return merged;
 }
@@ -347,6 +423,10 @@ function hasMatchingHandle(left: StationNetworkHandles, right: StationNetworkHan
     matches(left.awdbStation, right.awdbStation) ||
     matches(left.cwmsTsId, right.cwmsTsId) ||
     matches(left.hydrometSite, right.hydrometSite) ||
+    matches(left.rawsStationId, right.rawsStationId) ||
+    matches(left.noaaCoopsId, right.noaaCoopsId) ||
+    matches(left.agrimetSite, right.agrimetSite) ||
+    matches(left.cocorahsSid, right.cocorahsSid) ||
     matches(left.nwrfcId, right.nwrfcId)
   );
 }
@@ -375,6 +455,10 @@ function networksForStation(station: TelemetryStation): readonly StationNetworkK
   if (station.awdbStation) networks.push('nrcs-awdb');
   if (station.cwms) networks.push('usace-cwms');
   if (station.hydrometParams) networks.push('usbr-hydromet');
+  if (station.rawsStationId) networks.push('raws');
+  if (station.noaaCoopsId) networks.push('noaa-coops');
+  if (station.agrimetSite) networks.push('usbr-agrimet');
+  if (station.cocorahsSid) networks.push('cocorahs');
   if (nwrfcIdForStation(station)) networks.push('nwrfc');
   return uniqueNetworks(networks);
 }
@@ -394,6 +478,8 @@ function primaryCategoryForStation(station: TelemetryStation): PrimaryParameterC
     }
   }
   if (station.cwms) return station.cwms.tsId.toLowerCase().includes('elev') ? 'stage' : 'streamflow';
+  if (station.rawsStationId) return 'fire-weather';
+  if (station.noaaCoopsId) return 'stage';
   if (station.usgsSite) return 'streamflow';
   if (nwrfcIdForStation(station)) return 'forecast';
   return 'unknown';
@@ -847,6 +933,291 @@ function awdbDiscoveryRecord(station: AwdbStationMetadata): StationDiscoveryReco
     primaryParameterCategory,
     handles: { awdbStation: station.stationTriplet }
   };
+}
+
+async function discoverRawsStations(
+  bounds: ViewportBounds,
+  signal: AbortSignal | null
+): Promise<readonly StationDiscoveryRecord[]> {
+  const params = new URLSearchParams({
+    where: '1=1',
+    geometry: [bounds.west, bounds.south, bounds.east, bounds.north]
+      .map(formatBboxNumber)
+      .join(','),
+    geometryType: 'esriGeometryEnvelope',
+    inSR: '4326',
+    spatialRel: 'esriSpatialRelIntersects',
+    outFields:
+      'StationName,StationID,MesoWestStationID,Latitude,Longitude,State,Agency,Status,ObservedDate',
+    f: 'geojson'
+  });
+
+  const response = await fetchWithBudget(
+    `${URLS.nifcRawsFeatureServer}/query?${params.toString()}`,
+    {},
+    signal,
+    RAWS_DISCOVERY_TIMEOUT_MS
+  );
+  if (!response.ok) {
+    throw new Error(`NIFC RAWS station discovery HTTP ${response.status}`);
+  }
+
+  const payload: unknown = await response.json();
+  return readRawsFeatures(payload)
+    .map((feature) => RAWS_STATION_ADAPTER.toDiscoveryRecord(feature))
+    .filter(isDiscoveryRecord);
+}
+
+function readRawsFeatures(payload: unknown): readonly Record<string, unknown>[] {
+  if (!isObject(payload) || !Array.isArray(payload.features)) return [];
+  return payload.features.filter(isObject);
+}
+
+function rawsDiscoveryRecord(feature: unknown): StationDiscoveryRecord | null {
+  if (!isObject(feature)) return null;
+  const coords = readGeoJsonCoords(feature);
+  const properties = feature.properties;
+  if (!coords || !isObject(properties)) return null;
+  if (properties.Status !== 'A') return null;
+
+  const stationId = readIdentifier(properties.StationID);
+  const stationName = readNonEmptyString(properties.StationName);
+  if (!stationId || !stationName) return null;
+
+  const mesowestStationId = readIdentifier(properties.MesoWestStationID);
+  const id = `raws-${stationId}`;
+  return {
+    network: 'raws',
+    station: {
+      id,
+      name: stationName,
+      coords,
+      region: readNonEmptyString(properties.State) ?? 'discovered',
+      type: 'fire-weather',
+      agency: readNonEmptyString(properties.Agency) ?? 'NIFC RAWS',
+      color: '#ef4444',
+      description: 'NIFC RAWS station discovered in the current viewport.',
+      rawsStationId: stationId,
+      links: [
+        mesowestStationId
+          ? {
+              label: 'MesoWest station page',
+              url: `https://mesowest.utah.edu/cgi-bin/droman/meso_base_dyn.cgi?stn=${encodeURIComponent(
+                mesowestStationId
+              )}`
+            }
+          : {
+              label: 'NIFC RAWS open data',
+              url: 'https://data-nifc.opendata.arcgis.com/'
+            }
+      ]
+    },
+    value: {
+      stationId: id,
+      parameter: 'fire_weather_conditions',
+      label: 'Fire weather conditions',
+      value: null,
+      unit: '',
+      timestamp: '',
+      freshness: 'unknown',
+      source: 'raws'
+    },
+    primaryParameterCategory: 'fire-weather',
+    handles: { rawsStationId: stationId }
+  };
+}
+
+async function discoverCoopsStations(
+  request: StationViewportDiscoveryRequest
+): Promise<readonly StationDiscoveryRecord[]> {
+  try {
+    const stations = await getCoopsStationCache(request.signal);
+    if (request.signal?.aborted) return [];
+    return stations
+      .filter((station) => isCoordinateInBounds(station.latitude, station.longitude, request.bounds))
+      .map((station) => COOPS_STATION_ADAPTER.toDiscoveryRecord(station))
+      .filter(isDiscoveryRecord);
+  } catch (err) {
+    if (isAbortError(err) || request.signal?.aborted) throw err;
+    console.warn('[telemetry] NOAA CO-OPS station discovery failed.', err);
+    return [];
+  }
+}
+
+async function getCoopsStationCache(
+  signal: AbortSignal | null
+): Promise<readonly CoopsStationMetadata[]> {
+  if (coopsStationCache) return coopsStationCache;
+  const inflight =
+    coopsStationCacheInflight && !coopsStationCacheInflight.controller.signal.aborted
+      ? coopsStationCacheInflight
+      : startCoopsStationCacheFetch();
+  if (signal) addCoopsCacheWaiter(inflight, signal);
+
+  try {
+    if (!signal) return await inflight.promise;
+    return await Promise.race([inflight.promise, abortPromise(signal)]);
+  } finally {
+    if (signal) removeCoopsCacheWaiter(inflight, signal);
+  }
+}
+
+function startCoopsStationCacheFetch(): CoopsStationCacheInflight {
+  const controller = new AbortController();
+  const waiters = new Set<AbortSignal>();
+  const promise = fetchCoopsStationList(controller.signal)
+    .then((stations) => {
+      coopsStationCache = stations;
+      return stations;
+    })
+    .finally(() => {
+      coopsStationCacheInflight = null;
+    });
+  const inflight = { controller, promise, waiters, hasEverHadWaiter: false };
+  coopsStationCacheInflight = inflight;
+  return inflight;
+}
+
+function addCoopsCacheWaiter(inflight: CoopsStationCacheInflight, signal: AbortSignal): void {
+  if (signal.aborted) {
+    maybeAbortCoopsCacheFetch(inflight);
+    return;
+  }
+  inflight.hasEverHadWaiter = true;
+  inflight.waiters.add(signal);
+  signal.addEventListener('abort', () => removeCoopsCacheWaiter(inflight, signal), { once: true });
+}
+
+function removeCoopsCacheWaiter(inflight: CoopsStationCacheInflight, signal: AbortSignal): void {
+  inflight.waiters.delete(signal);
+  maybeAbortCoopsCacheFetch(inflight);
+}
+
+function maybeAbortCoopsCacheFetch(inflight: CoopsStationCacheInflight): void {
+  if (coopsStationCacheInflight !== inflight) return;
+  if (
+    inflight.hasEverHadWaiter &&
+    inflight.waiters.size === 0 &&
+    !inflight.controller.signal.aborted
+  ) {
+    inflight.controller.abort();
+  }
+}
+
+async function fetchCoopsStationList(signal: AbortSignal): Promise<readonly CoopsStationMetadata[]> {
+  const params = new URLSearchParams({ type: 'waterlevels' });
+  const response = await fetchWithBudget(
+    `${URLS.noaaCoopsStations}?${params.toString()}`,
+    {},
+    signal,
+    COOPS_DISCOVERY_TIMEOUT_MS
+  );
+  if (!response.ok) {
+    throw new Error(`NOAA CO-OPS station discovery HTTP ${response.status}`);
+  }
+  const payload: unknown = await response.json();
+  return readCoopsStationList(payload);
+}
+
+function readCoopsStationList(payload: unknown): readonly CoopsStationMetadata[] {
+  if (!isObject(payload) || !Array.isArray(payload.stations)) return [];
+  const stations: CoopsStationMetadata[] = [];
+  for (const raw of payload.stations) {
+    if (!isObject(raw)) continue;
+    const id = readIdentifier(raw.id);
+    const name = readNonEmptyString(raw.name);
+    const latitude = readFiniteNumber(raw.lat);
+    const longitude = readFiniteNumber(raw.lng);
+    if (!id || !name || latitude === null || longitude === null) continue;
+    stations.push({
+      id,
+      name,
+      latitude,
+      longitude,
+      state: readNonEmptyString(raw.state),
+      productsSelf: readCoopsProductsSelf(raw)
+    });
+  }
+  return stations;
+}
+
+function readCoopsProductsSelf(raw: Record<string, unknown>): string | null {
+  const products = raw.products;
+  if (!isObject(products)) return null;
+  return readNonEmptyString(products.self);
+}
+
+function coopsDiscoveryRecordFromUnknown(rawRecord: unknown): StationDiscoveryRecord | null {
+  if (!isCoopsStationMetadata(rawRecord)) return null;
+  return coopsDiscoveryRecord(rawRecord);
+}
+
+function isCoopsStationMetadata(value: unknown): value is CoopsStationMetadata {
+  return (
+    isObject(value) &&
+    typeof value.id === 'string' &&
+    typeof value.name === 'string' &&
+    typeof value.latitude === 'number' &&
+    typeof value.longitude === 'number' &&
+    (typeof value.state === 'string' || value.state === null) &&
+    (typeof value.productsSelf === 'string' || value.productsSelf === null)
+  );
+}
+
+function coopsDiscoveryRecord(station: CoopsStationMetadata): StationDiscoveryRecord | null {
+  const id = `coops-${station.id}`;
+  return {
+    network: 'noaa-coops',
+    station: {
+      id,
+      name: station.name,
+      coords: [station.latitude, station.longitude],
+      region: station.state ?? 'discovered',
+      type: 'tide-gage',
+      agency: 'NOAA CO-OPS',
+      color: '#2563eb',
+      description: 'NOAA CO-OPS water level station discovered in the current viewport.',
+      noaaCoopsId: station.id,
+      links: [
+        {
+          label: 'NOAA Tides and Currents station',
+          url: `https://tidesandcurrents.noaa.gov/stationhome.html?id=${encodeURIComponent(
+            station.id
+          )}`
+        }
+      ]
+    },
+    value: {
+      stationId: id,
+      parameter: 'water_level',
+      label: 'Water level',
+      value: null,
+      unit: '',
+      timestamp: '',
+      freshness: 'unknown',
+      source: 'noaa-coops'
+    },
+    primaryParameterCategory: 'stage',
+    handles: { noaaCoopsId: station.id }
+  };
+}
+
+function readGeoJsonCoords(feature: Record<string, unknown>): readonly [number, number] | null {
+  const geometry = feature.geometry;
+  if (!isObject(geometry) || !Array.isArray(geometry.coordinates)) return null;
+  const [lon, lat] = geometry.coordinates;
+  if (typeof lat !== 'number' || typeof lon !== 'number') return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return [lat, lon];
+}
+
+function readIdentifier(value: unknown): string | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return readNonEmptyString(value);
+}
+
+function isDiscoveryRecord(value: StationDiscoveryRecord | null): value is StationDiscoveryRecord {
+  return value !== null;
 }
 
 function readNonEmptyString(value: unknown): string | null {

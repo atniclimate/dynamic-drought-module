@@ -41,6 +41,14 @@ export interface TelemetryStation {
   readonly usgsSite?: string;
   /** USBR Hydromet/AgriMet daily parameters ("SITE PCODE"), primary first. */
   readonly hydrometParams?: readonly string[];
+  /** NIFC Remote Automated Weather Stations identifier. */
+  readonly rawsStationId?: string;
+  /** NOAA CO-OPS station identifier. */
+  readonly noaaCoopsId?: string;
+  /** USBR AgriMet site code. */
+  readonly agrimetSite?: string;
+  /** CoCoRaHS station identifier. */
+  readonly cocorahsSid?: string;
   /** USACE CWMS timeseries source. */
   readonly cwms?: CwmsSource;
   readonly links: ReadonlyArray<TelemetryLink>;
@@ -83,6 +91,10 @@ export interface StationValue {
     | 'usace-cwms'
     | 'usace-dataquery'
     | 'usbr-hydromet'
+    | 'raws'
+    | 'noaa-coops'
+    | 'usbr-agrimet'
+    | 'cocorahs'
     | 'nwrfc'
     | 'usgs-iv';
 }

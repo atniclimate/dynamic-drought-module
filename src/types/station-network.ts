@@ -2,7 +2,15 @@ import type { StationValue, TelemetryStation } from './station';
 
 export type StationNetworkKey = Extract<
   StationValue['source'],
-  'usgs-iv' | 'nrcs-awdb' | 'usace-cwms' | 'usbr-hydromet' | 'nwrfc'
+  | 'usgs-iv'
+  | 'nrcs-awdb'
+  | 'usace-cwms'
+  | 'usbr-hydromet'
+  | 'raws'
+  | 'noaa-coops'
+  | 'usbr-agrimet'
+  | 'cocorahs'
+  | 'nwrfc'
 >;
 
 export type PrimaryParameterCategory =
@@ -11,6 +19,7 @@ export type PrimaryParameterCategory =
   | 'snowpack'
   | 'precipitation'
   | 'soil-climate'
+  | 'fire-weather'
   | 'reservoir-storage'
   | 'evapotranspiration'
   | 'temperature'
@@ -23,6 +32,10 @@ export interface StationNetworkHandles {
   readonly cwmsOffice?: string;
   readonly cwmsTsId?: string;
   readonly hydrometSite?: string;
+  readonly rawsStationId?: string;
+  readonly noaaCoopsId?: string;
+  readonly agrimetSite?: string;
+  readonly cocorahsSid?: string;
   readonly nwrfcId?: string;
 }
 
