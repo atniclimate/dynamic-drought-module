@@ -135,6 +135,45 @@ export const URLS = Object.freeze({
   // daily reading observed was the prior calendar day.
   nrcsAwdbRest: 'https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/data',
 
+  // ---------- NRCS AWDB REST station metadata (SNOTEL / SCAN discovery) ----------
+  // The station-metadata (discovery) sibling of nrcsAwdbRest, same host.
+  // Consumer appends `?stationTriplets=<pattern>[,<pattern>]
+  // &returnStationElements=<bool>&activeOnly=<bool>`. stationTriplets takes
+  // the `*` wildcard in any position (stationId:stateCode:networkCode):
+  // network-only discovery uses `*:*:SNTL` (Snow Telemetry) or `*:*:SCAN`
+  // (Soil Climate Analysis Network); a region cut uses a comma list of
+  // per-state patterns, for example `*:WA:SNTL,*:OR:SNTL,*:ID:SNTL`.
+  // Response is a bare JSON array (no envelope), one object per station:
+  //   [].stationTriplet   "302:OR:SNTL"
+  //   [].name             station name
+  //   [].latitude         decimal degrees (WGS 84)
+  //   [].longitude        decimal degrees
+  //   [].elevation        feet
+  //   [].beginDate / .endDate   service window; endDate "2100-01-01 00:00"
+  //                             is the "still active" sentinel
+  // With returnStationElements=true (default false; omit for a lean
+  // coordinate-only payload): [].stationElements[].elementCode carries
+  // WTEQ (Snow Water Equivalent, in), SNWD (snow depth, in), PREC (precip
+  // accumulation, in) for SNOTEL; SMS (soil moisture, percent, ordinal =
+  // depth sensor) for SCAN.
+  // CAVEAT (load-bearing): there is NO server-side bounding-box or
+  // networkCds filter; an unrecognized parameter is silently ignored, not
+  // rejected (a guessed networkCds returns the full multi-network list).
+  // So fetch per network (and optionally per state list for a region),
+  // cache client-side (station metadata changes rarely, a days-to-weeks
+  // cache is fine), and do the viewport bounding box and nearest-N cap in
+  // the browser. Sizes: nationwide SNTL 912 stations (~395 kB), SCAN 212
+  // (~92 kB), Pacific Northwest SNTL (WA+OR+ID) 245 (~107 kB).
+  // CAVEAT: percent-encode the query via URLSearchParams / encodeURIComponent;
+  // an unencoded `*` or `:` returned HTTP 400 in testing.
+  // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, Content-Type
+  // application/json, Access-Control-Allow-Origin: * (genuine wildcard,
+  // confirmed with no Origin header, the app origin, and an unrelated test
+  // origin). Direct fetch; no Worker proxy needed (the host is already on
+  // the allow-list via nrcsAwdbRest; the same request through the Worker
+  // returned a byte-identical body the same day, as the resilience path).
+  nrcsAwdbStations: 'https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/stations',
+
   // ---------- NWRFC Water Supply Forecast Report (bulk CSV) ----------
   // Northwest River Forecast Center seasonal water-supply forecasts for the
   // Columbia Basin and PNW coastal rivers. Consumer appends
