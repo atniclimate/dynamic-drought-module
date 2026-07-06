@@ -575,7 +575,8 @@ function nwrfcIdForStation(station: TelemetryStation): string | null {
   return null;
 }
 
-function distanceMeters(
+/** Great-circle distance in meters between two [lat, lon] points. */
+export function distanceMeters(
   a: readonly [number, number],
   b: readonly [number, number]
 ): number {

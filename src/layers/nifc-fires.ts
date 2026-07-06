@@ -45,6 +45,7 @@ import { escapeHtml } from '../util/escape';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
+import { buildFireContextHtml } from '../impact/fire-context';
 
 const LAYER_KEY = 'nifc-fires';
 const SOURCE_ID = 'nifc-fires';
@@ -330,7 +331,13 @@ export function bindPopups(map: maplibregl.Map): void {
   map.on('click', FILL_LAYER_ID, (e) => {
     const feature = e.features && e.features[0];
     if (!feature) return;
-    const html = buildNifcPopupHtml(feature.properties ?? {});
+    // B1 fire-in-context: the incident metadata, then a composed read of the
+    // drought class beneath the clicked point and the nearest telemetry
+    // stations. The context block composes existing surfaces only; it does not
+    // compute a fire outlook (that lands in 0.8.0).
+    const html =
+      buildNifcPopupHtml(feature.properties ?? {}) +
+      buildFireContextHtml(map, e.point, e.lngLat);
     new maplibregl.Popup({ closeButton: true, closeOnClick: true })
       .setLngLat(e.lngLat)
       .setHTML(html)
