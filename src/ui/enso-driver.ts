@@ -23,9 +23,16 @@ const SECTION_ID = 'enso-driver';
 /**
  * The Pacific basin framing for the "View the Pacific" action: wide enough
  * to hold the whole ENSO tongue and the West Coast, so the eye can travel
- * from the Nino 3.4 box to home. [west, south, east, north].
+ * from the Nino 3.4 box to home. Explicit southwest/northeast corners, kept
+ * INSIDE -180..180 (a west edge past the antimeridian made MapLibre resolve
+ * a wrong, too-narrow framing that left the Nino 3.4 box off-screen; found
+ * by the 2026-07-06 browser verification). maxZoom guards the wide framing
+ * on any screen aspect.
  */
-const PACIFIC_BASIN_BOUNDS: [number, number, number, number] = [-190, -25, -100, 50];
+const PACIFIC_BASIN_BOUNDS: [[number, number], [number, number]] = [
+  [-178, -22],
+  [-104, 48]
+];
 
 /** Build and reveal the ENSO driver line. Safe to call once at boot. */
 export function buildEnsoDriver(): void {
@@ -64,7 +71,11 @@ export function buildEnsoDriver(): void {
         cb.checked = true;
         cb.dispatchEvent(new Event('change'));
       }
-      getMapRef()?.fitBounds(PACIFIC_BASIN_BOUNDS, { padding: 24, duration: 1200 });
+      getMapRef()?.fitBounds(PACIFIC_BASIN_BOUNDS, {
+        padding: 24,
+        duration: 1200,
+        maxZoom: 3
+      });
     });
   });
 }
