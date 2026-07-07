@@ -1037,6 +1037,10 @@ a:hover {
   font-weight: var(--fw-body);
   font-size: 12.5px;
   line-height: 1.55;
+  /* A tall popup (a hydrated telemetry block, a long treaty note) must not
+     overflow a short phone viewport with the close button off-screen (#8). */
+  max-height: 70vh;
+  overflow-y: auto;
 }
 .maplibregl-popup-close-button {
   color: var(--fg-2) !important;
@@ -1520,7 +1524,10 @@ a:hover {
     grid-template-rows: auto 1fr;
   }
   .sidebar {
-    max-height: 50vh;
+    /* On a short iframe the stacked-above-the-map sidebar must not eat half
+       the height; cap it near a third so the map keeps most of the view (#11).
+       The collapse control still hides it entirely. */
+    max-height: 30vh;
     border-right: none;
     border-bottom: 1px solid var(--line);
   }
@@ -1556,7 +1563,10 @@ a:hover {
 .preset-chip:focus-visible,
 .telemetry-item:focus-visible,
 .overlay-btn:focus-visible,
-.icon-btn:focus-visible {
+.icon-btn:focus-visible,
+.enso-driver-line:focus-visible,
+.enso-driver-pacific:focus-visible,
+.brand-seal:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }

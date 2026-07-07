@@ -28,6 +28,7 @@ import { buildTribalPopupHtml } from '../ui/popups';
 import { attachImpactTrigger } from '../ui/impact-panel';
 import { buildBoundaryContext } from '../impact/context';
 import { registry } from '../state/registry';
+import { fetchWithBudget } from '../util/fetch';
 
 /* ---------------------------------------------------------------------------
  * Identifiers
@@ -53,6 +54,13 @@ export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID] as const;
  * appending at the top of the layer list, which is acceptable.
  */
 const BEFORE_ID = 'first-symbol';
+
+/** Per-call budget for the bundled boundary fetch (same-origin, but honor the
+ *  cancellation contract, invariant 5). */
+const FETCH_TIMEOUT_MS = 10_000;
+
+/** Master abort for the in-flight bundled fetch; aborted on deactivate (#13). */
+let masterController: AbortController | null = null;
 
 type Status = 'loading' | 'ready' | 'error' | 'no-data';
 
@@ -83,18 +91,27 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   reportStatus('loading');
 
+  if (masterController) masterController.abort();
+  masterController = new AbortController();
+  const signal = masterController.signal;
+
   let geojson: FeatureCollection;
   try {
-    const response = await fetch(URLS.tribalLandsLocal);
+    const response = await fetchWithBudget(URLS.tribalLandsLocal, null, signal, FETCH_TIMEOUT_MS);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} ${response.statusText}`);
     }
     geojson = (await response.json()) as FeatureCollection;
   } catch (err) {
+    // Aborted means superseded or deactivated; drop silently per invariant 5.
+    if (signal.aborted) return;
     console.warn('[tribal] Tribal Lands fetch failed', err);
     reportStatus('error');
     return;
   }
+
+  // A late response to a torn-down activation must not render.
+  if (signal.aborted) return;
 
   const features = geojson?.features ?? [];
 
@@ -151,6 +168,10 @@ export async function activate(map: maplibregl.Map): Promise<void> {
  * does not). All `getLayer` / `getSource` checks are defensive.
  */
 export function deactivate(map: maplibregl.Map): void {
+  if (masterController) {
+    masterController.abort();
+    masterController = null;
+  }
   if (map.getLayer(FILL_LAYER_ID)) {
     map.removeLayer(FILL_LAYER_ID);
   }

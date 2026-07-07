@@ -30,6 +30,7 @@ import { buildTreatyPopupHtml } from '../ui/popups';
 import { attachImpactTrigger } from '../ui/impact-panel';
 import { buildBoundaryContext } from '../impact/context';
 import { registry } from '../state/registry';
+import { fetchWithBudget } from '../util/fetch';
 
 const LAYER_KEY = 'treaty';
 const SOURCE_ID = 'treaty-areas';
@@ -37,6 +38,12 @@ const OUTLINE_LAYER_ID = 'treaty-areas-outline';
 
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
 export const fadeLayerIds = [OUTLINE_LAYER_ID] as const;
+
+/** Per-call budget for the bundled boundary fetch; honors invariant 5. */
+const FETCH_TIMEOUT_MS = 10_000;
+
+/** Master abort for the in-flight bundled fetch; aborted on deactivate (#13). */
+let masterController: AbortController | null = null;
 
 type TreatyStatus = 'loading' | 'ready' | 'error' | 'no-data';
 
@@ -80,18 +87,27 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   reportStatus('loading');
 
+  if (masterController) masterController.abort();
+  masterController = new AbortController();
+  const signal = masterController.signal;
+
   let geojson: FeatureCollection;
   try {
-    const response = await fetch(URLS.treatyAreasLocal);
+    const response = await fetchWithBudget(URLS.treatyAreasLocal, null, signal, FETCH_TIMEOUT_MS);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} fetching ${URLS.treatyAreasLocal}`);
     }
     geojson = (await response.json()) as FeatureCollection;
   } catch (err) {
+    // Aborted means superseded or deactivated; drop silently per invariant 5.
+    if (signal.aborted) return;
     console.warn('[treaty] Treaty Areas file fetch failed.', err);
     reportStatus('error');
     return;
   }
+
+  // A late response to a torn-down activation must not render.
+  if (signal.aborted) return;
 
   const features: Feature<Geometry, GeoJsonProperties>[] = Array.isArray(geojson?.features)
     ? geojson.features
@@ -153,6 +169,10 @@ export async function activate(map: maplibregl.Map): Promise<void> {
  * layer is not present (each removal is guarded). Idempotent.
  */
 export function deactivate(map: maplibregl.Map): void {
+  if (masterController) {
+    masterController.abort();
+    masterController = null;
+  }
   if (map.getLayer(OUTLINE_LAYER_ID)) {
     map.removeLayer(OUTLINE_LAYER_ID);
   }

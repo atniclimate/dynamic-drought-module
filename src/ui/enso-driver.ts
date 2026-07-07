@@ -16,6 +16,7 @@
  */
 import { fetchEnsoDriverSummary } from '../impact/enso';
 import { escapeHtml } from '../util/escape';
+import { prefersReducedMotion } from '../util/motion';
 import { getMapRef } from './sidebar';
 
 const SECTION_ID = 'enso-driver';
@@ -71,9 +72,10 @@ export function buildEnsoDriver(): void {
         cb.checked = true;
         cb.dispatchEvent(new Event('change'));
       }
+      // The 1200 ms sweep jumps for reduced-motion users (WCAG 2.3.3, #7).
       getMapRef()?.fitBounds(PACIFIC_BASIN_BOUNDS, {
         padding: 24,
-        duration: 1200,
+        duration: prefersReducedMotion() ? 0 : 1200,
         maxZoom: 3
       });
     });

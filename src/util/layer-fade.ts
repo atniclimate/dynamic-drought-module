@@ -24,6 +24,8 @@
 
 import type maplibregl from 'maplibre-gl';
 
+import { prefersReducedMotion } from './motion';
+
 import { sleepUnlessAborted } from './fetch';
 
 /** Fade duration; matches the 0.12s-0.25s transition range in app.css. */
@@ -41,14 +43,6 @@ const OPACITY_PROPS: Readonly<Record<string, readonly string[]>> = {
   circle: ['circle-opacity', 'circle-stroke-opacity'],
   symbol: ['icon-opacity', 'text-opacity']
 };
-
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
 
 /** The opacity props for a layer id, or an empty list if it is absent. */
 function opacityProps(map: maplibregl.Map, id: string): readonly string[] {

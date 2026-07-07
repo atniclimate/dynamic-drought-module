@@ -67,12 +67,27 @@ const MODULATORS =
  * keeps the horizon honest even when the chart is absent (the honest-feedback
  * invariant; CLAUDE.md section 6).
  */
-function snapshotProvenance(retrieved: string): string {
+/**
+ * Hard staleness cutoff (#14). Past this age a new ONI/RONI season has very
+ * likely posted and the phase may have flipped, so the present-tense phase
+ * claim in `tiltText` degrades to a dated past-tense read rather than asserting
+ * a possibly-stale phase as current. The 45-day soft hedge below still applies
+ * earlier for the provenance sentence.
+ */
+const HARD_STALE_DAYS = 120;
+
+/** Age of a snapshot in days, or null when the date does not parse. */
+function snapshotAgeDays(retrieved: string): number | null {
   const ms = Date.parse(`${retrieved}T00:00:00Z`);
-  if (!Number.isFinite(ms)) {
+  if (!Number.isFinite(ms)) return null;
+  return (Date.now() - ms) / 86_400_000;
+}
+
+function snapshotProvenance(retrieved: string): string {
+  const ageDays = snapshotAgeDays(retrieved);
+  if (ageDays === null) {
     return ` This ENSO read is from the CPC index snapshot dated ${retrieved}.`;
   }
-  const ageDays = (Date.now() - ms) / 86_400_000;
   if (ageDays > 45) {
     const weeks = Math.round(ageDays / 7);
     return ` This ENSO read is from the CPC index snapshot retrieved ${retrieved}, now about ${weeks} weeks old and possibly out of date; refresh the snapshot for the current state.`;
@@ -91,8 +106,26 @@ function latestStr(latest: OniPoint): string {
 }
 
 /** The PNW long-range tilt text for the primary (ONI) phase. */
-function tiltText(phase: EnsoPhase, latest: OniPoint): string {
+function tiltText(phase: EnsoPhase, latest: OniPoint, retrieved: string): string {
   const oni = latestStr(latest);
+
+  // Hard-stale snapshot (#14): do not assert a possibly-changed phase in the
+  // present tense. State it as a dated past reading, nudge a refresh, and drop
+  // the confident seasonal tilt (which should not rest on a stale phase). The
+  // shift-in-odds modulators still apply.
+  const ageDays = snapshotAgeDays(retrieved);
+  if (ageDays !== null && ageDays > HARD_STALE_DAYS) {
+    const weeks = Math.round(ageDays / 7);
+    const wasPhase =
+      phase === 'neutral'
+        ? 'neutral'
+        : `in ${phase === 'el-nino' ? 'an El Nino' : 'a La Nina'} phase`;
+    return (
+      `As of the CPC snapshot dated ${retrieved} (about ${weeks} weeks old, so a new ONI season has likely posted and the phase may have changed), ENSO was ${wasPhase} (ONI ${oni}). Refresh the snapshot for the current phase before relying on the long-range tilt. ` +
+      MODULATORS
+    );
+  }
+
   switch (phase) {
     case 'el-nino':
       return (
@@ -245,7 +278,7 @@ export async function fetchEnsoDriverSummary(
       latest: `ONI ${latestStr(snap.oni.latest)}`,
       shortTilt: SHORT_TILT[snap.oni.phase],
       detail:
-        `${tiltText(snap.oni.phase, snap.oni.latest)} ${roniCorroboration(snap.oni, snap.roni)}` +
+        `${tiltText(snap.oni.phase, snap.oni.latest, snap.retrieved)} ${roniCorroboration(snap.oni, snap.roni)}` +
         (snap.probabilities ? ` ${plumeHeadline(snap.probabilities)}` : '') +
         snapshotProvenance(snap.retrieved),
       retrieved: snap.retrieved,
@@ -266,7 +299,7 @@ export async function fetchEnsoClaims(
     if (signal.aborted) return { claims: [], ok: false };
 
     const text =
-      `${tiltText(snap.oni.phase, snap.oni.latest)} ${roniCorroboration(snap.oni, snap.roni)}` +
+      `${tiltText(snap.oni.phase, snap.oni.latest, snap.retrieved)} ${roniCorroboration(snap.oni, snap.roni)}` +
       snapshotProvenance(snap.retrieved);
 
     const chartSvg = oniLineSvg(snap.oni.values, {

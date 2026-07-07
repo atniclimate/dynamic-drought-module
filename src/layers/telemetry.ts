@@ -51,6 +51,7 @@ import {
   hydrateTelemetryPopupData
 } from '../ui/popups';
 import { registry } from '../state/registry';
+import { prefersReducedMotion } from '../util/motion';
 
 // ---------------------------------------------------------------------------
 // Module-level state
@@ -481,10 +482,12 @@ export function flyToStation(map: maplibregl.Map, stationId: string): void {
   const lngLat = marker.getLngLat();
   const targetZoom = Math.max(map.getZoom(), 9);
 
+  // Jump instead of flying for reduced-motion users (WCAG 2.3.3, #7).
   map.flyTo({
     center: [lngLat.lng, lngLat.lat],
     zoom: targetZoom,
-    speed: 1.2
+    speed: 1.2,
+    ...(prefersReducedMotion() ? { animate: false } : {})
   });
 
   map.once('moveend', () => {

@@ -63,6 +63,7 @@ import type { RegionKey, Region } from '../config/regions';
 import { TELEMETRY_STATIONS } from '../config/telemetry';
 import { registry } from '../state/registry';
 import { openStateBriefing } from '../state/deep-link';
+import { prefersReducedMotion } from '../util/motion';
 import {
   fetchAwdbDailySeries,
   toStationValue,
@@ -264,7 +265,8 @@ function selectRegion(
     ],
     {
       padding: 20,
-      animate: !silent
+      // Suppress the fit animation for reduced-motion users (WCAG 2.3.3, #7).
+      animate: !silent && !prefersReducedMotion()
     }
   );
 

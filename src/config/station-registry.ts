@@ -1378,6 +1378,11 @@ async function discoverAgrimetStations(
 async function fetchAgrimetStationList(
   signal: AbortSignal
 ): Promise<readonly AgrimetStationMetadata[]> {
+  // On an empty-proxy fork (a deployer who has not stood up the Worker),
+  // building `${workerProxy}/proxy?...` would blind-fetch a relative `/proxy?`
+  // that 404s. Match the guard in hydromet.ts and awdb.ts and report no
+  // stations honestly instead (#17).
+  if (URLS.workerProxy === '') return [];
   // The AgriMet origin sends no CORS header, so the request must go through the
   // Worker proxy (www.usbr.gov is already on the allow-list). The response is a
   // JavaScript data file (application/x-javascript), not JSON; read it as text
