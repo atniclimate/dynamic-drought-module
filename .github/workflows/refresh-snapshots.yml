@@ -23,6 +23,10 @@ on:
 
 permissions:
   contents: write
+  # Raise a GitHub issue when a scheduled rebuild fails (critical-review #12).
+  # A silent `build:enso` failure (a CPC scrape drift) or a suspended workflow
+  # otherwise lets the snapshot age past its 45-day hedge unnoticed.
+  issues: write
 
 jobs:
   refresh:
@@ -55,3 +59,66 @@ jobs:
           git add public/data/enso-indices.json
           git commit -m "Refresh ENSO snapshot (scheduled)"
           git push
+
+      # Alert on any failure above (critical-review #12). Treat a red refresh as
+      # a release blocker: the ENSO snapshot is aging toward its staleness hedge
+      # and the impact briefing will start hedging its long-range horizon. The
+      # issue auto-closes on the next successful refresh.
+      - name: Open a refresh-failure issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = 'snapshot-refresh-failed';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              '<!-- ddm-snapshot-refresh -->',
+              '## Scheduled ENSO snapshot refresh failed',
+              '',
+              'The weekly rebuild of `public/data/enso-indices.json` did not complete.',
+              'Left unfixed, the committed snapshot ages past its 45-day staleness hedge and',
+              'the impact briefing begins hedging its long-range ENSO horizon.',
+              '',
+              `Failed run: ${runUrl}`,
+              '',
+              '_This issue auto-closes on the next successful refresh. Likely cause: a CPC page',
+              'scrape drift in `scripts/build-enso-snapshot.mjs`, or a suspended workflow._'
+            ].join('\n');
+            const open = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: label
+            });
+            if (open.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title: 'ENSO snapshot refresh failed', labels: [label], body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: open.data[0].number, body
+              });
+            }
+
+      # Close the refresh-failure issue after a successful run.
+      - name: Close the refresh-failure issue on success
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = 'snapshot-refresh-failed';
+            const open = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: label
+            });
+            for (const issue of open.data) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue.number,
+                body: 'The scheduled ENSO snapshot refresh succeeded; closing.'
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue.number, state: 'closed'
+              });
+            }
