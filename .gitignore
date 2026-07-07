@@ -38,13 +38,18 @@ scripts/.cache/
 
 # Local reference material, never published: the pre-migration Leaflet
 # baseline (a copy of the separate drought-region-maps repository) and
-# research PDFs whose licenses do not permit redistribution. The canonical
-# skills live under .claude/skills/; the root skills/ path holds only
-# local reference files. The pattern is anchored to the repository root so
-# it does not swallow new files under .claude/skills/.
+# the canonical skills under .claude/skills/ (the root skills/ path holds
+# only local reference files). The pattern is anchored to the repository
+# root so it does not swallow new files under .claude/skills/.
 drought-region-maps/
-research/
 /skills/
+
+# research/: the markdown plans, meta-analysis, and evidence logs ARE
+# tracked, but source PDFs (typically copyrighted journal articles) stay
+# local; redistributing them from a CC BY-NC-SA repository is a license and
+# copyright problem. Keep seed papers in research/ locally; commit the prose.
+research/**/*.pdf
+research/**/*.PDF
 
 # Playwright browser-verification session artifacts
 .playwright-cli/
