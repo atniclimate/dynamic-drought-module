@@ -43,7 +43,8 @@ export const REGIONS: Record<RegionKey, Region> = {
     short: 'WA State',
     bounds: [[45.5435, -124.7630], [49.0024, -116.9159]],
     padding: 0.15,
-    description: 'Statewide climatological framing.'
+    description: 'Statewide climatological framing.',
+    briefing: { kind: 'state', id: 'WA', label: 'Washington' }
   },
   columbia_snake_basin: {
     label: 'Columbia & Snake River Basin',
@@ -64,21 +65,26 @@ export const REGIONS: Record<RegionKey, Region> = {
     short: 'Central OR',
     bounds: [[43.5, -122.0], [45.65, -120.3]],
     padding: 0.15,
-    description: 'Deschutes basin & ag water demand.'
+    description: 'Deschutes basin & ag water demand.',
+    // Sub-state framing; the briefing describes the containing state (Oregon),
+    // which the panel title and the trigger label both name.
+    briefing: { kind: 'state', id: 'OR', label: 'Oregon' }
   },
   southwest_washington: {
     label: 'Southwest Washington',
     short: 'SW WA',
     bounds: [[45.5, -124.3], [47.0, -122.0]],
     padding: 0.10,
-    description: 'Lower Columbia estuary & coast.'
+    description: 'Lower Columbia estuary & coast.',
+    briefing: { kind: 'state', id: 'WA', label: 'Washington' }
   },
   south_puget_sound: {
     label: 'South Puget Sound',
     short: 'S. Puget Sound',
     bounds: [[46.9, -123.2], [47.5, -122.1]],
     padding: 0.10,
-    description: 'Inland marine waters & WRIAs.'
+    description: 'Inland marine waters & WRIAs.',
+    briefing: { kind: 'state', id: 'WA', label: 'Washington' }
   },
   national: {
     // The national explore framing (E1 of the national roadmap). The curated
@@ -103,14 +109,16 @@ export const REGIONS: Record<RegionKey, Region> = {
     short: 'AK',
     bounds: [[51.0, -170.0], [71.5, -129.5]],
     padding: 1.0,
-    description: 'Alaska statewide framing; layer coverage varies.'
+    description: 'Alaska statewide framing; layer coverage varies.',
+    briefing: { kind: 'state', id: 'AK', label: 'Alaska' }
   },
   hawaii: {
     label: 'Hawaii',
     short: 'HI',
     bounds: [[18.5, -160.5], [22.5, -154.5]],
     padding: 0.3,
-    description: 'Hawaiian Islands framing; layer coverage varies.'
+    description: 'Hawaiian Islands framing; layer coverage varies.',
+    briefing: { kind: 'state', id: 'HI', label: 'Hawaii' }
   }
 };
 

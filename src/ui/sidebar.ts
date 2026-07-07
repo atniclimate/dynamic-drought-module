@@ -62,6 +62,7 @@ import {
 import type { RegionKey, Region } from '../config/regions';
 import { TELEMETRY_STATIONS } from '../config/telemetry';
 import { registry } from '../state/registry';
+import { openStateBriefing } from '../state/deep-link';
 import {
   fetchAwdbDailySeries,
   toStationValue,
@@ -276,6 +277,9 @@ function selectRegion(
     btn.tabIndex = isActive ? 0 : -1;
   });
 
+  // Keep the keyboard briefing trigger in sync with the active region (#9).
+  updateRegionBriefingTrigger(key);
+
   pushUrl();
 }
 
@@ -338,6 +342,45 @@ function buildRegionButtons(
   container.addEventListener('keydown', (event: KeyboardEvent) => {
     handleRadiogroupKey(event, map, onRegionSelect);
   });
+
+  // The keyboard-reachable drought impact briefing trigger (critical-review
+  // #9). It sits after the radiogroup as an ordinary tabbable button (not part
+  // of the roving-tabindex group), so a keyboard user reaches it with one Tab.
+  // It opens the selected region's anchored state briefing, the same panel a
+  // map click builds; selectRegion() shows/labels or hides it per region. Being
+  // a real focusable opener, it also completes the impact panel's focus-restore
+  // (#16): focus returns here when the briefing closes.
+  const briefingBtn = document.createElement('button');
+  briefingBtn.type = 'button';
+  briefingBtn.id = 'region-briefing-btn';
+  briefingBtn.className = 'region-briefing-btn';
+  briefingBtn.hidden = true;
+  briefingBtn.addEventListener('click', () => {
+    const anchor = STATE.currentRegion ? REGIONS[STATE.currentRegion]?.briefing : undefined;
+    if (anchor) void openStateBriefing(map, anchor.id, { fit: false });
+  });
+  container.insertAdjacentElement('afterend', briefingBtn);
+  // Reflect the region active at build time (boot applies it again via selectRegion).
+  updateRegionBriefingTrigger(STATE.currentRegion);
+}
+
+/**
+ * Show, label, or hide the region-briefing trigger for the active region (#9).
+ * A region with a briefing anchor shows an explicit trigger naming the boundary
+ * the briefing describes; a region that spans several states (or the national
+ * framing) has no anchor and hides the trigger.
+ */
+function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): void {
+  const btn = document.getElementById('region-briefing-btn');
+  if (!(btn instanceof HTMLButtonElement)) return;
+  const anchor = regionKey ? REGIONS[regionKey]?.briefing : undefined;
+  if (!anchor) {
+    btn.hidden = true;
+    return;
+  }
+  btn.hidden = false;
+  btn.textContent = `Drought impact briefing: ${anchor.label}`;
+  btn.setAttribute('aria-label', `Open the drought impact briefing for ${anchor.label}`);
 }
 
 /**

@@ -602,6 +602,36 @@ a:hover {
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
+/* The keyboard-reachable drought impact briefing trigger (#9): a full-width
+   secondary action below the region grid, shown only for a region anchored to
+   a single briefable boundary. */
+.region-briefing-btn {
+  appearance: none;
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px 12px;
+  min-height: 38px;
+  background: var(--accent-soft);
+  color: var(--fg-0);
+  border: 1px solid var(--accent-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.02em;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.region-briefing-btn:hover {
+  background: var(--accent);
+  color: var(--bg-0);
+  border-color: var(--accent);
+}
+.region-briefing-btn[hidden] {
+  display: none;
+}
+
 /* ----------------------------------------------------------------------------
    View preset chips (UX-2)
    ---------------------------------------------------------------------------- */
@@ -1522,6 +1552,7 @@ a:hover {
 }
 
 .region-btn:focus-visible,
+.region-briefing-btn:focus-visible,
 .preset-chip:focus-visible,
 .telemetry-item:focus-visible,
 .overlay-btn:focus-visible,

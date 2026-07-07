@@ -51,7 +51,25 @@ export async function applyDeepLink(
   select: SelectParam | null
 ): Promise<void> {
   if (!select) return;
+  // A fresh deep link frames the state (fit: true); the shared helper below is
+  // also called by the keyboard region-briefing trigger with fit: false so it
+  // preserves the user's current framing (#9).
+  await openStateBriefing(map, select.id, { fit: true });
+}
 
+/**
+ * Open the drought impact briefing for a state by its two-letter USPS code.
+ * Shared by the `select` deep link and the sidebar region-briefing trigger
+ * (critical-review #9, the keyboard-reachable path to the briefing). Fetches
+ * the bundled state boundary, optionally frames it, and opens the panel with
+ * the same boundary context a map click would build. Failures surface as a
+ * toast and a console warning, never a silent no-op.
+ */
+export async function openStateBriefing(
+  map: maplibregl.Map,
+  stusps: string,
+  opts: { fit?: boolean } = {}
+): Promise<void> {
   let feature: Feature | undefined;
   try {
     const response = await fetchWithBudget(
@@ -64,25 +82,25 @@ export async function applyDeepLink(
       throw new Error(`HTTP ${response.status} ${response.statusText}`);
     }
     const fc = (await response.json()) as FeatureCollection;
-    const wanted = select.id.toUpperCase();
+    const wanted = stusps.toUpperCase();
     feature = fc.features.find((f) => {
       const code = f.properties?.STUSPS;
       return typeof code === 'string' && code.toUpperCase() === wanted;
     });
   } catch (err) {
-    console.warn('[deep-link] state boundaries fetch failed.', err);
-    showToast('The deep link could not load the state boundaries.');
+    console.warn('[briefing] state boundaries fetch failed.', err);
+    showToast('The drought impact briefing could not load the state boundaries.');
     return;
   }
 
   if (!feature) {
-    console.warn(`[deep-link] unknown state code "${select.id}".`);
-    showToast(`The deep link names an unknown state code (${select.id}).`);
+    console.warn(`[briefing] unknown state code "${stusps}".`);
+    showToast(`No boundary found for state code ${stusps}.`);
     return;
   }
 
   const bbox = geometryBbox(feature.geometry);
-  if (bbox) {
+  if (opts.fit && bbox) {
     map.fitBounds(bbox, { padding: 40 });
   }
 
