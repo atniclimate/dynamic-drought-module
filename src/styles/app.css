@@ -453,6 +453,31 @@ a:hover {
   color: var(--fg-1);
 }
 
+/* A stale surface: its upstream has frozen or drifted past its publish cadence
+   (critical-review #6). The value still shows because it is the best available,
+   but a warn-toned border plus an explicit "stale" tag stop it reading as
+   confidently current, and the date line switches to the same warn tone and
+   says so. Static styling only, so reduced-motion is inherently respected. */
+.conditions-metric[data-stale='true'] {
+  border-color: var(--warn);
+}
+.conditions-stale-tag {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 4px;
+  border: 1px solid var(--warn);
+  border-radius: 3px;
+  color: var(--warn);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+.conditions-date[data-stale='true'] {
+  color: var(--warn);
+}
+
 /* ----------------------------------------------------------------------------
    ENSO driver line (0.4.0 B2): the one-line climate-driver read under the
    conditions strip. Not a strip tile (the strip reflects the map; ENSO is a

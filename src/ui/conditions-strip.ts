@@ -63,6 +63,13 @@ interface Metric {
   readonly tone: 'data' | 'none' | 'off' | 'loading';
   /** Optional value color (the drought category color). */
   readonly color?: string;
+  /**
+   * The rendered data is real but older than the feed's publish cadence (a
+   * drifted or frozen upstream). The value still shows (it is the best we have)
+   * but is marked stale so it never reads as confidently current
+   * (critical-review #6). Currently only the weekly USDM surface sets this.
+   */
+  readonly stale?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -227,6 +234,18 @@ function firesMetric(map: maplibregl.Map): Metric {
 // Rendering
 // ---------------------------------------------------------------------------
 
+// The USDM publishes weekly (released each Thursday for the week ending the
+// prior Tuesday), so the current map is always within about a week. A MapDate
+// older than two full cycles means at least one release was missed: the upstream
+// has frozen or drifted and the map is showing an old week. That is the
+// "confident-looking stale map" harm from critical-review #6, so we flag it.
+const USDM_STALE_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
+
+/** True when a USDM MapDate is old enough that the feed has plainly stopped updating. */
+function isUsdmStale(dateMs: number | null, nowMs = Date.now()): boolean {
+  return dateMs !== null && nowMs - dateMs > USDM_STALE_AFTER_MS;
+}
+
 /** Compact "Mon D, YYYY" from a millisecond epoch, in UTC to match the USDM release date. */
 function formatMapDate(ms: number): string {
   const d = new Date(ms);
@@ -244,10 +263,14 @@ function renderMetric(key: string, m: Metric): string {
   // The shimmer is additive on the loading tone; every other tone renders the
   // tile without it, so a re-render into a terminal tone clears the sweep.
   const shimmer = m.tone === 'loading' ? ' skeleton-shimmer' : '';
+  // A stale tile carries a data attribute (for the muted visual) and an explicit
+  // "stale" tag so the value never reads as confidently current.
+  const staleAttr = m.stale ? ' data-stale="true"' : '';
+  const staleTag = m.stale ? '<span class="conditions-stale-tag">stale</span>' : '';
   return `
-    <div class="conditions-metric${shimmer}" data-metric="${escapeHtml(key)}" data-tone="${m.tone}">
+    <div class="conditions-metric${shimmer}" data-metric="${escapeHtml(key)}" data-tone="${m.tone}"${staleAttr}>
       <span class="conditions-value"${style}>${escapeHtml(m.value)}</span>
-      <span class="conditions-sublabel">${escapeHtml(m.sublabel)}</span>
+      <span class="conditions-sublabel">${escapeHtml(m.sublabel)}${staleTag}</span>
     </div>`;
 }
 
@@ -261,14 +284,29 @@ function render(map: maplibregl.Map): void {
   const alerts = alertsMetric(map);
   const fires = firesMetric(map);
 
+  // Degrade a frozen or drifted USDM surface to an explicit stale read
+  // (critical-review #6): the category still shows, but the tile and the date
+  // line both say so, rather than presenting an old week as current.
+  const droughtStale = drought.metric.tone === 'data' && isUsdmStale(drought.dateMs);
+  const droughtTile: Metric = droughtStale ? { ...drought.metric, stale: true } : drought.metric;
+
   metricsEl.innerHTML = [
-    renderMetric('drought', drought.metric),
+    renderMetric('drought', droughtTile),
     renderMetric('alerts', alerts),
     renderMetric('fires', fires)
   ].join('');
 
   if (dateEl) {
-    dateEl.textContent = drought.dateMs !== null ? `as of ${formatMapDate(drought.dateMs)}` : '';
+    if (drought.dateMs === null) {
+      dateEl.textContent = '';
+      delete dateEl.dataset.stale;
+    } else if (droughtStale) {
+      dateEl.textContent = `stale, data as of ${formatMapDate(drought.dateMs)}`;
+      dateEl.dataset.stale = 'true';
+    } else {
+      dateEl.textContent = `as of ${formatMapDate(drought.dateMs)}`;
+      delete dateEl.dataset.stale;
+    }
   }
 
   strip.hidden = false;
