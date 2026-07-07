@@ -685,6 +685,11 @@ a:hover {
   align-items: flex-start;
   gap: 10px;
   padding: 9px 10px;
+  /* The whole label row is the checkbox's activation target (clicking it
+     toggles via the `for` association), so the effective hit area is well over
+     the WCAG 2.5.8 24px minimum even though the checkbox glyph is 14px. The
+     explicit floor documents that and survives a future padding change (#10). */
+  min-height: 24px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background 0.12s ease;
@@ -1007,7 +1012,11 @@ a:hover {
   color: var(--fg-2) !important;
   font-size: 16px;
   line-height: 1;
-  padding: 6px 9px 0 0 !important;
+  /* >=24px hit area for WCAG 2.5.8 (the default was about 22px); the glyph
+     stays snug in the top-right via the asymmetric padding (#10). */
+  min-width: 24px !important;
+  min-height: 24px !important;
+  padding: 3px 7px 0 0 !important;
   background: transparent !important;
 }
 .maplibregl-popup-close-button:hover {
@@ -1559,6 +1568,14 @@ button.telemetry-item {
   box-shadow: -10px 0 32px rgba(0, 0, 0, 0.55);
   transform: translateX(100%);
   transition: transform 0.25s ease;
+}
+/* A closed panel is fully removed from layout and the accessibility tree. The
+   class rule above sets display:flex, which would otherwise override the UA
+   [hidden] rule and leave the off-screen (transformed) panel readable by a
+   screen reader after close. `hidden` is set only after the slide-out
+   transition completes, so this does not clip the animation (#16). */
+.impact-panel[hidden] {
+  display: none;
 }
 .impact-panel.open {
   transform: translateX(0);

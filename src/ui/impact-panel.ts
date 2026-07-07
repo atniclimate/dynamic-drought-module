@@ -48,6 +48,14 @@ let bodyEl: HTMLElement | null = null;
 let titleEl: HTMLElement | null = null;
 let kindEl: HTMLElement | null = null;
 
+/**
+ * The element focused at the moment the panel opened (the trigger), so focus
+ * can be restored to it on close instead of being dropped to the body
+ * (critical-review #16, WCAG 2.4.3). Null when opened from a deep link (no
+ * focused opener), in which case close leaves focus where it is.
+ */
+let openerEl: HTMLElement | null = null;
+
 /** The briefing currently shown, so Phase 3 hydration can re-render in place. */
 let activeBriefing: ImpactBriefing | null = null;
 
@@ -134,7 +142,38 @@ function ensurePanel(): HTMLElement {
     }
   });
 
+  // Focus containment (critical-review #16). While the panel is open it behaves
+  // as a modal task: Tab cycles within it rather than escaping behind it, so a
+  // keyboard user is never dropped onto the map canvas (which has no keyboard
+  // path). Focus is restored to the opener on close.
+  panel.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab' || panel.hidden) return;
+    const focusables = getFocusable(panel);
+    if (focusables.length === 0) return;
+    const first = focusables[0]!;
+    const last = focusables[focusables.length - 1]!;
+    const active = document.activeElement;
+    if (e.shiftKey) {
+      if (active === first || !panel.contains(active)) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else if (active === last || !panel.contains(active)) {
+      e.preventDefault();
+      first.focus();
+    }
+  });
+
   return panel;
+}
+
+/** Visible, keyboard-focusable descendants of the panel, in DOM order. */
+function getFocusable(container: HTMLElement): HTMLElement[] {
+  const selector =
+    'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  return Array.from(container.querySelectorAll<HTMLElement>(selector)).filter(
+    (el) => el.offsetParent !== null || el === document.activeElement
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -275,6 +314,13 @@ function paint(briefing: ImpactBriefing): void {
  * panel. Phase 3 starts the live hydration here.
  */
 export function openImpactPanel(context: BoundarySelectionContext): number {
+  // Remember the trigger so focus can return to it on close (#16). Captured
+  // before we move focus to the close button below. A reopen keeps the
+  // original opener rather than overwriting it with the close button.
+  if (!panelEl || panelEl.hidden) {
+    openerEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  }
+
   // Supersede any prior hydration before starting a new selection.
   if (activeController) activeController.abort();
   activeController = new AbortController();
@@ -288,6 +334,9 @@ export function openImpactPanel(context: BoundarySelectionContext): number {
 
   const panel = ensurePanel();
   panel.hidden = false;
+  // While open the panel contains keyboard focus (#16), so it is modal to
+  // assistive tech; the flag is cleared on close.
+  panel.setAttribute('aria-modal', 'true');
   // Force a frame so the slide-in transition runs from the hidden transform.
   void panel.offsetWidth;
   panel.classList.add('open');
@@ -333,6 +382,14 @@ export function closeImpactPanel(): void {
   }
   if (!panelEl) return;
   panelEl.classList.remove('open');
+  panelEl.setAttribute('aria-modal', 'false');
+  // Restore focus to the opener immediately (not after the slide-out) so a
+  // keyboard user lands back where they were instead of on the body (#16).
+  const toRestore = openerEl;
+  openerEl = null;
+  if (toRestore && document.contains(toRestore)) {
+    toRestore.focus();
+  }
   // Hide after the transition so the slide-out is visible; a reduced-motion
   // user has no transition, so hide immediately on the next tick.
   window.setTimeout(() => {
