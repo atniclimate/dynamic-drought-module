@@ -24,7 +24,22 @@ main = "src/index.ts"
 compatibility_date = "2026-05-09"
 
 # No KV, no D1, no Durable Objects, no R2. The Worker is stateless except for
-# the per-edge response cache exposed via `caches.default`.
+# the per-edge response cache exposed via `caches.default` and the platform
+# rate-limit counters below (managed by Cloudflare, not deployer state).
+
+# Abuse throttle (critical-review #4). The platform Rate Limiting binding caps
+# how many proxy requests a single client IP can make per minute at a Cloudflare
+# location, so the allow-listed CORS shim cannot be driven as an open relay at
+# the deployer's cost. `period` must be 10 or 60 seconds. `namespace_id` is any
+# integer unique within the deployer's Cloudflare account; two bindings sharing a
+# namespace_id share counters. The Worker fails OPEN if this stanza is removed
+# (see the `Env` interface in src/index.ts), so a fork still runs, but a
+# repo-standard deploy ships with the limit on. Tune `limit` to local traffic;
+# 300/minute is generous for a panning human and still caps automated abuse.
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 300, period = 60 }
 
 [vars]
 # Public, non-secret deployer-facing values only. Empty by default; the Worker

@@ -43,6 +43,16 @@
  *     from the Cloudflare edge cache instead of re-hitting the upstream.
  *   - Health check at `GET /healthz` returns a small JSON document with no
  *     allow-list enforcement, for uptime monitoring.
+ *   - Abuse throttle (critical-review #4). An allow-listed CORS shim with no
+ *     throttle is an open relay FOR the allow-listed hosts: anyone can drive
+ *     arbitrary traffic through the deployer's Cloudflare account, at the
+ *     deployer's cost and against the deployer's reputation with the upstream
+ *     agency. Three guards keep it a shim without becoming a relay: a per-client
+ *     rate limit via the platform Rate Limiting binding (fails OPEN if the
+ *     binding is not configured, so a fork or local run still works); a request
+ *     body and `url`-length cap; and honest pass-through of an upstream 429 with
+ *     its Retry-After. None of this transforms bodies or adds state beyond the
+ *     platform primitives, so the shim contract (CLAUDE.md rule 7) holds.
  */
 
 const ALLOW_LIST: ReadonlyArray<RegExp> = [
@@ -75,6 +85,26 @@ const USER_AGENT =
 const UPSTREAM_TIMEOUT_MS = 12_000;
 const DEFAULT_CACHE_CONTROL = "public, max-age=60";
 
+// Abuse-throttle bounds (critical-review #4). The rate limit itself lives in the
+// platform binding (wrangler.toml [[ratelimits]]); these cap a single request's
+// size so a hostile caller cannot force large upstream reads or oversized URLs.
+// The allow-listed upstreams are read endpoints that take short query strings and
+// small POST bodies, so these ceilings are far above any legitimate call.
+const MAX_UPSTREAM_URL_LENGTH = 2048;
+const MAX_REQUEST_BODY_BYTES = 64 * 1024;
+const RATE_LIMIT_RETRY_AFTER_SECONDS = 60;
+
+/**
+ * Worker environment bindings. `RATE_LIMITER` is the platform Rate Limiting
+ * binding declared in wrangler.toml. It is OPTIONAL on purpose: if a fork
+ * removes the [[ratelimits]] stanza, or a local run does not provide it, the
+ * throttle fails open rather than 500-ing every request. A repo-standard deploy
+ * includes the stanza, so the limit is on by default.
+ */
+interface Env {
+  RATE_LIMITER?: RateLimit;
+}
+
 const CORS_HEADERS: Readonly<Record<string, string>> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -106,7 +136,12 @@ function isAllowedHost(host: string): boolean {
   return ALLOW_LIST.some((rx) => rx.test(host));
 }
 
-function jsonError(status: number, code: string, detail: string): Response {
+function jsonError(
+  status: number,
+  code: string,
+  detail: string,
+  extraHeaders?: Readonly<Record<string, string>>
+): Response {
   return new Response(
     JSON.stringify({ error: code, detail }),
     {
@@ -114,7 +149,8 @@ function jsonError(status: number, code: string, detail: string): Response {
       headers: {
         "Content-Type": "application/json; charset=utf-8",
         "Cache-Control": "no-store",
-        ...CORS_HEADERS
+        ...CORS_HEADERS,
+        ...extraHeaders
       }
     }
   );
@@ -202,6 +238,12 @@ function buildClientResponse(upstream: Response): Response {
   if (!responseHeaders.has("Cache-Control")) {
     responseHeaders.set("Cache-Control", DEFAULT_CACHE_CONTROL);
   }
+  // Pass an upstream 429 through honestly (critical-review #4): keep its status
+  // and its Retry-After so the client backs off, and supply a default hint if
+  // the upstream omitted one. A 429 is not `ok`, so it is never cached below.
+  if (upstream.status === 429 && !responseHeaders.has("Retry-After")) {
+    responseHeaders.set("Retry-After", String(RATE_LIMIT_RETRY_AFTER_SECONDS));
+  }
 
   return new Response(upstream.body, {
     status: upstream.status,
@@ -222,6 +264,17 @@ function parseAndValidateUpstream(request: Request): URL | Response {
       400,
       "missing_url",
       "Query parameter 'url' is required and must be a fully qualified upstream URL."
+    );
+  }
+
+  // Cap the upstream URL length before parsing (critical-review #4). An
+  // allow-listed read endpoint never needs a multi-kilobyte URL; a very long
+  // one is either malformed or an attempt to smuggle an oversized query.
+  if (target.length > MAX_UPSTREAM_URL_LENGTH) {
+    return jsonError(
+      414,
+      "url_too_long",
+      `Query parameter 'url' exceeds the ${MAX_UPSTREAM_URL_LENGTH}-character limit.`
     );
   }
 
@@ -343,7 +396,7 @@ function isCacheableMethod(method: string): boolean {
 export default {
   async fetch(
     request: Request,
-    _env: unknown,
+    env: Env,
     ctx: ExecutionContext
   ): Promise<Response> {
     const url = new URL(request.url);
@@ -384,6 +437,41 @@ export default {
         "method_not_allowed",
         "The /proxy endpoint accepts GET, HEAD, POST, and OPTIONS."
       );
+    }
+
+    // Per-client rate limit (critical-review #4). Keyed on the real client IP
+    // Cloudflare attaches at the edge. Fails OPEN when the binding is absent so
+    // a fork or local run without the [[ratelimits]] stanza still serves. Only
+    // real proxy calls are limited; the health check above is exempt so uptime
+    // monitors are never throttled.
+    if (env.RATE_LIMITER) {
+      const clientIp = request.headers.get("CF-Connecting-IP") ?? "unknown";
+      const { success } = await env.RATE_LIMITER.limit({ key: clientIp });
+      if (!success) {
+        return jsonError(
+          429,
+          "rate_limited",
+          "Too many proxy requests from this client; slow down and retry.",
+          { "Retry-After": String(RATE_LIMIT_RETRY_AFTER_SECONDS) }
+        );
+      }
+    }
+
+    // Cap the request body (critical-review #4). The allow-listed upstreams take
+    // small query bodies, so a declared Content-Length above the ceiling is
+    // rejected before we open an upstream connection.
+    if (method === "POST") {
+      const declaredLength = request.headers.get("content-length");
+      if (declaredLength !== null) {
+        const bytes = Number(declaredLength);
+        if (Number.isFinite(bytes) && bytes > MAX_REQUEST_BODY_BYTES) {
+          return jsonError(
+            413,
+            "request_too_large",
+            `Request body exceeds the ${MAX_REQUEST_BODY_BYTES}-byte proxy limit.`
+          );
+        }
+      }
     }
 
     const upstreamOrError = parseAndValidateUpstream(request);
