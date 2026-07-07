@@ -590,6 +590,31 @@ function activateLayerWithIndicator(
         }
         return;
       }
+      // A non-throwing activation failure (a module that catches its own fetch
+      // error, calls reportStatus('error'), and returns) resolves normally, so
+      // without this guard the key would fadeIn, register active, get counted
+      // in the pill, and pollute the share URL. Treat a terminal 'error'
+      // status as a failed activation and mirror the thrown-error cleanup:
+      // never registry.activate on anything but a genuine on state (ready,
+      // no-data, or zoom-in). This protects the URL-as-state invariant
+      // (CLAUDE.md §6 invariant 2). See docs/ddm-critical-review-2026-07-07.md #2.
+      if (registry.getStatus(def.key) === 'error') {
+        cb.checked = false;
+        desiredOn.set(def.key, false);
+        try {
+          mod.deactivate(map);
+        } catch (err) {
+          console.error(`Layer "${def.key}" failed to deactivate cleanly:`, err);
+        }
+        // Emit a `change` so the URL re-syncs from the active set without this
+        // key (a boot from ?layers=<failed> must self-correct); registry.
+        // deactivate also clears the stored status.
+        registry.deactivate(def.key);
+        // Re-assert the terminal 'error' after that clear so the pill and any
+        // getStatus() reader see "unavailable", not "off".
+        registry.setStatus(def.key, 'error');
+        return;
+      }
       // Ease the just-added layers in (no-op for reduced-motion users and
       // for modules without map layers; src/util/layer-fade.ts).
       fadeInLayers(map, mod.fadeLayerIds);
