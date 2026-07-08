@@ -14,6 +14,7 @@ import type {
   ViewportBounds
 } from '../types/station-network';
 import { fetchWithBudget } from '../util/fetch';
+import { quantizeBbox } from '../util/bbox';
 import { isObject } from '../util/guards';
 
 const MINUTE_MS = 60 * 1000;
@@ -60,6 +61,16 @@ const USGS_DISCOVERY_PARAMETER_CODES = '00060,00065';
 const AWDB_DISCOVERY_NETWORKS = ['SNTL', 'SCAN'] as const;
 const AGRIMET_DISCOVERY_TIMEOUT_MS = 12_000;
 const COCORAHS_DISCOVERY_TIMEOUT_MS = 15_000;
+// Per-viewport discovery cache + RAWS zoom gate (#3). Quantizing the query
+// bounds (same 0.25-degree step hydrography's HYDRO_CACHE uses) coalesces nearby
+// pans onto one key, so USGS Instantaneous Values and NIFC RAWS are fetched once
+// per quantized viewport instead of on every settled pan; the caches live for
+// the session like HYDRO_CACHE (station existence is stable within a session;
+// popup hydration still re-fetches live values on click). RAWS additionally
+// skips entirely above the area cap, so a national or multi-state framing does
+// not fire a NIFC envelope query for a layer that only reads at regional zoom.
+const DISCOVERY_BBOX_QUANT = 0.25;
+const RAWS_DISCOVERY_AREA_CAP = 100;
 // CoCoRaHS round-one scope is the Pacific Northwest core; the IEM mirror has
 // no combined-region call, so we fan out one state per fetch and merge.
 const COCORAHS_DISCOVERY_STATES = ['WA', 'OR', 'ID'] as const;
@@ -304,25 +315,80 @@ export function freshnessForNetwork(
     : 'stale';
 }
 
+// Session caches keyed by quantized viewport (#3); see DISCOVERY_BBOX_QUANT.
+const USGS_DISCOVERY_CACHE = new Map<string, readonly StationDiscoveryRecord[]>();
+const RAWS_DISCOVERY_CACHE = new Map<string, readonly StationDiscoveryRecord[]>();
+
+/** Quantized cache key for a viewport bbox (mirrors hydrography's HYDRO_CACHE). */
+function discoveryCacheKey(bounds: ViewportBounds): string {
+  return quantizeBbox(
+    [bounds.south, bounds.west, bounds.north, bounds.east],
+    DISCOVERY_BBOX_QUANT
+  ).join(',');
+}
+
+/** Latitude-adjusted viewport area in square degrees (same math as the USGS gate). */
+function viewportAreaDeg(
+  bounds: ViewportBounds,
+  center: StationViewportDiscoveryRequest['center']
+): number {
+  const width = Math.abs(bounds.east - bounds.west);
+  const height = Math.abs(bounds.north - bounds.south);
+  const latitudeFactor = Math.max(0.05, Math.abs(Math.cos(radians(center[0]))));
+  return width * latitudeFactor * height;
+}
+
+/** USGS Instantaneous Values discovery, served from the per-viewport cache. */
+async function discoverUsgsStationsCached(
+  queryBounds: StationViewportDiscoveryRequest['bounds'],
+  signal: AbortSignal | null
+): Promise<readonly StationDiscoveryRecord[]> {
+  const key = discoveryCacheKey(queryBounds);
+  const cached = USGS_DISCOVERY_CACHE.get(key);
+  if (cached) return cached;
+  const records = await discoverUsgsStations(queryBounds, signal);
+  USGS_DISCOVERY_CACHE.set(key, records);
+  return records;
+}
+
+/** NIFC RAWS discovery, served from the per-viewport cache. */
+async function discoverRawsStationsCached(
+  bounds: StationViewportDiscoveryRequest['bounds'],
+  signal: AbortSignal | null
+): Promise<readonly StationDiscoveryRecord[]> {
+  const key = discoveryCacheKey(bounds);
+  const cached = RAWS_DISCOVERY_CACHE.get(key);
+  if (cached) return cached;
+  const records = await discoverRawsStations(bounds, signal);
+  RAWS_DISCOVERY_CACHE.set(key, records);
+  return records;
+}
+
 export async function discoverStationsForViewport(
   request: StationViewportDiscoveryRequest
 ): Promise<StationViewportDiscoveryResult> {
   const queryBounds = clampUsgsDiscoveryBounds(request.bounds, request.center);
+  // RAWS reads only at regional zoom; skip its NIFC envelope query on a
+  // national or multi-state framing rather than firing it every pan (#3).
+  const rawsAllowed =
+    viewportAreaDeg(request.bounds, request.center) <= RAWS_DISCOVERY_AREA_CAP;
   const [usgsRecords, awdbRecords, rawsRecords, coopsRecords, agrimetRecords, cocorahsRecords] =
     await Promise.all([
       queryBounds
         ? discoveryRecordsOrEmpty(
             'USGS IV station discovery',
-            discoverUsgsStations(queryBounds, request.signal),
+            discoverUsgsStationsCached(queryBounds, request.signal),
             request.signal
           )
         : Promise.resolve([]),
       discoverAwdbStations(request),
-      discoveryRecordsOrEmpty(
-        'NIFC RAWS station discovery',
-        discoverRawsStations(request.bounds, request.signal),
-        request.signal
-      ),
+      rawsAllowed
+        ? discoveryRecordsOrEmpty(
+            'NIFC RAWS station discovery',
+            discoverRawsStationsCached(request.bounds, request.signal),
+            request.signal
+          )
+        : Promise.resolve([]),
       discoverCoopsStations(request),
       discoverAgrimetStations(request),
       discoverCocorahsStations(request)
