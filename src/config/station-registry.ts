@@ -20,7 +20,36 @@ const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 const PROXIMITY_MERGE_METERS = 100;
+// Spatial-hash cell size for the proximity-merge fallback (#1). Chosen so one
+// cell is at least PROXIMITY_MERGE_METERS (100 m) wide in BOTH latitude and
+// longitude everywhere in the served domain (up to Alaska's ~71.5 deg N, where
+// 0.004 deg of longitude is about 141 m), so the 3x3 cell neighborhood around a
+// record always contains every entry within the 100 m merge radius. Cells are
+// deliberately over-inclusive at lower latitudes; the exact haversine filter
+// still runs, so over-inclusion costs a few extra checks, never correctness.
+const PROXIMITY_GRID_CELL_DEG = 0.004;
 const EARTH_RADIUS_METERS = 6_371_000;
+
+/**
+ * The handle fields that identify the same physical station across networks: a
+ * discovered record and an entry are the same station when they share any one
+ * of these values (note `cwmsOffice` is NOT here, since a shared office does not
+ * identify a station, only a shared `cwmsTsId` does). The merge handle index
+ * keys on exactly these fields (#1). Declared here, above
+ * STATIC_TELEMETRY_STATION_REGISTRY, because that module-level merge call reads
+ * it at load: a later `const` would sit in the temporal dead zone and crash boot.
+ */
+const HANDLE_MATCH_FIELDS: readonly (keyof StationNetworkHandles)[] = [
+  'usgsSite',
+  'awdbStation',
+  'cwmsTsId',
+  'hydrometSite',
+  'rawsStationId',
+  'noaaCoopsId',
+  'agrimetSite',
+  'cocorahsSid',
+  'nwrfcId'
+];
 const USGS_DISCOVERY_TIMEOUT_MS = 8_000;
 const AWDB_DISCOVERY_TIMEOUT_MS = 12_000;
 const RAWS_DISCOVERY_TIMEOUT_MS = 10_000;
@@ -187,22 +216,77 @@ export const STATIC_TELEMETRY_STATION_REGISTRY = mergeTelemetryStations(
   []
 );
 
+/** The `field:value` keys a handle bag contributes to the merge handle index. */
+function handleMatchKeys(handles: StationNetworkHandles): string[] {
+  const keys: string[] = [];
+  for (const field of HANDLE_MATCH_FIELDS) {
+    const value = handles[field];
+    if (value !== undefined) keys.push(`${field}:${value}`);
+  }
+  return keys;
+}
+
+/** Spatial-hash cell key for a coordinate pair `[lng, lat]`. */
+function proximityCellKey(lat: number, lng: number): string {
+  return `${Math.floor(lat / PROXIMITY_GRID_CELL_DEG)},${Math.floor(lng / PROXIMITY_GRID_CELL_DEG)}`;
+}
+
+/**
+ * Merge curated seed stations with discovered records into one registry.
+ *
+ * Same result as a naive per-record double scan, but O(D) rather than O(D*N):
+ * a handle index (`field:value` -> lowest entry index) replaces the handle
+ * findIndex, and a spatial grid (cell -> entry indices) bounds the proximity
+ * fallback to a 3x3 cell neighborhood (#1). The matching RULES are unchanged:
+ * a shared handle wins over proximity; proximity requires the same parameter
+ * category, a distance within PROXIMITY_MERGE_METERS, and no conflicting handle
+ * of the same network; and ties resolve to the lowest entry index, exactly as
+ * the previous `findIndex` did.
+ */
 export function mergeTelemetryStations(
   seeds: readonly TelemetryStation[],
   discovered: readonly StationDiscoveryRecord[]
 ): readonly StationRegistryEntry[] {
-  const entries: StationRegistryEntry[] = seeds.map((station) => seedEntry(station));
+  const entries: StationRegistryEntry[] = [];
+  // `field:value` -> lowest entry index carrying it (lowest preserves the old
+  // findIndex-first semantics; never overwrite a lower index).
+  const handleIndex = new Map<string, number>();
+  // cell -> entry indices whose coords fall in that cell.
+  const grid = new Map<string, number[]>();
+
+  const indexHandles = (i: number, handles: StationNetworkHandles): void => {
+    for (const key of handleMatchKeys(handles)) {
+      if (!handleIndex.has(key)) handleIndex.set(key, i);
+    }
+  };
+  const pushEntry = (entry: StationRegistryEntry): void => {
+    const i = entries.length;
+    entries.push(entry);
+    indexHandles(i, entry.handles);
+    const [lng, lat] = entry.station.coords;
+    const cell = proximityCellKey(lat, lng);
+    const bucket = grid.get(cell);
+    if (bucket) bucket.push(i);
+    else grid.set(cell, [i]);
+  };
+
+  for (const station of seeds) pushEntry(seedEntry(station));
 
   for (const record of discovered) {
-    const matchIndex = findMergeTarget(entries, record);
+    const matchIndex = findMergeTarget(entries, record, handleIndex, grid);
     if (matchIndex === -1) {
-      entries.push(discoveredEntry(record));
+      pushEntry(discoveredEntry(record));
       continue;
     }
 
     const current = entries[matchIndex];
     if (!current) continue;
-    entries[matchIndex] = mergeEntry(current, record);
+    const merged = mergeEntry(current, record);
+    entries[matchIndex] = merged;
+    // A merge can grow the entry's handle set; index the new keys. The coords
+    // are taken from `current` (the base) and never change, so the grid bucket
+    // stays valid without an update.
+    indexHandles(matchIndex, merged.handles);
   }
 
   return entries;
@@ -365,24 +449,56 @@ function mergeEntry(
 
 function findMergeTarget(
   entries: readonly StationRegistryEntry[],
-  record: StationDiscoveryRecord
+  record: StationDiscoveryRecord,
+  handleIndex: ReadonlyMap<string, number>,
+  grid: ReadonlyMap<string, number[]>
 ): number {
   const recordHandles = mergeHandles(handlesForStation(record.station), record.handles);
-  const handleIndex = entries.findIndex((entry) => hasMatchingHandle(entry.handles, recordHandles));
-  if (handleIndex !== -1) return handleIndex;
 
-  // Proximity fallback is for cross-network co-location (one physical
-  // place observed by two networks), NOT for two distinct stations of the
-  // same network that happen to be within the merge radius. If the record
-  // and a candidate carry conflicting handles of the same network (two
-  // different USGS site codes, say), they are distinct stations and must
-  // not collapse into one marker (adversarial-review finding, 2026-07-06).
-  return entries.findIndex(
-    (entry) =>
-      entry.primaryParameterCategory === record.primaryParameterCategory &&
-      distanceMeters(entry.station.coords, record.station.coords) <= PROXIMITY_MERGE_METERS &&
-      !handlesConflict(entry.handles, recordHandles)
-  );
+  // Handle match: the lowest-index entry that shares any handle value with the
+  // record (the handle index stores the lowest index per key, so the minimum
+  // across the record's keys is the same entry `findIndex` would have found).
+  let handleMatch = -1;
+  for (const key of handleMatchKeys(recordHandles)) {
+    const idx = handleIndex.get(key);
+    if (idx !== undefined && (handleMatch === -1 || idx < handleMatch)) handleMatch = idx;
+  }
+  if (handleMatch !== -1) return handleMatch;
+
+  // Proximity fallback is for cross-network co-location (one physical place
+  // observed by two networks), NOT for two distinct stations of the same
+  // network that happen to be within the merge radius. If the record and a
+  // candidate carry conflicting handles of the same network (two different USGS
+  // site codes, say), they are distinct stations and must not collapse into one
+  // marker (adversarial-review finding, 2026-07-06).
+  //
+  // Only entries in the record's 3x3 cell neighborhood can be within the merge
+  // radius (see PROXIMITY_GRID_CELL_DEG), so the grid bounds the scan. The
+  // lowest passing index is returned, matching the old findIndex-first result.
+  const [lng, lat] = record.station.coords;
+  const baseLatCell = Math.floor(lat / PROXIMITY_GRID_CELL_DEG);
+  const baseLngCell = Math.floor(lng / PROXIMITY_GRID_CELL_DEG);
+  let proxMatch = -1;
+  for (let dLat = -1; dLat <= 1; dLat++) {
+    for (let dLng = -1; dLng <= 1; dLng++) {
+      const bucket = grid.get(`${baseLatCell + dLat},${baseLngCell + dLng}`);
+      if (!bucket) continue;
+      for (const i of bucket) {
+        // Already have a lower-index match; a higher index cannot improve it.
+        if (proxMatch !== -1 && i >= proxMatch) continue;
+        const entry = entries[i];
+        if (!entry) continue;
+        if (
+          entry.primaryParameterCategory === record.primaryParameterCategory &&
+          distanceMeters(entry.station.coords, record.station.coords) <= PROXIMITY_MERGE_METERS &&
+          !handlesConflict(entry.handles, recordHandles)
+        ) {
+          proxMatch = i;
+        }
+      }
+    }
+  }
+  return proxMatch;
 }
 
 /**
@@ -467,23 +583,6 @@ function mergeHandles(
   return merged;
 }
 
-function hasMatchingHandle(left: StationNetworkHandles, right: StationNetworkHandles): boolean {
-  return (
-    matches(left.usgsSite, right.usgsSite) ||
-    matches(left.awdbStation, right.awdbStation) ||
-    matches(left.cwmsTsId, right.cwmsTsId) ||
-    matches(left.hydrometSite, right.hydrometSite) ||
-    matches(left.rawsStationId, right.rawsStationId) ||
-    matches(left.noaaCoopsId, right.noaaCoopsId) ||
-    matches(left.agrimetSite, right.agrimetSite) ||
-    matches(left.cocorahsSid, right.cocorahsSid) ||
-    matches(left.nwrfcId, right.nwrfcId)
-  );
-}
-
-function matches(left: string | undefined, right: string | undefined): boolean {
-  return left !== undefined && right !== undefined && left === right;
-}
 
 function mergeValues(
   values: readonly StationValue[],
