@@ -30,6 +30,7 @@ import type maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 
 import { registry } from '../state/registry';
+import { timeline } from '../state/timeline';
 import { USDM_CATEGORIES } from '../config/palette';
 import { escapeHtml } from '../util/escape';
 
@@ -284,10 +285,17 @@ function render(map: maplibregl.Map): void {
   const alerts = alertsMetric(map);
   const fires = firesMetric(map);
 
+  // A deliberately scrubbed historical week (0.5.0b temporal axis) is NOT a
+  // stale feed: the user chose to look back. The stale flag is reserved for
+  // a frozen upstream while viewing the CURRENT week; a scrubbed view gets
+  // its own honest "viewing week of" date register instead.
+  const viewingHistory = timeline.usdmWeek !== null;
+
   // Degrade a frozen or drifted USDM surface to an explicit stale read
   // (critical-review #6): the category still shows, but the tile and the date
   // line both say so, rather than presenting an old week as current.
-  const droughtStale = drought.metric.tone === 'data' && isUsdmStale(drought.dateMs);
+  const droughtStale =
+    !viewingHistory && drought.metric.tone === 'data' && isUsdmStale(drought.dateMs);
   const droughtTile: Metric = droughtStale ? { ...drought.metric, stale: true } : drought.metric;
 
   metricsEl.innerHTML = [
@@ -303,6 +311,9 @@ function render(map: maplibregl.Map): void {
     } else if (droughtStale) {
       dateEl.textContent = `stale, data as of ${formatMapDate(drought.dateMs)}`;
       dateEl.dataset.stale = 'true';
+    } else if (viewingHistory) {
+      dateEl.textContent = `viewing week of ${formatMapDate(drought.dateMs)}`;
+      delete dateEl.dataset.stale;
     } else {
       dateEl.textContent = `as of ${formatMapDate(drought.dateMs)}`;
       delete dateEl.dataset.stale;
@@ -338,6 +349,7 @@ export function buildConditionsStrip(map: maplibregl.Map): void {
 
   registry.on('change', scheduleRender);
   registry.on('status-change', scheduleRender);
+  timeline.onChange(scheduleRender);
   map.on('idle', scheduleRender);
   map.on('moveend', scheduleRender);
 }
