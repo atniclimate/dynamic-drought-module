@@ -76,6 +76,7 @@ import type { StationValue, TelemetryStation } from '../types/station';
 import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
 import { parseUrlParams, syncUrl } from '../state/url';
+import { timeline } from '../state/timeline';
 import { fadeInLayers, fadeOutLayers } from '../util/layer-fade';
 import { flyToStation } from '../layers/telemetry';
 import { buildConditionsStrip } from './conditions-strip';
@@ -293,7 +294,10 @@ function pushUrl(): void {
   syncUrl({
     region: STATE.currentRegion,
     layers: registry.getActiveKeys(),
-    embed: STATE.embed
+    embed: STATE.embed,
+    usdmWeek: timeline.usdmWeek,
+    usdmMode: timeline.usdmMode,
+    sstDate: timeline.sstDate
   });
 }
 
@@ -1089,6 +1093,13 @@ async function applyUrlState(map: maplibregl.Map): Promise<void> {
   const params = parseUrlParams();
   STATE.embed = params.embed;
 
+  // Seed the temporal store BEFORE any layer activates, so a layer module
+  // that reads the timeline during activate() (USDM restoring a scrubbed
+  // week, SST restoring a frame date) sees the URL's temporal state.
+  timeline.setUsdmWeek(params.usdmWeek);
+  timeline.setUsdmMode(params.usdmMode);
+  timeline.setSstDate(params.sstDate);
+
   const app = document.getElementById('app');
   if (app) {
     app.classList.toggle('embed', params.embed);
@@ -1165,6 +1176,10 @@ export function buildSidebar(
   registry.on('status-change', (key, status) => {
     setLayerStatusInPill(key, status);
   });
+
+  // Temporal-state changes re-sync the URL the same way layer changes do
+  // (invariant 2: the selected week / mode / SST frame is shareable state).
+  timeline.onChange(pushUrl);
 
   // Apply the URL state. If parsing fails (no params), we fall back to
   // the default region and the default-on layer set, both of which are
