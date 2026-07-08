@@ -2117,3 +2117,173 @@ a.impact-resource-link::after {
   border-radius: 2px;
   box-shadow: 0 0 0 1px rgba(11, 18, 32, 0.6);
 }
+
+/* =============================================================================
+   Time bar (0.5.0b temporal axis)
+   One map-bottom control per active temporal surface. The stamp typography is
+   the observed-vs-outlook register signal: observed reads as a hard VALID
+   date in the display face and accent cyan; the outlook register changes
+   instrument to the body face in warn amber with an ISSUED + valid-through
+   line. Authored products get the discrete rail; only a continuous field
+   (SST anomaly) ever renders the Play button.
+   ============================================================================= */
+
+.time-bar {
+  position: absolute;
+  bottom: 34px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 610;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: min(560px, calc(100% - 24px));
+  padding: 8px 12px 7px;
+  background: rgba(15, 23, 42, 0.94);
+  border: 1px solid var(--line-strong);
+  border-top: 2px solid var(--accent-strong);
+  border-radius: var(--radius-md);
+}
+.time-bar[hidden] { display: none; }
+.time-bar[data-register="outlook"] {
+  border-top-color: var(--warn);
+}
+
+.time-bar-rail-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.time-bar-step,
+.time-bar-play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--fg-1);
+  cursor: pointer;
+}
+.time-bar-step:hover:not(:disabled),
+.time-bar-play:hover:not(:disabled) {
+  border-color: var(--accent-strong);
+  color: var(--fg-0);
+}
+.time-bar-step:disabled,
+.time-bar-play:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.time-bar-rail {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.time-bar-jump {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 8px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-weight: var(--fw-subtitle);
+  font-size: 9.5px;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.time-bar-jump:hover { color: var(--fg-0); border-color: var(--line-strong); }
+/* A hatched jump chip previews the outlook instrument it switches to. */
+.time-bar-jump.hatched {
+  color: var(--warn);
+  border-color: rgba(245, 158, 11, 0.45);
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent 0 3px,
+      rgba(245, 158, 11, 0.16) 3px 5px
+    ),
+    var(--bg-2);
+}
+.time-bar-jump.hatched:hover { color: var(--fg-0); }
+
+.time-bar-stamp {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 10px;
+}
+/* Observed register: the hard, factual date stamp. */
+.time-bar-stamp-headline {
+  font-family: var(--font-display);
+  font-weight: var(--fw-title);
+  font-size: 12px;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+/* Outlook register: a different instrument, visibly (face, weight, color). */
+.time-bar[data-register="outlook"] .time-bar-stamp-headline {
+  font-family: var(--font-body);
+  font-weight: var(--fw-strong);
+  font-style: italic;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--warn);
+}
+.time-bar-stamp-detail {
+  font-family: var(--font-body);
+  font-weight: var(--fw-body);
+  font-size: 10.5px;
+  color: var(--fg-2);
+}
+
+.time-bar-modes {
+  display: flex;
+  gap: 4px;
+}
+.time-bar-mode {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 9px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-weight: var(--fw-body);
+  font-size: 10px;
+  color: var(--fg-2);
+  cursor: pointer;
+}
+.time-bar-mode:hover { color: var(--fg-0); border-color: var(--line-strong); }
+.time-bar-mode.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-strong);
+  color: var(--fg-0);
+}
+
+@media (max-width: 720px) {
+  .time-bar {
+    width: calc(100% - 16px);
+    bottom: 28px;
+    padding: 7px 9px 6px;
+  }
+  .time-bar-jump { font-size: 9px; padding: 2px 6px; }
+}
