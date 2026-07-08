@@ -122,6 +122,22 @@ export function timeBarOwner(): string | null {
   return currentOwner;
 }
 
+/**
+ * A focus marker for the control the user is on, so a re-render (the Play
+ * loop re-renders each tick to advance the clock) does not silently drop
+ * keyboard focus (Section 508). Restored by selector after the swap.
+ */
+function focusMarker(el: HTMLElement): string | null {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement) || !el.contains(active)) return null;
+  if (active.matches('[data-play]')) return '[data-play]';
+  if (active.matches('.time-bar-rail')) return '.time-bar-rail';
+  if (active.dataset.step) return `[data-step="${active.dataset.step}"]`;
+  if (active.dataset.mode) return `[data-mode="${active.dataset.mode}"]`;
+  if (active.dataset.jump) return `[data-jump="${active.dataset.jump}"]`;
+  return null;
+}
+
 function render(): void {
   const el = container();
   if (!el) return;
@@ -131,6 +147,8 @@ function render(): void {
     el.innerHTML = '';
     return;
   }
+
+  const restoreFocus = focusMarker(el);
 
   const spec = currentSpec;
   el.hidden = false;
@@ -261,5 +279,9 @@ function render(): void {
       'click',
       () => spec.play?.onToggle()
     );
+  }
+
+  if (restoreFocus) {
+    el.querySelector<HTMLElement>(restoreFocus)?.focus({ preventScroll: true });
   }
 }
