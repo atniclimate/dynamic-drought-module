@@ -443,7 +443,85 @@ export const URLS = Object.freeze({
   // Verified 2026-05-30 (live in-page fetch): HTTP 200, Content-Type
   // application/json, Access-Control-Allow-Origin: *, returns an array of
   // { name, mapDate, dsci } weekly records.
+  //
+  // A second path on the same base drives the temporal-axis scrubber: the
+  // per-category area-percent series used to enumerate valid USDM weeks and
+  // populate the sidebar statistics for a scrubbed week.
+  //   `${usdmDataServices}/StateStatistics/GetDroughtSeverityStatisticsByAreaPercent
+  //    ?aoi=<fips>&startdate=M/D/YYYY&enddate=M/D/YYYY&statisticsType=1`
+  // Send `Accept: application/json` (defaults to CSV like GetDSCI; the
+  // `Access-Control-Allow-Origin: *` header is only emitted when the request
+  // carries an `Origin` header, which every real browser fetch sends, so this
+  // is invisible from a bare `curl` call without `-H "Origin: ..."`).
+  // Verified 2026-07-08: HTTP 200, Content-Type application/json;
+  // charset=utf-8, Access-Control-Allow-Origin: * (confirmed with an Origin
+  // header present, matching real browser behavior; also confirmed on the
+  // CORS preflight OPTIONS response). Returns an array of weekly records:
+  // { mapDate, stateAbbreviation, none, d0, d1, d2, d3, d4, validStart,
+  // validEnd, statisticFormatID }. `mapDate`/`validStart` land on real
+  // Tuesdays (verified for aoi=53, 41, 16 across the full 2000-01-04 to
+  // present range); `d0`..`d4` are cumulative percent-of-area-in-category-
+  // or-worse (`none` + `d0` = 100). Tested aoi=53 (WA), 41 (OR), 16 (ID).
+  // Freshness matches the USDM Thursday release cadence: as of Wednesday
+  // 2026-07-08 the latest record was the week ending Tuesday 2026-06-30 (the
+  // following week's map, valid through 2026-07-07, had not yet posted).
   usdmDataServices: 'https://usdmdataservices.unl.edu/api',
+
+  // ---------- USDM per-week archive (0.5.0b temporal axis) ----------
+  // Every published USDM week since 2000-01-04 as the same NDMC ArcGIS
+  // Online FeatureServer family as `usdmFeatureServer`. The consumer appends
+  // `/query?where=MapDate=timestamp '<YYYY-MM-DD> 00:00:00'&outFields=...
+  // &outSR=4326&f=geojson` with the Tuesday valid date. Schema CAVEAT
+  // (verified live 2026-07-08): the validity fields are ValidStartDate /
+  // ValidEndDate here, NOT the ValidStart/ValidEnd of USDM_current, and an
+  // outFields naming a nonexistent field returns HTTP 400. DM 0..4 and
+  // MapDate (epoch ms) match. Pass maxAllowableOffset=0.01&
+  // geometryPrecision=4: a bad-drought national week shrinks from ~6.5 MB
+  // to ~440 KB (measured 2026-07-08).
+  // Verified 2026-07-08 (ddm-source-sweep wf_6ab55eaf): HTTP 200,
+  // application/json, Access-Control-Allow-Origin: * (wildcard). Direct
+  // fetch, no Worker proxy.
+  // CAVEAT (load-bearing): the newest archived week must be read LIVE (the
+  // scrubber derives it from the USDM_current MapDate); on a Wednesday the
+  // most recent Tuesday is NOT yet published (Thursday release). CAVEAT:
+  // f=topojson returns HTTP 400 (GeoJSON only). CAVEAT: request only the
+  // fields the popup needs; outFields=* on a bad-drought week is a large
+  // payload on rural connections.
+  usdmArchiveFeatureServer:
+    'https://services5.arcgis.com/0OTVzJS4K09zlixn/arcgis/rest/services/USDM_archive/FeatureServer/0',
+
+  // ---------- USDM Change Maps (0.5.0b, the honest velocity field) ----------
+  // Categorical change classes (worsened / no change / improved) for the
+  // CURRENT USDM week only; there is no keyless historical-change archive,
+  // so the change toggle is offered only at the newest scrubber stop.
+  // 1-week change: the drought.gov data bucket (same GCS host as
+  // nidisGriddedTileRoot). 4-week change: the NCEI NIDIS mirror.
+  // Verified 2026-07-08 (ddm-source-sweep wf_6ab55eaf): both HTTP 200,
+  // application/geo+json, Access-Control-Allow-Origin: * (wildcard),
+  // top-level `date` field matching the current valid Tuesday (20260630 at
+  // verification, released Thursday 2026-07-02). Direct fetch, no proxy.
+  usdmChange1wkGeojson:
+    'https://storage.googleapis.com/noaa-nidis-drought-gov-data/current-conditions/json/v1/us/usdm/usdm-change.geojson',
+  usdmChange4wkGeojson:
+    'https://www.ncei.noaa.gov/pub/data/nidis/geojson/us/usdm/usdm-4wk-change.geojson',
+
+  // ---------- CPC drought outlook, vector form (0.5.0b outlook register) ----------
+  // The same cpc_drought_outlk service the raster `cpcDroughtWMS` above
+  // renders, but the ArcGIS REST vector layers, so the outlook register can
+  // draw hatched fills client-side with the issued date and valid-through
+  // target read from attributes. Layer 1 = Monthly Drought Outlook (US +
+  // Puerto Rico), layer 4 = Seasonal Drought Outlook (US + Puerto Rico);
+  // island-territory layers are siblings. Consumer appends
+  // `/<1|4>/query?where=1=1&outFields=outlook,fcst_date,target,idp_filedate
+  // &outSR=4326&f=geojson`. Attributes: `outlook` (the four-class tendency),
+  // `fcst_date` (issued, 'MM/DD/YYYY'), `target` (valid-through label).
+  // Verified 2026-07-08 (ddm-source-sweep wf_6ab55eaf): HTTP 200,
+  // application/geo+json, Access-Control-Allow-Origin reflected origin
+  // (same posture as nwsWwaMapServer / usfsWhp; browser fetch needs no
+  // proxy). Monthly issued last day of month for the following month;
+  // Seasonal issued with a three-month horizon.
+  cpcDroughtOutlookVectorMapServer:
+    'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_drought_outlk/MapServer',
 
   // ---------- National Interagency Fire Center (NIFC) active perimeters --
   // Wildland Fire Interagency Geospatial Services (WFIGS) Current
@@ -550,6 +628,18 @@ export const URLS = Object.freeze({
   // windows are wired; resolving the SPEI and EDDI slugs is a future refinement.
   nidisGriddedTileRoot:
     'https://storage.googleapis.com/noaa-nidis-drought-gov-data/current-conditions/tile/v1',
+  // TEMPORAL CAVEAT (0.5.0b sweep, 2026-07-08): these tiles are a single
+  // current-conditions snapshot with NO time dimension; the gridded SPI
+  // surface cannot be honestly stepped from this source. The time-enumerable
+  // form is the University of Idaho THREDDS gridMET aggregation
+  // (https://tds-proxy.nkn.uidaho.edu/thredds/.../agg_met_spi90d_1979_
+  // CurrentYear_CONUS.nc, OPeNDAP + NetCDF subset, wildcard CORS, verified
+  // live 2026-07-08 with a native FIVE-day cadence, not weekly), but NetCDF
+  // decoding in the browser is a new transport; recorded here as verified
+  // NOT wired, deferred past 0.5.0. The VegDRI / QuickDRI weekly WMS at
+  // dmsdata.cr.usgs.gov (TIME-enabled, wildcard CORS, weekly Monday steps,
+  // exact-match TIME required, off-list dates return an HTTP 200 XML
+  // ServiceException) were likewise verified 2026-07-08 and left unwired.
 
   // ---------- Static reference layers (bundled data in public/data/) ----------
   // Vite serves `public/` under the configured `base`, so the runtime URLs
@@ -606,6 +696,24 @@ export const URLS = Object.freeze({
   // GetCapabilities or the colormap XML; do not assert a baseline in UI copy.
   gibsSstAnomalyWmts:
     'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png',
+
+  // ---------- GIBS SST anomaly TIME axis (0.5.0b, the one true Play loop) ----------
+  // The dated form of the template above: the `{TIME}` token (YYYY-MM-DD)
+  // is substituted by the SST layer module BEFORE the source is created
+  // (MapLibre only expands {z}/{y}/{x}). Dates are enumerated live from the
+  // WMTS DescribeDomains resource below (a compact per-layer XML, NOT the
+  // multi-megabyte all-layer GetCapabilities).
+  // Re-verified 2026-07-08 (ddm-source-sweep wf_6ab55eaf): tiles HTTP 200,
+  // image/png, wildcard CORS; latest granule 2026-07-07 (one-day lag on the
+  // daily P1D cadence; the current UTC date 404s until published).
+  // DescribeDomains HTTP 200 text/xml, wildcard CORS; 11 P1D DimensionDomain
+  // ranges spanning 2019-07-23 to present (short gaps exist; enumerate the
+  // ranges, never assume contiguity). The MUR25 sibling (Level6, 2002+) was
+  // also verified but is non-contiguous and coarser; not wired.
+  gibsSstAnomalyWmtsTime:
+    'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/{TIME}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png',
+  gibsSstDescribeDomains:
+    'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/wmts.cgi?SERVICE=WMTS&REQUEST=DescribeDomains&VERSION=1.0.0&LAYER=GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies&TILEMATRIXSET=GoogleMapsCompatible_Level7',
 
   // ---------- NOAA CPC weekly SST anomaly (B2 fallback, verified not wired) ----------
   // Fallback SST anomaly raster (weekly cadence, coarser). Same host family
@@ -686,24 +794,67 @@ export const URLS = Object.freeze({
     'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/InterAgencyFirePerimeterHistory_All_Years_View/FeatureServer/0',
 
   // USGS EROS VegDRI weekly vegetation drought stress (observed impact),
-  // GeoServer WMS. Verified 2026-07-06 (ddm-source-verifier): HTTP 200,
-  // image/png (magic bytes), Access-Control-Allow-Origin: * (genuine
-  // wildcard on a bare GeoServer; no Worker proxy needed). EPSG:3857 GetMap
-  // CONFIRMED working (native web-mercator; no reprojection). Layer
-  // (workspace:layer): quickdri_vegdri_conus_week_data:vegdri_conus_week_data.
-  // Weekly time dimension, default="current"; latest granule 2026-06-29 at
-  // verification (7-day lag on a weekly cadence). CAVEAT: the response sets
-  // an HttpOnly session cookie; fine for raster tiles, never fetch with
-  // credentials included. NOT yet wired.
+  // GeoServer WMS. Re-verified 2026-07-08 (ddm-source-verifier,
+  // adversarial pass; originally verified 2026-07-06): HTTP 200,
+  // image/png (magic bytes, 512x512 decode, 10-color palette, non-
+  // transparent pixels confirmed by pixel sample), Access-Control-Allow-
+  // Origin: * (genuine wildcard on a bare GeoServer; no Worker proxy
+  // needed). EPSG:3857 GetMap CONFIRMED working (native web-mercator; no
+  // reprojection). Layer (workspace:layer):
+  // quickdri_vegdri_conus_week_data:vegdri_conus_week_data. Weekly TIME
+  // dimension, default="current" (confirmed byte-identical to the
+  // explicit latest-TIME request). GetCapabilities lists the full valid
+  // TIME set; latest granule at this re-verification is still
+  // 2026-06-29 (the 2026-07-06 week had not posted as of 2026-07-08, a
+  // 9-16 day lag depending on how the week is counted; a wider lag than
+  // the 7-day figure noted 2026-07-06, so treat weekly cadence as
+  // approximate, not guaranteed). CAVEAT (load-bearing, new this pass):
+  // TIME must match a GetCapabilities Dimension value EXACTLY; there is
+  // no nearest-match fallback. An off-list TIME (tested with an
+  // out-of-range date) returns HTTP 200 with Content-Type text/xml
+  // (OGC ServiceExceptionReport, code InvalidDimensionValue), not a
+  // PNG, so callers must branch on Content-Type or snap requested dates
+  // to the published Dimension list rather than compute "last Monday."
+  // The Dimension list also shows a historical ~4-week gap
+  // (2022-07-25 to 2022-08-22), evidence this product has had past
+  // outages; not disqualifying, but do not assume unbroken weekly
+  // continuity when back-filling a time series. CAVEAT: the response
+  // sets an HttpOnly session cookie; fine for raster tiles, never fetch
+  // with credentials included. NOT yet wired.
   usgsVegdriWeeklyWms:
     'https://dmsdata.cr.usgs.gov/geoserver/quickdri_vegdri_conus_week_data/wms',
 
-  // USGS EROS QuickDRI composite (the faster-response sibling of VegDRI;
-  // confirmed ALIVE, closing the scout's open unknown). Same host, CORS,
-  // 3857 support, weekly cadence, and cookie caveat as usgsVegdriWeeklyWms;
-  // verified 2026-07-06 in the same pass (distinct 50,866-byte PNG for the
-  // same bbox, so genuinely different data). Layer:
-  // quickdri_quickdri_conus_week_data:quickdri_conus_week_data. NOT wired.
+  // Verified 2026-07-08 (ddm-source-verifier, adversarial pass): HTTP 200,
+  // Content-Type image/png (PNG magic bytes; a 183,976-byte frame for
+  // TIME=2026-06-29 versus a 59,619-byte frame for TIME=2017-01-09 at the
+  // same bbox, confirming TIME is genuinely respected and not ignored),
+  // Access-Control-Allow-Origin: * (genuine wildcard, confirmed with no
+  // Origin header, the app origin, and an unrelated test origin). Access
+  // method: WMS (GetCapabilities + GetMap raster PNG frames, TIME
+  // dimension). EPSG:3857 GetMap confirmed (native web-mercator; no
+  // reprojection). Layer (workspace:layer):
+  // quickdri_quickdri_conus_week_data:quickdri_conus_week_data. Weekly
+  // time dimension, default="current"; discrete list runs
+  // 2016-12-26..2026-06-29 at verification (9-day lag on a weekly
+  // cadence); the no-TIME default request is byte-identical to
+  // TIME=2026-06-29, confirming default really tracks latest. CAVEAT
+  // (load-bearing, adversarial finding): TIME must exactly match a value
+  // from the GetCapabilities time list; GeoServer does NOT snap to
+  // nearest for this layer. An off-list TIME (tested one week off) or an
+  // out-of-range TIME (tested a 2030 date) both return HTTP 200 but
+  // Content-Type text/xml;charset=UTF-8, an OGC ServiceExceptionReport
+  // (code InvalidDimensionValue), not a PNG; a consumer MUST check
+  // Content-Type before treating the body as image bytes, and should
+  // snap requested dates to the published discrete list (parse it from
+  // GetCapabilities) rather than assume every Sunday or Monday works.
+  // CAVEAT: the response sets an HttpOnly session cookie, same as the
+  // sibling usgsVegdriWeeklyWms; fine for anonymous raster tiles, never
+  // fetch with credentials included. No Cache-Control header observed.
+  // Anti-scrape note: this GetMap endpoint already is the machine path;
+  // there is no separate HTML viewer being bypassed. Same host, CORS,
+  // 3857 support, and cookie caveat as usgsVegdriWeeklyWms (the
+  // faster-response QuickDRI composite versus VegDRI's observed-impact
+  // product). NOT yet wired.
   usgsQuickdriWeeklyWms:
     'https://dmsdata.cr.usgs.gov/geoserver/quickdri_quickdri_conus_week_data/wms',
 

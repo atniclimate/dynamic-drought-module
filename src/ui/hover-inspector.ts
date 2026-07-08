@@ -31,7 +31,9 @@ const READOUT_ID = 'hover-inspector';
 // slightly-off cursor.
 const STATE_FILL = 'us-states-fill';
 const ECOREGION_FILLS = ['ecoregions-l4-fill', 'ecoregions-l3-fill'] as const;
-const USDM_FILL = 'usdm-current-fill';
+// Both frame-slot fills of the 0.5.0b week scrubber; the hidden slot is
+// visibility 'none' and never matches, so the read is the on-screen week.
+const USDM_FILLS = ['usdm-frame-a-fill', 'usdm-frame-b-fill'] as const;
 const HYDRO_LINE = 'hydrography';
 
 /** Half-size of the query box in pixels. */
@@ -89,8 +91,9 @@ function collectItems(map: maplibregl.Map, point: maplibregl.Point): InspectItem
     }
   }
 
-  if (map.getLayer(USDM_FILL)) {
-    const f = map.queryRenderedFeatures(box, { layers: [USDM_FILL] })[0];
+  const usdmFills = USDM_FILLS.filter((id) => map.getLayer(id));
+  if (usdmFills.length > 0) {
+    const f = map.queryRenderedFeatures(box, { layers: [...usdmFills] })[0];
     const dm = readDm(f?.properties ?? null);
     if (dm !== null) {
       const cat = USDM_CATEGORIES[dm]!;

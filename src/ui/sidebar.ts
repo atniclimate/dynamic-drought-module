@@ -297,7 +297,8 @@ function pushUrl(): void {
     embed: STATE.embed,
     usdmWeek: timeline.usdmWeek,
     usdmMode: timeline.usdmMode,
-    sstDate: timeline.sstDate
+    sstDate: timeline.sstDate,
+    outlookRange: timeline.outlookRange
   });
 }
 
@@ -1099,6 +1100,7 @@ async function applyUrlState(map: maplibregl.Map): Promise<void> {
   timeline.setUsdmWeek(params.usdmWeek);
   timeline.setUsdmMode(params.usdmMode);
   timeline.setSstDate(params.sstDate);
+  timeline.setOutlookRange(params.outlookRange);
 
   const app = document.getElementById('app');
   if (app) {

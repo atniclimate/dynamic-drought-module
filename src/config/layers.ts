@@ -62,7 +62,7 @@ export interface LayerDef {
 export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'hydrography', name: 'Hydrography', source: 'OpenStreetMap (Overpass)', role: 'reference', defaultOn: false, load: () => import('../layers/hydrography') },
   { key: 'ecoregions', name: 'Ecoregions (Level III/IV)', source: 'EPA Omernik · PMTiles', role: 'reference', defaultOn: false, load: () => import('../layers/ecoregions') },
-  { key: 'drought', name: 'Seasonal Drought Outlook', source: 'NOAA CPC · WMS', role: 'surface', defaultOn: false, load: () => import('../layers/drought') },
+  { key: 'drought', name: 'Drought Outlook (CPC)', source: 'NOAA CPC · Monthly & Seasonal', role: 'surface', defaultOn: false, load: () => import('../layers/drought') },
   { key: 'gridded-index', name: 'Gridded Drought Index (SPI)', source: 'NOAA NIDIS · raster tiles', role: 'surface', defaultOn: false, load: () => import('../layers/gridded-index') },
   { key: 'usdm', name: 'US Drought Monitor', source: 'NDMC · FeatureServer', role: 'surface', defaultOn: true, load: () => import('../layers/usdm') },
   { key: 'tribal', name: 'Tribal Lands', source: 'BIA · bundled GeoJSON', role: 'reference', defaultOn: true, load: () => import('../layers/tribal') },

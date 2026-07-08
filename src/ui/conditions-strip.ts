@@ -46,7 +46,13 @@ import { escapeHtml } from '../util/escape';
 // ---------------------------------------------------------------------------
 
 const USDM_KEY = 'usdm';
-const USDM_FILL = 'usdm-current-fill';
+// The two frame-slot fills of the week scrubber (0.5.0b); only the visible
+// slot matches queryRenderedFeatures (the hidden slot carries visibility
+// 'none'), so the strip always reads the week actually on screen.
+const USDM_FILLS = ['usdm-frame-a-fill', 'usdm-frame-b-fill'] as const;
+// The change-map fill (the derivative register); rendered when the user
+// swaps the absolute categories for the 1-week / 4-week change view.
+const USDM_CHANGE_FILL = 'usdm-change-fill';
 
 const ALERTS_KEY = 'nws-alerts';
 const ALERTS_FILL = 'nws-alerts-fill';
@@ -152,7 +158,26 @@ function droughtMetric(map: maplibregl.Map): { metric: Metric; dateMs: number | 
     // a dash that could read as missing data; the sublabel names the layer.
     return { metric: { value: 'Off', sublabel: 'US Drought Monitor', tone: 'off' }, dateMs: null };
   }
-  if (!map.getLayer(USDM_FILL)) {
+
+  // The change-map register (0.5.0b): the absolute categories are hidden,
+  // so a "worst category in view" number would be dishonest. Name the view
+  // instead, and read the product date off the rendered change features.
+  if (timeline.usdmMode !== 'absolute' && map.getLayer(USDM_CHANGE_FILL)) {
+    const span = timeline.usdmMode === 'chg4' ? '4-wk' : '1-wk';
+    const changeFeats = map.queryRenderedFeatures({ layers: [USDM_CHANGE_FILL] });
+    let changeDateMs: number | null = null;
+    for (const f of changeFeats) {
+      const d = readMapDateMs(f.properties);
+      if (d !== null) changeDateMs = d;
+    }
+    return {
+      metric: { value: span, sublabel: 'drought change in view', tone: 'data' },
+      dateMs: changeDateMs
+    };
+  }
+
+  const presentFills = USDM_FILLS.filter((id) => map.getLayer(id));
+  if (presentFills.length === 0) {
     // Active but the fill has not been created yet: while the status is
     // genuinely loading, the tile shimmers; any other pending status (no data,
     // unavailable) reads as the muted off tone with its honest sublabel.
@@ -160,7 +185,7 @@ function droughtMetric(map: maplibregl.Map): { metric: Metric; dateMs: number | 
     return { metric: { value: '-', sublabel: pendingSublabel(USDM_KEY), tone }, dateMs: null };
   }
 
-  const feats = map.queryRenderedFeatures({ layers: [USDM_FILL] });
+  const feats = map.queryRenderedFeatures({ layers: [...presentFills] });
   if (feats.length === 0) {
     // The USDM maps only D0 through D4 polygons; a viewport with none is
     // drought-free, which is a real reading, not missing data.

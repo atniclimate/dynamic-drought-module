@@ -27,6 +27,9 @@
 /** USDM surface view mode: absolute categories, or the honest derivative. */
 export type UsdmViewMode = 'absolute' | 'chg1' | 'chg4';
 
+/** Which CPC drought outlook register the outlook surface renders. */
+export type OutlookRange = 'monthly' | 'seasonal';
+
 /** The set of valid `dmode` URL tokens, for parse-time validation. */
 const USDM_MODES: ReadonlySet<string> = new Set(['chg1', 'chg4']);
 
@@ -44,6 +47,7 @@ class TimelineStore {
   private usdmWeekValue: string | null = null;
   private usdmModeValue: UsdmViewMode = 'absolute';
   private sstDateValue: string | null = null;
+  private outlookRangeValue: OutlookRange = 'seasonal';
 
   private readonly listeners: TimelineListener[] = [];
 
@@ -60,6 +64,12 @@ class TimelineStore {
   /** Selected SST anomaly frame date (YYYY-MM-DD), or null for the latest. */
   get sstDate(): string | null {
     return this.sstDateValue;
+  }
+
+  /** The CPC drought outlook register ('seasonal' is the historic default,
+   * matching what the 'drought' layer rendered before the temporal axis). */
+  get outlookRange(): OutlookRange {
+    return this.outlookRangeValue;
   }
 
   setUsdmWeek(week: string | null): void {
@@ -82,15 +92,23 @@ class TimelineStore {
     this.emit();
   }
 
+  setOutlookRange(range: OutlookRange): void {
+    if (range === this.outlookRangeValue) return;
+    this.outlookRangeValue = range;
+    this.emit();
+  }
+
   /** Reset every temporal selection to "now" (the parameterless URL). */
   reset(): void {
     const dirty =
       this.usdmWeekValue !== null ||
       this.usdmModeValue !== 'absolute' ||
-      this.sstDateValue !== null;
+      this.sstDateValue !== null ||
+      this.outlookRangeValue !== 'seasonal';
     this.usdmWeekValue = null;
     this.usdmModeValue = 'absolute';
     this.sstDateValue = null;
+    this.outlookRangeValue = 'seasonal';
     if (dirty) this.emit();
   }
 
@@ -127,4 +145,9 @@ export function parseUsdmWeek(raw: string | null): string | null {
 /** Parse-time validation for the `sst` URL parameter. */
 export function parseSstDate(raw: string | null): string | null {
   return raw !== null && SST_RE.test(raw) ? raw : null;
+}
+
+/** Parse-time validation for the `outlook` URL parameter. */
+export function parseOutlookRange(raw: string | null): OutlookRange {
+  return raw === 'monthly' ? 'monthly' : 'seasonal';
 }

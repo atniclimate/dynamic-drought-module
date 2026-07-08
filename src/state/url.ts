@@ -5,7 +5,9 @@ import {
   parseUsdmMode,
   parseUsdmWeek,
   parseSstDate,
-  type UsdmViewMode
+  parseOutlookRange,
+  type UsdmViewMode,
+  type OutlookRange
 } from './timeline';
 
 /**
@@ -43,6 +45,8 @@ export interface ParsedUrlParams {
   readonly usdmMode: UsdmViewMode;
   /** SST anomaly frame (YYYY-MM-DD) from `sst=`, or null for latest. */
   readonly sstDate: string | null;
+  /** Outlook register from `outlook=`; 'seasonal' when absent or invalid. */
+  readonly outlookRange: OutlookRange;
 }
 
 /**
@@ -95,7 +99,8 @@ export function parseUrlParams(): ParsedUrlParams {
     embed,
     usdmWeek: parseUsdmWeek(params.get('week')),
     usdmMode: parseUsdmMode(params.get('dmode')),
-    sstDate: parseSstDate(params.get('sst'))
+    sstDate: parseSstDate(params.get('sst')),
+    outlookRange: parseOutlookRange(params.get('outlook'))
   };
 }
 
@@ -141,6 +146,8 @@ export interface UrlSyncState {
   readonly usdmMode?: UsdmViewMode;
   /** Selected SST frame; emitted as `sst=` only when non-null. */
   readonly sstDate?: string | null;
+  /** Outlook register; emitted as `outlook=` only when 'monthly'. */
+  readonly outlookRange?: OutlookRange;
 }
 
 /**
@@ -183,6 +190,9 @@ export function syncUrl(state: UrlSyncState): void {
   }
   if (state.sstDate) {
     params.set('sst', state.sstDate);
+  }
+  if (state.outlookRange === 'monthly') {
+    params.set('outlook', state.outlookRange);
   }
 
   const url = window.location.pathname + '?' + params.toString();

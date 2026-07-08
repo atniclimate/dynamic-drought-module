@@ -8,42 +8,39 @@
  * of Agriculture (USDA). New maps publish every Thursday morning Eastern
  * Time, valid through the previous Tuesday at 07:00 Eastern.
  *
- * This layer renders the most recent USDM week. It is a different product
- * than the National Oceanic and Atmospheric Administration (NOAA) Climate
- * Prediction Center (CPC) Seasonal Drought Outlook handled by the M4
- * `drought.ts` module: USDM is a current-conditions composite, while CPC
- * Seasonal Drought Outlook is a forward-looking forecast.
+ * 0.5.0b (the temporal axis) turned this from a current-week snapshot into
+ * a week-stepped scrubber (critical-review Section 5 item 3):
  *
- * Endpoint choice. Three transport options were evaluated during M9:
- *   a. `https://droughtmonitor.unl.edu/data/json/usdm_<YYYYMMDD>.json` --
- *      requires the caller to compute the most recent Tuesday-aligned
- *      release date and probe backwards on a 404, plus the path predates
- *      the formal Open Data publication.
- *   b. `https://droughtmonitor.unl.edu/data/shapefiles_m/USDM_current_M.zip`
- *      -- shapefile, not directly browser-consumable.
- *   c. NDMC ArcGIS Online FeatureServer (the "USDM_current" service) --
- *      Environmental Systems Research Institute (ESRI) Representational
- *      State Transfer (REST) feature service that emits GeoJSON with
- *      `f=geojson`, refreshed each Thursday by NDMC. Uses date fields in
- *      milliseconds-since-epoch (`MapDate`, `ValidStart`, `ValidEnd`).
+ *   - A discrete rail whose stops are real valid-Tuesdays; the newest stop
+ *     is read LIVE from the current release's MapDate (on a Wednesday the
+ *     nearest past Tuesday is not yet published; never assume it is).
+ *   - Each stop loads that week's polygons from the USDM archive
+ *     FeatureServer and repaints D0-D4. Steps CROSSFADE between two real,
+ *     dated frames (opacity only, via src/util/frame-stepper.ts); analyst
+ *     polygons are never tweened. That line is bright and non-negotiable.
+ *   - A change-map view (the honest derivative: 1-week and 4-week
+ *     worsened / no change / improved) swaps in for the absolute fills at
+ *     the CURRENT week only; no keyless historical-change archive exists,
+ *     so the chips are disabled (with the reason) at historical stops.
+ *   - Jump chips switch instrument to the CPC drought outlook register (a
+ *     REAL surface switch through the sidebar checkbox path: registry,
+ *     URL, and pill all stay honest; a hard cut, never a crossfade across
+ *     the observed/forecast boundary).
  *
- * Option (c) is the cleanest browser-reachable choice and is what we use.
- * The URL is centralized in `src/config/urls.ts` as `URLS.usdmFeatureServer`.
+ * The selected week and view mode round-trip through the URL (`week=`,
+ * `dmode=`) via the timeline store (src/state/timeline.ts).
  *
- * Verification (2026-05-09):
- *   GET <URLS.usdmFeatureServer>/query?where=1%3D1&outFields=*&f=geojson
- *     - HTTP 200
- *     - Content-Type: application/json; charset=utf-8
- *     - Access-Control-Allow-Origin: *
- *     - Body: GeoJSON FeatureCollection of polygons, one feature per
- *       drought category present that week, with `properties.DM` in 0..4.
+ * Endpoints (all stamped in src/config/urls.ts): `usdmFeatureServer` for
+ * the current week (verified 2026-05-09), `usdmArchiveFeatureServer` for
+ * any week since 2000-01-04 (verified 2026-07-08, wildcard CORS), and the
+ * two change-map GeoJSONs (verified 2026-07-08, wildcard CORS).
  *
  * Render. Per USDM convention, the five categories use the canonical
- * yellow-to-dark-red ramp (D0 #FFFF00, D1 #FCD37F, D2 #FFAA00, D3 #E60000,
- * D4 #730000). Fill opacity 0.6 keeps the basemap visible. A thin matching
- * outline disambiguates adjacent categories. Color is resolved by a
- * MapLibre `match` data-driven expression keyed off the integer `DM`
- * field; no per-feature precomputation is needed.
+ * yellow-to-dark-red ramp resolved by a MapLibre `match` expression keyed
+ * off the integer `DM` field. The change view uses a color-blind-safe
+ * diverging ramp keyed off the signed `DN` class delta (blue improved,
+ * red worsened), stepped, with the class read also carried by the legend
+ * labels rather than color alone.
  */
 
 import maplibregl from 'maplibre-gl';
@@ -53,49 +50,77 @@ import { URLS } from '../config/urls';
 import { escapeHtml } from '../util/escape';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
+import { timeline, type UsdmViewMode } from '../state/timeline';
 import { USDM_CATEGORIES } from '../config/palette';
+import {
+  FrameCache,
+  crossfadeFrames,
+  primeForFadeIn,
+  type FadeTarget
+} from '../util/frame-stepper';
+import { setTimeBar, clearTimeBar } from '../ui/time-bar';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
 
 const LAYER_KEY = 'usdm';
-const SOURCE_ID = 'usdm-current';
-const FILL_LAYER_ID = 'usdm-current-fill';
-const OUTLINE_LAYER_ID = 'usdm-current-outline';
+
+/**
+ * Two frame slots so a week step can crossfade between two real dated
+ * states: the visible week fades out while the incoming week fades in,
+ * opacity only. Layer ids derive from the source ids.
+ */
+const SLOT_SOURCES = ['usdm-frame-a', 'usdm-frame-b'] as const;
+type Slot = 0 | 1;
+
+const fillId = (src: string): string => `${src}-fill`;
+const outlineId = (src: string): string => `${src}-outline`;
+
+/** Change-map view (the derivative register). */
+const CHANGE_SOURCE = 'usdm-change';
+const CHANGE_FILL = fillId(CHANGE_SOURCE);
+const CHANGE_OUTLINE = outlineId(CHANGE_SOURCE);
 
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
-export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID] as const;
+export const fadeLayerIds = [
+  fillId(SLOT_SOURCES[0]),
+  outlineId(SLOT_SOURCES[0]),
+  fillId(SLOT_SOURCES[1]),
+  outlineId(SLOT_SOURCES[1]),
+  CHANGE_FILL,
+  CHANGE_OUTLINE
+] as const;
 
-/**
- * Symbol layer ID used as the `beforeId` anchor when inserting the fill
- * and outline layers; matches the convention from `ecoregions.ts` and
- * `tribal.ts` so reference polygon layers stack consistently below the
- * basemap label glyphs. If the active style does not declare this layer
- * MapLibre falls back to appending at the top of the layer list.
- */
+/** The fill ids the conditions strip reads (src/ui/conditions-strip.ts). */
+export const USDM_FILL_LAYER_IDS = [
+  fillId(SLOT_SOURCES[0]),
+  fillId(SLOT_SOURCES[1])
+] as const;
+
 const BEFORE_ID = 'first-symbol';
+const FETCH_TIMEOUT_MS = 20_000;
 
-/** Per-call network budget for the USDM FeatureServer query. */
-const FETCH_TIMEOUT_MS = 15_000;
+const FILL_OPACITY = 0.6;
+const OUTLINE_OPACITY = 0.85;
 
-/**
- * Master cancellation controller for the in-flight fetch. Aborted on
- * `deactivate` and replaced on each `activate` so a superseded request can
- * never render into a torn-down layer (CLAUDE.md section 6 invariant 5).
- */
+/** Rail depth: 52 stops covers a full water year of weekly frames. */
+const WEEKS_BACK = 52;
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
 let masterController: AbortController | null = null;
 
-/**
- * Canonical USDM category colors, indexed by the integer `DM` attribute NDMC
- * publishes (0=D0 through 4=D4). Derived from the single USDM_CATEGORIES table
- * in palette.ts so the map fill, the unified legend, and the conditions strip
- * cannot drift apart.
- */
+/** Ascending YYYYMMDD valid-Tuesday keys; empty until activation succeeds. */
+let weeks: string[] = [];
+let weekIndex = 0;
+let activeSlot: Slot = 0;
+/** Monotonic step counter; a resolved load for a stale step is dropped. */
+let stepEpoch = 0;
+
+/** Session cache of weekly frames (survives toggle-off, like HYDRO_CACHE). */
+const frameCache = new FrameCache<GeoJSON.FeatureCollection>(12);
+const changeCache = new Map<UsdmViewMode, GeoJSON.FeatureCollection>();
+
 const USDM_COLORS: ReadonlyArray<string> = USDM_CATEGORIES.map((c) => c.color);
 
-/**
- * Human-readable label per USDM category, indexed by `DM` value. Used by
- * `bindPopups` to render readable category names and by
- * `formatCategoryLabel` for any future legend chip work.
- */
 const USDM_LABELS: ReadonlyArray<string> = [
   'D0 - Abnormally Dry',
   'D1 - Moderate Drought',
@@ -103,6 +128,19 @@ const USDM_LABELS: ReadonlyArray<string> = [
   'D3 - Extreme Drought',
   'D4 - Exceptional Drought'
 ];
+
+/**
+ * Diverging change ramp (ColorBrewer RdBu endpoints, color-blind safe):
+ * blue = improved, red = worsened, muted slate for no change. Class is
+ * also carried in the legend text, never by hue alone.
+ */
+const CHANGE_COLORS = {
+  improved2: '#2166ac',
+  improved1: '#92c5de',
+  same: '#8b93a3',
+  worsened1: '#f4a582',
+  worsened2: '#b2182b'
+} as const;
 
 type UsdmStatus = 'loading' | 'ready' | 'error' | 'no-data';
 
@@ -114,37 +152,535 @@ function resolveBeforeId(map: maplibregl.Map): string | undefined {
   return map.getLayer(BEFORE_ID) ? BEFORE_ID : undefined;
 }
 
+// ---------------------------------------------------------------------------
+// Week arithmetic (keys are YYYYMMDD in UTC)
+// ---------------------------------------------------------------------------
+
+function msToWeekKey(ms: number): string {
+  const d = new Date(ms);
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return `${yyyy}${mm}${dd}`;
+}
+
+function weekKeyToMs(key: string): number {
+  return Date.UTC(
+    Number(key.slice(0, 4)),
+    Number(key.slice(4, 6)) - 1,
+    Number(key.slice(6, 8))
+  );
+}
+
+/** ISO date (YYYY-MM-DD) for the archive timestamp literal. */
+function weekKeyToIso(key: string): string {
+  return `${key.slice(0, 4)}-${key.slice(4, 6)}-${key.slice(6, 8)}`;
+}
+
+/** Human date for stamps: "Jun 30, 2026" (UTC, matching the release date). */
+function weekLabel(key: string): string {
+  return new Date(weekKeyToMs(key)).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC'
+  });
+}
+
 /**
- * Build the GeoJSON query URL for the USDM FeatureServer. We request all
- * fields (`outFields=*`) so popups can show release/validity dates without
- * a second round trip, and pin `outSR=4326` so MapLibre receives native
- * lon/lat coordinates regardless of any future server default change.
+ * Build the rail from the LIVE latest MapDate: `WEEKS_BACK` consecutive
+ * weekly stops ending at the current release. The USDM has published every
+ * week since 2000-01-04, so each arithmetic Tuesday in this window is a
+ * real product; the newest stop is data-derived, never assumed.
  */
-function buildQueryUrl(): string {
+function buildWeeks(latestMapDateMs: number): string[] {
+  const list: string[] = [];
+  for (let i = WEEKS_BACK - 1; i >= 0; i--) {
+    list.push(msToWeekKey(latestMapDateMs - i * WEEK_MS));
+  }
+  return list;
+}
+
+/** Snap an arbitrary YYYYMMDD to the nearest rail stop index. */
+function nearestWeekIndex(key: string): number {
+  if (weeks.length === 0) return 0;
+  const target = weekKeyToMs(key);
+  let best = 0;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < weeks.length; i++) {
+    const dist = Math.abs(weekKeyToMs(weeks[i]!) - target);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = i;
+    }
+  }
+  return best;
+}
+
+// ---------------------------------------------------------------------------
+// Fetching
+// ---------------------------------------------------------------------------
+
+/**
+ * Fields the popups and conditions strip need; `*` on a bad-drought week
+ * is a large payload on rural connections (archive stamp caveat). The two
+ * services spell the validity fields differently (verified live
+ * 2026-07-08): USDM_current uses ValidStart/ValidEnd, USDM_archive uses
+ * ValidStartDate/ValidEndDate; the popup reads both.
+ */
+const CURRENT_OUT_FIELDS = 'DM,MapDate,ValidStart,ValidEnd';
+const ARCHIVE_OUT_FIELDS = 'DM,MapDate,ValidStartDate,ValidEndDate';
+
+function buildCurrentQueryUrl(): string {
   const params = new URLSearchParams({
     where: '1=1',
-    outFields: '*',
+    outFields: CURRENT_OUT_FIELDS,
     outSR: '4326',
     f: 'geojson'
   });
   return `${URLS.usdmFeatureServer}/query?${params.toString()}`;
 }
 
+function buildArchiveQueryUrl(weekKey: string): string {
+  const params = new URLSearchParams({
+    where: `MapDate=timestamp '${weekKeyToIso(weekKey)} 00:00:00'`,
+    outFields: ARCHIVE_OUT_FIELDS,
+    outSR: '4326',
+    f: 'geojson',
+    // Historical frames are stepped at national scale; server-side
+    // simplification cuts a bad-drought week from ~6.5 MB to ~440 KB
+    // (measured 2026-07-08) with no visible difference at the zooms the
+    // scrubber serves. The current week keeps full precision.
+    maxAllowableOffset: '0.01',
+    geometryPrecision: '4'
+  });
+  return `${URLS.usdmArchiveFeatureServer}/query?${params.toString()}`;
+}
+
+async function fetchFrame(
+  url: string,
+  signal: AbortSignal
+): Promise<GeoJSON.FeatureCollection> {
+  const response = await fetchWithBudget(url, null, signal, FETCH_TIMEOUT_MS);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} ${response.statusText}`);
+  }
+  return (await response.json()) as GeoJSON.FeatureCollection;
+}
+
+/** Frame loader for the cache: the newest stop uses the current-week
+ * service, every older stop the archive. */
+function frameLoader(signal: AbortSignal): (key: string) => Promise<GeoJSON.FeatureCollection> {
+  return (key: string) => {
+    const latest = weeks[weeks.length - 1];
+    const url = key === latest ? buildCurrentQueryUrl() : buildArchiveQueryUrl(key);
+    return fetchFrame(url, signal);
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Map plumbing
+// ---------------------------------------------------------------------------
+
+const dmColorExpression: maplibregl.ExpressionSpecification = [
+  'match',
+  ['get', 'DM'],
+  0, USDM_COLORS[0]!,
+  1, USDM_COLORS[1]!,
+  2, USDM_COLORS[2]!,
+  3, USDM_COLORS[3]!,
+  4, USDM_COLORS[4]!,
+  '#cccccc'
+];
+
+/** Stepped diverging ramp over the signed DN class delta. */
+const changeColorExpression: maplibregl.ExpressionSpecification = [
+  'step',
+  ['get', 'DN'],
+  CHANGE_COLORS.improved2,
+  -1, CHANGE_COLORS.improved1,
+  0, CHANGE_COLORS.same,
+  1, CHANGE_COLORS.worsened1,
+  2, CHANGE_COLORS.worsened2
+];
+
+function addPolygonPair(
+  map: maplibregl.Map,
+  sourceId: string,
+  color: maplibregl.ExpressionSpecification,
+  visible: boolean
+): void {
+  const beforeId = resolveBeforeId(map);
+  const visibility = visible ? 'visible' : 'none';
+  if (!map.getLayer(fillId(sourceId))) {
+    map.addLayer(
+      {
+        id: fillId(sourceId),
+        type: 'fill',
+        source: sourceId,
+        layout: { visibility },
+        paint: { 'fill-color': color, 'fill-opacity': FILL_OPACITY }
+      },
+      beforeId
+    );
+  }
+  if (!map.getLayer(outlineId(sourceId))) {
+    map.addLayer(
+      {
+        id: outlineId(sourceId),
+        type: 'line',
+        source: sourceId,
+        layout: { visibility },
+        paint: {
+          'line-color': color,
+          'line-width': 0.6,
+          'line-opacity': OUTLINE_OPACITY
+        }
+      },
+      beforeId
+    );
+  }
+}
+
+const EMPTY_FC: GeoJSON.FeatureCollection = {
+  type: 'FeatureCollection',
+  features: []
+};
+
+function ensureSources(map: maplibregl.Map, initial: GeoJSON.FeatureCollection): void {
+  if (!map.getSource(SLOT_SOURCES[0])) {
+    map.addSource(SLOT_SOURCES[0], {
+      type: 'geojson',
+      data: initial,
+      attribution: 'USDM (NDMC / NOAA / USDA)'
+    });
+  }
+  if (!map.getSource(SLOT_SOURCES[1])) {
+    map.addSource(SLOT_SOURCES[1], { type: 'geojson', data: EMPTY_FC });
+  }
+  if (!map.getSource(CHANGE_SOURCE)) {
+    map.addSource(CHANGE_SOURCE, {
+      type: 'geojson',
+      data: EMPTY_FC,
+      attribution: 'USDM change (NDMC / NOAA / USDA via drought.gov)'
+    });
+  }
+  addPolygonPair(map, SLOT_SOURCES[0], dmColorExpression, true);
+  addPolygonPair(map, SLOT_SOURCES[1], dmColorExpression, false);
+  addPolygonPair(map, CHANGE_SOURCE, changeColorExpression, false);
+}
+
+function setPairData(map: maplibregl.Map, sourceId: string, data: GeoJSON.FeatureCollection): void {
+  const src = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
+  src?.setData(data);
+}
+
+function setPairVisibility(map: maplibregl.Map, sourceId: string, visible: boolean): void {
+  const visibility = visible ? 'visible' : 'none';
+  for (const id of [fillId(sourceId), outlineId(sourceId)]) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', visibility);
+  }
+}
+
+function pairFadeTargets(sourceId: string): FadeTarget[] {
+  return [
+    { layerId: fillId(sourceId), prop: 'fill-opacity', target: FILL_OPACITY },
+    { layerId: outlineId(sourceId), prop: 'line-opacity', target: OUTLINE_OPACITY }
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Legends
+// ---------------------------------------------------------------------------
+
+function showAbsoluteLegend(): void {
+  showLegend(LAYER_KEY, {
+    order: LEGEND_ORDER.surface,
+    render: (body) =>
+      renderSwatchLegend(
+        body,
+        'Drought monitor key',
+        USDM_CATEGORIES.map((c) => ({ color: c.color, label: `${c.code} · ${c.label}` })),
+        'U.S. Drought Monitor · observed weekly conditions (NDMC / NOAA / USDA)'
+      )
+  });
+}
+
+function showChangeLegend(mode: UsdmViewMode): void {
+  const span = mode === 'chg4' ? '4-week' : '1-week';
+  showLegend(LAYER_KEY, {
+    order: LEGEND_ORDER.surface,
+    render: (body) =>
+      renderSwatchLegend(
+        body,
+        `Drought change key (${span})`,
+        [
+          { color: CHANGE_COLORS.improved2, label: 'Improved 2+ categories' },
+          { color: CHANGE_COLORS.improved1, label: 'Improved 1 category' },
+          { color: CHANGE_COLORS.same, label: 'No category change' },
+          { color: CHANGE_COLORS.worsened1, label: 'Worsened 1 category' },
+          { color: CHANGE_COLORS.worsened2, label: 'Worsened 2+ categories' }
+        ],
+        `USDM ${span} change · what moved, not where it stands`
+      )
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The time bar
+// ---------------------------------------------------------------------------
+
+function atLatestStop(): boolean {
+  return weekIndex === weeks.length - 1;
+}
+
+function installTimeBar(map: maplibregl.Map): void {
+  if (weeks.length === 0) return;
+  const mode = timeline.usdmMode;
+  const currentKey = weeks[weekIndex]!;
+  const changeTitle = (span: string): string =>
+    atLatestStop()
+      ? `Show the ${span} drought change classes (worsened, no change, improved)`
+      : 'Change maps are published for the current week only; step to the newest week to use them';
+
+  setTimeBar(LAYER_KEY, {
+    ariaLabel: 'US Drought Monitor timeline',
+    stamp:
+      mode === 'absolute'
+        ? {
+            headline: `Valid ${weekLabel(currentKey)}`,
+            detail: 'US Drought Monitor week · solid fills are observed conditions',
+            register: 'observed'
+          }
+        : {
+            headline: `Change through ${weekLabel(currentKey)}`,
+            detail: `USDM ${mode === 'chg4' ? '4-week' : '1-week'} change · observed, not forecast`,
+            register: 'observed'
+          },
+    rail: {
+      count: weeks.length,
+      index: weekIndex,
+      valueText: (i) => `Week of ${weekLabel(weeks[i] ?? currentKey)}`,
+      onStep: (i) => void showWeek(map, i)
+    },
+    modes: {
+      options: [
+        {
+          key: 'absolute',
+          label: 'Drought level',
+          title: 'Observed D0 to D4 categories for the selected week'
+        },
+        {
+          key: 'chg1',
+          label: '1-wk change',
+          title: changeTitle('1-week'),
+          disabled: !atLatestStop()
+        },
+        {
+          key: 'chg4',
+          label: '4-wk change',
+          title: changeTitle('4-week'),
+          disabled: !atLatestStop()
+        }
+      ],
+      activeKey: mode,
+      onSelect: (key) => void setMode(map, key as UsdmViewMode)
+    },
+    jumps: {
+      options: [
+        {
+          key: 'monthly',
+          label: 'Monthly outlook',
+          title:
+            'Switch to the CPC Monthly Drought Outlook: a forecast register (a shift in odds, not a forecast of outcomes)',
+          hatched: true
+        },
+        {
+          key: 'seasonal',
+          label: 'Seasonal outlook',
+          title:
+            'Switch to the CPC Seasonal Drought Outlook: a forecast register (a shift in odds, not a forecast of outcomes)',
+          hatched: true
+        }
+      ],
+      onJump: (key) => switchToOutlook(key)
+    }
+  });
+}
+
 /**
- * Add the USDM source plus fill and outline layers. Idempotent: if the
- * source already exists, the function exits after re-reporting status so
- * the registry observes a terminal state on a re-activation.
- *
- * Network failures surface as `'error'` rather than throwing; the caller
- * (LayerRegistry) is responsible for surfacing this in the sidebar status
- * pill.
+ * The instrument switch: a REAL surface switch to the outlook layer via
+ * the sidebar checkbox path, so the registry, the URL `layers=` list, and
+ * the status pill all record what is actually on screen. A hard cut by
+ * design; the observed/forecast boundary is never crossfaded.
  */
-export async function activate(map: maplibregl.Map): Promise<void> {
-  if (map.getSource(SOURCE_ID)) {
+function switchToOutlook(range: string): void {
+  timeline.setOutlookRange(range === 'monthly' ? 'monthly' : 'seasonal');
+  const cb = document.querySelector<HTMLInputElement>(
+    'input[data-layer-key="drought"]'
+  );
+  if (cb && !cb.checked) cb.click();
+}
+
+// ---------------------------------------------------------------------------
+// Week stepping and mode switching
+// ---------------------------------------------------------------------------
+
+/**
+ * Show the week at rail stop `index`, crossfading from the visible frame.
+ * Supersede-safe: a slower load that resolves after a newer step is
+ * dropped (invariant 5), and an aborted master signal drops silently.
+ */
+async function showWeek(map: maplibregl.Map, index: number): Promise<void> {
+  if (weeks.length === 0) return;
+  const clamped = Math.min(weeks.length - 1, Math.max(0, index));
+  const signal = masterController?.signal ?? null;
+  if (!signal) return;
+
+  const myEpoch = ++stepEpoch;
+  const key = weeks[clamped]!;
+
+  // Leaving the newest stop while in a change mode falls back to the
+  // absolute register (change maps exist for the current week only).
+  if (timeline.usdmMode !== 'absolute' && clamped !== weeks.length - 1) {
+    setPairVisibility(map, CHANGE_SOURCE, false);
+    setPairVisibility(map, SLOT_SOURCES[activeSlot], true);
+    timeline.setUsdmMode('absolute');
+    showAbsoluteLegend();
+  }
+
+  const cached = frameCache.peek(key) !== undefined;
+  if (!cached) reportStatus('loading');
+
+  let frame: GeoJSON.FeatureCollection;
+  try {
+    frame = await frameCache.get(key, frameLoader(signal));
+  } catch (err) {
+    if (signal.aborted || myEpoch !== stepEpoch) return;
+    console.warn(`[usdm] week ${key} fetch failed.`, err);
+    reportStatus('error');
+    return;
+  }
+  if (signal.aborted || myEpoch !== stepEpoch) return;
+
+  const outSource = SLOT_SOURCES[activeSlot];
+  const inSlot: Slot = activeSlot === 0 ? 1 : 0;
+  const inSource = SLOT_SOURCES[inSlot];
+
+  setPairData(map, inSource, frame);
+  primeForFadeIn(map, pairFadeTargets(inSource));
+  setPairVisibility(map, inSource, true);
+
+  weekIndex = clamped;
+  activeSlot = inSlot;
+  timeline.setUsdmWeek(clamped === weeks.length - 1 ? null : key);
+  installTimeBar(map);
+  reportStatus('ready');
+
+  await crossfadeFrames(map, pairFadeTargets(outSource), pairFadeTargets(inSource));
+  if (signal.aborted || myEpoch !== stepEpoch) return;
+  setPairVisibility(map, outSource, false);
+
+  // Warm the neighbors so the next step is instant (polite: the cache
+  // skips prefetch entirely on constrained connections).
+  const neighbors: string[] = [];
+  if (clamped > 0) neighbors.push(weeks[clamped - 1]!);
+  if (clamped < weeks.length - 1) neighbors.push(weeks[clamped + 1]!);
+  frameCache.prefetch(neighbors, frameLoader(signal));
+}
+
+/**
+ * Inject the change file's own top-level `date` (YYYYMMDD) into each
+ * feature as an epoch-ms MapDate, so the conditions strip's date line can
+ * read the product date off rendered features exactly as it does for the
+ * absolute register. The date is the product's, never invented.
+ */
+function stampChangeFeatures(
+  fc: GeoJSON.FeatureCollection & { date?: unknown }
+): GeoJSON.FeatureCollection {
+  const raw = String(fc.date ?? '');
+  const ms = /^\d{8}$/.test(raw) ? weekKeyToMs(raw) : null;
+  if (ms === null) return fc;
+  for (const f of fc.features) {
+    f.properties = { ...(f.properties ?? {}), MapDate: ms };
+  }
+  return fc;
+}
+
+/** Switch between the absolute register and a change-map view. */
+async function setMode(map: maplibregl.Map, mode: UsdmViewMode): Promise<void> {
+  if (mode === timeline.usdmMode) return;
+  const signal = masterController?.signal ?? null;
+  if (!signal) return;
+  const myEpoch = ++stepEpoch;
+
+  if (mode === 'absolute') {
+    const slotSource = SLOT_SOURCES[activeSlot];
+    primeForFadeIn(map, pairFadeTargets(slotSource));
+    setPairVisibility(map, slotSource, true);
+    timeline.setUsdmMode('absolute');
+    installTimeBar(map);
+    showAbsoluteLegend();
+    await crossfadeFrames(map, pairFadeTargets(CHANGE_SOURCE), pairFadeTargets(slotSource));
+    if (signal.aborted || myEpoch !== stepEpoch) return;
+    setPairVisibility(map, CHANGE_SOURCE, false);
     return;
   }
 
-  // Supersede any prior in-flight fetch before starting a new one.
+  // Change maps are published for the current week only.
+  if (!atLatestStop()) return;
+
+  let fc = changeCache.get(mode);
+  if (!fc) {
+    reportStatus('loading');
+    try {
+      const url = mode === 'chg4' ? URLS.usdmChange4wkGeojson : URLS.usdmChange1wkGeojson;
+      const response = await fetchWithBudget(url, null, signal, FETCH_TIMEOUT_MS);
+      if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
+      fc = stampChangeFeatures(
+        (await response.json()) as GeoJSON.FeatureCollection & { date?: unknown }
+      );
+      changeCache.set(mode, fc);
+    } catch (err) {
+      if (signal.aborted || myEpoch !== stepEpoch) return;
+      console.warn(`[usdm] change map (${mode}) fetch failed.`, err);
+      reportStatus('error');
+      return;
+    }
+  }
+  if (signal.aborted || myEpoch !== stepEpoch) return;
+
+  setPairData(map, CHANGE_SOURCE, fc);
+  primeForFadeIn(map, pairFadeTargets(CHANGE_SOURCE));
+  setPairVisibility(map, CHANGE_SOURCE, true);
+  timeline.setUsdmMode(mode);
+  installTimeBar(map);
+  showChangeLegend(mode);
+  reportStatus('ready');
+
+  const slotSource = SLOT_SOURCES[activeSlot];
+  await crossfadeFrames(map, pairFadeTargets(slotSource), pairFadeTargets(CHANGE_SOURCE));
+  if (signal.aborted || myEpoch !== stepEpoch) return;
+  setPairVisibility(map, slotSource, false);
+}
+
+// ---------------------------------------------------------------------------
+// Activate / deactivate
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the current week, stand up the frame slots and the time bar, and
+ * restore any URL-selected week or view mode. Idempotent: if the frame
+ * sources already exist the function exits after re-reporting status.
+ *
+ * Network failures surface as `'error'` rather than throwing; the caller
+ * (the sidebar activation spine) surfaces this in the status pill.
+ */
+export async function activate(map: maplibregl.Map): Promise<void> {
+  if (map.getSource(SLOT_SOURCES[0])) {
+    return;
+  }
+
   if (masterController) masterController.abort();
   masterController = new AbortController();
   const signal = masterController.signal;
@@ -153,143 +689,103 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   let geojson: GeoJSON.FeatureCollection;
   try {
-    const response = await fetchWithBudget(
-      buildQueryUrl(),
-      null,
-      signal,
-      FETCH_TIMEOUT_MS
-    );
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    }
-    geojson = (await response.json()) as GeoJSON.FeatureCollection;
+    geojson = await fetchFrame(buildCurrentQueryUrl(), signal);
   } catch (err) {
-    // Aborted means superseded or deactivated; drop silently per invariant 5.
     if (signal.aborted) return;
     console.warn('[usdm] Drought Monitor fetch failed.', err);
     reportStatus('error');
     return;
   }
-
-  // A late response to a torn-down activation must not render.
   if (signal.aborted) return;
 
   const features = geojson?.features ?? [];
 
-  map.addSource(SOURCE_ID, {
-    type: 'geojson',
-    data: geojson,
-    attribution: 'USDM (NDMC / NOAA / USDA)'
-  });
+  ensureSources(map, geojson);
 
   if (features.length === 0) {
-    // The USDM is published weekly; an empty FeatureCollection means
-    // every category is absent (full national coverage, no drought),
-    // which is rare but valid. Surface as `'no-data'` so the sidebar
-    // can communicate it without alarming the user.
+    // Every category absent (full national coverage, no drought) is rare
+    // but valid; without a MapDate there is no anchor for the rail, so
+    // the temporal controls stay down and the status says why.
     reportStatus('no-data');
     return;
   }
 
-  const beforeId = resolveBeforeId(map);
+  // The newest stop comes from the release itself (the archive-stamp
+  // caveat: on a Wednesday the nearest past Tuesday is not yet published).
+  const latestMs = Number(features[0]?.properties?.['MapDate']);
+  if (Number.isFinite(latestMs) && latestMs > 0) {
+    weeks = buildWeeks(latestMs);
+    weekIndex = weeks.length - 1;
+    activeSlot = 0;
+    frameCache.get(weeks[weekIndex]!, () => Promise.resolve(geojson)).catch(() => undefined);
+  } else {
+    weeks = [];
+  }
 
-  // Color is resolved at render time via a `match` expression keyed off
-  // the integer `DM` attribute. The fallback color (`#cccccc`) only
-  // applies if NDMC ever ships a feature outside 0..4, which would be a
-  // data anomaly worth noticing in the rendered output.
-  const colorExpression: maplibregl.ExpressionSpecification = [
-    'match',
-    ['get', 'DM'],
-    0, USDM_COLORS[0],
-    1, USDM_COLORS[1],
-    2, USDM_COLORS[2],
-    3, USDM_COLORS[3],
-    4, USDM_COLORS[4],
-    '#cccccc'
-  ];
-
-  map.addLayer(
-    {
-      id: FILL_LAYER_ID,
-      type: 'fill',
-      source: SOURCE_ID,
-      paint: {
-        'fill-color': colorExpression,
-        'fill-opacity': 0.6
-      }
-    },
-    beforeId
-  );
-
-  map.addLayer(
-    {
-      id: OUTLINE_LAYER_ID,
-      type: 'line',
-      source: SOURCE_ID,
-      paint: {
-        'line-color': colorExpression,
-        'line-width': 0.6,
-        'line-opacity': 0.85
-      }
-    },
-    beforeId
-  );
-
-  showLegend(LAYER_KEY, {
-    order: LEGEND_ORDER.surface,
-    render: (body) =>
-      renderSwatchLegend(
-        body,
-        'Drought monitor key',
-        USDM_CATEGORIES.map((c) => ({ color: c.color, label: `${c.code} · ${c.label}` })),
-        'U.S. Drought Monitor · current week (NDMC / NOAA / USDA)'
-      )
-  });
+  showAbsoluteLegend();
   reportStatus('ready');
+
+  if (weeks.length > 0) {
+    installTimeBar(map);
+
+    // URL restore: a shared week lands on its rail stop (snapped to a real
+    // Tuesday); a shared change mode reapplies only where it is honest
+    // (the newest stop), otherwise the URL falls back to absolute.
+    const urlWeek = timeline.usdmWeek;
+    if (urlWeek !== null) {
+      const idx = nearestWeekIndex(urlWeek);
+      if (idx !== weekIndex) await showWeek(map, idx);
+    }
+    const urlMode = timeline.usdmMode;
+    if (urlMode !== 'absolute') {
+      if (atLatestStop()) {
+        timeline.setUsdmMode('absolute'); // setMode() re-enters cleanly
+        await setMode(map, urlMode);
+      } else {
+        timeline.setUsdmMode('absolute');
+      }
+    }
+  }
 }
 
 /**
- * Abort any in-flight fetch and remove the USDM fill, outline, and source.
- * Each guard is defensive so callers can safely invoke `deactivate` without
- * first checking activation state. Symmetric with `activate`.
+ * Abort in-flight work and remove every USDM layer and source (both frame
+ * slots and the change pair). Resets the temporal selection to "now" so
+ * the URL never carries a week for a surface that is off.
  */
 export function deactivate(map: maplibregl.Map): void {
   if (masterController) {
     masterController.abort();
     masterController = null;
   }
-  if (map.getLayer(FILL_LAYER_ID)) {
-    map.removeLayer(FILL_LAYER_ID);
+  stepEpoch++;
+  for (const src of [...SLOT_SOURCES, CHANGE_SOURCE]) {
+    for (const id of [fillId(src), outlineId(src)]) {
+      if (map.getLayer(id)) map.removeLayer(id);
+    }
+    if (map.getSource(src)) map.removeSource(src);
   }
-  if (map.getLayer(OUTLINE_LAYER_ID)) {
-    map.removeLayer(OUTLINE_LAYER_ID);
-  }
-  if (map.getSource(SOURCE_ID)) {
-    map.removeSource(SOURCE_ID);
-  }
+  weeks = [];
+  weekIndex = 0;
+  activeSlot = 0;
+  clearTimeBar(LAYER_KEY);
   hideLegend(LAYER_KEY);
+  timeline.setUsdmWeek(null);
+  timeline.setUsdmMode('absolute');
 }
 
-/**
- * Format a USDM category integer (0..4) into a human-readable label.
- * Returns the literal `'Unknown drought category'` for anything else; this
- * is intentional and surfaces upstream data anomalies in the popup rather
- * than silently substituting a guess.
- */
+// ---------------------------------------------------------------------------
+// Popups
+// ---------------------------------------------------------------------------
+
 function formatCategoryLabel(dm: unknown): string {
   if (typeof dm !== 'number') return 'Unknown drought category';
   if (dm < 0 || dm > 4 || !Number.isInteger(dm)) {
     return 'Unknown drought category';
   }
-  return USDM_LABELS[dm];
+  return USDM_LABELS[dm]!;
 }
 
-/**
- * The plain-language impact read for a category, so a non-specialist learns
- * what the classification means without a glossary (personas: decision-makers,
- * community members). Falls back to the neutral range description for an
- * out-of-domain value rather than guessing.
- */
 function categoryImpact(dm: unknown): string {
   if (typeof dm === 'number' && Number.isInteger(dm) && dm >= 0 && dm <= 4) {
     return USDM_CATEGORIES[dm]!.impact;
@@ -315,19 +811,13 @@ function formatDate(value: unknown): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-/**
- * Build the popup HTML for a USDM polygon feature. Kept in-file (rather
- * than in `src/ui/popups.ts`) for M9 to avoid touching the popups module,
- * which the M5 work owns. Future consolidation may move this to the
- * shared popups module without changing call sites.
- */
 function buildUsdmPopupHtml(props: GeoJsonProperties): string {
   const p = props ?? {};
   const dm = (p.DM ?? p.dm) as unknown;
   const category = formatCategoryLabel(dm);
   const mapDate = formatDate(p.MapDate ?? p.mapDate);
-  const validStart = formatDate(p.ValidStart ?? p.validStart);
-  const validEnd = formatDate(p.ValidEnd ?? p.validEnd);
+  const validStart = formatDate(p.ValidStart ?? p.ValidStartDate ?? p.validStart);
+  const validEnd = formatDate(p.ValidEnd ?? p.ValidEndDate ?? p.validEnd);
 
   return `
     <div class="popup-title">${escapeHtml(category)}</div>
@@ -343,26 +833,65 @@ function buildUsdmPopupHtml(props: GeoJsonProperties): string {
   `;
 }
 
+/** Plain-language read of a signed change class delta. */
+function changeLabel(dn: unknown): string {
+  const n = typeof dn === 'number' ? dn : Number(dn);
+  if (!Number.isFinite(n) || !Number.isInteger(n)) return 'Unknown change class';
+  if (n === 0) return 'No category change';
+  const dir = n > 0 ? 'Worsened' : 'Improved';
+  const steps = Math.abs(n);
+  return `${dir} ${steps} ${steps === 1 ? 'category' : 'categories'}`;
+}
+
+function buildChangePopupHtml(props: GeoJsonProperties): string {
+  const p = props ?? {};
+  const mapDate = formatDate(p.MapDate);
+  return `
+    <div class="popup-title">${escapeHtml(changeLabel(p.DN))}</div>
+    <div class="popup-agency">U.S. Drought Monitor change map (via drought.gov)</div>
+    ${mapDate ? `<div class="popup-treaty-meta">Through: ${escapeHtml(mapDate)}</div>` : ''}
+    <div class="popup-description">How the drought category moved over the window, not where it stands. Observed analysis, not a forecast.</div>
+    <div class="popup-links">
+      <a href="https://droughtmonitor.unl.edu/Maps/ChangeMaps.aspx" target="_blank" rel="noopener">USDM Change Maps</a>
+    </div>
+  `;
+}
+
 /**
- * Wire a click handler on the USDM fill layer that opens a MapLibre popup
- * with category, map date, and validity window for the clicked polygon.
- * Mirrors the cursor affordance pattern from `treaty.ts`.
+ * Wire click handlers on both frame-slot fills and the change fill. The
+ * hidden pair never matches (its layers carry visibility 'none'), so a
+ * click always reads the week or register actually on screen.
  */
 export function bindPopups(map: maplibregl.Map): void {
-  map.on('click', FILL_LAYER_ID, (e) => {
+  for (const id of USDM_FILL_LAYER_IDS) {
+    map.on('click', id, (e) => {
+      const feature = e.features && e.features[0];
+      if (!feature) return;
+      new maplibregl.Popup({ closeButton: true, closeOnClick: true })
+        .setLngLat(e.lngLat)
+        .setHTML(buildUsdmPopupHtml(feature.properties ?? {}))
+        .addTo(map);
+    });
+    map.on('mouseenter', id, () => {
+      map.getCanvas().style.cursor = 'pointer';
+    });
+    map.on('mouseleave', id, () => {
+      map.getCanvas().style.cursor = '';
+    });
+  }
+
+  map.on('click', CHANGE_FILL, (e) => {
     const feature = e.features && e.features[0];
     if (!feature) return;
-    const html = buildUsdmPopupHtml(feature.properties ?? {});
     new maplibregl.Popup({ closeButton: true, closeOnClick: true })
       .setLngLat(e.lngLat)
-      .setHTML(html)
+      .setHTML(buildChangePopupHtml(feature.properties ?? {}))
       .addTo(map);
   });
-
-  map.on('mouseenter', FILL_LAYER_ID, () => {
+  map.on('mouseenter', CHANGE_FILL, () => {
     map.getCanvas().style.cursor = 'pointer';
   });
-  map.on('mouseleave', FILL_LAYER_ID, () => {
+  map.on('mouseleave', CHANGE_FILL, () => {
     map.getCanvas().style.cursor = '';
   });
 }

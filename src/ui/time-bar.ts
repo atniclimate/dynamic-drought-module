@@ -31,8 +31,11 @@ import { escapeHtml } from '../util/escape';
 export interface TimeBarMode {
   readonly key: string;
   readonly label: string;
-  /** Accessible description of what the mode shows. */
+  /** Accessible description of what the mode shows (or why it is off). */
   readonly title: string;
+  /** Honestly unavailable (e.g. change maps exist for the current week
+   * only); rendered disabled with the explanatory title, never hidden. */
+  readonly disabled?: boolean;
 }
 
 /** A jump chip: a labeled instrument switch rendered beyond the rail
@@ -198,7 +201,7 @@ function render(): void {
       parts.push(
         `<button type="button" class="time-bar-mode${active ? ' active' : ''}" ` +
           `data-mode="${escapeHtml(m.key)}" title="${escapeHtml(m.title)}" ` +
-          `aria-pressed="${active ? 'true' : 'false'}">${escapeHtml(m.label)}</button>`
+          `aria-pressed="${active ? 'true' : 'false'}"${m.disabled ? ' disabled' : ''}>${escapeHtml(m.label)}</button>`
       );
     }
     parts.push('</div>');

@@ -23,8 +23,10 @@ import { USDM_CATEGORIES } from '../config/palette';
 import { STATIC_TELEMETRY_STATION_REGISTRY, distanceMeters } from '../config/station-registry';
 import { escapeHtml } from '../util/escape';
 
-/** The USDM current-conditions fill layer id (mirrors src/ui/conditions-strip.ts). */
-const USDM_FILL = 'usdm-current-fill';
+/** The USDM frame-slot fill ids (0.5.0b scrubber; mirrors
+ * src/ui/conditions-strip.ts). Only the visible slot matches a rendered
+ * query, so the read is always the week actually on screen. */
+const USDM_FILLS = ['usdm-frame-a-fill', 'usdm-frame-b-fill'] as const;
 
 /** The USFS Wildfire Hazard Potential raster layer id (src/layers/usfs-whp.ts). */
 const WHP_LAYER = 'usfs-whp';
@@ -54,14 +56,15 @@ export function buildFireContextHtml(
 
 /** The USDM class beneath the clicked point, or an honest off/none state. */
 function droughtBeneathRow(map: maplibregl.Map, point: maplibregl.PointLike): string {
-  if (!map.getLayer(USDM_FILL)) {
+  const presentFills = USDM_FILLS.filter((id) => map.getLayer(id));
+  if (presentFills.length === 0) {
     return contextRow(
       'Drought beneath',
       'Turn on the US Drought Monitor to read the drought class here.'
     );
   }
 
-  const feats = map.queryRenderedFeatures(point, { layers: [USDM_FILL] });
+  const feats = map.queryRenderedFeatures(point, { layers: [...presentFills] });
   let maxDm = -1;
   for (const f of feats) {
     const dm = readDm(f.properties);
