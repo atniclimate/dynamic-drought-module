@@ -910,12 +910,17 @@ export const URLS = Object.freeze({
   // (BC_Current_Drought_Levels; 41 basins; DroughtLevel 0-5 with a 99
   // sentinel = "not updated outside core drought season"; weekly Thursday
   // in season). Parentheses in the path are kept percent-encoded (%28 %29).
-  // LICENSE CAVEAT (LOAD-BEARING, wiring BLOCKED pending maintainer
-  // sign-off): the ArcGIS item metadata licenses this "Access Only" with
-  // "Copyright (c), Province of British Columbia. All rights reserved."
-  // This is NOT the Open Government Licence - British Columbia and needs an
-  // explicit compatibility decision (or an OGL-BC alternative source)
-  // before any wiring. Recorded in the phase LOG 2026-07-07.
+  // LICENSE CAVEAT (LOAD-BEARING): the ArcGIS item metadata licenses this
+  // "Access Only" with "Copyright (c), Province of British Columbia. All
+  // rights reserved." This is NOT the Open Government Licence - British
+  // Columbia. MAINTAINER SIGN-OFF 2026-07-08 (Patrick Freeland, maintainer
+  // of record): approved for use, accepting the "All rights reserved"
+  // terms as a display/attribution source; the license blocker is lifted.
+  // The actual layer wiring remains a scheduled 0.7.0 transboundary task
+  // (seam doctrine: name the issuing agency per polygon, never blend); this
+  // stamp only clears the gate. Any deployer re-serving this into a Tribe's
+  // site should carry the "Province of British Columbia" attribution and
+  // re-confirm the license has not changed. Recorded in the 0.5.0 phase LOG.
   // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, application/json,
   // Access-Control-Allow-Origin: * (wildcard, Origin set) on both ?f=json
   // and /query; capabilities "Query,Extract" only (no edit operations
