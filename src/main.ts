@@ -34,7 +34,17 @@ async function boot(): Promise<void> {
   // replaced with `false` in the production build, so this block is dead-code
   // eliminated from `dist/`; no debug handle ships. Not application logic.
   if (import.meta.env.DEV) {
-    (window as unknown as { __ddmMap?: maplibregl.Map }).__ddmMap = map;
+    const devWindow = window as unknown as {
+      __ddmMap?: maplibregl.Map;
+      __ddmResolveIdentity?: (lng: number, lat: number) => Promise<unknown>;
+    };
+    devWindow.__ddmMap = map;
+    // Resolve the location identity for a point (R1 browser verification):
+    // window.__ddmResolveIdentity(lng, lat) returns the resolved identity.
+    devWindow.__ddmResolveIdentity = async (lng, lat) => {
+      const { resolveLocationIdentity } = await import('./state/location-identity');
+      return resolveLocationIdentity(map, { lng, lat }, new AbortController().signal);
+    };
   }
 
   await new Promise<void>((resolve) => {
