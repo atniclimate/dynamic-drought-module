@@ -28,6 +28,11 @@ import type maplibregl from 'maplibre-gl';
 
 import { createBriefingSkeleton } from '../impact/briefing';
 import { hydrateBriefing } from '../impact/hydrate';
+import { resourcesForIdentity } from '../impact/resource-catalog';
+import { resolveLocationIdentity } from '../state/location-identity';
+import { getMap } from '../state/map-store';
+import { getPlaceSelection, setPlaceSelection } from '../state/place-selection';
+import type { PlaceSelection } from '../state/place-selection';
 import type {
   BoundarySelectionContext,
   Horizon,
@@ -353,7 +358,51 @@ export function openImpactPanel(context: BoundarySelectionContext): number {
     }
   );
 
+  // In parallel, resolve the selection's location identity and swap in the
+  // state-tier resources from the verified catalog (F3; D-0.6.0-009). Same
+  // supersede signal and token as the horizon hydration.
+  void rehydrateResourcesFromCatalog(briefing, context, signal, token);
+
   return token;
+}
+
+/**
+ * Resolve the selection's location identity and swap in the state-tier
+ * resources from the verified catalog (F3; D-0.6.0-009). Runs async in parallel
+ * with the horizon hydration: the panel opens immediately with the base
+ * resources (Tribe's-own, federal, BIA regional), then this adds the state tier
+ * when the catalog answers.
+ *
+ * Honest degradation: if the map is not yet published, the identity does not
+ * resolve, or no catalog file exists for the state, the state tier is simply
+ * absent (the federal drought.gov state page in the federal tier still carries
+ * state conditions, so no link is fabricated).
+ */
+async function rehydrateResourcesFromCatalog(
+  briefing: ImpactBriefing,
+  context: BoundarySelectionContext,
+  signal: AbortSignal,
+  token: number
+): Promise<void> {
+  const map = getMap();
+  if (!map) return;
+  let stateRows: ResourceLink[];
+  try {
+    const identity = await resolveLocationIdentity(map, context.lngLat, signal);
+    if (signal.aborted) return;
+    stateRows = await resourcesForIdentity(identity, signal);
+  } catch (err) {
+    if (!signal.aborted) console.warn('[impact-panel] resource rehydrate failed:', err);
+    return;
+  }
+  if (signal.aborted || stateRows.length === 0) return;
+  // The panel groups resources by tier, so array order does not matter: drop any
+  // existing state rows and append the catalog's. Other tiers are untouched.
+  briefing.resources = [
+    ...briefing.resources.filter((r) => r.tier !== 'state'),
+    ...stateRows
+  ];
+  refreshOpenBriefing(token);
 }
 
 /** Whether `token` is still the active open (not superseded or closed). */
@@ -366,10 +415,25 @@ export function getActiveBriefing(): ImpactBriefing | null {
   return activeBriefing;
 }
 
-/** Re-render the active briefing in place after its horizons were mutated. */
+/**
+ * Re-render the active briefing in place after its horizons or resources were
+ * mutated (async hydration and the F3 resource rehydrate both call this).
+ *
+ * Focus-safe: the re-render replaces every focusable element in the body, so if
+ * a keyboard user had focus there (a resource link, a source link) it would be
+ * destroyed and focus would fall to the document body, escaping the dialog
+ * (WCAG 2.1.2). When that happens while the panel is open, pull focus back to
+ * the close button so the user stays trapped in the dialog rather than landing
+ * on the keyboard-inaccessible map canvas. The header (and its close button) is
+ * never re-rendered, so focus there is unaffected.
+ */
 export function refreshOpenBriefing(token: number): void {
-  if (!isCurrentBriefing(token) || !activeBriefing) return;
-  if (bodyEl) bodyEl.innerHTML = renderBody(activeBriefing);
+  if (!isCurrentBriefing(token) || !activeBriefing || !bodyEl) return;
+  const hadFocusInBody = bodyEl.contains(document.activeElement);
+  bodyEl.innerHTML = renderBody(activeBriefing);
+  if (hadFocusInBody && panelEl && !panelEl.contains(document.activeElement)) {
+    panelEl.querySelector<HTMLButtonElement>('.impact-panel-close')?.focus();
+  }
 }
 
 /** Close the panel and supersede any in-flight hydration. */
@@ -408,6 +472,18 @@ export function attachImpactTrigger(
   popup: maplibregl.Popup,
   context: BoundarySelectionContext
 ): void {
+  // A selected boundary becomes the current "place" so the sidebar front-door
+  // trigger can offer "See what this means" for it (F3; appendix D). Cleared on
+  // popup close so no stale place lingers, BUT only if this popup's selection is
+  // still current: a rapid click on another boundary sets a new place and closes
+  // this popup, and the two events can arrive in either order, so the close must
+  // not clobber a newer selection.
+  const selection: PlaceSelection = { label: context.title, context };
+  setPlaceSelection(selection);
+  popup.on('close', () => {
+    if (getPlaceSelection() === selection) setPlaceSelection(null);
+  });
+
   const wire = (): void => {
     const el = popup.getElement();
     if (!el) return;

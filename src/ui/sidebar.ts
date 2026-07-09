@@ -62,6 +62,8 @@ import { registry } from '../state/registry';
 import { createLayerController } from '../state/layer-controller';
 import type { LayerController, LayerControllerView } from '../state/layer-controller';
 import { openStateBriefing } from '../state/deep-link';
+import { openImpactPanel } from './impact-panel';
+import { getPlaceSelection, onPlaceSelectionChange } from '../state/place-selection';
 import { prefersReducedMotion } from '../util/motion';
 import {
   fetchAwdbDailySeries,
@@ -370,6 +372,14 @@ function buildRegionButtons(
   briefingBtn.className = 'region-briefing-btn';
   briefingBtn.hidden = true;
   briefingBtn.addEventListener('click', () => {
+    // Front door (F3): a selected map place takes precedence, opening the same
+    // briefing its boundary popup would. Otherwise fall back to the
+    // region-anchored briefing.
+    const place = getPlaceSelection();
+    if (place) {
+      openImpactPanel(place.context);
+      return;
+    }
     const anchor = STATE.currentRegion ? REGIONS[STATE.currentRegion]?.briefing : undefined;
     if (anchor) void openStateBriefing(map, anchor.id, { fit: false });
   });
@@ -387,6 +397,16 @@ function buildRegionButtons(
 function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): void {
   const btn = document.getElementById('region-briefing-btn');
   if (!(btn instanceof HTMLButtonElement)) return;
+  // A selected map place takes precedence over the region anchor (F3, the
+  // answer-first front door): the button becomes "See what this means" for the
+  // place the user just clicked.
+  const place = getPlaceSelection();
+  if (place) {
+    btn.hidden = false;
+    btn.textContent = 'See what this means';
+    btn.setAttribute('aria-label', `See what the drought means for ${place.label}`);
+    return;
+  }
   const anchor = regionKey ? REGIONS[regionKey]?.briefing : undefined;
   if (!anchor) {
     btn.hidden = true;
@@ -973,6 +993,11 @@ export function buildSidebar(
   // Temporal-state changes re-sync the URL the same way layer changes do
   // (invariant 2: the selected week / mode / SST frame is shareable state).
   timeline.onChange(pushUrl);
+
+  // The front-door trigger (F3): when a map place is selected or cleared, the
+  // region-briefing button relabels to "See what this means" for that place, or
+  // reverts to the region anchor.
+  onPlaceSelectionChange(() => updateRegionBriefingTrigger(STATE.currentRegion));
 
   // Apply the URL state. If parsing fails (no params), we fall back to
   // the default region and the default-on layer set, both of which are

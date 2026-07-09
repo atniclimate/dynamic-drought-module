@@ -3,6 +3,7 @@ import './styles/app.css';
 
 import type maplibregl from 'maplibre-gl';
 import { createMap } from './map/init';
+import { setMap } from './state/map-store';
 import { applyDeepLink } from './state/deep-link';
 import { parseSelectParam } from './state/url';
 import { buildSidebar } from './ui/sidebar';
@@ -27,6 +28,9 @@ import { buildEnsoDriver } from './ui/enso-driver';
 
 async function boot(): Promise<void> {
   const map = createMap('map');
+  // Publish the map so the frozen UI-service facades (the impact panel) can
+  // resolve a selection's location identity without a map parameter (F3).
+  setMap(map);
 
   // Development-only handle for manual and automated testing in the browser
   // console (for example projecting a feature to a pixel, or driving the map

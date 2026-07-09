@@ -182,74 +182,6 @@ function federalResources(state: StateCode | null): ResourceLink[] {
 }
 
 /**
- * State resources by state code (the SYNC BRIDGE; see below).
- *
- * BRIDGE NOTE (0.6.0 R2, D-0.6.0-004): the SYSTEM OF RECORD for the state tier
- * is now the per-state catalog at `public/data/resources/<code>.json`, loaded
- * by `src/impact/resource-catalog.ts` and documented in
- * `docs/resource-catalog-schema.md`. This inline table remains only because
- * `buildResources` runs synchronously and the catalog is fetched
- * asynchronously; F3 switches the state tier to the async catalog (the
- * open-then-rehydrate path, D-0.6.0-009) and removes this table. Until then
- * WA/OR/ID appear in both places by design; the catalog files are the
- * authoritative record the R3 fill campaign extends (new states are added ONLY
- * as catalog files, never here).
- *
- * Washington is the fully cataloged set (drinking-water emergencies, statewide
- * water-supply conditions, agricultural drought relief); Oregon and Idaho carry
- * their water-resources drought programs. Each is plainly attributed to its
- * agency and is regional context, never framed as governing a Tribal Nation.
- *
- * The table is deliberately partial: only strongly verified state programs
- * enter it. A state without an entry gets no state tier (the drought.gov
- * state page in the federal tier still carries state-specific conditions);
- * this never fabricates a link.
- */
-const STATE_RESOURCES: Partial<Record<StateCode, ResourceLink[]>> = {
-  WA: [
-    {
-      label: 'Drinking-water drought guidance',
-      url: 'https://doh.wa.gov/community-and-environment/drinking-water/drinking-water-emergencies/drought',
-      agency: 'Washington State Department of Health (Office of Drinking Water)',
-      tier: 'state',
-      description: 'Guidance for drinking-water systems during drought and water-supply emergencies.'
-    },
-    {
-      label: 'Statewide water-supply conditions',
-      url: 'https://ecology.wa.gov/water-shorelines/water-supply/water-availability/statewide-conditions',
-      agency: 'Washington State Department of Ecology',
-      tier: 'state',
-      description: 'Statewide water availability and drought-declaration status.'
-    },
-    {
-      label: 'Agricultural drought relief',
-      url: 'https://agr.wa.gov/services/emergency-management/disasters/drought',
-      agency: 'Washington State Department of Agriculture',
-      tier: 'state',
-      description: 'State agricultural drought emergency information and relief.'
-    }
-  ],
-  OR: [
-    {
-      label: 'Oregon Drought Watch',
-      url: 'https://www.oregon.gov/owrd/programs/climate/droughtwatch/pages/default.aspx',
-      agency: 'Oregon Water Resources Department',
-      tier: 'state',
-      description: 'County drought declarations and statewide water-supply status.'
-    }
-  ],
-  ID: [
-    {
-      label: 'Idaho water data and drought',
-      url: 'https://idwr.idaho.gov/water-data/',
-      agency: 'Idaho Department of Water Resources',
-      tier: 'state',
-      description: 'Streamflow, snowpack, and water-supply data for the state.'
-    }
-  ]
-};
-
-/**
  * The deployer-owned Tribe's-own-resources slot. Always present, always first,
  * empty by default. No specific Tribe's links are shipped; a deployer with
  * authorization populates this slot (documented in data/README.md). The panel
@@ -291,15 +223,21 @@ function biaRegionalResource(
 }
 
 /**
- * Compose the ordered resource list for a selection. Order is the stewardship
- * order: Tribe's-own slot first, then federal, then state (resolved from the
- * clicked state boundary or the region's primary state), then the BIA regional
- * entry for a reservation boundary.
+ * Compose the synchronously-available resource tiers for a selection, in
+ * stewardship order: the Tribe's-own slot first, then federal (state-aware via
+ * the resolved state code), then the BIA regional entry for a reservation
+ * boundary.
+ *
+ * The STATE tier is NOT built here: it comes from the verified per-state catalog
+ * (`public/data/resources/`, loaded by `src/impact/resource-catalog.ts`) and is
+ * added asynchronously after the panel opens (F3; the open-then-rehydrate path,
+ * `rehydrateResourcesFromCatalog` in `src/ui/impact-panel.ts`; D-0.6.0-009). The
+ * panel renders resources grouped by tier, so the state group simply appears
+ * when the catalog answers. See `docs/resource-catalog-schema.md`.
  */
 export function buildResources(context: BoundarySelectionContext): ResourceLink[] {
   const state = resolveStateCode(context);
   const out: ResourceLink[] = [tribeOwnSlot(), ...federalResources(state)];
-  if (state) out.push(...(STATE_RESOURCES[state] ?? []));
   const bia = biaRegionalResource(context);
   if (bia) out.push(bia);
   return out;
