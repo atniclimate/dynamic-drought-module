@@ -57,6 +57,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # TypeScript 7 is the native (Go) compiler; it installs a
+      # per-platform binary (@typescript/typescript-linux-x64 on this
+      # runner) as an optional dependency through npm ci and the lockfile.
+      # This step proves the native binary resolved on the Linux runner
+      # (not a stray global/editor compiler) before the build depends on
+      # it. See docs/ARCH_UX_PATHWAY_1.0.md appendix C.
+      - name: Verify TypeScript compiler
+        run: |
+          npm exec tsc -- --version
+          npm run typecheck
+
       - name: Build
         run: npm run build
 
