@@ -46,14 +46,11 @@ import maplibregl from 'maplibre-gl';
 import {
   LAYER_DEFS,
   LAYER_ROLE_ORDER,
-  getLayerDef,
-  loadLayerModule,
-  getLoadedLayerModule
+  getLayerDef
 } from '../config/layers';
-import type { LayerDef, LayerModule } from '../config/layers';
+import type { LayerDef } from '../config/layers';
 import type { LayerRole } from '../types/layer';
 import { VIEW_PRESETS } from '../config/presets';
-import type { ViewPreset } from '../config/presets';
 import {
   REGIONS,
   DEFAULT_REGION,
@@ -62,6 +59,8 @@ import {
 import type { RegionKey, Region } from '../config/regions';
 import { TELEMETRY_STATIONS } from '../config/telemetry';
 import { registry } from '../state/registry';
+import { createLayerController } from '../state/layer-controller';
+import type { LayerController, LayerControllerView } from '../state/layer-controller';
 import { openStateBriefing } from '../state/deep-link';
 import { prefersReducedMotion } from '../util/motion';
 import {
@@ -77,11 +76,10 @@ import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
 import { parseUrlParams, syncUrl } from '../state/url';
 import { timeline } from '../state/timeline';
-import { fadeInLayers, fadeOutLayers } from '../util/layer-fade';
 import { flyToStation } from '../layers/telemetry';
 import { buildConditionsStrip } from './conditions-strip';
 import { wireShareButton } from './share';
-import { showLoading, hideLoading, showToast } from './overlay';
+import { showToast } from './overlay';
 import { escapeHtml } from '../util/escape';
 
 // ---------------------------------------------------------------------------
@@ -114,6 +112,15 @@ const STATE: SidebarState = {
  * through the callback.
  */
 let mapRef: maplibregl.Map | null = null;
+
+/**
+ * The layer-activation controller (the extracted spine, D-ARCH-004). Created
+ * once in `buildSidebar` with the map plus the DOM view adapter below; the
+ * toggle rows, preset chips, and the URL-boot path drive layer state through
+ * it. Held module-level, mirroring `mapRef`, so the DOM builders can reach it
+ * without threading it through every signature.
+ */
+let controllerRef: LayerController | null = null;
 
 // ---------------------------------------------------------------------------
 // Status pill rendering
@@ -465,19 +472,20 @@ const ROLE_GROUP_LABELS: Record<LayerRole, { title: string; hint: string | null 
  * `LAYER_ROLE_ORDER` (surfaces, references, events, stations; UX-1).
  * Within a group, entries keep their `LAYER_DEFS` order. Each entry is a
  * `<label>` wrapping a checkbox plus three text spans (name, source,
- * status pill). The checkbox `change` handler activates or deactivates
- * the corresponding layer module and updates the registry.
+ * status pill). The checkbox `change` handler defers to the layer
+ * controller (`controller.activate` / `controller.deactivate`), which owns
+ * the activation state machine and updates the registry.
  *
- * Surfaces are mutually exclusive: checking a surface first deactivates
- * whichever surface is on, through the same `deactivateLayer` path a
- * manual off-toggle takes, so the registry (and with it the URL sync and
- * the pills) stays honest. All four groups keep checkbox semantics
- * because, unlike a radio group, every surface may be off at once.
+ * Surfaces are mutually exclusive: `controller.activate` first deactivates
+ * whichever surface is on, through the same deactivate path a manual
+ * off-toggle takes, so the registry (and with it the URL sync and the pills)
+ * stays honest. All four groups keep checkbox semantics because, unlike a
+ * radio group, every surface may be off at once.
  *
- * The activation path wraps the layer module's `activate` in a
- * `showLoading` / `hideLoading` token so parallel toggles do not stomp
- * each other's indicator text. On activation failure the checkbox is
- * unchecked so the UI does not lie about a layer being on.
+ * The controller wraps the layer module's `activate` in a loading-indicator
+ * token so parallel toggles do not stomp each other's indicator text; on
+ * activation failure it unchecks the row (via the view adapter) so the UI
+ * does not lie about a layer being on.
  */
 function buildLayerToggles(map: maplibregl.Map): void {
   const container = document.getElementById('layer-toggles');
@@ -513,7 +521,7 @@ function buildLayerToggles(map: maplibregl.Map): void {
  * Build a single layer toggle row. Split out of `buildLayerToggles` when
  * UX-1 introduced role groups; behavior is unchanged from the flat list.
  */
-function buildLayerToggle(map: maplibregl.Map, def: LayerDef): HTMLLabelElement {
+function buildLayerToggle(_map: maplibregl.Map, def: LayerDef): HTMLLabelElement {
   const id = `layer-toggle-${def.key}`;
   const wrapper = document.createElement('label');
   wrapper.className = 'layer-toggle';
@@ -529,210 +537,19 @@ function buildLayerToggle(map: maplibregl.Map, def: LayerDef): HTMLLabelElement 
 
   const cb = wrapper.querySelector<HTMLInputElement>('input[type="checkbox"]');
   if (cb) {
+    // Thin row factory: the change handler defers to the controller, which owns
+    // the activation state machine (surface exclusivity, the op chain, the
+    // intent guards, the loading indicator). `map` is no longer needed here.
     cb.addEventListener('change', () => {
       if (cb.checked) {
-        if (def.role === 'surface') {
-          deactivateOtherSurfaces(map, def.key);
-        }
-        void activateLayerWithIndicator(map, def, cb);
+        void controllerRef?.activate(def.key);
       } else {
-        deactivateLayer(map, def);
+        controllerRef?.deactivate(def.key);
       }
     });
   }
 
   return wrapper;
-}
-
-/**
- * Enforce the one-surface-at-a-time invariant (UX-1): deactivate every
- * surface other than `exceptKey` that is currently on. "On" means either
- * registered active or checked in the DOM; the DOM check covers a surface
- * whose activation is still in flight (the registry only records it after
- * `activate` resolves), and `deactivateLayer` aborts that in-flight work
- * through the layer module's cancellation contract.
- */
-function deactivateOtherSurfaces(map: maplibregl.Map, exceptKey: string): void {
-  const active = registry.getActiveKeys();
-  for (const def of LAYER_DEFS) {
-    if (def.role !== 'surface' || def.key === exceptKey) continue;
-    const cb = document.querySelector<HTMLInputElement>(
-      `input[data-layer-key="${cssAttrEscape(def.key)}"]`
-    );
-    const isOn = active.has(def.key) || (cb?.checked ?? false);
-    if (!isOn) continue;
-    if (cb) cb.checked = false;
-    deactivateLayer(map, def);
-  }
-}
-
-/**
- * The latest per-layer user intent (on or off), recorded synchronously the
- * moment a toggle, preset, or deep-link path asks for a change. The queued
- * operations below consult it at every await boundary, so an operation the
- * user has since reversed (toggled off while the chunk import or the
- * activation fetch was in flight) becomes a no-op instead of resurrecting
- * a turned-off layer into the registry and the URL.
- */
-const desiredOn = new Map<string, boolean>();
-
-/**
- * Per-layer operation chain: activations and deactivations for one key run
- * strictly in sequence. Without this, a rapid off/on could overlap a
- * module's `activate()` with itself (tribal and treaty throw on a duplicate
- * source id) or with its own `deactivate()`. Chains are per key, so
- * distinct layers still activate in parallel.
- */
-const layerOpChain = new Map<string, Promise<void>>();
-
-function enqueueLayerOp(key: string, op: () => Promise<void> | void): Promise<void> {
-  const prev = layerOpChain.get(key) ?? Promise.resolve();
-  // Run after the prior op regardless of how it settled; each op carries its
-  // own error handling, so the chain itself never sticks in a rejected state.
-  const next = prev.then(op, op);
-  layerOpChain.set(key, next);
-  return next;
-}
-
-/**
- * Activate a layer with a loading-indicator token around the call.
- * Updates the registry on success; unchecks the checkbox on failure.
- *
- * Mirrors the vanilla `activateLayer` flow (~app.js 1067-1097). The
- * registry is set to `loading` before the activation so the status
- * pill updates immediately; the layer module is responsible for
- * setting its own `ready`, `error`, `no-data`, or `zoom-in` once it
- * finishes.
- *
- * Intent checks: the queued operation re-reads `desiredOn` after each
- * await. A layer toggled off mid-import stops before activating; a layer
- * toggled off mid-activation is deactivated before it can register. The
- * matching queued deactivation (there is always one; only `deactivateLayer`
- * flips the intent off) then clears the pill and announces the off state.
- */
-function activateLayerWithIndicator(
-  map: maplibregl.Map,
-  def: LayerDef,
-  cb: HTMLInputElement
-): Promise<void> {
-  desiredOn.set(def.key, true);
-  return enqueueLayerOp(def.key, async () => {
-    // The user reversed this toggle while it waited in the queue, or the
-    // layer is already fully active (an off/on flip whose off was skipped
-    // as stale); either way there is nothing to do.
-    if (desiredOn.get(def.key) !== true) return;
-    if (registry.getActiveKeys().has(def.key)) return;
-
-    const token = showLoading(`Loading ${def.name}...`);
-    registry.setStatus(def.key, 'loading');
-    try {
-      const mod = await loadLayerModule(def);
-      if (desiredOn.get(def.key) !== true) return;
-      ensurePopupsBound(map, def.key, mod);
-      await mod.activate(map);
-      if (desiredOn.get(def.key) !== true) {
-        // Turned off during activation: undo before anything registers. The
-        // queued deactivation clears the pill and announces.
-        try {
-          mod.deactivate(map);
-        } catch (err) {
-          console.error(`Layer "${def.key}" failed to deactivate cleanly:`, err);
-        }
-        return;
-      }
-      // A non-throwing activation failure (a module that catches its own fetch
-      // error, calls reportStatus('error'), and returns) resolves normally, so
-      // without this guard the key would fadeIn, register active, get counted
-      // in the pill, and pollute the share URL. Treat a terminal 'error'
-      // status as a failed activation and mirror the thrown-error cleanup:
-      // never registry.activate on anything but a genuine on state (ready,
-      // no-data, or zoom-in). This protects the URL-as-state invariant
-      // (CLAUDE.md §6 invariant 2). See docs/ddm-critical-review-2026-07-07.md #2.
-      if (registry.getStatus(def.key) === 'error') {
-        cb.checked = false;
-        desiredOn.set(def.key, false);
-        try {
-          mod.deactivate(map);
-        } catch (err) {
-          console.error(`Layer "${def.key}" failed to deactivate cleanly:`, err);
-        }
-        // Emit a `change` so the URL re-syncs from the active set without this
-        // key (a boot from ?layers=<failed> must self-correct); registry.
-        // deactivate also clears the stored status.
-        registry.deactivate(def.key);
-        // Re-assert the terminal 'error' after that clear so the pill and any
-        // getStatus() reader see "unavailable", not "off".
-        registry.setStatus(def.key, 'error');
-        return;
-      }
-      // Ease the just-added layers in (no-op for reduced-motion users and
-      // for modules without map layers; src/util/layer-fade.ts).
-      fadeInLayers(map, mod.fadeLayerIds);
-      registry.activate(def.key);
-    } catch (err) {
-      console.error(`Layer "${def.key}" failed to load:`, err);
-      registry.setStatus(def.key, 'error');
-      cb.checked = false;
-      desiredOn.set(def.key, false);
-      registry.deactivate(def.key);
-    } finally {
-      hideLoading(token);
-    }
-  });
-}
-
-/** Layers whose bindPopups has already run (once, on first activation). */
-const popupsBound = new Set<string>();
-
-/**
- * Bind a layer's popup click handlers on its first activation. Popups are no
- * longer bound at boot (that would pull every layer module into the initial
- * bundle); binding once here, guarded, matches the old survive-toggle-cycles
- * behavior, and MapLibre tolerates a handler bound before its layer exists.
- */
-function ensurePopupsBound(map: maplibregl.Map, key: string, mod: LayerModule): void {
-  if (popupsBound.has(key)) return;
-  if (mod.bindPopups) mod.bindPopups(map);
-  popupsBound.add(key);
-}
-
-/**
- * Deactivate a layer: fade its map layers out (src/util/layer-fade.ts),
- * call the module's `deactivate` (which removes sources/layers and aborts
- * in-flight network operations), and remove the key from the registry.
- * The fade runs inside the per-key op chain, so a queued re-activation
- * waits for the fade plus removal instead of racing it; the registry,
- * pill, and URL transition after the removal, at most one fade duration
- * later than before.
- *
- * The status pill is cleared back to its pre-activation empty state: an
- * off layer has no load status, and leaving a stale "live" pill on a row
- * the surface radio behavior just unchecked (UX-1) would misreport the
- * map. The polite live region announces the off transition so a
- * screen-reader user hears why a checkbox they did not touch changed.
- */
-function deactivateLayer(map: maplibregl.Map, def: LayerDef): void {
-  desiredOn.set(def.key, false);
-  void enqueueLayerOp(def.key, async () => {
-    // The user re-toggled the layer on while this off waited in the queue;
-    // the newer activation owns the outcome.
-    if (desiredOn.get(def.key) !== false) return;
-    try {
-      // A module that was never loaded has nothing on the map; the optional
-      // chain is a no-op then, and the intent flip above makes any in-flight
-      // activation stand down at its next checkpoint.
-      const mod = getLoadedLayerModule(def.key);
-      if (mod) {
-        await fadeOutLayers(map, mod.fadeLayerIds);
-        mod.deactivate(map);
-      }
-    } catch (err) {
-      console.error(`Layer "${def.key}" failed to deactivate cleanly:`, err);
-    }
-    registry.deactivate(def.key);
-    clearLayerStatusPill(def.key);
-    announce(`${def.name}: off`);
-  });
 }
 
 /**
@@ -761,7 +578,7 @@ function clearLayerStatusPill(key: string): void {
  * so no chip carries a pressed state) whose click applies the preset's
  * layer-set. The tooltip carries the question the preset answers.
  */
-function buildPresetChips(map: maplibregl.Map): void {
+function buildPresetChips(_map: maplibregl.Map): void {
   const container = document.getElementById('preset-chips');
   if (!container) return;
   container.innerHTML = '';
@@ -772,50 +589,14 @@ function buildPresetChips(map: maplibregl.Map): void {
     btn.className = 'preset-chip';
     btn.textContent = preset.label;
     btn.title = preset.description;
+    // Preset application (deactivate the non-wanted, activate the wanted,
+    // preserving the at-most-one-surface invariant) now lives in the
+    // controller; the chip is a thin trigger.
     btn.addEventListener('click', () => {
-      applyPreset(map, preset);
+      controllerRef?.applyPreset(preset);
     });
     container.appendChild(btn);
   }
-}
-
-/**
- * Apply a preset: make the active layer set equal the preset's list,
- * routing every transition through the same activation and deactivation
- * paths a manual toggle takes (registry, URL sync, pills, and the UX-1
- * surface exclusivity all hold for free; a preset names at most one
- * surface by construction). Layers already on and named by the preset
- * are left untouched. After application the user is free to adjust;
- * the chip does not lock anything.
- */
-function applyPreset(map: maplibregl.Map, preset: ViewPreset): void {
-  const wanted = new Set(preset.layers);
-  const active = registry.getActiveKeys();
-
-  for (const def of LAYER_DEFS) {
-    if (wanted.has(def.key)) continue;
-    const cb = document.querySelector<HTMLInputElement>(
-      `input[data-layer-key="${cssAttrEscape(def.key)}"]`
-    );
-    const isOn = active.has(def.key) || (cb?.checked ?? false);
-    if (!isOn) continue;
-    if (cb) cb.checked = false;
-    deactivateLayer(map, def);
-  }
-
-  for (const key of preset.layers) {
-    const def = getLayerDef(key);
-    if (!def) continue;
-    const cb = document.querySelector<HTMLInputElement>(
-      `input[data-layer-key="${cssAttrEscape(key)}"]`
-    );
-    const isOn = registry.getActiveKeys().has(key) || (cb?.checked ?? false);
-    if (isOn) continue;
-    if (cb) cb.checked = true;
-    void activateLayerWithIndicator(map, def, cb ?? createDetachedCheckbox());
-  }
-
-  announce(`View: ${preset.label}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -1111,29 +892,12 @@ async function applyUrlState(map: maplibregl.Map): Promise<void> {
   // long fly-to on first paint.
   selectRegion(map, params.region, true);
 
-  const tasks: Array<Promise<void>> = [];
-  for (const key of params.layers) {
-    const def = getLayerDef(key);
-    if (!def) continue;
-    const cb = document.querySelector<HTMLInputElement>(
-      `input[data-layer-key="${cssAttrEscape(key)}"]`
-    );
-    if (cb) cb.checked = true;
-    tasks.push(activateLayerWithIndicator(map, def, cb ?? createDetachedCheckbox()));
-  }
-  await Promise.allSettled(tasks);
-}
-
-/**
- * Fallback checkbox for `applyUrlState` when the DOM lookup yields
- * `null` (an unknown layer key listed in the URL). The activation
- * path needs an HTMLInputElement to uncheck on failure; this
- * detached element absorbs that without affecting the DOM.
- */
-function createDetachedCheckbox(): HTMLInputElement {
-  const cb = document.createElement('input');
-  cb.type = 'checkbox';
-  return cb;
+  // Activate the URL/default layer set through the controller. It runs the
+  // same activation path a user toggle takes (concurrent across layers via
+  // Promise.allSettled), checks each row's box through the view adapter, and
+  // tolerates a missing checkbox for an unknown key (the old detached-checkbox
+  // fallback is now the view adapter's no-op write).
+  if (controllerRef) await controllerRef.applyLayerSet(params.layers);
 }
 
 // ---------------------------------------------------------------------------
@@ -1155,6 +919,33 @@ export function buildSidebar(
 ): void {
   mapRef = map;
   ensureLiveRegion();
+
+  // The activation state machine lives in the controller now (D-ARCH-004). It
+  // drives DOM through this view adapter, which wraps the sidebar's existing
+  // checkbox, status-pill, and live-region helpers, so the controller stays
+  // free of `document`. Created before the DOM builders and applyUrlState,
+  // which route all layer state through it.
+  const view: LayerControllerView = {
+    setCheckbox(key, checked) {
+      const cb = document.querySelector<HTMLInputElement>(
+        `input[data-layer-key="${cssAttrEscape(key)}"]`
+      );
+      if (cb) cb.checked = checked;
+    },
+    isCheckboxChecked(key) {
+      const cb = document.querySelector<HTMLInputElement>(
+        `input[data-layer-key="${cssAttrEscape(key)}"]`
+      );
+      return cb?.checked ?? false;
+    },
+    clearLayerStatus(key) {
+      clearLayerStatusPill(key);
+    },
+    announce(message) {
+      announce(message);
+    }
+  };
+  controllerRef = createLayerController(map, view);
 
   const handleRegion = (key: RegionKey): void => {
     selectRegion(map, key);
