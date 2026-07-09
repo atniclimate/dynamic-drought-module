@@ -17,11 +17,11 @@
       "description": "Statewide water availability and drought-declaration status."
     },
     {
-      "label": "Agricultural drought relief",
+      "label": "Agricultural drought relief information",
       "url": "https://agr.wa.gov/services/emergency-management/disasters/drought",
       "agency": "Washington State Department of Agriculture",
       "tier": "state",
-      "description": "State agricultural drought emergency information and relief."
+      "description": "Information on state agricultural drought emergency programs and relief."
     }
   ]
 }

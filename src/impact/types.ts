@@ -20,7 +20,6 @@
  */
 
 import type { RegionKey } from '../config/regions';
-import type { LocationIdentity } from '../state/location-identity';
 
 /**
  * One sourced statement in a horizon. `kind` separates an observation (a fact
@@ -129,13 +128,6 @@ export interface BoundarySelectionContext {
   readonly bbox?: readonly [number, number, number, number];
   /** Active region key, or null if no region is selected yet. */
   readonly regionKey: RegionKey | null;
-  /**
-   * The resolved location identity for `lngLat` (state, ecoregion, containing
-   * Tribal land; county null this phase). Optional and set asynchronously by
-   * the R1 wiring after the boundary context is built (D-0.6.0-009); a context
-   * without it degrades to the region-fallback resource routing.
-   */
-  readonly identity?: LocationIdentity;
 }
 
 /**

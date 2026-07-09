@@ -390,7 +390,10 @@ async function rehydrateResourcesFromCatalog(
   try {
     const identity = await resolveLocationIdentity(map, context.lngLat, signal);
     if (signal.aborted) return;
-    stateRows = await resourcesForIdentity(identity, signal);
+    // The catalog load is shared/cached and deliberately not tied to this
+    // caller's signal (see the cancellation note in resource-catalog.ts); the
+    // aborted check below drops a superseded RESULT instead.
+    stateRows = await resourcesForIdentity(identity);
   } catch (err) {
     if (!signal.aborted) console.warn('[impact-panel] resource rehydrate failed:', err);
     return;

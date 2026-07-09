@@ -1,5 +1,6 @@
 /**
- * Verified resource catalog (0.6.0 unit R2; pathway appendix F; D-0.6.0-004).
+ * Verified resource catalog (0.6.0 unit R2; pathway appendix F; D-0.6.0-004;
+ * hardened per the 2026-07-09 Codex adversarial review, D-0.6.0-011).
  *
  * The state-scoped resource links a briefing routes to are DATA, not code:
  * per-state JSON files under `public/data/resources/<code>.json`, fetched only
@@ -11,42 +12,52 @@
  * ships in-repo (unlike boundary polygons; CLAUDE.md hard rule 1). The
  * stewardship ORDER (the Tribe's own resources first, then federal, then state,
  * then BIA regional) is owned by the panel composition in `src/impact/`, not by
- * this file; this file supplies the state tier only.
+ * this file; this file supplies the state tier only. A state file's rows are
+ * LOCKED to `tier: "state"`: a row claiming any other tier is dropped, so a
+ * catalog file can never inject an entry that masquerades as a Nation-owned or
+ * federal resource (the top finding of the adversarial review).
  *
  * Honesty: a missing state file (HTTP 404) is not an error, it is "no
  * state-tier catalog for this state yet" and yields an empty list; a malformed
  * file drops the offending rows rather than rendering bad data. The build-time
  * schema check (`scripts/check-resource-catalog.mjs`, run in `npm run gate`) is
  * the strict gate; this runtime validation is the defensive backstop.
+ *
+ * Cancellation note (a documented deviation from the per-caller abort pattern):
+ * the catalog fetch is a small same-origin static-file GET, shared by every
+ * caller through the session cache, so it deliberately does NOT take a caller's
+ * abort signal (a shared fetch owned by one caller's signal let an aborted
+ * click starve a concurrent live one). It is bounded by its own timeout, and
+ * callers drop superseded RESULTS via their own signal checks (see
+ * `rehydrateResourcesFromCatalog` in `src/ui/impact-panel.ts`). Only a
+ * successful load or a definitive 404 is cached; transient failures (a 5xx, a
+ * timeout, malformed JSON) evict the entry so a later click retries.
  */
 
 import { URLS } from '../config/urls';
 import { fetchWithBudget } from '../util/fetch';
-import type { ResourceLink, ResourceTier } from './types';
+import type { ResourceLink } from './types';
 import type { LocationIdentity } from '../state/location-identity';
 
 /** One state's catalog entry. `verified` is the entry-level verification stamp. */
 export interface StateResourceCatalog {
   /** Display label, for example "Washington". */
   readonly label: string;
-  /** Entry-level verification stamp (ISO date), for example "2026-07-09". */
+  /** Entry-level verification stamp (ISO date `YYYY-MM-DD`). */
   readonly verified: string;
   readonly resources: readonly ResourceLink[];
 }
 
 const FETCH_TIMEOUT_MS = 10_000;
 
-const VALID_TIERS: ReadonlySet<ResourceTier> = new Set<ResourceTier>([
-  'tribe-own',
-  'federal',
-  'state',
-  'bia-regional'
-]);
+/** The `verified` stamp must be an ISO calendar date (the provenance claim). */
+const VERIFIED_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * Per-code load cache. Keyed by lowercase two-letter code; the value is the
+ * Per-code cache. Keyed by lowercase two-letter code; the value is the
  * in-flight or settled load promise, so concurrent clicks on the same state
- * share one fetch.
+ * share one fetch. Only two outcomes stay cached: a valid catalog, or the
+ * definitive-404 null ("no file for this state"). Anything transient evicts.
  */
 const cache = new Map<string, Promise<StateResourceCatalog | null>>();
 
@@ -54,26 +65,26 @@ function isNonEmptyString(v: unknown): v is string {
   return typeof v === 'string' && v.trim() !== '';
 }
 
-/** Validate and normalize one row; null if it fails the required-field rules. */
+/**
+ * Validate and normalize one row; null if it fails the required-field rules.
+ * State-file rows are locked to `tier: "state"` and MUST carry an `https://`
+ * url: the Tribe's-own link-less affordance and the federal tier are composed
+ * in code, never supplied by a state file.
+ */
 function normalizeRow(raw: unknown): ResourceLink | null {
   if (!raw || typeof raw !== 'object') return null;
   const row = raw as Record<string, unknown>;
   if (!isNonEmptyString(row['label'])) return null;
   if (!isNonEmptyString(row['agency'])) return null;
-  const tier = row['tier'];
-  if (typeof tier !== 'string' || !VALID_TIERS.has(tier as ResourceTier)) return null;
-  // `url` is optional (the Tribe's-own slot is link-less); when present it must
-  // be https:// so the panel never renders a mixed-content or insecure link.
+  if (row['tier'] !== 'state') return null;
   const url = row['url'];
-  if (url !== undefined) {
-    if (typeof url !== 'string' || !url.startsWith('https://')) return null;
-  }
+  if (typeof url !== 'string' || !url.startsWith('https://')) return null;
   const description = row['description'];
   return {
     label: row['label'] as string,
     agency: row['agency'] as string,
-    tier: tier as ResourceTier,
-    ...(typeof url === 'string' ? { url } : {}),
+    tier: 'state',
+    url,
     ...(isNonEmptyString(description) ? { description: description } : {})
   };
 }
@@ -83,7 +94,11 @@ function normalizeCatalog(raw: unknown): StateResourceCatalog | null {
   if (!raw || typeof raw !== 'object') return null;
   const obj = raw as Record<string, unknown>;
   if (!isNonEmptyString(obj['label'])) return null;
-  if (!isNonEmptyString(obj['verified'])) return null;
+  // The verified stamp is the provenance claim; a malformed one invalidates
+  // the file rather than rendering rows under a stamp that means nothing.
+  if (!isNonEmptyString(obj['verified']) || !VERIFIED_RE.test(obj['verified'] as string)) {
+    return null;
+  }
   if (!Array.isArray(obj['resources'])) return null;
   const resources = obj['resources']
     .map(normalizeRow)
@@ -97,14 +112,13 @@ function normalizeCatalog(raw: unknown): StateResourceCatalog | null {
 
 /**
  * Load the catalog entry for a state by its two-letter code (case-insensitive),
- * fetching `public/data/resources/<code>.json` once and caching the result. A
- * missing file (404) or any failure resolves to null (no state-tier catalog),
- * never a throw.
+ * fetching `public/data/resources/<code>.json` once and caching the result.
+ * Resolves to null (never a throw) when there is no usable catalog: a 404 (no
+ * file; cached as definitive), a transient failure (5xx, timeout, malformed
+ * JSON; NOT cached, so a later click retries), or a file the runtime
+ * validation rejects (not cached; the build gate should have caught it).
  */
-export function loadStateResourceCatalog(
-  code: string,
-  signal?: AbortSignal
-): Promise<StateResourceCatalog | null> {
+export function loadStateResourceCatalog(code: string): Promise<StateResourceCatalog | null> {
   const key = code.toLowerCase();
   const existing = cache.get(key);
   if (existing) return existing;
@@ -114,18 +128,20 @@ export function loadStateResourceCatalog(
       const response = await fetchWithBudget(
         `${URLS.resourcesLocalBase}${key}.json`,
         null,
-        signal ?? null,
+        null,
         FETCH_TIMEOUT_MS
       );
-      if (!response.ok) return null;
-      return normalizeCatalog(await response.json());
-    } catch (err) {
-      // An aborted fetch is a superseded click, not a real failure: forget it
-      // so a later click can try again.
-      if (signal?.aborted) {
-        cache.delete(key);
+      if (response.status === 404) return null; // definitive: no file; stays cached
+      if (!response.ok) {
+        cache.delete(key); // transient (5xx and friends): allow a later retry
         return null;
       }
+      const catalog = normalizeCatalog(await response.json());
+      if (!catalog) cache.delete(key); // shape-invalid: do not pin a bad read
+      return catalog;
+    } catch (err) {
+      // Network failure or timeout: transient, evict so a later click retries.
+      cache.delete(key);
       console.warn(`[resource-catalog] failed to load ${key}.json`, err);
       return null;
     }
@@ -139,14 +155,13 @@ export function loadStateResourceCatalog(
  * The state-tier resource rows for a resolved location identity: the catalog
  * entry for `identity.state`, or an empty list when there is no resolved state
  * or no catalog file for it. Composition with the other tiers (Tribe's-own,
- * federal, BIA regional) and the stewardship order stay with the panel.
+ * federal, BIA regional) and the stewardship order stay with the panel. The
+ * caller guards its own supersede/abort semantics (see the cancellation note
+ * in the module header).
  */
-export async function resourcesForIdentity(
-  identity: LocationIdentity,
-  signal?: AbortSignal
-): Promise<ResourceLink[]> {
+export async function resourcesForIdentity(identity: LocationIdentity): Promise<ResourceLink[]> {
   const code = identity.state?.code;
   if (!code) return [];
-  const catalog = await loadStateResourceCatalog(code, signal);
+  const catalog = await loadStateResourceCatalog(code);
   return catalog ? [...catalog.resources] : [];
 }
