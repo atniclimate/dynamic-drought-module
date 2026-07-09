@@ -28,7 +28,7 @@ import type maplibregl from 'maplibre-gl';
 
 import { createBriefingSkeleton } from '../impact/briefing';
 import { hydrateBriefing } from '../impact/hydrate';
-import { resourcesForIdentity } from '../impact/resource-catalog';
+import { loadFederalResources, resourcesForIdentity } from '../impact/resource-catalog';
 import { resolveLocationIdentity } from '../state/location-identity';
 import { getMap } from '../state/map-store';
 import { getPlaceSelection, setPlaceSelection } from '../state/place-selection';
@@ -367,16 +367,18 @@ export function openImpactPanel(context: BoundarySelectionContext): number {
 }
 
 /**
- * Resolve the selection's location identity and swap in the state-tier
- * resources from the verified catalog (F3; D-0.6.0-009). Runs async in parallel
- * with the horizon hydration: the panel opens immediately with the base
- * resources (Tribe's-own, federal, BIA regional), then this adds the state tier
- * when the catalog answers.
+ * Resolve the selection's location identity and swap in the catalog-supplied
+ * resources (F3; D-0.6.0-009 + D-0.6.0-012). Runs async in parallel with the
+ * horizon hydration: the panel opens immediately with the base resources
+ * (Tribe's-own, the in-code federal info anchors, BIA regional), then this
+ * adds the STATE tier for the resolved state and the FEDERAL program set
+ * (federal.json) when the catalog answers.
  *
- * Honest degradation: if the map is not yet published, the identity does not
- * resolve, or no catalog file exists for the state, the state tier is simply
- * absent (the federal drought.gov state page in the federal tier still carries
- * state conditions, so no link is fabricated).
+ * The federal set is national and deliberately independent of identity
+ * resolution: a missing map or an unresolved state still gets the federal
+ * programs. Honest degradation everywhere else: no resolved state or no state
+ * file means the state tier is simply absent (the state-aware drought.gov
+ * anchor still carries state conditions, so no link is fabricated).
  */
 async function rehydrateResourcesFromCatalog(
   briefing: ImpactBriefing,
@@ -384,26 +386,30 @@ async function rehydrateResourcesFromCatalog(
   signal: AbortSignal,
   token: number
 ): Promise<void> {
+  // The catalog loads are shared/cached and deliberately not tied to this
+  // caller's signal (see the cancellation note in resource-catalog.ts); the
+  // aborted checks below drop a superseded RESULT instead.
+  const federalPromise = loadFederalResources();
+  let stateRows: ResourceLink[] = [];
   const map = getMap();
-  if (!map) return;
-  let stateRows: ResourceLink[];
-  try {
-    const identity = await resolveLocationIdentity(map, context.lngLat, signal);
-    if (signal.aborted) return;
-    // The catalog load is shared/cached and deliberately not tied to this
-    // caller's signal (see the cancellation note in resource-catalog.ts); the
-    // aborted check below drops a superseded RESULT instead.
-    stateRows = await resourcesForIdentity(identity);
-  } catch (err) {
-    if (!signal.aborted) console.warn('[impact-panel] resource rehydrate failed:', err);
-    return;
+  if (map) {
+    try {
+      const identity = await resolveLocationIdentity(map, context.lngLat, signal);
+      if (!signal.aborted) stateRows = await resourcesForIdentity(identity);
+    } catch (err) {
+      if (!signal.aborted) console.warn('[impact-panel] state-resource rehydrate failed:', err);
+    }
   }
-  if (signal.aborted || stateRows.length === 0) return;
-  // The panel groups resources by tier, so array order does not matter: drop any
-  // existing state rows and append the catalog's. Other tiers are untouched.
+  const federalRows = await federalPromise;
+  if (signal.aborted || (stateRows.length === 0 && federalRows.length === 0)) return;
+  // The panel groups resources by tier, so array order within the list only
+  // matters within a tier: drop any existing state rows, append the state
+  // tier, then append the federal program set AFTER the in-code federal info
+  // anchors (which stay first in their group).
   briefing.resources = [
     ...briefing.resources.filter((r) => r.tier !== 'state'),
-    ...stateRows
+    ...stateRows,
+    ...federalRows
   ];
   refreshOpenBriefing(token);
 }

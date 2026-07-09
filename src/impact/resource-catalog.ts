@@ -65,32 +65,36 @@ function isNonEmptyString(v: unknown): v is string {
   return typeof v === 'string' && v.trim() !== '';
 }
 
+/** The catalog file kinds and the tier each is locked to. */
+type CatalogTier = 'state' | 'federal';
+
 /**
  * Validate and normalize one row; null if it fails the required-field rules.
- * State-file rows are locked to `tier: "state"` and MUST carry an `https://`
- * url: the Tribe's-own link-less affordance and the federal tier are composed
- * in code, never supplied by a state file.
+ * A catalog file's rows are locked to its file kind's tier (`state` for a
+ * state file, `federal` for federal.json) and MUST carry an `https://` url:
+ * the Tribe's-own link-less affordance and the BIA regional entry are composed
+ * in code, never supplied by a catalog file.
  */
-function normalizeRow(raw: unknown): ResourceLink | null {
+function normalizeRow(raw: unknown, expectedTier: CatalogTier): ResourceLink | null {
   if (!raw || typeof raw !== 'object') return null;
   const row = raw as Record<string, unknown>;
   if (!isNonEmptyString(row['label'])) return null;
   if (!isNonEmptyString(row['agency'])) return null;
-  if (row['tier'] !== 'state') return null;
+  if (row['tier'] !== expectedTier) return null;
   const url = row['url'];
   if (typeof url !== 'string' || !url.startsWith('https://')) return null;
   const description = row['description'];
   return {
     label: row['label'] as string,
     agency: row['agency'] as string,
-    tier: 'state',
+    tier: expectedTier,
     url,
     ...(isNonEmptyString(description) ? { description: description } : {})
   };
 }
 
-/** Validate and normalize a whole state entry; null if unusable. */
-function normalizeCatalog(raw: unknown): StateResourceCatalog | null {
+/** Validate and normalize a whole catalog entry; null if unusable. */
+function normalizeCatalog(raw: unknown, expectedTier: CatalogTier): StateResourceCatalog | null {
   if (!raw || typeof raw !== 'object') return null;
   const obj = raw as Record<string, unknown>;
   if (!isNonEmptyString(obj['label'])) return null;
@@ -101,7 +105,7 @@ function normalizeCatalog(raw: unknown): StateResourceCatalog | null {
   }
   if (!Array.isArray(obj['resources'])) return null;
   const resources = obj['resources']
-    .map(normalizeRow)
+    .map((row) => normalizeRow(row, expectedTier))
     .filter((r): r is ResourceLink => r !== null);
   return {
     label: obj['label'] as string,
@@ -111,15 +115,16 @@ function normalizeCatalog(raw: unknown): StateResourceCatalog | null {
 }
 
 /**
- * Load the catalog entry for a state by its two-letter code (case-insensitive),
- * fetching `public/data/resources/<code>.json` once and caching the result.
+ * Load and cache one catalog file by its basename (`wa`, `federal`, ...).
  * Resolves to null (never a throw) when there is no usable catalog: a 404 (no
  * file; cached as definitive), a transient failure (5xx, timeout, malformed
  * JSON; NOT cached, so a later click retries), or a file the runtime
  * validation rejects (not cached; the build gate should have caught it).
  */
-export function loadStateResourceCatalog(code: string): Promise<StateResourceCatalog | null> {
-  const key = code.toLowerCase();
+function loadCatalogFile(
+  key: string,
+  expectedTier: CatalogTier
+): Promise<StateResourceCatalog | null> {
   const existing = cache.get(key);
   if (existing) return existing;
 
@@ -136,7 +141,7 @@ export function loadStateResourceCatalog(code: string): Promise<StateResourceCat
         cache.delete(key); // transient (5xx and friends): allow a later retry
         return null;
       }
-      const catalog = normalizeCatalog(await response.json());
+      const catalog = normalizeCatalog(await response.json(), expectedTier);
       if (!catalog) cache.delete(key); // shape-invalid: do not pin a bad read
       return catalog;
     } catch (err) {
@@ -149,6 +154,26 @@ export function loadStateResourceCatalog(code: string): Promise<StateResourceCat
 
   cache.set(key, load);
   return load;
+}
+
+/**
+ * Load the catalog entry for a state by its two-letter code (case-insensitive).
+ */
+export function loadStateResourceCatalog(code: string): Promise<StateResourceCatalog | null> {
+  return loadCatalogFile(code.toLowerCase(), 'state');
+}
+
+/**
+ * The national federal-tier rows from `public/data/resources/federal.json`
+ * (D-0.6.0-012): the actionable federal program, assistance, and funding set,
+ * Tribal-specific entries first. An empty list when the file is missing or
+ * unusable; the in-code federal info anchors (the state-aware drought.gov
+ * page, the U.S. Drought Monitor, the USDA drought hub) render regardless, so
+ * the federal tier never disappears outright.
+ */
+export async function loadFederalResources(): Promise<ResourceLink[]> {
+  const catalog = await loadCatalogFile('federal', 'federal');
+  return catalog ? [...catalog.resources] : [];
 }
 
 /**

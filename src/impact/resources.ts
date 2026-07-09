@@ -141,10 +141,17 @@ function droughtGovStateUrl(state: StateCode): string {
 }
 
 /**
- * Federal resources. The drought.gov page is state-aware when a state can be
- * resolved for the selection and falls back to the national portal otherwise;
- * the U.S. Drought Monitor and the United States Department of Agriculture
- * drought-relief hub are national.
+ * The in-code federal INFO ANCHORS: the drought.gov page (state-aware when a
+ * state can be resolved, falling back to the national portal, which is why it
+ * cannot be static data), the U.S. Drought Monitor, and the United States
+ * Department of Agriculture drought-relief hub. They render immediately with
+ * the panel skeleton and lead the federal group.
+ *
+ * The federal PROGRAM set (disaster assistance, water and funding programs,
+ * the Tribal-specific federal programs; D-0.6.0-012) is DATA, not code:
+ * `public/data/resources/federal.json`, loaded by `loadFederalResources` and
+ * appended to the federal tier by the panel's async rehydrate. New federal
+ * program links are added ONLY there, never here.
  */
 function federalResources(state: StateCode | null): ResourceLink[] {
   const droughtGov: ResourceLink = state
