@@ -675,6 +675,12 @@ export const URLS = Object.freeze({
   // scripts/build-enso-snapshot.mjs, `npm run build:enso`). Bundled, so the
   // no-CORS CPC sources are read at build time, not by the browser at runtime.
   ensoIndicesLocal: import.meta.env.BASE_URL + 'data/enso-indices.json',
+  // Per-state resource catalog base (0.6.0 R2). Public resource LINKS are not
+  // sovereign data, so the catalog ships in-repo (D-0.6.0-004); each state's
+  // rows live at `<base>data/resources/<lowercase-two-letter-code>.json` and are
+  // fetched only for the clicked state (lazy). Schema and doctrine:
+  // docs/resource-catalog-schema.md.
+  resourcesLocalBase: import.meta.env.BASE_URL + 'data/resources/',
 
   // ---------- NASA GIBS sea surface temperature anomaly (B2, keyless WMTS) ----------
   // Global Imagery Browse Services (GIBS) GHRSST Level 4 MUR sea surface

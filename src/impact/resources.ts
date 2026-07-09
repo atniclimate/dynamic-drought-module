@@ -182,18 +182,28 @@ function federalResources(state: StateCode | null): ResourceLink[] {
 }
 
 /**
- * State resources by state code. Washington is the fully cataloged set
- * (drinking-water emergencies, statewide water-supply conditions, agricultural
- * drought relief); Oregon and Idaho carry their water-resources drought
- * programs. Each is plainly attributed to its agency and is regional context,
- * never framed as governing a Tribal Nation.
+ * State resources by state code (the SYNC BRIDGE; see below).
+ *
+ * BRIDGE NOTE (0.6.0 R2, D-0.6.0-004): the SYSTEM OF RECORD for the state tier
+ * is now the per-state catalog at `public/data/resources/<code>.json`, loaded
+ * by `src/impact/resource-catalog.ts` and documented in
+ * `docs/resource-catalog-schema.md`. This inline table remains only because
+ * `buildResources` runs synchronously and the catalog is fetched
+ * asynchronously; F3 switches the state tier to the async catalog (the
+ * open-then-rehydrate path, D-0.6.0-009) and removes this table. Until then
+ * WA/OR/ID appear in both places by design; the catalog files are the
+ * authoritative record the R3 fill campaign extends (new states are added ONLY
+ * as catalog files, never here).
+ *
+ * Washington is the fully cataloged set (drinking-water emergencies, statewide
+ * water-supply conditions, agricultural drought relief); Oregon and Idaho carry
+ * their water-resources drought programs. Each is plainly attributed to its
+ * agency and is regional context, never framed as governing a Tribal Nation.
  *
  * The table is deliberately partial: only strongly verified state programs
  * enter it. A state without an entry gets no state tier (the drought.gov
  * state page in the federal tier still carries state-specific conditions);
- * this never fabricates a link. The state-by-state catalog campaign (E4 of
- * the national roadmap) fills the table via the ddm-data-scout and
- * ddm-source-verifier pipeline.
+ * this never fabricates a link.
  */
 const STATE_RESOURCES: Partial<Record<StateCode, ResourceLink[]>> = {
   WA: [
