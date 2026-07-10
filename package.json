@@ -4,7 +4,7 @@
   "version": "0.6.2",
   "type": "module",
   "description": "Embeddable, serverless web map for drought, hydrography, ecological boundaries, wildfire activity, and live water and snowpack telemetry. Pacific Northwest focus.",
-  "license": "CC-BY-NC-SA-4.0",
+  "license": "PolyForm-Strict-1.0.0",
   "engines": {
     "node": ">=20"
   },

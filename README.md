@@ -28,8 +28,12 @@ placeholders that each deployer populates under its own authorizations.
 > with the relevant Tribal Nation before using these polygons for any
 > decision-making.
 
-License: Creative Commons Attribution-NonCommercial-ShareAlike 4.0
-International (CC BY-NC-SA 4.0).
+License: PolyForm Strict License 1.0.0. ATNI Climate, The Affiliated
+Tribes of Northwest Indians, holds the rights. Noncommercial use is
+permitted; selling or modifying the software requires explicit written
+permission from ATNI Climate with provenance tracking. See `LICENSE`,
+including the additional ATNI permission that covers noncommercial
+self-hosting and data population.
 
 ---
 
@@ -239,10 +243,17 @@ MapLibre GL JavaScript requires WebGL 1.
 
 ## Attribution and licensing
 
-This project is licensed CC BY-NC-SA 4.0: free to copy, redistribute,
-remix, and build upon; give appropriate credit to ATNI Climate, link the
-license, indicate changes; no commercial use; distribute remixes under the
-same license.
+Copyright (c) 2026 ATNI Climate, The Affiliated Tribes of Northwest
+Indians (ATNI). This project is licensed under the PolyForm Strict
+License 1.0.0 (see `LICENSE`): noncommercial entities may use the
+software; selling it, modifying it, or building new works on it requires
+explicit written permission from ATNI Climate, granted with
+provenance-tracking conditions (attribution preserved, changes documented
+and disclosed to ATNI). The `LICENSE` file carries an additional ATNI
+permission allowing noncommercial deployers to host unmodified copies and
+populate the data placeholders and configuration tables for their own
+deployment; that permission is what makes the self-hosting pattern in
+this README work.
 
 Data layers provided by sovereign Tribal Nations, state agencies, and
 federal entities retain their respective public-domain or specific-use
