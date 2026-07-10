@@ -6,7 +6,8 @@
  * validation in `src/impact/resource-catalog.ts` is only the defensive
  * backstop.
  *
- * Rules (docs/resource-catalog-schema.md is the authoritative statement):
+ * Rules (public/data/resources/README.md carries the deployer-facing
+ * statement of the schema):
  *   - every `.json`-like filename in the directory must be exactly lowercase
  *     (a `WA.json` or `wa.JSON` would silently vanish on case-sensitive
  *     hosting while looking present locally);

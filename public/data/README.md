@@ -4,7 +4,7 @@ The three GeoJSON files in this folder back the static reference layers shown on
 
 The app reports a layer as `no data (see data/README.md)` when its file is empty, and as `unavailable` when the file cannot be fetched.
 
-> **Stewardship note.** Anyone populating these files is responsible for the underlying authorizations. Tribal Lands, Treaty Areas, and any sovereign-jurisdiction polygons must be redistributed only with the relevant Tribal Nation's consent. The empty-placeholder pattern is a deliberate part of this module's design (see `CLAUDE.md` §2 and §4); please preserve it on contributions back upstream.
+> **Stewardship note.** Anyone populating these files is responsible for the underlying authorizations. Tribal Lands, Treaty Areas, and any sovereign-jurisdiction polygons must be redistributed only with the relevant Tribal Nation's consent. The empty-placeholder pattern is a deliberate part of this module's design; please preserve it on contributions back upstream.
 
 ---
 

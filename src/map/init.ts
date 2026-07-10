@@ -57,9 +57,8 @@ export function createMap(containerId: string): maplibregl.Map {
   // 3D is `map.setPitch(..)` plus `map.setTerrain({ source: <raster-dem> })`
   // after this constructor returns. The lightest honest option is MapLibre's
   // native terrain over a LOCAL raster-dem source (no cloud terrain
-  // dependency), which is also the GeoBase Light Engine's own render path
-  // (C:\dev\GeoBase, docs/ROADMAP.md phase 0.2), so the seam and GeoBase
-  // converge on one stack. Contract details: docs/interop/GEOBASE-BRIDGE.md.
+  // dependency), which is also the GeoBase Light Engine's own render path,
+  // so the seam and GeoBase converge on one stack.
   const map = new maplibregl.Map({
     container: containerId,
     style: buildBaseStyle(),

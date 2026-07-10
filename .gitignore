@@ -1,67 +1,7 @@
-# OS / editor noise
-.DS_Store
-Thumbs.db
-*.log
-*.swp
-*~
-
-# Secrets
-.env
-.env.*
-!.env.example
-
-# Phase B handoff bundle (kept local; relocated into place during Phase B)
-.handoff/
-
-# Session-specific handoff prompt (not part of the shipped baseline)
-KICKOFF.md
-
-# Build output / dependencies
+# Dynamic Drought Module: public repository ignores.
 node_modules/
 dist/
-.vite/
-
-# Background-task transcripts (when running with subagents)
-*.tasks.output
-
-# Claude Code transient scheduled-task lock
-.claude/scheduled_tasks.lock
-
-# Python build-time toolchain for the P9 landscape signature (build-time only,
-# never shipped to the browser; the client consumes only the baked JSON snapshot)
-.venv/
-__pycache__/
-*.pyc
-
-# P9 raster download / windowed-read cache (large; fetched at build time, not committed)
-scripts/.cache/
-
-# Local reference material, never published: the pre-migration Leaflet
-# baseline (a copy of the separate drought-region-maps repository) and
-# the canonical skills under .claude/skills/ (the root skills/ path holds
-# only local reference files). The pattern is anchored to the repository
-# root so it does not swallow new files under .claude/skills/.
-drought-region-maps/
-/skills/
-
-# research/: the markdown plans, meta-analysis, and evidence logs ARE
-# tracked, but source PDFs (typically copyrighted journal articles) stay
-# local; redistributing them from a CC BY-NC-SA repository is a license and
-# copyright problem. Keep seed papers in research/ locally; commit the prose.
-research/**/*.pdf
-research/**/*.PDF
-
-# Playwright browser-verification session artifacts
-.playwright-cli/
-
-# Playwright smoke-suite run artifacts (browsers install to a global cache,
-# not into the repository; only per-run output lands here)
+*.log
+.DS_Store
 test-results/
 playwright-report/
-blob-report/
-
-# graphify: graph outputs are committed; machine-local state is not
-graphify-out/.graphify_python
-graphify-out/.graphify_root
-graphify-out/cache/
-graphify-out/cost.json

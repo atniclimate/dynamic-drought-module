@@ -1,5 +1,5 @@
 # EditorConfig (https://editorconfig.org). Matches the conventions the
-# codebase already follows; see CONTRIBUTING.md for the rest.
+# codebase already follows.
 root = true
 
 [*]
