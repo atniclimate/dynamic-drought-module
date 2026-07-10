@@ -53,7 +53,7 @@ const STATE_FIPS: Record<StateCode, number> = {
   WA: 53, WV: 54, WI: 55, WY: 56, DC: 11, PR: 72
 };
 
-const STATE_LABEL: Record<StateCode, string> = {
+export const STATE_LABEL: Record<StateCode, string> = {
   AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
   CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida',
   GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana',

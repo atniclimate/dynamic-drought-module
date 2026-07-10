@@ -38,6 +38,7 @@ import type { GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
 import { registry } from '../state/registry';
+import { requestLayerOn } from '../ui/layer-toggle-command';
 import { timeline, type OutlookRange } from '../state/timeline';
 import { fetchWithBudget } from '../util/fetch';
 import { escapeHtml } from '../util/escape';
@@ -183,10 +184,13 @@ function installTimeBar(map: maplibregl.Map, fc: GeoJSON.FeatureCollection): voi
   });
 }
 
-/** The instrument switch back: a real surface switch via the USDM checkbox. */
+/**
+ * The instrument switch back: a real surface switch via the shared
+ * toggle command (ADR 0002 condition 2, D-0.7.0-008; DOM-free, so it
+ * works even before the catalog island mounts).
+ */
 function switchToObserved(): void {
-  const cb = document.querySelector<HTMLInputElement>('input[data-layer-key="usdm"]');
-  if (cb && !cb.checked) cb.click();
+  requestLayerOn('usdm');
 }
 
 // ---------------------------------------------------------------------------

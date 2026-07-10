@@ -416,6 +416,36 @@ a:hover {
   border-radius: var(--radius-md);
 }
 
+/* U1 (D-0.7.0-008): the tiles are real buttons that toggle their layer.
+   The button chrome resets to the tile card so the strip still reads as
+   a summary first; the interactive affordance is the hover border, the
+   off-state "Show" cue, and the focus ring (the U0c global rule). The
+   accessible name carries the full status-then-action sentence. */
+button.conditions-metric {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+button.conditions-metric:hover {
+  border-color: var(--accent-strong);
+}
+/* Hovering a muted tile lifts it toward full presence so the affordance
+   is visible without a color shout. */
+.conditions-metric[data-tone='off']:hover,
+.conditions-metric[data-tone='loading']:hover {
+  opacity: 0.85;
+}
+
+/* The off-state action cue: the immediate next step, visible where the
+   ambiguity used to live ("Layer off" + Show, never a bare "Off"). */
+.conditions-action {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--accent);
+}
+
 .conditions-value {
   font-family: var(--font-display);
   font-weight: var(--fw-title);
@@ -479,6 +509,98 @@ a:hover {
 }
 .conditions-date[data-stale='true'] {
   color: var(--warn);
+}
+
+/* ----------------------------------------------------------------------------
+   The two doors (U1, D-ARCH-002): the header mode switch and the Brief head.
+   Brief leads with the briefing and keeps the catalog beneath as drill-down;
+   console is the full instrument. The `view-brief`/`view-console` classes on
+   #app are the mode hooks (set by src/ui/view-shell.ts).
+   ---------------------------------------------------------------------------- */
+
+.view-switch {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+.view-switch button {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-2);
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--radius-md) - 2px);
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.view-switch button:hover {
+  color: var(--fg-0);
+}
+
+.view-switch button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.brief-head-lede {
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg-2);
+  margin: 6px 0 10px;
+}
+
+.brief-place-label {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-3);
+  margin-bottom: 4px;
+}
+
+.brief-place-select {
+  width: 100%;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--fg-0);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 7px 8px;
+  margin-bottom: 10px;
+}
+
+.brief-console-door {
+  display: block;
+  width: 100%;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-1);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.brief-console-door:hover {
+  border-color: var(--accent-strong);
+  color: var(--fg-0);
 }
 
 /* ----------------------------------------------------------------------------
@@ -2331,4 +2453,75 @@ a.impact-resource-link::after {
     padding: 7px 9px 6px;
   }
   .time-bar-jump { font-size: 9px; padding: 2px 6px; }
+}
+
+/* ----------------------------------------------------------------------------
+   The report in print (U1, D-0.7.0-017): with a briefing open, printing the
+   page prints THE REPORT, black on white, in full (no scroll clipping), for
+   council packets via the browser's print-to-PDF. Nothing else prints: the
+   map is interactive chrome, not part of the document. With no briefing
+   open, printing is the browser default (this block keys off :has(.open)).
+   PNG export is 0.8.0; this stylesheet is the U1 report-at-depth delivery.
+   ---------------------------------------------------------------------------- */
+@media print {
+  body:has(.impact-panel.open) {
+    background: #fff;
+  }
+  /* The app shell (map, sidebar, overlays) and the about card never print
+     while a report is open; the floating expand button likewise. */
+  body:has(.impact-panel.open) #app,
+  body:has(.impact-panel.open) #sidebar-expand,
+  body:has(.impact-panel.open) #about-atni {
+    display: none !important;
+  }
+  /* The panel becomes a static document: full width, natural height (every
+     claim and resource prints, not one scrollport), no chrome. */
+  body:has(.impact-panel.open) .impact-panel {
+    position: static;
+    width: auto;
+    max-width: none;
+    height: auto;
+    transform: none;
+    transition: none;
+    box-shadow: none;
+    border: 0;
+    background: #fff;
+    color: #000;
+  }
+  body:has(.impact-panel.open) .impact-panel-body {
+    overflow: visible;
+  }
+  body:has(.impact-panel.open) .impact-panel-close {
+    display: none;
+  }
+  /* Print legibility: ink on paper, with the hierarchy carried by weight and
+     case rather than the dark-theme palette. */
+  body:has(.impact-panel.open) .impact-panel :is(h2, h3, h4, p, span, div, a) {
+    color: #000;
+  }
+  body:has(.impact-panel.open) .impact-panel .impact-panel-kicker,
+  body:has(.impact-panel.open) .impact-panel .impact-panel-kind,
+  body:has(.impact-panel.open) .impact-panel .impact-claim-source,
+  body:has(.impact-panel.open) .impact-panel .impact-resource-agency,
+  body:has(.impact-panel.open) .impact-panel .impact-horizon-sub {
+    color: #444;
+  }
+  /* Sources must survive on paper: every claim and resource link prints its
+     address after the label (the whole point of a council-packet report). */
+  body:has(.impact-panel.open) .impact-panel a[href^='https://']::after {
+    content: ' (' attr(href) ')';
+    font-size: 9px;
+    color: #444;
+    word-break: break-all;
+  }
+  /* Keep a claim, a resource, and a horizon heading with its first content
+     on one page where the engine allows. */
+  .impact-claim,
+  .impact-resource,
+  .impact-resource-group {
+    break-inside: avoid;
+  }
+  .impact-horizon-head {
+    break-after: avoid;
+  }
 }

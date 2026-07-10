@@ -29,12 +29,42 @@ import type { Feature, FeatureCollection } from 'geojson';
 import { URLS } from '../config/urls';
 import { fetchWithBudget } from '../util/fetch';
 import { buildBoundaryContext, geometryBbox } from '../impact/context';
-import { openImpactPanel } from '../ui/impact-panel';
+import {
+  isCurrentBriefingIntent,
+  nextBriefingIntent,
+  openImpactPanel
+} from '../ui/impact-panel';
 import { showToast } from '../ui/overlay';
 import type { SelectParam } from './url';
 
 /** Per-call budget for the bundled boundaries fetch (same-origin). */
 const FETCH_TIMEOUT_MS = 10_000;
+
+/**
+ * Panel-aware camera padding (U1, headroom A2): a briefing fit always
+ * precedes the panel opening over the map, so the framed boundary must
+ * not end up hidden under it. The panel overlays the right 440px on
+ * desktop and the bottom sheet below the 720px breakpoint; both pads
+ * are clamped to half the viewport so a small embed can never be asked
+ * for more padding than it has pixels (MapLibre rejects that).
+ */
+function briefingCameraPadding(): maplibregl.PaddingOptions {
+  const mobile = window.matchMedia('(max-width: 720px)').matches;
+  if (mobile) {
+    return {
+      top: 24,
+      left: 24,
+      right: 24,
+      bottom: Math.min(Math.round(window.innerHeight * 0.45), 420)
+    };
+  }
+  return {
+    top: 40,
+    left: 40,
+    bottom: 40,
+    right: Math.min(480, Math.round(window.innerWidth * 0.5))
+  };
+}
 
 /**
  * Apply a captured `select` parameter. Called once from boot, after the
@@ -53,8 +83,16 @@ export async function applyDeepLink(
   if (!select) return;
   // A fresh deep link frames the state (fit: true); the shared helper below is
   // also called by the keyboard region-briefing trigger with fit: false so it
-  // preserves the user's current framing (#9).
-  await openStateBriefing(map, select.id, { fit: true });
+  // preserves the user's current framing (#9). The deep link is boot-time
+  // intent, so it carries the standard yield guard (U1 adversarial-review
+  // fix): a briefing the user opens or closes while this boundary fetch is
+  // in flight is NEWER intent and wins; the late deep link then yields
+  // instead of stomping it.
+  const intent = nextBriefingIntent();
+  await openStateBriefing(map, select.id, {
+    fit: true,
+    guard: () => isCurrentBriefingIntent(intent)
+  });
 }
 
 /**
@@ -68,7 +106,16 @@ export async function applyDeepLink(
 export async function openStateBriefing(
   map: maplibregl.Map,
   stusps: string,
-  opts: { fit?: boolean } = {}
+  opts: {
+    fit?: boolean;
+    /**
+     * Evaluated after the boundary fetch, immediately before the panel
+     * opens; returning false yields silently (no toast). The U1
+     * answer-first boot passes a guard so its late-resolving open never
+     * overrides a briefing the user has interacted with meanwhile.
+     */
+    guard?: () => boolean;
+  } = {}
 ): Promise<void> {
   let feature: Feature | undefined;
   try {
@@ -99,9 +146,11 @@ export async function openStateBriefing(
     return;
   }
 
+  if (opts.guard && !opts.guard()) return;
+
   const bbox = geometryBbox(feature.geometry);
   if (opts.fit && bbox) {
-    map.fitBounds(bbox, { padding: 40 });
+    map.fitBounds(bbox, { padding: briefingCameraPadding() });
   }
 
   const lngLat = bbox

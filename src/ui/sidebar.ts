@@ -36,6 +36,16 @@
  * `wireShareButton` lives in `./share`; `showLoading` / `hideLoading` /
  * `showToast` live in `./overlay`. The sidebar imports both.
  *
+ * ISLAND NOTE (ADR 0002, D-0.7.0-021): the layers catalog, the status
+ * pills, and the conditions strip are rendered by the Preact island in
+ * `./island/`, loaded via dynamic import so the framework rides a lazy
+ * chunk (condition 1). The view adapter's checkbox reads and writes go
+ * through the eager `./island/bridge` store (buffered until the island
+ * mounts); the live-region announcements stay here. Boot is split per
+ * the ADR's U1 integration note: the embed class, the timeline seed,
+ * and the region fit apply synchronously; only the layer-set activation
+ * chains on the island mount.
+ *
  * Stewardship: no Tribal, Treaty, or sovereign-jurisdiction data is
  * surfaced in this module. All region and layer labels come from the
  * config tables in `src/config/`.
@@ -43,13 +53,7 @@
 
 import maplibregl from 'maplibre-gl';
 
-import {
-  LAYER_DEFS,
-  LAYER_ROLE_ORDER,
-  getLayerDef
-} from '../config/layers';
-import type { LayerDef } from '../config/layers';
-import type { LayerRole } from '../types/layer';
+import { getLayerDef } from '../config/layers';
 import { VIEW_PRESETS } from '../config/presets';
 import {
   REGIONS,
@@ -62,7 +66,11 @@ import { registry } from '../state/registry';
 import { createLayerController } from '../state/layer-controller';
 import type { LayerController, LayerControllerView } from '../state/layer-controller';
 import { openStateBriefing } from '../state/deep-link';
-import { openImpactPanel } from './impact-panel';
+import {
+  isCurrentBriefingIntent,
+  nextBriefingIntent,
+  openImpactPanel
+} from './impact-panel';
 import { getPlaceSelection, onPlaceSelectionChange } from '../state/place-selection';
 import { prefersReducedMotion } from '../util/motion';
 import {
@@ -77,8 +85,15 @@ import type { StationValue, TelemetryStation } from '../types/station';
 import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
 import { parseUrlParams, syncUrl } from '../state/url';
+import type { ParsedUrlParams } from '../state/url';
+import { getViewMode, onViewModeChange, setViewMode } from '../state/view-mode';
 import { timeline } from '../state/timeline';
-import { buildConditionsStrip } from './conditions-strip';
+import { STATUS_PILL_TEXT } from './island/pill-text';
+import {
+  isChecked as bridgeIsChecked,
+  setChecked as bridgeSetChecked
+} from './island/bridge';
+import { bindLayerToggleController, requestLayerOn } from './layer-toggle-command';
 import { wireShareButton } from './share';
 import { showToast } from './overlay';
 import { escapeHtml } from '../util/escape';
@@ -123,62 +138,31 @@ let mapRef: maplibregl.Map | null = null;
  */
 let controllerRef: LayerController | null = null;
 
+/**
+ * The island mount trigger, set by `buildSidebar` (a closure over the map
+ * and controller). Callers outside the boot path (the sidebar-expand
+ * handler, the view shell's mode switch) use `mountSidebarIslandNow` to
+ * bring the catalog up when a brief embed deferred it (headroom C1).
+ */
+let onIslandNeeded: (() => Promise<void>) | null = null;
+
+/** Mount the catalog/strip island if it is not already mounted or mounting. */
+export function mountSidebarIslandNow(): Promise<void> {
+  return onIslandNeeded?.() ?? Promise.resolve();
+}
+
 // ---------------------------------------------------------------------------
-// Status pill rendering
+// Status announcements (pill DOM moved to the island)
 // ---------------------------------------------------------------------------
 
 /**
- * The six canonical layer states map to user-visible pill text per the
- * v0.1.2 wording (plus the 0.7.0 H4 `degraded` addition). CLAUDE.md
- * section 6 invariant 3 fixes this contract; the `LayerStatus` union in
- * `src/types/layer.ts` is the source of truth for the keys.
- *
- * Note the punctuation: an ellipsis is rendered as three ASCII dots
- * (`loading...`) per the same v0.1.2 convention; em dashes are forbidden
- * by CLAUDE.md section 4.
+ * Announce a layer status transition to the polite live region so a
+ * screen-reader user hears "Hydrography: live". The pill DOM itself is
+ * rendered by the island's catalog component from the registry mirror
+ * (ADR 0002, D-0.7.0-021); the pill text table is shared from
+ * `./island/pill-text` so the two surfaces can never drift.
  */
-const STATUS_PILL_TEXT: Record<LayerStatus, string> = {
-  loading: 'loading...',
-  ready: 'live',
-  degraded: 'live (partial)',
-  error: 'unavailable',
-  'no-data': 'empty placeholder (see data/README.md)',
-  'zoom-in': 'zoom in to load'
-};
-
-const STATUS_CSS_CLASSES: ReadonlyArray<string> = [
-  'loading',
-  'ready',
-  'degraded',
-  'error',
-  'no-data',
-  'zoom-in'
-];
-
-/**
- * Update the per-layer status pill text and CSS class. Called by both
- * the registry `status-change` subscription and any direct caller (for
- * example, a layer module that flips itself to `zoom-in` on a moveend
- * even while no activation is in flight).
- *
- * Also writes a sentence into the polite live region so screen readers
- * hear "Hydrography: live" when a layer transitions states.
- */
-export function setLayerStatusInPill(key: string, status: LayerStatus): void {
-  const el = document.querySelector<HTMLElement>(
-    `[data-layer-status="${cssAttrEscape(key)}"]`
-  );
-  if (!el) return;
-
-  for (const cls of STATUS_CSS_CLASSES) {
-    el.classList.remove(cls);
-  }
-  el.classList.add(status);
-  el.textContent = STATUS_PILL_TEXT[status];
-
-  // Polite live region announcement. Resolves the layer's display name
-  // so a screen-reader user hears "Hydrography: live" rather than the
-  // bare key.
+function announceLayerStatus(key: string, status: LayerStatus): void {
   const def = getLayerDef(key);
   const friendly = def ? def.name : key;
   announce(`${friendly}: ${STATUS_PILL_TEXT[status]}`);
@@ -305,6 +289,7 @@ function pushUrl(): void {
     region: STATE.currentRegion,
     layers: registry.getActiveKeys(),
     embed: STATE.embed,
+    view: getViewMode(),
     usdmWeek: timeline.usdmWeek,
     usdmMode: timeline.usdmMode,
     sstDate: timeline.sstDate,
@@ -375,14 +360,22 @@ function buildRegionButtons(
   briefingBtn.addEventListener('click', () => {
     // Front door (F3): a selected map place takes precedence, opening the same
     // briefing its boundary popup would. Otherwise fall back to the
-    // region-anchored briefing.
+    // region-anchored briefing. The anchor path resolves after an async
+    // boundary fetch, so it carries the standard yield guard: any panel
+    // interaction after THIS click (another open, an Escape close) wins
+    // over this one instead of being stomped by its late resolve.
     const place = getPlaceSelection();
     if (place) {
       openImpactPanel(place.context);
       return;
     }
     const anchor = STATE.currentRegion ? REGIONS[STATE.currentRegion]?.briefing : undefined;
-    if (anchor) void openStateBriefing(map, anchor.id, { fit: false });
+    if (!anchor) return;
+    const intent = nextBriefingIntent();
+    void openStateBriefing(map, anchor.id, {
+      fit: false,
+      guard: () => isCurrentBriefingIntent(intent)
+    });
   });
   container.insertAdjacentElement('afterend', briefingBtn);
   // Reflect the region active at build time (boot applies it again via selectRegion).
@@ -472,122 +465,17 @@ function handleRadiogroupKey(
 }
 
 // ---------------------------------------------------------------------------
-// Layer toggles builder
+// Layer toggles: rendered by the island (ADR 0002, D-0.7.0-021)
+//
+// The vanilla `buildLayerToggles` / `buildLayerToggle` builders and the
+// `clearLayerStatusPill` helper are replaced by the island's catalog
+// component (`./island/catalog.tsx`), which renders the same DOM contract
+// (checkboxes at `input[data-layer-key]`, pills at `[data-layer-status]`,
+// role groups per UX-1) from the registry and the bridge intent store.
+// The explicit pill clear became unnecessary: the registry deletes a
+// key's status on deactivate and the island derives pill text from the
+// registry, so the empty pre-activation state falls out of the data.
 // ---------------------------------------------------------------------------
-
-/**
- * User-facing labels for the four role groups (UX-1). The headings carry
- * the ratified place/state taxonomy into the sidebar: condition surfaces
- * describe the state a place is in (one at a time); references are the
- * tactile anchor for place; events and stations sit on top.
- */
-const ROLE_GROUP_LABELS: Record<LayerRole, { title: string; hint: string | null }> = {
-  surface: { title: 'Conditions', hint: 'one at a time' },
-  reference: { title: 'Place', hint: 'boundaries & rivers' },
-  event: { title: 'Events', hint: null },
-  stations: { title: 'Stations', hint: null }
-};
-
-/**
- * Build the layer toggle list from `LAYER_DEFS`, grouped by role in
- * `LAYER_ROLE_ORDER` (surfaces, references, events, stations; UX-1).
- * Within a group, entries keep their `LAYER_DEFS` order. Each entry is a
- * `<label>` wrapping a checkbox plus three text spans (name, source,
- * status pill). The checkbox `change` handler defers to the layer
- * controller (`controller.activate` / `controller.deactivate`), which owns
- * the activation state machine and updates the registry.
- *
- * Surfaces are mutually exclusive: `controller.activate` first deactivates
- * whichever surface is on, through the same deactivate path a manual
- * off-toggle takes, so the registry (and with it the URL sync and the pills)
- * stays honest. All four groups keep checkbox semantics because, unlike a
- * radio group, every surface may be off at once.
- *
- * The controller wraps the layer module's `activate` in a loading-indicator
- * token so parallel toggles do not stomp each other's indicator text; on
- * activation failure it unchecks the row (via the view adapter) so the UI
- * does not lie about a layer being on.
- */
-function buildLayerToggles(map: maplibregl.Map): void {
-  const container = document.getElementById('layer-toggles');
-  if (!container) return;
-  container.innerHTML = '';
-
-  for (const role of LAYER_ROLE_ORDER) {
-    const defs = LAYER_DEFS.filter((def) => def.role === role);
-    if (defs.length === 0) continue;
-
-    const group = document.createElement('div');
-    group.className = 'layer-group';
-    group.setAttribute('role', 'group');
-
-    const label = ROLE_GROUP_LABELS[role];
-    const heading = document.createElement('div');
-    heading.className = 'layer-group-title';
-    heading.id = `layer-group-${role}`;
-    heading.innerHTML = label.hint
-      ? `${escapeHtml(label.title)} <span class="layer-group-hint">${escapeHtml(label.hint)}</span>`
-      : escapeHtml(label.title);
-    group.setAttribute('aria-labelledby', heading.id);
-    group.appendChild(heading);
-
-    for (const def of defs) {
-      group.appendChild(buildLayerToggle(map, def));
-    }
-    container.appendChild(group);
-  }
-}
-
-/**
- * Build a single layer toggle row. Split out of `buildLayerToggles` when
- * UX-1 introduced role groups; behavior is unchanged from the flat list.
- */
-function buildLayerToggle(_map: maplibregl.Map, def: LayerDef): HTMLLabelElement {
-  const id = `layer-toggle-${def.key}`;
-  const wrapper = document.createElement('label');
-  wrapper.className = 'layer-toggle';
-  wrapper.htmlFor = id;
-  wrapper.innerHTML = `
-    <input type="checkbox" id="${escapeHtml(id)}" data-layer-key="${escapeHtml(def.key)}" />
-    <span class="layer-toggle-text">
-      <span class="layer-toggle-name">${escapeHtml(def.name)}</span>
-      <span class="layer-toggle-source">${escapeHtml(def.source)}</span>
-      <span class="layer-toggle-status" data-layer-status="${escapeHtml(def.key)}"></span>
-    </span>
-  `;
-
-  const cb = wrapper.querySelector<HTMLInputElement>('input[type="checkbox"]');
-  if (cb) {
-    // Thin row factory: the change handler defers to the controller, which owns
-    // the activation state machine (surface exclusivity, the op chain, the
-    // intent guards, the loading indicator). `map` is no longer needed here.
-    cb.addEventListener('change', () => {
-      if (cb.checked) {
-        void controllerRef?.activate(def.key);
-      } else {
-        controllerRef?.deactivate(def.key);
-      }
-    });
-  }
-
-  return wrapper;
-}
-
-/**
- * Reset a layer's status pill to the empty pre-activation state (no text,
- * no status class). The five canonical states describe load progress; an
- * intentionally-off layer is none of them.
- */
-function clearLayerStatusPill(key: string): void {
-  const el = document.querySelector<HTMLElement>(
-    `[data-layer-status="${cssAttrEscape(key)}"]`
-  );
-  if (!el) return;
-  for (const cls of STATUS_CSS_CLASSES) {
-    el.classList.remove(cls);
-  }
-  el.textContent = '';
-}
 
 // ---------------------------------------------------------------------------
 // View preset chips (UX-2)
@@ -809,23 +697,12 @@ function onActiveChangeForStationValues(active: ReadonlySet<string>): void {
 }
 
 /**
- * Toggle the telemetry layer on if it is currently off, by routing
- * through the same checkbox change handler the user would. This keeps
- * the registry, URL, and DOM checkbox in sync with whatever the layer
- * module needs to do on activation.
- *
- * No-op when the telemetry layer is already active or when the
- * checkbox is missing from the DOM (defensive; should not happen in
- * practice).
+ * The telemetry list's click-through, via the shared toggle command
+ * (ADR 0002 condition 2, D-0.7.0-008): the DOM-free door every
+ * non-checkbox caller takes, so it works before the island mounts.
  */
 function ensureTelemetryActive(_map: maplibregl.Map): void {
-  if (registry.getActiveKeys().has('telemetry')) return;
-  const cb = document.querySelector<HTMLInputElement>(
-    'input[data-layer-key="telemetry"]'
-  );
-  if (!cb) return;
-  cb.checked = true;
-  cb.dispatchEvent(new Event('change'));
+  requestLayerOn('telemetry');
 }
 
 // ---------------------------------------------------------------------------
@@ -872,8 +749,11 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
       const app = document.getElementById('app');
       if (app) app.classList.remove('sidebar-collapsed', 'embed');
       // Expanding always exits embed mode so the user gets the full
-      // chrome back. Persist that to the URL so a refresh holds.
+      // chrome back. Persist that to the URL so a refresh holds. A brief
+      // embed deferred the catalog island (headroom C1); the full chrome
+      // needs it, so mount it now (idempotent).
       STATE.embed = false;
+      void mountSidebarIslandNow();
       pushUrl();
       window.setTimeout(() => {
         map.resize();
@@ -898,17 +778,24 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Apply the parsed URL state at boot: set the embed class, fit the
- * region without animation, and toggle each requested layer on.
+ * Apply the SYNCHRONOUS half of the parsed URL state at boot: the embed
+ * class, the temporal seed, and the region fit. Returns the parsed
+ * params so the caller can chain the layer-set activation separately.
  *
- * Activation is concurrent across layers (`Promise.allSettled`) so a
- * single slow or failing layer does not delay the rest. Each
- * activation goes through the same path as a user-initiated toggle
- * (loading indicator, registry update, status pill).
+ * The split is the ADR 0002 U1 integration requirement: the parked
+ * spike branch chained ALL of the URL application on the island mount,
+ * which also delayed the `.embed` class and the initial region fit, so
+ * a slow island chunk could flash non-embed chrome for a beat. The
+ * first-paint state (embed chrome, camera) must never wait on a lazy
+ * chunk; only the layer-set activation does (see `buildSidebar`).
  */
-async function applyUrlState(map: maplibregl.Map): Promise<void> {
+function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   const params = parseUrlParams();
   STATE.embed = params.embed;
+
+  // Seed the view mode BEFORE the first pushUrl below (selectRegion syncs
+  // the URL, and the URL must carry the derived mode from its first write).
+  setViewMode(params.view);
 
   // Seed the temporal store BEFORE any layer activates, so a layer module
   // that reads the timeline during activate() (USDM restoring a scrubbed
@@ -927,12 +814,7 @@ async function applyUrlState(map: maplibregl.Map): Promise<void> {
   // long fly-to on first paint.
   selectRegion(map, params.region, true);
 
-  // Activate the URL/default layer set through the controller. It runs the
-  // same activation path a user toggle takes (concurrent across layers via
-  // Promise.allSettled), checks each row's box through the view adapter, and
-  // tolerates a missing checkbox for an unknown key (the old detached-checkbox
-  // fallback is now the view adapter's no-op write).
-  if (controllerRef) await controllerRef.applyLayerSet(params.layers);
+  return params;
 }
 
 // ---------------------------------------------------------------------------
@@ -955,54 +837,86 @@ export function buildSidebar(
   mapRef = map;
   ensureLiveRegion();
 
-  // The activation state machine lives in the controller now (D-ARCH-004). It
-  // drives DOM through this view adapter, which wraps the sidebar's existing
-  // checkbox, status-pill, and live-region helpers, so the controller stays
-  // free of `document`. Created before the DOM builders and applyUrlState,
-  // which route all layer state through it.
+  // The activation state machine lives in the controller now (D-ARCH-004).
+  // The checkbox reads and writes go through the eager island bridge instead
+  // of the DOM (ADR 0002): the bridge is the one source of truth for checkbox
+  // intent, written synchronously by both this adapter and the island's own
+  // change handler, and it buffers boot writes made before the lazy island
+  // mounts. The island renders the checkbox DOM from it, so the two can
+  // never disagree.
   const view: LayerControllerView = {
     setCheckbox(key, checked) {
-      const cb = document.querySelector<HTMLInputElement>(
-        `input[data-layer-key="${cssAttrEscape(key)}"]`
-      );
-      if (cb) cb.checked = checked;
+      bridgeSetChecked(key, checked);
     },
     isCheckboxChecked(key) {
-      const cb = document.querySelector<HTMLInputElement>(
-        `input[data-layer-key="${cssAttrEscape(key)}"]`
-      );
-      return cb?.checked ?? false;
+      return bridgeIsChecked(key);
     },
-    clearLayerStatus(key) {
-      clearLayerStatusPill(key);
+    clearLayerStatus() {
+      // Intentionally empty: the registry deletes a key's status on
+      // deactivate and the island derives pill text from the registry
+      // mirror, so the empty pre-activation pill falls out of the data
+      // instead of an imperative clear.
     },
     announce(message) {
       announce(message);
     }
   };
   controllerRef = createLayerController(map, view);
+  // Arm the shared toggle command (ADR 0002 condition 2): the DOM-free
+  // door for the time bar's instrument switches, the ENSO driver, the
+  // telemetry list, and the conditions tiles. Bound before any DOM
+  // builder or boot path can invoke it.
+  bindLayerToggleController(controllerRef);
 
   const handleRegion = (key: RegionKey): void => {
     selectRegion(map, key);
     onRegionSelect(key);
   };
 
-  buildConditionsStrip(map);
   buildRegionButtons(map, handleRegion);
   buildPresetChips(map);
-  buildLayerToggles(map);
   buildTelemetryList(map);
   wireTopLevelEvents(map);
 
+  // Mount the view island (the catalog and the conditions strip) from its
+  // lazy chunk (ADR 0002 condition 1). Checkbox intent buffers in the bridge
+  // and the registry holds the statuses, so the island snapshots both at
+  // mount; a mount failure degrades to a map without a catalog rather than
+  // a dead app (the boot chain below proceeds regardless).
+  //
+  // PER-MODE IMPORT (U1, headroom C1): a BRIEF EMBED never downloads the
+  // catalog chunk at boot; the collapsed sidebar shows nothing the island
+  // renders, the briefing panel is the surface, and every activation door
+  // is DOM-free through the shared toggle command since U1b. The mount is
+  // deferred, not dropped: expanding the sidebar or switching to console
+  // calls `ensureIslandMounted` below, and the island snapshots the bridge
+  // and the registry at that moment, so a late mount is always consistent.
+  const controllerForIsland = controllerRef;
+  let islandPromise: Promise<void> | null = null;
+  const ensureIslandMounted = (): Promise<void> => {
+    if (!islandPromise) {
+      islandPromise = import('./island')
+        .then(({ mountSidebarIsland }) => {
+          mountSidebarIsland(map, controllerForIsland);
+        })
+        .catch((err: unknown) => {
+          console.error('[sidebar] island mount failed:', err);
+        });
+    }
+    return islandPromise;
+  };
+  onIslandNeeded = ensureIslandMounted;
+
   // Subscribe to the registry. `change` drives URL sync + active-count
-  // pill; `status-change` drives the per-layer pill text + live region.
+  // pill; `status-change` drives the live-region announcement (the pill
+  // DOM is the island's).
   registry.on('change', (active) => {
     pushUrl();
     updateActiveCountPill(active);
     onActiveChangeForStationValues(active);
   });
   registry.on('status-change', (key, status) => {
-    setLayerStatusInPill(key, status);
+    announceLayerStatus(key, status);
   });
 
   // Temporal-state changes re-sync the URL the same way layer changes do
@@ -1014,15 +928,55 @@ export function buildSidebar(
   // reverts to the region anchor.
   onPlaceSelectionChange(() => updateRegionBriefingTrigger(STATE.currentRegion));
 
-  // Apply the URL state. If parsing fails (no params), we fall back to
-  // the default region and the default-on layer set, both of which are
-  // handled inside `applyUrlState` via `parseUrlParams`.
-  void applyUrlState(map).catch((err: unknown) => {
-    console.error('[sidebar] applyUrlState failed:', err);
+  // Apply the URL state, split per the ADR 0002 U1 integration note. The
+  // synchronous half (embed class, timeline seed, region fit) applies NOW,
+  // so the first paint never waits on a lazy chunk. Only the layer-set
+  // activation chains on the island mount settling (success or failure):
+  // the vanilla builders ran synchronously before the boot path, so the
+  // catalog DOM always existed before any layer activated; the lazy island
+  // reopened that window, and the time bar's instrument switches
+  // (usdm/drought) still reach for the checkbox DOM until the shared
+  // toggle command retires that door (ADR 0002 condition 2). Sequencing
+  // the layer set on the mount restores the old guarantee: no layer, and
+  // therefore no time bar, can exist before the checkboxes do. Measured
+  // cost under regional-4G throttle: +15 ms to the visible pill (ADR 0002
+  // condition 8; ruled not material).
+  let bootParams: ParsedUrlParams | null = null;
+  try {
+    bootParams = applyUrlStateSync(map);
+  } catch (err) {
+    console.error('[sidebar] URL state application failed:', err);
     // Defensive fallback: at least fit the default region so the user
     // sees the map.
     selectRegion(map, DEFAULT_REGION, true);
+  }
+
+  // The island boot decision (headroom C1): a brief embed defers the
+  // catalog chunk entirely; every other boot mounts it now. The mode is
+  // authoritative only after applyUrlStateSync seeded it above.
+  const isBriefEmbed = (bootParams?.embed ?? false) && getViewMode() === 'brief';
+  const islandReady = isBriefEmbed ? Promise.resolve() : ensureIslandMounted();
+
+  // A mode change re-syncs the URL (view= is state, invariant 2) and
+  // guarantees the catalog exists for the console door (idempotent).
+  onViewModeChange(() => {
+    pushUrl();
+    void ensureIslandMounted();
   });
+
+  void islandReady
+    .then(async () => {
+      // Activate the URL/default layer set through the controller. It runs
+      // the same activation path a user toggle takes (concurrent across
+      // layers via Promise.allSettled), records each row's intent through
+      // the view adapter, and tolerates an unknown key honestly.
+      if (bootParams && controllerRef) {
+        await controllerRef.applyLayerSet(bootParams.layers);
+      }
+    })
+    .catch((err: unknown) => {
+      console.error('[sidebar] boot layer activation failed:', err);
+    });
 }
 
 // ---------------------------------------------------------------------------

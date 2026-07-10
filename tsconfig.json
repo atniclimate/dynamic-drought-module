@@ -20,9 +20,12 @@
     "skipLibCheck": true,
     "useDefineForClassFields": true,
 
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+
     "noEmit": true,
 
     "types": ["vite/client", "geojson"]
   },
-  "include": ["src/**/*.ts", "vite.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]
 }

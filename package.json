@@ -1,7 +1,7 @@
 {
   "name": "dynamic-drought-module",
   "private": true,
-  "version": "0.6.4",
+  "version": "0.6.5",
   "type": "module",
   "description": "Embeddable, serverless web map for drought, hydrography, ecological boundaries, wildfire activity, and live water and snowpack telemetry. Pacific Northwest focus.",
   "license": "PolyForm-Strict-1.0.0",
@@ -26,8 +26,10 @@
     "check:drift": "node scripts/check-upstream-drift.mjs"
   },
   "dependencies": {
+    "@preact/signals": "^2.9.3",
     "maplibre-gl": "^4.7.0",
-    "pmtiles": "^4.4.1"
+    "pmtiles": "^4.4.1",
+    "preact": "^10.29.7"
   },
   "devDependencies": {
     "@playwright/test": "1.61.1",

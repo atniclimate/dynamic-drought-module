@@ -321,12 +321,24 @@ function paint(briefing: ImpactBriefing): void {
 export function openImpactPanel(context: BoundarySelectionContext): number {
   // Remember the trigger so focus can return to it on close (#16). Captured
   // before we move focus to the close button below. A reopen keeps the
-  // original opener rather than overwriting it with the close button.
+  // original opener rather than overwriting it with the close button. Two
+  // refinements since the answer-first boot (U1) can open the panel with no
+  // focused opener: the document body is never recorded as an opener (a
+  // close must not "restore" focus to the body), and a user-initiated open
+  // while an openerless panel is showing ADOPTS its real opener, so the
+  // keyboard trigger's focus restore works after a boot auto-open.
+  const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const realOpener = active !== null && active !== document.body ? active : null;
   if (!panelEl || panelEl.hidden) {
-    openerEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    openerEl = realOpener;
+  } else if (openerEl === null && realOpener !== null && !panelEl.contains(realOpener)) {
+    openerEl = realOpener;
   }
 
-  // Supersede any prior hydration before starting a new selection.
+  // Supersede any prior hydration before starting a new selection, and
+  // bump the intent sequence: an executed open outranks any async opener
+  // still waiting on its boundary fetch.
+  briefingIntentSeq++;
   if (activeController) activeController.abort();
   activeController = new AbortController();
   const signal = activeController.signal;
@@ -419,6 +431,30 @@ export function isCurrentBriefing(token: number): boolean {
   return token === openToken && activeBriefing !== null && panelEl !== null && !panelEl.hidden;
 }
 
+/**
+ * Briefing INTENT sequence (U1; hardened after the U1 adversarial
+ * review). Every declaration of "I want a briefing" takes a number:
+ * async openers (the answer-first boot, the place picker, the region
+ * trigger, the select= deep link) declare intent at user-action time
+ * and check, at their fetch's resolve, that no NEWER intent or panel
+ * interaction has happened since; executed opens and closes bump the
+ * sequence too, so they supersede anything declared before them. This
+ * makes the LAST intent win regardless of fetch resolve order (the
+ * interaction-count guard it replaces let whichever fetch resolved
+ * first win a two-pick race).
+ */
+let briefingIntentSeq = 0;
+
+/** Declare a briefing intent; returns its sequence number. */
+export function nextBriefingIntent(): number {
+  return ++briefingIntentSeq;
+}
+
+/** Whether `intent` is still the newest declaration. */
+export function isCurrentBriefingIntent(intent: number): boolean {
+  return intent === briefingIntentSeq;
+}
+
 /** The briefing currently on screen, for in-place hydration (Phase 3). */
 export function getActiveBriefing(): ImpactBriefing | null {
   return activeBriefing;
@@ -447,6 +483,9 @@ export function refreshOpenBriefing(token: number): void {
 
 /** Close the panel and supersede any in-flight hydration. */
 export function closeImpactPanel(): void {
+  // A deliberate close outranks any async opener still in flight: the
+  // user said "no panel", so a late-resolving boundary fetch must yield.
+  briefingIntentSeq++;
   openToken++;
   activeBriefing = null;
   if (activeController) {

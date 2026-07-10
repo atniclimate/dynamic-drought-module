@@ -52,6 +52,7 @@ import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 import { timeline, type UsdmViewMode } from '../state/timeline';
 import { USDM_CATEGORIES } from '../config/palette';
+import { requestLayerOn } from '../ui/layer-toggle-command';
 import {
   FrameCache,
   crossfadeFrames,
@@ -510,16 +511,20 @@ function installTimeBar(map: maplibregl.Map): void {
 
 /**
  * The instrument switch: a REAL surface switch to the outlook layer via
- * the sidebar checkbox path, so the registry, the URL `layers=` list, and
- * the status pill all record what is actually on screen. A hard cut by
- * design; the observed/forecast boundary is never crossfaded.
+ * the shared toggle command, so the registry, the URL `layers=` list,
+ * and the status pill all record what is actually on screen. A hard cut
+ * by design; the observed/forecast boundary is never crossfaded.
+ *
+ * The command (ADR 0002 condition 2, D-0.7.0-008) replaced the old
+ * checkbox `cb.click()` door: the catalog checkbox is rendered by a
+ * lazily-mounted island now, so a `querySelector` door would silently
+ * no-op in the pre-mount window (the spike's Codex adversarial
+ * finding). The command records the checkbox intent in the eager bridge
+ * and routes through the controller, DOM-free.
  */
 function switchToOutlook(range: string): void {
   timeline.setOutlookRange(range === 'monthly' ? 'monthly' : 'seasonal');
-  const cb = document.querySelector<HTMLInputElement>(
-    'input[data-layer-key="drought"]'
-  );
-  if (cb && !cb.checked) cb.click();
+  requestLayerOn('drought');
 }
 
 // ---------------------------------------------------------------------------

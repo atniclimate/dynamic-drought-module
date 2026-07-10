@@ -10,6 +10,7 @@ import { buildSidebar } from './ui/sidebar';
 import { initHoverInspector } from './ui/hover-inspector';
 import { initMapKey } from './ui/map-key';
 import { buildEnsoDriver } from './ui/enso-driver';
+import { initViewShell } from './ui/view-shell';
 
 /**
  * Dynamic Drought Module (DDM) boot.
@@ -89,6 +90,11 @@ async function boot(): Promise<void> {
   // The ENSO driver line (0.4.0 B2): the one-line climate-driver read under
   // the conditions strip, from the bundled snapshot. Hidden on any failure.
   buildEnsoDriver();
+
+  // The two doors (U1, D-ARCH-002): mode chrome, the Brief head, and the
+  // answer-first boot. After the sidebar (which seeds the mode from the
+  // URL); told about the deep link so it does not double-open a briefing.
+  initViewShell(map, { hasSelectDeepLink: select !== null });
 
   // Applied after the sidebar so the deep link's fitBounds supersedes the
   // region framing; async, so a slow bundled-data fetch never blocks boot.

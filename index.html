@@ -41,6 +41,12 @@
 
         <section class="panel enso-driver" id="enso-driver" aria-label="ENSO driver" hidden></section>
 
+        <!-- Brief head (U1, the two doors): the lede, the place picker, and
+             the console door. Filled by src/ui/view-shell.ts; visible only in
+             Brief mode. Sits under the strip and the driver line: the at-hand
+             numbers first, then "what does it mean here". -->
+        <section class="panel brief-head" id="brief-head" aria-label="Drought briefing" hidden></section>
+
         <section class="panel">
           <h2 class="panel-title">Region</h2>
           <div id="region-buttons" class="region-grid" role="radiogroup" aria-label="Select region"></div>
@@ -77,7 +83,7 @@
         <p>Data: OpenStreetMap · NOAA · USGS · BIA · EPA</p>
         <p class="muted">
           <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">atniclimate/dynamic-drought-module</a>
-          · v0.6.4
+          · v0.6.5
         </p>
       </footer>
     </aside>

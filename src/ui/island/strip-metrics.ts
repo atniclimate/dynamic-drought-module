@@ -1,38 +1,25 @@
 /**
- * Conditions strip (UX-3): a dated at-a-glance summary at the top of the
- * sidebar answering "what is happening in the view right now."
+ * Conditions-strip metric computation (UX-3), carried verbatim from the
+ * retired vanilla `src/ui/conditions-strip.ts` when the island view
+ * layer landed (ADR 0002, D-0.7.0-021). The rendering lives in
+ * `conditions-strip.tsx`; everything in this file is framework-free
+ * computation.
  *
- * Three metrics:
- *   - worst drought category in view (US Drought Monitor)
- *   - active heat and fire-weather alert count in view (NWS alerts)
- *   - active wildfire count in view (NIFC perimeters)
- *
- * Data model (ratified direction: reflect the map, honestly). The strip reads
- * ONLY what is currently rendered, through `map.queryRenderedFeatures` against
- * each layer's fill. It fetches nothing of its own and stands up no backend:
- * a metric shows a number only when its layer is active and rendered, and an
- * honest "off" state otherwise. This keeps the strip consistent with the
- * module's invariants (no backend, lazy-loaded layers, honest feedback) and
- * with the mutually-exclusive-surface rule: the US Drought Monitor is a
- * condition surface, so its number is present when it is the active surface
- * and yields to an "off" hint when the user switches to another surface.
- *
- * "In view" means the current viewport. Each source holds its whole
- * FeatureCollection, so only `queryRenderedFeatures` (viewport-clipped) gives
- * an in-view answer; `querySourceFeatures` would return the whole nation.
- *
- * Recompute is driven by the map settling (`idle`, `moveend`) and by the
- * layer registry changing (`change`, `status-change`), coalesced to one
- * render per frame so a burst of events does not thrash the DOM.
+ * Data model (ratified direction: reflect the map, honestly). The strip
+ * reads ONLY what is currently rendered, through
+ * `map.queryRenderedFeatures` against each layer's fill. It fetches
+ * nothing of its own and stands up no backend: a metric shows a number
+ * only when its layer is active and rendered, and an honest "off" state
+ * otherwise. "In view" means the current viewport; only
+ * `queryRenderedFeatures` (viewport-clipped) gives an in-view answer.
  */
 
 import type maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 
-import { registry } from '../state/registry';
-import { timeline } from '../state/timeline';
-import { USDM_CATEGORIES } from '../config/palette';
-import { escapeHtml } from '../util/escape';
+import { registry } from '../../state/registry';
+import { timeline } from '../../state/timeline';
+import { USDM_CATEGORIES } from '../../config/palette';
 
 // ---------------------------------------------------------------------------
 // Layer keys and fill-layer ids
@@ -60,7 +47,7 @@ const ALERTS_FILL = 'nws-alerts-fill';
 const FIRES_KEY = 'nifc-fires';
 const FIRES_FILL = 'nifc-fires-fill';
 
-interface Metric {
+export interface Metric {
   /** Headline value: a category code, a count, or an em-dash-free placeholder. */
   readonly value: string;
   /** One-line context under the value. */
@@ -137,26 +124,68 @@ function firstNonBlank(...candidates: unknown[]): string {
 // Metric computation
 // ---------------------------------------------------------------------------
 
-/** The honest "active but not yet rendered" state, worded from the pill vocabulary. */
+/**
+ * The honest "active but not yet rendered" state, worded from the
+ * canonical six-state pill vocabulary (U1 alignment: every status
+ * surface carries all six states with the canonical wording; no
+ * per-surface synonyms).
+ */
 function pendingSublabel(key: string): string {
   switch (registry.getStatus(key)) {
     case 'loading':
       return 'loading...';
+    case 'degraded':
+      return 'live (partial)';
     case 'no-data':
       return 'no data';
     case 'error':
       return 'unavailable';
+    case 'zoom-in':
+      return 'zoom in to load';
     default:
       return 'off';
   }
 }
 
-function droughtMetric(map: maplibregl.Map): { metric: Metric; dateMs: number | null } {
-  const active = registry.getActiveKeys().has(USDM_KEY);
-  if (!active) {
-    // "Off" as a deliberate small-caps state word (styled via data-tone), not
-    // a dash that could read as missing data; the sublabel names the layer.
-    return { metric: { value: 'Off', sublabel: 'US Drought Monitor', tone: 'off' }, dateMs: null };
+/**
+ * The deliberate off tile: the layer is not on and not being turned on.
+ * "Layer off" (not a bare "Off") per the ratified tile guardrail spec
+ * (D-0.7.0-008): the wording must not conflate "layer off" with "no
+ * events exist"; the tile's action cue ("Show") is rendered by the view.
+ */
+function offMetric(sublabel: string): Metric {
+  return { value: 'Layer off', sublabel, tone: 'off' };
+}
+
+/**
+ * The "on its way or degraded" tile: the layer is on (or activating)
+ * but its fill has nothing rendered yet. A genuinely loading layer
+ * shimmers; any other pending status (no data, unavailable, zoom in to
+ * load) reads muted with its honest canonical sublabel. Never a zero:
+ * a failed activation must not read as "0 alerts" (guardrail spec).
+ */
+function pendingMetric(key: string): Metric {
+  const tone = registry.getStatus(key) === 'loading' ? 'loading' : 'off';
+  return { value: '-', sublabel: pendingSublabel(key), tone };
+}
+
+/**
+ * A layer counts as "on" for the tile the moment its activation starts:
+ * the registry records active keys only after `activate` resolves, but
+ * it sets the `loading` status synchronously at the start, so
+ * `active || loading` tracks the checkbox intent without reaching for
+ * DOM. Keeps the button semantics stable across the whole lifecycle
+ * (off, loading, ready, zero, error; guardrail spec).
+ */
+function isLayerOn(key: string): boolean {
+  return registry.getActiveKeys().has(key) || registry.getStatus(key) === 'loading';
+}
+
+export function droughtMetric(map: maplibregl.Map): { metric: Metric; dateMs: number | null } {
+  if (!isLayerOn(USDM_KEY)) {
+    // A deliberate small-caps state phrase (styled via data-tone), not a
+    // dash that could read as missing data; the sublabel names the layer.
+    return { metric: offMetric('US Drought Monitor'), dateMs: null };
   }
 
   // The change-map register (0.5.0b): the absolute categories are hidden,
@@ -178,11 +207,10 @@ function droughtMetric(map: maplibregl.Map): { metric: Metric; dateMs: number | 
 
   const presentFills = USDM_FILLS.filter((id) => map.getLayer(id));
   if (presentFills.length === 0) {
-    // Active but the fill has not been created yet: while the status is
-    // genuinely loading, the tile shimmers; any other pending status (no data,
-    // unavailable) reads as the muted off tone with its honest sublabel.
-    const tone = registry.getStatus(USDM_KEY) === 'loading' ? 'loading' : 'off';
-    return { metric: { value: '-', sublabel: pendingSublabel(USDM_KEY), tone }, dateMs: null };
+    // On (or activating) but the fill has not been created yet: while the
+    // status is genuinely loading, the tile shimmers; any other pending
+    // status reads muted with its honest canonical sublabel.
+    return { metric: pendingMetric(USDM_KEY), dateMs: null };
   }
 
   const feats = map.queryRenderedFeatures({ layers: [...presentFills] });
@@ -211,10 +239,9 @@ function droughtMetric(map: maplibregl.Map): { metric: Metric; dateMs: number | 
   };
 }
 
-function alertsMetric(map: maplibregl.Map): Metric {
-  if (!registry.getActiveKeys().has(ALERTS_KEY) || !map.getLayer(ALERTS_FILL)) {
-    return { value: 'Off', sublabel: 'alerts', tone: 'off' };
-  }
+export function alertsMetric(map: maplibregl.Map): Metric {
+  if (!isLayerOn(ALERTS_KEY)) return offMetric('alerts');
+  if (!map.getLayer(ALERTS_FILL)) return pendingMetric(ALERTS_KEY);
   const feats = map.queryRenderedFeatures({ layers: [ALERTS_FILL] });
   const n = countDistinct(feats, (p) =>
     [p?.['prod_type'], p?.['onset'], p?.['ends'], p?.['wfo']].join('|')
@@ -226,10 +253,9 @@ function alertsMetric(map: maplibregl.Map): Metric {
   };
 }
 
-function firesMetric(map: maplibregl.Map): Metric {
-  if (!registry.getActiveKeys().has(FIRES_KEY) || !map.getLayer(FIRES_FILL)) {
-    return { value: 'Off', sublabel: 'wildfires', tone: 'off' };
-  }
+export function firesMetric(map: maplibregl.Map): Metric {
+  if (!isLayerOn(FIRES_KEY)) return offMetric('wildfires');
+  if (!map.getLayer(FIRES_FILL)) return pendingMetric(FIRES_KEY);
   // Count wildfire (WF) and complex (CX) incidents; exclude prescribed burns
   // (RX), which are intentional and not "active wildfires" in the hazard read.
   const feats = map
@@ -257,7 +283,7 @@ function firesMetric(map: maplibregl.Map): Metric {
 }
 
 // ---------------------------------------------------------------------------
-// Rendering
+// Staleness and date formatting
 // ---------------------------------------------------------------------------
 
 // The USDM publishes weekly (released each Thursday for the week ending the
@@ -268,12 +294,12 @@ function firesMetric(map: maplibregl.Map): Metric {
 const USDM_STALE_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
 
 /** True when a USDM MapDate is old enough that the feed has plainly stopped updating. */
-function isUsdmStale(dateMs: number | null, nowMs = Date.now()): boolean {
+export function isUsdmStale(dateMs: number | null, nowMs = Date.now()): boolean {
   return dateMs !== null && nowMs - dateMs > USDM_STALE_AFTER_MS;
 }
 
 /** Compact "Mon D, YYYY" from a millisecond epoch, in UTC to match the USDM release date. */
-function formatMapDate(ms: number): string {
+export function formatMapDate(ms: number): string {
   const d = new Date(ms);
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleDateString('en-US', {
@@ -282,99 +308,4 @@ function formatMapDate(ms: number): string {
     year: 'numeric',
     timeZone: 'UTC'
   });
-}
-
-function renderMetric(key: string, m: Metric): string {
-  const style = m.color ? ` style="color:${escapeHtml(m.color)}"` : '';
-  // The shimmer is additive on the loading tone; every other tone renders the
-  // tile without it, so a re-render into a terminal tone clears the sweep.
-  const shimmer = m.tone === 'loading' ? ' skeleton-shimmer' : '';
-  // A stale tile carries a data attribute (for the muted visual) and an explicit
-  // "stale" tag so the value never reads as confidently current.
-  const staleAttr = m.stale ? ' data-stale="true"' : '';
-  const staleTag = m.stale ? '<span class="conditions-stale-tag">stale</span>' : '';
-  return `
-    <div class="conditions-metric${shimmer}" data-metric="${escapeHtml(key)}" data-tone="${m.tone}"${staleAttr}>
-      <span class="conditions-value"${style}>${escapeHtml(m.value)}</span>
-      <span class="conditions-sublabel">${escapeHtml(m.sublabel)}${staleTag}</span>
-    </div>`;
-}
-
-function render(map: maplibregl.Map): void {
-  const strip = document.getElementById('conditions-strip');
-  const metricsEl = document.getElementById('conditions-metrics');
-  const dateEl = document.getElementById('conditions-date');
-  if (!strip || !metricsEl) return;
-
-  const drought = droughtMetric(map);
-  const alerts = alertsMetric(map);
-  const fires = firesMetric(map);
-
-  // A deliberately scrubbed historical week (0.5.0b temporal axis) is NOT a
-  // stale feed: the user chose to look back. The stale flag is reserved for
-  // a frozen upstream while viewing the CURRENT week; a scrubbed view gets
-  // its own honest "viewing week of" date register instead.
-  const viewingHistory = timeline.usdmWeek !== null;
-
-  // Degrade a frozen or drifted USDM surface to an explicit stale read
-  // (critical-review #6): the category still shows, but the tile and the date
-  // line both say so, rather than presenting an old week as current.
-  const droughtStale =
-    !viewingHistory && drought.metric.tone === 'data' && isUsdmStale(drought.dateMs);
-  const droughtTile: Metric = droughtStale ? { ...drought.metric, stale: true } : drought.metric;
-
-  metricsEl.innerHTML = [
-    renderMetric('drought', droughtTile),
-    renderMetric('alerts', alerts),
-    renderMetric('fires', fires)
-  ].join('');
-
-  if (dateEl) {
-    if (drought.dateMs === null) {
-      dateEl.textContent = '';
-      delete dateEl.dataset.stale;
-    } else if (droughtStale) {
-      dateEl.textContent = `stale, data as of ${formatMapDate(drought.dateMs)}`;
-      dateEl.dataset.stale = 'true';
-    } else if (viewingHistory) {
-      dateEl.textContent = `viewing week of ${formatMapDate(drought.dateMs)}`;
-      delete dateEl.dataset.stale;
-    } else {
-      dateEl.textContent = `as of ${formatMapDate(drought.dateMs)}`;
-      delete dateEl.dataset.stale;
-    }
-  }
-
-  strip.hidden = false;
-}
-
-// ---------------------------------------------------------------------------
-// Public entrypoint
-// ---------------------------------------------------------------------------
-
-/**
- * Build and wire the conditions strip. Called once from `buildSidebar` after
- * the map has loaded. Renders immediately (showing honest loading/off states
- * until layers settle) and re-renders when the map settles or the active-layer
- * set changes. The strip lives for the app lifetime, so listeners are not
- * torn down.
- */
-export function buildConditionsStrip(map: maplibregl.Map): void {
-  let scheduled = false;
-  const scheduleRender = (): void => {
-    if (scheduled) return;
-    scheduled = true;
-    window.requestAnimationFrame(() => {
-      scheduled = false;
-      render(map);
-    });
-  };
-
-  render(map);
-
-  registry.on('change', scheduleRender);
-  registry.on('status-change', scheduleRender);
-  timeline.onChange(scheduleRender);
-  map.on('idle', scheduleRender);
-  map.on('moveend', scheduleRender);
 }

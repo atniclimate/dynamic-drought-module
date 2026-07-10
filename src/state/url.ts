@@ -1,6 +1,8 @@
 import { REGIONS, DEFAULT_REGION } from '../config/regions';
 import type { RegionKey } from '../config/regions';
 import { DEFAULT_ON_KEYS, resolveExclusiveSurface } from '../config/layers';
+import { deriveViewMode } from './view-mode';
+import type { ViewMode } from './view-mode';
 import {
   parseUsdmMode,
   parseUsdmWeek,
@@ -39,6 +41,9 @@ export interface ParsedUrlParams {
   readonly region: RegionKey;
   readonly layers: Set<string>;
   readonly embed: boolean;
+  /** Brief/console mode from `view=`, or derived by the legacy-URL rule
+   * (D-0.7.0-017; see `deriveViewMode` in `./view-mode`). */
+  readonly view: ViewMode;
   /** USDM valid-Tuesday (YYYYMMDD) from `week=`, or null for current. */
   readonly usdmWeek: string | null;
   /** USDM view mode from `dmode=`; 'absolute' when absent or invalid. */
@@ -97,6 +102,7 @@ export function parseUrlParams(): ParsedUrlParams {
     region,
     layers,
     embed,
+    view: deriveViewMode(params),
     usdmWeek: parseUsdmWeek(params.get('week')),
     usdmMode: parseUsdmMode(params.get('dmode')),
     sstDate: parseSstDate(params.get('sst')),
@@ -140,6 +146,10 @@ export interface UrlSyncState {
   readonly region: RegionKey | null;
   readonly layers: ReadonlySet<string>;
   readonly embed: boolean;
+  /** Brief/console mode; always emitted so a shared URL restores the
+   * exact door the sharer was looking through (the legacy-URL rule
+   * derives a mode only for URLs authored before `view=` existed). */
+  readonly view: ViewMode;
   /** Selected USDM week; emitted as `week=` only when non-null. */
   readonly usdmWeek?: string | null;
   /** USDM view mode; emitted as `dmode=` only when not 'absolute'. */
@@ -177,6 +187,8 @@ export function syncUrl(state: UrlSyncState): void {
   if (state.embed) {
     params.set('embed', 'true');
   }
+
+  params.set('view', state.view);
 
   // Temporal parameters (0.5.0b): only non-default values are emitted, so
   // a view of "now" keeps the clean three-parameter URL. The embed flag

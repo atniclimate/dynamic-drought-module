@@ -17,6 +17,7 @@
 import { fetchEnsoDriverSummary } from '../impact/enso';
 import { escapeHtml } from '../util/escape';
 import { prefersReducedMotion } from '../util/motion';
+import { requestLayerOn } from './layer-toggle-command';
 import { getMapRef } from './sidebar';
 
 const SECTION_ID = 'enso-driver';
@@ -61,17 +62,14 @@ export function buildEnsoDriver(): void {
 
     // "View the Pacific": turn on the ocean-temperature surface and frame the
     // basin, so the driver line's number becomes a visible pattern. The layer
-    // is activated through the sidebar checkbox dispatch (the serialized
-    // activation path, the one true door); never by calling activate directly.
+    // is activated through the shared toggle command (the serialized
+    // activation path's DOM-free door); never by calling a layer module's
+    // activate directly, and never via the checkbox element, which does not
+    // exist until the lazy island mounts (the spike's Codex adversarial
+    // finding).
     const btn = section.querySelector<HTMLButtonElement>('#enso-view-pacific');
     btn?.addEventListener('click', () => {
-      const cb = document.querySelector<HTMLInputElement>(
-        'input[data-layer-key="sst-anomaly"]'
-      );
-      if (cb && !cb.checked) {
-        cb.checked = true;
-        cb.dispatchEvent(new Event('change'));
-      }
+      requestLayerOn('sst-anomaly');
       // The 1200 ms sweep jumps for reduced-motion users (WCAG 2.3.3, #7).
       getMapRef()?.fitBounds(PACIFIC_BASIN_BOUNDS, {
         padding: 24,
