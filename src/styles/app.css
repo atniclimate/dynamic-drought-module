@@ -1316,25 +1316,68 @@ a:hover {
   box-shadow: 0 0 0 2px #ffffff, 0 0 0 3px rgba(15, 23, 42, 0.65), 0 2px 8px rgba(0,0,0,0.3);
 }
 
+/* H2 (0.6.2): the station-cap message is a compact count chip in the shared
+   dock; the full explanation lives in the sidebar Water & Snow panel
+   (D-0.7.0-004). It must never cover the time bar again. */
 .telemetry-discovery-note {
-  position: absolute;
-  left: 50%;
-  bottom: 36px;
-  transform: translateX(-50%);
-  z-index: 950;
-  max-width: min(560px, calc(100% - 32px));
-  padding: 8px 12px;
+  max-width: min(560px, 100%);
+  padding: 3px 11px;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   background: rgba(15, 23, 42, 0.9);
-  color: #ffffff;
+  color: var(--fg-1);
   font-family: var(--font-body);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: var(--fw-strong);
   line-height: 1.35;
   text-align: center;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.25);
   pointer-events: none;
+}
+
+.telemetry-discovery-hint {
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--fg-3);
+}
+
+/* ----------------------------------------------------------------------------
+   Shared bottom overlay dock (H2, 0.6.2)
+   One flex column anchored above the scale bar; notices, the time bar, and
+   the corner chips (drought key left, embed brand right) stack instead of
+   absolutely positioning themselves onto each other. When the impact panel
+   is open on desktop, the dock insets so nothing hides under the panel.
+   ---------------------------------------------------------------------------- */
+
+.map-bottom-dock {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 34px;
+  z-index: 610;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.map-bottom-dock > * { pointer-events: auto; }
+.map-notices { display: contents; }
+.map-dock-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  width: 100%;
+  min-height: 0;
+  pointer-events: none;
+}
+.map-dock-foot > * { pointer-events: auto; }
+
+@media (min-width: 721px) {
+  /* Panel-inset awareness: 440px panel + 12px breathing room. */
+  body:has(.impact-panel.open) .map-bottom-dock {
+    right: 452px;
+  }
 }
 
 /* ----------------------------------------------------------------------------
@@ -1534,6 +1577,17 @@ a:hover {
   .app-shell.sidebar-collapsed {
     grid-template-columns: 1fr;
     grid-template-rows: 0 1fr;
+  }
+  /* H1 (0.6.2): embed mode must collapse the sidebar ROW here, not just the
+     column. Without this the stacked layout puts the map in the auto-sized
+     first row and a 400px iframe shows a strip of map over dead space
+     (hard rule 8: the embed contract is first-class at small widths). */
+  .app-shell.embed {
+    grid-template-columns: 1fr;
+    grid-template-rows: 0 1fr;
+  }
+  .app-shell.embed .sidebar {
+    border-bottom: none;
   }
   .map-overlay-controls { top: 8px; right: 8px; }
 }
@@ -2057,10 +2111,7 @@ a.impact-resource-link::after {
    name travel with the map. Hidden outside embed mode. */
 .embed-brand {
   display: none;
-  position: absolute;
-  bottom: 34px;
-  right: 10px;
-  z-index: 600;
+  margin-left: auto;
   align-items: center;
   gap: 6px;
   padding: 4px 9px 4px 5px;
@@ -2081,10 +2132,6 @@ a.impact-resource-link::after {
 /* On-map drought key (see src/ui/map-key.ts): bottom-left above the scale
    bar, same chrome as the overlay buttons. */
 .map-key {
-  position: absolute;
-  bottom: 34px;
-  left: 12px;
-  z-index: 600;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2129,15 +2176,10 @@ a.impact-resource-link::after {
    ============================================================================= */
 
 .time-bar {
-  position: absolute;
-  bottom: 34px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 610;
   display: flex;
   flex-direction: column;
   gap: 5px;
-  width: min(560px, calc(100% - 24px));
+  width: min(560px, 100%);
   padding: 8px 12px 7px;
   background: rgba(15, 23, 42, 0.94);
   border: 1px solid var(--line-strong);
@@ -2280,9 +2322,13 @@ a.impact-resource-link::after {
 }
 
 @media (max-width: 720px) {
-  .time-bar {
-    width: calc(100% - 16px);
+  .map-bottom-dock {
+    left: 8px;
+    right: 8px;
     bottom: 28px;
+  }
+  .time-bar {
+    width: 100%;
     padding: 7px 9px 6px;
   }
   .time-bar-jump { font-size: 9px; padding: 2px 6px; }

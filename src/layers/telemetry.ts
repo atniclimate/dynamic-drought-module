@@ -80,8 +80,10 @@ const MOVEEND_DEBOUNCE_MS = 350;
 const DISCOVERED_STATION_RENDER_CAP = 50;
 const EARTH_RADIUS_METERS = 6_371_000;
 const CAP_NOTE_ID = 'telemetry-discovery-note';
-const CAP_NOTE_TEXT =
-  'Showing nearest 50 of {total} discovered stations in this view. Zoom in or pan to narrow the set.';
+// H2 (0.6.2, D-0.7.0-004): a compact count chip in the shared bottom dock;
+// the full explanation lives in the sidebar Water & Snow panel. The old
+// full-sentence banner permanently covered the time bar on the default view.
+const CAP_NOTE_TEXT = 'Nearest {cap} of {total} stations shown';
 
 type TelemetryStatus = 'loading' | 'ready' | 'error' | 'no-data' | 'zoom-in';
 
@@ -361,19 +363,25 @@ function updateCapNote(map: maplibregl.Map, totalDiscovered: number): void {
     return;
   }
   const note = ensureCapNote(map);
-  note.textContent = CAP_NOTE_TEXT.replace('{total}', String(totalDiscovered));
+  note.textContent = CAP_NOTE_TEXT.replace(
+    '{cap}',
+    String(DISCOVERED_STATION_RENDER_CAP)
+  ).replace('{total}', totalDiscovered.toLocaleString('en-US'));
   note.hidden = false;
 }
 
 function ensureCapNote(map: maplibregl.Map): HTMLDivElement {
-  const container = map.getContainer();
-  const existing = container.querySelector<HTMLDivElement>(`#${CAP_NOTE_ID}`);
-  if (existing) return existing;
+  const existing = document.getElementById(CAP_NOTE_ID);
+  if (existing instanceof HTMLDivElement) return existing;
   const note = document.createElement('div');
   note.id = CAP_NOTE_ID;
   note.className = 'telemetry-discovery-note';
   note.hidden = true;
-  container.appendChild(note);
+  // The shared bottom dock stacks notices above the time bar so they can
+  // never overlap; fall back to the map container outside the app shell
+  // (unit harnesses, future embeds without the dock).
+  const dock = document.getElementById('map-notices');
+  (dock ?? map.getContainer()).appendChild(note);
   return note;
 }
 
