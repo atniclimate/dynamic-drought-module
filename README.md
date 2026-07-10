@@ -1,6 +1,7 @@
 # Dynamic Drought Module (DDM)
 
-`atniclimate/dynamic-drought-module` · v0.2.1
+`atniclimate/dynamic-drought-module` (the running version is stamped in
+the application footer)
 
 An embeddable, serverless web map for seeing drought conditions anywhere
 in the United States and understanding what they mean for a place: current
@@ -169,9 +170,8 @@ The basemap is OpenStreetMap standard raster tiles, subdued via raster
 paint so the condition surfaces dominate. No proprietary tile providers,
 ever. Hydrography queries the volunteer-run Overpass API (three-mirror
 failover, viewport-driven, dormant below zoom 7); institutional
-deployments expecting heavy concurrency should plan for the National
-Hydrography Dataset PMTiles bundle tracked in
-[`ROADMAP.md`](ROADMAP.md).
+deployments expecting heavy concurrency should plan for the planned
+National Hydrography Dataset PMTiles bundle.
 
 ### The Cloudflare Worker proxy (optional)
 
@@ -223,16 +223,14 @@ honestly as unavailable.
 
 ---
 
-## Project documents
+## Development
 
-- [`docs/PHASE_PLAN_090.md`](docs/PHASE_PLAN_090.md): the ratified phase
-  plan to the 0.9.0 pre-release (one minor version per phase).
-- [`ROADMAP.md`](ROADMAP.md): what remains, organized by phase.
-- [`CHANGES.md`](CHANGES.md): the session-by-session change log.
-- [`TODO.md`](TODO.md): deferred items, bucketed by phase.
-- `CLAUDE.md`: authoritative project context and hard rules.
-- [`SKILLS_SUITE.md`](SKILLS_SUITE.md): the agent-and-skills architecture
-  behind the scout-and-verify sourcing pipeline.
+This repository carries the deployable source: the application, its
+bundled assets, the optional Cloudflare Worker, and the automations that
+keep the live site current. Development planning, the change ledger, and
+the test suite are maintained in a private working repository; releases
+land here with version tags. Questions, problem reports, and contribution
+proposals are welcome through GitHub issues.
 
 ## Browser support
 
