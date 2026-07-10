@@ -78,7 +78,6 @@ import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
 import { parseUrlParams, syncUrl } from '../state/url';
 import { timeline } from '../state/timeline';
-import { flyToStation } from '../layers/telemetry';
 import { buildConditionsStrip } from './conditions-strip';
 import { wireShareButton } from './share';
 import { showToast } from './overlay';
@@ -651,7 +650,21 @@ function buildTelemetryList(map: maplibregl.Map): void {
     `;
     item.addEventListener('click', () => {
       ensureTelemetryActive(map);
-      flyToStation(map, station.id);
+      // Dynamic import (ADR 0002 condition 7, the entry-diet unit): a
+      // static `flyToStation` import here was the ONE eager edge into
+      // src/layers/telemetry, and it dragged that module plus
+      // src/ui/popups plus the whole station registry into the entry
+      // chunk, defeating the catalog's lazy split (Rolldown warned
+      // INEFFECTIVE_DYNAMIC_IMPORT on every build). The activation
+      // above already loads the same chunk, so this import resolves
+      // from cache or joins the in-flight fetch.
+      void import('../layers/telemetry')
+        .then(({ flyToStation }) => {
+          flyToStation(map, station.id);
+        })
+        .catch((err: unknown) => {
+          console.error('[sidebar] telemetry fly-to failed to load:', err);
+        });
     });
     container.appendChild(item);
   }
