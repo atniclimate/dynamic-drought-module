@@ -1,7 +1,0 @@
-# Dynamic Drought Module: public repository ignores.
-node_modules/
-dist/
-*.log
-.DS_Store
-test-results/
-playwright-report/

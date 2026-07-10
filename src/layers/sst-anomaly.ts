@@ -452,6 +452,9 @@ export async function activate(map: maplibregl.Map): Promise<void> {
         source: NINO_SOURCE_ID,
         layout: {
           'text-field': ['get', 'label'],
+          // Explicitly the self-hosted fontstack (U0a): MapLibre's implicit
+          // default stack is not in public/fonts/glyphs/ and would 404.
+          'text-font': ['Noto Sans Regular'],
           'text-size': 11,
           'text-anchor': 'top',
           'text-offset': [0, 0.4],

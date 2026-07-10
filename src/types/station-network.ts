@@ -89,8 +89,15 @@ export type StationViewportDiscoveryResult =
       readonly status: 'ok';
       readonly records: readonly StationDiscoveryRecord[];
       readonly queriedBounds: ViewportBounds;
+      /** Labels of discovery sources that failed non-abort (0.7.0 H4); any
+       * failure makes the telemetry pill read `degraded` ("live (partial)"),
+       * never a bare `live` and never a structural `error` (the curated
+       * seeds still render and the layer stays active). */
+      readonly failedSources: readonly string[];
     }
   | {
+      /** The viewport is wider than the discovery area cap (D-0.7.0-007):
+       * no discovery queries were fired; the layer reads "zoom in to load". */
       readonly status: 'zoom-in';
       readonly records: readonly StationDiscoveryRecord[];
     };

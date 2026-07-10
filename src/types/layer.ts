@@ -1,16 +1,21 @@
 /**
- * The five canonical layer load states surfaced through the sidebar status
+ * The six canonical layer load states surfaced through the sidebar status
  * pill (see CLAUDE.md §6 Architecture invariant 3). The internal value is
  * what code stores; the displayed pill text is the responsibility of the
  * UI layer (src/ui/sidebar.ts).
  *
  *   loading   -> "loading..."
  *   ready     -> "live"
+ *   degraded  -> "live (partial)"
  *   error     -> "unavailable"
  *   no-data   -> "empty placeholder (see data/README.md)"
  *   zoom-in   -> "zoom in to load"
+ *
+ * `degraded` was added for 0.7.0 H4 (the honest-status gap the pre-open
+ * assessment confirmed): a layer that merges several sources must not
+ * report an unqualified "live" when one of them failed.
  */
-export type LayerStatus = 'loading' | 'ready' | 'error' | 'no-data' | 'zoom-in';
+export type LayerStatus = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data' | 'zoom-in';
 
 /**
  * The four layer roles of the UX track (ROADMAP "The UX track", UX-1). The

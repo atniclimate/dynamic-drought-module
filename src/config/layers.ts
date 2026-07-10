@@ -76,7 +76,11 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'spc-fire-weather', name: 'Fire Weather Outlook (Day 1)', source: 'NOAA SPC · MapServer', role: 'surface', defaultOn: false, load: () => import('../layers/spc-fire-weather') },
   { key: 'usfs-whp', name: 'Wildfire Hazard Potential', source: 'USFS · GeoPlatform', role: 'surface', defaultOn: false, load: () => import('../layers/usfs-whp') },
   { key: 'sst-anomaly', name: 'Ocean Temperature Anomaly', source: 'NASA GIBS · GHRSST MUR', role: 'surface', defaultOn: false, load: () => import('../layers/sst-anomaly') },
-  { key: 'telemetry', name: 'Monitoring stations', source: 'USGS · USBR · NRCS · USACE', role: 'stations', defaultOn: true, load: () => import('../layers/telemetry') }
+  // Monitoring stations left the default-on set 2026-07-09 (D-0.7.0-018
+  // item 1, strengthening the D-0.7.0-007 zoom threshold): at region zoom
+  // the layer could only say "zoom in to load", so opening with it on
+  // bought noise, not signal.
+  { key: 'telemetry', name: 'Monitoring stations', source: 'USGS · USBR · NRCS · USACE', role: 'stations', defaultOn: false, load: () => import('../layers/telemetry') }
 ];
 
 /**

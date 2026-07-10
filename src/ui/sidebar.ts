@@ -129,10 +129,10 @@ let controllerRef: LayerController | null = null;
 // ---------------------------------------------------------------------------
 
 /**
- * The five canonical layer states map to user-visible pill text per the
- * v0.1.2 wording. CLAUDE.md section 6 invariant 3 fixes this contract;
- * the `LayerStatus` union in `src/types/layer.ts` is the source of truth
- * for the keys.
+ * The six canonical layer states map to user-visible pill text per the
+ * v0.1.2 wording (plus the 0.7.0 H4 `degraded` addition). CLAUDE.md
+ * section 6 invariant 3 fixes this contract; the `LayerStatus` union in
+ * `src/types/layer.ts` is the source of truth for the keys.
  *
  * Note the punctuation: an ellipsis is rendered as three ASCII dots
  * (`loading...`) per the same v0.1.2 convention; em dashes are forbidden
@@ -141,6 +141,7 @@ let controllerRef: LayerController | null = null;
 const STATUS_PILL_TEXT: Record<LayerStatus, string> = {
   loading: 'loading...',
   ready: 'live',
+  degraded: 'live (partial)',
   error: 'unavailable',
   'no-data': 'empty placeholder (see data/README.md)',
   'zoom-in': 'zoom in to load'
@@ -149,6 +150,7 @@ const STATUS_PILL_TEXT: Record<LayerStatus, string> = {
 const STATUS_CSS_CLASSES: ReadonlyArray<string> = [
   'loading',
   'ready',
+  'degraded',
   'error',
   'no-data',
   'zoom-in'

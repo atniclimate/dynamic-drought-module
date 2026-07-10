@@ -29,6 +29,7 @@ const SECTIONS_ID = 'legend-sections';
 export const LEGEND_ORDER = {
   surface: 10,
   event: 20,
+  stations: 25,
   reference: 30
 } as const;
 

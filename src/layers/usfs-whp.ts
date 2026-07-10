@@ -27,22 +27,40 @@
  *      `Vary: Origin`) and the deployed origin
  *      `https://atniclimate.github.io` is allowed.
  *
- * Option (c) is the cleanest browser-reachable choice; we use it. Because
- * the service is an ImageServer (not a tile server) we do not have a
- * native XYZ tile template. Instead, MapLibre's raster source pulls each
- * tile via `exportImage` with the per-tile bounding box expanded from the
- * `{bbox-epsg-3857}` token. ESRI ImageServer accepts `bboxSR=3857` and
- * `imageSR=3857`, which keeps the projection round-trip lossless.
+ * Option (c) is the browser-reachable host, but NOT directly: see the CORS
+ * regression below. Because the service is an ImageServer (not a tile
+ * server) we do not have a native XYZ tile template. Instead, MapLibre's
+ * raster source pulls each tile via `exportImage` with the per-tile
+ * bounding box expanded from the `{bbox-epsg-3857}` token. ESRI ImageServer
+ * accepts `bboxSR=3857` and `imageSR=3857`, which keeps the projection
+ * round-trip lossless.
  *
- * Verification (2026-05-09):
+ * CORS regression and the proxy route (2026-07-09, 0.7.0 H3). The
+ * 2026-05-09 verification observed origin-echoed CORS on `exportImage`,
+ * but the 0.7.0 pre-open assessment found the layer dead in production: a
+ * real browser saw 49 of 49 `exportImage` responses WITHOUT an
+ * `Access-Control-Allow-Origin` header, while the metadata endpoint kept
+ * answering 200 with the header (so capability probes lie). A fresh curl
+ * probe the same day got the header back again: the posture is
+ * INTERMITTENT (the service sends `Vary: Origin`, and a cache variant
+ * stored without the header is the suspected mechanism). An intermittent
+ * CORS upstream cannot back a production surface, so the tile template is
+ * routed through the DDM Worker proxy unconditionally: the browser only
+ * ever talks to the Worker (which always injects CORS headers), and the
+ * Worker fetches the upstream server-side where CORS does not apply.
+ * `imagery.geoplatform.gov` is on the Worker ALLOW_LIST (workers/proxy/).
+ * When no Worker is configured (URLS.workerProxy is empty, for example a
+ * fork without a deployed Worker), the layer reports `error` (rendered as
+ * "unavailable") instead of pretending a direct fetch would hold.
+ *
+ * Verification (2026-05-09, direct; superseded by the proxy route):
  *   GET <URLS.usfsWhp>?f=json
  *     - HTTP 200, Content-Type: application/json;charset=UTF-8
  *     - Access-Control-Allow-Origin: https://atniclimate.github.io
  *     - Body confirms 5-class thematic ImageServer at 270 m, 3857.
  *   GET <URLS.usfsWhp>/exportImage?bbox=...&size=256,256&format=png&f=image
- *     - HTTP 200, Content-Type: image/png
- *     - Access-Control-Allow-Origin: https://atniclimate.github.io
- *     - Body: 256x256 PNG.
+ *     - HTTP 200, Content-Type: image/png (but see the 2026-07-09
+ *       regression above; the header is not reliably present).
  *
  * Render. Raster source at 0.55 opacity so the basemap and
  * the USDM/Treaty/Tribal overlays remain legible underneath. The
@@ -77,14 +95,22 @@ function reportStatus(state: WhpStatus): void {
 }
 
 /**
- * Build the ESRI ImageServer `exportImage` URL template. MapLibre expands
- * `{bbox-epsg-3857}` to the tile's `minX,minY,maxX,maxY` extent in EPSG:3857
- * meters; the server projects and clips the WHP raster into a 256x256 PNG
- * for that extent. `imageSR=3857` and `bboxSR=3857` eliminate any
- * server-side reprojection so tile alignment matches MapLibre's expectation
- * exactly. `transparent=true` ensures the no-data and out-of-extent regions
- * (the WHP coverage is conterminous United States only) come back with an
- * alpha channel rather than a black or white border.
+ * Build the ESRI ImageServer `exportImage` URL template, routed through the
+ * DDM Worker proxy (the CORS regression note in the module header explains
+ * why the direct route is not trusted). MapLibre expands `{bbox-epsg-3857}`
+ * to the tile's `minX,minY,maxX,maxY` extent in EPSG:3857 meters; the
+ * server projects and clips the WHP raster into a 256x256 PNG for that
+ * extent. `imageSR=3857` and `bboxSR=3857` eliminate any server-side
+ * reprojection so tile alignment matches MapLibre's expectation exactly.
+ * `transparent=true` ensures the no-data and out-of-extent regions (the
+ * WHP coverage is conterminous United States only) come back with an alpha
+ * channel rather than a black or white border.
+ *
+ * The upstream URL is percent-encoded into the Worker's `url` parameter,
+ * EXCEPT the `{bbox-epsg-3857}` token, which must stay literal in the
+ * template for MapLibre to expand. The expanded bbox value (digits, minus
+ * signs, periods, commas) is query-value-safe, and the Worker decodes the
+ * parameter back to the exact upstream URL.
  */
 function buildImageTileTemplate(): string {
   const params = [
@@ -96,7 +122,12 @@ function buildImageTileTemplate(): string {
     'transparent=true',
     'f=image'
   ].join('&');
-  return `${URLS.usfsWhp}/exportImage?${params}`;
+  const upstream = `${URLS.usfsWhp}/exportImage?${params}`;
+  const encoded = encodeURIComponent(upstream).replace(
+    encodeURIComponent('{bbox-epsg-3857}'),
+    '{bbox-epsg-3857}'
+  );
+  return `${URLS.workerProxy}/proxy?url=${encoded}`;
 }
 
 /**
@@ -111,6 +142,19 @@ function buildImageTileTemplate(): string {
  */
 export async function activate(map: maplibregl.Map): Promise<void> {
   reportStatus('loading');
+
+  // WHP tiles ride the Worker proxy (see the module header). A deployment
+  // without a configured Worker cannot serve this layer; report it
+  // unavailable honestly instead of issuing direct fetches that fail
+  // intermittently in real browsers.
+  if (!URLS.workerProxy) {
+    console.warn(
+      '[usfs-whp] no Worker proxy configured (URLS.workerProxy is empty); ' +
+        'the WHP raster requires the proxy route.'
+    );
+    reportStatus('error');
+    return;
+  }
 
   try {
     if (!map.getSource(SOURCE_ID)) {

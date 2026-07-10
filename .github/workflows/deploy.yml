@@ -76,6 +76,12 @@ jobs:
           ls -la dist
           test -f dist/index.html
 
+      # The ratified bundle line (plan section 6, ratified at 100 kB gzip
+      # on the app entry chunk; maplibre vendor chunk exempt). A breach
+      # fails the deploy: never publish a build over the line.
+      - name: Bundle-size gate
+        run: npm run check:bundle
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 

@@ -545,6 +545,14 @@ export const URLS = Object.freeze({
   // Verified 2026-05-09: HTTP 200 from `exportImage`, Content-Type
   // `image/png`, `Access-Control-Allow-Origin: https://atniclimate.github.io`
   // (origin-echoed under `Vary: Origin`; the deploy origin is allowed).
+  // CORS REGRESSION 2026-07-09 (0.7.0 pre-open assessment; repaired as H3):
+  // a real browser saw 49/49 `exportImage` responses WITHOUT the
+  // Access-Control-Allow-Origin header while the metadata endpoint kept
+  // answering with it, and a same-day curl probe got the header again; the
+  // posture is INTERMITTENT (Vary: Origin cache-variant suspected). The
+  // layer module therefore routes tiles through `${workerProxy}/proxy`
+  // (imagery.geoplatform.gov is on the Worker allow-list); this URL is the
+  // upstream base only, never fetched directly by the browser anymore.
   usfsWhp:
     'https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer',
 

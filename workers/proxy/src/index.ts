@@ -24,6 +24,13 @@
  *     (the live American Indian and Alaska Native Land Area Representation host)
  *     and `biamaps.doi.gov` (the fallback host). The geoplatform host serves
  *     reflective CORS today; the allow-list entry is a resilience path.
+ *   - Federal GeoPlatform imagery host: `imagery.geoplatform.gov` (the USFS
+ *     Wildfire Hazard Potential ImageServer). Its `exportImage` CORS is
+ *     INTERMITTENT in real browsers (2026-07-09: 49 of 49 tile responses
+ *     arrived without Access-Control-Allow-Origin while a curl probe with an
+ *     Origin header got the origin-echoed value; `Vary: Origin` cache-variant
+ *     behavior suspected), so the client routes WHP tiles through this Worker
+ *     unconditionally (0.7.0 H3).
  *
  * Anything outside the allow-list is rejected with 403 Forbidden.
  *
@@ -76,7 +83,11 @@ const ALLOW_LIST: ReadonlyArray<RegExp> = [
   /^([a-z0-9-]+\.)*cpc\.ncep\.noaa\.gov$/i,
   // BIA map hosts: the live AIAN-LAR host (`biamaps.geoplatform.gov`) and the
   // fallback (`biamaps.doi.gov`).
-  /^biamaps\.(geoplatform\.gov|doi\.gov)$/i
+  /^biamaps\.(geoplatform\.gov|doi\.gov)$/i,
+  // Federal GeoPlatform imagery host (USFS Wildfire Hazard Potential
+  // ImageServer). Added 2026-07-09 (0.7.0 H3): the upstream's exportImage
+  // CORS is intermittent in real browsers, so WHP tiles ride this Worker.
+  /^imagery\.geoplatform\.gov$/i
 ];
 
 const USER_AGENT =

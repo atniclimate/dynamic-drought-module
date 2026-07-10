@@ -4,8 +4,11 @@
 # onto responses from a small allow-list of public agency endpoints. The
 # allow-list is defined in src/index.ts (ALLOW_LIST) and currently covers:
 # NRCS Air-Water Database, USACE Dataquery 2.0, USBR Hydromet, NWRFC (the
-# telemetry endpoints), plus NOAA CPC (El Nino / Southern Oscillation indices)
-# and the BIA map hosts (reservation boundaries). It does
+# telemetry endpoints), plus NOAA CPC (El Nino / Southern Oscillation indices),
+# the BIA map hosts (reservation boundaries), and the federal GeoPlatform
+# imagery host imagery.geoplatform.gov (USFS Wildfire Hazard Potential tiles;
+# added 2026-07-09, 0.7.0 H3, because the upstream's exportImage CORS is
+# intermittent in real browsers). It does
 # not transform response bodies, does not authenticate, does not log requests,
 # and does not collect telemetry. See workers/proxy/src/index.ts for the logic
 # and CLAUDE.md section 4 rule 3 for the no-tracking, no-analytics policy.
@@ -34,12 +37,15 @@ compatibility_date = "2026-05-09"
 # integer unique within the deployer's Cloudflare account; two bindings sharing a
 # namespace_id share counters. The Worker fails OPEN if this stanza is removed
 # (see the `Env` interface in src/index.ts), so a fork still runs, but a
-# repo-standard deploy ships with the limit on. Tune `limit` to local traffic;
-# 300/minute is generous for a panning human and still caps automated abuse.
+# repo-standard deploy ships with the limit on. Tune `limit` to local traffic.
+# Raised 300 -> 600 (2026-07-09, 0.7.0 H3): Wildfire Hazard Potential raster
+# tiles now ride the proxy, and one vigorous zoom-and-pan minute with WHP on
+# can legitimately request a few hundred tiles; 600/minute per client still
+# caps automated abuse while never throttling a human.
 [[ratelimits]]
 name = "RATE_LIMITER"
 namespace_id = "1001"
-simple = { limit = 300, period = 60 }
+simple = { limit = 600, period = 60 }
 
 [vars]
 # Public, non-secret deployer-facing values only. Empty by default; the Worker

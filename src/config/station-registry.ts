@@ -71,6 +71,44 @@ const COCORAHS_DISCOVERY_TIMEOUT_MS = 15_000;
 // not fire a NIFC envelope query for a layer that only reads at regional zoom.
 const DISCOVERY_BBOX_QUANT = 0.25;
 const RAWS_DISCOVERY_AREA_CAP = 100;
+// The whole-layer discovery gate (0.7.0 H4; D-0.7.0-007). The binding
+// physical limit is the USGS Instantaneous Values bBox rule: the RAW degree
+// product (width times height, NO latitude weighting) may not exceed 25
+// square degrees. Rather than clamping the query to a centered sub-window
+// (which silently drops edge stations; the exact sin the 2026-07-09
+// assessment caught), discovery is GATED: a viewport wider than this cap
+// fires no discovery queries at all and the layer reads "zoom in to load"
+// (the hydrography precedent). This also retires the cap note at region
+// zoom, per the ruling.
+const TELEMETRY_DISCOVERY_AREA_CAP_RAW_DEG = 25;
+
+/** Marker dot colors by discovered network (0.7.0 H4: no on-canvas color
+ * goes unlabeled; src/layers/telemetry.ts renders the legend key from
+ * STATION_MARKER_LEGEND so the colors and their labels live in one place).
+ * Curated seed stations keep their own per-station colors from
+ * src/config/telemetry.ts; the legend carries a note for those. */
+const STATION_MARKER_COLORS = {
+  usgsIv: '#06b6d4',
+  snotel: '#38bdf8',
+  scan: '#84cc16',
+  raws: '#ef4444',
+  noaaCoops: '#2563eb',
+  agrimet: '#f59e0b',
+  cocorahs: '#22d3ee'
+} as const;
+
+export const STATION_MARKER_LEGEND: readonly {
+  readonly color: string;
+  readonly label: string;
+}[] = [
+  { color: STATION_MARKER_COLORS.usgsIv, label: 'USGS streamgage' },
+  { color: STATION_MARKER_COLORS.snotel, label: 'NRCS SNOTEL snowpack' },
+  { color: STATION_MARKER_COLORS.scan, label: 'NRCS SCAN soil climate' },
+  { color: STATION_MARKER_COLORS.raws, label: 'NIFC RAWS fire weather' },
+  { color: STATION_MARKER_COLORS.noaaCoops, label: 'NOAA tides and currents' },
+  { color: STATION_MARKER_COLORS.agrimet, label: 'USBR AgriMet agriculture' },
+  { color: STATION_MARKER_COLORS.cocorahs, label: 'CoCoRaHS precipitation' }
+];
 // CoCoRaHS round-one scope is the Pacific Northwest core; the IEM mirror has
 // no combined-region call, so we fan out one state per fetch and merge.
 const COCORAHS_DISCOVERY_STATES = ['WA', 'OR', 'ID'] as const;
@@ -367,48 +405,96 @@ async function discoverRawsStationsCached(
 export async function discoverStationsForViewport(
   request: StationViewportDiscoveryRequest
 ): Promise<StationViewportDiscoveryResult> {
+  // The whole-layer gate (0.7.0 H4; D-0.7.0-007): above the raw-degree area
+  // cap no discovery source fires at all. The caller renders the curated
+  // seeds and reports "zoom in to load"; there is nothing partial to hide.
+  const rawWidth = Math.abs(request.bounds.east - request.bounds.west);
+  const rawHeight = Math.abs(request.bounds.north - request.bounds.south);
+  if (rawWidth * rawHeight > TELEMETRY_DISCOVERY_AREA_CAP_RAW_DEG) {
+    return { status: 'zoom-in', records: [] };
+  }
+
   const queryBounds = clampUsgsDiscoveryBounds(request.bounds, request.center);
   // RAWS reads only at regional zoom; skip its NIFC envelope query on a
   // national or multi-state framing rather than firing it every pan (#3).
+  // (Below the 25-square-degree gate this always allows; kept as a belt.)
   const rawsAllowed =
     viewportAreaDeg(request.bounds, request.center) <= RAWS_DISCOVERY_AREA_CAP;
-  const [usgsRecords, awdbRecords, rawsRecords, coopsRecords, agrimetRecords, cocorahsRecords] =
-    await Promise.all([
-      queryBounds
-        ? discoveryRecordsOrEmpty(
-            'USGS IV station discovery',
-            discoverUsgsStationsCached(queryBounds, request.signal),
-            request.signal
-          )
-        : Promise.resolve([]),
-      discoverAwdbStations(request),
-      rawsAllowed
-        ? discoveryRecordsOrEmpty(
-            'NIFC RAWS station discovery',
-            discoverRawsStationsCached(request.bounds, request.signal),
-            request.signal
-          )
-        : Promise.resolve([]),
-      discoverCoopsStations(request),
-      discoverAgrimetStations(request),
-      discoverCocorahsStations(request)
-    ]);
 
-  const records = [
-    ...usgsRecords,
-    ...awdbRecords,
-    ...rawsRecords,
-    ...coopsRecords,
-    ...agrimetRecords,
-    ...cocorahsRecords
+  // Every source runs through the same settle wrapper so a non-abort
+  // failure is RECORDED, not swallowed (0.7.0 H4: the pill must say
+  // "live (partial)" instead of an unqualified "live" when a source died).
+  const sources: readonly {
+    readonly label: string;
+    readonly run: () => Promise<readonly StationDiscoveryRecord[]>;
+  }[] = [
+    ...(queryBounds
+      ? [
+          {
+            label: 'USGS IV station discovery',
+            run: () => discoverUsgsStationsCached(queryBounds, request.signal)
+          }
+        ]
+      : []),
+    { label: 'NRCS AWDB station discovery', run: () => discoverAwdbStations(request) },
+    ...(rawsAllowed
+      ? [
+          {
+            label: 'NIFC RAWS station discovery',
+            run: () => discoverRawsStationsCached(request.bounds, request.signal)
+          }
+        ]
+      : []),
+    { label: 'NOAA CO-OPS station discovery', run: () => discoverCoopsStations(request) },
+    { label: 'USBR AgriMet station discovery', run: () => discoverAgrimetStations(request) },
+    { label: 'CoCoRaHS station discovery', run: () => discoverCocorahsStations(request) }
   ];
+
+  const outcomes = await Promise.all(
+    sources.map((source) =>
+      settleDiscoverySource(source.label, source.run(), request.signal)
+    )
+  );
+
+  const records = outcomes.flatMap((outcome) => outcome.records);
+  const failedSources = outcomes
+    .filter((outcome) => outcome.failed)
+    .map((outcome) => outcome.label);
+  // queryBounds is never null below the area gate; the belt remains for the
+  // day the gate constant and the clamp constant drift apart.
   if (!queryBounds) return { status: 'zoom-in', records };
 
   return {
     status: 'ok',
     records,
-    queriedBounds: queryBounds
+    queriedBounds: queryBounds,
+    failedSources
   };
+}
+
+interface DiscoverySourceOutcome {
+  readonly label: string;
+  readonly records: readonly StationDiscoveryRecord[];
+  readonly failed: boolean;
+}
+
+/**
+ * Await one discovery source, converting a non-abort failure into a
+ * recorded outcome (warn once, keep the label) instead of a swallowed
+ * empty array. Aborts still throw so a superseded viewport never renders.
+ */
+async function settleDiscoverySource(
+  label: string,
+  promise: Promise<readonly StationDiscoveryRecord[]>,
+  signal: AbortSignal | null
+): Promise<DiscoverySourceOutcome> {
+  try {
+    return { label, records: await promise, failed: false };
+  } catch (err) {
+    if (isAbortError(err) || signal?.aborted) throw err;
+    console.warn(`[telemetry] ${label} failed.`, err);
+    return { label, records: [], failed: true };
+  }
 }
 
 async function discoverUsgsStations(
@@ -439,20 +525,6 @@ async function discoverUsgsStations(
 
   const payload: unknown = await response.json();
   return usgsDiscoveryRecordsFromPayload(payload);
-}
-
-async function discoveryRecordsOrEmpty(
-  label: string,
-  promise: Promise<readonly StationDiscoveryRecord[]>,
-  signal: AbortSignal | null
-): Promise<readonly StationDiscoveryRecord[]> {
-  try {
-    return await promise;
-  } catch (err) {
-    if (isAbortError(err) || signal?.aborted) throw err;
-    console.warn(`[telemetry] ${label} failed.`, err);
-    return [];
-  }
 }
 
 export function stationNetworkByKey(key: StationNetworkKey): StationNetwork {
@@ -780,8 +852,14 @@ function clampUsgsDiscoveryBounds(
   const east = clamp(Math.max(bounds.west, bounds.east), -180, 180);
   const width = Math.max(0, east - west);
   const height = Math.max(0, north - south);
-  const latitudeFactor = Math.max(0.05, Math.abs(Math.cos(radians(centerLat))));
-  const area = width * latitudeFactor * height;
+  // RAW degree product, no latitude weighting. The USGS limit is "the
+  // product of the differences may not exceed 25 degrees" in raw degrees;
+  // the earlier cosine-weighted area here was the H4 400's root cause (the
+  // ~37-raw-square-degree Washington default view weighted to exactly 25.0
+  // at latitude 47 and sailed through unclamped). The whole-layer area gate
+  // in discoverStationsForViewport now stops wide viewports first; this
+  // clamp remains as the belt behind it.
+  const area = width * height;
 
   if (width <= 0 || height <= 0) return null;
   if (area > USGS_BBOX_AREA_CAP * USGS_EXTREME_AREA_FACTOR) return null;
@@ -841,7 +919,7 @@ function usgsDiscoveryRecordsFromPayload(payload: unknown): readonly StationDisc
         region: 'discovered',
         type: 'gage',
         agency: 'USGS',
-        color: '#06b6d4',
+        color: STATION_MARKER_COLORS.usgsIv,
         description: 'USGS Instantaneous Values station discovered in the current viewport.',
         usgsSite: site.siteCode,
         links: [
@@ -970,20 +1048,18 @@ function formatBboxNumber(value: number): string {
   return value.toFixed(5).replace(/\.?0+$/, '');
 }
 
+// The four cache-backed source functions below no longer carry their own
+// catch blocks: settleDiscoverySource records a non-abort failure at the
+// orchestration level (0.7.0 H4), where it feeds the degraded pill instead
+// of vanishing into a silent empty array.
 async function discoverAwdbStations(
   request: StationViewportDiscoveryRequest
 ): Promise<readonly StationDiscoveryRecord[]> {
-  try {
-    const stations = await getAwdbStationCache(request.signal);
-    if (request.signal?.aborted) return [];
-    return stations
-      .filter((station) => isCoordinateInBounds(station.latitude, station.longitude, request.bounds))
-      .map(awdbDiscoveryRecord);
-  } catch (err) {
-    if (isAbortError(err) || request.signal?.aborted) throw err;
-    console.warn('[telemetry] NRCS AWDB station discovery failed.', err);
-    return [];
-  }
+  const stations = await getAwdbStationCache(request.signal);
+  if (request.signal?.aborted) return [];
+  return stations
+    .filter((station) => isCoordinateInBounds(station.latitude, station.longitude, request.bounds))
+    .map(awdbDiscoveryRecord);
 }
 
 async function getAwdbStationCache(
@@ -1229,7 +1305,7 @@ function awdbDiscoveryRecord(station: AwdbStationMetadata): StationDiscoveryReco
       region: 'discovered',
       type: station.network === 'SNTL' ? 'snotel' : 'scan',
       agency: 'NRCS',
-      color: station.network === 'SNTL' ? '#38bdf8' : '#84cc16',
+      color: station.network === 'SNTL' ? STATION_MARKER_COLORS.snotel : STATION_MARKER_COLORS.scan,
       description:
         station.network === 'SNTL'
           ? 'NRCS SNOTEL station discovered in the current viewport.'
@@ -1312,7 +1388,7 @@ function rawsDiscoveryRecord(feature: unknown): StationDiscoveryRecord | null {
       region: readNonEmptyString(properties.State) ?? 'discovered',
       type: 'fire-weather',
       agency: readNonEmptyString(properties.Agency) ?? 'NIFC RAWS',
-      color: '#ef4444',
+      color: STATION_MARKER_COLORS.raws,
       description: 'NIFC RAWS station discovered in the current viewport.',
       rawsStationId: stationId,
       links: [
@@ -1347,18 +1423,12 @@ function rawsDiscoveryRecord(feature: unknown): StationDiscoveryRecord | null {
 async function discoverCoopsStations(
   request: StationViewportDiscoveryRequest
 ): Promise<readonly StationDiscoveryRecord[]> {
-  try {
-    const stations = await getCoopsStationCache(request.signal);
-    if (request.signal?.aborted) return [];
-    return stations
-      .filter((station) => isCoordinateInBounds(station.latitude, station.longitude, request.bounds))
-      .map((station) => COOPS_STATION_ADAPTER.toDiscoveryRecord(station))
-      .filter(isDiscoveryRecord);
-  } catch (err) {
-    if (isAbortError(err) || request.signal?.aborted) throw err;
-    console.warn('[telemetry] NOAA CO-OPS station discovery failed.', err);
-    return [];
-  }
+  const stations = await getCoopsStationCache(request.signal);
+  if (request.signal?.aborted) return [];
+  return stations
+    .filter((station) => isCoordinateInBounds(station.latitude, station.longitude, request.bounds))
+    .map((station) => COOPS_STATION_ADAPTER.toDiscoveryRecord(station))
+    .filter(isDiscoveryRecord);
 }
 
 async function getCoopsStationCache(
@@ -1492,7 +1562,7 @@ function coopsDiscoveryRecord(station: CoopsStationMetadata): StationDiscoveryRe
       region: station.state ?? 'discovered',
       type: 'tide-gage',
       agency: 'NOAA CO-OPS',
-      color: '#2563eb',
+      color: STATION_MARKER_COLORS.noaaCoops,
       description: 'NOAA CO-OPS water level station discovered in the current viewport.',
       noaaCoopsId: station.id,
       links: [
@@ -1524,20 +1594,14 @@ const agrimetStationListCache = createStationListCache(fetchAgrimetStationList);
 async function discoverAgrimetStations(
   request: StationViewportDiscoveryRequest
 ): Promise<readonly StationDiscoveryRecord[]> {
-  try {
-    const stations = await agrimetStationListCache.get(request.signal);
-    if (request.signal?.aborted) return [];
-    return stations
-      .filter((station) =>
-        isCoordinateInBounds(station.latitude, station.longitude, request.bounds)
-      )
-      .map((station) => AGRIMET_STATION_ADAPTER.toDiscoveryRecord(station))
-      .filter(isDiscoveryRecord);
-  } catch (err) {
-    if (isAbortError(err) || request.signal?.aborted) throw err;
-    console.warn('[telemetry] USBR AgriMet station discovery failed.', err);
-    return [];
-  }
+  const stations = await agrimetStationListCache.get(request.signal);
+  if (request.signal?.aborted) return [];
+  return stations
+    .filter((station) =>
+      isCoordinateInBounds(station.latitude, station.longitude, request.bounds)
+    )
+    .map((station) => AGRIMET_STATION_ADAPTER.toDiscoveryRecord(station))
+    .filter(isDiscoveryRecord);
 }
 
 async function fetchAgrimetStationList(
@@ -1620,7 +1684,7 @@ function agrimetDiscoveryRecord(station: AgrimetStationMetadata): StationDiscove
       region: station.state ?? 'discovered',
       type: 'agrimet',
       agency: 'USBR AgriMet',
-      color: '#f59e0b',
+      color: STATION_MARKER_COLORS.agrimet,
       description: 'USBR AgriMet agricultural weather station discovered in the current viewport.',
       agrimetSite: station.id,
       links: [
@@ -1649,20 +1713,14 @@ const cocorahsStationListCache = createStationListCache(fetchCocorahsStationList
 async function discoverCocorahsStations(
   request: StationViewportDiscoveryRequest
 ): Promise<readonly StationDiscoveryRecord[]> {
-  try {
-    const stations = await cocorahsStationListCache.get(request.signal);
-    if (request.signal?.aborted) return [];
-    return stations
-      .filter((station) =>
-        isCoordinateInBounds(station.latitude, station.longitude, request.bounds)
-      )
-      .map((station) => COCORAHS_STATION_ADAPTER.toDiscoveryRecord(station))
-      .filter(isDiscoveryRecord);
-  } catch (err) {
-    if (isAbortError(err) || request.signal?.aborted) throw err;
-    console.warn('[telemetry] CoCoRaHS station discovery failed.', err);
-    return [];
-  }
+  const stations = await cocorahsStationListCache.get(request.signal);
+  if (request.signal?.aborted) return [];
+  return stations
+    .filter((station) =>
+      isCoordinateInBounds(station.latitude, station.longitude, request.bounds)
+    )
+    .map((station) => COCORAHS_STATION_ADAPTER.toDiscoveryRecord(station))
+    .filter(isDiscoveryRecord);
 }
 
 async function fetchCocorahsStationLists(
@@ -1766,7 +1824,7 @@ function cocorahsDiscoveryRecord(station: CocorahsStationMetadata): StationDisco
       region: station.state ?? 'discovered',
       type: 'cocorahs',
       agency: 'CoCoRaHS (via Iowa Environmental Mesonet)',
-      color: '#22d3ee',
+      color: STATION_MARKER_COLORS.cocorahs,
       description:
         'CoCoRaHS precipitation station discovered in the current viewport (round-one scope: Washington, Oregon, Idaho).',
       cocorahsSid: station.sid,

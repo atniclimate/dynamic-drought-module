@@ -26,10 +26,14 @@ import { URLS } from '../config/urls';
  * would look muddy. Compositing over a light background instead pushes the
  * basemap toward a clean light gray.
  *
- * Glyphs note: the `glyphs` field points to the public MapLibre demotiles
- * font endpoint, the open-data default. The raster basemap does not consult
- * glyphs; once a vector tile bundle ships it should host its own glyph PBF
- * files and this URL should be repointed to it.
+ * Glyphs note (0.7.0 U0a): the `glyphs` template points at the SELF-HOSTED
+ * PBF files under `public/fonts/glyphs/` (provenance and license in
+ * `public/fonts/README.md`), so no third-party font host sees deployment
+ * traffic. Symbol layers must name a hosted fontstack explicitly in
+ * `text-font` (today: 'Noto Sans Regular'); MapLibre's implicit default
+ * stack is not hosted and would fail visibly. The template is built
+ * absolute from the page origin because a relative glyphs URL is not
+ * reliably resolved across MapLibre versions.
  *
  * Attribution covers OpenStreetMap (OSM) contributors. MapLibre surfaces it
  * through the AttributionControl added in `createMap` (see `src/map/init.ts`).
@@ -37,7 +41,7 @@ import { URLS } from '../config/urls';
 export function buildBaseStyle(): maplibregl.StyleSpecification {
   return {
     version: 8,
-    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+    glyphs: `${window.location.origin}${import.meta.env.BASE_URL}fonts/glyphs/{fontstack}/{range}.pbf`,
     sources: {
       // atni-geobase: terrain-source seam. The ATNI-GeoBase T0 elevation
       // baseline registers here as a `raster-dem` source (a LOCAL tile set

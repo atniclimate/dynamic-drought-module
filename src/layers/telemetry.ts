@@ -37,6 +37,7 @@ import maplibregl from 'maplibre-gl';
 import type { TelemetryFreshness, TelemetryStation } from '../types/station';
 import {
   STATIC_TELEMETRY_STATION_REGISTRY,
+  STATION_MARKER_LEGEND,
   discoverStationsForViewport,
   mergeTelemetryStations,
   stationNetworkByKey
@@ -51,6 +52,12 @@ import {
   hydrateTelemetryPopupData
 } from '../ui/popups';
 import { registry } from '../state/registry';
+import {
+  LEGEND_ORDER,
+  hideLegend,
+  renderSwatchLegend,
+  showLegend
+} from '../ui/legend-registry';
 import { prefersReducedMotion } from '../util/motion';
 
 // ---------------------------------------------------------------------------
@@ -85,7 +92,7 @@ const CAP_NOTE_ID = 'telemetry-discovery-note';
 // full-sentence banner permanently covered the time bar on the default view.
 const CAP_NOTE_TEXT = 'Nearest {cap} of {total} stations shown';
 
-type TelemetryStatus = 'loading' | 'ready' | 'error' | 'no-data' | 'zoom-in';
+type TelemetryStatus = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data' | 'zoom-in';
 
 interface TelemetryMarkerView {
   readonly station: TelemetryStation;
@@ -130,6 +137,27 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   ensureMoveendHandler(map);
   await runDiscoveryForCurrentViewport(map);
+}
+
+/**
+ * Contribute the station marker key to the unified legend (0.7.0 H4,
+ * D-0.7.0-007: "marker colors enter the legend registry"; no on-canvas
+ * color goes unlabeled). The seven discovered-network colors are the
+ * systematic encoding; curated featured stations keep their own colors, so
+ * one muted note covers them rather than a per-station swatch dump.
+ */
+function showStationLegend(): void {
+  showLegend(LAYER_KEY, {
+    order: LEGEND_ORDER.stations,
+    render(body: HTMLElement): void {
+      renderSwatchLegend(
+        body,
+        'Monitoring stations',
+        STATION_MARKER_LEGEND,
+        'Featured stations keep their own marker colors; open a marker for its source.'
+      );
+    }
+  });
 }
 
 function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView[]): void {
@@ -181,6 +209,7 @@ function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView
   }
 
   bindPopups(map);
+  showStationLegend();
 }
 
 /**
@@ -205,6 +234,7 @@ export function deactivate(map: maplibregl.Map): void {
     moveendHandler = null;
   }
   hideCapNote();
+  hideLegend(LAYER_KEY);
   clearMarkers();
 }
 
@@ -304,6 +334,10 @@ async function runDiscoveryForCurrentViewport(map: maplibregl.Map): Promise<void
     if (controller.signal.aborted || controller !== currentDiscoveryController) return;
 
     if (result.status === 'zoom-in') {
+      // The viewport is wider than the discovery area cap (D-0.7.0-007):
+      // no discovery ran. The curated seeds still render so the layer is
+      // not empty, and the pill reads "zoom in to load" honestly. No cap
+      // note at region zoom, per the ruling.
       const merged = mergeTelemetryStations(
         curatedEntries.map((entry) => entry.station),
         result.records
@@ -322,7 +356,21 @@ async function runDiscoveryForCurrentViewport(map: maplibregl.Map): Promise<void
     const capped = capDiscoveredStations(merged, viewportCenter(map));
     renderStations(map, capped.entries.map(markerViewForEntry));
     updateCapNote(map, capped.totalDiscovered);
-    reportStatus(capped.entries.length > 0 ? 'ready' : 'no-data');
+    // Honest aggregate status (0.7.0 H4): any source failure reads
+    // "live (partial)" instead of an unqualified "live". This includes the
+    // every-source-failed case, because the curated seed markers are
+    // genuinely live (they hydrate on click) and the layer must stay
+    // active per the stay-on contract; a terminal 'error' here would make
+    // the activation controller treat a data failure as structural and
+    // scrub the layer, unchecking it and clearing the seeds it just
+    // rendered (layer-controller.ts, the critical-review #2 guard;
+    // adversarial-review finding, 2026-07-10). 'error' remains the catch
+    // branch below, where discovery itself threw.
+    if (result.failedSources.length > 0) {
+      reportStatus('degraded');
+    } else {
+      reportStatus(capped.entries.length > 0 ? 'ready' : 'no-data');
+    }
   } catch (err) {
     if (controller.signal.aborted || controller !== currentDiscoveryController) return;
     console.warn('[telemetry] station discovery failed.', err);

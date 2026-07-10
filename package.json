@@ -1,7 +1,7 @@
 {
   "name": "dynamic-drought-module",
   "private": true,
-  "version": "0.6.2",
+  "version": "0.6.3",
   "type": "module",
   "description": "Embeddable, serverless web map for drought, hydrography, ecological boundaries, wildfire activity, and live water and snowpack telemetry. Pacific Northwest focus.",
   "license": "PolyForm-Strict-1.0.0",
@@ -18,7 +18,8 @@
     "test:report": "playwright show-report",
     "scan:emdash": "node scripts/scan-emdash.mjs",
     "check:resources": "node scripts/check-resource-catalog.mjs",
-    "gate": "npm run build && npm run scan:emdash && npm run check:resources",
+    "check:bundle": "node scripts/check-bundle-size.mjs",
+    "gate": "npm run build && npm run scan:emdash && npm run check:resources && npm run check:bundle",
     "build:enso": "node scripts/build-enso-snapshot.mjs",
     "build:ecoregion-tiles": "node scripts/build-ecoregion-tiles.mjs",
     "build:states": "node scripts/build-states.mjs",

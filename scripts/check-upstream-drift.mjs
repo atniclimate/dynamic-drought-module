@@ -14,6 +14,16 @@
  * the app's parameterized calls; the check guards liveness, not shape (shape
  * is the ddm-source-verifier's job at wire time).
  *
+ * CORS honesty (0.7.0 H3 lesson). The USFS Wildfire Hazard Potential
+ * ImageServer answered every capability probe 200 while its `exportImage`
+ * responses reached real browsers WITHOUT the Access-Control-Allow-Origin
+ * header: liveness without CORS lies. Every probe therefore sends an Origin
+ * header and reports the returned CORS header in the detail column; probes
+ * marked `corsRequired` (the through-Worker tile path, where the Worker
+ * must always inject the header) FAIL when it is absent. Upstream-direct
+ * CORS values are informational only, because several upstreams are
+ * intermittent (that is the lesson).
+ *
  * Run with: `npm run check:drift`. Exit code 1 when any endpoint fails, so a
  * scheduled runner (Task Scheduler, cron, or a future GitHub Action) can
  * alert on drift. Model-free by design; no AI in the loop.
@@ -29,13 +39,26 @@ const URLS_PATH = join(__dirname, '..', 'src', 'config', 'urls.ts');
 const TIMEOUT_MS = 15_000;
 const CONCURRENCY = 5;
 
+/** The production origin; sent on every probe so CORS posture is observable. */
+const BROWSER_ORIGIN = 'https://atniclimate.github.io';
+
+/** The representative WHP tile call (a real 256x256 export over the PNW).
+ * Probed twice: upstream-direct (informational CORS) and through the Worker
+ * proxy (corsRequired; this is the path production tiles actually ride). */
+const WHP_EXPORT_IMAGE_QUERY =
+  '/exportImage?bbox=-13887106,5700582,-13877106,5710582&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=true&f=image';
+
 /** Substitutions that turn a tile/parameter template into one probeable URL. */
 const TEMPLATE_SUBSTITUTIONS = [
   ['{z}', '3'],
   ['{y}', '2'],
   ['{x}', '2'],
   // A small Web-Mercator bbox over the Pacific Northwest.
-  ['{bbox-epsg-3857}', '-13887106,5700582,-13877106,5710582']
+  ['{bbox-epsg-3857}', '-13887106,5700582,-13877106,5710582'],
+  // GIBS WMTS accepts the literal keyword 'default' in the TIME position
+  // (the most recent granule). Without this the timed template 400s on the
+  // literal token and the monitor cries wolf (verified 2026-07-09).
+  ['{TIME}', 'default']
 ];
 
 /** Keys whose bare root answers 4xx by design; probed with the consumer's
@@ -52,6 +75,9 @@ const PROBE_SUFFIXES = new Map([
   ['usdmDataServices', '/USStatistics/GetDroughtSeverityStatisticsByArea?aoi=us&startdate=1/1/2026&enddate=1/7/2026&statisticsType=1'],
   // Tile ROOT with the template living in the consumer; probe one real tile.
   ['nidisGriddedTileRoot', '/ce-ACIS_NRCC_NN-spi-90d/3/1/2.png'],
+  // A representative exportImage tile, not just the capability document
+  // (the H3 lesson: metadata answered 200 while tiles were CORS-dead).
+  ['usfsWhp', WHP_EXPORT_IMAGE_QUERY],
   // The Worker's documented health check (urls.ts stamp).
   ['workerProxy', '/healthz'],
   // Directory root; probe a known archive (AAFC retains all years, 2019+).
@@ -86,11 +112,19 @@ async function check(entry) {
     const resp = await fetch(url, {
       signal: controller.signal,
       redirect: 'follow',
-      headers: { 'User-Agent': 'ddm-drift-monitor/1.0 (+https://github.com/atniclimate/dynamic-drought-module)' }
+      headers: {
+        'User-Agent': 'ddm-drift-monitor/1.0 (+https://github.com/atniclimate/dynamic-drought-module)',
+        Origin: BROWSER_ORIGIN
+      }
     });
     const type = resp.headers.get('content-type') ?? '(none)';
-    const ok = resp.status < 400;
-    return { key: entry.key, url, ok, detail: `HTTP ${resp.status} ${type}` };
+    const acao = resp.headers.get('access-control-allow-origin');
+    const corsMissing = Boolean(entry.corsRequired) && acao === null;
+    const ok = resp.status < 400 && !corsMissing;
+    const detail =
+      `HTTP ${resp.status} ${type}; cors=${acao ?? 'ABSENT'}` +
+      (corsMissing ? ' (required on this path)' : '');
+    return { key: entry.key, url, ok, detail };
   } catch (err) {
     const reason = err && err.name === 'AbortError' ? `timeout ${TIMEOUT_MS}ms` : String(err && err.cause ? err.cause : err);
     return { key: entry.key, url, ok: false, detail: reason };
@@ -118,6 +152,21 @@ async function main() {
   if (entries.length === 0) {
     console.error('No https URLs extracted from urls.ts; the extraction regex has drifted.');
     process.exit(1);
+  }
+
+  // Synthetic probe: the WHP tile THROUGH the Worker proxy, the path
+  // production tiles actually ride since 0.7.0 H3. The Worker must always
+  // inject the CORS header, so its absence here is a real failure (a stale
+  // Worker deploy missing the imagery.geoplatform.gov allow-list entry
+  // shows up as HTTP 403 on this row).
+  const workerProxy = entries.find((e) => e.key === 'workerProxy');
+  const usfsWhp = entries.find((e) => e.key === 'usfsWhp');
+  if (workerProxy && usfsWhp) {
+    entries.push({
+      key: 'workerProxy->usfsWhpTile',
+      url: `${workerProxy.url}/proxy?url=${encodeURIComponent(usfsWhp.url + WHP_EXPORT_IMAGE_QUERY)}`,
+      corsRequired: true
+    });
   }
 
   console.log(`Probing ${entries.length} upstream endpoints (timeout ${TIMEOUT_MS / 1000}s, concurrency ${CONCURRENCY})...\n`);
