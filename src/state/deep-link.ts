@@ -34,6 +34,7 @@ import {
   nextBriefingIntent,
   openImpactPanel
 } from '../ui/impact-panel';
+import { getSheetDetent, isSheetActive } from '../ui/mobile-sheet';
 import { showToast } from '../ui/overlay';
 import type { SelectParam } from './url';
 
@@ -41,15 +42,30 @@ import type { SelectParam } from './url';
 const FETCH_TIMEOUT_MS = 10_000;
 
 /**
- * Panel-aware camera padding (U1, headroom A2): a briefing fit always
- * precedes the panel opening over the map, so the framed boundary must
- * not end up hidden under it. The panel overlays the right 440px on
- * desktop and the bottom sheet below the 720px breakpoint; both pads
- * are clamped to half the viewport so a small embed can never be asked
- * for more padding than it has pixels (MapLibre rejects that).
+ * Panel-aware camera padding (U1, headroom A2; extended to the U2
+ * three-detent model): a briefing fit always precedes the panel opening
+ * over the map, so the framed boundary must not end up hidden under it.
+ *
+ * Three cases:
+ * - Desktop: the panel overlays the right 440px; a transient right pad,
+ *   clamped to half the viewport so a small window can never be asked
+ *   for more padding than it has pixels (MapLibre rejects that).
+ * - Mobile with the U2 sheet active: the sheet's LIVE height is already
+ *   the map's persistent transform padding (the one shared authority,
+ *   written by the sheet on every detent settle; MapLibre's
+ *   `cameraForBounds` composes transform padding with this option
+ *   padding), so the fit passes only its aesthetic margins. Reading the
+ *   sheet height here as well would double-count it.
+ * - Mobile without the sheet (embed keeps today's hidden-chrome
+ *   semantics; the no-JavaScript fallback stacks): the briefing overlay
+ *   still covers the lower viewport, so the pre-U2 transient bottom pad
+ *   stays.
  */
 function briefingCameraPadding(): maplibregl.PaddingOptions {
   const mobile = window.matchMedia('(max-width: 720px)').matches;
+  if (mobile && isSheetActive()) {
+    return { top: 24, left: 24, right: 24, bottom: 24 };
+  }
   if (mobile) {
     return {
       top: 24,
@@ -149,7 +165,11 @@ export async function openStateBriefing(
   if (opts.guard && !opts.guard()) return;
 
   const bbox = geometryBbox(feature.geometry);
-  if (opts.fit && bbox) {
+  // At the sheet's full detent the map has receded entirely; no camera
+  // call fires against a covered canvas (cartography lens). The report
+  // close restores the prior detent, whose settle re-pads the camera.
+  const mapCovered = getSheetDetent() === 'full';
+  if (opts.fit && bbox && !mapCovered) {
     map.fitBounds(bbox, { padding: briefingCameraPadding() });
   }
 

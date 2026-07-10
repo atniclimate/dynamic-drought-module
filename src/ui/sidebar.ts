@@ -94,6 +94,7 @@ import {
   setChecked as bridgeSetChecked
 } from './island/bridge';
 import { bindLayerToggleController, requestLayerOn } from './layer-toggle-command';
+import { revealSheetAtPeek } from './mobile-sheet';
 import { wireShareButton } from './share';
 import { showToast } from './overlay';
 import { escapeHtml } from '../util/escape';
@@ -755,6 +756,10 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
       STATE.embed = false;
       void mountSidebarIslandNow();
       pushUrl();
+      // Below 720px the post-embed chrome is the bottom sheet, revealed
+      // at peek (the ratified embed-exit path, D-0.7.0-017); a desktop
+      // expand is a no-op inside the helper.
+      revealSheetAtPeek();
       window.setTimeout(() => {
         map.resize();
       }, 220);

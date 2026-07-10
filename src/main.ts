@@ -4,13 +4,15 @@ import './styles/app.css';
 import type maplibregl from 'maplibre-gl';
 import { createMap } from './map/init';
 import { setMap } from './state/map-store';
-import { applyDeepLink } from './state/deep-link';
+import { applyDeepLink, openStateBriefing } from './state/deep-link';
 import { parseSelectParam } from './state/url';
 import { buildSidebar } from './ui/sidebar';
 import { initHoverInspector } from './ui/hover-inspector';
 import { initMapKey } from './ui/map-key';
 import { buildEnsoDriver } from './ui/enso-driver';
+import { initMobileSheet } from './ui/mobile-sheet';
 import { initViewShell } from './ui/view-shell';
+import { isCurrentBriefingIntent, nextBriefingIntent } from './ui/impact-panel';
 
 /**
  * Dynamic Drought Module (DDM) boot.
@@ -90,6 +92,22 @@ async function boot(): Promise<void> {
   // The ENSO driver line (0.4.0 B2): the one-line climate-driver read under
   // the conditions strip, from the bundled snapshot. Hidden on any failure.
   buildEnsoDriver();
+
+  // The mobile bottom sheet (U2, D-0.7.0-017): below 720px the sidebar
+  // becomes the one three-detent sheet; never in embed. Before the view
+  // shell, so a Brief boot finds the sheet already seated at half. The
+  // place-picker callback is injected here (the sheet module carries no
+  // deep-link/impact-panel imports); it uses the same yield-guard pattern
+  // as every async briefing opener.
+  initMobileSheet(map, {
+    openPlaceBriefing: (code) => {
+      const intent = nextBriefingIntent();
+      void openStateBriefing(map, code, {
+        fit: true,
+        guard: () => isCurrentBriefingIntent(intent)
+      });
+    }
+  });
 
   // The two doors (U1, D-ARCH-002): mode chrome, the Brief head, and the
   // answer-first boot. After the sidebar (which seeds the mode from the

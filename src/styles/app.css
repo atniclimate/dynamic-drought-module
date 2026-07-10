@@ -1721,6 +1721,318 @@ button.conditions-metric:hover {
 }
 
 /* ----------------------------------------------------------------------------
+   The mobile bottom sheet (0.7.0 U2; ratified detent model D-0.7.0-017,
+   build spec docs/ddm-detent-model-2026-07-09.md).
+
+   Below 720px, when src/ui/mobile-sheet.ts stamps `data-sheet-detent` on
+   #app, the sidebar element becomes the ONE bottom sheet over a
+   full-viewport map. Three detents, keyed off the attribute plus the
+   existing view-brief/view-console mode classes: peek (the conditions
+   strip and its date register), half (the at-hand answer in Brief, the
+   compact controls in console), full (the standalone report in Brief,
+   the whole catalog stack in console).
+
+   The attribute never appears in embed (`?embed=true` keeps today's
+   hidden-chrome semantics byte for byte) and never on desktop; without
+   it, the stacked-rows block above is the no-JavaScript fallback. The
+   `--sheet-peek` and `--sheet-half` values are written by the module
+   from its SHEET_DETENT_SIZE table (the one shared lookup); the literals
+   here are parse-time fallbacks only.
+   ---------------------------------------------------------------------------- */
+
+/* Sheet-only furniture never renders outside the active sheet. */
+.sheet-grabber-row,
+.sheet-at-hand,
+.sheet-all-layers,
+.sheet-report {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  /* Detent heights: the one place the attribute becomes a height. */
+  #app[data-sheet-detent='peek'] { --sheet-height: var(--sheet-peek, 132px); }
+  #app[data-sheet-detent='half'] { --sheet-height: calc(100vh * var(--sheet-half, 0.5)); }
+  #app[data-sheet-detent='full'] { --sheet-height: 100vh; }
+  @supports (height: 1dvh) {
+    #app[data-sheet-detent='half'] { --sheet-height: calc(100dvh * var(--sheet-half, 0.5)); }
+    #app[data-sheet-detent='full'] { --sheet-height: 100dvh; }
+  }
+
+  /* The map takes the whole shell; the sheet leaves the grid flow. */
+  #app:not(.embed)[data-sheet-detent] {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+  }
+
+  #app[data-sheet-detent] .sidebar {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: none;
+    height: var(--sheet-height, 132px);
+    z-index: 1350;
+    border-right: none;
+    border-bottom: none;
+    border-top: 1px solid var(--line-strong);
+    border-top-left-radius: var(--radius-lg);
+    border-top-right-radius: var(--radius-lg);
+    box-shadow: 0 -10px 32px rgba(0, 0, 0, 0.55);
+    transition: height 0.25s ease;
+    /* Override the base .sidebar clip: .sidebar-scroll clips the content
+       itself, and the first-peek hint floats ABOVE the sheet's top edge
+       (the inherited overflow:hidden swallowed it; matrix finding,
+       2026-07-10). */
+    overflow: visible;
+  }
+  /* Grabber drags set an inline --sheet-height per frame; the transition
+     would fight the pointer, so it drops for the duration of the drag. */
+  #app.sheet-dragging .sidebar { transition: none; }
+
+  /* Content scrolls internally ONLY at full (the ratified gesture
+     contract); scroll chaining never reaches the page. */
+  #app[data-sheet-detent] .sidebar-scroll {
+    overflow: hidden;
+    overscroll-behavior: contain;
+    padding: 0 0 10px;
+  }
+  #app[data-sheet-detent='full'] .sidebar-scroll { overflow-y: auto; }
+
+  /* --------------------------------------------------------------------------
+     The visibility matrix: hide everything, then re-admit per detent and
+     mode. `[hidden]` sections (strip before first data, brief-head in
+     console) stay hidden: every re-admit rule carries :not([hidden]) or
+     targets module-managed sections that have no hidden state.
+     -------------------------------------------------------------------------- */
+  #app[data-sheet-detent] .sidebar-header,
+  #app[data-sheet-detent] .sidebar-footer,
+  #app[data-sheet-detent] .sidebar-scroll > * { display: none; }
+
+  /* The grabber row: every detent. */
+  #app[data-sheet-detent] .sheet-grabber-row {
+    display: flex;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  /* Peek and half: the conditions strip (the collapsed detent IS the
+     strip), compacted so the tiles and the date register fit the peek. */
+  #app[data-sheet-detent='peek'] #conditions-strip:not([hidden]),
+  #app[data-sheet-detent='half'] #conditions-strip:not([hidden]) { display: block; }
+  #app[data-sheet-detent] #conditions-strip {
+    padding: 4px 14px 8px;
+    border-bottom: none;
+    container-type: inline-size;
+  }
+  #app[data-sheet-detent] #conditions-strip .conditions-head { margin-bottom: 6px; }
+
+  /* Half, Brief: the at-hand answer. */
+  #app[data-sheet-detent='half'].view-brief #sheet-at-hand { display: block; }
+
+  /* Half, console: the compact controls and the one door to the catalog. */
+  #app[data-sheet-detent='half'].view-console #panel-region,
+  #app[data-sheet-detent='half'].view-console #panel-quick-views,
+  #app[data-sheet-detent='half'].view-console #sheet-all-layers { display: block; }
+
+  /* Interim console-half compaction (matrix finding, 2026-07-10): the
+     full region grid overflowed the no-scroll half detent, pushing the
+     quick views and the catalog door below the fold. Compacted here so
+     the ratified content list fits common phones; the REAL fix is U3's
+     grid-to-jump-list demotion (D-0.7.0-009), which retires this block. */
+  #app[data-sheet-detent='half'].view-console #panel-region,
+  #app[data-sheet-detent='half'].view-console #panel-quick-views,
+  #app[data-sheet-detent='half'].view-console #sheet-all-layers {
+    padding: 8px 14px;
+  }
+  #app[data-sheet-detent='half'].view-console .region-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+  }
+  #app[data-sheet-detent='half'].view-console .region-btn {
+    min-height: 26px;
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+  #app[data-sheet-detent='half'].view-console .region-briefing-btn {
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+
+  /* Full, Brief: the standalone report; the map has receded. Until a
+     report is actually hosted and open, the at-hand block holds the
+     detent so Brief is never an empty sheet (D-0.7.0-006). */
+  #app[data-sheet-detent='full'].view-brief #sheet-report { display: block; }
+  #app[data-sheet-detent='full'].view-brief #sheet-at-hand { display: block; }
+  #app[data-sheet-detent='full'].view-brief:has(#sheet-report .impact-panel.open) #sheet-at-hand {
+    display: none;
+  }
+
+  /* Full, console: the whole stack (today's sidebar content) with the
+     brand header and the footer attribution. */
+  #app[data-sheet-detent='full'].view-console .sidebar-header { display: flex; }
+  #app[data-sheet-detent='full'].view-console .sidebar-footer { display: block; }
+  #app[data-sheet-detent='full'].view-console
+    .sidebar-scroll
+    > *:not([hidden]):not(.sheet-at-hand):not(.sheet-all-layers):not(.sheet-report) {
+    display: block;
+  }
+  /* Full, console, with an OPEN report (a console briefing open drives
+     the sheet to full): the report takes the detent; one sheet, never
+     two surfaces fighting inside it. Close restores the prior detent. */
+  #app[data-sheet-detent='full'].view-console:has(#sheet-report .impact-panel.open)
+    .sidebar-scroll
+    > *:not(.sheet-report) {
+    display: none;
+  }
+  #app[data-sheet-detent='full'].view-console:has(#sheet-report .impact-panel.open) .sidebar-header,
+  #app[data-sheet-detent='full'].view-console:has(#sheet-report .impact-panel.open) .sidebar-footer {
+    display: none;
+  }
+  #app[data-sheet-detent='full'].view-console #sheet-report:has(.impact-panel.open) {
+    display: block;
+  }
+  /* The sheet owns height via the grabber; the desktop collapse control
+     is not part of the sheet grammar. */
+  #app[data-sheet-detent] #sidebar-collapse { display: none; }
+
+  /* The bottom dock rides above the sheet while any map is visible; at
+     full the sheet covers it (the map has receded, so has its chrome). */
+  #app[data-sheet-detent='peek'] .map-bottom-dock,
+  #app[data-sheet-detent='half'] .map-bottom-dock {
+    bottom: calc(var(--sheet-height, 0px) + 10px);
+  }
+}
+
+/* The grabber: a real button, the only gesture surface that moves the
+   sheet. The bar is the visual handle; the hit target is the full row
+   (WCAG 2.2 target-size floor is 24px; this exceeds it). */
+.sheet-grabber {
+  appearance: none;
+  background: transparent;
+  border: none;
+  width: 100%;
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 0 5px;
+  cursor: grab;
+  touch-action: none;
+}
+.sheet-grabber-bar {
+  width: 44px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+.sheet-grabber:hover .sheet-grabber-bar { background: var(--fg-3); }
+#app.sheet-dragging .sheet-grabber { cursor: grabbing; }
+
+/* The one-time first-peek hint (product lens): dismissible, floats above
+   the sheet's top edge, never repeats once dismissed. */
+.sheet-hint {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 11px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  color: var(--fg-1);
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+}
+.sheet-hint-dismiss {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--fg-2);
+  font-size: 14px;
+  line-height: 1;
+  min-width: 24px;
+  min-height: 24px;
+  cursor: pointer;
+}
+
+/* The at-hand block (the half detent's Brief content). */
+.sheet-at-hand-kicker {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-overline);
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.sheet-at-hand-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: var(--fw-title);
+  letter-spacing: var(--track-display);
+  line-height: 1.2;
+  color: var(--fg-0);
+}
+.sheet-at-hand-kind {
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--fg-2);
+}
+.sheet-at-hand-headline {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg-1);
+  /* The half detent never scrolls (ratified): the read clamps instead. */
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sheet-at-hand-headline-empty { color: var(--fg-2); }
+.sheet-at-hand-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.sheet-place-select {
+  flex: 1 1 150px;
+  width: auto;
+  margin-bottom: 0;
+  min-height: 32px;
+}
+.sheet-report-door {
+  min-height: 32px;
+  padding: 6px 12px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-strong);
+  border-radius: var(--radius-sm);
+  color: var(--fg-0);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: var(--fw-strong);
+  cursor: pointer;
+}
+.sheet-report-door:hover { background: rgba(6, 182, 212, 0.24); }
+
+/* Container-query tile adaptation (headroom B3): in a narrow sheet the
+   tiles compact instead of restating their status words (dataviz lens). */
+@container (max-width: 379px) {
+  .conditions-metrics { gap: 6px; }
+  .conditions-value { font-size: 17px; }
+}
+
+/* ----------------------------------------------------------------------------
    Accessibility utilities
    M8 [next-polish]: visually-hidden polite live region + focus rings.
    The `.sr-only` class hides the element from sighted users while keeping
@@ -2090,6 +2402,12 @@ a.impact-resource-link::after {
 /* Focus rings for .impact-panel-close and .popup-impact-btn come from the
    global U0c rule; this block carried an identical duplicate. */
 
+/* Below 720px WITHOUT the U2 sheet (embed keeps today's hidden-chrome
+   semantics byte for byte; the no-JavaScript fallback stacks): the panel
+   stays the pre-U2 bottom overlay. With the sheet active the panel is
+   rehosted into the sheet's report region and the .sheet-hosted rules
+   below take over; the separate mobile overlay is retired there
+   (ratified: one sheet, never two). */
 @media (max-width: 720px) {
   .impact-panel {
     top: auto;
@@ -2113,8 +2431,42 @@ a.impact-resource-link::after {
   }
 }
 
+/* Sheet-hosted report (U2, the facade merge): inside the sheet the panel
+   is a static page-content block; the sheet supplies position, chrome,
+   and (at full) the one scroll context, so the panel's own overlay
+   furniture all resets. Placed after the mobile overlay block so these
+   declarations win at equal specificity. */
+.impact-panel.sheet-hosted {
+  position: static;
+  top: auto;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  width: auto;
+  max-width: none;
+  height: auto;
+  z-index: auto;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  transform: none;
+  transition: none;
+}
+.impact-panel.sheet-hosted.open {
+  transform: none;
+}
+.impact-panel.sheet-hosted .impact-panel-body {
+  flex: none;
+  overflow: visible;
+  padding-top: 10px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .impact-panel { transition: none; }
+  /* The sheet's detent height change goes instant (U2: the reduced-motion
+     block gains every newly animated property the day it ships). This
+     also covers the desktop sidebar width transition. */
+  .sidebar { transition: none; }
   .impact-spinner { animation: none; }
   /* The wave pulse falls back to the static three-stroke glyph. */
   .spinner-waves path { animation: none; }
@@ -2523,5 +2875,56 @@ a.impact-resource-link::after {
   }
   .impact-horizon-head {
     break-after: avoid;
+  }
+  /* Charts print as ink (the 2026-07-10 dataviz lens finding): the inline
+     chart SVGs carry dark-theme tokens as PRESENTATION ATTRIBUTES
+     (fill="var(--fg-0)" and friends), which print near-white text on white
+     paper. CSS rules outrank presentation attributes, so text is re-inked
+     and accent-toned marks darken to a printable teal; category-colored
+     data marks (USDM and tercile hexes) are deliberately untouched, they
+     are the data. Gridlines lighten to a paper-appropriate grey. */
+  body:has(.impact-panel.open) .impact-panel .impact-claim-chart svg text {
+    fill: #000;
+  }
+  body:has(.impact-panel.open) .impact-panel .impact-claim-chart svg [fill='var(--accent)'] {
+    fill: #0e7490;
+  }
+  body:has(.impact-panel.open) .impact-panel .impact-claim-chart svg [stroke='var(--accent)'] {
+    stroke: #0e7490;
+  }
+  body:has(.impact-panel.open) .impact-panel .impact-claim-chart svg [stroke='var(--line)'] {
+    stroke: #999;
+  }
+
+  /* U2 (the facade merge): below 720px the open report lives INSIDE #app
+     (the sheet's report region), so the wholesale #app hide above would
+     print a blank page there. Instead the shell prints as a plain block
+     chain down to the report, and every sibling branch (the map, the
+     grabber, the sheet chrome) hides. Desktop and embed keep the rules
+     above: the panel is a document.body child there. */
+  body:has(.impact-panel.sheet-hosted.open) #app {
+    display: block !important;
+  }
+  body:has(.impact-panel.sheet-hosted.open) #app > *:not(.sidebar),
+  body:has(.impact-panel.sheet-hosted.open) .sidebar > *:not(.sidebar-scroll),
+  body:has(.impact-panel.sheet-hosted.open) .sidebar-scroll > *:not(.sheet-report) {
+    display: none !important;
+  }
+  body:has(.impact-panel.sheet-hosted.open) .sidebar,
+  body:has(.impact-panel.sheet-hosted.open) .sidebar-scroll,
+  body:has(.impact-panel.sheet-hosted.open) .sheet-report {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: #fff !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+    transition: none !important;
+    padding: 0 !important;
   }
 }

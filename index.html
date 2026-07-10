@@ -14,6 +14,16 @@
   <div id="app" class="app-shell">
 
     <aside id="sidebar" class="sidebar" aria-label="Map controls">
+      <!-- The mobile bottom-sheet grabber (0.7.0 U2, D-0.7.0-017). Display
+           is stylesheet-gated: it exists only below 720px when the sheet is
+           active (never in embed). The grabber is a real button and the ONLY
+           gesture surface that moves the sheet (drag, tap to cycle,
+           Enter/Space cycles, arrow keys step); wired in src/ui/mobile-sheet.ts. -->
+      <div class="sheet-grabber-row">
+        <button type="button" id="sheet-grabber" class="sheet-grabber" aria-label="Resize the briefing sheet">
+          <span class="sheet-grabber-bar" aria-hidden="true"></span>
+        </button>
+      </div>
       <header class="sidebar-header">
         <div class="brand">
           <button class="brand-seal" popovertarget="about-atni" aria-label="About ATNI Climate" title="About ATNI Climate">
@@ -47,17 +57,30 @@
              numbers first, then "what does it mean here". -->
         <section class="panel brief-head" id="brief-head" aria-label="Drought briefing" hidden></section>
 
-        <section class="panel">
+        <!-- The sheet's at-hand block (U2): the half detent's Brief content
+             (place title, the current-horizon read, the place picker, the one
+             door to the full report). Filled by src/ui/mobile-sheet.ts;
+             display is stylesheet-gated to the mobile sheet's half detent. -->
+        <section class="panel sheet-at-hand" id="sheet-at-hand" aria-label="At-hand drought answer"></section>
+
+        <section class="panel" id="panel-region">
           <h2 class="panel-title">Region</h2>
           <div id="region-buttons" class="region-grid" role="radiogroup" aria-label="Select region"></div>
         </section>
 
-        <section class="panel">
+        <section class="panel" id="panel-quick-views">
           <h2 class="panel-title">Quick views</h2>
           <div id="preset-chips" class="preset-chips" role="group" aria-label="Quick view presets"></div>
         </section>
 
-        <section class="panel">
+        <!-- The sheet's "All layers" door (U2): the half detent's console
+             content ends with the one entry that expands to the full catalog.
+             Display is stylesheet-gated; wired in src/ui/mobile-sheet.ts. -->
+        <section class="panel sheet-all-layers" id="sheet-all-layers">
+          <button type="button" id="sheet-all-layers-btn" class="sheet-report-door">All layers &amp; stations</button>
+        </section>
+
+        <section class="panel" id="panel-layers">
           <div class="panel-title-row">
             <h2 class="panel-title">Layers</h2>
             <span id="layer-status" class="status-pill" aria-live="polite"></span>
@@ -65,7 +88,7 @@
           <div id="layer-toggles" class="layer-list"></div>
         </section>
 
-        <section class="panel">
+        <section class="panel" id="panel-telemetry">
           <h2 class="panel-title">Water &amp; Snow</h2>
           <p class="telemetry-discovery-hint">Stations are discovered in the current map view once you zoom in far enough; at wide zooms the featured stations below are shown and the layer reads "zoom in to load". Where discovery finds more than 50 stations, the nearest 50 are shown.</p>
           <div id="telemetry-list" class="telemetry-list"></div>
@@ -76,6 +99,12 @@
           <div id="legend-sections"></div>
         </section>
 
+        <!-- The sheet's report region (U2, the facade merge): below 720px the
+             impact panel rehosts here at the full detent, so the standalone
+             report is page content inside the one sheet, never a second
+             overlay. Display is stylesheet-gated. -->
+        <div class="sheet-report" id="sheet-report"></div>
+
       </div>
 
       <footer class="sidebar-footer">
@@ -83,7 +112,7 @@
         <p>Data: OpenStreetMap · NOAA · USGS · BIA · EPA</p>
         <p class="muted">
           <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">atniclimate/dynamic-drought-module</a>
-          · v0.6.5
+          · v0.6.6
         </p>
       </footer>
     </aside>

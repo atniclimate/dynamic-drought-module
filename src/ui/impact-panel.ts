@@ -33,6 +33,17 @@ import { resolveLocationIdentity } from '../state/location-identity';
 import { getMap } from '../state/map-store';
 import { getPlaceSelection, setPlaceSelection } from '../state/place-selection';
 import type { PlaceSelection } from '../state/place-selection';
+import { getViewMode } from '../state/view-mode';
+import {
+  driveSheetForReport,
+  getSheetDetent,
+  isSheetActive,
+  onSheetDetentSettle,
+  restoreSheetDetent,
+  setSheetBriefing,
+  setSheetDetent,
+  sheetReportHost
+} from './mobile-sheet';
 import type {
   BoundarySelectionContext,
   Horizon,
@@ -82,10 +93,18 @@ let activeController: AbortController | null = null;
 // Status pill text
 // ---------------------------------------------------------------------------
 
+/**
+ * Horizon pill wording follows the canonical six-state vocabulary
+ * (CLAUDE.md section 6 invariant 3; the island's STATUS_PILL_TEXT is the
+ * layer-side table). A horizon has only four states; each maps to its
+ * canonical string, never a per-surface synonym: the pre-U2 "partial"
+ * drifted from "live (partial)" and was flagged by the 2026-07-10 design
+ * corpus (dataviz lens; fixed with U2 per the BRIEF).
+ */
 const HORIZON_PILL_TEXT: Record<HorizonStatus, string> = {
   loading: 'loading...',
   ready: 'live',
-  partial: 'partial',
+  partial: 'live (partial)',
   unavailable: 'unavailable'
 };
 
@@ -138,12 +157,13 @@ function ensurePanel(): HTMLElement {
   kindEl = panel.querySelector<HTMLElement>('.impact-panel-kind');
 
   const closeBtn = panel.querySelector<HTMLButtonElement>('.impact-panel-close');
-  if (closeBtn) closeBtn.addEventListener('click', () => closeImpactPanel());
+  if (closeBtn) closeBtn.addEventListener('click', () => requestPanelDismiss());
 
-  // Escape closes the panel when it is open.
+  // Escape dismisses the panel when it is open (same routing as the
+  // close button: in Brief-on-the-sheet it returns to the answer).
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && panelEl && !panelEl.hidden) {
-      closeImpactPanel();
+      requestPanelDismiss();
     }
   });
 
@@ -151,8 +171,14 @@ function ensurePanel(): HTMLElement {
   // as a modal task: Tab cycles within it rather than escaping behind it, so a
   // keyboard user is never dropped onto the map canvas (which has no keyboard
   // path). Focus is restored to the opener on close.
+  //
+  // U2 (the facade merge): containment is keyed off aria-modal, so the
+  // sheet-hosted report (page content inside the one sheet, aria-modal
+  // false per the ratified detent model) lets Tab reach the grabber and
+  // the rest of the sheet instead of trapping against them.
   panel.addEventListener('keydown', (e) => {
     if (e.key !== 'Tab' || panel.hidden) return;
+    if (panel.getAttribute('aria-modal') !== 'true') return;
     const focusables = getFocusable(panel);
     if (focusables.length === 0) return;
     const first = focusables[0]!;
@@ -170,6 +196,86 @@ function ensurePanel(): HTMLElement {
   });
 
   return panel;
+}
+
+/**
+ * The mobile host (U2, the facade merge; ratified detent model,
+ * D-0.7.0-017): below 720px the panel element rehosts INTO the sheet's
+ * report region, so exactly one bottom sheet ever exists on mobile and
+ * the report is page content inside it (aria-modal drops; the
+ * close-button focus discipline stays). Everywhere else (desktop, embed,
+ * the no-JavaScript fallback) the panel stays a `document.body` overlay,
+ * byte for byte the pre-U2 behavior. The briefing model and hydration
+ * are untouched: only the host moves. Idempotent; also runs on every
+ * sheet settle so a viewport crossing rehosts an open panel both ways.
+ */
+function syncPanelHost(): void {
+  if (!panelEl) return;
+  const host = sheetReportHost();
+  const closeBtn = panelEl.querySelector<HTMLButtonElement>('.impact-panel-close');
+  if (host) {
+    const entering = panelEl.parentElement !== host;
+    if (entering) host.appendChild(panelEl);
+    panelEl.classList.add('sheet-hosted');
+    panelEl.setAttribute('aria-modal', 'false');
+    // Hosted, the button dismisses the FULL REPORT view (in Brief it
+    // returns to the half-detent answer; in console it closes outright).
+    closeBtn?.setAttribute('aria-label', 'Close the full report');
+    closeBtn?.setAttribute('title', 'Close the full report');
+    // An OPEN panel entering the sheet in CONSOLE mode (a viewport
+    // crossing mid-briefing) drives to full, as its open would have
+    // (adversarial-review finding 2): without this, the crossing parks
+    // the open report in a region the console peek never displays. In
+    // BRIEF no drive is needed or wanted: a crossing seats the half
+    // detent by the opening rule, and the ratified embed-exit reveals
+    // at peek with the briefing legitimately resting below.
+    if (entering && !panelEl.hidden && getViewMode() === 'console') {
+      driveSheetForReport('full');
+    }
+  } else {
+    if (panelEl.parentElement !== document.body) document.body.appendChild(panelEl);
+    panelEl.classList.remove('sheet-hosted');
+    closeBtn?.setAttribute('aria-label', 'Close briefing');
+    closeBtn?.setAttribute('title', 'Close briefing');
+    if (!panelEl.hidden) panelEl.setAttribute('aria-modal', 'true');
+  }
+}
+
+let hostSyncArmed = false;
+
+/** Arm the settle-driven rehost once the panel exists. */
+function armHostSync(): void {
+  if (hostSyncArmed) return;
+  hostSyncArmed = true;
+  onSheetDetentSettle(() => {
+    syncPanelHost();
+  });
+}
+
+/** Whether the panel is currently hosted inside the sheet's report region. */
+function isSheetHosted(): boolean {
+  return panelEl?.classList.contains('sheet-hosted') ?? false;
+}
+
+/**
+ * The user-facing dismiss (the close button, Escape). In Brief mode with
+ * the sheet hosting the report, the briefing IS the mode's answer
+ * surface: dismissing returns the sheet to the half detent with the
+ * briefing still open, so the at-hand block keeps answering and the
+ * report door reopens the full view (adversarial-review finding 4: a
+ * hard close emptied the half detent to a bare picker, violating the
+ * Brief-never-empty contract). Everywhere else (console, desktop,
+ * embed) dismiss closes the briefing outright, exactly as before.
+ */
+function requestPanelDismiss(): void {
+  if (isSheetHosted() && isSheetActive() && getViewMode() === 'brief') {
+    restoreSheetDetent();
+    // Focus follows the surface: the close button just left the visible
+    // region, so it lands on the at-hand door (the dismiss's inverse).
+    document.getElementById('sheet-report-door')?.focus();
+    return;
+  }
+  closeImpactPanel();
 }
 
 /** Visible, keyboard-focusable descendants of the panel, in DOM order. */
@@ -350,17 +456,44 @@ export function openImpactPanel(context: BoundarySelectionContext): number {
   paint(briefing);
 
   const panel = ensurePanel();
+  armHostSync();
+  syncPanelHost();
   panel.hidden = false;
-  // While open the panel contains keyboard focus (#16), so it is modal to
-  // assistive tech; the flag is cleared on close.
-  panel.setAttribute('aria-modal', 'true');
+  if (isSheetHosted()) {
+    // Sheet-hosted (U2): the report is page content inside the one sheet;
+    // aria-modal stays false and containment stays off. The detent is
+    // mode-keyed: in console every open is an explicit briefing request
+    // (the popup trigger button, the keyboard region trigger), so the
+    // report drives the sheet to full and close restores the prior
+    // detent; in Brief the sheet answers at half (the ratified opening
+    // detent) with the at-hand block mirroring this briefing, and only
+    // the Read-the-full-report door goes to full. An already-fuller
+    // sheet stays put.
+    if (getViewMode() === 'console') {
+      driveSheetForReport('full');
+    } else if (getSheetDetent() === 'peek') {
+      setSheetDetent('half');
+    }
+  } else {
+    // While open the overlay panel contains keyboard focus (#16), so it
+    // is modal to assistive tech; the flag is cleared on close.
+    panel.setAttribute('aria-modal', 'true');
+  }
   // Force a frame so the slide-in transition runs from the hidden transform.
   void panel.offsetWidth;
   panel.classList.add('open');
 
+  // Focus moves to the close button only when the report surface itself
+  // is visible (the overlay panel, or the sheet at full); at the half
+  // detent the at-hand block is the visible surface and focus must not
+  // jump into a display:none region.
   const closeBtn = panel.querySelector<HTMLButtonElement>('.impact-panel-close');
-  if (closeBtn) closeBtn.focus();
+  if (closeBtn && (!isSheetHosted() || getSheetDetent() === 'full')) closeBtn.focus();
   if (bodyEl) bodyEl.scrollTop = 0;
+
+  // Mirror the briefing into the sheet's at-hand block (the half
+  // detent's Brief content; an invisible no-op everywhere else).
+  setSheetBriefing(briefing);
 
   // Fill the horizons from live sources, re-rendering as each settles. The
   // master signal cancels in-flight fetches on close or reopen.
@@ -479,6 +612,9 @@ export function refreshOpenBriefing(token: number): void {
   if (hadFocusInBody && panelEl && !panelEl.contains(document.activeElement)) {
     panelEl.querySelector<HTMLButtonElement>('.impact-panel-close')?.focus();
   }
+  // Hydration just landed new horizon content; the sheet's at-hand block
+  // mirrors the same model (its headline is the current-horizon read).
+  setSheetBriefing(activeBriefing);
 }
 
 /** Close the panel and supersede any in-flight hydration. */
@@ -488,11 +624,16 @@ export function closeImpactPanel(): void {
   briefingIntentSeq++;
   openToken++;
   activeBriefing = null;
+  setSheetBriefing(null);
   if (activeController) {
     activeController.abort();
     activeController = null;
   }
   if (!panelEl) return;
+  // Sheet-hosted close restores the pre-report detent (ratified).
+  if (isSheetHosted() && isSheetActive() && !panelEl.hidden) {
+    restoreSheetDetent();
+  }
   panelEl.classList.remove('open');
   panelEl.setAttribute('aria-modal', 'false');
   // Restore focus to the opener immediately (not after the slide-out) so a
@@ -528,6 +669,21 @@ export function attachImpactTrigger(
   // not clobber a newer selection.
   const selection: PlaceSelection = { label: context.title, context };
   setPlaceSelection(selection);
+
+  // U2 (ratified detent model): below 720px in Brief mode, floating
+  // popups are suppressed and a boundary tap routes to the sheet: the
+  // place selection above plus an immediate briefing open, which the
+  // sheet answers at the half detent (the at-hand block). The popup is
+  // removed before it ever paints (same task as its addTo), and its
+  // close-clears-selection handler is never registered on this path, so
+  // the selection persists as the sheet's subject. Console keeps its
+  // popups: the map is the instrument there.
+  if (isSheetActive() && getViewMode() === 'brief') {
+    popup.remove();
+    openImpactPanel(context);
+    return;
+  }
+
   popup.on('close', () => {
     if (getPlaceSelection() === selection) setPlaceSelection(null);
   });
