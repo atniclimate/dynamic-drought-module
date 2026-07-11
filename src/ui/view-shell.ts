@@ -27,8 +27,6 @@
 import type maplibregl from 'maplibre-gl';
 
 import { REGIONS } from '../config/regions';
-import { STATE_LABEL } from '../impact/resources';
-import type { StateCode } from '../impact/resources';
 import { openStateBriefing } from '../state/deep-link';
 import { getPlaceSelection } from '../state/place-selection';
 import { getCurrentRegion } from '../state/region-store';
@@ -40,7 +38,6 @@ import {
   nextBriefingIntent,
   openImpactPanel
 } from './impact-panel';
-import { escapeHtml } from '../util/escape';
 import { prefersReducedMotion } from '../util/motion';
 
 /**
@@ -146,50 +143,43 @@ function buildModeSwitch(map: maplibregl.Map): void {
 }
 
 /**
- * Fill the Brief head: the lede, the state place picker (the minimal U1
- * picker; U3 replaces it with the shared search experience), and the
- * console door.
+ * Fill the Brief head: the lede, the ONE search (U3, replacing the U1 stopgap
+ * state `<select>`), and the console door. The search is the shared component
+ * (places + Tribal land areas + layers), the same one the console catalog and
+ * the mobile sheet mount, so a person types one box wherever they are.
  */
 function buildBriefHead(map: maplibregl.Map): void {
   const head = document.getElementById('brief-head');
   if (!head) return;
 
-  const states = (Object.entries(STATE_LABEL) as Array<[StateCode, string]>).sort((a, b) =>
-    a[1].localeCompare(b[1])
-  );
   head.innerHTML = `
     <h2 class="panel-title">Drought briefing</h2>
-    <p class="brief-head-lede">What does the current drought mean for a place? Pick a state, or select a boundary on the map, and the briefing answers with conditions, outlooks, and resources.</p>
-    <label class="brief-place-label" for="brief-place-select">See the briefing for</label>
-    <select id="brief-place-select" class="brief-place-select">
-      <option value="">Choose a state...</option>
-      ${states
-        .map(
-          ([code, name]) =>
-            `<option value="${escapeHtml(code)}">${escapeHtml(name)}</option>`
-        )
-        .join('')}
-    </select>
+    <p class="brief-head-lede">What does the current drought mean for a place? Search a place, a Tribal land area, or a layer, or select a boundary on the map, and the briefing answers with conditions, outlooks, and resources.</p>
+    <div id="brief-search"></div>
     <button type="button" id="brief-console-door" class="brief-console-door">Open the map &amp; layers console</button>
   `;
-
-  const select = head.querySelector<HTMLSelectElement>('#brief-place-select');
-  select?.addEventListener('change', () => {
-    const code = select.value;
-    if (!code) return;
-    // Same yield rule as every async open: the pick declares an intent,
-    // and anything newer (another pick, a boundary click, a close) wins
-    // over it even if this pick's fetch resolves later.
-    const intent = nextBriefingIntent();
-    void openStateBriefing(map, code, {
-      fit: true,
-      guard: () => isCurrentBriefingIntent(intent)
-    });
-  });
 
   const door = head.querySelector<HTMLButtonElement>('#brief-console-door');
   door?.addEventListener('click', () => {
     switchMode(map, 'console');
+  });
+
+  mountBriefSearch(map);
+}
+
+/**
+ * Mount the shared search into the Brief head. Gated by the C1 rule: a brief
+ * embed never downloads the island / search chunk (an embed exits only to the
+ * console, so the Brief head chrome is never the embed's surface). Every other
+ * boot has the island mounted already, so the extra chunk is free.
+ */
+function mountBriefSearch(map: maplibregl.Map): void {
+  const isEmbed = document.getElementById('app')?.classList.contains('embed') ?? false;
+  if (isEmbed && getViewMode() === 'brief') return;
+  const container = document.getElementById('brief-search');
+  if (!container) return;
+  void import('./search-controller').then(({ mountSearchInto }) => {
+    mountSearchInto(map, container);
   });
 }
 

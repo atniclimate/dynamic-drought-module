@@ -4,7 +4,7 @@ import './styles/app.css';
 import type maplibregl from 'maplibre-gl';
 import { createMap } from './map/init';
 import { setMap } from './state/map-store';
-import { applyDeepLink, openStateBriefing } from './state/deep-link';
+import { applyDeepLink } from './state/deep-link';
 import { parseSelectParam } from './state/url';
 import { buildSidebar } from './ui/sidebar';
 import { initHoverInspector } from './ui/hover-inspector';
@@ -12,7 +12,8 @@ import { initMapKey } from './ui/map-key';
 import { buildEnsoDriver } from './ui/enso-driver';
 import { initMobileSheet } from './ui/mobile-sheet';
 import { initViewShell } from './ui/view-shell';
-import { isCurrentBriefingIntent, nextBriefingIntent } from './ui/impact-panel';
+import { initPlaceEmphasis } from './state/place-emphasis';
+import { initLocatedBoundary } from './state/located-boundary';
 
 /**
  * Dynamic Drought Module (DDM) boot.
@@ -89,6 +90,17 @@ async function boot(): Promise<void> {
   // embed answer "what do the colors mean" without the sidebar legend.
   initMapKey();
 
+  // Selected-place emphasis (U3h, headroom A1): the chosen boundary stays lit
+  // while its popup or briefing is open. This wires only the close seam (clear
+  // on place-selection null); the set side lives in each boundary layer's click
+  // handler and the U3 search-locate path.
+  initPlaceEmphasis(map);
+
+  // The located-boundary highlight (U3d): when the search jumps to a Tribal
+  // land area, it lights that live-fetched geometry so it reads regardless of
+  // the BIA layer's viewport; this wires the clear-on-close seam.
+  initLocatedBoundary(map);
+
   // The ENSO driver line (0.4.0 B2): the one-line climate-driver read under
   // the conditions strip, from the bundled snapshot. Hidden on any failure.
   buildEnsoDriver();
@@ -96,18 +108,10 @@ async function boot(): Promise<void> {
   // The mobile bottom sheet (U2, D-0.7.0-017): below 720px the sidebar
   // becomes the one three-detent sheet; never in embed. Before the view
   // shell, so a Brief boot finds the sheet already seated at half. The
-  // place-picker callback is injected here (the sheet module carries no
-  // deep-link/impact-panel imports); it uses the same yield-guard pattern
-  // as every async briefing opener.
-  initMobileSheet(map, {
-    openPlaceBriefing: (code) => {
-      const intent = nextBriefingIntent();
-      void openStateBriefing(map, code, {
-        fit: true,
-        guard: () => isCurrentBriefingIntent(intent)
-      });
-    }
-  });
+  // at-hand place picker is the ONE shared search (U3), which the sheet
+  // mounts lazily on activation, so no deep-link/impact-panel callback is
+  // injected here anymore.
+  initMobileSheet(map);
 
   // The two doors (U1, D-ARCH-002): mode chrome, the Brief head, and the
   // answer-first boot. After the sidebar (which seeds the mode from the

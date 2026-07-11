@@ -29,6 +29,7 @@ import { STATE_OUTLINE_COLOR } from '../config/palette';
 import { buildStatePopupHtml } from '../ui/popups';
 import { attachImpactTrigger } from '../ui/impact-panel';
 import { buildBoundaryContext } from '../impact/context';
+import { emphasizePlace } from '../state/place-emphasis';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 
@@ -113,7 +114,9 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   map.addSource(SOURCE_ID, {
     type: 'geojson',
     data: geojson,
-    attribution: 'US Census Bureau'
+    attribution: 'US Census Bureau',
+    // Stable per-feature ids for the selected-place emphasis (U3h).
+    generateId: true
   });
 
   if (features.length === 0) {
@@ -132,8 +135,16 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       type: 'fill',
       source: SOURCE_ID,
       paint: {
+        // Transparent hit area by default; the selected state (U3h) takes a
+        // faint slate tint so the chosen reference frame reads under an open
+        // briefing without competing with the thematic surface.
         'fill-color': STATE_OUTLINE_COLOR,
-        'fill-opacity': 0
+        'fill-opacity': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false],
+          0.08,
+          0
+        ]
       }
     },
     beforeId
@@ -146,8 +157,18 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       source: SOURCE_ID,
       paint: {
         'line-color': STATE_OUTLINE_COLOR,
-        'line-width': 1,
-        'line-opacity': 0.7
+        'line-width': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false],
+          2.4,
+          1
+        ],
+        'line-opacity': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false],
+          1,
+          0.7
+        ]
       }
     },
     beforeId
@@ -180,6 +201,7 @@ export function bindPopups(map: maplibregl.Map): void {
   map.on('click', FILL_LAYER_ID, (e) => {
     const feature = e.features?.[0];
     if (!feature) return;
+    emphasizePlace(map, SOURCE_ID, feature.id);
     const props: GeoJsonProperties = feature.properties ?? null;
     const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true })
       .setLngLat(e.lngLat)

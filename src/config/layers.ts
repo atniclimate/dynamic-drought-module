@@ -44,6 +44,16 @@ export interface LayerDef {
   readonly role: LayerRole;
   readonly defaultOn: boolean;
   readonly load: () => Promise<LayerModule>;
+  /**
+   * Keys that co-activate with this layer: turning THIS layer on through a user
+   * toggle also turns them on (each stays individually toggleable off
+   * afterward). Applied ONLY on the user-toggle path (`activate`), never on the
+   * URL / deep-link restore path (`applyLayerSet`), so a shared link stays
+   * authoritative about exactly which layers were on. Cascades one level: a
+   * co-activated partner does not re-trigger co-activation. Used by the
+   * wildfire event pair (Active Wildfires + Smoke Plumes, D-0.7.0-018).
+   */
+  readonly coActivateWith?: readonly string[];
 }
 
 /**
@@ -69,9 +79,9 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'treaty', name: 'Treaty Areas', source: 'WA DAHP · bundled GeoJSON', role: 'reference', defaultOn: false, load: () => import('../layers/treaty') },
   { key: 'bia-reservations', name: 'Reservation Boundaries', source: 'BIA · AIAN-LAR (live)', role: 'reference', defaultOn: false, load: () => import('../layers/bia-reservations') },
   { key: 'states', name: 'State Boundaries', source: 'US Census · bundled GeoJSON', role: 'reference', defaultOn: false, load: () => import('../layers/states') },
-  { key: 'nifc-fires', name: 'Active Wildfires (NIFC)', source: 'NIFC WFIGS · FeatureServer', role: 'event', defaultOn: false, load: () => import('../layers/nifc-fires') },
+  { key: 'nifc-fires', name: 'Active Wildfires (NIFC)', source: 'NIFC WFIGS · FeatureServer', role: 'event', defaultOn: false, coActivateWith: ['hms-smoke'], load: () => import('../layers/nifc-fires') },
   { key: 'nws-alerts', name: 'Heat & Fire Weather Alerts', source: 'NOAA NWS · MapServer', role: 'event', defaultOn: false, load: () => import('../layers/nws-alerts') },
-  { key: 'hms-smoke', name: 'Smoke Plumes (HMS)', source: 'NOAA OSPO · FeatureServer', role: 'event', defaultOn: false, load: () => import('../layers/hms-smoke') },
+  { key: 'hms-smoke', name: 'Smoke Plumes (HMS)', source: 'NOAA OSPO · FeatureServer', role: 'event', defaultOn: false, coActivateWith: ['nifc-fires'], load: () => import('../layers/hms-smoke') },
   { key: 'heatrisk', name: 'HeatRisk · Today (Experimental)', source: 'NOAA NWS/WPC · ImageServer', role: 'surface', defaultOn: false, load: () => import('../layers/heatrisk') },
   { key: 'spc-fire-weather', name: 'Fire Weather Outlook (Day 1)', source: 'NOAA SPC · MapServer', role: 'surface', defaultOn: false, load: () => import('../layers/spc-fire-weather') },
   { key: 'usfs-whp', name: 'Wildfire Hazard Potential', source: 'USFS · GeoPlatform', role: 'surface', defaultOn: false, load: () => import('../layers/usfs-whp') },

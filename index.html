@@ -57,15 +57,26 @@
              numbers first, then "what does it mean here". -->
         <section class="panel brief-head" id="brief-head" aria-label="Drought briefing" hidden></section>
 
-        <!-- The sheet's at-hand block (U2): the half detent's Brief content
-             (place title, the current-horizon read, the place picker, the one
-             door to the full report). Filled by src/ui/mobile-sheet.ts;
-             display is stylesheet-gated to the mobile sheet's half detent. -->
-        <section class="panel sheet-at-hand" id="sheet-at-hand" aria-label="At-hand drought answer"></section>
+        <!-- The sheet's at-hand block (U2/U3): the half detent's Brief content
+             (place title, the current-horizon read, the ONE search, the one
+             door to the full report). Display is stylesheet-gated to the
+             mobile sheet's half detent. The body div is rebuilt by
+             renderAtHand() on every briefing push; the search and the report
+             door are STABLE DOM (a Preact search mounted inside an innerHTML
+             rebuild would be wiped), wired once in src/ui/mobile-sheet.ts. -->
+        <section class="panel sheet-at-hand" id="sheet-at-hand" aria-label="At-hand drought answer">
+          <div id="sheet-at-hand-body"></div>
+          <!-- The one search (U3): the same shared component the console
+               catalog and the Brief head mount, replacing the U2 stopgap
+               place <select>. Mounted on first sheet activation (never in
+               embed), so the C1 rule holds. -->
+          <div id="sheet-search" class="sheet-search"></div>
+          <button type="button" id="sheet-report-door" class="sheet-report-door">Read the full report</button>
+        </section>
 
         <section class="panel" id="panel-region">
-          <h2 class="panel-title">Region</h2>
-          <div id="region-buttons" class="region-grid" role="radiogroup" aria-label="Select region"></div>
+          <h2 class="panel-title">Jump to region</h2>
+          <div id="region-buttons" class="region-grid" role="radiogroup" aria-label="Jump to region"></div>
         </section>
 
         <section class="panel" id="panel-quick-views">
@@ -85,13 +96,26 @@
             <h2 class="panel-title">Layers</h2>
             <span id="layer-status" class="status-pill" aria-live="polite"></span>
           </div>
+          <!-- The one search (U3d): mounted here by the island so the console
+               catalog is searchable across places, Tribal land areas, and
+               layers. The Brief head reuses the same component. -->
+          <div id="catalog-search"></div>
           <div id="layer-toggles" class="layer-list"></div>
         </section>
 
+        <!-- Water & Snow (U3f2, D-0.7.0-018): collapsed by default. The
+             featured-station list is opt-in, matching the telemetry layer
+             leaving the default-on set (H4). The heading is a reveal
+             disclosure (button + aria-expanded); revealing is sidebar-local
+             and never touches the telemetry layer. -->
         <section class="panel" id="panel-telemetry">
-          <h2 class="panel-title">Water &amp; Snow</h2>
-          <p class="telemetry-discovery-hint">Stations are discovered in the current map view once you zoom in far enough; at wide zooms the featured stations below are shown and the layer reads "zoom in to load". Where discovery finds more than 50 stations, the nearest 50 are shown.</p>
-          <div id="telemetry-list" class="telemetry-list"></div>
+          <h2 class="panel-title panel-title-reveal">
+            <button type="button" class="panel-reveal" id="telemetry-reveal" aria-expanded="false" aria-controls="telemetry-body">Water &amp; Snow</button>
+          </h2>
+          <div id="telemetry-body" class="panel-reveal-body" hidden>
+            <p class="telemetry-discovery-hint">Stations are discovered in the current map view once you zoom in far enough; at wide zooms the featured stations below are shown and the layer reads "zoom in to load". Where discovery finds more than 50 stations, the nearest 50 are shown.</p>
+            <div id="telemetry-list" class="telemetry-list"></div>
+          </div>
         </section>
 
         <section class="panel legend-panel" id="legend-panel" hidden>
@@ -112,7 +136,7 @@
         <p>Data: OpenStreetMap · NOAA · USGS · BIA · EPA</p>
         <p class="muted">
           <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">atniclimate/dynamic-drought-module</a>
-          · v0.6.6
+          · v0.6.7
         </p>
       </footer>
     </aside>

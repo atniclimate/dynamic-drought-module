@@ -329,7 +329,10 @@ function buildRegionButtons(
     btn.setAttribute('role', 'radio');
     btn.setAttribute('aria-checked', 'false');
     btn.title = region.description;
-    btn.textContent = region.short;
+    // U3e (D-0.7.0-009): the demoted "jump to" list carries full-word region
+    // names (the grid's abbreviated `short` labels are retired); the short
+    // description stays as the hover title.
+    btn.textContent = region.label;
     btn.tabIndex = -1;
     btn.addEventListener('click', () => {
       onRegionSelect(key);
@@ -557,6 +560,25 @@ function buildTelemetryList(map: maplibregl.Map): void {
     });
     container.appendChild(item);
   }
+}
+
+/**
+ * Wire the Water & Snow panel's reveal disclosure (U3f2, D-0.7.0-018). The
+ * telemetry panel is collapsed by default: its featured-station list is
+ * opt-in, matching the telemetry layer leaving the default-on set (H4). The
+ * button toggles the collapsible body and its own `aria-expanded`. This is
+ * sidebar-local presentation only; revealing the panel never activates or
+ * deactivates the telemetry layer.
+ */
+function wireTelemetryReveal(): void {
+  const btn = document.getElementById('telemetry-reveal');
+  const body = document.getElementById('telemetry-body');
+  if (!(btn instanceof HTMLButtonElement) || !body) return;
+  btn.addEventListener('click', () => {
+    const expanded = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+    body.hidden = expanded;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -881,6 +903,7 @@ export function buildSidebar(
   buildRegionButtons(map, handleRegion);
   buildPresetChips(map);
   buildTelemetryList(map);
+  wireTelemetryReveal();
   wireTopLevelEvents(map);
 
   // Mount the view island (the catalog and the conditions strip) from its
@@ -900,9 +923,13 @@ export function buildSidebar(
   let islandPromise: Promise<void> | null = null;
   const ensureIslandMounted = (): Promise<void> => {
     if (!islandPromise) {
-      islandPromise = import('./island')
-        .then(({ mountSidebarIsland }) => {
-          mountSidebarIsland(map, controllerForIsland);
+      // The search controller rides the same lazy chunk as the island (U3d):
+      // it reaches impact / deep-link, which the pure island must not, so it
+      // stays outside the island and is injected as props. Loading it here
+      // keeps it off the entry chunk.
+      islandPromise = Promise.all([import('./island'), import('./search-controller')])
+        .then(([{ mountSidebarIsland }, { buildSearchWiring }]) => {
+          mountSidebarIsland(map, controllerForIsland, buildSearchWiring(map));
         })
         .catch((err: unknown) => {
           console.error('[sidebar] island mount failed:', err);

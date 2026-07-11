@@ -275,7 +275,7 @@ export function createLayerController(
     }
   }
 
-  function activate(key: string): Promise<void> {
+  function activate(key: string, cascade = true): Promise<void> {
     const def = getLayerDef(key);
     if (!def) return Promise.resolve();
     // Surfaces are mutually exclusive: checking a surface first deactivates
@@ -283,7 +283,25 @@ export function createLayerController(
     // off-toggle takes, so the registry (and with it the URL sync and the
     // pills) stays honest.
     if (def.role === 'surface') deactivateOtherSurfaces(def.key);
-    return activateWithIndicator(def);
+    const primary = activateWithIndicator(def);
+    // Co-activation (D-0.7.0-018: the wildfire event pair). Turning a layer on
+    // through a user toggle also turns on its partners, each still individually
+    // toggleable off. `cascade` is false for the partners so the pair activates
+    // one level and never ping-pongs. This lives ONLY here (the user-toggle
+    // path): applyLayerSet and applyPreset name their layers explicitly, so a
+    // deep link or preset stays authoritative about exactly what is on.
+    if (cascade && def.coActivateWith) {
+      for (const partnerKey of def.coActivateWith) {
+        const partner = getLayerDef(partnerKey);
+        if (!partner) continue;
+        const isOn =
+          registry.getActiveKeys().has(partnerKey) || view.isCheckboxChecked(partnerKey);
+        if (isOn) continue;
+        view.setCheckbox(partnerKey, true);
+        void activate(partnerKey, false);
+      }
+    }
+    return primary;
   }
 
   function deactivate(key: string): void {

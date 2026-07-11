@@ -36,9 +36,12 @@
  * active briefing PUSHED here by the impact panel's internals
  * (`setSheetBriefing`); this module never reaches into the briefing
  * lifecycle, so the frozen `openImpactPanel` facade stays the one owner
- * of hydration. The place picker and the report button wire through
- * callbacks injected at init (`SheetDeps`), which keeps this module free
- * of static imports from `deep-link`/`impact-panel` (no import cycle).
+ * of hydration. The place picker is the ONE shared search (U3), mounted
+ * lazily on first sheet activation via `search-controller`; keeping that
+ * import lazy (and off the boot path) is what keeps this module free of
+ * static `deep-link`/`impact-panel` imports (no import cycle) and honors
+ * the C1 rule (an embed, which never activates the sheet, never downloads
+ * the search chunk).
  *
  * Stewardship: the at-hand block renders only what the briefing model
  * carries (title, kind, the current-horizon claim text); nothing is
@@ -48,8 +51,6 @@
 
 import type maplibregl from 'maplibre-gl';
 
-import { STATE_LABEL } from '../impact/resources';
-import type { StateCode } from '../impact/resources';
 import type { ImpactBriefing } from '../impact/types';
 import { getViewMode, onViewModeChange } from '../state/view-mode';
 import { escapeHtml } from '../util/escape';
@@ -60,12 +61,6 @@ import { prefersReducedMotion } from '../util/motion';
 // ---------------------------------------------------------------------------
 
 export type SheetDetent = 'peek' | 'half' | 'full';
-
-/** Callbacks injected at init so this module has no deep-link/impact-panel imports. */
-export interface SheetDeps {
-  /** Open the briefing for a state code (the at-hand place picker). */
-  openPlaceBriefing: (code: StateCode) => void;
-}
 
 /**
  * Nominal detent heights. The peek height and the half fraction are the
@@ -92,12 +87,16 @@ const MIN_DRAG_HEIGHT_PX = 72;
 const SETTLE_FALLBACK_MS = 320;
 
 let mapRef: maplibregl.Map | null = null;
-let deps: SheetDeps | null = null;
 
 let appEl: HTMLElement | null = null;
 let sidebarEl: HTMLElement | null = null;
 let grabberEl: HTMLButtonElement | null = null;
-let atHandEl: HTMLElement | null = null;
+/** The dynamic read region rebuilt on every briefing push (the search and
+ * the report door are stable siblings, so an innerHTML rebuild never wipes
+ * the mounted Preact search). */
+let atHandBodyEl: HTMLElement | null = null;
+/** Guard so the shared search mounts at most once (idempotent activation). */
+let searchMounted = false;
 let liveRegionEl: HTMLElement | null = null;
 let hintEl: HTMLElement | null = null;
 
@@ -422,7 +421,7 @@ function currentHeadline(briefing: ImpactBriefing): string | null {
 }
 
 function renderAtHand(): void {
-  if (!atHandEl) return;
+  if (!atHandBodyEl) return;
   const briefing = sheetBriefing;
   const title = briefing ? briefing.landTitle : 'Pick a place';
   const kind = briefing ? briefing.landKind : '';
@@ -431,41 +430,35 @@ function renderAtHand(): void {
     ? `<p class="sheet-at-hand-headline">${escapeHtml(headline)}</p>`
     : `<p class="sheet-at-hand-headline sheet-at-hand-headline-empty">Open the full report for sourced conditions, outlooks, and resources.</p>`;
 
-  const states = (Object.entries(STATE_LABEL) as Array<[StateCode, string]>).sort((a, b) =>
-    a[1].localeCompare(b[1])
-  );
-  atHandEl.innerHTML = `
+  // Only the dynamic read is rebuilt here; the search and the report door
+  // are stable siblings (see initMobileSheet), so a briefing push never
+  // wipes the mounted search.
+  atHandBodyEl.innerHTML = `
     <p class="sheet-at-hand-kicker">Drought briefing</p>
     <h2 class="sheet-at-hand-title">${escapeHtml(title)}</h2>
     ${kind ? `<p class="sheet-at-hand-kind">${escapeHtml(kind)}</p>` : ''}
     ${headlineHtml}
-    <div class="sheet-at-hand-actions">
-      <label class="sr-only" for="sheet-place-select">See the briefing for</label>
-      <select id="sheet-place-select" class="brief-place-select sheet-place-select">
-        <option value="">Choose a state...</option>
-        ${states
-          .map(([code, name]) => `<option value="${escapeHtml(code)}">${escapeHtml(name)}</option>`)
-          .join('')}
-      </select>
-      <button type="button" id="sheet-report-door" class="sheet-report-door">Read the full report</button>
-    </div>
   `;
+}
 
-  atHandEl.querySelector<HTMLSelectElement>('#sheet-place-select')?.addEventListener(
-    'change',
-    (e) => {
-      const select = e.currentTarget as HTMLSelectElement;
-      const code = select.value;
-      if (!code) return;
-      deps?.openPlaceBriefing(code as StateCode);
-    }
-  );
-  atHandEl.querySelector<HTMLButtonElement>('#sheet-report-door')?.addEventListener(
-    'click',
-    () => {
-      setSheetDetent('full');
-    }
-  );
+/**
+ * Mount the ONE shared search into the sheet's at-hand block, replacing the
+ * U2 stopgap place `<select>`. Called on first sheet activation (guarded to
+ * run once); the sheet activates only on a mobile, non-embed viewport, so the
+ * search-controller chunk (and the island it pulls) never loads for an embed
+ * (the C1 rule). The container is stable DOM, so the mount survives every
+ * `renderAtHand()` rebuild; the component's `useId()` keeps its element ids
+ * distinct from the console-catalog and Brief-head mounts.
+ */
+function mountSheetSearch(): void {
+  if (searchMounted || !mapRef) return;
+  const container = document.getElementById('sheet-search');
+  if (!container) return;
+  searchMounted = true;
+  const map = mapRef;
+  void import('./search-controller').then(({ mountSearchInto }) => {
+    mountSearchInto(map, container);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -510,6 +503,9 @@ function activate(initial?: SheetDetent): void {
   appEl.setAttribute('data-sheet-detent', detent);
   updateGrabberState();
   renderAtHand();
+  // Mount the shared search now (never at boot): the sheet is active only on
+  // a mobile, non-embed viewport, so the C1 rule holds and the chunk is free.
+  mountSheetSearch();
   if (detent === 'peek') showHintOnce();
   // Seed the padding authority immediately from the detent table (the
   // rect is mid-transition here; the settle refines with the measured
@@ -573,13 +569,12 @@ export function revealSheetAtPeek(): void {
  * (which seeds the view mode from the URL) and before the view shell's
  * answer-first open (so a Brief boot finds the sheet already at half).
  */
-export function initMobileSheet(map: maplibregl.Map, sheetDeps: SheetDeps): void {
+export function initMobileSheet(map: maplibregl.Map): void {
   mapRef = map;
-  deps = sheetDeps;
   appEl = document.getElementById('app');
   sidebarEl = document.getElementById('sidebar');
   grabberEl = document.getElementById('sheet-grabber') as HTMLButtonElement | null;
-  atHandEl = document.getElementById('sheet-at-hand');
+  atHandBodyEl = document.getElementById('sheet-at-hand-body');
   if (!appEl || !sidebarEl || !grabberEl) return;
 
   // Publish the shared detent sizes to the stylesheet (the one lookup:
@@ -599,6 +594,12 @@ export function initMobileSheet(map: maplibregl.Map, sheetDeps: SheetDeps): void
 
   // The console half detent's one door to the full catalog stack.
   document.getElementById('sheet-all-layers-btn')?.addEventListener('click', () => {
+    setSheetDetent('full');
+  });
+
+  // The Brief half detent's one door to the standalone report (stable DOM
+  // now, so it is wired once here rather than on every renderAtHand()).
+  document.getElementById('sheet-report-door')?.addEventListener('click', () => {
     setSheetDetent('full');
   });
 

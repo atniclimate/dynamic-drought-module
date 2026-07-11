@@ -31,6 +31,8 @@ import type { LayerController } from '../../state/layer-controller';
 import { checkedSnapshot, onCheckedChange } from './bridge';
 import { Catalog } from './catalog';
 import { ConditionsStrip } from './conditions-strip';
+import { Search } from './search';
+import type { SearchProps } from './search';
 
 /**
  * Mirror of the registry's per-key status map. Rebuilt wholesale on
@@ -50,7 +52,8 @@ function statusSnapshot(): ReadonlyMap<string, LayerStatus> {
 
 export function mountSidebarIsland(
   map: maplibregl.Map,
-  controller: LayerController
+  controller: LayerController,
+  searchProps?: SearchProps
 ): void {
   const checked = signal<ReadonlyMap<string, boolean>>(checkedSnapshot());
   const statuses = signal<ReadonlyMap<string, LayerStatus>>(statusSnapshot());
@@ -94,5 +97,13 @@ export function mountSidebarIsland(
   const metrics = document.getElementById('conditions-metrics');
   if (metrics) {
     render(<ConditionsStrip map={map} tick={tick} checked={checked} />, metrics);
+  }
+
+  // The one search (U3d): mounted into the console catalog when the host
+  // supplies its wiring. Pure props; the routing brain lives in the injected
+  // search-controller, so the island keeps its no-impact-imports contract.
+  const searchContainer = document.getElementById('catalog-search');
+  if (searchContainer && searchProps) {
+    render(<Search {...searchProps} />, searchContainer);
   }
 }

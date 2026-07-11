@@ -136,17 +136,21 @@ export interface TreatyEntry {
   readonly color: string;
 }
 
+// Colors are the magenta-to-violet band of the Tribal-context boundary family
+// (D-0.7.0-019; see the family note below). Each Treaty keeps a distinct hue so
+// adjacent cessions stay tellable apart, but every hue now sits inside the one
+// family instead of the prior red/amber/teal/blue spread.
 export const TREATY_COLORS: ReadonlyArray<TreatyEntry> = [
-  { match: 'Medicine Creek', tribe: null,                                                  color: '#dc2626' },
-  { match: 'Yakama',         tribe: 'Confederated Tribes and Bands of the Yakama Nation',  color: '#8b5cf6' },
-  { match: 'Nez Perce',      tribe: 'Nez Perce Tribe',                                     color: '#f59e0b' },
-  { match: 'Point Elliott',  tribe: null,                                                  color: '#ec4899' },
-  { match: 'Point No Point', tribe: null,                                                  color: '#14b8a6' },
-  { match: 'Quinault',       tribe: 'Quinault Indian Nation',                              color: '#3b82f6' },
-  { match: 'Walla Walla',    tribe: null,                                                  color: '#a855f7' }
+  { match: 'Medicine Creek', tribe: null,                                                  color: '#ec4899' },
+  { match: 'Yakama',         tribe: 'Confederated Tribes and Bands of the Yakama Nation',  color: '#c026d3' },
+  { match: 'Nez Perce',      tribe: 'Nez Perce Tribe',                                     color: '#9333ea' },
+  { match: 'Point Elliott',  tribe: null,                                                  color: '#d946ef' },
+  { match: 'Point No Point', tribe: null,                                                  color: '#a855f7' },
+  { match: 'Quinault',       tribe: 'Quinault Indian Nation',                              color: '#8b5cf6' },
+  { match: 'Walla Walla',    tribe: null,                                                  color: '#7c3aed' }
 ];
 
-export const TREATY_COLOR_DEFAULT = '#f97316';
+export const TREATY_COLOR_DEFAULT = '#c026d3';
 
 /**
  * Find the TREATY_COLORS entry whose `match` is a substring of the feature
@@ -167,21 +171,37 @@ export function pickTreatyColor(name: string | null | undefined): string {
 }
 
 /* ---------------------------------------------------------------------------
- * Bureau of Indian Affairs (BIA) reservation boundaries (AIAN-LAR)
+ * The Tribal-context boundary family (magenta to violet; D-0.7.0-019)
  *
- * The American Indian and Alaska Native Land Area Representation (AIAN-LAR) is
- * fetched live from the authoritative BIA FeatureServer (CLAUDE.md hard rule 1:
- * live consumption, not redistribution). A single administrative-boundary color
- * is used for every classification; the popup surfaces the per-feature
- * CLASSIFICATION value. The indigo hue is chosen to read as an administrative
- * extent and to stay distinct from the Tribal-lands placeholder (deployer-owned,
- * warm orange) and the Treaty outlines (hollow, dashed, violet family).
- * On-map palette tuning is ddm-visual-styling-and-readability territory; these
- * are reasonable starting values, best refined in the browser.
+ * Three layers carry Tribal and Treaty place context: Tribal Lands (bundled,
+ * deployer-populated, empty by default), Treaty Areas (hollow cession-area
+ * outlines, colored by TREATY_COLORS above), and Bureau of Indian Affairs (BIA)
+ * reservation boundaries (American Indian and Alaska Native Land Area
+ * Representation, AIAN-LAR, fetched live per CLAUDE.md hard rule 1: live
+ * consumption, not redistribution). D-0.7.0-019 groups all three into ONE
+ * magenta-to-violet tone family so a reader sees them as related "whose place is
+ * this" layers, distinguished by opacity and line style rather than three
+ * unrelated hues (the prior warm-orange Tribal Lands, seven-hue Treaty spread,
+ * and indigo reservations). The visible reservation surface of record is the
+ * LIVE BIA layer; the bundled Tribal Lands placeholder ships empty (CLAUDE.md
+ * sections 2 and 4), so on the reference deployment the BIA purple is what a
+ * reader actually sees.
+ *
+ * Opacity hierarchy (ddm-visual-styling-and-readability, the 0.3 to 0.6 fill
+ * band): Tribal Lands (deployer-authorized, so fillable) sits highest; BIA
+ * reservations fill lower, as a representation and not a jurisdictional claim;
+ * Treaty Areas stay hollow, their lever the line color and dash, never a fill.
+ * These are starting values, best refined in the browser (that skill owns the
+ * tuning).
  * ------------------------------------------------------------------------- */
 
-export const RESERVATION_FILL_COLOR = '#6366f1';
-export const RESERVATION_OUTLINE_COLOR = '#4f46e5';
+/** Tribal Lands (bundled, deployer-populated). Fuchsia, the brightest of the family. */
+export const TRIBAL_FILL_COLOR = '#c026d3';
+export const TRIBAL_OUTLINE_COLOR = '#a21caf';
+
+/** BIA reservation boundaries (AIAN-LAR, live). Purple, one step toward violet. */
+export const RESERVATION_FILL_COLOR = '#9333ea';
+export const RESERVATION_OUTLINE_COLOR = '#7e22ce';
 
 /* ---------------------------------------------------------------------------
  * United States state boundaries (Census cartographic boundary file)

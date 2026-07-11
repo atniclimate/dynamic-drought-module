@@ -356,6 +356,38 @@ a:hover {
 }
 .panel-title-row .panel-title { margin: 0; }
 
+/* U3f2 (D-0.7.0-018): a panel heading that is a reveal disclosure (the Water
+   & Snow panel is collapsed by default; its featured-station list is opt-in,
+   matching the telemetry layer leaving the default-on set at H4). The button
+   carries the panel-title look; a CSS caret (ASCII-safe, kin to the U3a
+   Sources disclosure) points down when collapsed and flips up when expanded.
+   Revealing is sidebar-local and never touches the telemetry layer. */
+.panel-reveal {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.panel-reveal:hover { color: var(--fg-0); }
+.panel-reveal::after {
+  content: '';
+  margin-left: auto;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  transition: transform 0.12s ease;
+}
+.panel-reveal[aria-expanded='true']::after { transform: rotate(180deg); }
+
 .status-pill {
   font-family: var(--font-body);
   font-feature-settings: 'tnum' 1;
@@ -690,40 +722,46 @@ button.conditions-metric:hover {
    Region selector
    ---------------------------------------------------------------------------- */
 
+/* U3e (D-0.7.0-009): the region selector is demoted from the prominent
+   two-column button grid to a plain, secondary "jump to" list. Brief mode
+   carries place selection as the primary "where" control; this list is the
+   quiet way to jump the map to a preset framing. Rows are transparent list
+   items (not filled buttons) with a quiet accent marker on the active row,
+   so the list reads as secondary and does not compete with the search. The
+   radiogroup semantics (role, roving tabindex, arrow keys) are unchanged. */
 .region-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
 .region-btn {
   appearance: none;
-  background: var(--bg-2);
-  color: var(--fg-1);
-  border: 1px solid var(--line);
+  width: 100%;
+  background: transparent;
+  color: var(--fg-2);
+  border: 0;
   border-radius: var(--radius-sm);
-  padding: 9px 10px;
+  padding: 6px 10px;
   font-family: var(--font-display);
   font-size: 11.5px;
   font-weight: var(--fw-subtitle);
   letter-spacing: 0.02em;
   text-align: left;
   cursor: pointer;
-  transition: all 0.12s ease;
-  line-height: 1.25;
-  min-height: 38px;
+  transition: color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+  line-height: 1.2;
+  min-height: 30px;
   display: flex;
   align-items: center;
 }
 .region-btn:hover {
-  background: var(--bg-3);
-  border-color: var(--line-strong);
+  background: var(--bg-2);
   color: var(--fg-0);
 }
 .region-btn.active {
   background: var(--accent-soft);
   color: var(--fg-0);
-  border-color: var(--accent-strong);
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
@@ -754,6 +792,17 @@ button.conditions-metric:hover {
   border-color: var(--accent);
 }
 .region-briefing-btn[hidden] {
+  display: none;
+}
+
+/* U3e / D-0.7.0-009: the region "jump to" list is a CONSOLE "where" control.
+   In Brief mode the place search (the Brief head) is the one "where" control,
+   so the whole region panel (the list, its heading, and the briefing trigger
+   that lives inside it) is hidden; Brief leads with the answer and its search.
+   The .region-btn elements stay in the DOM (the island pre-mount boot signal
+   counts them), just not displayed. On mobile the sheet detents already gate
+   #panel-region, and console mode is unaffected. */
+#app.view-brief #panel-region {
   display: none;
 }
 
@@ -814,6 +863,10 @@ button.conditions-metric:hover {
 }
 
 .layer-group-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
   font-family: var(--font-display);
   font-size: 10px;
   font-weight: var(--fw-subtitle);
@@ -823,6 +876,7 @@ button.conditions-metric:hover {
   padding: 0 10px;
   margin-bottom: 2px;
 }
+.layer-group-title-text { min-width: 0; }
 
 .layer-group-hint {
   font-family: var(--font-body);
@@ -834,6 +888,49 @@ button.conditions-metric:hover {
   opacity: 0.8;
 }
 .layer-group-hint::before { content: '· '; }
+
+/* Active count per group (U3a): what is live at a glance. The accent is the
+   UI accent, not a data color, so it stays honest under U6's accent
+   discipline. Only shown when at least one layer in the group is on. */
+.layer-group-count {
+  flex-shrink: 0;
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+  font-size: 9.5px;
+  font-weight: var(--fw-body);
+  text-transform: none;
+  letter-spacing: var(--track-pill);
+  color: var(--accent);
+}
+
+/* Per-group "Sources" disclosure (U3a): the provider attribution collapses
+   behind this so the catalog leads with what a layer answers, not the agency
+   that serves it. A CSS caret (ASCII-safe) rotates with aria-expanded. */
+.layer-group-sources-toggle {
+  align-self: flex-start;
+  margin: 3px 0 0 10px;
+  padding: 2px 0;
+  background: none;
+  border: none;
+  font-family: var(--font-body);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--fg-3);
+  cursor: pointer;
+}
+.layer-group-sources-toggle:hover { color: var(--fg-1); }
+.layer-group-sources-toggle::before {
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-right: 5px;
+  border-left: 3px solid currentColor;
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  vertical-align: middle;
+}
+.layer-group-sources-toggle[aria-expanded='true']::before { transform: rotate(90deg); }
 
 .layer-toggle {
   display: flex;
@@ -851,6 +948,15 @@ button.conditions-metric:hover {
   border: 1px solid transparent;
 }
 .layer-toggle:hover { background: var(--bg-2); }
+/* Active-row lighting (U3a, headroom B4): an on layer stays visibly lit so the
+   catalog reads its own state without hunting the pills. Cyan-tinted fill plus
+   a faint accent border; the active hover deepens rather than reverting to the
+   neutral hover. */
+.layer-toggle:has(input:checked) {
+  background: rgba(6, 182, 212, 0.1);
+  border-color: rgba(6, 182, 212, 0.3);
+}
+.layer-toggle:has(input:checked):hover { background: rgba(6, 182, 212, 0.16); }
 
 .layer-toggle input[type="checkbox"] {
   appearance: none;
@@ -1837,28 +1943,17 @@ button.conditions-metric:hover {
   #app[data-sheet-detent='half'].view-console #panel-quick-views,
   #app[data-sheet-detent='half'].view-console #sheet-all-layers { display: block; }
 
-  /* Interim console-half compaction (matrix finding, 2026-07-10): the
-     full region grid overflowed the no-scroll half detent, pushing the
-     quick views and the catalog door below the fold. Compacted here so
-     the ratified content list fits common phones; the REAL fix is U3's
-     grid-to-jump-list demotion (D-0.7.0-009), which retires this block. */
-  #app[data-sheet-detent='half'].view-console #panel-region,
-  #app[data-sheet-detent='half'].view-console #panel-quick-views,
-  #app[data-sheet-detent='half'].view-console #sheet-all-layers {
-    padding: 8px 14px;
-  }
-  #app[data-sheet-detent='half'].view-console .region-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 4px;
-  }
-  #app[data-sheet-detent='half'].view-console .region-btn {
-    min-height: 26px;
-    padding: 4px 6px;
-    font-size: 10px;
-  }
-  #app[data-sheet-detent='half'].view-console .region-briefing-btn {
-    padding: 5px 8px;
-    font-size: 10px;
+  /* U3e (D-0.7.0-009): the region grid is now a plain "jump to" list, so
+     the interim console-half compaction (the 3-column cram + shrunk fonts)
+     is retired. The list would still be taller than the no-scroll half
+     detent with full-word names, so it is bounded and scrolls within its
+     own box (the sheet-search precedent). That keeps the quick views and
+     the one catalog door above the fold on common phones without shrinking
+     type; arrow-key focus auto-scrolls the bounded list into view. */
+  #app[data-sheet-detent='half'].view-console #region-buttons {
+    max-height: 20vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   /* Full, Brief: the standalone report; the map has receded. Until a
@@ -1998,19 +2093,60 @@ button.conditions-metric:hover {
   overflow: hidden;
 }
 .sheet-at-hand-headline-empty { color: var(--fg-2); }
-.sheet-at-hand-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 10px;
+/* The ONE search (U3) inside the sheet's at-hand block, replacing the U2
+   place <select>. The half detent does not scroll as a panel, but the
+   search's own results are a bounded, self-contained dropdown (exactly as
+   the native <select> option list it replaces was): cap the height and let
+   only the results scroll, so a long match list stays reachable without the
+   sheet itself scrolling. */
+.sheet-search { margin-top: 10px; }
+.sheet-search .ddm-search-results {
+  max-height: 22vh;
+  overflow-y: auto;
 }
-.sheet-place-select {
-  flex: 1 1 150px;
-  width: auto;
-  margin-bottom: 0;
-  min-height: 32px;
+.sheet-at-hand > .sheet-report-door { margin-top: 10px; }
+
+/* On short phones the answer, empty-search hint, and door exceed the half
+   detent before results even open. Keep the controls inside the detent and
+   let the bounded results open upward as an overlay, like the native picker
+   this search replaced. */
+@media (max-width: 720px) and (max-height: 800px) {
+  #app[data-sheet-detent='half'].view-brief .sheet-at-hand-headline {
+    -webkit-line-clamp: 1;
+  }
+  #app[data-sheet-detent='half'].view-brief .sheet-search { margin-top: 6px; }
+  /* Hide ONLY the at-rest guidance line (a direct child of .ddm-search, and
+     redundant with the input placeholder) to reclaim the vertical space; the
+     "No matches" zero-result message lives INSIDE .ddm-search-results and must
+     stay visible (the honest, non-blaming copy is deliberate, since Tribal
+     Nation names often will not match agency spellings). */
+  #app[data-sheet-detent='half'].view-brief .sheet-search .ddm-search > .ddm-search-empty {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  #app[data-sheet-detent='half'].view-brief .sheet-search .ddm-search-results {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(100% + 6px);
+    padding: 4px;
+    background: var(--bg-1);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-md);
+    z-index: 1;
+  }
+  #app[data-sheet-detent='half'].view-brief .sheet-at-hand > .sheet-report-door {
+    margin-top: 4px;
+  }
 }
+
 .sheet-report-door {
   min-height: 32px;
   padding: 6px 12px;
@@ -2541,10 +2677,6 @@ a.impact-resource-link::after {
   text-wrap: pretty;
 }
 
-/* A lone odd region button spans both columns instead of leaving a void. */
-.region-grid > :last-child:nth-child(odd) {
-  grid-column: 1 / -1;
-}
 
 /* Bottom fade on the sidebar scroller: a row cut by the fold reads as
    "more below" rather than as a rendering accident. */
@@ -2927,4 +3059,139 @@ a.impact-resource-link::after {
     transition: none !important;
     padding: 0 !important;
   }
+}
+
+/* U3c: the one search (search.tsx)
+   The single input searching Places, Tribal land areas, and Layers
+   (design-lens-product-2026-07-10.md U3: "one search box and one set of
+   grouped results"). Tokens only: --bg-0/1/2, --line, --line-strong,
+   --fg-0/2/3, --accent, --radius-sm/md, the display/body font pair, and
+   the 0.2s ease transition length already used by .layer-toggle and the
+   sidebar's other interactive rows. No new color, radius, or motion
+   literal is introduced here. Self-contained; nothing above this point
+   is touched. */
+
+.ddm-search {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+
+.ddm-search-input {
+  width: 100%;
+  min-height: 28px; /* clears the 24px touch-target floor with room */
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: var(--fw-body);
+  color: var(--fg-0);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 7px 8px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.ddm-search-input::placeholder {
+  color: var(--fg-3);
+}
+
+/* No outline override: the global focus-visible ring (line ~2062) already
+   covers `input` elements; this just adds a matching border/background
+   tint alongside it rather than replacing it. */
+.ddm-search-input:focus {
+  border-color: var(--accent);
+  background: var(--bg-1);
+}
+
+/* Visually hidden but announced: the polite result-count live region. */
+.ddm-search-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ddm-search-empty {
+  margin: 0;
+  padding: 6px 2px;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  font-weight: var(--fw-body);
+  font-style: italic;
+  color: var(--fg-2);
+}
+
+.ddm-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.ddm-search-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ddm-search-group-title {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-3);
+  padding: 4px 2px 2px;
+}
+
+.ddm-search-loading,
+.ddm-search-more {
+  margin: 0;
+  padding: 4px 6px;
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  font-style: italic;
+  color: var(--fg-3);
+}
+
+.ddm-search-result {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 24px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+/* Mouse hover and keyboard highlight share one visual style (corpus rule). */
+.ddm-search-result:hover,
+.ddm-search-result.is-active {
+  background: var(--bg-2);
+  border-color: var(--line-strong);
+}
+
+.ddm-search-result-label {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: var(--fw-subtitle);
+  color: var(--fg-0);
+  display: block;
+}
+
+.ddm-search-result-sublabel {
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  color: var(--fg-2);
+  margin-top: 2px;
+  display: block;
 }

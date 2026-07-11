@@ -29,6 +29,7 @@ import { TREATY_COLOR_DEFAULT, pickTreatyColor } from '../config/palette';
 import { buildTreatyPopupHtml } from '../ui/popups';
 import { attachImpactTrigger } from '../ui/impact-panel';
 import { buildBoundaryContext } from '../impact/context';
+import { emphasizePlace } from '../state/place-emphasis';
 import { registry } from '../state/registry';
 import { fetchWithBudget } from '../util/fetch';
 
@@ -138,7 +139,10 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   if (!map.getSource(SOURCE_ID)) {
     map.addSource(SOURCE_ID, {
       type: 'geojson',
-      data: decorated
+      data: decorated,
+      // Stable per-feature ids for the selected-place emphasis (U3h) without
+      // depending on a deployer-supplied unique field.
+      generateId: true
     });
   } else {
     const existing = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource;
@@ -155,8 +159,20 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       // the expression keeps the layer well-defined if an upstream change
       // ever ships features without the precomputed property.
       'line-color': ['coalesce', ['get', '_color'], TREATY_COLOR_DEFAULT],
-      'line-width': 2.4,
-      'line-opacity': 0.95,
+      // Hollow throughout (a cession-area representation, never a fill); the
+      // selected Treaty (U3h) reads through a heavier, fully opaque line.
+      'line-width': [
+        'case',
+        ['boolean', ['feature-state', 'selected'], false],
+        3.4,
+        2.4
+      ],
+      'line-opacity': [
+        'case',
+        ['boolean', ['feature-state', 'selected'], false],
+        1,
+        0.95
+      ],
       'line-dasharray': [6, 3]
     }
   });
@@ -196,6 +212,7 @@ export function bindPopups(map: maplibregl.Map): void {
   map.on('click', OUTLINE_LAYER_ID, (e) => {
     const feature = e.features && e.features[0];
     if (!feature) return;
+    emphasizePlace(map, SOURCE_ID, feature.id);
 
     const props: GeoJsonProperties = feature.properties ?? {};
     const featureName = pickTreatyName(props) ?? 'Treaty Area';

@@ -24,9 +24,11 @@
 import maplibregl from 'maplibre-gl';
 import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 import { URLS } from '../config/urls';
+import { TRIBAL_FILL_COLOR, TRIBAL_OUTLINE_COLOR } from '../config/palette';
 import { buildTribalPopupHtml } from '../ui/popups';
 import { attachImpactTrigger } from '../ui/impact-panel';
 import { buildBoundaryContext } from '../impact/context';
+import { emphasizePlace } from '../state/place-emphasis';
 import { registry } from '../state/registry';
 import { fetchWithBudget } from '../util/fetch';
 
@@ -119,7 +121,11 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   // full re-activation. Layers are only added when there is data to render.
   map.addSource(SOURCE_ID, {
     type: 'geojson',
-    data: geojson
+    data: geojson,
+    // Stable per-feature ids for the selected-place emphasis (U3h) without
+    // depending on a deployer-supplied unique field (the placeholder ships
+    // empty; a deployer's own polygons may carry only a display name).
+    generateId: true
   });
 
   if (features.length === 0) {
@@ -137,8 +143,17 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       type: 'fill',
       source: SOURCE_ID,
       paint: {
-        'fill-color': '#9a3412',
-        'fill-opacity': 0.25
+        // Fuchsia at the top of the reference fill band: Tribal Lands is
+        // deployer-authorized data, so it may read as the most present of the
+        // magenta family (D-0.7.0-019). Empty by default, so this shows only on
+        // a deployment that has populated tribal-lands.geojson.
+        'fill-color': TRIBAL_FILL_COLOR,
+        'fill-opacity': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false],
+          0.62,
+          0.45
+        ]
       }
     },
     beforeId
@@ -150,9 +165,19 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       type: 'line',
       source: SOURCE_ID,
       paint: {
-        'line-color': '#7c2d12',
-        'line-width': 1.2,
-        'line-opacity': 0.85
+        'line-color': TRIBAL_OUTLINE_COLOR,
+        'line-width': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false],
+          2.6,
+          1.2
+        ],
+        'line-opacity': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false],
+          1,
+          0.85
+        ]
       }
     },
     beforeId
@@ -197,6 +222,7 @@ export function bindPopups(map: maplibregl.Map): void {
   map.on('click', FILL_LAYER_ID, (e) => {
     const feature = e.features?.[0];
     if (!feature) return;
+    emphasizePlace(map, SOURCE_ID, feature.id);
     const props: GeoJsonProperties = feature.properties ?? null;
 
     const popup = new maplibregl.Popup({ closeOnClick: true })

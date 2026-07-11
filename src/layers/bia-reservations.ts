@@ -43,6 +43,7 @@ import {
 import { buildBiaReservationPopupHtml } from '../ui/popups';
 import { attachImpactTrigger } from '../ui/impact-panel';
 import { buildBoundaryContext } from '../impact/context';
+import { emphasizePlace } from '../state/place-emphasis';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 
@@ -153,7 +154,11 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   map.addSource(SOURCE_ID, {
     type: 'geojson',
     data: geojson,
-    attribution: 'BIA AIAN-LAR'
+    attribution: 'BIA AIAN-LAR',
+    // LARID is the stable federal land-area id, so the U3 search can emphasize
+    // a land area it located by LARNAME without a click (U3h). promoteId lifts
+    // it to the feature id feature-state and the click handler both key on.
+    promoteId: 'LARID'
   });
 
   if (features.length === 0) {
@@ -170,8 +175,18 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       type: 'fill',
       source: SOURCE_ID,
       paint: {
+        // The visible reservation surface of record (D-0.7.0-019); lifted from
+        // 0.18 so the magenta reads as primary, still below Tribal Lands in the
+        // family's opacity hierarchy and inside the 0.3-band-adjacent range that
+        // keeps the basemap legible underneath. The selected land area (U3h)
+        // lifts higher so it stays legible under an open briefing.
         'fill-color': RESERVATION_FILL_COLOR,
-        'fill-opacity': 0.18
+        'fill-opacity': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false],
+          0.5,
+          0.26
+        ]
       }
     },
     beforeId
@@ -184,8 +199,18 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       source: SOURCE_ID,
       paint: {
         'line-color': RESERVATION_OUTLINE_COLOR,
-        'line-width': 1.2,
-        'line-opacity': 0.9
+        'line-width': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false],
+          2.6,
+          1.2
+        ],
+        'line-opacity': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false],
+          1,
+          0.9
+        ]
       }
     },
     beforeId
@@ -219,6 +244,7 @@ export function bindPopups(map: maplibregl.Map): void {
   map.on('click', FILL_LAYER_ID, (e) => {
     const feature = e.features?.[0];
     if (!feature) return;
+    emphasizePlace(map, SOURCE_ID, feature.id);
     const props: GeoJsonProperties = feature.properties ?? null;
     const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true })
       .setLngLat(e.lngLat)
