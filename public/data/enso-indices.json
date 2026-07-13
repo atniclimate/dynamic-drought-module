@@ -1,5 +1,5 @@
 {
-  "retrieved": "2026-07-08",
+  "retrieved": "2026-07-13",
   "oni": {
     "source": "NOAA CPC Oceanic Nino Index (ONI)",
     "sourceUrl": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_v5.php",
@@ -389,26 +389,20 @@
   "probabilities": {
     "source": "NOAA CPC official probabilistic ENSO outlook (CPC/IRI consensus)",
     "sourceUrl": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/probabilities/",
-    "issued": "June 2026",
+    "issued": "July 2026",
     "baseline": "1991-2020 climatology, Nino 3.4 region (170-120W, 5S-5N), +/-0.5 C thresholds, verified against the Relative ONI",
     "seasons": [
       {
-        "seas": "MJJ",
-        "laNina": 0,
-        "neutral": 3,
-        "elNino": 97
-      },
-      {
         "seas": "JJA",
         "laNina": 0,
-        "neutral": 1,
-        "elNino": 99
+        "neutral": 0,
+        "elNino": 100
       },
       {
         "seas": "JAS",
         "laNina": 0,
-        "neutral": 1,
-        "elNino": 99
+        "neutral": 0,
+        "elNino": 100
       },
       {
         "seas": "ASO",
@@ -437,14 +431,20 @@
       {
         "seas": "DJF",
         "laNina": 0,
-        "neutral": 1,
-        "elNino": 99
+        "neutral": 0,
+        "elNino": 100
       },
       {
         "seas": "JFM",
         "laNina": 0,
-        "neutral": 2,
-        "elNino": 98
+        "neutral": 1,
+        "elNino": 99
+      },
+      {
+        "seas": "FMA",
+        "laNina": 0,
+        "neutral": 3,
+        "elNino": 97
       }
     ]
   }
