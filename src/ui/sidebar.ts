@@ -97,7 +97,7 @@ import {
   setChecked as bridgeSetChecked
 } from './island/bridge';
 import { bindLayerToggleController, requestLayerOn } from './layer-toggle-command';
-import { isSheetActive, revealSheetAtPeek, setSheetDetent } from './mobile-sheet';
+import { getSheetDetent, isSheetActive, revealSheetAtPeek, setSheetDetent } from './mobile-sheet';
 import { wireShareButton } from './share';
 import { showToast } from './overlay';
 import { escapeHtml } from '../util/escape';
@@ -511,33 +511,60 @@ function buildPresetChips(_map: maplibregl.Map): void {
     // controller; the chip is a thin trigger.
     btn.addEventListener('click', () => {
       controllerRef?.applyPreset(preset);
+      // Mobile shell (the mockup's rule 5): a quick view applies its
+      // preset and closes the sheet so the map answers. Desktop is
+      // untouched (the sheet is never active there).
+      if (isSheetActive()) {
+        const d = getSheetDetent();
+        if (d === 'half' || d === 'full') setSheetDetent('closed');
+      }
     });
     container.appendChild(btn);
   }
 }
 
 /**
- * Wire the mobile hazard rail (0.7.0 mobile shell). The rail's markup is
- * static in index.html; visibility is stylesheet-gated to the sheet's peek
- * and half detents, so this wiring is inert on desktop and in embed. Each
- * button is the same thin trigger a preset chip is (applyPreset through the
- * one controller; no pressed state, presets set state without locking it),
- * plus one mobile-specific move: the sheet drops to peek, because tapping a
- * hazard is a request to SEE the hazard map, not to read the sheet.
+ * Wire the mobile hazard rail (0.7.0 mobile shell; the ratified 2026-07-11
+ * mockup's lower-right thumb rail). The rail's markup is static in
+ * index.html; visibility is stylesheet-gated to the mobile shell's
+ * map-visible detents, so this wiring is inert on desktop and in embed.
+ * Each button applies its hazard preset through the one controller, and an
+ * open sheet closes to the edgeless map (the mockup: a quick select is a
+ * request to SEE the hazard map). The pressed state REFLECTS the registry
+ * (the rail and the catalog share one state, per the mockup): a button
+ * reads pressed while its surface layer is actually active, so the rail
+ * never claims a hazard the map is not showing.
  */
 function wireHazardRail(): void {
   const rail = document.getElementById('hazard-rail');
   if (!rail) return;
+  const buttons: Array<{ btn: HTMLButtonElement; surface: string }> = [];
   for (const btn of rail.querySelectorAll<HTMLButtonElement>('button[data-preset]')) {
     const preset = MOBILE_HAZARD_PRESETS.find((p) => p.key === btn.dataset.preset);
     if (!preset) continue;
     btn.title = preset.description;
     btn.setAttribute('aria-label', preset.description);
+    // The preset's first layer is its condition surface (the table is
+    // ordered surface-first); the pressed state mirrors that layer.
+    const surface = preset.layers[0] ?? '';
+    buttons.push({ btn, surface });
     btn.addEventListener('click', () => {
       controllerRef?.applyPreset(preset);
-      if (isSheetActive()) setSheetDetent('peek');
+      if (isSheetActive()) {
+        const d = getSheetDetent();
+        if (d === 'half' || d === 'full') setSheetDetent('closed');
+      }
     });
   }
+  if (buttons.length === 0) return;
+  const reflect = (): void => {
+    const active = registry.getActiveKeys();
+    for (const { btn, surface } of buttons) {
+      btn.setAttribute('aria-pressed', String(active.has(surface)));
+    }
+  };
+  registry.on('change', reflect);
+  reflect();
 }
 
 // ---------------------------------------------------------------------------

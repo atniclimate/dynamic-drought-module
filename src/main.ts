@@ -111,7 +111,7 @@ async function boot(): Promise<void> {
   // at-hand place picker is the ONE shared search (U3), which the sheet
   // mounts lazily on activation, so no deep-link/impact-panel callback is
   // injected here anymore.
-  initMobileSheet(map);
+  initMobileSheet(map, { deepLinkBoot: select !== null });
 
   // The two doors (U1, D-ARCH-002): mode chrome, the Brief head, and the
   // answer-first boot. After the sidebar (which seeds the mode from the

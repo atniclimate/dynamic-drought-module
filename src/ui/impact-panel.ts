@@ -42,6 +42,7 @@ import {
   restoreSheetDetent,
   setSheetBriefing,
   setSheetDetent,
+  sheetAllowsAutoRaise,
   sheetReportHost
 } from './mobile-sheet';
 import type {
@@ -494,7 +495,15 @@ export function openImpactPanel(context: BoundarySelectionContext): number {
     // sheet stays put.
     if (getViewMode() === 'console') {
       driveSheetForReport('full');
-    } else if (getSheetDetent() === 'peek') {
+    } else if (
+      getSheetDetent() === 'peek' ||
+      (getSheetDetent() === 'closed' && sheetAllowsAutoRaise())
+    ) {
+      // From the map-first closed state (mobile shell) a USER-initiated
+      // Brief briefing open (a boundary tap, a search select, a deep
+      // link) raises the at-hand answer, the mockup's map-tap popup
+      // equivalent; the ANSWER-FIRST BOOT briefing does not (the boot
+      // stays map-first, the answer waits behind the Brief door).
       setSheetDetent('half');
     }
   } else {

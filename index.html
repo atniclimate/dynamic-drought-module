@@ -127,6 +127,16 @@
           <div id="legend-sections"></div>
         </section>
 
+        <!-- The Alerts pane (mobile shell, 2026-07-14): the footer's fourth
+             door. Display is stylesheet-gated to the mobile sheet with the
+             alerts tab active; content renders from the live NWS alerts
+             source in src/ui/sheet-alerts.ts (reflect-the-map: nothing is
+             fetched here that the alerts layer did not already fetch). -->
+        <section class="panel sheet-alerts" id="sheet-alerts" aria-label="Active weather alerts">
+          <h2 class="panel-title">Alerts</h2>
+          <div id="sheet-alerts-body"></div>
+        </section>
+
         <!-- The sheet's report region (U2, the facade merge): below 720px the
              impact panel rehosts here at the full detent, so the standalone
              report is page content inside the one sheet, never a second
@@ -140,7 +150,7 @@
         <p>Data: OpenStreetMap · NOAA · USGS · BIA · EPA</p>
         <p class="muted">
           <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">atniclimate/dynamic-drought-module</a>
-          · v0.6.11
+          · v0.6.12
         </p>
       </footer>
     </aside>
@@ -219,6 +229,33 @@
         </div>
       </div>
     </main>
+
+    <!-- The mobile footer nav (mobile shell, 2026-07-14; from the ratified
+         2026-07-11 mockup): four persistent doors driving the ONE sheet.
+         Display is stylesheet-gated: it exists only while the mobile shell
+         is active (below 720px, never in embed). Brief opens the full
+         report; Place opens the at-hand answer with the one search; Layers
+         opens the console controls; Alerts opens the live alert list.
+         Tapping the active door closes the sheet to the edgeless closed
+         state. Wired in src/ui/mobile-sheet.ts. -->
+    <nav id="mobile-footer-nav" class="mobile-footer" aria-label="Primary">
+      <button type="button" data-tab="brief" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M9 9h6M9 13h6M9 17h4"/></svg>
+        <span>Brief</span>
+      </button>
+      <button type="button" data-tab="place" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6 7-11a7 7 0 0 0-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+        <span>Place</span>
+      </button>
+      <button type="button" data-tab="layers" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>
+        <span>Layers</span>
+      </button>
+      <button type="button" data-tab="alerts" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
+        <span>Alerts</span>
+      </button>
+    </nav>
 
   </div>
 
