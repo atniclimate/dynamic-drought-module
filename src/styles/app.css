@@ -1255,6 +1255,17 @@ button.conditions-metric:hover {
 body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   bottom: 58px;
 }
+
+/* Below MapLibre's 640px auto-compact threshold the attribution collapses
+   to a corner toggle; keep the dock (and the brand badge riding its right
+   edge) clear of that corner. The live 0.6.9 pass caught the badge sitting
+   ON the toggle at 400x600 embed and intercepting its clicks, which locked
+   users out of the data-source disclosure. */
+@media (max-width: 639px) {
+  .map-bottom-dock {
+    right: 56px;
+  }
+}
 .maplibregl-ctrl-attrib a { color: var(--fg-1) !important; }
 
 .maplibregl-ctrl-scale {
