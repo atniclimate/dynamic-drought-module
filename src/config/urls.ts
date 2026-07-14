@@ -488,6 +488,14 @@ export const URLS = Object.freeze({
   // Freshness matches the USDM Thursday release cadence: as of Wednesday
   // 2026-07-08 the latest record was the week ending Tuesday 2026-06-30 (the
   // following week's map, valid through 2026-07-07, had not yet posted).
+  // CORS DRIFT 2026-07-14 (caught by the 0.6.8 publish verification): the
+  // host STOPPED emitting Access-Control-Allow-Origin (three consecutive
+  // probes with a real Origin header, no ACAO, no Vary; both earlier
+  // verifications above recorded ACAO present). The DSCI trend fetch now
+  // rides the Worker proxy (src/impact/sources.ts; ALLOW_LIST entry added
+  // same day), per the vary-origin intermittency doctrine. If a later
+  // probe shows the header restored, KEEP the Worker route: intermittent
+  // CORS is the failure mode the doctrine exists for.
   usdmDataServices: 'https://usdmdataservices.unl.edu/api',
 
   // ---------- USDM per-week archive (0.5.0b temporal axis) ----------

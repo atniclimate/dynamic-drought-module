@@ -87,7 +87,14 @@ const ALLOW_LIST: ReadonlyArray<RegExp> = [
   // Federal GeoPlatform imagery host (USFS Wildfire Hazard Potential
   // ImageServer). Added 2026-07-09 (0.7.0 H3): the upstream's exportImage
   // CORS is intermittent in real browsers, so WHP tiles ride this Worker.
-  /^imagery\.geoplatform\.gov$/i
+  /^imagery\.geoplatform\.gov$/i,
+  // NDMC USDM Data Services (the DSCI drought-severity statistics behind
+  // the impact panel's trend chart). Added 2026-07-14 (the 0.6.8 publish
+  // verification): the upstream emitted Access-Control-Allow-Origin
+  // through 2026-07-08 and has since stopped (three consecutive probes
+  // with a real Origin, no ACAO, no Vary), so the trend fetch rides this
+  // Worker per the vary-origin intermittency doctrine.
+  /^usdmdataservices\.unl\.edu$/i
 ];
 
 const USER_AGENT =

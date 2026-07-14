@@ -220,6 +220,21 @@ async function main() {
     });
   }
 
+  // The DSCI trend THROUGH the Worker (added 2026-07-14 when the upstream
+  // stopped emitting CORS headers and the fetch moved onto the proxy): the
+  // Worker must always inject ACAO on this path, so its absence is a real
+  // failure (a stale Worker deploy missing the usdmdataservices.unl.edu
+  // allow-list entry shows up as HTTP 403 on this row).
+  const usdm = entries.find((e) => e.key === 'usdmDataServices');
+  if (workerProxy && usdm) {
+    const suffix = PROBE_SUFFIXES.get('usdmDataServices') ?? '';
+    entries.push({
+      key: 'workerProxy->usdmDsci',
+      url: `${workerProxy.url}/proxy?url=${encodeURIComponent(usdm.url + suffix)}`,
+      corsRequired: true
+    });
+  }
+
   console.log(`Probing ${entries.length} upstream endpoints (timeout ${TIMEOUT_MS / 1000}s, concurrency ${CONCURRENCY})...\n`);
   const results = await run(entries);
 

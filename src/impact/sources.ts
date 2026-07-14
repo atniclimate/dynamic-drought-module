@@ -236,7 +236,17 @@ export async function fetchDsciTrendClaims(
     enddate: fmtUsdmDate(end),
     statisticsType: '1'
   });
-  const url = `${URLS.usdmDataServices}/StateStatistics/GetDSCI?${params.toString()}`;
+  // Through the Worker proxy since 2026-07-14 (the 0.6.8 publish
+  // verification): the upstream emitted Access-Control-Allow-Origin
+  // through 2026-07-08 and has since stopped, so a direct browser fetch
+  // dies on CORS. The hydromet pattern: no configured Worker (a fork
+  // without one) falls back to the direct call, which degrades to the
+  // honest unavailable note below rather than faking data.
+  const upstream = `${URLS.usdmDataServices}/StateStatistics/GetDSCI?${params.toString()}`;
+  const url =
+    URLS.workerProxy === ''
+      ? upstream
+      : `${URLS.workerProxy}/proxy?url=${encodeURIComponent(upstream)}`;
   const source = 'USDM Data Services (NDMC)';
   const sourceUrl = 'https://droughtmonitor.unl.edu/DmData/DataDownload.aspx';
 
