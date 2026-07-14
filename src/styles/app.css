@@ -1916,7 +1916,13 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
 
 @media (max-width: 720px) {
   /* Detent heights: the one place the attribute becomes a height. */
-  #app[data-sheet-detent='peek'] { --sheet-height: var(--sheet-peek, 132px); }
+  /* Peek grows by the home-indicator inset so its content clears the bar
+     (the sheet carries a matching padding-bottom); half and full are
+     viewport-derived and must NOT grow past the viewport, so the inset
+     lives only here (Codex-sol monitor finding, 2026-07-14). */
+  #app[data-sheet-detent='peek'] {
+    --sheet-height: calc(var(--sheet-peek, 132px) + env(safe-area-inset-bottom, 0px));
+  }
   #app[data-sheet-detent='half'] { --sheet-height: calc(100vh * var(--sheet-half, 0.5)); }
   #app[data-sheet-detent='full'] { --sheet-height: 100vh; }
   @supports (height: 1dvh) {
@@ -1939,6 +1945,11 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
     width: auto;
     max-height: none;
     height: var(--sheet-height, 132px);
+    /* The home-indicator safe area parks below the content at every
+       detent (viewport-fit=cover); only the peek detent's HEIGHT grows
+       by the inset (see the detent definitions above), so full stays
+       exactly the viewport and a drag never double-counts the inset. */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
     z-index: 1350;
     border-right: none;
     border-bottom: none;
@@ -2059,6 +2070,70 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   #app[data-sheet-detent='half'] .map-bottom-dock {
     bottom: calc(var(--sheet-height, 0px) + 10px);
   }
+
+  /* --------------------------------------------------------------------------
+     The mobile hazard rail (0.7.0 mobile shell): the quick hazard
+     selections (Drought / Heat / Fire) in the lower-right thumb zone,
+     riding above the sheet exactly as the dock does. It exists only while
+     the sheet is at peek or half: never on desktop or in embed (the detent
+     attribute never appears there), and never at full, where the map has
+     receded and a map control would be furniture without a map.
+     -------------------------------------------------------------------------- */
+  #app[data-sheet-detent='peek'] .hazard-rail,
+  #app[data-sheet-detent='half'] .hazard-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: absolute;
+    right: 10px;
+    bottom: calc(var(--sheet-height, 0px) + 72px);
+    z-index: 620;
+  }
+}
+
+/* The hazard rail is sheet furniture: parse-time hidden, re-admitted only
+   by the peek/half detent rules above. Buttons are 56px targets (over the
+   44px touch floor), styled on the slate tokens with the cyan accent as
+   the control state (control state is cyan, never hazard-tinted; the map
+   carries the hazard colors). */
+.hazard-rail {
+  display: none;
+}
+.hazard-rail-btn {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 56px;
+  min-height: 56px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  color: var(--fg-1);
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.12s ease;
+}
+.hazard-rail-btn svg {
+  flex-shrink: 0;
+}
+.hazard-rail-btn:hover {
+  background: var(--bg-3);
+  border-color: var(--line-strong);
+  color: var(--fg-0);
+}
+.hazard-rail-btn:active {
+  background: var(--accent-soft);
+  border-color: var(--accent-strong);
+  color: var(--fg-0);
 }
 
 /* The grabber: a real button, the only gesture surface that moves the

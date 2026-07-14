@@ -54,7 +54,7 @@
 import maplibregl from 'maplibre-gl';
 
 import { getLayerDef } from '../config/layers';
-import { VIEW_PRESETS } from '../config/presets';
+import { MOBILE_HAZARD_PRESETS, VIEW_PRESETS } from '../config/presets';
 import {
   REGIONS,
   DEFAULT_REGION,
@@ -97,7 +97,7 @@ import {
   setChecked as bridgeSetChecked
 } from './island/bridge';
 import { bindLayerToggleController, requestLayerOn } from './layer-toggle-command';
-import { revealSheetAtPeek } from './mobile-sheet';
+import { isSheetActive, revealSheetAtPeek, setSheetDetent } from './mobile-sheet';
 import { wireShareButton } from './share';
 import { showToast } from './overlay';
 import { escapeHtml } from '../util/escape';
@@ -516,6 +516,30 @@ function buildPresetChips(_map: maplibregl.Map): void {
   }
 }
 
+/**
+ * Wire the mobile hazard rail (0.7.0 mobile shell). The rail's markup is
+ * static in index.html; visibility is stylesheet-gated to the sheet's peek
+ * and half detents, so this wiring is inert on desktop and in embed. Each
+ * button is the same thin trigger a preset chip is (applyPreset through the
+ * one controller; no pressed state, presets set state without locking it),
+ * plus one mobile-specific move: the sheet drops to peek, because tapping a
+ * hazard is a request to SEE the hazard map, not to read the sheet.
+ */
+function wireHazardRail(): void {
+  const rail = document.getElementById('hazard-rail');
+  if (!rail) return;
+  for (const btn of rail.querySelectorAll<HTMLButtonElement>('button[data-preset]')) {
+    const preset = MOBILE_HAZARD_PRESETS.find((p) => p.key === btn.dataset.preset);
+    if (!preset) continue;
+    btn.title = preset.description;
+    btn.setAttribute('aria-label', preset.description);
+    btn.addEventListener('click', () => {
+      controllerRef?.applyPreset(preset);
+      if (isSheetActive()) setSheetDetent('peek');
+    });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Telemetry list builder
 // ---------------------------------------------------------------------------
@@ -920,6 +944,7 @@ export function buildSidebar(
 
   buildRegionButtons(map, handleRegion);
   buildPresetChips(map);
+  wireHazardRail();
   buildTelemetryList(map);
   wireTelemetryReveal();
   wireTopLevelEvents(map);

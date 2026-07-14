@@ -29,6 +29,39 @@ export interface ViewPreset {
   readonly layers: readonly string[];
 }
 
+/**
+ * The mobile hazard rail's quick selections (0.7.0 mobile shell; from the
+ * 2026-07-11 ideation's hazard rail, built per the maintainer's 2026-07-14
+ * direction with Codex-sol design input). Hazard-named rather than
+ * question-named: on a phone the visitor reaches for "drought", "heat",
+ * "fire", not a temporal frame. Same ViewPreset semantics as the chip row
+ * (REPLACE the active set through the controller; at most one surface;
+ * never locked), and deliberately slim layer sets: the rail's job is the
+ * fastest honest read of one hazard, not a composed view. NOT exclusive
+ * modes: the visitor can still stack layers from the catalog afterward
+ * (the drought to heat to fire combined read stays reachable).
+ */
+export const MOBILE_HAZARD_PRESETS: readonly ViewPreset[] = [
+  {
+    key: 'hazard-drought',
+    label: 'Drought',
+    description: 'Current drought conditions: the weekly US Drought Monitor',
+    layers: ['usdm', 'tribal']
+  },
+  {
+    key: 'hazard-heat',
+    label: 'Heat',
+    description: 'Extreme heat: the NWS HeatRisk forecast with active heat alerts',
+    layers: ['heatrisk', 'nws-alerts', 'tribal']
+  },
+  {
+    key: 'hazard-fire',
+    label: 'Fire',
+    description: 'Wildfire: the SPC fire-weather outlook with active wildfire perimeters',
+    layers: ['spc-fire-weather', 'nifc-fires', 'tribal']
+  }
+];
+
 export const VIEW_PRESETS: readonly ViewPreset[] = [
   {
     key: 'right-now',

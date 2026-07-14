@@ -612,5 +612,25 @@ export function initMobileSheet(map: maplibregl.Map): void {
   });
 
   mql?.addEventListener('change', evaluate);
+
+  // Mobile browser chrome (the address bar, the keyboard) changes the
+  // visual viewport without a layout-intent event; the half detent's
+  // dvh-derived height moves with it while the camera padding was measured
+  // against the old height. A debounced re-settle keeps map.resize() and
+  // the padding authority honest (invariant 7; Codex design pass,
+  // 2026-07-14). Guarded to the active sheet: on desktop and in embed the
+  // detent is null and MapLibre's own container observer already resizes.
+  const vv = window.visualViewport;
+  if (vv) {
+    let vvTimer: number | null = null;
+    vv.addEventListener('resize', () => {
+      if (vvTimer !== null) window.clearTimeout(vvTimer);
+      vvTimer = window.setTimeout(() => {
+        vvTimer = null;
+        if (detent !== null) settle();
+      }, 150);
+    });
+  }
+
   evaluate();
 }

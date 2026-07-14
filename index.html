@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="description" content="Pacific Northwest drought, hydrology, and Tribal Treaty regional mapping. ATNI Climate." />
   <meta name="color-scheme" content="dark" />
   <title>Dynamic Drought Module · ATNI Climate</title>
@@ -140,7 +140,7 @@
         <p>Data: OpenStreetMap · NOAA · USGS · BIA · EPA</p>
         <p class="muted">
           <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">atniclimate/dynamic-drought-module</a>
-          · v0.6.10
+          · v0.6.11
         </p>
       </footer>
     </aside>
@@ -173,6 +173,29 @@
         <button id="reset-btn" class="overlay-btn" title="Reset to selected region bounds">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
           <span>Reset</span>
+        </button>
+      </div>
+
+      <!-- The mobile hazard rail (0.7.0 mobile shell): the quick hazard
+           selections from the 2026-07-11 ideation, seated in the lower-right
+           thumb zone. Display is stylesheet-gated: it exists only while the
+           bottom sheet is at peek or half (so never in embed, never on
+           desktop, and never at full where the map has receded). Each button
+           applies a MOBILE_HAZARD_PRESETS entry through the one layer
+           controller and drops the sheet to peek (you asked for a hazard
+           map; the map should show); wired in src/ui/sidebar.ts. -->
+      <div id="hazard-rail" class="hazard-rail" role="group" aria-label="Quick hazard views">
+        <button type="button" class="hazard-rail-btn" data-preset="hazard-drought">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+          <span>Drought</span>
+        </button>
+        <button type="button" class="hazard-rail-btn" data-preset="hazard-heat">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+          <span>Heat</span>
+        </button>
+        <button type="button" class="hazard-rail-btn" data-preset="hazard-fire">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+          <span>Fire</span>
         </button>
       </div>
 
