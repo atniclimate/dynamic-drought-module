@@ -26,6 +26,7 @@
 import { gzipSync } from 'node:zlib';
 
 /** PMTiles compression enum: 1 = none, 2 = gzip. */
+const COMPRESSION_NONE = 1;
 const COMPRESSION_GZIP = 2;
 /** PMTiles tile-type enum: 1 = MVT (Mapbox Vector Tile). */
 const TILETYPE_MVT = 1;
@@ -114,17 +115,27 @@ function e7(deg) {
  * Build a complete PMTiles version 3 archive.
  *
  * @param {object} opts
- * @param {{tileId:number,data:Buffer}[]} opts.tiles Non-empty tiles, each
- *   already MVT-encoded and gzip-compressed, sorted by ascending tileId.
+ * @param {{tileId:number,data:Buffer}[]} opts.tiles Non-empty tiles, sorted by
+ *   ascending tileId.
  * @param {number} opts.minZoom
  * @param {number} opts.maxZoom
  * @param {[number,number,number,number]} opts.bounds [minLon,minLat,maxLon,maxLat]
  * @param {[number,number,number]} opts.center [lon,lat,zoom]
- * @param {object} opts.metadata JSON metadata (must carry `vector_layers` for
- *   the MVT source so MapLibre learns the source-layer names and fields).
+ * @param {object} opts.metadata JSON metadata.
+ * @param {number} [opts.tileType=1] PMTiles tile type, 1 MVT, 2 PNG.
+ * @param {number} [opts.tileCompression=2] PMTiles tile compression enum.
  * @returns {Buffer} the archive bytes.
  */
-export function writePmtiles({ tiles, minZoom, maxZoom, bounds, center, metadata }) {
+export function writePmtiles({
+  tiles,
+  minZoom,
+  maxZoom,
+  bounds,
+  center,
+  metadata,
+  tileType = TILETYPE_MVT,
+  tileCompression = COMPRESSION_GZIP
+}) {
   // Lay out the tile-data section and the directory entries together. Offsets
   // are relative to the start of the tile-data section, per the specification.
   let runningOffset = 0;
@@ -166,8 +177,8 @@ export function writePmtiles({ tiles, minZoom, maxZoom, bounds, center, metadata
   dv.setBigUint64(88, BigInt(entries.length), true); // tile contents (no dedup)
   dv.setUint8(96, 1); // clustered: tiles written in tile-id order
   dv.setUint8(97, COMPRESSION_GZIP); // internal (directory + metadata) compression
-  dv.setUint8(98, COMPRESSION_GZIP); // tile compression
-  dv.setUint8(99, TILETYPE_MVT);
+  dv.setUint8(98, tileCompression);
+  dv.setUint8(99, tileType);
   dv.setUint8(100, minZoom);
   dv.setUint8(101, maxZoom);
   dv.setInt32(102, e7(bounds[0]), true); // min lon

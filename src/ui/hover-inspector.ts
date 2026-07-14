@@ -30,6 +30,10 @@ const READOUT_ID = 'hover-inspector';
 // small pixel box (not a bare point) so a thin river line is catchable under a
 // slightly-off cursor.
 const STATE_FILL = 'us-states-fill';
+// The municipal labels layer (U4e). Reading it here puts the OFFICIAL place
+// name (okina and macron forms included, D-0.7.0-030 condition 5) on a
+// semantic DOM surface instead of only the canvas label.
+const PLACE_LABELS = 'us-places-labels';
 const ECOREGION_FILLS = ['ecoregions-l4-fill', 'ecoregions-l3-fill'] as const;
 // Both frame-slot fills of the 0.5.0b week scrubber; the hidden slot is
 // visibility 'none' and never matches, so the read is the on-screen week.
@@ -69,7 +73,7 @@ function boxAround(point: maplibregl.Point): [maplibregl.PointLike, maplibregl.P
 
 /**
  * Collect the readout items under the cursor from the active layers, in a
- * where-then-what reading order: state, ecoregion, drought, river.
+ * where-then-what reading order: state, place, ecoregion, drought, river.
  */
 function collectItems(map: maplibregl.Map, point: maplibregl.Point): InspectItem[] {
   const box = boxAround(point);
@@ -79,6 +83,12 @@ function collectItems(map: maplibregl.Map, point: maplibregl.Point): InspectItem
     const f = map.queryRenderedFeatures(box, { layers: [STATE_FILL] })[0];
     const name = firstString(f?.properties ?? null, ['NAME', 'name']);
     if (name) items.push({ label: 'State', value: name });
+  }
+
+  if (map.getLayer(PLACE_LABELS)) {
+    const f = map.queryRenderedFeatures(box, { layers: [PLACE_LABELS] })[0];
+    const name = firstString(f?.properties ?? null, ['name']);
+    if (name) items.push({ label: 'Place', value: name });
   }
 
   for (const id of ECOREGION_FILLS) {

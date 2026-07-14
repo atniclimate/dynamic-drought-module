@@ -33,9 +33,11 @@ import type { StateCode } from '../impact/resources';
 import { buildBoundaryContext, geometryBbox } from '../impact/context';
 import { openStateBriefing } from '../state/deep-link';
 import { showLocatedBoundary } from '../state/located-boundary';
+import { onPlaceSelectionChange } from '../state/place-selection';
 import { fetchWithBudget } from '../util/fetch';
 import { requestLayerOn } from './layer-toggle-command';
 import { isCurrentBriefingIntent, nextBriefingIntent, openImpactPanel } from './impact-panel';
+import { showToast } from './overlay';
 import { Search } from './island/search';
 import type { SearchItem } from './island/search';
 
@@ -74,7 +76,20 @@ function buildSyncItems(): SearchItem[] {
 let tribalCache: SearchItem[] | null = null;
 let tribalInFlight: Promise<SearchItem[]> | null = null;
 
-/** Lazy-load the NAMES-ONLY Tribal land-area index (once, cached). */
+/**
+ * The STRUCTURAL provenance gate (D-0.7.0-026): a Tribal Nation name may
+ * render ONLY from a roster row whose provenance is one of these values.
+ * Any other row (including a row from an older or hand-edited roster with
+ * no provenance field at all) renders the BIA land-area label verbatim.
+ */
+const TRUSTED_PROVENANCE = new Set(['bia-authoritative', 'safe-match']);
+
+/**
+ * Lazy-load the NAMES-ONLY Tribal land-area index (once, cached). REJECTS on
+ * failure (invariant 6: a failed load must surface as "unavailable", never
+ * masquerade as an empty result); the component renders the honest
+ * unavailable line and a later attempt can retry.
+ */
 function loadTribal(): Promise<SearchItem[]> {
   if (tribalCache) return Promise.resolve(tribalCache);
   if (tribalInFlight) return tribalInFlight;
@@ -83,21 +98,25 @@ function loadTribal(): Promise<SearchItem[]> {
       const res = await fetch(ROSTER_URL);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = (await res.json()) as {
-        areas?: Array<{ larName: string; displayName: string; matched?: boolean }>;
+        areas?: Array<{ larName: string; displayName: string; provenance?: string }>;
       };
-      const items: SearchItem[] = (json.areas ?? []).map((a) => ({
-        kind: 'tribal',
-        id: a.larName,
-        label: a.displayName,
-        haystack: norm(`${a.larName} ${a.displayName}`),
-        // exactOptionalPropertyTypes: omit sublabel rather than set undefined.
-        ...(a.displayName !== a.larName ? { sublabel: `Land area: ${a.larName}` } : {})
-      }));
+      const items: SearchItem[] = (json.areas ?? []).map((a) => {
+        const trusted = TRUSTED_PROVENANCE.has(a.provenance ?? '');
+        const label = trusted ? a.displayName : a.larName;
+        return {
+          kind: 'tribal' as const,
+          id: a.larName,
+          label,
+          haystack: norm(`${a.larName} ${label}`),
+          // exactOptionalPropertyTypes: omit sublabel rather than set undefined.
+          ...(label !== a.larName ? { sublabel: `Land area: ${a.larName}` } : {})
+        };
+      });
       tribalCache = items;
       return items;
     } catch (err) {
       console.warn('[search] Tribal roster load failed.', err);
-      return [];
+      throw err instanceof Error ? err : new Error(String(err));
     } finally {
       tribalInFlight = null;
     }
@@ -119,13 +138,35 @@ function combineGeometry(features: readonly Feature[]): Geometry | null {
 }
 
 /**
+ * The master abort for the LARNAME locate (invariant 5): a newer locate
+ * supersedes and CANCELS the prior in-flight request rather than only
+ * dropping its late result.
+ */
+let locateAbort: AbortController | null = null;
+
+// Every selection change supersedes an in-flight locate (invariant 5): the
+// panel closing (selection to null) or a different briefing opening cancels
+// the LARNAME request itself, not merely its late result. The locate's own
+// completion also lands here, but only after its fetch has resolved, where
+// the abort is a no-op.
+onPlaceSelectionChange(() => {
+  locateAbort?.abort();
+  locateAbort = null;
+});
+
+/**
  * Locate a Tribal land area by LARNAME: one live AIAN-LAR query (SQL-escaped),
  * frame the merged extent, light the located geometry, turn on the BIA layer for
  * surrounding context, and open the briefing. Carries the standard briefing
- * intent guard so a newer user action wins any race.
+ * intent guard so a newer user action wins any race, plus a master abort so a
+ * superseded request is actively cancelled. Failures surface honestly as a
+ * toast (invariant 6), never as a silent no-op.
  */
 async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promise<void> {
   const intent = nextBriefingIntent();
+  locateAbort?.abort();
+  const abort = new AbortController();
+  locateAbort = abort;
   const escaped = larName.replace(/'/g, "''");
   const params = new URLSearchParams({
     where: `LARNAME='${escaped}'`,
@@ -138,16 +179,26 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
 
   let fc: FeatureCollection;
   try {
-    const res = await fetchWithBudget(url, null, null, LOCATE_TIMEOUT_MS);
+    const res = await fetchWithBudget(url, null, abort.signal, LOCATE_TIMEOUT_MS);
     if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
     fc = (await res.json()) as FeatureCollection;
   } catch (err) {
     console.warn('[search] LARNAME locate failed.', err);
+    // A deliberate supersede is not an error to report; anything else is
+    // surfaced honestly (the BIA service failed, no result will appear).
+    if (!abort.signal.aborted && isCurrentBriefingIntent(intent)) {
+      showToast('Could not reach the BIA land area service. Try again in a moment.');
+    }
     return;
   }
 
   const features = fc.features ?? [];
-  if (features.length === 0) return;
+  if (features.length === 0) {
+    if (isCurrentBriefingIntent(intent)) {
+      showToast('The BIA land area service returned no boundary for this land area.');
+    }
+    return;
+  }
   if (!isCurrentBriefingIntent(intent)) return;
 
   let bbox: [number, number, number, number] | null = null;
@@ -171,13 +222,17 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
   // Surrounding reservations for context; the located highlight guarantees THIS
   // land area reads regardless of the BIA layer's clipped viewport.
   requestLayerOn('bia-reservations');
-  showLocatedBoundary(map, combineGeometry(features) ?? features[0].geometry);
 
   const primary = features[0];
   const lngLat = bbox
     ? { lng: (bbox[0] + bbox[2]) / 2, lat: (bbox[1] + bbox[3]) / 2 }
     : { lng: 0, lat: 0 };
+  // ORDER MATTERS: the briefing open replaces the place selection, and the
+  // located-boundary module clears its highlight on EVERY selection change
+  // (the stage-5 major 4 fix), so the panel opens first and the highlight for
+  // THIS subject renders after; any prior subject's highlight is gone.
   openImpactPanel(buildBoundaryContext('bia-reservation', primary.properties ?? null, primary.geometry, lngLat));
+  showLocatedBoundary(map, combineGeometry(features) ?? features[0].geometry);
 }
 
 /** Route a chosen search result to its action. */
@@ -188,6 +243,10 @@ function selectResult(map: maplibregl.Map, item: SearchItem): void {
   }
   if (item.kind === 'place') {
     const intent = nextBriefingIntent();
+    // The place briefing sets its selection only after its own fetch, so the
+    // subscription above would fire too late; supersede the locate NOW.
+    locateAbort?.abort();
+    locateAbort = null;
     void openStateBriefing(map, item.id, { fit: true, guard: () => isCurrentBriefingIntent(intent) });
     return;
   }

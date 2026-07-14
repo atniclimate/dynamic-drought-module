@@ -51,7 +51,7 @@ import { escapeHtml } from '../util/escape';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 import { timeline, type UsdmViewMode } from '../state/timeline';
-import { USDM_CATEGORIES } from '../config/palette';
+import { USDM_CATEGORIES, USDM_NONE_SWATCH } from '../config/palette';
 import { requestLayerOn } from '../ui/layer-toggle-command';
 import {
   FrameCache,
@@ -401,7 +401,11 @@ function showAbsoluteLegend(): void {
       renderSwatchLegend(
         body,
         'Drought monitor key',
-        USDM_CATEGORIES.map((c) => ({ color: c.color, label: `${c.code} · ${c.label}` })),
+        // The none swatch leads (U4b): basemap grey is "no drought", a state.
+        [USDM_NONE_SWATCH, ...USDM_CATEGORIES].map((c) => ({
+          color: c.color,
+          label: `${c.code} · ${c.label}`
+        })),
         'U.S. Drought Monitor · observed weekly conditions (NDMC / NOAA / USDA)'
       )
   });

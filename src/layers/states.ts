@@ -157,11 +157,24 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       source: SOURCE_ID,
       paint: {
         'line-color': STATE_OUTLINE_COLOR,
+        // U4c chrome weights (headroom A5): with states default-on, the
+        // outline must stay a quiet reference frame at EVERY zoom: hairline
+        // at the whole-US framing, a touch heavier once a region fills the
+        // view. The selected boost stays a constant that reads against the
+        // interpolated base at any zoom. STRUCTURE MATTERS: MapLibre only
+        // accepts ["zoom"] as input to a TOP-LEVEL step/interpolate, so the
+        // zoom curve wraps the feature-state case, not the other way around
+        // (the inverted form validates but logs a style error and falls
+        // back to the default width; caught by the 2026-07-12 console
+        // inspection).
         'line-width': [
-          'case',
-          ['boolean', ['feature-state', 'selected'], false],
-          2.4,
-          1
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          3,
+          ['case', ['boolean', ['feature-state', 'selected'], false], 2.4, 0.5],
+          8,
+          ['case', ['boolean', ['feature-state', 'selected'], false], 2.4, 1.5]
         ],
         'line-opacity': [
           'case',

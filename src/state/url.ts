@@ -3,6 +3,8 @@ import type { RegionKey } from '../config/regions';
 import { DEFAULT_ON_KEYS, resolveExclusiveSurface } from '../config/layers';
 import { deriveViewMode } from './view-mode';
 import type { ViewMode } from './view-mode';
+import { parseBasemapParam } from './basemap-store';
+import type { BasemapMode } from './basemap-store';
 import {
   parseUsdmMode,
   parseUsdmWeek,
@@ -52,6 +54,9 @@ export interface ParsedUrlParams {
   readonly sstDate: string | null;
   /** Outlook register from `outlook=`; 'seasonal' when absent or invalid. */
   readonly outlookRange: OutlookRange;
+  /** Basemap mode from `basemap=` (U4d, D-0.7.0-031); only the exact
+   * token 'satellite' selects satellite, anything else is 'default'. */
+  readonly basemap: BasemapMode;
 }
 
 /**
@@ -106,7 +111,15 @@ export function parseUrlParams(): ParsedUrlParams {
     usdmWeek: parseUsdmWeek(params.get('week')),
     usdmMode: parseUsdmMode(params.get('dmode')),
     sstDate: parseSstDate(params.get('sst')),
-    outlookRange: parseOutlookRange(params.get('outlook'))
+    outlookRange: parseOutlookRange(params.get('outlook')),
+    // A DUPLICATED basemap parameter is malformed input and pins to the
+    // default in BOTH orders (D-0.7.0-031 edge-case rule; the stage-5
+    // adversarial major 5 caught a first-wins drift here): ambiguity is
+    // rejected, not resolved by position.
+    basemap:
+      params.getAll('basemap').length > 1
+        ? 'default'
+        : parseBasemapParam(params.get('basemap'))
   };
 }
 
@@ -158,6 +171,9 @@ export interface UrlSyncState {
   readonly sstDate?: string | null;
   /** Outlook register; emitted as `outlook=` only when 'monthly'. */
   readonly outlookRange?: OutlookRange;
+  /** Basemap mode; emitted as `basemap=satellite` only when non-default,
+   * so the default URL stays clean (the `view=` pattern, D-0.7.0-031). */
+  readonly basemap?: BasemapMode;
 }
 
 /**
@@ -205,6 +221,9 @@ export function syncUrl(state: UrlSyncState): void {
   }
   if (state.outlookRange === 'monthly') {
     params.set('outlook', state.outlookRange);
+  }
+  if (state.basemap === 'satellite') {
+    params.set('basemap', state.basemap);
   }
 
   const url = window.location.pathname + '?' + params.toString();

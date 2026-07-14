@@ -43,6 +43,7 @@ import {
 import type { LayerDef, LayerModule } from '../config/layers';
 import type { ViewPreset } from '../config/presets';
 import { registry } from './registry';
+import { reassertLabelOrder } from '../map/layer-order';
 import { fadeInLayers, fadeOutLayers } from '../util/layer-fade';
 import { showLoading, hideLoading } from '../ui/overlay';
 
@@ -206,6 +207,10 @@ export function createLayerController(
         // Ease the just-added layers in (no-op for reduced-motion users and
         // for modules without map layers; src/util/layer-fade.ts).
         fadeInLayers(map, mod.fadeLayerIds);
+        // Keep the always-on-top reference labels on top: a surface
+        // activated AFTER the labels appends above them otherwise (the U4
+        // stage-5 adversarial major 2; src/map/layer-order.ts).
+        reassertLabelOrder(map);
         registry.activate(def.key);
       } catch (err) {
         console.error(`Layer "${def.key}" failed to load:`, err);

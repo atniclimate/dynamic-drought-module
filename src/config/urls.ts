@@ -36,9 +36,32 @@ export const URLS = Object.freeze({
   ],
 
   // OSM standard tiles: the active basemap, subdued via raster paint in
-  // `src/map/style.ts`. Pin to `a` for the MapLibre raster source (MapLibre
-  // does not expand the Leaflet `{s}` subdomain placeholder).
-  basemapOSM: 'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  // `src/map/style.ts`. The bare hostname is the OSM tile policy's ONLY
+  // supported form (U4f, policy fetched live 2026-07-12): the legacy a/b/c
+  // sharding subdomains "may be slower or withdrawn without notice".
+  // Policy invariants: never append cache-busting query params to tile
+  // URLs, and never add a Referrer-Policy that strips the Referer from
+  // tile requests (the policy's web-traffic attribution branch).
+  basemapOSM: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+
+  // EOX Sentinel-2 cloudless, the opt-in satellite basemap (U4d,
+  // D-0.7.0-028 ruled 2026-07-14). The unversioned s2cloudless_3857 id IS
+  // the 2016 mosaic (CC BY 4.0; the 2018+ vintages are NC-SA and are NOT
+  // used); no versioned 2016 id exists, so the drift monitor pins the
+  // capabilities text as the vintage tripwire. WMTS RESTful template in
+  // EOX's {z}/{TileRow}/{TileCol} = {z}/{y}/{x} order. Verified live
+  // 2026-07-14: tiles 200 image/jpeg, ACAO wildcard + origin reflection
+  // (browser-safe from Pages origins, no Worker involved); full receipt in
+  // harness/phases/0.7.0/EVIDENCE_EOX_2026-07-14.md. Opt-in only, never
+  // the default (D-0.7.0-005); June 2026 EOxCloudless rebrand is branding
+  // only, tiles.maps.eox.at remains the sanctioned host.
+  basemapSatellite:
+    'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg',
+  // The vintage tripwire target (the D-028 binding condition 1): the
+  // capabilities XML whose s2cloudless layer text must keep identifying
+  // the unversioned id as the 2016 CC BY mosaic.
+  basemapSatelliteCapabilities:
+    'https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml',
 
   // ---------- Hydrography (live OSM via Overpass API) ----------
   // Mirrors are tried in order with a 12s per-call timeout and 350ms
@@ -669,6 +692,15 @@ export const URLS = Object.freeze({
   // `ecoregions-pnw.geojson` above is the legacy placeholder, retained until the
   // ecoregion layer module consumes this bundle.
   ecoregionsPmtilesLocal: import.meta.env.BASE_URL + 'data/ecoregions-pnw.pmtiles',
+  // The PNW hillshade raster-dem archive (U4g, D-0.7.0-012/-029): terrarium
+  // PNG tiles, 512 px, z0-8, whole-meter quantized, baked by
+  // `node scripts/build-hillshade-tiles.mjs` from the USGS 3DEP ImageServer
+  // (public domain; vintage and retrieval in the archive metadata and
+  // harness/phases/0.7.0/HILLSHADE_PIPELINE_REPORT.md). Served same-origin
+  // from Pages exactly like the ecoregion bundle (the D-029 per-asset
+  // selection, 2026-07-14: 33.6 MB fits the Pages path; the z9 build is a
+  // reproducible artifact, not shipped).
+  hillshadePmtilesLocal: import.meta.env.BASE_URL + 'data/hillshade-dem-pnw.pmtiles',
   tribalLandsLocal: import.meta.env.BASE_URL + 'data/tribal-lands.geojson',
   treatyAreasLocal: import.meta.env.BASE_URL + 'data/treaty-areas.geojson',
   // United States state boundaries, baked from the Census Bureau cartographic
@@ -679,6 +711,11 @@ export const URLS = Object.freeze({
   // CLAUDE.md hard rule 1. Provenance is recorded in the file's `metadata`
   // foreign member.
   usStatesLocal: import.meta.env.BASE_URL + 'data/us-states.geojson',
+  // Municipal place labels (U4e; Natural Earth 1:10m populated places,
+  // public domain, US subset; built by scripts/build-places.mjs with the
+  // build-failing glyph gate). Names only plus points; naming policy rides
+  // D-0.7.0-030.
+  usPlacesLocal: import.meta.env.BASE_URL + 'data/us-places.json',
   // ENSO index snapshot (the Oceanic Nino Index and the Relative ONI; built by
   // scripts/build-enso-snapshot.mjs, `npm run build:enso`). Bundled, so the
   // no-CORS CPC sources are read at build time, not by the browser at runtime.

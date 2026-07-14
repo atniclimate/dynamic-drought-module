@@ -55,7 +55,10 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
         type: 'raster',
         tiles: [URLS.basemapOSM],
         tileSize: 256,
-        attribution: '© OpenStreetMap contributors',
+        // The linked form per the OSM attribution guidance (U4f); the
+        // AttributionControl renders HTML.
+        attribution:
+          '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         minzoom: 0,
         maxzoom: 19
       }

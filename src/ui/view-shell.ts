@@ -169,9 +169,13 @@ function buildBriefHead(map: maplibregl.Map): void {
 
 /**
  * Mount the shared search into the Brief head. Gated by the C1 rule: a brief
- * embed never downloads the island / search chunk (an embed exits only to the
- * console, so the Brief head chrome is never the embed's surface). Every other
- * boot has the island mounted already, so the extra chunk is free.
+ * embed never downloads the island / search chunk at BOOT (the Brief head
+ * chrome is not the embed's surface). The embed-exit path (the sidebar
+ * expand control) calls back through `ensureBriefHeadSearch` once the embed
+ * class is gone, so an exited embed gets the head search without a reload
+ * (the U3 stage-5 minor 7 fix). Every other boot has the island mounted
+ * already, so the extra chunk is free. Mounting is idempotent: the search
+ * renders into a dedicated container and a re-render replaces it.
  */
 function mountBriefSearch(map: maplibregl.Map): void {
   const isEmbed = document.getElementById('app')?.classList.contains('embed') ?? false;
@@ -181,6 +185,15 @@ function mountBriefSearch(map: maplibregl.Map): void {
   void import('./search-controller').then(({ mountSearchInto }) => {
     mountSearchInto(map, container);
   });
+}
+
+/**
+ * Public seam for the embed-exit path: mount the Brief-head search if the
+ * boot-time C1 gate skipped it (a brief embed) and the app has since left
+ * embed mode. Safe to call repeatedly.
+ */
+export function ensureBriefHeadSearch(map: maplibregl.Map): void {
+  mountBriefSearch(map);
 }
 
 /**

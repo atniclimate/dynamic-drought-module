@@ -13,6 +13,12 @@ posture in CLAUDE.md section 4 rule 3).
   label the module currently renders (the Nino 3.4 region label). New
   labels that use other scripts need their ranges added here; a missing
   range fails visibly (the label does not draw), never silently.
+- `glyphs/Noto Sans Regular/512-767.pbf`: the Spacing Modifier Letters
+  range carrying the okina (U+02BB), needed by the GNIS-official Hawaiian
+  municipal names (D-0.7.0-030, ruled 2026-07-14; today only Līhuʻe).
+  Downloaded 2026-07-14 from the same MapLibre demotiles endpoint
+  (95,728 bytes, matching the stage-2 audit figure). Lazy at runtime:
+  MapLibre fetches a range file only when a rendered label needs it.
 
 ## Provenance and license
 

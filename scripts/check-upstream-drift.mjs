@@ -84,6 +84,38 @@ const PROBE_SUFFIXES = new Map([
   ['cdmDroughtAreasZipRoot', '/2026/cdm_2605_drought_areas_json.zip']
 ]);
 
+/** Content tripwires: keys whose response BODY must satisfy a validator,
+ * or the probe FAILS even on HTTP 200. A validator returns null when the
+ * body passes, or a human-readable miss description. First use: the
+ * D-0.7.0-028 vintage tripwire. No versioned 2016 EOX id exists, so the
+ * unversioned s2cloudless_3857 id is pinned to the 2016 CC BY mosaic only
+ * by EOX's published capabilities text; if that text stops saying so, the
+ * pin has silently broken and the satellite option must be pulled pending
+ * review (the D-0.7.0-026b evidence-disappears pattern). The check is
+ * SCOPED to the capabilities <Layer> element whose identifier is exactly
+ * s2cloudless_3857 (the stage-5 adversarial medium 10: whole-body
+ * substring search could false-pass on strings surviving elsewhere in a
+ * changed document). Reference text in EVIDENCE_EOX_2026-07-14.md. */
+const CONTENT_TRIPWIRES = new Map([
+  [
+    'basemapSatelliteCapabilities',
+    (body) => {
+      const blocks = body.split('<Layer>').slice(1).map((b) => b.split('</Layer>')[0]);
+      const target = blocks.find((b) =>
+        /<ows:Identifier>\s*s2cloudless_3857\s*<\/ows:Identifier>/.test(b)
+      );
+      if (!target) return 'no <Layer> with identifier s2cloudless_3857';
+      if (!target.includes('for 2016')) {
+        return 'the s2cloudless_3857 layer no longer identifies itself as the 2016 mosaic';
+      }
+      if (!/CC\s*BY|Creative Commons Attribution/i.test(target)) {
+        return 'the s2cloudless_3857 layer no longer declares CC BY';
+      }
+      return null;
+    }
+  ]
+]);
+
 function extractUrls(source) {
   const out = [];
   const re = /^\s*(\w+):\s*\n?\s*'(https:\/\/[^']+)'/gm;
@@ -120,10 +152,17 @@ async function check(entry) {
     const type = resp.headers.get('content-type') ?? '(none)';
     const acao = resp.headers.get('access-control-allow-origin');
     const corsMissing = Boolean(entry.corsRequired) && acao === null;
-    const ok = resp.status < 400 && !corsMissing;
+    let tripwireMiss = null;
+    const tripwire = CONTENT_TRIPWIRES.get(entry.key);
+    if (tripwire && resp.status < 400) {
+      const body = await resp.text();
+      tripwireMiss = tripwire(body);
+    }
+    const ok = resp.status < 400 && !corsMissing && tripwireMiss === null;
     const detail =
       `HTTP ${resp.status} ${type}; cors=${acao ?? 'ABSENT'}` +
-      (corsMissing ? ' (required on this path)' : '');
+      (corsMissing ? ' (required on this path)' : '') +
+      (tripwireMiss !== null ? `; TRIPWIRE: ${tripwireMiss}` : '');
     return { key: entry.key, url, ok, detail };
   } catch (err) {
     const reason = err && err.name === 'AbortError' ? `timeout ${TIMEOUT_MS}ms` : String(err && err.cause ? err.cause : err);
@@ -152,6 +191,18 @@ async function main() {
   if (entries.length === 0) {
     console.error('No https URLs extracted from urls.ts; the extraction regex has drifted.');
     process.exit(1);
+  }
+
+  // A configured tripwire whose key stopped matching an extracted URL is a
+  // DISARMED tripwire, which must fail loudly rather than silently skip
+  // (the stage-5 adversarial medium 10).
+  for (const key of CONTENT_TRIPWIRES.keys()) {
+    if (!entries.some((e) => e.key === key)) {
+      console.error(
+        `Tripwire key "${key}" not found among the extracted urls.ts entries; the tripwire is disarmed.`
+      );
+      process.exit(1);
+    }
   }
 
   // Synthetic probe: the WHP tile THROUGH the Worker proxy, the path

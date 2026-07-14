@@ -89,6 +89,22 @@ let openToken = 0;
  */
 let activeController: AbortController | null = null;
 
+/**
+ * The place selection this panel owns while a briefing is open (the U3
+ * stage-5 majors 3/4 fix). An open REPLACES the store's selection with a
+ * fresh object for the briefing's context, and a close clears the store only
+ * if this panel's selection is still current. Two consequences, both
+ * deliberate: (a) the popup whose close handler guards on ITS selection
+ * object no longer clears the store when the impact trigger removes that
+ * popup, so the feature-state emphasis stays lit for the whole life of the
+ * briefing on desktop; (b) selection-driven surfaces (the located-boundary
+ * highlight, the emphasis, the sheet's at-hand subject) see EVERY subject
+ * change, including search-locate opens that never had a popup, and see the
+ * close even on the mobile Brief path that never registers a popup close
+ * handler.
+ */
+let panelSelection: PlaceSelection | null = null;
+
 // ---------------------------------------------------------------------------
 // Status pill text
 // ---------------------------------------------------------------------------
@@ -453,6 +469,13 @@ export function openImpactPanel(context: BoundarySelectionContext): number {
   const briefing = createBriefingSkeleton(context);
   activeBriefing = briefing;
 
+  // The panel takes ownership of the place selection for this briefing (see
+  // the panelSelection doc comment above; the stage-5 majors 3/4 fix). The
+  // fresh object deliberately differs from any popup's selection object so
+  // the popup-close identity guard stands down.
+  panelSelection = { label: context.title, context };
+  setPlaceSelection(panelSelection);
+
   paint(briefing);
 
   const panel = ensurePanel();
@@ -625,6 +648,16 @@ export function closeImpactPanel(): void {
   openToken++;
   activeBriefing = null;
   setSheetBriefing(null);
+  // Panel-owned selection clear (the stage-5 majors 3/4 fix): closing the
+  // briefing ends the selection, which drops the feature-state emphasis and
+  // the located-boundary highlight through their store seams; this also
+  // covers the mobile Brief path, which never registers a popup close
+  // handler. A NEWER selection (a popup opened after this briefing) is not
+  // clobbered: the identity guard stands down in that case.
+  if (panelSelection !== null && getPlaceSelection() === panelSelection) {
+    setPlaceSelection(null);
+  }
+  panelSelection = null;
   if (activeController) {
     activeController.abort();
     activeController = null;

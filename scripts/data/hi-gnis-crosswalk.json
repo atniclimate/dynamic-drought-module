@@ -1,0 +1,77 @@
+{
+  "_comment": "Authoritative-name crosswalk for the bundled Hawaii rows in public/data/us-places.json, built per decision D-0.7.0-030 (GNIS/BGN-official okina forms, safe matches only). Reference only; does not modify us-places.json or build-places.mjs.",
+  "_source": "USGS Geographic Names Information System (GNIS), Board on Geographic Names official forms",
+  "_sourceDataset": "The National Map, Staged Products, Geographic Names, Domestic Names, State of Hawaii text extract (feature_id|feature_name|feature_class|... pipe-delimited), published 2024-02-01",
+  "_sourceUrl": "https://prd-tnm.s3.amazonaws.com/StagedProducts/GeographicNames/DomesticNames/DomesticNames_HI_Text.zip",
+  "_retrieved": "2026-07-14",
+  "_matchMethod": "ASCII-fold equality + <=15km proximity + HI state, per D-0.7.0-030 condition 1; ambiguous rows keep the baseline name",
+  "_matchMethodDetail": "A row is safe-match only if: (1) the bundled Natural Earth name, NFD-normalized with combining marks and okina/apostrophe variants stripped and case-folded, equals a GNIS feature_name in class Populated Place or Census processed the same way; (2) exactly one such GNIS feature exists statewide; (3) that feature's prim_lat_dec/prim_long_dec sits within 15 km of the bundled point; (4) the feature is in Hawaii. Anything else (no literal-name candidate, or the nearest candidate carries a different name) is ambiguous and keeps the baseline name; no spelling is guessed.",
+  "entries": [
+    {
+      "neName": "Honolulu",
+      "gnisName": "Honolulu",
+      "gnisId": "366212",
+      "gnisFeatureClass": "Populated Place",
+      "gnisCounty": "Honolulu",
+      "distanceKm": 0.39,
+      "sourceUrl": "https://prd-tnm.s3.amazonaws.com/StagedProducts/GeographicNames/DomesticNames/DomesticNames_HI_Text.zip",
+      "status": "safe-match",
+      "note": "GNIS official name identical to the bundled name; no diacritics. BGN-official since 01/01/1954. Check ran and confirmed no change needed."
+    },
+    {
+      "neName": "Hilo",
+      "gnisName": "Hilo",
+      "gnisId": "359187",
+      "gnisFeatureClass": "Populated Place",
+      "gnisCounty": "Hawaii",
+      "distanceKm": 1.96,
+      "sourceUrl": "https://prd-tnm.s3.amazonaws.com/StagedProducts/GeographicNames/DomesticNames/DomesticNames_HI_Text.zip",
+      "status": "safe-match",
+      "note": "GNIS official name identical to the bundled name; no diacritics. BGN-official since 01/01/2001. Check ran and confirmed no change needed."
+    },
+    {
+      "neName": "Kailua-Kona",
+      "gnisName": null,
+      "gnisId": null,
+      "gnisFeatureClass": null,
+      "gnisCounty": null,
+      "distanceKm": null,
+      "sourceUrl": "https://prd-tnm.s3.amazonaws.com/StagedProducts/GeographicNames/DomesticNames/DomesticNames_HI_Text.zip",
+      "status": "ambiguous",
+      "note": "No GNIS feature named literally 'Kailua-Kona' exists in any feature class, statewide. Nearest official Populated Place is GNIS 365355 'Kailua' (Hawaii County), 0.30 km from the bundled point, BGN-official since 01/01/1983; GNIS also carries 2414058 'Kailua Census Designated Place', 1.05 km away. 'Kailua-Kona' is the common and postal disambiguator used to distinguish this place from Kailua, Oahu (GNIS 359894, roughly 300 km away), not the GNIS official feature name. ASCII-fold('Kailua-Kona') does not equal ASCII-fold('Kailua'), so per D-0.7.0-030 condition 1 this is not a safe match. Baseline name retained; no spelling guessed."
+    },
+    {
+      "neName": "Lihue",
+      "gnisName": "Līhuʻe",
+      "gnisId": "361837",
+      "gnisFeatureClass": "Populated Place",
+      "gnisCounty": "Kauai",
+      "distanceKm": 0.48,
+      "sourceUrl": "https://prd-tnm.s3.amazonaws.com/StagedProducts/GeographicNames/DomesticNames/DomesticNames_HI_Text.zip",
+      "status": "safe-match",
+      "note": "Official GNIS form carries U+012B (macron i) and U+02BB (okina). BGN-official since 12/31/2011. Exactly one Populated Place/Census candidate statewide folds to 'lihue'; it sits 0.48 km from the bundled point."
+    },
+    {
+      "neName": "Wahiawa",
+      "gnisName": "Wahiawā",
+      "gnisId": "364420",
+      "gnisFeatureClass": "Populated Place",
+      "gnisCounty": "Honolulu",
+      "distanceKm": 0.29,
+      "sourceUrl": "https://prd-tnm.s3.amazonaws.com/StagedProducts/GeographicNames/DomesticNames/DomesticNames_HI_Text.zip",
+      "status": "safe-match",
+      "note": "Official GNIS form carries U+0101 (macron a) on the final syllable. BGN-official since 01/01/2000. Exactly one Populated Place/Census candidate statewide folds to 'wahiawa'; it sits 0.29 km from the bundled point."
+    },
+    {
+      "neName": "Wailuku",
+      "gnisName": "Wailuku",
+      "gnisId": "364757",
+      "gnisFeatureClass": "Populated Place",
+      "gnisCounty": "Maui",
+      "distanceKm": 0.43,
+      "sourceUrl": "https://prd-tnm.s3.amazonaws.com/StagedProducts/GeographicNames/DomesticNames/DomesticNames_HI_Text.zip",
+      "status": "safe-match",
+      "note": "GNIS official name identical to the bundled name; no diacritics. BGN-official since 01/01/1954. Check ran and confirmed no change needed."
+    }
+  ]
+}

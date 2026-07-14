@@ -138,3 +138,29 @@ export function regionToMapLibreBounds(
   const [[south, west], [north, east]] = region.bounds;
   return [west, south, east, north];
 }
+
+/**
+ * The map's global zoom floor (U4a, 0.7.0). Lives here (a pure config
+ * module) rather than in src/map/init.ts so the fit invariant below is
+ * testable in Node without importing MapLibre.
+ *
+ * The value is set by an ACCEPTANCE CRITERION, not taste (D-0.7.0-018 item
+ * 5, the cartography lens): fitting the national framing's padded bounds
+ * must not be clamped at ANY fixture viewport, and the narrowest fixture
+ * (390 px phones) needs roughly zoom 2.2 for the contiguous-US longitude
+ * span, so the floor is 2. Lowering the floor cannot disturb any region
+ * fit (fitBounds only binds to the floor when its computed target is BELOW
+ * it); the only behavior change is how far a user may manually zoom out.
+ * The spec in tests/u4-opening-map.spec.ts pins the invariant with the
+ * same arithmetic MapLibre uses (512 px world at zoom 0).
+ */
+export const MAP_MIN_ZOOM = 2;
+
+/**
+ * The minimum zoom at which a longitude span fits a viewport width, per
+ * MapLibre's 512 px world tile: degreesPerPixel(z) = 360 / (512 * 2^z).
+ * Exported for the U4a fit-invariant spec.
+ */
+export function zoomToFitLongitudeSpan(spanDegrees: number, viewportPx: number): number {
+  return Math.log2((viewportPx * 360) / (512 * spanDegrees));
+}

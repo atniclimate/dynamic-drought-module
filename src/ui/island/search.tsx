@@ -133,9 +133,15 @@ interface FlatRow {
 
 export function Search(props: SearchProps): preact.JSX.Element {
   const [query, setQuery] = useState('');
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  // The keyboard highlight is keyed by the ITEM (kind + id), never by list
+  // position: the Tribal group resolves asynchronously and inserts ABOVE the
+  // Layers group, so a position-keyed highlight would silently slide onto an
+  // unrelated row when the roster lands (the U3 stage-5 minor 8 fix). If the
+  // highlighted item leaves the list, the highlight collapses to none.
+  const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
   const [tribalItems, setTribalItems] = useState<SearchItem[]>([]);
   const [tribalPending, setTribalPending] = useState(false);
+  const [tribalFailed, setTribalFailed] = useState(false);
   const tribalStarted = useRef(false);
   // A per-instance id prefix so multiple mounts (the console catalog, the Brief
   // head, the mobile sheet) never collide on element ids (invalid HTML that
@@ -143,13 +149,15 @@ export function Search(props: SearchProps): preact.JSX.Element {
   const uid = useId();
 
   // Called once on first focus OR first keystroke, whichever comes first
-  // (the ref guard makes the second caller a no-op). loadTribal is
-  // documented to resolve to [] on failure; the catch is a defensive
-  // fallback to the same honest empty state, never a fake result.
+  // (the ref guard makes the second caller a no-op). loadTribal REJECTS on
+  // failure (invariant 6): the failure renders as an honest "unavailable"
+  // line, never as a fake empty result, and the guard resets so a later
+  // keystroke retries.
   const startTribalLoad = (): void => {
     if (tribalStarted.current) return;
     tribalStarted.current = true;
     setTribalPending(true);
+    setTribalFailed(false);
     props
       .loadTribal()
       .then((loaded) => {
@@ -159,6 +167,8 @@ export function Search(props: SearchProps): preact.JSX.Element {
       .catch(() => {
         setTribalItems([]);
         setTribalPending(false);
+        setTribalFailed(true);
+        tribalStarted.current = false;
       });
   };
 
@@ -183,8 +193,10 @@ export function Search(props: SearchProps): preact.JSX.Element {
   // The Tribal group appears while its load is pending (showing only the
   // loading line) even before any items resolve; once settled, it only
   // appears if it actually has matches (an empty resolve never shows a
-  // heading with nothing under it).
-  const showTribalGroup = !isEmptyQuery && (tribalPending || tribalGroup.visible.length > 0);
+  // heading with nothing under it) OR if the load FAILED (the honest
+  // unavailable line; a service failure is never dressed up as no results).
+  const showTribalGroup =
+    !isEmptyQuery && (tribalPending || tribalFailed || tribalGroup.visible.length > 0);
   const groupsForRender = GROUP_ORDER.map((kind) => {
     if (kind === 'place') return placeGroup;
     if (kind === 'layer') return layerGroup;
@@ -192,8 +204,10 @@ export function Search(props: SearchProps): preact.JSX.Element {
   }).filter((g) => (g.kind === 'tribal' ? showTribalGroup : g.visible.length > 0));
 
   // Flat, ordered, ID-stamped list for keyboard nav and aria-activedescendant.
-  // IDs are position-based within a render; stable enough for the single
-  // purpose they serve (naming the currently highlighted DOM option).
+  // The DOM ids are position-based within a render (they only name the
+  // currently highlighted DOM option for aria-activedescendant); the
+  // HIGHLIGHT itself is keyed by the stable item key so async list changes
+  // never move it to an unrelated row.
   let flatIdx = 0;
   const flatRows: FlatRow[] = [];
   for (const kind of GROUP_ORDER) {
@@ -205,11 +219,13 @@ export function Search(props: SearchProps): preact.JSX.Element {
     }
   }
 
-  // Out-of-range highlights (list shrank under the current highlight)
-  // collapse to "no highlight" rather than clamping to the last row,
-  // which would silently move the selection to an unrelated item.
+  const rowKey = (row: FlatRow): string => `${row.kind}:${row.item.id}`;
+
+  // A highlight whose item left the list (the query changed, the roster
+  // resolved differently) collapses to "no highlight" rather than sliding
+  // to whatever row now occupies its old position.
   const activeIndex =
-    highlightedIndex >= 0 && highlightedIndex < flatRows.length ? highlightedIndex : -1;
+    highlightedKey === null ? -1 : flatRows.findIndex((r) => rowKey(r) === highlightedKey);
   const activeRow = activeIndex >= 0 ? flatRows[activeIndex] : undefined;
 
   const totalMatches = placeMatches.length + tribalMatches.length + layerMatches.length;
@@ -223,9 +239,11 @@ export function Search(props: SearchProps): preact.JSX.Element {
     ? ''
     : tribalPending && totalMatches === 0
       ? 'Loading Tribal land areas.'
-      : totalMatches === 0
-        ? `No matches for "${rawTrimmed}".`
-        : `${totalMatches} result${totalMatches === 1 ? '' : 's'}.`;
+      : tribalFailed && totalMatches === 0
+        ? 'Tribal land area search is unavailable right now.'
+        : totalMatches === 0
+          ? `No matches for "${rawTrimmed}".`
+          : `${totalMatches} result${totalMatches === 1 ? '' : 's'}.`;
 
   const selectItem = (item: SearchItem): void => {
     props.onSelect(item);
@@ -233,13 +251,13 @@ export function Search(props: SearchProps): preact.JSX.Element {
     // renders the guidance line, not a list); the caller navigates away,
     // so the input keeps focus rather than being blurred.
     setQuery('');
-    setHighlightedIndex(-1);
+    setHighlightedKey(null);
   };
 
   const onInput = (event: Event): void => {
     const value = (event.currentTarget as HTMLInputElement).value;
     setQuery(value);
-    setHighlightedIndex(-1);
+    setHighlightedKey(null);
     startTribalLoad();
   };
 
@@ -248,14 +266,16 @@ export function Search(props: SearchProps): preact.JSX.Element {
   };
 
   // Arrow keys clamp at the list boundaries; they do not wrap. From "no
-  // highlight" (-1), either direction lands on the first row: the point
-  // is to bring a highlight into view, not to jump to the far end (my
-  // call, documented per the mission's "your call" allowance).
+  // highlight", either direction lands on the first row: the point is to
+  // bring a highlight into view, not to jump to the far end (my call,
+  // documented per the mission's "your call" allowance). The step computes
+  // over the CURRENT row order but stores the landed row's stable key.
   const moveHighlight = (delta: number): void => {
     if (flatRows.length === 0) return;
     const base = activeIndex < 0 ? -1 : activeIndex;
     const next = Math.min(Math.max(base + delta, 0), flatRows.length - 1);
-    setHighlightedIndex(next);
+    const landed = flatRows[next];
+    if (landed) setHighlightedKey(rowKey(landed));
   };
 
   const onKeyDown = (event: KeyboardEvent): void => {
@@ -273,7 +293,7 @@ export function Search(props: SearchProps): preact.JSX.Element {
     } else if (event.key === 'Escape') {
       event.preventDefault();
       setQuery('');
-      setHighlightedIndex(-1);
+      setHighlightedKey(null);
     }
   };
 
@@ -286,6 +306,11 @@ export function Search(props: SearchProps): preact.JSX.Element {
         </div>
         {group.kind === 'tribal' && tribalPending ? (
           <p class="ddm-search-loading">Loading Tribal land areas...</p>
+        ) : null}
+        {group.kind === 'tribal' && tribalFailed && !tribalPending ? (
+          <p class="ddm-search-unavailable">
+            Tribal land area search is unavailable right now. Places and layers still work.
+          </p>
         ) : null}
         {rows.map((row) => {
           const isActive = activeRow?.id === row.id;

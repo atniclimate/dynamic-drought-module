@@ -78,12 +78,20 @@ export function clearLocatedBoundary(map: maplibregl.Map): void {
 }
 
 /**
- * Wire the close seam: clear the highlight when the place selection clears
- * (briefing closed). Called once at boot. The show side is the search-locate
- * path (search-controller.ts).
+ * Wire the clear seam: the highlight is dropped on EVERY place-selection
+ * change (the U3 stage-5 major 4 fix), not only on the transition to null.
+ * The highlight always depicts the selection that created it, so a close
+ * (null) AND a subject change (a new briefing, a new popup) both invalidate
+ * it. The search-locate path re-renders its highlight AFTER opening the
+ * briefing (which sets the new selection), so its own subject survives this
+ * seam by ordering, and every stale subject is cleared. Called once at boot.
+ * The show side is the search-locate path (search-controller.ts).
+ *
+ * Returns the store unsubscribe so a bounded-lifetime caller (a test) can
+ * drop the subscription; the boot caller ignores it.
  */
-export function initLocatedBoundary(map: maplibregl.Map): void {
-  onPlaceSelectionChange((selection) => {
-    if (!selection) clearLocatedBoundary(map);
+export function initLocatedBoundary(map: maplibregl.Map): () => void {
+  return onPlaceSelectionChange(() => {
+    clearLocatedBoundary(map);
   });
 }

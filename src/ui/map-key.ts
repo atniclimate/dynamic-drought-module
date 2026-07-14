@@ -17,7 +17,7 @@
  */
 
 import { registry } from '../state/registry';
-import { USDM_CATEGORIES } from '../config/palette';
+import { USDM_CATEGORIES, USDM_NONE_SWATCH } from '../config/palette';
 import { escapeHtml } from '../util/escape';
 
 const USDM_KEY = 'usdm';
@@ -29,12 +29,16 @@ export function initMapKey(): void {
 
   host.innerHTML =
     '<span class="map-key-label">Drought</span>' +
-    USDM_CATEGORIES.map(
-      (c) =>
-        `<span class="map-key-item"><span class="map-key-swatch" style="background:${escapeHtml(
-          c.color
-        )}"></span>${escapeHtml(c.code)}</span>`
-    ).join('');
+    // The none swatch leads (U4b): bare basemap grey means "no drought here",
+    // a deliberate state, before the D0-D4 severity ramp.
+    [USDM_NONE_SWATCH, ...USDM_CATEGORIES]
+      .map(
+        (c) =>
+          `<span class="map-key-item"><span class="map-key-swatch" style="background:${escapeHtml(
+            c.color
+          )}"></span>${escapeHtml(c.code)}</span>`
+      )
+      .join('');
 
   const update = (): void => {
     host.hidden = !registry.getActiveKeys().has(USDM_KEY);

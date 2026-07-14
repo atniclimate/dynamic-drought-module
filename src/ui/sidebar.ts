@@ -72,6 +72,7 @@ import {
   openImpactPanel
 } from './impact-panel';
 import { getPlaceSelection, onPlaceSelectionChange } from '../state/place-selection';
+import { ensureBriefHeadSearch } from './view-shell';
 import { prefersReducedMotion } from '../util/motion';
 import {
   fetchAwdbDailySeries,
@@ -87,6 +88,8 @@ import type { LayerStatus } from '../types/layer';
 import { parseUrlParams, syncUrl } from '../state/url';
 import type { ParsedUrlParams } from '../state/url';
 import { getViewMode, onViewModeChange, setViewMode } from '../state/view-mode';
+import { getBasemapMode, onBasemapChange, setBasemapMode } from '../state/basemap-store';
+import { applyBasemapMode } from '../map/basemap-switcher';
 import { timeline } from '../state/timeline';
 import { STATUS_PILL_TEXT } from './island/pill-text';
 import {
@@ -294,7 +297,8 @@ function pushUrl(): void {
     usdmWeek: timeline.usdmWeek,
     usdmMode: timeline.usdmMode,
     sstDate: timeline.sstDate,
-    outlookRange: timeline.outlookRange
+    outlookRange: timeline.outlookRange,
+    basemap: getBasemapMode()
   });
 }
 
@@ -774,9 +778,13 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
       // Expanding always exits embed mode so the user gets the full
       // chrome back. Persist that to the URL so a refresh holds. A brief
       // embed deferred the catalog island (headroom C1); the full chrome
-      // needs it, so mount it now (idempotent).
+      // needs it, so mount it now (idempotent). The Brief-head search was
+      // gated by the same C1 rule at boot, so remount it too (the U3
+      // stage-5 minor 7 fix: without this, a desktop expand from a brief
+      // embed left an empty #brief-search host until a reload).
       STATE.embed = false;
       void mountSidebarIslandNow();
+      ensureBriefHeadSearch(map);
       pushUrl();
       // Below 720px the post-embed chrome is the bottom sheet, revealed
       // at peek (the ratified embed-exit path, D-0.7.0-017); a desktop
@@ -831,6 +839,16 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   timeline.setUsdmMode(params.usdmMode);
   timeline.setSstDate(params.sstDate);
   timeline.setOutlookRange(params.outlookRange);
+
+  // Seed the basemap mode BEFORE the first pushUrl for the same reason as
+  // the view mode: a `basemap=satellite` deep link must survive the first
+  // canonical write. The satellite layer itself rides a lazy chunk, so the
+  // visual switch is kicked off here and settles asynchronously (the
+  // desaturated default paints first; the U1 boot-split precedent).
+  setBasemapMode(params.basemap);
+  if (params.basemap === 'satellite') {
+    void applyBasemapMode(map, 'satellite');
+  }
 
   const app = document.getElementById('app');
   if (app) {
@@ -954,6 +972,10 @@ export function buildSidebar(
   // Temporal-state changes re-sync the URL the same way layer changes do
   // (invariant 2: the selected week / mode / SST frame is shareable state).
   timeline.onChange(pushUrl);
+
+  // Basemap-mode changes are durable shareable state too (U4d,
+  // D-0.7.0-031): `basemap=satellite` must survive every later syncUrl.
+  onBasemapChange(pushUrl);
 
   // The front-door trigger (F3): when a map place is selected or cleared, the
   // region-briefing button relabels to "See what this means" for that place, or

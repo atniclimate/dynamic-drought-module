@@ -26,6 +26,7 @@ import type { GeoJsonProperties } from 'geojson';
 
 import { ECOREGION_COLORS, ECOREGION_DEFAULT_COLOR } from '../config/palette';
 import { URLS } from '../config/urls';
+import { firstLayerIdAbove, BOTTOM_STACK_IDS } from '../map/layer-order';
 import { buildEcoregionPopupHtml } from '../ui/popups';
 import { attachImpactTrigger } from '../ui/impact-panel';
 import { buildBoundaryContext } from '../impact/context';
@@ -245,13 +246,15 @@ function setVisible(map: maplibregl.Map, layerId: string, visible: boolean): voi
  * basemap, which is still the bottom of the overlay stack).
  */
 function bottomOverlayBeforeId(map: maplibregl.Map): string | undefined {
-  const layers = map.getStyle().layers ?? [];
-  for (const l of layers) {
-    if (l.id === 'background' || l.id === 'basemap') continue;
-    if ((ALL_LAYER_IDS as readonly string[]).includes(l.id)) continue;
-    return l.id;
-  }
-  return undefined;
+  // Skip the WHOLE permanent bottom stack (background, basemap, satellite,
+  // hillshade; layer-order.ts), not a hardcoded pair: with satellite or
+  // hillshade activated first, the old two-id skip made them the beforeId
+  // and buried the ecoregions under opaque imagery (the U4 stage-5
+  // adversarial major 2).
+  return firstLayerIdAbove(map, [
+    ...BOTTOM_STACK_IDS,
+    ...(ALL_LAYER_IDS as readonly string[])
+  ]);
 }
 
 /**

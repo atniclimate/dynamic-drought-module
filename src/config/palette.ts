@@ -116,6 +116,22 @@ export const USDM_CATEGORIES: ReadonlyArray<UsdmCategory> = [
   }
 ];
 
+/**
+ * The "none" swatch (U4b, 0.7.0). Areas under no USDM category render as
+ * the bare desaturated basemap, and the design corpus found that grey reads
+ * as "broken", not "drought-free". This entry names that grey in the key so
+ * absence reads as a deliberate state. Kept OUTSIDE `USDM_CATEGORIES`:
+ * consumers index that array by drought level (`USDM_CATEGORIES[dm]`), so a
+ * sixth element would shift the D0-D4 mapping. The color approximates the
+ * desaturated basemap the user actually sees (raster-saturation -0.8 over
+ * OSM), not a data value; it never paints a map fill.
+ */
+export const USDM_NONE_SWATCH: Readonly<{ code: string; label: string; color: string }> = {
+  code: 'None',
+  label: 'No drought',
+  color: '#e2e4e6'
+};
+
 /* ---------------------------------------------------------------------------
  * Treaty area styling
  *
@@ -214,6 +230,33 @@ export const RESERVATION_OUTLINE_COLOR = '#7e22ce';
  * ------------------------------------------------------------------------- */
 
 export const STATE_OUTLINE_COLOR = '#64748b';
+
+/* ---------------------------------------------------------------------------
+ * Municipal place labels (U4e; Natural Earth bundled points)
+ *
+ * Dark slate text with a light halo: the one combination the corpus's
+ * both-basemaps rule accepts unchanged over the desaturated OSM default AND
+ * over satellite imagery (the halo carries the contrast, not the text
+ * color). These are the map-side tokens for label chrome; on-map paint
+ * cannot read CSS custom properties, so palette.ts is their single source.
+ * ------------------------------------------------------------------------- */
+
+export const PLACE_LABEL_COLOR = '#334155';
+export const PLACE_LABEL_HALO = '#f8fafc';
+
+/* ---------------------------------------------------------------------------
+ * Hillshade underlay (U4g)
+ *
+ * SUBTLE by contract (the cartography lens): terrain legibility under the
+ * thematic surfaces, never a competing statement. Slate-family shadow and a
+ * barely-off-white highlight keep the shading neutral against both the
+ * desaturated OSM default and satellite; the low exaggeration constant is
+ * the "subtle" knob and lives here so a design pass tunes one number.
+ * ------------------------------------------------------------------------- */
+
+export const HILLSHADE_SHADOW = '#1e293b';
+export const HILLSHADE_HIGHLIGHT = '#f8fafc';
+export const HILLSHADE_EXAGGERATION = 0.22;
 
 /* ---------------------------------------------------------------------------
  * NWS heat and fire-weather alert polygons
