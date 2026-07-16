@@ -1700,6 +1700,19 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   letter-spacing: 0.01em;
 }
 
+/* The related Treaty & Ceded Lands status slot (Unit I, D-0.7.0-038):
+   hydrated by src/impact/related-cessions.ts once the safe name match
+   against the Royce record resolves. Quiet meta styling; the honest
+   no-match wording is body text, not an error state. */
+.popup-cessions {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: var(--fw-body);
+  color: var(--fg-2);
+  margin-top: 8px;
+  letter-spacing: 0.01em;
+}
+
 /* Custom telemetry markers */
 .telemetry-marker {
   background: transparent;

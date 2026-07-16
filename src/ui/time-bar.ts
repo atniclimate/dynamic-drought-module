@@ -93,6 +93,20 @@ export interface TimeBarSpec {
 let currentOwner: string | null = null;
 let currentSpec: TimeBarSpec | null = null;
 
+/**
+ * The last markup actually swapped into the container. A re-render whose
+ * built markup is IDENTICAL skips the innerHTML swap entirely: the swap
+ * replaces every button mid-gesture, and a user's (or Playwright's) click
+ * whose mousedown and mouseup straddle the swap dispatches no click event
+ * at all (the targets differ, so the event dies on the container). Registry
+ * status flaps re-render the bar far more often than its content changes,
+ * so without this memo a click shortly after an instrument switch could be
+ * silently swallowed (found 2026-07-15 by the temporal-axis suite under a
+ * warm worker; the Unit I session). Handlers read `currentSpec` at event
+ * time, so a skipped swap never pins stale callbacks.
+ */
+let lastRenderedHtml: string | null = null;
+
 function container(): HTMLElement | null {
   return document.getElementById('time-bar');
 }
@@ -145,6 +159,7 @@ function render(): void {
   if (!currentSpec) {
     el.hidden = true;
     el.innerHTML = '';
+    lastRenderedHtml = null;
     return;
   }
 
@@ -225,30 +240,38 @@ function render(): void {
     parts.push('</div>');
   }
 
-  el.innerHTML = parts.join('');
+  // Identical markup: keep the existing DOM and its listeners (the memo
+  // note above; the handlers below read `currentSpec` at event time, so
+  // the freshly installed spec still drives them).
+  const html = parts.join('');
+  if (html === lastRenderedHtml) return;
+  el.innerHTML = html;
+  lastRenderedHtml = html;
 
   // --- wiring ---
+  // Every handler reads `currentSpec` at EVENT time (never the `spec` this
+  // render closed over): a later content-identical render skips the swap
+  // and keeps these listeners, and they must drive the newest callbacks.
   if (spec.rail) {
     const rail = el.querySelector<HTMLInputElement>('.time-bar-rail');
     const step = (delta: number): void => {
-      if (!spec.rail) return;
-      const next = Math.min(
-        spec.rail.count - 1,
-        Math.max(0, spec.rail.index + delta)
-      );
-      if (next !== spec.rail.index) spec.rail.onStep(next);
+      const r = currentSpec?.rail;
+      if (!r) return;
+      const next = Math.min(r.count - 1, Math.max(0, r.index + delta));
+      if (next !== r.index) r.onStep(next);
     };
     rail?.addEventListener('change', () => {
       const v = Number(rail.value);
-      if (Number.isInteger(v)) spec.rail?.onStep(v);
+      if (Number.isInteger(v)) currentSpec?.rail?.onStep(v);
     });
     // `input` fires per notch while dragging; stepping per notch would
     // spam fetches, so the fetch-triggering step waits for `change`
     // (release / arrow key). The valuetext still updates live for SR users.
     rail?.addEventListener('input', () => {
       const v = Number(rail.value);
-      if (spec.rail && Number.isInteger(v)) {
-        rail.setAttribute('aria-valuetext', spec.rail.valueText(v));
+      const r = currentSpec?.rail;
+      if (r && Number.isInteger(v)) {
+        rail.setAttribute('aria-valuetext', r.valueText(v));
       }
     });
     for (const btn of el.querySelectorAll<HTMLButtonElement>('.time-bar-step')) {
@@ -260,7 +283,7 @@ function render(): void {
     for (const btn of el.querySelectorAll<HTMLButtonElement>('.time-bar-jump')) {
       btn.addEventListener('click', () => {
         const key = btn.dataset.jump;
-        if (key) spec.jumps?.onJump(key);
+        if (key) currentSpec?.jumps?.onJump(key);
       });
     }
   }
@@ -269,7 +292,7 @@ function render(): void {
     for (const btn of el.querySelectorAll<HTMLButtonElement>('.time-bar-mode')) {
       btn.addEventListener('click', () => {
         const key = btn.dataset.mode;
-        if (key && key !== spec.modes?.activeKey) spec.modes?.onSelect(key);
+        if (key && key !== currentSpec?.modes?.activeKey) currentSpec?.modes?.onSelect(key);
       });
     }
   }
@@ -277,7 +300,7 @@ function render(): void {
   if (spec.play) {
     el.querySelector<HTMLButtonElement>('[data-play]')?.addEventListener(
       'click',
-      () => spec.play?.onToggle()
+      () => currentSpec?.play?.onToggle()
     );
   }
 

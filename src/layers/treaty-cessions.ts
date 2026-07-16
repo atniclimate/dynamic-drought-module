@@ -44,6 +44,8 @@ import type { Feature, FeatureCollection, GeoJsonProperties, Geometry } from 'ge
 
 import { URLS } from '../config/urls';
 import { TREATY_COLOR_DEFAULT, pickTreatyColor } from '../config/palette';
+import { CESSNUM_PROPERTY, matchCessionFeatures } from '../impact/cession-match';
+import type { CessionMatchQuery } from '../impact/cession-match';
 import { buildTreatyCessionPopupHtml, readTableQualifiedField } from '../ui/popups';
 import { attachImpactTrigger } from '../ui/impact-panel';
 import { buildBoundaryContext } from '../impact/context';
@@ -83,12 +85,10 @@ const OFFSET_PIXEL_TOLERANCE = 0.5;
 /** Decimal places requested for coordinates (`geometryPrecision`). */
 const GEOMETRY_PRECISION = 5;
 
-/**
- * The table-qualified Royce cession number property, promoted to the feature
- * id so selected-place emphasis survives the refresh's setData swaps. The
- * literal must match the service's exact key (see the urls.ts receipt).
- */
-const CESSNUM_PROPERTY = 'edw.s_usa.BdyPol_TribalCededLands.cessnum';
+// CESSNUM_PROPERTY (the table-qualified cession number, promoted to the
+// feature id so emphasis survives the refresh's setData swaps) lives in
+// src/impact/cession-match.ts since Unit I, shared with the matcher so the
+// two literals can never drift.
 
 type Status = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
 
@@ -204,7 +204,8 @@ function resolveMaxAllowableOffset(zoomBucket: number): number {
  */
 function buildQueryUrl(
   envelope: readonly [number, number, number, number],
-  zoomBucket: number
+  zoomBucket: number,
+  opts?: { returnGeometry?: boolean }
 ): string {
   const params = new URLSearchParams({
     where: '1=1',
@@ -214,7 +215,7 @@ function buildQueryUrl(
     outSR: '4326',
     spatialRel: 'esriSpatialRelIntersects',
     outFields: '*',
-    returnGeometry: 'true',
+    returnGeometry: opts?.returnGeometry === false ? 'false' : 'true',
     geometryPrecision: String(GEOMETRY_PRECISION),
     maxAllowableOffset: resolveMaxAllowableOffset(zoomBucket).toFixed(6),
     f: 'geojson'
@@ -370,12 +371,118 @@ function applyFeatureCollection(
   } else {
     addSourceAndLayers(map, decorated);
   }
+  lastAppliedFeatures = decorated.features;
+  refreshRelatedEmphasis(map);
   lastAppliedStatus = opts?.partial
     ? 'degraded'
     : (geojson.features ?? []).length === 0
       ? 'no-data'
       : 'ready';
   reportStatus(lastAppliedStatus);
+}
+
+// =============================================================================
+// Related-cession emphasis (Unit I, D-0.7.0-038 decision 2)
+// =============================================================================
+
+/**
+ * The active related-cession match query (the safe candidate names for the
+ * last clicked Tribal land area), or null when no click drives an emphasis.
+ * The pure matcher re-runs against every applied collection, so related
+ * cessions light up as they enter view and a superseded query's emphasis
+ * never lingers. Cleared only by supersession (a new click, or an explicit
+ * null): toggles and emphasis are user-journey state, not selection state
+ * (design note, docs/design/UNIT_I_RELATED_CESSIONS_2026-07-15.md).
+ */
+let relatedQuery: CessionMatchQuery | null = null;
+
+/** Feature ids currently carrying the `related` feature-state. */
+let relatedIds = new Set<string | number>();
+
+/** The last applied (decorated) feature array, for matcher re-runs. */
+let lastAppliedFeatures: ReadonlyArray<Feature<Geometry, GeoJsonProperties>> = [];
+
+/**
+ * Set (or clear) the related-match query and re-apply the emphasis against
+ * the currently rendered data. Called by src/impact/related-cessions.ts
+ * BEFORE the layer activation it requests, so the first applied collection
+ * already carries the emphasis.
+ */
+export function setRelatedCessionQuery(
+  map: maplibregl.Map,
+  query: CessionMatchQuery | null
+): void {
+  relatedQuery = query;
+  refreshRelatedEmphasis(map);
+}
+
+/** Re-run the matcher over the rendered features; move the feature-state. */
+function refreshRelatedEmphasis(map: maplibregl.Map): void {
+  if (!map.getSource(SOURCE_ID)) {
+    relatedIds = new Set();
+    return;
+  }
+  const result = relatedQuery
+    ? matchCessionFeatures(relatedQuery, lastAppliedFeatures)
+    : null;
+  const next = new Set<string | number>(result?.state === 'matched' ? result.ids : []);
+  for (const id of relatedIds) {
+    if (next.has(id)) continue;
+    try {
+      map.setFeatureState({ source: SOURCE_ID, id }, { related: false });
+    } catch {
+      // The feature left the clipped source data; nothing to clear.
+    }
+  }
+  for (const id of next) {
+    try {
+      map.setFeatureState({ source: SOURCE_ID, id }, { related: true });
+    } catch {
+      // Not in the current source data; the next apply re-runs the matcher.
+    }
+  }
+  relatedIds = next;
+}
+
+/** One probe response: the (geometry-free) features plus the honesty flag. */
+export interface CessionProbeResult {
+  readonly features: ReadonlyArray<Feature<Geometry, GeoJsonProperties>>;
+  readonly truncated: boolean;
+}
+
+/** Coarse fixed zoom bucket for probe queries: geometry is not returned, so
+ * the offset parameter is inert; any stable value keeps the URL cacheable. */
+const PROBE_ZOOM_BUCKET = 5;
+
+/**
+ * Probe the Royce service for cessions intersecting one envelope (the
+ * clicked feature's bounding box), WITHOUT touching the map: no source, no
+ * layer, no registry status. Properties only (`returnGeometry=false`), so a
+ * no-match answer costs a small payload. Same transport doctrine as the
+ * layer fetch: `cache: 'no-store'` (R1; a sovereign host never enters
+ * browser storage), the shared timeout budget, caller-owned abort.
+ */
+export async function probeCessions(
+  envelope: readonly [number, number, number, number],
+  signal: AbortSignal
+): Promise<CessionProbeResult> {
+  const resp = await fetchWithBudget(
+    buildQueryUrl(envelope, PROBE_ZOOM_BUCKET, { returnGeometry: false }),
+    { cache: 'no-store' },
+    signal,
+    FETCH_TIMEOUT_MS
+  );
+  if (!resp.ok) {
+    throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
+  }
+  const raw: unknown = await resp.json();
+  const geojson = assertFeatureCollection(raw);
+  return {
+    features: (geojson.features ?? []) as ReadonlyArray<
+      Feature<Geometry, GeoJsonProperties>
+    >,
+    truncated: isTruncated(raw)
+  };
 }
 
 /**
@@ -400,16 +507,21 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
     paint: {
       'line-color': ['coalesce', ['get', '_color'], TREATY_COLOR_DEFAULT],
       // Hollow throughout (a cession-area representation, never a fill); the
-      // selected cession (U3h) reads through a heavier, fully opaque line.
+      // selected cession (U3h) and the click-related cessions (Unit I,
+      // `related` feature-state) read through a heavier, fully opaque line.
       'line-width': [
         'case',
         ['boolean', ['feature-state', 'selected'], false],
+        3.2,
+        ['boolean', ['feature-state', 'related'], false],
         3.2,
         2
       ],
       'line-opacity': [
         'case',
         ['boolean', ['feature-state', 'selected'], false],
+        1,
+        ['boolean', ['feature-state', 'related'], false],
         1,
         0.95
       ],
@@ -484,6 +596,11 @@ export function deactivate(map: maplibregl.Map): void {
   }
   requestSeq++;
   lastAppliedStatus = null;
+  // The rendered data and its feature-states go with the source; the related
+  // match QUERY survives (a manual re-activation re-lights the same Tribe's
+  // cessions until a new click supersedes it).
+  relatedIds = new Set();
+  lastAppliedFeatures = [];
   if (map.getLayer(OUTLINE_LAYER_ID)) map.removeLayer(OUTLINE_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
 }

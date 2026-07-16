@@ -34,6 +34,7 @@ import { buildBoundaryContext, geometryBbox } from '../impact/context';
 import { openStateBriefing } from '../state/deep-link';
 import { showLocatedBoundary } from '../state/located-boundary';
 import { onPlaceSelectionChange } from '../state/place-selection';
+import { loadTribalRoster, TRUSTED_PROVENANCE } from '../state/tribal-roster';
 import { fetchWithBudget } from '../util/fetch';
 import { requestLayerOn } from './layer-toggle-command';
 import { isCurrentBriefingIntent, nextBriefingIntent, openImpactPanel } from './impact-panel';
@@ -41,7 +42,6 @@ import { showToast } from './overlay';
 import { Search } from './island/search';
 import type { SearchItem } from './island/search';
 
-const ROSTER_URL = import.meta.env.BASE_URL + 'data/tribal-roster.json';
 const LOCATE_TIMEOUT_MS = 12_000;
 
 /** The same normalization the roster build and the search component use. */
@@ -62,6 +62,10 @@ function buildSyncItems(): SearchItem[] {
     items.push({ kind: 'place', id: code, label: name, haystack: norm(`${name} ${code}`) });
   }
   for (const def of LAYER_DEFS) {
+    // A ui-hidden layer (the deployer own-data slots, Unit I / D-0.7.0-038
+    // part 3) is not a public-facing UI feature: no search result either.
+    // The keys stay URL-reachable (?layers=tribal / ?layers=treaty).
+    if (def.uiHidden) continue;
     items.push({
       kind: 'layer',
       id: def.key,
@@ -77,30 +81,20 @@ let tribalCache: SearchItem[] | null = null;
 let tribalInFlight: Promise<SearchItem[]> | null = null;
 
 /**
- * The STRUCTURAL provenance gate (D-0.7.0-026): a Tribal Nation name may
- * render ONLY from a roster row whose provenance is one of these values.
- * Any other row (including a row from an older or hand-edited roster with
- * no provenance field at all) renders the BIA land-area label verbatim.
- */
-const TRUSTED_PROVENANCE = new Set(['bia-authoritative', 'safe-match']);
-
-/**
- * Lazy-load the NAMES-ONLY Tribal land-area index (once, cached). REJECTS on
- * failure (invariant 6: a failed load must surface as "unavailable", never
- * masquerade as an empty result); the component renders the honest
- * unavailable line and a later attempt can retry.
+ * Lazy-load the NAMES-ONLY Tribal land-area index (once, cached) from the
+ * shared roster module (src/state/tribal-roster.ts, which owns the
+ * D-0.7.0-026 structural provenance gate). REJECTS on failure (invariant 6:
+ * a failed load must surface as "unavailable", never masquerade as an empty
+ * result); the component renders the honest unavailable line and a later
+ * attempt can retry.
  */
 function loadTribal(): Promise<SearchItem[]> {
   if (tribalCache) return Promise.resolve(tribalCache);
   if (tribalInFlight) return tribalInFlight;
   tribalInFlight = (async () => {
     try {
-      const res = await fetch(ROSTER_URL);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as {
-        areas?: Array<{ larName: string; displayName: string; provenance?: string }>;
-      };
-      const items: SearchItem[] = (json.areas ?? []).map((a) => {
+      const areas = await loadTribalRoster();
+      const items: SearchItem[] = areas.map((a) => {
         const trusted = TRUSTED_PROVENANCE.has(a.provenance ?? '');
         const label = trusted ? a.displayName : a.larName;
         return {

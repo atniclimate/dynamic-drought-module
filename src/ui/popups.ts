@@ -13,6 +13,8 @@ import type { CwmsLatest } from '../util/cwms';
 import { fetchHydrometDaily, hydrometStationValue } from '../util/hydromet';
 import type { HydrometSeries } from '../util/hydromet';
 import { escapeHtml } from '../util/escape';
+import { readTableQualifiedField } from '../util/table-qualified';
+import { RELATED_CESSIONS_SLOT_HTML } from './cession-wording';
 import {
   fetchUsgsIV,
   extractTimeSeries,
@@ -49,6 +51,10 @@ import { sparklineSvg } from './charts';
  */
 export const IMPACT_TRIGGER_BUTTON_HTML =
   '<button type="button" class="popup-impact-btn" data-ddm-impact-trigger>Drought impact briefing</button>';
+
+// The related Treaty & Ceded Lands slot markup and outcome wording (Unit I,
+// D-0.7.0-038 decision 2) live in src/ui/cession-wording.ts, a leaf module
+// shared with src/impact/related-cessions.ts and the specs.
 
 /**
  * Format a raw acres value (string or number) as a thousands-separated whole
@@ -151,6 +157,7 @@ export function buildBiaReservationPopupHtml(props: GeoJsonProperties): string {
     ${region ? `<div class="popup-treaty-meta">BIA region: ${escapeHtml(String(region))}</div>` : ''}
     ${acresStr ? `<div class="popup-treaty-meta">Acres: ${escapeHtml(acresStr)}</div>` : ''}
     <div class="popup-description">This boundary is the Bureau of Indian Affairs (BIA) administrative representation of reservation and trust land extent (the AIAN-LAR; the BIA publishes no fixed vintage and describes the dataset as continuously updated; service verified live July 15, 2026). It is requested live from the BIA service when the layer needs it, held only in this browser session's memory, and not bundled by this module, for general spatial reference. It is a representation, not a definitive depiction of Tribal jurisdiction; Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority.</div>
+    ${RELATED_CESSIONS_SLOT_HTML}
     ${IMPACT_TRIGGER_BUTTON_HTML}
     <div class="popup-links">
       <a href="https://biamaps.geoplatform.gov/" target="_blank" rel="noopener">BIA GeoPlatform</a>
@@ -226,6 +233,7 @@ export function buildAiannhPopupHtml(props: GeoJsonProperties): string {
     <div class="popup-agency">US Census Bureau · AIANNH (live)</div>
     <div class="popup-treaty-meta">Type: ${escapeHtml(subtype.label)}</div>
     <div class="popup-description">${caveat}</div>
+    ${RELATED_CESSIONS_SLOT_HTML}
     ${IMPACT_TRIGGER_BUTTON_HTML}
     <div class="popup-links">
       <a href="https://www.census.gov/programs-surveys/geography.html" target="_blank" rel="noopener">US Census geography</a>
@@ -257,46 +265,11 @@ export function buildTreatyPopupHtml(props: GeoJsonProperties, featureName: stri
   `;
 }
 
-/**
- * Read a field from a table-qualified property bag, deterministically. The
- * USFS EDW Royce cession service is an ESRI JOIN of two tables, so its
- * GeoJSON property keys arrive FULLY TABLE-QUALIFIED (for example
- * `edw.s_usa.BdyPol_TribalCededLandsTable.presdaytrb`); a bare-name read
- * would silently miss them (see the urls.ts `usfsRoyceCessions` receipt).
- *
- * Resolution order (Codex Unit B2 finding 5: never let upstream property
- * enumeration order pick a value on a stewardship-sensitive surface):
- *   1. exactly ONE key ending `.<suffix>` (case-insensitive): return it;
- *   2. two or more such keys: AMBIGUOUS; return null (the popup omits the
- *      row rather than guessing which joined table's value to show);
- *   3. no suffix match: an exact bare-name key, if present.
- * `endsWith('.<suffix>')` cannot match `mapname1`..`mapname6` when asked for
- * `mapname`. Returns null when the field is absent or empty.
- */
-export function readTableQualifiedField(
-  props: GeoJsonProperties,
-  suffix: string
-): string | null {
-  if (!props) return null;
-  const needle = `.${suffix}`.toLowerCase();
-  const bare = suffix.toLowerCase();
-  let suffixValue: string | null = null;
-  let suffixMatches = 0;
-  let bareValue: string | null = null;
-  for (const [key, value] of Object.entries(props)) {
-    if (value === null || value === undefined || value === '') continue;
-    const k = key.toLowerCase();
-    if (k.endsWith(needle)) {
-      suffixMatches += 1;
-      if (suffixMatches === 1) suffixValue = String(value);
-    } else if (k === bare && bareValue === null) {
-      bareValue = String(value);
-    }
-  }
-  if (suffixMatches === 1) return suffixValue;
-  if (suffixMatches > 1) return null;
-  return bareValue;
-}
+// readTableQualifiedField (the deterministic table-qualified property read;
+// Codex Unit B2 finding 5) lives in src/util/table-qualified.ts since Unit I,
+// shared with the cession matcher; re-exported here for its existing
+// consumers (the treaty-cessions layer).
+export { readTableQualifiedField };
 
 /**
  * Format a Royce cession date (ArcGIS epoch milliseconds; NEGATIVE for the

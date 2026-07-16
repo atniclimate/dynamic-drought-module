@@ -39,13 +39,21 @@ function isOn(key: string): boolean {
 }
 
 /**
- * Turn a layer on if it is not already on. Surface exclusivity, the
- * per-key op chain, the intent guards, and the loading indicator all
- * live in the controller; this command only records the checkbox intent
- * first, as every existing activation path does.
+ * Turn a layer on if the recorded INTENT is not already on. Deliberately
+ * intent-only (never `isOn`): a layer whose off-toggle is still draining
+ * through the per-key op chain is registry-active with its checkbox
+ * unchecked, and during that window a re-on request must proceed, not
+ * silently no-op (found 2026-07-15, the Unit I session: a quick
+ * outlook-to-Observed jump landed in usdm's teardown window and died;
+ * the URL serializes intent, so nothing else re-triggered it). The
+ * controller's serialized op chain and the modules' idempotent activate
+ * contract make the re-entry safe. Surface exclusivity, the per-key op
+ * chain, the intent guards, and the loading indicator all live in the
+ * controller; this command only records the checkbox intent first, as
+ * every existing activation path does.
  */
 export function requestLayerOn(key: string): void {
-  if (isOn(key)) return;
+  if (isChecked(key)) return;
   setChecked(key, true);
   void controller?.activate(key);
 }

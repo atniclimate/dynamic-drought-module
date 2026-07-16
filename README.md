@@ -19,13 +19,14 @@ provider. Every view is a shareable URL.
 **Stewardship comes first.** The module is built so each deployer (a
 Tribal Nation, a state agency, a partner) controls its own copy on its own
 infrastructure. Sovereign-jurisdiction data is never redistributed by this
-repository. The default Tribal-geography layers (Tribal Lands, Reservation
+repository. The live Tribal-geography layers (Tribal Lands, Reservation
 Boundaries, Treaty & Ceded Lands) are fetched LIVE from the publishing
 federal services at view time, held only in the browser session, and never
 bundled; requests run with `cache: 'no-store'` so nothing persists beyond
 the session. Separately, two deployer-owned slots (`tribal`, `treaty`)
 ship as empty placeholders a deployer may populate with its own authorized
-data.
+data; they appear in the interface only when turned on by URL (see the
+layer table below).
 
 > **Treaty boundaries.** Agency polygons are a representation of Treaty
 > cession areas, not a definitive depiction of Tribal jurisdiction. Treaty
@@ -57,10 +58,14 @@ self-hosting and data population.
   statistical geographies including Oklahoma Tribal Statistical Areas),
   Reservation Boundaries (live from the authoritative Bureau of Indian
   Affairs (BIA) AIAN-LAR service), and Treaty & Ceded Lands (live from
-  the US Forest Service digitized Royce cessions). Where two agencies
-  depict the same land the overlap is drawn legibly as two labeled
-  representations, never blended. Deployers can additionally load their
-  own Tribal Lands and Treaty Areas data into two default-off slots.
+  the US Forest Service digitized Royce cessions; off by default, it
+  joins via the Tribal Nations button, its own toggle, or a click on a
+  Tribal boundary, which highlights that Tribe's related cessions and
+  says plainly when none are on file). Where two agencies depict the
+  same land the overlap is drawn legibly as two labeled representations,
+  never blended. Deployers can additionally load their own Tribal Lands
+  and Treaty Areas data into two default-off slots (URL-addressed; not
+  shown in the default interface).
 - **Events**: active wildfire perimeters (National Interagency Fire
   Center) and active National Weather Service (NWS) heat and fire-weather
   alerts.
@@ -122,7 +127,7 @@ current URL.
 | Param | Values | Default |
 | ----- | ------ | ------- |
 | `region` | `washington_state`, `columbia_snake_basin`, `cascades`, `central_oregon`, `southwest_washington`, `south_puget_sound`, `national`, `alaska`, `hawaii` | `washington_state` |
-| `layers` | comma-separated keys from the table below | `usdm,aiannh,treaty-cessions,bia-reservations,states` |
+| `layers` | comma-separated keys from the table below | `usdm,aiannh,bia-reservations,states` |
 | `select` | `state:<postal code>` (for example `state:WA`): opens the map focused on that boundary with its impact briefing open; applied once, then dropped from the URL | none |
 | `embed` | `true` or `1` (hides the sidebar for clean iframe presentation) | `false` |
 
@@ -130,8 +135,9 @@ Display-state parameters also round-trip (`view` for the Brief/console
 mode, `week` for the USDM archive, `dmode`, `sst`, `outlook`, `basemap`);
 the authoritative grammar for every parameter is
 `docs/URL_SCHEMA_POLICY.md`. Old shared links keep working: `tribal` is
-still a valid key (now the deployer-data slot, off by default), and
-legacy layer lists resolve deterministically.
+still a valid key (now the deployer-data slot, off by default and not
+shown in the default interface; naming it in `layers` turns it on and
+reveals its toggle), and legacy layer lists resolve deterministically.
 
 Because condition surfaces render one at a time, a `layers` list naming
 several surfaces resolves deterministically to the first surface named
@@ -165,9 +171,9 @@ several surfaces resolves deterministically to the first surface named
 | `ecoregions` | Ecoregions (Level III/IV) | reference | EPA Omernik, bundled PMTiles |
 | `aiannh` | Tribal Lands | reference | US Census AIANNH MapServer (live, default-on) |
 | `bia-reservations` | Reservation Boundaries | reference | BIA AIAN-LAR FeatureServer (live, default-on) |
-| `treaty-cessions` | Treaty & Ceded Lands | reference | USFS Royce cessions MapServer (live, default-on) |
-| `tribal` | Tribal Lands (your own data) | reference | deployer slot, bundled EMPTY PLACEHOLDER, default-off |
-| `treaty` | Treaty Areas (your own data) | reference | deployer slot, bundled EMPTY PLACEHOLDER, default-off |
+| `treaty-cessions` | Treaty & Ceded Lands | reference | USFS Royce cessions MapServer (live, default-off; also loads from a Tribal-boundary click) |
+| `tribal` | Tribal Lands (your own data) | reference | deployer slot, bundled EMPTY PLACEHOLDER, default-off, URL-only (no catalog row until turned on) |
+| `treaty` | Treaty Areas (your own data) | reference | deployer slot, bundled EMPTY PLACEHOLDER, default-off, URL-only (no catalog row until turned on) |
 | `hydrography` | Rivers | reference | OpenStreetMap via Overpass (live) |
 | `nifc-fires` | Active Wildfires | event | NIFC WFIGS FeatureServer (live) |
 | `nws-alerts` | Heat & Fire Weather Alerts | event | NOAA NWS MapServer (live) |
@@ -179,18 +185,28 @@ caveats, verification date). Read it before touching a fetcher.
 
 ### Live Tribal geography, and the deployer slots
 
-The three default-on Tribal-geography layers (`aiannh`,
-`bia-reservations`, `treaty-cessions`) fetch the publishing federal
-services live at view time and redistribute nothing: responses are held
-in session memory only, requested with `cache: 'no-store'`, and are never
-bundled, baked, or written to disk by this module. Each popup names its
-publishing agency, its vintage, and the representation caveat.
+The three live Tribal-geography layers (`aiannh`, `bia-reservations`,
+`treaty-cessions`) fetch the publishing federal services live at view
+time and redistribute nothing: responses are held in session memory
+only, requested with `cache: 'no-store'`, and are never bundled, baked,
+or written to disk by this module. Each popup names its publishing
+agency, its vintage, and the representation caveat. The two present-day
+layers are on by default; Treaty & Ceded Lands (the historical Royce
+record) is off by default and joins via the Tribal Nations button, its
+own toggle, or a click on a Tribal Lands or Reservation Boundaries
+feature, which highlights the cessions related to that Tribe when a
+safe name match exists and says plainly when no cession is on file
+(absence in Royce is not evidence that a Tribe lacks a Treaty
+relationship).
 
 The `tribal` and `treaty` keys are the DEPLOYER slots: bundled empty
 `FeatureCollection` placeholders (in `public/data/`), off by default,
 that a deployer may populate with its own authorized data (a Tribal
-Nation's own boundary data, under its own governance). Their popups label
-the data as deployer-provided. If you populate a slot with data that
+Nation's own boundary data, under its own governance). They are not part
+of the default interface: no catalog row or search result names them
+until a `?layers=tribal` / `?layers=treaty` URL (or a deployer's own
+configuration) turns them on. Their popups label the data as
+deployer-provided. If you populate a slot with data that
 duplicates one of the live federal layers, consider toggling that live
 layer off in your embed links to avoid a confusing double-draw; the two
 are deliberately separate so your data never silently replaces or blends

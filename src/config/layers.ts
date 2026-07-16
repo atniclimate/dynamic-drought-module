@@ -78,6 +78,15 @@ export interface LayerDef {
    * wildfire event pair (Active Wildfires + Smoke Plumes, D-0.7.0-018).
    */
   readonly coActivateWith?: readonly string[];
+  /**
+   * Hidden from every default UI surface (no catalog row, no search result)
+   * while OFF; the row appears only when the layer is on (a `?layers=` deep
+   * link), so the URL keeps round-tripping and the user can still turn it
+   * off. The Unit I mechanism (D-0.7.0-038 part 3) for the deployer-owned
+   * own-data slots: "not a public-facing UI feature" governs the default UI,
+   * while the keys stay shipped, documented, and URL-reachable.
+   */
+  readonly uiHidden?: boolean;
 }
 
 /**
@@ -88,14 +97,17 @@ export interface LayerDef {
  * otherwise append).
  *
  * Default-on is the demo-ready set (deliberately changed by the Tribal
- * Nations umbrella build, D-0.7.0-032/033; recorded in
- * docs/URL_SCHEMA_POLICY.md as a deliberate default change, not a silent
- * one): US Drought Monitor (the headline drought layer), the three LIVE
- * Tribal-geography layers (Census AIANNH Tribal Lands, BIA Reservation
- * Boundaries, USFS Royce Treaty cessions; Tribal Nations MUST display on
- * first load), and State Boundaries. The bundled deployer slots (`tribal`,
- * `treaty`) are default-off: they are only meaningful once a deployer
- * populates them with their own authorized data. Hydrography is
+ * Nations umbrella build, D-0.7.0-032/033, then narrowed by Unit I,
+ * D-0.7.0-038; both recorded in docs/URL_SCHEMA_POLICY.md as deliberate
+ * default changes, not silent ones): US Drought Monitor (the headline
+ * drought layer), the two live PRESENT-DAY Tribal-geography layers (Census
+ * AIANNH Tribal Lands and BIA Reservation Boundaries; Tribal Nations MUST
+ * display on first load), and State Boundaries. Treaty & Ceded Lands (the
+ * historical Royce record) is default-off and joins via the Tribal Nations
+ * button, its own toggle, or a boundary click. The bundled deployer slots
+ * (`tribal`, `treaty`) are default-off AND ui-hidden: they are only
+ * meaningful once a deployer populates them with their own authorized
+ * data. Hydrography is
  * intentionally off by default; the live Overpass query is slow and
  * fragile, so leading the bare URL with it produced a flaky first paint.
  */
@@ -120,15 +132,22 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   // placeholder wording stays only on the bundled deployer slots (tribal,
   // treaty). Unit C of the umbrella build + the Codex Unit C pass.
   { key: 'usdm', name: 'US Drought Monitor', source: 'NDMC · FeatureServer', role: 'surface', defaultOn: true, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/usdm') },
-  // The Tribal Nations members (D-0.7.0-032/033): the three LIVE layers are
-  // default-on (Tribal Nations MUST display); the two bundled deployer slots
-  // are default-off and relabeled so "your own data" is unmistakable. The
-  // deployer keys (`tribal`, `treaty`) are shipped public identifiers and
-  // keep their meaning (URL policy rule 4); only display names changed.
+  // The Tribal Nations members (D-0.7.0-032/033, narrowed by D-0.7.0-038):
+  // the two live present-day layers are default-on (Tribal Nations MUST
+  // display); the live historical cession record is default-off; the two
+  // bundled deployer slots are default-off, ui-hidden, and labeled so "your
+  // own data" is unmistakable. The deployer keys (`tribal`, `treaty`) are
+  // shipped public identifiers and keep their meaning (URL policy rule 4);
+  // only display names and visibility changed.
   { key: 'aiannh', name: 'Tribal Lands', source: 'US Census · AIANNH (live)', role: 'reference', defaultOn: true, noDataLabel: 'no features returned for this view (Census-defined Tribal areas only)', load: () => import('../layers/aiannh') },
-  { key: 'tribal', name: 'Tribal Lands (your own data)', source: 'deployer · bundled GeoJSON', role: 'reference', defaultOn: false, load: () => import('../layers/tribal') },
-  { key: 'treaty-cessions', name: 'Treaty & Ceded Lands', source: 'USFS · Royce cessions (live)', role: 'reference', defaultOn: true, noDataLabel: 'no features returned for this view (a historical record; not every Treaty area is digitized)', load: () => import('../layers/treaty-cessions') },
-  { key: 'treaty', name: 'Treaty Areas (your own data)', source: 'deployer · bundled GeoJSON', role: 'reference', defaultOn: false, load: () => import('../layers/treaty') },
+  { key: 'tribal', name: 'Tribal Lands (your own data)', source: 'deployer · bundled GeoJSON', role: 'reference', defaultOn: false, uiHidden: true, load: () => import('../layers/tribal') },
+  // treaty-cessions is default-OFF since Unit I (D-0.7.0-038 decision 1,
+  // narrowing D-0.7.0-033 decision 3): the passive page-load default carries
+  // the two present-day representations; the historical cession record joins
+  // on the Tribal Nations button, the manual toggle, or a boundary click
+  // (src/impact/related-cessions.ts).
+  { key: 'treaty-cessions', name: 'Treaty & Ceded Lands', source: 'USFS · Royce cessions (live)', role: 'reference', defaultOn: false, noDataLabel: 'no features returned for this view (a historical record; not every Treaty area is digitized)', load: () => import('../layers/treaty-cessions') },
+  { key: 'treaty', name: 'Treaty Areas (your own data)', source: 'deployer · bundled GeoJSON', role: 'reference', defaultOn: false, uiHidden: true, load: () => import('../layers/treaty') },
   // The BIA label carries the design-required coverage caveat: AIAN-LAR
   // returning nothing here is a statement about the DATASET's coverage (it
   // omits most Oklahoma Tribal Statistical Areas and landless Tribal

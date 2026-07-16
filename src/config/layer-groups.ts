@@ -35,7 +35,12 @@ export interface LayerGroupDef {
 export const TRIBAL_NATIONS_GROUP: LayerGroupDef = {
   key: 'tribal-nations',
   label: 'Tribal Nations',
-  members: ['aiannh', 'bia-reservations', 'treaty-cessions', 'tribal', 'treaty'],
+  // The two deployer own-data slots (`tribal`, `treaty`) left the members
+  // list with Unit I (D-0.7.0-038 part 3): visible-but-unchecked in a
+  // disclosure was still a public-facing UI surface, which D-0.7.0-036
+  // part 4 ruled out. The slots stay in LAYER_DEFS (ui-hidden) and remain
+  // URL-reachable via ?layers=tribal / ?layers=treaty.
+  members: ['aiannh', 'bia-reservations', 'treaty-cessions'],
   buttonActivates: ['aiannh', 'bia-reservations', 'treaty-cessions'],
   actionDescription:
     'Turns on Tribal Lands, Reservation Boundaries, and Treaty & Ceded Lands.'

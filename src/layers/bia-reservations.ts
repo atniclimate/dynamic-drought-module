@@ -69,6 +69,7 @@ import {
 import { buildBiaReservationPopupHtml } from '../ui/popups';
 import { attachImpactTrigger } from '../ui/impact-panel';
 import { buildBoundaryContext } from '../impact/context';
+import { hydrateRelatedCessions } from '../impact/related-cessions';
 import { emphasizePlace } from '../state/place-emphasis';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
@@ -611,6 +612,9 @@ export function bindPopups(map: maplibregl.Map): void {
       popup,
       buildBoundaryContext('bia-reservation', props, feature.geometry, e.lngLat)
     );
+    // Unit I (D-0.7.0-038): surface this Tribe's related Royce cessions,
+    // with the honest no-match state, in the popup's cession slot.
+    hydrateRelatedCessions(map, popup, 'bia-reservation', props, feature.geometry);
   });
 
   map.on('mouseenter', FILL_LAYER_ID, () => {

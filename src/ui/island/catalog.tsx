@@ -246,9 +246,16 @@ export function Catalog(props: CatalogProps) {
         const isReference = role === 'reference';
         // The umbrella members render inside the LayerUmbrella card (first
         // in the group) and nowhere else; every other row keeps its place.
-        const flatDefs = isReference
+        // A ui-hidden layer (the deployer own-data slots, Unit I /
+        // D-0.7.0-038 part 3) renders NO row while off; when it is on (a
+        // ?layers= deep link) its row appears so the state stays visible
+        // and reversible.
+        const grouped = isReference
           ? defs.filter((def) => !TRIBAL_NATIONS_GROUP.members.includes(def.key))
           : defs;
+        const flatDefs = grouped.filter(
+          (def) => !def.uiHidden || (checked.value.get(def.key) ?? false)
+        );
         return (
           <div class="layer-group" role="group" aria-labelledby={headingId} key={role}>
             <div class="layer-group-title">

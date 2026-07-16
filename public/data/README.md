@@ -8,18 +8,22 @@ place labels, the Tribal name roster), and one committed data snapshot
 (`enso-indices.json`).
 
 **Read this first: the map's default Tribal geography does NOT come from
-this folder.** Three default-on layers fetch the publishing federal
-services LIVE at view time and redistribute nothing:
+this folder.** Three live layers fetch the publishing federal services
+LIVE at view time and redistribute nothing:
 
-- Tribal Lands (`aiannh`): US Census AIANNH (legal and statistical
-  geographies, including Oklahoma Tribal Statistical Areas).
-- Reservation Boundaries (`bia-reservations`): the Bureau of Indian
-  Affairs (BIA) AIAN Land Area Representation.
-- Treaty & Ceded Lands (`treaty-cessions`): the US Forest Service
-  digitized Royce cessions.
+- Tribal Lands (`aiannh`, default-on): US Census AIANNH (legal and
+  statistical geographies, including Oklahoma Tribal Statistical Areas).
+- Reservation Boundaries (`bia-reservations`, default-on): the Bureau of
+  Indian Affairs (BIA) AIAN Land Area Representation.
+- Treaty & Ceded Lands (`treaty-cessions`, default-off): the US Forest
+  Service digitized Royce cessions; joins via the Tribal Nations button,
+  its own toggle, or a click on a Tribal boundary.
 
 The two placeholder files below back the SEPARATE deployer slots
-(`tribal`, `treaty`), which are OFF by default. They exist so a deployer
+(`tribal`, `treaty`), which are OFF by default and not shown in the
+default interface: no catalog row or search result names them until a
+`?layers=tribal` / `?layers=treaty` URL (or your own configuration)
+turns them on. They exist so a deployer
 (most importantly a Tribal Nation) can display its own boundary data,
 under its own governance and authorization, without that data ever
 entering this repository. When the file is empty the layer reports
@@ -70,7 +74,7 @@ row; nothing breaks.
 ## `treaty-areas.geojson` (deployer slot, layer key `treaty`, default-off)
 
 Your own Treaty or ceded-area boundary data. The live `treaty-cessions`
-layer already draws the federal Royce cession digitization by default;
+layer already draws the federal Royce cession digitization on demand;
 this slot is for a deployer's own representation (a Nation's own
 depiction of its Treaty areas, or a state-curated set).
 
