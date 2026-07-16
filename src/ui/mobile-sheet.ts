@@ -122,11 +122,11 @@ let detent: SheetDetent | null = null;
 
 /**
  * Whether a briefing open may auto-raise the CLOSED sheet to half. The
- * map-first boot must stay closed while the answer-first boot hydrates
- * behind the Brief door, so the raise is earned by either a real user
- * gesture (the first pointer or key event) or a `?select=` deep link
- * (where the shared link itself is the ask). Read by the impact panel's
- * mobile host through `sheetAllowsAutoRaise`.
+ * map-first boot must stay closed, so the raise is earned by either a
+ * real user gesture (the first pointer or key event) or a `?select=`
+ * deep link (where the shared link itself is the ask; since S2,
+ * D-0.7.0-041, that deep link is the only boot-time briefing opener).
+ * Read by the impact panel's mobile host through `sheetAllowsAutoRaise`.
  */
 let userInteracted = false;
 let deepLinkRaise = false;
@@ -709,10 +709,11 @@ export function revealSheetAtPeek(): void {
 
 /**
  * Initialize the mobile sheet. Called once from boot, after the sidebar
- * (which seeds the view mode from the URL) and before the view shell's
- * answer-first open (so a Brief boot finds the shell already seated).
- * `opts.deepLinkBoot` marks a `?select=` boot: its briefing open may
- * auto-raise the closed sheet (the shared link is the ask).
+ * (which seeds the view mode from the URL) and before the view shell
+ * (so a Brief boot finds the shell already seated). `opts.deepLinkBoot`
+ * marks a `?select=` boot: its briefing open may auto-raise the closed
+ * sheet (the shared link is the ask; since S2, D-0.7.0-041, the deep
+ * link is also the ONLY boot-time briefing opener).
  */
 export function initMobileSheet(
   map: maplibregl.Map,

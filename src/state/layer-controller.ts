@@ -43,7 +43,7 @@ import {
 import type { LayerDef, LayerModule } from '../config/layers';
 import type { ViewPreset } from '../config/presets';
 import { registry } from './registry';
-import { reassertLabelOrder } from '../map/layer-order';
+import { reassertLabelOrder, reassertThematicOrder } from '../map/layer-order';
 import { fadeInLayers, fadeOutLayers } from '../util/layer-fade';
 import { showLoading, hideLoading } from '../ui/overlay';
 
@@ -235,6 +235,12 @@ export function createLayerController(
         // Ease the just-added layers in (no-op for reduced-motion users and
         // for modules without map layers; src/util/layer-fade.ts).
         fadeInLayers(map, mod.fadeLayerIds);
+        // Re-seat the deterministic thematic chain (E1 deliverable 2,
+        // D-0.7.0-041 part 2): basemap < hillshade < USDM < state hairline
+        // < Tribal Lands < Reservation Boundaries < labels, stable
+        // regardless of which activation's fetch resolved first
+        // (src/map/layer-order.ts).
+        reassertThematicOrder(map);
         // Keep the always-on-top reference labels on top: a surface
         // activated AFTER the labels appends above them otherwise (the U4
         // stage-5 adversarial major 2; src/map/layer-order.ts).

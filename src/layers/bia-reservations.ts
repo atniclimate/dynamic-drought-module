@@ -119,6 +119,22 @@ const CACHE_MAX_ENTRIES = 24;
  */
 const REFRESH_DEBOUNCE_MS = 400;
 
+/**
+ * E1 composition targets (D-0.7.0-041 part 2, review E1.3; D-0.7.0-043
+ * part 4): starting values for the stewardship visual review at unit
+ * close. The reservation fill calms from 0.26 to 0.18 with a 1.1 px
+ * outline, still the STRONGER of the two present-day Tribal-geography
+ * layers (the AIANNH wash in aiannh.ts sits at 0.12 with a 0.9 px
+ * outline). With both layers now in the one magenta family
+ * (src/config/palette.ts), outline weight and fill strength are the honest
+ * non-color channel that keeps the two representations distinguishable.
+ * The selected boosts stay.
+ */
+const FILL_OPACITY_BASE = 0.18;
+const FILL_OPACITY_SELECTED = 0.5;
+const OUTLINE_WIDTH_BASE = 1.1;
+const OUTLINE_WIDTH_SELECTED = 2.6;
+
 type Status = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
 
 /**
@@ -459,17 +475,17 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
       type: 'fill',
       source: SOURCE_ID,
       paint: {
-        // The visible reservation surface of record (D-0.7.0-019); lifted from
-        // 0.18 so the magenta reads as primary, still below Tribal Lands in the
-        // family's opacity hierarchy and inside the 0.3-band-adjacent range that
-        // keeps the basemap legible underneath. The selected land area (U3h)
-        // lifts higher so it stays legible under an open briefing.
+        // The visible reservation surface of record (D-0.7.0-019, calmed by
+        // E1): the stronger fill of the magenta pair, still light enough
+        // that the basemap and the drought surface stay legible underneath.
+        // The selected land area (U3h) lifts higher so it stays legible
+        // under an open briefing. See the E1 constants above.
         'fill-color': RESERVATION_FILL_COLOR,
         'fill-opacity': [
           'case',
           ['boolean', ['feature-state', 'selected'], false],
-          0.5,
-          0.26
+          FILL_OPACITY_SELECTED,
+          FILL_OPACITY_BASE
         ]
       }
     },
@@ -486,8 +502,8 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
         'line-width': [
           'case',
           ['boolean', ['feature-state', 'selected'], false],
-          2.6,
-          1.2
+          OUTLINE_WIDTH_SELECTED,
+          OUTLINE_WIDTH_BASE
         ],
         'line-opacity': [
           'case',

@@ -99,8 +99,17 @@ export const USDM_FILL_LAYER_IDS = [
 const BEFORE_ID = 'first-symbol';
 const FETCH_TIMEOUT_MS = 20_000;
 
-const FILL_OPACITY = 0.6;
-const OUTLINE_OPACITY = 0.85;
+/**
+ * E1 composition targets (D-0.7.0-041 part 2; the 2026-07-16 design review
+ * E1.3): starting values for the stewardship visual review at unit close.
+ * The surface fill drops from 0.6 into the ratified 0.52-0.56 band and the
+ * outline quiets to a 0.4 px line at 0.35-0.50 opacity, so the drought
+ * statement stays primary without shouting over the hillshade underlay and
+ * the boundary chain.
+ */
+const FILL_OPACITY = 0.54;
+const OUTLINE_OPACITY = 0.45;
+const OUTLINE_WIDTH = 0.4;
 
 /** Rail depth: 52 stops covers a full water year of weekly frames. */
 const WEEKS_BACK = 52;
@@ -334,7 +343,7 @@ function addPolygonPair(
         layout: { visibility },
         paint: {
           'line-color': color,
-          'line-width': 0.6,
+          'line-width': OUTLINE_WIDTH,
           'line-opacity': OUTLINE_OPACITY
         }
       },

@@ -50,6 +50,19 @@ const BEFORE_ID = 'first-symbol';
 /** Per-call budget for the bundled-file fetch (same-origin, normally fast). */
 const FETCH_TIMEOUT_MS = 10_000;
 
+/**
+ * E1 chrome targets (D-0.7.0-041 part 2, review E1.3): starting values for
+ * the stewardship visual review at unit close. A 0.4 px hairline at roughly
+ * 0.50 opacity at the national framing, easing to the regional weight by
+ * zoom 8; the selected boosts stay constant so the chosen reference frame
+ * reads at any zoom.
+ */
+const OUTLINE_WIDTH_NATIONAL = 0.4;
+const OUTLINE_WIDTH_REGIONAL = 1.5;
+const OUTLINE_WIDTH_SELECTED = 2.4;
+const OUTLINE_OPACITY_NATIONAL = 0.5;
+const OUTLINE_OPACITY_REGIONAL = 0.7;
+
 type Status = 'loading' | 'ready' | 'error' | 'no-data';
 
 /**
@@ -172,15 +185,41 @@ export async function activate(map: maplibregl.Map): Promise<void> {
           ['linear'],
           ['zoom'],
           3,
-          ['case', ['boolean', ['feature-state', 'selected'], false], 2.4, 0.5],
+          [
+            'case',
+            ['boolean', ['feature-state', 'selected'], false],
+            OUTLINE_WIDTH_SELECTED,
+            OUTLINE_WIDTH_NATIONAL
+          ],
           8,
-          ['case', ['boolean', ['feature-state', 'selected'], false], 2.4, 1.5]
+          [
+            'case',
+            ['boolean', ['feature-state', 'selected'], false],
+            OUTLINE_WIDTH_SELECTED,
+            OUTLINE_WIDTH_REGIONAL
+          ]
         ],
+        // Same zoom-curve-wraps-the-case structure as the width above (the
+        // inverted form logs a style error; see the width comment). E1 quiets
+        // the hairline to roughly half strength at the national framing.
         'line-opacity': [
-          'case',
-          ['boolean', ['feature-state', 'selected'], false],
-          1,
-          0.7
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          3,
+          [
+            'case',
+            ['boolean', ['feature-state', 'selected'], false],
+            1,
+            OUTLINE_OPACITY_NATIONAL
+          ],
+          8,
+          [
+            'case',
+            ['boolean', ['feature-state', 'selected'], false],
+            1,
+            OUTLINE_OPACITY_REGIONAL
+          ]
         ]
       }
     },

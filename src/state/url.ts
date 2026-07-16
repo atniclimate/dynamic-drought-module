@@ -1,10 +1,20 @@
 import { REGIONS, DEFAULT_REGION } from '../config/regions';
 import type { RegionKey } from '../config/regions';
 import { DEFAULT_ON_KEYS, resolveExclusiveSurface } from '../config/layers';
+import type { FramingKey } from '../config/framings';
+import { HAZARD_CLUSTERS } from '../config/clusters';
+import type { HazardClusterKey } from '../config/clusters';
+import type { OceanKey } from '../config/oceans';
 import { deriveViewMode } from './view-mode';
 import type { ViewMode } from './view-mode';
 import { parseBasemapParam } from './basemap-store';
 import type { BasemapMode } from './basemap-store';
+import { parseFramingParam } from './framing-store';
+import {
+  composeClusterBootLayers,
+  parseClusterParam,
+  parseOceanParam
+} from './cluster-store';
 import {
   parseUsdmMode,
   parseUsdmWeek,
@@ -34,6 +44,18 @@ import {
  *   sst      YYYY-MM-DD selected SST anomaly frame (always paused on load;
  *            playback state is deliberately never serialized)
  *
+ * plus the region-shell trio (S2, the additive URL migration;
+ * D-0.7.0-039/041/042/044/053; the precedence table lives in
+ * docs/URL_SCHEMA_POLICY.md):
+ *
+ *   framing  one of the nine editorial FramingKey tokens; absence is the
+ *            ALL state (D-0.7.0-041: absence is the truth), and the
+ *            legacy `region=national` alias stays on the region path
+ *   cluster  wildfire | heat | enso; Drought, the default display, is
+ *            absence (D-0.7.0-044); `layers=` outranks it on parse
+ *   ocean    pacific | arctic | atlantic; valid only beside
+ *            cluster=enso (D-0.7.0-042/053), ignored otherwise
+ *
  * This module is a direct port of the vanilla `app.js` parseUrlParams and
  * syncUrl functions (~lines 342-378 of the v0.1.x baseline). See CLAUDE.md
  * section 8 for the named-export contract.
@@ -57,6 +79,43 @@ export interface ParsedUrlParams {
   /** Basemap mode from `basemap=` (U4d, D-0.7.0-031); only the exact
    * token 'satellite' selects satellite, anything else is 'default'. */
   readonly basemap: BasemapMode;
+  /** Framing context from `framing=`; null is the ALL state
+   * (D-0.7.0-039/041). */
+  readonly framing: FramingKey | null;
+  /** Hazard cluster from `cluster=`; 'drought' (absence) when missing,
+   * unknown, or outranked by an explicit `layers=` (D-0.7.0-044). */
+  readonly cluster: HazardClusterKey;
+  /** Ocean framing from `ocean=`; non-null only beside cluster=enso
+   * (D-0.7.0-042/053). */
+  readonly ocean: OceanKey | null;
+}
+
+/**
+ * The region-shell slice of the URL, parsed with its ruled precedence
+ * (S2). Pure over the given params so the precedence table is testable
+ * in Node (the `deriveViewMode` pattern):
+ *
+ *   - `layers=` OUTRANKS `cluster=` (D-0.7.0-044: the granular list is
+ *     the more specific intent); when both appear, the cluster parses
+ *     to 'drought' (absence) and is therefore dropped by the next
+ *     canonical write.
+ *   - `ocean=` is valid ONLY beside a surviving `cluster=enso`
+ *     (D-0.7.0-042/053); otherwise it parses to null and is dropped on
+ *     the next sync.
+ *   - `framing=` is independent of both (camera-only context); unknown
+ *     tokens read as the ALL state.
+ */
+export function parseShellParams(params: URLSearchParams): {
+  framing: FramingKey | null;
+  cluster: HazardClusterKey;
+  ocean: OceanKey | null;
+} {
+  const framing = parseFramingParam(params.get('framing'));
+  const cluster = params.has('layers')
+    ? 'drought'
+    : parseClusterParam(params.get('cluster'));
+  const ocean = cluster === 'enso' ? parseOceanParam(params.get('ocean')) : null;
+  return { framing, cluster, ocean };
 }
 
 /**
@@ -76,11 +135,19 @@ export interface ParsedUrlParams {
 export function parseUrlParams(): ParsedUrlParams {
   const params = new URLSearchParams(window.location.search);
 
+  // The `region=national` legacy alias needs no special handling here:
+  // it resolves through REGIONS exactly as every other legacy region
+  // value (honored forever, D-0.7.0-039), and it normalizes to the ALL
+  // framing state simply by never producing a `framing=` token (absence
+  // is the truth, D-0.7.0-041; no framing key exists for the national
+  // fit because absence IS the national default).
   const rawRegion = params.get('region');
   const region: RegionKey =
     rawRegion !== null && Object.prototype.hasOwnProperty.call(REGIONS, rawRegion)
       ? (rawRegion as RegionKey)
       : DEFAULT_REGION;
+
+  const shell = parseShellParams(params);
 
   let layers: Set<string>;
   if (params.has('layers')) {
@@ -96,6 +163,15 @@ export function parseUrlParams(): ParsedUrlParams {
         .filter((s) => s.length > 0);
       layers = new Set(resolveExclusiveSurface(keys));
     }
+  } else if (shell.cluster !== 'drought') {
+    // A cluster boot resolves to the reference default-on set plus the
+    // cluster's current-horizon recipe (the interim, non-atomic
+    // application, D-0.7.0-044); the boot path then activates this set
+    // through the ordinary layer-controller road, exactly like a
+    // `layers=` list would. Only the no-`layers=` branch composes:
+    // `layers=` outranks `cluster=` (parseShellParams already resolved
+    // that pair to 'drought' when both appear).
+    layers = new Set(composeClusterBootLayers(shell.cluster));
   } else {
     layers = new Set(DEFAULT_ON_KEYS);
   }
@@ -119,7 +195,10 @@ export function parseUrlParams(): ParsedUrlParams {
     basemap:
       params.getAll('basemap').length > 1
         ? 'default'
-        : parseBasemapParam(params.get('basemap'))
+        : parseBasemapParam(params.get('basemap')),
+    framing: shell.framing,
+    cluster: shell.cluster,
+    ocean: shell.ocean
   };
 }
 
@@ -174,6 +253,18 @@ export interface UrlSyncState {
   /** Basemap mode; emitted as `basemap=satellite` only when non-default,
    * so the default URL stays clean (the `view=` pattern, D-0.7.0-031). */
   readonly basemap?: BasemapMode;
+  /** Framing context; emitted as `framing=` only when non-null (absence
+   * is the ALL state, D-0.7.0-041). Callers pass `region: null` while a
+   * framing is active so the URL never claims two cameras at once. */
+  readonly framing?: FramingKey | null;
+  /** Hazard cluster; while non-'drought' it REPLACES `layers=` in the
+   * emitted URL (the durable-truth model, D-0.7.0-044: the clean
+   * cluster is the one-word claim; the granular list returns the moment
+   * the display stops being that cluster). */
+  readonly cluster?: HazardClusterKey;
+  /** Ocean framing; emitted as `ocean=` only beside cluster=enso
+   * (D-0.7.0-042/053). */
+  readonly ocean?: OceanKey | null;
 }
 
 /**
@@ -194,7 +285,25 @@ export function syncUrl(state: UrlSyncState): void {
     params.set('region', state.region);
   }
 
-  if (state.layers.size > 0) {
+  if (state.framing) {
+    params.set('framing', state.framing);
+  }
+
+  // The durable-truth handoff (D-0.7.0-044): a clean non-default cluster
+  // is serialized as the one-word token INSTEAD of the granular list;
+  // everything else emits `layers=` exactly as before (including the
+  // explicit-empty all-off form). The caller (the sidebar's pushUrl)
+  // clears the cluster the moment the layer intent diverges from the
+  // cluster's composition, so the two branches can never both be true
+  // of the display.
+  const cluster = state.cluster ?? 'drought';
+  const clusterToken = HAZARD_CLUSTERS[cluster].urlToken;
+  if (clusterToken !== null) {
+    params.set('cluster', clusterToken);
+    if (cluster === 'enso' && state.ocean) {
+      params.set('ocean', state.ocean);
+    }
+  } else if (state.layers.size > 0) {
     params.set('layers', Array.from(state.layers).join(','));
   } else {
     params.set('layers', '');

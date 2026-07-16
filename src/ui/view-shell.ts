@@ -1,19 +1,24 @@
 /**
- * The view shell (U1, D-ARCH-002: "answer-first, two doors").
+ * The view shell (U1, D-ARCH-002: "two doors"; amended by S2,
+ * D-0.7.0-041: no unsolicited briefing).
  *
  * Owns the mode chrome around the Brief/console split: the header mode
  * switch, the Brief head (the lede, the place picker, and the console
- * door), the `#app` mode classes the stylesheet keys off, and the
- * answer-first boot (a Brief boot opens the active region's briefing
- * immediately; Brief never opens on an empty state, D-0.7.0-006).
+ * door), and the `#app` mode classes the stylesheet keys off. The U1
+ * answer-first boot (a Brief boot auto-opened the active region's
+ * briefing) is DELIBERATELY RETIRED (D-0.7.0-041 part 1): the boot
+ * never opens the impact briefing without an explicit selection; a
+ * briefing opens ONLY from an explicit place selection or a `select=`
+ * deep link. What survives of D-0.7.0-006 is the never-fake half: this
+ * module still never fabricates a briefing for an empty state.
  *
  * The mode itself lives in `src/state/view-mode.ts` (URL-derived at
  * boot, `view=` round-tripped by the sidebar's URL sync). BRIEF leads
- * with the briefing and keeps the catalog beneath the Brief head as the
- * drill-down (answer-first, layers-SECOND, not layers-never); CONSOLE
- * is the full instrument. Deeper console reshaping (the region grid
- * demoting to a jump-to list, the searchable catalog) is U3
- * (D-0.7.0-009), not here.
+ * with the briefing search and keeps the catalog beneath the Brief head
+ * as the drill-down (layers-SECOND, not layers-never); CONSOLE is the
+ * full instrument. Deeper console reshaping (the region grid demoting
+ * to a jump-to list, the searchable catalog) is U3 (D-0.7.0-009), not
+ * here.
  *
  * The mode swap crossfades via the View Transitions API where present,
  * guarded by prefers-reduced-motion (headroom B5); without support it
@@ -26,18 +31,11 @@
 
 import type maplibregl from 'maplibre-gl';
 
-import { REGIONS } from '../config/regions';
-import { openStateBriefing } from '../state/deep-link';
 import { getPlaceSelection } from '../state/place-selection';
-import { getCurrentRegion } from '../state/region-store';
 import { getViewMode, onViewModeChange, setViewMode } from '../state/view-mode';
 import type { ViewMode } from '../state/view-mode';
-import {
-  closeImpactPanel,
-  isCurrentBriefingIntent,
-  nextBriefingIntent,
-  openImpactPanel
-} from './impact-panel';
+import { closeImpactPanel, openImpactPanel } from './impact-panel';
+import { buildTribalNationsBriefAction } from './tribal-nations-action';
 import { prefersReducedMotion } from '../util/motion';
 
 /**
@@ -64,46 +62,38 @@ function updateModeSwitch(mode: ViewMode): void {
 }
 
 /**
- * Open the Brief answer: the selected map place if one is current,
- * otherwise the active region's briefing anchor. Brief never opens on
- * an empty state (D-0.7.0-006); a region without an anchor (none of the
- * shipped regions) simply leaves the panel closed rather than faking one.
- *
- * The anchor path resolves after an async boundary fetch, so it always
- * carries a yield guard: the intent is declared at call time, and any
- * NEWER intent or panel interaction in the fetch window wins over it
- * (last intent wins, regardless of fetch resolve order).
+ * Reopen the briefing for the PERSISTING explicit place selection when
+ * the Brief door opens, if one is current. This is the D-0.7.0-041
+ * replacement for the retired U1 answer-first open: the selection was
+ * an explicit user act and persists across the door switch (a selected
+ * briefing place is cleared only by its own explicit control), so
+ * reopening it is honoring that act, not soliciting a briefing. With no
+ * selection, the panel simply stays closed; the region-anchor fallback
+ * (the unsolicited half of the old behavior) is retired, and no
+ * briefing is fabricated for an empty state (the surviving half of
+ * D-0.7.0-006).
  */
-function openBriefAnswer(map: maplibregl.Map): void {
+function reopenSelectedPlace(): void {
   const place = getPlaceSelection();
-  if (place) {
-    openImpactPanel(place.context);
-    return;
-  }
-  const region = getCurrentRegion();
-  const anchor = region ? REGIONS[region]?.briefing : undefined;
-  if (!anchor) return;
-  const intent = nextBriefingIntent();
-  void openStateBriefing(map, anchor.id, {
-    fit: false,
-    guard: () => isCurrentBriefingIntent(intent)
-  });
+  if (place) openImpactPanel(place.context);
 }
 
 /**
  * Switch modes with a crossfade. The mutation flips the store (whose
  * subscribers apply the classes, re-sync the URL, and mount the island
  * if needed) and swaps the briefing panel to match the door: console is
- * the map, so the panel closes; Brief is the answer, so it opens.
+ * the map, so the panel closes; Brief reopens the persisting explicit
+ * selection if one is current and otherwise stays closed (D-0.7.0-041:
+ * never an unsolicited briefing).
  */
-function switchMode(map: maplibregl.Map, mode: ViewMode): void {
+function switchMode(mode: ViewMode): void {
   if (mode === getViewMode()) return;
   const mutate = (): void => {
     setViewMode(mode);
     if (mode === 'console') {
       closeImpactPanel();
     } else {
-      openBriefAnswer(map);
+      reopenSelectedPlace();
     }
   };
   const doc = document as Document & {
@@ -119,7 +109,7 @@ function switchMode(map: maplibregl.Map, mode: ViewMode): void {
 }
 
 /** Build the two-button mode switch into the sidebar header. */
-function buildModeSwitch(map: maplibregl.Map): void {
+function buildModeSwitch(): void {
   const header = document.querySelector('.sidebar-header');
   const collapseBtn = document.getElementById('sidebar-collapse');
   if (!header || !collapseBtn) return;
@@ -135,7 +125,7 @@ function buildModeSwitch(map: maplibregl.Map): void {
   group.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const target = btn.dataset['view'];
-      if (target === 'brief' || target === 'console') switchMode(map, target);
+      if (target === 'brief' || target === 'console') switchMode(target);
     });
   });
   header.insertBefore(group, collapseBtn);
@@ -147,6 +137,12 @@ function buildModeSwitch(map: maplibregl.Map): void {
  * state `<select>`), and the console door. The search is the shared component
  * (places + Tribal land areas + layers), the same one the console catalog and
  * the mobile sheet mount, so a person types one box wherever they are.
+ *
+ * E1 deliverable 1 (D-0.7.0-041 part 2, review E1.2): the lede is worded
+ * around selecting a place on the map, not around an already-open report,
+ * and the console door keeps its honest name (the interim escape to the
+ * full instrument; it is not renamed a studio). The Brief-mode section
+ * hiding itself is CSS-first (src/styles/app.css, the view-brief rules).
  */
 function buildBriefHead(map: maplibregl.Map): void {
   const head = document.getElementById('brief-head');
@@ -154,15 +150,28 @@ function buildBriefHead(map: maplibregl.Map): void {
 
   head.innerHTML = `
     <h2 class="panel-title">Drought briefing</h2>
-    <p class="brief-head-lede">What does the current drought mean for a place? Search a place, a Tribal land area, or a layer, or select a boundary on the map, and the briefing answers with conditions, outlooks, and resources.</p>
+    <p class="brief-head-lede">What does the current drought mean for a place? Select a Tribal land area, a reservation, or a state on the map, or search for one below; the briefing opens with conditions, outlooks, and resources for the place you choose.</p>
     <div id="brief-search"></div>
     <button type="button" id="brief-console-door" class="brief-console-door">Open the map &amp; layers console</button>
   `;
 
   const door = head.querySelector<HTMLButtonElement>('#brief-console-door');
   door?.addEventListener('click', () => {
-    switchMode(map, 'console');
+    switchMode('console');
   });
+
+  // The compact Tribal Nations action (umbrella Unit F) moved here from
+  // the impact panel's chrome at the S2/E1 integration: D-0.7.0-041
+  // retired the unsolicited briefing, so the panel is no longer the
+  // default Brief surface, and the ratified visibility guarantee (the
+  // group command and its health line visible on the default Brief,
+  // Codex final-pass finding 2) now rides the Brief head. A brief embed
+  // keeps the panel-hosted instance instead (the sidebar is collapsed
+  // there); one instance ever, the id is unique.
+  const isEmbedBoot = document.getElementById('app')?.classList.contains('embed') ?? false;
+  if (!isEmbedBoot) {
+    head.appendChild(buildTribalNationsBriefAction());
+  }
 
   mountBriefSearch(map);
 }
@@ -197,16 +206,32 @@ export function ensureBriefHeadSearch(map: maplibregl.Map): void {
 }
 
 /**
- * Initialize the view shell. Called once from boot, after the sidebar
- * (which seeds the mode from the URL) and before the deep link applies
- * (a `select=` deep link opens its own briefing, so the answer-first
- * boot must not double-open; the caller says whether one is present).
+ * Public seam for the embed-exit path (Codex S2/E1 integration finding
+ * 2): an embed boot skips the head-hosted Tribal Nations action, and
+ * the panel hosts it only when BUILT under the embed class, so an
+ * exited embed could end up with no instance at all. Idempotent: if
+ * the unique id already exists anywhere (the panel-hosted instance
+ * from an embed-boot panel build), this is a no-op; otherwise the
+ * Brief head gains the action, keeping the umbrella's default-Brief
+ * visibility guarantee after the exit.
  */
-export function initViewShell(
-  map: maplibregl.Map,
-  opts: { hasSelectDeepLink: boolean }
-): void {
-  buildModeSwitch(map);
+export function ensureBriefHeadTribalAction(): void {
+  if (document.getElementById('tribal-nations-brief-action')) return;
+  const head = document.getElementById('brief-head');
+  if (!head) return;
+  head.appendChild(buildTribalNationsBriefAction());
+}
+
+/**
+ * Initialize the view shell. Called once from boot, after the sidebar
+ * (which seeds the mode from the URL). The shell builds chrome only:
+ * the U1 answer-first boot open that used to fire here is retired
+ * (D-0.7.0-041 part 1; no unsolicited briefing), so a `select=` deep
+ * link (applied by the caller afterward) and explicit selections are
+ * the only briefing openers.
+ */
+export function initViewShell(map: maplibregl.Map): void {
+  buildModeSwitch();
   buildBriefHead(map);
   applyModeClass(getViewMode());
 
@@ -214,8 +239,4 @@ export function initViewShell(
     applyModeClass(mode);
     updateModeSwitch(mode);
   });
-
-  if (getViewMode() === 'brief' && !opts.hasSelectDeepLink) {
-    openBriefAnswer(map);
-  }
 }

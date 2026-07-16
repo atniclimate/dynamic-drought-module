@@ -126,9 +126,10 @@ export async function openStateBriefing(
     fit?: boolean;
     /**
      * Evaluated after the boundary fetch, immediately before the panel
-     * opens; returning false yields silently (no toast). The U1
-     * answer-first boot passes a guard so its late-resolving open never
-     * overrides a briefing the user has interacted with meanwhile.
+     * opens; returning false yields silently (no toast). Async openers
+     * (the select= deep link, the region-briefing trigger) pass a guard
+     * so a late-resolving open never overrides a briefing the user has
+     * interacted with meanwhile.
      */
     guard?: () => boolean;
   } = {}

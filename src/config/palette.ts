@@ -200,7 +200,7 @@ export function pickTreatyColor(name: string | null | undefined): string {
  * unrelated hues (the prior warm-orange Tribal Lands, seven-hue Treaty spread,
  * and indigo reservations). The visible reservation surface of record is the
  * LIVE BIA layer; the bundled Tribal Lands placeholder ships empty (CLAUDE.md
- * sections 2 and 4), so on the reference deployment the BIA purple is what a
+ * sections 2 and 4), so on the reference deployment the BIA magenta is what a
  * reader actually sees.
  *
  * Opacity hierarchy (ddm-visual-styling-and-readability, the 0.3 to 0.6 fill
@@ -215,19 +215,30 @@ export function pickTreatyColor(name: string | null | undefined): string {
 export const TRIBAL_FILL_COLOR = '#c026d3';
 export const TRIBAL_OUTLINE_COLOR = '#a21caf';
 
-/** BIA reservation boundaries (AIAN-LAR, live). Purple, one step toward violet. */
-export const RESERVATION_FILL_COLOR = '#9333ea';
-export const RESERVATION_OUTLINE_COLOR = '#7e22ce';
+/**
+ * BIA reservation boundaries (AIAN-LAR, live). Since E1 (D-0.7.0-043
+ * part 4, staged by D-0.7.0-041 part 2) the pair sits at the SAME magenta
+ * pole of the family as the AIANNH Tribal Lands layer: one Tribal color
+ * family, never two competing hues (the prior one-step-toward-violet
+ * purple retired). The two representations stay distinguishable through a
+ * NON-COLOR channel: bia-reservations.ts carries the stronger fill and the
+ * heavier outline, aiannh.ts the lighter wash and the finer outline, and
+ * the popup and pill wording name each agency source. The outline is one
+ * shade lighter than the AIANNH outline, inside the same magenta hue.
+ */
+export const RESERVATION_FILL_COLOR = '#ec4899';
+export const RESERVATION_OUTLINE_COLOR = '#db2777';
 
 /**
- * US Census AIANNH Tribal Lands (live). Pink, the warm end of the family:
- * distinct from both the deployer fuchsia and the BIA purple so the
+ * US Census AIANNH Tribal Lands (live). The magenta pole of the family,
+ * shared with the BIA reservation pair since E1 (see the note above): the
  * deliberate AIANNH + AIAN-LAR double-draw (D-0.7.0-033) reads as two
- * agencies' representations, never one blended dataset. The fill sits BELOW
- * the BIA reservation fill in the opacity hierarchy (see the header note):
+ * agencies' representations through weight and strength, never through two
+ * unrelated hues and never as one blended dataset. The fill sits BELOW the
+ * BIA reservation fill in the opacity hierarchy (see the header note):
  * AIANNH covers broad statistical geographies (Oklahoma Tribal Statistical
- * Areas span most of the state), so it renders as a light wash the stronger
- * reservation purple stays legible over.
+ * Areas span most of the state), so it renders as a light wash the
+ * stronger reservation pair stays legible over.
  */
 export const AIANNH_FILL_COLOR = '#ec4899';
 export const AIANNH_OUTLINE_COLOR = '#be185d';

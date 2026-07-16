@@ -806,6 +806,23 @@ button.conditions-metric:hover {
   display: none;
 }
 
+/* E1 deliverable 1, interim progressive disclosure (D-0.7.0-041 part 2; the
+   2026-07-16 design review E1.2): in Brief mode the console instrumentation
+   (Quick views, the Layers catalog, Water & Snow, and the persistent footer)
+   steps behind the existing, honestly named "Open the map & layers console"
+   door; the Brief page is the answer, the one search, and the one door.
+   CSS-first: the DOM stays mounted (the island pre-mount boot signal and the
+   specs count it), display only, and console mode is untouched. Embeds are
+   untouched byte for byte (:not(.embed)): the embed surface keeps its
+   shipped chrome (hard rule 8). On mobile the sheet detent matrix already
+   gates these sections; these rules only quiet the desktop Brief column. */
+#app.view-brief:not(.embed) #panel-quick-views,
+#app.view-brief:not(.embed) #panel-layers,
+#app.view-brief:not(.embed) #panel-telemetry,
+#app.view-brief:not(.embed) .sidebar-footer {
+  display: none;
+}
+
 /* ----------------------------------------------------------------------------
    View preset chips (UX-2)
    ---------------------------------------------------------------------------- */

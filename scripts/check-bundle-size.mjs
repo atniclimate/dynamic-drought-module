@@ -1,18 +1,26 @@
 /**
  * Measured gzip bundle gate (0.7.0 U0d; ratified line: plan section 6,
- * ratification 9.9 item 2a). The app chunk must stay under 100 kB gzip;
- * the maplibre and pmtiles vendor chunks are exempt as cache-stable.
+ * ratification 9.9 item 2a; hardened by D-0.7.0-045 at the S1 unit).
+ * The maplibre and pmtiles vendor chunks are exempt as cache-stable.
  *
- * The headline figure is the entry chunk (assets/index-*.js) as gzip
- * bytes, the same figure the SPIKE verdict must cite (D-ARCH-003; run
- * with --budget 45 for that check). The eager boot payload (entry plus
- * every modulepreload in dist/index.html, vendor exempt) is reported
- * alongside so weight cannot hide in a preloaded shared chunk; lazy
- * chunks and CSS are informational.
+ * TWO ENFORCED LINES (D-0.7.0-045: "state both numbers, and the gate
+ * command enforces both"):
  *
- * npm semantics: exit 0 under budget, exit 1 over budget or when dist/
- * is missing (run `npm run build` first; the gate script sequences that).
- * Sizes are reported in kB of 1000 bytes to match Vite's build report.
+ *   1. The ENTRY line: the entry chunk (assets/index-*.js) must stay
+ *      under 45 kB gzip BY DEFAULT (the ADR 0002 condition; no
+ *      remembered flag). --budget overrides this line only, for
+ *      exploratory checks; the default is the gate.
+ *   2. The APP line: the eager boot payload (entry plus every
+ *      modulepreload in dist/index.html, vendor exempt) must stay
+ *      under 100 kB gzip, always. Enforcing it on the eager total
+ *      keeps weight from hiding in a preloaded shared chunk.
+ *
+ * Lazy chunks and CSS are informational.
+ *
+ * npm semantics: exit 0 under both lines, exit 1 over either or when
+ * dist/ is missing (run `npm run build` first; the gate script
+ * sequences that). Sizes are reported in kB of 1000 bytes to match
+ * Vite's build report.
  */
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
@@ -21,7 +29,8 @@ import { gzipSync } from 'node:zlib';
 
 const DIST = 'dist';
 const ASSETS = join(DIST, 'assets');
-const DEFAULT_BUDGET_KB = 100;
+const DEFAULT_BUDGET_KB = 45;
+const APP_LINE_KB = 100;
 const VENDOR_EXEMPT = /^(maplibre|pmtiles)-/;
 
 const budgetArgAt = process.argv.indexOf('--budget');
@@ -70,7 +79,7 @@ const lazyJs = allJs.filter((f) => !eagerSet.has(f));
 const lazyGzip = lazyJs.reduce((sum, f) => sum + gzipBytes(join(ASSETS, f)), 0);
 const cssGzip = allCss.reduce((sum, f) => sum + gzipBytes(join(ASSETS, f)), 0);
 
-console.log(`bundle gate (gzip, kB = 1000 bytes; budget ${budgetKb} kB on the app entry chunk)`);
+console.log(`bundle gate (gzip, kB = 1000 bytes; entry line ${budgetKb} kB, app line ${APP_LINE_KB} kB on the eager app total)`);
 console.log(`  app entry chunk    ${kb(entryGzip).padStart(7)} kB  ${entryName}`);
 console.log('  eager boot payload (entry + modulepreload):');
 for (const row of eagerRows) console.log(row);
@@ -78,8 +87,14 @@ console.log(`  eager app total    ${kb(eagerAppGzip).padStart(7)} kB  (vendor-ex
 console.log(`  lazy chunks        ${kb(lazyGzip).padStart(7)} kB  across ${lazyJs.length} files`);
 console.log(`  stylesheets        ${kb(cssGzip).padStart(7)} kB  across ${allCss.length} files`);
 
+let failed = false;
 if (entryGzip / 1000 >= budgetKb) {
-  console.error(`bundle gate: FAIL; app entry chunk ${kb(entryGzip)} kB gzip is at or over the ${budgetKb} kB budget`);
-  process.exit(1);
+  console.error(`bundle gate: FAIL; app entry chunk ${kb(entryGzip)} kB gzip is at or over the ${budgetKb} kB entry line`);
+  failed = true;
 }
-console.log(`bundle gate: clean (${kb(entryGzip)} kB gzip under ${budgetKb} kB)`);
+if (eagerAppGzip / 1000 >= APP_LINE_KB) {
+  console.error(`bundle gate: FAIL; eager app total ${kb(eagerAppGzip)} kB gzip is at or over the ${APP_LINE_KB} kB app line`);
+  failed = true;
+}
+if (failed) process.exit(1);
+console.log(`bundle gate: clean (entry ${kb(entryGzip)} kB under ${budgetKb} kB; eager app ${kb(eagerAppGzip)} kB under ${APP_LINE_KB} kB)`);

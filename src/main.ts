@@ -113,10 +113,11 @@ async function boot(): Promise<void> {
   // injected here anymore.
   initMobileSheet(map, { deepLinkBoot: select !== null });
 
-  // The two doors (U1, D-ARCH-002): mode chrome, the Brief head, and the
-  // answer-first boot. After the sidebar (which seeds the mode from the
-  // URL); told about the deep link so it does not double-open a briefing.
-  initViewShell(map, { hasSelectDeepLink: select !== null });
+  // The two doors (U1, D-ARCH-002): mode chrome and the Brief head, after
+  // the sidebar (which seeds the mode from the URL). The U1 answer-first
+  // boot open is retired (S2, D-0.7.0-041: no unsolicited briefing); the
+  // `select=` deep link below is the only boot-time briefing opener.
+  initViewShell(map);
 
   // Applied after the sidebar so the deep link's fitBounds supersedes the
   // region framing; async, so a slow bundled-data fetch never blocks boot.

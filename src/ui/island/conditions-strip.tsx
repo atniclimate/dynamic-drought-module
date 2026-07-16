@@ -4,7 +4,10 @@
  * computation lives in `./strip-metrics`. Markup, strings, and data
  * attributes are contract: tests/conditions-strip.spec.ts asserts the
  * off-state wording, the tile order, the stale flags, and the button
- * semantics (see the conditions-strip-strings knowledge card).
+ * semantics (see the conditions-strip-strings knowledge card). Since E1
+ * (D-0.7.0-041 part 2, review E1.4) the Alerts and Fires tiles render only
+ * while their layers are on; the drought tile and the date line are the
+ * strip's permanent content.
  *
  * U1 (D-0.7.0-008, the ratified tile guardrail spec): each tile is a
  * REAL `button` with stable semantics in every state (off, loading,
@@ -190,11 +193,21 @@ export function ConditionsStrip({ map, tick, checked }: StripProps) {
     }
   });
 
+  // E1 deliverable 6 (D-0.7.0-041 part 2; the 2026-07-16 design review
+  // E1.4): the off-state Alerts and Fires tiles retire. The strip keeps the
+  // drought reading and the date line always (including drought's honest
+  // off state; the drought tile is the strip's identity), but the two event
+  // tiles render only while their layers are ON; turning a layer on (the
+  // catalog today, the cluster buttons at S4) brings its tile back as the
+  // live reading plus the hide action.
+  const alertsOn = isOn('alerts');
+  const firesOn = isOn('fires');
+
   return (
     <>
       <MetricTile id="drought" m={droughtTile} isOn={isOn('drought')} />
-      <MetricTile id="alerts" m={alerts} isOn={isOn('alerts')} />
-      <MetricTile id="fires" m={fires} isOn={isOn('fires')} />
+      {alertsOn ? <MetricTile id="alerts" m={alerts} isOn={alertsOn} /> : null}
+      {firesOn ? <MetricTile id="fires" m={fires} isOn={firesOn} /> : null}
     </>
   );
 }

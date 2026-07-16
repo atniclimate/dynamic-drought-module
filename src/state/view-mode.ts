@@ -3,9 +3,12 @@
  * two doors").
  *
  * The application has two doors: BRIEF leads with the drought briefing
- * (the answer) and keeps the map and layer catalog as the drill-down;
- * CONSOLE is the full map-and-layers instrument. The mode round-trips
- * through the URL as `view=brief|console` (invariant 2: URL as state).
+ * and keeps the map and layer catalog as the drill-down; CONSOLE is the
+ * full map-and-layers instrument. The mode round-trips through the URL
+ * as `view=brief|console` (invariant 2: URL as state). Since S2
+ * (D-0.7.0-041) a Brief boot no longer auto-opens a briefing: the mode
+ * derivation below stands, but a briefing opens ONLY from an explicit
+ * place selection or a `select=` deep link, never unsolicited.
  *
  * Boot derivation for URLs that do not carry an explicit `view=` (the
  * legacy-URL rule, D-0.7.0-017):
@@ -15,8 +18,9 @@
  *      (the recommended partner URL carries `layers=states` only to
  *      make the selected boundary visible, so `select` outranks the
  *      layers clause below).
- *   3. A URL naming `layers=`, or a `region` without `select=`, opens
- *      the CONSOLE: the sharer meant the map.
+ *   3. A URL naming `layers=`, a `cluster=` or its `ocean=` companion
+ *      (S2, D-0.7.0-044: a display link), or a `region` or `framing=`
+ *      without `select=`, opens the CONSOLE: the sharer meant the map.
  *   4. A bare URL opens BRIEF (embeds included: embeds default to
  *      brief, D-ARCH-002).
  *
@@ -38,7 +42,15 @@ export function deriveViewMode(params: URLSearchParams): ViewMode {
   const explicit = params.get('view');
   if (explicit === 'brief' || explicit === 'console') return explicit;
   if (params.get('select')) return 'brief';
-  if (params.has('layers') || params.has('region')) return 'console';
+  if (
+    params.has('layers') ||
+    params.has('region') ||
+    params.has('cluster') ||
+    params.has('ocean') ||
+    params.has('framing')
+  ) {
+    return 'console';
+  }
   return 'brief';
 }
 

@@ -169,14 +169,19 @@ function ensurePanel(): HTMLElement {
   `;
   document.body.appendChild(panel);
 
-  // The compact Tribal Nations action (umbrella build Unit F): the Brief
-  // door is the initial display for a bare URL, so the ratified prominent
-  // button rides the panel's static chrome, between the title/kind block
-  // and the body. Eager wiring only; the brief embed's C1 boundary (no
-  // island chunk) is untouched.
-  panel
-    .querySelector('.impact-panel-header')
-    ?.insertAdjacentElement('afterend', buildTribalNationsBriefAction());
+  // The compact Tribal Nations action (umbrella build Unit F) rides the
+  // panel's static chrome ONLY in embed mode, where the sidebar (and so
+  // the Brief head, the non-embed host since the S2/E1 integration under
+  // D-0.7.0-041) is collapsed. One instance ever; the id is unique.
+  // Eager wiring only; the brief embed's C1 boundary (no island chunk)
+  // is untouched. An exited embed keeps this panel-hosted instance (the
+  // umbrella's original placement) rather than remounting mid-session.
+  const isEmbedBoot = document.getElementById('app')?.classList.contains('embed') ?? false;
+  if (isEmbedBoot) {
+    panel
+      .querySelector('.impact-panel-header')
+      ?.insertAdjacentElement('afterend', buildTribalNationsBriefAction());
+  }
 
   panelEl = panel;
   bodyEl = panel.querySelector<HTMLElement>('.impact-panel-body');
@@ -455,11 +460,12 @@ export function openImpactPanel(context: BoundarySelectionContext): number {
   // Remember the trigger so focus can return to it on close (#16). Captured
   // before we move focus to the close button below. A reopen keeps the
   // original opener rather than overwriting it with the close button. Two
-  // refinements since the answer-first boot (U1) can open the panel with no
-  // focused opener: the document body is never recorded as an opener (a
+  // refinements since an open can arrive with no focused opener (today
+  // the select= deep link; formerly the U1 answer-first boot, retired by
+  // S2 D-0.7.0-041): the document body is never recorded as an opener (a
   // close must not "restore" focus to the body), and a user-initiated open
   // while an openerless panel is showing ADOPTS its real opener, so the
-  // keyboard trigger's focus restore works after a boot auto-open.
+  // keyboard trigger's focus restore works after a deep-link open.
   const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const realOpener = active !== null && active !== document.body ? active : null;
   if (!panelEl || panelEl.hidden) {
@@ -512,8 +518,9 @@ export function openImpactPanel(context: BoundarySelectionContext): number {
       // From the map-first closed state (mobile shell) a USER-initiated
       // Brief briefing open (a boundary tap, a search select, a deep
       // link) raises the at-hand answer, the mockup's map-tap popup
-      // equivalent; the ANSWER-FIRST BOOT briefing does not (the boot
-      // stays map-first, the answer waits behind the Brief door).
+      // equivalent. Since S2 (D-0.7.0-041) those explicit paths are the
+      // only briefing openers, so the gate is now belt-and-braces: the
+      // boot stays map-first because nothing opens unsolicited.
       setSheetDetent('half');
     }
   } else {
@@ -609,8 +616,8 @@ export function isCurrentBriefing(token: number): boolean {
 /**
  * Briefing INTENT sequence (U1; hardened after the U1 adversarial
  * review). Every declaration of "I want a briefing" takes a number:
- * async openers (the answer-first boot, the place picker, the region
- * trigger, the select= deep link) declare intent at user-action time
+ * async openers (the place picker, the region trigger, the select=
+ * deep link) declare intent at user-action time
  * and check, at their fetch's resolve, that no NEWER intent or panel
  * interaction has happened since; executed opens and closes bump the
  * sequence too, so they supersede anything declared before them. This

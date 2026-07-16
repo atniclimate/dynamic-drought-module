@@ -102,7 +102,8 @@ export interface LayerDef {
  * default changes, not silent ones): US Drought Monitor (the headline
  * drought layer), the two live PRESENT-DAY Tribal-geography layers (Census
  * AIANNH Tribal Lands and BIA Reservation Boundaries; Tribal Nations MUST
- * display on first load), and State Boundaries. Treaty & Ceded Lands (the
+ * display on first load), State Boundaries, and (since E1, D-0.7.0-043
+ * part 3) Terrain Shading. Treaty & Ceded Lands (the
  * historical Royce record) is default-off and joins via the Tribal Nations
  * button, its own toggle, or a boundary click. The bundled deployer slots
  * (`tribal`, `treaty`) are default-off AND ui-hidden: they are only
@@ -123,7 +124,10 @@ export const LIVE_NO_FEATURES_LABEL = 'no features returned for this view';
 export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'hydrography', name: 'Hydrography', source: 'OpenStreetMap (Overpass)', role: 'reference', defaultOn: false, load: () => import('../layers/hydrography') },
   { key: 'ecoregions', name: 'Ecoregions (Level III/IV)', source: 'EPA Omernik · PMTiles', role: 'reference', defaultOn: false, load: () => import('../layers/ecoregions') },
-  { key: 'hillshade', name: 'Terrain Shading', source: 'USGS 3DEP · PMTiles', role: 'reference', defaultOn: false, load: () => import('../layers/hillshade') },
+  // Default-on since E1 (D-0.7.0-043 part 3): terrain shading joins the
+  // calm default composition so the E1 paint tuning accounts for it from
+  // the start; it renders inside the bottom stack, below every data layer.
+  { key: 'hillshade', name: 'Terrain Shading', source: 'USGS 3DEP · PMTiles', role: 'reference', defaultOn: true, load: () => import('../layers/hillshade') },
   { key: 'drought', name: 'Drought Outlook (CPC)', source: 'NOAA CPC · Monthly & Seasonal', role: 'surface', defaultOn: false, load: () => import('../layers/drought') },
   { key: 'gridded-index', name: 'Gridded Drought Index (SPI)', source: 'NOAA NIDIS · raster tiles', role: 'surface', defaultOn: false, load: () => import('../layers/gridded-index') },
   // noDataLabel on the live agency layers below (usdm, wildfire pair, NWS

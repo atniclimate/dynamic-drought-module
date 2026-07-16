@@ -125,6 +125,21 @@ const OFFSET_PIXEL_TOLERANCE = 0.5;
  */
 const GEOMETRY_PRECISION = 5;
 
+/**
+ * E1 composition targets (D-0.7.0-041 part 2, review E1.3; D-0.7.0-043
+ * part 4): starting values for the stewardship visual review at unit
+ * close. The Tribal Lands wash lightens to 0.12 with a 0.9 px outline; the
+ * Reservation Boundaries pair (bia-reservations.ts) carries the STRONGER
+ * fill (0.18) and the heavier outline (1.1 px). With both layers now in
+ * the one magenta family (src/config/palette.ts), outline weight and fill
+ * strength are the honest non-color channel that keeps the two
+ * representations distinguishable. The selected boosts stay.
+ */
+const FILL_OPACITY_BASE = 0.12;
+const FILL_OPACITY_SELECTED = 0.4;
+const OUTLINE_WIDTH_BASE = 0.9;
+const OUTLINE_WIDTH_SELECTED = 2.4;
+
 type Status = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
 
 /**
@@ -181,7 +196,8 @@ const responseCache = new Map<string, CachedResponse>();
 /**
  * The BIA reservation fill layer id (src/layers/bia-reservations.ts). When
  * present it is this layer's preferred insertion anchor, so the documented
- * double-draw hierarchy (AIANNH wash BELOW the reservation purple) holds
+ * double-draw hierarchy (the lighter AIANNH wash BELOW the stronger
+ * reservation pair) holds
  * regardless of toggle order: without it, toggling AIANNH off and on while
  * BIA is active would reinsert AIANNH on top (Codex Unit B finding 4,
  * 2026-07-15). The literal is mirrored, not imported, to keep the layer
@@ -504,15 +520,16 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
       type: 'fill',
       source: SOURCE_ID,
       paint: {
-        // A light wash, deliberately below the BIA reservation fill (0.26) in
-        // the family hierarchy so the double-draw stays legible: AIANNH pink
-        // underneath, reservation purple on top (see palette.ts).
+        // A light wash, deliberately below the BIA reservation fill (0.18)
+        // in the family hierarchy so the double-draw stays legible: the
+        // lighter AIANNH wash underneath, the stronger reservation pair on
+        // top (see palette.ts and the E1 constants above).
         'fill-color': AIANNH_FILL_COLOR,
         'fill-opacity': [
           'case',
           ['boolean', ['feature-state', 'selected'], false],
-          0.4,
-          0.16
+          FILL_OPACITY_SELECTED,
+          FILL_OPACITY_BASE
         ]
       }
     },
@@ -529,8 +546,8 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
         'line-width': [
           'case',
           ['boolean', ['feature-state', 'selected'], false],
-          2.4,
-          1
+          OUTLINE_WIDTH_SELECTED,
+          OUTLINE_WIDTH_BASE
         ],
         'line-opacity': [
           'case',

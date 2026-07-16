@@ -72,7 +72,7 @@ import {
   openImpactPanel
 } from './impact-panel';
 import { getPlaceSelection, onPlaceSelectionChange } from '../state/place-selection';
-import { ensureBriefHeadSearch } from './view-shell';
+import { ensureBriefHeadSearch, ensureBriefHeadTribalAction } from './view-shell';
 import { prefersReducedMotion } from '../util/motion';
 import {
   fetchAwdbDailySeries,
@@ -89,6 +89,17 @@ import { parseUrlParams, syncUrl } from '../state/url';
 import type { ParsedUrlParams } from '../state/url';
 import { getViewMode, onViewModeChange, setViewMode } from '../state/view-mode';
 import { getBasemapMode, onBasemapChange, setBasemapMode } from '../state/basemap-store';
+import { getFraming, onFramingChange, setFraming } from '../state/framing-store';
+import {
+  clearOceanFraming,
+  getHazardCluster,
+  getOceanFraming,
+  onHazardClusterChange,
+  reconcileClusterWithLayerIntent,
+  setHazardCluster
+} from '../state/cluster-store';
+import { FRAMINGS } from '../config/framings';
+import { OCEANS } from '../config/oceans';
 import { applyBasemapMode } from '../map/basemap-switcher';
 import { timeline } from '../state/timeline';
 import { resolveStatusPillText } from './island/pill-text';
@@ -251,6 +262,16 @@ function selectRegion(
   const region: Region | undefined = REGIONS[key];
   if (!region) return;
 
+  // An EXPLICIT region choice (click or arrow-key; silent marks the boot
+  // fit) is a legacy camera gesture: it clears the framing context back
+  // to ALL and drops any ocean camera claim, so the URL never asserts
+  // two cameras at once (S2, D-0.7.0-041/044/053). The hazard cluster
+  // itself persists (camera gestures never change the display).
+  if (!silent) {
+    setFraming(null);
+    clearOceanFraming();
+  }
+
   STATE.currentRegion = key;
   // Mirror the active region into the shared store so the impact panel (and
   // any future consumer) can read it without threading it through every
@@ -316,8 +337,14 @@ function checkedLayerKeys(): Set<string> {
  * thin wrapper so callers do not have to assemble the snapshot.
  */
 function pushUrl(): void {
+  // Camera exclusivity (S2): while a framing is active the URL carries
+  // `framing=` INSTEAD of `region=` (one camera vocabulary claimed at a
+  // time); a null framing keeps the legacy region emission byte for
+  // byte. The cluster/ocean pair rides the durable-truth model inside
+  // syncUrl (D-0.7.0-044): a clean cluster replaces `layers=`.
+  const framing = getFraming();
   syncUrl({
-    region: STATE.currentRegion,
+    region: framing !== null ? null : STATE.currentRegion,
     layers: checkedLayerKeys(),
     embed: STATE.embed,
     view: getViewMode(),
@@ -325,7 +352,10 @@ function pushUrl(): void {
     usdmMode: timeline.usdmMode,
     sstDate: timeline.sstDate,
     outlookRange: timeline.outlookRange,
-    basemap: getBasemapMode()
+    basemap: getBasemapMode(),
+    framing,
+    cluster: getHazardCluster(),
+    ocean: getOceanFraming()
   });
 }
 
@@ -863,6 +893,11 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
       STATE.embed = false;
       void mountSidebarIslandNow();
       ensureBriefHeadSearch(map);
+      // An embed boot hosts the Tribal Nations Brief-door action on the
+      // impact panel (or nowhere, if the panel builds after this exit);
+      // the full chrome's host is the Brief head. Idempotent (Codex
+      // S2/E1 integration finding 2).
+      ensureBriefHeadTribalAction();
       pushUrl();
       // Below 720px the post-embed chrome is the bottom sheet, revealed
       // at peek (the ratified embed-exit path, D-0.7.0-017); a desktop
@@ -910,6 +945,14 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // the URL, and the URL must carry the derived mode from its first write).
   setViewMode(params.view);
 
+  // Seed the region-shell stores (S2) BEFORE the first pushUrl for the
+  // same reason: a `framing=` or `cluster=` deep link must survive the
+  // first canonical write. The parser already resolved the precedence
+  // pairs (`layers=` outranks `cluster=`; `ocean=` needs cluster=enso),
+  // so the seeds are the committed truth.
+  setFraming(params.framing);
+  setHazardCluster(params.cluster, params.ocean);
+
   // Seed the temporal store BEFORE any layer activates, so a layer module
   // that reads the timeline during activate() (USDM restoring a scrubbed
   // week, SST restoring a frame date) sees the URL's temporal state.
@@ -934,8 +977,34 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   }
 
   // Initial region fit; suppress animation so the user does not see a
-  // long fly-to on first paint.
+  // long fly-to on first paint. This runs even when a framing or ocean
+  // camera follows (below): selectRegion also owns the region-state
+  // bookkeeping (STATE.currentRegion, the radio marks, the store
+  // mirror), and both fits are instant in the same task, so only the
+  // winning camera ever paints.
   selectRegion(map, params.region, true);
+
+  // The boot camera precedence (S2; the table in
+  // docs/URL_SCHEMA_POLICY.md): `ocean=` (the most specific gesture,
+  // pairing display with camera, D-0.7.0-053) wins over `framing=`
+  // (D-0.7.0-039/041), which wins over the legacy `region=` fit above.
+  // Both are camera-only: they select nothing and brief nothing.
+  const cameraDef = params.ocean
+    ? OCEANS[params.ocean]
+    : params.framing
+      ? FRAMINGS[params.framing]
+      : null;
+  if (cameraDef) {
+    const [[south, west], [north, east]] = cameraDef.bounds;
+    const pad = cameraDef.padding;
+    map.fitBounds(
+      [
+        [west - pad, south - pad],
+        [east + pad, north + pad]
+      ],
+      { padding: 20, animate: false }
+    );
+  }
 
   return params;
 }
@@ -1056,6 +1125,13 @@ export function buildSidebar(
   // D-0.7.0-031): `basemap=satellite` must survive every later syncUrl.
   onBasemapChange(pushUrl);
 
+  // The region-shell stores re-sync the URL the same way (S2): a
+  // framing change rewrites `framing=`/`region=`, and a cluster change
+  // swaps between the one-word `cluster=` claim and the granular
+  // `layers=` list (D-0.7.0-044).
+  onFramingChange(pushUrl);
+  onHazardClusterChange(pushUrl);
+
   // The front-door trigger (F3): when a map place is selected or cleared, the
   // region-briefing button relabels to "See what this means" for that place, or
   // reverts to the region anchor.
@@ -1105,7 +1181,17 @@ export function buildSidebar(
   // region; user interaction cannot precede this line (it is the same
   // synchronous task). The registry subscription above still writes on
   // activation settle; the two writes are idempotent.
-  bridgeOnCheckedChange(() => pushUrl());
+  //
+  // The reconcile first (S2, D-0.7.0-044): any intent flip that makes
+  // the checked set diverge from the active cluster's composition drops
+  // the cluster claim, so this write (and every later one) carries the
+  // honest granular `layers=` instead of a cluster the display is not.
+  // The boot re-assertions from applyLayerSet are set-equal by
+  // construction, so they never clear a cluster boot.
+  bridgeOnCheckedChange(() => {
+    reconcileClusterWithLayerIntent(checkedLayerKeys());
+    pushUrl();
+  });
 
   // The island boot decision (headroom C1): a brief embed defers the
   // catalog chunk entirely; every other boot mounts it now. The mode is
