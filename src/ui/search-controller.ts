@@ -63,8 +63,10 @@ function buildSyncItems(): SearchItem[] {
   }
   for (const def of LAYER_DEFS) {
     // A ui-hidden layer (the deployer own-data slots, Unit I / D-0.7.0-038
-    // part 3) is not a public-facing UI feature: no search result either.
-    // The keys stay URL-reachable (?layers=tribal / ?layers=treaty).
+    // part 3; the buried Treaty & Ceded Lands, E2 / D-0.7.0-058 ruling 4)
+    // is not a public-facing UI feature: no search result either. The keys
+    // stay URL-reachable (?layers=tribal / ?layers=treaty /
+    // ?layers=treaty-cessions).
     if (def.uiHidden) continue;
     items.push({
       kind: 'layer',

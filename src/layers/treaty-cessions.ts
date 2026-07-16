@@ -15,8 +15,12 @@
  * cessions are kept SEPARATE (never dissolved or unioned; confirmed live that
  * cessions genuinely overlap), and the present-day Tribe name is shown
  * verbatim from the federal source, never remapped to a guessed name
- * (D-0.7.0-026 safety doctrine). Rendered hollow and dashed per the Treaty
- * family doctrine (line is the lever, never a fill).
+ * (D-0.7.0-026 safety doctrine). Rendered as #740058 fills with high,
+ * per-feature VARYING transparency since E2 (D-0.7.0-058 ruling 4): the
+ * dashed hollow outline retired, and overlapping cessions now read as depth
+ * through their stacked translucent fills. The layer also left the visible
+ * catalog (uiHidden in src/config/layers.ts) while staying reachable via
+ * layers= URLs and the Unit I related-cessions click path.
  *
  * NON-REDISTRIBUTION GUARD (CLAUDE.md hard rule 1): every response is
  * transient (in-memory session cache and the MapLibre source only); never
@@ -43,7 +47,7 @@ import maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection, GeoJsonProperties, Geometry } from 'geojson';
 
 import { URLS } from '../config/urls';
-import { TREATY_COLOR_DEFAULT, pickTreatyColor } from '../config/palette';
+import { TREATY_CESSION_FILL_COLOR } from '../config/palette';
 import { CESSNUM_PROPERTY, matchCessionFeatures } from '../impact/cession-match';
 import type { CessionMatchQuery } from '../impact/cession-match';
 import { buildTreatyCessionPopupHtml, readTableQualifiedField } from '../ui/popups';
@@ -55,10 +59,22 @@ import { registry } from '../state/registry';
 
 const LAYER_KEY = 'treaty-cessions';
 const SOURCE_ID = 'treaty-cessions';
+const FILL_LAYER_ID = 'treaty-cessions-fill';
 const OUTLINE_LAYER_ID = 'treaty-cessions-outline';
 
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
-export const fadeLayerIds = [OUTLINE_LAYER_ID] as const;
+export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID] as const;
+
+/**
+ * The per-feature fill-opacity band (E2, D-0.7.0-058 ruling 4): HIGH
+ * transparency throughout, VARYING by feature so overlapping cessions sum
+ * into visible depth instead of one flat wash. Deterministic from the
+ * cession number (below), so a refresh or a re-fetch never reshuffles a
+ * cession's transparency.
+ */
+const FILL_OPACITY_MIN = 0.1;
+const FILL_OPACITY_MAX = 0.26;
+const FILL_OPACITY_STEPS = 7;
 
 /** Per-call network budget for the cessions query. */
 const FETCH_TIMEOUT_MS = 15_000;
@@ -271,12 +287,31 @@ function pickCessionTitle(props: GeoJsonProperties): string {
 }
 
 /**
- * Precompute the per-feature outline color into `_color` (the treaty.ts
- * pattern; MapLibre paint expressions cannot call JavaScript). Colored by
- * matching the present-day Tribe name against TREATY_COLORS, so the Pacific
- * Northwest Treaty hues established there carry over to the cessions of the
- * same Tribal Nations; everything else takes the family default. Features
- * are rebuilt, never mutated in place.
+ * Deterministic per-feature fill opacity from the cession number: a small
+ * string hash bucketed into FILL_OPACITY_STEPS levels across the
+ * [FILL_OPACITY_MIN, FILL_OPACITY_MAX] band. The cession number is stable
+ * across fetches, so a cession keeps its transparency as the viewport
+ * refresh swaps data in and out of view.
+ */
+function cessionFillOpacity(cessnum: string | null): number {
+  const key = cessnum ?? '';
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  }
+  const step = hash % FILL_OPACITY_STEPS;
+  return (
+    FILL_OPACITY_MIN +
+    (step * (FILL_OPACITY_MAX - FILL_OPACITY_MIN)) / (FILL_OPACITY_STEPS - 1)
+  );
+}
+
+/**
+ * Precompute the per-feature fill opacity into `_fillOpacity` (the treaty.ts
+ * `_color` pattern; MapLibre paint expressions cannot call JavaScript). E2
+ * (D-0.7.0-058 ruling 4): the differentiation channel is VARYING high
+ * transparency over the one #740058 fill, replacing the retired per-Treaty
+ * hue spread. Features are rebuilt, never mutated in place.
  */
 function decorate(geojson: FeatureCollection): FeatureCollection {
   const features: Feature<Geometry, GeoJsonProperties>[] = Array.isArray(geojson.features)
@@ -286,7 +321,7 @@ function decorate(geojson: FeatureCollection): FeatureCollection {
     type: 'FeatureCollection',
     features: features.map((feature) => {
       const props: GeoJsonProperties = { ...(feature.properties ?? {}) };
-      props._color = pickTreatyColor(readTableQualifiedField(props, 'presdaytrb'));
+      props._fillOpacity = cessionFillOpacity(readTableQualifiedField(props, 'cessnum'));
       return { ...feature, properties: props };
     })
   };
@@ -486,11 +521,15 @@ export async function probeCessions(
 }
 
 /**
- * Add the source and the hollow dashed outline layer (the Treaty family
- * doctrine: the line is the lever, never a fill). Added even for an empty
- * collection so a later refresh can populate the existing source. Appended
- * without a beforeId, matching the bundled treaty.ts: hollow lines read
- * correctly above fills, and `reassertLabelOrder` keeps labels on top.
+ * Add the source, the depth fill, and the solid outline (E2, D-0.7.0-058
+ * ruling 4: the dashed hollow style retired; #740058 fills with high,
+ * per-feature varying transparency carry the read, overlaps summing into
+ * depth). Added even for an empty collection so a later refresh can
+ * populate the existing source. Appended without a beforeId, matching the
+ * bundled treaty.ts; `reassertLabelOrder` keeps labels on top. The outline
+ * stays because it is the click target `bindPopups` wires and the U3h /
+ * Unit I emphasis channel (`selected` / `related` feature-states), both
+ * unchanged here.
  */
 function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): void {
   map.addSource(SOURCE_ID, {
@@ -501,13 +540,24 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
   });
 
   map.addLayer({
+    id: FILL_LAYER_ID,
+    type: 'fill',
+    source: SOURCE_ID,
+    paint: {
+      'fill-color': TREATY_CESSION_FILL_COLOR,
+      // The per-feature `_fillOpacity` from decorate(); the coalesce
+      // fall-through is defensive (every decorated feature carries one).
+      'fill-opacity': ['coalesce', ['get', '_fillOpacity'], FILL_OPACITY_MIN]
+    }
+  });
+
+  map.addLayer({
     id: OUTLINE_LAYER_ID,
     type: 'line',
     source: SOURCE_ID,
     paint: {
-      'line-color': ['coalesce', ['get', '_color'], TREATY_COLOR_DEFAULT],
-      // Hollow throughout (a cession-area representation, never a fill); the
-      // selected cession (U3h) and the click-related cessions (Unit I,
+      'line-color': TREATY_CESSION_FILL_COLOR,
+      // The selected cession (U3h) and the click-related cessions (Unit I,
       // `related` feature-state) read through a heavier, fully opaque line.
       'line-width': [
         'case',
@@ -524,8 +574,7 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
         ['boolean', ['feature-state', 'related'], false],
         1,
         0.95
-      ],
-      'line-dasharray': [6, 3]
+      ]
     }
   });
 }
@@ -586,7 +635,7 @@ export function cancelActivation(): void {
 
 /**
  * Stop the viewport refresh, abort any in-flight fetch, and remove the
- * outline and source. Safe to call when never activated.
+ * outline, fill, and source. Safe to call when never activated.
  */
 export function deactivate(map: maplibregl.Map): void {
   detachRefresh(map);
@@ -602,6 +651,7 @@ export function deactivate(map: maplibregl.Map): void {
   relatedIds = new Set();
   lastAppliedFeatures = [];
   if (map.getLayer(OUTLINE_LAYER_ID)) map.removeLayer(OUTLINE_LAYER_ID);
+  if (map.getLayer(FILL_LAYER_ID)) map.removeLayer(FILL_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
 }
 

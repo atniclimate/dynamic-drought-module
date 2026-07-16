@@ -125,10 +125,10 @@ const REFRESH_DEBOUNCE_MS = 400;
  * close. The reservation fill calms from 0.26 to 0.18 with a 1.1 px
  * outline, still the STRONGER of the two present-day Tribal-geography
  * layers (the AIANNH wash in aiannh.ts sits at 0.12 with a 0.9 px
- * outline). With both layers now in the one magenta family
- * (src/config/palette.ts), outline weight and fill strength are the honest
- * non-color channel that keeps the two representations distinguishable.
- * The selected boosts stay.
+ * outline). With both layers now in the one Tribal family
+ * (src/config/palette.ts; pinned to #8d006b by E2, D-0.7.0-058 ruling 3),
+ * outline weight and fill strength are the honest non-color channel that
+ * keeps the two representations distinguishable. The selected boosts stay.
  */
 const FILL_OPACITY_BASE = 0.18;
 const FILL_OPACITY_SELECTED = 0.5;

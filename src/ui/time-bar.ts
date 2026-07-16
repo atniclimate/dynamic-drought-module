@@ -14,11 +14,16 @@
  *     valid-through range in the warn amber and body face. The change is
  *     deliberate and unmistakable (CLAUDE.md section 6 invariant 6).
  *
- * The bar lives on the map (not the sidebar) so it survives embed mode
- * with the sidebar collapsed, and it is owned by exactly one surface at a
- * time (surfaces are mutually exclusive). Layer modules install a spec on
- * activate and remove it on deactivate; the bar renders whatever the
- * current owner declares and never invents temporal capability.
+ * The bar lives in the SIDEBAR beside the legend (E2, D-0.7.0-058
+ * ruling 1: the floating map-bottom bar retired; this is a rehost, not a
+ * redesign; every capability and URL round-trip above is unchanged), and
+ * it is owned by exactly one surface at a time (surfaces are mutually
+ * exclusive). Layer modules install a spec on activate and remove it on
+ * deactivate; the bar renders whatever the current owner declares and
+ * never invents temporal capability. Embed mode has no sidebar, so the
+ * render also mirrors the stamp HEADLINE into the on-map
+ * `#embed-date-stamp` chip (visible only in embed via app.css): the
+ * smallest honest valid-date statement the date-honesty rule requires.
  *
  * Accessibility: the rail is a native range input (arrow keys work, the
  * discrete `step` snaps by construction); the stamp is aria-live polite so
@@ -112,6 +117,26 @@ function container(): HTMLElement | null {
 }
 
 /**
+ * The minimal embed valid-date stamp (E2, D-0.7.0-058 ruling 1): a chip in
+ * the map bottom dock carrying only the stamp headline and register. CSS
+ * shows it in embed mode alone; everywhere else the sidebar bar is the
+ * temporal surface. Mirrored on every render so the embed date can never
+ * drift from the spec the owning surface installed.
+ */
+function syncEmbedStamp(spec: TimeBarSpec | null): void {
+  const stamp = document.getElementById('embed-date-stamp');
+  if (!stamp) return;
+  if (!spec) {
+    stamp.hidden = true;
+    stamp.textContent = '';
+    return;
+  }
+  stamp.hidden = false;
+  stamp.dataset.register = spec.stamp.register;
+  stamp.textContent = spec.stamp.headline;
+}
+
+/**
  * Install (or update) the time bar for `owner` (a layer key). The bar
  * shows the given spec until the same owner clears it. A non-owning
  * caller's clear is ignored, so a slow deactivate cannot tear down the
@@ -155,6 +180,8 @@ function focusMarker(el: HTMLElement): string | null {
 function render(): void {
   const el = container();
   if (!el) return;
+
+  syncEmbedStamp(currentSpec);
 
   if (!currentSpec) {
     el.hidden = true;

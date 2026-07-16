@@ -61,9 +61,11 @@ export class BasemapSwitcherControl implements maplibregl.IControl {
     btn.className = 'basemap-switcher-btn';
     btn.setAttribute('aria-label', 'Satellite imagery');
     btn.title = 'Satellite imagery';
-    // A text glyph rather than an icon font: self-hosted posture, and the
-    // glyph reads at control size. Styled from tokens in app.css.
-    btn.textContent = 'SAT';
+    // A text label rather than an icon font: self-hosted posture, and the
+    // label reads at control size. Relabeled from 'SAT' to 'Satellite' by
+    // E2 (D-0.7.0-058 ruling 2) so the switcher reads as one family with
+    // the Share view / Reset stack. Styled from tokens in app.css.
+    btn.textContent = 'Satellite';
 
     const reflect = (): void => {
       const on = getBasemapMode() === 'satellite';

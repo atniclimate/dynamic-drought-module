@@ -135,6 +135,15 @@
           </div>
         </section>
 
+        <!-- The temporal controls (E2, D-0.7.0-058 ruling 1): the time bar
+             rehosted from the floating map-bottom dock into the sidebar,
+             beside the legend it already shares context with. Same element
+             id and internal markup (src/ui/time-bar.ts renders here);
+             hidden until a temporal surface installs a spec. Embeds (no
+             sidebar) keep the minimal valid-date stamp on the map (the
+             embed-date-stamp element in the bottom dock). -->
+        <div id="time-bar" class="time-bar" role="group" hidden></div>
+
         <section class="panel legend-panel" id="legend-panel" hidden>
           <h2 class="panel-title">Legend</h2>
           <div id="legend-sections"></div>
@@ -163,7 +172,7 @@
         <p>Data: OpenStreetMap · NOAA · USGS · BIA · EPA</p>
         <p class="muted">
           <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">atniclimate/dynamic-drought-module</a>
-          · v0.6.15
+          · v0.6.16
         </p>
       </footer>
     </aside>
@@ -224,13 +233,18 @@
 
       <div id="copy-toast" class="copy-toast" hidden>Link copied to clipboard</div>
 
-      <!-- Shared bottom overlay dock (H2, 0.6.2): notices, the time bar, and
-           the corner chips stack in one flex column so they can never cover
-           each other. Items hide individually; the dock itself is inert. -->
+      <!-- Shared bottom overlay dock (H2, 0.6.2): notices and the corner
+           chips stack in one flex column so they can never cover each other.
+           Items hide individually; the dock itself is inert. The time bar
+           moved to the sidebar (E2, D-0.7.0-058 ruling 1); what remains
+           here is the minimal embed valid-date stamp, mirrored from the
+           active temporal spec by src/ui/time-bar.ts and shown only in
+           embed mode (the embed has no sidebar, and the date-honesty rule
+           still applies there). -->
       <div id="map-bottom-dock" class="map-bottom-dock">
         <div id="map-notices" class="map-notices"></div>
 
-        <div id="time-bar" class="time-bar" role="group" hidden></div>
+        <div id="embed-date-stamp" class="embed-date-stamp" hidden></div>
 
         <div class="map-dock-foot">
           <div id="map-key" class="map-key" role="img" aria-label="Drought category key, D0 abnormally dry through D4 exceptional drought" hidden></div>

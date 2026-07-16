@@ -131,9 +131,10 @@ const GEOMETRY_PRECISION = 5;
  * close. The Tribal Lands wash lightens to 0.12 with a 0.9 px outline; the
  * Reservation Boundaries pair (bia-reservations.ts) carries the STRONGER
  * fill (0.18) and the heavier outline (1.1 px). With both layers now in
- * the one magenta family (src/config/palette.ts), outline weight and fill
- * strength are the honest non-color channel that keeps the two
- * representations distinguishable. The selected boosts stay.
+ * the one Tribal family (src/config/palette.ts; pinned to #8d006b by E2,
+ * D-0.7.0-058 ruling 3), outline weight and fill strength are the honest
+ * non-color channel that keeps the two representations distinguishable.
+ * The selected boosts stay.
  */
 const FILL_OPACITY_BASE = 0.12;
 const FILL_OPACITY_SELECTED = 0.4;

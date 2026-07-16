@@ -73,6 +73,15 @@ interface RowProps extends CatalogProps {
   def: LayerDef;
   /** Whether the group's provider attributions are revealed (U3a). */
   showSource: boolean;
+  /**
+   * Natively hide the row while keeping it mounted (E2, D-0.7.0-058
+   * ruling 4): a ui-hidden UMBRELLA MEMBER (treaty-cessions) keeps its
+   * exact DOM contract (`data-layer-key`, `data-layer-status`) for
+   * read-only locators and the bridge/registry sync, but shows no row
+   * while off. Contrast the flat-list uiHidden handling below, which
+   * unmounts (the deployer slots have no permanent-mount doctrine).
+   */
+  rowHidden?: boolean;
 }
 
 /**
@@ -83,7 +92,13 @@ interface RowProps extends CatalogProps {
  * (surface exclusivity, the op chain, the intent guards, the loading
  * indicator).
  */
-function LayerRow({ def, controller, checked, statuses, showSource }: RowProps) {
+/** Session-sticky reveal for buried umbrella members (E2, D-0.7.0-058
+ * ruling 4): once a ui-hidden member has been active this session, its
+ * row stays visible so toggling it off remains reversible. Module-level
+ * so an island remount does not re-bury an in-use row. */
+const revealedThisSession = new Set<string>();
+
+function LayerRow({ def, controller, checked, statuses, showSource, rowHidden }: RowProps) {
   const id = `layer-toggle-${def.key}`;
   const isOn = checked.value.get(def.key) ?? false;
   const status = statuses.value.get(def.key);
@@ -99,7 +114,7 @@ function LayerRow({ def, controller, checked, statuses, showSource }: RowProps) 
   };
 
   return (
-    <label class="layer-toggle" for={id}>
+    <label class="layer-toggle" for={id} hidden={rowHidden ?? false}>
       <input
         type="checkbox"
         id={id}
@@ -197,9 +212,28 @@ function LayerUmbrella({ sourcesOpen, ...props }: UmbrellaProps) {
         {detailsOpen ? 'Hide layer details' : 'Layer details'}
       </button>
       <div id={controlsId} class="layer-umbrella-controls" hidden={!detailsOpen}>
-        {memberDefs.map((def) => (
-          <LayerRow key={def.key} def={def} showSource={sourcesOpen} {...props} />
-        ))}
+        {memberDefs.map((def) => {
+          // E2 (D-0.7.0-058 ruling 4): a ui-hidden member (treaty-cessions)
+          // shows no row on a boot where it is off, but STAYS MOUNTED (see
+          // RowProps); activation (layers= deep link, the Tribal Nations
+          // button, a related-cessions click) reveals the row, and the
+          // reveal is STICKY for the session so a user who toggles the
+          // layer off can honestly toggle it back on (the R2 re-toggle
+          // contract; hiding on the off-click would strand the state).
+          const isChecked = checked.value.get(def.key) ?? false;
+          if (isChecked) revealedThisSession.add(def.key);
+          return (
+            <LayerRow
+              key={def.key}
+              def={def}
+              showSource={sourcesOpen}
+              rowHidden={
+                def.uiHidden === true && !isChecked && !revealedThisSession.has(def.key)
+              }
+              {...props}
+            />
+          );
+        })}
       </div>
       {sourcesOpen ? (
         <p class="layer-group-provenance" data-provenance="tribal-nations">

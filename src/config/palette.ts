@@ -155,7 +155,10 @@ export interface TreatyEntry {
 // Colors are the magenta-to-violet band of the Tribal-context boundary family
 // (D-0.7.0-019; see the family note below). Each Treaty keeps a distinct hue so
 // adjacent cessions stay tellable apart, but every hue now sits inside the one
-// family instead of the prior red/amber/teal/blue spread.
+// family instead of the prior red/amber/teal/blue spread. Since E2
+// (D-0.7.0-058 ruling 4) this table styles the BUNDLED deployer Treaty slot
+// (treaty.ts) and names formal Tribes for popups; the live Treaty & Ceded
+// Lands layer renders TREATY_CESSION_FILL_COLOR depth fills instead.
 export const TREATY_COLORS: ReadonlyArray<TreatyEntry> = [
   { match: 'Medicine Creek', tribe: null,                                                  color: '#ec4899' },
   { match: 'Yakama',         tribe: 'Confederated Tribes and Bands of the Yakama Nation',  color: '#c026d3' },
@@ -206,42 +209,62 @@ export function pickTreatyColor(name: string | null | undefined): string {
  * Opacity hierarchy (ddm-visual-styling-and-readability, the 0.3 to 0.6 fill
  * band): Tribal Lands (deployer-authorized, so fillable) sits highest; BIA
  * reservations fill lower, as a representation and not a jurisdictional claim;
- * Treaty Areas stay hollow, their lever the line color and dash, never a fill.
- * These are starting values, best refined in the browser (that skill owns the
- * tuning).
+ * Treaty & Ceded Lands render as high-transparency depth fills (see the
+ * cession constant below). These are starting values, best refined in the
+ * browser (that skill owns the tuning).
+ *
+ * E2 (D-0.7.0-058 ruling 3): the maintainer pinned the ONE Tribal boundary
+ * color family to #8d006b on rendered v0.6.15 evidence. Every fill and
+ * outline in the family derives from that hex; the distinction channels
+ * remain outline WEIGHT and fill STRENGTH (D-0.7.0-043 part 4), never a
+ * second hue. The per-layer opacity and width constants live in the layer
+ * modules (aiannh.ts, bia-reservations.ts, tribal.ts).
  * ------------------------------------------------------------------------- */
 
-/** Tribal Lands (bundled, deployer-populated). Fuchsia, the brightest of the family. */
-export const TRIBAL_FILL_COLOR = '#c026d3';
-export const TRIBAL_OUTLINE_COLOR = '#a21caf';
+/** The one ruled Tribal boundary family hex (D-0.7.0-058 ruling 3). */
+export const TRIBAL_FAMILY_COLOR = '#8d006b';
+
+/** Tribal Lands (bundled, deployer-populated). The family hex; the deployer
+ * slot fills strongest (deployer-authorized data), per the hierarchy note. */
+export const TRIBAL_FILL_COLOR = TRIBAL_FAMILY_COLOR;
+export const TRIBAL_OUTLINE_COLOR = TRIBAL_FAMILY_COLOR;
 
 /**
  * BIA reservation boundaries (AIAN-LAR, live). Since E1 (D-0.7.0-043
- * part 4, staged by D-0.7.0-041 part 2) the pair sits at the SAME magenta
- * pole of the family as the AIANNH Tribal Lands layer: one Tribal color
- * family, never two competing hues (the prior one-step-toward-violet
- * purple retired). The two representations stay distinguishable through a
+ * part 4, staged by D-0.7.0-041 part 2) the pair sits at the SAME pole of
+ * the family as the AIANNH Tribal Lands layer: one Tribal color family,
+ * never two competing hues; E2 (D-0.7.0-058 ruling 3) pins that pole to
+ * #8d006b. The two representations stay distinguishable through a
  * NON-COLOR channel: bia-reservations.ts carries the stronger fill and the
  * heavier outline, aiannh.ts the lighter wash and the finer outline, and
- * the popup and pill wording name each agency source. The outline is one
- * shade lighter than the AIANNH outline, inside the same magenta hue.
+ * the popup and pill wording name each agency source.
  */
-export const RESERVATION_FILL_COLOR = '#ec4899';
-export const RESERVATION_OUTLINE_COLOR = '#db2777';
+export const RESERVATION_FILL_COLOR = TRIBAL_FAMILY_COLOR;
+export const RESERVATION_OUTLINE_COLOR = TRIBAL_FAMILY_COLOR;
 
 /**
- * US Census AIANNH Tribal Lands (live). The magenta pole of the family,
- * shared with the BIA reservation pair since E1 (see the note above): the
- * deliberate AIANNH + AIAN-LAR double-draw (D-0.7.0-033) reads as two
- * agencies' representations through weight and strength, never through two
- * unrelated hues and never as one blended dataset. The fill sits BELOW the
- * BIA reservation fill in the opacity hierarchy (see the header note):
- * AIANNH covers broad statistical geographies (Oklahoma Tribal Statistical
- * Areas span most of the state), so it renders as a light wash the
- * stronger reservation pair stays legible over.
+ * US Census AIANNH Tribal Lands (live). The same ruled family hex as the
+ * BIA reservation pair (see the note above): the deliberate AIANNH +
+ * AIAN-LAR double-draw (D-0.7.0-033) reads as two agencies'
+ * representations through weight and strength, never through two unrelated
+ * hues and never as one blended dataset. The fill sits BELOW the BIA
+ * reservation fill in the opacity hierarchy (see the header note): AIANNH
+ * covers broad statistical geographies (Oklahoma Tribal Statistical Areas
+ * span most of the state), so it renders as a light wash the stronger
+ * reservation pair stays legible over.
  */
-export const AIANNH_FILL_COLOR = '#ec4899';
-export const AIANNH_OUTLINE_COLOR = '#be185d';
+export const AIANNH_FILL_COLOR = TRIBAL_FAMILY_COLOR;
+export const AIANNH_OUTLINE_COLOR = TRIBAL_FAMILY_COLOR;
+
+/**
+ * Treaty & Ceded Lands (USFS Royce cessions, live). E2 (D-0.7.0-058
+ * ruling 4): the dashed-edge style retired; cessions render as #740058
+ * fills with high, per-feature VARYING transparency, so overlapping
+ * cessions read as depth (the differentiation channel is transparency,
+ * not seven hues). The bundled deployer Treaty slot (treaty.ts) keeps the
+ * TREATY_COLORS table above.
+ */
+export const TREATY_CESSION_FILL_COLOR = '#740058';
 
 /* ---------------------------------------------------------------------------
  * United States state boundaries (Census cartographic boundary file)

@@ -98,6 +98,9 @@
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
+  /* The one map-control family width (E2, D-0.7.0-058 ruling 2): Share
+     view, Reset, and the Satellite switcher all render at this width. */
+  --map-ctrl-w: 104px;
 }
 
 * {
@@ -1095,6 +1098,10 @@ button.conditions-metric:hover {
   border: 1px solid transparent;
 }
 .layer-toggle:hover { background: var(--bg-2); }
+/* A ui-hidden umbrella member row (E2, D-0.7.0-058 ruling 4) stays mounted
+   for its DOM contract but shows nothing while off; the explicit display
+   override is needed because the flex display above outranks [hidden]. */
+.layer-toggle[hidden] { display: none; }
 /* Active-row lighting (U3a, headroom B4): an on layer stays visibly lit so the
    catalog reads its own state without hunting the pills. Cyan-tinted fill plus
    a faint accent border; the active hover deepens rather than reverting to the
@@ -1428,12 +1435,14 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   padding: 1px 6px !important;
 }
 
-/* The basemap switcher button (U4d): slate chrome matching the other
-   controls; the pressed (satellite) state lights with the accent tokens.
-   One button, real semantics; aria-pressed is set by the control. */
+/* The basemap switcher button (U4d): the DESIGN MODEL of the map control
+   family since E2 (D-0.7.0-058 ruling 2): sharp rectangle, transparent
+   slate, and the shared family width, relabeled "Satellite" so it reads
+   with the Share view / Reset stack. The pressed (satellite) state lights
+   with the accent tokens. One button, real semantics; aria-pressed is set
+   by the control. */
 .basemap-switcher-btn {
-  width: auto !important;
-  min-width: 30px;
+  width: var(--map-ctrl-w) !important;
   padding: 0 7px;
   background: rgba(15, 23, 42, 0.85) !important;
   color: var(--fg-1) !important;
@@ -1444,6 +1453,11 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   letter-spacing: 0.06em;
   cursor: pointer;
 }
+/* The family's sharp-rectangle model: MapLibre's control group would
+   otherwise round and clip the switcher's corners. */
+.maplibregl-ctrl-group:has(.basemap-switcher-btn) {
+  border-radius: 0;
+}
 .basemap-switcher-btn.active {
   background: var(--accent-soft) !important;
   color: var(--accent) !important;
@@ -1453,7 +1467,7 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
 /* The satellite vintage notice (U4d, D-0.7.0-028 honesty split): a plain
    statement distinct from the legal attribution, visible whenever the
    satellite basemap is selected, embeds included. Lives in the shared
-   bottom dock so it composes with the time bar and legend chip. */
+   bottom dock so it composes with the notices and the legend chip. */
 .basemap-vintage-chip {
   background: rgba(15, 23, 42, 0.85);
   color: var(--fg-1);
@@ -1883,6 +1897,11 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   color: var(--fg-3);
 }
 
+/* E2 (D-0.7.0-058 ruling 2): the top-right controls adopt the SAT box's
+   design model (sharp rectangles, background transparency): Share view and
+   Reset stack vertically at ONE uniform width, and the basemap switcher
+   below carries the same width and chrome so the three buttons read as one
+   family. The width token is shared with .basemap-switcher-btn. */
 .map-overlay-controls {
   position: absolute;
   top: 12px;
@@ -1890,33 +1909,31 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   z-index: 1000;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .overlay-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 7px;
-  padding: 7px 11px;
-  background: rgba(15, 23, 42, 0.95);
+  width: var(--map-ctrl-w);
+  padding: 7px 8px;
+  background: rgba(15, 23, 42, 0.85);
   color: var(--fg-1);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border: none;
+  border-radius: 0;
   font-family: var(--font-display);
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: var(--fw-subtitle);
   letter-spacing: 0.02em;
   cursor: pointer;
   transition: all 0.12s ease;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
   white-space: nowrap;
 }
 .overlay-btn:hover {
-  background: rgba(27, 41, 66, 0.95);
+  background: rgba(27, 41, 66, 0.9);
   color: var(--fg-0);
-  border-color: var(--accent-strong);
 }
 
 /* (The static attribution overlay was removed in the 0.3.0 design pass: it
@@ -2350,9 +2367,9 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
     margin-right: 72px;
   }
 
-  /* The bottom dock (notices, the time bar) clears the rail's column so
-     the temporal controls and the quick selects never fight for the same
-     pixels. */
+  /* The bottom dock (notices, the embed stamp slot) clears the rail's
+     column so the dock chips and the quick selects never fight for the
+     same pixels. */
   #app[data-sheet-detent] .map-bottom-dock {
     right: 76px;
   }
@@ -3312,8 +3329,9 @@ a.impact-resource-link::after {
 }
 
 /* =============================================================================
-   Time bar (0.5.0b temporal axis)
-   One map-bottom control per active temporal surface. The stamp typography is
+   Time bar (0.5.0b temporal axis; rehosted E2, D-0.7.0-058 ruling 1)
+   One sidebar control per active temporal surface, seated beside the legend
+   panel (the floating map-bottom bar retired). The stamp typography is
    the observed-vs-outlook register signal: observed reads as a hard VALID
    date in the display face and accent cyan; the outlook register changes
    instrument to the body face in warn amber with an ISSUED + valid-through
@@ -3325,12 +3343,15 @@ a.impact-resource-link::after {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  width: min(560px, 100%);
   padding: 8px 12px 7px;
   background: rgba(15, 23, 42, 0.94);
   border: 1px solid var(--line-strong);
   border-top: 2px solid var(--accent-strong);
   border-radius: var(--radius-md);
+}
+/* Sidebar seating: card margins matching the panel gutter, above the legend. */
+.sidebar-scroll > .time-bar {
+  margin: 12px 14px;
 }
 .time-bar[hidden] { display: none; }
 .time-bar[data-register="outlook"] {
@@ -3474,10 +3495,46 @@ a.impact-resource-link::after {
     bottom: 28px;
   }
   .time-bar {
-    width: 100%;
     padding: 7px 9px 6px;
   }
   .time-bar-jump { font-size: 9px; padding: 2px 6px; }
+}
+
+/* The minimal embed valid-date stamp (E2, D-0.7.0-058 ruling 1): the embed
+   has no sidebar, so the date-honesty rule is carried by this one chip in
+   the bottom dock, mirrored from the active temporal spec by
+   src/ui/time-bar.ts. Display is embed-gated; the register attribute keeps
+   the observed (accent) vs outlook (warn) signal. */
+.embed-date-stamp { display: none; }
+/* The full sidebar-hosted bar never renders inside an embed: the chip
+   above is the embed's whole temporal surface (the collapsed sidebar's
+   zero-width column alone does not satisfy Playwright's visibility
+   model, and honesty-wise the bar is chrome the embed contract hides). */
+.app-shell.embed #time-bar { display: none; }
+.app-shell.embed .embed-date-stamp:not([hidden]) {
+  display: block;
+  align-self: flex-start;
+  padding: 3px 9px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-weight: var(--fw-title);
+  font-size: 10.5px;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  pointer-events: none;
+}
+.app-shell.embed .embed-date-stamp[data-register='outlook']:not([hidden]) {
+  font-family: var(--font-body);
+  font-weight: var(--fw-strong);
+  font-style: italic;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--warn);
 }
 
 /* ----------------------------------------------------------------------------

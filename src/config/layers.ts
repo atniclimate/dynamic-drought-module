@@ -150,7 +150,12 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   // the two present-day representations; the historical cession record joins
   // on the Tribal Nations button, the manual toggle, or a boundary click
   // (src/impact/related-cessions.ts).
-  { key: 'treaty-cessions', name: 'Treaty & Ceded Lands', source: 'USFS · Royce cessions (live)', role: 'reference', defaultOn: false, noDataLabel: 'no features returned for this view (a historical record; not every Treaty area is digitized)', load: () => import('../layers/treaty-cessions') },
+  // E2 (D-0.7.0-058 ruling 4): treaty-cessions leaves the visible catalog
+  // through the same uiHidden mechanism as the deployer slots below; the
+  // key stays shipped, URL-reachable (?layers=treaty-cessions), commanded
+  // by the Tribal Nations button, and opened by the Unit I related-cessions
+  // click. The LAYERS studio (D-0.7.0-055) is its future visible home.
+  { key: 'treaty-cessions', name: 'Treaty & Ceded Lands', source: 'USFS · Royce cessions (live)', role: 'reference', defaultOn: false, uiHidden: true, noDataLabel: 'no features returned for this view (a historical record; not every Treaty area is digitized)', load: () => import('../layers/treaty-cessions') },
   { key: 'treaty', name: 'Treaty Areas (your own data)', source: 'deployer · bundled GeoJSON', role: 'reference', defaultOn: false, uiHidden: true, load: () => import('../layers/treaty') },
   // The BIA label carries the design-required coverage caveat: AIAN-LAR
   // returning nothing here is a statement about the DATASET's coverage (it
