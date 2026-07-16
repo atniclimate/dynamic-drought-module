@@ -179,7 +179,10 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
 
   let fc: FeatureCollection;
   try {
-    const res = await fetchWithBudget(url, null, abort.signal, LOCATE_TIMEOUT_MS);
+    // cache: 'no-store': this response carries sovereign-boundary geometry,
+    // so it must never persist in the browser HTTP cache (hard rule 1;
+    // the same transport guard as the three live Tribal-geography layers).
+    const res = await fetchWithBudget(url, { cache: 'no-store' }, abort.signal, LOCATE_TIMEOUT_MS);
     if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
     fc = (await res.json()) as FeatureCollection;
   } catch (err) {

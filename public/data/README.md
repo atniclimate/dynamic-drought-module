@@ -1,136 +1,168 @@
 # Reference data
 
-The three GeoJSON files in this folder back the static reference layers shown on the map (Ecoregions, Tribal Lands, Treaty Areas). They ship as empty `FeatureCollection` placeholders so the app loads cleanly on first deploy. Replace them with authoritative data using the steps below.
+This folder holds the module's bundled data: two DEPLOYER-OWNED
+placeholder files you may populate with your own authorized data
+(`tribal-lands.geojson`, `treaty-areas.geojson`), bundled public
+reference data the module ships with (states, ecoregions, hillshade,
+place labels, the Tribal name roster), and one committed data snapshot
+(`enso-indices.json`).
 
-The app reports a layer as `no data (see data/README.md)` when its file is empty, and as `unavailable` when the file cannot be fetched.
+**Read this first: the map's default Tribal geography does NOT come from
+this folder.** Three default-on layers fetch the publishing federal
+services LIVE at view time and redistribute nothing:
 
-> **Stewardship note.** Anyone populating these files is responsible for the underlying authorizations. Tribal Lands, Treaty Areas, and any sovereign-jurisdiction polygons must be redistributed only with the relevant Tribal Nation's consent. The empty-placeholder pattern is a deliberate part of this module's design; please preserve it on contributions back upstream.
+- Tribal Lands (`aiannh`): US Census AIANNH (legal and statistical
+  geographies, including Oklahoma Tribal Statistical Areas).
+- Reservation Boundaries (`bia-reservations`): the Bureau of Indian
+  Affairs (BIA) AIAN Land Area Representation.
+- Treaty & Ceded Lands (`treaty-cessions`): the US Forest Service
+  digitized Royce cessions.
+
+The two placeholder files below back the SEPARATE deployer slots
+(`tribal`, `treaty`), which are OFF by default. They exist so a deployer
+(most importantly a Tribal Nation) can display its own boundary data,
+under its own governance and authorization, without that data ever
+entering this repository. When the file is empty the layer reports
+`no data (see data/README.md)`; when the file cannot be fetched it
+reports `unavailable`.
+
+> **Stewardship note.** Anyone populating these files is responsible for
+> the underlying authorizations. Tribal Lands, Treaty Areas, and any
+> sovereign-jurisdiction polygons must be redistributed only with the
+> relevant Tribal Nation's consent. The empty-placeholder pattern is a
+> deliberate part of this module's design; please preserve it on
+> contributions back upstream.
 
 ---
 
-## `ecoregions-pnw.geojson`
+## `tribal-lands.geojson` (deployer slot, layer key `tribal`, default-off)
 
-EPA Level III Ecoregions, clipped to the Pacific Northwest (PNW).
+Your own Tribal land boundary data. The popup labels this layer as
+deployer-provided data and never implies federal agency custody.
 
-**Source:** US Environmental Protection Agency (EPA), Ecoregion Maps and Data.
+**Avoiding a double-draw:** the live `aiannh` and `bia-reservations`
+layers already draw federal representations by default. If your data
+covers the same areas, consider linking or embedding with those live
+layers toggled off (for example
+`?layers=usdm,tribal,states`) so users see one clear representation;
+the deployer slot never silently replaces or blends with the live
+layers.
 
-- Landing page: https://www.epa.gov/eco-research/level-iii-and-iv-ecoregions-continental-united-states
-- Direct shapefile (CONUS Level III): ftp://newftp.epa.gov/EPADataCommons/ORD/Ecoregions/us/us_eco_l3.zip
-
-**Convert** to GeoJSON, clipped to a PNW bounding box and reprojected to WGS 84, using `ogr2ogr` from GDAL:
-
-```bash
-ogr2ogr -f GeoJSON \
-  -t_srs EPSG:4326 \
-  -clipsrc -125 41 -110 50 \
-  -simplify 0.001 \
-  data/ecoregions-pnw.geojson \
-  us_eco_l3.shp
-```
-
-`-simplify 0.001` reduces vertex count for browser performance; tune as needed.
-
-**Expected per-feature properties:** the app reads `US_L3NAME` first, then falls back to `NA_L3NAME` or `name`. Any of these will populate the legend and color map.
-
-**Color mapping:** the `ECOREGION_COLORS` constant in `app.js` keys colors by ecoregion name. Add or adjust entries to match the names in your converted file.
-
----
-
-## `tribal-lands.geojson`
-
-Tribal land area boundaries.
-
-**Sources** (pick the one that fits your use):
-
-- **Bureau of Indian Affairs (BIA), American Indian / Alaska Native Land Area Representation (AIAN-LAR).**
-  - Catalog page: https://catalog.data.gov/dataset/american-indian-and-alaska-native-areas
-  - Federal authoritative; used widely in federal mapping.
-
-- **US Census Bureau, American Indian / Alaska Native / Native Hawaiian Areas (AIANNH).**
-  - https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html
-  - Cleaner, lighter-weight; well-suited for web maps.
-
-- **State sources** (where a single state suffices):
-  - Washington: https://geo.wa.gov/ ("Tribal Lands")
-  - Oregon: https://spatialdata.oregonexplorer.info/
-  - Idaho: https://insideidaho.org/
-
-**Convert** (clipped to PNW):
+**Populate:** replace the empty `FeatureCollection` in this file with
+GeoJSON in WGS 84 (EPSG:4326). A typical conversion from a shapefile,
+using `ogr2ogr` from GDAL:
 
 ```bash
 ogr2ogr -f GeoJSON -t_srs EPSG:4326 \
-  -clipsrc -125 41 -110 50 \
   -simplify 0.0005 \
-  data/tribal-lands.geojson \
-  AIAN_LAR.shp
+  public/data/tribal-lands.geojson \
+  YOUR_BOUNDARIES.shp
 ```
 
-**Expected per-feature properties:** the app reads `LARNAME` first, then falls back to `name` or `NAME`.
+**Per-feature properties the app reads:** name from `LARNAME` (or
+`LARName`, `NAME`, `name`, `TRIBE`, `RESERV_NAM`), optional
+`LARGovernment`/`GOVT` (government), `LARType`/`TYPE` (type), and
+`GISAcres`/`ACRES` (acreage). Missing properties simply do not render a
+row; nothing breaks.
 
 ---
 
-## `treaty-areas.geojson`
+## `treaty-areas.geojson` (deployer slot, layer key `treaty`, default-off)
 
-Treaty cession boundaries (Medicine Creek 1854, Yakama 1855, Nez Perce 1855, Walla Walla 1855, etc.).
+Your own Treaty or ceded-area boundary data. The live `treaty-cessions`
+layer already draws the federal Royce cession digitization by default;
+this slot is for a deployer's own representation (a Nation's own
+depiction of its Treaty areas, or a state-curated set).
 
-**Sources:**
+**Per-feature properties the app reads:** `name`, `treaty_year`, and
+`tribe`. Style overrides for specific Treaties live in the
+`TREATY_COLORS` table in `src/config/palette.ts` (matched against
+`name`).
 
-- **Washington Department of Archaeology and Historic Preservation (DAHP), WISAARD.**
-  - https://wisaard.dahp.wa.gov/ (Tribal layers, Treaty boundaries for Washington Tribes).
-  - Export from the WISAARD viewer or contact DAHP for a shapefile.
+> **Treaty boundaries.** Agency polygons are a representation of Treaty
+> cession areas, not a definitive depiction of Tribal jurisdiction.
+> Verify with the relevant Tribal Nation before using these polygons for
+> any decision-making.
 
-- **Library of Congress, Royce Indian Land Cessions in the United States.**
-  - https://www.loc.gov/resource/g3701em.gct00002/ (historical cession maps; some are digitized as GeoJSON).
+---
 
-- **Native Land Digital.**
-  - https://native-land.ca/ provides territorial GeoJSON under CC-BY; the Treaties tab includes boundary data. Native Land's data is community-curated and is not authoritative for legal or administrative use.
+## Bundled public reference data (not placeholders)
 
-**Expected per-feature properties:** `name`, `treaty_year`, and `tribe`. The app uses these to color and label the polygons. Style overrides for specific Treaties live in the `TREATY_COLORS` table in `app.js` (matched against `name`).
+- `us-states.geojson`: state boundaries (US Census, public domain).
+- `ecoregions-pnw.pmtiles`: EPA Omernik ecoregions, the served artifact
+  (built by `npm run build:ecoregion-tiles`); `ecoregions-pnw.geojson`
+  is the legacy placeholder retained for compatibility.
+- `hillshade-dem-pnw.pmtiles`: terrain hillshade (USGS 3DEP-derived,
+  built by `npm run build:hillshade-tiles`).
+- `us-places.json`: municipal label points (Natural Earth, built by
+  `npm run build:states` tooling; see scripts/).
+- `tribal-roster.json` + `tribal-larname-crosswalk.json`: the
+  names-only roster of federally recognized Tribes from the BIA annual
+  Federal Register notice, with the reviewed LARNAME crosswalk (names
+  only; no geometry). Regenerated by script; do not hand-edit.
 
-> **Treaty boundaries.** Agency polygons are a representation of Treaty cession areas, not a definitive depiction of Tribal jurisdiction. Verify with the relevant Tribal Nation before using these polygons for any decision-making.
+These are public, non-sovereign reference data; they are not deployer
+slots.
 
 ---
 
 ## `enso-indices.json` (committed snapshot, not a placeholder)
 
-Unlike the three GeoJSON files above, `enso-indices.json` is a committed data snapshot, not a deployer-populated placeholder. It holds a recent window of two National Oceanic and Atmospheric Administration (NOAA) Climate Prediction Center (CPC) El Nino / Southern Oscillation (ENSO) indices:
+A committed snapshot of two National Oceanic and Atmospheric
+Administration (NOAA) Climate Prediction Center (CPC) El Nino / Southern
+Oscillation (ENSO) indices:
 
-- the Oceanic Nino Index (ONI), the standard three-month running mean of the Nino 3.4 sea surface temperature anomaly; and
-- the Relative ONI (RONI), the ONI with the tropical-mean ocean warming background removed, a useful corroborating index in a warming climate (in a warming ocean the raw ONI drifts warm, so RONI often reads cooler).
+- the Oceanic Nino Index (ONI), the standard three-month running mean of
+  the Nino 3.4 sea surface temperature anomaly; and
+- the Relative ONI (RONI), the ONI with the tropical-mean ocean warming
+  background removed, a useful corroborating index in a warming climate
+  (in a warming ocean the raw ONI drifts warm, so RONI often reads
+  cooler).
 
-They drive the drought-impact briefing's long-range ENSO tilt and its ONI-and-RONI chart.
+They drive the drought-impact briefing's long-range ENSO tilt and its
+ONI-and-RONI chart.
 
-Both CPC sources are served without Cross-Origin Resource Sharing (CORS) headers, so a browser cannot fetch them directly. Per the climate-data-sources doctrine, a slow monthly index is snapshotted at build or commit time rather than proxied at runtime; there is no cleaner JSON application programming interface (API) for the CPC indices (the whitespace-delimited ascii table is the canonical machine source). Refresh the snapshot (about monthly, when CPC updates the indices) with:
+Both CPC sources are served without Cross-Origin Resource Sharing (CORS)
+headers, so a browser cannot fetch them directly. Per the
+climate-data-sources doctrine, a slow monthly index is snapshotted at
+build or commit time rather than proxied at runtime. Refresh the snapshot
+(about monthly, when CPC updates the indices) with:
 
 ```bash
 npm run build:enso
 ```
 
-That runs `scripts/build-enso-snapshot.mjs`, which fetches both indices, parses each table, determines each ENSO phase, and rewrites `enso-indices.json` with its retrieval date. Commit the regenerated file. There is no deployer authorization concern here; this is public federal climate data.
+That runs `scripts/build-enso-snapshot.mjs`, which fetches both indices,
+parses each table, determines each ENSO phase, and rewrites
+`enso-indices.json` with its retrieval date. Commit the regenerated file.
+There is no deployer authorization concern here; this is public federal
+climate data.
 
 ---
 
 ## Quick verification
 
-After converting and dropping a file in this folder, test locally. From the repo root:
+After populating a deployer slot, test locally from the repo root:
 
 ```bash
-python3 -m http.server 8080
-# then open http://localhost:8080/?layers=ecoregions
+npm run dev
+# open http://localhost:5173/dynamic-drought-module/?layers=tribal
 ```
 
-Or simply commit and push (GitHub Pages will serve the file at `https://atniclimate.github.io/dynamic-drought-module/data/ecoregions-pnw.geojson`).
-
-If the layer toggle still reports `no data (see data/README.md)`, the file is loading but contains zero features. If it reports `unavailable`, check the path and that the file is valid JSON.
+If the layer toggle reports `no data (see data/README.md)`, the file is
+loading but contains zero features. If it reports `unavailable`, check
+the path and that the file is valid JSON.
 
 ---
 
 ## File size budget
 
-Browsers start to feel the strain above roughly 5 MB per layer. If a converted file exceeds that:
+Browsers start to feel the strain above roughly 5 MB per layer. If a
+converted file exceeds that:
 
 - Increase `-simplify` tolerance (try 0.002, 0.005).
-- Tighten the `-clipsrc` bounding box if you only need a sub-region.
-- Consider splitting into per-region files and switching the loader to fetch by region.
+- Tighten a `-clipsrc` bounding box if you only need a sub-region.
+- Consider splitting into per-region files.
 
-GitHub also warns on files larger than 50 MB and refuses files larger than 100 MB.
+GitHub also warns on files larger than 50 MB and refuses files larger
+than 100 MB.

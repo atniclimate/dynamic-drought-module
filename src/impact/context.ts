@@ -30,6 +30,11 @@ const REPRESENTATION_CAVEAT =
 const KIND_LABEL: Record<BoundaryKind, string> = {
   ecoregion: 'EPA Omernik ecoregion',
   tribal: 'Tribal Lands (deployer data)',
+  // AIANNH spans legal and statistical geographies; the neutral product name is
+  // the honest label for the briefing subtitle (the per-feature legal-vs-
+  // statistical distinction is drawn in the popup by AIANNHCC, never here as a
+  // jurisdiction claim).
+  aiannh: 'Tribal Lands (US Census AIANNH)',
   treaty: 'Historical Treaty area',
   'bia-reservation': 'BIA reservation boundary (AIAN-LAR)',
   state: 'State (Census cartographic boundary)'
@@ -59,6 +64,10 @@ function resolveTitle(kind: BoundaryKind, props: GeoJsonProperties): string {
         firstString(props, ['LARName', 'LARNAME', 'NAME', 'name', 'TRIBE', 'RESERV_NAM']) ??
         'Tribal land area'
       );
+    case 'aiannh':
+      // US Census AIANNH: NAME carries the area name (BASENAME the descriptor-
+      // stripped form). Never presented as the Tribe's own name for itself.
+      return firstString(props, ['NAME', 'BASENAME', 'name']) ?? 'Tribal land area';
     case 'treaty':
       return (
         firstString(props, ['name', 'TREATY_NAM', 'TREATY_NAME', 'TreatyName', 'NAME', 'Treaty']) ??

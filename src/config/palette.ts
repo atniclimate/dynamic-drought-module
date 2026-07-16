@@ -219,6 +219,19 @@ export const TRIBAL_OUTLINE_COLOR = '#a21caf';
 export const RESERVATION_FILL_COLOR = '#9333ea';
 export const RESERVATION_OUTLINE_COLOR = '#7e22ce';
 
+/**
+ * US Census AIANNH Tribal Lands (live). Pink, the warm end of the family:
+ * distinct from both the deployer fuchsia and the BIA purple so the
+ * deliberate AIANNH + AIAN-LAR double-draw (D-0.7.0-033) reads as two
+ * agencies' representations, never one blended dataset. The fill sits BELOW
+ * the BIA reservation fill in the opacity hierarchy (see the header note):
+ * AIANNH covers broad statistical geographies (Oklahoma Tribal Statistical
+ * Areas span most of the state), so it renders as a light wash the stronger
+ * reservation purple stays legible over.
+ */
+export const AIANNH_FILL_COLOR = '#ec4899';
+export const AIANNH_OUTLINE_COLOR = '#be185d';
+
 /* ---------------------------------------------------------------------------
  * United States state boundaries (Census cartographic boundary file)
  *

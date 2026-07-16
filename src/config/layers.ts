@@ -13,6 +13,17 @@ export interface LayerModule {
   deactivate(map: maplibregl.Map): void;
   bindPopups?(map: maplibregl.Map): void;
   /**
+   * Optional synchronous cancellation seam, invoked by the layer controller
+   * the moment off intent is recorded, BEFORE the serialized teardown op
+   * reaches the module. A module with a long-running activation fetch aborts
+   * it here immediately (CLAUDE.md section 6 invariant 5) instead of letting
+   * it run out its network budget behind the per-key op queue; it must NOT
+   * touch map state (sources/layers), which remains `deactivate`'s job.
+   * Added with the Tribal Nations umbrella build (Codex Unit B finding 1,
+   * C:\dev\_reviews\ddm\2026-07-15_unit-B-codex.md).
+   */
+  cancelActivation?(): void;
+  /**
    * Map layer ids this module renders, consumed by the sidebar's fade
    * transitions (src/util/layer-fade.ts) on toggle. Optional: a module
    * that renders DOM markers instead of style layers (telemetry) omits it
@@ -45,6 +56,19 @@ export interface LayerDef {
   readonly defaultOn: boolean;
   readonly load: () => Promise<LayerModule>;
   /**
+   * Optional presentation override for the `no-data` status (Unit C of the
+   * Tribal Nations umbrella build; closes standing task #9 for the live
+   * layers). The canonical six-state union is untouched: this re-words ONE
+   * state's user-visible text where the default "empty placeholder (see
+   * data/README.md)" would be dishonest. A LIVE layer that returns zero
+   * features for the current view is not a placeholder; it says so
+   * (`LIVE_NO_FEATURES_LABEL`). Bundled placeholder layers omit this and
+   * keep the canonical wording. Resolved in ONE place
+   * (`resolveStatusPillText` in src/ui/island/pill-text.ts) shared by the
+   * status pill and the live-region announcer, so the two can never drift.
+   */
+  readonly noDataLabel?: string;
+  /**
    * Keys that co-activate with this layer: turning THIS layer on through a user
    * toggle also turns them on (each stays individually toggleable off
    * afterward). Applied ONLY on the user-toggle path (`activate`), never on the
@@ -63,29 +87,60 @@ export interface LayerDef {
  * `beforeId` strategy (most layers anchor to `'first-symbol'` if present,
  * otherwise append).
  *
- * Default-on is the demo-ready set: US Drought Monitor (the headline drought
- * layer), Tribal Lands (intentional empty placeholder per stewardship), and
- * Telemetry. Hydrography is intentionally off by default; the live Overpass
- * query is slow and fragile, so leading the bare URL with it produced a
- * flaky first paint. Users can still toggle it on.
+ * Default-on is the demo-ready set (deliberately changed by the Tribal
+ * Nations umbrella build, D-0.7.0-032/033; recorded in
+ * docs/URL_SCHEMA_POLICY.md as a deliberate default change, not a silent
+ * one): US Drought Monitor (the headline drought layer), the three LIVE
+ * Tribal-geography layers (Census AIANNH Tribal Lands, BIA Reservation
+ * Boundaries, USFS Royce Treaty cessions; Tribal Nations MUST display on
+ * first load), and State Boundaries. The bundled deployer slots (`tribal`,
+ * `treaty`) are default-off: they are only meaningful once a deployer
+ * populates them with their own authorized data. Hydrography is
+ * intentionally off by default; the live Overpass query is slow and
+ * fragile, so leading the bare URL with it produced a flaky first paint.
  */
+/**
+ * The honest zero-state wording for LIVE viewport-queried layers: the agency
+ * answered and had no features intersecting this view. Distinct from the
+ * bundled-placeholder wording by design (a live layer is never a
+ * placeholder, and pointing a user at data/README.md for it was wrong; see
+ * the Unit C note on `LayerDef.noDataLabel`).
+ */
+export const LIVE_NO_FEATURES_LABEL = 'no features returned for this view';
+
 export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'hydrography', name: 'Hydrography', source: 'OpenStreetMap (Overpass)', role: 'reference', defaultOn: false, load: () => import('../layers/hydrography') },
   { key: 'ecoregions', name: 'Ecoregions (Level III/IV)', source: 'EPA Omernik · PMTiles', role: 'reference', defaultOn: false, load: () => import('../layers/ecoregions') },
   { key: 'hillshade', name: 'Terrain Shading', source: 'USGS 3DEP · PMTiles', role: 'reference', defaultOn: false, load: () => import('../layers/hillshade') },
   { key: 'drought', name: 'Drought Outlook (CPC)', source: 'NOAA CPC · Monthly & Seasonal', role: 'surface', defaultOn: false, load: () => import('../layers/drought') },
   { key: 'gridded-index', name: 'Gridded Drought Index (SPI)', source: 'NOAA NIDIS · raster tiles', role: 'surface', defaultOn: false, load: () => import('../layers/gridded-index') },
-  { key: 'usdm', name: 'US Drought Monitor', source: 'NDMC · FeatureServer', role: 'surface', defaultOn: true, load: () => import('../layers/usdm') },
-  { key: 'tribal', name: 'Tribal Lands', source: 'BIA · bundled GeoJSON', role: 'reference', defaultOn: true, load: () => import('../layers/tribal') },
-  { key: 'treaty', name: 'Treaty Areas', source: 'WA DAHP · bundled GeoJSON', role: 'reference', defaultOn: false, load: () => import('../layers/treaty') },
-  { key: 'bia-reservations', name: 'Reservation Boundaries', source: 'BIA · AIAN-LAR (live)', role: 'reference', defaultOn: false, load: () => import('../layers/bia-reservations') },
+  // noDataLabel on the live agency layers below (usdm, wildfire pair, NWS
+  // alerts, SPC, bia-reservations): a zero-feature live response is a real,
+  // good answer ("no smoke drawn today"), never an "empty placeholder"; the
+  // placeholder wording stays only on the bundled deployer slots (tribal,
+  // treaty). Unit C of the umbrella build + the Codex Unit C pass.
+  { key: 'usdm', name: 'US Drought Monitor', source: 'NDMC · FeatureServer', role: 'surface', defaultOn: true, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/usdm') },
+  // The Tribal Nations members (D-0.7.0-032/033): the three LIVE layers are
+  // default-on (Tribal Nations MUST display); the two bundled deployer slots
+  // are default-off and relabeled so "your own data" is unmistakable. The
+  // deployer keys (`tribal`, `treaty`) are shipped public identifiers and
+  // keep their meaning (URL policy rule 4); only display names changed.
+  { key: 'aiannh', name: 'Tribal Lands', source: 'US Census · AIANNH (live)', role: 'reference', defaultOn: true, noDataLabel: 'no features returned for this view (Census-defined Tribal areas only)', load: () => import('../layers/aiannh') },
+  { key: 'tribal', name: 'Tribal Lands (your own data)', source: 'deployer · bundled GeoJSON', role: 'reference', defaultOn: false, load: () => import('../layers/tribal') },
+  { key: 'treaty-cessions', name: 'Treaty & Ceded Lands', source: 'USFS · Royce cessions (live)', role: 'reference', defaultOn: true, noDataLabel: 'no features returned for this view (a historical record; not every Treaty area is digitized)', load: () => import('../layers/treaty-cessions') },
+  { key: 'treaty', name: 'Treaty Areas (your own data)', source: 'deployer · bundled GeoJSON', role: 'reference', defaultOn: false, load: () => import('../layers/treaty') },
+  // The BIA label carries the design-required coverage caveat: AIAN-LAR
+  // returning nothing here is a statement about the DATASET's coverage (it
+  // omits most Oklahoma Tribal Statistical Areas and landless Tribal
+  // Nations), never a verified absence of Tribal presence.
+  { key: 'bia-reservations', name: 'Reservation Boundaries', source: 'BIA · AIAN-LAR (live)', role: 'reference', defaultOn: true, noDataLabel: 'no features returned for this view (AIAN-LAR does not cover every Tribal Nation)', load: () => import('../layers/bia-reservations') },
   { key: 'states', name: 'State Boundaries', source: 'US Census · bundled GeoJSON', role: 'reference', defaultOn: true, load: () => import('../layers/states') },
   { key: 'places', name: 'City & Town Labels', source: 'Natural Earth · bundled', role: 'reference', defaultOn: false, load: () => import('../layers/places') },
-  { key: 'nifc-fires', name: 'Active Wildfires (NIFC)', source: 'NIFC WFIGS · FeatureServer', role: 'event', defaultOn: false, coActivateWith: ['hms-smoke'], load: () => import('../layers/nifc-fires') },
-  { key: 'nws-alerts', name: 'Heat & Fire Weather Alerts', source: 'NOAA NWS · MapServer', role: 'event', defaultOn: false, load: () => import('../layers/nws-alerts') },
-  { key: 'hms-smoke', name: 'Smoke Plumes (HMS)', source: 'NOAA OSPO · FeatureServer', role: 'event', defaultOn: false, coActivateWith: ['nifc-fires'], load: () => import('../layers/hms-smoke') },
+  { key: 'nifc-fires', name: 'Active Wildfires (NIFC)', source: 'NIFC WFIGS · FeatureServer', role: 'event', defaultOn: false, coActivateWith: ['hms-smoke'], noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nifc-fires') },
+  { key: 'nws-alerts', name: 'Heat & Fire Weather Alerts', source: 'NOAA NWS · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nws-alerts') },
+  { key: 'hms-smoke', name: 'Smoke Plumes (HMS)', source: 'NOAA OSPO · FeatureServer', role: 'event', defaultOn: false, coActivateWith: ['nifc-fires'], noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/hms-smoke') },
   { key: 'heatrisk', name: 'HeatRisk · Today (Experimental)', source: 'NOAA NWS/WPC · ImageServer', role: 'surface', defaultOn: false, load: () => import('../layers/heatrisk') },
-  { key: 'spc-fire-weather', name: 'Fire Weather Outlook (Day 1)', source: 'NOAA SPC · MapServer', role: 'surface', defaultOn: false, load: () => import('../layers/spc-fire-weather') },
+  { key: 'spc-fire-weather', name: 'Fire Weather Outlook (Day 1)', source: 'NOAA SPC · MapServer', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/spc-fire-weather') },
   { key: 'usfs-whp', name: 'Wildfire Hazard Potential', source: 'USFS · GeoPlatform', role: 'surface', defaultOn: false, load: () => import('../layers/usfs-whp') },
   { key: 'sst-anomaly', name: 'Ocean Temperature Anomaly', source: 'NASA GIBS · GHRSST MUR', role: 'surface', defaultOn: false, load: () => import('../layers/sst-anomaly') },
   // Monitoring stations left the default-on set 2026-07-09 (D-0.7.0-018

@@ -1,111 +1,101 @@
 /**
- * Bureau of Indian Affairs (BIA) reservation-boundary layer.
+ * US Census Bureau American Indian, Alaska Native, and Native Hawaiian Areas
+ * (AIANNH) layer: the BROAD live Tribal Lands layer (D-0.7.0-032/033).
  *
- * Renders the American Indian and Alaska Native Land Area Representation
- * (AIAN-LAR): the authoritative federal depiction of reservation and trust
- * land extent for federally recognized Tribes. Unlike the bundled
- * `tribal-lands.geojson` placeholder (the deployer's own-data slot, empty by
- * default per CLAUDE.md hard rule 1), this layer is fetched live from the BIA
- * FeatureServer. Live consumption of an authoritative public federal source
- * commits no sovereign polygons to the repository, exactly like the United
- * States Drought Monitor and National Interagency Fire Center layers; see the
- * `ddm-tribal-boundary-mapping` skill for the stewardship reconciliation. The
- * two coexist: one is fetched-and-live, one is bundled-and-empty.
+ * Renders the Census TIGERweb AIANNH comprehensive layer (layer 47), which
+ * carries federal reservations and off-reservation trust land PLUS the
+ * statistical geographies the BIA AIAN-LAR does not: Oklahoma Tribal
+ * Statistical Areas (OTSA), Alaska Native Village Statistical Areas (ANVSA),
+ * Hawaiian Home Lands, state reservations, and joint-use areas. This closes
+ * the Oklahoma gap where AIAN-LAR returns zero features.
  *
- * Stewardship: the boundary is a representation for general spatial reference,
- * not a definitive depiction of Tribal jurisdiction. The mandatory caveat
- * lives in `buildBiaReservationPopupHtml` (src/ui/popups.ts).
+ * Stewardship (CLAUDE.md section 2; the Unit A source-aware boundary model):
+ * AIANNH spans legal and statistical geographies. The per-feature legal vs
+ * statistical distinction is drawn by `AIANNHCC` in `buildAiannhPopupHtml`
+ * (src/ui/popups.ts); a statistical area is never labeled as jurisdiction or
+ * land ownership, and the `aiannh` identity source ranks LOWEST in
+ * location-identity precedence (src/state/location-identity.ts). This layer
+ * deliberately double-draws with the BIA reservation layer on federal
+ * reservations: two agencies' representations, separately labeled, never
+ * blended into one dataset.
  *
- * Source: `URLS.biaLarFeatureServer` (verified 2026-05-30; see urls.ts).
+ * NON-REDISTRIBUTION GUARD (CLAUDE.md hard rule 1; the plan-attack standing
+ * guard): every AIANNH response is transient. It lives in the in-memory
+ * session cache below and the MapLibre source, and nowhere else: never
+ * committed, never emitted by the default build, never written to disk, and
+ * never copied into a test fixture. Live-fetch of a public federal product is
+ * not redistribution; see docs/ddm-tribal-geography-tier-assessment-2026-07-15.md.
  *
- * Clipping: the national dataset is large, so the query is clipped to the
- * current map viewport (overscanned by OVERSCAN_FACTOR on each side) with an
- * Environmental Systems Research Institute (ESRI) spatial envelope rather
- * than fetching the full national FeatureCollection. The region selection
- * drives the viewport, so toggling this layer on after selecting a region
- * pulls only that region's boundaries.
+ * Source: `URLS.censusAiannhMapServer` layer 47 (verified 2026-07-15; see
+ * urls.ts for the full provenance receipt). CORS is reflected-origin; no
+ * proxy. The query is viewport-clipped with an Environmental Systems Research
+ * Institute (ESRI) envelope, overscanned by OVERSCAN_FACTOR, with
+ * `maxAllowableOffset` and `geometryPrecision` keyed to the current zoom so
+ * the multi-megabyte full-precision geometries (an Oklahoma OTSA is 4.18 MB
+ * raw) arrive generalized for display. The tolerance is deliberately
+ * conservative (a fraction of one screen pixel) so small and detached parcels
+ * survive; the browser verification pass (Unit H) confirms this visually.
  *
- * Caching: successful responses are kept in an in-memory, session-scoped
- * cache (`responseCache`) keyed by a bucketed bounds string coarser than the
- * query envelope (`buildCacheKey`), so a deactivate then re-activate against
- * substantially the same view renders instantly with no network call. A real
- * region change still misses the cache and fetches fresh.
- * The cache is never committed anywhere and adds nothing to the repository;
- * it is a browser-session optimization, not a data-bundling change (CLAUDE.md
- * hard rule 1 is unaffected; see
- * `docs/ddm-tribal-geography-tier-assessment-2026-07-15.md`).
+ * Viewport refresh (the lifecycle the pre-umbrella BIA layer lacked): while
+ * active, a debounced `moveend` handler refetches the current view and swaps
+ * the data into the EXISTING source with `setData` (never a second source).
+ * A request-identity token plus the master abort signal guarantee a stale
+ * response never renders over a newer one. The handler is removed on
+ * `deactivate`. `bia-reservations.ts` carries the same lifecycle so the two
+ * behave as peers under the Tribal Nations umbrella.
  *
- * Viewport refresh (the Tribal Nations umbrella build; formerly finding 3 of
- * `C:\dev\_reviews\ddm\2026-07-15_tribal-boundary-live-fetch-review.md`):
- * while active, a debounced `moveend` handler refetches the current view and
- * swaps the data into the EXISTING source with `setData` (never a second
- * source), guarded by a request-identity token plus the master abort signal
- * so a stale response never renders over a newer one. The handler is removed
- * on `deactivate`. `aiannh.ts` carries the same lifecycle so the two live
- * Tribal-geography layers behave as peers under the umbrella.
- *
- * Response validation: `assertFeatureCollection` rejects an ArcGIS
- * error-shaped body or a non-FeatureCollection payload before it can be
- * rendered, so a malformed or service-error response reports `'error'`
- * through the existing catch block rather than rendering garbage or
- * throwing past it. A response flagged `exceededTransferLimit` by the
- * service is logged, not silently treated as complete.
- *
- * Cancellation (CLAUDE.md section 6 invariant 5): the fetch goes through
+ * Cancellation (CLAUDE.md section 6 invariant 5): every fetch goes through
  * `fetchWithBudget` with a per-call timeout and a master abort signal that
- * fires on `deactivate` or on a superseding `activate`. A late response to a
- * superseded or torn-down activation is dropped, not rendered. A cache hit
- * renders synchronously and never touches the abort signal.
+ * fires on `deactivate` or on a superseding fetch. Late responses to
+ * superseded requests are dropped, not rendered. A cache hit renders
+ * synchronously and never touches the abort signal.
+ *
+ * Response validation: `assertFeatureCollection` rejects ArcGIS error-shaped
+ * bodies and non-FeatureCollection payloads; `exceededTransferLimit` is
+ * logged, not silently treated as complete.
  */
 
 import maplibregl from 'maplibre-gl';
 import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
-import {
-  RESERVATION_FILL_COLOR,
-  RESERVATION_OUTLINE_COLOR
-} from '../config/palette';
-import { buildBiaReservationPopupHtml } from '../ui/popups';
+import { AIANNH_FILL_COLOR, AIANNH_OUTLINE_COLOR } from '../config/palette';
+import { buildAiannhPopupHtml } from '../ui/popups';
 import { attachImpactTrigger } from '../ui/impact-panel';
 import { buildBoundaryContext } from '../impact/context';
 import { emphasizePlace } from '../state/place-emphasis';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 
-const LAYER_KEY = 'bia-reservations';
-const SOURCE_ID = 'bia-reservations';
-const FILL_LAYER_ID = 'bia-reservations-fill';
-const OUTLINE_LAYER_ID = 'bia-reservations-outline';
+const LAYER_KEY = 'aiannh';
+const SOURCE_ID = 'aiannh';
+/**
+ * MUST stay `aiannh-fill`: src/state/location-identity.ts already reads this
+ * id (AIANNH_FILL) for the lowest-precedence containment probe (Unit A).
+ */
+const FILL_LAYER_ID = 'aiannh-fill';
+const OUTLINE_LAYER_ID = 'aiannh-outline';
 
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
 export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID] as const;
 
-/**
- * Symbol layer ID used as the `beforeId` anchor so the boundary stacks below
- * the basemap label glyphs, matching every other reference-polygon module. If
- * the active style does not declare `first-symbol`, MapLibre appends at the top
- * of the layer list, which is an acceptable fallback.
- */
+/** Symbol anchor so the boundary stacks below basemap labels (shared idiom). */
 const BEFORE_ID = 'first-symbol';
 
-/** Per-call network budget for the AIAN-LAR query. */
+/** Per-call network budget for the AIANNH query. */
 const FETCH_TIMEOUT_MS = 15_000;
 
 /**
  * Overscan margin applied to the query envelope, as a fraction of the
- * viewport's width and height on each side. Fetching a bit beyond the
- * visible viewport lets small pans render correctly at their edges instead
- * of clipping at the exact prior bounds, and increases the odds a minor pan
- * still hits the response cache below.
+ * viewport's width and height on each side, so small pans render correctly at
+ * their edges and are more likely to hit the response cache.
  */
 const OVERSCAN_FACTOR = 0.25;
 
 /**
- * Cache-key bounds precision, in decimal degrees, coarser than the five
- * decimal places used for the actual query envelope (roughly 11 km at PNW
- * latitudes). Chosen so ordinary pans and re-toggles of the same region
- * reuse a cached response while a real region change still misses it.
+ * Cache-key bounds precision in decimal degrees (see bia-reservations.ts for
+ * the rationale): ordinary pans and re-toggles of the same region reuse a
+ * cached response; a real region change misses.
  */
 const CACHE_KEY_PRECISION = 1;
 
@@ -117,6 +107,22 @@ const CACHE_MAX_ENTRIES = 24;
  * pans, programmatic fit chains) collapse into one refetch.
  */
 const REFRESH_DEBOUNCE_MS = 400;
+
+/**
+ * Geometry generalization tolerance, in screen pixels, converted to degrees
+ * for `maxAllowableOffset` at the current zoom. Half a pixel is conservative
+ * on purpose (the catalog caveat: verify small and detached parcels survive);
+ * it still cuts the multi-megabyte OTSA geometries by roughly two orders of
+ * magnitude versus full precision.
+ */
+const OFFSET_PIXEL_TOLERANCE = 0.5;
+
+/**
+ * Decimal places requested for coordinates (`geometryPrecision`). Five places
+ * is roughly one meter, far below anything visible at any zoom this layer
+ * serves, and materially shrinks the JSON payload.
+ */
+const GEOMETRY_PRECISION = 5;
 
 type Status = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
 
@@ -165,32 +171,55 @@ interface CachedResponse {
 }
 
 /**
- * Session-scoped response cache, keyed by `buildCacheKey`. Module-level so
- * it outlives individual activate/deactivate cycles; cleared only on page
- * reload. Never written to disk or the repository; see the Caching
- * paragraph in the module docblock above.
+ * Session-scoped response cache keyed by `buildCacheKey`. In browser memory
+ * only, cleared on page reload; never written to disk or the repository
+ * (hard rule 1 guard in the module docblock).
  */
 const responseCache = new Map<string, CachedResponse>();
+
+/**
+ * The BIA reservation fill layer id (src/layers/bia-reservations.ts). When
+ * present it is this layer's preferred insertion anchor, so the documented
+ * double-draw hierarchy (AIANNH wash BELOW the reservation purple) holds
+ * regardless of toggle order: without it, toggling AIANNH off and on while
+ * BIA is active would reinsert AIANNH on top (Codex Unit B finding 4,
+ * 2026-07-15). The literal is mirrored, not imported, to keep the layer
+ * chunks independent (the same pattern location-identity.ts uses).
+ */
+const BIA_FILL_LAYER_ID = 'bia-reservations-fill';
 
 function reportStatus(state: Status): void {
   registry.setStatus(LAYER_KEY, state);
 }
 
 function resolveBeforeId(map: maplibregl.Map): string | undefined {
+  if (map.getLayer(BIA_FILL_LAYER_ID)) return BIA_FILL_LAYER_ID;
   return map.getLayer(BEFORE_ID) ? BEFORE_ID : undefined;
 }
 
 /**
- * Bucketed cache key for the current viewport (see CACHE_KEY_PRECISION). No
- * zoom component: this query has no zoom-keyed generalization parameter, so
- * one response serves every zoom of the same bounds. The key is a fast-path
- * bucket only; a hit must ALSO pass the `envelopeCovers` coverage check.
+ * Integer zoom bucket used for BOTH the cache key and the generalization
+ * tolerance, so one cache entry can never mix generalization levels (Codex
+ * Unit B finding 3: a key on floored zoom with an offset on raw zoom let the
+ * same key span nearly a twofold tolerance range).
  */
-function buildCacheKey(map: maplibregl.Map): string {
+function resolveZoomBucket(map: maplibregl.Map): number {
+  return Math.floor(map.getZoom());
+}
+
+/**
+ * Bucketed cache key for the current viewport. Includes the zoom bucket
+ * because the query's generalization tolerance is zoom-keyed: a response
+ * generalized for zoom 4 must not satisfy a zoom 9 view of the same bounds.
+ * The key is a fast-path bucket only; a hit must ALSO pass the
+ * `envelopeCovers` coverage check before it is served.
+ */
+function buildCacheKey(map: maplibregl.Map, zoomBucket: number): string {
   const b = map.getBounds();
-  return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]
+  const bounds = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]
     .map((n) => n.toFixed(CACHE_KEY_PRECISION))
     .join(',');
+  return `z${zoomBucket}:${bounds}`;
 }
 
 /**
@@ -266,12 +295,26 @@ function cacheResponse(
 }
 
 /**
- * Build the GeoJSON query URL, clipped to the given overscanned envelope.
- * The envelope is `xmin,ymin,xmax,ymax` in the `inSR` (WGS 84 longitude /
- * latitude). `outFields` is limited to the five fields the popup and the
- * impact briefing read, to keep the payload small.
+ * Degrees of longitude per CSS pixel at the given zoom bucket (512-pixel
+ * world tiles), scaled by OFFSET_PIXEL_TOLERANCE, for `maxAllowableOffset`.
  */
-function buildQueryUrl(envelope: readonly [number, number, number, number]): string {
+function resolveMaxAllowableOffset(zoomBucket: number): number {
+  const degreesPerPixel = 360 / (512 * Math.pow(2, zoomBucket));
+  return degreesPerPixel * OFFSET_PIXEL_TOLERANCE;
+}
+
+/**
+ * Build the GeoJSON query URL against the comprehensive AIANNH layer (47),
+ * clipped to the given overscanned envelope. `outFields` is limited to what
+ * the popup, identity, and briefing read. Geometry is generalized
+ * server-side by the zoom-bucket-keyed `maxAllowableOffset` plus a fixed
+ * `geometryPrecision`; note AREALAND/AREAWATER arrive STRING-typed (catalog
+ * caveat), so any consumer doing area math must parse first.
+ */
+function buildQueryUrl(
+  envelope: readonly [number, number, number, number],
+  zoomBucket: number
+): string {
   const params = new URLSearchParams({
     where: '1=1',
     geometry: envelope.map((n) => n.toFixed(5)).join(','),
@@ -279,20 +322,20 @@ function buildQueryUrl(envelope: readonly [number, number, number, number]): str
     inSR: '4326',
     outSR: '4326',
     spatialRel: 'esriSpatialRelIntersects',
-    outFields: 'LARID,LARNAME,CLASSIFICATION,GISACRES,REGION',
+    outFields: 'NAME,AIANNHCC,MTFCC,BASENAME,AIANNHNS,AREALAND,AREAWATER',
     returnGeometry: 'true',
+    geometryPrecision: String(GEOMETRY_PRECISION),
+    maxAllowableOffset: resolveMaxAllowableOffset(zoomBucket).toFixed(6),
     f: 'geojson'
   });
-  return `${URLS.biaLarFeatureServer}/query?${params.toString()}`;
+  return `${URLS.censusAiannhMapServer}/47/query?${params.toString()}`;
 }
 
 /**
  * Validate that a parsed response is a genuine GeoJSON FeatureCollection and
  * not an ArcGIS error body or other malformed shape. Throws on failure so the
- * caller's existing catch block reports `'error'`, matching every other
- * failure path in this module. A response the service flags as truncated
- * (`exceededTransferLimit`) is logged, not silently treated as complete;
- * full pagination is a larger change than this validation pass covers.
+ * caller's catch block reports `'error'`. A response the service flags as
+ * truncated (`exceededTransferLimit`) is logged, not silently complete.
  */
 function assertFeatureCollection(raw: unknown): FeatureCollection {
   if (raw && typeof raw === 'object' && 'error' in raw) {
@@ -307,7 +350,7 @@ function assertFeatureCollection(raw: unknown): FeatureCollection {
     (raw as { type?: string }).type !== 'FeatureCollection' ||
     !Array.isArray((raw as { features?: unknown }).features)
   ) {
-    throw new Error('AIAN-LAR response was not a GeoJSON FeatureCollection.');
+    throw new Error('AIANNH response was not a GeoJSON FeatureCollection.');
   }
   return raw as FeatureCollection;
 }
@@ -329,12 +372,11 @@ function isTruncated(raw: unknown): boolean {
 }
 
 /**
- * Fetch the AIAN-LAR for the current viewport and apply it: into the existing
- * source via `setData` when refreshing, or as a fresh source plus layers on
- * first render. Shared by `activate` and the `moveend` refresh. A cache hit
- * applies synchronously with no network call (see the Caching paragraph in
- * the module docblock). Network failures surface as `'error'` rather than
- * throwing, matching the other layer modules.
+ * Fetch the AIANNH features for the current viewport and apply them: into the
+ * existing source via `setData` when refreshing, or as a fresh source plus
+ * layers on first render. Shared by `activate` and the `moveend` refresh. A
+ * cache hit applies synchronously with no network call. Failures surface as
+ * `'error'`, never thrown.
  */
 async function fetchAndApply(map: maplibregl.Map): Promise<void> {
   // Supersede any prior in-flight fetch FIRST, before the cache lookup, so a
@@ -347,7 +389,8 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
   }
   const token = ++requestSeq;
 
-  const cacheKey = buildCacheKey(map);
+  const zoomBucket = resolveZoomBucket(map);
+  const cacheKey = buildCacheKey(map, zoomBucket);
   const cached = responseCache.get(cacheKey);
   if (cached && envelopeCovers(cached.envelope, map)) {
     applyFeatureCollection(map, cached.geojson);
@@ -364,12 +407,12 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
   let truncated = false;
   try {
     // cache: 'no-store' enforces hard rule 1's session-only scope at the
-    // transport level: the upstream sends max-age=0 + public + ETag
-    // (storable, revalidate-on-use), so without this the browser HTTP
-    // cache may persist sovereign-boundary responses across page loads
+    // transport level: the upstream sends max-age=0 + ETag (storable,
+    // revalidate-on-use), so without this the browser HTTP cache may
+    // persist sovereign-boundary responses across page loads
     // (harness/phases/0.7.0/EVIDENCE_HEADERS_2026-07-15.md).
     const resp = await fetchWithBudget(
-      buildQueryUrl(envelope),
+      buildQueryUrl(envelope, zoomBucket),
       { cache: 'no-store' },
       signal,
       FETCH_TIMEOUT_MS
@@ -384,7 +427,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
     // Aborted or superseded means a newer request owns the view; drop
     // silently per invariant 5.
     if (signal.aborted || token !== requestSeq) return;
-    console.warn('[bia-reservations] AIAN-LAR fetch failed.', err);
+    console.warn('[aiannh] Census AIANNH fetch failed.', err);
     reportStatus('error');
     return;
   }
@@ -394,7 +437,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
 
   if (truncated) {
     console.warn(
-      '[bia-reservations] response truncated by the service (exceededTransferLimit); rendering a partial result for this view and reporting live (partial).'
+      '[aiannh] AIANNH response was truncated by the service (exceededTransferLimit); rendering a partial result for this view and reporting live (partial).'
     );
     applyFeatureCollection(map, geojson, { partial: true });
     return;
@@ -404,14 +447,13 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
 }
 
 /**
- * Apply a validated FeatureCollection, from cache or a fresh fetch: `setData`
- * into the existing source (the refresh path) or create the source and layers
- * (first render). A zero-feature response reports the honest live-zero state:
- * a valid, non-error response with no intersecting features reflects what
- * BIA AIAN-LAR returns for this query, not a verified absence of Tribal
- * presence (AIAN-LAR does not cover most Oklahoma Tribal Statistical Areas or
- * landless Tribes; confirmed 2026-07-15, see
- * docs/ddm-tribal-geography-tier-assessment-2026-07-15.md).
+ * Apply a validated FeatureCollection to the map: `setData` into the existing
+ * source (the refresh path) or create the source and layers (first render).
+ * Reports the honest live-zero state when the service returned no features
+ * for this view; that is "no features returned", never "empty placeholder"
+ * (this layer is never a placeholder; the wording is resolved in Unit C).
+ * A `partial: true` application (a truncated response) reports `degraded`
+ * ("live (partial)"), never an unqualified `ready`.
  */
 function applyFeatureCollection(
   map: maplibregl.Map,
@@ -429,25 +471,28 @@ function applyFeatureCollection(
     : (geojson.features ?? []).length === 0
       ? 'no-data'
       : 'ready';
-  reportStatus(lastAppliedStatus);
+  if (lastAppliedStatus) reportStatus(lastAppliedStatus);
 }
 
 /**
- * Add the source and both style layers. The layers are added even for an
- * empty collection: the viewport refresh swaps data into the existing source
- * with `setData`, so a view that starts empty (Oklahoma, where AIAN-LAR
- * returns zero features) must still have layers ready for the features a
+ * Add the source and both style layers. Unlike the pre-umbrella BIA module,
+ * the layers are added even for an empty collection: the viewport refresh
+ * swaps data into the existing source with `setData`, so a view that starts
+ * empty (an ocean view, say) must still have layers ready for the features a
  * later pan brings in.
  */
 function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): void {
   map.addSource(SOURCE_ID, {
     type: 'geojson',
     data: geojson,
-    attribution: 'BIA AIAN-LAR',
-    // LARID is the stable federal land-area id, so the U3 search can emphasize
-    // a land area it located by LARNAME without a click (U3h). promoteId lifts
-    // it to the feature id feature-state and the click handler both key on.
-    promoteId: 'LARID'
+    attribution: 'US Census AIANNH',
+    // AIANNHNS is the stable Census (GNIS-derived) area identifier; promoting
+    // it to the feature id keeps feature-state emphasis attached to the same
+    // area across the viewport refresh's setData swaps. Persistence across a
+    // toggle-off (which removes the source and its feature state) or a page
+    // reload is the selection seam's job, not this module's; the emphasis is
+    // reapplied by the next click or search, matching the BIA peer.
+    promoteId: 'AIANNHNS'
   });
 
   const beforeId = resolveBeforeId(map);
@@ -458,17 +503,15 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
       type: 'fill',
       source: SOURCE_ID,
       paint: {
-        // The visible reservation surface of record (D-0.7.0-019); lifted from
-        // 0.18 so the magenta reads as primary, still below Tribal Lands in the
-        // family's opacity hierarchy and inside the 0.3-band-adjacent range that
-        // keeps the basemap legible underneath. The selected land area (U3h)
-        // lifts higher so it stays legible under an open briefing.
-        'fill-color': RESERVATION_FILL_COLOR,
+        // A light wash, deliberately below the BIA reservation fill (0.26) in
+        // the family hierarchy so the double-draw stays legible: AIANNH pink
+        // underneath, reservation purple on top (see palette.ts).
+        'fill-color': AIANNH_FILL_COLOR,
         'fill-opacity': [
           'case',
           ['boolean', ['feature-state', 'selected'], false],
-          0.5,
-          0.26
+          0.4,
+          0.16
         ]
       }
     },
@@ -481,18 +524,18 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
       type: 'line',
       source: SOURCE_ID,
       paint: {
-        'line-color': RESERVATION_OUTLINE_COLOR,
+        'line-color': AIANNH_OUTLINE_COLOR,
         'line-width': [
           'case',
           ['boolean', ['feature-state', 'selected'], false],
-          2.6,
-          1.2
+          2.4,
+          1
         ],
         'line-opacity': [
           'case',
           ['boolean', ['feature-state', 'selected'], false],
           1,
-          0.9
+          0.85
         ]
       }
     },
@@ -531,10 +574,10 @@ function detachRefresh(map: maplibregl.Map): void {
 }
 
 /**
- * Fetch the AIAN-LAR for the current viewport, add the source and layers, and
- * start the while-active viewport refresh. Idempotent: if the source already
- * exists the call only (re)ensures the refresh handler, so the URL-restore
- * path cannot stack duplicates.
+ * Fetch the AIANNH areas for the current viewport, add the source and layers,
+ * and start the while-active viewport refresh. Idempotent: if the source
+ * already exists the call only (re)ensures the refresh handler, so the
+ * URL-restore path cannot stack duplicates.
  */
 export async function activate(map: maplibregl.Map): Promise<void> {
   attachRefresh(map);
@@ -573,8 +616,7 @@ export function cancelActivation(): void {
 
 /**
  * Stop the viewport refresh, abort any in-flight fetch, and remove the fill,
- * outline, and source. Layers are removed before the source (removing a
- * source with attached layers raises a MapLibre error). Safe to call when
+ * outline, and source (layers before source, per MapLibre). Safe to call when
  * never activated.
  */
 export function deactivate(map: maplibregl.Map): void {
@@ -592,10 +634,9 @@ export function deactivate(map: maplibregl.Map): void {
 }
 
 /**
- * Wire the click-to-popup handler and the hover cursor affordance on the fill
- * layer. Bound once at boot (per the boot-time `bindPopups` loop), independent
- * of activation; MapLibre tolerates a handler bound to a not-yet-existing layer
- * ID and the handler short-circuits cleanly when no feature is hit.
+ * Wire the click-to-popup handler and hover cursor affordance on the fill
+ * layer. Bound once at boot, independent of activation; MapLibre tolerates a
+ * handler bound to a not-yet-existing layer id.
  */
 export function bindPopups(map: maplibregl.Map): void {
   map.on('click', FILL_LAYER_ID, (e) => {
@@ -605,11 +646,11 @@ export function bindPopups(map: maplibregl.Map): void {
     const props: GeoJsonProperties = feature.properties ?? null;
     const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true })
       .setLngLat(e.lngLat)
-      .setHTML(buildBiaReservationPopupHtml(props))
+      .setHTML(buildAiannhPopupHtml(props))
       .addTo(map);
     attachImpactTrigger(
       popup,
-      buildBoundaryContext('bia-reservation', props, feature.geometry, e.lngLat)
+      buildBoundaryContext('aiannh', props, feature.geometry, e.lngLat)
     );
   });
 

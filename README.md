@@ -19,8 +19,13 @@ provider. Every view is a shareable URL.
 **Stewardship comes first.** The module is built so each deployer (a
 Tribal Nation, a state agency, a partner) controls its own copy on its own
 infrastructure. Sovereign-jurisdiction data is never redistributed by this
-repository: the Tribal Lands and Treaty Areas layers ship as empty
-placeholders that each deployer populates under its own authorizations.
+repository. The default Tribal-geography layers (Tribal Lands, Reservation
+Boundaries, Treaty & Ceded Lands) are fetched LIVE from the publishing
+federal services at view time, held only in the browser session, and never
+bundled; requests run with `cache: 'no-store'` so nothing persists beyond
+the session. Separately, two deployer-owned slots (`tribal`, `treaty`)
+ship as empty placeholders a deployer may populate with its own authorized
+data.
 
 > **Treaty boundaries.** Agency polygons are a representation of Treaty
 > cession areas, not a definitive depiction of Tribal jurisdiction. Treaty
@@ -47,9 +52,15 @@ self-hosting and data population.
   Wildfire Hazard Potential.
 - **Place** (the reference boundaries that say where you are and whose
   land you are looking at): state boundaries, EPA Omernik Level III and
-  Level IV ecoregions, Tribal Lands, Treaty Areas, Bureau of Indian
-  Affairs (BIA) reservation boundaries (live from the authoritative
-  AIAN-LAR service), and rivers.
+  Level IV ecoregions, rivers, and the Tribal Nations umbrella: Tribal
+  Lands (live from the US Census AIANNH service, covering legal AND
+  statistical geographies including Oklahoma Tribal Statistical Areas),
+  Reservation Boundaries (live from the authoritative Bureau of Indian
+  Affairs (BIA) AIAN-LAR service), and Treaty & Ceded Lands (live from
+  the US Forest Service digitized Royce cessions). Where two agencies
+  depict the same land the overlap is drawn legibly as two labeled
+  representations, never blended. Deployers can additionally load their
+  own Tribal Lands and Treaty Areas data into two default-off slots.
 - **Events**: active wildfire perimeters (National Interagency Fire
   Center) and active National Weather Service (NWS) heat and fire-weather
   alerts.
@@ -69,8 +80,9 @@ self-hosting and data population.
   the question being asked, without locking it.
 
 Every layer reports an honest status in the sidebar (`loading`, `live`,
-`unavailable`, `no data`, `zoom in to load`); a failed upstream shows an
-honest pill, never a silent blank.
+`live (partial)`, `unavailable`, `no data`, `zoom in to load`); a failed
+or truncated upstream shows an honest pill, never a silent blank and
+never an unqualified `live`.
 
 ---
 
@@ -110,9 +122,16 @@ current URL.
 | Param | Values | Default |
 | ----- | ------ | ------- |
 | `region` | `washington_state`, `columbia_snake_basin`, `cascades`, `central_oregon`, `southwest_washington`, `south_puget_sound`, `national`, `alaska`, `hawaii` | `washington_state` |
-| `layers` | comma-separated keys from the table below | `usdm,tribal,telemetry` |
+| `layers` | comma-separated keys from the table below | `usdm,aiannh,treaty-cessions,bia-reservations,states` |
 | `select` | `state:<postal code>` (for example `state:WA`): opens the map focused on that boundary with its impact briefing open; applied once, then dropped from the URL | none |
 | `embed` | `true` or `1` (hides the sidebar for clean iframe presentation) | `false` |
+
+Display-state parameters also round-trip (`view` for the Brief/console
+mode, `week` for the USDM archive, `dmode`, `sst`, `outlook`, `basemap`);
+the authoritative grammar for every parameter is
+`docs/URL_SCHEMA_POLICY.md`. Old shared links keep working: `tribal` is
+still a valid key (now the deployer-data slot, off by default), and
+legacy layer lists resolve deterministically.
 
 Because condition surfaces render one at a time, a `layers` list naming
 several surfaces resolves deterministically to the first surface named
@@ -144,9 +163,11 @@ several surfaces resolves deterministically to the first surface named
 | `usfs-whp` | Wildfire Hazard Potential | surface | USFS GeoPlatform ImageServer (live) |
 | `states` | State Boundaries | reference | US Census, bundled GeoJSON |
 | `ecoregions` | Ecoregions (Level III/IV) | reference | EPA Omernik, bundled PMTiles |
-| `tribal` | Tribal Lands | reference | bundled GeoJSON, EMPTY PLACEHOLDER |
-| `treaty` | Treaty Areas | reference | bundled GeoJSON, EMPTY PLACEHOLDER |
-| `bia-reservations` | Reservation Boundaries | reference | BIA AIAN-LAR FeatureServer (live) |
+| `aiannh` | Tribal Lands | reference | US Census AIANNH MapServer (live, default-on) |
+| `bia-reservations` | Reservation Boundaries | reference | BIA AIAN-LAR FeatureServer (live, default-on) |
+| `treaty-cessions` | Treaty & Ceded Lands | reference | USFS Royce cessions MapServer (live, default-on) |
+| `tribal` | Tribal Lands (your own data) | reference | deployer slot, bundled EMPTY PLACEHOLDER, default-off |
+| `treaty` | Treaty Areas (your own data) | reference | deployer slot, bundled EMPTY PLACEHOLDER, default-off |
 | `hydrography` | Rivers | reference | OpenStreetMap via Overpass (live) |
 | `nifc-fires` | Active Wildfires | event | NIFC WFIGS FeatureServer (live) |
 | `nws-alerts` | Heat & Fire Weather Alerts | event | NOAA NWS MapServer (live) |
@@ -156,17 +177,25 @@ Every live endpoint in `src/config/urls.ts` carries a verification
 metadata block (HTTP status, content type, CORS posture, response-shape
 caveats, verification date). Read it before touching a fetcher.
 
-### About the placeholders
+### Live Tribal geography, and the deployer slots
 
-Tribal Lands and Treaty Areas load from bundled GeoJSON in `public/data/`
-and ship as empty `FeatureCollection` placeholders, so the application is
-functional on first deploy without redistributing any sovereign-
-jurisdiction data. To enable a layer, replace the corresponding file with
-authoritative GeoJSON under your own authorization. Conversion commands
-and download URLs are documented in
-[`public/data/README.md`](public/data/README.md). The BIA reservation
-layer takes the other path: it fetches the authoritative federal service
-live and redistributes nothing.
+The three default-on Tribal-geography layers (`aiannh`,
+`bia-reservations`, `treaty-cessions`) fetch the publishing federal
+services live at view time and redistribute nothing: responses are held
+in session memory only, requested with `cache: 'no-store'`, and are never
+bundled, baked, or written to disk by this module. Each popup names its
+publishing agency, its vintage, and the representation caveat.
+
+The `tribal` and `treaty` keys are the DEPLOYER slots: bundled empty
+`FeatureCollection` placeholders (in `public/data/`), off by default,
+that a deployer may populate with its own authorized data (a Tribal
+Nation's own boundary data, under its own governance). Their popups label
+the data as deployer-provided. If you populate a slot with data that
+duplicates one of the live federal layers, consider toggling that live
+layer off in your embed links to avoid a confusing double-draw; the two
+are deliberately separate so your data never silently replaces or blends
+with a federal representation. Conversion commands and population
+instructions are in [`public/data/README.md`](public/data/README.md).
 
 ### About the basemap and hydrography
 
@@ -198,14 +227,17 @@ honestly as unavailable.
 - **One surface at a time.** Condition surfaces are mutually exclusive by
   construction; place, events, and stations stack over the active surface.
 - **Lazy loading with honest status.** Layers load on first toggle-on and
-  report five canonical states; a data failure keeps the layer checked
+  report six canonical states; a data failure keeps the layer checked
   with an honest `unavailable` pill (a shared link never silently loses a
-  layer because an upstream blipped).
+  layer because an upstream blipped), and a truncated response reads
+  `live (partial)`, never an unqualified `live`.
 - **Cancellable network operations.** Master abort signal plus per-call
   timeout on every non-trivial fetch; late responses to superseded
   operations are dropped, not rendered.
-- **Empty-placeholder stewardship.** Sovereign-jurisdiction layers ship
-  empty; deployers populate them under their own authorizations.
+- **Live-fetch stewardship.** Sovereign-jurisdiction geography is never
+  redistributed: the federal representations are fetched live per session
+  (no-store), and the deployer-owned slots ship empty for population
+  under the deployer's own authorizations.
 - **Mobile and accessibility.** The sidebar stacks above the map below
   720 pixels; region selection is arrow-key navigable; status changes are
   announced through a polite live region; embed semantics survive

@@ -91,10 +91,12 @@ import { getViewMode, onViewModeChange, setViewMode } from '../state/view-mode';
 import { getBasemapMode, onBasemapChange, setBasemapMode } from '../state/basemap-store';
 import { applyBasemapMode } from '../map/basemap-switcher';
 import { timeline } from '../state/timeline';
-import { STATUS_PILL_TEXT } from './island/pill-text';
+import { resolveStatusPillText } from './island/pill-text';
 import {
   isChecked as bridgeIsChecked,
-  setChecked as bridgeSetChecked
+  setChecked as bridgeSetChecked,
+  checkedSnapshot as bridgeCheckedSnapshot,
+  onCheckedChange as bridgeOnCheckedChange
 } from './island/bridge';
 import { bindLayerToggleController, requestLayerOn } from './layer-toggle-command';
 import { getSheetDetent, isSheetActive, revealSheetAtPeek, setSheetDetent } from './mobile-sheet';
@@ -169,7 +171,7 @@ export function mountSidebarIslandNow(): Promise<void> {
 function announceLayerStatus(key: string, status: LayerStatus): void {
   const def = getLayerDef(key);
   const friendly = def ? def.name : key;
-  announce(`${friendly}: ${STATUS_PILL_TEXT[status]}`);
+  announce(`${friendly}: ${resolveStatusPillText(status, def?.noDataLabel)}`);
 }
 
 /**
@@ -285,13 +287,38 @@ function selectRegion(
 }
 
 /**
- * Push the current region + active-layers + embed state to the URL. A
+ * The `layers` value for EVERY URL write is the bridge's checkbox INTENT:
+ * the one synchronous store every door writes (the catalog checkbox, the
+ * shared toggle command and with it the Tribal Nations action, presets,
+ * surface exclusivity, the boot seeding below, and the controller's
+ * failure cleanup). Never the registry's completion-order active set, and
+ * never a frozen boot snapshot. This closes both halves of the URL-race
+ * pair the umbrella reviews converged on (Codex Unit E finding 1; the
+ * final-pass finding 1; the independent code review's boot-window
+ * finding): a bare or deep-link boot serializes its full parsed set from
+ * the first write, a user action during boot or during any in-flight
+ * activation serializes the moment intent is declared, and a terminal
+ * activation failure unchecks the bridge so the failed key self-corrects
+ * out of the URL. Unknown URL keys never enter the bridge (the boot seed
+ * validates against getLayerDef, exactly like applyLayerSet), so the
+ * canonical rewrite still drops them (URL policy rules 2 and 7).
+ */
+function checkedLayerKeys(): Set<string> {
+  const keys = new Set<string>();
+  for (const [key, on] of bridgeCheckedSnapshot()) {
+    if (on) keys.add(key);
+  }
+  return keys;
+}
+
+/**
+ * Push the current region + intended-layers + embed state to the URL. A
  * thin wrapper so callers do not have to assemble the snapshot.
  */
 function pushUrl(): void {
   syncUrl({
     region: STATE.currentRegion,
-    layers: registry.getActiveKeys(),
+    layers: checkedLayerKeys(),
     embed: STATE.embed,
     view: getViewMode(),
     usdmWeek: timeline.usdmWeek,
@@ -1047,6 +1074,20 @@ export function buildSidebar(
   // therefore no time bar, can exist before the checkboxes do. Measured
   // cost under regional-4G throttle: +15 ms to the visible pill (ADR 0002
   // condition 8; ruled not material).
+  // Seed the bridge's checkbox intent from the parsed URL BEFORE the
+  // synchronous state application: its region fit writes the URL, and that
+  // write must carry the parsed layer set (the deep-link set or the
+  // explicit default list), never an empty pre-boot bridge. Validated
+  // against the layer registry so an unknown key survives the LOAD but not
+  // the canonical rewrite (URL policy rule 2). applyLayerSet re-asserts the
+  // same intent later; setChecked is idempotent.
+  try {
+    for (const key of parseUrlParams().layers) {
+      if (getLayerDef(key)) bridgeSetChecked(key, true);
+    }
+  } catch (err) {
+    console.error('[sidebar] boot intent seeding failed:', err);
+  }
   let bootParams: ParsedUrlParams | null = null;
   try {
     bootParams = applyUrlStateSync(map);
@@ -1056,6 +1097,15 @@ export function buildSidebar(
     // sees the map.
     selectRegion(map, DEFAULT_REGION, true);
   }
+
+  // Every checkbox-intent flip serializes the URL the moment it happens
+  // (invariant 2: the URL mirrors what the user asked for, never network
+  // completion order). Registered AFTER the synchronous boot application
+  // so the seeding loop above cannot emit writes carrying the pre-boot
+  // region; user interaction cannot precede this line (it is the same
+  // synchronous task). The registry subscription above still writes on
+  // activation settle; the two writes are idempotent.
+  bridgeOnCheckedChange(() => pushUrl());
 
   // The island boot decision (headroom C1): a brief embed defers the
   // catalog chunk entirely; every other boot mounts it now. The mode is
@@ -1082,6 +1132,13 @@ export function buildSidebar(
     })
     .catch((err: unknown) => {
       console.error('[sidebar] boot layer activation failed:', err);
+    })
+    .finally(() => {
+      // One canonical post-settle write (URL policy rule 7). Terminal
+      // failures already unchecked their bridge intent (each triggering its
+      // own write); this is the belt-and-braces canonicalization on the
+      // success and failure paths alike.
+      pushUrl();
     });
 }
 

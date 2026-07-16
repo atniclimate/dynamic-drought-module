@@ -55,6 +55,8 @@ import type { ImpactBriefing } from '../impact/types';
 import { getViewMode, onViewModeChange, setViewMode } from '../state/view-mode';
 import { escapeHtml } from '../util/escape';
 import { prefersReducedMotion } from '../util/motion';
+import { TRIBAL_NATIONS_GROUP } from '../config/layer-groups';
+import { activateTribalNationsGroup, wireTribalNationsHealth } from './tribal-nations-action';
 
 // ---------------------------------------------------------------------------
 // Types and module state
@@ -750,6 +752,22 @@ export function initMobileSheet(
   document.getElementById('sheet-all-layers-btn')?.addEventListener('click', () => {
     setSheetDetent('full');
   });
+
+  // The at-hand Tribal Nations action (umbrella build Unit F): the Brief
+  // half detent shows the at-hand summary INSTEAD of the report, so the
+  // report-hosted action needs this mirror to stay reachable. Same eager
+  // command; the label and description are re-stamped from the group config
+  // so the static index.html copy cannot drift from it.
+  const atHandAction = document.getElementById('tribal-nations-at-hand-action');
+  if (atHandAction) {
+    atHandAction.textContent = TRIBAL_NATIONS_GROUP.label;
+    atHandAction.setAttribute('aria-label', `Show ${TRIBAL_NATIONS_GROUP.label} layers`);
+    atHandAction.addEventListener('click', () => activateTribalNationsGroup());
+    const atHandDesc = document.getElementById('tribal-nations-at-hand-action-desc');
+    if (atHandDesc) atHandDesc.textContent = TRIBAL_NATIONS_GROUP.actionDescription;
+    const atHandHealth = document.getElementById('tribal-nations-at-hand-health');
+    if (atHandHealth) wireTribalNationsHealth(atHandHealth);
+  }
 
   // The Brief half detent's one door to the standalone report (stable DOM
   // now, so it is wired once here rather than on every renderAtHand()).

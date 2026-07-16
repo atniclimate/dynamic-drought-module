@@ -16,7 +16,11 @@
  * surfaces is a config bug; keep the table honest by construction.
  *
  * Tribal Lands appears in every preset: whose land you are looking at is
- * part of every question this module answers (CLAUDE.md section 2).
+ * part of every question this module answers (CLAUDE.md section 2). Since
+ * the Tribal Nations umbrella build (D-0.7.0-032/033), the key that carries
+ * it is `aiannh`, the LIVE US Census layer that actually renders on the
+ * reference deployment; the `tribal` deployer own-data slot ships empty and
+ * stays out of presets.
  */
 
 export interface ViewPreset {
@@ -46,19 +50,22 @@ export const MOBILE_HAZARD_PRESETS: readonly ViewPreset[] = [
     key: 'hazard-drought',
     label: 'Drought',
     description: 'Current drought conditions: the weekly US Drought Monitor',
-    layers: ['usdm', 'tribal']
+    layers: ['usdm', 'aiannh']
   },
   {
     key: 'hazard-heat',
     label: 'Heat',
     description: 'Extreme heat: the NWS HeatRisk forecast with active heat alerts',
-    layers: ['heatrisk', 'nws-alerts', 'tribal']
+    layers: ['heatrisk', 'nws-alerts', 'aiannh']
   },
   {
     key: 'hazard-fire',
     label: 'Fire',
-    description: 'Wildfire: the SPC fire-weather outlook with active wildfire perimeters',
-    layers: ['spc-fire-weather', 'nifc-fires', 'tribal']
+    description: 'Wildfire: the SPC fire-weather outlook with active wildfire perimeters and smoke plumes',
+    // hms-smoke is named explicitly (maintainer ruling 2026-07-15): applyPreset
+    // takes the non-cascading activation path, so coActivateWith alone would
+    // not bring smoke in, and a fire view without smoke is not the full read.
+    layers: ['spc-fire-weather', 'nifc-fires', 'hms-smoke', 'aiannh']
   }
 ];
 
@@ -67,30 +74,31 @@ export const VIEW_PRESETS: readonly ViewPreset[] = [
     key: 'right-now',
     label: 'Right now',
     description: 'Current drought conditions: the weekly US Drought Monitor with live telemetry stations',
-    layers: ['usdm', 'tribal', 'telemetry']
+    layers: ['usdm', 'aiannh', 'telemetry']
   },
   {
     key: 'this-week',
     label: 'This week',
     description: 'The days ahead: the HeatRisk forecast for today with active heat and fire-weather alerts',
-    layers: ['heatrisk', 'nws-alerts', 'tribal']
+    layers: ['heatrisk', 'nws-alerts', 'aiannh']
   },
   {
     key: 'season-ahead',
     label: 'Season ahead',
     description: 'The long view: the NOAA CPC Seasonal Drought Outlook (a categorical tendency, not a forecast of outcomes)',
-    layers: ['drought', 'tribal']
+    layers: ['drought', 'aiannh']
   },
   {
     key: 'fire-risk',
     label: 'Fire risk',
-    description: 'Fire weather threat: the SPC Day 1 fire-weather outlook with active wildfire perimeters',
-    layers: ['spc-fire-weather', 'nifc-fires', 'tribal']
+    description: 'Fire weather threat: the SPC Day 1 fire-weather outlook with active wildfire perimeters and smoke plumes',
+    // Explicit hms-smoke for the same non-cascading reason as hazard-fire.
+    layers: ['spc-fire-weather', 'nifc-fires', 'hms-smoke', 'aiannh']
   },
   {
     key: 'whose-land',
     label: 'Whose land',
     description: 'Place and stewardship: Tribal Lands, Treaty areas (representations, not jurisdictional truth), reservation and state boundaries',
-    layers: ['tribal', 'treaty', 'bia-reservations', 'states']
+    layers: ['aiannh', 'treaty-cessions', 'bia-reservations', 'states']
   }
 ];

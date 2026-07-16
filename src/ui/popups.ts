@@ -93,6 +93,19 @@ export function buildEcoregionPopupHtml(
   `;
 }
 
+/**
+ * Popup for the DEPLOYER-provided Tribal Lands slot (`tribal`, the bundled
+ * `public/data/tribal-lands.geojson` a deployer populates under its own
+ * authorization; empty placeholder by default).
+ *
+ * Provenance honesty (Unit-H adjacent recommendation 5, 2026-07-15): this
+ * layer renders whatever data THIS deployment's operator supplied. The popup
+ * must say exactly that, and must not imply Bureau of Indian Affairs (BIA)
+ * or any other agency custody for arbitrary deployer data; the hardcoded
+ * BIA/Washington links the old popup carried are removed. The LIVE federal
+ * representations have their own layers and popups (aiannh,
+ * bia-reservations, treaty-cessions), each naming its actual agency.
+ */
 export function buildTribalPopupHtml(props: GeoJsonProperties): string {
   const p = props ?? {};
   const name = p.LARName || p.LARNAME || p.NAME || p.name || p.TRIBE || p.RESERV_NAM || 'Tribal Land Area';
@@ -102,15 +115,12 @@ export function buildTribalPopupHtml(props: GeoJsonProperties): string {
 
   return `
     <div class="popup-title">${escapeHtml(String(name))}</div>
-    <div class="popup-agency">Tribal Land</div>
+    <div class="popup-agency">Tribal Lands (deployer data)</div>
     ${govt ? `<div class="popup-description"><strong>Government:</strong> ${escapeHtml(String(govt))}</div>` : ''}
     ${type ? `<div class="popup-treaty-meta">Type: ${escapeHtml(String(type))}</div>` : ''}
     ${acresStr ? `<div class="popup-treaty-meta">Acres: ${escapeHtml(acresStr)}</div>` : ''}
+    <div class="popup-description">This boundary comes from data supplied by this deployment's operator under its own authorization (see data/README.md in the deployed module). It is a representation, not a definitive depiction of Tribal jurisdiction; Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority.</div>
     ${IMPACT_TRIGGER_BUTTON_HTML}
-    <div class="popup-links">
-      <a href="https://catalog.data.gov/dataset/american-indian-and-alaska-native-areas" target="_blank" rel="noopener">BIA AIAN-LAR (data.gov)</a>
-      <a href="https://geo.wa.gov/" target="_blank" rel="noopener">WA Geospatial Open Data</a>
-    </div>
   `;
 }
 
@@ -140,11 +150,85 @@ export function buildBiaReservationPopupHtml(props: GeoJsonProperties): string {
     ${classification ? `<div class="popup-treaty-meta">Classification: ${escapeHtml(String(classification))}</div>` : ''}
     ${region ? `<div class="popup-treaty-meta">BIA region: ${escapeHtml(String(region))}</div>` : ''}
     ${acresStr ? `<div class="popup-treaty-meta">Acres: ${escapeHtml(acresStr)}</div>` : ''}
-    <div class="popup-description">This boundary is the Bureau of Indian Affairs (BIA) administrative representation of reservation and trust land extent, published for general spatial reference. It is a representation, not a definitive depiction of Tribal jurisdiction; Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority.</div>
+    <div class="popup-description">This boundary is the Bureau of Indian Affairs (BIA) administrative representation of reservation and trust land extent (the AIAN-LAR; the BIA publishes no fixed vintage and describes the dataset as continuously updated; service verified live July 15, 2026). It is requested live from the BIA service when the layer needs it, held only in this browser session's memory, and not bundled by this module, for general spatial reference. It is a representation, not a definitive depiction of Tribal jurisdiction; Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority.</div>
     ${IMPACT_TRIGGER_BUTTON_HTML}
     <div class="popup-links">
       <a href="https://biamaps.geoplatform.gov/" target="_blank" rel="noopener">BIA GeoPlatform</a>
       <a href="https://onemap-bia-geospatial.hub.arcgis.com/" target="_blank" rel="noopener">BIA OneMap</a>
+    </div>
+  `;
+}
+
+/**
+ * Resolve the US Census AIANNH subtype from `AIANNHCC`, distinguishing legal
+ * reservation/trust-land geographies from statistical geographies. This is the
+ * load-bearing stewardship distinction (D-0.7.0-033, the plan-attack HIGH
+ * constraint): a statistical area is a Census tabulation geography, not land
+ * ownership or jurisdiction, and must never be labeled as one. `isLegal` drives
+ * the caveat wording; an unknown code falls back to the neutral, non-committal
+ * "Census AIANNH area", never to a jurisdiction claim.
+ */
+function resolveAiannhSubtype(code: string): { label: string; isLegal: boolean } {
+  switch (code.toUpperCase()) {
+    case 'D1':
+    case 'D2':
+      return { label: 'Federal reservation', isLegal: true };
+    case 'D3':
+      return { label: 'Off-reservation trust land', isLegal: true };
+    case 'D4':
+      return { label: 'State-recognized reservation', isLegal: true };
+    case 'D6':
+      return { label: 'Oklahoma Tribal Statistical Area (statistical)', isLegal: false };
+    case 'D0':
+      return { label: 'Tribal joint-use area (statistical)', isLegal: false };
+    case 'E1':
+      return { label: 'Alaska Native Village Statistical Area (statistical)', isLegal: false };
+    case 'F1':
+      return { label: 'Hawaiian Home Land', isLegal: true };
+    default:
+      return { label: 'Census AIANNH area', isLegal: false };
+  }
+}
+
+/**
+ * Popup for a US Census American Indian, Alaska Native, and Native Hawaiian
+ * Areas (AIANNH) feature (the live `aiannh` layer). Reads `NAME`, `AIANNHCC`
+ * (subtype), and `BASENAME`, all interpolated through `escapeHtml`.
+ *
+ * Stewardship (D-0.7.0-033; CLAUDE.md section 2): AIANNH is a US Census
+ * Bureau product, fetched live at activation time, not bundled by DDM. It
+ * spans both legal reservation/trust-land geographies and statistical
+ * geographies (Oklahoma Tribal Statistical Areas and the like). A statistical
+ * area is a Census tabulation geography, explicitly NOT a depiction of Tribal
+ * jurisdiction or land ownership; that is stated in the description below and
+ * the subtype is never softened into a jurisdiction claim. This layer is a
+ * distinct, separately labeled representation and is never blended with the
+ * BIA AIAN-LAR layer (the architectural-review HIGH constraint).
+ */
+export function buildAiannhPopupHtml(props: GeoJsonProperties): string {
+  const p = props ?? {};
+  const name = p.NAME || p.BASENAME || p.name || 'Tribal land area';
+  const code = String(p.AIANNHCC || p.aiannhcc || '');
+  const subtype = resolveAiannhSubtype(code);
+  // The user-visible provenance sentence (umbrella build Unit D): publisher,
+  // fetched-live-not-bundled, vintage, and the jurisdiction caveat, on the
+  // one surface that survives desktop, mobile, and embed.
+  // "Requested live ... when the layer needs it" and the session-memory
+  // clause are the accurate description of the fetch-plus-transient-cache
+  // behavior (Codex Unit D finding 3: a session-cache reactivation performs
+  // no network call, so "fetched at activation time" overclaimed).
+  const caveat = subtype.isLegal
+    ? "This is a US Census Bureau representation of Tribal land (vintage January 1, 2025), requested live from the Census TIGERweb service when the layer needs it, held only in this browser session's memory, and not bundled by this module, for general spatial reference. It is a representation, not a definitive depiction of Tribal jurisdiction; Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority."
+    : "This is a US Census Bureau statistical geography (vintage January 1, 2025), requested live from the Census TIGERweb service when the layer needs it, held only in this browser session's memory, and not bundled by this module, for tabulation and general spatial reference. A statistical area is not a reservation, not trust land, and not a depiction of Tribal jurisdiction or land ownership; Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority.";
+
+  return `
+    <div class="popup-title">${escapeHtml(String(name))}</div>
+    <div class="popup-agency">US Census Bureau · AIANNH (live)</div>
+    <div class="popup-treaty-meta">Type: ${escapeHtml(subtype.label)}</div>
+    <div class="popup-description">${caveat}</div>
+    ${IMPACT_TRIGGER_BUTTON_HTML}
+    <div class="popup-links">
+      <a href="https://www.census.gov/programs-surveys/geography.html" target="_blank" rel="noopener">US Census geography</a>
     </div>
   `;
 }
@@ -169,6 +253,103 @@ export function buildTreatyPopupHtml(props: GeoJsonProperties, featureName: stri
     <div class="popup-links">
       <a href="https://wisaard.dahp.wa.gov/" target="_blank" rel="noopener">WA DAHP WISAARD</a>
       <a href="https://native-land.ca/" target="_blank" rel="noopener">Native Land Digital</a>
+    </div>
+  `;
+}
+
+/**
+ * Read a field from a table-qualified property bag, deterministically. The
+ * USFS EDW Royce cession service is an ESRI JOIN of two tables, so its
+ * GeoJSON property keys arrive FULLY TABLE-QUALIFIED (for example
+ * `edw.s_usa.BdyPol_TribalCededLandsTable.presdaytrb`); a bare-name read
+ * would silently miss them (see the urls.ts `usfsRoyceCessions` receipt).
+ *
+ * Resolution order (Codex Unit B2 finding 5: never let upstream property
+ * enumeration order pick a value on a stewardship-sensitive surface):
+ *   1. exactly ONE key ending `.<suffix>` (case-insensitive): return it;
+ *   2. two or more such keys: AMBIGUOUS; return null (the popup omits the
+ *      row rather than guessing which joined table's value to show);
+ *   3. no suffix match: an exact bare-name key, if present.
+ * `endsWith('.<suffix>')` cannot match `mapname1`..`mapname6` when asked for
+ * `mapname`. Returns null when the field is absent or empty.
+ */
+export function readTableQualifiedField(
+  props: GeoJsonProperties,
+  suffix: string
+): string | null {
+  if (!props) return null;
+  const needle = `.${suffix}`.toLowerCase();
+  const bare = suffix.toLowerCase();
+  let suffixValue: string | null = null;
+  let suffixMatches = 0;
+  let bareValue: string | null = null;
+  for (const [key, value] of Object.entries(props)) {
+    if (value === null || value === undefined || value === '') continue;
+    const k = key.toLowerCase();
+    if (k.endsWith(needle)) {
+      suffixMatches += 1;
+      if (suffixMatches === 1) suffixValue = String(value);
+    } else if (k === bare && bareValue === null) {
+      bareValue = String(value);
+    }
+  }
+  if (suffixMatches === 1) return suffixValue;
+  if (suffixMatches > 1) return null;
+  return bareValue;
+}
+
+/**
+ * Format a Royce cession date (ArcGIS epoch milliseconds; NEGATIVE for the
+ * pre-1970 dates every cession has) as a bare year. Empty string when the
+ * value is missing, blank, or does not form a valid Date (a finite number
+ * outside the supported epoch range yields an invalid Date whose UTC year is
+ * NaN; Codex Unit B2 finding 6), so the popup omits the row rather than
+ * showing a fabricated date.
+ */
+function formatCessionYear(value: string | null): string {
+  if (value === null) return '';
+  const trimmed = value.trim();
+  if (trimmed === '') return '';
+  const ms = Number(trimmed);
+  if (!Number.isFinite(ms)) return '';
+  const date = new Date(ms);
+  if (Number.isNaN(date.getTime())) return '';
+  return String(date.getUTCFullYear());
+}
+
+/**
+ * Popup for a USFS Royce Tribal land cession polygon (the live
+ * `treaty-cessions` layer, D-0.7.0-034). Reads the table-qualified fields
+ * through `readTableQualifiedField`; every value is interpolated through
+ * `escapeHtml`.
+ *
+ * Stewardship (CLAUDE.md section 2 + the T0 catalog harmonization): the
+ * mandatory disclaimer states that these are generalized legal references
+ * digitized from the 1896-1897 Royce maps, not surveyed boundaries and not a
+ * definitive depiction of Tribal jurisdiction. The present-day Tribe name is
+ * shown VERBATIM from the federal source (it carries the Federal Register
+ * form); per D-0.7.0-026's safety doctrine it is never remapped to a guessed
+ * name. The historical schedule name is labeled as the 1896-1897 record.
+ */
+export function buildTreatyCessionPopupHtml(props: GeoJsonProperties): string {
+  const tribe = readTableQualifiedField(props, 'presdaytrb');
+  const scheduleTribe = readTableQualifiedField(props, 'schdtrb');
+  const mapname = readTableQualifiedField(props, 'mapname');
+  const cessnum = readTableQualifiedField(props, 'cessnum');
+  const year = formatCessionYear(readTableQualifiedField(props, 'cessdate1'));
+  const title = mapname || (cessnum ? `Royce cession ${cessnum}` : 'Tribal land cession');
+
+  return `
+    <div class="popup-title">${escapeHtml(title)}</div>
+    <div class="popup-agency">US Forest Service · Royce cession lands (live)</div>
+    ${cessnum ? `<div class="popup-treaty-meta">Royce cession number: ${escapeHtml(cessnum)}</div>` : ''}
+    ${year ? `<div class="popup-treaty-meta">Ceded: ${escapeHtml(year)}</div>` : ''}
+    ${tribe ? `<div class="popup-treaty-meta">Present-day Tribe: ${escapeHtml(tribe)}</div>` : ''}
+    ${scheduleTribe && scheduleTribe !== tribe ? `<div class="popup-treaty-meta">As recorded in the 1896-1897 Royce schedule: ${escapeHtml(scheduleTribe)}</div>` : ''}
+    <div class="popup-description">This boundary is a digitized representation of a 19th-century Royce cession map (drawn near 1:2,000,000 scale), requested live from the US Forest Service (dataset published May 29, 2018) when the layer needs it, held only in this browser session's memory, and not bundled by this module. It is a generalized legal reference, not a surveyed boundary and not a definitive depiction of Tribal jurisdiction. Where Tribes ceded land they often retained off-reservation rights; Treaty rights and Tribal sovereignty are matters of sovereign authority. Overlapping cessions are shown separately, never merged.</div>
+    ${IMPACT_TRIGGER_BUTTON_HTML}
+    <div class="popup-links">
+      <a href="https://data.fs.usda.gov/geodata/edw/datasets.php" target="_blank" rel="noopener">USFS geodata clearinghouse</a>
     </div>
   `;
 }

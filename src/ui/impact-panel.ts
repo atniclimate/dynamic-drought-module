@@ -55,6 +55,7 @@ import type {
   SourcedClaim
 } from '../impact/types';
 import { escapeHtml } from '../util/escape';
+import { buildTribalNationsBriefAction } from './tribal-nations-action';
 
 // ---------------------------------------------------------------------------
 // Module state
@@ -167,6 +168,15 @@ function ensurePanel(): HTMLElement {
     <div class="impact-panel-body"></div>
   `;
   document.body.appendChild(panel);
+
+  // The compact Tribal Nations action (umbrella build Unit F): the Brief
+  // door is the initial display for a bare URL, so the ratified prominent
+  // button rides the panel's static chrome, between the title/kind block
+  // and the body. Eager wiring only; the brief embed's C1 boundary (no
+  // island chunk) is untouched.
+  panel
+    .querySelector('.impact-panel-header')
+    ?.insertAdjacentElement('afterend', buildTribalNationsBriefAction());
 
   panelEl = panel;
   bodyEl = panel.querySelector<HTMLElement>('.impact-panel-body');

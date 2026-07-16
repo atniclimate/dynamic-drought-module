@@ -76,8 +76,19 @@ export interface EcoregionIdentity {
  */
 export interface ContainingTribalIdentity {
   readonly name: string;
-  /** Which active layer resolved it. */
-  readonly source: 'tribal' | 'bia-reservation';
+  /**
+   * Which active layer resolved it, in descending authority:
+   *   tribal          the deployer's own data (the Nation's own data) if populated
+   *   bia-reservation the BIA AIAN-LAR legal reservation/trust-land depiction
+   *   aiannh          a US Census AIANNH area. LOWEST authority: it spans
+   *                   statistical geographies (Oklahoma Tribal Statistical Areas,
+   *                   Alaska Native Village Statistical Areas, etc.) that are NOT
+   *                   land ownership or jurisdiction, so it must never outrank a
+   *                   reservation. A consumer presenting this must not phrase an
+   *                   `aiannh` hit as "your Tribal land is X"; it is "falls within
+   *                   the Census AIANNH area X".
+   */
+  readonly source: 'tribal' | 'bia-reservation' | 'aiannh';
 }
 
 /** The composed identity for a point. Every field degrades honestly to null. */
@@ -96,6 +107,7 @@ const STATES_FILL = 'us-states-fill';
 const ECOREGION_FILLS = ['ecoregions-l4-fill', 'ecoregions-l3-fill'] as const;
 const TRIBAL_FILL = 'tribal-lands-fill';
 const BIA_FILL = 'bia-reservations-fill';
+const AIANNH_FILL = 'aiannh-fill';
 
 /** Per-call budget for the bundled-boundaries fallback fetch (same-origin). */
 const STATES_FETCH_TIMEOUT_MS = 10_000;
@@ -207,10 +219,15 @@ function resolveEcoregion(map: maplibregl.Map, point: maplibregl.PointLike): Eco
 
 /**
  * Resolve the CONTAINING Tribal / reservation land from an active Tribal layer
- * only (D-0.6.0-008). The deployer-populated `tribal-lands` takes precedence
- * over the BIA reservations when both are active and overlap: it is the
- * Nation's own data. Null when no Tribal boundary layer is active or the point
- * falls in none.
+ * only (D-0.6.0-008). Precedence, highest authority first (D-0.7.0-033, the
+ * plan-attack BLOCKER 3 fix): the deployer-populated `tribal-lands` (the
+ * Nation's own data), then the BIA AIAN-LAR legal reservation/trust-land
+ * depiction, then the live Census `aiannh` area LAST. The Census layer ranks
+ * lowest deliberately: it spans statistical geographies (Oklahoma Tribal
+ * Statistical Areas, Alaska Native Village Statistical Areas, and the like)
+ * that are not land ownership or jurisdiction, so an AIANNH statistical area
+ * must never outrank a real reservation the point also falls in. Null when no
+ * Tribal boundary layer is active or the point falls in none.
  */
 function resolveContainingTribal(
   map: maplibregl.Map,
@@ -225,6 +242,11 @@ function resolveContainingTribal(
   if (bia) {
     const name = firstString(bia.properties, ['LARNAME', 'LARName', 'NAME', 'name']);
     if (name) return { name, source: 'bia-reservation' };
+  }
+  const aiannh = queryFirstFeature(map, point, [AIANNH_FILL]);
+  if (aiannh) {
+    const name = firstString(aiannh.properties, ['NAME', 'BASENAME', 'name']);
+    if (name) return { name, source: 'aiannh' };
   }
   return null;
 }

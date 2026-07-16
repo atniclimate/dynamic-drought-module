@@ -106,8 +106,19 @@ export interface ResourceLink {
   readonly description?: string;
 }
 
-/** The kind of boundary that was selected; drives the land title and caveat. */
-export type BoundaryKind = 'ecoregion' | 'tribal' | 'treaty' | 'bia-reservation' | 'state';
+/**
+ * The kind of boundary that was selected; drives the land title and caveat.
+ *
+ *   tribal          the deployer-populated own-data slot (the Nation's own data)
+ *   aiannh          a US Census AIANNH area (live), which spans BOTH legal
+ *                   reservation/trust land AND statistical geographies (Oklahoma
+ *                   Tribal Statistical Areas, Alaska Native Village Statistical
+ *                   Areas, Hawaiian Home Lands, state reservations, joint-use
+ *                   areas). A statistical area is NEVER a jurisdiction claim; the
+ *                   distinction is drawn by AIANNHCC in the popup and label.
+ *   bia-reservation the BIA AIAN-LAR federal reservation/trust-land depiction
+ */
+export type BoundaryKind = 'ecoregion' | 'tribal' | 'aiannh' | 'treaty' | 'bia-reservation' | 'state';
 
 /**
  * The context handed from a boundary click to the briefing composer. Carries

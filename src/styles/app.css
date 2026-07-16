@@ -932,6 +932,136 @@ button.conditions-metric:hover {
 }
 .layer-group-sources-toggle[aria-expanded='true']::before { transform: rotate(90deg); }
 
+/* Group-level provenance disclosure (umbrella build Unit D): the concise
+   fetched-live / vintage / caveat note revealed with the group's Sources.
+   Sized to the source-line vocabulary; wraps freely so it survives the
+   400px embed. */
+.layer-group-provenance {
+  margin: 4px 10px 2px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+
+/* ---------------------------------------------------------------------------
+   The Tribal Nations umbrella (Unit F; the Codex front-end consultation Q4).
+   A compact featured card inside the Place role group: a narrow
+   magenta-to-violet identity rule names the mapped family (never the
+   interaction state; cyan keeps that job), the full-width command button
+   reads prominent at 400px, the "n of 3 selected" line carries the honest
+   intent state, and the quieter details disclosure reveals the member rows.
+   --------------------------------------------------------------------------- */
+.layer-umbrella {
+  margin: 4px 0 8px;
+  padding: 8px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  border-top: 2px solid transparent;
+  /* The 2px identity rule: AIANNH pink to reservation violet. */
+  background-image:
+    linear-gradient(var(--bg-2), var(--bg-2)),
+    linear-gradient(90deg, #ec4899, #7e22ce);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+
+.layer-umbrella-cta {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: var(--fw-title);
+  color: var(--fg-0);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-strong);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.layer-umbrella-cta:hover { border-color: var(--accent); background: rgba(6, 182, 212, 0.22); }
+.layer-umbrella-cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.layer-umbrella-count {
+  margin: 5px 2px 0;
+  font-size: 10.5px;
+  color: var(--fg-2);
+  font-feature-settings: 'tnum' 1;
+}
+
+.layer-umbrella-details-toggle {
+  display: block;
+  margin: 4px 0 0;
+  padding: 8px 0;
+  min-height: 32px;
+  background: none;
+  border: none;
+  font-family: var(--font-body);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--fg-3);
+  cursor: pointer;
+}
+.layer-umbrella-details-toggle:hover { color: var(--fg-1); }
+.layer-umbrella-details-toggle::before {
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-right: 5px;
+  border-left: 3px solid currentColor;
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  vertical-align: middle;
+}
+.layer-umbrella-details-toggle[aria-expanded='true']::before { transform: rotate(90deg); }
+@media (max-width: 720px) {
+  .layer-umbrella-details-toggle { min-height: 44px; }
+}
+
+/* An author display rule must never defeat the native hidden contract (the
+   .impact-panel[hidden] lesson): the collapsed member region stays gone. */
+.layer-umbrella-controls[hidden] { display: none; }
+
+/* The compact Brief-door action (the eager mirror of the umbrella button,
+   hosted by the impact panel's static chrome). One labeled row; no child
+   rows, no provenance paragraph (those stay in the catalog). */
+.tribal-nations-brief-row {
+  padding: 8px 18px 0;
+}
+/* The at-hand mirror rides its section's own gutters. */
+.tribal-nations-at-hand-row {
+  padding: 10px 0 0;
+}
+/* The visible intent-versus-outcome line under each Brief-door action. */
+.tribal-nations-health {
+  display: block;
+  margin-top: 4px;
+  font-size: 10.5px;
+  color: var(--fg-2);
+  font-feature-settings: 'tnum' 1;
+}
+.tribal-nations-brief-action {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 12px;
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: var(--fw-title);
+  color: var(--fg-0);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-strong);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.tribal-nations-brief-action:hover { border-color: var(--accent); background: rgba(6, 182, 212, 0.22); }
+.tribal-nations-brief-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 720px) {
+  .tribal-nations-brief-action { min-height: 44px; }
+}
+
 .layer-toggle {
   display: flex;
   align-items: flex-start;

@@ -20,6 +20,8 @@ import type { GeoJsonProperties } from 'geojson';
 import { registry } from '../../state/registry';
 import { timeline } from '../../state/timeline';
 import { USDM_CATEGORIES } from '../../config/palette';
+import { getLayerDef } from '../../config/layers';
+import { resolveStatusPillText } from './pill-text';
 
 // ---------------------------------------------------------------------------
 // Layer keys and fill-layer ids
@@ -125,26 +127,20 @@ function firstNonBlank(...candidates: unknown[]): string {
 // ---------------------------------------------------------------------------
 
 /**
- * The honest "active but not yet rendered" state, worded from the
- * canonical six-state pill vocabulary (U1 alignment: every status
- * surface carries all six states with the canonical wording; no
- * per-surface synonyms).
+ * The honest "active but not yet rendered" state, worded through the ONE
+ * shared status-text resolver (U1 alignment: every status surface carries
+ * the canonical wording; no per-surface synonyms). This surface previously
+ * kept its own literal table whose `no data` had already drifted from the
+ * canonical vocabulary (Codex Unit C finding 1, 2026-07-15); it now resolves
+ * exactly what the catalog pill and the live-region announcer resolve,
+ * including a layer's `noDataLabel` override, so the three can never
+ * disagree. `ready` (rendered elsewhere, nothing in this view) and an
+ * unknown status keep the honest `off` wording.
  */
 function pendingSublabel(key: string): string {
-  switch (registry.getStatus(key)) {
-    case 'loading':
-      return 'loading...';
-    case 'degraded':
-      return 'live (partial)';
-    case 'no-data':
-      return 'no data';
-    case 'error':
-      return 'unavailable';
-    case 'zoom-in':
-      return 'zoom in to load';
-    default:
-      return 'off';
-  }
+  const status = registry.getStatus(key);
+  if (status === undefined || status === 'ready') return 'off';
+  return resolveStatusPillText(status, getLayerDef(key)?.noDataLabel);
 }
 
 /**

@@ -604,10 +604,148 @@ export const URLS = Object.freeze({
   // Verified 2026-05-30: HTTP 200, Content-Type application/geo+json,
   // Access-Control-Allow-Origin: <reflected request origin> (verified against
   // https://atniclimate.github.io, so a browser fetch needs no proxy).
+  // Vintage receipt (2026-07-15): the layer metadata publishes NO fixed
+  // vintage or editingInfo date; the BIA's own description says the dataset
+  // is "continuously being updated". User-visible provenance says exactly
+  // that plus a dated verified-live statement (never an invented date).
   // Access method: ESRI FeatureServer query, f=geojson, spatial envelope clip.
   // Anti-scrape note: the BIA AIAN-LAR FeatureServer, not the OneMap HTML hub.
   biaLarFeatureServer:
     'https://biamaps.geoplatform.gov/server/rest/services/DivLTR/BIA_AIAN_National_LAR/FeatureServer/0',
+
+  // ---------- US Census Bureau TIGERweb AIANNH (Tribal Lands, live) ----------
+  // American Indian, Alaska Native, and Native Hawaiian Areas (AIANNH), the
+  // Census Bureau's comprehensive Tribal-geography product, hosted as an ESRI
+  // MapServer. This is the BROAD Tribal Lands layer (D-0.7.0-032): it carries
+  // reservations and off-reservation trust land AND the statistical
+  // geographies AIAN-LAR does not (Oklahoma Tribal Statistical Areas (OTSA),
+  // Alaska Native Village Statistical Areas, Hawaiian Home Lands, state
+  // reservations, joint-use areas), so it closes the confirmed Oklahoma gap
+  // (biaLarFeatureServer returns zero features for Oklahoma). Consumed LIVE,
+  // not bundled: activation-time agency fetch commits no sovereign polygons to
+  // the repository and does not engage CLAUDE.md hard rule 1 (exactly like
+  // biaLarFeatureServer). Layer 47 is the comprehensive layer; per-type
+  // siblings exist (2 Federal reservations, 3 off-reservation trust land, 7
+  // OTSA, 10 joint-use, 4 state reservations, 5 Hawaiian Home Lands, 6 Alaska
+  // Native Village Statistical Areas). Consumer appends
+  // `/<layer>/query?where=1=1&geometry=<bbox>&geometryType=esriGeometryEnvelope
+  // &inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects&outFields=NAME,
+  // AIANNH,AIANNHCC,MTFCC,BASENAME,AIANNHNS,AREALAND,AREAWATER&returnGeometry=
+  // true&f=geojson`, the biaLarFeatureServer pattern. STEWARDSHIP: AIANNHCC is
+  // the reliable subtype field (MTFCC is coarser via layer 47); statistical
+  // areas MUST be labeled distinctly from legal reservation/trust-land
+  // representations (Codex architectural review HIGH constraint, never blend
+  // with AIAN-LAR). AREALAND/AREAWATER are STRING-typed (parse before area
+  // math). Generalize large geometry with maxAllowableOffset+geometryPrecision
+  // but visually verify small/detached parcels survive (per the review).
+  // Verified 2026-07-15 (ddm-source-verifier): HTTP 200, Content-Type
+  // application/geo+json on /query; Access-Control-Allow-Origin: <reflected
+  // request origin> (genuine reflection confirmed three ways including a bogus-
+  // origin control, works for https://atniclimate.github.io, no proxy needed;
+  // NOT on the Worker ALLOW_LIST, adding it if CORS ever drifts is a hard-rule-
+  // 7 decision). Layer 47 returned 31 features for the Oklahoma envelope (25
+  // OTSA + Osage reservation + Shawnee trust land + 4 joint-use); layer 7
+  // returned 25 OTSA. Vintage "January 1, 2025". maxRecordCount 100000 (no
+  // truncation risk). Provenance chain for the D-0.7.0-032 T0 condition:
+  // publisher US Census Bureau, a federal statistical product, activation-time
+  // fetch, full record in docs/ddm-tribal-geography-tier-assessment-2026-07-15.md.
+  // Anti-scrape note: the ArcGIS REST /query path, not the TIGERweb viewer.
+  censusAiannhMapServer:
+    'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/AIANNHA/MapServer',
+
+  // ---------- BIA Tribal Leaders Directory (headquarters points, live) ----------
+  // Administrative-headquarters POINT layer (not a boundary), proposed to give
+  // spatial representation to the 314 federally recognized Tribal Nations with
+  // no mapped land area in AIAN-LAR (public/data/tribal-larname-crosswalk.json
+  // rosterNoLar). A government office location, markedly lower sensitivity than
+  // a jurisdiction boundary. Consumed LIVE. Consumer appends
+  // `/query?where=1=1&outFields=*&f=geojson` (588 records, one page,
+  // maxRecordCount 2000) or `/query?where=tribefullname='<name>'&...`. GeoJSON
+  // Point; geometry.coordinates [lon,lat] (prefer over the single-precision
+  // longitude/latitude scalar fields). STEWARDSHIP: BIA's own disclaimer ("not
+  // an official listing of federally recognized tribes... does not guarantee
+  // the accuracy of the Directory's tribal contact information") must ride in
+  // any surfacing, the "representation, not settled fact" pattern adapted to
+  // contact accuracy. CAVEATS: 27 of 588 rows have a NULL physicaladdress (all
+  // true SQL NULL; fall back to mailingaddress or name/region/phone); NEVER set
+  // credentials:'include' (the service returns Access-Control-Allow-Credentials:
+  // true alongside the wildcard ACAO, spec-invalid together, inert only while
+  // anonymous). Verified 2026-07-15 (ddm-source-verifier): HTTP 200,
+  // Content-Type application/json; charset=utf-8; Access-Control-Allow-Origin: *
+  // (GENUINE wildcard, confirmed with the production origin, no-origin, and an
+  // OPTIONS preflight; more permissive than biaLarFeatureServer; direct fetch,
+  // no proxy). Live count 588; same-day layer-wide edit stamp (monthly BIA CSV
+  // sync). NOT yet wired to a layer (candidate for the landless-Tribe point
+  // display; D-0.7.0-032 records the source, the UI is a later unit).
+  // Anti-scrape note: the TribalLeadership_Directory FeatureServer /0/query
+  // path, not the bia.gov HTML map viewer.
+  biaTribalLeadersDirectory:
+    'https://services1.arcgis.com/UxqqIfhng71wUT9x/arcgis/rest/services/TribalLeadership_Directory/FeatureServer/0',
+
+  // ---------- USFS Royce Tribal cession lands (Treaty / Ceded, live) ----------
+  // The digitized Royce (1896-1897) Tribal land cessions, the standard national
+  // ceded-territories dataset, hosted on the US Forest Service Enterprise Data
+  // Warehouse (EDW) as an ESRI MapServer. This is the LIVE Treaty source that
+  // resolves the D-0.7.0-032 Treaty gap (D-0.7.0-034): consumed at activation
+  // time, never bundled; the bundled empty `treaty-areas.geojson` placeholder
+  // remains the deployer's own-data slot. Layer 0 (no scale ceiling) is the one
+  // to query; layer 1 is a scale-gated sibling, same schema, not needed.
+  // Consumer appends `/0/query` with the envelope pattern and `outFields=*`.
+  // LOAD-BEARING (verified live): the service is an ESRI JOIN of two tables, so
+  // GeoJSON property keys are FULLY TABLE-QUALIFIED, for example
+  // `edw.s_usa.BdyPol_TribalCededLandsTable.presdaytrb` (present-day Tribe) and
+  // `edw.s_usa.BdyPol_TribalCededLands.cessnum` (the Royce cession number, the
+  // industry-standard join key); a guessed bare field name (`outFields=objectid`)
+  // returns HTTP 200 with ZERO features, silently. `cessdate1` is epoch
+  // milliseconds and NEGATIVE for pre-1970 dates (all cessions are). STEWARDSHIP
+  // (CLAUDE.md section 2 + the T0 catalog harmonization): Royce lines were drawn
+  // at roughly 1:2,000,000 on 19th-century paper; every surfacing must carry the
+  // "generalized legal references, not surveyed boundaries" disclaimer, and
+  // overlapping cessions (confirmed live: two polygons at one Pacific
+  // Northwest test point) are kept SEPARATE, never dissolved or unioned.
+  // Verified 2026-07-15 (ddm-source-verifier): HTTP 200, Content-Type
+  // application/geo+json; charset=UTF-8; Access-Control-Allow-Origin:
+  // <reflected request origin> (genuine per-origin reflection confirmed with the
+  // production origin, a bogus-origin control, and a no-Origin control; direct
+  // browser fetch, no proxy; Access-Control-Allow-Credentials: true rides along,
+  // so NEVER set credentials:'include'). Source CRS EPSG:4269; outSR=4326
+  // confirmed. 718 features nationally, maxRecordCount 2000, no truncation at
+  // national extent (exceededTransferLimit absent; ~538 kB generalized).
+  // Vintage: service pubdate 2018-05-29 (a static historical digitization).
+  // Access method: API (ESRI MapServer /0/query, f=geojson, outSR=4326).
+  // Anti-scrape note: the EDW_TribalCessionLands_01 MapServer /0/query REST
+  // path, not the FSGeodata Clearinghouse HTML viewer or the ArcGIS Online
+  // item page.
+  usfsRoyceCessions:
+    'https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_TribalCessionLands_01/MapServer/0',
+
+  // ---------- WA Ecology ceded lands (Treaty / Ceded, PNW complement) ----------
+  // Washington State Department of Ecology's PNW treaty-lands layer (Stevens
+  // Treaties, 1854-1892), an ArcGIS Online hosted FeatureServer. Regional,
+  // higher-detail COMPLEMENT to the national Royce set above; verified but NOT
+  // yet wired to a layer (the live Treaty layer consumes the national Royce
+  // set; this is the documented regional-detail candidate, the
+  // biaTribalLeadersDirectory precedent). LOAD-BEARING (verified live): the
+  // layer is NOT ceded-lands-only; `LAND_TYPE` is a coded domain (CED ceded,
+  // DIS disputed, NTA non-treaty, REC rescinded reservation, RES reservation,
+  // OOF off-reservation trust land), so a Treaty consumer MUST filter
+  // `LAND_TYPE='CED'` or it silently blends reservations into cessions. Name
+  // fields: prefer TRIBAL_NM / TRIBAL_NM1 (TRIBAL_NM2 is frequently null);
+  // TREATY_DT is a bare year string. 397 features, ~4.93 MB at full vertex
+  // precision (generalize with maxAllowableOffset before shipping); a
+  // sub-page resultRecordCount request can report exceededTransferLimit from a
+  // byte-size cap even under the record cap, so pull unpaginated or page by
+  // resultOffset. Verified 2026-07-15 (ddm-source-verifier): HTTP 200,
+  // Content-Type application/json (body a valid GeoJSON FeatureCollection with
+  // an EPSG:4326 crs block); Access-Control-Allow-Origin: * (genuine wildcard,
+  // no Vary: Origin; Access-Control-Allow-Credentials: true rides along, so
+  // NEVER set credentials:'include'). Raw storage WA State Plane South
+  // (EPSG:2927); outSR=4326 confirmed. Fresh service edit stamp (2026-07-14).
+  // Access method: API (ESRI FeatureServer /10/query, f=geojson, outSR=4326).
+  // Anti-scrape note: the ECY FeatureServer /10/query REST path, not the WA
+  // State Geospatial Portal HTML map viewer.
+  waEcologyCededLands:
+    'https://services.arcgis.com/6lCKYNJLvwTXqrmp/arcgis/rest/services/ECY/FeatureServer/10',
 
   // ---------- EPA Omernik ecoregions (live services, Phase D fallback) ----------
   // The Environmental Protection Agency (EPA) Office of Research and Development

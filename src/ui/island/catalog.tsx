@@ -39,11 +39,14 @@
 import { useState } from 'preact/hooks';
 import type { ReadonlySignal } from '@preact/signals';
 
-import { LAYER_DEFS, LAYER_ROLE_ORDER } from '../../config/layers';
+import { LAYER_DEFS, LAYER_ROLE_ORDER, getLayerDef } from '../../config/layers';
 import type { LayerDef } from '../../config/layers';
+import { TRIBAL_NATIONS_PROVENANCE_NOTE } from '../../config/provenance';
+import { TRIBAL_NATIONS_GROUP } from '../../config/layer-groups';
+import { activateTribalNationsGroup, formatGroupHealth } from '../tribal-nations-action';
 import type { LayerRole, LayerStatus } from '../../types/layer';
 import type { LayerController } from '../../state/layer-controller';
-import { STATUS_PILL_TEXT } from './pill-text';
+import { resolveStatusPillText } from './pill-text';
 import { setChecked } from './bridge';
 
 /**
@@ -110,7 +113,7 @@ function LayerRow({ def, controller, checked, statuses, showSource }: RowProps) 
           class={status ? `layer-toggle-status ${status}` : 'layer-toggle-status'}
           data-layer-status={def.key}
         >
-          {status ? STATUS_PILL_TEXT[status] : ''}
+          {status ? resolveStatusPillText(status, def.noDataLabel) : ''}
         </span>
         {showSource ? <span class="layer-toggle-source">{def.source}</span> : null}
       </span>
@@ -118,10 +121,101 @@ function LayerRow({ def, controller, checked, statuses, showSource }: RowProps) 
   );
 }
 
+interface UmbrellaProps extends CatalogProps {
+  /** Whether the hosting role group's Sources disclosure is open (U3a). */
+  readonly sourcesOpen: boolean;
+}
+
+/**
+ * The Tribal Nations umbrella (D-0.7.0-033; Unit F): the featured group
+ * card inside the reference role group, per the Codex front-end
+ * consultation (C:\dev\_reviews\ddm\2026-07-15_unit-F-frontend-codex.md).
+ * Two SEPARATE controls: the prominent activation button is a command (it
+ * requests the configured live member set on through the bridge-safe
+ * shared door; no aria-expanded, no aria-pressed, never disabled), and the
+ * quieter "Layer details" disclosure reveals the granular member rows.
+ * Member rows stay PERMANENTLY MOUNTED inside a natively `hidden` region:
+ * checkboxes leave the tab order and the accessibility tree while
+ * collapsed, but their DOM, signal subscriptions, and exact contract
+ * (`data-layer-key`, `data-layer-status`) survive, so read-only locators
+ * and the bridge/registry sync never depend on visibility. The group
+ * provenance note (Unit D) renders here but stays controlled by the role
+ * group's SOURCES state, not by the details disclosure (it is group
+ * provenance, not a child control).
+ */
+function LayerUmbrella({ sourcesOpen, ...props }: UmbrellaProps) {
+  const { checked, statuses } = props;
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const group = TRIBAL_NATIONS_GROUP;
+  const memberDefs = group.members
+    .map((key) => getLayerDef(key))
+    .filter((def): def is LayerDef => def !== null);
+  const selectedCount = group.buttonActivates.filter(
+    (key) => checked.value.get(key) ?? false
+  ).length;
+  // Outcome beside intent (the final-pass finding 2): a terminally failed
+  // agency shows here too, in the same shared format the Brief hosts use.
+  const unavailableCount = group.buttonActivates.filter(
+    (key) => statuses.value.get(key) === 'error'
+  ).length;
+  const controlsId = `${group.key}-layer-controls`;
+  const descId = `${group.key}-action-desc`;
+
+  return (
+    <div
+      class="layer-umbrella"
+      data-layer-group-key={group.key}
+      role="group"
+      aria-label={group.label}
+    >
+      <button
+        type="button"
+        class="layer-umbrella-cta"
+        aria-label={`Show ${group.label} layers`}
+        aria-describedby={descId}
+        onClick={() => activateTribalNationsGroup()}
+      >
+        {group.label}
+      </button>
+      <p id={descId} class="sr-only">
+        {group.actionDescription}
+      </p>
+      {/* "selected", never "live": activation may still be loading or may
+          fail; the pills carry the honest per-layer status, and a terminal
+          agency failure surfaces as "unavailable" right here. */}
+      <p class="layer-umbrella-count" aria-live="polite">
+        {formatGroupHealth(selectedCount, group.buttonActivates.length, unavailableCount)}
+      </p>
+      <button
+        type="button"
+        class="layer-umbrella-details-toggle"
+        data-layer-group-toggle={group.key}
+        aria-expanded={detailsOpen}
+        aria-controls={controlsId}
+        onClick={() => setDetailsOpen((open) => !open)}
+      >
+        {detailsOpen ? 'Hide layer details' : 'Layer details'}
+      </button>
+      <div id={controlsId} class="layer-umbrella-controls" hidden={!detailsOpen}>
+        {memberDefs.map((def) => (
+          <LayerRow key={def.key} def={def} showSource={sourcesOpen} {...props} />
+        ))}
+      </div>
+      {sourcesOpen ? (
+        <p class="layer-group-provenance" data-provenance="tribal-nations">
+          {TRIBAL_NATIONS_PROVENANCE_NOTE}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * The full catalog: role groups in `LAYER_ROLE_ORDER`, entries keeping
  * their `LAYER_DEFS` order within a group, empty groups omitted. Each
- * group carries its active count and a "Sources" disclosure (U3a).
+ * group carries its active count and a "Sources" disclosure (U3a). The
+ * reference group leads with the Tribal Nations umbrella; its member rows
+ * render inside the umbrella and nowhere else.
  */
 export function Catalog(props: CatalogProps) {
   const { checked } = props;
@@ -145,8 +239,16 @@ export function Catalog(props: CatalogProps) {
         if (defs.length === 0) return null;
         const label = ROLE_GROUP_LABELS[role];
         const headingId = `layer-group-${role}`;
+        // The active count spans EVERY layer of the role, umbrella members
+        // included: the umbrella is presentation, not a separate role.
         const onCount = defs.filter((def) => checked.value.get(def.key) ?? false).length;
         const sourcesOpen = openSources.has(role);
+        const isReference = role === 'reference';
+        // The umbrella members render inside the LayerUmbrella card (first
+        // in the group) and nowhere else; every other row keeps its place.
+        const flatDefs = isReference
+          ? defs.filter((def) => !TRIBAL_NATIONS_GROUP.members.includes(def.key))
+          : defs;
         return (
           <div class="layer-group" role="group" aria-labelledby={headingId} key={role}>
             <div class="layer-group-title">
@@ -161,7 +263,8 @@ export function Catalog(props: CatalogProps) {
                 <span class="layer-group-count">{onCount} on</span>
               ) : null}
             </div>
-            {defs.map((def) => (
+            {isReference ? <LayerUmbrella sourcesOpen={sourcesOpen} {...props} /> : null}
+            {flatDefs.map((def) => (
               <LayerRow key={def.key} def={def} showSource={sourcesOpen} {...props} />
             ))}
             <button

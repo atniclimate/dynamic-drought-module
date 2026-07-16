@@ -107,6 +107,27 @@ export function createLayerController(
   const desiredOn = new Map<string, boolean>();
 
   /**
+   * Monotonic intent generation per key, bumped on EVERY intent flip (on or
+   * off). A queued activation captures the generation it was born under and
+   * stands down after any await if a newer flip occurred, even when the
+   * boolean intent has aliased back to true (a rapid off/on while the
+   * original activation fetch was being cancelled). Without this, the
+   * cancelled original could pass the boolean check, register a layer whose
+   * fetch never completed (no source on the map), and starve the queued real
+   * reactivation (Codex Unit B re-verify finding 1, 2026-07-15,
+   * C:\dev\_reviews\ddm\2026-07-15_unit-B-codex-reverify.md).
+   */
+  const intentGen = new Map<string, number>();
+
+  /** Record an intent flip: bump the key's generation, set the boolean. */
+  function bumpIntent(key: string, on: boolean): number {
+    const gen = (intentGen.get(key) ?? 0) + 1;
+    intentGen.set(key, gen);
+    desiredOn.set(key, on);
+    return gen;
+  }
+
+  /**
    * Per-layer operation chain: activations and deactivations for one key run
    * strictly in sequence. Without this, a rapid off/on could overlap a
    * module's `activate()` with itself (tribal and treaty throw on a duplicate
@@ -154,24 +175,31 @@ export function createLayerController(
    * then clears the pill and announces the off state.
    */
   function activateWithIndicator(def: LayerDef): Promise<void> {
-    desiredOn.set(def.key, true);
+    const gen = bumpIntent(def.key, true);
+    // This activation owns the outcome only while BOTH hold: the latest
+    // intent is on AND no newer flip has occurred since this op was born.
+    // The generation guard catches the boolean aliasing a rapid off/on
+    // produces (see intentGen above).
+    const ownsIntent = (): boolean =>
+      desiredOn.get(def.key) === true && intentGen.get(def.key) === gen;
     return enqueueLayerOp(def.key, async () => {
-      // The user reversed this toggle while it waited in the queue, or the
-      // layer is already fully active (an off/on flip whose off was skipped
-      // as stale); either way there is nothing to do.
-      if (desiredOn.get(def.key) !== true) return;
+      // The user reversed or superseded this toggle while it waited in the
+      // queue, or the layer is already fully active (an off/on flip whose
+      // off was skipped as stale); either way there is nothing to do.
+      if (!ownsIntent()) return;
       if (registry.getActiveKeys().has(def.key)) return;
 
       const token = showLoading(`Loading ${def.name}...`);
       registry.setStatus(def.key, 'loading');
       try {
         const mod = await loadLayerModule(def);
-        if (desiredOn.get(def.key) !== true) return;
+        if (!ownsIntent()) return;
         ensurePopupsBound(def.key, mod);
         await mod.activate(map);
-        if (desiredOn.get(def.key) !== true) {
-          // Turned off during activation: undo before anything registers. The
-          // queued deactivation clears the pill and announces.
+        if (!ownsIntent()) {
+          // Turned off (or superseded by a newer flip) during activation:
+          // undo before anything registers. A queued deactivation clears the
+          // pill and announces; a queued newer activation starts clean.
           try {
             mod.deactivate(map);
           } catch (err) {
@@ -238,7 +266,18 @@ export function createLayerController(
    * exclusivity rule).
    */
   function deactivateInternal(def: LayerDef): void {
-    desiredOn.set(def.key, false);
+    bumpIntent(def.key, false);
+    // Synchronously cancel any in-flight activation work through the optional
+    // LayerModule seam: the queued teardown below cannot run until the
+    // activation op ahead of it in the chain settles, so without this an
+    // abandoned activation fetch would run out its full network budget after
+    // the user withdrew intent (invariant 5; Codex Unit B finding 1,
+    // 2026-07-15). Map-state teardown stays serialized in the op below.
+    try {
+      getLoadedLayerModule(def.key)?.cancelActivation?.();
+    } catch (err) {
+      console.error(`Layer "${def.key}" failed to cancel cleanly:`, err);
+    }
     void enqueueLayerOp(def.key, async () => {
       // The user re-toggled the layer on while this off waited in the queue;
       // the newer activation owns the outcome.

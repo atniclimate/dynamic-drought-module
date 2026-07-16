@@ -23,3 +23,21 @@ export const STATUS_PILL_TEXT: Record<LayerStatus, string> = {
   'no-data': 'empty placeholder (see data/README.md)',
   'zoom-in': 'zoom in to load'
 };
+
+/**
+ * Resolve the user-visible text for a status, honoring a layer's optional
+ * `noDataLabel` override (Unit C of the Tribal Nations umbrella build): a
+ * LIVE viewport-queried layer that returns zero features is not an "empty
+ * placeholder" and must not point at data/README.md. Every surface that
+ * renders or announces a status goes through THIS function (the island's
+ * pills and the sidebar's live-region announcer), so pill and announcement
+ * can never disagree. Only the `no-data` state is overridable; the other
+ * five keep the canonical table above.
+ */
+export function resolveStatusPillText(
+  status: LayerStatus,
+  noDataLabel?: string
+): string {
+  if (status === 'no-data' && noDataLabel) return noDataLabel;
+  return STATUS_PILL_TEXT[status];
+}

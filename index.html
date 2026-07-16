@@ -70,6 +70,19 @@
              rebuild would be wiped), wired once in src/ui/mobile-sheet.ts. -->
         <section class="panel sheet-at-hand" id="sheet-at-hand" aria-label="At-hand drought answer">
           <div id="sheet-at-hand-body"></div>
+          <!-- The compact Tribal Nations action, mirrored on the mobile
+               at-hand surface (umbrella build Unit F; the Brief half detent
+               replaces the report, so the report-hosted action alone would
+               be unreachable here). STABLE DOM outside the rebuilt body;
+               unique ids (the report-hosted twin owns tribal-nations-brief-
+               action); label and description text are re-stamped from the
+               group config at wiring time (src/ui/mobile-sheet.ts) so the
+               two instances cannot drift. -->
+          <div class="tribal-nations-brief-row tribal-nations-at-hand-row">
+            <button type="button" id="tribal-nations-at-hand-action" class="tribal-nations-brief-action" aria-label="Show Tribal Nations layers" aria-describedby="tribal-nations-at-hand-action-desc">Tribal Nations</button>
+            <span id="tribal-nations-at-hand-action-desc" class="sr-only">Turns on Tribal Lands, Reservation Boundaries, and Treaty &amp; Ceded Lands.</span>
+            <span id="tribal-nations-at-hand-health" class="tribal-nations-health" aria-live="polite"></span>
+          </div>
           <!-- The one search (U3): the same shared component the console
                catalog and the Brief head mount, replacing the U2 stopgap
                place <select>. Mounted on first sheet activation (never in
@@ -150,7 +163,7 @@
         <p>Data: OpenStreetMap · NOAA · USGS · BIA · EPA</p>
         <p class="muted">
           <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">atniclimate/dynamic-drought-module</a>
-          · v0.6.12
+          · v0.6.13
         </p>
       </footer>
     </aside>
