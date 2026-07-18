@@ -14,14 +14,14 @@
  *     valid-through range in the warn amber and body face. The change is
  *     deliberate and unmistakable (CLAUDE.md section 6 invariant 6).
  *
- * The bar lives in the SIDEBAR beside the legend (E2, D-0.7.0-058
- * ruling 1: the floating map-bottom bar retired; this is a rehost, not a
- * redesign; every capability and URL round-trip above is unchanged), and
- * it is owned by exactly one surface at a time (surfaces are mutually
- * exclusive). Layer modules install a spec on activate and remove it on
- * deactivate; the bar renders whatever the current owner declares and
- * never invents temporal capability. Embed mode has no sidebar, so the
- * render also mirrors the stamp HEADLINE into the on-map
+ * The bar lives in the SIDEBAR after place and before the display description
+ * (Option 1, D-0.7.0-067; the floating map-bottom bar remains retired). On the
+ * mobile Brief shell the same node moves into the at-hand host. Every
+ * capability and URL round-trip is unchanged, and exactly one surface owns
+ * the bar at a time (surfaces are mutually exclusive). Layer modules install a
+ * spec on activate and remove it on deactivate; the bar renders whatever the
+ * current owner declares and never invents temporal capability. Embed mode has
+ * no sidebar, so the render also mirrors the stamp HEADLINE into the on-map
  * `#embed-date-stamp` chip (visible only in embed via app.css): the
  * smallest honest valid-date statement the date-honesty rule requires.
  *
@@ -112,8 +112,66 @@ let currentSpec: TimeBarSpec | null = null;
  */
 let lastRenderedHtml: string | null = null;
 
+const mobileSheetMedia: MediaQueryList | null =
+  typeof window !== 'undefined' ? window.matchMedia('(max-width: 720px)') : null;
+let hostSyncArmed = false;
+
 function container(): HTMLElement | null {
   return document.getElementById('time-bar');
+}
+
+/**
+ * Move the one time-bar node between its stable desktop and mobile seats.
+ * Moving the node preserves its listeners, current specification, and focused
+ * descendant. The mobile host is used only by the non-embed Brief shell;
+ * console keeps the direct-child seat so its full stack remains complete.
+ */
+export function syncTimeBarHost(): void {
+  const el = container();
+  const app = document.getElementById('app');
+  const briefHead = document.getElementById('brief-head');
+  const mobileHost = document.getElementById('sheet-time-host');
+  if (!el || !app || !briefHead || !mobileHost) return;
+
+  const focused =
+    document.activeElement instanceof HTMLElement && el.contains(document.activeElement)
+      ? document.activeElement
+      : null;
+  const useMobileHost =
+    mobileSheetMedia?.matches === true &&
+    app.hasAttribute('data-sheet-detent') &&
+    app.classList.contains('view-brief') &&
+    !app.classList.contains('embed');
+
+  if (useMobileHost) {
+    // mobile-sheet groups its report door after initialization. Keep the
+    // stable time host between search and that action group.
+    const actions = document.getElementById('sheet-at-hand-actions');
+    if (actions?.parentElement === mobileHost.parentElement && mobileHost.nextElementSibling !== actions) {
+      actions.insertAdjacentElement('beforebegin', mobileHost);
+    }
+    if (el.parentElement !== mobileHost) mobileHost.appendChild(el);
+  } else if (el.parentElement !== briefHead.parentElement || el.previousElementSibling !== briefHead) {
+    briefHead.insertAdjacentElement('afterend', el);
+  }
+
+  if (focused && focused.isConnected && document.activeElement !== focused) {
+    focused.focus({ preventScroll: true });
+  }
+}
+
+/** Watch only the presentation hooks that can change the correct host. */
+function armTimeBarHostSync(): void {
+  if (hostSyncArmed) return;
+  const app = document.getElementById('app');
+  if (!app) return;
+  hostSyncArmed = true;
+  const observer = new MutationObserver(syncTimeBarHost);
+  observer.observe(app, {
+    attributes: true,
+    attributeFilter: ['class', 'data-sheet-detent']
+  });
+  mobileSheetMedia?.addEventListener('change', syncTimeBarHost);
 }
 
 /**
@@ -178,6 +236,8 @@ function focusMarker(el: HTMLElement): string | null {
 }
 
 function render(): void {
+  armTimeBarHostSync();
+  syncTimeBarHost();
   const el = container();
   if (!el) return;
 

@@ -4,11 +4,13 @@
  * Ports the ratified U3 note verbatim (design-lens-product-2026-07-10.md
  * section 3, DESIGN_CORPUS.md): "one search box and one set of grouped
  * results," reachable identically from wherever a caller mounts it, with
- * no per-surface search filters and no visible fuzzy-match confidence
- * score.
+ * no visible fuzzy-match confidence score. Specialized hosts may omit
+ * result kinds that cannot act visibly on that surface.
  *
  * PURE VIEW. This file imports only from 'preact', '@preact/signals'
- * (types only) and 'preact/hooks'. All data (the synchronous Places and
+ * (types only), 'preact/hooks', and the pure dependency-free text fold
+ * in src/util/search-fold.ts (shared so query and haystack can never
+ * diverge; wave A finding 1). All data (the synchronous Places and
  * Layers items, the lazy Tribal loader) and all behavior (onSelect)
  * arrive as props; this component has no knowledge of the map, the URL,
  * the layer registry, or any config table. The caller owns wiring
@@ -19,9 +21,8 @@
  * must appear in an item's `haystack` (AND, substring, case-insensitive,
  * diacritic-insensitive on the query side; the caller is trusted to have
  * normalized `haystack` the same way). No ranking, no visible confidence
- * score, no per-surface filters (ruled out for U3, see the design-lens
- * "Cut" list): roughly two dozen places, layers, and Tribal land areas
- * combined does not need search-product weight.
+ * score. The main-shell instances keep the complete grouped vocabulary;
+ * a specialized host may supply only the result kinds it can act on.
  *
  * Stewardship: this component holds no Tribal, Treaty, or
  * sovereign-jurisdiction data itself. `SearchItem` for `kind: 'tribal'`
@@ -41,6 +42,8 @@
 import type * as preact from 'preact';
 import { useId, useRef, useState } from 'preact/hooks';
 
+import { foldSearchText } from '../../util/search-fold';
+
 export interface SearchItem {
   kind: 'place' | 'tribal' | 'layer';
   id: string; // state code | LARNAME | layer key
@@ -52,8 +55,8 @@ export interface SearchItem {
 export interface SearchProps {
   /** Items available synchronously (Places + Layers). */
   items: SearchItem[];
-  /** Lazy loader for Tribal land areas, called once on first focus or first keystroke; resolves to [] on failure. */
-  loadTribal: () => Promise<SearchItem[]>;
+  /** Optional lazy loader for Tribal land areas, called once on first focus or first keystroke. */
+  loadTribal?: () => Promise<SearchItem[]>;
   /** Called when the user chooses a result (click or Enter). */
   onSelect: (item: SearchItem) => void;
   /** Input placeholder + accessible label, e.g. "Search places, Tribal land areas, and layers". */
@@ -71,34 +74,13 @@ const GROUP_TITLES: Record<SearchItem['kind'], string> = {
 };
 const GROUP_ORDER: readonly SearchItem['kind'][] = ['place', 'tribal', 'layer'];
 
-// The Unicode "Combining Diacritical Marks" block: what NFD decomposition
-// leaves behind on a base letter (e.g. e + COMBINING ACUTE ACCENT for "e").
-// Written as code points rather than a \u escape sequence in a regex, to
-// keep the source in plain ASCII.
-const COMBINING_MARK_MIN = 768; // U+0300 COMBINING GRAVE ACCENT
-const COMBINING_MARK_MAX = 879; // U+036F COMBINING LATIN SMALL LETTER X
-
-/** Drop combining marks left over from `String.prototype.normalize('NFD')`. */
-function stripCombiningMarks(s: string): string {
-  let out = '';
-  for (const ch of s) {
-    const code = ch.codePointAt(0);
-    if (code !== undefined && code >= COMBINING_MARK_MIN && code <= COMBINING_MARK_MAX) continue;
-    out += ch;
-  }
-  return out;
-}
-
 /**
- * Lowercase, strip diacritics (NFD decompose + drop combining marks), and
- * collapse whitespace. Applied to the query only; `haystack` arrives
- * pre-normalized from the caller (see the `SearchItem` doc comment).
+ * The ONE search folding, shared with every other surface (wave A finding
+ * 1): query and haystack normalize identically or punctuation and
+ * diacritics silently break matching. See src/util/search-fold.ts.
  */
 function normalizeQuery(raw: string): string {
-  return stripCombiningMarks(raw.normalize('NFD'))
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, ' ');
+  return foldSearchText(raw);
 }
 
 function tokenize(normalized: string): string[] {
@@ -147,6 +129,7 @@ export function Search(props: SearchProps): preact.JSX.Element {
   // head, the mobile sheet) never collide on element ids (invalid HTML that
   // would break the aria-controls / aria-activedescendant references).
   const uid = useId();
+  const tribalEnabled = props.loadTribal !== undefined;
 
   // Called once on first focus OR first keystroke, whichever comes first
   // (the ref guard makes the second caller a no-op). loadTribal REJECTS on
@@ -154,12 +137,12 @@ export function Search(props: SearchProps): preact.JSX.Element {
   // line, never as a fake empty result, and the guard resets so a later
   // keystroke retries.
   const startTribalLoad = (): void => {
-    if (tribalStarted.current) return;
+    const loadTribal = props.loadTribal;
+    if (!loadTribal || tribalStarted.current) return;
     tribalStarted.current = true;
     setTribalPending(true);
     setTribalFailed(false);
-    props
-      .loadTribal()
+    loadTribal()
       .then((loaded) => {
         setTribalItems(loaded);
         setTribalPending(false);
@@ -196,7 +179,9 @@ export function Search(props: SearchProps): preact.JSX.Element {
   // heading with nothing under it) OR if the load FAILED (the honest
   // unavailable line; a service failure is never dressed up as no results).
   const showTribalGroup =
-    !isEmptyQuery && (tribalPending || tribalFailed || tribalGroup.visible.length > 0);
+    tribalEnabled &&
+    !isEmptyQuery &&
+    (tribalPending || tribalFailed || tribalGroup.visible.length > 0);
   const groupsForRender = GROUP_ORDER.map((kind) => {
     if (kind === 'place') return placeGroup;
     if (kind === 'layer') return layerGroup;

@@ -57,6 +57,9 @@ const SOURCES = {
 };
 
 const OUT_PATH = fileURLToPath(new URL('../public/data/ecoregions-pnw.pmtiles', import.meta.url));
+const CATALOG_OUT_PATH = fileURLToPath(
+  new URL('../public/data/ecoregions-pnw-catalog.json', import.meta.url)
+);
 const CACHE_DIR = join(tmpdir(), 'ddm-ecoregion-cache');
 
 /** Download a URL to a cache file, reusing the cached copy when present. */
@@ -111,6 +114,42 @@ function mapshaperToGeoJson(input, shpName, fields) {
   });
 }
 
+/** Build the catalog from the same clipped feature collections sent to PMTiles. */
+function buildCatalogManifest(layers) {
+  const specs = [
+    ['ecoregions-l3', 'III', 'US_L3CODE', 'US_L3NAME'],
+    ['ecoregions-l4', 'IV', 'US_L4CODE', 'US_L4NAME']
+  ];
+  const entries = new Map();
+  for (const [layerName, level, codeField, nameField] of specs) {
+    const layer = layers[layerName];
+    if (!layer || !Array.isArray(layer.features)) {
+      throw new Error(`catalog source layer missing: ${layerName}`);
+    }
+    for (const feature of layer.features) {
+      const rawCode = feature?.properties?.[codeField];
+      const rawName = feature?.properties?.[nameField];
+      const code = rawCode === null || rawCode === undefined ? '' : String(rawCode).trim();
+      const name = rawName === null || rawName === undefined ? '' : String(rawName).trim();
+      if (!code || !name) {
+        throw new Error(`catalog field missing in ${layerName}: ${codeField}/${nameField}`);
+      }
+      const key = `${level}:${code}`;
+      const prior = entries.get(key);
+      if (prior && prior.name !== name) {
+        throw new Error(`conflicting catalog names for ${key}: ${prior.name}/${name}`);
+      }
+      entries.set(key, { code, name, level });
+    }
+  }
+  return {
+    entries: [...entries.values()].sort((a, b) => {
+      const levelOrder = a.level === b.level ? 0 : a.level === 'III' ? -1 : 1;
+      return levelOrder || a.code.localeCompare(b.code, undefined, { numeric: true });
+    })
+  };
+}
+
 async function main() {
   await mkdir(CACHE_DIR, { recursive: true });
 
@@ -125,6 +164,7 @@ async function main() {
   }
 
   console.log('\nbaking PMTiles ...');
+  const catalog = buildCatalogManifest(layers);
   const { archive, tileCount, vectorLayers } = geojsonLayersToPmtiles(layers, {
     minZoom: 0,
     maxZoom: MAX_ZOOM,
@@ -134,8 +174,12 @@ async function main() {
     attribution: `${ATTRIBUTION}; vintage ${SOURCE_VINTAGE}; simplified ${SIMPLIFY}; retrieved ${RETRIEVED}`
   });
 
-  await writeFile(OUT_PATH, archive);
+  await Promise.all([
+    writeFile(OUT_PATH, archive),
+    writeFile(CATALOG_OUT_PATH, `${JSON.stringify(catalog, null, 2)}\n`)
+  ]);
   console.log(`  wrote ${OUT_PATH}`);
+  console.log(`  wrote ${CATALOG_OUT_PATH} (${catalog.entries.length} catalog members)`);
   console.log(`  tiles: ${tileCount}, size: ${(archive.length / 1024).toFixed(1)} KiB`);
 
   // Validate: read the archive back through the runtime pmtiles reader.

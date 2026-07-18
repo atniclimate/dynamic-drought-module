@@ -53,13 +53,35 @@
           <div class="conditions-metrics" id="conditions-metrics" aria-live="polite" aria-atomic="true"></div>
         </section>
 
-        <section class="panel enso-driver" id="enso-driver" aria-label="ENSO driver" hidden></section>
-
-        <!-- Brief head (U1, the two doors): the lede, the place picker, and
-             the console door. Filled by src/ui/view-shell.ts; visible only in
-             Brief mode. Sits under the strip and the driver line: the at-hand
-             numbers first, then "what does it mean here". -->
+        <!-- Brief head (U1, the two doors): the concise lede and the one place
+             entry surface. Filled by src/ui/view-shell.ts and visible only in
+             Brief mode. It deliberately ends before the stable time-bar node:
+             regenerated Brief markup must never own the temporal renderer. -->
         <section class="panel brief-head" id="brief-head" aria-label="Drought briefing" hidden></section>
+
+        <!-- The contextual time rail (D-0.7.0-067, Option 1): a stable direct
+             child after place and before the generated display description.
+             src/ui/time-bar.ts renders the current temporal owner's one spec
+             here and moves this SAME node into #sheet-time-host for the mobile
+             Brief surface. Embeds suppress the full rail and keep only the
+             mirrored #embed-date-stamp chip on the map. -->
+        <div id="time-bar" class="time-bar" role="group" hidden></div>
+
+        <!-- What is shown and how to refine it. Stable hosts let view-shell
+             update prose, studio entries, and the selected-place response
+             without ever rebuilding or nesting #time-bar. The ENSO capability
+             is demoted into this description with its detail behind disclosure. -->
+        <section class="panel brief-display" id="brief-display" aria-label="What is shown" hidden>
+          <h2 class="panel-title">Shown now</h2>
+          <p class="brief-display-summary" id="brief-display-summary"></p>
+          <div class="enso-driver" id="enso-driver" aria-label="ENSO driver" hidden></div>
+          <div id="layers-studio-entry-host"></div>
+          <div id="brief-secondary-actions"></div>
+          <div class="brief-selection-summary" id="brief-selection-summary" hidden>
+            <p id="brief-selection-read"></p>
+            <button type="button" class="brief-full-report-link" id="brief-full-report-link">Open full drought impact brief</button>
+          </div>
+        </section>
 
         <!-- The sheet's at-hand block (U2/U3): the half detent's Brief content
              (place title, the current-horizon read, the ONE search, the one
@@ -70,25 +92,25 @@
              rebuild would be wiped), wired once in src/ui/mobile-sheet.ts. -->
         <section class="panel sheet-at-hand" id="sheet-at-hand" aria-label="At-hand drought answer">
           <div id="sheet-at-hand-body"></div>
-          <!-- The compact Tribal Nations action, mirrored on the mobile
-               at-hand surface (umbrella build Unit F; the Brief half detent
-               replaces the report, so the report-hosted action alone would
-               be unreachable here). STABLE DOM outside the rebuilt body;
-               unique ids (the report-hosted twin owns tribal-nations-brief-
-               action); label and description text are re-stamped from the
-               group config at wiring time (src/ui/mobile-sheet.ts) so the
-               two instances cannot drift. -->
-          <div class="tribal-nations-brief-row tribal-nations-at-hand-row">
-            <button type="button" id="tribal-nations-at-hand-action" class="tribal-nations-brief-action" aria-label="Show Tribal Nations layers" aria-describedby="tribal-nations-at-hand-action-desc">Tribal Nations</button>
-            <span id="tribal-nations-at-hand-action-desc" class="sr-only">Turns on Tribal Lands, Reservation Boundaries, and Treaty &amp; Ceded Lands.</span>
-            <span id="tribal-nations-at-hand-health" class="tribal-nations-health" aria-live="polite"></span>
-          </div>
           <!-- The one search (U3): the same shared component the console
                catalog and the Brief head mount, replacing the U2 stopgap
                place <select>. Mounted on first sheet activation (never in
                embed), so the C1 rule holds. -->
           <div id="sheet-search" class="sheet-search"></div>
-          <button type="button" id="sheet-report-door" class="sheet-report-door">Read the full report</button>
+          <!-- Stable mobile host for the SAME #time-bar node. The host sits
+               after place search and before the report door; time-bar.ts
+               preserves this order after mobile-sheet groups the door. -->
+          <div id="sheet-time-host" class="sheet-time-host"></div>
+          <button type="button" id="sheet-report-door" class="sheet-report-door" hidden>Read the full report</button>
+          <!-- The compact Tribal Nations action, mirrored on the mobile
+               at-hand surface (umbrella build Unit F). It follows the primary
+               place, time, and report path and stays stable outside the body
+               that renderAtHand() rebuilds. -->
+          <div class="tribal-nations-brief-row tribal-nations-at-hand-row">
+            <button type="button" id="tribal-nations-at-hand-action" class="tribal-nations-brief-action" aria-label="Show Tribal Nations layers" aria-describedby="tribal-nations-at-hand-action-desc">Tribal Nations</button>
+            <span id="tribal-nations-at-hand-action-desc" class="sr-only">Turns on Tribal Lands and Reservation Boundaries.</span>
+            <span id="tribal-nations-at-hand-health" class="tribal-nations-health" aria-live="polite"></span>
+          </div>
         </section>
 
         <section class="panel" id="panel-region">
@@ -135,15 +157,6 @@
           </div>
         </section>
 
-        <!-- The temporal controls (E2, D-0.7.0-058 ruling 1): the time bar
-             rehosted from the floating map-bottom dock into the sidebar,
-             beside the legend it already shares context with. Same element
-             id and internal markup (src/ui/time-bar.ts renders here);
-             hidden until a temporal surface installs a spec. Embeds (no
-             sidebar) keep the minimal valid-date stamp on the map (the
-             embed-date-stamp element in the bottom dock). -->
-        <div id="time-bar" class="time-bar" role="group" hidden></div>
-
         <section class="panel legend-panel" id="legend-panel" hidden>
           <h2 class="panel-title">Legend</h2>
           <div id="legend-sections"></div>
@@ -172,7 +185,7 @@
         <p>Data: OpenStreetMap · NOAA · USGS · BIA · EPA</p>
         <p class="muted">
           <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">atniclimate/dynamic-drought-module</a>
-          · v0.6.16
+          · v0.6.17
         </p>
       </footer>
     </aside>

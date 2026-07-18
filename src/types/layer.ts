@@ -8,7 +8,7 @@
  *   ready     -> "live"
  *   degraded  -> "live (partial)"
  *   error     -> "unavailable"
- *   no-data   -> "empty placeholder (see data/README.md)"
+ *   no-data   -> "no data (see data/README.md)"
  *   zoom-in   -> "zoom in to load"
  *
  * `degraded` was added for 0.7.0 H4 (the honest-status gap the pre-open

@@ -40,10 +40,9 @@ export const TRIBAL_NATIONS_GROUP: LayerGroupDef = {
   // disclosure was still a public-facing UI surface, which D-0.7.0-036
   // part 4 ruled out. The slots stay in LAYER_DEFS (ui-hidden) and remain
   // URL-reachable via ?layers=tribal / ?layers=treaty.
-  members: ['aiannh', 'bia-reservations', 'treaty-cessions'],
-  buttonActivates: ['aiannh', 'bia-reservations', 'treaty-cessions'],
-  actionDescription:
-    'Turns on Tribal Lands, Reservation Boundaries, and Treaty & Ceded Lands.'
+  members: ['aiannh', 'bia-reservations'],
+  buttonActivates: ['aiannh', 'bia-reservations'],
+  actionDescription: 'Turns on Tribal Lands and Reservation Boundaries.'
 };
 
 export const LAYER_GROUPS: readonly LayerGroupDef[] = [TRIBAL_NATIONS_GROUP];

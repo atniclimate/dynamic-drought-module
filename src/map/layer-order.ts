@@ -51,7 +51,7 @@ const TOP_LABEL_IDS: readonly string[] = ['us-places-labels'];
  * member after each activation, so the stack is stable regardless of which
  * network fetch completed first; the existing AIANNH-below-BIA pair rule is
  * carried by the chain order itself. Layers not named here (events, treaty
- * cessions, hydrography, the other surfaces) keep their insertion-order
+ * hydrography, the other surfaces) keep their insertion-order
  * position ABOVE the chain; the ecoregion underlay stays below it.
  */
 export const THEMATIC_STACK_IDS: readonly string[] = [

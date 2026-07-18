@@ -67,6 +67,8 @@ interface CatalogProps {
   controller: LayerController;
   checked: ReadonlySignal<ReadonlyMap<string, boolean>>;
   statuses: ReadonlySignal<ReadonlyMap<string, LayerStatus>>;
+  /** The studio has its own id namespace (the live Treaty row was retired by D-0.7.0-065). */
+  studio?: boolean;
 }
 
 interface RowProps extends CatalogProps {
@@ -74,12 +76,10 @@ interface RowProps extends CatalogProps {
   /** Whether the group's provider attributions are revealed (U3a). */
   showSource: boolean;
   /**
-   * Natively hide the row while keeping it mounted (E2, D-0.7.0-058
-   * ruling 4): a ui-hidden UMBRELLA MEMBER (treaty-cessions) keeps its
-   * exact DOM contract (`data-layer-key`, `data-layer-status`) for
-   * read-only locators and the bridge/registry sync, but shows no row
-   * while off. Contrast the flat-list uiHidden handling below, which
-   * unmounts (the deployer slots have no permanent-mount doctrine).
+   * Natively hide a ui-hidden umbrella-member row while keeping it mounted.
+   * Its exact DOM contract (`data-layer-key`, `data-layer-status`) remains
+   * available for read-only locators and the bridge/registry sync, while the
+   * flat-list uiHidden handling below unmounts the deployer slots.
    */
   rowHidden?: boolean;
 }
@@ -98,8 +98,16 @@ interface RowProps extends CatalogProps {
  * so an island remount does not re-bury an in-use row. */
 const revealedThisSession = new Set<string>();
 
-function LayerRow({ def, controller, checked, statuses, showSource, rowHidden }: RowProps) {
-  const id = `layer-toggle-${def.key}`;
+function LayerRow({
+  def,
+  controller,
+  checked,
+  statuses,
+  showSource,
+  rowHidden,
+  studio
+}: RowProps) {
+  const id = `${studio ? 'studio-' : ''}layer-toggle-${def.key}`;
   const isOn = checked.value.get(def.key) ?? false;
   const status = statuses.value.get(def.key);
 
@@ -159,7 +167,7 @@ interface UmbrellaProps extends CatalogProps {
  * provenance, not a child control).
  */
 function LayerUmbrella({ sourcesOpen, ...props }: UmbrellaProps) {
-  const { checked, statuses } = props;
+  const { checked, statuses, studio } = props;
   const [detailsOpen, setDetailsOpen] = useState(false);
   const group = TRIBAL_NATIONS_GROUP;
   const memberDefs = group.members
@@ -173,8 +181,9 @@ function LayerUmbrella({ sourcesOpen, ...props }: UmbrellaProps) {
   const unavailableCount = group.buttonActivates.filter(
     (key) => statuses.value.get(key) === 'error'
   ).length;
-  const controlsId = `${group.key}-layer-controls`;
-  const descId = `${group.key}-action-desc`;
+  const idPrefix = studio ? 'studio-' : '';
+  const controlsId = `${idPrefix}${group.key}-layer-controls`;
+  const descId = `${idPrefix}${group.key}-action-desc`;
 
   return (
     <div
@@ -213,13 +222,6 @@ function LayerUmbrella({ sourcesOpen, ...props }: UmbrellaProps) {
       </button>
       <div id={controlsId} class="layer-umbrella-controls" hidden={!detailsOpen}>
         {memberDefs.map((def) => {
-          // E2 (D-0.7.0-058 ruling 4): a ui-hidden member (treaty-cessions)
-          // shows no row on a boot where it is off, but STAYS MOUNTED (see
-          // RowProps); activation (layers= deep link, the Tribal Nations
-          // button, a related-cessions click) reveals the row, and the
-          // reveal is STICKY for the session so a user who toggles the
-          // layer off can honestly toggle it back on (the R2 re-toggle
-          // contract; hiding on the off-click would strand the state).
           const isChecked = checked.value.get(def.key) ?? false;
           if (isChecked) revealedThisSession.add(def.key);
           return (
@@ -252,7 +254,7 @@ function LayerUmbrella({ sourcesOpen, ...props }: UmbrellaProps) {
  * render inside the umbrella and nowhere else.
  */
 export function Catalog(props: CatalogProps) {
-  const { checked } = props;
+  const { checked, studio = false } = props;
   // Which groups have their provider attributions revealed. Ephemeral view
   // state: a fresh Set so the default is "all collapsed" on every mount.
   const [openSources, setOpenSources] = useState<Set<LayerRole>>(() => new Set());
@@ -272,7 +274,7 @@ export function Catalog(props: CatalogProps) {
         const defs = LAYER_DEFS.filter((def) => def.role === role);
         if (defs.length === 0) return null;
         const label = ROLE_GROUP_LABELS[role];
-        const headingId = `layer-group-${role}`;
+        const headingId = `${studio ? 'studio-' : ''}layer-group-${role}`;
         // The active count spans EVERY layer of the role, umbrella members
         // included: the umbrella is presentation, not a separate role.
         const onCount = defs.filter((def) => checked.value.get(def.key) ?? false).length;

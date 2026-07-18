@@ -13,8 +13,6 @@ import type { CwmsLatest } from '../util/cwms';
 import { fetchHydrometDaily, hydrometStationValue } from '../util/hydromet';
 import type { HydrometSeries } from '../util/hydromet';
 import { escapeHtml } from '../util/escape';
-import { readTableQualifiedField } from '../util/table-qualified';
-import { RELATED_CESSIONS_SLOT_HTML } from './cession-wording';
 import {
   fetchUsgsIV,
   extractTimeSeries,
@@ -52,9 +50,6 @@ import { sparklineSvg } from './charts';
 export const IMPACT_TRIGGER_BUTTON_HTML =
   '<button type="button" class="popup-impact-btn" data-ddm-impact-trigger>Drought impact briefing</button>';
 
-// The related Treaty & Ceded Lands slot markup and outcome wording (Unit I,
-// D-0.7.0-038 decision 2) live in src/ui/cession-wording.ts, a leaf module
-// shared with src/impact/related-cessions.ts and the specs.
 
 /**
  * Format a raw acres value (string or number) as a thousands-separated whole
@@ -110,7 +105,7 @@ export function buildEcoregionPopupHtml(
  * or any other agency custody for arbitrary deployer data; the hardcoded
  * BIA/Washington links the old popup carried are removed. The LIVE federal
  * representations have their own layers and popups (aiannh,
- * bia-reservations, treaty-cessions), each naming its actual agency.
+ * bia-reservations), each naming its actual agency.
  */
 export function buildTribalPopupHtml(props: GeoJsonProperties): string {
   const p = props ?? {};
@@ -157,7 +152,6 @@ export function buildBiaReservationPopupHtml(props: GeoJsonProperties): string {
     ${region ? `<div class="popup-treaty-meta">BIA region: ${escapeHtml(String(region))}</div>` : ''}
     ${acresStr ? `<div class="popup-treaty-meta">Acres: ${escapeHtml(acresStr)}</div>` : ''}
     <div class="popup-description">This boundary is the Bureau of Indian Affairs (BIA) administrative representation of reservation and trust land extent (the AIAN-LAR; the BIA publishes no fixed vintage and describes the dataset as continuously updated; service verified live July 15, 2026). It is requested live from the BIA service when the layer needs it, held only in this browser session's memory, and not bundled by this module, for general spatial reference. It is a representation, not a definitive depiction of Tribal jurisdiction; Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority. No federal dataset maps every Tribal Nation; absence from this layer is not absence of a Nation or of its rights.</div>
-    ${RELATED_CESSIONS_SLOT_HTML}
     ${IMPACT_TRIGGER_BUTTON_HTML}
     <div class="popup-links">
       <a href="https://biamaps.geoplatform.gov/" target="_blank" rel="noopener">BIA GeoPlatform</a>
@@ -242,7 +236,6 @@ export function buildAiannhPopupHtml(props: GeoJsonProperties): string {
     <div class="popup-agency">US Census Bureau · AIANNH (live)</div>
     <div class="popup-treaty-meta">Type: ${escapeHtml(subtype.label)}</div>
     <div class="popup-description">${caveat}</div>
-    ${RELATED_CESSIONS_SLOT_HTML}
     ${IMPACT_TRIGGER_BUTTON_HTML}
     <div class="popup-links">
       <a href="https://www.census.gov/programs-surveys/geography.html" target="_blank" rel="noopener">US Census geography</a>
@@ -270,68 +263,6 @@ export function buildTreatyPopupHtml(props: GeoJsonProperties, featureName: stri
     <div class="popup-links">
       <a href="https://wisaard.dahp.wa.gov/" target="_blank" rel="noopener">WA DAHP WISAARD</a>
       <a href="https://native-land.ca/" target="_blank" rel="noopener">Native Land Digital</a>
-    </div>
-  `;
-}
-
-// readTableQualifiedField (the deterministic table-qualified property read;
-// Codex Unit B2 finding 5) lives in src/util/table-qualified.ts since Unit I,
-// shared with the cession matcher; re-exported here for its existing
-// consumers (the treaty-cessions layer).
-export { readTableQualifiedField };
-
-/**
- * Format a Royce cession date (ArcGIS epoch milliseconds; NEGATIVE for the
- * pre-1970 dates every cession has) as a bare year. Empty string when the
- * value is missing, blank, or does not form a valid Date (a finite number
- * outside the supported epoch range yields an invalid Date whose UTC year is
- * NaN; Codex Unit B2 finding 6), so the popup omits the row rather than
- * showing a fabricated date.
- */
-function formatCessionYear(value: string | null): string {
-  if (value === null) return '';
-  const trimmed = value.trim();
-  if (trimmed === '') return '';
-  const ms = Number(trimmed);
-  if (!Number.isFinite(ms)) return '';
-  const date = new Date(ms);
-  if (Number.isNaN(date.getTime())) return '';
-  return String(date.getUTCFullYear());
-}
-
-/**
- * Popup for a USFS Royce Tribal land cession polygon (the live
- * `treaty-cessions` layer, D-0.7.0-034). Reads the table-qualified fields
- * through `readTableQualifiedField`; every value is interpolated through
- * `escapeHtml`.
- *
- * Stewardship (CLAUDE.md section 2 + the T0 catalog harmonization): the
- * mandatory disclaimer states that these are generalized legal references
- * digitized from the 1896-1897 Royce maps, not surveyed boundaries and not a
- * definitive depiction of Tribal jurisdiction. The present-day Tribe name is
- * shown VERBATIM from the federal source (it carries the Federal Register
- * form); per D-0.7.0-026's safety doctrine it is never remapped to a guessed
- * name. The historical schedule name is labeled as the 1896-1897 record.
- */
-export function buildTreatyCessionPopupHtml(props: GeoJsonProperties): string {
-  const tribe = readTableQualifiedField(props, 'presdaytrb');
-  const scheduleTribe = readTableQualifiedField(props, 'schdtrb');
-  const mapname = readTableQualifiedField(props, 'mapname');
-  const cessnum = readTableQualifiedField(props, 'cessnum');
-  const year = formatCessionYear(readTableQualifiedField(props, 'cessdate1'));
-  const title = mapname || (cessnum ? `Royce cession ${cessnum}` : 'Tribal land cession');
-
-  return `
-    <div class="popup-title">${escapeHtml(title)}</div>
-    <div class="popup-agency">US Forest Service · Royce cession lands (live)</div>
-    ${cessnum ? `<div class="popup-treaty-meta">Royce cession number: ${escapeHtml(cessnum)}</div>` : ''}
-    ${year ? `<div class="popup-treaty-meta">Ceded: ${escapeHtml(year)}</div>` : ''}
-    ${tribe ? `<div class="popup-treaty-meta">Present-day Tribe: ${escapeHtml(tribe)}</div>` : ''}
-    ${scheduleTribe && scheduleTribe !== tribe ? `<div class="popup-treaty-meta">As recorded in the 1896-1897 Royce schedule: ${escapeHtml(scheduleTribe)}</div>` : ''}
-    <div class="popup-description">This boundary is a digitized representation of a 19th-century Royce cession map (drawn near 1:2,000,000 scale), requested live from the US Forest Service (dataset published May 29, 2018) when the layer needs it, held only in this browser session's memory, and not bundled by this module. It is a generalized legal reference, not a surveyed boundary and not a definitive depiction of Tribal jurisdiction. Where Tribes ceded land they often retained off-reservation rights; Treaty rights and Tribal sovereignty are matters of sovereign authority. Overlapping cessions are shown separately, never merged.</div>
-    ${IMPACT_TRIGGER_BUTTON_HTML}
-    <div class="popup-links">
-      <a href="https://data.fs.usda.gov/geodata/edw/datasets.php" target="_blank" rel="noopener">USFS geodata clearinghouse</a>
     </div>
   `;
 }

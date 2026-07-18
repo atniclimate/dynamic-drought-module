@@ -92,7 +92,17 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   setStatus('loading');
 
   if (!map.getSource(SOURCE_ID)) {
-    map.addSource(SOURCE_ID, { type: 'vector', url: PMTILES_URL });
+    // The stable EPA codes become the feature ids so feature-state
+    // emphasis addresses an ECOREGION (every fragment sharing the code
+    // lights together), not one tile-clipped polygon.
+    map.addSource(SOURCE_ID, {
+      type: 'vector',
+      url: PMTILES_URL,
+      promoteId: {
+        [L3_SOURCE_LAYER]: 'US_L3CODE',
+        [L4_SOURCE_LAYER]: 'US_L4CODE'
+      }
+    });
   }
   ensureLayers(map);
   applyLevelVisibility(map);
@@ -205,7 +215,15 @@ function addFillAndOutline(
         type: 'fill',
         source: SOURCE_ID,
         'source-layer': sourceLayer,
-        paint: { 'fill-color': fillColor, 'fill-opacity': fillOpacity }
+        paint: {
+          'fill-color': fillColor,
+          'fill-opacity': [
+            'case',
+            ['boolean', ['feature-state', 'selected'], false],
+            Math.min(fillOpacity + 0.15, 1),
+            fillOpacity
+          ]
+        }
       },
       beforeId
     );
@@ -217,7 +235,21 @@ function addFillAndOutline(
         type: 'line',
         source: SOURCE_ID,
         'source-layer': sourceLayer,
-        paint: { 'line-color': fillColor, 'line-width': lineWidth, 'line-opacity': lineOpacity }
+        paint: {
+          'line-color': fillColor,
+          'line-width': [
+            'case',
+            ['boolean', ['feature-state', 'selected'], false],
+            lineWidth + 1,
+            lineWidth
+          ],
+          'line-opacity': [
+            'case',
+            ['boolean', ['feature-state', 'selected'], false],
+            0.95,
+            lineOpacity
+          ]
+        }
       },
       beforeId
     );
@@ -237,6 +269,29 @@ function setVisible(map: maplibregl.Map, layerId: string, visible: boolean): voi
   if (map.getLayer(layerId)) {
     map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
   }
+}
+
+/**
+ * Studio-facing display-level facade (swarm finding R2 H3): the Place
+ * studio must draw the level its selection belongs to, or the selected
+ * feature-state lands on a hidden source-layer and the emphasis is
+ * invisible. Returns the PREVIOUS level so the caller can restore it on
+ * studio exit. Keeps the legend select (when mounted) and the legend
+ * note in sync, exactly as the select's own change handler does.
+ */
+export function setEcoregionDisplayLevel(
+  map: maplibregl.Map,
+  level: 'ecoregions-l3' | 'ecoregions-l4'
+): 'ecoregions-l3' | 'ecoregions-l4' {
+  const previous = activeLevel;
+  if (level === previous) return previous;
+  activeLevel = level;
+  applyLevelVisibility(map);
+  updateLegendNote();
+  const select = document.querySelector<HTMLSelectElement>('#ecoregion-level');
+  if (select) select.value = activeLevel;
+  refreshLegend(map);
+  return previous;
 }
 
 /**

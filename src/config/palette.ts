@@ -154,11 +154,10 @@ export interface TreatyEntry {
 
 // Colors are the magenta-to-violet band of the Tribal-context boundary family
 // (D-0.7.0-019; see the family note below). Each Treaty keeps a distinct hue so
-// adjacent cessions stay tellable apart, but every hue now sits inside the one
+// adjacent areas stay tellable apart, but every hue now sits inside the one
 // family instead of the prior red/amber/teal/blue spread. Since E2
 // (D-0.7.0-058 ruling 4) this table styles the BUNDLED deployer Treaty slot
-// (treaty.ts) and names formal Tribes for popups; the live Treaty & Ceded
-// Lands layer renders TREATY_CESSION_FILL_COLOR depth fills instead.
+// (treaty.ts) and names formal Tribes for popups.
 export const TREATY_COLORS: ReadonlyArray<TreatyEntry> = [
   { match: 'Medicine Creek', tribe: null,                                                  color: '#ec4899' },
   { match: 'Yakama',         tribe: 'Confederated Tribes and Bands of the Yakama Nation',  color: '#c026d3' },
@@ -208,10 +207,9 @@ export function pickTreatyColor(name: string | null | undefined): string {
  *
  * Opacity hierarchy (ddm-visual-styling-and-readability, the 0.3 to 0.6 fill
  * band): Tribal Lands (deployer-authorized, so fillable) sits highest; BIA
- * reservations fill lower, as a representation and not a jurisdictional claim;
- * Treaty & Ceded Lands render as high-transparency depth fills (see the
- * cession constant below). These are starting values, best refined in the
- * browser (that skill owns the tuning).
+ * reservations fill lower, as a representation and not a jurisdictional claim.
+ * These are starting values, best refined in the browser (that skill owns the
+ * tuning).
  *
  * E2 (D-0.7.0-058 ruling 3): the maintainer pinned the ONE Tribal boundary
  * color family to #8d006b on rendered v0.6.15 evidence. Every fill and
@@ -255,16 +253,6 @@ export const RESERVATION_OUTLINE_COLOR = TRIBAL_FAMILY_COLOR;
  */
 export const AIANNH_FILL_COLOR = TRIBAL_FAMILY_COLOR;
 export const AIANNH_OUTLINE_COLOR = TRIBAL_FAMILY_COLOR;
-
-/**
- * Treaty & Ceded Lands (USFS Royce cessions, live). E2 (D-0.7.0-058
- * ruling 4): the dashed-edge style retired; cessions render as #740058
- * fills with high, per-feature VARYING transparency, so overlapping
- * cessions read as depth (the differentiation channel is transparency,
- * not seven hues). The bundled deployer Treaty slot (treaty.ts) keeps the
- * TREATY_COLORS table above.
- */
-export const TREATY_CESSION_FILL_COLOR = '#740058';
 
 /* ---------------------------------------------------------------------------
  * United States state boundaries (Census cartographic boundary file)

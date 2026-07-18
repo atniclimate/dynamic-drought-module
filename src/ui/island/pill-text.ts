@@ -20,7 +20,7 @@ export const STATUS_PILL_TEXT: Record<LayerStatus, string> = {
   ready: 'live',
   degraded: 'live (partial)',
   error: 'unavailable',
-  'no-data': 'empty placeholder (see data/README.md)',
+  'no-data': 'no data (see data/README.md)',
   'zoom-in': 'zoom in to load'
 };
 

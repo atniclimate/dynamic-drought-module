@@ -8,16 +8,13 @@ place labels, the Tribal name roster), and one committed data snapshot
 (`enso-indices.json`).
 
 **Read this first: the map's default Tribal geography does NOT come from
-this folder.** Three live layers fetch the publishing federal services
+this folder.** Two live layers fetch the publishing federal services
 LIVE at view time and redistribute nothing:
 
 - Tribal Lands (`aiannh`, default-on): US Census AIANNH (legal and
   statistical geographies, including Oklahoma Tribal Statistical Areas).
 - Reservation Boundaries (`bia-reservations`, default-on): the Bureau of
   Indian Affairs (BIA) AIAN Land Area Representation.
-- Treaty & Ceded Lands (`treaty-cessions`, default-off): the US Forest
-  Service digitized Royce cessions; joins via the Tribal Nations button,
-  its own toggle, or a click on a Tribal boundary.
 
 The two placeholder files below back the SEPARATE deployer slots
 (`tribal`, `treaty`), which are OFF by default and not shown in the
@@ -73,10 +70,9 @@ row; nothing breaks.
 
 ## `treaty-areas.geojson` (deployer slot, layer key `treaty`, default-off)
 
-Your own Treaty or ceded-area boundary data. The live `treaty-cessions`
-layer already draws the federal Royce cession digitization on demand;
-this slot is for a deployer's own representation (a Nation's own
-depiction of its Treaty areas, or a state-curated set).
+Your own Treaty or ceded-area boundary data. This slot is for a deployer's
+own representation (a Nation's own depiction of its Treaty areas, or a
+state-curated set).
 
 **Per-feature properties the app reads:** `name`, `treaty_year`, and
 `tribe`. Style overrides for specific Treaties live in the

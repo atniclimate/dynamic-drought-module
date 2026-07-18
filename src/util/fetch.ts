@@ -53,6 +53,66 @@ export async function fetchWithBudget(
 }
 
 /**
+ * Fetch and parse a JSON response while retaining the owning cancellation
+ * signal and timeout through response-body consumption.
+ *
+ * This is intentionally separate from `fetchWithBudget`, whose contract ends
+ * when response headers arrive. The response body is read through an explicit
+ * reader so an abort can cancel a stalled stream before JSON parsing finishes.
+ */
+export async function fetchJsonWithBudget(
+  url: string,
+  opts: RequestInit | null,
+  masterSignal: AbortSignal | null,
+  timeoutMs: number
+): Promise<unknown> {
+  const ctrl = new AbortController();
+  if (masterSignal && masterSignal.aborted) {
+    ctrl.abort();
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  const cancelBody = (): void => {
+    void reader?.cancel().catch(() => undefined);
+  };
+  const onMasterAbort = (): void => ctrl.abort();
+  if (masterSignal) masterSignal.addEventListener('abort', onMasterAbort);
+  ctrl.signal.addEventListener('abort', cancelBody);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, { ...(opts ?? {}), signal: ctrl.signal });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${response.statusText}`);
+    }
+    if (!response.body) return response.json() as Promise<unknown>;
+
+    reader = response.body.getReader();
+    if (ctrl.signal.aborted) {
+      await reader.cancel().catch(() => undefined);
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
+    const decoder = new TextDecoder();
+    let text = '';
+    while (true) {
+      const chunk = await reader.read();
+      if (ctrl.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+      if (chunk.done) break;
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+    text += decoder.decode();
+    return JSON.parse(text) as unknown;
+  } finally {
+    clearTimeout(timer);
+    ctrl.signal.removeEventListener('abort', cancelBody);
+    if (masterSignal) masterSignal.removeEventListener('abort', onMasterAbort);
+    reader?.releaseLock();
+  }
+}
+
+/**
  * Sleep for `ms` milliseconds, but resolve early if the signal aborts.
  * Resolves rather than rejects on abort so callers can re-check
  * `signal.aborted` and bail cleanly without a try/catch wrapper.

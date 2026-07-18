@@ -33,36 +33,68 @@ import type maplibregl from 'maplibre-gl';
 
 import { onPlaceSelectionChange } from './place-selection';
 
-/** The currently emphasized feature, or null when nothing is lit. */
-let current: { source: string; id: string | number } | null = null;
+/** One emphasized feature identity. */
+export interface EmphasisTarget {
+  readonly source: string;
+  readonly sourceLayer?: string;
+  readonly id: string | number;
+}
+
+/** The currently emphasized features (empty when nothing is lit). */
+let current: readonly EmphasisTarget[] = [];
+
+function sameTarget(a: EmphasisTarget, b: EmphasisTarget): boolean {
+  return a.source === b.source && a.id === b.id && a.sourceLayer === b.sourceLayer;
+}
 
 /**
  * Set (or move) the emphasis to one feature. A prior emphasis on a different
  * feature is cleared first. A missing id (a source without `promoteId` /
  * `generateId`, which should not happen for the boundary layers) clears any
  * current emphasis rather than lighting an unknown feature.
+ *
+ * `sourceLayer` is required for VECTOR sources (the ecoregion PMTiles
+ * bundle); GeoJSON sources omit it, exactly as MapLibre's own
+ * setFeatureState contract requires.
  */
 export function emphasizePlace(
   map: maplibregl.Map,
   source: string,
-  id: string | number | undefined | null
+  id: string | number | undefined | null,
+  sourceLayer?: string
 ): void {
   if (id === undefined || id === null) {
     clearEmphasis(map);
     return;
   }
-  if (current && (current.source !== source || current.id !== id)) {
-    applyState(map, current, false);
+  emphasizePlaces(
+    map,
+    sourceLayer === undefined ? [{ source, id }] : [{ source, sourceLayer, id }]
+  );
+}
+
+/**
+ * Set the emphasis to a SET of features at once (swarm findings R4 M5 and
+ * R2 H3): a Tribal Nation can be represented by several matched land-area
+ * polygons, and lighting only the first would present a partial highlight
+ * as the whole selected Nation. Prior targets not in the new set are
+ * cleared; the set replaces the whole emphasis state.
+ */
+export function emphasizePlaces(
+  map: maplibregl.Map,
+  targets: readonly EmphasisTarget[]
+): void {
+  for (const prior of current) {
+    if (!targets.some((t) => sameTarget(t, prior))) applyState(map, prior, false);
   }
-  current = { source, id };
-  applyState(map, current, true);
+  for (const target of targets) applyState(map, target, true);
+  current = [...targets];
 }
 
 /** Clear any current emphasis. Safe to call when nothing is lit. */
 export function clearEmphasis(map: maplibregl.Map): void {
-  if (!current) return;
-  applyState(map, current, false);
-  current = null;
+  for (const target of current) applyState(map, target, false);
+  current = [];
 }
 
 /**
@@ -73,12 +105,17 @@ export function clearEmphasis(map: maplibregl.Map): void {
  */
 function applyState(
   map: maplibregl.Map,
-  sel: { source: string; id: string | number },
+  sel: { source: string; sourceLayer?: string; id: string | number },
   selected: boolean
 ): void {
   if (!map.getSource(sel.source)) return;
   try {
-    map.setFeatureState({ source: sel.source, id: sel.id }, { selected });
+    map.setFeatureState(
+      sel.sourceLayer === undefined
+        ? { source: sel.source, id: sel.id }
+        : { source: sel.source, sourceLayer: sel.sourceLayer, id: sel.id },
+      { selected }
+    );
   } catch {
     // The feature is not present in the current (clipped) source data; the
     // paint simply never reads a state for it. Not an error.

@@ -26,10 +26,9 @@ export const TRIBAL_NATIONS_PROVENANCE_NOTE =
   'is the US Census AIANNH product (vintage January 1, 2025); Reservation ' +
   'Boundaries is the BIA AIAN-LAR (no fixed published vintage; the BIA ' +
   'describes it as continuously updated; service verified live July 15, ' +
-  '2026); Treaty & Ceded Lands is the US Forest Service Royce cession ' +
-  'dataset (published May 29, 2018). Each is requested live from its agency ' +
+  '2026). Each is requested live from its agency ' +
   "when its layer first needs it and held only in this browser session's " +
-  'memory; none of these three federal datasets is bundled with the module. ' +
+  'memory; neither federal dataset is bundled with the module. ' +
   'The separate "your own data" slots hold only what a deployer adds under ' +
   'its own authorization. Every boundary shown is a representation for ' +
   'general reference, not a definitive depiction of Tribal jurisdiction; ' +

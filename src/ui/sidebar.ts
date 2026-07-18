@@ -72,7 +72,12 @@ import {
   openImpactPanel
 } from './impact-panel';
 import { getPlaceSelection, onPlaceSelectionChange } from '../state/place-selection';
-import { ensureBriefHeadSearch, ensureBriefHeadTribalAction } from './view-shell';
+import {
+  ensureBriefHeadSearch,
+  ensureBriefHeadTribalAction,
+  refreshLayersStudioEntry,
+  renderStudioLoadFailure
+} from './view-shell';
 import { prefersReducedMotion } from '../util/motion';
 import {
   fetchAwdbDailySeries,
@@ -87,6 +92,16 @@ import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
 import { parseUrlParams, syncUrl } from '../state/url';
 import type { ParsedUrlParams } from '../state/url';
+import {
+  getStudioRoute,
+  initializeStudioRoute,
+  isPhysicallyFramed,
+  onStudioRouteChange
+} from '../state/studio-route';
+import type {
+  StudioRoute,
+  StudioRouteChangeSource
+} from '../state/studio-route';
 import { getViewMode, onViewModeChange, setViewMode } from '../state/view-mode';
 import { getBasemapMode, onBasemapChange, setBasemapMode } from '../state/basemap-store';
 import { getFraming, onFramingChange, setFraming } from '../state/framing-store';
@@ -162,6 +177,10 @@ let controllerRef: LayerController | null = null;
  * bring the catalog up when a brief embed deferred it (headroom C1).
  */
 let onIslandNeeded: (() => Promise<void>) | null = null;
+
+let onStudioRouteNeeded:
+  | ((route: StudioRoute, source: StudioRouteChangeSource) => void)
+  | null = null;
 
 /** Mount the catalog/strip island if it is not already mounted or mounting. */
 export function mountSidebarIslandNow(): Promise<void> {
@@ -355,7 +374,8 @@ function pushUrl(): void {
     basemap: getBasemapMode(),
     framing,
     cluster: getHazardCluster(),
-    ocean: getOceanFraming()
+    ocean: getOceanFraming(),
+    studio: getStudioRoute()
   });
 }
 
@@ -899,6 +919,8 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
       // S2/E1 integration finding 2).
       ensureBriefHeadTribalAction();
       pushUrl();
+      refreshLayersStudioEntry();
+      onStudioRouteNeeded?.(getStudioRoute(), 'push');
       // Below 720px the post-embed chrome is the bottom sheet, revealed
       // at peek (the ratified embed-exit path, D-0.7.0-017); a desktop
       // expand is a no-op inside the helper.
@@ -970,6 +992,16 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   if (params.basemap === 'satellite') {
     void applyBasemapMode(map, 'satellite');
   }
+
+  // The studio composes with all map state. Seed it only after every
+  // underlying store above is ready, and before selectRegion performs the
+  // first canonical URL write. A non-embed direct studio boot synthesizes
+  // its map predecessor so Back to map never leaves the application; an
+  // embed or physical-frame boot never mounts a studio, so it skips the
+  // synthesis.
+  initializeStudioRoute(params.studio, {
+    synthesizeReturnEntry: !params.embed && !isPhysicallyFramed()
+  });
 
   const app = document.getElementById('app');
   if (app) {
@@ -1104,6 +1136,101 @@ export function buildSidebar(
     return islandPromise;
   };
   onIslandNeeded = ensureIslandMounted;
+
+  let studioRoot: HTMLElement | null = null;
+  let studioModule: typeof import('./island/layers-studio') | null = null;
+  let studioPromise: Promise<typeof import('./island/layers-studio')> | null = null;
+  let studioOpener: HTMLElement | null = null;
+
+  const restoreLayersStudioFocus = (opener: HTMLElement | null): void => {
+    if (opener?.isConnected) {
+      opener.focus({ preventScroll: true });
+      return;
+    }
+    const mapContainer = document.getElementById('map-container');
+    if (!mapContainer) return;
+    mapContainer.tabIndex = -1;
+    mapContainer.focus({ preventScroll: true });
+  };
+
+  const loadStudio = (root: HTMLElement): void => {
+    const promise = studioPromise ?? import('./island/layers-studio');
+    studioPromise = promise;
+    void Promise.all([promise, import('./search-controller')])
+      .then(([module, { buildSearchWiring }]) => {
+        studioModule = module;
+        if (
+          getStudioRoute() !== 'layers' ||
+          STATE.embed ||
+          isPhysicallyFramed() ||
+          studioRoot !== root
+        ) {
+          return;
+        }
+        module.mountLayersStudio(
+          root,
+          controllerForIsland,
+          buildSearchWiring(map, {
+            permittedKinds: ['layer'],
+            placeholder: 'Search layers'
+          })
+        );
+      })
+      .catch((err: unknown) => {
+        if (studioPromise === promise) studioPromise = null;
+        console.error('[sidebar] LAYERS studio mount failed:', err);
+        if (
+          getStudioRoute() === 'layers' &&
+          !STATE.embed &&
+          !isPhysicallyFramed() &&
+          studioRoot === root
+        ) {
+          renderStudioLoadFailure(root, 'layers-studio-failure-heading');
+        }
+      });
+  };
+
+  const syncStudioRoute = (
+    route: StudioRoute,
+    source: StudioRouteChangeSource
+  ): void => {
+    if (route === 'layers' && source === 'push') {
+      const active = document.activeElement;
+      studioOpener =
+        active instanceof HTMLElement && active.id === 'layers-studio-entry'
+          ? active
+          : null;
+    }
+
+    if (source === 'popstate') {
+      // A studio toggle replaces the pushed studio entry. On the one-step
+      // return, rewrite the prior entry from the still-live map state so the
+      // URL and the display remain the same snapshot.
+      pushUrl();
+    }
+
+    if (route !== 'layers' || STATE.embed || isPhysicallyFramed()) {
+      if (studioRoot) {
+        const opener = studioOpener;
+        studioOpener = null;
+        if (studioModule) studioModule.unmountLayersStudio(studioRoot);
+        studioRoot.remove();
+        studioRoot = null;
+        restoreLayersStudioFocus(opener);
+      }
+      return;
+    }
+
+    if (!studioRoot) {
+      studioRoot = document.createElement('div');
+      studioRoot.id = 'layers-studio-root';
+      document.body.appendChild(studioRoot);
+    }
+    const root = studioRoot;
+    loadStudio(root);
+  };
+  onStudioRouteNeeded = syncStudioRoute;
+  onStudioRouteChange(syncStudioRoute);
 
   // Subscribe to the registry. `change` drives URL sync + active-count
   // pill; `status-change` drives the live-region announcement (the pill

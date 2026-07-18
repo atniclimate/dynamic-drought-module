@@ -98,7 +98,7 @@ export const VIEW_PRESETS: readonly ViewPreset[] = [
   {
     key: 'whose-land',
     label: 'Whose land',
-    description: 'Place and stewardship: Tribal Lands, Treaty areas (representations, not jurisdictional truth), reservation and state boundaries',
-    layers: ['aiannh', 'treaty-cessions', 'bia-reservations', 'states']
+    description: 'Place and stewardship: Tribal Lands, reservation and state boundaries',
+    layers: ['aiannh', 'bia-reservations', 'states']
   }
 ];

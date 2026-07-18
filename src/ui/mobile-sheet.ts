@@ -56,6 +56,7 @@ import { getViewMode, onViewModeChange, setViewMode } from '../state/view-mode';
 import { escapeHtml } from '../util/escape';
 import { prefersReducedMotion } from '../util/motion';
 import { TRIBAL_NATIONS_GROUP } from '../config/layer-groups';
+import { enterPlaceStudio } from '../state/studio-route';
 import { activateTribalNationsGroup, wireTribalNationsHealth } from './tribal-nations-action';
 
 // ---------------------------------------------------------------------------
@@ -102,6 +103,7 @@ const DRAG_THRESHOLD_PX = 6;
 const MIN_DRAG_HEIGHT_PX = 72;
 /** Height-transition settle fallback when `transitionend` never fires. */
 const SETTLE_FALLBACK_MS = 320;
+const PLACE_STUDIO_OPENER_EVENT = 'ddm:place-studio-opener';
 
 let mapRef: maplibregl.Map | null = null;
 
@@ -475,7 +477,17 @@ function currentHeadline(briefing: ImpactBriefing): string | null {
   return null;
 }
 
+function updateAtHandActions(): void {
+  const hasBriefing = sheetBriefing !== null;
+  document
+    .getElementById('sheet-at-hand-actions')
+    ?.classList.toggle('has-briefing', hasBriefing);
+  const reportDoor = document.getElementById('sheet-report-door');
+  if (reportDoor) reportDoor.hidden = !hasBriefing;
+}
+
 function renderAtHand(): void {
+  updateAtHandActions();
   if (!atHandBodyEl) return;
   const briefing = sheetBriefing;
   const title = briefing ? briefing.landTitle : 'Pick a place';
@@ -514,6 +526,39 @@ function mountSheetSearch(): void {
   void import('./search-controller').then(({ mountSearchInto }) => {
     mountSearchInto(map, container);
   });
+}
+
+/** Add the one D-0.7.0-054 entry below the sheet's time control. */
+function buildSheetPlaceStudioEntry(): void {
+  if (document.getElementById('sheet-place-studio-entry')) return;
+  const timeHost = document.getElementById('sheet-time-host');
+  const reportDoor = document.getElementById('sheet-report-door');
+  if (!timeHost || !reportDoor) return;
+
+  const actions = document.createElement('div');
+  actions.id = 'sheet-at-hand-actions';
+  actions.className = 'sheet-at-hand-actions';
+
+  const placeButton = document.createElement('button');
+  placeButton.type = 'button';
+  placeButton.id = 'sheet-place-studio-entry';
+  placeButton.className = 'sheet-report-door sheet-place-studio-entry';
+  placeButton.textContent = 'PLACE';
+  placeButton.title = 'Open the PLACE studio: choose a place for the briefing';
+  placeButton.setAttribute(
+    'aria-label',
+    'Open the PLACE studio: choose a place for the briefing'
+  );
+  placeButton.addEventListener('click', () => {
+    document.dispatchEvent(
+      new CustomEvent(PLACE_STUDIO_OPENER_EVENT, { detail: placeButton })
+    );
+    enterPlaceStudio();
+  });
+
+  timeHost.insertAdjacentElement('afterend', actions);
+  actions.append(placeButton, reportDoor);
+  updateAtHandActions();
 }
 
 // ---------------------------------------------------------------------------
@@ -769,6 +814,8 @@ export function initMobileSheet(
     const atHandHealth = document.getElementById('tribal-nations-at-hand-health');
     if (atHandHealth) wireTribalNationsHealth(atHandHealth);
   }
+
+  buildSheetPlaceStudioEntry();
 
   // The Brief half detent's one door to the standalone report (stable DOM
   // now, so it is wired once here rather than on every renderAtHand()).

@@ -64,3 +64,17 @@ export function requestLayerOff(key: string): void {
   setChecked(key, false);
   controller?.deactivate(key);
 }
+
+/**
+ * Turn a layer on WITHOUT its co-activation cascade (swarm finding
+ * R4 H2). The display-snapshot restore path names every restored layer
+ * explicitly, exactly as applyLayerSet does for deep links, so letting
+ * the user-toggle cascade run there could restore a LARGER intent set
+ * than the snapshot captured (nifc-fires pulling hms-smoke back on).
+ * Same intent-first discipline as requestLayerOn.
+ */
+export function requestLayerOnExact(key: string): void {
+  if (isChecked(key)) return;
+  setChecked(key, true);
+  void controller?.activate(key, false);
+}

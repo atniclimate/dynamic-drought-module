@@ -6,6 +6,9 @@ import { createMap } from './map/init';
 import { setMap } from './state/map-store';
 import { applyDeepLink } from './state/deep-link';
 import { parseSelectParam } from './state/url';
+import type { SelectParam } from './state/url';
+import { getStudioRoute, onStudioRouteChange } from './state/studio-route';
+import { onTypedPlaceChange } from './state/typed-place';
 import { buildSidebar } from './ui/sidebar';
 import { initHoverInspector } from './ui/hover-inspector';
 import { initMapKey } from './ui/map-key';
@@ -29,6 +32,98 @@ import { initLocatedBoundary } from './state/located-boundary';
  * layers are on" and propagates changes to the URL sync layer and the
  * sidebar pills.
  */
+
+/**
+ * Hold a boot-time select command while a studio owns the route. This listener
+ * is armed before the sidebar initializes route state, so it observes a
+ * select-bearing popstate before the sidebar's canonical URL write removes
+ * the one-shot parameter.
+ */
+function prepareStudioAwareDeepLink(
+  map: maplibregl.Map,
+  initialSelect: SelectParam
+): () => void {
+  interface InFlightCommand {
+    readonly select: SelectParam;
+    readonly routeGeneration: number;
+  }
+
+  let heldSelect: SelectParam | null = initialSelect;
+  let inFlight: InFlightCommand | null = null;
+  let routeGeneration = 0;
+  let started = false;
+  let disposed = false;
+  let unsubscribeRoute: (() => void) | null = null;
+  let unsubscribeTypedPlace: (() => void) | null = null;
+
+  const cleanup = (): void => {
+    if (disposed) return;
+    disposed = true;
+    unsubscribeRoute?.();
+    unsubscribeTypedPlace?.();
+  };
+
+  const runHeld = (): void => {
+    if (!started || disposed || getStudioRoute() !== null || !heldSelect) return;
+    const command: InFlightCommand = {
+      select: heldSelect,
+      routeGeneration
+    };
+    heldSelect = null;
+    inFlight = command;
+    void applyDeepLink(
+      map,
+      command.select,
+      () =>
+        getStudioRoute() === null &&
+        routeGeneration === command.routeGeneration
+    ).finally(() => {
+      if (inFlight === command) inFlight = null;
+      if (heldSelect && getStudioRoute() === null) {
+        runHeld();
+      } else if (!heldSelect && !inFlight) {
+        cleanup();
+      }
+    });
+  };
+
+  unsubscribeRoute = onStudioRouteChange((route, source) => {
+    routeGeneration += 1;
+    const interrupted = inFlight;
+    if (interrupted) {
+      inFlight = null;
+      if (route !== null && heldSelect === null) {
+        heldSelect = interrupted.select;
+      }
+    }
+
+    if (source === 'popstate' && (heldSelect !== null || interrupted !== null)) {
+      const navigationSelect = parseSelectParam();
+      if (navigationSelect) heldSelect = navigationSelect;
+    }
+
+    if (route === null) runHeld();
+  });
+
+  unsubscribeTypedPlace = onTypedPlaceChange((place) => {
+    if (!place || getStudioRoute() !== 'place') return;
+    routeGeneration += 1;
+    heldSelect = null;
+    inFlight = null;
+    cleanup();
+  });
+
+  return () => {
+    if (started) return;
+    started = true;
+    if (getStudioRoute() === null) {
+      cleanup();
+      void applyDeepLink(map, initialSelect);
+      return;
+    }
+    runHeld();
+  };
+}
 
 async function boot(): Promise<void> {
   const map = createMap('map');
@@ -74,6 +169,9 @@ async function boot(): Promise<void> {
   // sidebar's first syncUrl rewrites the URL and deliberately drops the
   // parameter, so it must be read first (order is load-bearing).
   const select = parseSelectParam();
+  const startStudioAwareDeepLink = select
+    ? prepareStudioAwareDeepLink(map, select)
+    : null;
 
   buildSidebar(map, () => {
     // Region-change observer hook. The sidebar handles fitBounds, the
@@ -121,7 +219,9 @@ async function boot(): Promise<void> {
 
   // Applied after the sidebar so the deep link's fitBounds supersedes the
   // region framing; async, so a slow bundled-data fetch never blocks boot.
-  void applyDeepLink(map, select);
+  // A studio route holds the command until its one-step return to the map.
+  if (startStudioAwareDeepLink) startStudioAwareDeepLink();
+  else void applyDeepLink(map, select);
 }
 
 if (document.readyState === 'loading') {

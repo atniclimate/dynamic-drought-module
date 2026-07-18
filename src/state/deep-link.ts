@@ -35,6 +35,8 @@ import {
   openImpactPanel
 } from '../ui/impact-panel';
 import { getSheetDetent, isSheetActive } from '../ui/mobile-sheet';
+import { setPlaceSelection } from './place-selection';
+import { getViewMode } from './view-mode';
 import { showToast } from '../ui/overlay';
 import type { SelectParam } from './url';
 
@@ -90,11 +92,14 @@ function briefingCameraPadding(): maplibregl.PaddingOptions {
  * The caller captures the parameter with `parseSelectParam()` BEFORE the
  * sidebar boots: the sidebar's first `syncUrl` rewrites the URL via
  * `history.replaceState` and (deliberately) drops `select`, so parsing here
- * would race the rewrite and lose. Boot order is load-bearing.
+ * would race the rewrite and lose. Boot order is load-bearing. A deferred
+ * studio composition may supply a route-generation guard so a later route
+ * change yields before the camera or briefing changes.
  */
 export async function applyDeepLink(
   map: maplibregl.Map,
-  select: SelectParam | null
+  select: SelectParam | null,
+  routeGuard?: () => boolean
 ): Promise<void> {
   if (!select) return;
   // A fresh deep link frames the state (fit: true); the shared helper below is
@@ -107,7 +112,9 @@ export async function applyDeepLink(
   const intent = nextBriefingIntent();
   await openStateBriefing(map, select.id, {
     fit: true,
-    guard: () => isCurrentBriefingIntent(intent)
+    guard: () =>
+      isCurrentBriefingIntent(intent) &&
+      (routeGuard ? routeGuard() : true)
   });
 }
 
@@ -132,6 +139,16 @@ export async function openStateBriefing(
      * interacted with meanwhile.
      */
     guard?: () => boolean;
+    /**
+     * Summary-first (D-0.7.0-070): set the place selection and let the
+     * left panel offer the one full-report link instead of opening the
+     * briefing directly; on the active mobile Brief sheet the briefing
+     * still opens (map-click parity: the at-hand half detent IS the
+     * mobile summary). The select= deep link and the keyboard
+     * region-briefing trigger stay direct: both are explicit
+     * open-the-briefing requests.
+     */
+    summaryFirst?: boolean;
   } = {}
 ): Promise<void> {
   let feature: Feature | undefined;
@@ -178,7 +195,16 @@ export async function openStateBriefing(
     ? { lng: (bbox[0] + bbox[2]) / 2, lat: (bbox[1] + bbox[3]) / 2 }
     : { lng: 0, lat: 0 };
 
-  openImpactPanel(
-    buildBoundaryContext('state', feature.properties ?? null, feature.geometry, lngLat)
+  const context = buildBoundaryContext(
+    'state',
+    feature.properties ?? null,
+    feature.geometry,
+    lngLat
   );
+  if (opts.summaryFirst) {
+    setPlaceSelection({ label: context.title, context });
+    if (isSheetActive() && getViewMode() === 'brief') openImpactPanel(context);
+    return;
+  }
+  openImpactPanel(context);
 }

@@ -3,7 +3,7 @@
  * (`public/data/tribal-roster.json`, built by scripts/build-tribal-roster.mjs
  * from the Federal Register roster and the BIA AIAN-LAR LARNAME audit;
  * D-0.7.0-026). Two consumers: the search index (src/ui/search-controller.ts)
- * and the related-cession matcher (src/impact/related-cessions.ts). Extracted
+ * and other consumers that need trusted formal names. Extracted
  * with Unit I so the STRUCTURAL provenance gate lives in exactly one place.
  *
  * Stewardship: the roster carries NAMES ONLY (no geometry). A formal Tribal

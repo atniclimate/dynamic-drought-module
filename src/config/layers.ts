@@ -59,7 +59,7 @@ export interface LayerDef {
    * Optional presentation override for the `no-data` status (Unit C of the
    * Tribal Nations umbrella build; closes standing task #9 for the live
    * layers). The canonical six-state union is untouched: this re-words ONE
-   * state's user-visible text where the default "empty placeholder (see
+   * state's user-visible text where the default "no data (see
    * data/README.md)" would be dishonest. A LIVE layer that returns zero
    * features for the current view is not a placeholder; it says so
    * (`LIVE_NO_FEATURES_LABEL`). Bundled placeholder layers omit this and
@@ -103,10 +103,8 @@ export interface LayerDef {
  * drought layer), the two live PRESENT-DAY Tribal-geography layers (Census
  * AIANNH Tribal Lands and BIA Reservation Boundaries; Tribal Nations MUST
  * display on first load), State Boundaries, and (since E1, D-0.7.0-043
- * part 3) Terrain Shading. Treaty & Ceded Lands (the
- * historical Royce record) is default-off and joins via the Tribal Nations
- * button, its own toggle, or a boundary click. The bundled deployer slots
- * (`tribal`, `treaty`) are default-off AND ui-hidden: they are only
+ * part 3) Terrain Shading. The bundled deployer slots (`tribal`, `treaty`)
+ * are default-off AND ui-hidden: they are only
  * meaningful once a deployer populates them with their own authorized
  * data. Hydrography is
  * intentionally off by default; the live Overpass query is slow and
@@ -138,24 +136,12 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'usdm', name: 'US Drought Monitor', source: 'NDMC · FeatureServer', role: 'surface', defaultOn: true, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/usdm') },
   // The Tribal Nations members (D-0.7.0-032/033, narrowed by D-0.7.0-038):
   // the two live present-day layers are default-on (Tribal Nations MUST
-  // display); the live historical cession record is default-off; the two
-  // bundled deployer slots are default-off, ui-hidden, and labeled so "your
-  // own data" is unmistakable. The deployer keys (`tribal`, `treaty`) are
-  // shipped public identifiers and keep their meaning (URL policy rule 4);
-  // only display names and visibility changed.
+  // display); the two bundled deployer slots are default-off, ui-hidden, and
+  // labeled so "your own data" is unmistakable. The deployer keys (`tribal`,
+  // `treaty`) are shipped public identifiers and keep their meaning (URL
+  // policy rule 4); only display names and visibility changed.
   { key: 'aiannh', name: 'Tribal Lands', source: 'US Census · AIANNH (live)', role: 'reference', defaultOn: true, noDataLabel: 'no features returned for this view (Census-defined Tribal areas only)', load: () => import('../layers/aiannh') },
   { key: 'tribal', name: 'Tribal Lands (your own data)', source: 'deployer · bundled GeoJSON', role: 'reference', defaultOn: false, uiHidden: true, load: () => import('../layers/tribal') },
-  // treaty-cessions is default-OFF since Unit I (D-0.7.0-038 decision 1,
-  // narrowing D-0.7.0-033 decision 3): the passive page-load default carries
-  // the two present-day representations; the historical cession record joins
-  // on the Tribal Nations button, the manual toggle, or a boundary click
-  // (src/impact/related-cessions.ts).
-  // E2 (D-0.7.0-058 ruling 4): treaty-cessions leaves the visible catalog
-  // through the same uiHidden mechanism as the deployer slots below; the
-  // key stays shipped, URL-reachable (?layers=treaty-cessions), commanded
-  // by the Tribal Nations button, and opened by the Unit I related-cessions
-  // click. The LAYERS studio (D-0.7.0-055) is its future visible home.
-  { key: 'treaty-cessions', name: 'Treaty & Ceded Lands', source: 'USFS · Royce cessions (live)', role: 'reference', defaultOn: false, uiHidden: true, noDataLabel: 'no features returned for this view (a historical record; not every Treaty area is digitized)', load: () => import('../layers/treaty-cessions') },
   { key: 'treaty', name: 'Treaty Areas (your own data)', source: 'deployer · bundled GeoJSON', role: 'reference', defaultOn: false, uiHidden: true, load: () => import('../layers/treaty') },
   // The BIA label carries the design-required coverage caveat: AIAN-LAR
   // returning nothing here is a statement about the DATASET's coverage (it

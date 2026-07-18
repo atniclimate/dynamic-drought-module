@@ -9,7 +9,7 @@
  * documented in `data/README.md`. An empty placeholder is therefore the
  * expected first-run state, not an error; this module surfaces it as the
  * canonical `'no-data'` status (rendered by the sidebar as
- * "empty placeholder (see data/README.md)") and renders nothing visible.
+ * "no data (see data/README.md)") and renders nothing visible.
  *
  * Status reporting is currently a `console.info` placeholder; M7 wires the
  * LayerRegistry through `setStatus(key, status)` and removes the console

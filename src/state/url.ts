@@ -55,6 +55,9 @@ import {
  *            absence (D-0.7.0-044); `layers=` outranks it on parse
  *   ocean    pacific | arctic | atlantic; valid only beside
  *            cluster=enso (D-0.7.0-042/053), ignored otherwise
+ *   studio   layers or place opens the matching lazy studio over the
+ *            mounted map; it composes with every other durable state
+ *            parameter
  *
  * This module is a direct port of the vanilla `app.js` parseUrlParams and
  * syncUrl functions (~lines 342-378 of the v0.1.x baseline). See CLAUDE.md
@@ -88,6 +91,14 @@ export interface ParsedUrlParams {
   /** Ocean framing from `ocean=`; non-null only beside cluster=enso
    * (D-0.7.0-042/053). */
   readonly ocean: OceanKey | null;
+  /** Lazy full-viewport studio route. Only the exact tokens `layers` and
+   * `place` are recognized; absence or any other value leaves the map open. */
+  readonly studio: 'layers' | 'place' | null;
+}
+
+/** Parse the additive `studio=` route token. */
+export function parseStudioParam(raw: string | null): 'layers' | 'place' | null {
+  return raw === 'layers' || raw === 'place' ? raw : null;
 }
 
 /**
@@ -198,7 +209,11 @@ export function parseUrlParams(): ParsedUrlParams {
         : parseBasemapParam(params.get('basemap')),
     framing: shell.framing,
     cluster: shell.cluster,
-    ocean: shell.ocean
+    ocean: shell.ocean,
+    studio:
+      params.getAll('studio').length === 1
+        ? parseStudioParam(params.get('studio'))
+        : null
   };
 }
 
@@ -265,6 +280,8 @@ export interface UrlSyncState {
   /** Ocean framing; emitted as `ocean=` only beside cluster=enso
    * (D-0.7.0-042/053). */
   readonly ocean?: OceanKey | null;
+  /** Lazy studio route; emitted only while one exclusive studio is open. */
+  readonly studio?: 'layers' | 'place' | null;
 }
 
 /**
@@ -334,7 +351,14 @@ export function syncUrl(state: UrlSyncState): void {
   if (state.basemap === 'satellite') {
     params.set('basemap', state.basemap);
   }
+  if (state.studio === 'layers' || state.studio === 'place') {
+    params.set('studio', state.studio);
+  }
 
   const url = window.location.pathname + '?' + params.toString();
-  window.history.replaceState(null, '', url);
+  // Preserve the existing history.state: the studio route stamps a
+  // marker on studio entries (src/state/studio-route.ts), and replacing
+  // it with null here would make a reload inside a studio look like a
+  // direct boot and re-synthesize history.
+  window.history.replaceState(window.history.state, '', url);
 }

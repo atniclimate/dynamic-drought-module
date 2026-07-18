@@ -1,18 +1,18 @@
 /**
  * ENSO driver line (0.4.0 B2 slice 1).
  *
- * A one-line, always-visible readout of the El Nino / Southern Oscillation
- * (ENSO) state directly under the conditions strip: the phase, the latest
- * Oceanic Nino Index (ONI) reading, and a five-word Pacific Northwest tilt.
- * Expanding the line (a native details/summary disclosure) shows the full
- * odds-never-outcomes tilt paragraph with the modulators named, the snapshot
- * provenance, and the source link.
+ * A one-line readout of the El Nino / Southern Oscillation (ENSO) state inside
+ * the Brief display description: the phase, the latest Oceanic Nino Index
+ * (ONI) reading, and a short Pacific Northwest tilt. Expanding the line (a
+ * native details/summary disclosure) shows the full odds-never-outcomes tilt
+ * paragraph with the modulators named, the snapshot provenance, and the source
+ * link.
  *
- * This deliberately does NOT live inside the conditions strip: the strip's
+ * This deliberately does not live inside the conditions strip: the strip's
  * contract is "reflect what is rendered on the map" and ENSO is a climate
- * driver, not a map layer. It reads the bundled build-time snapshot (no
- * network dependency beyond the local file), and on any failure the section
- * stays hidden; a missing snapshot never becomes a faked phase.
+ * driver, not a map layer. It reads the bundled build-time snapshot (no network
+ * dependency beyond the local file), and on any failure the section stays
+ * hidden; a missing snapshot never becomes a faked phase.
  */
 import { fetchEnsoDriverSummary } from '../impact/enso';
 import { escapeHtml } from '../util/escape';

@@ -117,8 +117,12 @@ export interface ResourceLink {
  *                   areas). A statistical area is NEVER a jurisdiction claim; the
  *                   distinction is drawn by AIANNHCC in the popup and label.
  *   bia-reservation the BIA AIAN-LAR federal reservation/trust-land depiction
+ *   watershed       a USGS Watershed Boundary Dataset hydrologic unit (HUC2 or
+ *                   HUC4 in the Place studio's v1 scope); a landscape unit like
+ *                   an ecoregion, never a jurisdiction, so it carries no
+ *                   sovereignty caveat
  */
-export type BoundaryKind = 'ecoregion' | 'tribal' | 'aiannh' | 'treaty' | 'bia-reservation' | 'state';
+export type BoundaryKind = 'ecoregion' | 'tribal' | 'aiannh' | 'treaty' | 'bia-reservation' | 'state' | 'watershed';
 
 /**
  * The context handed from a boundary click to the briefing composer. Carries

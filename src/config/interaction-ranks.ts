@@ -18,10 +18,9 @@
  * but unreachable.
  *
  * S1 lands only this table; the coordinator that consumes it is a later
- * unit (it feeds S4 and the embed response feeds S6). The Unit I rule
- * rides the coordinator: a related-cessions probe starts only after a
- * committed Tribal Lands or Reservation Boundaries target and aborts
- * when the committed target changes.
+ * unit (it feeds S4 and the embed response feeds S6). (The Unit I
+ * related-cessions probe this note once described was retired with the
+ * live Treaty layer, D-0.7.0-065.)
  */
 
 /**
@@ -36,7 +35,10 @@
  *                        within it
  *   reservation-boundary the BIA AIAN-LAR representation
  *   tribal-lands         the Census AIANNH representation
- *   treaty-cession       Treaty or ceded-land representation when active
+ *   treaty-cession       RESERVED generic rank slot: a deployer-provided
+ *                        Treaty representation (the own-data slot), if one
+ *                        is ever registered; the retired LIVE cession layer
+ *                        (D-0.7.0-065) has no producer and none exists today
  *   ecoregion-watershed  ecoregion or watershed boundary when active
  *   state-boundary       state outline
  *   condition-surface    the active condition surface (USDM and peers)

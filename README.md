@@ -19,8 +19,8 @@ provider. Every view is a shareable URL.
 **Stewardship comes first.** The module is built so each deployer (a
 Tribal Nation, a state agency, a partner) controls its own copy on its own
 infrastructure. Sovereign-jurisdiction data is never redistributed by this
-repository. The live Tribal-geography layers (Tribal Lands, Reservation
-Boundaries, Treaty & Ceded Lands) are fetched LIVE from the publishing
+repository. The live Tribal-geography layers (Tribal Lands and Reservation
+Boundaries) are fetched LIVE from the publishing
 federal services at view time, held only in the browser session, and never
 bundled; requests run with `cache: 'no-store'` so nothing persists beyond
 the session. Separately, two deployer-owned slots (`tribal`, `treaty`)
@@ -57,11 +57,7 @@ self-hosting and data population.
   Lands (live from the US Census AIANNH service, covering legal AND
   statistical geographies including Oklahoma Tribal Statistical Areas),
   Reservation Boundaries (live from the authoritative Bureau of Indian
-  Affairs (BIA) AIAN-LAR service), and Treaty & Ceded Lands (live from
-  the US Forest Service digitized Royce cessions; off by default, it
-  joins via the Tribal Nations button, its own toggle, or a click on a
-  Tribal boundary, which highlights that Tribe's related cessions and
-  says plainly when none are on file). Where two agencies depict the
+  Affairs (BIA) AIAN-LAR service). Where two agencies depict the
   same land the overlap is drawn legibly as two labeled representations,
   never blended. Deployers can additionally load their own Tribal Lands
   and Treaty Areas data into two default-off slots (URL-addressed; not
@@ -171,7 +167,6 @@ several surfaces resolves deterministically to the first surface named
 | `ecoregions` | Ecoregions (Level III/IV) | reference | EPA Omernik, bundled PMTiles |
 | `aiannh` | Tribal Lands | reference | US Census AIANNH MapServer (live, default-on) |
 | `bia-reservations` | Reservation Boundaries | reference | BIA AIAN-LAR FeatureServer (live, default-on) |
-| `treaty-cessions` | Treaty & Ceded Lands | reference | USFS Royce cessions MapServer (live, default-off; also loads from a Tribal-boundary click) |
 | `tribal` | Tribal Lands (your own data) | reference | deployer slot, bundled EMPTY PLACEHOLDER, default-off, URL-only (no catalog row until turned on) |
 | `treaty` | Treaty Areas (your own data) | reference | deployer slot, bundled EMPTY PLACEHOLDER, default-off, URL-only (no catalog row until turned on) |
 | `hydrography` | Rivers | reference | OpenStreetMap via Overpass (live) |
@@ -183,21 +178,15 @@ Every live endpoint in `src/config/urls.ts` carries a verification
 metadata block (HTTP status, content type, CORS posture, response-shape
 caveats, verification date). Read it before touching a fetcher.
 
-### Live Tribal geography, and the deployer slots
+### Live Tribal geography and the deployer slots
 
-The three live Tribal-geography layers (`aiannh`, `bia-reservations`,
-`treaty-cessions`) fetch the publishing federal services live at view
+The two live Tribal-geography layers (`aiannh`, `bia-reservations`) fetch
+the publishing federal services live at view
 time and redistribute nothing: responses are held in session memory
 only, requested with `cache: 'no-store'`, and are never bundled, baked,
 or written to disk by this module. Each popup names its publishing
-agency, its vintage, and the representation caveat. The two present-day
-layers are on by default; Treaty & Ceded Lands (the historical Royce
-record) is off by default and joins via the Tribal Nations button, its
-own toggle, or a click on a Tribal Lands or Reservation Boundaries
-feature, which highlights the cessions related to that Tribe when a
-safe name match exists and says plainly when no cession is on file
-(absence in Royce is not evidence that a Tribe lacks a Treaty
-relationship).
+agency, its vintage, and the representation caveat. Both layers are on
+by default.
 
 The `tribal` and `treaty` keys are the DEPLOYER slots: bundled empty
 `FeatureCollection` placeholders (in `public/data/`), off by default,

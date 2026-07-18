@@ -33,48 +33,49 @@ import type { StateCode } from '../impact/resources';
 import { buildBoundaryContext, geometryBbox } from '../impact/context';
 import { openStateBriefing } from '../state/deep-link';
 import { showLocatedBoundary } from '../state/located-boundary';
-import { onPlaceSelectionChange } from '../state/place-selection';
+import { getViewMode } from '../state/view-mode';
+import { onPlaceSelectionChange, setPlaceSelection } from '../state/place-selection';
 import { loadTribalRoster, TRUSTED_PROVENANCE } from '../state/tribal-roster';
 import { fetchWithBudget } from '../util/fetch';
+import { isSheetActive } from './mobile-sheet';
 import { requestLayerOn } from './layer-toggle-command';
 import { isCurrentBriefingIntent, nextBriefingIntent, openImpactPanel } from './impact-panel';
 import { showToast } from './overlay';
 import { Search } from './island/search';
 import type { SearchItem } from './island/search';
+import { foldSearchText } from '../util/search-fold';
 
 const LOCATE_TIMEOUT_MS = 12_000;
 
 /** The same normalization the roster build and the search component use. */
 function norm(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9 ]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return foldSearchText(s);
 }
 
 /** Places (states) and layers are available synchronously from the config tables. */
-function buildSyncItems(): SearchItem[] {
+function buildSyncItems(
+  permittedKinds: ReadonlySet<SearchItem['kind']> | null = null
+): SearchItem[] {
   const items: SearchItem[] = [];
-  for (const [code, name] of Object.entries(STATE_LABEL) as Array<[StateCode, string]>) {
-    items.push({ kind: 'place', id: code, label: name, haystack: norm(`${name} ${code}`) });
+  if (!permittedKinds || permittedKinds.has('place')) {
+    for (const [code, name] of Object.entries(STATE_LABEL) as Array<[StateCode, string]>) {
+      items.push({ kind: 'place', id: code, label: name, haystack: norm(`${name} ${code}`) });
+    }
   }
-  for (const def of LAYER_DEFS) {
-    // A ui-hidden layer (the deployer own-data slots, Unit I / D-0.7.0-038
-    // part 3; the buried Treaty & Ceded Lands, E2 / D-0.7.0-058 ruling 4)
-    // is not a public-facing UI feature: no search result either. The keys
-    // stay URL-reachable (?layers=tribal / ?layers=treaty /
-    // ?layers=treaty-cessions).
-    if (def.uiHidden) continue;
-    items.push({
-      kind: 'layer',
-      id: def.key,
-      label: def.name,
-      sublabel: def.source,
-      haystack: norm(`${def.name} ${def.source}`)
-    });
+  if (!permittedKinds || permittedKinds.has('layer')) {
+    for (const def of LAYER_DEFS) {
+      // A ui-hidden layer (the deployer own-data slots, Unit I / D-0.7.0-038
+      // part 3) is not a public-facing UI feature: no search result either.
+      // The keys stay URL-reachable (?layers=tribal / ?layers=treaty).
+      if (def.uiHidden) continue;
+      items.push({
+        kind: 'layer',
+        id: def.key,
+        label: def.name,
+        sublabel: def.source,
+        haystack: norm(`${def.name} ${def.source}`)
+      });
+    }
   }
   return items;
 }
@@ -226,11 +227,16 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
   const lngLat = bbox
     ? { lng: (bbox[0] + bbox[2]) / 2, lat: (bbox[1] + bbox[3]) / 2 }
     : { lng: 0, lat: 0 };
-  // ORDER MATTERS: the briefing open replaces the place selection, and the
-  // located-boundary module clears its highlight on EVERY selection change
-  // (the stage-5 major 4 fix), so the panel opens first and the highlight for
-  // THIS subject renders after; any prior subject's highlight is gone.
-  openImpactPanel(buildBoundaryContext('bia-reservation', primary.properties ?? null, primary.geometry, lngLat));
+  // ORDER MATTERS: the located-boundary module clears its highlight on
+  // EVERY selection change (the stage-5 major 4 fix), so the selection is
+  // set first and the highlight for THIS subject renders after; any prior
+  // subject's highlight is gone. Summary-first (D-0.7.0-070): the search
+  // selection behaves like a map click, so the briefing opens through the
+  // left panel's one link; on the active mobile Brief sheet it still opens
+  // directly (map-click parity, the at-hand half detent IS the summary).
+  const context = buildBoundaryContext('bia-reservation', primary.properties ?? null, primary.geometry, lngLat);
+  setPlaceSelection({ label: context.title, context });
+  if (isSheetActive() && getViewMode() === 'brief') openImpactPanel(context);
   showLocatedBoundary(map, combineGeometry(features) ?? features[0].geometry);
 }
 
@@ -246,7 +252,14 @@ function selectResult(map: maplibregl.Map, item: SearchItem): void {
     // subscription above would fire too late; supersede the locate NOW.
     locateAbort?.abort();
     locateAbort = null;
-    void openStateBriefing(map, item.id, { fit: true, guard: () => isCurrentBriefingIntent(intent) });
+    // Summary-first (D-0.7.0-070): a search selection behaves like a map
+    // click; the briefing opens only through the panel's one link (the
+    // active mobile Brief sheet keeps map-click parity inside the helper).
+    void openStateBriefing(map, item.id, {
+      fit: true,
+      guard: () => isCurrentBriefingIntent(intent),
+      summaryFirst: true
+    });
     return;
   }
   void locateTribalLandArea(map, item.id);
@@ -255,18 +268,30 @@ function selectResult(map: maplibregl.Map, item: SearchItem): void {
 /** The props the search component needs, assembled and routed for a map. */
 export interface SearchWiring {
   items: SearchItem[];
-  loadTribal: () => Promise<SearchItem[]>;
+  loadTribal?: () => Promise<SearchItem[]>;
   onSelect: (item: SearchItem) => void;
   placeholder: string;
 }
 
-/** Build the search wiring bound to a map. One brain, shared by every host. */
-export function buildSearchWiring(map: maplibregl.Map): SearchWiring {
+export interface SearchWiringOptions {
+  readonly permittedKinds: readonly SearchItem['kind'][];
+  readonly placeholder: string;
+}
+
+/** Build search wiring bound to a map, optionally scoped for a specialized host. */
+export function buildSearchWiring(
+  map: maplibregl.Map,
+  options?: SearchWiringOptions
+): SearchWiring {
+  const permittedKinds = options ? new Set(options.permittedKinds) : null;
+  const permitsTribal = permittedKinds?.has('tribal') ?? true;
   return {
-    items: buildSyncItems(),
-    loadTribal,
-    onSelect: (item) => selectResult(map, item),
-    placeholder: 'Search places, Tribal land areas, and layers'
+    items: buildSyncItems(permittedKinds),
+    ...(permitsTribal ? { loadTribal } : {}),
+    onSelect: (item) => {
+      if (!permittedKinds || permittedKinds.has(item.kind)) selectResult(map, item);
+    },
+    placeholder: options?.placeholder ?? 'Search places, Tribal land areas, and layers'
   };
 }
 

@@ -78,7 +78,7 @@ export interface LayerControllerView {
  *   - `ensureActive` is fire-and-forget activation (void, not awaited).
  */
 export interface LayerController {
-  activate(key: string): Promise<void>;
+  activate(key: string, cascade?: boolean): Promise<void>;
   deactivate(key: string): void;
   applyPreset(preset: ViewPreset): void;
   applyLayerSet(keys: Iterable<string>): Promise<void>;
