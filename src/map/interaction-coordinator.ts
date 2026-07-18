@@ -314,16 +314,41 @@ function renderPopup(
 
   const container = document.createElement('div');
   container.className = 'coordinated-response';
-  if (typeof response.content === 'string') {
-    container.innerHTML = response.content;
-  } else {
-    container.appendChild(response.content);
-  }
 
+  // Split the response into a FROZEN head and a SCROLLING body
+  // (maintainer directive 2026-07-18). The head, top to bottom, is the
+  // title, then the briefing door, then the "Other map features here"
+  // switcher; the body carries the agency line, meta, the caveat, and
+  // links. The key actions stay put while a long note scrolls, so a
+  // click never scrolls the briefing button or the feature switcher out
+  // of reach. The CSS (.ddm-coordinated-popup) makes the body the
+  // scroll container instead of the whole card.
+  const raw = document.createElement('div');
+  if (typeof response.content === 'string') raw.innerHTML = response.content;
+  else raw.appendChild(response.content);
+
+  const head = document.createElement('div');
+  head.className = 'coordinated-response-head';
+  const body = document.createElement('div');
+  body.className = 'coordinated-response-body';
+
+  // Title first (frozen), if the content carries one; then the briefing
+  // door directly below it. querySelector on the working fragment moves
+  // each node out of `raw`, so whatever remains falls through to the body.
+  const title = raw.querySelector('.popup-title');
+  if (title) head.appendChild(title);
+  const trigger = raw.querySelector('[data-ddm-impact-trigger]');
+  if (trigger) head.appendChild(trigger);
+  while (raw.firstChild) body.appendChild(raw.firstChild);
+
+  // The escape hatch sits at the foot of the frozen head, below the door.
   const others = hits.filter((h) => h !== primary);
   if (others.length > 0) {
-    container.appendChild(buildDisclosure(map, hits, others, click));
+    head.appendChild(buildDisclosure(map, hits, others, click));
   }
+
+  container.appendChild(head);
+  container.appendChild(body);
 
   if (selection) {
     const context = selection.context;
@@ -338,6 +363,7 @@ function renderPopup(
   const popup = new maplibregl.Popup({
     closeButton: true,
     ...response.popupOptions,
+    className: 'ddm-coordinated-popup',
     closeOnClick: false
   })
     .setLngLat(click.lngLat)

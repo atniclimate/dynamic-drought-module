@@ -1895,6 +1895,47 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   border-color: var(--line-strong);
 }
 
+/* The coordinated response splits into a frozen head (title, the briefing
+   door, and the other-features switcher) and a scrolling body (agency,
+   meta, the caveat, links); maintainer directive 2026-07-18. The body is
+   the scroll container instead of the whole popup card, so the key
+   actions never scroll out of reach. Scoped to .ddm-coordinated-popup so
+   the telemetry marker popups (which do not carry the class) keep their
+   own whole-card scroll. */
+.ddm-coordinated-popup .maplibregl-popup-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ddm-coordinated-popup .coordinated-response {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.coordinated-response-head {
+  flex: 0 0 auto;
+}
+/* A gap so scrolling body content reads as beneath the frozen head, and a
+   hairline that only shows once there is a head to divide from. */
+.coordinated-response-head:not(:empty) {
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.coordinated-response-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* The escape hatch is inside the frozen head now, so its own top border
+   would double the head's divider; drop it here. */
+.coordinated-response-head .popup-other-features {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 8px;
+}
+
 /* Custom telemetry markers */
 .telemetry-marker {
   background: transparent;

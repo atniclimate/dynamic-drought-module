@@ -244,14 +244,14 @@ function buildHmsPopupHtml(props: GeoJsonProperties): string {
  * nifc-fires interaction pattern.
  */
 export function bindPopups(map: maplibregl.Map): void {
+  // A smoke plume can span states, so despite the LAYER_DEFS 'event'
+  // role it behaves as a blanketing contextual surface at click time;
+  // ranking it 'point-event' would make every boundary under a plume
+  // unreachable except through the disclosure. The table names
+  // perimeters and alerts as direct targets, not plumes. RATIFIED
+  // condition-surface (maintainer, 2026-07-18; the 2026-07-17
+  // adversarial finding 4 proposal accepted).
   registerClickTarget({
-    // PROPOSED rank (2026-07-17 adversarial pass, finding 4; maintainer
-    // may reverse with a one-line change): a smoke plume can span
-    // states, so despite the LAYER_DEFS 'event' role it behaves as a
-    // blanketing contextual surface at click time; ranking it
-    // 'point-event' would make every boundary under a plume unreachable
-    // except through the disclosure. The table names perimeters and
-    // alerts as direct targets; it does not name plumes.
     kind: 'condition-surface',
     layerIds: [FILL_LAYER_ID],
     label: (feature) => {
