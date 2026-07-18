@@ -26,14 +26,15 @@
  * `fetchWithBudget`, late responses dropped.
  */
 
-import maplibregl from 'maplibre-gl';
-import type { FeatureCollection, GeoJsonProperties } from 'geojson';
+import type maplibregl from 'maplibre-gl';
+import type { FeatureCollection } from 'geojson';
 
 import { URLS } from '../config/urls';
 import {
   NWS_ALERT_COLORS,
   NWS_ALERT_DEFAULT_COLOR
 } from '../config/palette';
+import { registerClickTarget } from '../map/interaction-coordinator';
 import { buildNwsAlertPopupHtml } from '../ui/popups';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
@@ -242,18 +243,21 @@ export function deactivate(map: maplibregl.Map): void {
 }
 
 /**
- * Wire the click-to-popup handler and hover cursor affordance on the fill
- * layer. Bound once at boot, independent of activation.
+ * Register the fill layer's click target with the InteractionCoordinator
+ * (one response per click; D-0.7.0-058 ruling 5) and wire the hover
+ * cursor affordance. Bound once on first activation.
  */
 export function bindPopups(map: maplibregl.Map): void {
-  map.on('click', FILL_LAYER_ID, (e) => {
-    const feature = e.features?.[0];
-    if (!feature) return;
-    const props: GeoJsonProperties = feature.properties ?? null;
-    new maplibregl.Popup({ closeButton: true, closeOnClick: true })
-      .setLngLat(e.lngLat)
-      .setHTML(buildNwsAlertPopupHtml(props))
-      .addTo(map);
+  registerClickTarget({
+    kind: 'point-event',
+    layerIds: [FILL_LAYER_ID],
+    label: (feature) => {
+      const event = feature.properties?.['prod_type'];
+      return typeof event === 'string' && event.trim() !== '' ? event : 'Weather alert';
+    },
+    respond: (feature) => ({
+      content: buildNwsAlertPopupHtml(feature.properties ?? null)
+    })
   });
 
   map.on('mouseenter', FILL_LAYER_ID, () => {

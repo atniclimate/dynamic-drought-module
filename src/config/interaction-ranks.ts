@@ -35,10 +35,10 @@
  *                        within it
  *   reservation-boundary the BIA AIAN-LAR representation
  *   tribal-lands         the Census AIANNH representation
- *   treaty-cession       RESERVED generic rank slot: a deployer-provided
- *                        Treaty representation (the own-data slot), if one
- *                        is ever registered; the retired LIVE cession layer
- *                        (D-0.7.0-065) has no producer and none exists today
+ *   treaty-cession       the deployer-provided Treaty representation (the
+ *                        own-data slot, `src/layers/treaty.ts`), which
+ *                        registers this rank when activated; the retired
+ *                        LIVE cession layer (D-0.7.0-065) has no producer
  *   ecoregion-watershed  ecoregion or watershed boundary when active
  *   state-boundary       state outline
  *   condition-surface    the active condition surface (USDM and peers)

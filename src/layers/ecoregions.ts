@@ -21,15 +21,15 @@
  * the overlay never implies precision the 2012 source does not carry).
  */
 
-import maplibregl from 'maplibre-gl';
+import type maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 
 import { ECOREGION_COLORS, ECOREGION_DEFAULT_COLOR } from '../config/palette';
 import { URLS } from '../config/urls';
 import { firstLayerIdAbove, BOTTOM_STACK_IDS } from '../map/layer-order';
 import { buildEcoregionPopupHtml } from '../ui/popups';
-import { attachImpactTrigger } from '../ui/impact-panel';
 import { buildBoundaryContext } from '../impact/context';
+import { registerClickTarget } from '../map/interaction-coordinator';
 import { escapeHtml } from '../util/escape';
 import { registry } from '../state/registry';
 import { showLegend, hideLegend, LEGEND_ORDER } from '../ui/legend-registry';
@@ -130,14 +130,32 @@ export function deactivate(map: maplibregl.Map): void {
 }
 
 /**
- * Wire click and hover on both level fill layers. Bound once at boot to layer
- * ids (not instances), so the handlers survive deactivate / activate cycles and
- * tolerate the layers not existing yet. Only the visible level receives clicks,
- * so the active-level selector decides which ecoregion a click selects.
+ * Register the click target for both level fills with the
+ * InteractionCoordinator (one response per click; D-0.7.0-058 ruling 5)
+ * and wire hover cursors. Only the visible level renders features, so
+ * the active-level selector decides which ecoregion a click selects.
+ * The clicked feature carries `US_L3NAME` and (at Level IV) `US_L4NAME`;
+ * the resolved name becomes the response title and the briefing land
+ * title, and the geometry yields the bounding box the briefing uses to
+ * clip live queries.
  */
 export function bindPopups(map: maplibregl.Map): void {
-  bindLevelClick(map, L3_FILL_ID, 'III');
-  bindLevelClick(map, L4_FILL_ID, 'IV');
+  registerClickTarget({
+    kind: 'ecoregion-watershed',
+    layerIds: [L3_FILL_ID, L4_FILL_ID],
+    label: (feature) =>
+      pickName(feature.properties ?? null, levelForFill(feature.layer.id)),
+    respond: (feature, click) => {
+      const props = feature.properties ?? null;
+      const level = levelForFill(feature.layer.id);
+      const name = pickName(props, level);
+      const parentL3 = level === 'IV' ? pickL3Name(props) : null;
+      return {
+        content: buildEcoregionPopupHtml(name, parentL3 ? { level, parentL3 } : { level }),
+        selection: buildBoundaryContext('ecoregion', props, feature.geometry, click.lngLat, name)
+      };
+    }
+  });
 
   for (const fillId of [L3_FILL_ID, L4_FILL_ID]) {
     map.on('mouseenter', fillId, () => {
@@ -149,34 +167,9 @@ export function bindPopups(map: maplibregl.Map): void {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Selection wiring
-// ---------------------------------------------------------------------------
-
-/**
- * Bind the click handler for one level's fill layer. The clicked feature
- * carries `US_L3NAME` and (at Level IV) `US_L4NAME`; the resolved name becomes
- * the popup title and the briefing land title, and the geometry yields the
- * bounding box the briefing uses to clip live queries.
- */
-function bindLevelClick(map: maplibregl.Map, fillId: string, level: 'III' | 'IV'): void {
-  map.on('click', fillId, (e: maplibregl.MapLayerMouseEvent) => {
-    const feature = e.features?.[0];
-    if (!feature) return;
-    const props = feature.properties ?? null;
-    const name = pickName(props, level);
-    const parentL3 = level === 'IV' ? pickL3Name(props) : null;
-
-    const popup = new maplibregl.Popup()
-      .setLngLat(e.lngLat)
-      .setHTML(buildEcoregionPopupHtml(name, parentL3 ? { level, parentL3 } : { level }))
-      .addTo(map);
-
-    attachImpactTrigger(
-      popup,
-      buildBoundaryContext('ecoregion', props, feature.geometry, e.lngLat, name)
-    );
-  });
+/** The ecoregion level a fill layer id renders. */
+function levelForFill(fillId: string): 'III' | 'IV' {
+  return fillId === L4_FILL_ID ? 'IV' : 'III';
 }
 
 // ---------------------------------------------------------------------------

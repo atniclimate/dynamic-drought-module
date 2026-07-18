@@ -34,6 +34,7 @@
 
 import maplibregl from 'maplibre-gl';
 
+import { adoptExternalResponse } from '../map/interaction-coordinator';
 import type { TelemetryFreshness, TelemetryStation } from '../types/station';
 import {
   STATIC_TELEMETRY_STATION_REGISTRY,
@@ -279,6 +280,15 @@ export function bindPopups(_map: maplibregl.Map): void {
     if (!popup) continue;
 
     popup.on('open', () => {
+      // One response per click (D-0.7.0-058 ruling 5): a station marker
+      // is a DOM element, so its popup opens through MapLibre's marker
+      // click observer (or Enter/Space on the element), invisible to
+      // the InteractionCoordinator's rendered-feature arbitration. The
+      // station is the table's top point-event, so the marker popup
+      // WINS: adopting it dismisses any coordinator response committed
+      // for the same click and occupies the single response slot.
+      adoptExternalResponse(popup);
+
       // Abort any prior in-flight fetch from a popup that the user opened
       // and dismissed quickly.
       const prior = abortControllers.get(marker);

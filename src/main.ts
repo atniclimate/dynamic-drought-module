@@ -3,6 +3,7 @@ import './styles/app.css';
 
 import type maplibregl from 'maplibre-gl';
 import { createMap } from './map/init';
+import { initInteractionCoordinator } from './map/interaction-coordinator';
 import { setMap } from './state/map-store';
 import { applyDeepLink } from './state/deep-link';
 import { parseSelectParam } from './state/url';
@@ -158,12 +159,12 @@ async function boot(): Promise<void> {
     map.once('load', () => resolve());
   });
 
-  // Popup click handlers are bound on a layer's FIRST activation (in the
-  // sidebar's activate path), not up front, so a layer's module and its popup
-  // wiring arrive together in the same lazy chunk. MapLibre tolerates a handler
-  // bound before its layer exists, and binding once (guarded in the sidebar)
-  // survives later toggle-off and toggle-on cycles, matching the old boot-time
-  // behavior without forcing every layer module into the initial bundle.
+  // Click targets register with the InteractionCoordinator on a layer's
+  // FIRST activation (the layer-controller's bindPopups seam), not up
+  // front, so a layer's module and its click wiring arrive together in
+  // the same lazy chunk. Registration order never matters: the
+  // coordinator arbitrates by the semantic precedence table, and one
+  // registration survives later toggle-off and toggle-on cycles.
 
   // Capture the one-shot `select` deep link BEFORE the sidebar boots: the
   // sidebar's first syncUrl rewrites the URL and deliberately drops the
@@ -180,6 +181,12 @@ async function boot(): Promise<void> {
     // observe region transitions without coupling to the sidebar.
   });
 
+  // The InteractionCoordinator (D-0.7.0-058 ruling 5): one map click,
+  // one response. Layers register their click targets lazily (in their
+  // bindPopups, on first activation); the one arbitrating click handler
+  // binds here so no per-layer handler can ever stack a second popup.
+  initInteractionCoordinator(map);
+
   // The hover inspector (UX-4) reads what is under the cursor from the active
   // layers. Pointer-only; it is inert on touch devices.
   initHoverInspector(map);
@@ -190,8 +197,8 @@ async function boot(): Promise<void> {
 
   // Selected-place emphasis (U3h, headroom A1): the chosen boundary stays lit
   // while its popup or briefing is open. This wires only the close seam (clear
-  // on place-selection null); the set side lives in each boundary layer's click
-  // handler and the U3 search-locate path.
+  // on place-selection null); the set side lives in the coordinator's
+  // place-bearing commits and the search-locate path.
   initPlaceEmphasis(map);
 
   // The located-boundary highlight (U3d): when the search jumps to a Tribal

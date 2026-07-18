@@ -42,8 +42,8 @@ import { sparklineSvg } from './charts';
 
 /**
  * The "Drought impact briefing" button appended to every boundary popup. The
- * `data-ddm-impact-trigger` attribute is the hook the impact panel wires to
- * (`attachImpactTrigger` in src/ui/impact-panel.ts), keeping the popup a
+ * `data-ddm-impact-trigger` attribute is the hook the InteractionCoordinator
+ * wires to (src/map/interaction-coordinator.ts), keeping the popup a
  * lightweight identity card while the rich briefing lives in the slide-in
  * panel. Static markup, no interpolation, so it is safe to inline.
  */

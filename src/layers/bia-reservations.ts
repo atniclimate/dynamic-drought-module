@@ -58,7 +58,7 @@
  * renders synchronously and never touches the abort signal.
  */
 
-import maplibregl from 'maplibre-gl';
+import type maplibregl from 'maplibre-gl';
 import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
@@ -67,9 +67,8 @@ import {
   RESERVATION_OUTLINE_COLOR
 } from '../config/palette';
 import { buildBiaReservationPopupHtml } from '../ui/popups';
-import { attachImpactTrigger } from '../ui/impact-panel';
-import { buildBoundaryContext } from '../impact/context';
-import { emphasizePlace } from '../state/place-emphasis';
+import { buildBoundaryContext, resolveBoundaryTitle } from '../impact/context';
+import { registerClickTarget } from '../map/interaction-coordinator';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 
@@ -608,25 +607,29 @@ export function deactivate(map: maplibregl.Map): void {
 }
 
 /**
- * Wire the click-to-popup handler and the hover cursor affordance on the fill
- * layer. Bound once at boot (per the boot-time `bindPopups` loop), independent
- * of activation; MapLibre tolerates a handler bound to a not-yet-existing layer
- * ID and the handler short-circuits cleanly when no feature is hit.
+ * Register the fill layer's click target with the InteractionCoordinator
+ * (one response per click; D-0.7.0-058 ruling 5) and wire the hover
+ * cursor affordance. Bound once on first activation (the layer-controller
+ * `bindPopups` seam); MapLibre tolerates hover handlers bound to a
+ * not-yet-existing layer id.
  */
 export function bindPopups(map: maplibregl.Map): void {
-  map.on('click', FILL_LAYER_ID, (e) => {
-    const feature = e.features?.[0];
-    if (!feature) return;
-    emphasizePlace(map, SOURCE_ID, feature.id);
-    const props: GeoJsonProperties = feature.properties ?? null;
-    const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true })
-      .setLngLat(e.lngLat)
-      .setHTML(buildBiaReservationPopupHtml(props))
-      .addTo(map);
-    attachImpactTrigger(
-      popup,
-      buildBoundaryContext('bia-reservation', props, feature.geometry, e.lngLat)
-    );
+  registerClickTarget({
+    kind: 'reservation-boundary',
+    layerIds: [FILL_LAYER_ID],
+    label: (feature) => resolveBoundaryTitle('bia-reservation', feature.properties ?? null),
+    respond: (feature, click) => {
+      const props: GeoJsonProperties = feature.properties ?? null;
+      return {
+        content: buildBiaReservationPopupHtml(props),
+        selection: buildBoundaryContext('bia-reservation', props, feature.geometry, click.lngLat),
+        // An id-less feature clears any prior emphasis (the old
+        // emphasizePlace contract) rather than lighting an unknown one.
+        emphasis: feature.id === undefined || feature.id === null
+          ? []
+          : [{ source: SOURCE_ID, id: feature.id }]
+      };
+    }
   });
 
   map.on('mouseenter', FILL_LAYER_ID, () => {

@@ -43,10 +43,11 @@
  * labels rather than color alone.
  */
 
-import maplibregl from 'maplibre-gl';
+import type maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
+import { registerClickTarget } from '../map/interaction-coordinator';
 import { escapeHtml } from '../util/escape';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
@@ -876,20 +877,33 @@ function buildChangePopupHtml(props: GeoJsonProperties): string {
 }
 
 /**
- * Wire click handlers on both frame-slot fills and the change fill. The
- * hidden pair never matches (its layers carry visibility 'none'), so a
- * click always reads the week or register actually on screen.
+ * Register the click targets for both frame-slot fills and the change
+ * fill with the InteractionCoordinator (one response per click;
+ * D-0.7.0-058 ruling 5). The hidden frame pair never matches (its
+ * layers carry visibility 'none'), so a click always reads the week or
+ * register actually on screen. The condition surface ranks LAST in the
+ * precedence table: it blankets every other target, and ranking it
+ * higher would make sovereign geography visible but unreachable.
  */
 export function bindPopups(map: maplibregl.Map): void {
-  for (const id of USDM_FILL_LAYER_IDS) {
-    map.on('click', id, (e) => {
-      const feature = e.features && e.features[0];
-      if (!feature) return;
-      new maplibregl.Popup({ closeButton: true, closeOnClick: true })
-        .setLngLat(e.lngLat)
-        .setHTML(buildUsdmPopupHtml(feature.properties ?? {}))
-        .addTo(map);
-    });
+  registerClickTarget({
+    kind: 'condition-surface',
+    layerIds: [...USDM_FILL_LAYER_IDS],
+    label: (feature) => formatCategoryLabel((feature.properties ?? {}).DM ?? (feature.properties ?? {}).dm),
+    respond: (feature) => ({
+      content: buildUsdmPopupHtml(feature.properties ?? {})
+    })
+  });
+  registerClickTarget({
+    kind: 'condition-surface',
+    layerIds: [CHANGE_FILL],
+    label: (feature) => changeLabel((feature.properties ?? {}).DN),
+    respond: (feature) => ({
+      content: buildChangePopupHtml(feature.properties ?? {})
+    })
+  });
+
+  for (const id of [...USDM_FILL_LAYER_IDS, CHANGE_FILL]) {
     map.on('mouseenter', id, () => {
       map.getCanvas().style.cursor = 'pointer';
     });
@@ -897,19 +911,4 @@ export function bindPopups(map: maplibregl.Map): void {
       map.getCanvas().style.cursor = '';
     });
   }
-
-  map.on('click', CHANGE_FILL, (e) => {
-    const feature = e.features && e.features[0];
-    if (!feature) return;
-    new maplibregl.Popup({ closeButton: true, closeOnClick: true })
-      .setLngLat(e.lngLat)
-      .setHTML(buildChangePopupHtml(feature.properties ?? {}))
-      .addTo(map);
-  });
-  map.on('mouseenter', CHANGE_FILL, () => {
-    map.getCanvas().style.cursor = 'pointer';
-  });
-  map.on('mouseleave', CHANGE_FILL, () => {
-    map.getCanvas().style.cursor = '';
-  });
 }

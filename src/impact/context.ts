@@ -1,7 +1,8 @@
 /**
  * Build a `BoundarySelectionContext` from a clicked map feature.
  *
- * Each boundary layer's `bindPopups` handler has the clicked feature's
+ * Each boundary layer's registered click target (the
+ * InteractionCoordinator's `respond`) has the committed feature's
  * properties and geometry plus the click `lngLat`. This module turns that into
  * the typed context the briefing composer consumes: it resolves a display
  * title per boundary kind, attaches the representation caveat for Tribal and
@@ -81,6 +82,19 @@ function resolveTitle(kind: BoundaryKind, props: GeoJsonProperties): string {
     case 'watershed':
       return firstString(props, ['name', 'NAME']) ?? 'Watershed';
   }
+}
+
+/**
+ * The display title a boundary click resolves for a feature, exposed so
+ * the InteractionCoordinator can label a not-yet-committed hit in its
+ * "Other map features here" disclosure without building the full
+ * selection context (no geometry walk).
+ */
+export function resolveBoundaryTitle(
+  kind: BoundaryKind,
+  props: GeoJsonProperties
+): string {
+  return resolveTitle(kind, props);
 }
 
 /**

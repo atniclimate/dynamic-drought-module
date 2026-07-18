@@ -22,14 +22,13 @@
  * (where it belongs) and the MapLibre paint expression trivial.
  */
 
-import maplibregl from 'maplibre-gl';
+import type maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection, GeoJsonProperties, Geometry } from 'geojson';
 import { URLS } from '../config/urls';
 import { TREATY_COLOR_DEFAULT, pickTreatyColor } from '../config/palette';
 import { buildTreatyPopupHtml } from '../ui/popups';
-import { attachImpactTrigger } from '../ui/impact-panel';
 import { buildBoundaryContext } from '../impact/context';
-import { emphasizePlace } from '../state/place-emphasis';
+import { registerClickTarget } from '../map/interaction-coordinator';
 import { registry } from '../state/registry';
 import { fetchWithBudget } from '../util/fetch';
 
@@ -209,23 +208,23 @@ export function deactivate(map: maplibregl.Map): void {
  * that Treaty outlines are interactive even though they are hollow.
  */
 export function bindPopups(map: maplibregl.Map): void {
-  map.on('click', OUTLINE_LAYER_ID, (e) => {
-    const feature = e.features && e.features[0];
-    if (!feature) return;
-    emphasizePlace(map, SOURCE_ID, feature.id);
-
-    const props: GeoJsonProperties = feature.properties ?? {};
-    const featureName = pickTreatyName(props) ?? 'Treaty Area';
-    const html = buildTreatyPopupHtml(props, featureName);
-
-    const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true })
-      .setLngLat(e.lngLat)
-      .setHTML(html)
-      .addTo(map);
-    attachImpactTrigger(
-      popup,
-      buildBoundaryContext('treaty', props, feature.geometry, e.lngLat, featureName)
-    );
+  registerClickTarget({
+    kind: 'treaty-cession',
+    layerIds: [OUTLINE_LAYER_ID],
+    label: (feature) => pickTreatyName(feature.properties ?? {}) ?? 'Treaty Area',
+    respond: (feature, click) => {
+      const props: GeoJsonProperties = feature.properties ?? {};
+      const featureName = pickTreatyName(props) ?? 'Treaty Area';
+      return {
+        content: buildTreatyPopupHtml(props, featureName),
+        selection: buildBoundaryContext('treaty', props, feature.geometry, click.lngLat, featureName),
+        // An id-less feature clears any prior emphasis (the old
+        // emphasizePlace contract) rather than lighting an unknown one.
+        emphasis: feature.id === undefined || feature.id === null
+          ? []
+          : [{ source: SOURCE_ID, id: feature.id }]
+      };
+    }
   });
 
   map.on('mouseenter', OUTLINE_LAYER_ID, () => {

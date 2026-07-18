@@ -23,10 +23,11 @@
  * `fetchWithBudget`, late responses dropped.
  */
 
-import maplibregl from 'maplibre-gl';
+import type maplibregl from 'maplibre-gl';
 import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
+import { registerClickTarget } from '../map/interaction-coordinator';
 import {
   SPC_FIREWX_CATEGORIES,
   SPC_FIREWX_DEFAULT_COLOR
@@ -203,18 +204,26 @@ export function deactivate(map: maplibregl.Map): void {
 }
 
 /**
- * Wire the click-to-popup handler and hover cursor affordance on the fill
- * layer. Bound once at boot, independent of activation.
+ * Register the fill layer's click target with the InteractionCoordinator
+ * (one response per click; D-0.7.0-058 ruling 5) and wire the hover
+ * cursor affordance. Bound once on first activation.
  */
 export function bindPopups(map: maplibregl.Map): void {
-  map.on('click', FILL_LAYER_ID, (e) => {
-    const feature = e.features?.[0];
-    if (!feature) return;
-    const props: GeoJsonProperties = feature.properties ?? null;
-    new maplibregl.Popup({ closeButton: true, closeOnClick: true })
-      .setLngLat(e.lngLat)
-      .setHTML(buildSpcFireWeatherPopupHtml(categoryLabel(props?.dn), props))
-      .addTo(map);
+  registerClickTarget({
+    // A Day 1 outlook polygon is a broad condition surface (LAYER_DEFS
+    // role: 'surface'), not a direct point target: ranked last so it
+    // never blankets sovereign geography (the precedence table's stated
+    // rationale; corrected from 'point-event' at the 2026-07-17
+    // adversarial pass, finding 4).
+    kind: 'condition-surface',
+    layerIds: [FILL_LAYER_ID],
+    label: (feature) => `${categoryLabel(feature.properties?.['dn'])} fire weather`,
+    respond: (feature) => {
+      const props: GeoJsonProperties = feature.properties ?? null;
+      return {
+        content: buildSpcFireWeatherPopupHtml(categoryLabel(props?.dn), props)
+      };
+    }
   });
 
   map.on('mouseenter', FILL_LAYER_ID, () => {

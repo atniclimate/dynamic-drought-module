@@ -23,11 +23,12 @@
  * states.ts.
  */
 
-import maplibregl from 'maplibre-gl';
+import type maplibregl from 'maplibre-gl';
 import type { FeatureCollection } from 'geojson';
 
 import { URLS } from '../config/urls';
 import { PLACE_LABEL_COLOR, PLACE_LABEL_HALO } from '../config/palette';
+import { registerClickTarget } from '../map/interaction-coordinator';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 
@@ -162,17 +163,26 @@ export function deactivate(map: maplibregl.Map): void {
  * (TODO), recorded rather than half-solved here.
  */
 export function bindPopups(map: maplibregl.Map): void {
-  map.on('click', LABEL_LAYER_ID, (e) => {
-    const feature = e.features?.[0];
-    const name = feature?.properties?.['name'];
-    if (typeof name !== 'string' || name.trim() === '') return;
-    const el = document.createElement('div');
-    el.className = 'place-name-popup';
-    el.textContent = name;
-    new maplibregl.Popup({ closeButton: false, offset: 10 })
-      .setLngLat(e.lngLat)
-      .setDOMContent(el)
-      .addTo(map);
+  registerClickTarget({
+    kind: 'point-event',
+    layerIds: [LABEL_LAYER_ID],
+    // An unnamed label offers nothing; a null label skips the hit in
+    // arbitration entirely (the old handler's early return).
+    label: (feature) => {
+      const name = feature.properties?.['name'];
+      return typeof name === 'string' && name.trim() !== '' ? name : null;
+    },
+    respond: (feature) => {
+      const name = feature.properties?.['name'];
+      if (typeof name !== 'string' || name.trim() === '') return null;
+      const el = document.createElement('div');
+      el.className = 'place-name-popup';
+      el.textContent = name;
+      return {
+        content: el,
+        popupOptions: { closeButton: false, offset: 10 }
+      };
+    }
   });
   map.on('mouseenter', LABEL_LAYER_ID, () => {
     map.getCanvas().style.cursor = 'pointer';

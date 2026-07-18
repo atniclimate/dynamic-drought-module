@@ -1849,6 +1849,52 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   letter-spacing: 0.01em;
 }
 
+/* The InteractionCoordinator's lower-priority-hits escape hatch: a quiet
+   disclosure inside the one response (D-0.7.0-058 ruling 5). Native
+   details/summary keeps it keyboard and touch reachable for free. */
+.popup-other-features {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.popup-other-features > summary {
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: var(--fw-strong);
+  color: var(--fg-2);
+  letter-spacing: 0.01em;
+  list-style-position: inside;
+}
+.popup-other-features > summary:hover,
+.popup-other-features > summary:focus-visible {
+  color: var(--fg-0);
+}
+.popup-other-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+.popup-other-item {
+  appearance: none;
+  text-align: left;
+  background: var(--bg-0);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  font-weight: var(--fw-body);
+  color: var(--fg-1);
+  cursor: pointer;
+}
+.popup-other-item:hover,
+.popup-other-item:focus-visible {
+  color: var(--fg-0);
+  border-color: var(--line-strong);
+}
+
 /* Custom telemetry markers */
 .telemetry-marker {
   background: transparent;

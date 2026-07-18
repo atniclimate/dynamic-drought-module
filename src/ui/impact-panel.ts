@@ -24,8 +24,6 @@
  * verified sources, then `refreshOpenBriefing` to re-render in place.
  */
 
-import type maplibregl from 'maplibre-gl';
-
 import { createBriefingSkeleton } from '../impact/briefing';
 import { hydrateBriefing } from '../impact/hydrate';
 import { loadFederalResources, resourcesForIdentity } from '../impact/resource-catalog';
@@ -709,58 +707,10 @@ export function closeImpactPanel(): void {
   }, 260);
 }
 
-/**
- * Wire a boundary popup's "Drought impact briefing" button to open the panel.
- * Call after `popup.addTo(map)`. The button markup (carrying the
- * `data-ddm-impact-trigger` attribute) is emitted by the popup factories in
- * `src/ui/popups.ts`. Clicking it opens the panel and closes the popup so the
- * panel is the focus.
- */
-export function attachImpactTrigger(
-  popup: maplibregl.Popup,
-  context: BoundarySelectionContext
-): void {
-  // A selected boundary becomes the current "place" so the sidebar front-door
-  // trigger can offer "See what this means" for it (F3; appendix D). Cleared on
-  // popup close so no stale place lingers, BUT only if this popup's selection is
-  // still current: a rapid click on another boundary sets a new place and closes
-  // this popup, and the two events can arrive in either order, so the close must
-  // not clobber a newer selection.
-  const selection: PlaceSelection = { label: context.title, context };
-  setPlaceSelection(selection);
-
-  // U2 (ratified detent model): below 720px in Brief mode, floating
-  // popups are suppressed and a boundary tap routes to the sheet: the
-  // place selection above plus an immediate briefing open, which the
-  // sheet answers at the half detent (the at-hand block). The popup is
-  // removed before it ever paints (same task as its addTo), and its
-  // close-clears-selection handler is never registered on this path, so
-  // the selection persists as the sheet's subject. Console keeps its
-  // popups: the map is the instrument there.
-  if (isSheetActive() && getViewMode() === 'brief') {
-    popup.remove();
-    openImpactPanel(context);
-    return;
-  }
-
-  popup.on('close', () => {
-    if (getPlaceSelection() === selection) setPlaceSelection(null);
-  });
-
-  const wire = (): void => {
-    const el = popup.getElement();
-    if (!el) return;
-    const btn = el.querySelector<HTMLButtonElement>('[data-ddm-impact-trigger]');
-    if (!btn) return;
-    btn.addEventListener('click', () => {
-      openImpactPanel(context);
-      popup.remove();
-    });
-  };
-  // The popup element exists once it is on the map; if not yet, wire on open.
-  if (popup.getElement()) {
-    wire();
-  } else {
-    popup.once('open', wire);
-  }
-}
+// The former `attachImpactTrigger(popup, context)` facade was retired by
+// the InteractionCoordinator unit (D-0.7.0-058 ruling 5): the coordinator
+// (src/map/interaction-coordinator.ts) now owns the one click response,
+// so it sets the place selection, routes the active mobile Brief sheet,
+// wires the `[data-ddm-impact-trigger]` button, and clears the selection
+// on response close (only if still current). The facade-freeze record of
+// the removal is docs/facade-freeze.md with the ADR 0001 note.

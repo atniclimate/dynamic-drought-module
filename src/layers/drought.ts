@@ -33,10 +33,11 @@
  * areas render nothing, matching CPC's own blank.
  */
 
-import maplibregl from 'maplibre-gl';
+import type maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
+import { registerClickTarget } from '../map/interaction-coordinator';
 import { registry } from '../state/registry';
 import { requestLayerOn } from '../ui/layer-toggle-command';
 import { timeline, type OutlookRange } from '../state/timeline';
@@ -403,15 +404,24 @@ function buildOutlookPopupHtml(props: GeoJsonProperties): string {
   `;
 }
 
-/** Wire click handlers on the hatched fill (cursor pattern per treaty.ts). */
+/**
+ * Register the hatched fill's click target with the
+ * InteractionCoordinator (one response per click; D-0.7.0-058 ruling 5;
+ * condition surfaces rank last so they never blanket a boundary).
+ */
 export function bindPopups(map: maplibregl.Map): void {
-  map.on('click', FILL_LAYER_ID, (e) => {
-    const feature = e.features && e.features[0];
-    if (!feature) return;
-    new maplibregl.Popup({ closeButton: true, closeOnClick: true })
-      .setLngLat(e.lngLat)
-      .setHTML(buildOutlookPopupHtml(feature.properties ?? {}))
-      .addTo(map);
+  registerClickTarget({
+    kind: 'condition-surface',
+    layerIds: [FILL_LAYER_ID],
+    label: (feature) => {
+      const cls = feature.properties?.['outlook'];
+      return typeof cls === 'string' && cls.trim() !== ''
+        ? `Drought outlook: ${cls}`
+        : 'Drought outlook';
+    },
+    respond: (feature) => ({
+      content: buildOutlookPopupHtml(feature.properties ?? {})
+    })
   });
   map.on('mouseenter', FILL_LAYER_ID, () => {
     map.getCanvas().style.cursor = 'pointer';

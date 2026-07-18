@@ -9,10 +9,13 @@
  * reads to lift its fill opacity and outline weight.
  *
  * Two seams drive it, kept deliberately apart:
- *   - SET happens where the feature id is known: each boundary layer's click
- *     handler (`e.features[0].id`) and the search-locate path (the BIA layer's
- *     `LARID`, stable via `promoteId`). The place-selection store carries only
- *     a display context, not a feature id, so it cannot drive the set.
+ *   - SET happens where the feature id is known: the
+ *     InteractionCoordinator's place-bearing commits (each boundary
+ *     registration supplies its emphasis targets; a place commit with
+ *     none clears the prior subject's) and the search-locate path (the
+ *     BIA layer's `LARID`, stable via `promoteId`). The place-selection
+ *     store carries only a display context, not a feature id, so it
+ *     cannot drive the set.
  *   - CLEAR happens when the selection ends: `initPlaceEmphasis` subscribes to
  *     the place-selection store and drops the emphasis the moment the store
  *     goes null (popup or briefing closed). A selection replaced by another
@@ -89,6 +92,15 @@ export function emphasizePlaces(
   }
   for (const target of targets) applyState(map, target, true);
   current = [...targets];
+}
+
+/**
+ * The currently emphasized feature identities (empty when nothing is
+ * lit). The InteractionCoordinator reads this to rank a click that
+ * falls on the already selected place ('selected-place' promotion).
+ */
+export function getEmphasisTargets(): readonly EmphasisTarget[] {
+  return current;
 }
 
 /** Clear any current emphasis. Safe to call when nothing is lit. */

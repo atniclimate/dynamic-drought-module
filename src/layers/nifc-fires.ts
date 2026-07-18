@@ -37,10 +37,11 @@
  * origin in the popup.
  */
 
-import maplibregl from 'maplibre-gl';
+import type maplibregl from 'maplibre-gl';
 import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
+import { registerClickTarget } from '../map/interaction-coordinator';
 import { escapeHtml } from '../util/escape';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
@@ -323,25 +324,25 @@ function buildNifcPopupHtml(props: GeoJsonProperties): string {
 }
 
 /**
- * Wire a click handler on the fill layer that opens a MapLibre popup with
- * incident metadata for the clicked perimeter. Cursor affordance switches
- * to pointer on hover so users see that perimeters are interactive.
+ * Register the perimeter fill's click target with the
+ * InteractionCoordinator (one response per click; D-0.7.0-058 ruling 5).
+ * Cursor affordance switches to pointer on hover so users see that
+ * perimeters are interactive.
  */
 export function bindPopups(map: maplibregl.Map): void {
-  map.on('click', FILL_LAYER_ID, (e) => {
-    const feature = e.features && e.features[0];
-    if (!feature) return;
+  registerClickTarget({
+    kind: 'point-event',
+    layerIds: [FILL_LAYER_ID],
+    label: (feature) => pickIncidentName(feature.properties ?? {}),
     // B1 fire-in-context: the incident metadata, then a composed read of the
     // drought class beneath the clicked point and the nearest telemetry
     // stations. The context block composes existing surfaces only; it does not
     // compute a fire outlook (that lands in 0.8.0).
-    const html =
-      buildNifcPopupHtml(feature.properties ?? {}) +
-      buildFireContextHtml(map, e.point, e.lngLat);
-    new maplibregl.Popup({ closeButton: true, closeOnClick: true })
-      .setLngLat(e.lngLat)
-      .setHTML(html)
-      .addTo(map);
+    respond: (feature, click, m) => ({
+      content:
+        buildNifcPopupHtml(feature.properties ?? {}) +
+        buildFireContextHtml(m, click.point, click.lngLat)
+    })
   });
 
   map.on('mouseenter', FILL_LAYER_ID, () => {

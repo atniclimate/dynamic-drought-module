@@ -20,10 +20,11 @@
  * label glyphs, a legend registration, and a click popup.
  */
 
-import maplibregl from 'maplibre-gl';
+import type maplibregl from 'maplibre-gl';
 import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
+import { registerClickTarget } from '../map/interaction-coordinator';
 import { escapeHtml } from '../util/escape';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
@@ -238,17 +239,30 @@ function buildHmsPopupHtml(props: GeoJsonProperties): string {
 }
 
 /**
- * Wire the click popup and hover cursor on the smoke fill, matching the
+ * Register the smoke fill's click target with the InteractionCoordinator
+ * (one response per click; D-0.7.0-058 ruling 5), matching the
  * nifc-fires interaction pattern.
  */
 export function bindPopups(map: maplibregl.Map): void {
-  map.on('click', FILL_LAYER_ID, (e) => {
-    const feature = e.features && e.features[0];
-    if (!feature) return;
-    new maplibregl.Popup({ closeButton: true, closeOnClick: true })
-      .setLngLat(e.lngLat)
-      .setHTML(buildHmsPopupHtml(feature.properties ?? {}))
-      .addTo(map);
+  registerClickTarget({
+    // PROPOSED rank (2026-07-17 adversarial pass, finding 4; maintainer
+    // may reverse with a one-line change): a smoke plume can span
+    // states, so despite the LAYER_DEFS 'event' role it behaves as a
+    // blanketing contextual surface at click time; ranking it
+    // 'point-event' would make every boundary under a plume unreachable
+    // except through the disclosure. The table names perimeters and
+    // alerts as direct targets; it does not name plumes.
+    kind: 'condition-surface',
+    layerIds: [FILL_LAYER_ID],
+    label: (feature) => {
+      const density = feature.properties?.['Density'];
+      return typeof density === 'string' && density.trim() !== ''
+        ? `${density} smoke`
+        : 'Smoke plume';
+    },
+    respond: (feature) => ({
+      content: buildHmsPopupHtml(feature.properties ?? {})
+    })
   });
 
   map.on('mouseenter', FILL_LAYER_ID, () => {

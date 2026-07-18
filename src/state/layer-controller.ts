@@ -149,10 +149,12 @@ export function createLayerController(
   }
 
   /**
-   * Bind a layer's popup click handlers on its first activation. Popups are no
-   * longer bound at boot (that would pull every layer module into the initial
-   * bundle); binding once here, guarded, matches the old survive-toggle-cycles
-   * behavior, and MapLibre tolerates a handler bound before its layer exists.
+   * Run a layer's `bindPopups` on its first activation: the module
+   * registers its click target with the InteractionCoordinator (one
+   * response per click; no layer binds its own map click handler) and
+   * wires hover cursors. Not run at boot (that would pull every layer
+   * module into the initial bundle); once here, guarded, survives
+   * toggle cycles, and registration order never affects arbitration.
    */
   function ensurePopupsBound(key: string, mod: LayerModule): void {
     if (popupsBound.has(key)) return;

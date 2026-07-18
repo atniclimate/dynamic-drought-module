@@ -21,14 +21,13 @@
  * the Pacific Northwest (PNW) by the deployer.
  */
 
-import maplibregl from 'maplibre-gl';
+import type maplibregl from 'maplibre-gl';
 import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 import { URLS } from '../config/urls';
 import { TRIBAL_FILL_COLOR, TRIBAL_OUTLINE_COLOR } from '../config/palette';
 import { buildTribalPopupHtml } from '../ui/popups';
-import { attachImpactTrigger } from '../ui/impact-panel';
-import { buildBoundaryContext } from '../impact/context';
-import { emphasizePlace } from '../state/place-emphasis';
+import { buildBoundaryContext, resolveBoundaryTitle } from '../impact/context';
+import { registerClickTarget } from '../map/interaction-coordinator';
 import { registry } from '../state/registry';
 import { fetchWithBudget } from '../util/fetch';
 
@@ -218,20 +217,22 @@ export function deactivate(map: maplibregl.Map): void {
  * (LARName / NAME / TRIBE / etc.) and HTML escaping; this function only
  * extracts the first feature's properties and forwards them.
  */
-export function bindPopups(map: maplibregl.Map): void {
-  map.on('click', FILL_LAYER_ID, (e) => {
-    const feature = e.features?.[0];
-    if (!feature) return;
-    emphasizePlace(map, SOURCE_ID, feature.id);
-    const props: GeoJsonProperties = feature.properties ?? null;
-
-    const popup = new maplibregl.Popup({ closeOnClick: true })
-      .setLngLat(e.lngLat)
-      .setHTML(buildTribalPopupHtml(props))
-      .addTo(map);
-    attachImpactTrigger(
-      popup,
-      buildBoundaryContext('tribal', props, feature.geometry, e.lngLat)
-    );
+export function bindPopups(_map: maplibregl.Map): void {
+  registerClickTarget({
+    kind: 'tribal-lands',
+    layerIds: [FILL_LAYER_ID],
+    label: (feature) => resolveBoundaryTitle('tribal', feature.properties ?? null),
+    respond: (feature, click) => {
+      const props: GeoJsonProperties = feature.properties ?? null;
+      return {
+        content: buildTribalPopupHtml(props),
+        selection: buildBoundaryContext('tribal', props, feature.geometry, click.lngLat),
+        // An id-less feature clears any prior emphasis (the old
+        // emphasizePlace contract) rather than lighting an unknown one.
+        emphasis: feature.id === undefined || feature.id === null
+          ? []
+          : [{ source: SOURCE_ID, id: feature.id }]
+      };
+    }
   });
 }
