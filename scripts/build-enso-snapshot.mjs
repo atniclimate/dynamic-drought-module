@@ -32,13 +32,15 @@ import { dirname, join } from 'node:path';
 
 const ONI_URL = 'https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt';
 const RONI_URL = 'https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt';
-// The official CPC/IRI consensus probabilistic ENSO outlook (the plume). This
-// is the RESOLVED data page; the sibling .../roni/probabilities.php is a
-// meta-refresh SHELL that returns 200 with no table, and Node fetch does not
-// follow meta-refresh, so it must never be used here (verified 2026-07-06,
-// ddm-source-verifier; the stamp lives on URLS.cpcEnsoProbabilities).
-const PROBABILITIES_URL =
-  'https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/probabilities/';
+// REMOVED 2026-07-21 (D-0.8.0-011 finding 3, built as T-P0-1): the CPC
+// probabilistic-outlook plume was scraped from an HTML table here, which
+// violates the no-scraping doctrine (CLAUDE.md hard rule 2 scope; the
+// anti-scrape doctrine in ddm-climate-data-sources). CPC publishes the
+// probabilities as HTML only, with no documented machine feed. The snapshot
+// is now indices-only; the app renders the honest no-plume state. The plume
+// returns only via a documented machine endpoint if CPC ships one, or as an
+// explicitly-labeled MODELED NMME ensemble plume once its redistribution
+// license verifies (workplan T-V0-3 / U-ENSO-REPAIR).
 const RECENT_SEASONS = 36; // about three years of overlapping seasons
 const THRESHOLD = 0.5;
 const RUN_LENGTH = 5; // consecutive overlapping seasons to declare an event
@@ -96,60 +98,8 @@ async function fetchIndex(url) {
   };
 }
 
-/**
- * Scrape the CPC probabilities table (9 overlapping 3-month seasons, integer
- * percent chances in La Nina / Neutral / El Nino column order, per the
- * verified shape). Returns null on any failure or short parse so a CPC page
- * blip degrades the snapshot to indices-only rather than failing the build;
- * the app renders no plume when the block is absent (honest absence).
- */
-async function fetchProbabilities() {
-  try {
-    const resp = await fetch(PROBABILITIES_URL);
-    if (!resp.ok) throw new Error(`fetch failed: HTTP ${resp.status}`);
-    const html = await resp.text();
-
-    const tableMatch = /<table id="probabilities-table">([\s\S]*?)<\/table>/.exec(html);
-    if (!tableMatch) throw new Error('probabilities table not found in page source');
-
-    const seasons = [];
-    const rowRe =
-      /<tr>\s*<th scope="row">\s*<abbr>\s*([A-Z]{3})[\s\S]*?<\/th>\s*<td>(\d+)<\/td>\s*<td>(\d+)<\/td>\s*<td>(\d+)<\/td>\s*<\/tr>/g;
-    let row;
-    while ((row = rowRe.exec(tableMatch[1])) !== null) {
-      seasons.push({
-        seas: row[1],
-        laNina: Number(row[2]),
-        neutral: Number(row[3]),
-        elNino: Number(row[4])
-      });
-    }
-    if (seasons.length < 6) {
-      throw new Error(`parsed only ${seasons.length} probability rows; expected about 9`);
-    }
-
-    const issuedMatch = /<h2>\s*Issued\s+([^<]+?)\s*<\/h2>/i.exec(html);
-
-    return {
-      source: 'NOAA CPC official probabilistic ENSO outlook (CPC/IRI consensus)',
-      sourceUrl: PROBABILITIES_URL,
-      issued: issuedMatch ? issuedMatch[1] : null,
-      baseline:
-        '1991-2020 climatology, Nino 3.4 region (170-120W, 5S-5N), +/-0.5 C thresholds, verified against the Relative ONI',
-      seasons
-    };
-  } catch (err) {
-    console.warn(`ENSO probabilities scrape failed (snapshot will omit the plume): ${err.message}`);
-    return null;
-  }
-}
-
 async function main() {
-  const [oni, roni, probabilities] = await Promise.all([
-    fetchIndex(ONI_URL),
-    fetchIndex(RONI_URL),
-    fetchProbabilities()
-  ]);
+  const [oni, roni] = await Promise.all([fetchIndex(ONI_URL), fetchIndex(RONI_URL)]);
 
   const snapshot = {
     retrieved: new Date().toISOString().slice(0, 10),
@@ -170,8 +120,7 @@ async function main() {
       phase: roni.phase,
       latest: roni.latest,
       values: roni.values
-    },
-    ...(probabilities ? { probabilities } : {})
+    }
   };
 
   await mkdir(DATA_DIR, { recursive: true });
@@ -182,9 +131,7 @@ async function main() {
   console.log(
     `Wrote ${OUT_PATH}: ONI phase=${oni.phase} latest=${oni.latest.seas} ${oni.latest.year} ${oni.latest.anom}; ` +
       `RONI phase=${roni.phase} latest=${roni.latest.seas} ${roni.latest.year} ${roni.latest.anom}; ` +
-      (probabilities
-        ? `probabilities ${probabilities.seasons.length} seasons (issued ${probabilities.issued ?? 'unknown'}).`
-        : 'probabilities OMITTED (scrape failed).')
+      'indices-only (the probabilistic plume was removed 2026-07-21, T-P0-1; no machine feed exists).'
   );
 }
 

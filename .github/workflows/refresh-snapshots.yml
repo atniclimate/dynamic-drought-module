@@ -24,8 +24,10 @@ on:
 permissions:
   contents: write
   # Raise a GitHub issue when a scheduled rebuild fails (critical-review #12).
-  # A silent `build:enso` failure (a CPC scrape drift) or a suspended workflow
-  # otherwise lets the snapshot age past its 45-day hedge unnoticed.
+  # A silent `build:enso` failure (a CPC ascii-table drift) or a suspended
+  # workflow otherwise lets the snapshot age past its 45-day hedge unnoticed.
+  # (The snapshot is indices-only since 2026-07-21, T-P0-1; the HTML
+  # probabilities scrape was removed per the anti-scrape doctrine.)
   issues: write
 
 jobs:
@@ -81,8 +83,8 @@ jobs:
               '',
               `Failed run: ${runUrl}`,
               '',
-              '_This issue auto-closes on the next successful refresh. Likely cause: a CPC page',
-              'scrape drift in `scripts/build-enso-snapshot.mjs`, or a suspended workflow._'
+              '_This issue auto-closes on the next successful refresh. Likely cause: a CPC',
+              'ascii index-table drift in `scripts/build-enso-snapshot.mjs`, or a suspended workflow._'
             ].join('\n');
             const open = await github.rest.issues.listForRepo({
               owner: context.repo.owner, repo: context.repo.repo,

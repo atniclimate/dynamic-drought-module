@@ -38,8 +38,11 @@ interface IndexSeries {
   readonly values: OniPoint[];
 }
 
-/** The optional CPC probabilities block (present when the build-time scrape
- * succeeded; absent is an honest no-plume state, never an error). */
+/** The optional probabilities block. The CPC HTML scrape that once produced
+ * it was REMOVED 2026-07-21 (T-P0-1; anti-scrape doctrine), so current
+ * snapshots never carry it; absent is the honest no-plume state, never an
+ * error. The shape is kept for a future documented machine feed or an
+ * explicitly-labeled modeled NMME plume (workplan T-V0-3 / U-ENSO-REPAIR). */
 interface EnsoProbabilities {
   readonly sourceUrl: string;
   readonly issued: string | null;
@@ -309,8 +312,9 @@ export async function fetchEnsoClaims(
       compare: { values: snap.roni.values, label: 'RONI' }
     });
 
-    // The forward plume (odds by season), when the build-time scrape landed.
-    // Absent probabilities are an honest no-plume state, not an error.
+    // The forward plume (odds by season), only if a future snapshot carries a
+    // probabilities block from a documented machine source (the HTML scrape
+    // was removed 2026-07-21, T-P0-1). Absence is the honest no-plume state.
     const plumeClaims = [];
     if (snap.probabilities) {
       const p = snap.probabilities;

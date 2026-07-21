@@ -870,24 +870,13 @@ export const URLS = Object.freeze({
   cpcWeeklySstAnomalyMapServer:
     'https://mapservices.weather.noaa.gov/raster/rest/services/climate/cpc_wkly_sst/MapServer',
 
-  // ---------- CPC official ENSO probabilities (B2, build-time snapshot source) ----------
-  // The CPC/IRI consensus probabilistic ENSO outlook: 9 overlapping 3-month
-  // seasons, integer percent chances of La Nina / Neutral / El Nino. Consumed
-  // ONLY by scripts/build-enso-snapshot.mjs at build time (Node fetch; CORS
-  // not applicable); the browser reads the bundled snapshot.
-  // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, text/html.
-  // CAVEAT (load-bearing, adversarial finding): the sibling
-  // .../roni/probabilities.php URL returns 200 but is a META-REFRESH SHELL
-  // with no data (Node fetch does not follow meta-refresh); fetch THIS
-  // resolved URL, never the .php shell. Shape: server-rendered <table
-  // id="probabilities-table">, header row Season / La Nina / Neutral /
-  // El Nino, 9 rows (MJJ through JFM), 3 integer percent cells each; no
-  // inline JSON, no client-side fetch. Issued monthly (2nd Thursday, with
-  // the ENSO Diagnostics Discussion). Baseline stated on page: 1991-2020,
-  // Nino-3.4 region (170-120W, 5S-5N), +/-0.5 C thresholds, verified
-  // against the Relative ONI.
-  cpcEnsoProbabilities:
-    'https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/probabilities/',
+  // ---------- CPC official ENSO probabilities (REMOVED; tombstone) ----------
+  // REMOVED 2026-07-21 (T-P0-1, D-0.8.0-011 finding 3): cpcEnsoProbabilities,
+  // the CPC probabilistic-outlook page. It is HTML-only (a server-rendered
+  // table, no documented machine feed), so the build-time consumer was a
+  // scrape, contrary to the anti-scrape doctrine. The ENSO snapshot is
+  // indices-only; a plume returns only via a documented CPC machine endpoint
+  // or an explicitly-labeled modeled NMME ensemble (workplan T-V0-3).
 
   // ---------- B3 coupled-hazards slate (all five verified 2026-07-06) ----------
   // Per the ratified B3 discipline: the pipeline ran against all five

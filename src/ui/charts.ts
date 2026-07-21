@@ -326,7 +326,11 @@ export function oniLineSvg(values: readonly OniPoint[], opts: OniLineOptions): s
 }
 
 // ---------------------------------------------------------------------------
-// ENSO probability plume (CPC/IRI consensus outlook)
+// ENSO probability plume (DORMANT since 2026-07-21, T-P0-1: the CPC HTML
+// scrape that fed it was removed per the anti-scrape doctrine, so no current
+// snapshot carries a probabilities block and this chart never renders. The
+// machinery is reserved for a documented machine feed or an explicitly-labeled
+// modeled NMME ensemble (workplan T-V0-3 / U-ENSO-REPAIR).
 // ---------------------------------------------------------------------------
 
 export interface EnsoPlumePoint {
