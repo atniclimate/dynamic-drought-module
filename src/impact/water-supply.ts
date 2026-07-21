@@ -25,6 +25,7 @@
 
 import { URLS } from '../config/urls';
 import { fetchWithBudget } from '../util/fetch';
+import { makeClaim, todayIso } from './evidence';
 import { resolveStateCode } from './resources';
 import type { BoundarySelectionContext, SourcedClaim } from './types';
 import type { SourceResult } from './sources';
@@ -219,26 +220,38 @@ export async function fetchWaterSupplyClaims(
 
   const location = titleCase(row.location);
   const stationUrl = `https://www.nwrfc.noaa.gov/water_supply/ws_forecasts.php?id=${encodeURIComponent(point)}`;
+  // Shared contract fields: `FcstDate` echoes the requested date (ISO), so it
+  // is the issue date of the report both claims read from.
+  const wsShared = {
+    source: 'NWRFC Water Supply Forecast',
+    sourceUrl: stationUrl,
+    dates: { issued: row.fcstDate, retrieved: todayIso() },
+    support: { reporting: `the ${location} basin forecast point (${point})` },
+    method: { baseline: '1991-2020 normal' }
+  } as const;
   const claims: SourcedClaim[] = [];
 
   if (row.runoffToDatePct !== null) {
-    claims.push({
-      text: `Observed water-year runoff to date at the ${location} forecast point is ${row.runoffToDatePct} percent of the 1991-2020 normal.`,
-      source: 'NWRFC Water Supply Forecast',
-      sourceUrl: stationUrl,
-      kind: 'observation'
-    });
+    claims.push(
+      makeClaim({
+        text: `Observed water-year runoff to date at the ${location} forecast point is ${row.runoffToDatePct} percent of the 1991-2020 normal.`,
+        ...wsShared,
+        evidence: 'observed'
+      })
+    );
   }
 
-  claims.push({
-    text:
-      `The NWRFC April-September water-supply forecast at ${location} is ${row.pctOfNormal} percent of the 1991-2020 normal ` +
-      `(50 percent exceedance, issued ${row.fcstDate}). This is a basin-scale read at a named forecast point, not a site-specific value. ` +
-      supplyTilt(row.pctOfNormal),
-    source: 'NWRFC Water Supply Forecast',
-    sourceUrl: stationUrl,
-    kind: 'outlook'
-  });
+  claims.push(
+    makeClaim({
+      text:
+        `The NWRFC April-September water-supply forecast at ${location} is ${row.pctOfNormal} percent of the 1991-2020 normal ` +
+        `(50 percent exceedance, issued ${row.fcstDate}). This is a basin-scale read at a named forecast point, not a site-specific value. ` +
+        supplyTilt(row.pctOfNormal),
+      ...wsShared,
+      evidence: 'outlook',
+      uncertainty: { kind: 'range', text: 'the 50 percent exceedance value of an ensemble forecast; actual volumes have even odds of falling either side of it' }
+    })
+  );
 
   return { claims, ok: true };
 }

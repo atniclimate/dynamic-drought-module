@@ -26,6 +26,7 @@
 
 import { createBriefingSkeleton } from '../impact/briefing';
 import { hydrateBriefing } from '../impact/hydrate';
+import { renderClaim } from './claim-render';
 import { loadFederalResources, resourcesForIdentity } from '../impact/resource-catalog';
 import { resolveLocationIdentity } from '../state/location-identity';
 import { getMap } from '../state/map-store';
@@ -49,8 +50,7 @@ import type {
   HorizonStatus,
   ImpactBriefing,
   ResourceLink,
-  ResourceTier,
-  SourcedClaim
+  ResourceTier
 } from '../impact/types';
 import { escapeHtml } from '../util/escape';
 import { buildTribalNationsBriefAction } from './tribal-nations-action';
@@ -321,26 +321,9 @@ function getFocusable(container: HTMLElement): HTMLElement[] {
 // Rendering
 // ---------------------------------------------------------------------------
 
-/** Render a single sourced claim. Outlooks are visually distinct from observations. */
-function renderClaim(claim: SourcedClaim): string {
-  const kindClass = claim.kind === 'outlook' ? 'outlook' : 'observation';
-  const kindLabel = claim.kind === 'outlook' ? 'Outlook' : 'Observed';
-  const sourceHtml =
-    typeof claim.sourceUrl === 'string' && claim.sourceUrl.startsWith('https://')
-      ? `<a href="${escapeHtml(claim.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(claim.source)}</a>`
-      : escapeHtml(claim.source);
-  // chartSvg is trusted, self-generated markup from src/ui/charts.ts (never
-  // user-supplied), so it is injected as-is beneath the claim text.
-  const chart = claim.chartSvg ? `<div class="impact-claim-chart">${claim.chartSvg}</div>` : '';
-  return `
-    <div class="impact-claim impact-claim-${kindClass}">
-      <span class="impact-claim-badge">${escapeHtml(kindLabel)}</span>
-      <p class="impact-claim-text">${escapeHtml(claim.text)}</p>
-      ${chart}
-      <p class="impact-claim-source">Source: ${sourceHtml}</p>
-    </div>
-  `;
-}
+// renderClaim lives in src/ui/claim-render.ts (pure, DOM-free) so the
+// evidence-contract spec can import it without pulling this module's
+// application state; every claim below renders through it.
 
 /** Render one horizon section: heading, status pill, claims or honest state. */
 function renderHorizon(horizon: Horizon): string {

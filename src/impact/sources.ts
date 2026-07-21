@@ -26,6 +26,7 @@ import { fetchWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
 import { cpcOutlookBarsSvg, trendLineSvg, type TrendPoint } from '../ui/charts';
 import { categoryImpact } from './category-impacts';
+import { makeClaim, todayIso } from './evidence';
 import { contextStateFips, contextStateName } from './resources';
 import type { BoundarySelectionContext, SourcedClaim } from './types';
 
@@ -124,6 +125,16 @@ export async function fetchUsdmClaims(
   const url = `${URLS.usdmFeatureServer}/query?${esriPointQuery(lng, lat, 'DM').toString()}`;
   const source = 'U.S. Drought Monitor (NDMC / NOAA / USDA)';
   const sourceUrl = 'https://droughtmonitor.unl.edu/';
+  // The USDM is an expert-analyzed weekly product: evidence 'analyzed'. The
+  // point query returns only the DM category (no map date), so the date shown
+  // is the retrieval date; the prose already frames the read as "this week's".
+  const usdmShared = {
+    source,
+    sourceUrl,
+    evidence: 'analyzed',
+    dates: { retrieved: todayIso() },
+    support: { reporting: 'the USDM polygon at the clicked point' }
+  } as const;
 
   try {
     const json: unknown = await fetchJson(url, GEOJSON_ACCEPT, signal);
@@ -141,12 +152,10 @@ export async function fetchUsdmClaims(
       return {
         ok: true,
         claims: [
-          {
+          makeClaim({
             text: 'No drought category is mapped at this location in this week\'s U.S. Drought Monitor (conditions are better than D0, Abnormally Dry).',
-            source,
-            sourceUrl,
-            kind: 'observation'
-          }
+            ...usdmShared
+          })
         ]
       };
     }
@@ -156,12 +165,10 @@ export async function fetchUsdmClaims(
       return {
         ok: true,
         claims: [
-          {
+          makeClaim({
             text: `This location is in a mapped U.S. Drought Monitor category (DM ${worst}) this week.`,
-            source,
-            sourceUrl,
-            kind: 'observation'
-          }
+            ...usdmShared
+          })
         ]
       };
     }
@@ -169,24 +176,27 @@ export async function fetchUsdmClaims(
     return {
       ok: true,
       claims: [
-        {
+        makeClaim({
           text: `This location is in ${impact.code} ${impact.label} as of this week's U.S. Drought Monitor. ${impact.summary}`,
-          source,
-          sourceUrl,
-          kind: 'observation'
-        },
-        {
+          ...usdmShared
+        }),
+        // The wildfire and heat companions translate the analyzed category
+        // through the documented USDM impact profiles and the causal-chain
+        // reads in ddm-drought-impact-modeling: a DDM-derived read, labeled so.
+        makeClaim({
           text: `Wildfire: ${impact.wildfire} Drought raises the odds and the potential intensity of wildfire by drying and curing fuels; it does not by itself start fires.`,
-          source,
-          sourceUrl,
-          kind: 'observation'
-        },
-        {
+          ...usdmShared,
+          evidence: 'derived',
+          lineage: ['USDM category at the clicked point', 'documented USDM impact profiles and the ddm-drought-impact-modeling causal-chain reads'],
+          uncertainty: { kind: 'typical', text: 'an elevated-risk tendency at this category, not a certainty' }
+        }),
+        makeClaim({
           text: `Extreme heat: ${impact.heat}`,
-          source,
-          sourceUrl,
-          kind: 'observation'
-        }
+          ...usdmShared,
+          evidence: 'derived',
+          lineage: ['USDM category at the clicked point', 'documented USDM impact profiles and the ddm-drought-impact-modeling causal-chain reads'],
+          uncertainty: { kind: 'typical', text: 'an elevated-risk tendency at this category, not a certainty' }
+        })
       ]
     };
   } catch (err) {
@@ -202,6 +212,42 @@ export async function fetchUsdmClaims(
 
 function fmtUsdmDate(d: Date): string {
   return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+}
+
+/** A calendar day, free of any timezone interpretation. */
+interface CalendarDay {
+  readonly y: number;
+  readonly m: number;
+  readonly d: number;
+}
+
+/**
+ * Extract the calendar day of an upstream date string TEXTUALLY, without an
+ * instant round trip: `Date.parse` treats a date-only ISO string as UTC
+ * midnight while local getters read the viewer's zone, so mixing them can
+ * shift the shown day by one either side of UTC (the DG-080-REVIEW T-P0-2
+ * blocker: the prose and the Valid line could disagree on the same card).
+ * ISO (`2026-07-14...`) and US (`7/14/2026...`) forms are read as written;
+ * anything else falls back to the UTC calendar of the parsed instant so both
+ * derived forms still agree with each other.
+ */
+function calendarDayOf(s: string): CalendarDay | null {
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (iso) return { y: Number(iso[1]), m: Number(iso[2]), d: Number(iso[3]) };
+  const us = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s);
+  if (us) return { y: Number(us[3]), m: Number(us[1]), d: Number(us[2]) };
+  const t = Date.parse(s);
+  if (!Number.isFinite(t)) return null;
+  const dt = new Date(t);
+  return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+}
+
+function calendarToProse(c: CalendarDay): string {
+  return `${c.m}/${c.d}/${c.y}`;
+}
+
+function calendarToIso(c: CalendarDay): string {
+  return `${c.y}-${String(c.m).padStart(2, '0')}-${String(c.d).padStart(2, '0')}`;
 }
 
 /**
@@ -256,11 +302,18 @@ export async function fetchDsciTrendClaims(
 
     const rows = Array.isArray(json) ? json : [];
     const points: TrendPoint[] = [];
+    // The raw upstream date string per instant, so the shown dates can be
+    // derived from the source CALENDAR value rather than a timezone-sensitive
+    // instant round trip (see calendarDayOf).
+    const rawByT = new Map<number, string>();
     for (const r of rows) {
-      if (!isObject(r)) continue;
-      const t = typeof r.mapDate === 'string' ? Date.parse(r.mapDate) : NaN;
+      if (!isObject(r) || typeof r.mapDate !== 'string') continue;
+      const t = Date.parse(r.mapDate);
       const v = typeof r.dsci === 'number' ? r.dsci : Number(r.dsci);
-      if (Number.isFinite(t) && Number.isFinite(v)) points.push({ t, v });
+      if (Number.isFinite(t) && Number.isFinite(v)) {
+        points.push({ t, v });
+        rawByT.set(t, r.mapDate);
+      }
     }
     if (points.length < 2) {
       return { claims: [], ok: false, note: 'The USDM Data Services drought-severity series was unavailable.' };
@@ -272,9 +325,13 @@ export async function fetchDsciTrendClaims(
     const prior = points[Math.max(0, points.length - 12)]!.v;
     const delta = lastPoint.v - prior;
     const trendWord = Math.abs(delta) < 15 ? 'about steady' : delta > 0 ? 'rising' : 'easing';
-    // Carry the latest map date so the reading is dated, not asserted as "now"
-    // (the USGS popup and USDM point claim use the same dated framing).
-    const asOf = fmtUsdmDate(new Date(lastPoint.t));
+    // The latest map date, read once as a calendar value: the prose and the
+    // claim's `dates.valid` MUST agree (they are the same day, shown twice).
+    const lastCal = calendarDayOf(rawByT.get(lastPoint.t) ?? '');
+    if (!lastCal) {
+      return { claims: [], ok: false, note: 'The USDM Data Services drought-severity series was unavailable.' };
+    }
+    const asOf = calendarToProse(lastCal);
 
     const chartSvg = trendLineSvg(points, {
       title: `${stateName} drought severity (DSCI, 0 to 500) over the past year`,
@@ -283,16 +340,20 @@ export async function fetchDsciTrendClaims(
       source: 'USDM Data Services'
     });
 
+    // DSCI is computed by NDMC from the analyzed weekly USDM: 'analyzed'.
+    // The latest map date is the value's valid date; retrieval is now.
     return {
       ok: true,
       claims: [
-        {
+        makeClaim({
           text: `As of the ${asOf} map, statewide drought severity for ${stateName} (Drought Severity and Coverage Index, 0 to 500) is ${Math.round(lastPoint.v)} and has been ${trendWord} over recent weeks.`,
           source,
           sourceUrl,
-          kind: 'observation',
+          evidence: 'analyzed',
+          dates: { valid: calendarToIso(lastCal), retrieved: todayIso() },
+          support: { reporting: `statewide (${stateName})` },
           ...(chartSvg ? { chartSvg } : {})
-        }
+        })
       ]
     };
   } catch (err) {
@@ -332,7 +393,13 @@ export async function fetchNifcClaims(
       count === 0
         ? 'No active NIFC wildfire perimeters intersect this area right now.'
         : `${count} active wildfire ${count === 1 ? 'perimeter' : 'perimeters'} (NIFC) ${count === 1 ? 'intersects' : 'intersect'} this area right now.`;
-    return { ok: true, claims: [{ text, source, sourceUrl, kind: 'observation' }] };
+    // Mapped incident perimeters and their count: directly observed.
+    return {
+      ok: true,
+      claims: [
+        makeClaim({ text, source, sourceUrl, evidence: 'observed', dates: { retrieved: todayIso() } })
+      ]
+    };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
     console.warn('[impact] NIFC query failed.', err);
@@ -377,30 +444,33 @@ export async function fetchNwsAlertClaims(
 
     const fire = [...events].filter((e) => FIRE_EVENTS.includes(e));
     const heat = [...events].filter((e) => HEAT_EVENTS.includes(e));
+    // Whether an NWS alert is in effect at the point is a directly observed
+    // fact (the alert names quoted are verbatim upstream product names).
+    const alertShared = { source, sourceUrl, evidence: 'observed', dates: { retrieved: todayIso() } } as const;
     const claims: SourcedClaim[] = [];
     if (fire.length > 0) {
-      claims.push({
-        text: `A fire-weather alert is in effect here: ${fire.join(', ')}. This signals imminent fire-weather conditions (low humidity, wind, dry fuels).`,
-        source,
-        sourceUrl,
-        kind: 'observation'
-      });
+      claims.push(
+        makeClaim({
+          text: `A fire-weather alert is in effect here: ${fire.join(', ')}. This signals imminent fire-weather conditions (low humidity, wind, dry fuels).`,
+          ...alertShared
+        })
+      );
     }
     if (heat.length > 0) {
-      claims.push({
-        text: `An extreme-heat alert is in effect here: ${heat.join(', ')}. Heat raises drinking-water demand and human-health stress, and drought-dried soils amplify it.`,
-        source,
-        sourceUrl,
-        kind: 'observation'
-      });
+      claims.push(
+        makeClaim({
+          text: `An extreme-heat alert is in effect here: ${heat.join(', ')}. Heat raises drinking-water demand and human-health stress, and drought-dried soils amplify it.`,
+          ...alertShared
+        })
+      );
     }
     if (claims.length === 0) {
-      claims.push({
-        text: 'No active red-flag fire-weather or extreme-heat alerts at this location right now (NWS).',
-        source,
-        sourceUrl,
-        kind: 'observation'
-      });
+      claims.push(
+        makeClaim({
+          text: 'No active red-flag fire-weather or extreme-heat alerts at this location right now (NWS).',
+          ...alertShared
+        })
+      );
     }
     return { ok: true, claims };
   } catch (err) {
@@ -477,10 +547,12 @@ export async function fetchCpcOutlookClaims(
     { label: '8-14 day', base: URLS.cpc814OutlookMapServer }
   ];
 
-  const claims: SourcedClaim[] = [];
+  // Each settled claim carries its window's ordinal so chronological order
+  // never depends on the display copy (a wording change must not reorder).
+  const settled: Array<{ readonly ordinal: number; readonly claim: SourcedClaim }> = [];
   let anyFailed = false;
   await Promise.all(
-    windows.map(async ({ label, base }) => {
+    windows.map(async ({ label, base }, ordinal) => {
       try {
         // Fetch temperature and precipitation independently so one variable's
         // HTTP failure does not discard the other; a window still emits the
@@ -503,12 +575,17 @@ export async function fetchCpcOutlookClaims(
         const chartSvg = temp
           ? cpcOutlookBarsSvg({ variable: 'temperature', cat: temp.cat, prob: temp.prob, window: label })
           : undefined;
-        claims.push({
-          text: `CPC ${label} outlook: ${parts.join(', ')}.${interp ? ' ' + interp : ''}`,
-          source,
-          sourceUrl,
-          kind: 'outlook',
-          ...(chartSvg ? { chartSvg } : {})
+        settled.push({
+          ordinal,
+          claim: makeClaim({
+            text: `CPC ${label} outlook: ${parts.join(', ')}.${interp ? ' ' + interp : ''}`,
+            source,
+            sourceUrl,
+            evidence: 'outlook',
+            dates: { retrieved: todayIso() },
+            uncertainty: { kind: 'categorical', text: 'stated as tercile odds (above, near, or below normal), not a deterministic value' },
+            ...(chartSvg ? { chartSvg } : {})
+          })
         });
       } catch (err) {
         if (!signal.aborted) console.warn(`[impact] CPC ${label} outlook failed.`, err);
@@ -519,8 +596,8 @@ export async function fetchCpcOutlookClaims(
 
   if (signal.aborted) return { claims: [], ok: false };
   // Keep windows in chronological order (6-10 then 8-14) regardless of which
-  // promise settled first.
-  claims.sort((a, b) => a.text.localeCompare(b.text));
+  // promise settled first, by the declared window ordinal (never by text).
+  const claims = settled.sort((a, b) => a.ordinal - b.ordinal).map((s) => s.claim);
   if (claims.length === 0) {
     return { claims: [], ok: false, note: 'The CPC extended-range outlooks did not respond.' };
   }
@@ -580,12 +657,14 @@ export async function fetchNwsForecastClaims(
     return {
       ok: true,
       claims: [
-        {
+        makeClaim({
           text: `${name}: ${short || 'forecast available'}, near ${tempStr}. Watch this against the heat outlook; hot, dry spells deepen near-term dryness and fire danger.`,
           source,
           sourceUrl,
-          kind: 'outlook'
-        }
+          evidence: 'outlook',
+          dates: { retrieved: todayIso() },
+          uncertainty: { kind: 'not-quantified', text: 'a point weather forecast stated as a tendency; the NWS product publishes no uncertainty band here' }
+        })
       ]
     };
   } catch (err) {

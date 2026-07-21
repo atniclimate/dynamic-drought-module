@@ -22,11 +22,69 @@
 import type { RegionKey } from '../config/regions';
 
 /**
- * One sourced statement in a horizon. `kind` separates an observation (a fact
- * about current conditions, stated plainly) from an outlook (a probability or
- * tendency, never rendered as a fact); the panel styles and labels them
- * differently so a forecast can never read as a certainty (CLAUDE.md section 6
- * invariant 6; the honest-feedback rule).
+ * What kind of knowledge a claim rests on (the 0.8.0 evidence/claim contract,
+ * T-P0-2). The class drives the badge label and styling through the single
+ * mapping in `src/impact/evidence.ts`, so a modeled or derived read can never
+ * wear observation styling. Class meanings are documented on that mapping.
+ */
+export type EvidenceClass =
+  | 'observed'
+  | 'analyzed'
+  | 'classified'
+  | 'modeled-analysis'
+  | 'modeled'
+  | 'derived'
+  | 'outlook';
+
+/**
+ * The dates a claim carries, all ISO 8601 (`YYYY-MM-DD`). The shown line uses
+ * the precedence valid, else issued, else published, else retrieved (see
+ * `claimDateLine` in `src/impact/evidence.ts`). Live fetches set `retrieved`
+ * to the fetch date; fixed prose claims set `retrieved` to the date their
+ * source statement was last verified.
+ */
+export interface ClaimDates {
+  /** When the source published the underlying product. */
+  readonly published?: string;
+  /** The date the value is valid for (for example a USDM map date). */
+  readonly valid?: string;
+  /** When the source issued the product (for example a forecast issue date). */
+  readonly issued?: string;
+  /** When DDM retrieved the value (fetch date or snapshot build date). */
+  readonly retrieved?: string;
+}
+
+/** The spatial support a claim's value actually has, stated honestly. */
+export interface ClaimSupport {
+  /** The source data's native support, for example "4 km gridMET cell". */
+  readonly native?: string;
+  /** The effective support after any resampling or aggregation. */
+  readonly effective?: string;
+  /** What the claim reports over, for example "statewide" or "basin forecast point". */
+  readonly reporting?: string;
+}
+
+/**
+ * A claim's uncertainty, shown rather than smoothed. `not-quantified` is the
+ * explicit honest state for a source that publishes no uncertainty.
+ */
+export interface ClaimUncertainty {
+  readonly kind: 'range' | 'typical' | 'categorical' | 'not-quantified';
+  readonly text: string;
+}
+
+/** Method provenance: version, climatological baseline, source vintage. */
+export interface ClaimMethod {
+  readonly version?: string;
+  readonly baseline?: string;
+  readonly sourceVintage?: string;
+}
+
+/**
+ * One sourced statement in a horizon, under the evidence/claim contract
+ * (T-P0-2): every claim names its evidence class and carries its dates.
+ * Build claims ONLY through `makeClaim` in `src/impact/evidence.ts`; the
+ * legacy `kind` is derived there from `evidence` and never set independently.
  */
 export interface SourcedClaim {
   /** The statement itself. Rendered through `escapeHtml`. */
@@ -35,8 +93,24 @@ export interface SourcedClaim {
   readonly source: string;
   /** Optional `https://` link to the source; only https is rendered. */
   readonly sourceUrl?: string;
-  /** Observation = current fact stated plainly; outlook = probability/tendency. */
+  /** What kind of knowledge the statement rests on. Required; set truthfully. */
+  readonly evidence: EvidenceClass;
+  /**
+   * Legacy compatibility tone, DERIVED from `evidence` by `makeClaim`
+   * (observation for observed/analyzed/classified; outlook for the
+   * model-borne and forward classes). The renderer styles from `evidence`.
+   */
   readonly kind: 'observation' | 'outlook';
+  /** The claim's dates (ISO 8601); every construction site sets at least one. */
+  readonly dates?: ClaimDates;
+  /** The spatial support of the value, when it matters to honesty. */
+  readonly support?: ClaimSupport;
+  /** The claim's uncertainty, or the explicit not-quantified state. */
+  readonly uncertainty?: ClaimUncertainty;
+  /** Method provenance (version, baseline, source vintage). */
+  readonly method?: ClaimMethod;
+  /** For derived reads: the inputs the derivation stands on, in order. */
+  readonly lineage?: readonly string[];
   /**
    * Optional inline SVG chart (from `src/ui/charts.ts`) rendered beneath the
    * claim text. Trusted, self-generated markup; never user-supplied.

@@ -27,6 +27,7 @@ import { URLS } from '../config/urls';
 import { fetchWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
 import { oniLineSvg, ensoPlumeSvg, type OniPoint, type EnsoPlumePoint } from '../ui/charts';
+import { makeClaim } from './evidence';
 import type { SourceResult } from './sources';
 import type { BoundarySelectionContext } from './types';
 
@@ -323,28 +324,38 @@ export async function fetchEnsoClaims(
         source: `NOAA CPC probabilistic ENSO outlook${p.issued ? `, issued ${p.issued}` : ''}`
       });
       if (plumeSvg) {
-        plumeClaims.push({
-          text:
-            `${plumeHeadline(p)} These are odds across overlapping three-month seasons, not a forecast of outcomes; ` +
-            `the categories are defined against the ${p.baseline}.`,
-          source: 'NOAA CPC official probabilistic ENSO outlook (CPC/IRI consensus)',
-          sourceUrl: p.sourceUrl,
-          kind: 'outlook' as const,
-          chartSvg: plumeSvg
-        });
+        plumeClaims.push(
+          makeClaim({
+            text:
+              `${plumeHeadline(p)} These are odds across overlapping three-month seasons, not a forecast of outcomes; ` +
+              `the categories are defined against the ${p.baseline}.`,
+            source: 'NOAA CPC official probabilistic ENSO outlook (CPC/IRI consensus)',
+            sourceUrl: p.sourceUrl,
+            evidence: 'outlook',
+            dates: { retrieved: snap.retrieved, ...(p.issued ? { issued: p.issued } : {}) },
+            uncertainty: { kind: 'categorical', text: 'category odds by overlapping three-month season, not a forecast of outcomes' },
+            chartSvg: plumeSvg
+          })
+        );
       }
     }
 
     return {
       ok: true,
       claims: [
-        {
+        // The tilt is DDM's own read composed from the observed CPC indices
+        // through the ddm-enso-correlation doctrine: evidence 'derived', with
+        // the lineage named. The snapshot build date is the retrieval date.
+        makeClaim({
           text,
           source: SOURCE,
           sourceUrl: SOURCE_URL,
-          kind: 'outlook',
+          evidence: 'derived',
+          dates: { retrieved: snap.retrieved },
+          lineage: ['NOAA CPC ONI and RONI index snapshot', 'DDM Pacific Northwest tilt read (ddm-enso-correlation doctrine)'],
+          uncertainty: { kind: 'typical', text: 'a shift in the odds, not a forecast of outcomes; the named modulators can reinforce or mute the signal' },
           ...(chartSvg ? { chartSvg } : {})
-        },
+        }),
         ...plumeClaims
       ]
     };

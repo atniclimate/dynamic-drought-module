@@ -29,6 +29,7 @@ import {
   type SourceResult
 } from './sources';
 import { fetchEnsoClaims } from './enso';
+import { makeClaim } from './evidence';
 import { fetchWaterSupplyClaims } from './water-supply';
 import type { Horizon, ImpactBriefing, SourcedClaim } from './types';
 
@@ -68,13 +69,20 @@ function fillHorizon(horizon: Horizon, results: SourceResult[], extraClaims: Sou
   if (notes.length > 0) horizon.note = notes.join(' ');
 }
 
-/** The cited long-range CPC Seasonal Drought Outlook claim. */
-const CPC_SEASONAL_OUTLOOK: SourcedClaim = {
+/**
+ * The cited long-range CPC Seasonal Drought Outlook claim. Fixed prose, not a
+ * fetch, so `dates.retrieved` is the date the statement and its link were last
+ * verified against the live product (the T-P0-2 contract rule for fixed
+ * claims); re-stamp it whenever this text is re-checked.
+ */
+const CPC_SEASONAL_OUTLOOK: SourcedClaim = makeClaim({
   text: 'The CPC Seasonal Drought Outlook is the authoritative long-range drought tendency (drought persists, develops, improves, or is removed) over the coming season. In the Pacific Northwest the El Nino / Southern Oscillation phase shifts these odds; the long-range read is a probability tilt, not a forecast of outcomes.',
   source: 'NOAA CPC Seasonal Drought Outlook',
   sourceUrl: 'https://www.cpc.ncep.noaa.gov/products/expert_assessment/sdo_summary.php',
-  kind: 'outlook'
-};
+  evidence: 'outlook',
+  dates: { retrieved: '2026-07-21' },
+  uncertainty: { kind: 'categorical', text: 'a seasonal tendency category (persists, develops, improves, removed), not a forecast of outcomes' }
+});
 
 /**
  * Hydrate every horizon of `briefing`. Returns when all horizons have settled
