@@ -319,10 +319,11 @@ function renderPopup(
   // (maintainer directive 2026-07-18). The head, top to bottom, is the
   // title, then the briefing door, then the "Other map features here"
   // switcher; the body carries the agency line, meta, the caveat, and
-  // links. The key actions stay put while a long note scrolls, so a
-  // click never scrolls the briefing button or the feature switcher out
-  // of reach. The CSS (.ddm-coordinated-popup) makes the body the
-  // scroll container instead of the whole card.
+  // links. Body scrolling never moves the head (the body, not the
+  // card, is the scroll container via .ddm-coordinated-popup); whether
+  // the head is VISIBLE at a given popup size is governed solely by
+  // the canonical tier table in src/ui/popup-viewport.ts, which does
+  // not promise head visibility in every tier.
   const raw = document.createElement('div');
   if (typeof response.content === 'string') raw.innerHTML = response.content;
   else raw.appendChild(response.content);

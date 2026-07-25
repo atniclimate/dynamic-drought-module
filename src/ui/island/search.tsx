@@ -348,7 +348,11 @@ export function Search(props: SearchProps): preact.JSX.Element {
       <div class="ddm-search-live" aria-live="polite">
         {liveText}
       </div>
-      {isEmptyQuery ? <p class="ddm-search-empty">{props.placeholder}</p> : null}
+      {/* DEG-1 (U-UX-FIX-1): the at-rest guidance paragraph is GONE. It
+          rendered the placeholder text a second, visible time directly under
+          the input; the input already carries the same words as both its
+          placeholder and its aria-label, so assistive tech loses nothing.
+          The honest zero-match line below (inside the results) stays. */}
       <div class="ddm-search-results" role="listbox" id={`${uid}-listbox`}>
         {!isEmptyQuery
           ? groupsForRender.map((group) => renderGroup(group, rowsByKind(group.kind)))

@@ -71,6 +71,13 @@ export interface ParsedUrlParams {
   /** Brief/console mode from `view=`, or derived by the legacy-URL rule
    * (D-0.7.0-017; see `deriveViewMode` in `./view-mode`). */
   readonly view: ViewMode;
+  /** Whether the INBOUND URL carried an explicit, valid `view=` token
+   * (U-UX-FIX-1 DEF-2). This is raw parse-time truth, captured BEFORE the
+   * first canonical `syncUrl` write stamps `view=` onto every URL: it is
+   * the only signal that distinguishes a shared `?view=brief` link (the
+   * sharer asked for the Brief surface) from a bare boot whose mode was
+   * merely derived (the map-first closed state, D-0.7.0-041). */
+  readonly explicitView: boolean;
   /** USDM valid-Tuesday (YYYYMMDD) from `week=`, or null for current. */
   readonly usdmWeek: string | null;
   /** USDM view mode from `dmode=`; 'absolute' when absent or invalid. */
@@ -190,11 +197,18 @@ export function parseUrlParams(): ParsedUrlParams {
   const rawEmbed = params.get('embed');
   const embed = rawEmbed === 'true' || rawEmbed === '1';
 
+  // Raw explicitness (DEF-2): only the two valid tokens count. An invalid
+  // `view=` value falls through the legacy-URL derivation and is NOT an
+  // explicit ask.
+  const rawView = params.get('view');
+  const explicitView = rawView === 'brief' || rawView === 'console';
+
   return {
     region,
     layers,
     embed,
     view: deriveViewMode(params),
+    explicitView,
     usdmWeek: parseUsdmWeek(params.get('week')),
     usdmMode: parseUsdmMode(params.get('dmode')),
     sstDate: parseSstDate(params.get('sst')),

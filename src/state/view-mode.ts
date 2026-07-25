@@ -60,6 +60,35 @@ export function getViewMode(): ViewMode {
 }
 
 /**
+ * The explicit-Brief boot flag (U-UX-FIX-1 DEF-2). True only when the
+ * INBOUND URL carried a literal, valid `view=brief` token, recorded by the
+ * sidebar's boot URL application from the parser's raw explicitness (the
+ * derived Brief mode of a bare URL never sets it). The mobile sheet reads
+ * it exactly once, at its boot activation, to raise the Brief surface at
+ * the half detent: a shared or reloaded `?view=brief` link reproduces what
+ * the sender saw, while a bare boot keeps the ratified map-first closed
+ * state (D-0.7.0-041). The sheet clears the flag after its boot evaluation
+ * so later shell activations (a viewport crossing, the embed-exit reveal)
+ * are never re-raised by the app's own `view=` stamp.
+ */
+let explicitBriefBoot = false;
+
+/** Record whether the boot URL explicitly asked for the Brief door. */
+export function setExplicitBriefBoot(flag: boolean): void {
+  explicitBriefBoot = flag;
+}
+
+/** Whether the boot URL explicitly asked for the Brief door (see above). */
+export function isExplicitBriefBoot(): boolean {
+  return explicitBriefBoot;
+}
+
+/** Consume the boot-time ask (called once the boot shell has evaluated). */
+export function clearExplicitBriefBoot(): void {
+  explicitBriefBoot = false;
+}
+
+/**
  * Set the view mode. Notifies subscribers only on a real change; the
  * boot write (same value as the initial state) is silent by nature.
  */

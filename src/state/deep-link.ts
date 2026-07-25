@@ -52,10 +52,21 @@ const FETCH_TIMEOUT_MS = 10_000;
  * three-detent model): a briefing fit always precedes the panel opening
  * over the map, so the framed boundary must not end up hidden under it.
  *
+ * THE PAD FOLLOWS THE PANEL THAT WILL ACTUALLY RENDER (U-UX-FIX-1
+ * DEF-5): `panelWillOpen` says whether THIS open will put the impact
+ * panel over the map. The summary-first desktop path (a search
+ * selection, D-0.7.0-070) renders in the LEFT sidebar column and never
+ * opens the right-side panel, so reserving the desktop right pad there
+ * shrank the effective viewport by up to 480px and computed a fit zoom
+ * for a panel that never appeared (Washington at 5.71 instead of ~6.52,
+ * Alberta in frame). Paths where the panel does open keep their exact
+ * pre-fix padding values.
+ *
  * Three cases:
  * - Desktop: the panel overlays the right 440px; a transient right pad,
  *   clamped to half the viewport so a small window can never be asked
- *   for more padding than it has pixels (MapLibre rejects that).
+ *   for more padding than it has pixels (MapLibre rejects that). With
+ *   no panel coming, symmetric aesthetic margins only.
  * - Mobile with the U2 sheet active: the sheet's LIVE height is already
  *   the map's persistent transform padding (the one shared authority,
  *   written by the sheet on every detent settle; MapLibre's
@@ -65,9 +76,9 @@ const FETCH_TIMEOUT_MS = 10_000;
  * - Mobile without the sheet (embed keeps today's hidden-chrome
  *   semantics; the no-JavaScript fallback stacks): the briefing overlay
  *   still covers the lower viewport, so the pre-U2 transient bottom pad
- *   stays.
+ *   stays; with no overlay coming, aesthetic margins only.
  */
-function briefingCameraPadding(): maplibregl.PaddingOptions {
+function briefingCameraPadding(panelWillOpen: boolean): maplibregl.PaddingOptions {
   const mobile = window.matchMedia('(max-width: 720px)').matches;
   if (mobile && isSheetActive()) {
     return { top: 24, left: 24, right: 24, bottom: 24 };
@@ -77,14 +88,16 @@ function briefingCameraPadding(): maplibregl.PaddingOptions {
       top: 24,
       left: 24,
       right: 24,
-      bottom: Math.min(Math.round(window.innerHeight * 0.45), 420)
+      bottom: panelWillOpen
+        ? Math.min(Math.round(window.innerHeight * 0.45), 420)
+        : 24
     };
   }
   return {
     top: 40,
     left: 40,
     bottom: 40,
-    right: Math.min(480, Math.round(window.innerWidth * 0.5))
+    right: panelWillOpen ? Math.min(480, Math.round(window.innerWidth * 0.5)) : 40
   };
 }
 
@@ -186,13 +199,24 @@ export async function openStateBriefing(
 
   if (opts.guard && !opts.guard()) return;
 
+  // ONE shared decision (U-UX-FIX-1 DEF-5; DG-080-REVIEW finding 3):
+  // whether THIS open will put the impact panel over the map. On the
+  // summary-first path the panel opens ONLY on the active mobile Brief
+  // sheet (map-click parity); every direct open (deep link, the
+  // region-briefing trigger) opens it unconditionally. Computed once and
+  // used by BOTH the camera padding and the open branch below, so the
+  // two can never drift apart. Everything between the two uses is
+  // synchronous, so the single read equals the former pair of reads.
+  const panelWillOpen =
+    !opts.summaryFirst || (isSheetActive() && getViewMode() === 'brief');
+
   const bbox = geometryBbox(feature.geometry);
   // At the sheet's full detent the map has receded entirely; no camera
   // call fires against a covered canvas (cartography lens). The report
   // close restores the prior detent, whose settle re-pads the camera.
   const mapCovered = getSheetDetent() === 'full';
   if (opts.fit && bbox && !mapCovered) {
-    map.fitBounds(bbox, { padding: briefingCameraPadding() });
+    map.fitBounds(bbox, { padding: briefingCameraPadding(panelWillOpen) });
   }
 
   const lngLat = bbox ? bboxCenter(bbox) : { lng: 0, lat: 0 };
@@ -205,7 +229,9 @@ export async function openStateBriefing(
   );
   if (opts.summaryFirst) {
     setPlaceSelection({ label: context.title, context });
-    if (isSheetActive() && getViewMode() === 'brief') openImpactPanel(context);
+    // The shared decision: on this branch `panelWillOpen` is exactly
+    // "the mobile Brief sheet is active" (see its computation above).
+    if (panelWillOpen) openImpactPanel(context);
     return;
   }
   openImpactPanel(context);

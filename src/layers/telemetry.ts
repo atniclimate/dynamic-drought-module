@@ -193,8 +193,13 @@ function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView
     // TelemetryStation.coords is [lat, lng]; MapLibre wants [lng, lat].
     const [lat, lng] = station.coords;
 
+    // U-UX-FIX-1 DEF-4 (triage 2026-07-24): a fixed 320px card can hang
+    // past a narrow phone viewport with the close control off-screen.
+    // The responsive cap keeps the card inside sub-344px viewports
+    // natively; src/ui/popup-viewport.ts clamps the remaining anchor
+    // geometry (a marker mid-viewport whose card extends past an edge).
     const popup = new maplibregl.Popup({
-      maxWidth: '320px',
+      maxWidth: 'min(320px, calc(100vw - 24px))',
       closeButton: true,
       closeOnClick: true
     });

@@ -102,7 +102,13 @@ import type {
   StudioRoute,
   StudioRouteChangeSource
 } from '../state/studio-route';
-import { getViewMode, onViewModeChange, setViewMode } from '../state/view-mode';
+import {
+  getViewMode,
+  onViewModeChange,
+  setViewMode,
+  setExplicitBriefBoot
+} from '../state/view-mode';
+import { installPopupViewportContainment } from './popup-viewport';
 import { getBasemapMode, onBasemapChange, setBasemapMode } from '../state/basemap-store';
 import { getFraming, onFramingChange, setFraming } from '../state/framing-store';
 import {
@@ -967,6 +973,15 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // the URL, and the URL must carry the derived mode from its first write).
   setViewMode(params.view);
 
+  // Record the RAW explicit-view ask beside the mode (U-UX-FIX-1 DEF-2):
+  // once the first pushUrl stamps `view=` onto every URL, only this
+  // parse-time flag still distinguishes a shared `?view=brief` link from
+  // a bare boot's derived Brief mode. The mobile sheet consumes it at its
+  // boot activation (see initMobileSheet) to honor the shared link with
+  // the half-detent Brief surface while a bare boot stays map-first
+  // closed (D-0.7.0-041).
+  setExplicitBriefBoot(params.explicitView && params.view === 'brief');
+
   // Seed the region-shell stores (S2) BEFORE the first pushUrl for the
   // same reason: a `framing=` or `cluster=` deep link must survive the
   // first canonical write. The parser already resolved the precedence
@@ -1060,6 +1075,18 @@ export function buildSidebar(
 ): void {
   mapRef = map;
   ensureLiveRegion();
+
+  // U-UX-FIX-1 DEF-3/DEF-4 (triage 2026-07-24): clamp every MapLibre
+  // popup card toward its reachable region (the visual viewport
+  // intersected with the map container, minus the active mobile sheet
+  // and footer rects) under the tiered contract of THE CANONICAL TIER
+  // TABLE beside the boundary constants in popup-viewport.ts (the one
+  // authoritative statement of what each region size is promised), so
+  // the scroll region genuinely overflows and the close control sits in
+  // reachable pixels wherever that table promises them. Installed here
+  // because buildSidebar runs on every boot path (embeds included),
+  // before any layer can paint a popup.
+  installPopupViewportContainment();
 
   // The activation state machine lives in the controller now (D-ARCH-004).
   // The checkbox reads and writes go through the eager island bridge instead

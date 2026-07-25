@@ -52,7 +52,13 @@
 import type maplibregl from 'maplibre-gl';
 
 import type { ImpactBriefing } from '../impact/types';
-import { getViewMode, onViewModeChange, setViewMode } from '../state/view-mode';
+import {
+  getViewMode,
+  onViewModeChange,
+  setViewMode,
+  isExplicitBriefBoot,
+  clearExplicitBriefBoot
+} from '../state/view-mode';
 import { escapeHtml } from '../util/escape';
 import { prefersReducedMotion } from '../util/motion';
 import { TRIBAL_NATIONS_GROUP } from '../config/layer-groups';
@@ -678,7 +684,17 @@ function activate(initial?: SheetDetent): void {
   // activates CLOSED, an edgeless map with the footer nav. Content raises
   // the sheet only on an explicit ask: a footer door, a briefing open
   // (the impact panel's mobile host), or the embed-exit reveal at peek.
-  detent = initial ?? 'closed';
+  // The ONE boot-time exception (U-UX-FIX-1 DEF-2, the same family as the
+  // `?select=` deep link): an INBOUND URL that literally carried
+  // `view=brief` is itself the ask, so the boot activation opens the
+  // Brief surface at its half detent; the URL-as-state invariant means a
+  // shared or reloaded link reproduces what the sender saw. Only the raw
+  // parse-time flag qualifies (the app stamps `view=` onto every URL
+  // after the first sync, so the current mode alone can never earn the
+  // raise); initMobileSheet clears it after the boot evaluation.
+  detent =
+    initial ??
+    (isExplicitBriefBoot() && getViewMode() === 'brief' ? 'half' : 'closed');
   appEl.setAttribute('data-sheet-detent', detent);
   updateGrabberState();
   renderAtHand();
@@ -857,4 +873,11 @@ export function initMobileSheet(
   }
 
   evaluate();
+
+  // The explicit-view ask is a BOOT-ONLY raise (DEF-2): whether or not the
+  // boot viewport activated the sheet (a desktop boot does not), the flag
+  // is spent now. Later activations (a desktop-to-mobile crossing, the
+  // embed-exit reveal at peek) keep their ratified map-first or peek
+  // behavior; the app's own `view=` stamp never re-raises the sheet.
+  clearExplicitBriefBoot();
 }

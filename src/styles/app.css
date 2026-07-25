@@ -1827,6 +1827,12 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--line);
+  /* Anchors size to their text (U-UX-FIX-1, DG-080-REVIEW finding 2
+     hardening): a stretched full-width anchor ran under the map's
+     attribution control, which can legitimately overlay the card's
+     right edge on a short viewport, so the dead right half of the strip
+     was not hit-testable. The visible link text IS the hit area. */
+  align-items: flex-start;
 }
 .popup-links a {
   font-size: 11.5px;
@@ -1895,13 +1901,29 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   border-color: var(--line-strong);
 }
 
-/* The coordinated response splits into a frozen head (title, the briefing
-   door, and the other-features switcher) and a scrolling body (agency,
-   meta, the caveat, links); maintainer directive 2026-07-18. The body is
-   the scroll container instead of the whole popup card, so the key
-   actions never scroll out of reach. Scoped to .ddm-coordinated-popup so
-   the telemetry marker popups (which do not carry the class) keep their
-   own whole-card scroll. */
+/* The coordinated response splits into a head (title, the briefing door,
+   and the other-features switcher) and a scrolling body (agency, meta,
+   the caveat, links); maintainer directive 2026-07-18. The body is the
+   scroll container instead of the whole popup card, so the head's key
+   actions sit OUTSIDE the scroll flow: scrolling the body never moves
+   them. Whether they stay VISIBLE depends on the region: under squeeze
+   the head cedes its height to the body's window and can shrink to
+   zero; head visibility is expressly not claimed by any tier of THE
+   CANONICAL TIER TABLE beside the boundary constants in
+   src/ui/popup-viewport.ts, which is the one authoritative statement of
+   what each region size is promised (this stylesheet states no limit of
+   its own). In the FULL tier only, when the viewport clamp caps the card
+   below its natural height, the body keeps at least its 44px scroll
+   window (its min-height below); COMPACT reduces that window to 24px
+   and the containment-only band below the usable-body thresholds
+   makes no body-window claim at all (see the canonical tier table).
+   In every tier the HEAD cedes the remaining height, scrolling
+   internally instead of pushing the body toward zero; with room to
+   spare the head sits at its natural height (its shrink share is three
+   orders below the body's, so it yields only once the body has reached
+   its window). Scoped to .ddm-coordinated-popup so the telemetry marker
+   popups (which do not carry the class) keep their own whole-card
+   scroll. */
 .ddm-coordinated-popup .maplibregl-popup-content {
   display: flex;
   flex-direction: column;
@@ -1914,7 +1936,9 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   min-height: 0;
 }
 .coordinated-response-head {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 /* A gap so scrolling body content reads as beneath the frozen head, and a
    hairline that only shows once there is a head to divide from. */
@@ -1924,9 +1948,37 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   border-bottom: 1px solid var(--line);
 }
 .coordinated-response-body {
-  flex: 1 1 auto;
-  min-height: 0;
+  /* The 1000 shrink weight sends a squeeze to the body first, until the
+     44px floor; only then does the head above start to yield. */
+  flex: 1 1000 auto;
+  /* The nonzero body scroll window the DEF-3 containment relies on: a
+     clamped card squeezes the head before the body drops below 44px.
+     When this window is actually promised is stated ONLY by the
+     canonical tier table in src/ui/popup-viewport.ts; below its FULL
+     boundary the clamp applies .ddm-popup-compact, whose rules below
+     take over. */
+  min-height: 44px;
   overflow-y: auto;
+}
+/* COMPACT PRESENTATION (U-UX-FIX-1, DG-080-REVIEW r2 finding 1): applied
+   by the clamp (src/ui/popup-viewport.ts) to the content box exactly
+   while its reachable region is under the FULL boundary of the
+   canonical tier table there. Chrome shrinks so the card can physically
+   follow the clamp's hard cap: 6px/8px padding makes the minimum card
+   14px tall by 18px wide, the head divider drops to 9px, and the
+   coordinated body window drops to 24px. What each region size is
+   promised, and expressly not promised, is stated ONLY by that tier
+   table (beside the boundary constants in popup-viewport.ts); this
+   stylesheet states no limit of its own. */
+.maplibregl-popup-content.ddm-popup-compact {
+  padding: 6px 8px !important;
+}
+.ddm-popup-compact .coordinated-response-head:not(:empty) {
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+.ddm-popup-compact .coordinated-response-body {
+  min-height: 24px;
 }
 /* The escape hatch is inside the frozen head now, so its own top border
    would double the head's divider; drop it here. */
@@ -3224,9 +3276,10 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
 
   /* --------------------------------------------------------------------------
      The Place pane (the mockup's search-first door): with the place tab
-     active the one search leads the at-hand block, and the redundant
-     at-rest guidance line stays out (the input placeholder already says
-     it); the honest zero-result copy inside the results stays.
+     active the one search leads the at-hand block. The redundant at-rest
+     guidance line this pane used to hide is gone at the SOURCE (DEG-1,
+     U-UX-FIX-1): the input placeholder carries those words, and the
+     honest zero-result copy inside the results stays.
      -------------------------------------------------------------------------- */
   #app[data-sheet-detent][data-sheet-tab='place'] #sheet-at-hand {
     display: flex;
@@ -3235,9 +3288,6 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   #app[data-sheet-detent][data-sheet-tab='place'] .sheet-search {
     order: -1;
     margin: 2px 0 12px;
-  }
-  #app[data-sheet-detent][data-sheet-tab='place'] .sheet-search .ddm-search > .ddm-search-empty {
-    display: none;
   }
 }
 
@@ -3475,31 +3525,19 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
 }
 .sheet-at-hand > .sheet-report-door { margin-top: 10px; }
 
-/* On short phones the answer, empty-search hint, and door exceed the half
-   detent before results even open. Keep the controls inside the detent and
-   let the bounded results open upward as an overlay, like the native picker
-   this search replaced. */
+/* On short phones the answer and door exceed the half detent before
+   results even open. Keep the controls inside the detent and let the
+   bounded results open upward as an overlay, like the native picker this
+   search replaced. (The at-rest guidance line this block used to demote
+   to screen-reader-only is gone at the SOURCE since DEG-1, U-UX-FIX-1;
+   the "No matches" zero-result message lives INSIDE .ddm-search-results
+   and stays visible: the honest, non-blaming copy is deliberate, since
+   Tribal Nation names often will not match agency spellings.) */
 @media (max-width: 720px) and (max-height: 800px) {
   #app[data-sheet-detent='half'].view-brief .sheet-at-hand-headline {
     -webkit-line-clamp: 1;
   }
   #app[data-sheet-detent='half'].view-brief .sheet-search { margin-top: 6px; }
-  /* Hide ONLY the at-rest guidance line (a direct child of .ddm-search, and
-     redundant with the input placeholder) to reclaim the vertical space; the
-     "No matches" zero-result message lives INSIDE .ddm-search-results and must
-     stay visible (the honest, non-blaming copy is deliberate, since Tribal
-     Nation names often will not match agency spellings). */
-  #app[data-sheet-detent='half'].view-brief .sheet-search .ddm-search > .ddm-search-empty {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
   #app[data-sheet-detent='half'].view-brief .sheet-search .ddm-search-results {
     position: absolute;
     left: 0;
@@ -4650,4 +4688,81 @@ a.impact-resource-link::after {
   color: var(--fg-2);
   margin-top: 2px;
   display: block;
+}
+
+/* ------------------------------------------------------------------ */
+/* U-UX-FIX-1 DEF-3 (usability triage 2026-07-24): popup scroll        */
+/* containment. src/ui/popup-viewport.ts clamps every popup CARD (the  */
+/* content box) toward its reachable region (visual viewport, map      */
+/* container, minus the active sheet and footer rects) under the       */
+/* tiered contract of the canonical tier table beside its boundary     */
+/* constants (the one authoritative statement of limits; this          */
+/* stylesheet states none of its own), so a card whose content         */
+/* exceeds the clamp genuinely overflows its scroll region; these      */
+/* rules keep wheel and touch input over that region scrolling the     */
+/* REGION, never chaining into the map underneath.                     */
+/* Layout only; no popup content rule is touched.                      */
+/* ------------------------------------------------------------------ */
+.maplibregl-popup {
+  /* An OPEN popup is the map area's transient topmost surface: the clamp
+     keeps the card (at minimum its close corner; the canonical tier
+     table in popup-viewport.ts states which, per region size) in
+     reachable pixels, so the persistent map chrome (the Share/Reset/
+     basemap family at 1000-1001, the attribution control, the embed
+     linkouts) must not cover the very controls that contract points at.
+     Kept below the mobile sheet (1350) and footer (1400), whose rects
+     the clamp SUBTRACTS instead of riding over. */
+  z-index: 1200;
+}
+.maplibregl-popup-content {
+  /* Whole-card scrollers (telemetry markers): a wheel or swipe that
+     reaches the card's end must stop there, not hand off to the map. */
+  overscroll-behavior: contain;
+}
+.coordinated-response-body {
+  /* The coordinated response's one scroll region: vertical pans scroll
+     the caveat and links, and never chain into a map pan or zoom. */
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ------------------------------------------------------------------ */
+/* U-UX-FIX-1 DEF-1 (usability triage 2026-07-24): the short-landscape */
+/* void. At 844x390 the desktop grid applies (the mobile shell is      */
+/* width-gated at 720px) and the shell itself caps at 100dvh, but the  */
+/* sidebar's absolutely positioned screen-reader helpers (.sr-only)    */
+/* had NO positioned ancestor, so their containing block was the       */
+/* initial containing block: when the Brief stack pushed their static  */
+/* positions past a short viewport's fold they escaped every           */
+/* overflow clip on the way up and extended the DOCUMENT itself        */
+/* (measured: document scrollHeight 567 vs 390 innerHeight, the        */
+/* deepest sr-only span's bottom exactly), enabling the page-level     */
+/* scroll into a blank void. Positioning the sidebar contains them:    */
+/* they now belong to the sidebar's own (clipped) overflow, the        */
+/* document stays exactly one viewport tall, and the header, the       */
+/* sidebar's internally scrolling panel stack, and the map are all     */
+/* reachable with no page scroll. The mobile sheet is untouched: its   */
+/* own higher-specificity rule (#app[data-sheet-detent] .sidebar)      */
+/* already sets position: fixed. Spec: tests/landscape-viewport.spec.ts */
+/* ------------------------------------------------------------------ */
+.sidebar {
+  position: relative;
+}
+
+/* ------------------------------------------------------------------ */
+/* U-UX-FIX-1 DEG-2 (usability triage 2026-07-24): the Satellite       */
+/* basemap toggle measured 104x29px on mobile, under the 44px          */
+/* touch-target floor every other primary mobile control meets (the    */
+/* touch-target floor block above: overlay-btn, preset chips, region   */
+/* and time-bar buttons, all gated on the active sheet shell). The     */
+/* switcher joins the same floor with the same gate; min-height beats  */
+/* the 29px height MapLibre's control stylesheet sets, the family      */
+/* width token is untouched, and desktop keeps the compact one-family  */
+/* stack. Spec: tests/basemap-touch-target.spec.ts                     */
+/* ------------------------------------------------------------------ */
+@media (max-width: 720px) {
+  #app[data-sheet-detent] .basemap-switcher-btn {
+    min-height: 44px;
+  }
 }
