@@ -14,10 +14,15 @@ import { join, extname } from 'node:path';
 
 const ROOTS = ['src', 'tests', 'docs', 'workers', 'scripts', 'harness', '.claude'];
 const ROOT_FILES = ['index.html'];
-const SKIP_DIRS = new Set(['node_modules', '.git']);
+// .cache is the gitignored build-time raster cache (large binary GeoTIFFs;
+// random bytes there can spell any codepoint and CI never sees the dir).
+const SKIP_DIRS = new Set(['node_modules', '.git', '.cache']);
 const SKIP_EXTS = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2',
-  '.pmtiles', '.zip', '.exe', '.pdf'
+  '.pmtiles', '.zip', '.exe', '.pdf',
+  // Binary geodata (the committed landscape test fixtures): the em-dash
+  // rule is prose-scoped (D-0.7.0-027); raster/geopackage bytes are not prose.
+  '.tif', '.tiff', '.gpkg'
 ]);
 // Built from the escape so this file never carries the literal byte
 // sequence (the CI byte-level grep covers scripts/ too).

@@ -36,6 +36,18 @@ export type { Region } from '../types/region';
  * 45.6 to 45.65 in v0.1.2 so that the Deschutes at Moody station (latitude
  * 45.622) is inside the raw bounds rather than only the padded fit. Do not
  * reduce 45.65 without re-verifying that constraint.
+ *
+ * Capability-substrate metadata (0.8.0 T-M0-4, N4a): every region carries
+ * `group` (selector grouping; nothing renders it until N4b),
+ * `coverageFamily` (its coverage/capability-matrix row; the honest
+ * disablement hook is `regionCapabilityLevel` in
+ * src/config/region-capability.ts, which imports this table so THIS module
+ * stays metadata-only and the matrix stays out of the eager entry graph),
+ * `sourceEditions` (upstream drought-monitor edition and cadence for the
+ * named scope; semantics in src/types/region.ts), and, where enumerable
+ * without inference, `memberStates`. The Columbia and Snake basin carries
+ * scope 'us-portion': the basin reaches into British Columbia, which no US
+ * edition covers, and its state membership is deliberately not inferred.
  */
 export const REGIONS: Record<RegionKey, Region> = {
   washington_state: {
@@ -44,21 +56,35 @@ export const REGIONS: Record<RegionKey, Region> = {
     bounds: [[45.5435, -124.7630], [49.0024, -116.9159]],
     padding: 0.15,
     description: 'Statewide climatological framing.',
-    briefing: { kind: 'state', id: 'WA', label: 'Washington' }
+    briefing: { kind: 'state', id: 'WA', label: 'Washington' },
+    group: 'pnw',
+    coverageFamily: 'pnw',
+    sourceEditions: [{ source: 'usdm', cadence: 'weekly', scope: 'full' }],
+    memberStates: ['WA']
   },
   columbia_snake_basin: {
     label: 'Columbia & Snake River Basin',
     short: 'Columbia/Snake',
     bounds: [[45.3453, -126.1675], [50.2225, -111.0435]],
     padding: 0.25,
-    description: '259,000 sq mi drainage across seven states.'
+    description: '259,000 sq mi drainage across seven states.',
+    group: 'pnw',
+    coverageFamily: 'pnw',
+    // The basin's identity geography reaches into British Columbia, which
+    // no US edition covers ('us-portion'); state membership is deliberately
+    // not inferred (fuzzy basin membership; docs/EXPANSION_PLAN_070.md).
+    sourceEditions: [{ source: 'usdm', cadence: 'weekly', scope: 'us-portion' }]
   },
   cascades: {
     label: 'Western & Northern Cascades',
     short: 'Cascades',
     bounds: [[46.5, -122.5], [49.0, -120.5]],
     padding: 0.10,
-    description: 'High-elevation snowpack & runoff zone.'
+    description: 'High-elevation snowpack & runoff zone.',
+    group: 'pnw',
+    coverageFamily: 'pnw',
+    sourceEditions: [{ source: 'usdm', cadence: 'weekly', scope: 'full' }],
+    memberStates: ['WA']
   },
   central_oregon: {
     label: 'Central Oregon',
@@ -68,7 +94,11 @@ export const REGIONS: Record<RegionKey, Region> = {
     description: 'Deschutes basin & ag water demand.',
     // Sub-state framing; the briefing describes the containing state (Oregon),
     // which the panel title and the trigger label both name.
-    briefing: { kind: 'state', id: 'OR', label: 'Oregon' }
+    briefing: { kind: 'state', id: 'OR', label: 'Oregon' },
+    group: 'pnw',
+    coverageFamily: 'pnw',
+    sourceEditions: [{ source: 'usdm', cadence: 'weekly', scope: 'full' }],
+    memberStates: ['OR']
   },
   southwest_washington: {
     label: 'Southwest Washington',
@@ -76,7 +106,11 @@ export const REGIONS: Record<RegionKey, Region> = {
     bounds: [[45.5, -124.3], [47.0, -122.0]],
     padding: 0.10,
     description: 'Lower Columbia estuary & coast.',
-    briefing: { kind: 'state', id: 'WA', label: 'Washington' }
+    briefing: { kind: 'state', id: 'WA', label: 'Washington' },
+    group: 'pnw',
+    coverageFamily: 'pnw',
+    sourceEditions: [{ source: 'usdm', cadence: 'weekly', scope: 'full' }],
+    memberStates: ['WA']
   },
   south_puget_sound: {
     label: 'South Puget Sound',
@@ -84,7 +118,11 @@ export const REGIONS: Record<RegionKey, Region> = {
     bounds: [[46.9, -123.2], [47.5, -122.1]],
     padding: 0.10,
     description: 'Inland marine waters & WRIAs.',
-    briefing: { kind: 'state', id: 'WA', label: 'Washington' }
+    briefing: { kind: 'state', id: 'WA', label: 'Washington' },
+    group: 'pnw',
+    coverageFamily: 'pnw',
+    sourceEditions: [{ source: 'usdm', cadence: 'weekly', scope: 'full' }],
+    memberStates: ['WA']
   },
   national: {
     // The national explore framing (E1 of the national roadmap). The curated
@@ -98,7 +136,12 @@ export const REGIONS: Record<RegionKey, Region> = {
     short: 'US',
     bounds: [[24.4, -125.0], [49.4, -66.9]],
     padding: 0.5,
-    description: 'Contiguous United States explore framing.'
+    description: 'Contiguous United States explore framing.',
+    group: 'explore',
+    coverageFamily: 'conus',
+    // Identity geography is the contiguous United States as a whole;
+    // memberStates is omitted (not enumerated here), never "no states".
+    sourceEditions: [{ source: 'usdm', cadence: 'weekly', scope: 'full' }]
   },
   alaska: {
     // The west bound stops short of the Aleutian antimeridian crossing;
@@ -110,7 +153,14 @@ export const REGIONS: Record<RegionKey, Region> = {
     bounds: [[51.0, -170.0], [71.5, -129.5]],
     padding: 1.0,
     description: 'Alaska statewide framing; layer coverage varies.',
-    briefing: { kind: 'state', id: 'AK', label: 'Alaska' }
+    briefing: { kind: 'state', id: 'AK', label: 'Alaska' },
+    group: 'explore',
+    coverageFamily: 'ak-hi',
+    // Upstream USDM covers Alaska weekly; the module's ak-hi droughtState
+    // remains 'none' in the capability matrix (upstream truth vs module
+    // capability; see src/types/region.ts).
+    sourceEditions: [{ source: 'usdm', cadence: 'weekly', scope: 'full' }],
+    memberStates: ['AK']
   },
   hawaii: {
     label: 'Hawaii',
@@ -118,7 +168,11 @@ export const REGIONS: Record<RegionKey, Region> = {
     bounds: [[18.5, -160.5], [22.5, -154.5]],
     padding: 0.3,
     description: 'Hawaiian Islands framing; layer coverage varies.',
-    briefing: { kind: 'state', id: 'HI', label: 'Hawaii' }
+    briefing: { kind: 'state', id: 'HI', label: 'Hawaii' },
+    group: 'explore',
+    coverageFamily: 'ak-hi',
+    sourceEditions: [{ source: 'usdm', cadence: 'weekly', scope: 'full' }],
+    memberStates: ['HI']
   }
 };
 

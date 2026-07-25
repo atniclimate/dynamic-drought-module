@@ -253,7 +253,7 @@ export const STATION_NETWORKS = [
   },
   {
     key: 'nwrfc',
-    label: 'Northwest River Forecast Center',
+    label: 'Northwest River Forecast Center', // vocab-allow: verbatim agency name
     refreshWindowMs: DAY_MS,
     cadence: 'seasonal updates',
     adapter: DISCOVERY_NOT_WIRED_ADAPTER

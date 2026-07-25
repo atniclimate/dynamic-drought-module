@@ -94,6 +94,7 @@ export const TELEMETRY_STATIONS: readonly TelemetryStation[] = [
     agency: 'NRCS',
     color: '#e2e8f0',
     description:
+      // vocab-allow: names the NWRFC runoff forecast products, upstream data
       'Upper Tye River basin · 3,940 ft. Daily Snow Water Equivalent (SWE) reading drives runoff forecasts.',
     awdbStation: '791:WA:SNTL',
     links: [
@@ -190,6 +191,7 @@ export const TELEMETRY_STATIONS: readonly TelemetryStation[] = [
     agency: 'NWRFC / USGS',
     color: '#06b6d4',
     description:
+      // vocab-allow: names the NWRFC volume forecast products, upstream data
       'Skagit basin runoff. NWRFC volume forecasts use SNOTEL inputs to project exceedance probabilities.',
     usgsSite: '12194000',
     links: [

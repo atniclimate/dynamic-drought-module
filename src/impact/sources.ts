@@ -22,6 +22,7 @@
  */
 
 import { URLS } from '../config/urls';
+import { selectionEnvelope } from '../util/bbox';
 import { fetchWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
 import { cpcOutlookBarsSvg, trendLineSvg, type TrendPoint } from '../ui/charts';
@@ -378,8 +379,10 @@ export async function fetchNifcClaims(
   signal: AbortSignal
 ): Promise<SourceResult> {
   const { lng, lat } = context.lngLat;
-  const bbox = context.bbox ?? ([lng - 0.5, lat - 0.5, lng + 0.5, lat + 0.5] as const);
-  const envelope = bbox.map((n) => round4(n)).join(',');
+  // Antimeridian-naive on purpose: a crossing selection sends ONE
+  // world-spanning envelope (T-M0-4 pin; N2 owns the split; see
+  // selectionEnvelope in src/util/bbox.ts and tests/antimeridian.spec.ts).
+  const envelope = selectionEnvelope(context.bbox, { lng, lat });
   const url = `${URLS.nifcFires}/query?${esriEnvelopeQuery(envelope, 'attr_IncidentName', 50).toString()}`;
   const source = 'NIFC active fire perimeters (WFIGS)';
   const sourceUrl = 'https://data-nifc.opendata.arcgis.com/';
@@ -412,8 +415,8 @@ export async function fetchNifcClaims(
 // ---------------------------------------------------------------------------
 
 /** NWS alert event names the briefing foregrounds (fire weather and heat). */
-const FIRE_EVENTS = ['Red Flag Warning', 'Fire Weather Watch'];
-const HEAT_EVENTS = ['Excessive Heat Warning', 'Excessive Heat Watch', 'Heat Advisory', 'Extreme Heat Warning', 'Extreme Heat Watch'];
+const FIRE_EVENTS = ['Red Flag Warning', 'Fire Weather Watch']; // vocab-allow: verbatim NWS product names, quoted source data
+const HEAT_EVENTS = ['Excessive Heat Warning', 'Excessive Heat Watch', 'Heat Advisory', 'Extreme Heat Warning', 'Extreme Heat Watch']; // vocab-allow: verbatim NWS product names, quoted source data
 
 /**
  * Query the National Weather Service active alerts at the clicked point and
@@ -427,7 +430,7 @@ export async function fetchNwsAlertClaims(
 ): Promise<SourceResult> {
   const { lng, lat } = context.lngLat;
   const url = `${URLS.nwsApi}/alerts/active?point=${round4(lat)},${round4(lng)}`;
-  const source = 'NWS active alerts';
+  const source = 'NWS active alerts'; // vocab-allow: names the NWS alerts service, upstream product
   const sourceUrl = 'https://www.weather.gov/';
 
   try {
@@ -451,6 +454,7 @@ export async function fetchNwsAlertClaims(
     if (fire.length > 0) {
       claims.push(
         makeClaim({
+          // vocab-allow: reports the NWS alert products in effect, upstream data
           text: `A fire-weather alert is in effect here: ${fire.join(', ')}. This signals imminent fire-weather conditions (low humidity, wind, dry fuels).`,
           ...alertShared
         })
@@ -459,6 +463,7 @@ export async function fetchNwsAlertClaims(
     if (heat.length > 0) {
       claims.push(
         makeClaim({
+          // vocab-allow: reports the NWS alert products in effect, upstream data
           text: `An extreme-heat alert is in effect here: ${heat.join(', ')}. Heat raises drinking-water demand and human-health stress, and drought-dried soils amplify it.`,
           ...alertShared
         })
@@ -467,6 +472,7 @@ export async function fetchNwsAlertClaims(
     if (claims.length === 0) {
       claims.push(
         makeClaim({
+          // vocab-allow: reports the absence of NWS alert products, upstream data
           text: 'No active red-flag fire-weather or extreme-heat alerts at this location right now (NWS).',
           ...alertShared
         })
@@ -476,6 +482,7 @@ export async function fetchNwsAlertClaims(
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
     console.warn('[impact] NWS alerts query failed.', err);
+    // vocab-allow: names the NWS alerts service, upstream product
     return { claims: [], ok: false, note: 'The NWS alerts service did not respond.' };
   }
 }
@@ -621,7 +628,7 @@ export async function fetchNwsForecastClaims(
 ): Promise<SourceResult> {
   const { lng, lat } = context.lngLat;
   const pointsUrl = `${URLS.nwsApi}/points/${round4(lat)},${round4(lng)}`;
-  const source = 'NWS forecast';
+  const source = 'NWS forecast'; // vocab-allow: names the NWS point forecast, upstream product
   const sourceUrl = 'https://www.weather.gov/';
 
   try {
@@ -658,11 +665,13 @@ export async function fetchNwsForecastClaims(
       ok: true,
       claims: [
         makeClaim({
+          // vocab-allow: names the NWS point forecast, upstream product
           text: `${name}: ${short || 'forecast available'}, near ${tempStr}. Watch this against the heat outlook; hot, dry spells deepen near-term dryness and fire danger.`,
           source,
           sourceUrl,
           evidence: 'outlook',
           dates: { retrieved: todayIso() },
+          // vocab-allow: names the NWS point forecast, upstream product
           uncertainty: { kind: 'not-quantified', text: 'a point weather forecast stated as a tendency; the NWS product publishes no uncertainty band here' }
         })
       ]
@@ -670,6 +679,7 @@ export async function fetchNwsForecastClaims(
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
     console.warn('[impact] NWS forecast query failed.', err);
+    // vocab-allow: names the NWS point forecast, upstream product
     return { claims: [], ok: false, note: 'The NWS point forecast did not respond.' };
   }
 }

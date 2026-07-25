@@ -150,6 +150,7 @@ function installTimeBar(map: maplibregl.Map, fc: GeoJSON.FeatureCollection): voi
     ariaLabel: 'CPC Drought Outlook register',
     stamp: {
       headline: `${issuedPart}${targetPart}`,
+      // vocab-allow: honesty disclaimer, denies being a forecast
       detail: `CPC ${rangeName(range)} Drought Outlook · a shift in odds, not a forecast of outcomes`,
       register: 'outlook'
     },
@@ -338,6 +339,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
           body,
           'Drought outlook key',
           OUTLOOK_LEGEND,
+          // vocab-allow: names the CPC outlook (an upstream forecast product) and disclaims outcomes
           'NOAA CPC Drought Outlook · hatched fills mark a FORECAST register; a shift in odds, not a forecast of outcomes'
         )
     });
@@ -391,6 +393,7 @@ function buildOutlookPopupHtml(props: GeoJsonProperties): string {
     : cls === 'Removal' ? 'Drought removal likely'
     : 'Drought outlook';
 
+  // vocab-allow: names the CPC outlook (an upstream forecast product) and disclaims outcomes
   return `
     <div class="popup-title">${escapeHtml(title)}</div>
     <div class="popup-agency">NOAA CPC ${escapeHtml(rangeName(timeline.outlookRange))} Drought Outlook</div>

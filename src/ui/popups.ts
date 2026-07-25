@@ -276,11 +276,12 @@ export function buildTreatyPopupHtml(props: GeoJsonProperties, featureName: stri
  */
 export function buildNwsAlertPopupHtml(props: GeoJsonProperties): string {
   const p = props ?? {};
-  const event = p.prod_type || 'Weather alert';
+  const event = p.prod_type || 'Weather alert'; // vocab-allow: fallback title for an NWS alert product, upstream data
   const onset = p.onset || '';
   const ends = p.ends || p.expiration || '';
   const wfo = p.wfo || '';
 
+  // vocab-allow: describes the NWS alert products verbatim, upstream data
   return `
     <div class="popup-title">${escapeHtml(String(event))}</div>
     <div class="popup-agency">NOAA NWS · Active Alert</div>
@@ -327,6 +328,7 @@ export function buildSpcFireWeatherPopupHtml(
   const valid = formatSpcTime(p.valid);
   const expire = formatSpcTime(p.expire);
 
+  // vocab-allow: describes the SPC Fire Weather Outlook product, upstream data
   return `
     <div class="popup-title">Fire Weather Outlook: ${escapeHtml(categoryLabel)}</div>
     <div class="popup-agency">NOAA SPC · Day 1 Outlook</div>

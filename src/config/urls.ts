@@ -811,6 +811,13 @@ export const URLS = Object.freeze({
   // scripts/build-enso-snapshot.mjs, `npm run build:enso`). Bundled, so the
   // no-CORS CPC sources are read at build time, not by the browser at runtime.
   ensoIndicesLocal: import.meta.env.BASE_URL + 'data/enso-indices.json',
+  // Landscape-signature artifact (T-M0-3; built by scripts/landscape via
+  // `npm run build:landscape`, validated against
+  // schema/landscape-signature.schema.json). NOT committed yet: honest
+  // absence is the shipped loader behavior (src/impact/landscape.ts) until
+  // the first real artifact lands with the T-S1 adapters.
+  landscapeSignatureLocal:
+    import.meta.env.BASE_URL + 'data/landscape-signature-pnw.json',
   // Per-state resource catalog base (0.6.0 R2). Public resource LINKS are not
   // sovereign data, so the catalog ships in-repo (D-0.6.0-004); each state's
   // rows live at `<base>data/resources/<lowercase-two-letter-code>.json` and are

@@ -215,6 +215,18 @@ export interface BoundarySelectionContext {
   readonly lngLat: { readonly lng: number; readonly lat: number };
   /** Feature bounding box `[west, south, east, north]`, when derivable. */
   readonly bbox?: readonly [number, number, number, number];
+  /**
+   * True when the selected feature's geometry shows antimeridian-crossing
+   * evidence (`geometryLikelyCrossesAntimeridian` in
+   * src/util/antimeridian.ts; evidence, not proof). When set, `bbox` above
+   * REMAINS the naive min/max walk (near-world-spanning) and CANNOT be
+   * split or reinterpreted into service envelopes; crossing-aware
+   * envelopes must be re-derived from the geometry, which is N2's work.
+   * NO consumer changes behavior on this flag yet (T-M0-4 contract); the
+   * consumers' naive handling is pinned in tests/antimeridian.spec.ts.
+   * Omitted (never false) when no crossing evidence exists.
+   */
+  readonly bboxCrossesAntimeridian?: boolean;
   /** Active region key, or null if no region is selected yet. */
   readonly regionKey: RegionKey | null;
 }

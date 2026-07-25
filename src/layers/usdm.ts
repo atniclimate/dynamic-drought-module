@@ -469,6 +469,7 @@ function installTimeBar(map: maplibregl.Map): void {
           }
         : {
             headline: `Change through ${weekLabel(currentKey)}`,
+            // vocab-allow: honesty disclaimer, denies being a forecast
             detail: `USDM ${mode === 'chg4' ? '4-week' : '1-week'} change · observed, not forecast`,
             register: 'observed'
           },
@@ -506,14 +507,14 @@ function installTimeBar(map: maplibregl.Map): void {
         {
           key: 'monthly',
           label: 'Monthly outlook',
-          title:
+          title: // vocab-allow: names the CPC outlook (an upstream forecast product) and disclaims outcomes
             'Switch to the CPC Monthly Drought Outlook: a forecast register (a shift in odds, not a forecast of outcomes)',
           hatched: true
         },
         {
           key: 'seasonal',
           label: 'Seasonal outlook',
-          title:
+          title: // vocab-allow: names the CPC outlook (an upstream forecast product) and disclaims outcomes
             'Switch to the CPC Seasonal Drought Outlook: a forecast register (a shift in odds, not a forecast of outcomes)',
           hatched: true
         }
@@ -865,6 +866,7 @@ function changeLabel(dn: unknown): string {
 function buildChangePopupHtml(props: GeoJsonProperties): string {
   const p = props ?? {};
   const mapDate = formatDate(p.MapDate);
+  // vocab-allow: honesty disclaimer, denies being a forecast
   return `
     <div class="popup-title">${escapeHtml(changeLabel(p.DN))}</div>
     <div class="popup-agency">U.S. Drought Monitor change map (via drought.gov)</div>

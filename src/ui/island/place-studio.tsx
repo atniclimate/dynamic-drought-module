@@ -25,6 +25,12 @@ import { URLS } from '../../config/urls';
 import { createBriefingSkeleton } from '../../impact/briefing';
 import { selectBriefNarrativeLine } from '../../impact/brief-narrative-selector';
 import { buildBoundaryContext, caveatFor, geometryBbox } from '../../impact/context';
+import {
+  arcGisEnvelopeValue,
+  bboxCenter,
+  bboxIntersection,
+  bboxIntersects
+} from '../../util/bbox';
 import { hydrateBriefing } from '../../impact/hydrate';
 import { computeOverlapRows } from '../../impact/overlap-engine';
 import type { OverlapRelationship } from '../../impact/overlap-engine';
@@ -248,39 +254,9 @@ function escapeSql(value: string): string {
   return value.replace(/'/g, "''");
 }
 
-function centerOfBbox(
-  bbox: readonly [number, number, number, number]
-): { lng: number; lat: number } {
-  return {
-    lng: (bbox[0] + bbox[2]) / 2,
-    lat: (bbox[1] + bbox[3]) / 2
-  };
-}
-
-function bboxIntersects(
-  first: readonly [number, number, number, number],
-  second: readonly [number, number, number, number]
-): boolean {
-  return !(
-    first[2] < second[0] ||
-    first[0] > second[2] ||
-    first[3] < second[1] ||
-    first[1] > second[3]
-  );
-}
-
-function bboxIntersection(
-  first: readonly [number, number, number, number],
-  second: readonly [number, number, number, number]
-): readonly [number, number, number, number] | null {
-  if (!bboxIntersects(first, second)) return null;
-  return [
-    Math.max(first[0], second[0]),
-    Math.max(first[1], second[1]),
-    Math.min(first[2], second[2]),
-    Math.min(first[3], second[3])
-  ];
-}
+// centerOfBbox/bboxIntersects/bboxIntersection moved to src/util/bbox.ts at
+// T-M0-4 (bboxCenter and friends): same antimeridian-naive arithmetic, now
+// shared with deep-link and search and pinned in tests/antimeridian.spec.ts.
 
 function featureIntersectsBbox(
   feature: Feature,
@@ -296,7 +272,9 @@ function arcGisEnvelopeParams(
 ): URLSearchParams {
   return new URLSearchParams({
     where: '1=1',
-    geometry: bbox.join(','),
+    // Antimeridian-naive on purpose: one raw envelope (T-M0-4 pin; N2 owns
+    // the split; see arcGisEnvelopeValue in src/util/bbox.ts).
+    geometry: arcGisEnvelopeValue(bbox),
     geometryType: 'esriGeometryEnvelope',
     inSR: '4326',
     outSR: '4326',
@@ -322,7 +300,7 @@ function resolvedSelection(
       kind,
       properties,
       geometry,
-      centerOfBbox(bbox),
+      bboxCenter(bbox),
       title
     ),
     geometry,

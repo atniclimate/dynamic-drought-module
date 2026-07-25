@@ -100,6 +100,7 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
   heat: {
     title: 'Extreme Heat',
     urlToken: 'heat',
+    // vocab-allow: names the NWS HeatRisk and alert products, upstream data
     description: 'The NWS HeatRisk forecast with heat alerts for the frame in view.',
     recipes: {
       // Alerts ride the count-first, hazard-filtered model

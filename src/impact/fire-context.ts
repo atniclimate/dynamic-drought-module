@@ -44,6 +44,7 @@ export function buildFireContextHtml(
   point: maplibregl.PointLike,
   lngLat: maplibregl.LngLat
 ): string {
+  // vocab-allow: honesty disclaimer, denies being a forecast
   return `
     <div class="fire-context">
       <div class="fire-context-heading">Fire in context</div>

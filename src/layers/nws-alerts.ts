@@ -61,13 +61,13 @@ const FETCH_TIMEOUT_MS = 15_000;
  * The alert product names this layer requests: the two foregrounded hazards
  * only. Order is also the legend order if a legend panel is added later.
  */
-const ALERT_EVENTS: readonly string[] = [
-  'Extreme Heat Warning',
+const ALERT_EVENTS: readonly string[] = [ // vocab-allow: verbatim NWS product names, quoted source data
+  'Extreme Heat Warning', // vocab-allow: verbatim NWS product names, quoted source data
   'Excessive Heat Warning',
   'Extreme Heat Watch',
   'Excessive Heat Watch',
   'Heat Advisory',
-  'Red Flag Warning',
+  'Red Flag Warning', // vocab-allow: verbatim NWS product names, quoted source data
   'Fire Weather Watch'
 ];
 
@@ -77,9 +77,11 @@ const ALERT_EVENTS: readonly string[] = [
  * Colors come from the official NWS display palette in NWS_ALERT_COLORS.
  */
 const ALERT_LEGEND: ReadonlyArray<{ color: string; label: string }> = [
+  // vocab-allow: verbatim NWS product names, quoted source data
   { color: NWS_ALERT_COLORS['Extreme Heat Warning'], label: 'Extreme Heat Warning' },
   { color: NWS_ALERT_COLORS['Extreme Heat Watch'], label: 'Extreme Heat Watch' },
   { color: NWS_ALERT_COLORS['Heat Advisory'], label: 'Heat Advisory' },
+  // vocab-allow: verbatim NWS product names, quoted source data
   { color: NWS_ALERT_COLORS['Red Flag Warning'], label: 'Red Flag Warning' },
   { color: NWS_ALERT_COLORS['Fire Weather Watch'], label: 'Fire Weather Watch' }
 ];
@@ -218,8 +220,10 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     render: (body) =>
       renderSwatchLegend(
         body,
+        // vocab-allow: names the NWS alert products layer, upstream data
         'Heat & fire weather alerts',
         ALERT_LEGEND,
+        // vocab-allow: verbatim NWS product names, quoted source data
         'Active NWS watches, warnings, and advisories (heat and fire weather).'
       )
   });
@@ -253,6 +257,7 @@ export function bindPopups(map: maplibregl.Map): void {
     layerIds: [FILL_LAYER_ID],
     label: (feature) => {
       const event = feature.properties?.['prod_type'];
+      // vocab-allow: fallback title for an NWS alert product, upstream data
       return typeof event === 'string' && event.trim() !== '' ? event : 'Weather alert';
     },
     respond: (feature) => ({

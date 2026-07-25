@@ -20,13 +20,17 @@
  *
  * Alaska caveat: the bbox walk is antimeridian-naive (documented in
  * `geometryBbox`), so `select=state:AK` frames the Aleutian crossing
- * poorly. Acceptable for v1; tracked with the other antimeridian notes.
+ * poorly. The context now carries crossing evidence
+ * (`bboxCrossesAntimeridian`, T-M0-4) but this module deliberately does
+ * not read it yet; the naive camera/midpoint handling is pinned in
+ * tests/antimeridian.spec.ts (via the shared `bboxCenter`) until N2.
  */
 
 import type maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection } from 'geojson';
 
 import { URLS } from '../config/urls';
+import { bboxCenter } from '../util/bbox';
 import { fetchWithBudget } from '../util/fetch';
 import { buildBoundaryContext, geometryBbox } from '../impact/context';
 import {
@@ -191,9 +195,7 @@ export async function openStateBriefing(
     map.fitBounds(bbox, { padding: briefingCameraPadding() });
   }
 
-  const lngLat = bbox
-    ? { lng: (bbox[0] + bbox[2]) / 2, lat: (bbox[1] + bbox[3]) / 2 }
-    : { lng: 0, lat: 0 };
+  const lngLat = bbox ? bboxCenter(bbox) : { lng: 0, lat: 0 };
 
   const context = buildBoundaryContext(
     'state',

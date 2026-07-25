@@ -26,6 +26,14 @@ export default defineConfig({
     // show up in this codebase (network handlers, layer lifecycle).
     sourcemap: true,
 
+    // Emit dist/.vite/manifest.json. The activation gate
+    // (scripts/check-activation-budget.mjs, T-P0-7) needs the import
+    // EDGES between chunks: sourcemaps prove what is folded INTO a
+    // chunk, the manifest proves what a chunk IMPORTS, and the gate
+    // needs both to compute the eager closure and per-feature
+    // activation closures. Turning this off breaks that gate loudly.
+    manifest: true,
+
     // Split the large, rarely-changing vendor libraries into their own chunks
     // so an app-code change does not invalidate them in a returning visitor's
     // (or an embedding page's) browser cache. MapLibre GL is roughly 788 kB by

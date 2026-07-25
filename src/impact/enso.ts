@@ -60,7 +60,7 @@ interface EnsoSnapshot {
 
 const SOURCE = 'NOAA CPC Oceanic Nino Index and Relative ONI';
 const SOURCE_URL = 'https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/';
-const MODULATORS =
+const MODULATORS = // vocab-allow: honesty disclaimer, denies being a forecast
   'This is a shift in the odds, not a forecast: the Pacific Decadal Oscillation, the event strength and timing, and intraseasonal variability can reinforce or mute the signal.';
 
 /**
@@ -326,14 +326,14 @@ export async function fetchEnsoClaims(
       if (plumeSvg) {
         plumeClaims.push(
           makeClaim({
-            text:
+            text: // vocab-allow: honesty disclaimer, denies being a forecast
               `${plumeHeadline(p)} These are odds across overlapping three-month seasons, not a forecast of outcomes; ` +
               `the categories are defined against the ${p.baseline}.`,
             source: 'NOAA CPC official probabilistic ENSO outlook (CPC/IRI consensus)',
             sourceUrl: p.sourceUrl,
             evidence: 'outlook',
             dates: { retrieved: snap.retrieved, ...(p.issued ? { issued: p.issued } : {}) },
-            uncertainty: { kind: 'categorical', text: 'category odds by overlapping three-month season, not a forecast of outcomes' },
+            uncertainty: { kind: 'categorical', text: 'category odds by overlapping three-month season, not a forecast of outcomes' }, // vocab-allow: honesty disclaimer, denies being a forecast
             chartSvg: plumeSvg
           })
         );
@@ -353,7 +353,7 @@ export async function fetchEnsoClaims(
           evidence: 'derived',
           dates: { retrieved: snap.retrieved },
           lineage: ['NOAA CPC ONI and RONI index snapshot', 'DDM Pacific Northwest tilt read (ddm-enso-correlation doctrine)'],
-          uncertainty: { kind: 'typical', text: 'a shift in the odds, not a forecast of outcomes; the named modulators can reinforce or mute the signal' },
+          uncertainty: { kind: 'typical', text: 'a shift in the odds, not a forecast of outcomes; the named modulators can reinforce or mute the signal' }, // vocab-allow: honesty disclaimer, denies being a forecast
           ...(chartSvg ? { chartSvg } : {})
         }),
         ...plumeClaims

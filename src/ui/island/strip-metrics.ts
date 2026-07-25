@@ -244,6 +244,7 @@ export function alertsMetric(map: maplibregl.Map): Metric {
   );
   return {
     value: String(n),
+    // vocab-allow: counts the NWS heat/fire alert products, upstream data
     sublabel: n === 1 ? 'heat/fire alert' : 'heat/fire alerts',
     tone: n > 0 ? 'data' : 'none'
   };

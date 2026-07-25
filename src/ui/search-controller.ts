@@ -31,6 +31,7 @@ import { URLS } from '../config/urls';
 import { STATE_LABEL } from '../impact/resources';
 import type { StateCode } from '../impact/resources';
 import { buildBoundaryContext, geometryBbox } from '../impact/context';
+import { bboxCenter, unionBboxes } from '../util/bbox';
 import { openStateBriefing } from '../state/deep-link';
 import { showLocatedBoundary } from '../state/located-boundary';
 import { getViewMode } from '../state/view-mode';
@@ -201,14 +202,19 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
   }
   if (!isCurrentBriefingIntent(intent)) return;
 
-  let bbox: [number, number, number, number] | null = null;
-  for (const f of features) {
-    const b = geometryBbox(f.geometry);
-    if (!b) continue;
-    bbox = bbox
-      ? [Math.min(bbox[0], b[0]), Math.min(bbox[1], b[1]), Math.max(bbox[2], b[2]), Math.max(bbox[3], b[3])]
-      : b;
-  }
+  // Antimeridian-naive on purpose: a multipart land area straddling the
+  // antimeridian unions toward a world-spanning box and centers on the
+  // wrong side of the world (T-M0-4 pin via the shared unionBboxes and
+  // bboxCenter; N2 owns the fix; tests/antimeridian.spec.ts). KNOWN
+  // FLAG-PROVENANCE RESIDUAL (N2): this camera unions EVERY feature while
+  // the context below is built from the PRIMARY feature only, so its
+  // bboxCrossesAntimeridian evidence does not speak for the aggregate
+  // (inventoried in src/util/antimeridian.ts; pinned in the spec).
+  const bbox = unionBboxes(
+    features
+      .map((f) => geometryBbox(f.geometry))
+      .filter((b): b is [number, number, number, number] => b !== null)
+  );
   if (bbox) {
     map.fitBounds(
       [
@@ -224,9 +230,7 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
   requestLayerOn('bia-reservations');
 
   const primary = features[0];
-  const lngLat = bbox
-    ? { lng: (bbox[0] + bbox[2]) / 2, lat: (bbox[1] + bbox[3]) / 2 }
-    : { lng: 0, lat: 0 };
+  const lngLat = bbox ? bboxCenter(bbox) : { lng: 0, lat: 0 };
   // ORDER MATTERS: the located-boundary module clears its highlight on
   // EVERY selection change (the stage-5 major 4 fix), so the selection is
   // set first and the highlight for THIS subject renders after; any prior

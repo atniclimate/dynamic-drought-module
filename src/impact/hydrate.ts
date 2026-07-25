@@ -76,11 +76,13 @@ function fillHorizon(horizon: Horizon, results: SourceResult[], extraClaims: Sou
  * claims); re-stamp it whenever this text is re-checked.
  */
 const CPC_SEASONAL_OUTLOOK: SourcedClaim = makeClaim({
+  // vocab-allow: honesty disclaimer, denies being a forecast
   text: 'The CPC Seasonal Drought Outlook is the authoritative long-range drought tendency (drought persists, develops, improves, or is removed) over the coming season. In the Pacific Northwest the El Nino / Southern Oscillation phase shifts these odds; the long-range read is a probability tilt, not a forecast of outcomes.',
   source: 'NOAA CPC Seasonal Drought Outlook',
   sourceUrl: 'https://www.cpc.ncep.noaa.gov/products/expert_assessment/sdo_summary.php',
   evidence: 'outlook',
   dates: { retrieved: '2026-07-21' },
+  // vocab-allow: honesty disclaimer, denies being a forecast
   uncertainty: { kind: 'categorical', text: 'a seasonal tendency category (persists, develops, improves, removed), not a forecast of outcomes' }
 });
 

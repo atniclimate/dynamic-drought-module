@@ -9,6 +9,7 @@ import type {
 
 import type { PlaceCatalogEntry } from '../config/place-catalog';
 import { URLS } from '../config/urls';
+import { arcGisEnvelopeValue } from '../util/bbox';
 import { fetchJsonWithBudget } from '../util/fetch';
 
 export type WatershedGeometry = Polygon | MultiPolygon;
@@ -180,7 +181,9 @@ export async function loadWatershedCandidates(
         `${layer.codeField},name,areasqkm,states`
       );
       params.set('where', '1=1');
-      params.set('geometry', bbox.join(','));
+      // Antimeridian-naive on purpose: one raw envelope (T-M0-4 pin; N2
+      // owns the split; see arcGisEnvelopeValue in src/util/bbox.ts).
+      params.set('geometry', arcGisEnvelopeValue(bbox));
       params.set('geometryType', 'esriGeometryEnvelope');
       params.set('inSR', '4326');
       params.set('spatialRel', 'esriSpatialRelIntersects');

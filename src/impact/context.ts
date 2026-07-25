@@ -17,6 +17,7 @@
 import type { GeoJsonProperties, Geometry, Position } from 'geojson';
 
 import { getCurrentRegion } from '../state/region-store';
+import { geometryLikelyCrossesAntimeridian } from '../util/antimeridian';
 import type { BoundaryKind, BoundarySelectionContext } from './types';
 
 /**
@@ -102,8 +103,11 @@ export function resolveBoundaryTitle(
  * bounding box. Returns null for geometries without positional coordinates
  * (an empty geometry or a `GeometryCollection`, which the boundary layers do
  * not emit). Longitudes are not normalized across the antimeridian; the PNW
- * framings do not cross it (and the Alaska deep link inherits this
- * limitation; documented at the caller).
+ * framings do not cross it. For a crossing geometry the walk smears into a
+ * near-world-spanning box whose true extent is NOT recoverable from the box
+ * alone; `buildBoundaryContext` records the crossing evidence on the
+ * context's `bboxCrossesAntimeridian` flag (T-M0-4), and consumers keep
+ * their naive handling until N2 (pinned in tests/antimeridian.spec.ts).
  */
 export function geometryBbox(
   geometry: Geometry | undefined | null
@@ -149,12 +153,16 @@ export function buildBoundaryContext(
 ): BoundarySelectionContext {
   const title = titleOverride && titleOverride.trim() !== '' ? titleOverride : resolveTitle(kind, properties);
   const bbox = geometryBbox(geometry);
+  // T-M0-4: crossing evidence rides the context so N2 can change consumer
+  // behavior without re-deriving detection; the bbox stays the naive walk.
+  const crossesAntimeridian = bbox ? geometryLikelyCrossesAntimeridian(geometry) : false;
   return {
     kind,
     title,
     properties: (properties as Readonly<Record<string, unknown>> | null) ?? null,
     lngLat: { lng: lngLat.lng, lat: lngLat.lat },
     ...(bbox ? { bbox } : {}),
+    ...(crossesAntimeridian ? { bboxCrossesAntimeridian: true } : {}),
     regionKey: getCurrentRegion()
   };
 }

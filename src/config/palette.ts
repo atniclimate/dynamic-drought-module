@@ -305,12 +305,12 @@ export const HILLSHADE_EXAGGERATION = 0.22;
  * ------------------------------------------------------------------------- */
 
 export const NWS_ALERT_COLORS: Readonly<Record<string, string>> = {
-  'Extreme Heat Warning': '#c71585',
-  'Excessive Heat Warning': '#c71585',
+  'Extreme Heat Warning': '#c71585', // vocab-allow: verbatim NWS product names, quoted source data
+  'Excessive Heat Warning': '#c71585', // vocab-allow: verbatim NWS product names, quoted source data
   'Extreme Heat Watch': '#800000',
   'Excessive Heat Watch': '#800000',
   'Heat Advisory': '#ff7f50',
-  'Red Flag Warning': '#ff1493',
+  'Red Flag Warning': '#ff1493', // vocab-allow: verbatim NWS product names, quoted source data
   'Fire Weather Watch': '#ffdead'
 };
 

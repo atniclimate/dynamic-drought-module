@@ -76,7 +76,7 @@ function collectAlerts(map: maplibregl.Map): AlertRow[] {
   }
   // Warnings ahead of watches ahead of the rest, then alphabetical: the
   // most urgent word first, matching the severity language of weather.gov.
-  const rank = (t: string): number =>
+  const rank = (t: string): number => // vocab-allow: matches the verbatim NWS product type strings, upstream data
     t.includes('Warning') ? 0 : t.includes('Watch') ? 1 : 2;
   rows.sort((a, b) => rank(a.type) - rank(b.type) || a.type.localeCompare(b.type));
   return rows;
@@ -91,7 +91,7 @@ function render(): void {
   const rows = active ? collectAlerts(mapRef) : [];
 
   if (rows.length > 0) {
-    body.innerHTML =
+    body.innerHTML = // vocab-allow: describes the NWS alert products and feed, upstream data
       '<p class="sheet-alerts-note">Active National Weather Service heat and fire-weather alerts in the current map view. Each alert also shades its area on the map.</p>' +
       '<div class="sheet-alerts-list">' +
       rows
@@ -109,14 +109,16 @@ function render(): void {
   }
 
   if (!active || status === 'loading') {
+    // vocab-allow: describes the NWS alert products and feed, upstream data
     body.innerHTML = '<p class="sheet-alerts-note">Checking the National Weather Service alert feed for the current view.</p>';
     return;
   }
   if (status === 'error') {
-    body.innerHTML =
+    body.innerHTML = // vocab-allow: describes the NWS alert products and feed, upstream data
       '<p class="sheet-alerts-note">The National Weather Service alert feed is not reachable right now. Current alerts are always available at <a href="https://www.weather.gov/alerts" target="_blank" rel="noopener">weather.gov/alerts</a>.</p>';
     return;
   }
+  // vocab-allow: describes the NWS alert products and feed, upstream data
   body.innerHTML = '<p class="sheet-alerts-note">No active heat or fire-weather alerts in the current map view.</p>';
 }
 
