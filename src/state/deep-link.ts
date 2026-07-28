@@ -18,28 +18,28 @@
  * actually sees. Failures (unknown code, fetch failure) surface as a toast
  * and a console warning, never a silent no-op.
  *
- * Alaska caveat: the bbox walk is antimeridian-naive (documented in
- * `geometryBbox`), so `select=state:AK` frames the Aleutian crossing
- * poorly. The context now carries crossing evidence
- * (`bboxCrossesAntimeridian`, T-M0-4) but this module deliberately does
- * not read it yet; the naive camera/midpoint handling is pinned in
- * tests/antimeridian.spec.ts (via the shared `bboxCenter`) until N2.
+ * Alaska selections use the compact circular geometry bbox, then unwrap it
+ * into a continuous MapLibre fit. The context carries the same compact bbox
+ * so briefing envelope requests split at the antimeridian.
  */
 
 import type maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection } from 'geojson';
+import type { BoundarySelectionContext } from '../impact/types';
 
 import { URLS } from '../config/urls';
-import { bboxCenter } from '../util/bbox';
+import { bboxCenter, bboxToContinuousBounds } from '../util/bbox';
+import { geometryBboxAcrossAntimeridian } from '../util/antimeridian';
 import { fetchWithBudget } from '../util/fetch';
-import { buildBoundaryContext, geometryBbox } from '../impact/context';
 import {
   isCurrentBriefingIntent,
   nextBriefingIntent,
-  openImpactPanel
+  openImpactPanel,
+  openImpactPanelUnavailable
 } from '../ui/impact-panel';
 import { getSheetDetent, isSheetActive } from '../ui/mobile-sheet';
 import { setPlaceSelection } from './place-selection';
+import { getCurrentRegion } from './region-store';
 import { getViewMode } from './view-mode';
 import { showToast } from '../ui/overlay';
 import type { SelectParam } from './url';
@@ -199,6 +199,31 @@ export async function openStateBriefing(
 
   if (opts.guard && !opts.guard()) return;
 
+  const bbox = geometryBboxAcrossAntimeridian(feature.geometry);
+  const lngLat = bbox ? bboxCenter(bbox) : { lng: 0, lat: 0 };
+  let buildBoundaryContext: typeof import('../impact/context').buildBoundaryContext;
+  try {
+    ({ buildBoundaryContext } = await import('../impact/context'));
+  } catch {
+    if (!opts.guard || opts.guard()) {
+      const name = feature.properties?.NAME;
+      const context: BoundarySelectionContext = {
+        kind: 'state',
+        title:
+          typeof name === 'string' && name.length > 0
+            ? name
+            : stusps.toUpperCase(),
+        properties: feature.properties ?? null,
+        lngLat,
+        ...(bbox ? { bbox, serviceBbox: bbox } : {}),
+        regionKey: getCurrentRegion()
+      };
+      openImpactPanelUnavailable(context);
+    }
+    return;
+  }
+  if (opts.guard && !opts.guard()) return;
+
   // ONE shared decision (U-UX-FIX-1 DEF-5; DG-080-REVIEW finding 3):
   // whether THIS open will put the impact panel over the map. On the
   // summary-first path the panel opens ONLY on the active mobile Brief
@@ -210,23 +235,23 @@ export async function openStateBriefing(
   const panelWillOpen =
     !opts.summaryFirst || (isSheetActive() && getViewMode() === 'brief');
 
-  const bbox = geometryBbox(feature.geometry);
   // At the sheet's full detent the map has receded entirely; no camera
   // call fires against a covered canvas (cartography lens). The report
   // close restores the prior detent, whose settle re-pads the camera.
   const mapCovered = getSheetDetent() === 'full';
   if (opts.fit && bbox && !mapCovered) {
-    map.fitBounds(bbox, { padding: briefingCameraPadding(panelWillOpen) });
+    map.fitBounds(bboxToContinuousBounds(bbox), {
+      padding: briefingCameraPadding(panelWillOpen)
+    });
   }
 
-  const lngLat = bbox ? bboxCenter(bbox) : { lng: 0, lat: 0 };
-
-  const context = buildBoundaryContext(
+  const rawContext = buildBoundaryContext(
     'state',
     feature.properties ?? null,
     feature.geometry,
     lngLat
   );
+  const context = bbox ? { ...rawContext, bbox } : rawContext;
   if (opts.summaryFirst) {
     setPlaceSelection({ label: context.title, context });
     // The shared decision: on this branch `panelWillOpen` is exactly

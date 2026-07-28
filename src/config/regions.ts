@@ -1,4 +1,5 @@
 import type { Region } from '../types/region';
+import { bboxToContinuousBounds } from '../util/bbox';
 
 /**
  * Region keys for the Pacific Northwest (PNW) framings shipped with the
@@ -15,7 +16,8 @@ export type RegionKey =
   | 'south_puget_sound'
   | 'national'
   | 'alaska'
-  | 'hawaii';
+  | 'hawaii'
+  | 'british_columbia';
 
 export type { Region } from '../types/region';
 
@@ -144,13 +146,12 @@ export const REGIONS: Record<RegionKey, Region> = {
     sourceEditions: [{ source: 'usdm', cadence: 'weekly', scope: 'full' }]
   },
   alaska: {
-    // The west bound stops short of the Aleutian antimeridian crossing;
-    // geometryBbox in src/impact/context.ts does not normalize longitudes
-    // across it (documented there), and the mainland framing serves the
-    // planning use case.
+    // Encoded crossing bounds include the tested western Aleutian extent.
+    // regionToMapLibreBounds unwraps the east edge for a compact continuous
+    // MapLibre fit instead of spanning nearly the whole world.
     label: 'Alaska',
     short: 'AK',
-    bounds: [[51.0, -170.0], [71.5, -129.5]],
+    bounds: [[51.0, 172.0], [71.5, -129.5]],
     padding: 1.0,
     description: 'Alaska statewide framing; layer coverage varies.',
     briefing: { kind: 'state', id: 'AK', label: 'Alaska' },
@@ -173,6 +174,22 @@ export const REGIONS: Record<RegionKey, Region> = {
     coverageFamily: 'ak-hi',
     sourceEditions: [{ source: 'usdm', cadence: 'weekly', scope: 'full' }],
     memberStates: ['HI']
+  },
+  british_columbia: {
+    label: 'British Columbia',
+    short: 'BC',
+    // Rounded outward from the live basin layer extent queried in WGS 84
+    // on 2026-07-27; this framing describes source coverage, not a boundary.
+    bounds: [[48.2975, -139.0614], [60.0020, -114.0534]],
+    padding: 0.4,
+    description: 'Province-wide basin drought-level framing; Canadian briefings are unavailable.',
+    group: 'canada',
+    coverageFamily: 'canada',
+    sourceEditions: [{
+      source: 'bc-basin',
+      cadence: 'weekly-in-season',
+      scope: 'full'
+    }]
   }
 };
 
@@ -190,7 +207,7 @@ export function regionToMapLibreBounds(
   region: Region
 ): [number, number, number, number] {
   const [[south, west], [north, east]] = region.bounds;
-  return [west, south, east, north];
+  return bboxToContinuousBounds([west, south, east, north]);
 }
 
 /**
@@ -213,8 +230,12 @@ export const MAP_MIN_ZOOM = 2;
 /**
  * The minimum zoom at which a longitude span fits a viewport width, per
  * MapLibre's 512 px world tile: degreesPerPixel(z) = 360 / (512 * 2^z).
- * Exported for the U4a fit-invariant spec.
+ * A negative raw span from encoded crossing bounds is converted to its
+ * eastward circular span. Exported for the U4a fit-invariant spec.
  */
 export function zoomToFitLongitudeSpan(spanDegrees: number, viewportPx: number): number {
-  return Math.log2((viewportPx * 360) / (512 * spanDegrees));
+  const wrappedSpan = ((spanDegrees % 360) + 360) % 360;
+  const continuousSpan =
+    wrappedSpan === 0 && spanDegrees !== 0 ? 360 : wrappedSpan;
+  return Math.log2((viewportPx * 360) / (512 * continuousSpan));
 }

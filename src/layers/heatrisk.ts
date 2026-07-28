@@ -1,84 +1,202 @@
 /**
- * NWS HeatRisk layer (experimental product; E2).
+ * National Weather Service (NWS) HeatRisk layer (experimental product; E2).
  *
- * Renders today's National Weather Service / Weather Prediction Center
- * HeatRisk class raster: five classes of expected heat impact (0 little to
- * none, 1 minor, 2 moderate, 3 major, 4 extreme), CONUS coverage, colorized
- * server-side per the published HeatRisk legend. NWS flags the product as
- * experimental; the sidebar label says so and the attribution carries the
- * agency name.
+ * The Environmental Systems Research Institute (ESRI) ImageServer publishes
+ * a time-aware mosaic of colorized HeatRisk classes. The service metadata
+ * exposes only a time range, so this module reads the mosaic catalog's
+ * `idp_validtime` field at every activation and offers exactly those
+ * advertised granules. It never invents an intermediate date and never
+ * omits the `time` parameter.
  *
- * Time handling (the load-bearing caveat from adversarial verification; see
- * `URLS.nwsHeatRisk` in urls.ts): the ImageServer is a rolling 6-day
- * forecast mosaic, and a request WITHOUT a `time` parameter serves an
- * arbitrary forecast day (verified: the +2-day raster), not today. This
- * module therefore reads `timeInfo.timeExtent[0]` (the current issuance's
- * first forecast day) from the service metadata at every activation and
- * bakes it into the tile template as `time=<epoch ms>`. If the metadata
- * fetch fails the layer reports `'error'` rather than guessing a time;
- * showing the wrong day's heat forecast without saying so would violate the
- * honest-feedback invariant. A session left open across the daily issuance
- * keeps the activation-time day until the layer is toggled off and on;
- * `deactivate` then `activate` refreshes it.
- *
- * Raster pattern follows `usfs-whp.ts` (ESRI ImageServer exportImage via
- * MapLibre's `{bbox-epsg-3857}` template); the metadata fetch follows the
- * cancellation contract (CLAUDE.md section 6 invariant 5).
+ * Each selected frame is rendered through its own MapLibre source instance.
+ * Replacing a selection first aborts the superseded controller, detaches its
+ * honesty watcher, and removes its source. A late tile from the removed
+ * source therefore has nowhere to render.
  */
 
 import type maplibregl from 'maplibre-gl';
 
+import { pointHasHeatRiskCoverage } from './heatrisk-coverage';
 import { URLS } from '../config/urls';
-import { fetchWithBudget } from '../util/fetch';
-import { isObject } from '../util/guards';
 import { registry } from '../state/registry';
-import { watchRasterTiles, type RasterTileWatch } from '../util/raster-status';
+import {
+  parseHeatRiskDayParam,
+  syncHeatRiskDayParam
+} from '../state/url';
+import { hideLegend, LEGEND_ORDER, showLegend } from '../ui/legend-registry';
+import { fetchJsonWithBudget } from '../util/fetch';
+import { isObject } from '../util/guards';
+import {
+  watchRasterTiles,
+  type RasterTileWatch
+} from '../util/raster-status';
 
 const LAYER_KEY = 'heatrisk';
-const SOURCE_ID = 'heatrisk';
+const SOURCE_ID_PREFIX = 'heatrisk-frame';
 const LAYER_ID = 'heatrisk';
+
+const FRAMES_EVENT = 'ddm:heatrisk-frames';
+const DAY_SELECT_EVENT = 'ddm:heatrisk-day-select';
 
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
 export const fadeLayerIds = [LAYER_ID] as const;
 
-/** Per-call network budget for the service-metadata fetch. */
+/** Per-call network budget for service metadata and catalog enumeration. */
 const FETCH_TIMEOUT_MS = 10_000;
+/** Maximum wait for a selected frame to produce positive tile evidence. */
+const TILE_SUCCESS_DEADLINE_MS = 10_000;
 
-type Status = 'loading' | 'ready' | 'error';
+type Status = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
+type FrameEventStatus = Status | 'inactive';
 
-/**
- * Master cancellation controller for the metadata fetch. Aborted on
- * `deactivate` and replaced on each `activate`.
- */
+interface HeatRiskFrame {
+  readonly day: number;
+  readonly validTime: number;
+  readonly name: string;
+}
+
+interface FrameEventDetail {
+  readonly status: FrameEventStatus;
+  readonly frames: readonly HeatRiskFrame[];
+  readonly selectedDay: number | null;
+  readonly hasCoverage: boolean | null;
+}
+
 let masterController: AbortController | null = null;
-
-/** The tile-load honesty watcher (util/raster-status.ts); null when inactive. */
 let tileWatch: RasterTileWatch | null = null;
+let activeMap: maplibregl.Map | null = null;
+let activeSourceId: string | null = null;
+let sourceGeneration = 0;
+let frames: readonly HeatRiskFrame[] = [];
+let selectedDay: number | null = null;
+let currentHasCoverage: boolean | null = null;
+let listeningForDaySelection = false;
+let coverageMoveMap: maplibregl.Map | null = null;
 
 function reportStatus(state: Status): void {
   registry.setStatus(LAYER_KEY, state);
 }
 
-/**
- * Read the start of the service's advertised time extent (epoch
- * milliseconds of the current issuance's first forecast day). Returns null
- * when the metadata does not carry a usable extent.
- */
-function extractTimeExtentStart(json: unknown): number | null {
-  if (!isObject(json)) return null;
-  const timeInfo = json.timeInfo;
-  if (!isObject(timeInfo)) return null;
-  const extent = timeInfo.timeExtent;
-  if (!Array.isArray(extent) || extent.length < 1) return null;
-  const start = extent[0];
-  return typeof start === 'number' && Number.isFinite(start) ? start : null;
+function emitFrames(status: FrameEventStatus): void {
+  window.dispatchEvent(
+    new CustomEvent<FrameEventDetail>(FRAMES_EVENT, {
+      detail: { status, frames, selectedDay, hasCoverage: currentHasCoverage }
+    })
+  );
+}
+
+function replaceMasterController(): AbortSignal {
+  masterController?.abort();
+  masterController = new AbortController();
+  return masterController.signal;
+}
+
+function mapCenterHasCoverage(map: maplibregl.Map): boolean {
+  const center = map.getCenter();
+  return pointHasHeatRiskCoverage(center.lng, center.lat);
+}
+
+function showCoverageNote(hasCoverage: boolean): void {
+  showLegend(LAYER_KEY, {
+    order: LEGEND_ORDER.surface,
+    render: (body) => {
+      const title = document.createElement('h3');
+      title.className = 'legend-section-title';
+      title.textContent = 'HeatRisk coverage';
+      const note = document.createElement('p');
+      note.className = 'legend-note';
+      note.textContent = hasCoverage
+        ? 'National Weather Service HeatRisk covers the contiguous United States only.'
+        : 'No HeatRisk data at the map center. National Weather Service HeatRisk covers the contiguous United States only.';
+      body.append(title, note);
+    }
+  });
+}
+
+/** Read the complete advertised time range from the service metadata. */
+function extractTimeExtent(json: unknown): readonly [number, number] | null {
+  if (!isObject(json) || !isObject(json.timeInfo)) return null;
+  const extent = json.timeInfo.timeExtent;
+  if (!Array.isArray(extent) || extent.length !== 2) return null;
+  const [start, end] = extent;
+  if (
+    typeof start !== 'number' ||
+    !Number.isFinite(start) ||
+    typeof end !== 'number' ||
+    !Number.isFinite(end) ||
+    start > end
+  ) {
+    return null;
+  }
+  return [start, end];
 }
 
 /**
- * Build the exportImage tile template with the day-1 `time` baked in.
- * MapLibre substitutes `{bbox-epsg-3857}` per tile; everything else is
- * static for the lifetime of this activation.
+ * Parse every distinct primary catalog granule. The returned day position
+ * comes only from chronological order in this response.
  */
+function extractFrames(
+  json: unknown,
+  extent: readonly [number, number]
+): readonly HeatRiskFrame[] | null {
+  if (
+    !isObject(json) ||
+    json.exceededTransferLimit === true ||
+    !Array.isArray(json.features)
+  ) {
+    return null;
+  }
+
+  const byTime = new Map<number, string>();
+  for (const feature of json.features) {
+    if (!isObject(feature) || !isObject(feature.attributes)) return null;
+    const validTime = feature.attributes.idp_validtime;
+    const name = feature.attributes.name;
+    if (
+      typeof validTime !== 'number' ||
+      !Number.isFinite(validTime) ||
+      !Number.isSafeInteger(validTime) ||
+      typeof name !== 'string' ||
+      name.length === 0
+    ) {
+      return null;
+    }
+    if (byTime.has(validTime)) return null;
+    byTime.set(validTime, name);
+  }
+
+  const advertised = Array.from(byTime, ([validTime, name]) => ({
+    validTime,
+    name
+  })).sort((a, b) => a.validTime - b.validTime);
+
+  if (
+    advertised.length === 0 ||
+    advertised[0]?.validTime !== extent[0] ||
+    advertised.at(-1)?.validTime !== extent[1]
+  ) {
+    return null;
+  }
+
+  return advertised.map((frame, index) => ({
+    day: index + 1,
+    validTime: frame.validTime,
+    name: frame.name
+  }));
+}
+
+function buildCatalogUrl(): string {
+  const params = new URLSearchParams({
+    where: 'category=1',
+    outFields: 'name,idp_validtime',
+    returnGeometry: 'false',
+    orderByFields: 'idp_validtime ASC',
+    f: 'json'
+  });
+  return `${URLS.nwsHeatRisk}/query?${params.toString()}`;
+}
+
+/** Build a tile template containing one exact catalog-advertised time. */
 function buildImageTileTemplate(timeMs: number): string {
   const params = [
     'bbox={bbox-epsg-3857}',
@@ -93,85 +211,217 @@ function buildImageTileTemplate(timeMs: number): string {
   return `${URLS.nwsHeatRisk}/exportImage?${params}`;
 }
 
+function removeActiveRaster(map: maplibregl.Map): void {
+  tileWatch?.detach();
+  tileWatch = null;
+  if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
+  if (activeSourceId && map.getSource(activeSourceId)) {
+    map.removeSource(activeSourceId);
+  }
+  activeSourceId = null;
+}
+
 /**
- * Resolve today's issuance time from the service metadata, then add the
- * raster source and layer. Idempotent. A metadata failure is `'error'`;
- * there is no honest fallback (see the module comment).
+ * Replace the displayed source with one exact advertised frame. Source IDs
+ * are never reused, so a late response owned by the superseded source is
+ * dropped by MapLibre after that source is removed.
  */
-export async function activate(map: maplibregl.Map): Promise<void> {
-  if (map.getSource(SOURCE_ID)) {
+function renderFrame(map: maplibregl.Map, day: number): void {
+  const frame = frames[day - 1];
+  if (!frame) return;
+
+  replaceMasterController();
+  removeActiveRaster(map);
+
+  selectedDay = day;
+  syncHeatRiskDayParam(day);
+
+  const hasCoverage = mapCenterHasCoverage(map);
+  currentHasCoverage = hasCoverage;
+  showCoverageNote(hasCoverage);
+  if (!hasCoverage) {
+    reportStatus('no-data');
+    emitFrames('no-data');
     return;
   }
-
-  // Supersede any prior in-flight metadata fetch.
-  if (masterController) masterController.abort();
-  masterController = new AbortController();
-  const signal = masterController.signal;
 
   reportStatus('loading');
-
-  let timeMs: number | null = null;
-  try {
-    const response = await fetchWithBudget(
-      `${URLS.nwsHeatRisk}?f=json`,
-      null,
-      signal,
-      FETCH_TIMEOUT_MS
-    );
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    }
-    timeMs = extractTimeExtentStart(await response.json());
-  } catch (err) {
-    if (signal.aborted) return;
-    console.warn('[heatrisk] service metadata fetch failed.', err);
-    reportStatus('error');
-    return;
-  }
-
-  if (signal.aborted) return;
-
-  if (timeMs === null) {
-    // No advertised time extent: refusing to guess which forecast day the
-    // mosaic would serve. Error, not a silent wrong-day render.
-    console.warn('[heatrisk] service metadata carried no time extent.');
-    reportStatus('error');
-    return;
-  }
-
-  map.addSource(SOURCE_ID, {
+  sourceGeneration += 1;
+  const sourceId = `${SOURCE_ID_PREFIX}-${sourceGeneration}`;
+  activeSourceId = sourceId;
+  map.addSource(sourceId, {
     type: 'raster',
-    tiles: [buildImageTileTemplate(timeMs)],
+    tiles: [buildImageTileTemplate(frame.validTime)],
     tileSize: 256,
     attribution: 'NOAA NWS HeatRisk (experimental)'
   });
-
   map.addLayer({
     id: LAYER_ID,
     type: 'raster',
-    source: SOURCE_ID,
+    source: sourceId,
     paint: {
       'raster-opacity': 0.55
     }
   });
 
-  tileWatch?.detach();
-  tileWatch = watchRasterTiles(map, SOURCE_ID, reportStatus);
-  reportStatus('ready');
+  tileWatch = watchRasterTiles(
+    map,
+    sourceId,
+    (state) => {
+      if (!mapCenterHasCoverage(map)) {
+        currentHasCoverage = false;
+        reportStatus('no-data');
+        emitFrames('no-data');
+        return;
+      }
+      currentHasCoverage = true;
+      reportStatus(state);
+      emitFrames(state);
+    },
+    {
+      reportInitialSuccess: true,
+      requestCompletenessDeadlineMs: TILE_SUCCESS_DEADLINE_MS
+    }
+  );
+  emitFrames('ready');
+}
+
+function onCoverageMoveEnd(): void {
+  if (!activeMap || selectedDay === null || frames.length === 0) return;
+  const hasCoverage = mapCenterHasCoverage(activeMap);
+  currentHasCoverage = hasCoverage;
+  showCoverageNote(hasCoverage);
+  if (!hasCoverage) {
+    masterController?.abort();
+    masterController = null;
+    removeActiveRaster(activeMap);
+    reportStatus('no-data');
+    emitFrames('no-data');
+    return;
+  }
+  if (!activeSourceId || !activeMap.getSource(activeSourceId)) {
+    renderFrame(activeMap, selectedDay);
+  }
+}
+
+function listenForCoverageMoves(map: maplibregl.Map): void {
+  if (coverageMoveMap === map) return;
+  coverageMoveMap?.off('moveend', onCoverageMoveEnd);
+  coverageMoveMap = map;
+  map.on('moveend', onCoverageMoveEnd);
+}
+
+function stopListeningForCoverageMoves(): void {
+  coverageMoveMap?.off('moveend', onCoverageMoveEnd);
+  coverageMoveMap = null;
+}
+
+function onDaySelection(event: Event): void {
+  if (!activeMap || frames.length === 0) return;
+  const detail = (event as CustomEvent<{ day?: unknown }>).detail;
+  const day = detail?.day;
+  if (
+    typeof day !== 'number' ||
+    !Number.isSafeInteger(day) ||
+    day < 1 ||
+    day > frames.length ||
+    day === selectedDay
+  ) {
+    return;
+  }
+  renderFrame(activeMap, day);
+}
+
+function listenForDaySelection(): void {
+  if (listeningForDaySelection) return;
+  window.addEventListener(DAY_SELECT_EVENT, onDaySelection);
+  listeningForDaySelection = true;
+}
+
+function stopListeningForDaySelection(): void {
+  if (!listeningForDaySelection) return;
+  window.removeEventListener(DAY_SELECT_EVENT, onDaySelection);
+  listeningForDaySelection = false;
 }
 
 /**
- * Abort any in-flight metadata fetch and remove the layer and source.
- * Toggling the layer back on re-resolves the issuance time, which is also
- * the refresh path across the daily issuance boundary.
+ * Enumerate exact granule times, then add the first or URL-selected raster
+ * frame. Missing or inconsistent metadata reports `error`; there is no
+ * fallback that guesses a date.
+ */
+export async function activate(map: maplibregl.Map): Promise<void> {
+  if (activeMap === map && frames.length > 0) return;
+
+  const signal = replaceMasterController();
+  activeMap = map;
+  activeSourceId = null;
+  frames = [];
+  selectedDay = null;
+  currentHasCoverage = null;
+  listenForDaySelection();
+  listenForCoverageMoves(map);
+  reportStatus('loading');
+  emitFrames('loading');
+
+  try {
+    const metadataJson = await fetchJsonWithBudget(
+      `${URLS.nwsHeatRisk}?f=json`,
+      null,
+      signal,
+      FETCH_TIMEOUT_MS
+    );
+    const extent = extractTimeExtent(metadataJson);
+    if (extent === null) {
+      console.warn('[heatrisk] service metadata carried no usable time extent.');
+      reportStatus('error');
+      emitFrames('error');
+      return;
+    }
+
+    const catalogJson = await fetchJsonWithBudget(
+      buildCatalogUrl(),
+      null,
+      signal,
+      FETCH_TIMEOUT_MS
+    );
+    const advertised = extractFrames(catalogJson, extent);
+    if (advertised === null) {
+      console.warn('[heatrisk] catalog carried no consistent granule times.');
+      reportStatus('error');
+      emitFrames('error');
+      return;
+    }
+
+    if (signal.aborted) return;
+    frames = advertised;
+    const requestedDay = parseHeatRiskDayParam();
+    const initialDay =
+      requestedDay !== null && requestedDay <= frames.length
+        ? requestedDay
+        : 1;
+    renderFrame(map, initialDay);
+  } catch (err) {
+    if (signal.aborted) return;
+    console.warn('[heatrisk] source qualification fetch failed.', err);
+    reportStatus('error');
+    emitFrames('error');
+  }
+}
+
+/**
+ * Abort current work, detach the frame watcher, and remove the active source.
+ * Toggling on again re-enumerates the publisher's current granules.
  */
 export function deactivate(map: maplibregl.Map): void {
-  if (masterController) {
-    masterController.abort();
-    masterController = null;
-  }
-  tileWatch?.detach();
-  tileWatch = null;
-  if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
-  if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+  masterController?.abort();
+  masterController = null;
+  removeActiveRaster(map);
+  stopListeningForDaySelection();
+  stopListeningForCoverageMoves();
+  hideLegend(LAYER_KEY);
+  activeMap = null;
+  frames = [];
+  selectedDay = null;
+  currentHasCoverage = null;
+  emitFrames('inactive');
 }

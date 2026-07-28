@@ -119,6 +119,55 @@ export interface LayerDef {
  */
 export const LIVE_NO_FEATURES_LABEL = 'no features returned for this view';
 
+export interface DroughtSurfacePresentation {
+  readonly edition: 'usdm' | 'bc-basin';
+  readonly name: string;
+  readonly source: string;
+  readonly sourceDate: string | null;
+}
+
+const USDM_PRESENTATION: DroughtSurfacePresentation = {
+  edition: 'usdm',
+  name: 'US Drought Monitor',
+  source: 'NDMC · FeatureServer',
+  sourceDate: null
+};
+
+let droughtSurfacePresentation: DroughtSurfacePresentation = USDM_PRESENTATION;
+
+/**
+ * The registered `usdm` key is the one issuer-aware drought controller.
+ * The catalog reads these getters on every registry render, so a region or
+ * source-date change updates the one existing row without a second surface.
+ */
+export function setDroughtSurfacePresentation(
+  presentation: DroughtSurfacePresentation
+): void {
+  droughtSurfacePresentation = presentation;
+}
+
+export function resetDroughtSurfacePresentation(): void {
+  droughtSurfacePresentation = USDM_PRESENTATION;
+}
+
+export function getDroughtSurfacePresentation(): DroughtSurfacePresentation {
+  return droughtSurfacePresentation;
+}
+
+const DROUGHT_CONDITIONS_DEF: LayerDef = {
+  key: 'usdm',
+  get name() {
+    return droughtSurfacePresentation.name;
+  },
+  get source() {
+    return droughtSurfacePresentation.source;
+  },
+  role: 'surface',
+  defaultOn: true,
+  noDataLabel: 'no coverage returned by the active drought source',
+  load: () => import('../layers/usdm')
+};
+
 export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'hydrography', name: 'Hydrography', source: 'OpenStreetMap (Overpass)', role: 'reference', defaultOn: false, load: () => import('../layers/hydrography') },
   { key: 'ecoregions', name: 'Ecoregions (Level III/IV)', source: 'EPA Omernik · PMTiles', role: 'reference', defaultOn: false, load: () => import('../layers/ecoregions') },
@@ -133,7 +182,9 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   // good answer ("no smoke drawn today"), never an "empty placeholder"; the
   // placeholder wording stays only on the bundled deployer slots (tribal,
   // treaty). Unit C of the umbrella build + the Codex Unit C pass.
-  { key: 'usdm', name: 'US Drought Monitor', source: 'NDMC · FeatureServer', role: 'surface', defaultOn: true, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/usdm') },
+  DROUGHT_CONDITIONS_DEF,
+  { key: 'cdm-drought', name: 'Canadian Drought Monitor', source: 'Agriculture and Agri-Food Canada · committed monthly snapshot', role: 'surface', defaultOn: false, load: () => import('../layers/cdm-drought') },
+  { key: 'nadm-drought', name: 'North American Drought Monitor', source: 'Tri-national consensus · NCEI direct GeoJSON', role: 'surface', defaultOn: false, noDataLabel: 'no continental polygons returned by the active source', load: () => import('../layers/nadm-drought') },
   // The Tribal Nations members (D-0.7.0-032/033, narrowed by D-0.7.0-038):
   // the two live present-day layers are default-on (Tribal Nations MUST
   // display); the two bundled deployer slots are default-off, ui-hidden, and
@@ -154,7 +205,7 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   // vocab-allow: names the NWS alert products layer, upstream data
   { key: 'nws-alerts', name: 'Heat & Fire Weather Alerts', source: 'NOAA NWS · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nws-alerts') },
   { key: 'hms-smoke', name: 'Smoke Plumes (HMS)', source: 'NOAA OSPO · FeatureServer', role: 'event', defaultOn: false, coActivateWith: ['nifc-fires'], noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/hms-smoke') },
-  { key: 'heatrisk', name: 'HeatRisk · Today (Experimental)', source: 'NOAA NWS/WPC · ImageServer', role: 'surface', defaultOn: false, load: () => import('../layers/heatrisk') },
+  { key: 'heatrisk', name: 'HeatRisk (Experimental)', source: 'NOAA NWS/WPC · ImageServer', role: 'surface', defaultOn: false, load: () => import('../layers/heatrisk') },
   { key: 'spc-fire-weather', name: 'Fire Weather Outlook (Day 1)', source: 'NOAA SPC · MapServer', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/spc-fire-weather') },
   { key: 'usfs-whp', name: 'Wildfire Hazard Potential', source: 'USFS · GeoPlatform', role: 'surface', defaultOn: false, load: () => import('../layers/usfs-whp') },
   { key: 'sst-anomaly', name: 'Ocean Temperature Anomaly', source: 'NASA GIBS · GHRSST MUR', role: 'surface', defaultOn: false, load: () => import('../layers/sst-anomaly') },

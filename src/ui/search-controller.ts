@@ -30,8 +30,9 @@ import { LAYER_DEFS } from '../config/layers';
 import { URLS } from '../config/urls';
 import { STATE_LABEL } from '../impact/resources';
 import type { StateCode } from '../impact/resources';
-import { buildBoundaryContext, geometryBbox } from '../impact/context';
-import { bboxCenter, unionBboxes } from '../util/bbox';
+import { buildBoundaryContext } from '../impact/context';
+import { bboxCenter, bboxToContinuousBounds } from '../util/bbox';
+import { geometryBboxAcrossAntimeridian } from '../util/antimeridian';
 import { openStateBriefing } from '../state/deep-link';
 import { showLocatedBoundary } from '../state/located-boundary';
 import { getViewMode } from '../state/view-mode';
@@ -202,24 +203,18 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
   }
   if (!isCurrentBriefingIntent(intent)) return;
 
-  // Antimeridian-naive on purpose: a multipart land area straddling the
-  // antimeridian unions toward a world-spanning box and centers on the
-  // wrong side of the world (T-M0-4 pin via the shared unionBboxes and
-  // bboxCenter; N2 owns the fix; tests/antimeridian.spec.ts). KNOWN
-  // FLAG-PROVENANCE RESIDUAL (N2): this camera unions EVERY feature while
-  // the context below is built from the PRIMARY feature only, so its
-  // bboxCrossesAntimeridian evidence does not speak for the aggregate
-  // (inventoried in src/util/antimeridian.ts; pinned in the spec).
-  const bbox = unionBboxes(
-    features
-      .map((f) => geometryBbox(f.geometry))
-      .filter((b): b is [number, number, number, number] => b !== null)
-  );
+  // Use the aggregate geometry for both camera and context provenance. This
+  // retains a compact Aleutian extent and lets the context's crossing evidence
+  // describe the same subject the camera frames.
+  const aggregateGeometry =
+    combineGeometry(features) ?? features[0]?.geometry ?? null;
+  const bbox = geometryBboxAcrossAntimeridian(aggregateGeometry);
   if (bbox) {
+    const continuous = bboxToContinuousBounds(bbox);
     map.fitBounds(
       [
-        [bbox[0], bbox[1]],
-        [bbox[2], bbox[3]]
+        [continuous[0], continuous[1]],
+        [continuous[2], continuous[3]]
       ],
       { padding: 60 }
     );
@@ -229,7 +224,7 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
   // land area reads regardless of the BIA layer's clipped viewport.
   requestLayerOn('bia-reservations');
 
-  const primary = features[0];
+  const primary = features[0]!;
   const lngLat = bbox ? bboxCenter(bbox) : { lng: 0, lat: 0 };
   // ORDER MATTERS: the located-boundary module clears its highlight on
   // EVERY selection change (the stage-5 major 4 fix), so the selection is
@@ -238,10 +233,16 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
   // selection behaves like a map click, so the briefing opens through the
   // left panel's one link; on the active mobile Brief sheet it still opens
   // directly (map-click parity, the at-hand half detent IS the summary).
-  const context = buildBoundaryContext('bia-reservation', primary.properties ?? null, primary.geometry, lngLat);
+  const rawContext = buildBoundaryContext(
+    'bia-reservation',
+    primary.properties ?? null,
+    aggregateGeometry,
+    lngLat
+  );
+  const context = bbox ? { ...rawContext, bbox } : rawContext;
   setPlaceSelection({ label: context.title, context });
   if (isSheetActive() && getViewMode() === 'brief') openImpactPanel(context);
-  showLocatedBoundary(map, combineGeometry(features) ?? features[0].geometry);
+  showLocatedBoundary(map, aggregateGeometry);
 }
 
 /** Route a chosen search result to its action. */

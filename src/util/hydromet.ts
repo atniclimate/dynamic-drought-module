@@ -16,11 +16,60 @@
  */
 
 import { URLS } from '../config/urls';
-import { fetchWithBudget } from './fetch';
 import { dailyFreshness } from './awdb';
 import type { StationValue } from '../types/station';
 
 const FETCH_TIMEOUT_MS = 15_000;
+
+/** Hold cancellation and timeout ownership through a text body read. */
+async function fetchTextWithBudget(
+  url: string,
+  opts: RequestInit | null,
+  masterSignal: AbortSignal | null,
+  timeoutMs: number
+): Promise<string> {
+  const ctrl = new AbortController();
+  if (masterSignal?.aborted) {
+    ctrl.abort();
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  const cancelBody = (): void => {
+    void reader?.cancel().catch(() => undefined);
+  };
+  const onMasterAbort = (): void => ctrl.abort();
+  masterSignal?.addEventListener('abort', onMasterAbort);
+  ctrl.signal.addEventListener('abort', cancelBody);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, { ...(opts ?? {}), signal: ctrl.signal });
+    if (!response.ok) throw new Error(`Hydromet HTTP ${response.status}`);
+    if (!response.body) return response.text();
+
+    reader = response.body.getReader();
+    if (ctrl.signal.aborted) {
+      await reader.cancel().catch(() => undefined);
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
+    const decoder = new TextDecoder();
+    let text = '';
+    while (true) {
+      const chunk = await reader.read();
+      if (ctrl.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+      if (chunk.done) break;
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+    return text + decoder.decode();
+  } finally {
+    clearTimeout(timer);
+    ctrl.signal.removeEventListener('abort', cancelBody);
+    masterSignal?.removeEventListener('abort', onMasterAbort);
+    reader?.releaseLock();
+  }
+}
 
 /** One Hydromet parameter series ("WIC AF"), readings in date order. */
 export interface HydrometSeries {
@@ -73,9 +122,13 @@ export async function fetchHydrometDaily(
   const upstream = `${URLS.usbrHydrometArcCsv}?${query.toString()}`;
   const proxied = `${URLS.workerProxy}/proxy?url=${encodeURIComponent(upstream)}`;
 
-  const resp = await fetchWithBudget(proxied, {}, signal, FETCH_TIMEOUT_MS);
-  if (!resp.ok) throw new Error(`Hydromet HTTP ${resp.status}`);
-  return parseHydrometCsv(await resp.text());
+  const text = await fetchTextWithBudget(
+    proxied,
+    {},
+    signal,
+    FETCH_TIMEOUT_MS
+  );
+  return parseHydrometCsv(text);
 }
 
 /** Parse the HTML-wrapped, marker-delimited Hydromet CSV. */

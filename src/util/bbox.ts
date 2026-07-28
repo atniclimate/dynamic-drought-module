@@ -1,3 +1,11 @@
+import {
+  bboxCrossesAntimeridian,
+  crossingAwareBbox,
+  normalizeLongitude,
+  splitBboxAtAntimeridian,
+  type LngLatBbox
+} from './antimeridian';
+
 /**
  * Quantize a bounding box to a fixed grid step, padded outward by one step
  * on every side. Used by the hydrography layer to coalesce nearby viewport
@@ -42,96 +50,171 @@ export function leafletBoundsToMapLibre(
 }
 
 /*
- * Shared selection-bbox seams (0.8.0 T-M0-4). Everything below operates on
- * MapLibre-order `[west, south, east, north]` boxes and is deliberately
- * ANTIMERIDIAN-NAIVE: plain arithmetic on raw numbers, no wrapping. These
- * used to live inline at their call sites (src/impact/sources.ts,
- * src/state/deep-link.ts, src/ui/search-controller.ts,
- * src/ui/island/place-studio.tsx, src/state/watershed-geometry.ts); they
- * were extracted so tests/antimeridian.spec.ts can pin the CURRENT naive
- * behavior on a crossing bbox through the very functions production calls
- * (several of those modules import src/config/urls.ts, which evaluates
- * Vite-only state at module scope and cannot be imported by a Node spec).
- * N2 (the Alaska/Aleutian widening) changes the behavior; the pins make
- * that a visible diff, not a surprise.
+ * Shared selection-bbox seams (N2-A). Everything below operates on
+ * MapLibre-order `[west, south, east, north]` boxes and accepts both encoded
+ * crossings (`west > east`) and naive geometry walks (`east - west > 180`).
+ * Geometry-owning callers should still prefer the exact geometry walk in
+ * `geometryBboxAcrossAntimeridian`.
  */
 
+type LongitudeInterval = readonly [number, number];
+
+/** Split either bbox representation into normalized, non-crossing pieces. */
+export function serviceBboxPieces(
+  bbox: LngLatBbox
+): readonly [LngLatBbox] | readonly [LngLatBbox, LngLatBbox] {
+  return splitBboxAtAntimeridian(crossingAwareBbox(bbox));
+}
+
+/** Longitude-only pieces used by union and intersection. */
+function longitudeIntervals(bbox: LngLatBbox): LongitudeInterval[] {
+  return serviceBboxPieces(bbox).map(
+    (piece) => [piece[0], piece[2]] as const
+  );
+}
+
 /**
- * Midpoint of a bbox by plain averaging. For a naive min/max walked box of
- * an antimeridian-crossing geometry this lands on the WRONG side of the
- * world (near longitude 0); that known-poor framing is pinned behavior
- * until N2.
+ * Convert a crossing bbox to one continuous MapLibre fit. The east edge may
+ * exceed 180 so the camera follows the compact antimeridian extent.
  */
+export function bboxToContinuousBounds(
+  bbox: LngLatBbox,
+  referenceLongitude?: number
+): [number, number, number, number] {
+  const aware = crossingAwareBbox(bbox);
+  let west = aware[0];
+  let east = aware[2];
+  if (bboxCrossesAntimeridian(aware)) east += 360;
+
+  if (referenceLongitude !== undefined && Number.isFinite(referenceLongitude)) {
+    const center = (west + east) / 2;
+    const shift = Math.round((referenceLongitude - center) / 360) * 360;
+    west += shift;
+    east += shift;
+  }
+  return [west, aware[1], east, aware[3]];
+}
+
+/** Midpoint of either bbox representation on its continuous longitude arc. */
 export function bboxCenter(
-  bbox: readonly [number, number, number, number]
+  bbox: LngLatBbox,
+  referenceLongitude?: number
 ): { lng: number; lat: number } {
+  const continuous = bboxToContinuousBounds(bbox, referenceLongitude);
   return {
-    lng: (bbox[0] + bbox[2]) / 2,
-    lat: (bbox[1] + bbox[3]) / 2
+    lng: normalizeLongitude((continuous[0] + continuous[2]) / 2),
+    lat: (continuous[1] + continuous[3]) / 2
   };
 }
 
 /**
- * Union bboxes by min/max on raw numbers; null for an empty list. For
- * parts on either side of the antimeridian the union smears toward a
- * world-spanning box (pinned behavior until N2).
+ * Union bboxes on a circle; null for an empty list. The result uses encoded
+ * crossing form when the smallest covering longitude arc crosses 180.
  */
 export function unionBboxes(
-  boxes: ReadonlyArray<readonly [number, number, number, number]>
+  boxes: ReadonlyArray<LngLatBbox>
 ): [number, number, number, number] | null {
-  let union: [number, number, number, number] | null = null;
-  for (const b of boxes) {
-    union = union
-      ? [
-          Math.min(union[0], b[0]),
-          Math.min(union[1], b[1]),
-          Math.max(union[2], b[2]),
-          Math.max(union[3], b[3])
-        ]
-      : [b[0], b[1], b[2], b[3]];
+  if (boxes.length === 0) return null;
+
+  let south = Infinity;
+  let north = -Infinity;
+  const intervals: Array<[number, number]> = [];
+  for (const bbox of boxes) {
+    south = Math.min(south, bbox[1]);
+    north = Math.max(north, bbox[3]);
+    for (const interval of longitudeIntervals(bbox)) {
+      intervals.push([interval[0], interval[1]]);
+    }
   }
-  return union;
+
+  intervals.sort((first, second) => first[0] - second[0]);
+  const merged: Array<[number, number]> = [];
+  for (const interval of intervals) {
+    const previous = merged[merged.length - 1];
+    if (previous && interval[0] <= previous[1]) {
+      previous[1] = Math.max(previous[1], interval[1]);
+    } else {
+      merged.push([...interval]);
+    }
+  }
+
+  if (
+    merged.length === 1 &&
+    merged[0]?.[0] === -180 &&
+    merged[0]?.[1] === 180
+  ) {
+    return [-180, south, 180, north];
+  }
+
+  let largestGap = -1;
+  let west = merged[0]?.[0] ?? -180;
+  let east = merged[merged.length - 1]?.[1] ?? 180;
+  for (let index = 0; index < merged.length; index++) {
+    const current = merged[index] as [number, number];
+    const next =
+      index === merged.length - 1
+        ? (merged[0] as [number, number])[0] + 360
+        : (merged[index + 1] as [number, number])[0];
+    const gap = next - current[1];
+    if (gap > largestGap) {
+      largestGap = gap;
+      west = normalizeLongitude(next);
+      east = normalizeLongitude(current[1]);
+    }
+  }
+
+  if (largestGap <= 0) return [-180, south, 180, north];
+  return [west, south, east, north];
 }
 
-/** Axis-aligned overlap test on raw numbers; no longitude wrapping. */
+/** Axis-aligned overlap test with circular longitude handling. */
 export function bboxIntersects(
-  first: readonly [number, number, number, number],
-  second: readonly [number, number, number, number]
+  first: LngLatBbox,
+  second: LngLatBbox
 ): boolean {
-  return !(
-    first[2] < second[0] ||
-    first[0] > second[2] ||
-    first[3] < second[1] ||
-    first[1] > second[3]
+  if (first[3] < second[1] || first[1] > second[3]) return false;
+  return longitudeIntervals(first).some((firstInterval) =>
+    longitudeIntervals(second).some(
+      (secondInterval) =>
+        firstInterval[1] >= secondInterval[0] &&
+        firstInterval[0] <= secondInterval[1]
+    )
   );
 }
 
-/** Axis-aligned intersection on raw numbers, or null when disjoint. */
+/**
+ * Circular bbox intersection, or null when disjoint. An intersection that
+ * spans both sides of 180 is returned in encoded crossing form.
+ */
 export function bboxIntersection(
-  first: readonly [number, number, number, number],
-  second: readonly [number, number, number, number]
-): readonly [number, number, number, number] | null {
-  if (!bboxIntersects(first, second)) return null;
-  return [
-    Math.max(first[0], second[0]),
-    Math.max(first[1], second[1]),
-    Math.min(first[2], second[2]),
-    Math.min(first[3], second[3])
-  ];
+  first: LngLatBbox,
+  second: LngLatBbox
+): LngLatBbox | null {
+  const south = Math.max(first[1], second[1]);
+  const north = Math.min(first[3], second[3]);
+  if (south > north) return null;
+
+  const intersections: LngLatBbox[] = [];
+  for (const firstInterval of longitudeIntervals(first)) {
+    for (const secondInterval of longitudeIntervals(second)) {
+      const west = Math.max(firstInterval[0], secondInterval[0]);
+      const east = Math.min(firstInterval[1], secondInterval[1]);
+      if (west <= east) intersections.push([west, south, east, north]);
+    }
+  }
+  return unionBboxes(intersections);
 }
 
 /**
- * The selection envelope string for the NIFC perimeter query
- * (src/impact/sources.ts): the selection bbox when one exists, else a
- * halo around the click point; members rounded to 4 decimals and joined.
- * A crossing selection still yields ONE naive world-spanning envelope
- * (pinned behavior until N2).
+ * Selection envelopes for NIFC and similar services. The selection bbox is
+ * used when present; otherwise a click halo is constructed. Crossings always
+ * return exactly two non-crossing strings.
  */
-export function selectionEnvelope(
-  bbox: readonly [number, number, number, number] | undefined,
+export function selectionEnvelopes(
+  bbox: LngLatBbox | undefined,
   lngLat: { readonly lng: number; readonly lat: number },
   haloDegrees = 0.5
-): string {
+): readonly string[] {
   const box =
     bbox ??
     ([
@@ -140,16 +223,71 @@ export function selectionEnvelope(
       lngLat.lng + haloDegrees,
       lngLat.lat + haloDegrees
     ] as const);
-  return box.map((n) => Math.round(n * 10000) / 10000).join(',');
+  return serviceBboxPieces(box).map((piece) =>
+    piece.map((n) => Math.round(n * 10000) / 10000).join(',')
+  );
+}
+
+/** ArcGIS `geometry` parameter values under the shared split contract. */
+export function arcGisEnvelopeValues(bbox: LngLatBbox): readonly string[] {
+  return serviceBboxPieces(bbox).map((piece) => piece.join(','));
 }
 
 /**
- * The `geometry` parameter value for an ArcGIS envelope query
- * (place-studio and watershed-geometry): the raw joined tuple. A crossing
- * bbox is sent as-is, one naive envelope (pinned behavior until N2).
+ * Legacy singular ArcGIS value for callers whose product behavior belongs to
+ * a later slice. N2-A consumers use `arcGisEnvelopeValues`.
  */
-export function arcGisEnvelopeValue(
-  bbox: readonly [number, number, number, number]
-): string {
+export function arcGisEnvelopeValue(bbox: LngLatBbox): string {
   return bbox.join(',');
+}
+
+/** Merge split response rows by a stable identifier, preserving first order. */
+export function mergeByStableIdentifier<T>(
+  groups: ReadonlyArray<readonly T[]>,
+  identifier: (row: T) => string | number | null | undefined
+): T[] {
+  const merged: T[] = [];
+  const seen = new Set<string | number>();
+  for (const group of groups) {
+    for (const row of group) {
+      const id = identifier(row);
+      if (id !== null && id !== undefined) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+      }
+      merged.push(row);
+    }
+  }
+  return merged;
+}
+
+/**
+ * Run one request per non-crossing service piece. A parent abort or any
+ * sibling failure aborts the shared child signal for every request.
+ */
+export async function loadServiceEnvelopePieces<T>(
+  bbox: LngLatBbox,
+  parentSignal: AbortSignal,
+  load: (
+    piece: LngLatBbox,
+    siblingSignal: AbortSignal,
+    index: number
+  ) => Promise<T>
+): Promise<T[]> {
+  const siblingController = new AbortController();
+  const abortSiblings = (): void => siblingController.abort();
+  if (parentSignal.aborted) abortSiblings();
+  else parentSignal.addEventListener('abort', abortSiblings, { once: true });
+
+  try {
+    const requests = serviceBboxPieces(bbox).map((piece, index) =>
+      load(piece, siblingController.signal, index)
+    );
+    return await Promise.all(requests);
+  } catch (error) {
+    abortSiblings();
+    throw error;
+  } finally {
+    parentSignal.removeEventListener('abort', abortSiblings);
+  }
 }

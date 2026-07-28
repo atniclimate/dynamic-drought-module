@@ -25,10 +25,28 @@
  * records, not deeply trusted shapes.
  *
  * Version policy (NAMED: known-minor, not major-tolerant): exactly the
- * 1.2.x line is accepted (SUPPORTED_SCHEMA_VERSIONS). The 1.0->1.1 bump
+ * 1.3.x line is accepted (SUPPORTED_SCHEMA_VERSIONS). The 1.0->1.1 bump
  * was itself a semantic correction, and no additive-minor evolution rule
  * is ratified, so accepting unreviewed future minors would overclaim; the
- * range is extended deliberately when a reviewed schema lands (T-S1-4).
+ * range is extended deliberately when a reviewed schema lands.
+ *
+ * EXTENDED 1.2.x -> 1.3.x on 2026-07-27, the deliberate extension this note
+ * reserved for T-S1-4. That unit merged at 5e734df and shipped schema 1.3.0
+ * (the accepted soil and landcoverFuels families, terrain methodVersion 3,
+ * per-layer source resolution and vintage provenance, the per-bundle
+ * unavailable ledger), and public/data/landscape-signature-pnw.json declares
+ * 1.3.0. The 1.2.x line is NOT retained: schema/landscape-signature.schema.json
+ * pins schemaVersion as a `const` of 1.3.0 and the validator's own self-test
+ * asserts 1.2.0 FAILS, so 1.3.0 is the single normative shape and a loader
+ * accepting the retired line would contradict the schema it validates against.
+ * The added families surface through the existing shallow-trust seams
+ * (`sources` and `bundles` stay Record&lt;string, unknown&gt;, narrowed by the
+ * caller), so this extension needs no structural type change.
+ *
+ * Until this extension the loader rejected the ONLY artifact the project
+ * ships. It was invisible because no runtime consumer imports this module
+ * yet, and the gate validated a fixture rather than the shipped file; both
+ * halves are fixed together (see check:landscape-schema in package.json).
  *
  * Caching: NONE at module level, deliberately. The artifact is static,
  * but a memoizing stub would freeze an early absence (or an aborted read)
@@ -45,8 +63,8 @@ function isPlainRecord(v: unknown): v is Record<string, unknown> {
   return isObject(v) && !Array.isArray(v);
 }
 
-/** Exactly the reviewed 1.2.x schema line; see the version-policy note. */
-const SUPPORTED_SCHEMA_VERSIONS = /^1\.2\.\d+$/;
+/** Exactly the reviewed 1.3.x schema line; see the version-policy note. */
+const SUPPORTED_SCHEMA_VERSIONS = /^1\.3\.\d+$/;
 
 const TIMEOUT_MS = 6000;
 
@@ -311,7 +329,7 @@ export async function loadLandscapeSignature(
       reason: 'unsupported-version',
       note:
         `The landscape-signature artifact declares schemaVersion ` +
-        `${snapshot.schemaVersion}; this build supports the 1.2.x line ` +
+        `${snapshot.schemaVersion}; this build supports the 1.3.x line ` +
         `only.`
     };
   }

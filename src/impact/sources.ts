@@ -11,9 +11,9 @@
  * stated as probabilities or tendencies. A fetch that fails returns `ok:false`
  * so the horizon can say so honestly rather than inventing a value. A fetch
  * that succeeds but finds nothing (no active alerts, no fires) returns
- * `ok:true` with an informative observation. Every fetch goes through
- * `fetchWithBudget` with the briefing's master abort signal and a per-call
- * timeout, so a hung host never blocks the panel (invariant 5).
+ * `ok:true` with an informative observation. JSON fetches keep the briefing's
+ * master abort signal and per-call timeout active through body consumption,
+ * so a hung host never blocks the panel (invariant 5).
  *
  * Verified sources (see docs/KERNEL_INTEGRATION_CONTINUATION.md section 3 and
  * src/config/urls.ts): USDM FeatureServer (CORS *), NIFC perimeters
@@ -22,8 +22,12 @@
  */
 
 import { URLS } from '../config/urls';
-import { selectionEnvelope } from '../util/bbox';
-import { fetchWithBudget } from '../util/fetch';
+import {
+  loadServiceEnvelopePieces,
+  mergeByStableIdentifier
+} from '../util/bbox';
+import { naiveBboxSuggestsAntimeridianCrossing } from '../util/antimeridian';
+import { fetchJsonWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
 import { cpcOutlookBarsSvg, trendLineSvg, type TrendPoint } from '../ui/charts';
 import { categoryImpact } from './category-impacts';
@@ -87,9 +91,9 @@ function esriEnvelopeQuery(envelope: string, outFields: string, recordCount?: nu
 }
 
 /**
- * `fetchWithBudget` plus the ok-check and JSON parse shared by every fetcher.
- * Throws `HTTP <status>` on a non-OK response. Callers keep their own
- * `signal.aborted` re-check immediately after, before touching the panel.
+ * Cancellable JSON fetch shared by every fetcher. The owning signal and
+ * timeout remain active through response-body consumption. Callers keep their
+ * own `signal.aborted` re-check immediately after, before touching the panel.
  */
 async function fetchJson(
   url: string,
@@ -97,9 +101,7 @@ async function fetchJson(
   signal: AbortSignal,
   timeoutMs = TIMEOUT_MS
 ): Promise<unknown> {
-  const resp = await fetchWithBudget(url, { headers }, signal, timeoutMs);
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  return resp.json();
+  return fetchJsonWithBudget(url, { headers }, signal, timeoutMs);
 }
 
 /** The `features` array of a GeoJSON-shaped payload, or `[]` when absent. */
@@ -181,18 +183,13 @@ export async function fetchUsdmClaims(
           text: `This location is in ${impact.code} ${impact.label} as of this week's U.S. Drought Monitor. ${impact.summary}`,
           ...usdmShared
         }),
-        // The wildfire and heat companions translate the analyzed category
-        // through the documented USDM impact profiles and the causal-chain
-        // reads in ddm-drought-impact-modeling: a DDM-derived read, labeled so.
+        // The wildfire companion translates the analyzed category through the
+        // documented USDM impact profiles: a DDM-derived read, labeled so.
+        // The former extreme-heat companion was removed by ruling
+        // (D-0.8.0-047); do not reintroduce a heat claim inferred from the
+        // USDM category.
         makeClaim({
           text: `Wildfire: ${impact.wildfire} Drought raises the odds and the potential intensity of wildfire by drying and curing fuels; it does not by itself start fires.`,
-          ...usdmShared,
-          evidence: 'derived',
-          lineage: ['USDM category at the clicked point', 'documented USDM impact profiles and the ddm-drought-impact-modeling causal-chain reads'],
-          uncertainty: { kind: 'typical', text: 'an elevated-risk tendency at this category, not a certainty' }
-        }),
-        makeClaim({
-          text: `Extreme heat: ${impact.heat}`,
           ...usdmShared,
           evidence: 'derived',
           lineage: ['USDM category at the clicked point', 'documented USDM impact profiles and the ddm-drought-impact-modeling causal-chain reads'],
@@ -379,19 +376,54 @@ export async function fetchNifcClaims(
   signal: AbortSignal
 ): Promise<SourceResult> {
   const { lng, lat } = context.lngLat;
-  // Antimeridian-naive on purpose: a crossing selection sends ONE
-  // world-spanning envelope (T-M0-4 pin; N2 owns the split; see
-  // selectionEnvelope in src/util/bbox.ts and tests/antimeridian.spec.ts).
-  const envelope = selectionEnvelope(context.bbox, { lng, lat });
-  const url = `${URLS.nifcFires}/query?${esriEnvelopeQuery(envelope, 'attr_IncidentName', 50).toString()}`;
   const source = 'NIFC active fire perimeters (WFIGS)';
   const sourceUrl = 'https://data-nifc.opendata.arcgis.com/';
+  const incompleteCrossingEnvelope =
+    !context.serviceBbox &&
+    (context.bboxCrossesAntimeridian === true ||
+      (context.bbox !== undefined &&
+        naiveBboxSuggestsAntimeridianCrossing(context.bbox)));
+  if (incompleteCrossingEnvelope) {
+    return {
+      claims: [],
+      ok: false,
+      note: 'The NIFC active-fire service could not query the complete selection envelope.'
+    };
+  }
+  const requestBbox =
+    context.serviceBbox ??
+    context.bbox ??
+    ([lng - 0.5, lat - 0.5, lng + 0.5, lat + 0.5] as const);
 
   try {
-    const json: unknown = await fetchJson(url, GEOJSON_ACCEPT, signal);
+    const payloads = await loadServiceEnvelopePieces(
+      requestBbox,
+      signal,
+      async (piece, siblingSignal) => {
+        const envelope = piece.map(round4).join(',');
+        const query = esriEnvelopeQuery(
+          envelope,
+          'attr_UniqueFireIdentifier,attr_IncidentName',
+          50
+        );
+        return fetchJson(
+          `${URLS.nifcFires}/query?${query.toString()}`,
+          GEOJSON_ACCEPT,
+          siblingSignal
+        );
+      }
+    );
     if (signal.aborted) return { claims: [], ok: false };
 
-    const count = featuresOf(json).length;
+    const features = mergeByStableIdentifier(
+      payloads.map(featuresOf),
+      (feature) => {
+        if (!isObject(feature) || !isObject(feature.properties)) return null;
+        const id = feature.properties.attr_UniqueFireIdentifier;
+        return typeof id === 'string' || typeof id === 'number' ? id : null;
+      }
+    );
+    const count = features.length;
     const text =
       count === 0
         ? 'No active NIFC wildfire perimeters intersect this area right now.'
@@ -418,6 +450,28 @@ export async function fetchNifcClaims(
 const FIRE_EVENTS = ['Red Flag Warning', 'Fire Weather Watch']; // vocab-allow: verbatim NWS product names, quoted source data
 const HEAT_EVENTS = ['Excessive Heat Warning', 'Excessive Heat Watch', 'Heat Advisory', 'Extreme Heat Warning', 'Extreme Heat Watch']; // vocab-allow: verbatim NWS product names, quoted source data
 
+/** Validate the active-products shape before absence can become an all-clear. */
+function nwsActiveProductFeatures(json: unknown): unknown[] | null {
+  if (
+    !isObject(json) ||
+    json.type !== 'FeatureCollection' ||
+    !Array.isArray(json.features)
+  ) {
+    return null;
+  }
+  for (const feature of json.features) {
+    if (
+      !isObject(feature) ||
+      feature.type !== 'Feature' ||
+      !isObject(feature.properties) ||
+      typeof feature.properties.event !== 'string'
+    ) {
+      return null;
+    }
+  }
+  return json.features;
+}
+
 /**
  * Query the National Weather Service active alerts at the clicked point and
  * surface any fire-weather or extreme-heat alerts as observations. When none
@@ -437,7 +491,10 @@ export async function fetchNwsAlertClaims(
     const json: unknown = await fetchJson(url, GEOJSON_ACCEPT, signal);
     if (signal.aborted) return { claims: [], ok: false };
 
-    const features = featuresOf(json);
+    const features = nwsActiveProductFeatures(json);
+    if (features === null) {
+      throw new Error('invalid NWS active-products payload');
+    }
     const events = new Set<string>();
     for (const f of features) {
       if (!isObject(f) || !isObject(f.properties)) continue;
@@ -632,9 +689,12 @@ export async function fetchNwsForecastClaims(
   const sourceUrl = 'https://www.weather.gov/';
 
   try {
-    const pResp = await fetchWithBudget(pointsUrl, { headers: GEOJSON_ACCEPT }, signal, TIMEOUT_MS);
-    if (!pResp.ok) throw new Error(`points HTTP ${pResp.status}`);
-    const pJson: unknown = await pResp.json();
+    const pJson: unknown = await fetchJsonWithBudget(
+      pointsUrl,
+      { headers: GEOJSON_ACCEPT },
+      signal,
+      TIMEOUT_MS
+    );
     if (signal.aborted) return { claims: [], ok: false };
 
     const forecastUrl =
@@ -643,9 +703,12 @@ export async function fetchNwsForecastClaims(
         : null;
     if (!forecastUrl) throw new Error('no forecast URL in points response');
 
-    const fResp = await fetchWithBudget(forecastUrl, { headers: GEOJSON_ACCEPT }, signal, TIMEOUT_MS);
-    if (!fResp.ok) throw new Error(`forecast HTTP ${fResp.status}`);
-    const fJson: unknown = await fResp.json();
+    const fJson: unknown = await fetchJsonWithBudget(
+      forecastUrl,
+      { headers: GEOJSON_ACCEPT },
+      signal,
+      TIMEOUT_MS
+    );
     if (signal.aborted) return { claims: [], ok: false };
 
     const periods =

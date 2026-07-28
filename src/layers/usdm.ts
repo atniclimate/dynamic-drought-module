@@ -51,8 +51,13 @@ import { registerClickTarget } from '../map/interaction-coordinator';
 import { escapeHtml } from '../util/escape';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
+import { getCurrentRegion, onRegionChange } from '../state/region-store';
 import { timeline, type UsdmViewMode } from '../state/timeline';
 import { USDM_CATEGORIES, USDM_NONE_SWATCH } from '../config/palette';
+import {
+  resetDroughtSurfacePresentation,
+  setDroughtSurfacePresentation
+} from '../config/layers';
 import { requestLayerOn } from '../ui/layer-toggle-command';
 import {
   FrameCache,
@@ -88,7 +93,9 @@ export const fadeLayerIds = [
   fillId(SLOT_SOURCES[1]),
   outlineId(SLOT_SOURCES[1]),
   CHANGE_FILL,
-  CHANGE_OUTLINE
+  CHANGE_OUTLINE,
+  'bc-drought-fill',
+  'bc-drought-outline'
 ] as const;
 
 /** The fill ids the conditions strip reads (src/ui/conditions-strip.ts). */
@@ -696,7 +703,7 @@ async function setMode(map: maplibregl.Map, mode: UsdmViewMode): Promise<void> {
  * Network failures surface as `'error'` rather than throwing; the caller
  * (the sidebar activation spine) surfaces this in the status pill.
  */
-export async function activate(map: maplibregl.Map): Promise<void> {
+async function activateUsdm(map: maplibregl.Map): Promise<void> {
   if (map.getSource(SLOT_SOURCES[0])) {
     return;
   }
@@ -773,7 +780,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
  * slots and the change pair). Resets the temporal selection to "now" so
  * the URL never carries a week for a surface that is off.
  */
-export function deactivate(map: maplibregl.Map): void {
+function deactivateUsdm(map: maplibregl.Map): void {
   if (masterController) {
     masterController.abort();
     masterController = null;
@@ -887,7 +894,7 @@ function buildChangePopupHtml(props: GeoJsonProperties): string {
  * precedence table: it blankets every other target, and ranking it
  * higher would make sovereign geography visible but unreachable.
  */
-export function bindPopups(map: maplibregl.Map): void {
+function bindUsdmPopups(map: maplibregl.Map): void {
   registerClickTarget({
     kind: 'condition-surface',
     layerIds: [...USDM_FILL_LAYER_IDS],
@@ -913,4 +920,115 @@ export function bindPopups(map: maplibregl.Map): void {
       map.getCanvas().style.cursor = '';
     });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Issuer-aware drought controller
+// ---------------------------------------------------------------------------
+
+type DroughtEdition = 'usdm' | 'bc-basin';
+type BcDroughtModule = typeof import('./bc-drought');
+
+let activeEdition: DroughtEdition | null = null;
+let activeMap: maplibregl.Map | null = null;
+let unsubscribeRegion: (() => void) | null = null;
+let editionEpoch = 0;
+let bcModule: BcDroughtModule | null = null;
+let bcPopupsBound = false;
+
+function editionForRegion(region: string | null): DroughtEdition {
+  return region === 'british_columbia' ? 'bc-basin' : 'usdm';
+}
+
+function preparePresentation(edition: DroughtEdition): void {
+  if (edition === 'usdm') {
+    resetDroughtSurfacePresentation();
+    return;
+  }
+  setDroughtSurfacePresentation({
+    edition: 'bc-basin',
+    name: 'British Columbia Basin Drought Levels',
+    source: 'Province of British Columbia · source date loads with data',
+    sourceDate: null
+  });
+}
+
+function teardownEdition(map: maplibregl.Map, edition: DroughtEdition): void {
+  if (edition === 'usdm') {
+    deactivateUsdm(map);
+  } else {
+    bcModule?.deactivate(map);
+  }
+}
+
+async function switchEdition(
+  map: maplibregl.Map,
+  next: DroughtEdition
+): Promise<void> {
+  if (activeEdition === next) return;
+  const epoch = ++editionEpoch;
+  const previous = activeEdition;
+  activeEdition = null;
+  if (previous !== null) teardownEdition(map, previous);
+
+  preparePresentation(next);
+  registry.setStatus(LAYER_KEY, 'loading');
+
+  if (next === 'bc-basin') {
+    const mod = bcModule ?? (await import('./bc-drought'));
+    if (epoch !== editionEpoch || activeMap !== map) return;
+    bcModule = mod;
+    if (!bcPopupsBound) {
+      mod.bindPopups(map);
+      bcPopupsBound = true;
+    }
+    activeEdition = next;
+    await mod.activate(map);
+  } else {
+    activeEdition = next;
+    await activateUsdm(map);
+  }
+
+  if (
+    (epoch !== editionEpoch || activeMap !== map) &&
+    activeEdition === next
+  ) {
+    teardownEdition(map, next);
+    activeEdition = null;
+  }
+}
+
+/**
+ * Activate the one registered drought surface for the current region. The
+ * region listener removes the old issuer completely before mounting the new
+ * one, so no frame, legend, or date stamp can survive across the seam.
+ */
+export async function activate(map: maplibregl.Map): Promise<void> {
+  activeMap = map;
+  unsubscribeRegion?.();
+  unsubscribeRegion = onRegionChange((region) => {
+    void switchEdition(map, editionForRegion(region));
+  });
+  await switchEdition(map, editionForRegion(getCurrentRegion()));
+}
+
+/** Synchronous cancellation seam used by the layer controller. */
+export function cancelActivation(): void {
+  editionEpoch++;
+  masterController?.abort();
+  bcModule?.cancelActivation();
+}
+
+export function deactivate(map: maplibregl.Map): void {
+  editionEpoch++;
+  unsubscribeRegion?.();
+  unsubscribeRegion = null;
+  if (activeEdition !== null) teardownEdition(map, activeEdition);
+  activeEdition = null;
+  activeMap = null;
+  preparePresentation(editionForRegion(getCurrentRegion()));
+}
+
+export function bindPopups(map: maplibregl.Map): void {
+  bindUsdmPopups(map);
 }

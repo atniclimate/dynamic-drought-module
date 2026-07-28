@@ -17,6 +17,7 @@ import {
   loadPlaceCatalog,
   typedPlaceRef
 } from '../../config/place-catalog';
+import { regionCapabilityLevel } from '../../config/region-capability';
 import type {
   PlaceCapabilityKey,
   PlaceCatalogEntry
@@ -24,13 +25,15 @@ import type {
 import { URLS } from '../../config/urls';
 import { createBriefingSkeleton } from '../../impact/briefing';
 import { selectBriefNarrativeLine } from '../../impact/brief-narrative-selector';
-import { buildBoundaryContext, caveatFor, geometryBbox } from '../../impact/context';
+import { buildBoundaryContext, caveatFor } from '../../impact/context';
 import {
-  arcGisEnvelopeValue,
   bboxCenter,
   bboxIntersection,
-  bboxIntersects
+  bboxIntersects,
+  loadServiceEnvelopePieces,
+  mergeByStableIdentifier
 } from '../../util/bbox';
+import { geometryBboxAcrossAntimeridian } from '../../util/antimeridian';
 import { hydrateBriefing } from '../../impact/hydrate';
 import { computeOverlapRows } from '../../impact/overlap-engine';
 import type { OverlapRelationship } from '../../impact/overlap-engine';
@@ -58,7 +61,7 @@ import {
   loadWatershedCandidates,
   loadWatershedSelectionGeometry
 } from '../../state/watershed-geometry';
-import { fetchWithBudget } from '../../util/fetch';
+import { fetchJsonWithBudget } from '../../util/fetch';
 import { foldSearchText } from '../../util/search-fold';
 import { openImpactPanel } from '../impact-panel';
 
@@ -192,14 +195,12 @@ async function fetchJson(
   signal: AbortSignal,
   init: RequestInit | null = null
 ): Promise<unknown> {
-  const response = await fetchWithBudget(
+  return fetchJsonWithBudget(
     url,
     init,
     signal,
     PLACE_DATA_TIMEOUT_MS
   );
-  if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
-  return response.json() as Promise<unknown>;
 }
 
 function assertFeatureCollection(raw: unknown): FeatureCollection {
@@ -254,27 +255,24 @@ function escapeSql(value: string): string {
   return value.replace(/'/g, "''");
 }
 
-// centerOfBbox/bboxIntersects/bboxIntersection moved to src/util/bbox.ts at
-// T-M0-4 (bboxCenter and friends): same antimeridian-naive arithmetic, now
-// shared with deep-link and search and pinned in tests/antimeridian.spec.ts.
+// bboxCenter/bboxIntersects/bboxIntersection share the N2-A circular
+// longitude contract with deep links and search.
 
 function featureIntersectsBbox(
   feature: Feature,
   bbox: readonly [number, number, number, number]
 ): boolean {
-  const candidateBbox = geometryBbox(feature.geometry);
+  const candidateBbox = geometryBboxAcrossAntimeridian(feature.geometry);
   return candidateBbox ? bboxIntersects(candidateBbox, bbox) : false;
 }
 
 function arcGisEnvelopeParams(
-  bbox: readonly [number, number, number, number],
+  envelope: string,
   outFields: string
 ): URLSearchParams {
   return new URLSearchParams({
     where: '1=1',
-    // Antimeridian-naive on purpose: one raw envelope (T-M0-4 pin; N2 owns
-    // the split; see arcGisEnvelopeValue in src/util/bbox.ts).
-    geometry: arcGisEnvelopeValue(bbox),
+    geometry: envelope,
     geometryType: 'esriGeometryEnvelope',
     inSR: '4326',
     outSR: '4326',
@@ -293,16 +291,17 @@ function resolvedSelection(
   properties: GeoJsonProperties,
   geometry: ArealGeometry
 ): ResolvedPlaceSelection | null {
-  const bbox = geometryBbox(geometry);
+  const bbox = geometryBboxAcrossAntimeridian(geometry);
   if (!bbox) return null;
+  const rawContext = buildBoundaryContext(
+    kind,
+    properties,
+    geometry,
+    bboxCenter(bbox),
+    title
+  );
   return {
-    context: buildBoundaryContext(
-      kind,
-      properties,
-      geometry,
-      bboxCenter(bbox),
-      title
-    ),
+    context: { ...rawContext, bbox },
     geometry,
     bbox
   };
@@ -476,21 +475,45 @@ async function loadEcoregionCandidates(
   bbox: readonly [number, number, number, number],
   signal: AbortSignal
 ): Promise<FeatureCollection<ArealGeometry, PlaceOverlapProperties>> {
-  const query = async (layer: 7 | 11): Promise<Feature[]> => {
+  const query = async (
+    layer: 7 | 11,
+    envelope: string,
+    siblingSignal: AbortSignal
+  ): Promise<Feature[]> => {
     const outFields =
       layer === 7
         ? 'US_L4CODE,US_L4NAME,US_L3CODE,US_L3NAME'
         : 'US_L3CODE,US_L3NAME';
-    const params = arcGisEnvelopeParams(bbox, outFields);
+    const params = arcGisEnvelopeParams(envelope, outFields);
     return assertFeatureCollection(
       await fetchJson(
         `${URLS.epaEcoregionsMapServer}/${layer}/query?${params.toString()}`,
-        signal,
+        siblingSignal,
         { cache: 'no-store' }
       )
     ).features;
   };
-  const [level3, level4] = await Promise.all([query(11), query(7)]);
+
+  const groups = await loadServiceEnvelopePieces(
+    bbox,
+    signal,
+    async (piece, siblingSignal) => {
+      const envelope = piece.join(',');
+      const [level3, level4] = await Promise.all([
+        query(11, envelope, siblingSignal),
+        query(7, envelope, siblingSignal)
+      ]);
+      return { level3, level4 };
+    }
+  );
+  const level3 = mergeByStableIdentifier(
+    groups.map((group) => group.level3),
+    (feature) => textProperty(feature.properties, 'US_L3CODE')
+  );
+  const level4 = mergeByStableIdentifier(
+    groups.map((group) => group.level4),
+    (feature) => textProperty(feature.properties, 'US_L4CODE')
+  );
   abortIfNeeded(signal);
   const features: Array<Feature<ArealGeometry, PlaceOverlapProperties>> = [];
   for (const [source, level] of [
@@ -514,19 +537,32 @@ async function loadTribeCandidates(
   bbox: readonly [number, number, number, number],
   signal: AbortSignal
 ): Promise<FeatureCollection<ArealGeometry, PlaceOverlapProperties>> {
-  const params = arcGisEnvelopeParams(
+  const featureGroups = loadServiceEnvelopePieces(
     bbox,
-    'LARID,LARNAME,CLASSIFICATION,GISACRES,REGION'
+    signal,
+    async (piece, siblingSignal) => {
+      const envelope = piece.join(',');
+      const params = arcGisEnvelopeParams(
+        envelope,
+        'LARID,LARNAME,CLASSIFICATION,GISACRES,REGION'
+      );
+      return assertFeatureCollection(
+        await fetchJson(
+          `${URLS.biaLarFeatureServer}/query?${params.toString()}`,
+          siblingSignal,
+          { cache: 'no-store' }
+        )
+      ).features;
+    }
   );
-  const [collection, catalog] = await Promise.all([
-    fetchJson(
-      `${URLS.biaLarFeatureServer}/query?${params.toString()}`,
-      signal,
-      { cache: 'no-store' }
-    ).then(assertFeatureCollection),
+  const [groups, catalog] = await Promise.all([
+    featureGroups,
     loadPlaceCatalog('tribe', signal)
   ]);
   abortIfNeeded(signal);
+  const collectionFeatures = mergeByStableIdentifier(groups, (feature) =>
+    textProperty(feature.properties, 'LARID')
+  );
 
   const entriesByRepresentation = new Map<string, PlaceCatalogEntry[]>();
   for (const entry of catalog) {
@@ -540,7 +576,7 @@ async function loadTribeCandidates(
 
   const featuresByNation = new Map<string, Feature[]>();
   const entryByNation = new Map<string, PlaceCatalogEntry>();
-  for (const feature of collection.features) {
+  for (const feature of collectionFeatures) {
     const representationId = textProperty(feature.properties, 'LARNAME');
     if (!representationId) continue;
     for (const entry of
@@ -575,13 +611,22 @@ async function loadWatershedOverlapCandidates(
   bbox: readonly [number, number, number, number],
   signal: AbortSignal
 ): Promise<FeatureCollection<ArealGeometry, PlaceOverlapProperties>> {
-  const collection = await loadWatershedCandidates(
+  const collections = await loadServiceEnvelopePieces(
     bbox,
-    getMap()?.getZoom() ?? 0,
-    signal
+    signal,
+    (piece, siblingSignal) =>
+      loadWatershedCandidates(
+        piece,
+        getMap()?.getZoom() ?? 0,
+        siblingSignal
+      )
+  );
+  const candidates = mergeByStableIdentifier(
+    collections.map((collection) => collection.features),
+    (feature) => feature.properties.watershedCode
   );
   const features: Array<Feature<ArealGeometry, PlaceOverlapProperties>> = [];
-  for (const feature of collection.features) {
+  for (const feature of candidates) {
     const normalized = normalizedFeature(
       feature,
       'watershed',
@@ -976,7 +1021,14 @@ function PlaceStudio() {
           setPlaceStudioReturnAction(() => openImpactPanel(resolved.context));
         }
 
-        if (coverage.briefable.state === 'available') {
+        const impactSynthesis = regionCapabilityLevel(
+          resolved.context.regionKey,
+          'impactSynthesis'
+        );
+        if (
+          coverage.briefable.state === 'available' &&
+          impactSynthesis !== 'none'
+        ) {
           const briefing = createBriefingSkeleton(resolved.context);
           setNarrativeKindLabel(briefing.landKind);
           void hydrateBriefing(briefing, masterAbort.signal, () => {

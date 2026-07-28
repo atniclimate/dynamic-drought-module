@@ -108,23 +108,29 @@ export function contextStateName(
 }
 
 /**
- * Map a region key to its primary state for resource framing. The PNW
- * framings are Washington-centric (the deployer context is ATNI Climate);
- * Central Oregon routes to Oregon. The national explore framing has no
- * primary state.
+ * Map a supported single-state region key to its primary state for resource
+ * framing. The transboundary Columbia and Snake basin, national framing,
+ * unknown future keys, and a missing region return no local route.
  */
 function regionPrimaryState(regionKey: RegionKey | null): StateCode | null {
   switch (regionKey) {
+    case 'washington_state':
+    case 'cascades':
+    case 'southwest_washington':
+    case 'south_puget_sound':
+      return 'WA';
     case 'central_oregon':
       return 'OR';
     case 'alaska':
       return 'AK';
     case 'hawaii':
       return 'HI';
+    case 'columbia_snake_basin':
     case 'national':
+    case null:
       return null;
     default:
-      return 'WA';
+      return null;
   }
 }
 

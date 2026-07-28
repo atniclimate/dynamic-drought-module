@@ -42,9 +42,10 @@ import type { CoverageFamilyKey } from './capability-matrix';
  * Pacific Northwest framings (the deployment identity), 'explore' for the
  * pull-back framings (national, alaska, hawaii). The ratified NIDIS Drought
  * Early Warning System (DEWS) groups join at N4b; nothing renders grouping
- * yet (the grouped selector is N4b's visible change).
+ * yet (the grouped selector is N4b's visible change). 'canada' is the
+ * British Columbia display grouping added by U7.
  */
-export type RegionGroup = 'pnw' | 'explore';
+export type RegionGroup = 'pnw' | 'explore' | 'canada';
 
 /**
  * Which drought-monitor edition covers (part of) a region's identity
@@ -56,7 +57,9 @@ export type RegionGroup = 'pnw' | 'explore';
  *   source   'usdm' = the US Drought Monitor (weekly);
  *            'cdm'  = the Canadian Drought Monitor (monthly). 'cdm' is a
  *            union member for the N6 mixed-edition seam; no shipped region
- *            carries a 'cdm' row today (no claim is made).
+ *            carries a 'cdm' row today (no claim is made);
+ *            'bc-basin' = the Province of British Columbia basin drought
+ *            levels, updated weekly during the core drought season.
  *   scope    'full' when the edition covers the whole identity geography;
  *            'us-portion' when the identity geography deliberately includes
  *            Canadian land the edition does not cover (the Columbia and
@@ -66,8 +69,8 @@ export type RegionGroup = 'pnw' | 'explore';
  *            shows.
  */
 export interface RegionSourceEdition {
-  readonly source: 'usdm' | 'cdm';
-  readonly cadence: 'weekly' | 'monthly';
+  readonly source: 'usdm' | 'cdm' | 'bc-basin';
+  readonly cadence: 'weekly' | 'weekly-in-season' | 'monthly';
   readonly scope: 'full' | 'us-portion';
 }
 

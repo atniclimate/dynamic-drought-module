@@ -1004,9 +1004,9 @@ export const URLS = Object.freeze({
   // blends them into one field.
 
   // North American Drought Monitor (NADM) continental monthly snapshot
-  // (NOAA NCEI hosting; tri-national consensus). Build-time bulk download
-  // (the ensoIndicesLocal pattern). Regional cuts with an identical schema
-  // exist per basin (NADM-<Region>current.geojson; Columbia confirmed).
+  // (NOAA NCEI hosting; tri-national consensus). Regional cuts with an
+  // identical schema exist per basin (NADM-<Region>current.geojson;
+  // Columbia confirmed).
   // Properties: DROUGHTCAT "d0".."d4", YEAR_MONTH "YYYYMM", POPULATION,
   // POP_PCT, AREA_SQMI, AREA_PCT. NO per-feature issuing-agency attribute
   // (labeling NDMC vs AAFC vs CONAGUA needs a spatial join; flagged for
@@ -1017,6 +1017,17 @@ export const URLS = Object.freeze({
   // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, application/geo+json,
   // Access-Control-Allow-Origin: * (wildcard, Origin set); YEAR_MONTH
   // 202605, Last-Modified 2026-06-16 (monthly, 2-3 week publication lag).
+  // RECONFIRMED 2026-07-27: direct .geojson remains HTTP 200 with wildcard
+  // CORS; 616,132 bytes, five MultiPolygons, DROUGHTCAT d0-d4, YEAR_MONTH
+  // 202606, Last-Modified 2026-07-16. NCEI's current open-data policy keeps
+  // NOAA and other federal data public domain in the United States, while
+  // contributed international holdings retain their originator's terms.
+  // Carry product attribution: National Oceanic and Atmospheric
+  // Administration (NOAA), National Drought Mitigation Center (NDMC),
+  // United States Department of Agriculture (USDA), Agriculture and Agri-Food
+  // Canada (AAFC), and Mexico's National Water Commission (CONAGUA). Do not
+  // infer an issuing agency for a polygon. Runtime must fetch this .geojson
+  // only; the sibling .json extension remains the TopoJSON trap.
   nadmCurrentGeojson:
     'https://www.ncei.noaa.gov/pub/data/nidis/geojson/na/nadm/NADM-current.geojson',
 
@@ -1024,7 +1035,8 @@ export const URLS = Object.freeze({
   // bulk archive. Consumer substitutes <year>/<yymm>: .../areasofDrought/
   // <year>/cdm_<yymm>_drought_areas_json.zip. License: Open Government
   // Licence - Canada (confirmed via open.canada.ca dataset
-  // 292646cd-619f-4200-afb1-8b2c52f984a2).
+  // 292646cd-619f-4200-afb1-8b2c52f984a2; reconfirmed unchanged
+  // 2026-07-27 through the open.canada.ca package API).
   // CAVEAT (load-bearing): the zip holds ONE FILE PER OCCUPIED CLASS ONLY
   // (CDM_<yymm>_D<n>_LR.geojson; May 2026 held D0/D1/D2, no D3/D4 file);
   // never assume all five. Properties are ONLY {OBJECTID, DM 0-4, AREA_AC,
@@ -1037,11 +1049,15 @@ export const URLS = Object.freeze({
   // used; the archive regenerates monthly).
   // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, application/zip,
   // 2,187,740 bytes; Access-Control-Allow-Origin ABSENT (Origin set), so
-  // browser use is Worker-proxy ONLY and agriculture.canada.ca is NOT yet
-  // on the Worker ALLOW_LIST (add at wire time); build-time is the cleaner
-  // route for a monthly product.
+  // browser use is Worker-proxy ONLY and agriculture.canada.ca is NOT on
+  // the Worker ALLOW_LIST. T-V0-6 selected the build-time snapshot route;
+  // agriculture.canada.ca stays off the allow list.
   cdmDroughtAreasZipRoot:
     'https://agriculture.canada.ca/atlas/data_donnees/canadianDroughtMonitor/data_donnees/geoJSON/areasofDrought',
+  // Compact build-time snapshot emitted by scripts/build-cdm-snapshot.mjs.
+  // The artifact records its own month, class occupancy, source URL, byte
+  // count, retrieval date, reprojection, and mandatory stewardship result.
+  cdmDroughtAreasLocal: './data/cdm-drought-areas.json',
 
   // British Columbia drought levels by water basin (GeoBC / Water Management
   // Branch), ArcGIS Online hosted feature view, layer 27
@@ -1054,6 +1070,9 @@ export const URLS = Object.freeze({
   // Columbia. MAINTAINER SIGN-OFF 2026-07-08 (Patrick Freeland, maintainer
   // of record): approved for use, accepting the "All rights reserved"
   // terms as a display/attribution source; the license blocker is lifted.
+  // RECONFIRMED 2026-07-27: the ArcGIS item still says "Access Only",
+  // "Copyright (c), Province of British Columbia. All rights reserved.";
+  // public access, Query/Extract capabilities, and wildcard CORS are unchanged.
   // The actual layer wiring remains a scheduled 0.7.0 transboundary task
   // (seam doctrine: name the issuing agency per polygon, never blend); this
   // stamp only clears the gate. Any deployer re-serving this into a Tribe's

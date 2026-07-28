@@ -7,8 +7,9 @@
  * the typed context the briefing composer consumes: it resolves a display
  * title per boundary kind, attaches the representation caveat for Tribal and
  * Treaty boundaries (CLAUDE.md section 2), derives a bounding box from the
- * feature geometry for later query clipping, and reads the active region key
- * from the shared region store.
+ * feature geometry for later query clipping, carries a compact service
+ * envelope for antimeridian crossings, and reads the active region key from
+ * the shared region store.
  *
  * Identifying the land is step 1 of the land-resource-analyst flow
  * (docs/KERNEL_INTEGRATION_CONTINUATION.md section 12).
@@ -17,7 +18,10 @@
 import type { GeoJsonProperties, Geometry, Position } from 'geojson';
 
 import { getCurrentRegion } from '../state/region-store';
-import { geometryLikelyCrossesAntimeridian } from '../util/antimeridian';
+import {
+  geometryBboxAcrossAntimeridian,
+  geometryLikelyCrossesAntimeridian
+} from '../util/antimeridian';
 import type { BoundaryKind, BoundarySelectionContext } from './types';
 
 /**
@@ -105,9 +109,9 @@ export function resolveBoundaryTitle(
  * not emit). Longitudes are not normalized across the antimeridian; the PNW
  * framings do not cross it. For a crossing geometry the walk smears into a
  * near-world-spanning box whose true extent is NOT recoverable from the box
- * alone; `buildBoundaryContext` records the crossing evidence on the
- * context's `bboxCrossesAntimeridian` flag (T-M0-4), and consumers keep
- * their naive handling until N2 (pinned in tests/antimeridian.spec.ts).
+ * alone. `buildBoundaryContext` preserves this compatibility bbox and carries
+ * the geometry-derived compact envelope separately for services that must
+ * cover the complete selection.
  */
 export function geometryBbox(
   geometry: Geometry | undefined | null
@@ -153,15 +157,20 @@ export function buildBoundaryContext(
 ): BoundarySelectionContext {
   const title = titleOverride && titleOverride.trim() !== '' ? titleOverride : resolveTitle(kind, properties);
   const bbox = geometryBbox(geometry);
-  // T-M0-4: crossing evidence rides the context so N2 can change consumer
-  // behavior without re-deriving detection; the bbox stays the naive walk.
   const crossesAntimeridian = bbox ? geometryLikelyCrossesAntimeridian(geometry) : false;
+  // N2-A consumes the T-M0-4 crossing evidence. The compatibility bbox stays
+  // the naive walk, while every geometry-backed service receives a complete
+  // circular envelope and never reconstructs one from lost min/max endpoints.
+  const serviceBbox = bbox
+    ? geometryBboxAcrossAntimeridian(geometry)
+    : null;
   return {
     kind,
     title,
     properties: (properties as Readonly<Record<string, unknown>> | null) ?? null,
     lngLat: { lng: lngLat.lng, lat: lngLat.lat },
     ...(bbox ? { bbox } : {}),
+    ...(serviceBbox ? { serviceBbox } : {}),
     ...(crossesAntimeridian ? { bboxCrossesAntimeridian: true } : {}),
     regionKey: getCurrentRegion()
   };

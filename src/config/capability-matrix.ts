@@ -12,17 +12,12 @@
  * (`npm run build:coverage-matrix`); the gate fails on drift. Notes are one
  * line, honest, and name the limiting fact (not aspiration).
  *
- * Nothing in the APPLICATION imports this module at runtime yet: the
- * T-M0-4 honest-disablement hook is `regionCapabilityLevel()` in
+ * The application imports this module through the
+ * T-M0-4 honest-disablement hooks in
  * src/config/region-capability.ts (a separate module so this one stays
  * import-free for the coverage-matrix generator's native type-stripping
- * import, src/config/regions.ts stays metadata-only, and the matrix stays
- * out of the eager entry graph), and that hook has no runtime caller
- * either; the first behavioral consumer is the honest-disablement work in
- * the breadth track (M-BREADTH: disable unsupported analyses per this
- * matrix rather than failing quietly). (Wording amended at T-M0-4 from
- * "Nothing imports this module at runtime yet": tests import it, and the
- * hook module now exists.)
+ * import). N2-A's impact panel is the first behavioral consumer: unsupported
+ * synthesis renders the matrix note and starts no briefing hydration.
  */
 
 import type {
@@ -134,7 +129,7 @@ export const CAPABILITY_MATRIX: CapabilityMatrix = {
   'ak-hi': {
     display: {
       level: 'partial',
-      note: 'The Alaska framing stops short of the Aleutians; the antimeridian contract is pending (N2).'
+      note: 'The Alaska framing includes the tested Aleutian extent; condition surfaces remain unverified for Alaska and Hawaii.'
     },
     selectablePlace: {
       level: 'partial',
@@ -155,16 +150,16 @@ export const CAPABILITY_MATRIX: CapabilityMatrix = {
   },
   canada: {
     display: {
-      level: 'none',
-      note: 'Camera framings cross into Canada but every condition source is US-scoped there (the framings carry that coverage note); validated Canadian display is the N-track and U7.'
+      level: 'partial',
+      note: 'British Columbia has a validated live basin display, the Canadian Drought Monitor has a committed monthly national snapshot, and the North American Drought Monitor supplies separate continental context; Canadian place catalogs do not ship.'
     },
     selectablePlace: {
       level: 'none',
       note: 'No Canadian place catalogs are wired.'
     },
     droughtState: {
-      level: 'none',
-      note: 'The Canadian Drought Monitor endpoint is qualified (T-V0-5 evidence) but nothing is wired.'
+      level: 'partial',
+      note: 'Province of British Columbia basin levels display with source dates, the Canadian Drought Monitor snapshot displays its month and class occupancy, and the North American Drought Monitor displays its separate consensus month; no edition is blended with another.'
     },
     landscapeSignature: {
       level: 'none',

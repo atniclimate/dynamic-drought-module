@@ -2157,6 +2157,34 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   gap: 4px;
 }
 
+/* PRE-1.0 TEST PREVIEW BADGE. Remove this rule together with the
+   .test-preview-badge span in index.html before the 1.0 publish; they are
+   the only two places it exists.
+
+   Deliberately non-interactive: pointer-events: none means it can never
+   intercept a click meant for the map or for the overlay buttons it sits
+   above, which is the failure mode this corner has already produced once
+   (the U4d basemap-switcher spec moved that control to bottom-right
+   precisely because this stack swallows pointer events). It is a plain
+   span, not a control and not a live region, so it reads once in document
+   order and never announces itself again. Muted on purpose: it states the
+   build's status honestly without competing with data for attention. */
+.test-preview-badge {
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-weight: var(--fw-subtitle);
+  font-size: 9px;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-3);
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 2px 5px;
+  line-height: 1;
+  user-select: none;
+}
+
 .overlay-btn {
   display: inline-flex;
   align-items: center;
@@ -4210,6 +4238,23 @@ a.impact-resource-link::after {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+.map-key-qualification {
+  flex: 1 1 220px;
+  min-width: 0;
+  line-height: 1.3;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.map-key-qualification strong {
+  color: var(--fg-1);
+  font-weight: var(--fw-strong);
+}
+.app-shell.embed .map-key {
+  box-sizing: border-box;
+  flex-wrap: wrap;
+  row-gap: 4px;
+  max-width: min(560px, calc(100% - 112px));
 }
 .map-key-swatch {
   width: 12px;

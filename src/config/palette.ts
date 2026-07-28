@@ -133,6 +133,57 @@ export const USDM_NONE_SWATCH: Readonly<{ code: string; label: string; color: st
 };
 
 /* ---------------------------------------------------------------------------
+ * North American Drought Monitor (NADM) monthly consensus categories
+ *
+ * Kept separate from the weekly USDM palette even though the published class
+ * names and colors align. NADM is a tri-national monthly consensus product,
+ * not a USDM extension or a field to blend with USDM, CDM, or BC basin levels.
+ * ------------------------------------------------------------------------- */
+
+export const NADM_CATEGORIES: ReadonlyArray<{
+  readonly code: string;
+  readonly label: string;
+  readonly color: string;
+}> = [
+  { code: 'D0', label: 'Abnormally dry', color: '#FFFF00' },
+  { code: 'D1', label: 'Moderate drought', color: '#FCD37F' },
+  { code: 'D2', label: 'Severe drought', color: '#FFAA00' },
+  { code: 'D3', label: 'Extreme drought', color: '#E60000' },
+  { code: 'D4', label: 'Exceptional drought', color: '#730000' }
+];
+
+/* ---------------------------------------------------------------------------
+ * Province of British Columbia basin drought levels
+ *
+ * This is a separate scale from USDM. Levels are named numerically because
+ * the FeatureServer publishes the number, not a USDM-equivalent category.
+ * Value 99 is an explicit No update state and sits outside the severity ramp.
+ * ------------------------------------------------------------------------- */
+
+export interface BcDroughtLevel {
+  readonly value: number;
+  readonly code: string;
+  readonly label: string;
+  readonly color: string;
+}
+
+export const BC_DROUGHT_LEVELS: readonly BcDroughtLevel[] = [
+  { value: 0, code: '0', label: 'Level 0', color: '#2f855a' },
+  { value: 1, code: '1', label: 'Level 1', color: '#f6e05e' },
+  { value: 2, code: '2', label: 'Level 2', color: '#f6ad55' },
+  { value: 3, code: '3', label: 'Level 3', color: '#ed8936' },
+  { value: 4, code: '4', label: 'Level 4', color: '#e53e3e' },
+  { value: 5, code: '5', label: 'Level 5', color: '#822727' }
+];
+
+export const BC_DROUGHT_NO_UPDATE: BcDroughtLevel = {
+  value: 99,
+  code: 'No update',
+  label: 'Not measured right now',
+  color: '#64748b'
+};
+
+/* ---------------------------------------------------------------------------
  * Treaty area styling
  *
  * The `match` field is a substring tested against the GeoJSON feature name

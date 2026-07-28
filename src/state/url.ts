@@ -43,6 +43,8 @@ import {
  *   dmode    'chg1' | 'chg4', the USDM change-map view mode
  *   sst      YYYY-MM-DD selected SST anomaly frame (always paused on load;
  *            playback state is deliberately never serialized)
+ *   heatday  one-based HeatRisk frame position; the layer resolves that
+ *            position only against the service's advertised granule list
  *
  * plus the region-shell trio (S2, the additive URL migration;
  * D-0.7.0-039/041/042/044/053; the precedence table lives in
@@ -86,6 +88,9 @@ export interface ParsedUrlParams {
   readonly sstDate: string | null;
   /** Outlook register from `outlook=`; 'seasonal' when absent or invalid. */
   readonly outlookRange: OutlookRange;
+  /** One-based HeatRisk frame position from `heatday=`, or null for the
+   * first currently advertised frame. */
+  readonly heatRiskDay: number | null;
   /** Basemap mode from `basemap=` (U4d, D-0.7.0-031); only the exact
    * token 'satellite' selects satellite, anything else is 'default'. */
   readonly basemap: BasemapMode;
@@ -106,6 +111,30 @@ export interface ParsedUrlParams {
 /** Parse the additive `studio=` route token. */
 export function parseStudioParam(raw: string | null): 'layers' | 'place' | null {
   return raw === 'layers' || raw === 'place' ? raw : null;
+}
+
+/** Parse the additive HeatRisk day position. Unknown or duplicate input is ignored. */
+export function parseHeatRiskDayParam(params = new URLSearchParams(window.location.search)): number | null {
+  const values = params.getAll('heatday');
+  if (values.length !== 1 || !/^[1-9]\d*$/.test(values[0] ?? '')) return null;
+  const day = Number(values[0]);
+  return Number.isSafeInteger(day) ? day : null;
+}
+
+/**
+ * Replace only the HeatRisk day parameter while preserving every other
+ * current URL field, including `embed=true`.
+ */
+export function syncHeatRiskDayParam(day: number | null): void {
+  const params = new URLSearchParams(window.location.search);
+  if (day !== null && Number.isSafeInteger(day) && day > 1) {
+    params.set('heatday', String(day));
+  } else {
+    params.delete('heatday');
+  }
+  const query = params.toString();
+  const url = window.location.pathname + (query === '' ? '' : `?${query}`);
+  window.history.replaceState(window.history.state, '', url);
 }
 
 /**
@@ -213,6 +242,7 @@ export function parseUrlParams(): ParsedUrlParams {
     usdmMode: parseUsdmMode(params.get('dmode')),
     sstDate: parseSstDate(params.get('sst')),
     outlookRange: parseOutlookRange(params.get('outlook')),
+    heatRiskDay: parseHeatRiskDayParam(params),
     // A DUPLICATED basemap parameter is malformed input and pins to the
     // default in BOTH orders (D-0.7.0-031 edge-case rule; the stage-5
     // adversarial major 5 caught a first-wins drift here): ambiguity is
@@ -310,6 +340,12 @@ export interface UrlSyncState {
  * polluted by every layer toggle.
  */
 export function syncUrl(state: UrlSyncState): void {
+  // HeatRisk owns its additive day position. Preserve it across every
+  // ordinary state write so layer toggles and embed changes cannot erase
+  // the selected frame.
+  const heatRiskDay = parseHeatRiskDayParam(
+    new URLSearchParams(window.location.search)
+  );
   const params = new URLSearchParams();
 
   if (state.region) {
@@ -361,6 +397,9 @@ export function syncUrl(state: UrlSyncState): void {
   }
   if (state.outlookRange === 'monthly') {
     params.set('outlook', state.outlookRange);
+  }
+  if (heatRiskDay !== null && heatRiskDay > 1) {
+    params.set('heatday', String(heatRiskDay));
   }
   if (state.basemap === 'satellite') {
     params.set('basemap', state.basemap);

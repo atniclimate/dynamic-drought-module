@@ -2,11 +2,11 @@
  * ENSO driver line (0.4.0 B2 slice 1).
  *
  * A one-line readout of the El Nino / Southern Oscillation (ENSO) state inside
- * the Brief display description: the phase, the latest Oceanic Nino Index
- * (ONI) reading, and a short Pacific Northwest tilt. Expanding the line (a
- * native details/summary disclosure) shows the full odds-never-outcomes tilt
- * paragraph with the modulators named, the snapshot provenance, and the source
- * link.
+ * the Brief display description: the phase, the latest Relative Oceanic Nino
+ * Index (RONI) operational reading, and a short Pacific Northwest tilt.
+ * Expanding the line (a native details/summary disclosure) shows the full
+ * odds-never-outcomes tilt paragraph with the modulators named, the observed
+ * companion indices, the snapshot provenance, and the source link.
  *
  * This deliberately does not live inside the conditions strip: the strip's
  * contract is "reflect what is rendered on the map" and ENSO is a climate
@@ -54,7 +54,7 @@ export function buildEnsoDriver(): void {
         <p class="enso-driver-detail">${escapeHtml(summary.detail)}</p>
         <div class="enso-driver-actions">
           <button type="button" class="enso-driver-pacific" id="enso-view-pacific">View the Pacific</button>
-          <a class="enso-driver-source" href="${escapeHtml(summary.sourceUrl)}" target="_blank" rel="noopener">NOAA CPC ONI and Relative ONI</a>
+          <a class="enso-driver-source" href="${escapeHtml(summary.sourceUrl)}" target="_blank" rel="noopener">NOAA Climate Prediction Center observed ENSO indices</a>
         </div>
       </details>
     `;

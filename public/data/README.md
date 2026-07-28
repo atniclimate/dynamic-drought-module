@@ -140,6 +140,64 @@ climate data.
 
 ---
 
+## British Columbia basin drought levels (live, not bundled)
+
+The British Columbia drought framing fetches basin geometry directly from
+the Province of British Columbia ArcGIS FeatureServer at activation time.
+No British Columbia basin geometry is copied into this repository or stored
+under `public/data/`.
+
+The source attribution is `Province of British Columbia`. Its ArcGIS item
+terms were reconfirmed on 2026-07-27 and remain `Access Only`, `Copyright
+(c), Province of British Columbia. All rights reserved.` The maintainer's
+2026-07-08 display-and-attribution sign-off therefore remains applicable.
+The layer asks only for the basin identifier, basin name, drought level, and
+source date needed by the display.
+
+The provincial 0 through 5 scale is not converted to United States Drought
+Monitor categories. Source value 99 renders as `No update`, meaning the basin
+is not measured outside the core drought season; it is never put on the
+severity ramp.
+
+---
+
+## `cdm-drought-areas.json` (committed monthly snapshot)
+
+A compact World Geodetic System 1984 (WGS 84) snapshot of the Canadian
+Drought Monitor from Agriculture and Agri-Food Canada, licensed under the
+Open Government Licence - Canada. The dataset licence was reconfirmed through
+the open.canada.ca record
+`292646cd-619f-4200-afb1-8b2c52f984a2` on 2026-07-27.
+
+The committed artifact is for June 2026. It records its month, source URL,
+retrieval date, source archive byte count, present and absent classes,
+reprojection, simplification, and stewardship result. The source archive
+contained D0, D1, D2, and D3 files. D4 was absent, which means no area was in
+that class for the published month; it does not mean the fetch failed. A
+missing archive or failed build never writes an artifact.
+
+Refresh a named month with:
+
+```bash
+npm run build:cdm -- YYYY-MM
+```
+
+The builder downloads one archive, expands it only in Node with the dev-only
+`fflate` dependency, checks every archive member name and decoded content for
+First Nations, Metis, Métis, Inuit, reserve, and Treaty terms, and fails
+before write on any match. It also rejects unexpected GeoJSON or properties,
+reprojects EPSG:3857 to WGS 84, and enforces a 5,000,000-byte build ceiling.
+For the June 2026 snapshot the mandatory result was:
+
+`PASS: no First Nations, Metis, Métis, Inuit, reserve, or Treaty terms found in 4 archive member names or decoded contents.`
+
+The runtime receives only the compact JSON artifact. Neither a ZIP archive nor
+a ZIP decoder is imported by application code. Areas without a rendered
+polygon are described as having no polygon coverage in the artifact; they are
+never painted or described as class zero.
+
+---
+
 ## Quick verification
 
 After populating a deployer slot, test locally from the repo root:

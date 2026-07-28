@@ -223,6 +223,8 @@ export interface OniPoint {
   readonly year: number;
   /** ONI anomaly (signed, in degrees Celsius). */
   readonly anom: number;
+  /** True when the plotted seasonal value may still be revised. */
+  readonly preliminary?: boolean;
 }
 
 /** A comparison series (for example RONI) plotted dashed alongside the primary. */
@@ -266,7 +268,10 @@ export function oniLineSvg(values: readonly OniPoint[], opts: OniLineOptions): s
   const h = 120;
   const padL = 22;
   const padR = 8;
-  const padTop = 22; // room for the legend row
+  const primaryHasPreliminary = pts.some((point) => point.preliminary === true);
+  const compareHasPreliminary = cmp.some((point) => point.preliminary === true);
+  const hasPreliminary = primaryHasPreliminary || compareHasPreliminary;
+  const padTop = hasPreliminary ? 32 : 22; // second legend row explains preliminary values
   const padBottom = 24;
   const plotW = w - padL - padR;
   const plotH = h - padTop - padBottom;
@@ -283,6 +288,7 @@ export function oniLineSvg(values: readonly OniPoint[], opts: OniLineOptions): s
 
   const primaryPts = pts.map((p, i) => `${xOf(i, pts.length).toFixed(1)},${y(p.anom).toFixed(1)}`).join(' ');
   const last = pts[pts.length - 1] as OniPoint;
+  const cmpLast = cmp.length >= 2 ? (cmp[cmp.length - 1] as OniPoint) : null;
 
   const guides =
     `<line x1="${padL}" y1="${zeroY}" x2="${w - padR}" y2="${zeroY}" stroke="var(--line-strong)" stroke-width="0.7"/>` +
@@ -295,18 +301,20 @@ export function oniLineSvg(values: readonly OniPoint[], opts: OniLineOptions): s
   // comparison, each with its current value.
   let legend =
     `<line x1="${padL}" y1="6" x2="${padL + 12}" y2="6" stroke="var(--fg-0)" stroke-width="1.6"/>` +
-    `<text x="${padL + 16}" y="9" fill="var(--fg-1)" font-size="8">${escapeHtml(primaryLabel)} ${signedAnom(last.anom)}</text>`;
+    `<text x="${padL + 16}" y="9" fill="var(--fg-1)" font-size="8">${escapeHtml(primaryLabel)}${primaryHasPreliminary ? '*' : ''} ${signedAnom(last.anom)}</text>`;
   let comparePoly = '';
   let compareDot = '';
-  if (cmp.length >= 2) {
-    const cmpLast = cmp[cmp.length - 1] as OniPoint;
+  if (cmpLast) {
     const cmpPts = cmp.map((p, i) => `${xOf(i, cmp.length).toFixed(1)},${y(p.anom).toFixed(1)}`).join(' ');
     comparePoly = `<polyline points="${cmpPts}" fill="none" stroke="var(--fg-2)" stroke-width="1.2" stroke-dasharray="4 2" stroke-linejoin="round"/>`;
     compareDot = `<circle cx="${xOf(cmp.length - 1, cmp.length).toFixed(1)}" cy="${y(cmpLast.anom).toFixed(1)}" r="2.4" fill="var(--fg-2)"/>`;
     legend +=
       `<line x1="${padL + 110}" y1="6" x2="${padL + 122}" y2="6" stroke="var(--fg-2)" stroke-width="1.4" stroke-dasharray="4 2"/>` +
-      `<text x="${padL + 126}" y="9" fill="var(--fg-1)" font-size="8">${escapeHtml(opts.compare!.label)} ${signedAnom(cmpLast.anom)}</text>`;
+      `<text x="${padL + 126}" y="9" fill="var(--fg-1)" font-size="8">${escapeHtml(opts.compare!.label)}${compareHasPreliminary ? '*' : ''} ${signedAnom(cmpLast.anom)}</text>`;
   }
+  const preliminaryNote = hasPreliminary
+    ? `<text x="${padL}" y="19" fill="var(--fg-2)" font-size="7.5">* Preliminary: plotted value may change.</text>`
+    : '';
 
   const firstLabel = `${pts[0]!.seas} ${pts[0]!.year}`;
   const lastLabel = `${last.seas} ${last.year}`;
@@ -314,6 +322,7 @@ export function oniLineSvg(values: readonly OniPoint[], opts: OniLineOptions): s
   const inner =
     guides +
     legend +
+    preliminaryNote +
     comparePoly +
     `<polyline points="${primaryPts}" fill="none" stroke="var(--fg-0)" stroke-width="1.4" stroke-linejoin="round"/>` +
     compareDot +
@@ -322,7 +331,10 @@ export function oniLineSvg(values: readonly OniPoint[], opts: OniLineOptions): s
     `<text x="${w - padR}" y="${h - 12}" fill="var(--fg-3)" font-size="7.5" text-anchor="end">${escapeHtml(lastLabel)}</text>` +
     attribution(padL, h - 2, opts.source);
 
-  return `<figure class="ddm-chart-fig">${svgWrap(w, h, opts.title, inner)}</figure>`;
+  const accessibleTitle = hasPreliminary
+    ? `${opts.title}. Preliminary plotted values may change.`
+    : opts.title;
+  return `<figure class="ddm-chart-fig">${svgWrap(w, h, accessibleTitle, inner)}</figure>`;
 }
 
 // ---------------------------------------------------------------------------

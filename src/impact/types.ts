@@ -213,18 +213,25 @@ export interface BoundarySelectionContext {
   readonly properties: Readonly<Record<string, unknown>> | null;
   /** Click location in WGS 84. */
   readonly lngLat: { readonly lng: number; readonly lat: number };
-  /** Feature bounding box `[west, south, east, north]`, when derivable. */
+  /**
+   * Compatibility feature bounding box `[west, south, east, north]`, when
+   * derivable. A crossing geometry retains its naive min/max walk here.
+   */
   readonly bbox?: readonly [number, number, number, number];
+  /**
+   * Complete geometry-derived service envelope, encoded with west greater
+   * than east when the selection crosses the antimeridian. Services that can
+   * make a negative spatial claim use this field and fail closed when a
+   * suspected crossing has no complete envelope.
+   */
+  readonly serviceBbox?: readonly [number, number, number, number];
   /**
    * True when the selected feature's geometry shows antimeridian-crossing
    * evidence (`geometryLikelyCrossesAntimeridian` in
    * src/util/antimeridian.ts; evidence, not proof). When set, `bbox` above
-   * REMAINS the naive min/max walk (near-world-spanning) and CANNOT be
-   * split or reinterpreted into service envelopes; crossing-aware
-   * envelopes must be re-derived from the geometry, which is N2's work.
-   * NO consumer changes behavior on this flag yet (T-M0-4 contract); the
-   * consumers' naive handling is pinned in tests/antimeridian.spec.ts.
-   * Omitted (never false) when no crossing evidence exists.
+   * remains the naive min/max walk and `serviceBbox` carries the compact
+   * geometry envelope. Omitted (never false) when no crossing evidence
+   * exists.
    */
   readonly bboxCrossesAntimeridian?: boolean;
   /** Active region key, or null if no region is selected yet. */

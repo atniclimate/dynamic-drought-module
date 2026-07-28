@@ -55,8 +55,7 @@ export const MOBILE_HAZARD_PRESETS: readonly ViewPreset[] = [
   {
     key: 'hazard-heat',
     label: 'Heat',
-    // vocab-allow: names the NWS HeatRisk and alert products, upstream data
-    description: 'Extreme heat: the NWS HeatRisk forecast with active heat alerts',
+    description: 'Extreme heat: published National Weather Service HeatRisk heat-impact levels for the selected date, with active heat notices',
     layers: ['heatrisk', 'nws-alerts', 'aiannh']
   },
   {
@@ -80,8 +79,7 @@ export const VIEW_PRESETS: readonly ViewPreset[] = [
   {
     key: 'this-week',
     label: 'This week',
-    // vocab-allow: names the NWS HeatRisk and alert products, upstream data
-    description: 'The days ahead: the HeatRisk forecast for today with active heat and fire-weather alerts',
+    description: 'The days ahead: published National Weather Service HeatRisk heat-impact levels for the selected date, with active heat and fire-weather notices',
     layers: ['heatrisk', 'nws-alerts', 'aiannh']
   },
   {

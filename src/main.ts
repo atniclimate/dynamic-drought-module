@@ -13,7 +13,6 @@ import { onTypedPlaceChange } from './state/typed-place';
 import { buildSidebar } from './ui/sidebar';
 import { initHoverInspector } from './ui/hover-inspector';
 import { initMapKey } from './ui/map-key';
-import { buildEnsoDriver } from './ui/enso-driver';
 import { initMobileSheet } from './ui/mobile-sheet';
 import { initViewShell } from './ui/view-shell';
 import { initPlaceEmphasis } from './state/place-emphasis';
@@ -208,7 +207,10 @@ async function boot(): Promise<void> {
 
   // The ENSO driver line (0.4.0 B2): the one-line climate-driver read under
   // the conditions strip, from the bundled snapshot. Hidden on any failure.
-  buildEnsoDriver();
+  void import('./ui/enso-driver').then(
+    ({ buildEnsoDriver }) => buildEnsoDriver(),
+    () => undefined
+  );
 
   // The mobile bottom sheet (U2, D-0.7.0-017): below 720px the sidebar
   // becomes the one three-detent sheet; never in embed. Before the view

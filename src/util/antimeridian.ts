@@ -1,10 +1,9 @@
 /**
  * Antimeridian contract utilities (0.8.0 T-M0-4, the N4a substrate for N2).
  *
- * The module defines, tests, and documents how this codebase talks about
- * longitude wrapping BEFORE any behavior changes. Nothing in the shipped
- * application changes behavior on these functions yet; the N2 unit (widening
- * the Alaska frame across the Aleutians) is the first behavioral consumer.
+ * The module defines, tests, and implements how this codebase talks about
+ * longitude wrapping. N2-A makes the contract behavioral for geometry walks,
+ * selection bboxes, camera fits, and split service envelopes.
  *
  * TWO bbox representations exist and must never be conflated:
  *
@@ -21,29 +20,20 @@
  *    `bboxCrossesAntimeridian` and `splitBboxAtAntimeridian` speak about
  *    this representation; feeding them a naive walked box classifies it as
  *    non-crossing, which is correct for the representation and useless for
- *    recovering the true extent (see 1).
+ *    recovering the true extent (see 1). Geometry-owning consumers use
+ *    `geometryBboxAcrossAntimeridian`; bbox-only consumers apply the admitted
+ *    compact-walk heuristic through `crossingAwareBbox`.
  *
  * Bbox order is MapLibre's `[west, south, east, north]` throughout.
  *
- * Validation policy (no caller exists yet, so failing loudly is free):
+ * Validation policy:
  * every bbox-taking function throws a RangeError on non-finite members,
  * south > north, |latitude| > 90, or |east - west| > 360. Scalar
  * `normalizeLongitude` stays total (NaN in, NaN out).
  *
- * N2 residual inventory (antimeridian-naive paths OUTSIDE the selection-bbox
- * scope of T-M0-4, recorded here so the census stays honest; N2 owns them):
- * the Region bounds to `regionToMapLibreBounds` to `fitBounds` path
- * (src/config/regions.ts, src/ui/sidebar.ts), the viewport-to-service
- * envelopes in src/layers/aiannh.ts, src/layers/bia-reservations.ts, and
- * src/layers/hydrography.ts, the ray-cast in src/util/point-in-polygon.ts
- * (its header documents the limitation), and the search FLAG-PROVENANCE
- * mismatch: src/ui/search-controller.ts unions EVERY returned feature's
- * box for its camera but builds the selection context (and therefore the
- * `bboxCrossesAntimeridian` evidence) from the PRIMARY feature's geometry
- * only, so separate features jointly straddling the antimeridian smear
- * the camera without setting the flag (pinned in
- * tests/antimeridian.spec.ts; a future flag consumer must not trust the
- * flag as evidence about the AGGREGATE subject until N2 resolves this).
+ * Product-specific viewport request behavior in the NIFC, BIA, and AIAN-LAR
+ * layers belongs to later breadth slices. Those slices consume the shared
+ * split helpers proven by N2-A.
  */
 
 import type { Geometry, Position } from 'geojson';
@@ -136,6 +126,28 @@ export function naiveBboxSuggestsAntimeridianCrossing(bbox: LngLatBbox): boolean
 }
 
 /**
+ * Normalize a bbox while preserving encoded crossings and compacting a naive
+ * min/max walk whose raw span exceeds 180 degrees. The latter is necessarily
+ * a heuristic because the true extent is not recoverable from the bbox alone;
+ * geometry-owning callers should use `geometryBboxAcrossAntimeridian`.
+ */
+export function crossingAwareBbox(bbox: LngLatBbox): LngLatBbox {
+  assertValidBbox(bbox, 'crossingAwareBbox');
+  const [west, south, east, north] = bbox;
+  if (east - west === 360) return [-180, south, 180, north];
+
+  const normalizedWest = normalizeLongitude(west);
+  const normalizedEast = normalizeLongitude(east);
+  if (canonicalMeridian(normalizedWest) === canonicalMeridian(normalizedEast)) {
+    return [normalizedWest, south, normalizedWest, north];
+  }
+  if (naiveBboxSuggestsAntimeridianCrossing(bbox)) {
+    return [normalizedEast, south, normalizedWest, north];
+  }
+  return [normalizedWest, south, normalizedEast, north];
+}
+
+/**
  * Antimeridian-crossing evidence read from a GeoJSON geometry itself:
  *
  * - any segment whose endpoints differ by more than 180 degrees of
@@ -196,6 +208,89 @@ export function geometryLikelyCrossesAntimeridian(
   if (wrapSegment) return true;
   if (!Number.isFinite(minLng)) return false;
   return maxLng - minLng > 180;
+}
+
+/**
+ * Walk a GeoJSON geometry into its smallest circular longitude envelope.
+ * Unlike a raw min/max walk, a multipart Aleutian geometry retains the full
+ * compact extent on both sides of the antimeridian. The returned bbox uses
+ * encoded crossing form when its west edge is numerically greater than east.
+ */
+export function geometryBboxAcrossAntimeridian(
+  geometry: Geometry | undefined | null
+): LngLatBbox | null {
+  if (!geometry) return null;
+
+  const longitudes: number[] = [];
+  let south = Infinity;
+  let north = -Infinity;
+
+  const visitCoordinates = (node: unknown): void => {
+    if (!Array.isArray(node)) return;
+    if (
+      typeof node[0] === 'number' &&
+      typeof node[1] === 'number' &&
+      Number.isFinite(node[0]) &&
+      Number.isFinite(node[1])
+    ) {
+      const longitude = normalizeLongitude(node[0]);
+      const latitude = node[1];
+      if (Number.isFinite(longitude)) {
+        longitudes.push(longitude < 0 ? longitude + 360 : longitude);
+      }
+      if (latitude < south) south = latitude;
+      if (latitude > north) north = latitude;
+      return;
+    }
+    for (const child of node) visitCoordinates(child);
+  };
+
+  const visitGeometry = (candidate: Geometry): void => {
+    if (candidate.type === 'GeometryCollection') {
+      for (const child of candidate.geometries) visitGeometry(child);
+      return;
+    }
+    visitCoordinates(candidate.coordinates);
+  };
+
+  visitGeometry(geometry);
+  if (
+    longitudes.length === 0 ||
+    !Number.isFinite(south) ||
+    !Number.isFinite(north)
+  ) {
+    return null;
+  }
+
+  const sorted = [...new Set(longitudes)].sort((a, b) => a - b);
+  if (sorted.length === 1) {
+    const longitude = normalizeLongitude(sorted[0] as number);
+    return [longitude, south, longitude, north];
+  }
+
+  let largestGap = -1;
+  let extentStart = sorted[0] as number;
+  let extentEnd = sorted[sorted.length - 1] as number;
+  for (let index = 0; index < sorted.length; index++) {
+    const current = sorted[index] as number;
+    const next =
+      index === sorted.length - 1
+        ? (sorted[0] as number) + 360
+        : (sorted[index + 1] as number);
+    const gap = next - current;
+    if (gap > largestGap) {
+      largestGap = gap;
+      extentStart = next % 360;
+      extentEnd = current;
+    }
+  }
+
+  return [
+    normalizeLongitude(extentStart),
+    south,
+    normalizeLongitude(extentEnd),
+    north
+  ];
 }
 
 /**

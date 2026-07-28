@@ -185,7 +185,7 @@
         <p>Data: OpenStreetMap · NOAA · USGS · BIA · EPA</p>
         <p class="muted">
           <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">atniclimate/dynamic-drought-module</a>
-          · v0.6.22
+          · v0.6.23
         </p>
       </footer>
     </aside>
@@ -211,6 +211,17 @@
       </div>
 
       <div class="map-overlay-controls">
+        <!-- PRE-1.0 TEST PREVIEW BADGE. Remove this element and the
+             .test-preview-badge rule in src/styles/app.css together before
+             the 1.0 publish; they are the only two places it exists. It is
+             deliberately non-interactive (pointer-events: none in the rule)
+             so it can never intercept a click meant for the map or the
+             overlay buttons below it, and it rides this stack so the
+             existing mobile and bottom-sheet offsets apply unchanged. It is
+             present in embeds ON PURPOSE: an embedded copy of a preview
+             build is still a preview, and hard rule 8 keeps the embed a
+             first-class surface rather than one that hides its own status. -->
+        <span class="test-preview-badge">Test preview</span>
         <button id="share-btn" class="overlay-btn" title="Copy embed-ready link to clipboard">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
           <span>Share view</span>

@@ -350,8 +350,8 @@ function buildBriefHead(map: maplibregl.Map): void {
 
 /**
  * Fill and wire the generated portion of the post-time display block. Static
- * hosts in index.html preserve the ENSO disclosure that builds before the view
- * shell and keep #time-bar outside every regenerated region.
+ * hosts in index.html preserve the El Nino / Southern Oscillation disclosure
+ * across lazy hydration and keep #time-bar outside every regenerated region.
  */
 function buildBriefDisplay(): void {
   const summary = document.getElementById('brief-display-summary');

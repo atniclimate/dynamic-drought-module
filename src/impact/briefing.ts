@@ -13,6 +13,7 @@
  * honest-gap rule from ddm-drought-impact-modeling (#6).
  */
 
+import { regionCapabilityLevel } from '../config/region-capability';
 import { buildResources } from './resources';
 import { caveatFor, kindLabel } from './context';
 import type {
@@ -51,9 +52,9 @@ function emptyHorizon(spec: HorizonSpec): Horizon {
 
 /**
  * Build the briefing skeleton: land identity, routed resources, and three
- * empty horizons in the `loading` state. The resources are fully populated
- * here because they are static link-outs; the horizons are filled by Phase 3's
- * `hydrateBriefing`.
+ * empty horizons in the `loading` state. Static resource routes are populated
+ * only where the capability matrix validates impact synthesis and routing;
+ * the horizons are filled by Phase 3's `hydrateBriefing`.
  */
 export function createBriefingSkeleton(
   context: BoundarySelectionContext
@@ -73,6 +74,9 @@ export function createBriefingSkeleton(
       nearTerm: horizonByKey.nearTerm,
       longRange: horizonByKey.longRange
     },
-    resources: buildResources(context)
+    resources:
+      regionCapabilityLevel(context.regionKey, 'impactSynthesis') === 'none'
+        ? []
+        : buildResources(context)
   };
 }

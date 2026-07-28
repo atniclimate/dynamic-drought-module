@@ -53,7 +53,11 @@
 
 import maplibregl from 'maplibre-gl';
 
-import { getLayerDef } from '../config/layers';
+import {
+  getLayerDef,
+  resetDroughtSurfacePresentation,
+  setDroughtSurfacePresentation
+} from '../config/layers';
 import { MOBILE_HAZARD_PRESETS, VIEW_PRESETS } from '../config/presets';
 import {
   REGIONS,
@@ -61,6 +65,7 @@ import {
   regionToMapLibreBounds
 } from '../config/regions';
 import type { RegionKey, Region } from '../config/regions';
+import { regionCapabilityLevel } from '../config/region-capability';
 import { TELEMETRY_STATIONS } from '../config/telemetry';
 import { registry } from '../state/registry';
 import { createLayerController } from '../state/layer-controller';
@@ -69,7 +74,8 @@ import { openStateBriefing } from '../state/deep-link';
 import {
   isCurrentBriefingIntent,
   nextBriefingIntent,
-  openImpactPanel
+  openImpactPanel,
+  closeImpactPanel
 } from './impact-panel';
 import { getPlaceSelection, onPlaceSelectionChange } from '../state/place-selection';
 import {
@@ -287,6 +293,14 @@ function selectRegion(
   const region: Region | undefined = REGIONS[key];
   if (!region) return;
 
+  // A region without impact-synthesis capability cannot inherit a briefing
+  // from the prior region. The matrix is authoritative: closing here aborts
+  // hydration, clears the panel-owned place selection, and drops the mobile
+  // at-hand briefing before the new region is presented or printed.
+  if (regionCapabilityLevel(key, 'impactSynthesis') === 'none') {
+    closeImpactPanel();
+  }
+
   // An EXPLICIT region choice (click or arrow-key; silent marks the boot
   // fit) is a legacy camera gesture: it clears the framing context back
   // to ALL and drops any ocean camera claim, so the URL never asserts
@@ -298,6 +312,16 @@ function selectRegion(
   }
 
   STATE.currentRegion = key;
+  if (key === 'british_columbia') {
+    setDroughtSurfacePresentation({
+      edition: 'bc-basin',
+      name: 'British Columbia Basin Drought Levels',
+      source: 'Province of British Columbia · source date loads with data',
+      sourceDate: null
+    });
+  } else {
+    resetDroughtSurfacePresentation();
+  }
   // Mirror the active region into the shared store so the impact panel (and
   // any future consumer) can read it without threading it through every
   // layer signature. See src/state/region-store.ts.
