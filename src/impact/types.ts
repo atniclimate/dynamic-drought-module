@@ -20,6 +20,8 @@
  */
 
 import type { RegionKey } from '../config/regions';
+import type { BriefingSourcePolicy } from './source-policy';
+import type { LayerStatus } from '../types/layer';
 
 /**
  * What kind of knowledge a claim rests on (the 0.8.0 evidence/claim contract,
@@ -224,6 +226,88 @@ export interface LandscapeContext {
   readonly sources: readonly LandscapeContextSource[];
 }
 
+export type PointHeatMetricKey =
+  | 'temperature'
+  | 'relativeHumidity'
+  | 'maxTemperature'
+  | 'minTemperature'
+  | 'apparentTemperature'
+  | 'heatIndex'
+  | 'wetBulbGlobeTemperature';
+
+/** One issuer value with its unit and untouched ISO 8601 validity interval. */
+export interface PointHeatValue {
+  readonly value: number;
+  readonly unitCode: string;
+  readonly validTime: string;
+  readonly startTime: string;
+  readonly endTime?: string;
+}
+
+/** One NWS grid field and its bounded current/future series. */
+export interface PointHeatMetricSeries {
+  readonly key: PointHeatMetricKey;
+  readonly label: string;
+  readonly unitCode: string;
+  readonly values: readonly PointHeatValue[];
+  /** Number of populated current/future intervals in the issuer payload. */
+  readonly availableValueCount: number;
+}
+
+export interface PointHeatObservation {
+  status: LayerStatus;
+  note?: string;
+  stationId?: string;
+  stationName?: string;
+  stationUrl?: string;
+  distanceKm?: number;
+  timestamp?: string;
+  metrics: readonly PointHeatMetricSeries[];
+}
+
+export interface PointHeatGridGuidance {
+  status: LayerStatus;
+  note?: string;
+  office?: string;
+  gridId?: string;
+  generatedAt?: string;
+  metrics: readonly PointHeatMetricSeries[];
+}
+
+/**
+ * Point heat is its own briefing lane. It describes the selected coordinate,
+ * never the complete boundary, state, Tribal Nation, or Treaty area.
+ */
+export interface PointHeatBriefing {
+  status: LayerStatus;
+  note?: string;
+  readonly point: { readonly lng: number; readonly lat: number };
+  observation: PointHeatObservation;
+  grid: PointHeatGridGuidance;
+}
+
+export type HeatSourceReadKey =
+  | 'pointHeat'
+  | 'heatRisk'
+  | 'nwsForecast'
+  | 'nwsAlerts';
+
+export interface HeatSourceRead {
+  readonly key: HeatSourceReadKey;
+  readonly label: string;
+  readonly text: string;
+}
+
+/**
+ * Side-by-side heat evidence. DDM preserves each issuer product's spatial and
+ * temporal support and never converts these reads into a new heat class.
+ */
+export interface HeatSynthesis {
+  status: LayerStatus;
+  reads: readonly HeatSourceRead[];
+  note?: string;
+}
+
 /**
  * The kind of boundary that was selected; drives the land title and caveat.
  *
@@ -289,6 +373,8 @@ export interface BoundarySelectionContext {
  */
 export interface ImpactBriefing {
   readonly context: BoundarySelectionContext;
+  /** Canonical geography plus the independent policy for every source. */
+  readonly sourcePolicy: BriefingSourcePolicy;
   readonly landTitle: string;
   /** A short kind label, for example "BIA reservation boundary". */
   readonly landKind: string;
@@ -296,6 +382,8 @@ export interface ImpactBriefing {
   readonly landCaveat: string;
   /** Lazy, static ecoregion context. Replaced when its artifact read settles. */
   landscape: LandscapeContext;
+  pointHeat: PointHeatBriefing;
+  heatSynthesis: HeatSynthesis;
   readonly horizons: {
     current: Horizon;
     nearTerm: Horizon;

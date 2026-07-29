@@ -13,9 +13,9 @@
  * honest-gap rule from ddm-drought-impact-modeling (#6).
  */
 
-import { regionCapabilityLevel } from '../config/region-capability';
 import { buildResources } from './resources';
 import { caveatFor, kindLabel } from './context';
+import { briefingSourcePolicy, sourceMayRun } from './source-policy';
 import type {
   BoundarySelectionContext,
   Horizon,
@@ -59,6 +59,7 @@ function emptyHorizon(spec: HorizonSpec): Horizon {
 export function createBriefingSkeleton(
   context: BoundarySelectionContext
 ): ImpactBriefing {
+  const sourcePolicy = briefingSourcePolicy(context);
   const horizonByKey = {} as Record<HorizonKey, Horizon>;
   for (const spec of HORIZON_SPECS) {
     horizonByKey[spec.key] = emptyHorizon(spec);
@@ -66,6 +67,7 @@ export function createBriefingSkeleton(
 
   return {
     context,
+    sourcePolicy,
     landTitle: context.title,
     landKind: kindLabel(context.kind),
     landCaveat: caveatFor(context.kind),
@@ -74,14 +76,50 @@ export function createBriefingSkeleton(
       facts: [],
       sources: []
     },
+    pointHeat: {
+      status: sourceMayRun(sourcePolicy, 'pointHeat') ? 'loading' : 'error',
+      ...(sourceMayRun(sourcePolicy, 'pointHeat')
+        ? {}
+        : { note: sourcePolicy.sources.pointHeat.note }),
+      point: { ...context.lngLat },
+      observation: {
+        status: sourceMayRun(sourcePolicy, 'pointHeat') ? 'loading' : 'error',
+        ...(sourceMayRun(sourcePolicy, 'pointHeat')
+          ? {}
+          : { note: sourcePolicy.sources.pointHeat.note }),
+        metrics: []
+      },
+      grid: {
+        status: sourceMayRun(sourcePolicy, 'pointHeat') ? 'loading' : 'error',
+        ...(sourceMayRun(sourcePolicy, 'pointHeat')
+          ? {}
+          : { note: sourcePolicy.sources.pointHeat.note }),
+        metrics: []
+      }
+    },
+    heatSynthesis: {
+      status:
+        sourceMayRun(sourcePolicy, 'pointHeat') ||
+        sourceMayRun(sourcePolicy, 'heatRisk') ||
+        sourceMayRun(sourcePolicy, 'nwsForecast') ||
+        sourceMayRun(sourcePolicy, 'nwsAlerts')
+          ? 'loading'
+          : 'error',
+      reads: [],
+      ...(
+        sourceMayRun(sourcePolicy, 'pointHeat') ||
+        sourceMayRun(sourcePolicy, 'heatRisk') ||
+        sourceMayRun(sourcePolicy, 'nwsForecast') ||
+        sourceMayRun(sourcePolicy, 'nwsAlerts')
+          ? {}
+          : { note: 'No heat source is available for this selected geography.' }
+      )
+    },
     horizons: {
       current: horizonByKey.current,
       nearTerm: horizonByKey.nearTerm,
       longRange: horizonByKey.longRange
     },
-    resources:
-      regionCapabilityLevel(context.regionKey, 'impactSynthesis') === 'none'
-        ? []
-        : buildResources(context)
+    resources: sourcePolicy.droughtImpact.enabled ? buildResources(context) : []
   };
 }

@@ -52,6 +52,7 @@
 import type maplibregl from 'maplibre-gl';
 
 import type { ImpactBriefing } from '../impact/types';
+import { selectBriefNarrativeLine } from '../impact/brief-narrative-selector';
 import {
   getViewMode,
   onViewModeChange,
@@ -475,12 +476,9 @@ export function setSheetBriefing(briefing: ImpactBriefing | null): void {
   renderAtHand();
 }
 
-/** The first current-horizon claim's text, if hydration has delivered one. */
+/** The critical-first point-heat or current-horizon line, when available. */
 function currentHeadline(briefing: ImpactBriefing): string | null {
-  const current = briefing.horizons.current;
-  const first = current.claims[0];
-  if (first && first.text) return first.text;
-  return null;
+  return selectBriefNarrativeLine(briefing);
 }
 
 function updateAtHandActions(): void {
@@ -507,7 +505,7 @@ function renderAtHand(): void {
   // are stable siblings (see initMobileSheet), so a briefing push never
   // wipes the mounted search.
   atHandBodyEl.innerHTML = `
-    <p class="sheet-at-hand-kicker">Drought briefing</p>
+    <p class="sheet-at-hand-kicker">Conditions briefing</p>
     <h2 class="sheet-at-hand-title">${escapeHtml(title)}</h2>
     ${kind ? `<p class="sheet-at-hand-kind">${escapeHtml(kind)}</p>` : ''}
     ${headlineHtml}

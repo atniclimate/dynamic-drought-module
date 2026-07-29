@@ -33,6 +33,9 @@ import {
 import { fetchEnsoClaims } from './enso';
 import { makeClaim } from './evidence';
 import { fillHorizon } from './heat-horizon';
+import { synthesizeHeatSources } from './heat-synthesis';
+import { createNwsRequestSession } from './nws-point';
+import { sourceMayRun } from './source-policy';
 import { fetchWaterSupplyClaims } from './water-supply';
 import type { ImpactBriefing, SourcedClaim } from './types';
 
@@ -69,8 +72,96 @@ export async function hydrateBriefing(
   signal: AbortSignal,
   onUpdate: UpdateHook
 ): Promise<void> {
-  const { context, horizons } = briefing;
+  const { context, horizons, sourcePolicy } = briefing;
+  const nwsSession = createNwsRequestSession(signal);
+  const heatResults = new Map<
+    'heatRisk' | 'nwsForecast' | 'nwsAlerts',
+    SourceResult
+  >();
+  const initialHeatSources = (
+    ['heatRisk', 'nwsForecast', 'nwsAlerts'] as const
+  ).filter((key) => sourceMayRun(sourcePolicy, key));
   let heatGeneration = 0;
+  let heatRiskSettled = !initialHeatSources.includes('heatRisk');
+  let heatPending =
+    initialHeatSources.length +
+    (sourceMayRun(sourcePolicy, 'pointHeat') ? 1 : 0);
+
+  const publishHeatSynthesis = (): void => {
+    if (signal.aborted) return;
+    briefing.heatSynthesis = synthesizeHeatSources(
+      briefing.pointHeat,
+      [...heatResults.values()],
+      heatPending === 0
+    );
+    onUpdate();
+  };
+
+  const settleHeatResult = (
+    key: 'nwsForecast' | 'nwsAlerts',
+    result: SourceResult
+  ): SourceResult => {
+    heatResults.set(key, result);
+    heatPending = Math.max(0, heatPending - 1);
+    publishHeatSynthesis();
+    return result;
+  };
+
+  const settleHeatRisk = (
+    generation: number,
+    result: SourceResult
+  ): SourceResult => {
+    if (signal.aborted || generation !== heatGeneration) return result;
+    heatResults.set('heatRisk', result);
+    if (!heatRiskSettled) {
+      heatRiskSettled = true;
+      heatPending = Math.max(0, heatPending - 1);
+    }
+    publishHeatSynthesis();
+    return result;
+  };
+
+  if (!sourcePolicy.droughtImpact.enabled) {
+    const note =
+      sourcePolicy.droughtImpact.note ??
+      'Drought impact synthesis is unavailable for this selection.';
+    for (const horizon of [
+      horizons.current,
+      horizons.nearTerm,
+      horizons.longRange
+    ]) {
+      horizon.status = 'unavailable';
+      horizon.claims = [];
+      horizon.note = note;
+    }
+    onUpdate();
+  }
+
+  const pointHeat = sourceMayRun(sourcePolicy, 'pointHeat')
+    ? import('./point-heat')
+        .then(({ fetchPointHeat }) => fetchPointHeat(context, nwsSession))
+        .then((pointHeatResult) => {
+          if (signal.aborted) return;
+          briefing.pointHeat = pointHeatResult;
+          heatPending = Math.max(0, heatPending - 1);
+          publishHeatSynthesis();
+        })
+        .catch((err: unknown) => {
+          if (signal.aborted) return;
+          console.warn('[impact] point heat hydration failed.', err);
+          const note = 'The NWS point heat source did not respond.';
+          briefing.pointHeat = {
+            status: 'error',
+            note,
+            point: { ...context.lngLat },
+            observation: { status: 'error', note, metrics: [] },
+            grid: { status: 'error', note, metrics: [] }
+          };
+          heatPending = Math.max(0, heatPending - 1);
+          publishHeatSynthesis();
+        })
+    : Promise.resolve();
+
   let nearTermBase: readonly [SourceResult, SourceResult] | null = null;
   let latestHeatRisk: SourceResult | null = null;
 
@@ -88,29 +179,62 @@ export async function hydrateBriefing(
     void fetchHeatRiskClaims(context, signal).then((heatRisk) => {
       if (signal.aborted || generation !== heatGeneration) return;
       latestHeatRisk = heatRisk;
+      settleHeatRisk(generation, heatRisk);
       publishNearTerm();
     });
   };
 
-  // Establish the generation and listener before any source begins. A frame
-  // event invalidates the initial read immediately, so a later current-source
-  // completion cannot publish a classification for a superseded raster.
-  const onHeatRiskFrame = (): void => {
-    const generation = ++heatGeneration;
-    latestHeatRisk = { claims: [], ok: true };
-    publishNearTerm();
-    refreshHeatRisk(generation);
-  };
-  const removeHeatListener = (): void => {
-    window.removeEventListener(HEATRISK_FRAMES_EVENT, onHeatRiskFrame);
-  };
-  window.addEventListener(HEATRISK_FRAMES_EVENT, onHeatRiskFrame);
-  signal.addEventListener('abort', removeHeatListener, { once: true });
+  if (sourceMayRun(sourcePolicy, 'heatRisk')) {
+    // Establish the generation and listener before any source begins. A frame
+    // event invalidates the initial read immediately, so a later source
+    // completion cannot publish a classification for a superseded raster.
+    const onHeatRiskFrame = (): void => {
+      const generation = ++heatGeneration;
+      latestHeatRisk = { claims: [], ok: true };
+      heatResults.delete('heatRisk');
+      if (heatRiskSettled) {
+        heatRiskSettled = false;
+        heatPending += 1;
+      }
+      publishHeatSynthesis();
+      publishNearTerm();
+      refreshHeatRisk(generation);
+    };
+    const removeHeatListener = (): void => {
+      window.removeEventListener(HEATRISK_FRAMES_EVENT, onHeatRiskFrame);
+    };
+    window.addEventListener(HEATRISK_FRAMES_EVENT, onHeatRiskFrame);
+    signal.addEventListener('abort', removeHeatListener, { once: true });
+  }
 
   const initialHeatGeneration = heatGeneration;
-  const initialHeatRisk = fetchHeatRiskClaims(context, signal);
+  const initialHeatRisk: Promise<SourceResult | null> = sourceMayRun(
+    sourcePolicy,
+    'heatRisk'
+  )
+    ? fetchHeatRiskClaims(context, signal).then((result) =>
+        settleHeatRisk(initialHeatGeneration, result)
+      )
+    : Promise.resolve(null);
+  const forecast: Promise<SourceResult | null> = sourceMayRun(
+    sourcePolicy,
+    'nwsForecast'
+  )
+    ? fetchNwsForecastClaims(context, signal, nwsSession).then((result) =>
+        settleHeatResult('nwsForecast', result)
+      )
+    : Promise.resolve(null);
+  const alerts: Promise<SourceResult | null> = sourceMayRun(
+    sourcePolicy,
+    'nwsAlerts'
+  )
+    ? fetchNwsAlertClaims(context, signal, nwsSession).then((result) =>
+        settleHeatResult('nwsAlerts', result)
+      )
+    : Promise.resolve(null);
 
   const longRange = (async (): Promise<void> => {
+    if (!sourcePolicy.droughtImpact.enabled) return;
     // The ENSO phase tilt leads, then the NWRFC water-supply pairing
     // (observed runoff to date plus the seasonal volume forecast; the
     // projection partner to the snowpack observations), then the cited CPC
@@ -125,33 +249,45 @@ export async function hydrateBriefing(
   })();
 
   const current = (async (): Promise<void> => {
-    const results = await Promise.all([
-      fetchUsdmClaims(context, signal),
-      fetchDsciTrendClaims(context, signal),
-      fetchNifcClaims(context, signal),
-      fetchNwsAlertClaims(context, signal)
-    ]);
+    if (!sourcePolicy.droughtImpact.enabled) return;
+    const results = (await Promise.all([
+      sourceMayRun(sourcePolicy, 'usdm')
+        ? fetchUsdmClaims(context, signal)
+        : Promise.resolve(null),
+      sourceMayRun(sourcePolicy, 'dsci')
+        ? fetchDsciTrendClaims(context, signal)
+        : Promise.resolve(null),
+      sourceMayRun(sourcePolicy, 'nifc')
+        ? fetchNifcClaims(context, signal)
+        : Promise.resolve(null),
+      alerts
+    ])).filter((result): result is SourceResult => result !== null);
     if (signal.aborted) return;
     fillHorizon(horizons.current, results);
     onUpdate();
   })();
 
   const nearTerm = (async (): Promise<void> => {
-    // Selected HeatRisk frame, NWS point forecast (the immediate days), then
-    // the CPC 6-10 and 8-14 day probability tilt, so the claims read
-    // chronologically outward.
-    const [heatRisk, forecast, cpc] = await Promise.all([
+    const [heatRisk, forecastResult, cpc] = await Promise.all([
       initialHeatRisk,
-      fetchNwsForecastClaims(context, signal),
-      fetchCpcOutlookClaims(context, signal)
+      forecast,
+      sourcePolicy.droughtImpact.enabled &&
+      sourceMayRun(sourcePolicy, 'cpcExtended')
+        ? fetchCpcOutlookClaims(context, signal)
+        : Promise.resolve(null)
     ]);
     if (signal.aborted) return;
-    nearTermBase = [forecast, cpc];
+    if (!sourcePolicy.droughtImpact.enabled) return;
+    nearTermBase = [
+      forecastResult ?? { claims: [], ok: true },
+      cpc ?? { claims: [], ok: true }
+    ];
     if (initialHeatGeneration === heatGeneration) {
-      latestHeatRisk = heatRisk;
+      latestHeatRisk = heatRisk ?? { claims: [], ok: true };
     }
     publishNearTerm();
   })();
 
-  await Promise.all([longRange, current, nearTerm]);
+  if (heatPending === 0) publishHeatSynthesis();
+  await Promise.all([longRange, current, nearTerm, pointHeat]);
 }

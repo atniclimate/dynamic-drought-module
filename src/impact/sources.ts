@@ -34,7 +34,18 @@ import { cpcOutlookBarsSvg, trendLineSvg, type TrendPoint } from '../ui/charts';
 import { categoryImpact } from './category-impacts';
 import { makeClaim, todayIso } from './evidence';
 import { contextStateFips, contextStateName } from './resources';
-import type { BoundarySelectionContext, SourcedClaim } from './types';
+import {
+  NWS_CACHE_TTL,
+  createNwsRequestSession,
+  fetchNwsPointMetadata,
+  nwsCoordinate,
+  type NwsRequestSession
+} from './nws-point';
+import type {
+  BoundarySelectionContext,
+  HeatSourceRead,
+  SourcedClaim
+} from './types';
 
 /** The outcome of one source fetch. */
 export interface SourceResult {
@@ -43,6 +54,8 @@ export interface SourceResult {
   readonly ok: boolean;
   /** Optional honest note shown when `ok` is false. */
   readonly note?: string;
+  /** Optional typed heat read used by the cross-source comparison. */
+  readonly heatRead?: HeatSourceRead;
 }
 
 const TIMEOUT_MS = 10_000;
@@ -179,30 +192,42 @@ export async function fetchHeatRiskClaims(
     } as const;
 
     if (identified.value === null) {
+      const text =
+        `HeatRisk (Experimental): no data at the selected point for ${context.title} for the selected frame. ` +
+        `Valid ${validity}.`;
       return {
         ok: true,
         claims: [
           makeClaim({
-            text:
-              `HeatRisk (Experimental): no data at the selected point for ${context.title} for the selected frame. ` +
-              `Valid ${validity}.`,
+            text,
             ...shared
           })
-        ]
+        ],
+        heatRead: {
+          key: 'heatRisk',
+          label: 'NWS HeatRisk selected frame',
+          text
+        }
       };
     }
 
     const category = HEATRISK_CATEGORIES[identified.value]!;
+    const text =
+      `HeatRisk (Experimental) value ${category.value}, ${category.label}, at the selected point for ${context.title}. ` +
+      `Valid ${validity}. ${category.meaning}`;
     return {
       ok: true,
       claims: [
         makeClaim({
-          text:
-            `HeatRisk (Experimental) value ${category.value}, ${category.label}, at the selected point for ${context.title}. ` +
-            `Valid ${validity}. ${category.meaning}`,
+          text,
           ...shared
         })
-      ]
+      ],
+      heatRead: {
+        key: 'heatRisk',
+        label: 'NWS HeatRisk selected frame',
+        text
+      }
     };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
@@ -586,15 +611,18 @@ function nwsActiveProductFeatures(json: unknown): unknown[] | null {
  */
 export async function fetchNwsAlertClaims(
   context: BoundarySelectionContext,
-  signal: AbortSignal
+  signal: AbortSignal,
+  session: NwsRequestSession = createNwsRequestSession(signal)
 ): Promise<SourceResult> {
   const { lng, lat } = context.lngLat;
-  const url = `${URLS.nwsApi}/alerts/active?point=${round4(lat)},${round4(lng)}`;
+  const url =
+    `${URLS.nwsApi}/alerts/active?point=` +
+    `${nwsCoordinate(lat)},${nwsCoordinate(lng)}`;
   const source = 'NWS active alerts'; // vocab-allow: names the NWS alerts service, upstream product
   const sourceUrl = 'https://www.weather.gov/';
 
   try {
-    const json: unknown = await fetchJson(url, GEOJSON_ACCEPT, signal);
+    const json: unknown = await session.fetchJson(url, NWS_CACHE_TTL.alerts);
     if (signal.aborted) return { claims: [], ok: false };
 
     const features = nwsActiveProductFeatures(json);
@@ -610,6 +638,12 @@ export async function fetchNwsAlertClaims(
 
     const fire = [...events].filter((e) => FIRE_EVENTS.includes(e));
     const heat = [...events].filter((e) => HEAT_EVENTS.includes(e));
+    const heatText =
+      heat.length > 0
+        // vocab-allow: reports upstream NWS alert products in effect
+        ? `NWS active alerts at the selected point: ${heat.join(', ')}.`
+        // vocab-allow: reports the absence of upstream NWS alert products
+        : 'NWS reports no active extreme-heat alert at the selected point.';
     // Whether an NWS alert is in effect at the point is a directly observed
     // fact (the alert names quoted are verbatim upstream product names).
     const alertShared = { source, sourceUrl, evidence: 'observed', dates: { retrieved: todayIso() } } as const;
@@ -641,7 +675,16 @@ export async function fetchNwsAlertClaims(
         })
       );
     }
-    return { ok: true, claims };
+    return {
+      ok: true,
+      claims,
+      heatRead: {
+        key: 'nwsAlerts',
+        // vocab-allow: names the upstream NWS active heat alerts product
+        label: 'NWS active heat alerts',
+        text: heatText
+      }
+    };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
     console.warn('[impact] NWS alerts query failed.', err);
@@ -787,33 +830,25 @@ export async function fetchCpcOutlookClaims(
  */
 export async function fetchNwsForecastClaims(
   context: BoundarySelectionContext,
-  signal: AbortSignal
+  signal: AbortSignal,
+  session: NwsRequestSession = createNwsRequestSession(signal)
 ): Promise<SourceResult> {
-  const { lng, lat } = context.lngLat;
-  const pointsUrl = `${URLS.nwsApi}/points/${round4(lat)},${round4(lng)}`;
   const source = 'NWS forecast'; // vocab-allow: names the NWS point forecast, upstream product
   const sourceUrl = 'https://www.weather.gov/';
 
   try {
-    const pJson: unknown = await fetchJsonWithBudget(
-      pointsUrl,
-      { headers: GEOJSON_ACCEPT },
-      signal,
-      TIMEOUT_MS
+    const point = await fetchNwsPointMetadata(
+      context.lngLat.lng,
+      context.lngLat.lat,
+      session
     );
     if (signal.aborted) return { claims: [], ok: false };
-
-    const forecastUrl =
-      isObject(pJson) && isObject(pJson.properties) && typeof pJson.properties.forecast === 'string'
-        ? pJson.properties.forecast
-        : null;
+    const forecastUrl = point.forecastUrl;
     if (!forecastUrl) throw new Error('no forecast URL in points response');
 
-    const fJson: unknown = await fetchJsonWithBudget(
+    const fJson: unknown = await session.fetchJson(
       forecastUrl,
-      { headers: GEOJSON_ACCEPT },
-      signal,
-      TIMEOUT_MS
+      NWS_CACHE_TTL.forecast
     );
     if (signal.aborted) return { claims: [], ok: false };
 
@@ -829,13 +864,15 @@ export async function fetchNwsForecastClaims(
     const unit = typeof first.temperatureUnit === 'string' ? first.temperatureUnit : 'F';
     const short = typeof first.shortForecast === 'string' ? first.shortForecast : '';
     const tempStr = temp !== null ? `${temp} degrees ${unit}` : 'an unspecified temperature';
+    // vocab-allow: renders the upstream NWS point forecast product
+    const text = `${name}: ${short || 'forecast available'}, near ${tempStr}. Watch this against the heat outlook; hot, dry spells deepen near-term dryness and fire danger.`;
 
     return {
       ok: true,
       claims: [
         makeClaim({
           // vocab-allow: names the NWS point forecast, upstream product
-          text: `${name}: ${short || 'forecast available'}, near ${tempStr}. Watch this against the heat outlook; hot, dry spells deepen near-term dryness and fire danger.`,
+          text,
           source,
           sourceUrl,
           evidence: 'outlook',
@@ -843,7 +880,14 @@ export async function fetchNwsForecastClaims(
           // vocab-allow: names the NWS point forecast, upstream product
           uncertainty: { kind: 'not-quantified', text: 'a point weather forecast stated as a tendency; the NWS product publishes no uncertainty band here' }
         })
-      ]
+      ],
+      heatRead: {
+        key: 'nwsForecast',
+        // vocab-allow: names the upstream NWS point forecast product
+        label: 'NWS point forecast',
+        // vocab-allow: renders the upstream NWS point forecast product
+        text: `${name}: ${short || 'forecast available'}, near ${tempStr}.`
+      }
     };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };

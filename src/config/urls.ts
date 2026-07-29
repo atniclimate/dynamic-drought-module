@@ -24,6 +24,9 @@
 
 import { LANDSCAPE_SIGNATURE_LOCAL_URL } from './landscape-url';
 
+const BASE_URL =
+  import.meta.env?.BASE_URL ?? '/dynamic-drought-module/';
+
 export const URLS = Object.freeze({
   // ---------- Basemaps (raster tiles) ----------
   // MapLibre GL JavaScript raster sources do not natively expand the `{s}`
@@ -358,15 +361,19 @@ export const URLS = Object.freeze({
   // api.weather.gov: the public National Oceanic and Atmospheric
   // Administration (NOAA) NWS Application Programming Interface (API). Used by
   // the impact briefing for active alerts (red-flag fire weather, excessive
-  // heat) at a point and for the point forecast (near-term temperature). The
-  // service recommends a descriptive User-Agent, but browsers cannot set that
-  // header (it is forbidden); GET requests still succeed and are CORS-open.
+  // heat), point observations, raw grid guidance, and point forecasts. NWS
+  // requires an identifying User-Agent. Browsers discard a caller-supplied
+  // User-Agent, so the production-identification path is the allow-listed
+  // Worker. Direct mode remains the safe default until that Worker revision is
+  // explicitly deployed; it also preserves graceful operation for forks.
   //   - Active alerts:  `${nwsApi}/alerts/active?point=<lat>,<lon>`
   //   - Point metadata: `${nwsApi}/points/<lat>,<lon>` (returns the forecast URL)
-  // Verified 2026-05-30: HTTP 200, Content-Type application/geo+json (alerts)
-  // and application/geo+json (points), Access-Control-Allow-Origin: * (browser
-  // fetch confirmed from the app origin). Access method: REST GeoJSON, direct.
+  // Re-verified 2026-07-29: alerts, points, grid data, station lists, and
+  // latest observations returned CORS-open JSON. Chromium discarded a custom
+  // fetch User-Agent. Set `nwsApiUseWorker` true only in the same release that
+  // follows deployment of the Worker allow-list revision in workers/proxy/.
   nwsApi: 'https://api.weather.gov',
+  nwsApiUseWorker: false as boolean,
 
   // NOAA NWS event-driven Watch/Warning/Advisory (WWA) MapServer, layer 1
   // (WatchesWarnings). Used by the heat and fire-weather alerts map layer:
@@ -777,7 +784,7 @@ export const URLS = Object.freeze({
   // both locally and on Pages; that was a latent bug (the empty-placeholder
   // layers surfaced as `error` instead of `no-data`). BASE_URL ends with a
   // slash, so the path segment must not start with one.
-  ecoregionsLocal: import.meta.env.BASE_URL + 'data/ecoregions-pnw.geojson',
+  ecoregionsLocal: BASE_URL + 'data/ecoregions-pnw.geojson',
   // EPA Omernik Level III and Level IV ecoregion polygons for the PNW, baked
   // into a PMTiles vector bundle by scripts/build-ecoregion-tiles.mjs
   // (`npm run build:ecoregion-tiles`) from the EPA Region 10 shapefiles. Two
@@ -788,7 +795,7 @@ export const URLS = Object.freeze({
   // never implies precision the source does not carry. The empty
   // `ecoregions-pnw.geojson` above is the legacy placeholder, retained until the
   // ecoregion layer module consumes this bundle.
-  ecoregionsPmtilesLocal: import.meta.env.BASE_URL + 'data/ecoregions-pnw.pmtiles',
+  ecoregionsPmtilesLocal: BASE_URL + 'data/ecoregions-pnw.pmtiles',
   // The PNW hillshade raster-dem archive (U4g, D-0.7.0-012/-029): terrarium
   // PNG tiles, 512 px, z0-8, whole-meter quantized, baked by
   // Built from the USGS 3DEP ImageServer (public domain; vintage and
@@ -796,9 +803,9 @@ export const URLS = Object.freeze({
   // from Pages exactly like the ecoregion bundle (the D-029 per-asset
   // selection, 2026-07-14: 33.6 MB fits the Pages path; the z9 build is a
   // reproducible artifact, not shipped).
-  hillshadePmtilesLocal: import.meta.env.BASE_URL + 'data/hillshade-dem-pnw.pmtiles',
-  tribalLandsLocal: import.meta.env.BASE_URL + 'data/tribal-lands.geojson',
-  treatyAreasLocal: import.meta.env.BASE_URL + 'data/treaty-areas.geojson',
+  hillshadePmtilesLocal: BASE_URL + 'data/hillshade-dem-pnw.pmtiles',
+  tribalLandsLocal: BASE_URL + 'data/tribal-lands.geojson',
+  treatyAreasLocal: BASE_URL + 'data/treaty-areas.geojson',
   // United States state boundaries, baked from the Census Bureau cartographic
   // boundary file (1:20,000,000 generalization, 2023 vintage, public domain)
   // by scripts/build-states.mjs (`npm run build:states`; source download
@@ -806,16 +813,16 @@ export const URLS = Object.freeze({
   // not sovereign-jurisdiction polygons, so bundling is consistent with
   // CLAUDE.md hard rule 1. Provenance is recorded in the file's `metadata`
   // foreign member.
-  usStatesLocal: import.meta.env.BASE_URL + 'data/us-states.geojson',
+  usStatesLocal: BASE_URL + 'data/us-states.geojson',
   // Municipal place labels (U4e; Natural Earth 1:10m populated places,
   // public domain, US subset; built by scripts/build-places.mjs with the
   // build-failing glyph gate). Names only plus points; naming policy rides
   // D-0.7.0-030.
-  usPlacesLocal: import.meta.env.BASE_URL + 'data/us-places.json',
+  usPlacesLocal: BASE_URL + 'data/us-places.json',
   // ENSO index snapshot (the Oceanic Nino Index and the Relative ONI; built by
   // scripts/build-enso-snapshot.mjs, `npm run build:enso`). Bundled, so the
   // no-CORS CPC sources are read at build time, not by the browser at runtime.
-  ensoIndicesLocal: import.meta.env.BASE_URL + 'data/enso-indices.json',
+  ensoIndicesLocal: BASE_URL + 'data/enso-indices.json',
   // Landscape-signature artifact (T-M0-3; built by scripts/landscape via
   // `npm run build:landscape`, validated against
   // schema/landscape-signature.schema.json). The artifact IS committed and
@@ -829,7 +836,7 @@ export const URLS = Object.freeze({
   // rows live at `<base>data/resources/<lowercase-two-letter-code>.json` and are
   // fetched only for the clicked state (lazy). Schema and doctrine:
   // docs/resource-catalog-schema.md.
-  resourcesLocalBase: import.meta.env.BASE_URL + 'data/resources/',
+  resourcesLocalBase: BASE_URL + 'data/resources/',
 
   // ---------- NASA GIBS sea surface temperature anomaly (B2, keyless WMTS) ----------
   // Global Imagery Browse Services (GIBS) GHRSST Level 4 MUR sea surface

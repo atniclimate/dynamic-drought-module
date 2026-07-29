@@ -87,7 +87,7 @@ for (const provenance of [
   });
 }
 
-test('impactSynthesis none renders its matrix note and starts no briefing sources', async ({
+test('impactSynthesis none keeps unrelated sources off while independent point heat runs', async ({
   page
 }) => {
   await gotoApp(page, '?region=national&layers=states&view=brief');
@@ -101,20 +101,103 @@ test('impactSynthesis none renders its matrix note and starts no briefing source
     .click();
   await expect(page.locator('#brief-place-name')).toHaveText('Kansas');
 
-  const briefingSourceRequests: string[] = [];
+  await page.route('https://api.weather.gov/**', (route) => {
+    const url = new URL(route.request().url());
+    let body: unknown;
+    if (url.pathname.startsWith('/points/')) {
+      body = {
+        properties: {
+          forecastGridData:
+            'https://api.weather.gov/gridpoints/TOP/31,80',
+          observationStations:
+            'https://api.weather.gov/gridpoints/TOP/31,80/stations',
+          forecast:
+            'https://api.weather.gov/gridpoints/TOP/31,80/forecast',
+          cwa: 'TOP',
+          gridId: 'TOP'
+        }
+      };
+    } else if (url.pathname === '/gridpoints/TOP/31,80/stations') {
+      body = {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [-98, 38] },
+            properties: {
+              stationIdentifier: 'KTEST',
+              name: 'Test Station',
+              '@id': 'https://api.weather.gov/stations/KTEST'
+            }
+          }
+        ]
+      };
+    } else if (url.pathname === '/stations/KTEST/observations/latest') {
+      body = {
+        properties: {
+          timestamp: '2026-07-29T12:00:00+00:00',
+          temperature: { unitCode: 'wmoUnit:degC', value: 30 },
+          relativeHumidity: { unitCode: 'wmoUnit:percent', value: 42 },
+          heatIndex: { unitCode: 'wmoUnit:degC', value: 31 }
+        }
+      };
+    } else if (url.pathname === '/gridpoints/TOP/31,80/forecast') {
+      body = {
+        properties: {
+          periods: [
+            {
+              name: 'Today',
+              temperature: 90,
+              temperatureUnit: 'F',
+              shortForecast: 'Sunny'
+            }
+          ]
+        }
+      };
+    } else if (url.pathname === '/gridpoints/TOP/31,80') {
+      body = {
+        properties: {
+          heatIndex: {
+            uom: 'wmoUnit:degC',
+            values: [
+              {
+                validTime: '2026-07-29T00:00:00+00:00/P2D',
+                value: 32
+              }
+            ]
+          }
+        }
+      };
+    } else if (url.pathname === '/alerts/active') {
+      body = { type: 'FeatureCollection', features: [] };
+    } else {
+      return route.abort();
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/geo+json',
+      body: JSON.stringify(body)
+    });
+  });
+
+  const unrelatedSourceRequests: string[] = [];
+  const nwsRequests: string[] = [];
   page.on('request', (request) => {
     const url = request.url();
+    if (url.startsWith('https://api.weather.gov/')) {
+      nwsRequests.push(url);
+      return;
+    }
     if (
       url.includes('/data/enso-indices.json') ||
       url.includes('/USDM_current/FeatureServer/0/query') ||
       url.includes('/StateStatistics/GetDSCI') ||
       url.includes('/WFIGS_Interagency_Perimeters_Current/') ||
-      url.startsWith('https://api.weather.gov/') ||
       url.includes('/cpc_610_outlk/') ||
       url.includes('/cpc_814_outlk/') ||
       url.includes('nwrfc.noaa.gov/water_supply/')
     ) {
-      briefingSourceRequests.push(url);
+      unrelatedSourceRequests.push(url);
     }
   });
 
@@ -124,7 +207,14 @@ test('impactSynthesis none renders its matrix note and starts no briefing source
   await expect(panel.locator('.impact-capability-unavailable')).toContainText(
     'The briefing synthesis and resource routing are not validated outside the PNW.'
   );
-  await page.waitForTimeout(500);
-  expect(briefingSourceRequests).toEqual([]);
+  await expect(
+    panel.locator('.point-heat > .impact-horizon-head .point-heat-pill-ready')
+  ).toHaveText('live');
+  await expect(panel.locator('.point-heat-station')).toContainText(
+    'Test Station'
+  );
+  expect(unrelatedSourceRequests).toEqual([]);
+  expect(nwsRequests).toHaveLength(6);
+  expect(nwsRequests.filter((url) => url.includes('/points/'))).toHaveLength(1);
   await expect(panel.locator('.impact-resource-link')).toHaveCount(0);
 });

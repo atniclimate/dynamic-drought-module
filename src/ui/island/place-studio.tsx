@@ -17,7 +17,6 @@ import {
   loadPlaceCatalog,
   typedPlaceRef
 } from '../../config/place-catalog';
-import { regionCapabilityLevel } from '../../config/region-capability';
 import type {
   PlaceCapabilityKey,
   PlaceCatalogEntry
@@ -1021,14 +1020,7 @@ function PlaceStudio() {
           setPlaceStudioReturnAction(() => openImpactPanel(resolved.context));
         }
 
-        const impactSynthesis = regionCapabilityLevel(
-          resolved.context.regionKey,
-          'impactSynthesis'
-        );
-        if (
-          coverage.briefable.state === 'available' &&
-          impactSynthesis !== 'none'
-        ) {
+        if (coverage.briefable.state === 'available') {
           const briefing = createBriefingSkeleton(resolved.context);
           setNarrativeKindLabel(briefing.landKind);
           void hydrateBriefing(briefing, masterAbort.signal, () => {

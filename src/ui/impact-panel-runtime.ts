@@ -30,10 +30,6 @@ import {
   resolveLandscapeSelection
 } from '../impact/landscape-resolution';
 import type { LandscapeEcoregionKey } from '../impact/landscape-resolution';
-import {
-  regionCapabilityLevel,
-  regionCapabilityNote
-} from '../config/region-capability';
 import { renderClaim } from './claim-render';
 import { renderLandscapeContext } from './landscape-context';
 import { loadFederalResources, resourcesForIdentity } from '../impact/resource-catalog';
@@ -44,12 +40,16 @@ import type { PlaceSelection } from '../state/place-selection';
 import { setSheetBriefing } from './mobile-sheet';
 import type {
   BoundarySelectionContext,
+  HeatSynthesis,
   Horizon,
   HorizonStatus,
   ImpactBriefing,
+  PointHeatBriefing,
+  PointHeatMetricSeries,
   ResourceLink,
   ResourceTier
 } from '../impact/types';
+import type { LayerStatus } from '../types/layer';
 import { escapeHtml } from '../util/escape';
 import {
   closeImpactPanelShell,
@@ -122,6 +122,15 @@ const HORIZON_PILL_TEXT: Record<HorizonStatus, string> = {
   unavailable: 'unavailable'
 };
 
+const SOURCE_PILL_TEXT: Record<LayerStatus, string> = {
+  loading: 'loading...',
+  ready: 'live',
+  degraded: 'live (partial)',
+  error: 'unavailable',
+  'no-data': 'no data',
+  'zoom-in': 'zoom in to load'
+};
+
 const TIER_HEADING: Record<ResourceTier, string> = {
   'tribe-own': "The Nation's own resources",
   federal: 'Federal regional resources',
@@ -178,6 +187,171 @@ function renderHorizon(horizon: Horizon): string {
         <span class="impact-horizon-pill impact-horizon-pill-${horizon.status}">${escapeHtml(HORIZON_PILL_TEXT[horizon.status])}</span>
       </div>
       <div class="impact-horizon-claims">${inner}</div>
+    </section>
+  `;
+}
+
+function readableUnit(unitCode: string): string {
+  const unit = unitCode.split(':').at(-1) ?? unitCode;
+  const labels: Readonly<Record<string, string>> = {
+    degC: '°C',
+    degF: '°F',
+    percent: '%'
+  };
+  return labels[unit] ?? unit;
+}
+
+function renderMetricValue(metric: PointHeatMetricSeries): string {
+  const value = metric.values[0];
+  if (!value) return '';
+  return `${value.value} ${escapeHtml(readableUnit(value.unitCode))} <small class="point-heat-unit">(${escapeHtml(value.unitCode)})</small>`;
+}
+
+function renderObservation(pointHeat: PointHeatBriefing): string {
+  const observation = pointHeat.observation;
+  if (observation.status === 'loading') {
+    return '<p class="point-heat-state">Reading the nearest NWS station...</p>';
+  }
+  if (observation.status !== 'ready') {
+    return `<p class="point-heat-state">${escapeHtml(
+      observation.note ?? SOURCE_PILL_TEXT[observation.status]
+    )}</p>`;
+  }
+  const stationName =
+    observation.stationName ?? observation.stationId ?? 'Nearest NWS station';
+  const station =
+    observation.stationUrl?.startsWith('https://')
+      ? `<a href="${escapeHtml(observation.stationUrl)}" target="_blank" rel="noopener">${escapeHtml(stationName)}</a>`
+      : escapeHtml(stationName);
+  const distance =
+    observation.distanceKm === undefined
+      ? ''
+      : `<span>${observation.distanceKm.toFixed(1)} km from the selected point</span>`;
+  const timestamp = observation.timestamp
+    ? `<time datetime="${escapeHtml(observation.timestamp)}">${escapeHtml(observation.timestamp)}</time>`
+    : '';
+  return `
+    <p class="point-heat-station">${station}</p>
+    <p class="point-heat-meta">${distance}${timestamp}</p>
+    <dl class="point-heat-observation-values">
+      ${observation.metrics
+        .map(
+          (metric) =>
+            `<div><dt>${escapeHtml(metric.label)}</dt><dd>${renderMetricValue(metric)}</dd></div>`
+        )
+        .join('')}
+    </dl>
+  `;
+}
+
+function renderGridMetric(
+  metric: PointHeatMetricSeries,
+  open: boolean
+): string {
+  const shown = metric.values.slice(0, 8);
+  return `
+    <details class="point-heat-series"${open ? ' open' : ''}>
+      <summary>${escapeHtml(metric.label)} <span>${escapeHtml(SOURCE_PILL_TEXT.ready)}</span></summary>
+      <table>
+        <thead><tr><th scope="col">Issuer value</th><th scope="col">Valid interval</th></tr></thead>
+        <tbody>
+          ${shown
+            .map(
+              (value) => `
+                <tr>
+                  <td>${value.value} ${escapeHtml(readableUnit(value.unitCode))}<small class="point-heat-unit"> (${escapeHtml(value.unitCode)})</small></td>
+                  <td><code>${escapeHtml(value.validTime)}</code></td>
+                </tr>
+              `
+            )
+            .join('')}
+        </tbody>
+      </table>
+      ${
+        metric.availableValueCount > shown.length
+          ? `<p class="point-heat-series-count">Showing ${shown.length} of ${metric.availableValueCount} populated current or future intervals.</p>`
+          : ''
+      }
+    </details>
+  `;
+}
+
+function renderGrid(pointHeat: PointHeatBriefing): string {
+  const grid = pointHeat.grid;
+  if (grid.status === 'loading') {
+    return '<p class="point-heat-state">Reading NWS grid guidance...</p>';
+  }
+  if (grid.status !== 'ready') {
+    return `<p class="point-heat-state">${escapeHtml(
+      grid.note ?? SOURCE_PILL_TEXT[grid.status]
+    )}</p>`;
+  }
+  const preferred =
+    grid.metrics.find((metric) => metric.key === 'heatIndex')?.key ??
+    grid.metrics.find((metric) => metric.key === 'apparentTemperature')?.key ??
+    grid.metrics[0]?.key;
+  const identity = [grid.office, grid.gridId].filter(Boolean).join(' / ');
+  return `
+    ${identity ? `<p class="point-heat-meta">${escapeHtml(identity)}</p>` : ''}
+    ${grid.metrics
+      .map((metric) => renderGridMetric(metric, metric.key === preferred))
+      .join('')}
+  `;
+}
+
+function renderHeatSynthesis(synthesis: HeatSynthesis): string {
+  const reads =
+    synthesis.reads.length > 0
+      ? `<ul>${synthesis.reads
+          .map(
+            (read) =>
+              `<li><strong>${escapeHtml(read.label)}</strong><p>${escapeHtml(read.text)}</p></li>`
+          )
+          .join('')}</ul>`
+      : '';
+  const note = synthesis.note
+    ? `<p class="point-heat-synthesis-note">${escapeHtml(synthesis.note)}</p>`
+    : '';
+  return `
+    <section class="point-heat-synthesis" aria-label="Heat sources together">
+      <div class="impact-horizon-head">
+        <h4>Heat sources together</h4>
+        <span class="point-heat-pill point-heat-pill-${synthesis.status}">${escapeHtml(SOURCE_PILL_TEXT[synthesis.status])}</span>
+      </div>
+      ${reads}
+      ${note}
+    </section>
+  `;
+}
+
+function renderPointHeat(
+  pointHeat: PointHeatBriefing,
+  synthesis: HeatSynthesis
+): string {
+  const pointLabel =
+    `${pointHeat.point.lat.toFixed(4)}, ${pointHeat.point.lng.toFixed(4)}`;
+  return `
+    <section class="point-heat" aria-label="Heat at selected point">
+      <div class="impact-horizon-head">
+        <div>
+          <h3 class="impact-section-title">Heat at selected point</h3>
+          <p class="point-heat-coordinate">${escapeHtml(pointLabel)}</p>
+        </div>
+        <span class="point-heat-pill point-heat-pill-${pointHeat.status}">${escapeHtml(SOURCE_PILL_TEXT[pointHeat.status])}</span>
+      </div>
+      <p class="point-heat-scope">Values describe this coordinate and nearby station, not the complete selected boundary or jurisdiction.</p>
+      ${pointHeat.note ? `<p class="impact-horizon-note">${escapeHtml(pointHeat.note)}</p>` : ''}
+      <div class="point-heat-grid">
+        <section class="point-heat-card" aria-label="Observed nearby">
+          <h4>Observed nearby</h4>
+          ${renderObservation(pointHeat)}
+        </section>
+        <section class="point-heat-card" aria-label="NWS grid guidance">
+          <h4>NWS grid guidance</h4>
+          ${renderGrid(pointHeat)}
+        </section>
+      </div>
+      ${renderHeatSynthesis(synthesis)}
     </section>
   `;
 }
@@ -257,6 +431,7 @@ function renderBody(
     `;
   return `
     ${caveat}
+    ${renderPointHeat(briefing.pointHeat, briefing.heatSynthesis)}
     ${renderLandscapeContext(briefing.landscape)}
     ${impact}
     ${renderResources(briefing.resources)}
@@ -323,14 +498,9 @@ export function openImpactPanel(
       sources: []
     };
   }
-  const impactSynthesis = regionCapabilityLevel(
-    context.regionKey,
-    'impactSynthesis'
-  );
-  const unavailableNote =
-    impactSynthesis === 'none'
-      ? regionCapabilityNote(context.regionKey, 'impactSynthesis')
-      : null;
+  const unavailableNote = briefing.sourcePolicy.droughtImpact.enabled
+    ? null
+    : briefing.sourcePolicy.droughtImpact.note;
   if (unavailableNote) {
     markImpactSynthesisUnavailable(briefing, unavailableNote);
   }
@@ -363,20 +533,20 @@ export function openImpactPanel(
     );
   }
 
-  // Fill supported horizons from live sources, re-rendering as each settles.
-  // A matrix level of none is an explicit unavailable surface and starts no
-  // briefing-source request.
-  if (impactSynthesis !== 'none') {
-    void hydrateBriefing(
-      briefing,
-      signal,
-      () => refreshOpenBriefing(token)
-    ).catch((err: unknown) => {
-      if (!signal.aborted) {
-        console.warn('[impact-panel] hydration failed:', err);
-      }
-    });
+  // Hydration applies the independent policy for every source. This runs even
+  // when regional drought synthesis is unavailable because point heat may be
+  // supported for the selected geography.
+  void hydrateBriefing(
+    briefing,
+    signal,
+    () => refreshOpenBriefing(token)
+  ).catch((err: unknown) => {
+    if (!signal.aborted) {
+      console.warn('[impact-panel] hydration failed:', err);
+    }
+  });
 
+  if (briefing.sourcePolicy.droughtImpact.enabled) {
     // In parallel, resolve the selection's location identity and swap in the
     // state-tier resources from the verified catalog (F3; D-0.6.0-009). The
     // same capability evidence gates resource routing, so unsupported or

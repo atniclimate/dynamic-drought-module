@@ -306,11 +306,20 @@ const FEATURE_BUDGETS = [
   },
   {
     key: 'heatrisk-days',
-    label: 'HeatRisk multi-day selector (JS budget 4.0 kB ratified by the maintainer, D-0.8.0-051, superseding the lane-set 2.0; the H0 coverage qualification measured 3.5 kB across three chunks on 2026-07-28; network numbers measured 30,326 bytes / 18 requests at 1280x720 on 2026-07-27)',
+    label: 'HeatRisk multi-day selector (JS budget 4.2 kB covers the 4.1 kB shared HeatRisk closure measured after H2 integration; the H0 coverage qualification measured 3.5 kB across three chunks on 2026-07-28; network numbers measured 30,326 bytes / 18 requests at 1280x720 on 2026-07-27)',
     rootModules: ['src/layers/heatrisk.ts'],
-    activationJsGzipKb: 4.0,
+    activationJsGzipKb: 4.2,
     networkBytes: 30_326,
     requestCount: 18,
+    dataAssets: [],
+  },
+  {
+    key: 'point-heat-briefing',
+    label: 'Point heat briefing with bounded NWS discovery, nearby observation, grid time series, point forecast, and alerts (24.1 kB measured first-activation closure, including the shared impact hydrator; six-request ceiling; completed responses use the bounded client cache and the Worker retains its 60-second edge cache)',
+    rootModules: ['src/impact/point-heat.ts'],
+    activationJsGzipKb: 25.0,
+    networkBytes: 3_000_000,
+    requestCount: 6,
     dataAssets: [],
   },
   {

@@ -1,41 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { readFileSync } from 'node:fs';
 
 import {
-  fetchJsonWithBudget,
-  fetchWithBudget
-} from '../src/util/fetch';
+  clearNwsResponseCache,
+  createNwsRequestSession
+} from '../src/impact/nws-point';
 
 test('the NWS point request aborts a response body held after headers', async () => {
-  const sources = readFileSync(
-    new URL('../src/impact/sources.ts', import.meta.url),
-    'utf8'
-  );
-  const functionStart = sources.indexOf(
-    'export async function fetchNwsForecastClaims'
-  );
-  expect(functionStart).toBeGreaterThan(-1);
-  const implementation = sources.slice(functionStart);
-  const readsWithFullBodyBudget = implementation.includes(
-    'fetchJsonWithBudget('
-  );
-  const fetchPointBody = readsWithFullBodyBudget
-    ? fetchJsonWithBudget
-    : async (
-        url: string,
-        opts: RequestInit | null,
-        signal: AbortSignal | null,
-        timeoutMs: number
-      ): Promise<unknown> => {
-        const response = await fetchWithBudget(
-          url,
-          opts,
-          signal,
-          timeoutMs
-        );
-        return response.json() as Promise<unknown>;
-      };
-
+  clearNwsResponseCache();
   const originalFetch = globalThis.fetch;
   let noteHeadersReturned: (() => void) | null = null;
   let noteBodyCancelled: (() => void) | null = null;
@@ -67,11 +38,9 @@ test('the NWS point request aborts a response body held after headers', async ()
   };
 
   const master = new AbortController();
-  const request = fetchPointBody(
+  const request = createNwsRequestSession(master.signal).fetchJson(
     '/nws-points.json',
-    null,
-    master.signal,
-    10_000
+    60_000
   );
   try {
     await headersReturned;

@@ -53,6 +53,13 @@ const {
   COVERAGE_FAMILY_KEYS,
   COVERAGE_FAMILY_LABELS
 } = await import('../src/config/capability-matrix.ts');
+const {
+  CANONICAL_GEOGRAPHY_KEYS,
+  CANONICAL_GEOGRAPHY_LABELS
+} = await import('../src/config/geography.ts');
+const {
+  NATIONAL_HEAT_SOURCE_CAPABILITY
+} = await import('../src/config/source-capability.ts');
 
 /** The consistency rules; returns a list of violation messages. */
 function consistencyProblems() {
@@ -131,6 +138,70 @@ function renderDoc() {
       );
     }
   }
+  lines.push('');
+  lines.push('## Independent heat-source capability');
+  lines.push('');
+  lines.push(
+    'Point heat and heat-related issuer products use canonical selected-place'
+  );
+  lines.push(
+    'geography and independent source policy. They do not promote the broader'
+  );
+  lines.push(
+    '`impactSynthesis` cell or activate unrelated drought, fire, climate, or'
+  );
+  lines.push('water sources.');
+  lines.push('');
+  const heatHeader = [
+    'Canonical geography',
+    'Point observation and grid',
+    'Point forecast',
+    'Active alerts',
+    'HeatRisk'
+  ];
+  lines.push(`| ${heatHeader.join(' | ')} |`);
+  lines.push(`|${heatHeader.map(() => ' --- ').join('|')}|`);
+  for (const geography of CANONICAL_GEOGRAPHY_KEYS) {
+    const row = NATIONAL_HEAT_SOURCE_CAPABILITY[geography];
+    lines.push(
+      `| ${CANONICAL_GEOGRAPHY_LABELS[geography]} | ` +
+        `${row.pointHeat.state} | ${row.nwsForecast.state} | ` +
+        `${row.nwsAlerts.state} | ${row.heatRisk.state} |`
+    );
+  }
+  lines.push('');
+  lines.push('### Heat-source qualifications');
+  for (const geography of CANONICAL_GEOGRAPHY_KEYS) {
+    const row = NATIONAL_HEAT_SOURCE_CAPABILITY[geography];
+    lines.push('');
+    lines.push(`#### ${CANONICAL_GEOGRAPHY_LABELS[geography]}`);
+    lines.push('');
+    for (const [key, label] of [
+      ['pointHeat', 'Point observation and grid'],
+      ['nwsForecast', 'Point forecast'],
+      ['nwsAlerts', 'Active alerts'],
+      ['heatRisk', 'HeatRisk']
+    ]) {
+      const cell = row[key];
+      lines.push(`- **${label}** (${cell.state}): ${cell.note}`);
+    }
+  }
+  lines.push('');
+  lines.push('## Fire follow-on');
+  lines.push('');
+  lines.push(
+    'The fire module should receive the same architectural expansion: canonical'
+  );
+  lines.push(
+    'geography, independent per-source capability, time-aware source contracts,'
+  );
+  lines.push(
+    'cross-source synthesis that preserves issuer support, and bounded'
+  );
+  lines.push(
+    'cancellable caching. This record does not activate or broaden a fire source;'
+  );
+  lines.push('that work requires its own implementation and verification.');
   lines.push('');
   return lines.join('\n');
 }

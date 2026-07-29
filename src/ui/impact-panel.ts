@@ -351,6 +351,28 @@ function unavailableBriefing(
 ): ImpactBriefing {
   return {
     context,
+    sourcePolicy: {
+      geography: {
+        key: 'unknown',
+        country: 'unknown',
+        basis: 'unknown',
+        note: UNAVAILABLE_NOTE
+      },
+      droughtImpact: { enabled: false, note: UNAVAILABLE_NOTE },
+      sources: {
+        pointHeat: { state: 'unavailable', note: UNAVAILABLE_NOTE },
+        nwsForecast: { state: 'unavailable', note: UNAVAILABLE_NOTE },
+        nwsAlerts: { state: 'unavailable', note: UNAVAILABLE_NOTE },
+        heatRisk: { state: 'unavailable', note: UNAVAILABLE_NOTE },
+        usdm: { state: 'unavailable', note: UNAVAILABLE_NOTE },
+        dsci: { state: 'unavailable', note: UNAVAILABLE_NOTE },
+        nifc: { state: 'unavailable', note: UNAVAILABLE_NOTE },
+        cpcExtended: { state: 'unavailable', note: UNAVAILABLE_NOTE },
+        enso: { state: 'unavailable', note: UNAVAILABLE_NOTE },
+        waterSupply: { state: 'unavailable', note: UNAVAILABLE_NOTE },
+        cpcSeasonal: { state: 'unavailable', note: UNAVAILABLE_NOTE }
+      }
+    },
     landTitle: context.title,
     landKind: 'Boundary briefing',
     landCaveat: '',
@@ -359,6 +381,26 @@ function unavailableBriefing(
       note: UNAVAILABLE_NOTE,
       facts: [],
       sources: []
+    },
+    pointHeat: {
+      status: 'error',
+      note: UNAVAILABLE_NOTE,
+      point: { ...context.lngLat },
+      observation: {
+        status: 'error',
+        note: UNAVAILABLE_NOTE,
+        metrics: []
+      },
+      grid: {
+        status: 'error',
+        note: UNAVAILABLE_NOTE,
+        metrics: []
+      }
+    },
+    heatSynthesis: {
+      status: 'error',
+      reads: [],
+      note: UNAVAILABLE_NOTE
     },
     horizons: {
       current: unavailableHorizon('current', 'Current conditions', 'now'),

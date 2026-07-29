@@ -3899,6 +3899,176 @@ button.telemetry-item {
   color: var(--fg-2);
 }
 
+.point-heat {
+  margin-bottom: 22px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--bg-2) 86%, var(--accent) 14%);
+  border: 1px solid var(--accent-strong);
+  border-radius: var(--radius-md);
+}
+.point-heat .impact-section-title {
+  margin-bottom: 2px;
+  color: var(--fg-0);
+}
+.point-heat-coordinate,
+.point-heat-scope,
+.point-heat-meta,
+.point-heat-state,
+.point-heat-series-count,
+.point-heat-synthesis-note {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+.point-heat-scope {
+  margin-bottom: 10px;
+}
+.point-heat-pill {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-feature-settings: 'tnum' 1;
+  color: var(--fg-3);
+  white-space: nowrap;
+}
+.point-heat-pill-loading {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.point-heat-pill-ready {
+  color: var(--good);
+  border-color: var(--good);
+}
+.point-heat-pill-degraded {
+  color: var(--accent);
+  border-color: var(--accent-strong);
+}
+.point-heat-pill-error,
+.point-heat-pill-no-data,
+.point-heat-pill-zoom-in {
+  color: var(--fg-3);
+  font-style: italic;
+}
+.point-heat-grid {
+  display: grid;
+  gap: 10px;
+}
+.point-heat-card,
+.point-heat-synthesis {
+  min-width: 0;
+  padding: 10px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.point-heat-card > h4,
+.point-heat-synthesis h4 {
+  margin: 0 0 7px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: var(--fw-subtitle);
+  color: var(--fg-1);
+}
+.point-heat-station {
+  margin: 0 0 3px;
+  font-size: 11.5px;
+  color: var(--fg-0);
+}
+.point-heat-station a {
+  color: var(--accent);
+}
+.point-heat-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+  margin-bottom: 7px;
+}
+.point-heat-observation-values {
+  margin: 0;
+}
+.point-heat-observation-values > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 0;
+  border-top: 1px dashed var(--line);
+}
+.point-heat-observation-values dt,
+.point-heat-observation-values dd {
+  margin: 0;
+  font-size: 10.5px;
+}
+.point-heat-observation-values dd {
+  color: var(--fg-0);
+  text-align: right;
+}
+.point-heat-unit {
+  color: var(--fg-3);
+  font-size: 8.5px;
+}
+.point-heat-series {
+  border-top: 1px dashed var(--line);
+}
+.point-heat-series summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 0;
+  cursor: pointer;
+  font-size: 10.5px;
+  color: var(--fg-1);
+}
+.point-heat-series summary span {
+  color: var(--good);
+}
+.point-heat-series table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 9.5px;
+}
+.point-heat-series th,
+.point-heat-series td {
+  padding: 5px 4px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.point-heat-series th:first-child,
+.point-heat-series td:first-child {
+  width: 35%;
+}
+.point-heat-series code {
+  color: var(--fg-2);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 8.5px;
+  overflow-wrap: anywhere;
+}
+.point-heat-series-count {
+  padding: 6px 0 2px;
+}
+.point-heat-synthesis {
+  margin-top: 10px;
+}
+.point-heat-synthesis ul {
+  margin: 0;
+  padding-left: 16px;
+}
+.point-heat-synthesis li {
+  margin-bottom: 7px;
+  font-size: 10.5px;
+  color: var(--fg-1);
+}
+.point-heat-synthesis li p {
+  margin: 2px 0 0;
+  line-height: 1.45;
+  color: var(--fg-2);
+}
+
 .impact-horizons { margin-bottom: 22px; }
 
 .impact-horizon {
