@@ -14,11 +14,11 @@ import { HAZARD_CLUSTER_KEYS, HAZARD_CLUSTERS } from '../src/config/clusters';
 import { OCEAN_KEYS } from '../src/config/oceans';
 import { LAYER_DEFS } from '../src/config/layers';
 import { parseFramingParam } from '../src/state/framing-store';
-import {
-  composeClusterBootLayers,
-  parseClusterParam,
-  parseOceanParam
-} from '../src/state/cluster-store';
+import { parseClusterParam, parseOceanParam } from '../src/state/cluster-store';
+// The boot composition moved to the S3 cluster service (the S2 interim
+// mechanics retired per the 2026-07-24 conductor amendment); the pinned
+// assertions below are unchanged.
+import { composeClusterIntent } from '../src/state/cluster-service';
 import { parseShellParams } from '../src/state/url';
 import { deriveViewMode } from '../src/state/view-mode';
 
@@ -162,7 +162,7 @@ test.describe('S2 precedence table (Node)', () => {
 
 test.describe('S2 cluster boot composition (Node)', () => {
   test('drought composes back to exactly the default-on set (absence is the default display)', () => {
-    expect([...composeClusterBootLayers('drought')].sort()).toEqual([...DEFAULT_ON].sort());
+    expect([...composeClusterIntent('drought')].sort()).toEqual([...DEFAULT_ON].sort());
   });
 
   test('a hazard cluster is the untouched reference set plus its current recipe, one surface at most', () => {
@@ -170,7 +170,7 @@ test.describe('S2 cluster boot composition (Node)', () => {
       (key) => !SURFACE_KEYS.has(key)
     );
     for (const cluster of HAZARD_CLUSTER_KEYS) {
-      const composed = composeClusterBootLayers(cluster);
+      const composed = composeClusterIntent(cluster);
       // The default-on reference set is left alone (D-0.7.0-044).
       for (const key of reference) {
         expect(composed, `${cluster}: reference ${key} survives`).toContain(key);
@@ -186,8 +186,8 @@ test.describe('S2 cluster boot composition (Node)', () => {
       expect(new Set(composed).size).toBe(composed.length);
     }
     // The drought default surface never rides a hazard cluster.
-    expect(composeClusterBootLayers('wildfire')).not.toContain('usdm');
-    expect(composeClusterBootLayers('enso')).toContain('sst-anomaly');
+    expect(composeClusterIntent('wildfire')).not.toContain('usdm');
+    expect(composeClusterIntent('enso')).toContain('sst-anomaly');
   });
 });
 

@@ -388,6 +388,10 @@ test.describe('U-HEATRISK-DAYS multi-day read', () => {
     await expect
       .poll(() => exportedTimes.includes(TIMES[0]), { timeout: 15_000 })
       .toBe(true);
+    // The cutoff must follow the complete initial-frame tile fan-out.
+    // Under a loaded serial suite, MapLibre can schedule additional Day 1
+    // tiles after the first request appears in exportedTimes.
+    await page.waitForLoadState('networkidle');
     const requestCutoff = exportedTimes.length;
 
     await select.selectOption('2');

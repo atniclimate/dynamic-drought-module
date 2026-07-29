@@ -109,6 +109,63 @@ const specByLayerId = new Map<string, ClickTargetSpec>();
 let currentPopup: maplibregl.Popup | null = null;
 let initialized = false;
 
+// ---------------------------------------------------------------------------
+// The swappable response sink (S4c). The sanctioning authority is the S4
+// design record section 3, S4c bullet: "the NEW structured coordinator
+// response sink + the active-cluster-aware response". This file's own
+// pre-existing header (the design-intent comment above) anticipated the
+// same shape: a single shell rehosting the response by swapping the sink
+// while the arbitration above it does not change; that sentence is this
+// module's, not the design record's.
+// ---------------------------------------------------------------------------
+
+/**
+ * The structured response handed to a swappable sink. The element is the
+ * SAME assembled response the popup path renders: a frozen
+ * `.coordinated-response-head` (title, briefing door, the "Other map
+ * features here" disclosure) followed by a scrolling
+ * `.coordinated-response-body` (agency line, meta, the full
+ * representation caveat; D-0.7.0-072). Handing the assembled element
+ * over keeps the two surfaces byte-identical in content.
+ */
+export interface StructuredResponse {
+  readonly element: HTMLElement;
+  /** The response title text, when the content carried one. */
+  readonly title: string | null;
+  /** True when the response established a place selection. */
+  readonly placeBearing: boolean;
+}
+
+export interface ResponseSink {
+  /**
+   * Present the response, replacing any prior one in place. Return
+   * false to DECLINE (the sink surface is not usable right now: a
+   * collapsed sidebar, a narrow viewport); the coordinator then falls
+   * back to its own popup, so a response is never silently dropped.
+   */
+  present(response: StructuredResponse): boolean;
+  /** Retire the currently presented response. Idempotent. */
+  dismiss(): void;
+}
+
+let sink: ResponseSink | null = null;
+let sinkPresented = false;
+let sinkSelection: PlaceSelection | null = null;
+
+/**
+ * Install (or, with null, remove) the one alternate response sink. Only
+ * PLACE-BEARING responses route to the sink, mirroring the shipped
+ * mobile-sheet precedent: the map is the instrument for fire, smoke,
+ * and condition responses, so those keep the map-anchored popup.
+ * Installing over a presented response retires it first, so no response
+ * is stranded on a surface the coordinator no longer tracks.
+ */
+export function setResponseSink(next: ResponseSink | null): void {
+  if (sink === next) return;
+  if (sinkPresented) dismissResponse();
+  sink = next;
+}
+
 /**
  * Register a click target. Called from each layer module's `bindPopups`
  * (the layer-controller invokes that once, on first activation, so a
@@ -177,6 +234,9 @@ export function resetInteractionCoordinatorForTest(): void {
   specByLayerId.clear();
   currentPopup = null;
   initialized = false;
+  sink = null;
+  sinkPresented = false;
+  sinkSelection = null;
 }
 
 function handleClick(map: maplibregl.Map, e: maplibregl.MapMouseEvent): void {
@@ -361,6 +421,24 @@ function renderPopup(
       });
   }
 
+  // The swappable sink (S4c): a PLACE-BEARING response offers itself to
+  // the installed sink first (the shell's panel-foot response). The sink
+  // may decline (collapsed sidebar, narrow viewport), in which case the
+  // popup below renders exactly as before. Non-place responses never
+  // route here; the map stays the instrument for those.
+  if (sink && selection) {
+    const presented = sink.present({
+      element: container,
+      title: title?.textContent ?? null,
+      placeBearing: true
+    });
+    if (presented) {
+      sinkPresented = true;
+      sinkSelection = selection;
+      return;
+    }
+  }
+
   const popup = new maplibregl.Popup({
     closeButton: true,
     ...response.popupOptions,
@@ -413,9 +491,22 @@ function buildDisclosure(
   return details;
 }
 
-/** Close the coordinator's response popup, if one is open. */
+/**
+ * Close the coordinator's current response, wherever it is presented
+ * (the map popup or the installed sink). The sink path clears the
+ * response's place selection only if still current, exactly as the
+ * popup's close handler does, so a rapid follow-up selection is never
+ * clobbered by a late dismissal.
+ */
 export function dismissResponse(): void {
   const popup = currentPopup;
   currentPopup = null;
   popup?.remove();
+  if (sinkPresented) {
+    sinkPresented = false;
+    const sel = sinkSelection;
+    sinkSelection = null;
+    sink?.dismiss();
+    if (sel && getPlaceSelection() === sel) setPlaceSelection(null);
+  }
 }

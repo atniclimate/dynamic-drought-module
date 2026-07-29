@@ -16,7 +16,14 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     expect(order[0]).toBeLessThan(order[1]!);
     expect(order[1]).toBeLessThan(order[2]!);
 
-    await expect(page.locator('#time-bar')).toBeVisible();
+    // S4 supersession (the 2026-07-18 design record, S4c): on the
+    // desktop Brief shell the compact WHEN row plus the "More time"
+    // popover carry the temporal surface, and the full #time-bar stands
+    // down (attached for console/mobile, display gone here). The
+    // D-0.7.0-067 order contract above still holds on the DOM.
+    await expect(page.locator('#time-bar')).toBeHidden();
+    await expect(page.locator('#time-bar')).toBeAttached();
+    await expect(page.locator('#shell-time')).toBeVisible();
     await expect(page.locator('#brief-display')).toBeVisible();
     await expect(page.locator('#brief-display #studio-entry-pair')).toBeVisible();
     await expect(page.locator('#brief-display #enso-driver')).toBeVisible();
@@ -75,8 +82,16 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     await page.keyboard.press('Enter');
     await expect(previous).toBeFocused();
     await page.setViewportSize({ width: 1280, height: 900 });
-    await expect(page.locator('#brief-head + #time-bar')).toHaveCount(1);
-    await expect(previous).toBeFocused();
+    // The desktop seat honors the S4 band order: the bar returns AFTER
+    // the shell panel (VIEW / MAP CONTEXT / WHEN / SHOWN NOW), not
+    // between the brief head and the shell (DG-080 review finding 4).
+    await expect(page.locator('#shell-panel + #time-bar')).toHaveCount(1);
+    // S4 supersession: the rehosted rail is attached in its desktop slot
+    // but display-gone in desktop Brief (the shell's compact WHEN row is
+    // that surface now), so the cross-host FOCUS carry ends at the
+    // desktop line; the rehost itself (the D-0.7.0-067 stable-host
+    // contract) is still pinned above.
+    await expect(page.locator('#time-bar')).toBeHidden();
   });
 
   test('embed keeps only the mirrored date until its explicit exit', async ({ page }) => {

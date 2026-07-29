@@ -71,7 +71,11 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
   drought: {
     title: 'Drought',
     urlToken: null,
-    description: 'Current drought conditions and the CPC drought outlooks.',
+    // First-use expansion (CLAUDE.md section 5; DG-080 r2 finding 5):
+    // this tooltip is the cluster's first prose use of the agency name,
+    // so both acronyms are spelled out here; later uses stay compact.
+    description:
+      'Current drought conditions and the National Oceanic and Atmospheric Administration (NOAA) Climate Prediction Center (CPC) drought outlooks.',
     recipes: {
       // The weekly US Drought Monitor is the current read.
       current: ['usdm'],
@@ -119,7 +123,10 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
   enso: {
     title: 'ENSO',
     urlToken: 'enso',
-    description: 'The sea-surface-temperature anomaly display with the current ENSO index snapshot.',
+    // First-use expansion (CLAUDE.md section 5; DG-080 review finding
+    // 7): the ruled compact button title stays 'ENSO'; the description
+    // (the button's title text) spells the acronym out.
+    description: 'The sea-surface-temperature anomaly display with the current El Nino / Southern Oscillation (ENSO) index snapshot.',
     recipes: {
       // v1 is the shipped SST anomaly surface at every horizon; the
       // ENSO snapshot line is a UI surface, not a map layer. Richer

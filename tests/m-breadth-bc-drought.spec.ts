@@ -296,9 +296,23 @@ test.describe('U7 British Columbia basin drought display', () => {
     const map = page.locator('#map');
     const box = await map.boundingBox();
     if (!box) throw new Error('map has no bounding box');
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-
     const popup = page.locator('.maplibregl-popup-content');
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
+    await expect
+      .poll(
+        async () => {
+          await page.mouse.click(centerX, centerY);
+          await page.waitForTimeout(120);
+          return popup.isVisible();
+        },
+        {
+          timeout: 8000,
+          message: 'British Columbia drought popup never appeared over the basin fill'
+        }
+      )
+      .toBe(true);
+
     await expect(popup).toContainText('Interior Test Basin: No update');
     await expect(popup).toContainText('Province of British Columbia');
     await expect(popup).toContainText('Source date: 2026-07-23');

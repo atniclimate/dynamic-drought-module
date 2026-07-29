@@ -349,14 +349,25 @@ test.describe('InteractionCoordinator: one click, one response', () => {
     await routeAllTribalFixtures(page);
     await gotoApp(page, '?view=brief&layers=aiannh,bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
-    await clickCenterForResponse(page);
-    await expect(page.locator('.maplibregl-popup')).toHaveCount(1);
+    // S4: in desktop Brief the place-bearing response rehosts at the
+    // panel foot (the coordinator's swappable sink); the dismissal seam
+    // under test is the same coordinator seam, whichever surface holds
+    // the response.
+    const box = await page.locator('#map').boundingBox();
+    if (!box) throw new Error('map container has no box');
+    const foot = page.locator('#panel-response .coordinated-response');
+    await expect(async () => {
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await expect(foot).toBeVisible({ timeout: 1500 });
+    }).toPass({ timeout: 20_000 });
+    await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
 
     // The PLACE studio is a left-side route on desktop: without the
-    // dismissal seam the popup stays painted on the exposed map
+    // dismissal seam the response would stay painted beside the studio
     // (adversarial finding 5).
     await page.locator('#place-studio-entry').click();
     await expect(page).toHaveURL(/studio=place/);
+    await expect(foot).toHaveCount(0);
     await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
   });
 });

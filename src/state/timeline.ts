@@ -22,7 +22,28 @@
  * The store is a plain observable singleton, mirroring the LayerRegistry
  * pattern (src/state/registry.ts): synchronous setters, snapshot getters,
  * and a change event the sidebar subscribes to for URL sync.
+ *
+ * S3 (the atomic cluster service; D-0.7.0-052/074) adds the COMMITTED
+ * TEMPORAL HORIZON register: which of the three briefing horizons
+ * (current / weeks-ahead / season-ahead) the shell is committed to. It
+ * persists across cluster flips (a cluster switch compares the same
+ * time) and round-trips through the URL as `horizon=` (emitted only for
+ * the two outlook horizons; absence is 'current'), because the horizon
+ * selects the RECIPE a cluster boot composes: without it a shared
+ * cluster=wildfire&horizon=season-ahead link would reboot at the
+ * current-horizon recipe and show the recipient a different display
+ * than the sharer saw (CLAUDE.md section 6 invariant 2). The timeline
+ * owns the horizon-to-register mapping in BOTH directions
+ * (`outlookRangeForHorizon` / the setter logic below): 'current' reads
+ * the observed registers (usdmWeek / usdmMode / sstDate), while the two
+ * outlook horizons select the CPC outlook register ('weeks-ahead' =
+ * monthly, 'season-ahead' = seasonal), and an outlook-register change
+ * made through a surface's own controls updates a committed outlook
+ * horizon to match, so the pressed horizon chip never claims a time the
+ * displayed outlook product no longer shows.
  */
+
+import type { TemporalHorizonKey } from '../config/clusters';
 
 /** USDM surface view mode: absolute categories, or the honest derivative. */
 export type UsdmViewMode = 'absolute' | 'chg1' | 'chg4';
@@ -48,6 +69,7 @@ class TimelineStore {
   private usdmModeValue: UsdmViewMode = 'absolute';
   private sstDateValue: string | null = null;
   private outlookRangeValue: OutlookRange = 'seasonal';
+  private horizonValue: TemporalHorizonKey = 'current';
 
   private readonly listeners: TimelineListener[] = [];
 
@@ -95,6 +117,42 @@ class TimelineStore {
   setOutlookRange(range: OutlookRange): void {
     if (range === this.outlookRangeValue) return;
     this.outlookRangeValue = range;
+    // The reverse half of the horizon-to-register mapping: when an
+    // OUTLOOK horizon is committed and a surface's own temporal controls
+    // (the drought/usdm TimeBarSpec callbacks) select the other outlook
+    // register, the committed horizon follows in the same synchronous
+    // write, so the shell's pressed chip and the displayed product can
+    // never disagree. A 'current' commitment is left alone here: the
+    // register write alone is not a display claim; the drought outlook
+    // surface commits the mapped horizon itself the moment it RENDERS a
+    // register (src/layers/drought.ts showRange), which is what closes
+    // the legacy outlook= URL split (DG-080 review blocker 1).
+    if (this.horizonValue !== 'current') {
+      this.horizonValue = horizonForOutlookRange(range);
+    }
+    this.emit();
+  }
+
+  /** The committed temporal horizon (S3); 'current' at boot. Persists
+   * across cluster flips so a switch compares the same time. */
+  get horizon(): TemporalHorizonKey {
+    return this.horizonValue;
+  }
+
+  /**
+   * Commit a temporal horizon. Applies the timeline-owned
+   * horizon-to-register mapping in the same synchronous write: an
+   * outlook horizon also selects its CPC outlook register, so the
+   * drought outlook surface renders the register the horizon means.
+   * One emit covers both register changes.
+   */
+  setHorizon(next: TemporalHorizonKey): void {
+    if (next === this.horizonValue) return;
+    this.horizonValue = next;
+    const mapped = outlookRangeForHorizon(next);
+    if (mapped !== null && mapped !== this.outlookRangeValue) {
+      this.outlookRangeValue = mapped;
+    }
     this.emit();
   }
 
@@ -104,11 +162,13 @@ class TimelineStore {
       this.usdmWeekValue !== null ||
       this.usdmModeValue !== 'absolute' ||
       this.sstDateValue !== null ||
-      this.outlookRangeValue !== 'seasonal';
+      this.outlookRangeValue !== 'seasonal' ||
+      this.horizonValue !== 'current';
     this.usdmWeekValue = null;
     this.usdmModeValue = 'absolute';
     this.sstDateValue = null;
     this.outlookRangeValue = 'seasonal';
+    this.horizonValue = 'current';
     if (dirty) this.emit();
   }
 
@@ -150,4 +210,38 @@ export function parseSstDate(raw: string | null): string | null {
 /** Parse-time validation for the `outlook` URL parameter. */
 export function parseOutlookRange(raw: string | null): OutlookRange {
   return raw === 'monthly' ? 'monthly' : 'seasonal';
+}
+
+/** Parse-time validation for the `horizon` URL parameter: only the two
+ * outlook horizons are ever serialized; absence (or any unknown token)
+ * is the 'current' default. */
+export function parseHorizonParam(raw: string | null): TemporalHorizonKey {
+  return raw === 'weeks-ahead' || raw === 'season-ahead' ? raw : 'current';
+}
+
+/**
+ * The timeline-owned horizon-to-register mapping (S3; D-0.7.0-052): the
+ * outlook register a committed horizon selects, or null for 'current',
+ * which reads the observed registers (usdmWeek / usdmMode / sstDate)
+ * and leaves the outlook register untouched.
+ */
+export function outlookRangeForHorizon(
+  horizon: TemporalHorizonKey
+): OutlookRange | null {
+  if (horizon === 'weeks-ahead') return 'monthly';
+  if (horizon === 'season-ahead') return 'seasonal';
+  return null;
+}
+
+/**
+ * The inverse half of the mapping (S3; DG-080 review blocker 1): the
+ * committed horizon a CPC outlook register means when the outlook
+ * product is the displayed drought register. Owned here, beside its
+ * inverse, so the shell, the instrument switches (usdm's
+ * switchToOutlook), and the drought surface's own render path share ONE
+ * mapping and the pressed horizon chip can never claim a register the
+ * displayed outlook product does not show.
+ */
+export function horizonForOutlookRange(range: OutlookRange): TemporalHorizonKey {
+  return range === 'monthly' ? 'weeks-ahead' : 'season-ahead';
 }

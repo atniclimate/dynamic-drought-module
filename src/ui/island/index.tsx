@@ -33,6 +33,8 @@ import { Catalog } from './catalog';
 import { ConditionsStrip } from './conditions-strip';
 import { Search } from './search';
 import type { SearchProps } from './search';
+import { mountShell } from './shell';
+import { mountPanelResponse } from './panel-response';
 
 /**
  * Mirror of the registry's per-key status map. Rebuilt wholesale on
@@ -105,5 +107,24 @@ export function mountSidebarIsland(
   const searchContainer = document.getElementById('catalog-search');
   if (searchContainer && searchProps) {
     render(<Search {...searchProps} />, searchContainer);
+  }
+
+  // The S4 main-screen shell (cluster buttons, minimap, compact WHEN
+  // row, the honest display summary) and the panel-foot response sink.
+  // Both ride this same lazy chunk (ADR 0002 condition 1) and mount into
+  // static hosts, so a brief embed (which defers the island entirely)
+  // never pays for them and never changes its shipped surface.
+  const shellHost = document.getElementById('shell-island');
+  if (shellHost) {
+    mountShell(shellHost, map);
+    // Stamp the mount so the stylesheet may retire the vanilla fallbacks
+    // (#time-bar in desktop Brief) and reveal the shell panel. Until this
+    // class exists the shipped controls stay: a failed or slow island
+    // chunk degrades to the pre-S4 surface, never to a control-less panel.
+    document.getElementById('app')?.classList.add('shell-ready');
+  }
+  const responseHost = document.getElementById('panel-response');
+  if (responseHost) {
+    mountPanelResponse(responseHost);
   }
 }

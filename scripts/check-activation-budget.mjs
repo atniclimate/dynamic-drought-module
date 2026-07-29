@@ -316,9 +316,9 @@ const FEATURE_BUDGETS = [
   },
   {
     key: 'canadian-drought-monitor-snapshot',
-    label: 'Canadian Drought Monitor monthly committed snapshot (June 2026 artifact measured 960,818 bytes on 2026-07-28)',
+    label: 'Canadian Drought Monitor monthly committed snapshot (June 2026 artifact measured 960,818 bytes on 2026-07-28; S4 shared time-bar closure measured 5,591 gzip bytes on 2026-07-29)',
     rootModules: ['src/layers/cdm-drought.ts'],
-    activationJsGzipKb: 5.5,
+    activationJsGzipKb: 5.7,
     networkBytes: 1_000_000,
     requestCount: 1,
     dataAssets: [{

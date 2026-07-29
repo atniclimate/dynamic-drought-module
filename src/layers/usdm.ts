@@ -52,7 +52,12 @@ import { escapeHtml } from '../util/escape';
 import { fetchWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 import { getCurrentRegion, onRegionChange } from '../state/region-store';
-import { timeline, type UsdmViewMode } from '../state/timeline';
+import {
+  timeline,
+  horizonForOutlookRange,
+  type UsdmViewMode
+} from '../state/timeline';
+import { requestHorizon } from '../state/cluster-service';
 import { USDM_CATEGORIES, USDM_NONE_SWATCH } from '../config/palette';
 import {
   resetDroughtSurfacePresentation,
@@ -545,7 +550,11 @@ function installTimeBar(map: maplibregl.Map): void {
  * and routes through the controller, DOM-free.
  */
 function switchToOutlook(range: string): void {
-  timeline.setOutlookRange(range === 'monthly' ? 'monthly' : 'seasonal');
+  // Commit the temporal horizon through the S3 cluster service so the
+  // pressed shell chip always describes the drought register being shown.
+  requestHorizon(
+    horizonForOutlookRange(range === 'monthly' ? 'monthly' : 'seasonal')
+  );
   requestLayerOn('drought');
 }
 
@@ -704,6 +713,10 @@ async function setMode(map: maplibregl.Map, mode: UsdmViewMode): Promise<void> {
  * (the sidebar activation spine) surfaces this in the status pill.
  */
 async function activateUsdm(map: maplibregl.Map): Promise<void> {
+  // The US Drought Monitor is the observed register. Commit the current
+  // horizon before mounting it so URL restoration and shell state cannot
+  // claim an outlook horizon over an observed display.
+  timeline.setHorizon('current');
   if (map.getSource(SLOT_SOURCES[0])) {
     return;
   }

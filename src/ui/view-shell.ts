@@ -354,11 +354,9 @@ function buildBriefHead(map: maplibregl.Map): void {
  * across lazy hydration and keep #time-bar outside every regenerated region.
  */
 function buildBriefDisplay(): void {
-  const summary = document.getElementById('brief-display-summary');
-  if (summary) {
-    summary.textContent =
-      'The active condition surface uses the current map framing. When the product has a time frame, its valid or issued date appears above.';
-  }
+  // The shell island renders the live, status-derived DisplaySummary.
+  // Keeping a static sentence here would create a second, stale account
+  // of the map state.
 
   document.getElementById('brief-full-report-link')?.addEventListener('click', () => {
     const place = getPlaceSelection();

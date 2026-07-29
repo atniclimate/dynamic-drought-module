@@ -26,7 +26,15 @@ import { defineConfig } from '@playwright/test';
  * `webServer.url` health check both carry the subpath.
  */
 
-const PREVIEW_ORIGIN = 'http://localhost:4173';
+// 127.0.0.1 EXPLICITLY, never `localhost`: on this machine `localhost`
+// can resolve to ::1 first, and an unrelated preview (another worktree
+// lane's orphaned `vite preview`) listening on [::1]:4173 would then be
+// tested in place of this tree's build (observed 2026-07-24: two review
+// runs nondeterministically hit another lane's dist). Pinning the
+// literal IPv4 loopback on both the health check and the browser, and
+// binding the preview to the same host below, makes the served build
+// deterministic even with a stale IPv6 listener present.
+const PREVIEW_ORIGIN = 'http://127.0.0.1:4173';
 const BASE_PATH = '/dynamic-drought-module/';
 const BASE_URL = `${PREVIEW_ORIGIN}${BASE_PATH}`;
 
@@ -104,7 +112,7 @@ export default defineConfig({
     // Build then serve the production bundle. Locally this guarantees a fresh
     // `dist/`; in CI the same command runs on the runner. `reuseExistingServer`
     // lets a developer keep a `npm run preview` running between local runs.
-    command: 'npm run build && npm run preview',
+    command: 'npm run build && npm run preview -- --host 127.0.0.1 --strictPort',
     url: BASE_URL,
     reuseExistingServer: !isCI,
     // The build (tsc plus vite) plus preview startup can take a while on a cold

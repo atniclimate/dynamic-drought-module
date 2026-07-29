@@ -55,6 +55,7 @@
 import maplibregl from 'maplibre-gl';
 
 import {
+  LAYER_DEFS,
   getLayerDef,
   resetDroughtSurfacePresentation,
   setDroughtSurfacePresentation
@@ -123,9 +124,9 @@ import {
   getHazardCluster,
   getOceanFraming,
   onHazardClusterChange,
-  reconcileClusterWithLayerIntent,
   setHazardCluster
 } from '../state/cluster-store';
+import { reconcileClusterWithLayerIntent } from '../state/cluster-service';
 import { FRAMINGS } from '../config/framings';
 import { OCEANS } from '../config/oceans';
 import { applyBasemapMode } from '../map/basemap-switcher';
@@ -402,6 +403,7 @@ function pushUrl(): void {
     usdmMode: timeline.usdmMode,
     sstDate: timeline.sstDate,
     outlookRange: timeline.outlookRange,
+    horizon: timeline.horizon,
     basemap: getBasemapMode(),
     framing,
     cluster: getHazardCluster(),
@@ -1022,6 +1024,10 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   timeline.setUsdmMode(params.usdmMode);
   timeline.setSstDate(params.sstDate);
   timeline.setOutlookRange(params.outlookRange);
+  // Seed the committed horizon after the outlook register. The horizon
+  // owns the register mapping for explicit horizon deep links; otherwise
+  // the rendered drought surface commits its own honest temporal claim.
+  timeline.setHorizon(params.horizon);
 
   // Seed the basemap mode BEFORE the first pushUrl for the same reason as
   // the view mode: a `basemap=satellite` deep link must survive the first
@@ -1337,8 +1343,11 @@ export function buildSidebar(
   // the canonical rewrite (URL policy rule 2). applyLayerSet re-asserts the
   // same intent later; setChecked is idempotent.
   try {
-    for (const key of parseUrlParams().layers) {
-      if (getLayerDef(key)) bridgeSetChecked(key, true);
+    const bootLayers = parseUrlParams().layers;
+    // Seed every known key so the cluster service can distinguish an
+    // explicit all-off or granular deep link from a pristine bridge.
+    for (const def of LAYER_DEFS) {
+      bridgeSetChecked(def.key, bootLayers.has(def.key));
     }
   } catch (err) {
     console.error('[sidebar] boot intent seeding failed:', err);

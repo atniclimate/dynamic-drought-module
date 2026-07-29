@@ -59,6 +59,17 @@
              regenerated Brief markup must never own the temporal renderer. -->
         <section class="panel brief-head" id="brief-head" aria-label="Drought briefing" hidden></section>
 
+        <!-- The S4 main-screen shell (the 2026-07-18 design record; ruled
+             band order VIEW, MAP CONTEXT, WHEN, SHOWN NOW): the four hazard
+             cluster buttons, the framing minimap, the compact temporal row,
+             and the honest display summary, rendered by the lazy Preact
+             shell island (src/ui/island/shell.tsx) into this static host.
+             Stylesheet-gated: desktop only (below 720px the mobile sheet
+             and hazard rail carry the same decisions), never in embed. -->
+        <section class="panel shell-panel" id="shell-panel" aria-label="View, framing, and display summary">
+          <div id="shell-island"></div>
+        </section>
+
         <!-- The contextual time rail (D-0.7.0-067, Option 1): a stable direct
              child after place and before the generated display description.
              src/ui/time-bar.ts renders the current temporal owner's one spec
@@ -71,9 +82,11 @@
              update prose, studio entries, and the selected-place response
              without ever rebuilding or nesting #time-bar. The ENSO capability
              is demoted into this description with its detail behind disclosure. -->
-        <section class="panel brief-display" id="brief-display" aria-label="What is shown" hidden>
-          <h2 class="panel-title">Shown now</h2>
-          <p class="brief-display-summary" id="brief-display-summary"></p>
+        <section class="panel brief-display" id="brief-display" aria-label="Refine the view" hidden>
+          <!-- The static "Shown now" heading and summary sentence moved into
+               the shell island (S4): the S3 DisplaySummary renders the live,
+               status-derived truth there, so a hand-authored placeholder
+               sentence here would be a second, staler description. -->
           <div class="enso-driver" id="enso-driver" aria-label="ENSO driver" hidden></div>
           <div id="layers-studio-entry-host"></div>
           <div id="brief-secondary-actions"></div>
@@ -118,6 +131,12 @@
           <div id="region-buttons" class="region-grid" role="radiogroup" aria-label="Jump to region"></div>
         </section>
 
+        <!-- The Quick views preset panel (UX-2). On the desktop BRIEF
+             launch pad the shell panel's four cluster buttons carry the
+             view question (S4; the 2026-07-18 design record) and this
+             panel stays hidden as it has since E1; it remains the shipped
+             surface of desktop console and the mobile sheet's half and
+             console detents (mobile surfaces defer to S6). -->
         <section class="panel" id="panel-quick-views">
           <h2 class="panel-title">Quick views</h2>
           <div id="preset-chips" class="preset-chips" role="group" aria-label="Quick view presets"></div>
@@ -179,6 +198,15 @@
         <div class="sheet-report" id="sheet-report"></div>
 
       </div>
+
+      <!-- The S4c panel-foot response: place-bearing map clicks rehost their
+           one coordinated response here on desktop (the coordinator's
+           swappable sink), using the frozen-head / scrolling-body pattern
+           (D-0.7.0-072) so the full representation caveat scrolls within
+           this bounded foot and the panel itself never scrolls. Sits
+           OUTSIDE .sidebar-scroll so the no-scroll contract and the foot's
+           own scroll region cannot fight. -->
+      <div id="panel-response" class="panel-response"></div>
 
       <footer class="sidebar-footer">
         <p>A project of ATNI Climate (Affiliated Tribes of Northwest Indians)</p>

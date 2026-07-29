@@ -17,16 +17,17 @@
  * ignored on parse and dropped on sync. The setter enforces the
  * invariant so no writer can commit an ocean against a hazard cluster.
  *
- * INTERIM MECHANICS (S2): the boot path applies a cluster's
- * current-horizon recipe through the existing layer controller
- * (`composeClusterBootLayers` below), and the sidebar clears the
- * cluster the moment the granular layer intent diverges from that
- * composition (`reconcileClusterWithLayerIntent`): the URL never claims
- * a cluster the display is not (D-0.7.0-044). S3's atomic applyCluster
- * replaces these mechanics, not the semantics.
+ * APPLICATION MECHANICS LIVE ELSEWHERE (S3): this store holds and
+ * parses the committed cluster/ocean claim only. Resolving a cluster's
+ * horizon-aware recipe, applying it through the layer controller, and
+ * clearing the claim when the granular intent diverges are the S3
+ * cluster service's job (`src/state/cluster-service.ts`), which
+ * replaced the S2 interim mechanics that briefly lived here
+ * (composeClusterBootLayers / reconcileClusterWithLayerIntent). The
+ * semantics carried over unchanged: the URL never claims a cluster the
+ * display is not (D-0.7.0-044).
  */
 
-import { DEFAULT_ON_KEYS, LAYER_DEFS } from '../config/layers';
 import { HAZARD_CLUSTERS } from '../config/clusters';
 import type { HazardClusterKey } from '../config/clusters';
 import { OCEANS } from '../config/oceans';
@@ -124,44 +125,4 @@ export function parseOceanParam(raw: string | null): OceanKey | null {
     return raw as OceanKey;
   }
   return null;
-}
-
-/**
- * The layer set a cluster boot activates (S2's interim, non-atomic
- * application; D-0.7.0-044): the default-on REFERENCE set (sovereign
- * geography, state hairlines; everything default-on that is not a
- * condition surface) left alone, plus the cluster's CURRENT-horizon
- * hazard recipe. For 'drought' this composes back to exactly the
- * default-on set (its current recipe is the default surface), so the
- * bare boot and the absent-cluster boot are the same set by
- * construction. Order: reference keys in LAYER_DEFS order, then the
- * recipe in its activation order.
- */
-export function composeClusterBootLayers(cluster: HazardClusterKey): readonly string[] {
-  const referenceOn = LAYER_DEFS.filter(
-    (def) => DEFAULT_ON_KEYS.has(def.key) && def.role !== 'surface'
-  ).map((def) => def.key);
-  const recipe = HAZARD_CLUSTERS[cluster].recipes.current;
-  const out: string[] = [];
-  for (const key of [...referenceOn, ...recipe]) {
-    if (!out.includes(key)) out.push(key);
-  }
-  return out;
-}
-
-/**
- * Drop the cluster claim when the granular layer intent no longer
- * matches its composition (D-0.7.0-044: the moment the user customizes,
- * `cluster=` comes off and `layers=` goes on; the URL never claims a
- * cluster the display is not). Called by the sidebar on every
- * checkbox-intent flip. A terminal activation failure that unchecks a
- * recipe member also lands here, which is deliberate honesty: a
- * wildfire display missing its perimeters is not the Wildfire cluster.
- */
-export function reconcileClusterWithLayerIntent(checked: ReadonlySet<string>): void {
-  if (currentCluster === 'drought') return;
-  const expected = composeClusterBootLayers(currentCluster);
-  const matches =
-    checked.size === expected.length && expected.every((key) => checked.has(key));
-  if (!matches) setHazardCluster('drought', null);
 }

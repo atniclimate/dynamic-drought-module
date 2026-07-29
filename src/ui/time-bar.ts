@@ -99,6 +99,40 @@ let currentOwner: string | null = null;
 let currentSpec: TimeBarSpec | null = null;
 
 /**
+ * The compact/detail spec facade (S4c; the S4 design record section 3).
+ * The shell's compact WHEN row and the "More time" popover render FROM
+ * the same spec the owning surface installed, so the two surfaces can
+ * never disagree about the product date or its capabilities. Listeners
+ * fire after every install or clear (owners re-install on each temporal
+ * change, so a subscriber sees every date step). Read-only: consumers
+ * drive changes only through the spec's own callbacks.
+ */
+const specListeners = new Set<() => void>();
+
+/** The currently installed spec, or null when no surface owns the bar. */
+export function getTimeBarSpec(): TimeBarSpec | null {
+  return currentSpec;
+}
+
+/** Subscribe to spec installs/clears. Returns an unsubscribe function. */
+export function onTimeBarSpecChange(fn: () => void): () => void {
+  specListeners.add(fn);
+  return () => {
+    specListeners.delete(fn);
+  };
+}
+
+function notifySpecChange(): void {
+  for (const fn of [...specListeners]) {
+    try {
+      fn();
+    } catch (err) {
+      console.error('[time-bar] spec listener threw:', err);
+    }
+  }
+}
+
+/**
  * The last markup actually swapped into the container. A re-render whose
  * built markup is IDENTICAL skips the innerHTML swap entirely: the swap
  * replaces every button mid-gesture, and a user's (or Playwright's) click
@@ -151,8 +185,21 @@ export function syncTimeBarHost(): void {
       actions.insertAdjacentElement('beforebegin', mobileHost);
     }
     if (el.parentElement !== mobileHost) mobileHost.appendChild(el);
-  } else if (el.parentElement !== briefHead.parentElement || el.previousElementSibling !== briefHead) {
-    briefHead.insertAdjacentElement('afterend', el);
+  } else {
+    // The desktop seat honors the S4 static band order (VIEW / MAP
+    // CONTEXT / WHEN / SHOWN NOW): once the shell panel exists, the bar
+    // anchors AFTER it, exactly where index.html places the node; the
+    // pre-S4 anchor directly after the brief head remains only as the
+    // fallback for a document without the shell (DG-080 review finding
+    // 4: the old unconditional brief-head reseat deterministically moved
+    // the bar above the shell on every temporal render in console).
+    const desktopAnchor = document.getElementById('shell-panel') ?? briefHead;
+    if (
+      el.parentElement !== desktopAnchor.parentElement ||
+      el.previousElementSibling !== desktopAnchor
+    ) {
+      desktopAnchor.insertAdjacentElement('afterend', el);
+    }
   }
 
   if (focused && focused.isConnected && document.activeElement !== focused) {
@@ -204,6 +251,7 @@ export function setTimeBar(owner: string, spec: TimeBarSpec): void {
   currentOwner = owner;
   currentSpec = spec;
   render();
+  notifySpecChange();
 }
 
 /** Remove the time bar if `owner` still owns it. */
@@ -212,6 +260,7 @@ export function clearTimeBar(owner: string): void {
   currentOwner = null;
   currentSpec = null;
   render();
+  notifySpecChange();
 }
 
 /** The owning layer key, exposed for tests and the sidebar's debugging. */

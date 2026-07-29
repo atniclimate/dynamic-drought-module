@@ -10,19 +10,18 @@ import type { ViewMode } from './view-mode';
 import { parseBasemapParam } from './basemap-store';
 import type { BasemapMode } from './basemap-store';
 import { parseFramingParam } from './framing-store';
-import {
-  composeClusterBootLayers,
-  parseClusterParam,
-  parseOceanParam
-} from './cluster-store';
+import { parseClusterParam, parseOceanParam } from './cluster-store';
+import { composeClusterIntent } from './cluster-service';
 import {
   parseUsdmMode,
   parseUsdmWeek,
   parseSstDate,
   parseOutlookRange,
+  parseHorizonParam,
   type UsdmViewMode,
   type OutlookRange
 } from './timeline';
+import type { TemporalHorizonKey } from '../config/clusters';
 
 /**
  * URL parameterization for the Dynamic Drought Module (DDM).
@@ -88,6 +87,9 @@ export interface ParsedUrlParams {
   readonly sstDate: string | null;
   /** Outlook register from `outlook=`; 'seasonal' when absent or invalid. */
   readonly outlookRange: OutlookRange;
+  /** Committed temporal horizon from `horizon=`; 'current' when absent
+   * or invalid. A cluster boot composes its recipe at this horizon. */
+  readonly horizon: TemporalHorizonKey;
   /** One-based HeatRisk frame position from `heatday=`, or null for the
    * first currently advertised frame. */
   readonly heatRiskDay: number | null;
@@ -195,6 +197,7 @@ export function parseUrlParams(): ParsedUrlParams {
       : DEFAULT_REGION;
 
   const shell = parseShellParams(params);
+  const horizon = parseHorizonParam(params.get('horizon'));
 
   let layers: Set<string>;
   if (params.has('layers')) {
@@ -212,13 +215,10 @@ export function parseUrlParams(): ParsedUrlParams {
     }
   } else if (shell.cluster !== 'drought') {
     // A cluster boot resolves to the reference default-on set plus the
-    // cluster's current-horizon recipe (the interim, non-atomic
-    // application, D-0.7.0-044); the boot path then activates this set
-    // through the ordinary layer-controller road, exactly like a
-    // `layers=` list would. Only the no-`layers=` branch composes:
-    // `layers=` outranks `cluster=` (parseShellParams already resolved
-    // that pair to 'drought' when both appear).
-    layers = new Set(composeClusterBootLayers(shell.cluster));
+    // cluster's recipe at the URL's committed horizon. Composing at the
+    // shared horizon makes a cluster share reproduce the displayed recipe
+    // instead of silently returning to the current-horizon composition.
+    layers = new Set(composeClusterIntent(shell.cluster, horizon));
   } else {
     layers = new Set(DEFAULT_ON_KEYS);
   }
@@ -242,6 +242,7 @@ export function parseUrlParams(): ParsedUrlParams {
     usdmMode: parseUsdmMode(params.get('dmode')),
     sstDate: parseSstDate(params.get('sst')),
     outlookRange: parseOutlookRange(params.get('outlook')),
+    horizon,
     heatRiskDay: parseHeatRiskDayParam(params),
     // A DUPLICATED basemap parameter is malformed input and pins to the
     // default in BOTH orders (D-0.7.0-031 edge-case rule; the stage-5
@@ -309,6 +310,8 @@ export interface UrlSyncState {
   readonly sstDate?: string | null;
   /** Outlook register; emitted as `outlook=` only when 'monthly'. */
   readonly outlookRange?: OutlookRange;
+  /** Committed temporal horizon; omitted for the current horizon. */
+  readonly horizon?: TemporalHorizonKey;
   /** Basemap mode; emitted as `basemap=satellite` only when non-default,
    * so the default URL stays clean (the `view=` pattern, D-0.7.0-031). */
   readonly basemap?: BasemapMode;
@@ -397,6 +400,9 @@ export function syncUrl(state: UrlSyncState): void {
   }
   if (state.outlookRange === 'monthly') {
     params.set('outlook', state.outlookRange);
+  }
+  if (state.horizon === 'weeks-ahead' || state.horizon === 'season-ahead') {
+    params.set('horizon', state.horizon);
   }
   if (heatRiskDay !== null && heatRiskDay > 1) {
     params.set('heatday', String(heatRiskDay));
