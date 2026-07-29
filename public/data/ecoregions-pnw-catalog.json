@@ -1,0 +1,849 @@
+{
+  "entries": [
+    {
+      "code": "1",
+      "name": "Coast Range",
+      "level": "III"
+    },
+    {
+      "code": "2",
+      "name": "Puget Lowland",
+      "level": "III"
+    },
+    {
+      "code": "3",
+      "name": "Willamette Valley",
+      "level": "III"
+    },
+    {
+      "code": "4",
+      "name": "Cascades",
+      "level": "III"
+    },
+    {
+      "code": "9",
+      "name": "Eastern Cascades Slopes and Foothills",
+      "level": "III"
+    },
+    {
+      "code": "10",
+      "name": "Columbia Plateau",
+      "level": "III"
+    },
+    {
+      "code": "11",
+      "name": "Blue Mountains",
+      "level": "III"
+    },
+    {
+      "code": "12",
+      "name": "Snake River Plain",
+      "level": "III"
+    },
+    {
+      "code": "13",
+      "name": "Central Basin and Range",
+      "level": "III"
+    },
+    {
+      "code": "15",
+      "name": "Northern Rockies",
+      "level": "III"
+    },
+    {
+      "code": "16",
+      "name": "Idaho Batholith",
+      "level": "III"
+    },
+    {
+      "code": "17",
+      "name": "Middle Rockies",
+      "level": "III"
+    },
+    {
+      "code": "18",
+      "name": "Wyoming Basin",
+      "level": "III"
+    },
+    {
+      "code": "19",
+      "name": "Wasatch and Uinta Mountains",
+      "level": "III"
+    },
+    {
+      "code": "77",
+      "name": "North Cascades",
+      "level": "III"
+    },
+    {
+      "code": "78",
+      "name": "Klamath Mountains/California High North Coast Range",
+      "level": "III"
+    },
+    {
+      "code": "80",
+      "name": "Northern Basin and Range",
+      "level": "III"
+    },
+    {
+      "code": "1a",
+      "name": "Coastal Lowlands",
+      "level": "IV"
+    },
+    {
+      "code": "1b",
+      "name": "Coastal Uplands",
+      "level": "IV"
+    },
+    {
+      "code": "1c",
+      "name": "Low Olympics",
+      "level": "IV"
+    },
+    {
+      "code": "1d",
+      "name": "Volcanics",
+      "level": "IV"
+    },
+    {
+      "code": "1e",
+      "name": "Outwash",
+      "level": "IV"
+    },
+    {
+      "code": "1f",
+      "name": "Willapa Hills",
+      "level": "IV"
+    },
+    {
+      "code": "1g",
+      "name": "Mid-Coastal Sedimentary",
+      "level": "IV"
+    },
+    {
+      "code": "1h",
+      "name": "Southern Oregon Coastal Mountains",
+      "level": "IV"
+    },
+    {
+      "code": "1i",
+      "name": "Northern Franciscan Redwood Forest",
+      "level": "IV"
+    },
+    {
+      "code": "2a",
+      "name": "Fraser Lowland",
+      "level": "IV"
+    },
+    {
+      "code": "2b",
+      "name": "Eastern Puget Riverine Lowlands",
+      "level": "IV"
+    },
+    {
+      "code": "2c",
+      "name": "San Juan Islands",
+      "level": "IV"
+    },
+    {
+      "code": "2d",
+      "name": "Olympic Rainshadow",
+      "level": "IV"
+    },
+    {
+      "code": "2e",
+      "name": "Eastern Puget Uplands",
+      "level": "IV"
+    },
+    {
+      "code": "2f",
+      "name": "Central Puget Lowland",
+      "level": "IV"
+    },
+    {
+      "code": "2g",
+      "name": "Southern Puget Prairies",
+      "level": "IV"
+    },
+    {
+      "code": "2h",
+      "name": "Cowlitz/Chehalis Foothills",
+      "level": "IV"
+    },
+    {
+      "code": "2i",
+      "name": "Cowlitz/Newaukum Prairie Floodplains",
+      "level": "IV"
+    },
+    {
+      "code": "3a",
+      "name": "Portland/Vancouver Basin",
+      "level": "IV"
+    },
+    {
+      "code": "3b",
+      "name": "Willamette River and Tributaries Gallery Forest",
+      "level": "IV"
+    },
+    {
+      "code": "3c",
+      "name": "Prairie Terraces",
+      "level": "IV"
+    },
+    {
+      "code": "3d",
+      "name": "Valley Foothills",
+      "level": "IV"
+    },
+    {
+      "code": "4a",
+      "name": "Western Cascades Lowlands and Valleys",
+      "level": "IV"
+    },
+    {
+      "code": "4b",
+      "name": "Western Cascades Montane Highlands",
+      "level": "IV"
+    },
+    {
+      "code": "4c",
+      "name": "Cascade Crest Montane Forest",
+      "level": "IV"
+    },
+    {
+      "code": "4d",
+      "name": "Cascade Subalpine/Alpine",
+      "level": "IV"
+    },
+    {
+      "code": "4e",
+      "name": "High Southern Cascades Montane Forest",
+      "level": "IV"
+    },
+    {
+      "code": "4f",
+      "name": "Low Southern Cascades Mixed Conifer Forest",
+      "level": "IV"
+    },
+    {
+      "code": "9a",
+      "name": "Yakima Plateau and Slopes",
+      "level": "IV"
+    },
+    {
+      "code": "9b",
+      "name": "Grand Fir Mixed Forest",
+      "level": "IV"
+    },
+    {
+      "code": "9c",
+      "name": "Oak/Conifer Foothills",
+      "level": "IV"
+    },
+    {
+      "code": "9d",
+      "name": "Ponderosa Pine/Bitterbrush Woodland",
+      "level": "IV"
+    },
+    {
+      "code": "9e",
+      "name": "Pumice Plateau",
+      "level": "IV"
+    },
+    {
+      "code": "9f",
+      "name": "Pumice Plateau Basins",
+      "level": "IV"
+    },
+    {
+      "code": "9g",
+      "name": "Klamath/Goose Lake Basins",
+      "level": "IV"
+    },
+    {
+      "code": "9h",
+      "name": "Fremont Pine/Fir Forest",
+      "level": "IV"
+    },
+    {
+      "code": "9i",
+      "name": "Southern Cascades Slope",
+      "level": "IV"
+    },
+    {
+      "code": "9j",
+      "name": "Klamath Juniper Woodland/Devils Garden",
+      "level": "IV"
+    },
+    {
+      "code": "9m",
+      "name": "Warner Mountains",
+      "level": "IV"
+    },
+    {
+      "code": "9t",
+      "name": "Old Cascades",
+      "level": "IV"
+    },
+    {
+      "code": "10a",
+      "name": "Channeled Scablands",
+      "level": "IV"
+    },
+    {
+      "code": "10b",
+      "name": "Loess Islands",
+      "level": "IV"
+    },
+    {
+      "code": "10c",
+      "name": "Umatilla Plateau",
+      "level": "IV"
+    },
+    {
+      "code": "10d",
+      "name": "Okanogan Drift Hills",
+      "level": "IV"
+    },
+    {
+      "code": "10e",
+      "name": "Pleistocene Lake Basins",
+      "level": "IV"
+    },
+    {
+      "code": "10f",
+      "name": "Dissected Loess Uplands",
+      "level": "IV"
+    },
+    {
+      "code": "10g",
+      "name": "Yakima Folds",
+      "level": "IV"
+    },
+    {
+      "code": "10h",
+      "name": "Palouse Hills",
+      "level": "IV"
+    },
+    {
+      "code": "10i",
+      "name": "Deep Loess Foothills",
+      "level": "IV"
+    },
+    {
+      "code": "10j",
+      "name": "Nez Perce Prairie",
+      "level": "IV"
+    },
+    {
+      "code": "10k",
+      "name": "Deschutes/John Day Canyons",
+      "level": "IV"
+    },
+    {
+      "code": "10l",
+      "name": "Lower Snake and Clearwater Canyons",
+      "level": "IV"
+    },
+    {
+      "code": "10m",
+      "name": "Okanogan Valley",
+      "level": "IV"
+    },
+    {
+      "code": "10n",
+      "name": "Umatilla Dissected Uplands",
+      "level": "IV"
+    },
+    {
+      "code": "11a",
+      "name": "John Day/Clarno Uplands",
+      "level": "IV"
+    },
+    {
+      "code": "11b",
+      "name": "John Day/Clarno Highlands",
+      "level": "IV"
+    },
+    {
+      "code": "11c",
+      "name": "Maritime-Influenced Zone",
+      "level": "IV"
+    },
+    {
+      "code": "11d",
+      "name": "Melange",
+      "level": "IV"
+    },
+    {
+      "code": "11e",
+      "name": "Wallowas/Seven Devils Mountains",
+      "level": "IV"
+    },
+    {
+      "code": "11f",
+      "name": "Canyons and Dissected Highlands",
+      "level": "IV"
+    },
+    {
+      "code": "11g",
+      "name": "Canyons and Dissected Uplands",
+      "level": "IV"
+    },
+    {
+      "code": "11h",
+      "name": "Continental Zone Highlands",
+      "level": "IV"
+    },
+    {
+      "code": "11i",
+      "name": "Continental Zone Foothills",
+      "level": "IV"
+    },
+    {
+      "code": "11k",
+      "name": "Blue Mountain Basins",
+      "level": "IV"
+    },
+    {
+      "code": "11l",
+      "name": "Mesic Forest Zone",
+      "level": "IV"
+    },
+    {
+      "code": "11m",
+      "name": "Subalpine-Alpine Zone",
+      "level": "IV"
+    },
+    {
+      "code": "11n",
+      "name": "Deschutes River Valley",
+      "level": "IV"
+    },
+    {
+      "code": "11o",
+      "name": "Cold Basins",
+      "level": "IV"
+    },
+    {
+      "code": "12a",
+      "name": "Treasure Valley",
+      "level": "IV"
+    },
+    {
+      "code": "12b",
+      "name": "Lava Fields",
+      "level": "IV"
+    },
+    {
+      "code": "12c",
+      "name": "Camas Prairie",
+      "level": "IV"
+    },
+    {
+      "code": "12d",
+      "name": "Dissected Plateaus and Teton Basin",
+      "level": "IV"
+    },
+    {
+      "code": "12e",
+      "name": "Upper Snake River Plain",
+      "level": "IV"
+    },
+    {
+      "code": "12f",
+      "name": "Semiarid Foothills",
+      "level": "IV"
+    },
+    {
+      "code": "12g",
+      "name": "Eastern Snake River Basalt Plains",
+      "level": "IV"
+    },
+    {
+      "code": "12h",
+      "name": "Mountain Home Uplands",
+      "level": "IV"
+    },
+    {
+      "code": "12i",
+      "name": "Magic Valley",
+      "level": "IV"
+    },
+    {
+      "code": "12j",
+      "name": "Unwooded Alkaline Foothills",
+      "level": "IV"
+    },
+    {
+      "code": "13b",
+      "name": "Shadscale-Dominated Saline Basins",
+      "level": "IV"
+    },
+    {
+      "code": "13c",
+      "name": "Sagebrush Basins and Slopes",
+      "level": "IV"
+    },
+    {
+      "code": "13d",
+      "name": "Woodland- and Shrub-Covered Low Mountains",
+      "level": "IV"
+    },
+    {
+      "code": "13i",
+      "name": "Malad and Cache Valleys",
+      "level": "IV"
+    },
+    {
+      "code": "15f",
+      "name": "Grassy Potlatch Ridges",
+      "level": "IV"
+    },
+    {
+      "code": "15g",
+      "name": "Western Okanogan Semiarid Foothills",
+      "level": "IV"
+    },
+    {
+      "code": "15h",
+      "name": "High Northern Rockies",
+      "level": "IV"
+    },
+    {
+      "code": "15i",
+      "name": "Clearwater Mountains and Breaks",
+      "level": "IV"
+    },
+    {
+      "code": "15j",
+      "name": "Lower Clearwater Canyons",
+      "level": "IV"
+    },
+    {
+      "code": "15m",
+      "name": "Kootenai Valley",
+      "level": "IV"
+    },
+    {
+      "code": "15n",
+      "name": "Weippe Prairie",
+      "level": "IV"
+    },
+    {
+      "code": "15o",
+      "name": "Coeur d Alene Metasedimentary Zone",
+      "level": "IV"
+    },
+    {
+      "code": "15p",
+      "name": "St. Joe Schist-Gneiss Zone",
+      "level": "IV"
+    },
+    {
+      "code": "15q",
+      "name": "Purcell-Cabinet-North Bitterroot Mountains",
+      "level": "IV"
+    },
+    {
+      "code": "15r",
+      "name": "Okanogan-Colville Xeric Valleys and Foothills",
+      "level": "IV"
+    },
+    {
+      "code": "15s",
+      "name": "Spokane Valley Outwash Plains",
+      "level": "IV"
+    },
+    {
+      "code": "15u",
+      "name": "Inland Maritime Foothills and Valleys",
+      "level": "IV"
+    },
+    {
+      "code": "15v",
+      "name": "Northern Idaho Hills and Low Relief Mountains",
+      "level": "IV"
+    },
+    {
+      "code": "15w",
+      "name": "Western Selkirk Maritime Forest",
+      "level": "IV"
+    },
+    {
+      "code": "15x",
+      "name": "Okanogan Highland Dry Forest",
+      "level": "IV"
+    },
+    {
+      "code": "15y",
+      "name": "Selkirk Mountains",
+      "level": "IV"
+    },
+    {
+      "code": "16b",
+      "name": "Lochsa Uplands",
+      "level": "IV"
+    },
+    {
+      "code": "16c",
+      "name": "Lochsa-Selway-Clearwater Canyons",
+      "level": "IV"
+    },
+    {
+      "code": "16d",
+      "name": "Dry Partly Wooded Mountains",
+      "level": "IV"
+    },
+    {
+      "code": "16e",
+      "name": "Glaciated Bitterroot Mountains and Canyons",
+      "level": "IV"
+    },
+    {
+      "code": "16f",
+      "name": "Foothill Shrublands-Grasslands",
+      "level": "IV"
+    },
+    {
+      "code": "16g",
+      "name": "High Glacial Drift-Filled Valleys",
+      "level": "IV"
+    },
+    {
+      "code": "16h",
+      "name": "High Idaho Batholith",
+      "level": "IV"
+    },
+    {
+      "code": "16i",
+      "name": "South Clearwater Forested Mountains",
+      "level": "IV"
+    },
+    {
+      "code": "16j",
+      "name": "Hot Dry Canyons",
+      "level": "IV"
+    },
+    {
+      "code": "16k",
+      "name": "Southern Forested Mountains",
+      "level": "IV"
+    },
+    {
+      "code": "17aa",
+      "name": "Dry Intermontane Sagebrush Valleys",
+      "level": "IV"
+    },
+    {
+      "code": "17ab",
+      "name": "Dry Gneissic-Schistose-Volcanic Hills",
+      "level": "IV"
+    },
+    {
+      "code": "17ad",
+      "name": "Western Beaverhead Mountains",
+      "level": "IV"
+    },
+    {
+      "code": "17e",
+      "name": "Barren Mountains",
+      "level": "IV"
+    },
+    {
+      "code": "17h",
+      "name": "Alpine Zone",
+      "level": "IV"
+    },
+    {
+      "code": "17j",
+      "name": "Yellowstone Plateau",
+      "level": "IV"
+    },
+    {
+      "code": "17l",
+      "name": "Gneissic-Schistose Forested Mountains",
+      "level": "IV"
+    },
+    {
+      "code": "17n",
+      "name": "High Elevation Valleys",
+      "level": "IV"
+    },
+    {
+      "code": "17o",
+      "name": "Partly Forested Mountains",
+      "level": "IV"
+    },
+    {
+      "code": "18c",
+      "name": "Sub-Irrigated High Valleys",
+      "level": "IV"
+    },
+    {
+      "code": "18d",
+      "name": "Foothill Shrublands and Low Mountains",
+      "level": "IV"
+    },
+    {
+      "code": "19d",
+      "name": "Wasatch Montane Zone",
+      "level": "IV"
+    },
+    {
+      "code": "19f",
+      "name": "Semiarid Foothills",
+      "level": "IV"
+    },
+    {
+      "code": "77a",
+      "name": "North Cascades Lowland Forests",
+      "level": "IV"
+    },
+    {
+      "code": "77b",
+      "name": "North Cascades Highland Forests",
+      "level": "IV"
+    },
+    {
+      "code": "77c",
+      "name": "North Cascades Subalpine/Alpine",
+      "level": "IV"
+    },
+    {
+      "code": "77d",
+      "name": "Pasayten/Sawtooth Highlands",
+      "level": "IV"
+    },
+    {
+      "code": "77e",
+      "name": "Okanogan Pine/Fir Hills",
+      "level": "IV"
+    },
+    {
+      "code": "77f",
+      "name": "Chelan Tephra Hills",
+      "level": "IV"
+    },
+    {
+      "code": "77g",
+      "name": "Wenatchee/Chelan Highlands",
+      "level": "IV"
+    },
+    {
+      "code": "77h",
+      "name": "Chiwaukum Hills and Lowlands",
+      "level": "IV"
+    },
+    {
+      "code": "77i",
+      "name": "High Olympics",
+      "level": "IV"
+    },
+    {
+      "code": "78a",
+      "name": "Rogue/Illinois/Scott Valleys",
+      "level": "IV"
+    },
+    {
+      "code": "78b",
+      "name": "Oak Savanna Foothills",
+      "level": "IV"
+    },
+    {
+      "code": "78c",
+      "name": "Umpqua Interior Foothills",
+      "level": "IV"
+    },
+    {
+      "code": "78d",
+      "name": "Serpentine Siskiyous",
+      "level": "IV"
+    },
+    {
+      "code": "78e",
+      "name": "Inland Siskiyous",
+      "level": "IV"
+    },
+    {
+      "code": "78f",
+      "name": "Coastal Siskiyous",
+      "level": "IV"
+    },
+    {
+      "code": "78g",
+      "name": "Klamath River Ridges",
+      "level": "IV"
+    },
+    {
+      "code": "78h",
+      "name": "Border High-Siskiyous",
+      "level": "IV"
+    },
+    {
+      "code": "80a",
+      "name": "Dissected High Lava Plateau",
+      "level": "IV"
+    },
+    {
+      "code": "80b",
+      "name": "Semiarid Hills and Low Mountains",
+      "level": "IV"
+    },
+    {
+      "code": "80c",
+      "name": "High Elevation Forests and Shrublands",
+      "level": "IV"
+    },
+    {
+      "code": "80d",
+      "name": "Pluvial Lake Basins",
+      "level": "IV"
+    },
+    {
+      "code": "80e",
+      "name": "High Desert Wetlands",
+      "level": "IV"
+    },
+    {
+      "code": "80f",
+      "name": "Owyhee Uplands and Canyons",
+      "level": "IV"
+    },
+    {
+      "code": "80g",
+      "name": "High Lava Plains",
+      "level": "IV"
+    },
+    {
+      "code": "80h",
+      "name": "Saltbush-Dominated Valleys",
+      "level": "IV"
+    },
+    {
+      "code": "80i",
+      "name": "Sagebrush Steppe Valleys",
+      "level": "IV"
+    },
+    {
+      "code": "80j",
+      "name": "Semiarid Uplands",
+      "level": "IV"
+    },
+    {
+      "code": "80k",
+      "name": "Partly Forested Mountains",
+      "level": "IV"
+    },
+    {
+      "code": "80l",
+      "name": "Salt Shrub Valleys",
+      "level": "IV"
+    },
+    {
+      "code": "80m",
+      "name": "Barren Playas",
+      "level": "IV"
+    }
+  ]
+}

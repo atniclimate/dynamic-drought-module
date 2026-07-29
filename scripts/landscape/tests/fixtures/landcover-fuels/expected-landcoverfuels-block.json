@@ -1,0 +1,53 @@
+{
+  "north-cascades-window": {
+    "fbfm40": {
+      "dominantCode": 165,
+      "dominantFraction": 0.432,
+      "nonburnableFraction": 0.019,
+      "classes": [
+        {
+          "code": 165,
+          "fraction": 0.432
+        },
+        {
+          "code": 185,
+          "fraction": 0.33
+        },
+        {
+          "code": 162,
+          "fraction": 0.192
+        }
+      ],
+      "otherBurnableFraction": 0.027,
+      "coveragePct": 100.0
+    },
+    "evt": {
+      "dominantCode": 7174,
+      "dominantName": null,
+      "dominantFraction": 0.591,
+      "coveragePct": 100.0
+    },
+    "landcover": {
+      "forestFraction": 0.968,
+      "croplandFraction": 0.0,
+      "wetlandFraction": 0.009,
+      "openWaterFraction": 0.0,
+      "coveragePct": 100.0
+    },
+    "whp": {
+      "classMean": 3.57,
+      "classFractions": {
+        "1": 0.0,
+        "2": 0.316,
+        "3": 0.131,
+        "4": 0.182,
+        "5": 0.346,
+        "6": 0.016,
+        "7": 0.009
+      },
+      "cellCount": 123.5,
+      "coarse": false,
+      "coveragePct": 100.0
+    }
+  }
+}

@@ -1,0 +1,52 @@
+# Build-time-only Python toolchain for the landscape signature
+# (scripts/landscape package; historical entry scripts/build_landscape_signature.py).
+#
+# This stack runs ONLY at build time, is kept out of the shipped bundle, and
+# never reaches the browser; the client consumes only
+# public/data/landscape-signature-pnw.json. See
+# docs/adr/P9-001-analysis-crs-resampling-toolchain.md.
+#
+# Versions are PINNED EXACTLY (T-M0-1): the parity fixtures under
+# scripts/landscape/tests/fixtures/legacy/ are byte-stable only against a
+# fixed toolchain; floors would let the resolver drift the numerics. This
+# file pins the SELECTED direct and transitive set relevant to those
+# numerics; it is a numerics-stability pin set, not a hermetic environment
+# lock and not an exhaustive inventory of every installed distribution.
+# The nine most numerics-relevant package versions, plus the interpreter
+# and platform of the capture environment, are additionally recorded in
+# the fixtures' legacy/MANIFEST.json. Every pin meets or exceeds the P9a
+# vulnerability-audit floors (2026-05-30):
+#   requests >= 2.33.0  fixes CVE-2026-25645 (temp-file reuse)
+#   urllib3  >= 2.7.0   fixes CVE-2026-44431 (cross-origin header leak) and
+#                       CVE-2026-44432 (decompression-bomb bypass)
+# Geospatial Data Abstraction Library (GDAL) ships bundled inside the rasterio
+# wheel; its HDF4-driver advisories do not apply because this pipeline ingests
+# GeoTIFF / Cloud-Optimized GeoTIFF only, never HDF4.
+
+# Direct
+rasterio==1.5.0
+exactextract==0.3.0
+geopandas==1.1.3
+pyproj==3.7.2
+numpy==2.4.6
+requests==2.34.2
+
+# Transitive (pinned for byte-stability; the security-relevant ones first)
+urllib3==2.7.0
+certifi==2026.5.20
+shapely==2.1.2
+fiona==1.10.1
+click==8.4.1
+pandas==3.0.3
+pyogrio==0.12.1
+affine==2.4.0
+attrs==26.1.0
+packaging==26.2
+click-plugins==1.1.1.2
+cligj==0.7.2
+pyparsing==3.3.2
+python-dateutil==2.9.0.post0
+tzdata==2026.2
+charset-normalizer==3.4.7
+idna==3.17
+six==1.17.0

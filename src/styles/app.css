@@ -1,0 +1,4836 @@
+/* =============================================================================
+   Dynamic Drought Module (DDM) · stylesheet
+   Aesthetic: technical-cartographic. Slate foundation, water-cyan accent.
+   Typography: League Spartan (titles/labels) + Lexend (body/data).
+   ============================================================================= */
+
+/* Self-hosted fonts (public/fonts/, SIL OFL 1.1; license texts alongside the
+   files so every dist/ copy carries them). Both families ship as variable
+   fonts, so one file per family and subset covers every weight the app uses;
+   unicode-range keeps latin-ext lazy (fetched only if a glyph needs it).
+   No third-party font request: the module observes the user, it does not
+   report on them (CLAUDE.md section 4 rule 3). */
+@font-face {
+  font-family: 'League Spartan';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/league-spartan-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'League Spartan';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/league-spartan-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Lexend';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/lexend-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Lexend';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/lexend-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  /* Palette */
+  --bg-0: #0b1220;
+  --bg-1: #0f172a;
+  --bg-2: #131f36;
+  --bg-3: #1b2942;
+  --line: #243049;
+  --line-strong: #2f3d5a;
+
+  --fg-0: #f1f5f9;
+  --fg-1: #cbd5e1;
+  --fg-2: #94a3b8;
+  --fg-3: #64748b;
+
+  --accent: #06b6d4;
+  --accent-strong: #0891b2;
+  --accent-soft: rgba(6, 182, 212, 0.14);
+
+  --warn: #f59e0b;
+  --good: #10b981;
+  --danger: #ef4444;
+
+  /* The ruled Tribal identity family (E2: D-0.7.0-058 ruling 3 pinned
+     the one family color). UI accents referencing the family use this
+     token; the map paint's source of truth stays src/config/palette.ts
+     (TRIBAL_FAMILY_COLOR), and the value must match it. */
+  --tribal-family: #8d006b;
+
+  /* Typography
+     ATNI Climate brand: League Spartan (display), Lexend (body).
+     Both self-hosted from public/fonts/, both SIL OFL 1.1 licensed. */
+  --font-display: 'League Spartan', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: 'Lexend', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Weight tokens. Both families are variable (wght 100-900), so weights are
+     shaved slightly below their nominal steps: light-on-dark text halates and
+     reads one notch heavier than the same weight dark-on-light, and this UI
+     is permanently dark (0.3.0 typography pass; CSS-Tricks "Dark mode and
+     variable fonts", CHI 2023 polarity study). The hierarchy steps are
+     preserved: 580 titles, 490 subtitles/emphasis, 385 body. */
+  --fw-title: 580;     /* League Spartan Semibold, optically corrected for dark */
+  --fw-subtitle: 490;  /* League Spartan Medium, optically corrected */
+  --fw-body: 385;      /* Lexend Normal, optically corrected */
+  --fw-strong: 490;    /* Lexend Medium (emphasized body) */
+
+  /* Tracking tokens (0.3.0 typography pass). Kerning is the font's job
+     (font-kerning below keeps the kern tables on at small sizes); tracking is
+     ours. Uppercase micro-headings need opened tracking (Butterick: 5-12% for
+     caps), tiny lowercase status text gets a little air, and large display
+     figures tighten. Lexend body text deliberately gets NO added tracking:
+     its expanded spacing is designed in. */
+  --track-overline: 0.12em;  /* uppercase panel/section headings */
+  --track-caps-sm: 0.08em;   /* small uppercase labels and badges */
+  --track-pill: 0.03em;      /* tiny lowercase status text */
+  --track-display: -0.01em;  /* 17-20px display values */
+
+  /* Layout */
+  --sidebar-w: 340px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  /* The one map-control family width (E2, D-0.7.0-058 ruling 2): Share
+     view, Reset, and the Satellite switcher all render at this width. */
+  --map-ctrl-w: 104px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg-0);
+  color: var(--fg-0);
+  font-family: var(--font-body);
+  font-weight: var(--fw-body);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Keep the fonts' kern tables active at every size: the initial value
+     (auto) explicitly permits engines to drop kerning on small text, and
+     this UI lives at 9.5 to 12px. Replaces the legacy text-rendering:
+     optimizeLegibility switch (same intent, pre-2014 spelling, documented
+     performance caveats). This one line is the honest answer to "JavaScript
+     kerning": the OpenType kern data in the self-hosted fonts does the
+     per-pair work; no script needed. */
+  font-kerning: normal;
+  /* Size fallback fonts to Lexend's x-height so the pre-swap frame does not
+     jump (Baseline 2024). */
+  font-size-adjust: from-font;
+}
+
+strong, b {
+  font-weight: var(--fw-strong);
+}
+
+/* Tabular-numerals utility: apply to numeric readouts for column alignment.
+   Lexend supports OpenType 'tnum' so we don't need a separate mono face. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+  transition: border-color 0.15s ease;
+}
+a:hover {
+  border-bottom-color: var(--accent);
+}
+
+/* ----------------------------------------------------------------------------
+   App shell
+   ---------------------------------------------------------------------------- */
+
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  width: 100vw;
+  /* U0b: dynamic viewport height tracks the mobile address bar collapse;
+     the vh line stays as the fallback for engines without dvh. */
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.app-shell.sidebar-collapsed {
+  grid-template-columns: 0 1fr;
+}
+
+/* embed mode: sidebar is hidden by URL param, but expand button still surfaces */
+.app-shell.embed {
+  grid-template-columns: 0 1fr;
+}
+.app-shell.embed .sidebar-expand-btn {
+  display: inline-flex;
+}
+
+/* ----------------------------------------------------------------------------
+   Sidebar
+   ---------------------------------------------------------------------------- */
+
+.sidebar {
+  background: var(--bg-1);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  transition: width 0.2s ease;
+}
+
+.app-shell.sidebar-collapsed .sidebar,
+.app-shell.embed .sidebar {
+  width: 0;
+  border-right: none;
+}
+
+.sidebar-header {
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 6px 12px;
+  flex-shrink: 0;
+}
+
+.sidebar-header > #sidebar-collapse {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  grid-column: 1;
+  grid-row: 1;
+}
+/* The organizational seal on a light circular chip. The chip color matches
+   the seal asset's own background (#e9edf0, sampled from the source PNG) so
+   the crop edge is invisible; a plain ring, no glow (a glow under a formal
+   seal reads gimmicky). It is a button: activating it opens the about card
+   with the full lockup. */
+.brand-seal {
+  appearance: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e9edf0;
+  border: none;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--line-strong);
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+.brand-seal:hover { box-shadow: 0 0 0 1px var(--accent-strong); }
+.brand-seal img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: block;
+}
+.brand-text { min-width: 0; }
+.brand-text h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: var(--fw-title);
+  letter-spacing: -0.005em;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.brand-text p {
+  margin: 3px 0 0;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: var(--fw-body);
+  color: var(--fg-2);
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 0;
+}
+.sidebar-scroll::-webkit-scrollbar { width: 8px; }
+.sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 4px;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover { background: var(--fg-3); }
+
+.sidebar-footer {
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+  font-size: 10.5px;
+  color: var(--fg-2);
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+.sidebar-footer p { margin: 2px 0; }
+.sidebar-footer .muted { color: var(--fg-3); }
+.sidebar-footer a { color: var(--fg-1); }
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.icon-btn:hover {
+  background: var(--bg-2);
+  color: var(--fg-0);
+  border-color: var(--line-strong);
+}
+
+.sidebar-expand-btn {
+  position: absolute;
+  /* On the same 12px corner grid as the Share view / Reset stack top-right.
+     (An earlier 80px offset dodged the Leaflet zoom control, which does not
+     exist in the MapLibre build; it left the button stranded mid-edge.) */
+  top: 12px;
+  left: 12px;
+  z-index: 1001;
+  background: var(--bg-1);
+  border-color: var(--line-strong);
+  display: none;
+}
+.app-shell.sidebar-collapsed .sidebar-expand-btn,
+.app-shell.embed .sidebar-expand-btn {
+  display: inline-flex;
+}
+
+/* ----------------------------------------------------------------------------
+   Panels
+   ---------------------------------------------------------------------------- */
+
+.panel {
+  padding: 16px 18px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.panel:last-child { border-bottom: none; }
+
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.panel-title {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-overline);
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+.panel-title-row .panel-title { margin: 0; }
+
+/* U3f2 (D-0.7.0-018): a panel heading that is a reveal disclosure (the Water
+   & Snow panel is collapsed by default; its featured-station list is opt-in,
+   matching the telemetry layer leaving the default-on set at H4). The button
+   carries the panel-title look; a CSS caret (ASCII-safe, kin to the U3a
+   Sources disclosure) points down when collapsed and flips up when expanded.
+   Revealing is sidebar-local and never touches the telemetry layer. */
+.panel-reveal {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.panel-reveal:hover { color: var(--fg-0); }
+.panel-reveal::after {
+  content: '';
+  margin-left: auto;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  transition: transform 0.12s ease;
+}
+.panel-reveal[aria-expanded='true']::after { transform: rotate(180deg); }
+
+.status-pill {
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+  font-size: 10px;
+  font-weight: var(--fw-body);
+  color: var(--fg-3);
+  padding: 2px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  letter-spacing: var(--track-pill);
+  white-space: nowrap;
+}
+.status-pill.active { color: var(--accent); border-color: var(--accent-strong); }
+
+/* ----------------------------------------------------------------------------
+   Conditions strip (UX-3): dated at-a-glance summary of the view
+   ---------------------------------------------------------------------------- */
+
+.conditions-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.conditions-title {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-overline);
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+.conditions-date {
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+  font-size: 9px;
+  color: var(--fg-3);
+  opacity: 0.72;
+  white-space: nowrap;
+}
+
+.conditions-metrics {
+  display: flex;
+  gap: 8px;
+}
+
+.conditions-metric {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+/* U1 (D-0.7.0-008): the tiles are real buttons that toggle their layer.
+   The button chrome resets to the tile card so the strip still reads as
+   a summary first; the interactive affordance is the hover border, the
+   off-state "Show" cue, and the focus ring (the U0c global rule). The
+   accessible name carries the full status-then-action sentence. */
+button.conditions-metric {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+button.conditions-metric:hover {
+  border-color: var(--accent-strong);
+}
+/* Hovering a muted tile lifts it toward full presence so the affordance
+   is visible without a color shout. */
+.conditions-metric[data-tone='off']:hover,
+.conditions-metric[data-tone='loading']:hover {
+  opacity: 0.85;
+}
+
+/* The off-state action cue: the immediate next step, visible where the
+   ambiguity used to live ("Layer off" + Show, never a bare "Off"). */
+.conditions-action {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--accent);
+}
+
+/* On the unselected Brief first open, the strip is a conditions receipt, not
+   a second layer catalog. Remove the off-state activation styling while the
+   real refinement doors remain directly below the contextual time rail. */
+#app.view-brief:not([data-place-selected]) .conditions-metric[data-tone='off'] .conditions-action {
+  display: none;
+}
+#app.view-brief:not([data-place-selected]) button.conditions-metric[data-tone='off'] {
+  cursor: default;
+}
+#app.view-brief:not([data-place-selected]) button.conditions-metric[data-tone='off']:hover {
+  border-color: var(--line);
+  opacity: 0.6;
+}
+
+.conditions-value {
+  font-family: var(--font-display);
+  font-weight: var(--fw-title);
+  font-feature-settings: 'tnum' 1;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: var(--track-display);
+  color: var(--fg-0);
+}
+
+.conditions-sublabel {
+  font-family: var(--font-body);
+  font-size: 10px;
+  line-height: 1.25;
+  color: var(--fg-3);
+}
+
+/* An off metric (its layer is not active) reads as muted, so the eye lands on
+   the live numbers. A real zero ("no drought in view", "0 alerts") keeps full
+   contrast: it is an answer, not an absence. */
+.conditions-metric[data-tone='off'],
+.conditions-metric[data-tone='loading'] {
+  opacity: 0.6;
+}
+/* The off value reads as a deliberate small-caps state word, not a dash that
+   could be mistaken for missing data. The loading tile shares the muted,
+   equal-height treatment and adds the skeleton-shimmer sweep. The 20px line
+   height is kept so the three tiles stay equal-height whatever their tones. */
+.conditions-metric[data-tone='off'] .conditions-value,
+.conditions-metric[data-tone='loading'] .conditions-value {
+  color: var(--fg-3);
+  font-size: 11px;
+  line-height: 20px;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+}
+.conditions-metric[data-tone='none'] .conditions-value {
+  color: var(--fg-1);
+}
+
+/* A stale surface: its upstream has frozen or drifted past its publish cadence
+   (critical-review #6). The value still shows because it is the best available,
+   but a warn-toned border plus an explicit "stale" tag stop it reading as
+   confidently current, and the date line switches to the same warn tone and
+   says so. Static styling only, so reduced-motion is inherently respected. */
+.conditions-metric[data-stale='true'] {
+  border-color: var(--warn);
+}
+.conditions-stale-tag {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 4px;
+  border: 1px solid var(--warn);
+  border-radius: 3px;
+  color: var(--warn);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+.conditions-date[data-stale='true'] {
+  color: var(--warn);
+}
+
+/* ----------------------------------------------------------------------------
+   The two doors (U1, D-ARCH-002): the header mode switch and the Brief head.
+   Brief leads with the briefing and keeps the catalog beneath as drill-down;
+   console is the full instrument. The `view-brief`/`view-console` classes on
+   #app are the mode hooks (set by src/ui/view-shell.ts).
+   ---------------------------------------------------------------------------- */
+
+.view-switch {
+  display: flex;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-self: end;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+.view-switch button {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-2);
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--radius-md) - 2px);
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.view-switch button:hover {
+  color: var(--fg-0);
+}
+
+.view-switch button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.brief-head-lede {
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg-2);
+  margin: 6px 0 10px;
+}
+
+.brief-place-context {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 9px;
+  padding: 8px 10px;
+  background: var(--accent-soft);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--fg-1);
+}
+.brief-place-context[hidden] { display: none; }
+.brief-place-context span {
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+.brief-place-context strong {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: var(--fw-title);
+  color: var(--fg-0);
+}
+.brief-place-context small {
+  font-size: 10px;
+  color: var(--fg-2);
+}
+
+.brief-display-summary {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg-1);
+}
+#layers-studio-entry-host { margin-top: 12px; }
+#layers-studio-entry-host:empty { display: none; }
+#brief-secondary-actions .tribal-nations-brief-row { padding: 10px 0 0; }
+#brief-secondary-actions .tribal-nations-brief-action {
+  min-height: 32px;
+  background: transparent;
+  border-color: var(--line);
+  color: var(--fg-1);
+  font-size: 11px;
+}
+.brief-selection-summary {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.brief-selection-summary[hidden] { display: none; }
+.brief-selection-summary p {
+  margin: 0 0 6px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--fg-1);
+}
+.brief-full-report-link {
+  appearance: none;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: var(--fw-strong);
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.brief-full-report-link:hover { color: var(--fg-0); }
+
+.brief-place-label {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-3);
+  margin-bottom: 4px;
+}
+
+.brief-place-select {
+  width: 100%;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--fg-0);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 7px 8px;
+  margin-bottom: 10px;
+}
+
+.brief-console-door {
+  display: block;
+  width: 100%;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-1);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.brief-console-door:hover {
+  border-color: var(--accent-strong);
+  color: var(--fg-0);
+}
+
+/* ----------------------------------------------------------------------------
+   ENSO driver line (0.4.0 B2): one compact climate-driver line inside the
+   post-time display description. It is not a strip tile (the strip reflects
+   the map; ENSO is a driver). Disclosure carries the full tilt text.
+   ---------------------------------------------------------------------------- */
+
+.enso-driver {
+  margin-top: 9px;
+  padding: 7px 0 0;
+  border-top: 1px dashed var(--line);
+}
+.enso-driver-line {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+  white-space: nowrap;
+  cursor: pointer;
+  list-style: none;
+}
+.enso-driver-line::-webkit-details-marker {
+  display: none;
+}
+.enso-driver-line::after {
+  content: '+';
+  margin-left: auto;
+  color: var(--fg-3);
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1;
+}
+.enso-driver-details[open] .enso-driver-line::after {
+  content: '\2212'; /* minus sign */
+}
+.enso-driver-kicker {
+  font-family: var(--font-display);
+  font-weight: var(--fw-title);
+  font-size: 10px;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+.enso-driver-value {
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+  font-size: 11.5px;
+  font-weight: var(--fw-strong);
+  color: var(--fg-0);
+  flex-shrink: 0;
+}
+.enso-driver-tilt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  color: var(--fg-3);
+}
+.enso-driver-detail {
+  margin: 8px 0 4px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--fg-1);
+}
+.enso-driver-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 2px;
+}
+.enso-driver-pacific {
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  font-weight: var(--fw-strong);
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.enso-driver-pacific:hover {
+  border-color: var(--accent);
+}
+.enso-driver-source {
+  font-size: 10.5px;
+  color: var(--accent);
+}
+
+/* ----------------------------------------------------------------------------
+   Region selector
+   ---------------------------------------------------------------------------- */
+
+/* U3e (D-0.7.0-009): the region selector is demoted from the prominent
+   two-column button grid to a plain, secondary "jump to" list. Brief mode
+   carries place selection as the primary "where" control; this list is the
+   quiet way to jump the map to a preset framing. Rows are transparent list
+   items (not filled buttons) with a quiet accent marker on the active row,
+   so the list reads as secondary and does not compete with the search. The
+   radiogroup semantics (role, roving tabindex, arrow keys) are unchanged. */
+.region-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.region-btn {
+  appearance: none;
+  width: 100%;
+  background: transparent;
+  color: var(--fg-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.02em;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+  line-height: 1.2;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+}
+.region-btn:hover {
+  background: var(--bg-2);
+  color: var(--fg-0);
+}
+.region-btn.active {
+  background: var(--accent-soft);
+  color: var(--fg-0);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* The keyboard-reachable drought impact briefing trigger (#9): a full-width
+   secondary action below the region grid, shown only for a region anchored to
+   a single briefable boundary. */
+.region-briefing-btn {
+  appearance: none;
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px 12px;
+  min-height: 38px;
+  background: var(--accent-soft);
+  color: var(--fg-0);
+  border: 1px solid var(--accent-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.02em;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.region-briefing-btn:hover {
+  background: var(--accent);
+  color: var(--bg-0);
+  border-color: var(--accent);
+}
+.region-briefing-btn[hidden] {
+  display: none;
+}
+
+/* U3e / D-0.7.0-009: the region "jump to" list is a CONSOLE "where" control.
+   In Brief mode the place search (the Brief head) is the one "where" control,
+   so the whole region panel (the list, its heading, and the briefing trigger
+   that lives inside it) is hidden; Brief leads with the answer and its search.
+   The .region-btn elements stay in the DOM (the island pre-mount boot signal
+   counts them), just not displayed. On mobile the sheet detents already gate
+   #panel-region, and console mode is unaffected. */
+#app.view-brief #panel-region {
+  display: none;
+}
+
+/* E1 deliverable 1, interim progressive disclosure (D-0.7.0-041 part 2; the
+   2026-07-16 design review E1.2): in Brief mode the console instrumentation
+   (Quick views, the Layers catalog, Water & Snow, and the persistent footer)
+   steps behind the existing, honestly named "Open the map & layers console"
+   door; the Brief page is the answer, the one search, and the one door.
+   CSS-first: the DOM stays mounted (the island pre-mount boot signal and the
+   specs count it), display only, and console mode is untouched. Embeds are
+   untouched byte for byte (:not(.embed)): the embed surface keeps its
+   shipped chrome (hard rule 8). On mobile the sheet detent matrix already
+   gates these sections; these rules only quiet the desktop Brief column. */
+#app.view-brief:not(.embed) #panel-quick-views,
+#app.view-brief:not(.embed) #panel-layers,
+#app.view-brief:not(.embed) #panel-telemetry,
+#app.view-brief:not(.embed) .sidebar-footer {
+  display: none;
+}
+
+/* ----------------------------------------------------------------------------
+   View preset chips (UX-2)
+   ---------------------------------------------------------------------------- */
+
+.preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preset-chip {
+  appearance: none;
+  background: var(--bg-2);
+  color: var(--fg-1);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  line-height: 1.2;
+}
+.preset-chip:hover {
+  background: var(--bg-3);
+  border-color: var(--line-strong);
+  color: var(--fg-0);
+}
+.preset-chip:active {
+  background: var(--accent-soft);
+  border-color: var(--accent-strong);
+  color: var(--fg-0);
+}
+
+/* ----------------------------------------------------------------------------
+   Layer toggles
+   ---------------------------------------------------------------------------- */
+
+.layer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Role groups (UX-1): surfaces, references, events, stations. */
+.layer-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.layer-group + .layer-group {
+  margin-top: 10px;
+}
+
+.layer-group-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-overline);
+  text-transform: uppercase;
+  color: var(--fg-3);
+  padding: 0 10px;
+  margin-bottom: 2px;
+}
+.layer-group-title-text { min-width: 0; }
+
+.layer-group-hint {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: var(--fw-body);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--fg-3);
+  opacity: 0.8;
+}
+.layer-group-hint::before { content: '· '; }
+
+/* Active count per group (U3a): what is live at a glance. The accent is the
+   UI accent, not a data color, so it stays honest under U6's accent
+   discipline. Only shown when at least one layer in the group is on. */
+.layer-group-count {
+  flex-shrink: 0;
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+  font-size: 9.5px;
+  font-weight: var(--fw-body);
+  text-transform: none;
+  letter-spacing: var(--track-pill);
+  color: var(--accent);
+}
+
+/* Per-group "Sources" disclosure (U3a): the provider attribution collapses
+   behind this so the catalog leads with what a layer answers, not the agency
+   that serves it. A CSS caret (ASCII-safe) rotates with aria-expanded. */
+.layer-group-sources-toggle {
+  align-self: flex-start;
+  margin: 3px 0 0 10px;
+  padding: 2px 0;
+  background: none;
+  border: none;
+  font-family: var(--font-body);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--fg-3);
+  cursor: pointer;
+}
+.layer-group-sources-toggle:hover { color: var(--fg-1); }
+.layer-group-sources-toggle::before {
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-right: 5px;
+  border-left: 3px solid currentColor;
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  vertical-align: middle;
+}
+.layer-group-sources-toggle[aria-expanded='true']::before { transform: rotate(90deg); }
+
+/* Group-level provenance disclosure (umbrella build Unit D): the concise
+   fetched-live / vintage / caveat note revealed with the group's Sources.
+   Sized to the source-line vocabulary; wraps freely so it survives the
+   400px embed. */
+.layer-group-provenance {
+  margin: 4px 10px 2px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+
+/* ---------------------------------------------------------------------------
+   The Tribal Nations umbrella (Unit F; the Codex front-end consultation Q4).
+   A compact featured card inside the Place role group: a narrow identity
+   rule in the RULED Tribal family colors names the mapped family (never
+   the interaction state; cyan keeps that job), the full-width command
+   button reads prominent at 400px, the "n of 2 selected" line carries the
+   honest intent state, and the quieter details disclosure reveals the
+   member rows. The identity rule uses --tribal-family (#8d006b, the one
+   E2-ruled family color, D-0.7.0-058 ruling 3); src/config/palette.ts
+   remains the source of truth for the map paint.
+   --------------------------------------------------------------------------- */
+.layer-umbrella {
+  margin: 4px 0 8px;
+  padding: 8px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  border-top: 2px solid transparent;
+  /* The 2px identity rule: the ruled Tribal family, one hue, two depths. */
+  background-image:
+    linear-gradient(var(--bg-2), var(--bg-2)),
+    linear-gradient(var(--tribal-family), var(--tribal-family));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+
+.layer-umbrella-cta {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: var(--fw-title);
+  color: var(--fg-0);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-strong);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.layer-umbrella-cta:hover { border-color: var(--accent); background: rgba(6, 182, 212, 0.22); }
+.layer-umbrella-cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.layer-umbrella-count {
+  margin: 5px 2px 0;
+  font-size: 10.5px;
+  color: var(--fg-2);
+  font-feature-settings: 'tnum' 1;
+}
+
+.layer-umbrella-details-toggle {
+  display: block;
+  margin: 4px 0 0;
+  padding: 8px 0;
+  min-height: 32px;
+  background: none;
+  border: none;
+  font-family: var(--font-body);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--fg-3);
+  cursor: pointer;
+}
+.layer-umbrella-details-toggle:hover { color: var(--fg-1); }
+.layer-umbrella-details-toggle::before {
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-right: 5px;
+  border-left: 3px solid currentColor;
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  vertical-align: middle;
+}
+.layer-umbrella-details-toggle[aria-expanded='true']::before { transform: rotate(90deg); }
+@media (max-width: 720px) {
+  .layer-umbrella-details-toggle { min-height: 44px; }
+}
+
+/* An author display rule must never defeat the native hidden contract (the
+   .impact-panel[hidden] lesson): the collapsed member region stays gone. */
+.layer-umbrella-controls[hidden] { display: none; }
+
+/* The compact Brief-door action (the eager mirror of the umbrella button,
+   hosted by the impact panel's static chrome). One labeled row; no child
+   rows, no provenance paragraph (those stay in the catalog). */
+.tribal-nations-brief-row {
+  padding: 8px 18px 0;
+}
+/* The at-hand mirror rides its section's own gutters. */
+.tribal-nations-at-hand-row {
+  padding: 10px 0 0;
+}
+/* The visible intent-versus-outcome line under each Brief-door action. */
+.tribal-nations-health {
+  display: block;
+  margin-top: 4px;
+  font-size: 10.5px;
+  color: var(--fg-2);
+  font-feature-settings: 'tnum' 1;
+}
+.tribal-nations-brief-action {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 12px;
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: var(--fw-title);
+  color: var(--fg-0);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-strong);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.tribal-nations-brief-action:hover { border-color: var(--accent); background: rgba(6, 182, 212, 0.22); }
+.tribal-nations-brief-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 720px) {
+  .tribal-nations-brief-action { min-height: 44px; }
+}
+
+.layer-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 10px;
+  /* The whole label row is the checkbox's activation target (clicking it
+     toggles via the `for` association), so the effective hit area is well over
+     the WCAG 2.5.8 24px minimum even though the checkbox glyph is 14px. The
+     explicit floor documents that and survives a future padding change (#10). */
+  min-height: 24px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.12s ease;
+  border: 1px solid transparent;
+}
+.layer-toggle:hover { background: var(--bg-2); }
+/* A ui-hidden umbrella member row (E2, D-0.7.0-058 ruling 4) stays mounted
+   for its DOM contract but shows nothing while off; the explicit display
+   override is needed because the flex display above outranks [hidden]. */
+.layer-toggle[hidden] { display: none; }
+/* Active-row lighting (U3a, headroom B4): an on layer stays visibly lit so the
+   catalog reads its own state without hunting the pills. Cyan-tinted fill plus
+   a faint accent border; the active hover deepens rather than reverting to the
+   neutral hover. */
+.layer-toggle:has(input:checked) {
+  background: rgba(6, 182, 212, 0.1);
+  border-color: rgba(6, 182, 212, 0.3);
+}
+.layer-toggle:has(input:checked):hover { background: rgba(6, 182, 212, 0.16); }
+
+.layer-toggle input[type="checkbox"] {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin: 2px 0 0;
+  flex-shrink: 0;
+  background: var(--bg-0);
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.layer-toggle input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.layer-toggle input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 4px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--bg-0);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.layer-toggle-text { min-width: 0; flex: 1; }
+.layer-toggle-name {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.01em;
+  color: var(--fg-0);
+  display: block;
+}
+.layer-toggle-source {
+  font-size: 10.5px;
+  color: var(--fg-2);
+  display: block;
+  margin-top: 2px;
+  letter-spacing: 0.02em;
+}
+
+.layer-toggle-status {
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+  font-size: 10.5px;
+  font-weight: var(--fw-body);
+  color: var(--fg-2);
+  margin-top: 2px;
+  display: block;
+  letter-spacing: var(--track-pill);
+}
+.layer-toggle-status.loading { color: var(--warn); }
+.layer-toggle-status.error { color: var(--danger); }
+.layer-toggle-status.ready { color: var(--good); }
+/* Partial source loss (0.7.0 H4): live data is showing, but one of the
+   layer's merged sources failed; warn tone, not error red. */
+.layer-toggle-status.degraded { color: var(--warn); }
+.layer-toggle-status.no-data { color: var(--fg-2); font-style: italic; }
+.layer-toggle-status.zoom-in { color: var(--accent); }
+
+/* ----------------------------------------------------------------------------
+   Telemetry list
+   ---------------------------------------------------------------------------- */
+
+.telemetry-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.telemetry-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.telemetry-item:hover {
+  background: var(--bg-3);
+  border-color: var(--line-strong);
+}
+
+.telemetry-marker-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;
+  border: 1.5px solid var(--bg-1);
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+
+.telemetry-meta { min-width: 0; flex: 1; }
+.telemetry-name {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.01em;
+  color: var(--fg-0);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.telemetry-agency {
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+  font-size: 10px;
+  font-weight: var(--fw-body);
+  color: var(--fg-2);
+  display: block;
+  margin-top: 2px;
+  letter-spacing: 0.01em;
+}
+
+/* Live station values (Tier 2). Empty while `unknown` (nothing attempted);
+   the freshness class colors the reading honestly. */
+.telemetry-values {
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+  font-size: 10px;
+  font-weight: var(--fw-strong);
+  display: block;
+  margin-top: 2px;
+  letter-spacing: 0.01em;
+}
+.telemetry-values:empty { display: none; }
+.telemetry-values.loading { color: var(--fg-3); font-style: italic; }
+.telemetry-values.fresh { color: var(--fg-1); }
+.telemetry-values.stale { color: var(--warn); }
+.telemetry-values.unavailable { color: var(--fg-3); font-style: italic; }
+
+/* ----------------------------------------------------------------------------
+   Legend (UX-3 unified registry: one panel, one section per active layer)
+   ---------------------------------------------------------------------------- */
+
+.legend-section + .legend-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.legend-section-title {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+.legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 11.5px;
+  color: var(--fg-1);
+}
+.swatch {
+  display: inline-block;
+  width: 16px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,0.25);
+}
+.legend-note {
+  margin: 8px 0 0;
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: var(--fw-body);
+  color: var(--fg-3);
+  letter-spacing: 0.01em;
+}
+.ecoregion-legend {
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* Gridded drought-index (SPI) legend: product selector + orientation ramp.
+   The ramp is an approximate dry-to-wet orientation aid; the authoritative
+   color scale is baked into the NIDIS tiles and linked from drought.gov, so we
+   deliberately do not claim an exact SPI-to-color mapping here. */
+.legend-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.legend-control-label {
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.04em;
+  color: var(--fg-2);
+}
+.legend-select {
+  flex: 1;
+  appearance: none;
+  background: var(--bg-2);
+  color: var(--fg-0);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.legend-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.gridded-index-ramp-bar {
+  display: block;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  background: linear-gradient(to right, #a8763e, #d8c8a8, #eef0ee, #7fb89a, #2e8b6b);
+}
+.gridded-index-ramp-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--fg-2);
+  letter-spacing: 0.02em;
+}
+.ecoregion-legend::-webkit-scrollbar { width: 6px; }
+.ecoregion-legend::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 3px; }
+
+/* ----------------------------------------------------------------------------
+   Map container
+   ---------------------------------------------------------------------------- */
+
+.map-container {
+  position: relative;
+  background: var(--bg-0);
+  overflow: hidden;
+  min-width: 0;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+  /* Light placeholder matching the style's background layer, so the first
+     paint before tiles arrive does not flash dark. */
+  background: #e9eef3;
+}
+
+/* MapLibre chrome theming. The migration's earlier `.leaflet-*` selectors
+   never matched MapLibre's DOM (MapLibre uses `.maplibregl-*`), so popups
+   and controls were rendering with the library defaults (a white popup with
+   near-white text was effectively invisible). These rules restore the
+   intended slate-cartographic chrome. */
+.maplibregl-map {
+  font-family: var(--font-body);
+  font-size: 12px;
+}
+
+.maplibregl-ctrl-attrib {
+  background: rgba(15, 23, 42, 0.85) !important;
+  color: var(--fg-2) !important;
+  font-size: 10px !important;
+  padding: 3px 8px !important;
+  border-top-left-radius: var(--radius-sm) !important;
+  font-family: var(--font-body);
+  letter-spacing: 0.01em;
+  /* Never reach the bottom-left scale control: a long attribution (the
+     satellite legal string) wraps upward instead of spanning the full
+     width (the U4 stage-5 matrix caught the 1024px overlap). */
+  max-width: calc(100% - 220px);
+}
+
+/* When the satellite vintage chip is showing, the attribution bar can wrap
+   to two lines (the long EOxCloudless legal string); lift the dock clear of
+   it so the chip and key rows never intersect the bar. */
+body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
+  bottom: 58px;
+}
+
+/* Below MapLibre's 640px auto-compact threshold the attribution collapses
+   to a corner toggle; keep the dock (and the brand badge riding its right
+   edge) clear of that corner. The live 0.6.9 pass caught the badge sitting
+   ON the toggle at 400x600 embed and intercepting its clicks, which locked
+   users out of the data-source disclosure. */
+@media (max-width: 639px) {
+  .map-bottom-dock {
+    right: 56px;
+  }
+}
+.maplibregl-ctrl-attrib a { color: var(--fg-1) !important; }
+
+.maplibregl-ctrl-scale {
+  background: rgba(15, 23, 42, 0.85) !important;
+  color: var(--fg-1) !important;
+  border: 1px solid var(--line-strong) !important;
+  border-top: none !important;
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+  font-size: 10px !important;
+  font-weight: var(--fw-body);
+  letter-spacing: 0.02em;
+  padding: 1px 6px !important;
+}
+
+/* The basemap switcher button (U4d): the DESIGN MODEL of the map control
+   family since E2 (D-0.7.0-058 ruling 2): sharp rectangle, transparent
+   slate, and the shared family width, relabeled "Satellite" so it reads
+   with the Share view / Reset stack. The pressed (satellite) state lights
+   with the accent tokens. One button, real semantics; aria-pressed is set
+   by the control. */
+.basemap-switcher-btn {
+  width: var(--map-ctrl-w) !important;
+  padding: 0 7px;
+  background: rgba(15, 23, 42, 0.85) !important;
+  color: var(--fg-1) !important;
+  border: none;
+  font-family: var(--font-display);
+  font-weight: var(--fw-subtitle);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.basemap-switcher-btn:hover {
+  background: rgba(27, 41, 66, 0.9) !important;
+  color: var(--fg-0) !important;
+}
+/* The family's sharp-rectangle model: MapLibre's control group would
+   otherwise round and clip the switcher's corners. */
+.maplibregl-ctrl-group:has(.basemap-switcher-btn) {
+  border-radius: 0;
+}
+.basemap-switcher-btn.active {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+  box-shadow: inset 0 0 0 1px var(--accent-strong);
+}
+
+/* The satellite vintage notice (U4d, D-0.7.0-028 honesty split): a plain
+   statement distinct from the legal attribution, visible whenever the
+   satellite basemap is selected, embeds included. Lives in the shared
+   bottom dock so it composes with the notices and the legend chip. */
+.basemap-vintage-chip {
+  background: rgba(15, 23, 42, 0.85);
+  color: var(--fg-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  padding: 3px 9px;
+  pointer-events: none;
+}
+
+/* Popups */
+.maplibregl-popup-content {
+  background: var(--bg-1) !important;
+  color: var(--fg-0) !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55) !important;
+  padding: 14px 16px !important;
+  font-family: var(--font-body);
+  font-weight: var(--fw-body);
+  font-size: 12.5px;
+  line-height: 1.55;
+  /* A tall popup (a hydrated telemetry block, a long treaty note) must not
+     overflow a short phone viewport with the close button off-screen (#8). */
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.maplibregl-popup-close-button {
+  color: var(--fg-2) !important;
+  font-size: 16px;
+  line-height: 1;
+  /* >=24px hit area for WCAG 2.5.8 (the default was about 22px); the glyph
+     stays snug in the top-right via the asymmetric padding (#10). */
+  min-width: 24px !important;
+  min-height: 24px !important;
+  padding: 3px 7px 0 0 !important;
+  background: transparent !important;
+}
+.maplibregl-popup-close-button:hover {
+  color: var(--fg-0) !important;
+  background: transparent !important;
+}
+/* Tip triangle: tint the visible edge to match the popup body per anchor. */
+.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: var(--bg-1) !important;
+}
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: var(--bg-1) !important;
+}
+.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: var(--bg-1) !important;
+}
+.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: var(--bg-1) !important;
+}
+
+.popup-title {
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: var(--fw-title);
+  color: var(--fg-0);
+  margin: 0 0 2px;
+  letter-spacing: -0.005em;
+  line-height: 1.2;
+}
+.popup-agency {
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+  font-size: 10px;
+  font-weight: var(--fw-strong);
+  color: var(--accent);
+  letter-spacing: var(--track-caps-sm);
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+.popup-description {
+  font-size: 12px;
+  color: var(--fg-1);
+  margin: 0 0 10px;
+}
+.popup-data {
+  background: var(--bg-0);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  font-size: 11.5px;
+  font-weight: var(--fw-body);
+}
+.popup-data-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+  color: var(--fg-1);
+}
+.popup-data-row + .popup-data-row {
+  border-top: 1px dashed var(--line);
+}
+.popup-data-label {
+  color: var(--fg-2);
+  letter-spacing: 0.02em;
+}
+.popup-data-value {
+  color: var(--fg-0);
+  font-weight: var(--fw-strong);
+  text-align: right;
+}
+.popup-data-loading {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: var(--fw-body);
+  color: var(--fg-2);
+  padding: 6px 0;
+}
+.popup-data-error {
+  font-size: 11px;
+  color: var(--warn);
+  padding: 6px 0;
+  line-height: 1.4;
+}
+/* The honest note under a discovered station's custody block: no live value is
+   fetched in-browser, so the popup states the cadence and points to the link. */
+.popup-data-note {
+  font-size: 10.5px;
+  color: var(--fg-3);
+  margin-top: 6px;
+  line-height: 1.35;
+}
+
+/* Fire-in-context block (0.4.0 B1): a composed read appended to a NIFC
+   perimeter popup (drought class beneath, nearest stations). Composition only,
+   not a fire forecast. */
+.fire-context {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-body);
+  font-size: 11.5px;
+}
+.fire-context-heading {
+  font-family: var(--font-display);
+  font-weight: var(--fw-title);
+  font-size: 11px;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-2);
+  margin-bottom: 6px;
+}
+.fire-context-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px 0;
+}
+.fire-context-block + .fire-context-block {
+  border-top: 1px dashed var(--line);
+}
+.fire-context-label {
+  color: var(--fg-2);
+  letter-spacing: 0.02em;
+}
+.fire-context-value {
+  color: var(--fg-0);
+  font-weight: var(--fw-strong);
+}
+.fire-context-stations {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+}
+.fire-context-stations li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--fg-1);
+  padding: 1px 0;
+}
+.fire-context-distance {
+  color: var(--fg-3);
+  font-feature-settings: 'tnum' 1;
+}
+.fire-context-note {
+  margin: 6px 0 0;
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--fg-3);
+}
+
+/* ----------------------------------------------------------------------------
+   Skeleton shimmer (0.4.0 A4): a calm loading affordance for telemetry
+   surfaces that wait on a network round trip (the sidebar value slot and the
+   map popup data block). Attention without alarmism: one 1600 ms ease-in-out
+   sweep left to right, looping only while the placeholder is on screen, with
+   an 8 to 12 percent luminance band (fg-2 at 0.10 alpha over the surface).
+   The band leaves the box between cycles, so it reads as a slow pulse, not a
+   racing spinner. Reduced motion drops the sweep for a static tint. The class
+   is additive: terminal states reassign className without it, clearing the
+   shimmer automatically.
+   ---------------------------------------------------------------------------- */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0) 0%,
+    rgba(148, 163, 184, 0.1) 50%,
+    rgba(148, 163, 184, 0) 100%
+  );
+  animation: skeleton-shimmer-sweep 1600ms ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes skeleton-shimmer-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.popup-links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  /* Anchors size to their text (U-UX-FIX-1, DG-080-REVIEW finding 2
+     hardening): a stretched full-width anchor ran under the map's
+     attribution control, which can legitimately overlay the card's
+     right edge on a short viewport, so the dead right half of the strip
+     was not hit-testable. The visible link text IS the hit area. */
+  align-items: flex-start;
+}
+.popup-links a {
+  font-size: 11.5px;
+  color: var(--accent);
+  border-bottom: none;
+}
+.popup-links a:hover { color: var(--fg-0); }
+.popup-links a::after {
+  content: ' ↗';
+  font-size: 10px;
+  opacity: 0.7;
+}
+.popup-treaty-meta {
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+  font-size: 11px;
+  font-weight: var(--fw-body);
+  color: var(--fg-2);
+  margin-top: 6px;
+  letter-spacing: 0.01em;
+}
+
+/* The InteractionCoordinator's lower-priority-hits escape hatch: a quiet
+   disclosure inside the one response (D-0.7.0-058 ruling 5). Native
+   details/summary keeps it keyboard and touch reachable for free. */
+.popup-other-features {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.popup-other-features > summary {
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: var(--fw-strong);
+  color: var(--fg-2);
+  letter-spacing: 0.01em;
+  list-style-position: inside;
+}
+.popup-other-features > summary:hover,
+.popup-other-features > summary:focus-visible {
+  color: var(--fg-0);
+}
+.popup-other-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+.popup-other-item {
+  appearance: none;
+  text-align: left;
+  background: var(--bg-0);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  font-weight: var(--fw-body);
+  color: var(--fg-1);
+  cursor: pointer;
+}
+.popup-other-item:hover,
+.popup-other-item:focus-visible {
+  color: var(--fg-0);
+  border-color: var(--line-strong);
+}
+
+/* The coordinated response splits into a head (title, the briefing door,
+   and the other-features switcher) and a scrolling body (agency, meta,
+   the caveat, links); maintainer directive 2026-07-18. The body is the
+   scroll container instead of the whole popup card, so the head's key
+   actions sit OUTSIDE the scroll flow: scrolling the body never moves
+   them. Whether they stay VISIBLE depends on the region: under squeeze
+   the head cedes its height to the body's window and can shrink to
+   zero; head visibility is expressly not claimed by any tier of THE
+   CANONICAL TIER TABLE beside the boundary constants in
+   src/ui/popup-viewport.ts, which is the one authoritative statement of
+   what each region size is promised (this stylesheet states no limit of
+   its own). In the FULL tier only, when the viewport clamp caps the card
+   below its natural height, the body keeps at least its 44px scroll
+   window (its min-height below); COMPACT reduces that window to 24px
+   and the containment-only band below the usable-body thresholds
+   makes no body-window claim at all (see the canonical tier table).
+   In every tier the HEAD cedes the remaining height, scrolling
+   internally instead of pushing the body toward zero; with room to
+   spare the head sits at its natural height (its shrink share is three
+   orders below the body's, so it yields only once the body has reached
+   its window). Scoped to .ddm-coordinated-popup so the telemetry marker
+   popups (which do not carry the class) keep their own whole-card
+   scroll. */
+.ddm-coordinated-popup .maplibregl-popup-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ddm-coordinated-popup .coordinated-response {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.coordinated-response-head {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* A gap so scrolling body content reads as beneath the frozen head, and a
+   hairline that only shows once there is a head to divide from. */
+.coordinated-response-head:not(:empty) {
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.coordinated-response-body {
+  /* The 1000 shrink weight sends a squeeze to the body first, until the
+     44px floor; only then does the head above start to yield. */
+  flex: 1 1000 auto;
+  /* The nonzero body scroll window the DEF-3 containment relies on: a
+     clamped card squeezes the head before the body drops below 44px.
+     When this window is actually promised is stated ONLY by the
+     canonical tier table in src/ui/popup-viewport.ts; below its FULL
+     boundary the clamp applies .ddm-popup-compact, whose rules below
+     take over. */
+  min-height: 44px;
+  overflow-y: auto;
+}
+/* COMPACT PRESENTATION (U-UX-FIX-1, DG-080-REVIEW r2 finding 1): applied
+   by the clamp (src/ui/popup-viewport.ts) to the content box exactly
+   while its reachable region is under the FULL boundary of the
+   canonical tier table there. Chrome shrinks so the card can physically
+   follow the clamp's hard cap: 6px/8px padding makes the minimum card
+   14px tall by 18px wide, the head divider drops to 9px, and the
+   coordinated body window drops to 24px. What each region size is
+   promised, and expressly not promised, is stated ONLY by that tier
+   table (beside the boundary constants in popup-viewport.ts); this
+   stylesheet states no limit of its own. */
+.maplibregl-popup-content.ddm-popup-compact {
+  padding: 6px 8px !important;
+}
+.ddm-popup-compact .coordinated-response-head:not(:empty) {
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+.ddm-popup-compact .coordinated-response-body {
+  min-height: 24px;
+}
+/* The escape hatch is inside the frozen head now, so its own top border
+   would double the head's divider; drop it here. */
+.coordinated-response-head .popup-other-features {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 8px;
+}
+
+/* Custom telemetry markers */
+.telemetry-marker {
+  background: transparent;
+  border: none;
+  /* Insert fade: markers are DOM elements, not style layers, so they take
+     the CSS half of the layer add/remove transitions (layer-fade.ts). */
+  animation: telemetry-marker-in 0.2s ease-out;
+}
+@keyframes telemetry-marker-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.telemetry-marker-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.4);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.telemetry-marker-inner:hover { transform: scale(1.18); }
+
+.telemetry-marker[data-telemetry-freshness="fresh"] .telemetry-marker-inner {
+  opacity: 1;
+  border-style: solid;
+}
+
+.telemetry-marker[data-telemetry-freshness="stale"] .telemetry-marker-inner {
+  opacity: 0.7;
+  border-style: dashed;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.65), 0 2px 8px rgba(0,0,0,0.35);
+}
+
+.telemetry-marker[data-telemetry-freshness="unavailable"] .telemetry-marker-inner {
+  background: transparent !important;
+  border-color: var(--telemetry-marker-color, #ffffff);
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 3px rgba(15, 23, 42, 0.65), 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* H2 (0.6.2): the station-cap message is a compact count chip in the shared
+   dock; the full explanation lives in the sidebar Water & Snow panel
+   (D-0.7.0-004). It must never cover the time bar again. */
+.telemetry-discovery-note {
+  max-width: min(560px, 100%);
+  padding: 3px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.9);
+  color: var(--fg-1);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: var(--fw-strong);
+  line-height: 1.35;
+  text-align: center;
+  pointer-events: none;
+}
+
+.telemetry-discovery-hint {
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--fg-3);
+}
+
+/* ----------------------------------------------------------------------------
+   Shared bottom overlay dock (H2, 0.6.2)
+   One flex column anchored above the scale bar; notices, the time bar, and
+   the corner chips (drought key left, embed brand right) stack instead of
+   absolutely positioning themselves onto each other. When the impact panel
+   is open on desktop, the dock insets so nothing hides under the panel.
+   ---------------------------------------------------------------------------- */
+
+.map-bottom-dock {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 34px;
+  z-index: 610;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.map-bottom-dock > * { pointer-events: auto; }
+.map-notices { display: contents; }
+.map-dock-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  width: 100%;
+  min-height: 0;
+  pointer-events: none;
+}
+.map-dock-foot > * { pointer-events: auto; }
+
+@media (min-width: 721px) {
+  /* Panel-inset awareness: 440px panel + 12px breathing room. */
+  body:has(.impact-panel.open) .map-bottom-dock {
+    right: 452px;
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   Map overlay controls
+   ---------------------------------------------------------------------------- */
+
+/* ----------------------------------------------------------------------------
+   Hover inspector (UX-4): what-is-under-the-cursor readout
+   ---------------------------------------------------------------------------- */
+
+.hover-inspector {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
+  max-width: min(82%, 520px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 5px 14px;
+  padding: 6px 13px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  pointer-events: none;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  color: var(--fg-0);
+}
+/* The element carries the `hidden` attribute; override the flex display so
+   hidden actually hides. */
+.hover-inspector[hidden] { display: none; }
+
+.hover-item {
+  white-space: nowrap;
+  font-feature-settings: 'tnum' 1;
+}
+.hover-label {
+  margin-right: 5px;
+  font-family: var(--font-display);
+  font-weight: var(--fw-subtitle);
+  font-size: 9.5px;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+/* E2 (D-0.7.0-058 ruling 2): the top-right controls adopt the SAT box's
+   design model (sharp rectangles, background transparency): Share view and
+   Reset stack vertically at ONE uniform width, and the basemap switcher
+   below carries the same width and chrome so the three buttons read as one
+   family. The width token is shared with .basemap-switcher-btn. */
+.map-overlay-controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+/* PRE-1.0 TEST PREVIEW BADGE. Remove this rule together with the
+   .test-preview-badge span in index.html before the 1.0 publish; they are
+   the only two places it exists.
+
+   Deliberately non-interactive: pointer-events: none means it can never
+   intercept a click meant for the map or for the overlay buttons it sits
+   above, which is the failure mode this corner has already produced once
+   (the U4d basemap-switcher spec moved that control to bottom-right
+   precisely because this stack swallows pointer events). It is a plain
+   span, not a control and not a live region, so it reads once in document
+   order and never announces itself again. Muted on purpose: it states the
+   build's status honestly without competing with data for attention. */
+.test-preview-badge {
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-weight: var(--fw-subtitle);
+  font-size: 9px;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-3);
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 2px 5px;
+  line-height: 1;
+  user-select: none;
+}
+
+.overlay-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: var(--map-ctrl-w);
+  padding: 7px 8px;
+  background: rgba(15, 23, 42, 0.85);
+  color: var(--fg-1);
+  border: none;
+  border-radius: 0;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  white-space: nowrap;
+}
+.overlay-btn:hover {
+  background: rgba(27, 41, 66, 0.9);
+  color: var(--fg-0);
+}
+
+.layers-studio-linkout {
+  width: auto;
+  max-width: 240px;
+  white-space: normal;
+  text-align: center;
+  text-decoration: none;
+}
+
+/* =============================================================================
+   Minimal LAYERS studio. One lazy full-viewport route over the mounted map.
+   ============================================================================= */
+
+#layers-studio-root {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+}
+
+.layers-studio {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg-0);
+  color: var(--fg-0);
+}
+
+.layers-studio-header {
+  display: grid;
+  grid-template-columns: minmax(104px, 1fr) auto minmax(104px, 1fr);
+  align-items: center;
+  gap: 16px;
+  flex: 0 0 auto;
+  min-height: 64px;
+  padding: 10px 18px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.layers-studio-header h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: var(--fw-title);
+  letter-spacing: var(--track-display);
+}
+
+.layers-studio-back {
+  justify-self: start;
+  padding: 7px 11px;
+  background: var(--bg-2);
+  color: var(--fg-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: var(--fw-subtitle);
+  cursor: pointer;
+}
+
+.layers-studio-back:hover,
+.layers-studio-back:focus-visible {
+  border-color: var(--accent-strong);
+  color: var(--fg-0);
+}
+
+.studio-load-failure {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 24px;
+  background: var(--bg-0);
+  color: var(--fg-0);
+}
+
+.studio-load-failure-panel {
+  width: min(440px, 100%);
+  padding: 24px;
+  background: var(--bg-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+}
+
+.studio-load-failure-panel h2 {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: var(--fw-title);
+}
+
+.studio-load-failure-panel p {
+  margin: 0;
+  color: var(--fg-1);
+}
+
+.studio-load-failure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.layers-studio-basemap {
+  justify-self: end;
+}
+
+.layers-studio-basemap .maplibregl-ctrl {
+  float: none;
+  margin: 0;
+}
+
+.layers-studio-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
+}
+
+.layers-studio-search {
+  max-width: 720px;
+  margin: 0 auto 16px;
+  padding: 12px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+.layers-studio-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
+  align-items: start;
+  gap: 16px;
+  width: min(1080px, 100%);
+  margin: 0 auto;
+}
+
+.layers-studio-catalog {
+  min-width: 0;
+  padding: 14px 12px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+.layers-studio-depth > #panel-telemetry {
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .layers-studio-header {
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    min-height: 56px;
+    padding: 8px;
+  }
+  .layers-studio-header h2 { font-size: 17px; }
+  .layers-studio-back { padding: 6px 8px; }
+  .layers-studio-scroll { padding: 10px; }
+  .layers-studio-search { margin-bottom: 10px; }
+  .layers-studio-grid { grid-template-columns: 1fr; gap: 10px; }
+}
+
+/* =============================================================================
+   PLACE studio. Lazy route, catalog rail, and selection panel shell.
+   ============================================================================= */
+
+.studio-entry-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.studio-linkout-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  width: min(420px, calc(100vw - 24px));
+}
+
+.studio-linkout-pair .layers-studio-linkout {
+  width: auto;
+  max-width: none;
+}
+
+@media (max-width: 400px) {
+  .studio-linkout-pair {
+    grid-template-columns: minmax(0, 1fr);
+    width: min(240px, calc(100vw - 72px));
+  }
+}
+
+/* Short embed frames (T1-3, 2026-07-28): at viewport heights near the
+   embed floor the top-right overlay stack grows tall enough to reach
+   the vertical middle of the map, and the 240px linkout pair is wide
+   enough on narrow frames to cross the horizontal middle, so the one
+   place a user (and the popup acceptance tests) most naturally clicks
+   (the map center) landed on a button instead of the map; no popup
+   could ever open. These two tests were red from the day they were
+   written. The fix keeps every linkout's left edge inside the right
+   40 percent of the frame at short heights, so the center column
+   stays clickable no matter how tall the stack grows; the label wraps
+   (white-space override) instead of forcing width. */
+@media (max-height: 420px) {
+  .studio-linkout-pair {
+    grid-template-columns: minmax(0, 1fr);
+    width: min(150px, calc(50vw - 34px));
+  }
+  .studio-linkout-pair .layers-studio-linkout {
+    white-space: normal;
+    text-align: center;
+    line-height: 1.25;
+  }
+}
+
+#place-studio-root {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+}
+
+.place-studio-header > :last-child {
+  min-width: 1px;
+}
+
+.place-studio-type-rail {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  width: min(1080px, 100%);
+  margin: 0 auto 14px;
+}
+
+.place-studio-type {
+  min-height: 42px;
+  padding: 8px 10px;
+  color: var(--fg-2);
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: var(--fw-subtitle);
+  cursor: pointer;
+}
+
+.place-studio-type:hover,
+.place-studio-type:focus-visible {
+  color: var(--fg-0);
+  border-color: var(--accent-strong);
+}
+
+.place-studio-type[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-strong);
+}
+
+.place-studio-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
+  align-items: start;
+  gap: 16px;
+  width: min(1080px, 100%);
+  margin: 0 auto;
+}
+
+.place-studio-list-panel,
+.place-studio-selection-panel {
+  min-width: 0;
+  padding: 14px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+.place-studio-type-status {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  color: var(--fg-2);
+  font-family: var(--font-body);
+  font-size: 10.5px;
+}
+
+.place-studio-type-status strong {
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: var(--track-caps-sm);
+}
+
+.place-studio-search {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.place-studio-search input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  color: var(--fg-0);
+  background: var(--bg-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: 12px;
+}
+
+.place-studio-search input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.place-studio-list-status {
+  margin: 12px 2px;
+  color: var(--fg-2);
+  font-family: var(--font-body);
+  font-size: 11px;
+}
+
+.place-studio-list-failure .place-studio-list-status {
+  margin-bottom: 10px;
+}
+
+.place-studio-retry {
+  margin-left: 2px;
+}
+
+.place-studio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: calc(100dvh - 250px);
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.place-studio-option {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 9px;
+  color: var(--fg-1);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.place-studio-option:hover,
+.place-studio-option:focus-visible {
+  color: var(--fg-0);
+  background: var(--bg-2);
+  border-color: var(--line-strong);
+}
+
+.place-studio-option.selected {
+  color: var(--fg-0);
+  background: var(--accent-soft);
+  border-color: var(--accent-strong);
+}
+
+.place-studio-option small {
+  flex: 0 0 auto;
+  color: var(--fg-2);
+  font-size: 10.5px;
+}
+
+.place-studio-selection-panel h3,
+.place-studio-selection-panel h4,
+.place-studio-selection-panel h5 {
+  margin: 0;
+  color: var(--fg-0);
+  font-family: var(--font-display);
+}
+
+.place-studio-selection-panel h3 {
+  margin-bottom: 12px;
+  font-size: 15px;
+}
+
+#place-selection-empty {
+  margin: 0;
+  color: var(--fg-2);
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.place-studio-selection-kind,
+.place-studio-selection-availability,
+.place-studio-selection-coverage {
+  margin: 0 0 5px;
+  color: var(--fg-2);
+  font-family: var(--font-body);
+  font-size: 10.5px;
+}
+
+.place-studio-selection-kind,
+.place-studio-selection-availability {
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-caps-sm);
+}
+
+#place-selection-title {
+  margin-bottom: 8px;
+  font-size: 17px;
+  line-height: 1.3;
+}
+
+.place-studio-coverage-matrix {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0;
+}
+
+.place-studio-coverage-matrix > div {
+  display: grid;
+  grid-template-columns: minmax(128px, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+}
+
+.place-studio-coverage-matrix dt,
+.place-studio-coverage-matrix dd {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 10.5px;
+}
+
+.place-studio-coverage-matrix dt {
+  color: var(--fg-2);
+}
+
+.place-studio-coverage-matrix dd {
+  display: flex;
+  flex-direction: column;
+  color: var(--fg-0);
+}
+
+.place-studio-coverage-matrix dd small {
+  margin-top: 2px;
+  color: var(--fg-2);
+  font-size: 10.5px;
+}
+
+#place-brief-narrative,
+#place-overlap-columns {
+  min-height: 48px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+#place-brief-narrative h5,
+#place-overlap-columns h5 {
+  font-size: 11px;
+}
+
+#place-brief-narrative .place-studio-selection-kind {
+  margin-top: 8px;
+}
+
+#place-brief-line,
+#place-overlap-status,
+#place-overlap-empty,
+#place-overlap-suppression {
+  margin: 8px 0 0;
+  color: var(--fg-1);
+  font-family: var(--font-body);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+#place-overlap-suppression {
+  color: var(--fg-3);
+}
+
+.place-overlap-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.place-overlap-column {
+  min-width: 0;
+}
+
+.place-overlap-column h6 {
+  margin: 0 0 5px;
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: var(--track-caps-sm);
+}
+
+.place-overlap-column ul,
+.place-overlap-unavailable {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.place-overlap-column li,
+.place-overlap-unavailable li {
+  min-width: 0;
+  padding: 7px;
+  color: var(--fg-1);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.place-overlap-column li > span,
+.place-overlap-unavailable li > span {
+  display: block;
+  color: var(--fg-0);
+}
+
+.place-overlap-column li > small {
+  display: block;
+  margin-top: 2px;
+  color: var(--fg-3);
+  font-size: 9px;
+}
+
+.place-overlap-tribal-caveat,
+.place-overlap-unavailable p {
+  margin: 5px 0 0;
+  color: var(--fg-3);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.place-overlap-unavailable {
+  margin-top: 8px;
+}
+
+.place-overlap-unavailable li {
+  background: transparent;
+}
+
+@media (min-width: 720px) {
+  #place-studio-root {
+    inset: 0 auto 0 0;
+    width: min(560px, 100vw);
+  }
+
+  .place-studio {
+    width: 100%;
+    height: 100%;
+  }
+
+  .place-studio-type-rail {
+    width: 100%;
+  }
+
+  .place-studio-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    width: 100%;
+  }
+
+  .place-studio-list {
+    max-height: min(34dvh, 320px);
+  }
+}
+
+.sheet-at-hand-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.sheet-at-hand-actions.has-briefing {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.sheet-at-hand-actions .sheet-report-door {
+  width: 100%;
+}
+
+@media (max-width: 719px) {
+  .place-studio-type-rail {
+    grid-template-columns: repeat(4, minmax(112px, 1fr));
+    overflow-x: auto;
+  }
+  .place-studio-layout { grid-template-columns: 1fr; gap: 10px; }
+  .place-studio-list { max-height: 38dvh; }
+  .place-studio-type-status { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .place-overlap-grid { overflow-x: auto; }
+  .place-overlap-column { min-width: 120px; }
+  /* The sheet's PLACE-studio entry STAYS visible: the footer place tab
+     opens the at-hand search, not the studio, so this button is the only
+     mobile door to the full PLACE studio (D-0.7.0-054). The design pass
+     assumed the footer supplied studio doors; it does not. */
+}
+
+@media (max-width: 720px) and (max-height: 800px) {
+  .sheet-at-hand-actions { margin-top: 4px; }
+}
+
+/* (The static attribution overlay was removed in the 0.3.0 design pass: it
+   was the third statement of the same credits on one screen and collided
+   with the scale bar. The live MapLibre attribution control carries the
+   OpenStreetMap and per-layer credits dynamically.) */
+
+.copy-toast {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-8px);
+  z-index: 1500;
+  background: rgba(8, 145, 178, 0.95);
+  color: #ffffff;
+  border: 1px solid var(--accent);
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.02em;
+  box-shadow: 0 6px 20px rgba(8, 145, 178, 0.4);
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.copy-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ----------------------------------------------------------------------------
+   Loading indicator
+   ---------------------------------------------------------------------------- */
+
+.loading-indicator {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 14px;
+  background: rgba(15, 23, 42, 0.95);
+  color: var(--fg-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+  font-size: 11px;
+  font-weight: var(--fw-body);
+  letter-spacing: 0.02em;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/*
+ * The `.loading-indicator` author rule above sets `display: inline-flex`, which
+ * (being an author rule) outranks the user-agent `[hidden] { display: none }`
+ * rule of equal specificity. Without this guard the overlay never actually
+ * hides, so `hideLoading()` left a stuck "Loading ..." pill on screen after
+ * every layer finished loading. This restores the hidden semantics. (Baseline
+ * bug found during the Phase D Phase 8 browser verification; not in TODO.md.)
+ */
+.loading-indicator[hidden] {
+  display: none;
+}
+
+/* The three-wave motif from the retired header mark, now the working pulse:
+   the strokes breathe in the same 1.0 / 0.65 / 0.35 opacity stagger the old
+   brand mark carried. Appears only while the module is genuinely loading. */
+.spinner-waves {
+  width: 18px;
+  height: 13px;
+  flex-shrink: 0;
+}
+.spinner-waves path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  animation: wave-pulse 1.2s ease-in-out infinite;
+}
+.spinner-waves path:nth-child(2) { animation-delay: 0.15s; opacity: 0.65; }
+.spinner-waves path:nth-child(3) { animation-delay: 0.3s; opacity: 0.35; }
+
+@keyframes wave-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+/* ----------------------------------------------------------------------------
+   Responsive
+   ---------------------------------------------------------------------------- */
+
+@media (max-width: 720px) {
+  :root { --sidebar-w: 100vw; }
+  .app-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .sidebar {
+    /* On a short iframe the stacked-above-the-map sidebar must not eat half
+       the height; cap it near a third so the map keeps most of the view (#11).
+       The collapse control still hides it entirely. */
+    max-height: 30vh;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+  .app-shell.sidebar-collapsed {
+    grid-template-columns: 1fr;
+    grid-template-rows: 0 1fr;
+  }
+  /* H1 (0.6.2): embed mode must collapse the sidebar ROW here, not just the
+     column. Without this the stacked layout puts the map in the auto-sized
+     first row and a 400px iframe shows a strip of map over dead space
+     (hard rule 8: the embed contract is first-class at small widths). */
+  .app-shell.embed {
+    grid-template-columns: 1fr;
+    grid-template-rows: 0 1fr;
+  }
+  .app-shell.embed .sidebar {
+    border-bottom: none;
+  }
+  .map-overlay-controls { top: 8px; right: 8px; }
+}
+
+/* ----------------------------------------------------------------------------
+   The mobile bottom sheet (0.7.0 U2; ratified detent model D-0.7.0-017,
+   build spec docs/ddm-detent-model-2026-07-09.md).
+
+   Below 720px, when src/ui/mobile-sheet.ts stamps `data-sheet-detent` on
+   #app, the sidebar element becomes the ONE bottom sheet over a
+   full-viewport map. Three detents, keyed off the attribute plus the
+   existing view-brief/view-console mode classes: peek (the conditions
+   strip and its date register), half (the at-hand answer in Brief, the
+   compact controls in console), full (the standalone report in Brief,
+   the whole catalog stack in console).
+
+   The attribute never appears in embed (`?embed=true` keeps today's
+   hidden-chrome semantics byte for byte) and never on desktop; without
+   it, the stacked-rows block above is the no-JavaScript fallback. The
+   `--sheet-peek` and `--sheet-half` values are written by the module
+   from its SHEET_DETENT_SIZE table (the one shared lookup); the literals
+   here are parse-time fallbacks only.
+   ---------------------------------------------------------------------------- */
+
+/* Sheet-only furniture never renders outside the active sheet. */
+.sheet-grabber-row,
+.sheet-at-hand,
+.sheet-all-layers,
+.sheet-alerts,
+.sheet-report,
+.mobile-footer {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  /* The mobile shell (2026-07-14, from the ratified 2026-07-11 mockup):
+     the footer nav is the base chrome; the sheet rides ABOVE it, so the
+     home-indicator safe area belongs to the footer alone and the detent
+     heights never compose it (the Codex-sol geometry ruling). */
+  #app[data-sheet-detent] {
+    --mobile-footer-h: calc(var(--sheet-footer, 56px) + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Detent heights: the one place the attribute becomes a height. Closed
+     is the edgeless map-first state; full leaves the top gap so the key
+     bar and a strip of map keep the context (the mockup's 86px band). */
+  #app[data-sheet-detent='closed'] { --sheet-height: 0px; }
+  #app[data-sheet-detent='peek'] { --sheet-height: var(--sheet-peek, 132px); }
+  #app[data-sheet-detent='half'] { --sheet-height: calc(100vh * var(--sheet-half, 0.46)); }
+  #app[data-sheet-detent='full'] {
+    --sheet-height: calc(100vh - var(--mobile-footer-h) - var(--sheet-full-gap, 72px));
+  }
+  @supports (height: 1dvh) {
+    #app[data-sheet-detent='half'] { --sheet-height: calc(100dvh * var(--sheet-half, 0.46)); }
+    #app[data-sheet-detent='full'] {
+      --sheet-height: calc(100dvh - var(--mobile-footer-h) - var(--sheet-full-gap, 72px));
+    }
+  }
+
+  /* The map takes the whole shell; the sheet leaves the grid flow. */
+  #app:not(.embed)[data-sheet-detent] {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+  }
+
+  #app[data-sheet-detent] .sidebar {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    /* Above the footer nav: the footer carries the safe-area inset, so
+       the sheet's own geometry stays inset-free (no double count). */
+    bottom: var(--mobile-footer-h, 56px);
+    width: auto;
+    max-height: none;
+    height: var(--sheet-height, 132px);
+    z-index: 1350;
+    border-right: none;
+    border-bottom: none;
+    border-top: 1px solid var(--line-strong);
+    border-top-left-radius: var(--radius-lg);
+    border-top-right-radius: var(--radius-lg);
+    box-shadow: 0 -10px 32px rgba(0, 0, 0, 0.55);
+    transition: height 0.25s ease;
+    /* Override the base .sidebar clip: .sidebar-scroll clips the content
+       itself, and the first-peek hint floats ABOVE the sheet's top edge
+       (the inherited overflow:hidden swallowed it; matrix finding,
+       2026-07-10). */
+    overflow: visible;
+  }
+  /* Grabber drags set an inline --sheet-height per frame; the transition
+     would fight the pointer, so it drops for the duration of the drag. */
+  #app.sheet-dragging .sidebar { transition: none; }
+
+  /* Closed: the edgeless map-first state (the mockup's rule 3: with no
+     active door, no grabber or sheet edge peeks above the footer). The
+     height transition animates the collapse, then the delayed visibility
+     flip hides the box outright (padding would otherwise keep a sliver
+     painted); opening reads the base rule's transition, so the sheet
+     reappears instantly and slides up. */
+  #app[data-sheet-detent='closed'] .sidebar {
+    border-top: none;
+    box-shadow: none;
+    overflow: hidden;
+    visibility: hidden;
+    pointer-events: none;
+    transition: height 0.25s ease, visibility 0s linear 0.25s;
+  }
+
+  /* Content scrolls internally at half and full (the mockup's sheet body
+     scrolls at both open depths; the 2026-07-14 build adopted that,
+     retiring the MINOR 6 below-the-fold trap at half-console). Peek stays
+     clipped (it IS the strip); scroll chaining never reaches the page,
+     and the bottom padding keeps the last row clear of the sheet edge. */
+  #app[data-sheet-detent] .sidebar-scroll {
+    overflow: hidden;
+    overscroll-behavior: contain;
+    padding: 0 0 10px;
+  }
+  #app[data-sheet-detent='half'] .sidebar-scroll,
+  #app[data-sheet-detent='full'] .sidebar-scroll {
+    overflow-y: auto;
+    padding-bottom: 18px;
+  }
+
+  /* --------------------------------------------------------------------------
+     The visibility matrix: hide everything, then re-admit per detent and
+     mode. `[hidden]` sections (strip before first data, brief-head in
+     console) stay hidden: every re-admit rule carries :not([hidden]) or
+     targets module-managed sections that have no hidden state.
+     -------------------------------------------------------------------------- */
+  #app[data-sheet-detent] .sidebar-header,
+  #app[data-sheet-detent] .sidebar-footer,
+  #app[data-sheet-detent] .sidebar-scroll > * { display: none; }
+
+  /* The grabber row: every detent. */
+  #app[data-sheet-detent] .sheet-grabber-row {
+    display: flex;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  /* Peek: the conditions strip (the collapsed detent IS the strip),
+     compacted so the tiles and the date register fit. At half the strip
+     stays OUT (the mockup's half panes carry no tiles, and the strip was
+     exactly the MINOR 6 duplication that pushed the at-hand answer and
+     the console door below the fold on short phones). */
+  #app[data-sheet-detent='peek'] #conditions-strip:not([hidden]) { display: block; }
+  #app[data-sheet-detent] #conditions-strip {
+    padding: 4px 14px 8px;
+    border-bottom: none;
+    container-type: inline-size;
+  }
+  #app[data-sheet-detent] #conditions-strip .conditions-head { margin-bottom: 6px; }
+
+  /* Half, Brief: the at-hand answer. */
+  #app[data-sheet-detent='half'].view-brief #sheet-at-hand { display: block; }
+
+  /* Half, console: the compact controls and the one door to the catalog. */
+  #app[data-sheet-detent='half'].view-console #panel-region,
+  #app[data-sheet-detent='half'].view-console #panel-quick-views,
+  #app[data-sheet-detent='half'].view-console #sheet-all-layers { display: block; }
+
+  /* U3e (D-0.7.0-009): the region grid is now a plain "jump to" list, so
+     the interim console-half compaction (the 3-column cram + shrunk fonts)
+     is retired. The list would still be taller than the no-scroll half
+     detent with full-word names, so it is bounded and scrolls within its
+     own box (the sheet-search precedent). That keeps the quick views and
+     the one catalog door above the fold on common phones without shrinking
+     type; arrow-key focus auto-scrolls the bounded list into view. */
+  #app[data-sheet-detent='half'].view-console #region-buttons {
+    max-height: 20vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* Full, Brief: the standalone report; the map has receded. Until a
+     report is actually hosted and open, the at-hand block holds the
+     detent so Brief is never an empty sheet (D-0.7.0-006). */
+  #app[data-sheet-detent='full'].view-brief #sheet-report { display: block; }
+  #app[data-sheet-detent='full'].view-brief #sheet-at-hand { display: block; }
+  #app[data-sheet-detent='full'].view-brief:has(#sheet-report .impact-panel.open) #sheet-at-hand {
+    display: none;
+  }
+
+  /* Full, console: the whole stack (today's sidebar content) with the
+     brand header and the footer attribution. */
+  #app[data-sheet-detent='full'].view-console .sidebar-header { display: flex; }
+  #app[data-sheet-detent='full'].view-console .sidebar-footer { display: block; }
+  #app[data-sheet-detent='full'].view-console
+    .sidebar-scroll
+    > *:not([hidden]):not(.sheet-at-hand):not(.sheet-all-layers):not(.sheet-report) {
+    display: block;
+  }
+  /* Full, console, with an OPEN report (a console briefing open drives
+     the sheet to full): the report takes the detent; one sheet, never
+     two surfaces fighting inside it. Close restores the prior detent. */
+  #app[data-sheet-detent='full'].view-console:has(#sheet-report .impact-panel.open)
+    .sidebar-scroll
+    > *:not(.sheet-report) {
+    display: none;
+  }
+  #app[data-sheet-detent='full'].view-console:has(#sheet-report .impact-panel.open) .sidebar-header,
+  #app[data-sheet-detent='full'].view-console:has(#sheet-report .impact-panel.open) .sidebar-footer {
+    display: none;
+  }
+  #app[data-sheet-detent='full'].view-console #sheet-report:has(.impact-panel.open) {
+    display: block;
+  }
+  /* The sheet owns height via the grabber; the desktop collapse control
+     is not part of the sheet grammar. */
+  #app[data-sheet-detent] #sidebar-collapse { display: none; }
+
+  /* The bottom dock rides above the sheet and the footer while any map is
+     visible; at full the sheet covers it (the map has receded, so has its
+     chrome). */
+  #app[data-sheet-detent='closed'] .map-bottom-dock,
+  #app[data-sheet-detent='peek'] .map-bottom-dock,
+  #app[data-sheet-detent='half'] .map-bottom-dock {
+    bottom: calc(var(--mobile-footer-h, 56px) + var(--sheet-height, 0px) + 10px);
+  }
+
+  /* --------------------------------------------------------------------------
+     The mobile hazard rail (0.7.0 mobile shell): the quick hazard
+     selections (Drought / Heat / Fire) in the lower-right thumb zone,
+     riding just above the footer and the sheet (the mockup seats it 12px
+     over the footer). It exists while the map LEADS: closed and peek;
+     the open sheet covers that zone (exactly as the mockup's sheet
+     covers its rail), and it never exists on desktop or in embed (the
+     detent attribute never appears there).
+     -------------------------------------------------------------------------- */
+  #app[data-sheet-detent='closed'] .hazard-rail,
+  #app[data-sheet-detent='peek'] .hazard-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: absolute;
+    right: 10px;
+    bottom: calc(var(--mobile-footer-h, 56px) + var(--sheet-height, 0px) + 12px);
+    z-index: 620;
+  }
+
+  /* --------------------------------------------------------------------------
+     The footer nav (mobile shell): four persistent doors (Brief, Place,
+     Layers, Alerts) driving the one sheet. It exists exactly when the
+     shell does (the detent attribute), so embeds and desktop stay byte
+     for byte; the safe-area inset parks below the buttons.
+     -------------------------------------------------------------------------- */
+  #app[data-sheet-detent] .mobile-footer {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--mobile-footer-h, 56px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    z-index: 1400;
+    border-top: 1px solid var(--line-strong);
+    background: var(--bg-1);
+  }
+
+  /* --------------------------------------------------------------------------
+     The Alerts pane: the fourth door's content. When the alerts door is
+     active the pane is the sheet's ONLY content (one sheet, one surface);
+     the two-attribute selector outweighs the single-attribute re-admits
+     in the visibility matrix above.
+     -------------------------------------------------------------------------- */
+  #app[data-sheet-detent][data-sheet-tab='alerts'] .sidebar-scroll > :not(#sheet-alerts) {
+    display: none;
+  }
+  #app[data-sheet-detent='half'][data-sheet-tab='alerts'] #sheet-alerts,
+  #app[data-sheet-detent='full'][data-sheet-tab='alerts'] #sheet-alerts {
+    display: block;
+  }
+
+  /* --------------------------------------------------------------------------
+     The key rides the top of the map in the mobile shell (the mockup's
+     "the reference is always above the map"): full-width bar under the
+     safe area, above every map control. The share and reset controls
+     drop below it.
+     -------------------------------------------------------------------------- */
+  #app[data-sheet-detent] #map-key {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 8px);
+    left: 8px;
+    right: 8px;
+    z-index: 640;
+    flex-wrap: wrap;
+    row-gap: 3px;
+  }
+  #app[data-sheet-detent] .map-overlay-controls {
+    top: calc(env(safe-area-inset-top, 0px) + 64px);
+    right: 8px;
+  }
+
+  /* MapLibre's own corner controls (attribution, scale, the basemap
+     switcher) climb above the footer bar, and the right corner clears
+     the hazard rail's column. */
+  #app[data-sheet-detent] .maplibregl-ctrl-bottom-left,
+  #app[data-sheet-detent] .maplibregl-ctrl-bottom-right {
+    margin-bottom: var(--mobile-footer-h, 56px);
+  }
+  #app[data-sheet-detent] .maplibregl-ctrl-bottom-right {
+    margin-right: 72px;
+  }
+
+  /* The bottom dock (notices, the embed stamp slot) clears the rail's
+     column so the dock chips and the quick selects never fight for the
+     same pixels. */
+  #app[data-sheet-detent] .map-bottom-dock {
+    right: 76px;
+  }
+
+  /* The loading pulse drops below the top key bar and hugs the LEFT edge
+     (centered, it collided with the Share and Reset stack; Codex visual
+     pass, 2026-07-14). */
+  #app[data-sheet-detent] .loading-indicator {
+    top: calc(env(safe-area-inset-top, 0px) + 64px);
+    left: 8px;
+    transform: none;
+    max-width: 62vw;
+  }
+
+  /* --------------------------------------------------------------------------
+     Touch-target floor (Codex visual pass, 2026-07-14): every mobile
+     control clears 44px. Chips and rows grow their hit box, not their
+     type; the half detent scrolls, so taller rows stay reachable.
+     -------------------------------------------------------------------------- */
+  #app[data-sheet-detent] .overlay-btn { min-height: 44px; }
+  #app[data-sheet-detent] .preset-chip {
+    min-height: 44px;
+    padding: 10px 14px;
+    font-size: 12px;
+  }
+  #app[data-sheet-detent] .region-btn { min-height: 44px; }
+  #app[data-sheet-detent] .sheet-report-door { min-height: 44px; }
+  #app[data-sheet-detent] .time-bar-step,
+  #app[data-sheet-detent] .time-bar-play,
+  #app[data-sheet-detent] .time-bar-jump,
+  #app[data-sheet-detent] .time-bar-modes button { min-height: 44px; }
+
+  /* The same time bar compacts inside the Brief-half host. Previous and next
+     stay prominent 44px targets; the range remains coarse traversal. */
+  #app[data-sheet-detent] .time-bar {
+    gap: 3px;
+    padding: 6px 8px 5px;
+  }
+  #app[data-sheet-detent] .sheet-time-host {
+    display: none;
+    margin-top: 10px;
+  }
+  #app[data-sheet-detent].view-brief .sheet-time-host:has(.time-bar:not([hidden])) {
+    display: block;
+  }
+  #app[data-sheet-detent] .sheet-time-host .time-bar {
+    width: 100%;
+    margin: 0;
+  }
+  #app[data-sheet-detent] .time-bar-step {
+    min-width: 44px;
+    flex: 0 0 44px;
+  }
+  #app[data-sheet-detent] .time-bar-stamp-headline { font-size: 13px; }
+  #app[data-sheet-detent] .time-bar-stamp-detail { font-size: 10px; }
+
+  /* --------------------------------------------------------------------------
+     The Place pane (the mockup's search-first door): with the place tab
+     active the one search leads the at-hand block. The redundant at-rest
+     guidance line this pane used to hide is gone at the SOURCE (DEG-1,
+     U-UX-FIX-1): the input placeholder carries those words, and the
+     honest zero-result copy inside the results stays.
+     -------------------------------------------------------------------------- */
+  #app[data-sheet-detent][data-sheet-tab='place'] #sheet-at-hand {
+    display: flex;
+    flex-direction: column;
+  }
+  #app[data-sheet-detent][data-sheet-tab='place'] .sheet-search {
+    order: -1;
+    margin: 2px 0 12px;
+  }
+}
+
+/* The hazard rail is sheet furniture: parse-time hidden, re-admitted only
+   by the peek/half detent rules above. Buttons are 56px targets (over the
+   44px touch floor), styled on the slate tokens with the cyan accent as
+   the control state (control state is cyan, never hazard-tinted; the map
+   carries the hazard colors). */
+.hazard-rail {
+  display: none;
+}
+.hazard-rail-btn {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 56px;
+  min-height: 56px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  color: var(--fg-1);
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.12s ease;
+}
+.hazard-rail-btn svg {
+  flex-shrink: 0;
+}
+.hazard-rail-btn:hover {
+  background: var(--bg-3);
+  border-color: var(--line-strong);
+  color: var(--fg-0);
+}
+.hazard-rail-btn:active {
+  background: var(--accent-soft);
+  border-color: var(--accent-strong);
+  color: var(--fg-0);
+}
+/* The pressed state reflects the registry (the rail and the catalog share
+   one state): a DARK fill with a cyan ring and cyan label, so the icon
+   keeps its contrast (a light cyan fill washed the white icon out; Codex
+   visual pass, 2026-07-14). Cyan control chrome, never hazard-tinted. */
+.hazard-rail-btn[aria-pressed='true'] {
+  background: var(--bg-2);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset, 0 4px 16px rgba(0, 0, 0, 0.45);
+  color: var(--accent);
+}
+
+/* The footer nav's buttons: icon over label, 44px+ targets, cyan for the
+   active door. */
+.mobile-footer button {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--fg-2);
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-footer button svg { flex-shrink: 0; }
+.mobile-footer button.active { color: var(--accent); }
+
+/* The Alerts pane rows: severity dot, alert type, office and end time.
+   Severity colors come from the same table as the map fill. */
+.sheet-alerts-note {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+.sheet-alerts-note a { color: var(--accent); }
+.sheet-alerts-list {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.sheet-alert-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.sheet-alert-row + .sheet-alert-row { border-top: 1px solid var(--line); }
+.sheet-alert-dot {
+  width: 9px;
+  height: 9px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+.sheet-alert-type { color: var(--fg-0); font-weight: 500; }
+.sheet-alert-meta {
+  margin-left: auto;
+  color: var(--fg-2);
+  font-size: 10.5px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* The fire key's active-fire glyph (the NIFC incident point). */
+.map-key-fire-dot {
+  width: 10px;
+  height: 10px;
+  display: inline-block;
+  border-radius: 50%;
+  background: #ef3123;
+  box-shadow: 0 0 0 3px rgba(239, 49, 35, 0.22);
+}
+
+/* The grabber: a real button, the only gesture surface that moves the
+   sheet. The bar is the visual handle; the hit target is the full row
+   (WCAG 2.2 target-size floor is 24px; this exceeds it). */
+.sheet-grabber {
+  appearance: none;
+  background: transparent;
+  border: none;
+  width: 100%;
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 0 5px;
+  cursor: grab;
+  touch-action: none;
+}
+.sheet-grabber-bar {
+  width: 44px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+.sheet-grabber:hover .sheet-grabber-bar { background: var(--fg-3); }
+#app.sheet-dragging .sheet-grabber { cursor: grabbing; }
+
+/* The one-time first-peek hint (product lens): dismissible, floats above
+   the sheet's top edge, never repeats once dismissed. Offset high enough
+   to clear the dock's legend chip row (the U4 stage-5 matrix caught the
+   hint sitting exactly on the map key at 390x844). */
+.sheet-hint {
+  position: absolute;
+  bottom: calc(100% + 48px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 11px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  color: var(--fg-1);
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+}
+.sheet-hint-dismiss {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--fg-2);
+  font-size: 14px;
+  line-height: 1;
+  min-width: 24px;
+  min-height: 24px;
+  cursor: pointer;
+}
+
+/* The at-hand block (the half detent's Brief content). */
+.sheet-at-hand-kicker {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-overline);
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.sheet-at-hand-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: var(--fw-title);
+  letter-spacing: var(--track-display);
+  line-height: 1.2;
+  color: var(--fg-0);
+}
+.sheet-at-hand-kind {
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--fg-2);
+}
+.sheet-at-hand-headline {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg-1);
+  /* The half detent never scrolls (ratified): the read clamps instead. */
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sheet-at-hand-headline-empty { color: var(--fg-2); }
+/* The ONE search (U3) inside the sheet's at-hand block, replacing the U2
+   place <select>. The half detent does not scroll as a panel, but the
+   search's own results are a bounded, self-contained dropdown (exactly as
+   the native <select> option list it replaces was): cap the height and let
+   only the results scroll, so a long match list stays reachable without the
+   sheet itself scrolling. */
+.sheet-search { margin-top: 10px; }
+.sheet-search .ddm-search-results {
+  max-height: 22vh;
+  overflow-y: auto;
+}
+.sheet-at-hand > .sheet-report-door { margin-top: 10px; }
+
+/* On short phones the answer and door exceed the half detent before
+   results even open. Keep the controls inside the detent and let the
+   bounded results open upward as an overlay, like the native picker this
+   search replaced. (The at-rest guidance line this block used to demote
+   to screen-reader-only is gone at the SOURCE since DEG-1, U-UX-FIX-1;
+   the "No matches" zero-result message lives INSIDE .ddm-search-results
+   and stays visible: the honest, non-blaming copy is deliberate, since
+   Tribal Nation names often will not match agency spellings.) */
+@media (max-width: 720px) and (max-height: 800px) {
+  #app[data-sheet-detent='half'].view-brief .sheet-at-hand-headline {
+    -webkit-line-clamp: 1;
+  }
+  #app[data-sheet-detent='half'].view-brief .sheet-search { margin-top: 6px; }
+  #app[data-sheet-detent='half'].view-brief .sheet-search .ddm-search-results {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(100% + 6px);
+    padding: 4px;
+    background: var(--bg-1);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-md);
+    z-index: 1;
+  }
+  #app[data-sheet-detent='half'].view-brief .sheet-at-hand > .sheet-report-door {
+    margin-top: 4px;
+  }
+}
+
+.sheet-report-door {
+  min-height: 32px;
+  padding: 6px 12px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-strong);
+  border-radius: var(--radius-sm);
+  color: var(--fg-0);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: var(--fw-strong);
+  cursor: pointer;
+}
+.sheet-report-door:hover { background: rgba(6, 182, 212, 0.24); }
+
+/* Container-query tile adaptation (headroom B3): in a narrow sheet the
+   tiles compact instead of restating their status words (dataviz lens). */
+@container (max-width: 379px) {
+  .conditions-metrics { gap: 6px; }
+  .conditions-value { font-size: 17px; }
+}
+
+/* ----------------------------------------------------------------------------
+   Accessibility utilities
+   M8 [next-polish]: visually-hidden polite live region + focus rings.
+   The `.sr-only` class hides the element from sighted users while keeping
+   it readable by assistive tech. Focus rings use the cyan accent at 2px
+   with a small offset so the keyboard-navigation path is unambiguous.
+   ---------------------------------------------------------------------------- */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Global focus ring (0.7.0 U0c; headroom R4). Every focusable element
+   inherits the ring by default, so new surfaces (the U1-U3 overhaul and
+   beyond) are keyboard-visible without joining an enumerated list. The
+   MapLibre canvas is excluded (it carries tabindex for keyboard panning;
+   an outline around the whole map on focus reads as a rendering glitch).
+   A control needing a DIFFERENT ring overrides by specificity (see
+   .legend-select's 1px offset). */
+:is(button, a, input, select, textarea, summary, [tabindex]):not(.maplibregl-canvas):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Make the .telemetry-item button match its prior <div> presentation. */
+button.telemetry-item {
+  appearance: none;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+/* ----------------------------------------------------------------------------
+   Drought-impact briefing panel
+   The headline kernel-integration feature: a slide-in panel over the map that
+   turns a boundary selection into a sourced, three-horizon impact read plus
+   routed resources. Appended to <body>, positioned over the map, so it is
+   embed-safe (independent of the sidebar) and works under ?embed=true. Below
+   720px it becomes a bottom sheet. Themed entirely from the :root tokens.
+   ---------------------------------------------------------------------------- */
+
+.impact-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 440px;
+  max-width: 92vw;
+  z-index: 1400;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-1);
+  border-left: 1px solid var(--line-strong);
+  box-shadow: -10px 0 32px rgba(0, 0, 0, 0.55);
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+}
+/* A closed panel is fully removed from layout and the accessibility tree. The
+   class rule above sets display:flex, which would otherwise override the UA
+   [hidden] rule and leave the off-screen (transformed) panel readable by a
+   screen reader after close. `hidden` is set only after the slide-out
+   transition completes, so this does not clip the animation (#16). */
+.impact-panel[hidden] {
+  display: none;
+}
+.impact-panel.open {
+  transform: translateX(0);
+}
+
+.impact-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 14px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.impact-panel-heading {
+  min-width: 0;
+}
+.impact-panel-kicker {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-overline);
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.impact-panel-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: var(--fw-title);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--fg-0);
+}
+.impact-panel-kind {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--fg-2);
+  letter-spacing: 0.02em;
+}
+.impact-panel-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.impact-panel-close:hover {
+  background: var(--bg-2);
+  color: var(--fg-0);
+  border-color: var(--line-strong);
+}
+
+.impact-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 18px 22px;
+}
+.impact-panel-body::-webkit-scrollbar { width: 8px; }
+.impact-panel-body::-webkit-scrollbar-track { background: transparent; }
+.impact-panel-body::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 4px; }
+
+.impact-land-caveat {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent-strong);
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--fg-1);
+}
+
+.impact-section-title {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-overline);
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+.impact-horizons { margin-bottom: 22px; }
+
+.impact-horizon {
+  padding: 12px;
+  margin-bottom: 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+.impact-horizon-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.impact-horizon-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: var(--fw-subtitle);
+  color: var(--fg-0);
+  letter-spacing: 0.01em;
+}
+.impact-horizon-sub {
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  font-weight: var(--fw-body);
+  color: var(--fg-3);
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+.impact-horizon-pill {
+  flex-shrink: 0;
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+  font-size: 9.5px;
+  color: var(--fg-3);
+  padding: 2px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.impact-horizon-pill-loading { color: var(--warn); border-color: var(--warn); }
+.impact-horizon-pill-ready { color: var(--good); border-color: var(--good); }
+.impact-horizon-pill-partial { color: var(--accent); border-color: var(--accent-strong); }
+.impact-horizon-pill-unavailable { color: var(--fg-3); font-style: italic; }
+
+.impact-horizon-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--fg-2);
+  padding: 4px 0;
+}
+.impact-spinner {
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+.impact-horizon-note {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--fg-2);
+  font-style: italic;
+}
+
+.impact-claim {
+  padding: 8px 0;
+}
+.impact-claim + .impact-claim {
+  border-top: 1px dashed var(--line);
+}
+.impact-claim-badge {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 4px;
+}
+/* The seven evidence classes (T-P0-2 contract; src/impact/evidence.ts owns
+   the labels) are visually distinct so a modeled, derived, or probabilistic
+   read can never wear the observed-fact presentation (the honest-feedback
+   invariant). Green = directly observed; teal/blue = authoritative analysis
+   and classification; cyan = a DDM-derived read; violet/purple = model-borne;
+   amber = forward outlook. */
+.impact-claim-observed .impact-claim-badge {
+  color: var(--good);
+  background: rgba(16, 185, 129, 0.12);
+}
+.impact-claim-analyzed .impact-claim-badge {
+  color: #2dd4bf;
+  background: rgba(45, 212, 191, 0.12);
+}
+.impact-claim-classified .impact-claim-badge {
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.12);
+}
+.impact-claim-derived .impact-claim-badge {
+  color: var(--accent);
+  background: rgba(6, 182, 212, 0.12);
+}
+.impact-claim-modeled .impact-claim-badge {
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.12);
+}
+.impact-claim-modeled-analysis .impact-claim-badge {
+  color: #c084fc;
+  background: rgba(192, 132, 252, 0.14);
+}
+.impact-claim-outlook .impact-claim-badge {
+  color: var(--warn);
+  background: rgba(245, 158, 11, 0.12);
+}
+.impact-claim-date {
+  white-space: nowrap;
+  opacity: 0.85;
+}
+.impact-claim-date::before {
+  content: '\00B7\00A0';
+}
+.impact-claim-text {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg-0);
+}
+/* Uncertainty and derivation lineage are rendered, never data-only: a hidden
+   uncertainty is not "uncertainty shown" (the 0.8.0 honesty doctrine). */
+.impact-claim-uncertainty,
+.impact-claim-lineage {
+  margin: 0 0 3px;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--fg-2);
+  font-style: italic;
+}
+.impact-claim-source {
+  margin: 0;
+  font-size: 10.5px;
+  color: var(--fg-2);
+  letter-spacing: 0.01em;
+}
+.impact-claim-source a {
+  color: var(--accent);
+  border-bottom: none;
+}
+.impact-claim-source a:hover { color: var(--fg-0); }
+
+.impact-resources-framing {
+  margin: 0 0 14px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+.impact-resource-group { margin-bottom: 14px; }
+.impact-resource-group-title {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.02em;
+  color: var(--fg-1);
+}
+.impact-resource {
+  padding: 9px 11px;
+  margin-bottom: 6px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.impact-resource-empty {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--line-strong);
+}
+.impact-resource-label {
+  display: block;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: var(--fw-subtitle);
+  color: var(--fg-0);
+  letter-spacing: 0.01em;
+}
+a.impact-resource-link {
+  color: var(--accent);
+  border-bottom: none;
+}
+a.impact-resource-link:hover { color: var(--fg-0); }
+a.impact-resource-link::after {
+  content: ' ↗';
+  font-size: 10px;
+  opacity: 0.7;
+}
+.impact-resource-desc {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--fg-1);
+}
+.impact-resource-agency {
+  margin: 4px 0 0;
+  font-size: 10px;
+  color: var(--fg-3);
+  letter-spacing: 0.02em;
+}
+
+/* Popup briefing trigger button */
+.popup-impact-btn {
+  appearance: none;
+  display: block;
+  width: 100%;
+  margin: 4px 0 2px;
+  padding: 8px 12px;
+  background: var(--accent-soft);
+  color: var(--fg-0);
+  border: 1px solid var(--accent-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.popup-impact-btn:hover {
+  background: rgba(6, 182, 212, 0.24);
+  border-color: var(--accent);
+}
+
+/* Focus rings for .impact-panel-close and .popup-impact-btn come from the
+   global U0c rule; this block carried an identical duplicate. */
+
+/* Below 720px WITHOUT the U2 sheet (embed keeps today's hidden-chrome
+   semantics byte for byte; the no-JavaScript fallback stacks): the panel
+   stays the pre-U2 bottom overlay. With the sheet active the panel is
+   rehosted into the sheet's report region and the .sheet-hosted rules
+   below take over; the separate mobile overlay is retired there
+   (ratified: one sheet, never two). */
+@media (max-width: 720px) {
+  .impact-panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    max-width: 100vw;
+    /* U0b: dvh with the vh fallback, as on .app-shell. */
+    height: 82vh;
+    height: 82dvh;
+    border-left: none;
+    border-top: 1px solid var(--line-strong);
+    border-top-left-radius: var(--radius-lg);
+    border-top-right-radius: var(--radius-lg);
+    transform: translateY(100%);
+    box-shadow: 0 -10px 32px rgba(0, 0, 0, 0.55);
+  }
+  .impact-panel.open {
+    transform: translateY(0);
+  }
+}
+
+/* Sheet-hosted report (U2, the facade merge): inside the sheet the panel
+   is a static page-content block; the sheet supplies position, chrome,
+   and (at full) the one scroll context, so the panel's own overlay
+   furniture all resets. Placed after the mobile overlay block so these
+   declarations win at equal specificity. */
+.impact-panel.sheet-hosted {
+  position: static;
+  top: auto;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  width: auto;
+  max-width: none;
+  height: auto;
+  z-index: auto;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  transform: none;
+  transition: none;
+}
+.impact-panel.sheet-hosted.open {
+  transform: none;
+}
+.impact-panel.sheet-hosted .impact-panel-body {
+  flex: none;
+  overflow: visible;
+  padding-top: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .impact-panel { transition: none; }
+  /* The sheet's detent height change goes instant (U2: the reduced-motion
+     block gains every newly animated property the day it ships). This
+     also covers the desktop sidebar width transition. */
+  .sidebar { transition: none; }
+  .impact-spinner { animation: none; }
+  /* The wave pulse falls back to the static three-stroke glyph. */
+  .spinner-waves path { animation: none; }
+  .telemetry-marker { animation: none; }
+  /* The shimmer sweep falls back to a static faint tint (no motion). */
+  .skeleton-shimmer::after {
+    animation: none;
+    transform: none;
+    background: rgba(148, 163, 184, 0.06);
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   Charts (dependency-light inline SVG from src/ui/charts.ts)
+   The SVG inherits the :root custom properties via var() in its fill/stroke
+   attributes; these rules only handle layout. No animation, so reduced motion
+   needs no special case.
+   ---------------------------------------------------------------------------- */
+
+.ddm-chart-fig {
+  margin: 8px 0 2px;
+  padding: 0;
+}
+.ddm-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+}
+.ddm-chart text {
+  font-family: var(--font-body);
+}
+.impact-claim-chart {
+  margin: 2px 0 4px;
+}
+/* Sparkline inside a telemetry popup data block. */
+.popup-data .ddm-chart-fig {
+  margin-top: 8px;
+  border-top: 1px dashed var(--line);
+  padding-top: 6px;
+}
+
+
+/* ----------------------------------------------------------------------------
+   0.3.0 design pass: typographic finish, brand surfaces, on-map key
+   ---------------------------------------------------------------------------- */
+
+/* Cap-height trim (progressive enhancement; Chrome/Edge 133+, Safari 18.2+,
+   Firefox ignores harmlessly). Half-leading is why text never looks truly
+   centered inside a snug capsule; trimming to cap height and baseline makes
+   the pill, chip, and button padding optically honest, and aligns the three
+   conditions values to one cap line so the strip reads as one instrument. */
+@supports (text-box: trim-both cap alphabetic) {
+  .status-pill,
+  .layer-toggle-status,
+  .preset-chip,
+  .region-btn,
+  .conditions-value {
+    text-box: trim-both cap alphabetic;
+  }
+}
+
+/* Wrapping quality (progressive). Short one-to-two-line labels balance their
+   rag; footer prose avoids single-word orphans. */
+.layer-toggle-source,
+.conditions-sublabel,
+.layer-group-hint {
+  text-wrap: balance;
+}
+.sidebar-footer p {
+  text-wrap: pretty;
+}
+
+
+/* Bottom fade on the sidebar scroller: a row cut by the fold reads as
+   "more below" rather than as a rendering accident. */
+.sidebar-scroll {
+  mask-image: linear-gradient(to bottom, black calc(100% - 16px), transparent);
+}
+
+/* The about card (native popover; the one place the full red-and-black
+   lockup can live without fighting the dark UI: a white card). */
+.about-card {
+  max-width: 400px;
+  padding: 20px 22px;
+  background: #f8fafc;
+  color: #0b1220;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.about-card::backdrop {
+  background: rgba(11, 18, 32, 0.55);
+}
+.about-card .about-lockup {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+}
+.about-card p { margin: 0 0 8px; }
+.about-card .about-links { margin: 0; font-size: 12px; }
+.about-card a { color: #0e7490; }
+
+/* Embed provenance chip: in an iframe there is no sidebar, so the seal and
+   name travel with the map. Hidden outside embed mode. */
+.embed-brand {
+  display: none;
+  margin-left: auto;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px 4px 5px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--fg-1);
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-pill);
+  text-decoration: none;
+}
+.embed-brand img { border-radius: 50%; background: #e9edf0; }
+.embed-brand:hover { color: var(--fg-0); border-color: var(--accent-strong); }
+.app-shell.embed .embed-brand { display: inline-flex; }
+
+/* On-map drought key (see src/ui/map-key.ts): bottom-left above the scale
+   bar, same chrome as the overlay buttons. */
+.map-key {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: 9.5px;
+  color: var(--fg-2);
+  pointer-events: none;
+}
+.map-key[hidden] { display: none; }
+.map-key-label {
+  font-family: var(--font-display);
+  font-weight: var(--fw-subtitle);
+  font-size: 9px;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+.map-key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.map-key-qualification {
+  flex: 1 1 220px;
+  min-width: 0;
+  line-height: 1.3;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.map-key-qualification strong {
+  color: var(--fg-1);
+  font-weight: var(--fw-strong);
+}
+.app-shell.embed .map-key {
+  box-sizing: border-box;
+  flex-wrap: wrap;
+  row-gap: 4px;
+  max-width: min(560px, calc(100% - 112px));
+}
+.map-key-swatch {
+  width: 12px;
+  height: 9px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(11, 18, 32, 0.6);
+}
+
+/* =============================================================================
+   Time bar (0.5.0b temporal axis; contextual rail D-0.7.0-067)
+   One sidebar control per active temporal surface, seated between place and
+   the display description (the floating map-bottom bar remains retired). The
+   stamp typography is the observed-vs-outlook register signal: observed reads as a hard VALID
+   date in the display face and accent cyan; the outlook register changes
+   instrument to the body face in warn amber with an ISSUED + valid-through
+   line. Authored products get the discrete rail; only a continuous field
+   (SST anomaly) ever renders the Play button.
+   ============================================================================= */
+
+.time-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 12px 7px;
+  background: rgba(15, 23, 42, 0.94);
+  border: 1px solid var(--line-strong);
+  border-top: 2px solid var(--accent-strong);
+  border-radius: var(--radius-md);
+}
+/* Sidebar seating: card margins matching the panel gutter, above the legend. */
+.sidebar-scroll > .time-bar {
+  margin: 12px 14px;
+}
+.time-bar[hidden] { display: none; }
+.time-bar[data-register="outlook"] {
+  border-top-color: var(--warn);
+}
+
+.time-bar-rail-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.time-bar-step,
+.time-bar-play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--fg-1);
+  cursor: pointer;
+}
+.time-bar-step:hover:not(:disabled),
+.time-bar-play:hover:not(:disabled) {
+  border-color: var(--accent-strong);
+  color: var(--fg-0);
+}
+.time-bar-step:disabled,
+.time-bar-play:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.time-bar-rail {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.time-bar-jump {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 8px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-weight: var(--fw-subtitle);
+  font-size: 9.5px;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.time-bar-jump:hover { color: var(--fg-0); border-color: var(--line-strong); }
+/* A hatched jump chip previews the outlook instrument it switches to. */
+.time-bar-jump.hatched {
+  color: var(--warn);
+  border-color: rgba(245, 158, 11, 0.45);
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent 0 3px,
+      rgba(245, 158, 11, 0.16) 3px 5px
+    ),
+    var(--bg-2);
+}
+.time-bar-jump.hatched:hover { color: var(--fg-0); }
+
+.time-bar-stamp {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 10px;
+}
+/* Observed register: the hard, factual date stamp. */
+.time-bar-stamp-headline {
+  font-family: var(--font-display);
+  font-weight: var(--fw-title);
+  font-size: 12px;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+/* Outlook register: a different instrument, visibly (face, weight, color). */
+.time-bar[data-register="outlook"] .time-bar-stamp-headline {
+  font-family: var(--font-body);
+  font-weight: var(--fw-strong);
+  font-style: italic;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--warn);
+}
+.time-bar-stamp-detail {
+  font-family: var(--font-body);
+  font-weight: var(--fw-body);
+  font-size: 10.5px;
+  color: var(--fg-2);
+}
+
+.time-bar-modes {
+  display: flex;
+  gap: 4px;
+}
+.time-bar-mode {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 9px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-weight: var(--fw-body);
+  font-size: 10px;
+  color: var(--fg-2);
+  cursor: pointer;
+}
+.time-bar-mode:hover { color: var(--fg-0); border-color: var(--line-strong); }
+.time-bar-mode.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-strong);
+  color: var(--fg-0);
+}
+
+@media (max-width: 720px) {
+  .map-bottom-dock {
+    left: 8px;
+    right: 8px;
+    bottom: 28px;
+  }
+  .time-bar {
+    padding: 7px 9px 6px;
+  }
+  .time-bar-jump { font-size: 9px; padding: 2px 6px; }
+}
+
+/* The minimal embed valid-date stamp (E2, D-0.7.0-058 ruling 1): the embed
+   has no sidebar, so the date-honesty rule is carried by this one chip in
+   the bottom dock, mirrored from the active temporal spec by
+   src/ui/time-bar.ts. Display is embed-gated; the register attribute keeps
+   the observed (accent) vs outlook (warn) signal. */
+.embed-date-stamp { display: none; }
+/* The full sidebar-hosted bar never renders inside an embed: the chip
+   above is the embed's whole temporal surface (the collapsed sidebar's
+   zero-width column alone does not satisfy Playwright's visibility
+   model, and honesty-wise the bar is chrome the embed contract hides). */
+.app-shell.embed #time-bar { display: none; }
+.app-shell.embed .embed-date-stamp:not([hidden]) {
+  display: block;
+  align-self: flex-start;
+  padding: 3px 9px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-weight: var(--fw-title);
+  font-size: 10.5px;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  pointer-events: none;
+}
+.app-shell.embed .embed-date-stamp[data-register='outlook']:not([hidden]) {
+  font-family: var(--font-body);
+  font-weight: var(--fw-strong);
+  font-style: italic;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--warn);
+}
+
+/* ----------------------------------------------------------------------------
+   The report in print (U1, D-0.7.0-017): with a briefing open, printing the
+   page prints THE REPORT, black on white, in full (no scroll clipping), for
+   council packets via the browser's print-to-PDF. Nothing else prints: the
+   map is interactive chrome, not part of the document. With no briefing
+   open, printing is the browser default (this block keys off :has(.open)).
+   PNG export is 0.8.0; this stylesheet is the U1 report-at-depth delivery.
+   ---------------------------------------------------------------------------- */
+@media print {
+  body:has(.impact-panel.open) {
+    background: #fff;
+  }
+  /* The app shell (map, sidebar, overlays) and the about card never print
+     while a report is open; the floating expand button likewise. */
+  body:has(.impact-panel.open) #app,
+  body:has(.impact-panel.open) #sidebar-expand,
+  body:has(.impact-panel.open) #about-atni {
+    display: none !important;
+  }
+  /* The panel becomes a static document: full width, natural height (every
+     claim and resource prints, not one scrollport), no chrome. */
+  body:has(.impact-panel.open) .impact-panel {
+    position: static;
+    width: auto;
+    max-width: none;
+    height: auto;
+    transform: none;
+    transition: none;
+    box-shadow: none;
+    border: 0;
+    background: #fff;
+    color: #000;
+  }
+  body:has(.impact-panel.open) .impact-panel-body {
+    overflow: visible;
+  }
+  body:has(.impact-panel.open) .impact-panel-close {
+    display: none;
+  }
+  /* Print legibility: ink on paper, with the hierarchy carried by weight and
+     case rather than the dark-theme palette. */
+  body:has(.impact-panel.open) .impact-panel :is(h2, h3, h4, p, span, div, a) {
+    color: #000;
+  }
+  body:has(.impact-panel.open) .impact-panel .impact-panel-kicker,
+  body:has(.impact-panel.open) .impact-panel .impact-panel-kind,
+  body:has(.impact-panel.open) .impact-panel .impact-claim-source,
+  body:has(.impact-panel.open) .impact-panel .impact-resource-agency,
+  body:has(.impact-panel.open) .impact-panel .impact-horizon-sub {
+    color: #444;
+  }
+  /* Sources must survive on paper: every claim and resource link prints its
+     address after the label (the whole point of a council-packet report). */
+  body:has(.impact-panel.open) .impact-panel a[href^='https://']::after {
+    content: ' (' attr(href) ')';
+    font-size: 9px;
+    color: #444;
+    word-break: break-all;
+  }
+  /* Keep a claim, a resource, and a horizon heading with its first content
+     on one page where the engine allows. */
+  .impact-claim,
+  .impact-resource,
+  .impact-resource-group {
+    break-inside: avoid;
+  }
+  .impact-horizon-head {
+    break-after: avoid;
+  }
+  /* Charts print as ink (the 2026-07-10 dataviz lens finding): the inline
+     chart SVGs carry dark-theme tokens as PRESENTATION ATTRIBUTES
+     (fill="var(--fg-0)" and friends), which print near-white text on white
+     paper. CSS rules outrank presentation attributes, so text is re-inked
+     and accent-toned marks darken to a printable teal; category-colored
+     data marks (USDM and tercile hexes) are deliberately untouched, they
+     are the data. Gridlines lighten to a paper-appropriate grey. */
+  body:has(.impact-panel.open) .impact-panel .impact-claim-chart svg text {
+    fill: #000;
+  }
+  body:has(.impact-panel.open) .impact-panel .impact-claim-chart svg [fill='var(--accent)'] {
+    fill: #0e7490;
+  }
+  body:has(.impact-panel.open) .impact-panel .impact-claim-chart svg [stroke='var(--accent)'] {
+    stroke: #0e7490;
+  }
+  body:has(.impact-panel.open) .impact-panel .impact-claim-chart svg [stroke='var(--line)'] {
+    stroke: #999;
+  }
+
+  /* U2 (the facade merge): below 720px the open report lives INSIDE #app
+     (the sheet's report region), so the wholesale #app hide above would
+     print a blank page there. Instead the shell prints as a plain block
+     chain down to the report, and every sibling branch (the map, the
+     grabber, the sheet chrome) hides. Desktop and embed keep the rules
+     above: the panel is a document.body child there. */
+  body:has(.impact-panel.sheet-hosted.open) #app {
+    display: block !important;
+  }
+  body:has(.impact-panel.sheet-hosted.open) #app > *:not(.sidebar),
+  body:has(.impact-panel.sheet-hosted.open) .sidebar > *:not(.sidebar-scroll),
+  body:has(.impact-panel.sheet-hosted.open) .sidebar-scroll > *:not(.sheet-report) {
+    display: none !important;
+  }
+  body:has(.impact-panel.sheet-hosted.open) .sidebar,
+  body:has(.impact-panel.sheet-hosted.open) .sidebar-scroll,
+  body:has(.impact-panel.sheet-hosted.open) .sheet-report {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: #fff !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+    transition: none !important;
+    padding: 0 !important;
+  }
+}
+
+/* U3c: the one search (search.tsx)
+   The single input searching Places, Tribal land areas, and Layers
+   (design-lens-product-2026-07-10.md U3: "one search box and one set of
+   grouped results"). Tokens only: --bg-0/1/2, --line, --line-strong,
+   --fg-0/2/3, --accent, --radius-sm/md, the display/body font pair, and
+   the 0.2s ease transition length already used by .layer-toggle and the
+   sidebar's other interactive rows. No new color, radius, or motion
+   literal is introduced here. Self-contained; nothing above this point
+   is touched. */
+
+.ddm-search {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+
+.ddm-search-input {
+  width: 100%;
+  min-height: 28px; /* clears the 24px touch-target floor with room */
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: var(--fw-body);
+  color: var(--fg-0);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 7px 8px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.ddm-search-input::placeholder {
+  color: var(--fg-3);
+}
+
+/* No outline override: the global focus-visible ring (line ~2062) already
+   covers `input` elements; this just adds a matching border/background
+   tint alongside it rather than replacing it. */
+.ddm-search-input:focus {
+  border-color: var(--accent);
+  background: var(--bg-1);
+}
+
+/* Visually hidden but announced: the polite result-count live region. */
+.ddm-search-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ddm-search-empty {
+  margin: 0;
+  padding: 6px 2px;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  font-weight: var(--fw-body);
+  font-style: italic;
+  color: var(--fg-2);
+}
+
+.ddm-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.ddm-search-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ddm-search-group-title {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-3);
+  padding: 4px 2px 2px;
+}
+
+.ddm-search-loading,
+.ddm-search-unavailable,
+.ddm-search-more {
+  margin: 0;
+  padding: 4px 6px;
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  font-style: italic;
+  color: var(--fg-3);
+}
+
+.ddm-search-loading,
+.ddm-search-unavailable {
+  color: var(--fg-2);
+}
+
+.ddm-search-result {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 24px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+/* Mouse hover and keyboard highlight share one visual style (corpus rule). */
+.ddm-search-result:hover,
+.ddm-search-result.is-active {
+  background: var(--bg-2);
+  border-color: var(--line-strong);
+}
+
+.ddm-search-result-label {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: var(--fw-subtitle);
+  color: var(--fg-0);
+  display: block;
+}
+
+.ddm-search-result-sublabel {
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  color: var(--fg-2);
+  margin-top: 2px;
+  display: block;
+}
+
+/* ------------------------------------------------------------------ */
+/* U-UX-FIX-1 DEF-3 (usability triage 2026-07-24): popup scroll        */
+/* containment. src/ui/popup-viewport.ts clamps every popup CARD (the  */
+/* content box) toward its reachable region (visual viewport, map      */
+/* container, minus the active sheet and footer rects) under the       */
+/* tiered contract of the canonical tier table beside its boundary     */
+/* constants (the one authoritative statement of limits; this          */
+/* stylesheet states none of its own), so a card whose content         */
+/* exceeds the clamp genuinely overflows its scroll region; these      */
+/* rules keep wheel and touch input over that region scrolling the     */
+/* REGION, never chaining into the map underneath.                     */
+/* Layout only; no popup content rule is touched.                      */
+/* ------------------------------------------------------------------ */
+.maplibregl-popup {
+  /* An OPEN popup is the map area's transient topmost surface: the clamp
+     keeps the card (at minimum its close corner; the canonical tier
+     table in popup-viewport.ts states which, per region size) in
+     reachable pixels, so the persistent map chrome (the Share/Reset/
+     basemap family at 1000-1001, the attribution control, the embed
+     linkouts) must not cover the very controls that contract points at.
+     Kept below the mobile sheet (1350) and footer (1400), whose rects
+     the clamp SUBTRACTS instead of riding over. */
+  z-index: 1200;
+}
+.maplibregl-popup-content {
+  /* Whole-card scrollers (telemetry markers): a wheel or swipe that
+     reaches the card's end must stop there, not hand off to the map. */
+  overscroll-behavior: contain;
+}
+.coordinated-response-body {
+  /* The coordinated response's one scroll region: vertical pans scroll
+     the caveat and links, and never chain into a map pan or zoom. */
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ------------------------------------------------------------------ */
+/* U-UX-FIX-1 DEF-1 (usability triage 2026-07-24): the short-landscape */
+/* void. At 844x390 the desktop grid applies (the mobile shell is      */
+/* width-gated at 720px) and the shell itself caps at 100dvh, but the  */
+/* sidebar's absolutely positioned screen-reader helpers (.sr-only)    */
+/* had NO positioned ancestor, so their containing block was the       */
+/* initial containing block: when the Brief stack pushed their static  */
+/* positions past a short viewport's fold they escaped every           */
+/* overflow clip on the way up and extended the DOCUMENT itself        */
+/* (measured: document scrollHeight 567 vs 390 innerHeight, the        */
+/* deepest sr-only span's bottom exactly), enabling the page-level     */
+/* scroll into a blank void. Positioning the sidebar contains them:    */
+/* they now belong to the sidebar's own (clipped) overflow, the        */
+/* document stays exactly one viewport tall, and the header, the       */
+/* sidebar's internally scrolling panel stack, and the map are all     */
+/* reachable with no page scroll. The mobile sheet is untouched: its   */
+/* own higher-specificity rule (#app[data-sheet-detent] .sidebar)      */
+/* already sets position: fixed. Spec: tests/landscape-viewport.spec.ts */
+/* ------------------------------------------------------------------ */
+.sidebar {
+  position: relative;
+}
+
+/* ------------------------------------------------------------------ */
+/* U-UX-FIX-1 DEG-2 (usability triage 2026-07-24): the Satellite       */
+/* basemap toggle measured 104x29px on mobile, under the 44px          */
+/* touch-target floor every other primary mobile control meets (the    */
+/* touch-target floor block above: overlay-btn, preset chips, region   */
+/* and time-bar buttons, all gated on the active sheet shell). The     */
+/* switcher joins the same floor with the same gate; min-height beats  */
+/* the 29px height MapLibre's control stylesheet sets, the family      */
+/* width token is untouched, and desktop keeps the compact one-family  */
+/* stack. Spec: tests/basemap-touch-target.spec.ts                     */
+/* ------------------------------------------------------------------ */
+@media (max-width: 720px) {
+  #app[data-sheet-detent] .basemap-switcher-btn {
+    min-height: 44px;
+  }
+}

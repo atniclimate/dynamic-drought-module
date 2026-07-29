@@ -1,0 +1,27 @@
+{
+  "1": {
+    "elevMeanM": 591.6,
+    "elevMinM": 580.8,
+    "elevMaxM": 599.5,
+    "slopeMeanDeg": 5.46,
+    "coveragePct": 67.5
+  },
+  "2": {
+    "elevMeanM": 569.8,
+    "elevMinM": 545.4,
+    "elevMaxM": 595.2,
+    "slopeMeanDeg": 5.83,
+    "coveragePct": 77.3
+  },
+  "3": {
+    "elevMeanM": 621.2,
+    "elevMinM": 573.1,
+    "elevMaxM": 658.8,
+    "slopeMeanDeg": 8.79,
+    "coveragePct": 100.0
+  },
+  "4": {
+    "unavailable": true,
+    "reason": "empty geometry"
+  }
+}

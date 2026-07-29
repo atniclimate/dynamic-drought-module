@@ -1,0 +1,24 @@
+{
+  "capturedFromCommit": "2f0f8413365c837690ecb5d849698caec30d6b4f",
+  "capturedFile": "scripts/build_landscape_signature.py",
+  "fixedRetrievedDate": "2026-01-01",
+  "python": "3.13.14 (tags/v3.13.14:fd17997, Jun 10 2026, 13:03:48) [MSC v.1944 64 bit (AMD64)]",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "packages": {
+    "rasterio": "1.5.0",
+    "exactextract": "0.3.0",
+    "geopandas": "1.1.3",
+    "pyproj": "3.7.2",
+    "numpy": "2.4.6",
+    "requests": "2.34.2",
+    "shapely": "2.1.2",
+    "pandas": "3.0.3",
+    "pyogrio": "0.12.1"
+  },
+  "sha256": {
+    "synthetic/dem.tif": "b2bacd1ed5a37bdabd12b87e5d5301c7cd5bbebaf2feb6719368803415a475c5",
+    "synthetic/ecoregions_l3.gpkg": "0a0c79984765c4fb6b1e92a51bf553e5a1818bb935caca152700048b0eab1cc4",
+    "legacy/terrain_l3.json": "b98cca0fdcdfb9e1940d5db1ef779b3d593799dbb7defb16ae33c25e49fcee83",
+    "legacy/snapshot_terrain_l3.json": "c0432385e91fd1c9c6425683c4b9167a6f80097713b7564be83fd19e9c97e24f"
+  }
+}

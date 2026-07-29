@@ -1,0 +1,60 @@
+# Cloudflare Workers configuration for the Dynamic Drought Module (DDM) CORS proxy.
+#
+# This Worker exists solely to inject Cross-Origin Resource Sharing (CORS) headers
+# onto responses from a small allow-list of public agency endpoints. The
+# allow-list is defined in src/index.ts (ALLOW_LIST) and currently covers:
+# NRCS Air-Water Database, USACE Dataquery 2.0, USBR Hydromet, NWRFC (the
+# telemetry endpoints), plus NOAA CPC (El Nino / Southern Oscillation indices),
+# the BIA map hosts (reservation boundaries), the federal GeoPlatform
+# imagery host imagery.geoplatform.gov (USFS Wildfire Hazard Potential tiles;
+# added 2026-07-09, 0.7.0 H3, because the upstream's exportImage CORS is
+# intermittent in real browsers), and the NDMC USDM Data Services host
+# usdmdataservices.unl.edu (the DSCI trend statistics; added 2026-07-14
+# after the upstream stopped emitting CORS headers). It does
+# not transform response bodies, does not authenticate, does not log requests,
+# and does not collect telemetry. See workers/proxy/src/index.ts for the logic
+# and CLAUDE.md section 4 rule 3 for the no-tracking, no-analytics policy.
+#
+# Deployer notes:
+#   1. Run `npm install` inside `workers/proxy/` before the first `npm run dev`.
+#   2. The published Worker URL goes into `URLS.workerProxy` in
+#      `src/config/urls.ts` (root project). Format expected by the client:
+#      `https://<worker-name>.<account-subdomain>.workers.dev`
+#   3. If the deployer prefers a custom route on a Cloudflare-managed zone,
+#      uncomment and edit the `[[routes]]` block at the bottom of this file.
+#   4. There are no production secrets. Do not add any.
+
+name = "ddm-proxy"
+main = "src/index.ts"
+compatibility_date = "2026-05-09"
+
+# No KV, no D1, no Durable Objects, no R2. The Worker is stateless except for
+# the per-edge response cache exposed via `caches.default` and the platform
+# rate-limit counters below (managed by Cloudflare, not deployer state).
+
+# Abuse throttle (critical-review #4). The platform Rate Limiting binding caps
+# how many proxy requests a single client IP can make per minute at a Cloudflare
+# location, so the allow-listed CORS shim cannot be driven as an open relay at
+# the deployer's cost. `period` must be 10 or 60 seconds. `namespace_id` is any
+# integer unique within the deployer's Cloudflare account; two bindings sharing a
+# namespace_id share counters. The Worker fails OPEN if this stanza is removed
+# (see the `Env` interface in src/index.ts), so a fork still runs, but a
+# repo-standard deploy ships with the limit on. Tune `limit` to local traffic.
+# Raised 300 -> 600 (2026-07-09, 0.7.0 H3): Wildfire Hazard Potential raster
+# tiles now ride the proxy, and one vigorous zoom-and-pan minute with WHP on
+# can legitimately request a few hundred tiles; 600/minute per client still
+# caps automated abuse while never throttling a human.
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 600, period = 60 }
+
+[vars]
+# Public, non-secret deployer-facing values only. Empty by default; the Worker
+# does not currently need any environment values to function. If a deployer
+# wants to override the User-Agent string, add a `UA_OVERRIDE` here and read
+# it in `src/index.ts` from `env`.
+
+# [[routes]]
+# pattern = "proxy.example.org/*"
+# zone_name = "example.org"

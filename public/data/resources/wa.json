@@ -1,0 +1,27 @@
+{
+  "label": "Washington",
+  "verified": "2026-07-09",
+  "resources": [
+    {
+      "label": "Drinking-water drought guidance",
+      "url": "https://doh.wa.gov/community-and-environment/drinking-water/drinking-water-emergencies/drought",
+      "agency": "Washington State Department of Health (Office of Drinking Water)",
+      "tier": "state",
+      "description": "Guidance for drinking-water systems during drought and water-supply emergencies."
+    },
+    {
+      "label": "Statewide water-supply conditions",
+      "url": "https://ecology.wa.gov/water-shorelines/water-supply/water-availability/statewide-conditions",
+      "agency": "Washington State Department of Ecology",
+      "tier": "state",
+      "description": "Statewide water availability and drought-declaration status."
+    },
+    {
+      "label": "Agricultural drought relief information",
+      "url": "https://agr.wa.gov/services/emergency-management/disasters/drought",
+      "agency": "Washington State Department of Agriculture",
+      "tier": "state",
+      "description": "Information on state agricultural drought emergency programs and relief."
+    }
+  ]
+}

@@ -1,0 +1,153 @@
+{
+  "label": "Federal",
+  "verified": "2026-07-09",
+  "resources": [
+    {
+      "label": "Tribal Community Resilience program",
+      "url": "https://www.bia.gov/bia/ots/descrm/tcr",
+      "agency": "Bureau of Indian Affairs (BIA)",
+      "tier": "federal",
+      "description": "Technical assistance and pre-disaster resilience support for federally recognized Tribes and Alaska Native Villages: adaptation planning and vulnerability assessments for threats to health, safety, Treaty, and Trust resources."
+    },
+    {
+      "label": "Tribal Community Resilience Annual Awards Program",
+      "url": "https://www.bia.gov/service/tcr-annual-awards-program",
+      "agency": "Bureau of Indian Affairs (BIA)",
+      "tier": "federal",
+      "description": "The standing annual award vehicle for Tribal resilience funding; cycles and amounts change year to year."
+    },
+    {
+      "label": "Sanitation Facilities Construction program",
+      "url": "https://www.ihs.gov/dsfc/",
+      "agency": "Indian Health Service (IHS)",
+      "tier": "federal",
+      "description": "The nationwide program for safe drinking-water, wastewater, and solid-waste facilities in American Indian and Alaska Native communities."
+    },
+    {
+      "label": "Native American Affairs Technical Assistance Program",
+      "url": "https://www.usbr.gov/native/programs/TAPprogram.html",
+      "agency": "Bureau of Reclamation",
+      "tier": "federal",
+      "description": "Technical assistance for Tribes to develop, manage, and protect their water and related resources, including Tribal drought-resiliency assistance."
+    },
+    {
+      "label": "Office of Tribal Relations",
+      "url": "https://www.usda.gov/about-usda/general-information/staff-offices/office-tribal-relations",
+      "agency": "United States Department of Agriculture (USDA)",
+      "tier": "federal",
+      "description": "The department's primary point of contact for government-to-government coordination on drought, farm, and conservation programs."
+    },
+    {
+      "label": "USDA partnerships with Tribal Nations",
+      "url": "https://www.farmers.gov/your-business/tribal",
+      "agency": "United States Department of Agriculture (USDA)",
+      "tier": "federal",
+      "description": "A hub for Tribal Nations and Tribal producers to access farm and conservation programs across Tribal lands."
+    },
+    {
+      "label": "DisasterAssistance.gov",
+      "url": "https://www.disasterassistance.gov/",
+      "agency": "Federal Emergency Management Agency (FEMA)",
+      "tier": "federal",
+      "description": "The federal portal to find and apply for disaster assistance after a declared disaster."
+    },
+    {
+      "label": "Hazard Mitigation Assistance grants",
+      "url": "https://www.fema.gov/grants/mitigation",
+      "agency": "Federal Emergency Management Agency (FEMA)",
+      "tier": "federal",
+      "description": "The mitigation grant family (the Hazard Mitigation Grant Program, Flood Mitigation Assistance, and related programs); several activate only after a presidential disaster declaration."
+    },
+    {
+      "label": "Disaster assistance loans",
+      "url": "https://www.sba.gov/funding-programs/disaster-assistance",
+      "agency": "United States Small Business Administration (SBA)",
+      "tier": "federal",
+      "description": "Disaster loan programs for businesses, private nonprofit organizations, homeowners, and renters in declared disaster areas."
+    },
+    {
+      "label": "Livestock Forage Disaster Program",
+      "url": "https://www.fsa.usda.gov/resources/disaster-recovery/livestock-forage-disaster-program-lfp",
+      "agency": "United States Department of Agriculture, Farm Service Agency (FSA)",
+      "tier": "federal",
+      "description": "The standing program for grazing losses in counties the U.S. Drought Monitor rates at severe drought (D2) or worse."
+    },
+    {
+      "label": "Farm Service Agency disaster assistance programs",
+      "url": "https://www.fsa.usda.gov/resources/programs/disaster-assistance-programs",
+      "agency": "United States Department of Agriculture, Farm Service Agency (FSA)",
+      "tier": "federal",
+      "description": "The hub for agricultural disaster programs, including livestock, honeybee, farm-raised fish, tree, and emergency conservation assistance."
+    },
+    {
+      "label": "Community Development Block Grant Disaster Recovery",
+      "url": "https://www.hud.gov/hud-partners/community-cdbg-dr",
+      "agency": "United States Department of Housing and Urban Development (HUD)",
+      "tier": "federal",
+      "description": "Recovery funds allocated to States, Tribes, cities, and counties after a presidentially declared disaster and a congressional appropriation."
+    },
+    {
+      "label": "WaterSMART program",
+      "url": "https://www.usbr.gov/watersmart/",
+      "agency": "Bureau of Reclamation",
+      "tier": "federal",
+      "description": "The umbrella for the bureau's water-sustainability funding programs (efficiency, conservation, watershed, and recycling projects) across the Western states."
+    },
+    {
+      "label": "Drought Response Program",
+      "url": "https://www.usbr.gov/drought/",
+      "agency": "Bureau of Reclamation",
+      "tier": "federal",
+      "description": "Funding programs for drought contingency planning and drought resiliency projects."
+    },
+    {
+      "label": "Environmental Quality Incentives Program",
+      "url": "https://www.nrcs.usda.gov/programs-initiatives/environmental-quality-incentives-program",
+      "agency": "United States Department of Agriculture, Natural Resources Conservation Service (NRCS)",
+      "tier": "federal",
+      "description": "Financial and technical assistance for conservation practices, including water conservation and drought resilience; applications route through local NRCS offices."
+    },
+    {
+      "label": "Emergency Watershed Protection Program",
+      "url": "https://www.nrcs.usda.gov/programs-initiatives/emergency-watershed-protection",
+      "agency": "United States Department of Agriculture, Natural Resources Conservation Service (NRCS)",
+      "tier": "federal",
+      "description": "Assistance to relieve imminent watershed threats after a natural disaster, through a local sponsor; no federal disaster declaration is required."
+    },
+    {
+      "label": "Water and Environmental Programs",
+      "url": "https://www.rd.usda.gov/programs-services/water-environmental-programs",
+      "agency": "United States Department of Agriculture, Rural Development",
+      "tier": "federal",
+      "description": "Loan and grant programs for rural drinking-water and waste infrastructure, including Tribal-eligible sub-programs."
+    },
+    {
+      "label": "Drought preparedness and response information",
+      "url": "https://www.epa.gov/natural-disasters/drought",
+      "agency": "United States Environmental Protection Agency (EPA)",
+      "tier": "federal",
+      "description": "Preparation and response information for households, utilities, and communities, with links to water-system resilience resources."
+    },
+    {
+      "label": "Community Wildfire Defense Grant Program",
+      "url": "https://www.fs.usda.gov/managing-land/fire/grants/cwdg",
+      "agency": "United States Department of Agriculture, Forest Service",
+      "tier": "federal",
+      "description": "Competitive grants for communities and Tribes to plan for and reduce wildfire risk."
+    },
+    {
+      "label": "Low Income Home Energy Assistance Program",
+      "url": "https://acf.gov/ocs/programs/liheap",
+      "agency": "United States Department of Health and Human Services (HHS)",
+      "tier": "federal",
+      "description": "Home energy assistance, including summer cooling; administered through State, Tribal, and Territorial grantees."
+    },
+    {
+      "label": "Grants.gov",
+      "url": "https://www.grants.gov/",
+      "agency": "All federal grant-making agencies (administered by the United States Department of Health and Human Services)",
+      "tier": "federal",
+      "description": "The central federal site to search grant opportunities across every agency."
+    }
+  ]
+}

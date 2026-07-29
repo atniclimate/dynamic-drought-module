@@ -1,0 +1,482 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atniclimate.github.io/dynamic-drought-module/schema/landscape-signature.schema.json",
+  "title": "DDM landscape-signature artifact, schemaVersion 1.3.0",
+  "description": "The normative closed-world shape contract for the landscape signature. Schema 1.3.0 adds the accepted soil and landcoverFuels families, the terrain methodVersion 3 extension, per-layer source resolution and vintage provenance, and the per-bundle unavailable ledger. Statistical derivations and cross-field arithmetic are enforced by the Python known-answer and integration invariant suites.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "retrieved",
+    "analysisCrs",
+    "gridResolutionMeters",
+    "aggregationUnit",
+    "sources",
+    "bundles"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.3.0" },
+    "retrieved": { "$ref": "#/$defs/date" },
+    "analysisCrs": { "const": "EPSG:5070" },
+    "gridResolutionMeters": { "const": 30 },
+    "aggregationUnit": { "type": "string", "minLength": 1 },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["terrain"],
+      "properties": {
+        "terrain": { "$ref": "#/$defs/terrainSource" },
+        "soilMukey": { "$ref": "#/$defs/method1RasterSource" },
+        "soilSda": { "$ref": "#/$defs/soilSdaSource" },
+        "fuelsFbfm40": { "$ref": "#/$defs/method1RasterSource" },
+        "fuelsEvt": { "$ref": "#/$defs/method1RasterSource" },
+        "landcoverNlcd": { "$ref": "#/$defs/method1RasterSource" },
+        "hazardWhp": { "$ref": "#/$defs/method1RasterSource" }
+      }
+    },
+    "bundles": {
+      "description": "Keyed by ecoregion code (US_L3CODE or US_L4CODE).",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/$defs/bundle" }
+    }
+  },
+  "$defs": {
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "sha256OrNull": {
+      "oneOf": [
+        { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        { "type": "null" }
+      ]
+    },
+    "acquiredOrNull": {
+      "oneOf": [
+        { "$ref": "#/$defs/date" },
+        { "type": "null" }
+      ]
+    },
+    "rasterSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "sourceUrl",
+        "vintage",
+        "resolutionMeters",
+        "method",
+        "methodVersion",
+        "acquired",
+        "materializedRasterSha256"
+      ],
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "sourceUrl": { "type": "string", "pattern": "^https://" },
+        "vintage": { "type": "string", "minLength": 1 },
+        "resolutionMeters": { "type": "number", "exclusiveMinimum": 0 },
+        "method": { "type": "string", "minLength": 1 },
+        "methodVersion": { "type": "integer", "minimum": 1 },
+        "acquired": { "$ref": "#/$defs/acquiredOrNull" },
+        "materializedRasterSha256": { "$ref": "#/$defs/sha256OrNull" }
+      }
+    },
+    "method1RasterSource": {
+      "allOf": [
+        { "$ref": "#/$defs/rasterSource" },
+        {
+          "type": "object",
+          "properties": {
+            "methodVersion": { "const": 1 }
+          }
+        }
+      ]
+    },
+    "terrainSource": {
+      "allOf": [
+        { "$ref": "#/$defs/rasterSource" },
+        {
+          "type": "object",
+          "properties": {
+            "methodVersion": { "const": 3 }
+          }
+        }
+      ]
+    },
+    "soilSdaSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "sourceUrl",
+        "vintage",
+        "resolutionMeters",
+        "method",
+        "methodVersion",
+        "acquired",
+        "materializedRasterSha256"
+      ],
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "sourceUrl": { "type": "string", "pattern": "^https://" },
+        "vintage": { "type": "string", "minLength": 1 },
+        "resolutionMeters": { "type": "null" },
+        "method": { "type": "string", "minLength": 1 },
+        "methodVersion": { "const": 1 },
+        "acquired": { "$ref": "#/$defs/acquiredOrNull" },
+        "materializedRasterSha256": { "type": "null" }
+      }
+    },
+    "bundle": {
+      "oneOf": [
+        { "$ref": "#/$defs/level3Bundle" },
+        { "$ref": "#/$defs/level4Bundle" }
+      ]
+    },
+    "level3Bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "usL3Code", "usL3Name", "unavailable", "terrain"],
+      "properties": {
+        "level": { "const": 3 },
+        "usL3Code": { "type": "string", "minLength": 1 },
+        "usL3Name": { "type": "string", "minLength": 1 },
+        "unavailable": { "$ref": "#/$defs/unavailableLedger" },
+        "terrain": { "$ref": "#/$defs/terrainValue" },
+        "soil": { "$ref": "#/$defs/soilValue" },
+        "landcoverFuels": { "$ref": "#/$defs/landcoverFuelsValue" }
+      }
+    },
+    "level4Bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level",
+        "usL3Code",
+        "usL3Name",
+        "usL4Code",
+        "usL4Name",
+        "parent",
+        "unavailable",
+        "terrain"
+      ],
+      "properties": {
+        "level": { "const": 4 },
+        "usL3Code": { "type": "string", "minLength": 1 },
+        "usL3Name": { "type": "string", "minLength": 1 },
+        "usL4Code": { "type": "string", "minLength": 1 },
+        "usL4Name": { "type": "string", "minLength": 1 },
+        "parent": { "type": "string", "minLength": 1 },
+        "unavailable": { "$ref": "#/$defs/unavailableLedger" },
+        "terrain": { "$ref": "#/$defs/terrainValue" },
+        "soil": { "$ref": "#/$defs/soilValue" },
+        "landcoverFuels": { "$ref": "#/$defs/landcoverFuelsValue" }
+      }
+    },
+    "unavailableLedger": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^(terrain|soil|landcoverFuels|landcoverFuels\\.(fbfm40|evt|landcover|whp)|soil\\.mukey\\.[0-9]+)$"
+      }
+    },
+    "unavailableValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unavailable", "reason"],
+      "properties": {
+        "unavailable": { "const": true },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "terrainValue": {
+      "oneOf": [
+        { "$ref": "#/$defs/terrainStats" },
+        { "$ref": "#/$defs/unavailableValue" }
+      ]
+    },
+    "terrainStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elevMeanM",
+        "elevMinM",
+        "elevMaxM",
+        "slopeMeanDeg",
+        "aspectMeanDeg",
+        "aspectCardinal",
+        "coveragePct",
+        "elevBands",
+        "aspectDistribution"
+      ],
+      "properties": {
+        "elevMeanM": { "type": "number" },
+        "elevMinM": { "type": "number" },
+        "elevMaxM": { "type": "number" },
+        "slopeMeanDeg": { "type": ["number", "null"], "minimum": 0 },
+        "aspectMeanDeg": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "exclusiveMaximum": 360
+        },
+        "aspectCardinal": {
+          "oneOf": [
+            { "enum": ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] },
+            { "type": "null" }
+          ]
+        },
+        "coveragePct": { "$ref": "#/$defs/percentage" },
+        "elevBands": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "items": { "$ref": "#/$defs/fraction" }
+        },
+        "aspectDistribution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["N", "NE", "E", "SE", "S", "SW", "W", "NW", "flat", "excluded"],
+          "properties": {
+            "N": { "$ref": "#/$defs/fraction" },
+            "NE": { "$ref": "#/$defs/fraction" },
+            "E": { "$ref": "#/$defs/fraction" },
+            "SE": { "$ref": "#/$defs/fraction" },
+            "S": { "$ref": "#/$defs/fraction" },
+            "SW": { "$ref": "#/$defs/fraction" },
+            "W": { "$ref": "#/$defs/fraction" },
+            "NW": { "$ref": "#/$defs/fraction" },
+            "flat": { "$ref": "#/$defs/fraction" },
+            "excluded": { "$ref": "#/$defs/fraction" }
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "aspectMeanDeg": { "type": "number" },
+            "aspectCardinal": { "type": "string" }
+          }
+        },
+        {
+          "properties": {
+            "aspectMeanDeg": { "type": "null" },
+            "aspectCardinal": { "type": "null" }
+          }
+        }
+      ]
+    },
+    "soilValue": {
+      "oneOf": [
+        { "$ref": "#/$defs/soilStats" },
+        { "$ref": "#/$defs/unavailableValue" }
+      ]
+    },
+    "soilStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "awsRootZoneMm",
+        "awsP10",
+        "awsP90",
+        "rootZoneDepthCm",
+        "dominantTexture",
+        "ssurgoFraction",
+        "statsgo2Fraction",
+        "coveragePct",
+        "rootZoneCoveragePct",
+        "textureCoveragePct",
+        "cellCount",
+        "coarse",
+        "generalized"
+      ],
+      "properties": {
+        "awsRootZoneMm": { "type": "number", "minimum": 0 },
+        "awsP10": { "type": "number", "minimum": 0 },
+        "awsP90": { "type": "number", "minimum": 0 },
+        "rootZoneDepthCm": { "type": ["number", "null"], "minimum": 0 },
+        "dominantTexture": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        },
+        "ssurgoFraction": { "$ref": "#/$defs/fraction" },
+        "statsgo2Fraction": { "$ref": "#/$defs/fraction" },
+        "coveragePct": { "$ref": "#/$defs/percentage" },
+        "rootZoneCoveragePct": { "$ref": "#/$defs/percentage" },
+        "textureCoveragePct": { "$ref": "#/$defs/percentage" },
+        "cellCount": { "type": "number", "minimum": 0 },
+        "coarse": { "type": "boolean" },
+        "generalized": { "type": "boolean" }
+      }
+    },
+    "landcoverFuelsValue": {
+      "oneOf": [
+        { "$ref": "#/$defs/landcoverFuelsStats" },
+        { "$ref": "#/$defs/unavailableValue" }
+      ]
+    },
+    "landcoverFuelsStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fbfm40", "evt", "landcover", "whp"],
+      "properties": {
+        "fbfm40": { "$ref": "#/$defs/fbfm40Value" },
+        "evt": { "$ref": "#/$defs/evtValue" },
+        "landcover": { "$ref": "#/$defs/landcoverValue" },
+        "whp": { "$ref": "#/$defs/whpValue" }
+      }
+    },
+    "fbfm40Value": {
+      "oneOf": [
+        { "$ref": "#/$defs/fbfm40Stats" },
+        { "$ref": "#/$defs/unavailableValue" }
+      ]
+    },
+    "fbfm40Stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dominantCode",
+        "dominantFraction",
+        "nonburnableFraction",
+        "classes",
+        "otherBurnableFraction",
+        "coveragePct"
+      ],
+      "properties": {
+        "dominantCode": { "type": ["integer", "null"] },
+        "dominantFraction": {
+          "oneOf": [
+            { "$ref": "#/$defs/fraction" },
+            { "type": "null" }
+          ]
+        },
+        "nonburnableFraction": { "$ref": "#/$defs/fraction" },
+        "classes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/classFraction" }
+        },
+        "otherBurnableFraction": { "$ref": "#/$defs/fraction" },
+        "coveragePct": { "$ref": "#/$defs/percentage" }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "dominantCode": { "type": "integer" },
+            "dominantFraction": { "type": "number" }
+          }
+        },
+        {
+          "properties": {
+            "dominantCode": { "type": "null" },
+            "dominantFraction": { "type": "null" }
+          }
+        }
+      ]
+    },
+    "classFraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "fraction"],
+      "properties": {
+        "code": { "type": "integer" },
+        "fraction": { "$ref": "#/$defs/fraction" }
+      }
+    },
+    "evtValue": {
+      "oneOf": [
+        { "$ref": "#/$defs/evtStats" },
+        { "$ref": "#/$defs/unavailableValue" }
+      ]
+    },
+    "evtStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dominantCode", "dominantName", "dominantFraction", "coveragePct"],
+      "properties": {
+        "dominantCode": { "type": "integer" },
+        "dominantName": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        },
+        "dominantFraction": { "$ref": "#/$defs/fraction" },
+        "coveragePct": { "$ref": "#/$defs/percentage" }
+      }
+    },
+    "landcoverValue": {
+      "oneOf": [
+        { "$ref": "#/$defs/landcoverStats" },
+        { "$ref": "#/$defs/unavailableValue" }
+      ]
+    },
+    "landcoverStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "forestFraction",
+        "croplandFraction",
+        "wetlandFraction",
+        "openWaterFraction",
+        "coveragePct"
+      ],
+      "properties": {
+        "forestFraction": { "$ref": "#/$defs/fraction" },
+        "croplandFraction": { "$ref": "#/$defs/fraction" },
+        "wetlandFraction": { "$ref": "#/$defs/fraction" },
+        "openWaterFraction": { "$ref": "#/$defs/fraction" },
+        "coveragePct": { "$ref": "#/$defs/percentage" }
+      }
+    },
+    "whpValue": {
+      "oneOf": [
+        { "$ref": "#/$defs/whpStats" },
+        { "$ref": "#/$defs/unavailableValue" }
+      ]
+    },
+    "whpStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classMean", "classFractions", "cellCount", "coarse", "coveragePct"],
+      "properties": {
+        "classMean": {
+          "oneOf": [
+            { "type": "number", "minimum": 1, "maximum": 5 },
+            { "type": "null" }
+          ]
+        },
+        "classFractions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["1", "2", "3", "4", "5", "6", "7"],
+          "properties": {
+            "1": { "$ref": "#/$defs/fraction" },
+            "2": { "$ref": "#/$defs/fraction" },
+            "3": { "$ref": "#/$defs/fraction" },
+            "4": { "$ref": "#/$defs/fraction" },
+            "5": { "$ref": "#/$defs/fraction" },
+            "6": { "$ref": "#/$defs/fraction" },
+            "7": { "$ref": "#/$defs/fraction" }
+          }
+        },
+        "cellCount": { "type": "number", "minimum": 0 },
+        "coarse": { "type": "boolean" },
+        "coveragePct": { "$ref": "#/$defs/percentage" }
+      }
+    },
+    "fraction": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "percentage": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    }
+  }
+}

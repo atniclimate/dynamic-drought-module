@@ -1,0 +1,13 @@
+{
+  "label": "Idaho",
+  "verified": "2026-07-09",
+  "resources": [
+    {
+      "label": "Idaho water data and drought",
+      "url": "https://idwr.idaho.gov/water-data/",
+      "agency": "Idaho Department of Water Resources",
+      "tier": "state",
+      "description": "Streamflow, snowpack, and water-supply data for the state."
+    }
+  ]
+}

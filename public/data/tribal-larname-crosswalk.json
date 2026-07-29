@@ -1,0 +1,1857 @@
+{
+  "_comment": "Crosswalk audit for maintainer review (U3b; safe matcher per D-0.7.0-026). matched: land area LARNAME to the formal Federal Register Tribe name, with the safety rule that matched it; rows carrying a confirmed field were explicitly maintainer-confirmed against a flagged historical-renaming collision on the parallel-LAR premise (D-0.7.0-026b; parallelLar names the LAR row held by the other claimant Nation). larLabel: land areas that keep the BIA land-area label (no unambiguous match; NOT mapped to a guessed Tribe name, per hard rules 5 and 6 and D-0.7.0-026); this is the maintainer residue list. ambiguous: the subset of larLabel rows where several roster names contained the LARNAME phrase OR the maintainer curated the row as known-ambiguous (D-0.7.0-026a; curated rows carry a rule field naming that ruling; the candidates are listed; automation refuses to pick). rosterNoLar: federally recognized Tribes with no matched land area in AIAN-LAR (landless Tribes, Alaska Native villages, or differently-named areas).",
+  "meta": {
+    "rosterSource": "Federal Register 2026-01899 (2026-01-30)",
+    "landAreaSource": "BIA AIAN-LAR FeatureServer (distinct LARNAME)",
+    "matcher": "safe-match v2 (D-0.7.0-026): unique whole-phrase containment, state-constrained, distinctive-token guard; plus the maintainer-curated known-ambiguous gate (D-0.7.0-026a)",
+    "generated": "2026-07-12",
+    "rosterCount": 573,
+    "landAreaCount": 335,
+    "safeMatchCount": 258,
+    "larLabelCount": 77
+  },
+  "matched": [
+    {
+      "larName": "Acoma",
+      "tribe": "Pueblo of Acoma, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Agua Caliente",
+      "tribe": "Agua Caliente Band of Cahuilla Indians of the Agua Caliente Indian Reservation, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Alturas",
+      "tribe": "Alturas Indian Rancheria, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Annette Island",
+      "tribe": "Metlakatla Indian Community, Annette Island Reserve",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Aquinnah",
+      "tribe": "Wampanoag Tribe of Gay Head (Aquinnah)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Aroostook",
+      "tribe": "Mi'kmaq Nation (previously listed as Aroostook Band of Micmacs)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Auburn",
+      "tribe": "United Auburn Indian Community of the Auburn Rancheria of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Augustine",
+      "tribe": "Augustine Band of Cahuilla Indians, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Bad River",
+      "tribe": "Bad River Band of the Lake Superior Tribe of Chippewa Indians of the Bad River Reservation, Wisconsin",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Barona",
+      "tribe": "Capitan Grande Band of Diegueno Mission Indians of California (Barona Group of Capitan Grande Band of Mission Indians of the Barona Reservation, California; Viejas (Baron Long) Group of Capitan Grande Band of Mission Indians of the Viejas Reservation, California)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Battle Mountain",
+      "tribe": "Te-Moak Tribe of Western Shoshone Indians of Nevada (Four constituent bands: Battle Mountain Band; Elko Band; South Fork Band; and Wells Band)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Bay Mills",
+      "tribe": "Bay Mills Indian Community, Michigan",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Benton Paiute",
+      "tribe": "Utu Utu Gwaitu Paiute Tribe of the Benton Paiute Reservation, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Berry Creek",
+      "tribe": "Berry Creek Rancheria of Maidu Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Big Bend",
+      "tribe": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Big Lagoon",
+      "tribe": "Big Lagoon Rancheria, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Big Pine",
+      "tribe": "Big Pine Paiute Tribe of the Owens Valley",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Big Sandy",
+      "tribe": "Big Sandy Rancheria of Western Mono Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Big Valley",
+      "tribe": "Big Valley Band of Pomo Indians of the Big Valley Rancheria, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Bishop",
+      "tribe": "Bishop Paiute Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Blackfeet",
+      "tribe": "Blackfeet Tribe of the Blackfeet Indian Reservation of Montana",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Blue Lake",
+      "tribe": "Blue Lake Rancheria, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Bridgeport",
+      "tribe": "Bridgeport Indian Colony",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Buena Vista",
+      "tribe": "Buena Vista Rancheria of Me-Wuk Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Burns Paiute",
+      "tribe": "Burns Paiute Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Cabazon",
+      "tribe": "Cabazon Band of Cahuilla Indians (previously listed as Cabazon Band of Mission Indians, California)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Camp Verde",
+      "tribe": "Yavapai-Apache Nation of the Camp Verde Indian Reservation, Arizona",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Campo",
+      "tribe": "Campo Band of Diegueno Mission Indians of the Campo Indian Reservation, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Capitan Grande",
+      "tribe": "Capitan Grande Band of Diegueno Mission Indians of California (Barona Group of Capitan Grande Band of Mission Indians of the Barona Reservation, California; Viejas (Baron Long) Group of Capitan Grande Band of Mission Indians of the Viejas Reservation, California)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Carson",
+      "tribe": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Catawba",
+      "tribe": "Catawba Indian Nation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Cedarville",
+      "tribe": "Cedarville Rancheria, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Chehalis",
+      "tribe": "Confederated Tribes of the Chehalis Reservation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Chemehuevi",
+      "tribe": "Chemehuevi Indian Tribe of the Chemehuevi Reservation, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Cheyenne River",
+      "tribe": "Cheyenne River Sioux Tribe of the Cheyenne River Reservation, South Dakota",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Chicken Ranch",
+      "tribe": "Chicken Ranch Rancheria of Me-Wuk Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Chico",
+      "tribe": "Mechoopda Indian Tribe of Chico Rancheria, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Chitimacha",
+      "tribe": "Chitimacha Tribe of Louisiana",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Cloverdale",
+      "tribe": "Cloverdale Rancheria of Pomo Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Cochiti",
+      "tribe": "Pueblo of Cochiti, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Cocopah",
+      "tribe": "Cocopah Tribe of Arizona",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Coeur D'Alene",
+      "tribe": "Coeur D'Alene Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Cold Springs",
+      "tribe": "Cold Springs Rancheria of Mono Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Colorado River",
+      "tribe": "Colorado River Indian Tribes of the Colorado River Indian Reservation, Arizona and California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Colusa",
+      "tribe": "Cachil DeHe Band of Wintun Indians of the Colusa Indian Community of the Colusa Rancheria, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Colville",
+      "tribe": "Confederated Tribes of the Colville Reservation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Cow Creek",
+      "tribe": "Cow Creek Band of Umpqua Tribe of Indians",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Cowlitz",
+      "tribe": "Cowlitz Indian Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Coyote Valley",
+      "tribe": "Coyote Valley Band of Pomo Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Crow Creek",
+      "tribe": "Crow Creek Sioux Tribe of the Crow Creek Reservation, South Dakota",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Dresslerville",
+      "tribe": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Dry Creek",
+      "tribe": "Dry Creek Rancheria Band of Pomo Indians, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Duck Valley",
+      "tribe": "Shoshone-Paiute Tribes of the Duck Valley Reservation, Nevada",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Duckwater",
+      "tribe": "Duckwater Shoshone Tribe (previously listed as Duckwater Shoshone Tribe of the Duckwater Reservation, Nevada)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Elem",
+      "tribe": "Elem Indian Colony of Pomo Indians of the Sulphur Bank Rancheria, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Elk Valley",
+      "tribe": "Elk Valley Rancheria, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Elko",
+      "tribe": "Te-Moak Tribe of Western Shoshone Indians of Nevada (Four constituent bands: Battle Mountain Band; Elko Band; South Fork Band; and Wells Band)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Ely",
+      "tribe": "Ely Shoshone Tribe of Nevada",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Enterprise",
+      "tribe": "Enterprise Rancheria of Maidu Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Flandreau",
+      "tribe": "Flandreau Santee Sioux Tribe of South Dakota",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Flathead",
+      "tribe": "Confederated Salish and Kootenai Tribes of the Flathead Reservation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Fond du Lac",
+      "tribe": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Forest County Potawatomi",
+      "tribe": "Forest County Potawatomi Community, Wisconsin",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Fort Apache",
+      "tribe": "White Mountain Apache Tribe of the Fort Apache Reservation, Arizona",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Fort Belknap",
+      "tribe": "Fort Belknap Indian Community of the Fort Belknap Reservation of Montana",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Fort Berthold",
+      "tribe": "Three Affiliated Tribes of the Fort Berthold Reservation, North Dakota",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Fort Bidwell",
+      "tribe": "Fort Bidwell Indian Community of the Fort Bidwell Reservation of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Fort Hall",
+      "tribe": "Shoshone-Bannock Tribes of the Fort Hall Reservation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Fort Independence",
+      "tribe": "Fort Independence Indian Community of Paiute Indians of the Fort Independence Reservation, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Fort McDermitt",
+      "tribe": "Fort McDermitt Paiute and Shoshone Tribes of the Fort McDermitt Indian Reservation, Nevada and Oregon",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Fort McDowell",
+      "tribe": "Fort McDowell Yavapai Nation, Arizona",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Fort Mojave",
+      "tribe": "Fort Mojave Indian Tribe of Arizona, California & Nevada",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Fort Peck",
+      "tribe": "Assiniboine and Sioux Tribes of the Fort Peck Indian Reservation, Montana",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Gila River",
+      "tribe": "Gila River Indian Community of the Gila River Indian Reservation, Arizona",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Grand Portage",
+      "tribe": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Grand Ronde",
+      "tribe": "Confederated Tribes of the Grand Ronde Community of Oregon",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Grand Traverse",
+      "tribe": "Grand Traverse Band of Ottawa and Chippewa Indians, Michigan",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Graton",
+      "tribe": "Federated Indians of Graton Rancheria, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Greenville",
+      "tribe": "Greenville Rancheria",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Grindstone Indian",
+      "tribe": "Grindstone Indian Rancheria of Wintun-Wailaki Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Guidiville",
+      "tribe": "Guidiville Rancheria of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Hannahville",
+      "tribe": "Hannahville Indian Community, Michigan",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Havasupai",
+      "tribe": "Havasupai Tribe of the Havasupai Reservation, Arizona",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Ho-Chunk",
+      "tribe": "Ho-Chunk Nation of Wisconsin",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Hoh",
+      "tribe": "Hoh Indian Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Hoopa Valley",
+      "tribe": "Hoopa Valley Tribe, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Hopi",
+      "tribe": "Hopi Tribe of Arizona",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Hopland",
+      "tribe": "Hopland Band of Pomo Indians, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Hualapai",
+      "tribe": "Hualapai Indian Tribe of the Hualapai Indian Reservation, Arizona",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Inaja and Cosmit",
+      "tribe": "Inaja Band of Diegueno Mission Indians of the Inaja and Cosmit Reservation, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Indian Peaks",
+      "tribe": "Paiute Indian Tribe of Utah (Cedar Band of Paiutes, Kanosh Band of Paiutes, Koosharem Band of Paiutes, Indian Peaks Band of Paiutes, and Shivwits Band of Paiutes)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Isleta",
+      "tribe": "Pueblo of Isleta, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Jackson",
+      "tribe": "Jackson Band of Miwuk Indians",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Jamestown",
+      "tribe": "Jamestown S'Klallam Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Jamul",
+      "tribe": "Jamul Indian Village of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Jemez",
+      "tribe": "Pueblo of Jemez, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Jicarilla Apache",
+      "tribe": "Jicarilla Apache Nation, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Kaibab",
+      "tribe": "Kaibab Band of Paiute Indians of the Kaibab Indian Reservation, Arizona",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Kalispel",
+      "tribe": "Kalispel Indian Community of the Kalispel Reservation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Kanosh",
+      "tribe": "Paiute Indian Tribe of Utah (Cedar Band of Paiutes, Kanosh Band of Paiutes, Koosharem Band of Paiutes, Indian Peaks Band of Paiutes, and Shivwits Band of Paiutes)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Karuk",
+      "tribe": "Karuk Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Kickapoo (Kansas)",
+      "tribe": "Kickapoo Tribe of Indians of the Kickapoo Reservation in Kansas",
+      "rule": "unique-containment+state"
+    },
+    {
+      "larName": "Kickapoo Traditional (Texas)",
+      "tribe": "Kickapoo Traditional Tribe of Texas",
+      "rule": "unique-containment+state"
+    },
+    {
+      "larName": "Klamath",
+      "tribe": "Klamath Tribes",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Koosharem",
+      "tribe": "Paiute Indian Tribe of Utah (Cedar Band of Paiutes, Kanosh Band of Paiutes, Koosharem Band of Paiutes, Indian Peaks Band of Paiutes, and Shivwits Band of Paiutes)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "La Jolla",
+      "tribe": "La Jolla Band of Luiseno Indians, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "La Posta",
+      "tribe": "La Posta Band of Diegueno Mission Indians of the La Posta Indian Reservation, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Lac Courte Oreilles",
+      "tribe": "Lac Courte Oreilles Band of Lake Superior Chippewa Indians of Wisconsin",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Lac du Flambeau",
+      "tribe": "Lac du Flambeau Band of Lake Superior Chippewa Indians of the Lac du Flambeau Reservation of Wisconsin",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Lac Vieux Desert",
+      "tribe": "Lac Vieux Desert Band of Lake Superior Chippewa Indians of Michigan",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Laguna",
+      "tribe": "Pueblo of Laguna, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Las Vegas",
+      "tribe": "Las Vegas Tribe of Paiute Indians of the Las Vegas Indian Colony, Nevada",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Laytonville",
+      "tribe": "Cahto Tribe of the Laytonville Rancheria",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Leech Lake",
+      "tribe": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Likely",
+      "tribe": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Little Traverse Bay",
+      "tribe": "Little Traverse Bay Bands of Odawa Indians, Michigan",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Lone Pine",
+      "tribe": "Lone Pine Paiute-Shoshone Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Lookout",
+      "tribe": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Los Coyotes",
+      "tribe": "Los Coyotes Band of Cahuilla and Cupeno Indians, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Lovelock Indian",
+      "tribe": "Lovelock Paiute Tribe of the Lovelock Indian Colony, Nevada",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Lower Brule",
+      "tribe": "Lower Brule Sioux Tribe of the Lower Brule Reservation, South Dakota",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Lower Elwha",
+      "tribe": "Lower Elwha Tribal Community",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Lower Sioux",
+      "tribe": "Lower Sioux Indian Community in the State of Minnesota",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Lummi",
+      "tribe": "Lummi Tribe of the Lummi Reservation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Lytton",
+      "tribe": "Lytton Rancheria of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Makah",
+      "tribe": "Makah Indian Tribe of the Makah Indian Reservation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Manzanita",
+      "tribe": "Manzanita Band of Diegueno Mission Indians of the Manzanita Reservation, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Mashpee Wampanoag",
+      "tribe": "Mashpee Wampanoag Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Match-e-be-nash-she-wish",
+      "tribe": "Match-E-Be-Nash-She-Wish Band of Pottawatomi (previously listed as Match-E-Be-Nash-She-Wish Band of Pottawatomi Indians of Michigan)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Menominee",
+      "tribe": "Menominee Indian Tribe of Wisconsin",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Mesa Grande",
+      "tribe": "Mesa Grande Band of Diegueno Mission Indians of the Mesa Grande Reservation, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Mescalero Apache",
+      "tribe": "Mescalero Apache Tribe of the Mescalero Reservation, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Miccosukee",
+      "tribe": "Miccosukee Tribe of Indians",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Middletown",
+      "tribe": "Middletown Rancheria of Pomo Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Mille Lacs",
+      "tribe": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Moapa River",
+      "tribe": "Moapa Band of Paiute Indians of the Moapa River Indian Reservation, Nevada",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Montgomery Creek",
+      "tribe": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Mooretown",
+      "tribe": "Mooretown Rancheria of Maidu Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Morongo",
+      "tribe": "Morongo Band of Mission Indians, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Muckleshoot",
+      "tribe": "Muckleshoot Indian Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Nambe",
+      "tribe": "Pueblo of Nambe, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Narragansett",
+      "tribe": "Narragansett Indian Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Navajo",
+      "tribe": "Navajo Nation, Arizona, New Mexico, & Utah",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Nez Perce",
+      "tribe": "Nez Perce Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Nisqually",
+      "tribe": "Nisqually Indian Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Nooksack",
+      "tribe": "Nooksack Indian Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Northern Cheyenne",
+      "tribe": "Northern Cheyenne Tribe of the Northern Cheyenne Indian Reservation, Montana",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Northfork",
+      "tribe": "Northfork Rancheria of Mono Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Omaha",
+      "tribe": "Omaha Tribe of Nebraska",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Onondaga",
+      "tribe": "Onondaga Nation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Pala",
+      "tribe": "Pala Band of Mission Indians",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Pascua Yaqui",
+      "tribe": "Pascua Yaqui Tribe of Arizona",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Paskenta",
+      "tribe": "Paskenta Band of Nomlaki Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Passamaquoddy",
+      "tribe": "Passamaquoddy Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Pechanga",
+      "tribe": "Pechanga Band of Indians (previously listed as Pechanga Band of Luiseno Mission Indians of the Pechanga Reservation, California)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Penobscot",
+      "tribe": "Penobscot Nation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Picayune",
+      "tribe": "Picayune Rancheria of Chukchansi Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Picuris",
+      "tribe": "Pueblo of Picuris, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Pinoleville",
+      "tribe": "Pinoleville Pomo Nation, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Pojoaque",
+      "tribe": "Pueblo of Pojoaque, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Port Gamble",
+      "tribe": "Port Gamble S'Klallam Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Port Madison",
+      "tribe": "Suquamish Indian Tribe of the Port Madison Reservation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Potter Valley",
+      "tribe": "Potter Valley Tribe, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Prairie Island",
+      "tribe": "Prairie Island Indian Community in the State of Minnesota",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Puyallup",
+      "tribe": "Puyallup Tribe of the Puyallup Reservation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Pyramid Lake",
+      "tribe": "Pyramid Lake Paiute Tribe of the Pyramid Lake Reservation, Nevada",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Quartz Valley",
+      "tribe": "Quartz Valley Indian Community of the Quartz Valley Reservation of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Quileute",
+      "tribe": "Quileute Tribe of the Quileute Reservation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Quinault",
+      "tribe": "Quinault Indian Nation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Ramona",
+      "tribe": "Ramona Band of Cahuilla, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Red Cliff",
+      "tribe": "Red Cliff Band of Lake Superior Chippewa Indians of Wisconsin",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Red Lake",
+      "tribe": "Red Lake Band of Chippewa Indians, Minnesota",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Redding",
+      "tribe": "Redding Rancheria, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Redwood Valley",
+      "tribe": "Redwood Valley or Little River Band of Pomo Indians of the Redwood Valley Rancheria California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Reno-Sparks",
+      "tribe": "Reno-Sparks Indian Colony, Nevada",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Resighini",
+      "tribe": "PuliklaTribe of Yurok People (previously listed as Resighini Rancheria, California)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Rincon",
+      "tribe": "Rincon Band of Luiseno Indians (previously listed as Rincon Band of Luiseno Mission Indians of Rincon Reservation, California)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Roaring Creek",
+      "tribe": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Robinson",
+      "tribe": "Robinson Rancheria",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Rohnerville",
+      "tribe": "Bear River Band of the Rohnerville Rancheria, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Rosebud",
+      "tribe": "Rosebud Sioux Tribe of the Rosebud Indian Reservation, South Dakota",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Round Valley",
+      "tribe": "Round Valley Indian Tribes, Round Valley Reservation, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Salt River",
+      "tribe": "Salt River Pima-Maricopa Indian Community of the Salt River Reservation, Arizona",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "San Carlos",
+      "tribe": "San Carlos Apache Tribe of the San Carlos Reservation, Arizona",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "San Felipe",
+      "tribe": "Pueblo of San Felipe, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "San Ildefonso",
+      "tribe": "Pueblo of San Ildefonso, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "San Manuel",
+      "tribe": "Yuhaaviatam of San Manuel Nation (previously listed as San Manuel Band of Mission Indians, California)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "San Pasqual",
+      "tribe": "San Pasqual Band of Diegueno Mission Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Sandia",
+      "tribe": "Pueblo of Sandia, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Santa Ana",
+      "tribe": "Pueblo of Santa Ana, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Santa Clara",
+      "tribe": "Pueblo of Santa Clara, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Santa Ynez",
+      "tribe": "Santa Ynez Band of Chumash Mission Indians of the Santa Ynez Reservation, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Santa Ysabel",
+      "tribe": "Iipay Nation of Santa Ysabel, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Santo Domingo",
+      "tribe": "Santo Domingo Pueblo",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Sauk-Suiattle",
+      "tribe": "Sauk-Suiattle Indian Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Sault Ste. Marie",
+      "tribe": "Sault Ste. Marie Tribe of Chippewa Indians, Michigan",
+      "rule": "unique-containment",
+      "confirmed": "D-0.7.0-026b",
+      "parallelLar": "Bay Mills"
+    },
+    {
+      "larName": "Scotts Valley",
+      "tribe": "Scotts Valley Band of Pomo Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Shakopee",
+      "tribe": "Shakopee Mdewakanton Sioux Community of Minnesota",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Sherwood Valley",
+      "tribe": "Sherwood Valley Rancheria of Pomo Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Shingle Springs",
+      "tribe": "Shingle Springs Band of Miwok Indians, Shingle Springs Rancheria (Verona Tract), California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Shoalwater",
+      "tribe": "Shoalwater Bay Indian Tribe of the Shoalwater Bay Indian Reservation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Siletz",
+      "tribe": "Confederated Tribes of Siletz Indians of Oregon",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Skokomish",
+      "tribe": "Skokomish Indian Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Skull Valley",
+      "tribe": "Skull Valley Band of Goshute Indians of Utah",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Soboba",
+      "tribe": "Soboba Band of Luiseno Indians, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "South Fork",
+      "tribe": "Te-Moak Tribe of Western Shoshone Indians of Nevada (Four constituent bands: Battle Mountain Band; Elko Band; South Fork Band; and Wells Band)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Southern Ute",
+      "tribe": "Southern Ute Indian Tribe of the Southern Ute Reservation, Colorado",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Spokane",
+      "tribe": "Spokane Tribe of the Spokane Reservation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Squaxin Island",
+      "tribe": "Squaxin Island Tribe of the Squaxin Island Reservation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "St. Croix",
+      "tribe": "St. Croix Chippewa Indians of Wisconsin",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Standing Rock",
+      "tribe": "Standing Rock Sioux Tribe of North & South Dakota",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Stewart",
+      "tribe": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Stewarts Point",
+      "tribe": "Kashia Band of Pomo Indians of the Stewarts Point Rancheria, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Stillaguamish",
+      "tribe": "Stillaguamish Tribe of Indians of Washington",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Stockbridge Munsee",
+      "tribe": "Stockbridge Munsee Community, Wisconsin",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Summit Lake",
+      "tribe": "Summit Lake Paiute Tribe of Nevada",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Susanville",
+      "tribe": "Susanville Indian Rancheria, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Swinomish",
+      "tribe": "Swinomish Indian Tribal Community",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Sycuan",
+      "tribe": "Sycuan Band of the Kumeyaay Nation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Table Mountain",
+      "tribe": "Table Mountain Rancheria",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Taos",
+      "tribe": "Pueblo of Taos, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Tesuque",
+      "tribe": "Pueblo of Tesuque, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Timbisha Shoshone",
+      "tribe": "Timbisha Shoshone Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Tohono O'odham",
+      "tribe": "Tohono O'odham Nation of Arizona",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Tonawanda",
+      "tribe": "Tonawanda Band of Seneca",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Tonto Apache",
+      "tribe": "Tonto Apache Tribe of Arizona",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Torres-Martinez",
+      "tribe": "Torres Martinez Desert Cahuilla Indians, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Trinidad",
+      "tribe": "Cher-Ae Heights Indian Community of the Trinidad Rancheria, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Tulalip",
+      "tribe": "Tulalip Tribes of Washington",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Tule River",
+      "tribe": "Tule River Indian Tribe of the Tule River Reservation, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Tunica-Biloxi",
+      "tribe": "Tunica-Biloxi Indian Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Tuolumne",
+      "tribe": "Tuolumne Band of Me-Wuk Indians of the Tuolumne Rancheria of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Turtle Mountain",
+      "tribe": "Turtle Mountain Band of Chippewa Indians of North Dakota",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Tuscarora",
+      "tribe": "Tuscarora Nation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Twenty-Nine Palms",
+      "tribe": "Twenty-Nine Palms Band of Mission Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Umatilla",
+      "tribe": "Confederated Tribes of the Umatilla Indian Reservation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Upper Lake",
+      "tribe": "Habematolel Pomo of Upper Lake, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Upper Sioux",
+      "tribe": "Upper Sioux Community, Minnesota",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Upper Skagit",
+      "tribe": "Upper Skagit Indian Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Ute Mountain Ute",
+      "tribe": "Ute Mountain Ute Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Viejas",
+      "tribe": "Capitan Grande Band of Diegueno Mission Indians of California (Barona Group of Capitan Grande Band of Mission Indians of the Barona Reservation, California; Viejas (Baron Long) Group of Capitan Grande Band of Mission Indians of the Viejas Reservation, California)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Walker River",
+      "tribe": "Walker River Paiute Tribe of the Walker River Reservation, Nevada",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Washoe",
+      "tribe": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Wells",
+      "tribe": "Te-Moak Tribe of Western Shoshone Indians of Nevada (Four constituent bands: Battle Mountain Band; Elko Band; South Fork Band; and Wells Band)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "White Earth",
+      "tribe": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Wilton",
+      "tribe": "Wilton Rancheria, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Winnebago",
+      "tribe": "Winnebago Tribe of Nebraska",
+      "rule": "unique-containment",
+      "confirmed": "D-0.7.0-026b",
+      "parallelLar": "Ho-Chunk"
+    },
+    {
+      "larName": "Winnemucca",
+      "tribe": "Winnemucca Indian Colony of Nevada",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Woodfords",
+      "tribe": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "XL Ranch",
+      "tribe": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Yakama",
+      "tribe": "Confederated Tribes and Bands of the Yakama Nation",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Yankton",
+      "tribe": "Yankton Sioux Tribe of South Dakota",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Yerington",
+      "tribe": "Yerington Paiute Tribe of the Yerington Colony & Campbell Ranch, Nevada",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Yocha Dehe Wintun",
+      "tribe": "Yocha Dehe Wintun Nation, California",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Yomba",
+      "tribe": "Yomba Shoshone Tribe of the Yomba Reservation, Nevada",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Ysleta Del Sur",
+      "tribe": "Ysleta del Sur Pueblo",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Zia",
+      "tribe": "Pueblo of Zia, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "larName": "Zuni",
+      "tribe": "Zuni Tribe of the Zuni Reservation, New Mexico",
+      "rule": "unique-containment"
+    }
+  ],
+  "larLabel": [
+    "Acoma (Red Lake)",
+    "Alabama and Coushatta",
+    "Allegany",
+    "Big Cypress",
+    "Big Sandy (Truxton Canyon)",
+    "Bois Fort (Nett Lake)",
+    "Bois Forte (Deer Creek)",
+    "Bois Forte (Vermillion Lake)",
+    "Brighton",
+    "Cahuilla",
+    "Cattaraugus",
+    "Cedar City",
+    "Celilo",
+    "Choctaw",
+    "Coquille of Oregon",
+    "Cortina Indian",
+    "Coushatta",
+    "Crow",
+    "Cuyapaipe",
+    "Fort Pierce",
+    "Fort Sill Arizona",
+    "Fort Yuma (Quechan)",
+    "Gila Bend",
+    "Goshute",
+    "Hollywood (Dania)",
+    "Houlton of the Maliseet",
+    "Huron Potawatomi",
+    "Immokalee",
+    "Iowa",
+    "Isabella",
+    "Jena of the Choctaw",
+    "Kootenai",
+    "Lake Traverse (Sisseton)",
+    "L'Anse",
+    "L'Anse Ontonagon",
+    "Little River",
+    "Manchester Point Arena",
+    "Maricopa (Ak-Chin)",
+    "Mashnantucket Pequot",
+    "Mohegan of Connecticut",
+    "Mole Lake",
+    "Navajo (Alamo)",
+    "Navajo (Ramah)",
+    "Northwestern Shoshoni",
+    "Odgers Ranch",
+    "Oil Springs",
+    "Oneida",
+    "Oneida (New York)",
+    "Passamaquoddy (Indian Township)",
+    "Passamaquoddy (Pleasant Point)",
+    "Pauma and Yuima",
+    "Pine Ridge",
+    "Poarch Creek",
+    "Pokagon of Potawatomi",
+    "Potawatomi (Kansas)",
+    "Rocky Boys",
+    "Ruby Valley",
+    "Sac and Fox (Iowa)",
+    "Sac and Fox (KS-NE)",
+    "San Juan",
+    "San Xavier",
+    "Santa Rosa",
+    "Santa Rosa Cahuilla",
+    "Santee",
+    "Seneca",
+    "Sheep Ranch",
+    "Shivwitz",
+    "Smith River",
+    "St. Regis Mohawk",
+    "Table Bluff",
+    "Tampa",
+    "The Dalles Unit",
+    "Uintah and Ouray",
+    "Warm Springs",
+    "Wind River",
+    "Yavapai",
+    "Yurok"
+  ],
+  "ambiguous": [
+    {
+      "larName": "Cahuilla",
+      "candidates": [
+        "Agua Caliente Band of Cahuilla Indians of the Agua Caliente Indian Reservation, California",
+        "Augustine Band of Cahuilla Indians, California",
+        "Cabazon Band of Cahuilla Indians (previously listed as Cabazon Band of Mission Indians, California)",
+        "Cahuilla Band of Indians",
+        "Los Coyotes Band of Cahuilla and Cupeno Indians, California",
+        "Ramona Band of Cahuilla, California",
+        "Santa Rosa Band of Cahuilla Indians, California",
+        "Torres Martinez Desert Cahuilla Indians, California"
+      ]
+    },
+    {
+      "larName": "Choctaw",
+      "candidates": [
+        "Jena Band of Choctaw Indians",
+        "Mississippi Band of Choctaw Indians",
+        "The Choctaw Nation of Oklahoma"
+      ]
+    },
+    {
+      "larName": "Coushatta",
+      "candidates": [
+        "Alabama-Coushatta Tribe of Texas",
+        "Coushatta Tribe of Louisiana"
+      ]
+    },
+    {
+      "larName": "Crow",
+      "candidates": [
+        "Crow Creek Sioux Tribe of the Crow Creek Reservation, South Dakota",
+        "Crow Tribe of Montana"
+      ]
+    },
+    {
+      "larName": "Goshute",
+      "candidates": [
+        "Confederated Tribes of the Goshute Reservation, Nevada and Utah",
+        "Skull Valley Band of Goshute Indians of Utah"
+      ]
+    },
+    {
+      "larName": "Iowa",
+      "candidates": [
+        "Iowa Tribe of Kansas and Nebraska",
+        "Iowa Tribe of Oklahoma",
+        "Sac & Fox Tribe of the Mississippi in Iowa"
+      ]
+    },
+    {
+      "larName": "Kootenai",
+      "candidates": [
+        "Confederated Salish and Kootenai Tribes of the Flathead Reservation",
+        "Kootenai Tribe of Idaho"
+      ]
+    },
+    {
+      "larName": "Little River",
+      "candidates": [
+        "Little River Band of Ottawa Indians, Michigan",
+        "Redwood Valley or Little River Band of Pomo Indians of the Redwood Valley Rancheria California"
+      ]
+    },
+    {
+      "larName": "Oneida",
+      "candidates": [
+        "Oneida Indian Nation",
+        "Oneida Nation"
+      ]
+    },
+    {
+      "larName": "San Juan",
+      "candidates": [
+        "San Juan Southern Paiute Tribe of Arizona",
+        "Ohkay Owingeh, New Mexico (previously listed as Pueblo of San Juan)"
+      ],
+      "rule": "known-ambiguous (maintainer-curated, D-0.7.0-026a)"
+    },
+    {
+      "larName": "Santa Rosa",
+      "candidates": [
+        "Santa Rosa Band of Cahuilla Indians, California",
+        "Santa Rosa Indian Community of the Santa Rosa Rancheria, California"
+      ]
+    },
+    {
+      "larName": "Santee",
+      "candidates": [
+        "Flandreau Santee Sioux Tribe of South Dakota",
+        "Santee Sioux Nation, Nebraska"
+      ]
+    },
+    {
+      "larName": "Seneca",
+      "candidates": [
+        "Seneca Nation of Indians",
+        "Seneca-Cayuga Nation",
+        "Tonawanda Band of Seneca"
+      ]
+    },
+    {
+      "larName": "Warm Springs",
+      "candidates": [
+        "Confederated Tribes of the Warm Springs Reservation of Oregon",
+        "Fort Sill-Chiricahua-Warm Springs-Apache Tribe (previously listed as Fort Sill Apache Tribe of Oklahoma)"
+      ]
+    },
+    {
+      "larName": "Wind River",
+      "candidates": [
+        "Eastern Shoshone Tribe of the Wind River Reservation, Wyoming",
+        "Northern Arapaho Tribe of the Wind River Reservation, Wyoming"
+      ]
+    },
+    {
+      "larName": "Yavapai",
+      "candidates": [
+        "Fort McDowell Yavapai Nation, Arizona",
+        "Yavapai-Apache Nation of the Camp Verde Indian Reservation, Arizona",
+        "Yavapai-Prescott Indian Tribe"
+      ]
+    },
+    {
+      "larName": "Yurok",
+      "candidates": [
+        "PuliklaTribe of Yurok People (previously listed as Resighini Rancheria, California)",
+        "Yurok Tribe of the Yurok Reservation, California"
+      ]
+    }
+  ],
+  "rosterNoLar": [
+    "Absentee-Shawnee Tribe of Indians of Oklahoma",
+    "Ak-Chin Indian Community",
+    "Alabama-Coushatta Tribe of Texas",
+    "Alabama-Quassarte Tribal Town",
+    "Apache Tribe of Oklahoma",
+    "Caddo Nation of Oklahoma",
+    "Cahuilla Band of Indians",
+    "California Valley Miwok Tribe, California",
+    "Cayuga Nation",
+    "Cherokee Nation",
+    "Cheyenne and Arapaho Tribes, Oklahoma",
+    "Chickahominy Indian Tribe",
+    "Chickahominy Indian Tribe-Eastern Division",
+    "Chippewa Cree Indians of the Rocky Boy's Reservation, Montana",
+    "Citizen Potawatomi Nation, Oklahoma",
+    "Comanche Nation, Oklahoma",
+    "Confederated Tribes of the Coos, Lower Umpqua and Siuslaw Indians",
+    "Confederated Tribes of the Goshute Reservation, Nevada and Utah",
+    "Confederated Tribes of the Warm Springs Reservation of Oregon",
+    "Coquille Indian Tribe",
+    "Coushatta Tribe of Louisiana",
+    "Crow Tribe of Montana",
+    "Delaware Nation, Oklahoma",
+    "Delaware Tribe of Indians",
+    "Eastern Band of Cherokee Indians",
+    "Eastern Shawnee Tribe of Oklahoma",
+    "Eastern Shoshone Tribe of the Wind River Reservation, Wyoming",
+    "Ewiiaapaayp Band of Kumeyaay Indians (previously listed as Ewiiaapaayp Band of Kumeyaay Indians, California)",
+    "Fort Sill-Chiricahua-Warm Springs-Apache Tribe (previously listed as Fort Sill Apache Tribe of Oklahoma)",
+    "Houlton Band of Maliseet Indians",
+    "Ione Band of Miwok Indians of California",
+    "Iowa Tribe of Kansas and Nebraska",
+    "Iowa Tribe of Oklahoma",
+    "Jena Band of Choctaw Indians",
+    "Kaw Nation, Oklahoma",
+    "Keweenaw Bay Indian Community, Michigan",
+    "Kialegee Tribal Town",
+    "Kickapoo Tribe of Oklahoma",
+    "Kiowa Tribe (previously listed as Kiowa Indian Tribe of Oklahoma)",
+    "Kletsel Dehe Wintun Nation of the Cortina Rancheria (previously listed as Kletsel Dehe Band of Wintun Indians)",
+    "Koi Nation of Northern California",
+    "Kootenai Tribe of Idaho",
+    "Little River Band of Ottawa Indians, Michigan",
+    "Little Shell Tribe of Chippewa Indians of Montana",
+    "Manchester Band of Pomo Indians of the Manchester Rancheria, California",
+    "Mashantucket Pequot Indian Tribe",
+    "Miami Tribe of Oklahoma",
+    "Mississippi Band of Choctaw Indians",
+    "Modoc Nation",
+    "Mohegan Tribe of Indians of Connecticut",
+    "Monacan Indian Nation",
+    "Nansemond Indian Nation",
+    "Northern Arapaho Tribe of the Wind River Reservation, Wyoming",
+    "Northwestern Band of the Shoshone Nation",
+    "Nottawaseppi Huron Band of the Potawatomi, Michigan",
+    "Oglala Sioux Tribe",
+    "Ohkay Owingeh, New Mexico",
+    "Oneida Indian Nation",
+    "Oneida Nation",
+    "Otoe-Missouria Tribe of Indians, Oklahoma",
+    "Ottawa Tribe of Oklahoma",
+    "Paiute-Shoshone Tribe of the Fallon Reservation and Colony, Nevada",
+    "Pamunkey Indian Tribe",
+    "Pauma Band of Luiseno Mission Indians of the Pauma & Yuima Reservation, California",
+    "Pawnee Nation of Oklahoma",
+    "Peoria Tribe of Indians of Oklahoma",
+    "Poarch Band of Creek Indians",
+    "Pokagon Band of Potawatomi Indians, Michigan and Indiana",
+    "Ponca Tribe of Indians of Oklahoma",
+    "Ponca Tribe of Nebraska",
+    "Prairie Band Potawatomi Nation",
+    "Quapaw Nation",
+    "Quechan Tribe of the Fort Yuma Indian Reservation, California & Arizona",
+    "Rappahannock Tribe, Inc.",
+    "Sac & Fox Nation of Missouri in Kansas and Nebraska",
+    "Sac & Fox Nation, Oklahoma",
+    "Sac & Fox Tribe of the Mississippi in Iowa",
+    "Saginaw Chippewa Indian Tribe of Michigan",
+    "Saint Regis Mohawk Tribe",
+    "Samish Indian Nation",
+    "San Juan Southern Paiute Tribe of Arizona",
+    "Santa Rosa Band of Cahuilla Indians, California",
+    "Santa Rosa Indian Community of the Santa Rosa Rancheria, California",
+    "Santee Sioux Nation, Nebraska",
+    "Seminole Tribe of Florida",
+    "Seneca Nation of Indians",
+    "Seneca-Cayuga Nation",
+    "Shawnee Tribe",
+    "Shinnecock Indian Nation",
+    "Sisseton-Wahpeton Oyate of the Lake Traverse Reservation, South Dakota",
+    "Snoqualmie Indian Tribe",
+    "Sokaogon Chippewa Community, Wisconsin",
+    "Spirit Lake Tribe, North Dakota",
+    "Tejon Indian Tribe",
+    "The Chickasaw Nation",
+    "The Choctaw Nation of Oklahoma",
+    "The Muscogee (Creek) Nation",
+    "The Osage Nation",
+    "The Seminole Nation of Oklahoma",
+    "Thlopthlocco Tribal Town",
+    "Tolowa Dee-ni' Nation",
+    "Tonkawa Tribe of Indians of Oklahoma",
+    "United Keetoowah Band of Cherokee Indians in Oklahoma",
+    "Upper Mattaponi Tribe",
+    "Ute Indian Tribe of the Uintah & Ouray Reservation, Utah",
+    "Wichita and Affiliated Tribes (Wichita, Keechi, Waco, & Tawakonie), Oklahoma",
+    "Wiyot Tribe, California",
+    "Wyandotte Nation",
+    "Yavapai-Prescott Indian Tribe",
+    "Yurok Tribe of the Yurok Reservation, California",
+    "Agdaagux Tribe of King Cove",
+    "Akiachak Native Community",
+    "Akiak Native Community",
+    "Alatna Village",
+    "Algaaciq Native Village (St. Mary's)",
+    "Allakaket Village",
+    "Aleut Community of St. Paul Island (See Pribilof Islands Aleut Communities of St. Paul & St. George Islands) (previously listed as Saint Paul Island ( See Pribilof Islands Aleut Communities of St. Paul & St. George Islands))",
+    "Alutiiq Tribe of Old Harbor",
+    "Angoon Community Association",
+    "Anvik Village",
+    "Asa'carsarmiut Tribe",
+    "Beaver Village",
+    "Birch Creek Tribe",
+    "Central Council of the Tlingit & Haida Indian Tribes",
+    "Chalkyitsik Village",
+    "Cheesh-Na Tribe",
+    "Chevak Native Village",
+    "Chickaloon Native Village",
+    "Chignik Bay Tribal Council",
+    "Chignik Lake Village",
+    "Chilkat Indian Village (Klukwan)",
+    "Chilkoot Indian Association (Haines)",
+    "Chinik Eskimo Community (Golovin)",
+    "Chuloonawick Native Village",
+    "Circle Native Community",
+    "Craig Tribal Association",
+    "Curyung Tribal Council",
+    "Douglas Indian Association",
+    "Egegik Village",
+    "Eklutna Native Village",
+    "Emmonak Village",
+    "Evansville Village (aka Bettles Field)",
+    "Gulkana Village Council",
+    "Healy Lake Village",
+    "Holy Cross Tribe",
+    "Hoonah Indian Association",
+    "Hughes Village",
+    "Huslia Village",
+    "Hydaburg Cooperative Association",
+    "Igiugig Village",
+    "Inupiat Community of the Arctic Slope",
+    "Iqugmiut Traditional Council",
+    "Ivanof Bay Tribe",
+    "Kaguyak Village",
+    "Kaktovik Village (aka Barter Island)",
+    "Kasigluk Traditional Elders Council",
+    "Kenaitze Indian Tribe",
+    "Ketchikan Indian Community",
+    "King Island Native Community",
+    "King Salmon Tribe",
+    "Klawock Cooperative Association",
+    "Knik Tribe",
+    "Kokhanok Village",
+    "Koyukuk Native Village",
+    "Levelock Village",
+    "Lime Village",
+    "Louden Tribe (previously listed as Galena Village (aka Louden Village))",
+    "Manley Hot Springs Village",
+    "Manokotak Village",
+    "McGrath Native Village",
+    "Mentasta Traditional Council",
+    "Naknek Native Village",
+    "Native Village of Afognak",
+    "Native Village of Akhiok",
+    "Native Village of Akutan",
+    "Native Village of Aleknagik",
+    "Native Village of Ambler",
+    "Native Village of Atka",
+    "Native Village of Atqasuk",
+    "Native Village of Barrow Inupiat Traditional Government",
+    "Native Village of Belkofski",
+    "Native Village of Brevig Mission",
+    "Native Village of Buckland",
+    "Native Village of Cantwell",
+    "Native Village of Chenega",
+    "Native Village of Chignik Lagoon",
+    "Native Village of Chitina",
+    "Native Village of Chuathbaluk (Russian Mission, Kuskokwim)",
+    "Native Village of Council",
+    "Native Village of Deering",
+    "Native Village of Diomede (aka Inalik)",
+    "Native Village of Eagle",
+    "Native Village of Eek",
+    "Native Village of Ekuk",
+    "Native Village of Ekwok",
+    "Native Village of Elim",
+    "Native Village of Eyak (Cordova)",
+    "Native Village of False Pass",
+    "Native Village of Fort Yukon",
+    "Native Village of Gakona",
+    "Native Village of Gambell",
+    "Native Village of Georgetown",
+    "Native Village of Goodnews Bay",
+    "Native Village of Hamilton",
+    "Native Village of Hooper Bay",
+    "Native Village of Kanatak",
+    "Native Village of Karluk",
+    "Native Village of Kiana",
+    "Native Village of Kipnuk",
+    "Native Village of Kivalina",
+    "Native Village of Kluti Kaah (aka Copper Center)",
+    "Native Village of Kobuk",
+    "Native Village of Kongiganak",
+    "Native Village of Kotzebue",
+    "Native Village of Koyuk",
+    "Native Village of Kwigillingok",
+    "Native Village of Kwinhagak (aka Quinhagak)",
+    "Native Village of Larsen Bay",
+    "Native Village of Marshall (aka Fortuna Ledge)",
+    "Native Village of Mary's Igloo",
+    "Native Village of Mekoryuk",
+    "Native Village of Minto",
+    "Native Village of Nanwalek (aka English Bay)",
+    "Native Village of Napaimute",
+    "Native Village of Napakiak",
+    "Native Village of Napaskiak",
+    "Native Village of Nelson Lagoon",
+    "Native Village of Nightmute",
+    "Native Village of Nikolski",
+    "Native Village of Noatak",
+    "Native Village of Nuiqsut (aka Nooiksut)",
+    "Native Village of Nunam Iqua",
+    "Native Village of Nunapitchuk",
+    "Native Village of Ouzinkie",
+    "Native Village of Paimiut",
+    "Native Village of Perryville",
+    "Native Village of Pilot Point",
+    "Native Village of Point Hope",
+    "Native Village of Point Lay",
+    "Native Village of Port Graham",
+    "Native Village of Port Heiden",
+    "Native Village of Port Lions",
+    "Native Village of Ruby",
+    "Native Village of Saint Michael",
+    "Native Village of Savoonga",
+    "Native Village of Scammon Bay",
+    "Native Village of Selawik",
+    "Native Village of Shaktoolik",
+    "Native Village of Shishmaref",
+    "Native Village of Shungnak",
+    "Native Village of South Naknek (previously listed as South Naknek Village)",
+    "Native Village of Stevens",
+    "Native Village of Tanacross",
+    "Native Village of Tanana",
+    "Native Village of Tatitlek",
+    "Native Village of Tazlina",
+    "Native Village of Teller",
+    "Native Village of Tetlin",
+    "Native Village of Tuntutuliak",
+    "Native Village of Tununak",
+    "Native Village of Tyonek",
+    "Native Village of Unalakleet",
+    "Native Village of Unga",
+    "Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)",
+    "Native Village of Wales",
+    "Native Village of White Mountain",
+    "Nenana Native Association",
+    "New Koliganek Village Council",
+    "New Stuyahok Village",
+    "Newhalen Village",
+    "Newtok Village",
+    "Nikolai Village",
+    "Ninilchik Village",
+    "Nome Eskimo Community",
+    "Nondalton Tribe (previously listed as Nondalton Village)",
+    "Noorvik Native Community",
+    "Northway Village",
+    "Nulato Village",
+    "Nunakauyarmiut Tribe",
+    "Organized Village of Grayling (aka Holikachuk)",
+    "Organized Village of Kake",
+    "Organized Village of Kasaan",
+    "Organized Village of Kwethluk",
+    "Organized Village of Saxman",
+    "Orutsararmiut Traditional Native Council",
+    "Oscarville Traditional Village",
+    "Pauloff Harbor Village",
+    "Pedro Bay Village",
+    "Petersburg Indian Association",
+    "Pilot Station Traditional Village",
+    "Pitka's Point Traditional Council",
+    "Platinum Traditional Village",
+    "Portage Creek Village (aka Ohgsenakale)",
+    "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)",
+    "Qagan Tayagungin Tribe of Sand Point",
+    "Qawalangin Tribe of Unalaska",
+    "Rampart Village",
+    "Salamatof Tribe",
+    "Seldovia Village Tribe",
+    "Shageluk Native Village",
+    "Sitka Tribe of Alaska",
+    "Skagway Village",
+    "Stebbins Community Association",
+    "Sun'aq Tribe of Kodiak",
+    "Takotna Village",
+    "Tangirnaq Native Village",
+    "Telida Village",
+    "Traditional Village of Togiak",
+    "Tuluksak Native Community",
+    "Twin Hills Village",
+    "Ugashik Village",
+    "Umkumiut Native Village",
+    "Village of Alakanuk",
+    "Village of Anaktuvuk Pass",
+    "Village of Aniak",
+    "Village of Atmautluak",
+    "Village of Bill Moore's Slough",
+    "Village of Chefornak",
+    "Village of Clarks Point",
+    "Village of Crooked Creek",
+    "Village of Dot Lake",
+    "Village of Iliamna",
+    "Village of Kalskag",
+    "Village of Kaltag",
+    "Village of Kotlik",
+    "Village of Lower Kalskag",
+    "Village of Ohogamiut",
+    "Village of Red Devil",
+    "Village of Sleetmute",
+    "Village of Solomon",
+    "Village of Stony River",
+    "Village of Wainwright",
+    "Wrangell Cooperative Association",
+    "Yakutat Tlingit Tribe",
+    "Yupiit of Andreafski"
+  ]
+}

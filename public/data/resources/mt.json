@@ -1,0 +1,20 @@
+{
+  "label": "Montana",
+  "verified": "2026-07-09",
+  "resources": [
+    {
+      "label": "Montana drought and water-supply portal",
+      "url": "https://drought.mt.gov/",
+      "agency": "Montana Department of Natural Resources and Conservation",
+      "tier": "state",
+      "description": "Current drought conditions, the state drought management plan, and response and adaptation resources."
+    },
+    {
+      "label": "State drought resources",
+      "url": "https://des.mt.gov/Drought/State-Drought-Resources",
+      "agency": "Montana Disaster and Emergency Services",
+      "tier": "state",
+      "description": "Drought resources coordinated through the Governor's Drought and Water Supply Advisory Committee."
+    }
+  ]
+}

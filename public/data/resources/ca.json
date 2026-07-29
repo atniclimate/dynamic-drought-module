@@ -1,0 +1,27 @@
+{
+  "label": "California",
+  "verified": "2026-07-09",
+  "resources": [
+    {
+      "label": "California drought conditions and resources",
+      "url": "https://water.ca.gov/water-basics/drought",
+      "agency": "California Department of Water Resources",
+      "tier": "state",
+      "description": "Drought conditions, state activities, assistance program information, and resources."
+    },
+    {
+      "label": "California Water Watch (real-time conditions)",
+      "url": "https://cww.water.ca.gov/",
+      "agency": "California Department of Water Resources",
+      "tier": "state",
+      "description": "Real-time local and statewide precipitation, snowpack, reservoir, and groundwater conditions."
+    },
+    {
+      "label": "Drought response, drinking water, and water rights",
+      "url": "https://www.waterboards.ca.gov/drought/",
+      "agency": "California State Water Resources Control Board",
+      "tier": "state",
+      "description": "Drinking-water assistance for households facing shortages, water-rights administration, and regional drought response."
+    }
+  ]
+}

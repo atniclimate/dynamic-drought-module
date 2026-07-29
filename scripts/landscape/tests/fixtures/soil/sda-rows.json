@@ -1,0 +1,2135 @@
+{
+  "sacatalog": [
+    {
+      "areasymbol": "OR643",
+      "saverest": "Sep 10 2025  4:43PM"
+    }
+  ],
+  "muaggatt": [
+    {
+      "mukey": "64070",
+      "aws0150wta": "29.92",
+      "drclassdcd": "Somewhat poorly drained"
+    },
+    {
+      "mukey": "64071",
+      "aws0150wta": "22.5",
+      "drclassdcd": "Poorly drained"
+    },
+    {
+      "mukey": "64075",
+      "aws0150wta": "28.73",
+      "drclassdcd": "Well drained"
+    },
+    {
+      "mukey": "64078",
+      "aws0150wta": "27.47",
+      "drclassdcd": "Well drained"
+    },
+    {
+      "mukey": "64079",
+      "aws0150wta": "27.36",
+      "drclassdcd": "Poorly drained"
+    },
+    {
+      "mukey": "64081",
+      "aws0150wta": "17.16",
+      "drclassdcd": "Poorly drained"
+    },
+    {
+      "mukey": "64091",
+      "aws0150wta": "14.41",
+      "drclassdcd": "Moderately well drained"
+    },
+    {
+      "mukey": "64092",
+      "aws0150wta": "14.41",
+      "drclassdcd": "Moderately well drained"
+    },
+    {
+      "mukey": "64093",
+      "aws0150wta": "14.41",
+      "drclassdcd": "Moderately well drained"
+    },
+    {
+      "mukey": "64097",
+      "aws0150wta": "16.99",
+      "drclassdcd": "Somewhat poorly drained"
+    },
+    {
+      "mukey": "64122",
+      "aws0150wta": "26.22",
+      "drclassdcd": "Moderately well drained"
+    },
+    {
+      "mukey": "64133",
+      "aws0150wta": "13.21",
+      "drclassdcd": "Well drained"
+    },
+    {
+      "mukey": "64142",
+      "aws0150wta": "23",
+      "drclassdcd": "Well drained"
+    },
+    {
+      "mukey": "64143",
+      "aws0150wta": "12.08",
+      "drclassdcd": "Well drained"
+    },
+    {
+      "mukey": "64157",
+      "aws0150wta": "15.39",
+      "drclassdcd": "Well drained"
+    },
+    {
+      "mukey": "64158",
+      "aws0150wta": "15.39",
+      "drclassdcd": "Well drained"
+    },
+    {
+      "mukey": "64166",
+      "aws0150wta": "25.64",
+      "drclassdcd": "Poorly drained"
+    },
+    {
+      "mukey": "64170",
+      "aws0150wta": "30",
+      "drclassdcd": "Well drained"
+    },
+    {
+      "mukey": "64172",
+      "aws0150wta": "3.18",
+      "drclassdcd": "Well drained"
+    }
+  ],
+  "component": [
+    {
+      "mukey": "64070",
+      "cokey": "27059663",
+      "comppct_r": "5",
+      "majcompflag": "No "
+    },
+    {
+      "mukey": "64070",
+      "cokey": "27059664",
+      "comppct_r": "85",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64071",
+      "cokey": "27059662",
+      "comppct_r": "85",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64075",
+      "cokey": "27059657",
+      "comppct_r": "85",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64078",
+      "cokey": "27059654",
+      "comppct_r": "85",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64079",
+      "cokey": "27059652",
+      "comppct_r": "10",
+      "majcompflag": "No "
+    },
+    {
+      "mukey": "64079",
+      "cokey": "27059653",
+      "comppct_r": "90",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64081",
+      "cokey": "27059646",
+      "comppct_r": "5",
+      "majcompflag": "No "
+    },
+    {
+      "mukey": "64081",
+      "cokey": "27059647",
+      "comppct_r": "95",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64091",
+      "cokey": "27059636",
+      "comppct_r": "85",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64092",
+      "cokey": "27059635",
+      "comppct_r": "100",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64093",
+      "cokey": "27059633",
+      "comppct_r": "2",
+      "majcompflag": "No "
+    },
+    {
+      "mukey": "64093",
+      "cokey": "27059634",
+      "comppct_r": "85",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64097",
+      "cokey": "27059632",
+      "comppct_r": "85",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64122",
+      "cokey": "27059611",
+      "comppct_r": "5",
+      "majcompflag": "No "
+    },
+    {
+      "mukey": "64122",
+      "cokey": "27059612",
+      "comppct_r": "85",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64133",
+      "cokey": "27059603",
+      "comppct_r": "2",
+      "majcompflag": "No "
+    },
+    {
+      "mukey": "64133",
+      "cokey": "27059604",
+      "comppct_r": "85",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64142",
+      "cokey": "27059593",
+      "comppct_r": "100",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64143",
+      "cokey": "27059591",
+      "comppct_r": "35",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64143",
+      "cokey": "27059592",
+      "comppct_r": "50",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64157",
+      "cokey": "27059573",
+      "comppct_r": "90",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64158",
+      "cokey": "27059572",
+      "comppct_r": "90",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64166",
+      "cokey": "27059562",
+      "comppct_r": "90",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64170",
+      "cokey": "27059561",
+      "comppct_r": "83",
+      "majcompflag": "Yes"
+    },
+    {
+      "mukey": "64172",
+      "cokey": "27059559",
+      "comppct_r": "95",
+      "majcompflag": "Yes"
+    }
+  ],
+  "chorizon": [
+    {
+      "cokey": "27059559",
+      "chkey": "80805279",
+      "hzdept_r": "0",
+      "hzdepb_r": "10",
+      "awc_r": "0.09"
+    },
+    {
+      "cokey": "27059559",
+      "chkey": "80805280",
+      "hzdept_r": "10",
+      "hzdepb_r": "48",
+      "awc_r": "0.06"
+    },
+    {
+      "cokey": "27059559",
+      "chkey": "80805281",
+      "hzdept_r": "48",
+      "hzdepb_r": "58",
+      "awc_r": null
+    },
+    {
+      "cokey": "27059561",
+      "chkey": "80805285",
+      "hzdept_r": "0",
+      "hzdepb_r": "61",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059561",
+      "chkey": "80805286",
+      "hzdept_r": "61",
+      "hzdepb_r": "137",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059561",
+      "chkey": "80805287",
+      "hzdept_r": "137",
+      "hzdepb_r": "165",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059562",
+      "chkey": "80805288",
+      "hzdept_r": "0",
+      "hzdepb_r": "41",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059562",
+      "chkey": "80805289",
+      "hzdept_r": "41",
+      "hzdepb_r": "152",
+      "awc_r": "0.16"
+    },
+    {
+      "cokey": "27059572",
+      "chkey": "80805318",
+      "hzdept_r": "0",
+      "hzdepb_r": "53",
+      "awc_r": "0.19"
+    },
+    {
+      "cokey": "27059572",
+      "chkey": "80805319",
+      "hzdept_r": "53",
+      "hzdepb_r": "81",
+      "awc_r": "0.19"
+    },
+    {
+      "cokey": "27059572",
+      "chkey": "80805320",
+      "hzdept_r": "81",
+      "hzdepb_r": "107",
+      "awc_r": null
+    },
+    {
+      "cokey": "27059573",
+      "chkey": "80805321",
+      "hzdept_r": "0",
+      "hzdepb_r": "53",
+      "awc_r": "0.19"
+    },
+    {
+      "cokey": "27059573",
+      "chkey": "80805322",
+      "hzdept_r": "53",
+      "hzdepb_r": "81",
+      "awc_r": "0.19"
+    },
+    {
+      "cokey": "27059573",
+      "chkey": "80805323",
+      "hzdept_r": "81",
+      "hzdepb_r": "107",
+      "awc_r": null
+    },
+    {
+      "cokey": "27059591",
+      "chkey": "80805367",
+      "hzdept_r": "0",
+      "hzdepb_r": "3",
+      "awc_r": "0.45"
+    },
+    {
+      "cokey": "27059591",
+      "chkey": "80805368",
+      "hzdept_r": "3",
+      "hzdepb_r": "13",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059591",
+      "chkey": "80805369",
+      "hzdept_r": "13",
+      "hzdepb_r": "33",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059591",
+      "chkey": "80805370",
+      "hzdept_r": "33",
+      "hzdepb_r": "58",
+      "awc_r": null
+    },
+    {
+      "cokey": "27059592",
+      "chkey": "80805371",
+      "hzdept_r": "0",
+      "hzdepb_r": "53",
+      "awc_r": "0.19"
+    },
+    {
+      "cokey": "27059592",
+      "chkey": "80805372",
+      "hzdept_r": "53",
+      "hzdepb_r": "81",
+      "awc_r": "0.19"
+    },
+    {
+      "cokey": "27059592",
+      "chkey": "80805373",
+      "hzdept_r": "81",
+      "hzdepb_r": "107",
+      "awc_r": null
+    },
+    {
+      "cokey": "27059593",
+      "chkey": "80805374",
+      "hzdept_r": "25",
+      "hzdepb_r": "152",
+      "awc_r": "0.14"
+    },
+    {
+      "cokey": "27059593",
+      "chkey": "80805375",
+      "hzdept_r": "0",
+      "hzdepb_r": "25",
+      "awc_r": "0.22"
+    },
+    {
+      "cokey": "27059604",
+      "chkey": "80805399",
+      "hzdept_r": "0",
+      "hzdepb_r": "23",
+      "awc_r": "0.19"
+    },
+    {
+      "cokey": "27059604",
+      "chkey": "80805400",
+      "hzdept_r": "23",
+      "hzdepb_r": "91",
+      "awc_r": "0.13"
+    },
+    {
+      "cokey": "27059604",
+      "chkey": "80805401",
+      "hzdept_r": "91",
+      "hzdepb_r": "102",
+      "awc_r": null
+    },
+    {
+      "cokey": "27059611",
+      "chkey": "80805426",
+      "hzdept_r": "0",
+      "hzdepb_r": "41",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059611",
+      "chkey": "80805427",
+      "hzdept_r": "41",
+      "hzdepb_r": "152",
+      "awc_r": "0.16"
+    },
+    {
+      "cokey": "27059612",
+      "chkey": "80805428",
+      "hzdept_r": "0",
+      "hzdepb_r": "25",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059612",
+      "chkey": "80805429",
+      "hzdept_r": "25",
+      "hzdepb_r": "165",
+      "awc_r": "0.17"
+    },
+    {
+      "cokey": "27059632",
+      "chkey": "80805486",
+      "hzdept_r": "0",
+      "hzdepb_r": "46",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059632",
+      "chkey": "80805487",
+      "hzdept_r": "46",
+      "hzdepb_r": "61",
+      "awc_r": "0.19"
+    },
+    {
+      "cokey": "27059632",
+      "chkey": "80805488",
+      "hzdept_r": "61",
+      "hzdepb_r": "127",
+      "awc_r": "0.04"
+    },
+    {
+      "cokey": "27059632",
+      "chkey": "80805489",
+      "hzdept_r": "127",
+      "hzdepb_r": "152",
+      "awc_r": "0.1"
+    },
+    {
+      "cokey": "27059634",
+      "chkey": "80805490",
+      "hzdept_r": "0",
+      "hzdepb_r": "30",
+      "awc_r": "0.17"
+    },
+    {
+      "cokey": "27059634",
+      "chkey": "80805491",
+      "hzdept_r": "30",
+      "hzdepb_r": "71",
+      "awc_r": "0.16"
+    },
+    {
+      "cokey": "27059634",
+      "chkey": "80805492",
+      "hzdept_r": "71",
+      "hzdepb_r": "96",
+      "awc_r": "0.11"
+    },
+    {
+      "cokey": "27059634",
+      "chkey": "80805493",
+      "hzdept_r": "96",
+      "hzdepb_r": "121",
+      "awc_r": null
+    },
+    {
+      "cokey": "27059635",
+      "chkey": "80805494",
+      "hzdept_r": "0",
+      "hzdepb_r": "30",
+      "awc_r": "0.17"
+    },
+    {
+      "cokey": "27059635",
+      "chkey": "80805495",
+      "hzdept_r": "30",
+      "hzdepb_r": "71",
+      "awc_r": "0.16"
+    },
+    {
+      "cokey": "27059635",
+      "chkey": "80805496",
+      "hzdept_r": "71",
+      "hzdepb_r": "96",
+      "awc_r": "0.11"
+    },
+    {
+      "cokey": "27059635",
+      "chkey": "80805497",
+      "hzdept_r": "96",
+      "hzdepb_r": "121",
+      "awc_r": null
+    },
+    {
+      "cokey": "27059636",
+      "chkey": "80805498",
+      "hzdept_r": "0",
+      "hzdepb_r": "30",
+      "awc_r": "0.17"
+    },
+    {
+      "cokey": "27059636",
+      "chkey": "80805499",
+      "hzdept_r": "30",
+      "hzdepb_r": "71",
+      "awc_r": "0.16"
+    },
+    {
+      "cokey": "27059636",
+      "chkey": "80805500",
+      "hzdept_r": "71",
+      "hzdepb_r": "96",
+      "awc_r": "0.11"
+    },
+    {
+      "cokey": "27059636",
+      "chkey": "80805501",
+      "hzdept_r": "96",
+      "hzdepb_r": "121",
+      "awc_r": null
+    },
+    {
+      "cokey": "27059646",
+      "chkey": "80805533",
+      "hzdept_r": "0",
+      "hzdepb_r": "38",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059646",
+      "chkey": "80805534",
+      "hzdept_r": "38",
+      "hzdepb_r": "74",
+      "awc_r": "0.16"
+    },
+    {
+      "cokey": "27059646",
+      "chkey": "80805535",
+      "hzdept_r": "74",
+      "hzdepb_r": "152",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059647",
+      "chkey": "80805536",
+      "hzdept_r": "0",
+      "hzdepb_r": "33",
+      "awc_r": "0.22"
+    },
+    {
+      "cokey": "27059647",
+      "chkey": "80805537",
+      "hzdept_r": "33",
+      "hzdepb_r": "117",
+      "awc_r": "0.04"
+    },
+    {
+      "cokey": "27059647",
+      "chkey": "80805538",
+      "hzdept_r": "117",
+      "hzdepb_r": "152",
+      "awc_r": "0.18"
+    },
+    {
+      "cokey": "27059652",
+      "chkey": "80805562",
+      "hzdept_r": "0",
+      "hzdepb_r": "33",
+      "awc_r": "0.22"
+    },
+    {
+      "cokey": "27059652",
+      "chkey": "80805563",
+      "hzdept_r": "33",
+      "hzdepb_r": "117",
+      "awc_r": "0.04"
+    },
+    {
+      "cokey": "27059652",
+      "chkey": "80805564",
+      "hzdept_r": "117",
+      "hzdepb_r": "152",
+      "awc_r": "0.18"
+    },
+    {
+      "cokey": "27059653",
+      "chkey": "80805565",
+      "hzdept_r": "0",
+      "hzdepb_r": "38",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059653",
+      "chkey": "80805566",
+      "hzdept_r": "38",
+      "hzdepb_r": "74",
+      "awc_r": "0.16"
+    },
+    {
+      "cokey": "27059653",
+      "chkey": "80805567",
+      "hzdept_r": "74",
+      "hzdepb_r": "152",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059654",
+      "chkey": "80805568",
+      "hzdept_r": "0",
+      "hzdepb_r": "23",
+      "awc_r": "0.21"
+    },
+    {
+      "cokey": "27059654",
+      "chkey": "80805569",
+      "hzdept_r": "23",
+      "hzdepb_r": "104",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059654",
+      "chkey": "80805570",
+      "hzdept_r": "104",
+      "hzdepb_r": "211",
+      "awc_r": "0.14"
+    },
+    {
+      "cokey": "27059657",
+      "chkey": "80805578",
+      "hzdept_r": "0",
+      "hzdepb_r": "23",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059657",
+      "chkey": "80805579",
+      "hzdept_r": "23",
+      "hzdepb_r": "203",
+      "awc_r": "0.19"
+    },
+    {
+      "cokey": "27059662",
+      "chkey": "80805590",
+      "hzdept_r": "0",
+      "hzdepb_r": "36",
+      "awc_r": "0.15"
+    },
+    {
+      "cokey": "27059662",
+      "chkey": "80805591",
+      "hzdept_r": "36",
+      "hzdepb_r": "122",
+      "awc_r": "0.15"
+    },
+    {
+      "cokey": "27059662",
+      "chkey": "80805592",
+      "hzdept_r": "122",
+      "hzdepb_r": "152",
+      "awc_r": "0.15"
+    },
+    {
+      "cokey": "27059663",
+      "chkey": "80805593",
+      "hzdept_r": "38",
+      "hzdepb_r": "74",
+      "awc_r": "0.16"
+    },
+    {
+      "cokey": "27059663",
+      "chkey": "80805594",
+      "hzdept_r": "0",
+      "hzdepb_r": "38",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059663",
+      "chkey": "80805595",
+      "hzdept_r": "74",
+      "hzdepb_r": "152",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059664",
+      "chkey": "80805596",
+      "hzdept_r": "0",
+      "hzdepb_r": "61",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059664",
+      "chkey": "80805597",
+      "hzdept_r": "61",
+      "hzdepb_r": "94",
+      "awc_r": "0.2"
+    },
+    {
+      "cokey": "27059664",
+      "chkey": "80805598",
+      "hzdept_r": "94",
+      "hzdepb_r": "152",
+      "awc_r": "0.2"
+    }
+  ],
+  "chtexturegrp": [
+    {
+      "chkey": "80805279",
+      "chtgkey": "163957430",
+      "texture": "STV-SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805280",
+      "chtgkey": "163957431",
+      "texture": "STV-SICL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805280",
+      "chtgkey": "163957432",
+      "texture": "CBV-CL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805280",
+      "chtgkey": "163957433",
+      "texture": "CBX-L",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805281",
+      "chtgkey": "163957434",
+      "texture": "UWB",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805285",
+      "chtgkey": "163957440",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805286",
+      "chtgkey": "163957441",
+      "texture": "SICL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805286",
+      "chtgkey": "163957442",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805287",
+      "chtgkey": "163957443",
+      "texture": "SICL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805287",
+      "chtgkey": "163957444",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805288",
+      "chtgkey": "163957445",
+      "texture": "SICL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805289",
+      "chtgkey": "163957446",
+      "texture": "SICL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805289",
+      "chtgkey": "163957447",
+      "texture": "SIL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805318",
+      "chtgkey": "163957488",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805319",
+      "chtgkey": "163957489",
+      "texture": "CL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805319",
+      "chtgkey": "163957490",
+      "texture": "SICL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805320",
+      "chtgkey": "163957491",
+      "texture": "WB",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805321",
+      "chtgkey": "163957492",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805322",
+      "chtgkey": "163957493",
+      "texture": "CL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805322",
+      "chtgkey": "163957494",
+      "texture": "SICL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805323",
+      "chtgkey": "163957495",
+      "texture": "WB",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805367",
+      "chtgkey": "163957572",
+      "texture": "SPM",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805368",
+      "chtgkey": "163957573",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805369",
+      "chtgkey": "163957574",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805369",
+      "chtgkey": "163957575",
+      "texture": "CL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805369",
+      "chtgkey": "163957576",
+      "texture": "GR-SIL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805370",
+      "chtgkey": "163957577",
+      "texture": "WB",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805371",
+      "chtgkey": "163957578",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805372",
+      "chtgkey": "163957579",
+      "texture": "CL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805372",
+      "chtgkey": "163957580",
+      "texture": "SICL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805373",
+      "chtgkey": "163957581",
+      "texture": "WB",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805374",
+      "chtgkey": "163957582",
+      "texture": "SL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805374",
+      "chtgkey": "163957583",
+      "texture": "FSL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805374",
+      "chtgkey": "163957584",
+      "texture": "COSL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805375",
+      "chtgkey": "163957585",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805399",
+      "chtgkey": "163957625",
+      "texture": "SICL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805400",
+      "chtgkey": "163957626",
+      "texture": "C",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805400",
+      "chtgkey": "163957627",
+      "texture": "GR-C",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805400",
+      "chtgkey": "163957628",
+      "texture": "SIC",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805401",
+      "chtgkey": "163957629",
+      "texture": "UWB",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805426",
+      "chtgkey": "163957660",
+      "texture": "SICL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805427",
+      "chtgkey": "163957661",
+      "texture": "SICL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805427",
+      "chtgkey": "163957662",
+      "texture": "SIL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805428",
+      "chtgkey": "163957663",
+      "texture": "SICL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805429",
+      "chtgkey": "163957664",
+      "texture": "SICL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805429",
+      "chtgkey": "163957665",
+      "texture": "CL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805429",
+      "chtgkey": "163957666",
+      "texture": "SIL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805486",
+      "chtgkey": "163957749",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805487",
+      "chtgkey": "163957750",
+      "texture": "SICL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805487",
+      "chtgkey": "163957751",
+      "texture": "SIL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805488",
+      "chtgkey": "163957752",
+      "texture": "C",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805488",
+      "chtgkey": "163957753",
+      "texture": "SIC",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805489",
+      "chtgkey": "163957754",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805489",
+      "chtgkey": "163957755",
+      "texture": "SICL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805489",
+      "chtgkey": "163957756",
+      "texture": "CL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805490",
+      "chtgkey": "163957757",
+      "texture": "SICL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805491",
+      "chtgkey": "163957758",
+      "texture": "SIC",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805491",
+      "chtgkey": "163957759",
+      "texture": "SICL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805492",
+      "chtgkey": "163957760",
+      "texture": "C",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805493",
+      "chtgkey": "163957761",
+      "texture": "WB",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805494",
+      "chtgkey": "163957762",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805495",
+      "chtgkey": "163957763",
+      "texture": "SIC",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805495",
+      "chtgkey": "163957764",
+      "texture": "SICL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805496",
+      "chtgkey": "163957765",
+      "texture": "C",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805497",
+      "chtgkey": "163957766",
+      "texture": "WB",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805498",
+      "chtgkey": "163957767",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805499",
+      "chtgkey": "163957768",
+      "texture": "SIC",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805499",
+      "chtgkey": "163957769",
+      "texture": "SICL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805500",
+      "chtgkey": "163957770",
+      "texture": "C",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805501",
+      "chtgkey": "163957771",
+      "texture": "WB",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805533",
+      "chtgkey": "163957821",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805534",
+      "chtgkey": "163957822",
+      "texture": "SIC",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805534",
+      "chtgkey": "163957823",
+      "texture": "SICL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805534",
+      "chtgkey": "163957824",
+      "texture": "C",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805535",
+      "chtgkey": "163957825",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805535",
+      "chtgkey": "163957826",
+      "texture": "SICL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805536",
+      "chtgkey": "163957827",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805537",
+      "chtgkey": "163957828",
+      "texture": "SIC",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805537",
+      "chtgkey": "163957829",
+      "texture": "C",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805538",
+      "chtgkey": "163957830",
+      "texture": "SIL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805538",
+      "chtgkey": "163957831",
+      "texture": "SICL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805562",
+      "chtgkey": "163957873",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805563",
+      "chtgkey": "163957874",
+      "texture": "SIC",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805563",
+      "chtgkey": "163957875",
+      "texture": "C",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805564",
+      "chtgkey": "163957876",
+      "texture": "SIL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805564",
+      "chtgkey": "163957877",
+      "texture": "SICL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805565",
+      "chtgkey": "163957878",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805566",
+      "chtgkey": "163957879",
+      "texture": "SIC",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805566",
+      "chtgkey": "163957880",
+      "texture": "SICL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805566",
+      "chtgkey": "163957881",
+      "texture": "C",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805567",
+      "chtgkey": "163957882",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805567",
+      "chtgkey": "163957883",
+      "texture": "SICL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805568",
+      "chtgkey": "163957884",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805569",
+      "chtgkey": "163957885",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805570",
+      "chtgkey": "163957886",
+      "texture": "SL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805570",
+      "chtgkey": "163957887",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805578",
+      "chtgkey": "163957902",
+      "texture": "SICL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805579",
+      "chtgkey": "163957903",
+      "texture": "SIL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805579",
+      "chtgkey": "163957904",
+      "texture": "SICL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805590",
+      "chtgkey": "163957923",
+      "texture": "C",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805591",
+      "chtgkey": "163957924",
+      "texture": "C",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805592",
+      "chtgkey": "163957925",
+      "texture": "C",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805592",
+      "chtgkey": "163957926",
+      "texture": "SC",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805593",
+      "chtgkey": "163957927",
+      "texture": "SIC",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805593",
+      "chtgkey": "163957928",
+      "texture": "SICL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805593",
+      "chtgkey": "163957929",
+      "texture": "C",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805594",
+      "chtgkey": "163957930",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805595",
+      "chtgkey": "163957931",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805595",
+      "chtgkey": "163957932",
+      "texture": "SICL",
+      "rvindicator": "No "
+    },
+    {
+      "chkey": "80805596",
+      "chtgkey": "163957933",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805597",
+      "chtgkey": "163957934",
+      "texture": "SICL",
+      "rvindicator": "Yes"
+    },
+    {
+      "chkey": "80805598",
+      "chtgkey": "163957935",
+      "texture": "SIL",
+      "rvindicator": "Yes"
+    }
+  ],
+  "chtexture": [
+    {
+      "chtgkey": "163957430",
+      "chtkey": "166751372",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957431",
+      "chtkey": "166751373",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957432",
+      "chtkey": "166751374",
+      "texcl": "Clay loam"
+    },
+    {
+      "chtgkey": "163957433",
+      "chtkey": "166751375",
+      "texcl": "Loam"
+    },
+    {
+      "chtgkey": "163957434",
+      "chtkey": "166751376",
+      "texcl": null
+    },
+    {
+      "chtgkey": "163957440",
+      "chtkey": "166751382",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957441",
+      "chtkey": "166751383",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957442",
+      "chtkey": "166751384",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957443",
+      "chtkey": "166751385",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957444",
+      "chtkey": "166751386",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957445",
+      "chtkey": "166751387",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957446",
+      "chtkey": "166751388",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957447",
+      "chtkey": "166751389",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957488",
+      "chtkey": "166751430",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957489",
+      "chtkey": "166751431",
+      "texcl": "Clay loam"
+    },
+    {
+      "chtgkey": "163957490",
+      "chtkey": "166751432",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957491",
+      "chtkey": "166751433",
+      "texcl": null
+    },
+    {
+      "chtgkey": "163957492",
+      "chtkey": "166751434",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957493",
+      "chtkey": "166751435",
+      "texcl": "Clay loam"
+    },
+    {
+      "chtgkey": "163957494",
+      "chtkey": "166751436",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957495",
+      "chtkey": "166751437",
+      "texcl": null
+    },
+    {
+      "chtgkey": "163957572",
+      "chtkey": "166751514",
+      "texcl": null
+    },
+    {
+      "chtgkey": "163957573",
+      "chtkey": "166751515",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957574",
+      "chtkey": "166751516",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957575",
+      "chtkey": "166751517",
+      "texcl": "Clay loam"
+    },
+    {
+      "chtgkey": "163957576",
+      "chtkey": "166751518",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957577",
+      "chtkey": "166751519",
+      "texcl": null
+    },
+    {
+      "chtgkey": "163957578",
+      "chtkey": "166751520",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957579",
+      "chtkey": "166751521",
+      "texcl": "Clay loam"
+    },
+    {
+      "chtgkey": "163957580",
+      "chtkey": "166751522",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957581",
+      "chtkey": "166751523",
+      "texcl": null
+    },
+    {
+      "chtgkey": "163957582",
+      "chtkey": "166751524",
+      "texcl": "Sandy loam"
+    },
+    {
+      "chtgkey": "163957583",
+      "chtkey": "166751525",
+      "texcl": "Fine sandy loam"
+    },
+    {
+      "chtgkey": "163957584",
+      "chtkey": "166751526",
+      "texcl": "Coarse sandy loam"
+    },
+    {
+      "chtgkey": "163957585",
+      "chtkey": "166751527",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957625",
+      "chtkey": "166751567",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957626",
+      "chtkey": "166751568",
+      "texcl": "Clay"
+    },
+    {
+      "chtgkey": "163957627",
+      "chtkey": "166751569",
+      "texcl": "Clay"
+    },
+    {
+      "chtgkey": "163957628",
+      "chtkey": "166751570",
+      "texcl": "Silty clay"
+    },
+    {
+      "chtgkey": "163957629",
+      "chtkey": "166751571",
+      "texcl": null
+    },
+    {
+      "chtgkey": "163957660",
+      "chtkey": "166751602",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957661",
+      "chtkey": "166751603",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957662",
+      "chtkey": "166751604",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957663",
+      "chtkey": "166751605",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957664",
+      "chtkey": "166751606",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957665",
+      "chtkey": "166751607",
+      "texcl": "Clay loam"
+    },
+    {
+      "chtgkey": "163957666",
+      "chtkey": "166751608",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957749",
+      "chtkey": "166751691",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957750",
+      "chtkey": "166751692",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957751",
+      "chtkey": "166751693",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957752",
+      "chtkey": "166751694",
+      "texcl": "Clay"
+    },
+    {
+      "chtgkey": "163957753",
+      "chtkey": "166751695",
+      "texcl": "Silty clay"
+    },
+    {
+      "chtgkey": "163957754",
+      "chtkey": "166751696",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957755",
+      "chtkey": "166751697",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957756",
+      "chtkey": "166751698",
+      "texcl": "Clay loam"
+    },
+    {
+      "chtgkey": "163957757",
+      "chtkey": "166751699",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957758",
+      "chtkey": "166751700",
+      "texcl": "Silty clay"
+    },
+    {
+      "chtgkey": "163957759",
+      "chtkey": "166751701",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957760",
+      "chtkey": "166751702",
+      "texcl": "Clay"
+    },
+    {
+      "chtgkey": "163957761",
+      "chtkey": "166751703",
+      "texcl": null
+    },
+    {
+      "chtgkey": "163957762",
+      "chtkey": "166751704",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957763",
+      "chtkey": "166751705",
+      "texcl": "Silty clay"
+    },
+    {
+      "chtgkey": "163957764",
+      "chtkey": "166751706",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957765",
+      "chtkey": "166751707",
+      "texcl": "Clay"
+    },
+    {
+      "chtgkey": "163957766",
+      "chtkey": "166751708",
+      "texcl": null
+    },
+    {
+      "chtgkey": "163957767",
+      "chtkey": "166751709",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957768",
+      "chtkey": "166751710",
+      "texcl": "Silty clay"
+    },
+    {
+      "chtgkey": "163957769",
+      "chtkey": "166751711",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957770",
+      "chtkey": "166751712",
+      "texcl": "Clay"
+    },
+    {
+      "chtgkey": "163957771",
+      "chtkey": "166751713",
+      "texcl": null
+    },
+    {
+      "chtgkey": "163957821",
+      "chtkey": "166751763",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957822",
+      "chtkey": "166751764",
+      "texcl": "Silty clay"
+    },
+    {
+      "chtgkey": "163957823",
+      "chtkey": "166751765",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957824",
+      "chtkey": "166751766",
+      "texcl": "Clay"
+    },
+    {
+      "chtgkey": "163957825",
+      "chtkey": "166751767",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957826",
+      "chtkey": "166751768",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957827",
+      "chtkey": "166751769",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957828",
+      "chtkey": "166751770",
+      "texcl": "Silty clay"
+    },
+    {
+      "chtgkey": "163957829",
+      "chtkey": "166751771",
+      "texcl": "Clay"
+    },
+    {
+      "chtgkey": "163957830",
+      "chtkey": "166751772",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957831",
+      "chtkey": "166751773",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957873",
+      "chtkey": "166751815",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957874",
+      "chtkey": "166751816",
+      "texcl": "Silty clay"
+    },
+    {
+      "chtgkey": "163957875",
+      "chtkey": "166751817",
+      "texcl": "Clay"
+    },
+    {
+      "chtgkey": "163957876",
+      "chtkey": "166751818",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957877",
+      "chtkey": "166751819",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957878",
+      "chtkey": "166751820",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957879",
+      "chtkey": "166751821",
+      "texcl": "Silty clay"
+    },
+    {
+      "chtgkey": "163957880",
+      "chtkey": "166751822",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957881",
+      "chtkey": "166751823",
+      "texcl": "Clay"
+    },
+    {
+      "chtgkey": "163957882",
+      "chtkey": "166751824",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957883",
+      "chtkey": "166751825",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957884",
+      "chtkey": "166751826",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957885",
+      "chtkey": "166751827",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957886",
+      "chtkey": "166751828",
+      "texcl": "Sandy loam"
+    },
+    {
+      "chtgkey": "163957887",
+      "chtkey": "166751829",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957902",
+      "chtkey": "166751844",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957903",
+      "chtkey": "166751845",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957904",
+      "chtkey": "166751846",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957923",
+      "chtkey": "166751865",
+      "texcl": "Clay"
+    },
+    {
+      "chtgkey": "163957924",
+      "chtkey": "166751866",
+      "texcl": "Clay"
+    },
+    {
+      "chtgkey": "163957925",
+      "chtkey": "166751867",
+      "texcl": "Clay"
+    },
+    {
+      "chtgkey": "163957926",
+      "chtkey": "166751868",
+      "texcl": "Sandy clay"
+    },
+    {
+      "chtgkey": "163957927",
+      "chtkey": "166751869",
+      "texcl": "Silty clay"
+    },
+    {
+      "chtgkey": "163957928",
+      "chtkey": "166751870",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957929",
+      "chtkey": "166751871",
+      "texcl": "Clay"
+    },
+    {
+      "chtgkey": "163957930",
+      "chtkey": "166751872",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957931",
+      "chtkey": "166751873",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957932",
+      "chtkey": "166751874",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957933",
+      "chtkey": "166751875",
+      "texcl": "Silt loam"
+    },
+    {
+      "chtgkey": "163957934",
+      "chtkey": "166751876",
+      "texcl": "Silty clay loam"
+    },
+    {
+      "chtgkey": "163957935",
+      "chtkey": "166751877",
+      "texcl": "Silt loam"
+    }
+  ],
+  "corestrictions": [
+    {
+      "cokey": "27059559",
+      "resdept_r": "48"
+    },
+    {
+      "cokey": "27059572",
+      "resdept_r": "81"
+    },
+    {
+      "cokey": "27059573",
+      "resdept_r": "81"
+    },
+    {
+      "cokey": "27059591",
+      "resdept_r": "33"
+    },
+    {
+      "cokey": "27059592",
+      "resdept_r": "81"
+    },
+    {
+      "cokey": "27059604",
+      "resdept_r": "91"
+    },
+    {
+      "cokey": "27059632",
+      "resdept_r": "61"
+    },
+    {
+      "cokey": "27059634",
+      "resdept_r": "97"
+    },
+    {
+      "cokey": "27059635",
+      "resdept_r": "97"
+    },
+    {
+      "cokey": "27059636",
+      "resdept_r": "97"
+    },
+    {
+      "cokey": "27059647",
+      "resdept_r": "33"
+    }
+  ],
+  "mapunit": [
+    {
+      "mukey": "64070",
+      "lkey": "10400"
+    },
+    {
+      "mukey": "64071",
+      "lkey": "10400"
+    },
+    {
+      "mukey": "64075",
+      "lkey": "10400"
+    },
+    {
+      "mukey": "64078",
+      "lkey": "10400"
+    },
+    {
+      "mukey": "64079",
+      "lkey": "10400"
+    },
+    {
+      "mukey": "64081",
+      "lkey": "10400"
+    },
+    {
+      "mukey": "64091",
+      "lkey": "10400"
+    },
+    {
+      "mukey": "64092",
+      "lkey": "10400"
+    },
+    {
+      "mukey": "64093",
+      "lkey": "10400"
+    },
+    {
+      "mukey": "64097",
+      "lkey": "10400"
+    },
+    {
+      "mukey": "64122",
+      "lkey": "10400"
+    },
+    {
+      "mukey": "64133",
+      "lkey": "10400"
+    },
+    {
+      "mukey": "64142",
+      "lkey": "10400"
+    },
+    {
+      "mukey": "64143",
+      "lkey": "10400"
+    },
+    {
+      "mukey": "64157",
+      "lkey": "10400"
+    },
+    {
+      "mukey": "64158",
+      "lkey": "10400"
+    },
+    {
+      "mukey": "64166",
+      "lkey": "10400"
+    },
+    {
+      "mukey": "64170",
+      "lkey": "10400"
+    },
+    {
+      "mukey": "64172",
+      "lkey": "10400"
+    }
+  ],
+  "legend": [
+    {
+      "lkey": "10400",
+      "areasymbol": "OR643"
+    }
+  ]
+}

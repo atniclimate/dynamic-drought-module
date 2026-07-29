@@ -1,0 +1,17 @@
+{
+  "soil": {
+    "awsRootZoneMm": 218.3,
+    "awsP10": 171.6,
+    "awsP90": 287.3,
+    "rootZoneDepthCm": 105.1,
+    "dominantTexture": "Silt loam",
+    "ssurgoFraction": 1.0,
+    "statsgo2Fraction": 0.0,
+    "coveragePct": 100.0,
+    "rootZoneCoveragePct": 100.0,
+    "textureCoveragePct": 100.0,
+    "cellCount": 10000.0,
+    "coarse": false,
+    "generalized": false
+  }
+}

@@ -1,0 +1,930 @@
+{
+  "retrieved": "2026-07-29",
+  "roni": {
+    "source": "NOAA CPC Relative Oceanic Nino Index (RONI)",
+    "sourceUrl": "https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt",
+    "attribution": "NOAA Climate Prediction Center (CPC), public domain U.S. Government work",
+    "description": "CPC operational ENSO monitoring index. The Oceanic Nino Index with the tropical-mean sea surface temperature trend removed; the application uses its sustained-threshold phase as the observed-state headline.",
+    "published": "2026-07-03",
+    "phase": "neutral",
+    "latest": {
+      "seas": "AMJ",
+      "year": 2026,
+      "anom": 0.47,
+      "preliminary": true
+    },
+    "values": [
+      {
+        "seas": "MJJ",
+        "year": 2023,
+        "anom": 0.37,
+        "preliminary": false
+      },
+      {
+        "seas": "JJA",
+        "year": 2023,
+        "anom": 0.62,
+        "preliminary": false
+      },
+      {
+        "seas": "JAS",
+        "year": 2023,
+        "anom": 0.85,
+        "preliminary": false
+      },
+      {
+        "seas": "ASO",
+        "year": 2023,
+        "anom": 1.1,
+        "preliminary": false
+      },
+      {
+        "seas": "SON",
+        "year": 2023,
+        "anom": 1.35,
+        "preliminary": false
+      },
+      {
+        "seas": "OND",
+        "year": 2023,
+        "anom": 1.49,
+        "preliminary": false
+      },
+      {
+        "seas": "NDJ",
+        "year": 2023,
+        "anom": 1.45,
+        "preliminary": false
+      },
+      {
+        "seas": "DJF",
+        "year": 2024,
+        "anom": 1.2,
+        "preliminary": false
+      },
+      {
+        "seas": "JFM",
+        "year": 2024,
+        "anom": 0.85,
+        "preliminary": false
+      },
+      {
+        "seas": "FMA",
+        "year": 2024,
+        "anom": 0.49,
+        "preliminary": false
+      },
+      {
+        "seas": "MAM",
+        "year": 2024,
+        "anom": 0.05,
+        "preliminary": false
+      },
+      {
+        "seas": "AMJ",
+        "year": 2024,
+        "anom": -0.26,
+        "preliminary": false
+      },
+      {
+        "seas": "MJJ",
+        "year": 2024,
+        "anom": -0.46,
+        "preliminary": false
+      },
+      {
+        "seas": "JJA",
+        "year": 2024,
+        "anom": -0.51,
+        "preliminary": false
+      },
+      {
+        "seas": "JAS",
+        "year": 2024,
+        "anom": -0.64,
+        "preliminary": false
+      },
+      {
+        "seas": "ASO",
+        "year": 2024,
+        "anom": -0.76,
+        "preliminary": false
+      },
+      {
+        "seas": "SON",
+        "year": 2024,
+        "anom": -0.82,
+        "preliminary": false
+      },
+      {
+        "seas": "OND",
+        "year": 2024,
+        "anom": -0.94,
+        "preliminary": false
+      },
+      {
+        "seas": "NDJ",
+        "year": 2024,
+        "anom": -1.08,
+        "preliminary": false
+      },
+      {
+        "seas": "DJF",
+        "year": 2025,
+        "anom": -1.13,
+        "preliminary": false
+      },
+      {
+        "seas": "JFM",
+        "year": 2025,
+        "anom": -0.9,
+        "preliminary": false
+      },
+      {
+        "seas": "FMA",
+        "year": 2025,
+        "anom": -0.67,
+        "preliminary": false
+      },
+      {
+        "seas": "MAM",
+        "year": 2025,
+        "anom": -0.52,
+        "preliminary": false
+      },
+      {
+        "seas": "AMJ",
+        "year": 2025,
+        "anom": -0.49,
+        "preliminary": false
+      },
+      {
+        "seas": "MJJ",
+        "year": 2025,
+        "anom": -0.43,
+        "preliminary": false
+      },
+      {
+        "seas": "JJA",
+        "year": 2025,
+        "anom": -0.47,
+        "preliminary": false
+      },
+      {
+        "seas": "JAS",
+        "year": 2025,
+        "anom": -0.63,
+        "preliminary": false
+      },
+      {
+        "seas": "ASO",
+        "year": 2025,
+        "anom": -0.77,
+        "preliminary": false
+      },
+      {
+        "seas": "SON",
+        "year": 2025,
+        "anom": -0.87,
+        "preliminary": false
+      },
+      {
+        "seas": "OND",
+        "year": 2025,
+        "anom": -0.93,
+        "preliminary": false
+      },
+      {
+        "seas": "NDJ",
+        "year": 2025,
+        "anom": -0.97,
+        "preliminary": false
+      },
+      {
+        "seas": "DJF",
+        "year": 2026,
+        "anom": -0.88,
+        "preliminary": false
+      },
+      {
+        "seas": "JFM",
+        "year": 2026,
+        "anom": -0.71,
+        "preliminary": false
+      },
+      {
+        "seas": "FMA",
+        "year": 2026,
+        "anom": -0.45,
+        "preliminary": false
+      },
+      {
+        "seas": "MAM",
+        "year": 2026,
+        "anom": -0.04,
+        "preliminary": true
+      },
+      {
+        "seas": "AMJ",
+        "year": 2026,
+        "anom": 0.47,
+        "preliminary": true
+      }
+    ]
+  },
+  "oni": {
+    "source": "NOAA CPC Oceanic Nino Index (ONI)",
+    "sourceUrl": "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt",
+    "attribution": "NOAA Climate Prediction Center (CPC), public domain U.S. Government work",
+    "description": "Three-month running mean of the Nino 3.4 sea surface temperature anomaly, retained as the long historical-continuity comparison behind the operational RONI headline.",
+    "published": "2026-07-06",
+    "phase": "neutral",
+    "latest": {
+      "seas": "AMJ",
+      "year": 2026,
+      "anom": 0.98,
+      "preliminary": true
+    },
+    "values": [
+      {
+        "seas": "MJJ",
+        "year": 2023,
+        "anom": 0.84,
+        "preliminary": false
+      },
+      {
+        "seas": "JJA",
+        "year": 2023,
+        "anom": 1.12,
+        "preliminary": false
+      },
+      {
+        "seas": "JAS",
+        "year": 2023,
+        "anom": 1.37,
+        "preliminary": false
+      },
+      {
+        "seas": "ASO",
+        "year": 2023,
+        "anom": 1.6,
+        "preliminary": false
+      },
+      {
+        "seas": "SON",
+        "year": 2023,
+        "anom": 1.83,
+        "preliminary": false
+      },
+      {
+        "seas": "OND",
+        "year": 2023,
+        "anom": 1.99,
+        "preliminary": false
+      },
+      {
+        "seas": "NDJ",
+        "year": 2023,
+        "anom": 2.06,
+        "preliminary": false
+      },
+      {
+        "seas": "DJF",
+        "year": 2024,
+        "anom": 1.92,
+        "preliminary": false
+      },
+      {
+        "seas": "JFM",
+        "year": 2024,
+        "anom": 1.62,
+        "preliminary": false
+      },
+      {
+        "seas": "FMA",
+        "year": 2024,
+        "anom": 1.26,
+        "preliminary": false
+      },
+      {
+        "seas": "MAM",
+        "year": 2024,
+        "anom": 0.82,
+        "preliminary": false
+      },
+      {
+        "seas": "AMJ",
+        "year": 2024,
+        "anom": 0.49,
+        "preliminary": false
+      },
+      {
+        "seas": "MJJ",
+        "year": 2024,
+        "anom": 0.22,
+        "preliminary": false
+      },
+      {
+        "seas": "JJA",
+        "year": 2024,
+        "anom": 0.08,
+        "preliminary": false
+      },
+      {
+        "seas": "JAS",
+        "year": 2024,
+        "anom": -0.07,
+        "preliminary": false
+      },
+      {
+        "seas": "ASO",
+        "year": 2024,
+        "anom": -0.17,
+        "preliminary": false
+      },
+      {
+        "seas": "SON",
+        "year": 2024,
+        "anom": -0.21,
+        "preliminary": false
+      },
+      {
+        "seas": "OND",
+        "year": 2024,
+        "anom": -0.3,
+        "preliminary": false
+      },
+      {
+        "seas": "NDJ",
+        "year": 2024,
+        "anom": -0.42,
+        "preliminary": false
+      },
+      {
+        "seas": "DJF",
+        "year": 2025,
+        "anom": -0.45,
+        "preliminary": false
+      },
+      {
+        "seas": "JFM",
+        "year": 2025,
+        "anom": -0.24,
+        "preliminary": false
+      },
+      {
+        "seas": "FMA",
+        "year": 2025,
+        "anom": -0.06,
+        "preliminary": false
+      },
+      {
+        "seas": "MAM",
+        "year": 2025,
+        "anom": 0.02,
+        "preliminary": false
+      },
+      {
+        "seas": "AMJ",
+        "year": 2025,
+        "anom": -0.02,
+        "preliminary": false
+      },
+      {
+        "seas": "MJJ",
+        "year": 2025,
+        "anom": -0.04,
+        "preliminary": false
+      },
+      {
+        "seas": "JJA",
+        "year": 2025,
+        "anom": -0.14,
+        "preliminary": false
+      },
+      {
+        "seas": "JAS",
+        "year": 2025,
+        "anom": -0.28,
+        "preliminary": false
+      },
+      {
+        "seas": "ASO",
+        "year": 2025,
+        "anom": -0.4,
+        "preliminary": false
+      },
+      {
+        "seas": "SON",
+        "year": 2025,
+        "anom": -0.51,
+        "preliminary": false
+      },
+      {
+        "seas": "OND",
+        "year": 2025,
+        "anom": -0.55,
+        "preliminary": false
+      },
+      {
+        "seas": "NDJ",
+        "year": 2025,
+        "anom": -0.54,
+        "preliminary": false
+      },
+      {
+        "seas": "DJF",
+        "year": 2026,
+        "anom": -0.37,
+        "preliminary": false
+      },
+      {
+        "seas": "JFM",
+        "year": 2026,
+        "anom": -0.14,
+        "preliminary": false
+      },
+      {
+        "seas": "FMA",
+        "year": 2026,
+        "anom": 0.13,
+        "preliminary": false
+      },
+      {
+        "seas": "MAM",
+        "year": 2026,
+        "anom": 0.51,
+        "preliminary": true
+      },
+      {
+        "seas": "AMJ",
+        "year": 2026,
+        "anom": 0.98,
+        "preliminary": true
+      }
+    ]
+  },
+  "nino34": {
+    "source": "NOAA CPC detrended monthly Nino 3.4 sea surface temperature anomaly",
+    "sourceUrl": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/detrend.nino34.ascii.txt",
+    "attribution": "NOAA Climate Prediction Center (CPC), public domain U.S. Government work",
+    "description": "Analyzed monthly Nino 3.4 sea surface temperature anomaly, retained as a fast-moving companion and never used as an ENSO phase declaration on its own.",
+    "published": "2026-07-06",
+    "latest": {
+      "year": 2026,
+      "month": 6,
+      "total": 29.17,
+      "climAdjust": 27.67,
+      "anom": 1.5
+    },
+    "values": [
+      {
+        "year": 2023,
+        "month": 7,
+        "total": 28.31,
+        "climAdjust": 27.25,
+        "anom": 1.07
+      },
+      {
+        "year": 2023,
+        "month": 8,
+        "total": 28.2,
+        "climAdjust": 26.81,
+        "anom": 1.39
+      },
+      {
+        "year": 2023,
+        "month": 9,
+        "total": 28.32,
+        "climAdjust": 26.68,
+        "anom": 1.64
+      },
+      {
+        "year": 2023,
+        "month": 10,
+        "total": 28.44,
+        "climAdjust": 26.67,
+        "anom": 1.77
+      },
+      {
+        "year": 2023,
+        "month": 11,
+        "total": 28.72,
+        "climAdjust": 26.65,
+        "anom": 2.08
+      },
+      {
+        "year": 2023,
+        "month": 12,
+        "total": 28.63,
+        "climAdjust": 26.5,
+        "anom": 2.13
+      },
+      {
+        "year": 2024,
+        "month": 1,
+        "total": 28.36,
+        "climAdjust": 26.38,
+        "anom": 1.98
+      },
+      {
+        "year": 2024,
+        "month": 2,
+        "total": 28.28,
+        "climAdjust": 26.61,
+        "anom": 1.67
+      },
+      {
+        "year": 2024,
+        "month": 3,
+        "total": 28.42,
+        "climAdjust": 27.19,
+        "anom": 1.22
+      },
+      {
+        "year": 2024,
+        "month": 4,
+        "total": 28.6,
+        "climAdjust": 27.71,
+        "anom": 0.89
+      },
+      {
+        "year": 2024,
+        "month": 5,
+        "total": 28.17,
+        "climAdjust": 27.83,
+        "anom": 0.34
+      },
+      {
+        "year": 2024,
+        "month": 6,
+        "total": 27.9,
+        "climAdjust": 27.67,
+        "anom": 0.23
+      },
+      {
+        "year": 2024,
+        "month": 7,
+        "total": 27.34,
+        "climAdjust": 27.25,
+        "anom": 0.09
+      },
+      {
+        "year": 2024,
+        "month": 8,
+        "total": 26.74,
+        "climAdjust": 26.81,
+        "anom": -0.07
+      },
+      {
+        "year": 2024,
+        "month": 9,
+        "total": 26.46,
+        "climAdjust": 26.68,
+        "anom": -0.22
+      },
+      {
+        "year": 2024,
+        "month": 10,
+        "total": 26.45,
+        "climAdjust": 26.67,
+        "anom": -0.22
+      },
+      {
+        "year": 2024,
+        "month": 11,
+        "total": 26.46,
+        "climAdjust": 26.65,
+        "anom": -0.19
+      },
+      {
+        "year": 2024,
+        "month": 12,
+        "total": 26,
+        "climAdjust": 26.5,
+        "anom": -0.49
+      },
+      {
+        "year": 2025,
+        "month": 1,
+        "total": 25.82,
+        "climAdjust": 26.38,
+        "anom": -0.56
+      },
+      {
+        "year": 2025,
+        "month": 2,
+        "total": 26.33,
+        "climAdjust": 26.61,
+        "anom": -0.28
+      },
+      {
+        "year": 2025,
+        "month": 3,
+        "total": 27.3,
+        "climAdjust": 27.19,
+        "anom": 0.11
+      },
+      {
+        "year": 2025,
+        "month": 4,
+        "total": 27.69,
+        "climAdjust": 27.71,
+        "anom": -0.02
+      },
+      {
+        "year": 2025,
+        "month": 5,
+        "total": 27.8,
+        "climAdjust": 27.83,
+        "anom": -0.02
+      },
+      {
+        "year": 2025,
+        "month": 6,
+        "total": 27.66,
+        "climAdjust": 27.67,
+        "anom": -0.01
+      },
+      {
+        "year": 2025,
+        "month": 7,
+        "total": 27.15,
+        "climAdjust": 27.25,
+        "anom": -0.1
+      },
+      {
+        "year": 2025,
+        "month": 8,
+        "total": 26.49,
+        "climAdjust": 26.81,
+        "anom": -0.32
+      },
+      {
+        "year": 2025,
+        "month": 9,
+        "total": 26.25,
+        "climAdjust": 26.68,
+        "anom": -0.43
+      },
+      {
+        "year": 2025,
+        "month": 10,
+        "total": 26.22,
+        "climAdjust": 26.67,
+        "anom": -0.45
+      },
+      {
+        "year": 2025,
+        "month": 11,
+        "total": 26.01,
+        "climAdjust": 26.65,
+        "anom": -0.64
+      },
+      {
+        "year": 2025,
+        "month": 12,
+        "total": 25.93,
+        "climAdjust": 26.5,
+        "anom": -0.57
+      },
+      {
+        "year": 2026,
+        "month": 1,
+        "total": 25.97,
+        "climAdjust": 26.38,
+        "anom": -0.41
+      },
+      {
+        "year": 2026,
+        "month": 2,
+        "total": 26.49,
+        "climAdjust": 26.61,
+        "anom": -0.12
+      },
+      {
+        "year": 2026,
+        "month": 3,
+        "total": 27.29,
+        "climAdjust": 27.19,
+        "anom": 0.09
+      },
+      {
+        "year": 2026,
+        "month": 4,
+        "total": 28.13,
+        "climAdjust": 27.71,
+        "anom": 0.42
+      },
+      {
+        "year": 2026,
+        "month": 5,
+        "total": 28.84,
+        "climAdjust": 27.83,
+        "anom": 1.01
+      },
+      {
+        "year": 2026,
+        "month": 6,
+        "total": 29.17,
+        "climAdjust": 27.67,
+        "anom": 1.5
+      }
+    ]
+  },
+  "soi": {
+    "source": "NOAA CPC Southern Oscillation Index (SOI)",
+    "sourceUrl": "https://www.cpc.ncep.noaa.gov/data/indices/soi",
+    "attribution": "NOAA Climate Prediction Center (CPC), public domain U.S. Government work",
+    "description": "Standardized monthly SOI second block, retained only as a supporting ocean-atmosphere agreement flag and never used to drive the ENSO phase.",
+    "published": "2026-07-06",
+    "block": "standardized",
+    "latest": {
+      "year": 2026,
+      "month": 6,
+      "value": -1.4
+    },
+    "values": [
+      {
+        "year": 2024,
+        "month": 1,
+        "value": 0.5
+      },
+      {
+        "year": 2024,
+        "month": 2,
+        "value": -1.4
+      },
+      {
+        "year": 2024,
+        "month": 3,
+        "value": 0.4
+      },
+      {
+        "year": 2024,
+        "month": 4,
+        "value": -0.2
+      },
+      {
+        "year": 2024,
+        "month": 5,
+        "value": 0.5
+      },
+      {
+        "year": 2024,
+        "month": 6,
+        "value": 0
+      },
+      {
+        "year": 2024,
+        "month": 7,
+        "value": -0.7
+      },
+      {
+        "year": 2024,
+        "month": 8,
+        "value": 0.9
+      },
+      {
+        "year": 2024,
+        "month": 9,
+        "value": -0.1
+      },
+      {
+        "year": 2024,
+        "month": 10,
+        "value": 0.5
+      },
+      {
+        "year": 2024,
+        "month": 11,
+        "value": 0.5
+      },
+      {
+        "year": 2024,
+        "month": 12,
+        "value": 1.2
+      },
+      {
+        "year": 2025,
+        "month": 1,
+        "value": 0.2
+      },
+      {
+        "year": 2025,
+        "month": 2,
+        "value": 0.5
+      },
+      {
+        "year": 2025,
+        "month": 3,
+        "value": 1.7
+      },
+      {
+        "year": 2025,
+        "month": 4,
+        "value": 0.5
+      },
+      {
+        "year": 2025,
+        "month": 5,
+        "value": 0.4
+      },
+      {
+        "year": 2025,
+        "month": 6,
+        "value": 0.3
+      },
+      {
+        "year": 2025,
+        "month": 7,
+        "value": 0.6
+      },
+      {
+        "year": 2025,
+        "month": 8,
+        "value": 0.4
+      },
+      {
+        "year": 2025,
+        "month": 9,
+        "value": 0
+      },
+      {
+        "year": 2025,
+        "month": 10,
+        "value": 1.1
+      },
+      {
+        "year": 2025,
+        "month": 11,
+        "value": 1.1
+      },
+      {
+        "year": 2025,
+        "month": 12,
+        "value": 0
+      },
+      {
+        "year": 2026,
+        "month": 1,
+        "value": 1.1
+      },
+      {
+        "year": 2026,
+        "month": 2,
+        "value": 1.4
+      },
+      {
+        "year": 2026,
+        "month": 3,
+        "value": 1.2
+      },
+      {
+        "year": 2026,
+        "month": 4,
+        "value": -0.6
+      },
+      {
+        "year": 2026,
+        "month": 5,
+        "value": -0.9
+      },
+      {
+        "year": 2026,
+        "month": 6,
+        "value": -1.4
+      },
+      {
+        "year": 2026,
+        "month": 7,
+        "value": null
+      },
+      {
+        "year": 2026,
+        "month": 8,
+        "value": null
+      },
+      {
+        "year": 2026,
+        "month": 9,
+        "value": null
+      },
+      {
+        "year": 2026,
+        "month": 10,
+        "value": null
+      },
+      {
+        "year": 2026,
+        "month": 11,
+        "value": null
+      },
+      {
+        "year": 2026,
+        "month": 12,
+        "value": null
+      }
+    ]
+  }
+}

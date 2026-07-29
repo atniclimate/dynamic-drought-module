@@ -1,0 +1,367 @@
+{
+  "_comment": "The machine-readable record of every INTENTIONAL output difference between the immutable legacy/ baseline and the corrected/ baseline (WORKPLAN T-M0-2). Two layers: 'fields' is the intent record (why each field changed); 'occurrences' pins every individual difference by file, JSON pointer, change kind, and the exact legacy and corrected values. tests/test_parity.py enforces the occurrences EXACTLY in both directions: any legacy-vs-corrected difference not pinned here fails (including a different VALUE at a pinned pointer), and any pinned occurrence that no longer matches fails. Quietly regenerating corrected/ therefore cannot hide a behavior change: the new values would disagree with the hand-committed pins below.",
+  "baseline": "legacy/",
+  "corrected": "corrected/",
+  "unit": "T-M0-2 (methods) + T-M0-3 (provenance) + T-S1-4 (terrain methodVersion 3 activation)",
+  "fields": [
+    {
+      "field": "slopeMeanDeg",
+      "change": "value",
+      "reason": "slope is now a true Horn 3x3 kernel; the legacy value was numpy.gradient magnitude (one-sided at edges, different stencil weights). Cells without a full 3x3 neighborhood are now excluded rather than estimated."
+    },
+    {
+      "field": "aspectMeanDeg",
+      "change": "added",
+      "reason": "aspect output owed at T-M0-2 and activated methodVersion 3 weighting at T-S1-4: the circular MEAN of Horn downslope azimuth (0 = north, clockwise; a mean direction, no dominance claim), with each cell weighted by polygon area and gradient magnitude so near-flat cells contribute in proportion to their directional signal; null when the polygon is flat or when opposing slopes cancel below ASPECT_CANCELLATION_EPSILON."
+    },
+    {
+      "field": "aspectCardinal",
+      "change": "added",
+      "reason": "the 8-direction compass bucket of aspectMeanDeg; null exactly when aspectMeanDeg is null."
+    },
+    {
+      "field": "elevBands",
+      "change": "added",
+      "reason": "terrain methodVersion 3 adds ten fractions of polygon-weighted valid-elevation area over the frozen ELEV_BAND_EDGES_M bands."
+    },
+    {
+      "field": "aspectDistribution",
+      "change": "added",
+      "reason": "terrain methodVersion 3 adds the eight cardinal, flat, and Horn-neighborhood-excluded fractions as a partition of polygon-weighted valid-elevation area."
+    },
+    {
+      "field": "coveragePct",
+      "change": "value",
+      "reason": "now the polygon-weighted valid-elevation fraction via exactextract partial-pixel weights; the legacy value was the valid fraction of the rectangular read window, which misstates coverage whenever invalid cells fall unevenly between the window and the polygon (fixture polygon 3, fully valid ground under a non-rectangular shape, is unchanged at 100.0 in both baselines)."
+    },
+    {
+      "field": "method",
+      "change": "value",
+      "reason": "sources.terrain.method now describes the corrected Horn methods and the activated methodVersion 3 gradient-magnitude aspect weighting, elevation bands, and aspect distribution. The legacy string carried the false 'Horn gradient' claim."
+    },
+    {
+      "field": "schemaVersion",
+      "change": "value",
+      "reason": "1.0.0 to 1.3.0 across three integrations: 1.1.0 added aspect and corrected coveragePct, 1.2.0 added per-source runtime provenance and methodVersion, and 1.3.0 adds the accepted family blocks, terrain extensions, per-source resolution and vintage, and the unavailable ledger."
+    },
+    {
+      "field": "acquired",
+      "change": "added",
+      "reason": "per-source acquisition date owed by the T-M0-3 work order: read ONLY from the materialized cache sidecar (null when materialization failed or the sidecar is unreadable); the reproducibility pin governs the top-level retrieved stamp and never rewrites it. The fixture value is real flow under the pinned acquisition clock (fixtures/seams.py FIXED_DATE)."
+    },
+    {
+      "field": "materializedRasterSha256",
+      "change": "added",
+      "reason": "the sha256 of the serialized LOCAL materialized analysis raster the statistics were computed from (the cache-identity value the validator checks on every reuse); expressly not an upstream-content hash. The fixture value is an INJECTED SENTINEL (64 hex zeros, fixtures/seams.py), not a real digest, so byte-pinned fixtures never depend on platform GeoTIFF encoder bytes; the real sidecar-sha linkage is pinned by tests/test_core.py ProvenanceLinkage instead."
+    },
+    {
+      "field": "methodVersion",
+      "change": "added",
+      "reason": "monotonic per-family method version anchored to the METHOD_VERSIONS history mapping in adapters/terrain.py (1 = legacy monolith, 2 = corrected Horn methods, 3 = elevation bands, aspect distribution, and gradient-magnitude aspect weighting). The schema pins current version 3 as a const and the independent test anchor pins the complete history."
+    },
+    {
+      "field": "unavailable",
+      "change": "added",
+      "reason": "schemaVersion 1.3.0 requires the per-bundle canonical unavailable ledger. Empty arrays prove full availability; the synthetic no-data bundle records terrain."
+    }
+  ],
+  "occurrences": {
+    "terrain_l3.json": [
+      {
+        "pointer": "/1/aspectCardinal",
+        "change": "added",
+        "corrected": "SW"
+      },
+      {
+        "pointer": "/1/aspectDistribution",
+        "change": "added",
+        "corrected": {
+          "N": 0.0,
+          "NE": 0.0,
+          "E": 0.002,
+          "SE": 0.161,
+          "S": 0.186,
+          "SW": 0.26,
+          "W": 0.041,
+          "NW": 0.0,
+          "flat": 0.0,
+          "excluded": 0.349
+        }
+      },
+      {
+        "pointer": "/1/aspectMeanDeg",
+        "change": "added",
+        "corrected": 205.0
+      },
+      {
+        "pointer": "/1/coveragePct",
+        "change": "value",
+        "legacy": 67.5,
+        "corrected": 49.5
+      },
+      {
+        "pointer": "/1/elevBands",
+        "change": "added",
+        "corrected": [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      },
+      {
+        "pointer": "/1/slopeMeanDeg",
+        "change": "value",
+        "legacy": 5.46,
+        "corrected": 5.44
+      },
+      {
+        "pointer": "/2/aspectCardinal",
+        "change": "added",
+        "corrected": "SW"
+      },
+      {
+        "pointer": "/2/aspectDistribution",
+        "change": "added",
+        "corrected": {
+          "N": 0.006,
+          "NE": 0.0,
+          "E": 0.14,
+          "SE": 0.107,
+          "S": 0.081,
+          "SW": 0.151,
+          "W": 0.273,
+          "NW": 0.0,
+          "flat": 0.0,
+          "excluded": 0.242
+        }
+      },
+      {
+        "pointer": "/2/aspectMeanDeg",
+        "change": "added",
+        "corrected": 235.6
+      },
+      {
+        "pointer": "/2/coveragePct",
+        "change": "value",
+        "legacy": 77.3,
+        "corrected": 64.5
+      },
+      {
+        "pointer": "/2/elevBands",
+        "change": "added",
+        "corrected": [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      },
+      {
+        "pointer": "/2/slopeMeanDeg",
+        "change": "value",
+        "legacy": 5.83,
+        "corrected": 5.8
+      },
+      {
+        "pointer": "/3/aspectCardinal",
+        "change": "added",
+        "corrected": "N"
+      },
+      {
+        "pointer": "/3/aspectDistribution",
+        "change": "added",
+        "corrected": {
+          "N": 0.17,
+          "NE": 0.145,
+          "E": 0.223,
+          "SE": 0.052,
+          "S": 0.064,
+          "SW": 0.019,
+          "W": 0.183,
+          "NW": 0.144,
+          "flat": 0.0,
+          "excluded": 0.0
+        }
+      },
+      {
+        "pointer": "/3/aspectMeanDeg",
+        "change": "added",
+        "corrected": 352.0
+      },
+      {
+        "pointer": "/3/elevBands",
+        "change": "added",
+        "corrected": [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      },
+      {
+        "pointer": "/3/slopeMeanDeg",
+        "change": "value",
+        "legacy": 8.79,
+        "corrected": 8.76
+      }
+    ],
+    "snapshot_terrain_l3.json": [
+      {
+        "pointer": "/bundles/1/terrain/aspectCardinal",
+        "change": "added",
+        "corrected": "SW"
+      },
+      {
+        "pointer": "/bundles/1/terrain/aspectDistribution",
+        "change": "added",
+        "corrected": {
+          "N": 0.0,
+          "NE": 0.0,
+          "E": 0.002,
+          "SE": 0.161,
+          "S": 0.186,
+          "SW": 0.26,
+          "W": 0.041,
+          "NW": 0.0,
+          "flat": 0.0,
+          "excluded": 0.349
+        }
+      },
+      {
+        "pointer": "/bundles/1/terrain/aspectMeanDeg",
+        "change": "added",
+        "corrected": 205.0
+      },
+      {
+        "pointer": "/bundles/1/terrain/coveragePct",
+        "change": "value",
+        "legacy": 67.5,
+        "corrected": 49.5
+      },
+      {
+        "pointer": "/bundles/1/terrain/elevBands",
+        "change": "added",
+        "corrected": [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      },
+      {
+        "pointer": "/bundles/1/terrain/slopeMeanDeg",
+        "change": "value",
+        "legacy": 5.46,
+        "corrected": 5.44
+      },
+      {
+        "pointer": "/bundles/1/unavailable",
+        "change": "added",
+        "corrected": []
+      },
+      {
+        "pointer": "/bundles/2/terrain/aspectCardinal",
+        "change": "added",
+        "corrected": "SW"
+      },
+      {
+        "pointer": "/bundles/2/terrain/aspectDistribution",
+        "change": "added",
+        "corrected": {
+          "N": 0.006,
+          "NE": 0.0,
+          "E": 0.14,
+          "SE": 0.107,
+          "S": 0.081,
+          "SW": 0.151,
+          "W": 0.273,
+          "NW": 0.0,
+          "flat": 0.0,
+          "excluded": 0.242
+        }
+      },
+      {
+        "pointer": "/bundles/2/terrain/aspectMeanDeg",
+        "change": "added",
+        "corrected": 235.6
+      },
+      {
+        "pointer": "/bundles/2/terrain/coveragePct",
+        "change": "value",
+        "legacy": 77.3,
+        "corrected": 64.5
+      },
+      {
+        "pointer": "/bundles/2/terrain/elevBands",
+        "change": "added",
+        "corrected": [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      },
+      {
+        "pointer": "/bundles/2/terrain/slopeMeanDeg",
+        "change": "value",
+        "legacy": 5.83,
+        "corrected": 5.8
+      },
+      {
+        "pointer": "/bundles/2/unavailable",
+        "change": "added",
+        "corrected": []
+      },
+      {
+        "pointer": "/bundles/3/terrain/aspectCardinal",
+        "change": "added",
+        "corrected": "N"
+      },
+      {
+        "pointer": "/bundles/3/terrain/aspectDistribution",
+        "change": "added",
+        "corrected": {
+          "N": 0.17,
+          "NE": 0.145,
+          "E": 0.223,
+          "SE": 0.052,
+          "S": 0.064,
+          "SW": 0.019,
+          "W": 0.183,
+          "NW": 0.144,
+          "flat": 0.0,
+          "excluded": 0.0
+        }
+      },
+      {
+        "pointer": "/bundles/3/terrain/aspectMeanDeg",
+        "change": "added",
+        "corrected": 352.0
+      },
+      {
+        "pointer": "/bundles/3/terrain/elevBands",
+        "change": "added",
+        "corrected": [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      },
+      {
+        "pointer": "/bundles/3/terrain/slopeMeanDeg",
+        "change": "value",
+        "legacy": 8.79,
+        "corrected": 8.76
+      },
+      {
+        "pointer": "/bundles/3/unavailable",
+        "change": "added",
+        "corrected": []
+      },
+      {
+        "pointer": "/bundles/4/unavailable",
+        "change": "added",
+        "corrected": ["terrain"]
+      },
+      {
+        "pointer": "/schemaVersion",
+        "change": "value",
+        "legacy": "1.0.0",
+        "corrected": "1.3.0"
+      },
+      {
+        "pointer": "/sources/terrain/method",
+        "change": "value",
+        "legacy": "area-weighted mean elevation (exactextract) on a 30m EPSG:5070 grid; slope by Horn gradient",
+        "corrected": "area-weighted mean elevation (exactextract) on a 30m EPSG:5070 grid; Horn 3x3 slope and aspect (cells without a full neighborhood excluded; flat cells carry no aspect); aspect summarized as the area-weighted, gradient-magnitude-weighted (resultant) circular mean, so near-flat cells contribute in proportion to the directional signal they carry; coveragePct is the polygon-weighted valid-elevation fraction; adds elevBands (ten fractions of valid-elevation area over the ELEV_BAND_EDGES_M bands: below 0, eight half-open [edge, next) intervals, 4000-plus) and aspectDistribution (eight cardinals plus flat, the exactly-zero-gradient cells, plus excluded, the neighborhood-exclusion cells; a partition of valid-elevation area)"
+      },
+      {
+        "pointer": "/sources/terrain/acquired",
+        "change": "added",
+        "corrected": "2026-01-01"
+      },
+      {
+        "pointer": "/sources/terrain/materializedRasterSha256",
+        "change": "added",
+        "corrected": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "pointer": "/sources/terrain/methodVersion",
+        "change": "added",
+        "corrected": 3
+      }
+    ]
+  }
+}

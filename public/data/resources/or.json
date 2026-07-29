@@ -1,0 +1,13 @@
+{
+  "label": "Oregon",
+  "verified": "2026-07-09",
+  "resources": [
+    {
+      "label": "Oregon Drought Watch",
+      "url": "https://www.oregon.gov/owrd/programs/climate/droughtwatch/pages/default.aspx",
+      "agency": "Oregon Water Resources Department",
+      "tier": "state",
+      "description": "County drought declarations and statewide water-supply status."
+    }
+  ]
+}

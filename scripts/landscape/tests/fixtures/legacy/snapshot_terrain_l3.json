@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "1.0.0",
+  "retrieved": "2026-01-01",
+  "analysisCrs": "EPSG:5070",
+  "gridResolutionMeters": 30,
+  "aggregationUnit": "EPA Omernik ecoregion (unsimplified Region 10 Albers source)",
+  "sources": {
+    "terrain": {
+      "source": "USGS 3D Elevation Program (3DEP) 1/3 arc-second seamless DEM",
+      "sourceUrl": "https://www.usgs.gov/3d-elevation-program",
+      "vintage": "continuously updated (seamless VRT)",
+      "resolutionMeters": 10,
+      "method": "area-weighted mean elevation (exactextract) on a 30m EPSG:5070 grid; slope by Horn gradient"
+    }
+  },
+  "bundles": {
+    "1": {
+      "level": 3,
+      "usL3Code": "1",
+      "usL3Name": "Synthetic Flats",
+      "terrain": {
+        "elevMeanM": 591.6,
+        "elevMinM": 580.8,
+        "elevMaxM": 599.5,
+        "slopeMeanDeg": 5.46,
+        "coveragePct": 67.5
+      }
+    },
+    "2": {
+      "level": 3,
+      "usL3Code": "2",
+      "usL3Name": "Nodata Notch",
+      "terrain": {
+        "elevMeanM": 569.8,
+        "elevMinM": 545.4,
+        "elevMaxM": 595.2,
+        "slopeMeanDeg": 5.83,
+        "coveragePct": 77.3
+      }
+    },
+    "3": {
+      "level": 3,
+      "usL3Code": "3",
+      "usL3Name": "Holey Ridge",
+      "terrain": {
+        "elevMeanM": 621.2,
+        "elevMinM": 573.1,
+        "elevMaxM": 658.8,
+        "slopeMeanDeg": 8.79,
+        "coveragePct": 100.0
+      }
+    },
+    "4": {
+      "level": 3,
+      "usL3Code": "4",
+      "usL3Name": "Empty Void",
+      "terrain": {
+        "unavailable": true,
+        "reason": "empty geometry"
+      }
+    }
+  }
+}

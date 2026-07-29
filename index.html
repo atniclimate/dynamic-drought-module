@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="Pacific Northwest drought, hydrology, and Tribal Treaty regional mapping. ATNI Climate." />
+  <meta name="color-scheme" content="dark" />
+  <title>Dynamic Drought Module · ATNI Climate</title>
+  <!-- The ATNI seal as the tab icon; also silences the browser's default
+       /favicon.ico request, which 404ed on every first load (found by the
+       U4d browser pass 2026-07-14). -->
+  <link rel="icon" type="image/png" href="/brand/atni-seal.png" />
+
+  <!-- Fonts are self-hosted (public/fonts/, SIL OFL 1.1); the @font-face
+       declarations live in src/styles/app.css. No third-party font request. -->
+</head>
+<body class="app-body">
+  <div id="app" class="app-shell">
+
+    <aside id="sidebar" class="sidebar" aria-label="Map controls">
+      <!-- The mobile bottom-sheet grabber (0.7.0 U2, D-0.7.0-017). Display
+           is stylesheet-gated: it exists only below 720px when the sheet is
+           active (never in embed). The grabber is a real button and the ONLY
+           gesture surface that moves the sheet (drag, tap to cycle,
+           Enter/Space cycles, arrow keys step); wired in src/ui/mobile-sheet.ts. -->
+      <div class="sheet-grabber-row">
+        <button type="button" id="sheet-grabber" class="sheet-grabber" aria-label="Resize the briefing sheet">
+          <span class="sheet-grabber-bar" aria-hidden="true"></span>
+        </button>
+      </div>
+      <header class="sidebar-header">
+        <div class="brand">
+          <button class="brand-seal" popovertarget="about-atni" aria-label="About ATNI Climate" title="About ATNI Climate">
+            <img src="/brand/atni-seal.png" alt="Seal of the Affiliated Tribes of Northwest Indians" width="28" height="28" />
+          </button>
+          <div class="brand-text">
+            <h1>Dynamic Drought Module</h1>
+            <p>Regional climate &amp; water indicators</p>
+          </div>
+        </div>
+        <button id="sidebar-collapse" class="icon-btn" aria-label="Collapse sidebar" title="Collapse sidebar">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+      </header>
+
+      <div class="sidebar-scroll">
+
+        <section class="panel conditions-strip" id="conditions-strip" aria-label="Conditions in view" hidden>
+          <div class="conditions-head">
+            <span class="conditions-title">Conditions in view</span>
+            <span class="conditions-date" id="conditions-date"></span>
+          </div>
+          <div class="conditions-metrics" id="conditions-metrics" aria-live="polite" aria-atomic="true"></div>
+        </section>
+
+        <!-- Brief head (U1, the two doors): the concise lede and the one place
+             entry surface. Filled by src/ui/view-shell.ts and visible only in
+             Brief mode. It deliberately ends before the stable time-bar node:
+             regenerated Brief markup must never own the temporal renderer. -->
+        <section class="panel brief-head" id="brief-head" aria-label="Drought briefing" hidden></section>
+
+        <!-- The contextual time rail (D-0.7.0-067, Option 1): a stable direct
+             child after place and before the generated display description.
+             src/ui/time-bar.ts renders the current temporal owner's one spec
+             here and moves this SAME node into #sheet-time-host for the mobile
+             Brief surface. Embeds suppress the full rail and keep only the
+             mirrored #embed-date-stamp chip on the map. -->
+        <div id="time-bar" class="time-bar" role="group" hidden></div>
+
+        <!-- What is shown and how to refine it. Stable hosts let view-shell
+             update prose, studio entries, and the selected-place response
+             without ever rebuilding or nesting #time-bar. The ENSO capability
+             is demoted into this description with its detail behind disclosure. -->
+        <section class="panel brief-display" id="brief-display" aria-label="What is shown" hidden>
+          <h2 class="panel-title">Shown now</h2>
+          <p class="brief-display-summary" id="brief-display-summary"></p>
+          <div class="enso-driver" id="enso-driver" aria-label="ENSO driver" hidden></div>
+          <div id="layers-studio-entry-host"></div>
+          <div id="brief-secondary-actions"></div>
+          <div class="brief-selection-summary" id="brief-selection-summary" hidden>
+            <p id="brief-selection-read"></p>
+            <button type="button" class="brief-full-report-link" id="brief-full-report-link">Open full drought impact brief</button>
+          </div>
+        </section>
+
+        <!-- The sheet's at-hand block (U2/U3): the half detent's Brief content
+             (place title, the current-horizon read, the ONE search, the one
+             door to the full report). Display is stylesheet-gated to the
+             mobile sheet's half detent. The body div is rebuilt by
+             renderAtHand() on every briefing push; the search and the report
+             door are STABLE DOM (a Preact search mounted inside an innerHTML
+             rebuild would be wiped), wired once in src/ui/mobile-sheet.ts. -->
+        <section class="panel sheet-at-hand" id="sheet-at-hand" aria-label="At-hand drought answer">
+          <div id="sheet-at-hand-body"></div>
+          <!-- The one search (U3): the same shared component the console
+               catalog and the Brief head mount, replacing the U2 stopgap
+               place <select>. Mounted on first sheet activation (never in
+               embed), so the C1 rule holds. -->
+          <div id="sheet-search" class="sheet-search"></div>
+          <!-- Stable mobile host for the SAME #time-bar node. The host sits
+               after place search and before the report door; time-bar.ts
+               preserves this order after mobile-sheet groups the door. -->
+          <div id="sheet-time-host" class="sheet-time-host"></div>
+          <button type="button" id="sheet-report-door" class="sheet-report-door" hidden>Read the full report</button>
+          <!-- The compact Tribal Nations action, mirrored on the mobile
+               at-hand surface (umbrella build Unit F). It follows the primary
+               place, time, and report path and stays stable outside the body
+               that renderAtHand() rebuilds. -->
+          <div class="tribal-nations-brief-row tribal-nations-at-hand-row">
+            <button type="button" id="tribal-nations-at-hand-action" class="tribal-nations-brief-action" aria-label="Show Tribal Nations layers" aria-describedby="tribal-nations-at-hand-action-desc">Tribal Nations</button>
+            <span id="tribal-nations-at-hand-action-desc" class="sr-only">Turns on Tribal Lands and Reservation Boundaries.</span>
+            <span id="tribal-nations-at-hand-health" class="tribal-nations-health" aria-live="polite"></span>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-region">
+          <h2 class="panel-title">Jump to region</h2>
+          <div id="region-buttons" class="region-grid" role="radiogroup" aria-label="Jump to region"></div>
+        </section>
+
+        <section class="panel" id="panel-quick-views">
+          <h2 class="panel-title">Quick views</h2>
+          <div id="preset-chips" class="preset-chips" role="group" aria-label="Quick view presets"></div>
+        </section>
+
+        <!-- The sheet's "All layers" door (U2): the half detent's console
+             content ends with the one entry that expands to the full catalog.
+             Display is stylesheet-gated; wired in src/ui/mobile-sheet.ts. -->
+        <section class="panel sheet-all-layers" id="sheet-all-layers">
+          <button type="button" id="sheet-all-layers-btn" class="sheet-report-door">All layers &amp; stations</button>
+        </section>
+
+        <section class="panel" id="panel-layers">
+          <div class="panel-title-row">
+            <h2 class="panel-title">Layers</h2>
+            <span id="layer-status" class="status-pill" aria-live="polite"></span>
+          </div>
+          <!-- The one search (U3d): mounted here by the island so the console
+               catalog is searchable across places, Tribal land areas, and
+               layers. The Brief head reuses the same component. -->
+          <div id="catalog-search"></div>
+          <div id="layer-toggles" class="layer-list"></div>
+        </section>
+
+        <!-- Water & Snow (U3f2, D-0.7.0-018): collapsed by default. The
+             featured-station list is opt-in, matching the telemetry layer
+             leaving the default-on set (H4). The heading is a reveal
+             disclosure (button + aria-expanded); revealing is sidebar-local
+             and never touches the telemetry layer. -->
+        <section class="panel" id="panel-telemetry">
+          <h2 class="panel-title panel-title-reveal">
+            <button type="button" class="panel-reveal" id="telemetry-reveal" aria-expanded="false" aria-controls="telemetry-body">Water &amp; Snow</button>
+          </h2>
+          <div id="telemetry-body" class="panel-reveal-body" hidden>
+            <p class="telemetry-discovery-hint">Stations are discovered in the current map view once you zoom in far enough; at wide zooms the featured stations below are shown and the layer reads "zoom in to load". Where discovery finds more than 50 stations, the nearest 50 are shown.</p>
+            <div id="telemetry-list" class="telemetry-list"></div>
+          </div>
+        </section>
+
+        <section class="panel legend-panel" id="legend-panel" hidden>
+          <h2 class="panel-title">Legend</h2>
+          <div id="legend-sections"></div>
+        </section>
+
+        <!-- The Alerts pane (mobile shell, 2026-07-14): the footer's fourth
+             door. Display is stylesheet-gated to the mobile sheet with the
+             alerts tab active; content renders from the live NWS alerts
+             source in src/ui/sheet-alerts.ts (reflect-the-map: nothing is
+             fetched here that the alerts layer did not already fetch). -->
+        <section class="panel sheet-alerts" id="sheet-alerts" aria-label="Active weather alerts">
+          <h2 class="panel-title">Alerts</h2>
+          <div id="sheet-alerts-body"></div>
+        </section>
+
+        <!-- The sheet's report region (U2, the facade merge): below 720px the
+             impact panel rehosts here at the full detent, so the standalone
+             report is page content inside the one sheet, never a second
+             overlay. Display is stylesheet-gated. -->
+        <div class="sheet-report" id="sheet-report"></div>
+
+      </div>
+
+      <footer class="sidebar-footer">
+        <p>A project of ATNI Climate (Affiliated Tribes of Northwest Indians)</p>
+        <p>Data: OpenStreetMap · NOAA · USGS · BIA · EPA</p>
+        <p class="muted">
+          <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">atniclimate/dynamic-drought-module</a>
+          · v0.6.24
+        </p>
+      </footer>
+    </aside>
+
+    <button id="sidebar-expand" class="icon-btn sidebar-expand-btn" aria-label="Expand sidebar" title="Expand sidebar" hidden>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+
+    <main id="map-container" class="map-container">
+      <div id="map" role="application" aria-label="Interactive regional map"></div>
+
+      <div id="hover-inspector" class="hover-inspector" aria-hidden="true" hidden></div>
+
+      <div id="loading-indicator" class="loading-indicator" hidden>
+        <!-- The three-wave motif from the retired header mark, now the working
+             pulse: it appears only while the module is genuinely loading. -->
+        <svg class="spinner-waves" viewBox="0 0 24 17" aria-hidden="true">
+          <path d="M2 14 Q7 9 12 14 T22 14" />
+          <path d="M2 9.5 Q7 4.5 12 9.5 T22 9.5" />
+          <path d="M2 5 Q7 0 12 5 T22 5" />
+        </svg>
+        <span id="loading-text">Loading...</span>
+      </div>
+
+      <div class="map-overlay-controls">
+        <!-- PRE-1.0 TEST PREVIEW BADGE. Remove this element and the
+             .test-preview-badge rule in src/styles/app.css together before
+             the 1.0 publish; they are the only two places it exists. It is
+             deliberately non-interactive (pointer-events: none in the rule)
+             so it can never intercept a click meant for the map or the
+             overlay buttons below it, and it rides this stack so the
+             existing mobile and bottom-sheet offsets apply unchanged. It is
+             present in embeds ON PURPOSE: an embedded copy of a preview
+             build is still a preview, and hard rule 8 keeps the embed a
+             first-class surface rather than one that hides its own status. -->
+        <span class="test-preview-badge">Test preview</span>
+        <button id="share-btn" class="overlay-btn" title="Copy embed-ready link to clipboard">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+          <span>Share view</span>
+        </button>
+        <button id="reset-btn" class="overlay-btn" title="Reset to selected region bounds">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+          <span>Reset</span>
+        </button>
+      </div>
+
+      <!-- The mobile hazard rail (0.7.0 mobile shell): the quick hazard
+           selections from the 2026-07-11 ideation, seated in the lower-right
+           thumb zone. Display is stylesheet-gated: it exists only while the
+           bottom sheet is at peek or half (so never in embed, never on
+           desktop, and never at full where the map has receded). Each button
+           applies a MOBILE_HAZARD_PRESETS entry through the one layer
+           controller and drops the sheet to peek (you asked for a hazard
+           map; the map should show); wired in src/ui/sidebar.ts. -->
+      <div id="hazard-rail" class="hazard-rail" role="group" aria-label="Quick hazard views">
+        <button type="button" class="hazard-rail-btn" data-preset="hazard-drought">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+          <span>Drought</span>
+        </button>
+        <button type="button" class="hazard-rail-btn" data-preset="hazard-heat">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+          <span>Heat</span>
+        </button>
+        <button type="button" class="hazard-rail-btn" data-preset="hazard-fire">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+          <span>Fire</span>
+        </button>
+      </div>
+
+      <div id="copy-toast" class="copy-toast" hidden>Link copied to clipboard</div>
+
+      <!-- Shared bottom overlay dock (H2, 0.6.2): notices and the corner
+           chips stack in one flex column so they can never cover each other.
+           Items hide individually; the dock itself is inert. The time bar
+           moved to the sidebar (E2, D-0.7.0-058 ruling 1); what remains
+           here is the minimal embed valid-date stamp, mirrored from the
+           active temporal spec by src/ui/time-bar.ts and shown only in
+           embed mode (the embed has no sidebar, and the date-honesty rule
+           still applies there). -->
+      <div id="map-bottom-dock" class="map-bottom-dock">
+        <div id="map-notices" class="map-notices"></div>
+
+        <div id="embed-date-stamp" class="embed-date-stamp" hidden></div>
+
+        <div class="map-dock-foot">
+          <div id="map-key" class="map-key" role="img" aria-label="Drought category key, D0 abnormally dry through D4 exceptional drought" hidden></div>
+
+          <a class="embed-brand" href="https://atniclimate.github.io/dynamic-drought-module/" target="_blank" rel="noopener" aria-label="Open the full Dynamic Drought Module by ATNI Climate">
+            <img src="/brand/atni-seal.png" alt="" width="18" height="18" />
+            <span>ATNI Climate</span>
+          </a>
+        </div>
+      </div>
+    </main>
+
+    <!-- The mobile footer nav (mobile shell, 2026-07-14; from the ratified
+         2026-07-11 mockup): four persistent doors driving the ONE sheet.
+         Display is stylesheet-gated: it exists only while the mobile shell
+         is active (below 720px, never in embed). Brief opens the full
+         report; Place opens the at-hand answer with the one search; Layers
+         opens the console controls; Alerts opens the live alert list.
+         Tapping the active door closes the sheet to the edgeless closed
+         state. Wired in src/ui/mobile-sheet.ts. -->
+    <nav id="mobile-footer-nav" class="mobile-footer" aria-label="Primary">
+      <button type="button" data-tab="brief" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M9 9h6M9 13h6M9 17h4"/></svg>
+        <span>Brief</span>
+      </button>
+      <button type="button" data-tab="place" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6 7-11a7 7 0 0 0-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+        <span>Place</span>
+      </button>
+      <button type="button" data-tab="layers" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>
+        <span>Layers</span>
+      </button>
+      <button type="button" data-tab="alerts" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
+        <span>Alerts</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <div id="about-atni" popover class="about-card">
+    <img class="about-lockup" src="/brand/atni-climate-lockup.png" alt="Affiliated Tribes of Northwest Indians, ATNI Climate" />
+    <p>The Dynamic Drought Module is a project of ATNI Climate, the climate resilience program of the Affiliated Tribes of Northwest Indians (ATNI).</p>
+    <p class="about-links">
+      <a href="https://atnitribes.org" target="_blank" rel="noopener">atnitribes.org</a>
+      · <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">source repository</a>
+    </p>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
