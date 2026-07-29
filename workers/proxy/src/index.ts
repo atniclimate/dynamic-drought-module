@@ -31,6 +31,9 @@
  *     Origin header got the origin-echoed value; `Vary: Origin` cache-variant
  *     behavior suspected), so the client routes WHP tiles through this Worker
  *     unconditionally (0.7.0 H3).
+ *   - National Weather Service public API: `api.weather.gov`. Browser fetch
+ *     cannot set the required identifying User-Agent, so the Worker supplies
+ *     the DDM identity while preserving the upstream body.
  *
  * Anything outside the allow-list is rejected with 403 Forbidden.
  *
@@ -94,11 +97,15 @@ const ALLOW_LIST: ReadonlyArray<RegExp> = [
   // through 2026-07-08 and has since stopped (three consecutive probes
   // with a real Origin, no ACAO, no Vary), so the trend fetch rides this
   // Worker per the vary-origin intermittency doctrine.
-  /^usdmdataservices\.unl\.edu$/i
+  /^usdmdataservices\.unl\.edu$/i,
+  // NWS API. Added for point heat so the upstream receives the Worker's
+  // identifying User-Agent. The body remains byte-transparent.
+  /^api\.weather\.gov$/i
 ];
 
 const USER_AGENT =
   "DDM-Proxy/0.1.0 (+https://github.com/atniclimate/dynamic-drought-module)";
+const WORKER_REVISION = "2026-07-29-nws-point-heat-v1";
 
 const UPSTREAM_TIMEOUT_MS = 12_000;
 const DEFAULT_CACHE_CONTROL = "public, max-age=60";
@@ -188,6 +195,7 @@ function healthResponse(): Response {
   const body = JSON.stringify({
     status: "ok",
     worker: "ddm-proxy",
+    revision: WORKER_REVISION,
     ts: new Date().toISOString()
   });
   return new Response(body, {

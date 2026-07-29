@@ -10,7 +10,8 @@
 # added 2026-07-09, 0.7.0 H3, because the upstream's exportImage CORS is
 # intermittent in real browsers), and the NDMC USDM Data Services host
 # usdmdataservices.unl.edu (the DSCI trend statistics; added 2026-07-14
-# after the upstream stopped emitting CORS headers). It does
+# after the upstream stopped emitting CORS headers), and api.weather.gov so
+# NWS point-heat requests carry the Worker's identifying User-Agent. It does
 # not transform response bodies, does not authenticate, does not log requests,
 # and does not collect telemetry. See workers/proxy/src/index.ts for the logic
 # and CLAUDE.md section 4 rule 3 for the no-tracking, no-analytics policy.
