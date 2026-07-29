@@ -108,19 +108,28 @@ slots.
 
 ## `enso-indices.json` (committed snapshot, not a placeholder)
 
-A committed snapshot of two National Oceanic and Atmospheric
+A committed snapshot of four National Oceanic and Atmospheric
 Administration (NOAA) Climate Prediction Center (CPC) El Nino / Southern
-Oscillation (ENSO) indices:
+Oscillation (ENSO) index series:
 
+- the Relative Oceanic Nino Index (RONI), the operational headline and
+  phase driver: the ONI with the tropical-mean ocean warming background
+  removed (in a warming ocean the raw ONI drifts warm, so RONI often
+  reads cooler);
 - the Oceanic Nino Index (ONI), the standard three-month running mean of
-  the Nino 3.4 sea surface temperature anomaly; and
-- the Relative ONI (RONI), the ONI with the tropical-mean ocean warming
-  background removed, a useful corroborating index in a warming climate
-  (in a warming ocean the raw ONI drifts warm, so RONI often reads
-  cooler).
+  the Nino 3.4 sea surface temperature anomaly, kept as the historical
+  continuity comparison;
+- the analyzed monthly Nino 3.4 anomaly, a fast-moving companion that
+  never declares a phase on its own; and
+- the standardized Southern Oscillation Index (SOI), a supporting
+  ocean-atmosphere agreement flag only.
 
-They drive the drought-impact briefing's long-range ENSO tilt and its
-ONI-and-RONI chart.
+Seasonal points carry a `preliminary` flag (recent seasons may still be
+revised). They drive the drought-impact briefing's long-range ENSO tilt
+and its index chart. The publish script refuses to copy back any
+externally refreshed snapshot that lacks this shape or drops a series
+(see `scripts/publish-public.mjs`), so a stale builder can never regress
+the live read again.
 
 Both CPC sources are served without Cross-Origin Resource Sharing (CORS)
 headers, so a browser cannot fetch them directly. Per the
@@ -132,8 +141,8 @@ build or commit time rather than proxied at runtime. Refresh the snapshot
 npm run build:enso
 ```
 
-That runs `scripts/build-enso-snapshot.mjs`, which fetches both indices,
-parses each table, determines each ENSO phase, and rewrites
+That runs `scripts/build-enso-snapshot.mjs`, which fetches all four
+index products, parses each table, determines each ENSO phase, and rewrites
 `enso-indices.json` with its retrieval date. Commit the regenerated file.
 There is no deployer authorization concern here; this is public federal
 climate data.

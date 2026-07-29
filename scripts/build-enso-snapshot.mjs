@@ -28,6 +28,7 @@
 import { writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { rejectEnsoSnapshot } from './lib/enso-snapshot-contract.mjs';
 
 const ONI_URL = 'https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt';
 const RONI_URL = 'https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt';
@@ -411,6 +412,15 @@ async function main() {
   const serialized = JSON.stringify(snapshot, null, 2) + '\n';
   if (serialized.includes(String(SOI_MISSING))) {
     throw new Error('SOI schema check failed: missing-value sentinel would leak into the snapshot');
+  }
+
+  // The shared consumer contract, enforced at the producer (2026-07-28
+  // regression guard): a snapshot the runtime consumer would reject or
+  // degrade must never be written, so a stale or drifted builder fails
+  // loudly here instead of silently shipping a dead read.
+  const rejection = rejectEnsoSnapshot(snapshot);
+  if (rejection !== null) {
+    throw new Error(`built snapshot fails the consumer contract: ${rejection}`);
   }
 
   await mkdir(DATA_DIR, { recursive: true });

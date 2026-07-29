@@ -50,6 +50,12 @@ jobs:
       - name: Rebuild the ENSO snapshot
         run: npm run build:enso
 
+      # The shared consumer-contract check (2026-07-28 regression guard):
+      # a snapshot the app would reject must never be committed, whatever
+      # builder version produced it.
+      - name: Validate the snapshot against the consumer contract
+        run: node scripts/validate-enso-snapshot.mjs public/data/enso-indices.json
+
       - name: Commit when the snapshot changed
         run: |
           if git diff --quiet public/data/enso-indices.json; then
