@@ -284,7 +284,9 @@ browser test suite, product data builders, validation gates, and optional
 Cloudflare Worker. Run `npm run gate` for the static build and product
 checks, and `npm run test:serial` for the full browser suite. Project
 operating rules are in `AGENTS.md`; donor provenance and scaffold
-boundaries are in `ORIGIN.md`.
+boundaries are in `ORIGIN.md`. Current successor priorities, release
+boundaries, confidence gaps, and approved improvement directions are in
+[`docs/SUCCESSOR_PLAN.md`](docs/SUCCESSOR_PLAN.md).
 
 ## Browser support
 
