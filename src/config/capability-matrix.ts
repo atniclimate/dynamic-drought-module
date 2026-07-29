@@ -97,7 +97,7 @@ export const CAPABILITY_MATRIX: CapabilityMatrix = {
     },
     landscapeSignature: {
       level: 'none',
-      note: 'The P9 signature pipeline is design and evidence only; no baked artifact ships yet.'
+      note: 'The baked PNW artifact ships (169 ecoregion bundles, schema-validated in the gate) but no runtime consumer reads it yet; the level stays none until the briefing consumes it.'
     },
     impactSynthesis: {
       level: 'partial',

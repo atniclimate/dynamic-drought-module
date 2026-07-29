@@ -11,10 +11,11 @@
  * canonical `'no-data'` status (rendered by the sidebar as
  * "no data (see data/README.md)") and renders nothing visible.
  *
- * Status reporting is currently a `console.info` placeholder; M7 wires the
- * LayerRegistry through `setStatus(key, status)` and removes the console
- * calls. The five canonical states (see `src/types/layer.ts`) are reused
- * verbatim so that no callsite migration is required.
+ * Status reporting goes through the LayerRegistry (`registry.setStatus`,
+ * wired below); the canonical states live in `src/types/layer.ts`. (An
+ * earlier draft of this docblock described a `console.info` placeholder
+ * long after the registry wiring landed; corrected 2026-07-28,
+ * ground-truth audit.)
  *
  * Source / property reference: Bureau of Indian Affairs (BIA) American
  * Indian / Alaska Native Land Area Representation (AIAN-LAR), clipped to

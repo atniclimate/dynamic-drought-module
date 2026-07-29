@@ -2404,6 +2404,29 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   }
 }
 
+/* Short embed frames (T1-3, 2026-07-28): at viewport heights near the
+   embed floor the top-right overlay stack grows tall enough to reach
+   the vertical middle of the map, and the 240px linkout pair is wide
+   enough on narrow frames to cross the horizontal middle, so the one
+   place a user (and the popup acceptance tests) most naturally clicks
+   (the map center) landed on a button instead of the map; no popup
+   could ever open. These two tests were red from the day they were
+   written. The fix keeps every linkout's left edge inside the right
+   40 percent of the frame at short heights, so the center column
+   stays clickable no matter how tall the stack grows; the label wraps
+   (white-space override) instead of forcing width. */
+@media (max-height: 420px) {
+  .studio-linkout-pair {
+    grid-template-columns: minmax(0, 1fr);
+    width: min(150px, calc(50vw - 34px));
+  }
+  .studio-linkout-pair .layers-studio-linkout {
+    white-space: normal;
+    text-align: center;
+    line-height: 1.25;
+  }
+}
+
 #place-studio-root {
   position: fixed;
   inset: 0;

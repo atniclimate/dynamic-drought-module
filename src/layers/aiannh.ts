@@ -141,6 +141,12 @@ const OUTLINE_WIDTH_SELECTED = 2.4;
 
 type Status = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
 
+/** Empty data applied before an active refresh failure reports unavailable. */
+const EMPTY_FEATURE_COLLECTION: FeatureCollection = {
+  type: 'FeatureCollection',
+  features: []
+};
+
 /**
  * Master cancellation controller for the in-flight fetch. Aborted on
  * `deactivate` and replaced on each new fetch so a superseded request can
@@ -151,7 +157,7 @@ let masterController: AbortController | null = null;
 /**
  * Request-identity token: each fetch takes `++requestSeq` and drops its
  * response if the module has moved on. Belt to the abort signal's braces; a
- * response that raced past the abort still cannot render stale data.
+ * response that raced past the abort still cannot render superseded data.
  */
 let requestSeq = 0;
 
@@ -388,11 +394,22 @@ function isTruncated(raw: unknown): boolean {
 }
 
 /**
+ * Remove any rendered features from a prior viewport. D-0.8.0-052 authorizes
+ * no post-failure fallback, so an active refresh failure must clear first and
+ * then report unavailable.
+ */
+function clearRenderedFeatures(map: maplibregl.Map): void {
+  const existing = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+  if (existing) existing.setData(EMPTY_FEATURE_COLLECTION);
+  lastAppliedStatus = null;
+}
+
+/**
  * Fetch the AIANNH features for the current viewport and apply them: into the
  * existing source via `setData` when refreshing, or as a fresh source plus
  * layers on first render. Shared by `activate` and the `moveend` refresh. A
- * cache hit applies synchronously with no network call. Failures surface as
- * `'error'`, never thrown.
+ * cache hit applies synchronously with no network call. Failures clear prior
+ * data before surfacing as `'error'`.
  */
 async function fetchAndApply(map: maplibregl.Map): Promise<void> {
   // Supersede any prior in-flight fetch FIRST, before the cache lookup, so a
@@ -444,6 +461,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
     // silently per invariant 5.
     if (signal.aborted || token !== requestSeq) return;
     console.warn('[aiannh] Census AIANNH fetch failed.', err);
+    clearRenderedFeatures(map);
     reportStatus('error');
     return;
   }

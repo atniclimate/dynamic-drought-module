@@ -1,9 +1,9 @@
 {
   "name": "dynamic-drought-module",
   "private": true,
-  "version": "0.6.23",
+  "version": "0.6.24",
   "type": "module",
-  "description": "Embeddable, serverless web map for drought, hydrography, ecological boundaries, wildfire activity, and live water and snowpack telemetry. Pacific Northwest focus.",
+  "description": "Embeddable, serverless web map for drought, hydrography, ecological boundaries, wildfire activity, and live water and snowpack telemetry. Whole-US scope; deepest coverage in the Pacific Northwest.",
   "license": "PolyForm-Strict-1.0.0",
   "engines": {
     "node": ">=20"
@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "test": "playwright test",
     "test:serial": "playwright test --workers=1",
+    "ci:release": "node scripts/ci-release.mjs",
     "test:report": "playwright show-report",
     "scan:emdash": "node scripts/scan-emdash.mjs",
     "check:resources": "node scripts/check-resource-catalog.mjs",
@@ -25,9 +26,10 @@
     "check:activation": "node scripts/check-activation-budget.mjs",
     "check:landscape-schema": "node scripts/validate-landscape-artifact.mjs scripts/landscape/tests/fixtures/corrected/snapshot_terrain_l3.json && node scripts/validate-landscape-artifact.mjs public/data/landscape-signature-pnw.json",
     "build:coverage-matrix": "node scripts/generate-coverage-matrix.mjs",
-    "gate": "npm run build && npm run scan:emdash && npm run check:resources && npm run check:bundle && npm run check:activation && npm run check:places && npm run check:coverage && npm run check:vocabulary && npm run check:landscape-schema && npm run check:enso",
+    "gate": "npm run build && npm run scan:emdash && npm run check:resources && npm run check:bundle && npm run check:activation && npm run check:places && npm run check:coverage && npm run check:vocabulary && npm run check:landscape-schema && npm run check:enso && npm run check:harness",
     "build:enso": "node scripts/build-enso-snapshot.mjs",
     "check:enso": "node scripts/validate-enso-snapshot.mjs public/data/enso-indices.json",
+    "check:harness": "node scripts/check-harness-state.mjs",
     "build:cdm": "node scripts/build-cdm-snapshot.mjs",
     "build:landscape": ".venv\\Scripts\\python.exe -m scripts.landscape && node scripts/validate-landscape-artifact.mjs public/data/landscape-signature-pnw.json",
     "build:landscape:smoke": ".venv\\Scripts\\python.exe -m scripts.landscape --smoke --output scripts/.cache/landscape-smoke.json && node scripts/validate-landscape-artifact.mjs scripts/.cache/landscape-smoke.json",
@@ -53,6 +55,7 @@
     "pngjs": "^7.0.0",
     "typescript": "^7.0.0",
     "vite": "^8.1.3",
-    "vt-pbf": "^3.1.3"
+    "vt-pbf": "^3.1.3",
+    "yaml": "^2.9.0"
   }
 }

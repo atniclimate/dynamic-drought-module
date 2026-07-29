@@ -126,6 +126,14 @@ function prepareStudioAwareDeepLink(
 }
 
 async function boot(): Promise<void> {
+  // The build's source commit and per-run nonce, readable by any
+  // browser run (T1-0 receipt integrity): a verification suite asserts
+  // these against the commit and run it BELIEVES it is testing, so an
+  // exit code can never again silently describe the wrong server's
+  // build (the nonce distinguishes two servers on the same commit).
+  document.documentElement.dataset.ddmBuildSha = __DDM_BUILD_SHA__;
+  document.documentElement.dataset.ddmBuildNonce = __DDM_BUILD_NONCE__;
+
   const map = createMap('map');
   // Publish the map so the frozen UI-service facades (the impact panel) can
   // resolve a selection's location identity without a map parameter (F3).

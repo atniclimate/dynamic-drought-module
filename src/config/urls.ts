@@ -589,25 +589,29 @@ export const URLS = Object.freeze({
 
   // ---------- Bureau of Indian Affairs (BIA) reservation boundaries ----------
   // American Indian and Alaska Native Land Area Representation (AIAN-LAR): the
-  // authoritative federal depiction of reservation and trust land extent for
-  // federally recognized Tribes, hosted as an Environmental Systems Research
-  // Institute (ESRI) FeatureServer. The `/0/query` path with `f=geojson` and a
-  // spatial envelope (esriGeometryEnvelope, inSR=4326) returns a polygon
-  // FeatureCollection clipped to the requested extent, with fields LARID,
-  // LARNAME, CLASSIFICATION, GISACRES, REGION. Consumed live, not bundled:
-  // live consumption commits no sovereign polygons to the repository (exactly
-  // like USDM and NIFC), the stance reconciled in the ddm-tribal-boundary-
-  // mapping skill against CLAUDE.md hard rule 1. The bundled empty
+  // Land Area Representation feature definitions were last published in 2019.
+  // The live BIA service separately reports continuing spatial-accuracy and
+  // attribute updates. BIA authority is limited to BIA mission use; this
+  // representation is illustrative, reference, and statistical only, not
+  // legal, survey, or jurisdictional truth. The runtime stamps each successful
+  // response with its browser retrieval date for the popup.
+  // Hosted as an Environmental Systems Research Institute (ESRI)
+  // FeatureServer, the `/0/query` path with `f=geojson` and a spatial envelope
+  // (esriGeometryEnvelope, inSR=4326) returns a polygon FeatureCollection
+  // clipped to the requested extent, with fields LARID, LARNAME,
+  // CLASSIFICATION, GISACRES, REGION. Consumed live, not bundled: live
+  // consumption commits no sovereign polygons to the repository. The bundled
+  // empty
   // `tribal-lands.geojson` placeholder remains the deployer's own-data slot.
   // The `biamaps.doi.gov` host returned HTTP 500 at verification; use the
   // `biamaps.geoplatform.gov` host below.
   // Verified 2026-05-30: HTTP 200, Content-Type application/geo+json,
   // Access-Control-Allow-Origin: <reflected request origin> (verified against
   // https://atniclimate.github.io, so a browser fetch needs no proxy).
-  // Vintage receipt (2026-07-15): the layer metadata publishes NO fixed
-  // vintage or editingInfo date; the BIA's own description says the dataset
-  // is "continuously being updated". User-visible provenance says exactly
-  // that plus a dated verified-live statement (never an invented date).
+  // Fact-separated provenance receipt (D-0.8.0-052): the BIA governance page
+  // says LAR feature definitions were last published in 2019; the service
+  // metadata separately reports continuing spatial-accuracy and attribute
+  // updates. Runtime records the actual browser retrieval date.
   // Access method: ESRI FeatureServer query, f=geojson, spatial envelope clip.
   // Anti-scrape note: the BIA AIAN-LAR FeatureServer, not the OneMap HTML hub.
   biaLarFeatureServer:
@@ -813,9 +817,13 @@ export const URLS = Object.freeze({
   ensoIndicesLocal: import.meta.env.BASE_URL + 'data/enso-indices.json',
   // Landscape-signature artifact (T-M0-3; built by scripts/landscape via
   // `npm run build:landscape`, validated against
-  // schema/landscape-signature.schema.json). NOT committed yet: honest
-  // absence is the shipped loader behavior (src/impact/landscape.ts) until
-  // the first real artifact lands with the T-S1 adapters.
+  // schema/landscape-signature.schema.json). The artifact IS committed and
+  // ships (169 bundles at T-S1-4, 2026-07-25; the gate validates it via
+  // check:landscape-schema), but the loader (src/impact/landscape.ts) has
+  // no runtime importer yet: nothing consumes the signature until the
+  // 0.8.0 consumer unit wires it into the briefing (plan T3-2). Corrected
+  // 2026-07-28 (ground-truth audit): this comment previously claimed the
+  // artifact was not committed.
   landscapeSignatureLocal:
     import.meta.env.BASE_URL + 'data/landscape-signature-pnw.json',
   // Per-state resource catalog base (0.6.0 R2). Public resource LINKS are not

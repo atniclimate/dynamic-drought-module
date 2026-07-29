@@ -17,11 +17,11 @@
  *     Level IV fills); null when the ecoregion layer is not rendered. There is
  *     no bundled ecoregion fallback (the tiles are the source).
  *   - CONTAINING TRIBAL (D-0.6.0-008, "containing" not "nearest"): resolve the
- *     Tribal / reservation land the point falls WITHIN, from whatever Tribal
- *     boundary layer is ACTIVE (deployer-populated `tribal-lands` or the live
- *     BIA reservations). Honest null otherwise. NEVER auto-fetch the national
- *     BIA layer per click (a bandwidth and stewardship cost; CLAUDE.md section
- *     2, the empty-placeholder rule).
+ *     Tribal / reservation land the point falls WITHIN, from active Tribal
+ *     boundary layers through the subtype-aware D-0.8.0-052 matrix. Honest
+ *     null otherwise. NEVER auto-fetch a national boundary layer per click
+ *     (a bandwidth and stewardship cost; CLAUDE.md section 2, the
+ *     empty-placeholder rule).
  *   - COUNTY: null this phase (D-0.6.0-007). A bundled/offline county source is
  *     a fast-follow, never a per-click service; `county` already allows null.
  *
@@ -35,10 +35,9 @@
  * user already chose to load.
  */
 
-import maplibregl from 'maplibre-gl';
+import type maplibregl from 'maplibre-gl';
 import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
-import { URLS } from '../config/urls';
 import { fetchWithBudget } from '../util/fetch';
 import { pointInPolygonGeometry } from '../util/point-in-polygon';
 
@@ -77,16 +76,10 @@ export interface EcoregionIdentity {
 export interface ContainingTribalIdentity {
   readonly name: string;
   /**
-   * Which active layer resolved it, in descending authority:
-   *   tribal          the deployer's own data (the Nation's own data) if populated
-   *   bia-reservation the BIA AIAN-LAR legal reservation/trust-land depiction
-   *   aiannh          a US Census AIANNH area. LOWEST authority: it spans
-   *                   statistical geographies (Oklahoma Tribal Statistical Areas,
-   *                   Alaska Native Village Statistical Areas, etc.) that are NOT
-   *                   land ownership or jurisdiction, so it must never outrank a
-   *                   reservation. A consumer presenting this must not phrase an
-   *                   `aiannh` hit as "your Tribal land is X"; it is "falls within
-   *                   the Census AIANNH area X".
+   * Which active layer resolved it. Precedence depends on AIANNH subtype:
+   * deployer data, Census AIANNH legal entity, BIA LAR, then Census AIANNH
+   * statistical entity (D-0.8.0-052). A consumer must still describe the
+   * result as a source representation, never jurisdictional truth.
    */
   readonly source: 'tribal' | 'bia-reservation' | 'aiannh';
 }
@@ -109,8 +102,22 @@ const TRIBAL_FILL = 'tribal-lands-fill';
 const BIA_FILL = 'bia-reservations-fill';
 const AIANNH_FILL = 'aiannh-fill';
 
+/**
+ * AIANNHCC values the Census product identifies as legal entities. Unknown or
+ * missing codes take the safer statistical or unclassified rank.
+ */
+const LEGAL_AIANNH_CODES = new Set(['D1', 'D2', 'D3', 'D4', 'F1']);
+
 /** Per-call budget for the bundled-boundaries fallback fetch (same-origin). */
 const STATES_FETCH_TIMEOUT_MS = 10_000;
+
+/**
+ * Same-origin state-boundary path. The optional environment read preserves
+ * the Vite production base while keeping the pure identity resolver importable
+ * by the Playwright runner in Node.
+ */
+const STATES_LOCAL_URL =
+  `${import.meta.env?.BASE_URL ?? '/dynamic-drought-module/'}data/us-states.geojson`;
 
 /**
  * Session cache for the bundled state boundaries used by the point-in-polygon
@@ -132,20 +139,28 @@ function firstString(props: GeoJsonProperties, keys: readonly string[]): string 
 }
 
 /**
- * Query the first rendered feature under `point` among whichever of `layerIds`
+ * Query rendered features under `point` among whichever of `layerIds`
  * currently exist on the map. Filtering to existing layers matters:
  * `queryRenderedFeatures` throws on an unknown layer id, and these layers exist
  * only while their toggle is on.
  */
+function queryFeatures(
+  map: maplibregl.Map,
+  point: maplibregl.PointLike,
+  layerIds: readonly string[]
+): maplibregl.MapGeoJSONFeature[] {
+  const present = layerIds.filter((id) => map.getLayer(id));
+  if (present.length === 0) return [];
+  return map.queryRenderedFeatures(point, { layers: present });
+}
+
+/** First rendered feature from `queryFeatures`, or null. */
 function queryFirstFeature(
   map: maplibregl.Map,
   point: maplibregl.PointLike,
   layerIds: readonly string[]
 ): maplibregl.MapGeoJSONFeature | null {
-  const present = layerIds.filter((id) => map.getLayer(id));
-  if (present.length === 0) return null;
-  const features = map.queryRenderedFeatures(point, { layers: present });
-  return features[0] ?? null;
+  return queryFeatures(map, point, layerIds)[0] ?? null;
 }
 
 /** Build a StateIdentity from a feature's Census properties, or null. */
@@ -161,7 +176,7 @@ function loadBundledStates(signal: AbortSignal): Promise<FeatureCollection | nul
   if (statesCachePromise) return statesCachePromise;
   statesCachePromise = (async () => {
     try {
-      const response = await fetchWithBudget(URLS.usStatesLocal, null, signal, STATES_FETCH_TIMEOUT_MS);
+      const response = await fetchWithBudget(STATES_LOCAL_URL, null, signal, STATES_FETCH_TIMEOUT_MS);
       if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
       return (await response.json()) as FeatureCollection;
     } catch (err) {
@@ -217,17 +232,34 @@ function resolveEcoregion(map: maplibregl.Map, point: maplibregl.PointLike): Eco
   return { level3, level4, name };
 }
 
+/** Whether an AIANNH feature is a legal entity for the D-0.8.0-052 matrix. */
+function isLegalAiannh(props: GeoJsonProperties): boolean {
+  const code = firstString(props, ['AIANNHCC', 'aiannhcc']);
+  return code !== null && LEGAL_AIANNH_CODES.has(code.toUpperCase());
+}
+
+/** First usable AIANNH identity matching the requested legal/statistical rank. */
+function aiannhIdentity(
+  features: readonly maplibregl.MapGeoJSONFeature[],
+  legal: boolean
+): ContainingTribalIdentity | null {
+  for (const feature of features) {
+    if (isLegalAiannh(feature.properties) !== legal) continue;
+    const name = firstString(feature.properties, ['NAME', 'BASENAME', 'name']);
+    if (name) return { name, source: 'aiannh' };
+  }
+  return null;
+}
+
 /**
  * Resolve the CONTAINING Tribal / reservation land from an active Tribal layer
- * only (D-0.6.0-008). Precedence, highest authority first (D-0.7.0-033, the
- * plan-attack BLOCKER 3 fix): the deployer-populated `tribal-lands` (the
- * Nation's own data), then the BIA AIAN-LAR legal reservation/trust-land
- * depiction, then the live Census `aiannh` area LAST. The Census layer ranks
- * lowest deliberately: it spans statistical geographies (Oklahoma Tribal
- * Statistical Areas, Alaska Native Village Statistical Areas, and the like)
- * that are not land ownership or jurisdiction, so an AIANNH statistical area
- * must never outrank a real reservation the point also falls in. Null when no
- * Tribal boundary layer is active or the point falls in none.
+ * only (D-0.6.0-008). D-0.8.0-052 replaces binary BIA-over-AIANNH precedence
+ * with this order: deployer data, Census AIANNH legal entity, BIA LAR, then
+ * Census AIANNH statistical entity. BIA authority is scoped to BIA mission
+ * use, so a Census feature expressly typed as legal wins a conflict in DDM's
+ * general location identity. A statistical or unknown AIANNH subtype remains
+ * below BIA because it is a tabulation geography, not a land-identity claim.
+ * Null when no active Tribal boundary layer contains the point.
  */
 function resolveContainingTribal(
   map: maplibregl.Map,
@@ -238,17 +270,18 @@ function resolveContainingTribal(
     const name = firstString(tribal.properties, ['LARName', 'LARNAME', 'NAME', 'name', 'TRIBE', 'RESERV_NAM']);
     if (name) return { name, source: 'tribal' };
   }
+
+  const aiannhFeatures = queryFeatures(map, point, [AIANNH_FILL]);
+  const legalAiannh = aiannhIdentity(aiannhFeatures, true);
+  if (legalAiannh) return legalAiannh;
+
   const bia = queryFirstFeature(map, point, [BIA_FILL]);
   if (bia) {
     const name = firstString(bia.properties, ['LARNAME', 'LARName', 'NAME', 'name']);
     if (name) return { name, source: 'bia-reservation' };
   }
-  const aiannh = queryFirstFeature(map, point, [AIANNH_FILL]);
-  if (aiannh) {
-    const name = firstString(aiannh.properties, ['NAME', 'BASENAME', 'name']);
-    if (name) return { name, source: 'aiannh' };
-  }
-  return null;
+
+  return aiannhIdentity(aiannhFeatures, false);
 }
 
 /**

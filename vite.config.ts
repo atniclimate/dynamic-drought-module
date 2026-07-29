@@ -1,4 +1,22 @@
 import { defineConfig } from 'vite';
+import { execSync } from 'node:child_process';
+
+/**
+ * The source commit this build was produced from, embedded so a browser
+ * run can PROVE which build it is exercising (T1-0 receipt integrity,
+ * 2026-07-28: verification suites have twice tested the wrong server;
+ * an exit code is not attributable to a build without this). Resolution
+ * order: an explicit DDM_BUILD_SHA (CI/publish can inject), else the
+ * local git HEAD, else 'unknown' (never fail the build over it).
+ */
+function buildSha(): string {
+  if (process.env.DDM_BUILD_SHA) return process.env.DDM_BUILD_SHA;
+  try {
+    return execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
+  } catch {
+    return 'unknown';
+  }
+}
 
 /**
  * Vite configuration for the Dynamic Drought Module (DDM).
@@ -16,6 +34,15 @@ import { defineConfig } from 'vite';
  */
 export default defineConfig({
   base: '/dynamic-drought-module/',
+
+  define: {
+    __DDM_BUILD_SHA__: JSON.stringify(buildSha()),
+    // A per-run nonce (T1-0 hardening, final-check finding 3): the SHA
+    // alone cannot distinguish two servers built from the same commit,
+    // so ci:release injects a fresh random nonce per run and asserts
+    // BOTH. 'dev' outside ci:release.
+    __DDM_BUILD_NONCE__: JSON.stringify(process.env.DDM_BUILD_NONCE ?? 'dev'),
+  },
 
   build: {
     // Default outDir is 'dist'. The GitHub Actions workflow expects this.
@@ -85,8 +112,11 @@ export default defineConfig({
 
   preview: {
     // `npm run preview` serves the production build locally for
-    // smoke-testing before pushing.
+    // smoke-testing before pushing. strictPort (final-check finding 3):
+    // a raced or occupied 4173 must FAIL LOUDLY, never silently shift
+    // ports, or a verification suite can attach to the wrong server.
     port: 4173,
+    strictPort: true,
   },
 
   // Path aliases are commented out. To enable, uncomment below AND add

@@ -131,12 +131,11 @@ export function buildTribalPopupHtml(props: GeoJsonProperties): string {
  * Reads `LARNAME`, `CLASSIFICATION`, `REGION`, and `GISACRES`, all interpolated
  * through `escapeHtml`.
  *
- * Stewardship (CLAUDE.md sections 2 and 4; ddm-tribal-boundary-mapping #11):
- * the AIAN-LAR is the federal administrative depiction for general spatial
- * reference. It is a representation, not a definitive depiction of Tribal
- * jurisdiction; Tribal sovereignty and a Tribe's own understanding of its
- * territory are matters of sovereign authority. That caveat is mandatory and
- * lives in the description below.
+ * Stewardship (CLAUDE.md sections 2 and 4; D-0.8.0-052): LAR definition
+ * publication, continuing service updates, browser retrieval date, and
+ * BIA-mission authority are separate facts. The representation is never
+ * legal, survey, or jurisdictional truth. Tribal sovereignty and a Tribe's
+ * own understanding of its territory are matters of sovereign authority.
  */
 export function buildBiaReservationPopupHtml(props: GeoJsonProperties): string {
   const p = props ?? {};
@@ -144,6 +143,7 @@ export function buildBiaReservationPopupHtml(props: GeoJsonProperties): string {
   const classification = p.CLASSIFICATION || p.Classification || '';
   const region = p.REGION || p.Region || '';
   const acresStr = formatAcres(p.GISACRES ?? p.GISAcres ?? p.ACRES ?? '');
+  const retrievedOn = p.__DDM_RETRIEVED_ON || 'not recorded';
 
   return `
     <div class="popup-title">${escapeHtml(String(name))}</div>
@@ -151,7 +151,7 @@ export function buildBiaReservationPopupHtml(props: GeoJsonProperties): string {
     ${classification ? `<div class="popup-treaty-meta">Classification: ${escapeHtml(String(classification))}</div>` : ''}
     ${region ? `<div class="popup-treaty-meta">BIA region: ${escapeHtml(String(region))}</div>` : ''}
     ${acresStr ? `<div class="popup-treaty-meta">Acres: ${escapeHtml(acresStr)}</div>` : ''}
-    <div class="popup-description">This boundary is the Bureau of Indian Affairs (BIA) administrative representation of reservation and trust land extent (the AIAN-LAR; the BIA publishes no fixed vintage and describes the dataset as continuously updated; service verified live July 15, 2026). It is requested live from the BIA service when the layer needs it, held only in this browser session's memory, and not bundled by this module, for general spatial reference. It is a representation, not a definitive depiction of Tribal jurisdiction; Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority. No federal dataset maps every Tribal Nation; absence from this layer is not absence of a Nation or of its rights.</div>
+    <div class="popup-description">This boundary is from the Bureau of Indian Affairs (BIA) American Indian and Alaska Native Land Area Representation (AIAN-LAR). Land Area Representation (LAR) feature definitions were last published in 2019. The live BIA service separately reports continuing spatial-accuracy and attribute updates. Retrieved on ${escapeHtml(String(retrievedOn))}. The layer is BIA-authoritative for BIA mission use only. This representation is for illustrative, reference, and statistical use, not legal, survey, or jurisdictional truth. It is requested live from the BIA service when the layer needs it, held only in this browser session's memory, and not bundled by this module. Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority. No federal dataset maps every Tribal Nation; absence from this layer is not absence of a Nation or of its rights.</div>
     ${IMPACT_TRIGGER_BUTTON_HTML}
     <div class="popup-links">
       <a href="https://biamaps.geoplatform.gov/" target="_blank" rel="noopener">BIA GeoPlatform</a>

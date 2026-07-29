@@ -56,8 +56,10 @@ self-hosting and data population.
   Level IV ecoregions, rivers, and the Tribal Nations umbrella: Tribal
   Lands (live from the US Census AIANNH service, covering legal AND
   statistical geographies including Oklahoma Tribal Statistical Areas),
-  Reservation Boundaries (live from the authoritative Bureau of Indian
-  Affairs (BIA) AIAN-LAR service). Where two agencies depict the
+  Reservation Boundaries (live from the Bureau of Indian Affairs (BIA)
+  AIAN-LAR service, authoritative for BIA mission use only; feature
+  definitions last published 2019 with continuing service updates, and
+  never legal, survey, or jurisdictional truth). Where two agencies depict the
   same land the overlap is drawn legibly as two labeled representations,
   never blended. Deployers can additionally load their own Tribal Lands
   and Treaty Areas data into two default-off slots (URL-addressed; not
@@ -122,8 +124,8 @@ current URL.
 
 | Param | Values | Default |
 | ----- | ------ | ------- |
-| `region` | `washington_state`, `columbia_snake_basin`, `cascades`, `central_oregon`, `southwest_washington`, `south_puget_sound`, `national`, `alaska`, `hawaii` | `washington_state` |
-| `layers` | comma-separated keys from the table below | `usdm,aiannh,bia-reservations,states` |
+| `region` | `washington_state`, `columbia_snake_basin`, `cascades`, `central_oregon`, `southwest_washington`, `south_puget_sound`, `national`, `alaska`, `hawaii`, `british_columbia` | `washington_state` |
+| `layers` | comma-separated keys from the table below | `usdm,aiannh,bia-reservations,states,hillshade` |
 | `select` | `state:<postal code>` (for example `state:WA`): opens the map focused on that boundary with its impact briefing open; applied once, then dropped from the URL | none |
 | `embed` | `true` or `1` (hides the sidebar for clean iframe presentation) | `false` |
 
@@ -159,20 +161,31 @@ several surfaces resolves deterministically to the first surface named
 | --- | ----- | ---- | ------ |
 | `usdm` | US Drought Monitor | surface | NDMC FeatureServer (live) |
 | `gridded-index` | Gridded Drought Index (SPI) | surface | NOAA NIDIS raster tiles (live) |
-| `drought` | Seasonal Drought Outlook | surface | NOAA CPC WMS (live) |
-| `heatrisk` | HeatRisk · Today (Experimental) | surface | NOAA NWS/WPC ImageServer (live) |
+| `drought` | Seasonal Drought Outlook | surface | NOAA CPC vector MapServer (live) |
+| `heatrisk` | HeatRisk (seven published days) | surface | NOAA NWS/WPC ImageServer (live) |
 | `spc-fire-weather` | Fire Weather Outlook (Day 1) | surface | NOAA SPC MapServer (live) |
 | `usfs-whp` | Wildfire Hazard Potential | surface | USFS GeoPlatform ImageServer (live) |
-| `states` | State Boundaries | reference | US Census, bundled GeoJSON |
+| `cdm-drought` | Canadian Drought Monitor (snapshot) | surface | Agriculture and Agri-Food Canada, bundled monthly snapshot |
+| `nadm-drought` | North American Drought Monitor | surface | NOAA NCEI GeoJSON (live) |
+| `sst-anomaly` | Sea surface temperature anomaly | surface | NASA GIBS WMTS (live) |
+| `states` | State Boundaries | reference | US Census, bundled GeoJSON (default-on) |
+| `hillshade` | Terrain shading | reference | USGS 3DEP, bundled PMTiles (default-on) |
 | `ecoregions` | Ecoregions (Level III/IV) | reference | EPA Omernik, bundled PMTiles |
+| `places` | Municipal place labels | reference | Natural Earth, bundled (display-only) |
 | `aiannh` | Tribal Lands | reference | US Census AIANNH MapServer (live, default-on) |
 | `bia-reservations` | Reservation Boundaries | reference | BIA AIAN-LAR FeatureServer (live, default-on) |
 | `tribal` | Tribal Lands (your own data) | reference | deployer slot, bundled EMPTY PLACEHOLDER, default-off, URL-only (no catalog row until turned on) |
 | `treaty` | Treaty Areas (your own data) | reference | deployer slot, bundled EMPTY PLACEHOLDER, default-off, URL-only (no catalog row until turned on) |
 | `hydrography` | Rivers | reference | OpenStreetMap via Overpass (live) |
 | `nifc-fires` | Active Wildfires | event | NIFC WFIGS FeatureServer (live) |
+| `hms-smoke` | Smoke plumes | event | NOAA HMS FeatureServer (live) |
 | `nws-alerts` | Heat & Fire Weather Alerts | event | NOAA NWS MapServer (live) |
 | `telemetry` | Telemetry Stations | stations | USGS, NRCS, USBR, USACE (live) |
+
+(The British Columbia drought-levels surface swaps in for the US Drought
+Monitor inside the `british_columbia` framing; it has no separate layer
+key. Table trued up 2026-07-28; it had drifted six layers behind the
+shipped set.)
 
 Every live endpoint in `src/config/urls.ts` carries a verification
 metadata block (HTTP status, content type, CORS posture, response-shape
@@ -213,9 +226,12 @@ National Hydrography Dataset PMTiles bundle.
 
 ### The Cloudflare Worker proxy (optional)
 
-Most sources serve the browser directly. Two do not (USBR Hydromet and
-the NWRFC water-supply CSV have no CORS), and one is flaky enough to want
-a retry path (NRCS AWDB). The Worker in `workers/proxy/` is a CORS shim
+Most sources serve the browser directly. The allow-list in
+`workers/proxy/src/index.ts` (mirrored in the `wrangler.toml` header) is
+the authoritative set of proxied upstreams; it has grown beyond the
+original telemetry trio to eight host families, including the USFS
+Wildfire Hazard Potential tiles and the US Drought Monitor DSCI service.
+The Worker in `workers/proxy/` is a CORS shim
 with a strict allow-list; it adds a header and changes nothing else.
 Deploy it with `wrangler` and set `URLS.workerProxy` to enable those
 sources; without it, the module still runs and reports those values

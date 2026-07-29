@@ -2,19 +2,26 @@
  * Bureau of Indian Affairs (BIA) reservation-boundary layer.
  *
  * Renders the American Indian and Alaska Native Land Area Representation
- * (AIAN-LAR): the authoritative federal depiction of reservation and trust
- * land extent for federally recognized Tribes. Unlike the bundled
+ * (AIAN-LAR). Land Area Representation (LAR) feature definitions were last
+ * published in 2019. The live BIA service separately reports continuing
+ * spatial-accuracy and attribute updates. The browser retrieval date is
+ * stamped onto each successful response for the popup. BIA authority is
+ * limited to BIA mission use; this layer is illustrative, reference, and
+ * statistical only, not legal, survey, or jurisdictional truth.
+ *
+ * Unlike the bundled
  * `tribal-lands.geojson` placeholder (the deployer's own-data slot, empty by
  * default per CLAUDE.md hard rule 1), this layer is fetched live from the BIA
- * FeatureServer. Live consumption of an authoritative public federal source
- * commits no sovereign polygons to the repository, exactly like the United
- * States Drought Monitor and National Interagency Fire Center layers; see the
- * `ddm-tribal-boundary-mapping` skill for the stewardship reconciliation. The
- * two coexist: one is fetched-and-live, one is bundled-and-empty.
+ * FeatureServer. Live consumption of a public federal source commits no
+ * sovereign polygons to the repository, exactly like the United States
+ * Drought Monitor and National Interagency Fire Center layers. The two
+ * coexist: one is fetched live, one is bundled and empty by default.
  *
  * Stewardship: the boundary is a representation for general spatial reference,
- * not a definitive depiction of Tribal jurisdiction. The mandatory caveat
- * lives in `buildBiaReservationPopupHtml` (src/ui/popups.ts).
+ * not legal, survey, or jurisdictional truth. Tribal sovereignty and each
+ * Tribe's understanding of its territory are matters of sovereign authority.
+ * The mandatory caveat lives in `buildBiaReservationPopupHtml`
+ * (src/ui/popups.ts).
  *
  * Source: `URLS.biaLarFeatureServer` (verified 2026-05-30; see urls.ts).
  *
@@ -135,6 +142,15 @@ const OUTLINE_WIDTH_SELECTED = 2.6;
 
 type Status = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
 
+/** Empty data applied before an active refresh failure reports unavailable. */
+const EMPTY_FEATURE_COLLECTION: FeatureCollection = {
+  type: 'FeatureCollection',
+  features: []
+};
+
+/** Runtime-only property carrying the successful browser retrieval date. */
+const RETRIEVED_ON_PROPERTY = '__DDM_RETRIEVED_ON';
+
 /**
  * Master cancellation controller for the in-flight fetch. Aborted on
  * `deactivate` and replaced on each new fetch so a superseded request can
@@ -145,7 +161,7 @@ let masterController: AbortController | null = null;
 /**
  * Request-identity token: each fetch takes `++requestSeq` and drops its
  * response if the module has moved on. Belt to the abort signal's braces; a
- * response that raced past the abort still cannot render stale data.
+ * response that raced past the abort still cannot render superseded data.
  */
 let requestSeq = 0;
 
@@ -344,12 +360,44 @@ function isTruncated(raw: unknown): boolean {
 }
 
 /**
+ * Stamp each fetched feature with the browser retrieval date shown in the
+ * popup. A session-cache hit retains the original date instead of presenting
+ * the later display time as a new retrieval.
+ */
+function stampRetrievalDate(
+  geojson: FeatureCollection,
+  retrievedOn: string
+): FeatureCollection {
+  return {
+    ...geojson,
+    features: geojson.features.map((feature) => ({
+      ...feature,
+      properties: {
+        ...(feature.properties ?? {}),
+        [RETRIEVED_ON_PROPERTY]: retrievedOn
+      }
+    }))
+  };
+}
+
+/**
+ * Remove any rendered features from a prior viewport. D-0.8.0-052 authorizes
+ * no post-failure fallback, so an active refresh failure must clear first and
+ * then report unavailable.
+ */
+function clearRenderedFeatures(map: maplibregl.Map): void {
+  const existing = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+  if (existing) existing.setData(EMPTY_FEATURE_COLLECTION);
+  lastAppliedStatus = null;
+}
+
+/**
  * Fetch the AIAN-LAR for the current viewport and apply it: into the existing
  * source via `setData` when refreshing, or as a fresh source plus layers on
  * first render. Shared by `activate` and the `moveend` refresh. A cache hit
  * applies synchronously with no network call (see the Caching paragraph in
- * the module docblock). Network failures surface as `'error'` rather than
- * throwing, matching the other layer modules.
+ * the module docblock). Network failures clear prior data before surfacing as
+ * `'error'`.
  */
 async function fetchAndApply(map: maplibregl.Map): Promise<void> {
   // Supersede any prior in-flight fetch FIRST, before the cache lookup, so a
@@ -393,13 +441,17 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
       throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
     }
     const raw: unknown = await resp.json();
-    geojson = assertFeatureCollection(raw);
+    geojson = stampRetrievalDate(
+      assertFeatureCollection(raw),
+      new Date().toISOString().slice(0, 10)
+    );
     truncated = isTruncated(raw);
   } catch (err) {
     // Aborted or superseded means a newer request owns the view; drop
     // silently per invariant 5.
     if (signal.aborted || token !== requestSeq) return;
     console.warn('[bia-reservations] AIAN-LAR fetch failed.', err);
+    clearRenderedFeatures(map);
     reportStatus('error');
     return;
   }

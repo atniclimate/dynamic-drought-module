@@ -24,11 +24,12 @@
  *        and the active-count pill, and to `status-change` for the
  *        per-layer pill text and the polite live region.
  *
- *   2. `setLayerStatusInPill(key, status)` updates the per-layer status
- *      pill and the visually-hidden live region. Bound externally via
- *      `registry.on('status-change', ...)`; also exported so a layer
- *      module that wants to set its own status before activation
- *      completes can reach it without going through the registry.
+ *   2. Per-layer status pills: rendered by the Preact island (the
+ *      `resolveStatusPillText` copy lives in `src/ui/island/pill-text.ts`),
+ *      driven by the registry's `status-change` event. The frozen-contract
+ *      name `setLayerStatusInPill` from CLAUDE.md section 8 no longer
+ *      exists as a function; the island subscription replaced it
+ *      (corrected 2026-07-28, ground-truth audit).
  *
  * Deviation note (per CLAUDE.md section 12): the kickoff prescribed
  * splitting share, overlay, and sidebar into three files. We keep the
