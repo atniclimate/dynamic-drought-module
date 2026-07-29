@@ -15,21 +15,27 @@
  * NWS HeatRisk, or the SPC fire-weather outlook; the one-surface-at-a-time
  * invariant means at most one is active), with the NIFC perimeter glyphs as
  * the fire fallback when only the event layer is on. Nothing is fetched.
- * Swatches come from the same palette tables as the map fills, so the key
- * can never disagree with the map.
+ * Vector swatches come from the map-fill palettes. HeatRisk uses the one
+ * issuer-owned mirror table while its raster remains colorized upstream.
  */
 
 import { registry } from '../state/registry';
 import {
   BC_DROUGHT_LEVELS,
   BC_DROUGHT_NO_UPDATE,
+  HEATRISK_CATEGORIES,
   NADM_CATEGORIES,
+  NWS_ALERT_COLORS,
   USDM_CATEGORIES,
   USDM_NONE_SWATCH,
   SPC_FIREWX_CATEGORIES
 } from '../config/palette';
 import { getDroughtSurfacePresentation } from '../config/layers';
 import { escapeHtml } from '../util/escape';
+import {
+  createHeatRiskSequenceLoader,
+  type HeatRiskFrameEventDetail
+} from './heatrisk-sequence-loader';
 
 interface KeySpec {
   readonly label: string;
@@ -41,19 +47,6 @@ interface HeatRiskFrame {
   readonly day: number;
   readonly validTime: number;
   readonly name: string;
-}
-
-interface HeatRiskFrameEventDetail {
-  readonly status:
-    | 'loading'
-    | 'ready'
-    | 'degraded'
-    | 'error'
-    | 'no-data'
-    | 'inactive';
-  readonly frames: readonly HeatRiskFrame[];
-  readonly selectedDay: number | null;
-  readonly hasCoverage: boolean | null;
 }
 
 interface NwsSnapshotEventDetail {
@@ -109,19 +102,6 @@ function swatchItem(color: string, code: string): string {
     color
   )}"></span>${escapeHtml(code)}</span>`;
 }
-
-/**
- * NWS HeatRisk classes. The raster arrives colorized server-side per the
- * published HeatRisk legend; these swatches mirror that published scale
- * (0 little to none is the bare map, matching the none-swatch-leads rule).
- */
-const HEATRISK_ITEMS: ReadonlyArray<{ color: string; code: string }> = [
-  { color: '#00e087', code: 'Low' },
-  { color: '#ffee00', code: 'Minor' },
-  { color: '#ff9c00', code: 'Moderate' },
-  { color: '#e60000', code: 'Major' },
-  { color: '#c800c8', code: 'Extreme' }
-];
 
 function droughtKey(): KeySpec {
   const presentation = getDroughtSurfacePresentation();
@@ -201,10 +181,12 @@ function heatKey(): KeySpec {
   const validDate = selected
     ? ` Valid ${formatHeatRiskDate(selected.validTime)}.`
     : '';
+  const firstCategory = HEATRISK_CATEGORIES[0]!;
+  const lastCategory = HEATRISK_CATEGORIES.at(-1)!;
   return {
     label: 'HeatRisk',
     ariaLabel:
-      'NWS HeatRisk key, low through extreme expected heat impact (experimental product).' +
+      `NWS HeatRisk key, value ${firstCategory.value} ${firstCategory.label} through value ${lastCategory.value} ${lastCategory.label} expected heat impact (experimental product).` +
       validDate +
       (heatRiskFrameStatus === 'degraded'
         ? ' Live (partial): selected frame has missing tiles.'
@@ -213,12 +195,44 @@ function heatKey(): KeySpec {
           : ''),
     itemsHtml:
       heatDateControl() +
-      HEATRISK_ITEMS.map((c) => swatchItem(c.color, c.code)).join('') +
+      '<span class="map-key-scale" data-heatrisk-scale>' +
+      '<strong class="map-key-scale-label">Surface</strong>' +
+      HEATRISK_CATEGORIES.map((category) =>
+        swatchItem(
+          category.color,
+          `${category.value} ${category.label}`
+        )
+      ).join('') +
+      '</span>' +
       (heatRiskFrameStatus === 'degraded'
         ? '<span class="map-key-qualification" data-heatrisk-tile-status><strong>live (partial)</strong> Selected frame has missing tiles.</span>'
         : heatRiskFrameStatus === 'error'
           ? '<span class="map-key-qualification" data-heatrisk-tile-status><strong>unavailable</strong> No selected-frame tiles loaded.</span>'
           : '')
+  };
+}
+
+function nwsProductKey(): {
+  readonly html: string;
+  readonly ariaLabel: string;
+} {
+  const labelsByColor = new Map<string, string[]>();
+  for (const [label, color] of Object.entries(NWS_ALERT_COLORS)) {
+    const labels = labelsByColor.get(color) ?? [];
+    labels.push(label);
+    labelsByColor.set(color, labels);
+  }
+  const labels = [...labelsByColor.values()].flat();
+  return {
+    html:
+      '<span class="map-key-scale map-key-nws-products" data-nws-products-key>' +
+      '<strong class="map-key-scale-label">NWS products</strong>' +
+      [...labelsByColor].map(([color, names]) =>
+        swatchItem(color, names.join(' / '))
+      ).join('') +
+      '</span>',
+    ariaLabel:
+      `National Weather Service event products: ${labels.join(', ')}.`
   };
 }
 
@@ -341,17 +355,19 @@ function activeKey(): KeySpec | null {
 
   if (!active.has('nws-alerts')) return spec;
   const snapshot = nwsSnapshotQualification();
+  const products = nwsProductKey();
   if (spec) {
     return {
       ...spec,
-      ariaLabel: `${spec.ariaLabel} ${snapshot.ariaLabel}`,
-      itemsHtml: spec.itemsHtml + snapshot.html
+      ariaLabel:
+        `${spec.ariaLabel} ${products.ariaLabel} ${snapshot.ariaLabel}`,
+      itemsHtml: spec.itemsHtml + products.html + snapshot.html
     };
   }
   return {
     label: 'Products',
-    ariaLabel: snapshot.ariaLabel,
-    itemsHtml: snapshot.html
+    ariaLabel: `${products.ariaLabel} ${snapshot.ariaLabel}`,
+    itemsHtml: products.html + snapshot.html
   };
 }
 
@@ -359,6 +375,12 @@ function activeKey(): KeySpec | null {
 export function initMapKey(): void {
   const host = document.getElementById('map-key');
   if (!host) return;
+  const heatRiskSequenceLoader = createHeatRiskSequenceLoader(
+    () => import('./heatrisk-sequence'),
+    (err) => {
+      console.warn('[map-key] HeatRisk sequence failed to load.', err);
+    }
+  );
 
   let rendered = '';
   const update = (): void => {
@@ -405,6 +427,7 @@ export function initMapKey(): void {
     heatRiskSelectedDay = detail.selectedDay;
     heatRiskHasCoverage = detail.hasCoverage;
     update();
+    heatRiskSequenceLoader.apply(detail);
   });
 
   window.addEventListener(NWS_SNAPSHOT_EVENT, (event) => {

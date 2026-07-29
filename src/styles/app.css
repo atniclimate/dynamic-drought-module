@@ -4238,11 +4238,16 @@ a.impact-resource-link::after {
 .map-key {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+  row-gap: 4px;
   padding: 5px 10px;
   background: rgba(15, 23, 42, 0.92);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: min(720px, calc(100% - 112px));
   font-family: var(--font-body);
   font-size: 9.5px;
   color: var(--fg-2);
@@ -4255,7 +4260,7 @@ a.impact-resource-link::after {
   font-size: 9px;
   letter-spacing: var(--track-caps-sm);
   text-transform: uppercase;
-  color: var(--fg-3);
+  color: var(--fg-1);
 }
 .map-key-item {
   display: inline-flex;
@@ -4263,7 +4268,7 @@ a.impact-resource-link::after {
   gap: 4px;
 }
 .map-key-qualification {
-  flex: 1 1 220px;
+  flex: 1 1 100%;
   min-width: 0;
   line-height: 1.3;
   white-space: normal;
@@ -4273,17 +4278,174 @@ a.impact-resource-link::after {
   color: var(--fg-1);
   font-weight: var(--fw-strong);
 }
-.app-shell.embed .map-key {
-  box-sizing: border-box;
+.map-key [data-heatrisk-date] {
+  min-width: 0;
+}
+.map-key [data-heatrisk-day] {
+  max-width: 142px;
+  min-width: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--bg-1);
+  color: var(--fg-1);
+  font: inherit;
+}
+.map-key-scale {
+  display: flex;
+  flex: 1 1 100%;
   flex-wrap: wrap;
-  row-gap: 4px;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
+}
+.map-key-scale-label {
+  flex: 0 0 auto;
+  color: var(--fg-1);
+  font-family: var(--font-display);
+  font-size: 9px;
+}
+.map-key-scale[data-heatrisk-scale] .map-key-item {
+  flex: 1 1 60px;
+}
+.map-key-nws-products .map-key-item {
+  flex: 1 1 132px;
+  min-width: 0;
+  line-height: 1.2;
+  white-space: normal;
+}
+.app-shell.embed .map-key {
   max-width: min(560px, calc(100% - 112px));
 }
 .map-key-swatch {
+  flex: 0 0 auto;
   width: 12px;
   height: 9px;
   border-radius: 2px;
   box-shadow: 0 0 0 1px rgba(11, 18, 32, 0.6);
+}
+
+/* HeatRisk selected-place sequence. This module is inserted into the shared
+   dock only after HeatRisk activates, so no sequence code rides the boot. */
+.heatrisk-sequence {
+  width: min(336px, calc(100vw - 16px));
+  padding: 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+  background: rgba(15, 23, 42, 0.94);
+  color: var(--fg-1);
+  font-family: var(--font-body);
+  pointer-events: auto;
+}
+.heatrisk-sequence[hidden] { display: none; }
+.heatrisk-sequence-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 5px;
+  font-size: 10px;
+}
+.heatrisk-sequence-heading span { color: var(--fg-2); }
+.heatrisk-sequence-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+}
+.heatrisk-sequence-cell {
+  min-width: 0;
+  min-height: 48px;
+  padding: 2px 1px;
+  border: 1px solid var(--line-strong);
+  border-top: 6px solid var(--heatrisk-cell-color);
+  border-radius: 4px;
+  background: var(--bg-1);
+  color: var(--fg-1);
+  font-family: var(--font-body);
+  font-size: 9px;
+  line-height: 1.05;
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.heatrisk-sequence-cell > span,
+.heatrisk-sequence-cell > strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: clip;
+}
+.heatrisk-sequence-day { color: var(--fg-1); }
+.heatrisk-sequence-date { color: var(--fg-2); }
+.heatrisk-sequence-value {
+  margin-top: 2px;
+  font-family: var(--font-display);
+  font-size: 12px;
+}
+.heatrisk-sequence-cell:hover,
+.heatrisk-sequence-cell:focus-visible {
+  border-color: var(--fg-0);
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 1px;
+}
+.heatrisk-sequence-cell.selected {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px var(--accent-strong);
+}
+.heatrisk-sequence-selected,
+.heatrisk-sequence-source,
+.heatrisk-sequence-state {
+  margin: 6px 0 0;
+  line-height: 1.3;
+}
+.heatrisk-sequence-selected { font-size: 10px; }
+.heatrisk-sequence-source,
+.heatrisk-sequence-state {
+  color: var(--fg-2);
+  font-size: 9.5px;
+}
+.heatrisk-sequence-source a { color: var(--accent); }
+
+@media (max-width: 480px) {
+  .app-shell.embed .map-dock-foot:has(#map-key:not([hidden])) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .app-shell.embed .map-key {
+    width: 100%;
+    max-width: 100%;
+  }
+  .app-shell.embed .embed-brand {
+    align-self: flex-end;
+  }
+}
+
+@media (max-width: 240px) {
+  .map-key {
+    gap: 4px;
+    padding: 4px 5px;
+  }
+  .map-key-scale {
+    gap: 3px 4px;
+  }
+  .map-key-scale[data-heatrisk-scale] .map-key-item,
+  .map-key-nws-products .map-key-item {
+    flex-basis: 100%;
+  }
+  .heatrisk-sequence {
+    padding: 5px 3px;
+  }
+  .heatrisk-sequence-grid {
+    gap: 1px;
+  }
+  .heatrisk-sequence-cell {
+    padding-inline: 0;
+    font-size: 8.5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heatrisk-sequence-cell {
+    transition: none;
+  }
 }
 
 /* =============================================================================

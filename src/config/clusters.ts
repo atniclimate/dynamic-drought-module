@@ -36,8 +36,8 @@
 export type HazardClusterKey = 'drought' | 'wildfire' | 'heat' | 'enso';
 
 /**
- * The three briefing/display horizons (D-0.7.0-052: Current, Weeks
- * ahead, Season ahead). Mapping these onto the timeline store's
+ * The three briefing/display horizons (D-0.7.0-052: Current, Next seven
+ * days, Season ahead). Mapping these onto the timeline store's
  * registers (USDM week, outlook range) is the S3 cluster service's job.
  */
 export type TemporalHorizonKey = 'current' | 'weeks-ahead' | 'season-ahead';
@@ -47,6 +47,15 @@ export const TEMPORAL_HORIZON_KEYS: readonly TemporalHorizonKey[] = [
   'weeks-ahead',
   'season-ahead'
 ];
+
+/** Display labels. The durable `weeks-ahead` key predates the seven-day read. */
+export const TEMPORAL_HORIZON_LABELS: Readonly<
+  Record<TemporalHorizonKey, string>
+> = {
+  current: 'current',
+  'weeks-ahead': 'next seven days',
+  'season-ahead': 'season ahead'
+};
 
 export interface HazardClusterDef {
   /** Button title, exactly as ruled (D-0.7.0-042). */
@@ -110,9 +119,9 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       // (D-0.7.0-043 part 2); the nws-alerts layer is the map face of
       // that model.
       current: ['heatrisk', 'nws-alerts'],
-      // HeatRisk is a short-range product (the shipped frame is
-      // today); it is the nearest HONEST read at this horizon until a
-      // true multi-week heat product is verified and wired.
+      // HeatRisk publishes the next seven daily periods. The durable
+      // `weeks-ahead` recipe key keeps its URL compatibility, while its
+      // display label above names the source's actual next-seven-days span.
       'weeks-ahead': ['heatrisk', 'nws-alerts'],
       // No verified season-ahead heat surface exists yet; the drought
       // briefing carries seasonal temperature context in prose. An

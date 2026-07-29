@@ -49,6 +49,62 @@ export const DROUGHT_COLORS: Readonly<Record<string, string>> = {
 };
 
 /* ---------------------------------------------------------------------------
+ * National Weather Service (NWS) HeatRisk categories
+ *
+ * The NWS ImageServer publishes these issuer-owned class colors and meanings.
+ * Source: https://mapservices.weather.noaa.gov/experimental/rest/services/
+ * NWS_HeatRisk/ImageServer/legend and /info/iteminfo (verified 2026-07-28).
+ * The raster remains colorized by the issuer. This table is the one mirror
+ * used by every DDM surface that names a HeatRisk class.
+ * ------------------------------------------------------------------------- */
+
+export type HeatRiskValue = 0 | 1 | 2 | 3 | 4;
+
+export interface HeatRiskCategory {
+  readonly value: HeatRiskValue;
+  readonly label: string;
+  readonly color: string;
+  readonly meaning: string;
+}
+
+export const HEATRISK_CATEGORIES: readonly HeatRiskCategory[] = [
+  {
+    value: 0,
+    label: 'Little to no risk',
+    color: '#E8F9E7',
+    meaning: 'Little to no risk from expected heat.'
+  },
+  {
+    value: 1,
+    label: 'Minor',
+    color: '#F4F257',
+    meaning:
+      'This level of heat affects primarily those individuals extremely sensitive to heat, especially when outdoors without effective cooling and/or adequate hydration.'
+  },
+  {
+    value: 2,
+    label: 'Moderate',
+    color: '#F69632',
+    meaning:
+      'This level of heat affects most individuals sensitive to heat, especially those without effective cooling and/or adequate hydration. Impacts possible in some health systems and in heat-sensitive industries.'
+  },
+  {
+    value: 3,
+    label: 'Major',
+    color: '#E22F33',
+    meaning:
+      'This level of heat affects anyone without effective cooling and/or adequate hydration. Impacts likely in some health systems, heat-sensitive industries and infrastructure.'
+  },
+  {
+    value: 4,
+    label: 'Extreme',
+    color: '#7A0E7F',
+    meaning:
+      'This level of rare and/or long-duration extreme heat with little to no overnight relief affects anyone without effective cooling and/or adequate hydration. Impacts likely in most health systems, heat-sensitive industries and infrastructure.'
+  }
+];
+
+/* ---------------------------------------------------------------------------
  * US Drought Monitor (USDM) category palette
  *
  * Indexed by the integer `DM` attribute the National Drought Mitigation

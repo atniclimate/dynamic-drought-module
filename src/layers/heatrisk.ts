@@ -45,6 +45,9 @@ export const fadeLayerIds = [LAYER_ID] as const;
 const FETCH_TIMEOUT_MS = 10_000;
 /** Maximum wait for a selected frame to produce positive tile evidence. */
 const TILE_SUCCESS_DEADLINE_MS = 10_000;
+/** The issuer contract is seven distinct daily periods. */
+const DAILY_FRAME_MS = 24 * 60 * 60 * 1000;
+const REQUIRED_FRAME_COUNT = 7;
 
 type Status = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
 type FrameEventStatus = Status | 'inactive';
@@ -171,9 +174,14 @@ function extractFrames(
   })).sort((a, b) => a.validTime - b.validTime);
 
   if (
-    advertised.length === 0 ||
+    advertised.length !== REQUIRED_FRAME_COUNT ||
     advertised[0]?.validTime !== extent[0] ||
-    advertised.at(-1)?.validTime !== extent[1]
+    advertised.at(-1)?.validTime !== extent[1] ||
+    advertised.some(
+      (frame, index) =>
+        index > 0 &&
+        frame.validTime - advertised[index - 1]!.validTime !== DAILY_FRAME_MS
+    )
   ) {
     return null;
   }

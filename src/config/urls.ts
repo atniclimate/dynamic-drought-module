@@ -417,7 +417,7 @@ export const URLS = Object.freeze({
   // unrelated origin), so no Worker proxy is needed. Access method: ESRI
   // ImageServer exportImage raster tiles, MapLibre bbox template, direct.
   // CAVEAT (load-bearing, found in adversarial verification): this is a
-  // 6-day rolling forecast mosaic keyed on idp_validtime. Omitting `time`
+  // 7-day rolling forecast mosaic keyed on idp_validtime. Omitting `time`
   // is stable but WRONG: a no-time exportImage matched the +2-day raster,
   // not today (confirmed via identify catalogItemVisibilities). The
   // consumer MUST read timeInfo.timeExtent[0] from the service metadata at

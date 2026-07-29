@@ -22,6 +22,7 @@
  */
 
 import { URLS } from '../config/urls';
+import { HEATRISK_CATEGORIES } from '../config/palette';
 import {
   loadServiceEnvelopePieces,
   mergeByStableIdentifier
@@ -107,6 +108,111 @@ async function fetchJson(
 /** The `features` array of a GeoJSON-shaped payload, or `[]` when absent. */
 function featuresOf(json: unknown): unknown[] {
   return isObject(json) && Array.isArray(json.features) ? json.features : [];
+}
+
+// ---------------------------------------------------------------------------
+// Current: issuer-published HeatRisk class at the selected frame and point
+// ---------------------------------------------------------------------------
+
+function heatRiskIsoDay(time: number): string {
+  return new Date(time).toISOString().slice(0, 10);
+}
+
+function heatRiskMoment(time: number): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'UTC',
+    timeZoneName: 'short'
+  }).format(new Date(time));
+}
+
+/**
+ * Read the selected HeatRisk frame at the selected point. The identify helper
+ * sends that frame's exact epoch and verifies the returned catalog time before
+ * a non-null class can become a claim.
+ */
+export async function fetchHeatRiskClaims(
+  context: BoundarySelectionContext,
+  signal: AbortSignal
+): Promise<SourceResult> {
+  try {
+    const { identifySelectedHeatRisk } = await import(
+      '../ui/heatrisk-sequence'
+    );
+    const identified = await identifySelectedHeatRisk(
+      context.lngLat.lng,
+      context.lngLat.lat,
+      signal
+    );
+    if (signal.aborted) return { claims: [], ok: false };
+    // HeatRisk is contextual to its active displayed frame. An inactive layer
+    // adds no source slot and does not make an otherwise complete horizon
+    // partial.
+    if (!identified) return { claims: [], ok: true };
+
+    const validity =
+      `${heatRiskMoment(identified.frame.validTime)} to ` +
+      heatRiskMoment(identified.validThrough);
+    const source = 'National Weather Service HeatRisk (Experimental)';
+    const sourceUrl = `${URLS.nwsHeatRisk}/info/iteminfo`;
+    const shared = {
+      source,
+      sourceUrl,
+      evidence: 'classified',
+      dates: {
+        valid: heatRiskIsoDay(identified.frame.validTime),
+        retrieved: todayIso()
+      },
+      support: {
+        native: 'National Weather Service HeatRisk raster cell',
+        reporting: 'the cell at the selected point'
+      },
+      uncertainty: {
+        kind: 'categorical',
+        text: 'an issuer-published 0-4 classification; no DDM category is calculated'
+      }
+    } as const;
+
+    if (identified.value === null) {
+      return {
+        ok: true,
+        claims: [
+          makeClaim({
+            text:
+              `HeatRisk (Experimental): no data at the selected point for ${context.title} for the selected frame. ` +
+              `Valid ${validity}.`,
+            ...shared
+          })
+        ]
+      };
+    }
+
+    const category = HEATRISK_CATEGORIES[identified.value]!;
+    return {
+      ok: true,
+      claims: [
+        makeClaim({
+          text:
+            `HeatRisk (Experimental) value ${category.value}, ${category.label}, at the selected point for ${context.title}. ` +
+            `Valid ${validity}. ${category.meaning}`,
+          ...shared
+        })
+      ]
+    };
+  } catch (err) {
+    if (signal.aborted) return { claims: [], ok: false };
+    console.warn('[impact] HeatRisk identify failed.', err);
+    return {
+      claims: [],
+      ok: false,
+      note: 'The National Weather Service HeatRisk classification did not respond.'
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------
