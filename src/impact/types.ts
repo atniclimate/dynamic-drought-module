@@ -180,6 +180,50 @@ export interface ResourceLink {
   readonly description?: string;
 }
 
+/** One dated source behind a landscape-context fact. */
+export interface LandscapeContextSource {
+  /** Stable artifact source key, for example `terrain` or `soilMukey`. */
+  readonly key: string;
+  readonly label: string;
+  readonly url?: string;
+  readonly vintage: string;
+  readonly acquired?: string;
+  readonly methodVersion: number;
+}
+
+/** One readable family from the baked ecoregion signature. */
+export interface LandscapeContextFact {
+  readonly key: 'terrain' | 'soil' | 'landcover' | 'fuels';
+  readonly label: string;
+  readonly text: string;
+  /** A family-specific honesty qualification shown directly with the fact. */
+  readonly note?: string;
+}
+
+/**
+ * The lazy landscape-signature read shown beside the temporal briefing.
+ *
+ * It is context, never an observation or current-condition claim. Only an
+ * EPA Omernik ecoregion selection resolves directly to one baked bundle.
+ * Other boundary kinds use the explicit unavailable state rather than a
+ * centroid, click point, or silent polygon-to-point substitution.
+ */
+export interface LandscapeContext {
+  readonly status: 'loading' | 'ready' | 'unavailable';
+  readonly note?: string;
+  readonly ecoregion?: {
+    readonly level: 3 | 4;
+    readonly code: string;
+    readonly name: string;
+  };
+  readonly support?: string;
+  readonly artifactDate?: string;
+  readonly analysisCrs?: string;
+  readonly gridResolutionMeters?: number;
+  readonly facts: readonly LandscapeContextFact[];
+  readonly sources: readonly LandscapeContextSource[];
+}
+
 /**
  * The kind of boundary that was selected; drives the land title and caveat.
  *
@@ -250,6 +294,8 @@ export interface ImpactBriefing {
   readonly landKind: string;
   /** The representation caveat, or empty string when none applies. */
   readonly landCaveat: string;
+  /** Lazy, static ecoregion context. Replaced when its artifact read settles. */
+  landscape: LandscapeContext;
   readonly horizons: {
     current: Horizon;
     nearTerm: Horizon;

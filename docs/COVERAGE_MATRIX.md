@@ -11,7 +11,7 @@ supported; the note says why).
 
 | Family | Display | Selectable place | Drought state | Landscape signature | Impact synthesis |
 | --- | --- | --- | --- | --- | --- |
-| Pacific Northwest (PNW) | full | full | partial | none | partial |
+| Pacific Northwest (PNW) | full | full | partial | partial | partial |
 | Contiguous United States (CONUS) | full | partial | partial | none | none |
 | Alaska and Hawaii | partial | partial | none | none | none |
 | Canada | partial | none | partial | none | none |
@@ -24,8 +24,8 @@ supported; the note says why).
 - **Display** (full): The shipped framings render the PNW as the primary region.
 - **Selectable place** (full): Tribal Nations, states, ecoregions, and watersheds are selectable typed places (watershed lists come from the live USGS WBD service); municipal labels are display-only.
 - **Drought state** (partial): US Drought Monitor (USDM) polygons, DSCI, and the NIDIS SPI raster display; no gridded index feeds analysis or the briefing yet (the MCO value path lands in 0.8.0).
-- **Landscape signature** (none): The baked PNW artifact ships (169 ecoregion bundles, schema-validated in the gate) but no runtime consumer reads it yet; the level stays none until the briefing consumes it.
-- **Impact synthesis** (partial): The shipped briefing composes USDM, outlooks, and telemetry with the evidence contract; no gridded or signature inputs yet.
+- **Landscape signature** (partial): The briefing lazily renders the baked terrain, soil, land-cover, and fuels signature for exact PNW Level III and IV ecoregion selections; other boundary kinds stay explicitly unavailable rather than being remapped to one ecoregion.
+- **Impact synthesis** (partial): The shipped briefing composes USDM, outlooks, and telemetry with the evidence contract and shows the signature as separately labeled static ecoregion context; no gridded index input or signature-derived claim yet.
 
 ### Contiguous United States (CONUS)
 

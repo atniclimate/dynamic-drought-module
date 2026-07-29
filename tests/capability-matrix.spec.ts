@@ -106,14 +106,14 @@ test.describe('capability matrix consistency (T-P0-3 honesty rules)', () => {
   });
 });
 
-test.describe('capability matrix current truth (through U7 Canada)', () => {
+test.describe('capability matrix current truth (through T3-2)', () => {
   test('the load-bearing levels match the ratified work order', () => {
     const levels: Record<CoverageFamilyKey, Record<CapabilityAxisKey, CapabilityLevel>> = {
       pnw: {
         display: 'full',
         selectablePlace: 'full',
         droughtState: 'partial',
-        landscapeSignature: 'none',
+        landscapeSignature: 'partial',
         impactSynthesis: 'partial'
       },
       conus: {

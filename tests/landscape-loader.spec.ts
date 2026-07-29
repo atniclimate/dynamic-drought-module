@@ -20,9 +20,8 @@ import type { fetchJsonWithBudget } from '../src/util/fetch';
  * `fetchJsonImpl`, so the lazy default Uniform Resource Locator (URL)
  * branch (a dynamic import of
  * config/urls, which only evaluates under the Vite bundle) is never taken
- * here. That branch is exercised by the first real consumer's rendered
- * verification (T-S1/M-DEMO); until then it is a documented, untested-in-
- * Node seam, stated in the module header.
+ * here. T3-2 exercises that default URL branch through the rendered
+ * ecoregion-briefing verification in landscape-consumer.spec.ts.
  *
  * The failure contract under test is the MACHINE-READABLE reason code,
  * not prose: absence/timeout -> 'unavailable', cancel -> 'aborted',
@@ -63,6 +62,7 @@ function validArtifact(): Record<string, unknown> {
         level: 3,
         usL3Code: '1',
         usL3Name: 'Test Flats',
+        unavailable: [],
         terrain: {
           elevMeanM: 591.6,
           elevMinM: 580.8,

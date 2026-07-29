@@ -69,6 +69,11 @@ export function createBriefingSkeleton(
     landTitle: context.title,
     landKind: kindLabel(context.kind),
     landCaveat: caveatFor(context.kind),
+    landscape: {
+      status: 'loading',
+      facts: [],
+      sources: []
+    },
     horizons: {
       current: horizonByKey.current,
       nearTerm: horizonByKey.nearTerm,

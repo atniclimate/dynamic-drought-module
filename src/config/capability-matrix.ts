@@ -96,12 +96,12 @@ export const CAPABILITY_MATRIX: CapabilityMatrix = {
       note: 'US Drought Monitor (USDM) polygons, DSCI, and the NIDIS SPI raster display; no gridded index feeds analysis or the briefing yet (the MCO value path lands in 0.8.0).'
     },
     landscapeSignature: {
-      level: 'none',
-      note: 'The baked PNW artifact ships (169 ecoregion bundles, schema-validated in the gate) but no runtime consumer reads it yet; the level stays none until the briefing consumes it.'
+      level: 'partial',
+      note: 'The briefing lazily renders the baked terrain, soil, land-cover, and fuels signature for exact PNW Level III and IV ecoregion selections; other boundary kinds stay explicitly unavailable rather than being remapped to one ecoregion.'
     },
     impactSynthesis: {
       level: 'partial',
-      note: 'The shipped briefing composes USDM, outlooks, and telemetry with the evidence contract; no gridded or signature inputs yet.'
+      note: 'The shipped briefing composes USDM, outlooks, and telemetry with the evidence contract and shows the signature as separately labeled static ecoregion context; no gridded index input or signature-derived claim yet.'
     }
   },
   conus: {

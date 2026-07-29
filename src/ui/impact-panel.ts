@@ -354,6 +354,12 @@ function unavailableBriefing(
     landTitle: context.title,
     landKind: 'Boundary briefing',
     landCaveat: '',
+    landscape: {
+      status: 'unavailable',
+      note: UNAVAILABLE_NOTE,
+      facts: [],
+      sources: []
+    },
     horizons: {
       current: unavailableHorizon('current', 'Current conditions', 'now'),
       nearTerm: unavailableHorizon('nearTerm', 'Near-term outlook', 'days to weeks'),

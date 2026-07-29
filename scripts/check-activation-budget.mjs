@@ -70,13 +70,13 @@
  *      exemptions) is extended.
  *
  * EXEMPTIONS, WITH THEIR RESIDUALS STATED:
- *   - rolldown-runtime-*: may lack a sourcemap (generated bundler
- *     helpers with no source modules), but only while it is not the
- *     entry chunk and stays under a small raw-size cap. RESIDUAL: this
- *     is a size-bounded filename exemption, not a content proof; a
- *     hostile sub-cap chunk planted under that name would pass, which
- *     requires control of the build output and is accepted as outside
- *     this gate's threat model.
+ *   - rolldown-runtime-* and preload-helper-*: may lack a sourcemap
+ *     (generated bundler helpers with no source modules), but only
+ *     while they are not the entry chunk and stay under small raw-size
+ *     caps. RESIDUAL: these are size-bounded filename exemptions, not
+ *     content proofs; a hostile sub-cap chunk planted under either
+ *     name would pass, which requires control of the build output and
+ *     is accepted as outside this gate's threat model.
  *   - fflate inside the pmtiles-* vendor chunk: allowed only while
  *     that chunk's ENTIRE source list is pmtiles + fflate modules and
  *     actually contains pmtiles (fflate is pmtiles' own
@@ -263,12 +263,20 @@ const IMPACT_EAGER_RULE_CONTRACT = [
 ];
 
 // Map-exemption invariants: pattern + not-the-entry + raw-size cap.
-// The real rolldown runtime is ~0.6 kB of generated helpers.
-const MAP_EXEMPT = [{
-  pattern: /^rolldown-runtime-/,
-  maxRawBytes: 8192,
-  reason: 'generated bundler module-runtime helpers; no source modules by construction',
-}];
+// The real rolldown runtime is ~0.6 kB and Vite's dependency-preload helper
+// is ~1.3 kB. Both are generated helpers with no source module map.
+const MAP_EXEMPT = [
+  {
+    pattern: /^rolldown-runtime-/,
+    maxRawBytes: 8192,
+    reason: 'generated bundler module-runtime helpers; no source modules by construction',
+  },
+  {
+    pattern: /^preload-helper-/,
+    maxRawBytes: 4096,
+    reason: 'generated Vite dependency-preload helper; no source modules by construction',
+  },
+];
 
 /* ------------------------------------------------------------------ *
  * The per-feature activation budget table. Row contract is enforced
@@ -277,11 +285,11 @@ const MAP_EXEMPT = [{
 const FEATURE_BUDGETS = [
   {
     key: 'landscape-signature-artifact',
-    label: 'Landscape signature artifact (T-S1-4 complete artifact measured 531,045 bytes; the earlier 486,037-byte figure measured the build-1 degraded artifact whose fuels family was honestly unavailable during the 2026-07-23/25 LANDFIRE outage; runtime activation is owned by a later consumer unit)',
-    rootModules: [],
-    activationJsGzipKb: PENDING,
-    networkBytes: PENDING,
-    requestCount: PENDING,
+    label: 'Landscape signature briefing consumer (T3-2 measured 3.33 kB gzip in its first-activation static closure and one 531,090-byte bundled artifact request on 2026-07-29; unsupported boundary kinds do not request the artifact)',
+    rootModules: ['src/impact/landscape-consumer.ts'],
+    activationJsGzipKb: 4.0,
+    networkBytes: 531_090,
+    requestCount: 1,
     dataAssets: [{
       path: 'data/landscape-signature-pnw.json',
       maxBytes: 560_000,
@@ -881,6 +889,15 @@ const SELF_TEST_CASES = [
     },
   },
   {
+    name: 'fail-preload-helper-oversize', kind: 'fail', expect: 'map-exempt',
+    files: {
+      'index.html': htmlWith('preload-helper-test.js'),
+      '.vite/manifest.json': manifestWith(['_preload.js'], { '_preload.js': { file: 'assets/preload-helper-test.js' } }),
+      ...CLEAN_ENTRY,
+      'assets/preload-helper-test.js': 'x'.repeat(5000),
+    },
+  },
+  {
     name: 'fail-forged-vendor-no-pmtiles', kind: 'fail', expect: 'allowance rejected',
     files: {
       'index.html': htmlWith('pmtiles-test.js'),
@@ -1027,6 +1044,15 @@ const SELF_TEST_CASES = [
     },
   },
   {
+    name: 'pass-preload-helper-exempt', kind: 'pass',
+    files: {
+      'index.html': htmlWith('preload-helper-test.js'),
+      '.vite/manifest.json': manifestWith(['_preload.js'], { '_preload.js': { file: 'assets/preload-helper-test.js' } }),
+      ...CLEAN_ENTRY,
+      'assets/preload-helper-test.js': 'const seen = new Map;',
+    },
+  },
+  {
     name: 'pass-vendor-allowance', kind: 'pass',
     files: {
       'index.html': htmlWith('pmtiles-test.js'),
@@ -1058,7 +1084,8 @@ const EXPECTED_CASE_NAMES = [
   'fail-eager-geotiff', 'fail-eager-landscape', 'fail-eager-zip',
   'fail-eager-impact-briefing-cluster',
   'fail-missing-map', 'fail-empty-sources', 'fail-indexed-map',
-  'fail-runtime-oversize', 'fail-forged-vendor-no-pmtiles',
+  'fail-runtime-oversize', 'fail-preload-helper-oversize',
+  'fail-forged-vendor-no-pmtiles',
   'fail-vendor-firstparty-share', 'fail-manifest-html-mismatch',
   'fail-no-manifest', 'fail-budget-over', 'fail-budget-root-missing',
   'fail-budget-no-roots', 'fail-budget-invalid-value',
@@ -1068,6 +1095,7 @@ const EXPECTED_CASE_NAMES = [
   'fail-data-assets-not-array', 'fail-data-asset-missing',
   'fail-data-asset-directory',
   'pass-clean-with-lazy-geotiff', 'pass-runtime-exempt',
+  'pass-preload-helper-exempt',
   'pass-vendor-allowance', 'pass-budget-under-closure',
 ];
 

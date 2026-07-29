@@ -21,6 +21,9 @@
  *     Cross-Origin Resource Sharing (CORS) enabled, JavaScript Object
  *     Notation (JSON).
  */
+
+import { LANDSCAPE_SIGNATURE_LOCAL_URL } from './landscape-url';
+
 export const URLS = Object.freeze({
   // ---------- Basemaps (raster tiles) ----------
   // MapLibre GL JavaScript raster sources do not natively expand the `{s}`
@@ -817,13 +820,10 @@ export const URLS = Object.freeze({
   // `npm run build:landscape`, validated against
   // schema/landscape-signature.schema.json). The artifact IS committed and
   // ships (169 bundles at T-S1-4, 2026-07-25; the gate validates it via
-  // check:landscape-schema), but the loader (src/impact/landscape.ts) has
-  // no runtime importer yet: nothing consumes the signature until the
-  // 0.8.0 consumer unit wires it into the briefing (plan T3-2). Corrected
-  // 2026-07-28 (ground-truth audit): this comment previously claimed the
-  // artifact was not committed.
-  landscapeSignatureLocal:
-    import.meta.env.BASE_URL + 'data/landscape-signature-pnw.json',
+  // check:landscape-schema). T3-2 consumes it lazily for exact Level III and
+  // Level IV ecoregion briefings; unsupported boundary kinds never request
+  // the artifact and explain the missing one-to-one resolution honestly.
+  landscapeSignatureLocal: LANDSCAPE_SIGNATURE_LOCAL_URL,
   // Per-state resource catalog base (0.6.0 R2). Public resource LINKS are not
   // sovereign data, so the catalog ships in-repo (D-0.6.0-004); each state's
   // rows live at `<base>data/resources/<lowercase-two-letter-code>.json` and are

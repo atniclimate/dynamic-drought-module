@@ -5,14 +5,14 @@
  * (public/data/landscape-signature-pnw.json, built by scripts/landscape
  * and validated at build time against
  * schema/landscape-signature.schema.json) and returns it behind an
- * honest-absence result: the artifact is NOT committed yet, so the
- * shipped behavior of this module is `{ ok: false, reason: 'unavailable' }`
- * (the empty-placeholder pattern; absence is a state, never an error).
+ * honest-absence result. The complete Pacific Northwest artifact is committed
+ * and schema-validated; absence is still a state, never an error, for a
+ * deployment that deliberately omits it or a read that does not complete.
  *
- * NO CALLER imports this module yet, by contract: the first consumers are
- * the T-S1 signature adapters and the M-DEMO briefing surface. The T-P0-7
- * activation gate (scripts/check-activation-budget.mjs) bans it from the
- * eager import graph, so it can only ever arrive lazily.
+ * T3-2 is the first runtime consumer. The T-P0-7 activation gate
+ * (scripts/check-activation-budget.mjs) bans this module from the eager import
+ * graph, so it arrives only when a briefing requests supported landscape
+ * context.
  *
  * Validation boundary (say what the mechanism does, no more): this module
  * performs STRUCTURAL SPOT-CHECKS of the top level only (schemaVersion in
@@ -99,16 +99,21 @@ export type LandscapeSignatureResult =
       readonly note: string;
     };
 
-/** The terrain source block (schema 1.2.0 provenance included). */
-export interface TerrainSource {
+/** One dated source block from schema 1.3.0. */
+export interface LandscapeSource {
   readonly source: string;
   readonly sourceUrl: string;
   readonly vintage: string;
-  readonly resolutionMeters: number;
+  readonly resolutionMeters: number | null;
   readonly method: string;
   readonly methodVersion: number;
   readonly acquired: string | null;
   readonly materializedRasterSha256: string | null;
+}
+
+/** The terrain source always has a numeric native resolution. */
+export interface TerrainSource extends LandscapeSource {
+  readonly resolutionMeters: number;
 }
 
 /** The per-ecoregion stats variant (aspect pair null together; slope may
@@ -129,6 +134,64 @@ export interface UnavailableSignature {
   readonly reason: string;
 }
 
+export interface SoilSignature {
+  readonly awsRootZoneMm: number;
+  readonly awsP10: number;
+  readonly awsP90: number;
+  readonly rootZoneDepthCm: number | null;
+  readonly dominantTexture: string | null;
+  readonly ssurgoFraction: number;
+  readonly statsgo2Fraction: number;
+  readonly coveragePct: number;
+  readonly rootZoneCoveragePct: number;
+  readonly textureCoveragePct: number;
+  readonly cellCount: number;
+  readonly coarse: boolean;
+  readonly generalized: boolean;
+}
+
+export interface Fbfm40Signature {
+  readonly dominantCode: number | null;
+  readonly dominantFraction: number | null;
+  readonly nonburnableFraction: number;
+  readonly classes: readonly {
+    readonly code: number;
+    readonly fraction: number;
+  }[];
+  readonly otherBurnableFraction: number;
+  readonly coveragePct: number;
+}
+
+export interface EvtSignature {
+  readonly dominantCode: number;
+  readonly dominantName: string | null;
+  readonly dominantFraction: number;
+  readonly coveragePct: number;
+}
+
+export interface LandcoverSignature {
+  readonly forestFraction: number;
+  readonly croplandFraction: number;
+  readonly wetlandFraction: number;
+  readonly openWaterFraction: number;
+  readonly coveragePct: number;
+}
+
+export interface WhpSignature {
+  readonly classMean: number | null;
+  readonly classFractions: Readonly<Record<'1' | '2' | '3' | '4' | '5' | '6' | '7', number>>;
+  readonly cellCount: number;
+  readonly coarse: boolean;
+  readonly coveragePct: number;
+}
+
+export interface LandcoverFuelsSignature {
+  readonly fbfm40: Fbfm40Signature | UnavailableSignature;
+  readonly evt: EvtSignature | UnavailableSignature;
+  readonly landcover: LandcoverSignature | UnavailableSignature;
+  readonly whp: WhpSignature | UnavailableSignature;
+}
+
 /** Level-local shapes matching the schema's closed bundle branches: a
  * Level III bundle carries NO Level IV fields; a Level IV bundle carries
  * all three. The guard checks every property these types promise. */
@@ -136,7 +199,10 @@ export interface Level3Bundle {
   readonly level: 3;
   readonly usL3Code: string;
   readonly usL3Name: string;
+  readonly unavailable: readonly string[];
   readonly terrain: TerrainSignature | UnavailableSignature;
+  readonly soil?: SoilSignature | UnavailableSignature;
+  readonly landcoverFuels?: LandcoverFuelsSignature | UnavailableSignature;
 }
 
 export interface Level4Bundle {
@@ -146,7 +212,10 @@ export interface Level4Bundle {
   readonly usL4Code: string;
   readonly usL4Name: string;
   readonly parent: string;
+  readonly unavailable: readonly string[];
   readonly terrain: TerrainSignature | UnavailableSignature;
+  readonly soil?: SoilSignature | UnavailableSignature;
+  readonly landcoverFuels?: LandcoverFuelsSignature | UnavailableSignature;
 }
 
 export type LandscapeBundle = Level3Bundle | Level4Bundle;
@@ -190,18 +259,125 @@ export function isTerrainSignature(value: unknown): value is TerrainSignature {
 }
 
 export function isTerrainSource(value: unknown): value is TerrainSource {
+  return (
+    isLandscapeSource(value) &&
+    typeof value.resolutionMeters === 'number'
+  );
+}
+
+/** Narrow any schema 1.3.0 source block, including the null-resolution SDA source. */
+export function isLandscapeSource(value: unknown): value is LandscapeSource {
   if (!isObject(value)) return false;
   const v = value as Record<string, unknown>;
   return (
     typeof v.source === 'string' &&
     typeof v.sourceUrl === 'string' &&
     typeof v.vintage === 'string' &&
-    typeof v.resolutionMeters === 'number' &&
+    (v.resolutionMeters === null || typeof v.resolutionMeters === 'number') &&
     typeof v.method === 'string' &&
     typeof v.methodVersion === 'number' &&
     (v.acquired === null || typeof v.acquired === 'string') &&
     (v.materializedRasterSha256 === null ||
       typeof v.materializedRasterSha256 === 'string')
+  );
+}
+
+export function isSoilSignature(value: unknown): value is SoilSignature {
+  if (!isObject(value)) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.awsRootZoneMm === 'number' &&
+    typeof v.awsP10 === 'number' &&
+    typeof v.awsP90 === 'number' &&
+    (v.rootZoneDepthCm === null || typeof v.rootZoneDepthCm === 'number') &&
+    (v.dominantTexture === null || typeof v.dominantTexture === 'string') &&
+    typeof v.ssurgoFraction === 'number' &&
+    typeof v.statsgo2Fraction === 'number' &&
+    typeof v.coveragePct === 'number' &&
+    typeof v.rootZoneCoveragePct === 'number' &&
+    typeof v.textureCoveragePct === 'number' &&
+    typeof v.cellCount === 'number' &&
+    typeof v.coarse === 'boolean' &&
+    typeof v.generalized === 'boolean'
+  );
+}
+
+export function isFbfm40Signature(value: unknown): value is Fbfm40Signature {
+  if (!isObject(value)) return false;
+  const v = value as Record<string, unknown>;
+  const classes = v.classes;
+  const dominancePair =
+    (typeof v.dominantCode === 'number' &&
+      typeof v.dominantFraction === 'number') ||
+    (v.dominantCode === null && v.dominantFraction === null);
+  return (
+    dominancePair &&
+    typeof v.nonburnableFraction === 'number' &&
+    Array.isArray(classes) &&
+    classes.every(
+      (row) =>
+        isObject(row) &&
+        typeof (row as Record<string, unknown>).code === 'number' &&
+        typeof (row as Record<string, unknown>).fraction === 'number'
+    ) &&
+    typeof v.otherBurnableFraction === 'number' &&
+    typeof v.coveragePct === 'number'
+  );
+}
+
+export function isEvtSignature(value: unknown): value is EvtSignature {
+  if (!isObject(value)) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.dominantCode === 'number' &&
+    (v.dominantName === null || typeof v.dominantName === 'string') &&
+    typeof v.dominantFraction === 'number' &&
+    typeof v.coveragePct === 'number'
+  );
+}
+
+export function isLandcoverSignature(
+  value: unknown
+): value is LandcoverSignature {
+  if (!isObject(value)) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.forestFraction === 'number' &&
+    typeof v.croplandFraction === 'number' &&
+    typeof v.wetlandFraction === 'number' &&
+    typeof v.openWaterFraction === 'number' &&
+    typeof v.coveragePct === 'number'
+  );
+}
+
+export function isWhpSignature(value: unknown): value is WhpSignature {
+  if (!isObject(value)) return false;
+  const v = value as Record<string, unknown>;
+  const fractions = v.classFractions;
+  return (
+    (v.classMean === null || typeof v.classMean === 'number') &&
+    isPlainRecord(fractions) &&
+    ['1', '2', '3', '4', '5', '6', '7'].every(
+      (key) => typeof fractions[key] === 'number'
+    ) &&
+    typeof v.cellCount === 'number' &&
+    typeof v.coarse === 'boolean' &&
+    typeof v.coveragePct === 'number'
+  );
+}
+
+export function isLandcoverFuelsSignature(
+  value: unknown
+): value is LandcoverFuelsSignature {
+  if (!isObject(value)) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    (isFbfm40Signature(v.fbfm40) ||
+      isUnavailableSignature(v.fbfm40)) &&
+    (isEvtSignature(v.evt) || isUnavailableSignature(v.evt)) &&
+    (isLandcoverSignature(v.landcover) ||
+      isUnavailableSignature(v.landcover)) &&
+    (isWhpSignature(v.whp) || isUnavailableSignature(v.whp))
   );
 }
 
@@ -211,7 +387,15 @@ export function isLandscapeBundle(value: unknown): value is LandscapeBundle {
   const common =
     typeof v.usL3Code === 'string' &&
     typeof v.usL3Name === 'string' &&
-    (isTerrainSignature(v.terrain) || isUnavailableSignature(v.terrain));
+    Array.isArray(v.unavailable) &&
+    v.unavailable.every((entry) => typeof entry === 'string') &&
+    (isTerrainSignature(v.terrain) || isUnavailableSignature(v.terrain)) &&
+    (v.soil === undefined ||
+      isSoilSignature(v.soil) ||
+      isUnavailableSignature(v.soil)) &&
+    (v.landcoverFuels === undefined ||
+      isLandcoverFuelsSignature(v.landcoverFuels) ||
+      isUnavailableSignature(v.landcoverFuels));
   if (!common) return false;
   if (v.level === 3) {
     return (
@@ -240,9 +424,6 @@ export function isLandscapeBundle(value: unknown): value is LandscapeBundle {
 export async function loadLandscapeSignature(
   opts?: LandscapeLoadOptions
 ): Promise<LandscapeSignatureResult> {
-  const signal = opts?.signal ?? null;
-  const fetchJson = opts?.fetchJsonImpl ?? fetchJsonWithBudget;
-
   let url = opts?.url;
   if (url === undefined) {
     // Lazy so this module stays importable in pure-Node specs: config/urls
@@ -252,7 +433,19 @@ export async function loadLandscapeSignature(
     const { URLS } = await import('../config/urls');
     url = URLS.landscapeSignatureLocal;
   }
+  return loadLandscapeSignatureAtUrl(url, opts);
+}
 
+/**
+ * Load from an already-resolved URL. T3-2 uses this entry so the consumer
+ * activation chunk has no nested configuration import.
+ */
+export async function loadLandscapeSignatureAtUrl(
+  url: string,
+  opts?: Omit<LandscapeLoadOptions, 'url'>
+): Promise<LandscapeSignatureResult> {
+  const signal = opts?.signal ?? null;
+  const fetchJson = opts?.fetchJsonImpl ?? fetchJsonWithBudget;
   let payload: unknown;
   try {
     payload = await fetchJson(

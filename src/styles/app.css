@@ -3782,6 +3782,113 @@ button.telemetry-item {
   color: var(--fg-1);
 }
 
+.impact-landscape {
+  margin-bottom: 22px;
+}
+.impact-landscape-card {
+  padding: 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+.impact-landscape-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  font-size: 11.5px;
+  color: var(--fg-2);
+}
+.impact-landscape-identity {
+  margin: 0 0 5px;
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--fg-0);
+}
+.impact-landscape-identity span {
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  color: var(--fg-3);
+}
+.impact-landscape-support,
+.impact-landscape-unavailable {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+.impact-landscape-unavailable {
+  font-style: italic;
+}
+.impact-landscape-facts {
+  margin-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+.impact-landscape-fact {
+  padding: 9px 0;
+  border-bottom: 1px dashed var(--line);
+}
+.impact-landscape-fact h4 {
+  margin: 0 0 3px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: var(--fw-subtitle);
+  color: var(--fg-1);
+}
+.impact-landscape-fact p {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--fg-0);
+}
+.impact-landscape-fact .impact-landscape-fact-note {
+  margin-top: 4px;
+  font-size: 10.5px;
+  color: var(--fg-2);
+  font-style: italic;
+}
+.impact-landscape-facts + .impact-landscape-unavailable {
+  margin-top: 9px;
+}
+.impact-landscape-provenance {
+  margin-top: 11px;
+}
+.impact-landscape-provenance-title {
+  margin: 0 0 3px;
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  font-weight: var(--fw-subtitle);
+  color: var(--fg-1);
+}
+.impact-landscape-artifact-date {
+  margin: 0;
+  font-size: 9.5px;
+  line-height: 1.45;
+  color: var(--fg-3);
+}
+.impact-landscape-provenance ul {
+  margin: 6px 0 0;
+  padding-left: 16px;
+}
+.impact-landscape-source {
+  margin: 0 0 5px;
+  font-size: 9.5px;
+  line-height: 1.45;
+  color: var(--fg-2);
+}
+.impact-landscape-source a {
+  color: var(--accent);
+  border-bottom: 0;
+}
+.impact-landscape-source a:hover {
+  color: var(--fg-0);
+}
+.impact-landscape-source span {
+  display: block;
+  color: var(--fg-3);
+}
+
 .impact-section-title {
   margin: 0 0 10px;
   font-family: var(--font-display);

@@ -27,10 +27,15 @@
 import { createBriefingSkeleton } from '../impact/briefing';
 import { hydrateBriefing } from '../impact/hydrate';
 import {
+  resolveLandscapeSelection
+} from '../impact/landscape-resolution';
+import type { LandscapeEcoregionKey } from '../impact/landscape-resolution';
+import {
   regionCapabilityLevel,
   regionCapabilityNote
 } from '../config/region-capability';
 import { renderClaim } from './claim-render';
+import { renderLandscapeContext } from './landscape-context';
 import { loadFederalResources, resourcesForIdentity } from '../impact/resource-catalog';
 import { resolveLocationIdentity } from '../state/location-identity';
 import { getMap } from '../state/map-store';
@@ -252,6 +257,7 @@ function renderBody(
     `;
   return `
     ${caveat}
+    ${renderLandscapeContext(briefing.landscape)}
     ${impact}
     ${renderResources(briefing.resources)}
   `;
@@ -308,6 +314,15 @@ export function openImpactPanel(
 
   const token = ++openToken;
   const briefing = createBriefingSkeleton(context);
+  const landscapeResolution = resolveLandscapeSelection(context);
+  if (!landscapeResolution.ok) {
+    briefing.landscape = {
+      status: 'unavailable',
+      note: landscapeResolution.note,
+      facts: [],
+      sources: []
+    };
+  }
   const impactSynthesis = regionCapabilityLevel(
     context.regionKey,
     'impactSynthesis'
@@ -336,6 +351,18 @@ export function openImpactPanel(
   // detent's Brief content; an invisible no-op everywhere else).
   setSheetBriefing(briefing);
 
+  // The 531 kB landscape artifact and its consumer stay out of every
+  // unsupported briefing. Exact ecoregion selections activate the lazy
+  // consumer in parallel with the temporal sources.
+  if (landscapeResolution.ok) {
+    void rehydrateLandscapeContext(
+      briefing,
+      landscapeResolution.key,
+      signal,
+      token
+    );
+  }
+
   // Fill supported horizons from live sources, re-rendering as each settles.
   // A matrix level of none is an explicit unavailable surface and starts no
   // briefing-source request.
@@ -358,6 +385,33 @@ export function openImpactPanel(
   }
 
   return token;
+}
+
+async function rehydrateLandscapeContext(
+  briefing: ImpactBriefing,
+  key: LandscapeEcoregionKey,
+  signal: AbortSignal,
+  token: number
+): Promise<void> {
+  try {
+    const { resolveLandscapeContext } = await import(
+      '../impact/landscape-consumer'
+    );
+    const landscape = await resolveLandscapeContext(key, { signal });
+    if (signal.aborted) return;
+    briefing.landscape = landscape;
+  } catch (err) {
+    if (signal.aborted) return;
+    console.warn('[impact-panel] landscape context failed:', err);
+    briefing.landscape = {
+      status: 'unavailable',
+      note:
+        'The baked landscape context could not be opened for this ecoregion.',
+      facts: [],
+      sources: []
+    };
+  }
+  refreshOpenBriefing(token);
 }
 
 /**
