@@ -50,8 +50,17 @@ layer states remain invariants.
   merge `83fa417` and the corrected publication record.
 - The local checkout has no configured Git remote. The existing GitHub Pages
   workflow on `main` remains the publication authority.
+- The public footer and `package.json` identify the application as `0.6.24`,
+  while both root fields in `package-lock.json` still say `0.6.23`; the latest
+  local version tag is `v0.6.23`. Preserve the published `v0.6.24` history and
+  close the current release line with one uniquely identified `v0.6.25`
+  stabilization release.
+- The `v0.6.25` interface stabilization and release-identity closeout is the
+  only active milestone. The selected-place National Interagency Fire Center
+  perimeter read is the next implementation and opens the `v0.7.0` line only
+  after that closeout.
 - The active continuation brief is
-  `docs/ENGINE_PATHWAY_FRESH_SESSION_HANDOFF_2026-07-30.md`.
+  `docs/V0_6_X_CLOSEOUT_FRESH_SESSION_HANDOFF_2026-07-30.md`.
 
 Latest verification receipts:
 
@@ -101,9 +110,70 @@ Use these state words precisely:
 - **deployed**: the external Worker or static artifact changed;
 - **published**: users can reach the successor release.
 
-### 2. Expand the fire module
+### 2. Close the 0.6.x line at v0.6.25
 
-After H2 is released, apply the same source fence to fire:
+This is the only active milestone. It establishes a stable successor
+interface, reconciles release identity, and creates the regression baseline
+for the next engine milestone. It adds no data source, source capability,
+navigation model, or information architecture.
+
+Outcome: a person can use the current successor on desktop, mobile, and in an
+embed without a known high-impact functional, comprehension, accessibility,
+responsive-layout, or honest-state defect. The published artifact has one
+human-readable version and one exact Git commit receipt.
+
+Interface acceptance:
+
+- Review the bare opening, layer exploration, place search and selection,
+  selected-place briefing, time controls, HeatRisk sequence, source access,
+  keyboard order, and visible focus on desktop.
+- Review the established `390x844` mobile flow, including the navigation doors,
+  selected-place briefing, touch targets, bottom-sheet containment, long
+  labels, time intervals, and focus restoration.
+- Review `?embed=true`, iframe operation, attribution, source links,
+  selected-place reporting, and URL state at `400x600` and the `200x600`
+  embed-width floor.
+- Confirm that observations, forecasts, alerts, HeatRisk, current conditions,
+  future guidance, complete results, partial coverage, unavailable sources,
+  no data, selected boundaries, and point-area fallbacks remain distinguishable.
+- Fix only a current defect that affects function, comprehension,
+  accessibility, responsive or embed integrity, URL restoration, or the
+  honesty of a source state. Defer aesthetic preference, broad redesign,
+  navigation change, CSS cleanup, component refactoring, and future-fire
+  interface work.
+
+Release-identity acceptance:
+
+- Set `package.json`, both root version fields in `package-lock.json`, and the
+  application footer to `0.6.25` only after the interface changes are stable.
+- Add a concise release note that identifies `v0.6.25` as the final 0.6.x
+  stabilization release. Do not rewrite, relabel, or retag the existing
+  `v0.6.24` history.
+- Preserve the exact Git commit identifier as the authoritative build receipt.
+- After explicit publication authorization, publish the reviewed commit,
+  verify the public receipt, create the matching `v0.6.25` tag on that exact
+  commit, and align local `main` and public GitHub `main` without rewriting
+  history.
+
+Verification:
+
+- Run focused Playwright coverage for every interface area changed.
+- Run `npm run gate` near completion.
+- Run `npm run test:serial` once at final closeout.
+- Repeat visual verification at desktop `1440x900`, mobile `390x844`, embed
+  `400x600`, and the embed width floor `200x600`.
+- Verify root and GitHub Pages subpath assets, iframe operation, URL state,
+  point heat, source states, and the exact release receipt before declaring the
+  release published.
+
+The closeout does not require the historical source catalog, national coverage,
+National Interagency Fire Center implementation, Climate Prediction Center
+extremes research, water-parser corrections, a selected-place drought-index
+read, broad external user research, or old process archives to be completed.
+
+### 3. Expand the fire module in v0.7.0
+
+After `v0.6.25` is published and tagged, apply the same source fence to fire:
 
 - canonical selected-place geography;
 - independent per-source capability;
@@ -125,7 +195,8 @@ Keep the fire products semantically separate:
 Do not create a DDM fire-risk score. Do not promote a broad regional
 capability merely to activate one nationally supported source.
 
-First bounded milestone: **selected-place active fire perimeters**.
+First bounded `v0.7.0` milestone:
+**selected-place National Interagency Fire Center active fire perimeters**.
 
 Outcome: when a user opens a selected place, a concise fire block reports the
 observed NIFC active perimeters supported by that place independently of the
@@ -157,13 +228,13 @@ Acceptance criteria:
   and 200-pixel embed-width viewports, with focused cancellation, cache,
   partial-response, absence, and source-isolation coverage.
 
-### 3. Continue the engine-first successor pathway
+### 4. Continue the engine-first successor pathway
 
-The selected-place NIFC milestone remains the only active implementation
-priority. After it closes, choose the next bounded user-visible milestone from
-the engine directions below based on source readiness and user consequence.
-This is a directional product backlog, not a phase clock or authorization to
-develop the engines in parallel.
+The selected-place National Interagency Fire Center milestone is the next
+implementation priority after the `v0.6.25` closeout. After it closes, choose
+the next bounded user-visible milestone from the engine directions below based
+on source readiness and user consequence. This is a directional product
+backlog, not a phase clock or authorization to develop the engines in parallel.
 
 Drought engine:
 
@@ -228,7 +299,7 @@ The CPC Week-2 Probabilistic Extremes Tool is logged only as a candidate in
 `docs/SOURCES_CATALOG.yaml` and `docs/IDEAS.md`. Candidate status does not add
 runtime support, Worker access, capability, or a release commitment.
 
-### 4. Keep comprehension and maintainability inside engine work
+### 5. Keep comprehension and maintainability inside engine work
 
 These improvements are approved directions, not one release-blocking
 refactor. Apply only the smallest comprehension or code-health correction
@@ -308,14 +379,30 @@ Needs more evidence:
 Treat a green test suite as evidence for code behavior, not as proof of
 upstream reliability, production configuration, or user comprehension.
 
+## Acronym reference
+
+- CPC: Climate Prediction Center
+- CSS: Cascading Style Sheets
+- DDM: Dynamic Drought Module
+- DSCI: Drought Severity and Coverage Index
+- HMS: Hazard Mapping System
+- NIFC: National Interagency Fire Center
+- NWS: National Weather Service
+- SPC: Storm Prediction Center
+- SPI: Standardized Precipitation Index
+- USDM: United States Drought Monitor
+- URL: Uniform Resource Locator
+
 ## Current boundaries
 
-- Complete one user-visible engine milestone at a time, beginning with the
-  selected-place NIFC active-perimeter read.
-- No broad visual redesign, navigation rewrite, CSS cleanup, or additional
-  publication until the underlying drought, heat, fire, and water engine seams
-  are further developed. Small semantic and accessibility corrections required
-  to understand an engine milestone remain in scope.
+- Close `v0.6.25` first through bounded interface acceptance, release-identity
+  reconciliation, full verification, and an authorized publication.
+- Begin `v0.7.0` only after that closeout, with the selected-place National
+  Interagency Fire Center active-perimeter read as its one active milestone.
+- No broad visual redesign, navigation rewrite, CSS cleanup, or component
+  refactor. During the closeout, change the interface only to correct a current
+  functional, comprehension, accessibility, responsive, embed, URL-state, or
+  honest-state defect.
 - No activation of the CPC extremes candidate until a separate source
   verification establishes transport, schema, cadence, coverage, terms, and
   honest absence.
@@ -325,5 +412,7 @@ upstream reliability, production configuration, or user comprehension.
   unless a bounded user-visible engine milestone requires that seam.
 - No harness, phase clock, review queue, change ledger, or parallel status
   system.
-- No push, deployment, publication, or remote change without explicit
-  authorization.
+- No wholesale import of the C-drive estate. Recover source evidence, build
+  tooling, or design material only when the active milestone needs it.
+- No push, deployment, publication, tag push, or remote change without
+  explicit authorization.
