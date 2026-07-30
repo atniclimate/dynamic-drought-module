@@ -227,8 +227,9 @@ National Hydrography Dataset PMTiles bundle.
 Most sources serve the browser directly. The allow-list in
 `workers/proxy/src/index.ts` (mirrored in the `wrangler.toml` header) is
 the authoritative set of proxied upstreams; it has grown beyond the
-original telemetry trio to eight host families, including the USFS
-Wildfire Hazard Potential tiles and the US Drought Monitor DSCI service.
+original telemetry endpoints to nine host families, including the USFS
+Wildfire Hazard Potential tiles, the US Drought Monitor DSCI service, and
+the exact `api.weather.gov` host used by the point-heat path.
 The Worker in `workers/proxy/` is a CORS shim
 with a strict allow-list; it adds a header and changes nothing else.
 Deploy it with `wrangler` and set `URLS.workerProxy` to enable those

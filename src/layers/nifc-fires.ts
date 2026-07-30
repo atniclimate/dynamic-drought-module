@@ -337,7 +337,7 @@ export function bindPopups(map: maplibregl.Map): void {
     // B1 fire-in-context: the incident metadata, then a composed read of the
     // drought class beneath the clicked point and the nearest telemetry
     // stations. The context block composes existing surfaces only; it does not
-    // compute a fire outlook (that lands in 0.8.0).
+    // compute a fire outlook or combine the sources into a risk class.
     respond: (feature, click, m) => ({
       content:
         buildNifcPopupHtml(feature.properties ?? {}) +

@@ -8,9 +8,8 @@
  *
  * This unit COMPOSES only what is already on the map and in the registry. It
  * deliberately does NOT compute a conditions-based fire potential (drought plus
- * fuels plus weather into a hazard read); that computed outlook lands in 0.8.0,
- * and this block is its honest seed. The fuels read is likewise deferred to a
- * later B1 slice (it depends on wiring a hazard-potential surface).
+ * fuels plus weather into a hazard read). The sources stay separate, and the
+ * fuels row is only an honest pointer to the separately labeled hazard context.
  *
  * Every branch is honest. When the USDM surface is off, the block says to turn
  * it on rather than inventing a class. When no D0 to D4 polygon covers the
@@ -51,7 +50,7 @@ export function buildFireContextHtml(
       ${droughtBeneathRow(map, point)}
       ${fuelsRow(map)}
       ${nearestStationsBlock(lngLat)}
-      <p class="fire-context-note">A read of current conditions around this perimeter, not a fire forecast. The computed fire outlook arrives in a later release.</p>
+      <p class="fire-context-note">A read of separate current and long-term sources around this perimeter, not a fire forecast or a combined fire-risk class.</p>
     </div>`;
 }
 
@@ -85,8 +84,7 @@ function droughtBeneathRow(map: maplibregl.Map, point: maplibregl.PointLike): st
 /**
  * The fuels / hazard read. Wildfire Hazard Potential is a raster surface, so
  * its class cannot be read at a point in-browser without a verified identify
- * endpoint (that point-precise read lands with the 0.8.0 computed outlook).
- * Until then this is an honest pointer: it reflects whether the WHP surface is
+ * endpoint. This is an honest pointer: it reflects whether the WHP surface is
  * on and directs the eye to it, and never fakes a hazard class.
  */
 function fuelsRow(map: maplibregl.Map): string {

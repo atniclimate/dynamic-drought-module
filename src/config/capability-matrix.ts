@@ -93,7 +93,7 @@ export const CAPABILITY_MATRIX: CapabilityMatrix = {
     },
     droughtState: {
       level: 'partial',
-      note: 'US Drought Monitor (USDM) polygons, DSCI, and the NIDIS SPI raster display; no gridded index feeds analysis or the briefing yet (the MCO value path lands in 0.8.0).'
+      note: 'US Drought Monitor (USDM) polygons, DSCI, and the NIDIS SPI raster display; no gridded index feeds analysis or the briefing yet.'
     },
     landscapeSignature: {
       level: 'partial',

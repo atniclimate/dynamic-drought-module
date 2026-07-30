@@ -90,7 +90,8 @@ candidate:
    and protected against stale results.
 6. Observation and grid values remain separate, raw issuer intervals survive,
    and the synthesis does not invent a DDM heat class or threshold.
-7. The Worker allowlists only `api.weather.gov`, identifies the application,
+7. The Worker adds only the exact `api.weather.gov` host for H2 to its existing
+   agency-host allow-list, identifies the application for that host,
    revalidates redirects, preserves response bodies, and caps completed
    response edge caching at 60 seconds.
 8. The Worker and GitHub Pages application are deployed, and the release is

@@ -22,7 +22,7 @@ test('the Worker health response identifies the point-heat allowlist revision', 
   });
 });
 
-test('the Worker allowlists only the exact NWS API host and supplies the identifying User-Agent', () => {
+test('the Worker adds only the exact NWS API host and supplies the identifying User-Agent for it', () => {
   const worker = readFileSync(
     new URL('../workers/proxy/src/index.ts', import.meta.url),
     'utf8'

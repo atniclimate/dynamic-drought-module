@@ -29,8 +29,9 @@ layer states remain invariants.
   bounded National Weather Service requests, a completed-response cache,
   richer time series, and issuer-preserving cross-source synthesis.
 - Worker readiness is committed locally in
-  `665effc feat: prepare NWS proxy for point heat`. It allowlists only
-  `api.weather.gov`, supplies an identifying User-Agent, and reports revision
+  `665effc feat: prepare NWS proxy for point heat`. It adds only the exact
+  `api.weather.gov` host to the existing agency-host allow-list, supplies an
+  identifying User-Agent for that host, and reports revision
   `2026-07-29-nws-point-heat-v2` from `/healthz`. The v2 release correction
   caps the Worker's completed-response edge cache at 60 seconds while
   preserving the upstream Cache-Control header returned to clients.
@@ -123,6 +124,38 @@ Keep the fire products semantically separate:
 
 Do not create a DDM fire-risk score. Do not promote a broad regional
 capability merely to activate one nationally supported source.
+
+First bounded milestone: **selected-place active fire perimeters**.
+
+Outcome: when a user opens a selected place, a concise fire block reports the
+observed NIFC active perimeters supported by that place independently of the
+regional drought-impact capability. The block appears before longer heat,
+landscape, and drought context so the current incident read stays visible on
+mobile and in embeds.
+
+Acceptance criteria:
+
+- Resolve NIFC capability from the existing canonical geography and shared
+  per-source policy. Do not activate drought, smoke, alerts, outlooks, or
+  long-term hazard context as a side effect.
+- State the queried spatial support and the source's current-perimeter temporal
+  meaning. A point fallback must be labeled as an area around the point, not as
+  the selected boundary.
+- Keep the request cancellable and time-bounded through response-body
+  consumption. Cache only completed validated responses in a bounded,
+  short-lived cache; do not promote failed or aborted work.
+- Validate the issuer response before absence becomes `no data`. Report a
+  transfer limit or otherwise incomplete selection as partial, never as an
+  exact count.
+- Drop results from a superseded selection. Report unsupported geography and
+  source failure as `unavailable`; describe zero intersecting mapped perimeters
+  as `no data`, not as an all-clear.
+- Preserve NIFC perimeters as observed incidents. Do not blend them with HMS
+  smoke, NWS alerts, SPC outlooks, Wildfire Hazard Potential, drought,
+  vegetation, or fuels, and do not create a DDM severity or risk class.
+- Verify the dedicated fire block at the established desktop, mobile, embed,
+  and 200-pixel embed-width viewports, with focused cancellation, cache,
+  partial-response, absence, and source-isolation coverage.
 
 ### 3. Refine comprehension and maintainability
 
