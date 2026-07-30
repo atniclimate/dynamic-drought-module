@@ -42,13 +42,28 @@ layer states remain invariants.
   Resource Sharing headers. Source-level policy coverage pins the identifying
   User-Agent, redirect revalidation, and 60-second edge-cache ceiling.
 - `URLS.nwsApiUseWorker` is now `true` in the verified local application
-  release candidate. The static artifact is not yet deployed or published.
+  release candidate.
+- The static successor is deployed owner-only at
+  `https://dynamic-drought-module.indigenousaccess.chatgpt.site` as Sites
+  version 6. The deployed source receipt is
+  `0f1fdcedfea379d74f5c0aca26241430a0f294b6`, built from local release commit
+  `6fd6a9f`. Access remains limited to the owner, so this is deployed but not
+  published.
+- The Sites source snapshot omits only the host-incompatible duplicate
+  hillshade archive. The application uses the verified ATNI static archive
+  fallback when that local URL is absent.
 - This successor repository has no Git remote and no automatic publication
   workflow.
 
 Latest verification receipts:
 
 - `npm run gate`: passed.
+- Sites static adapter coverage: 2 passed.
+- `npm run build:sites`: passed; required server, client, and hosting outputs
+  were present and the duplicate hillshade archive was absent.
+- Owner-authenticated live static verification: root state URL returned 200,
+  the entry asset returned 200, and the entry contained the exact deployed
+  source receipt.
 - `npm --prefix workers/proxy run typecheck`: passed.
 - `npm --prefix workers/proxy audit`: zero findings.
 - Critical heat, cancellation, Worker-policy, embed, and URL-state coverage:
@@ -71,24 +86,18 @@ Latest verification receipts:
 
 ## Right sequence
 
-### 1. Complete the operational release
+### 1. Authorize publication
 
-Deployment and publication are separate from local H2 close and require
-explicit authorization.
+The reviewed Worker and owner-only static artifact are deployed. Publication
+remains a separate external change and requires explicit authorization.
 
-After authorization:
+After publication is authorized:
 
-1. Deploy the reviewed Worker revision.
-2. Verify `/healthz`, the revision identifier, the exact NWS host allowlist,
-   the identifying User-Agent, response-body transparency, redirect guards,
-   and the 60-second edge-cache policy.
-3. Set `URLS.nwsApiUseWorker` to `true` in the same release.
-4. Rebuild and rerun the critical heat, cancellation, Worker-policy, embed,
-   and URL-state checks.
-5. Establish one simple, reviewable publication path for the successor. Do not
-   import the donor harness or its process-only release machinery.
-6. Publish only after the deployed Worker and static artifact have matching
-   receipts.
+1. Confirm the intended audience and access mode.
+2. Change Sites access only to that approved audience.
+3. Verify the public or shared URL without an owner bypass.
+4. Confirm embed operation, URL state, point heat, and the deployed source
+   receipt from that audience path.
 
 Use these state words precisely:
 
