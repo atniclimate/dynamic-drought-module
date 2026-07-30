@@ -554,6 +554,7 @@ async function stubBrowserNwsHeat(page: Page): Promise<void> {
 test.describe('H2 critical-first surfaces', () => {
   test('mobile at-hand and full report lead with point heat', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.clock.setFixedTime('2026-07-29T12:30:00+00:00');
     await stubBrowserNwsHeat(page);
     await gotoApp(page, '?select=state:WA');
 

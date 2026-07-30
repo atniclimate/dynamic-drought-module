@@ -1,19 +1,20 @@
-# Fresh-session handoff: close the 0.6.x line at v0.6.25
+# Fresh-session handoff: establish the v0.6.25 stabilization checkpoint
 
 Resume work in:
 
 `I:\dynamic-drought-module`
 
 The immediate task is to complete a bounded current-interface stabilization,
-reconcile the release identity, and prepare the final 0.6.x release as
-`v0.6.25`. Do not begin the selected-place National Interagency Fire Center
-implementation until this closeout is published, tagged, and established as
-the next development baseline.
+reconcile the release identity, and prepare `v0.6.25` as a verified
+stabilization checkpoint. This is not the final `0.6.x` release. Further
+evidence-driven interface tweaks and adjustments remain in the `0.6.x` line.
+Do not begin the selected-place National Interagency Fire Center implementation
+until the interface line is explicitly closed.
 
-This is a release closeout, not a redesign. Inspect the current application
-before changing it. Fix only demonstrated functional, comprehension,
-accessibility, responsive, embed, URL-state, or honest-source-state defects.
-Do not invent visual work to fill the milestone.
+This is a release checkpoint, not a redesign. Inspect the current application
+before changing it. For `v0.6.25`, fix only demonstrated functional,
+comprehension, accessibility, responsive, embed, URL-state, or
+honest-source-state defects. Do not invent visual work to fill the milestone.
 
 ## Read first
 
@@ -35,18 +36,20 @@ The July 29 heat and fire handoffs and the July 30 engine-pathway handoff are
 historical records. Do not use them to restore National Interagency Fire Center
 work as the current priority.
 
-## Expected repository state
+## Starting repository state
 
-Expected local state before the planning checkpoint is committed:
+The following local state was captured before planning checkpoint `4518038`
+was committed. It is retained as historical execution context, not as the
+expected current release-candidate state:
 
 - Branch: `feature/heatrisk-legibility`
 - Head:
   `6374e05 docs: preserve the engine-first successor pathway`
-- Expected pending paths:
+- Captured pending paths:
   - modified `docs/SUCCESSOR_PLAN.md`;
   - untracked
     `docs/V0_6_X_CLOSEOUT_FRESH_SESSION_HANDOFF_2026-07-30.md`.
-- No other pending path is expected.
+- No other pending path was expected.
 - No configured local Git remote.
 - Local `main` still points to the clean successor baseline
   `b20489a scaffold: establish clean DDM v0.6.24 baseline`.
@@ -55,7 +58,12 @@ Expected local state before the planning checkpoint is committed:
 - The active branch contains published successor receipt `e1a9084` as an
   ancestor.
 
-Start with:
+The planning checkpoint was committed locally as
+`4518038 docs: plan the final 0.6.x closeout`. Its historical subject is
+superseded by this handoff's checkpoint direction and does not close the
+`0.6.x` interface line.
+
+At the start of a resumed session, inspect the current state with:
 
 ```powershell
 Set-Location I:\dynamic-drought-module
@@ -70,20 +78,23 @@ git diff --check
 git fsck --no-dangling
 ```
 
-Confirm that the pending paths match the expectation. Read both pending files
-completely, inspect the full diff, and scan for conflict markers. Do not reset,
-clean, stash, discard, or overwrite an unexpected change.
+Compare the current state with this historical context and the active
+`v0.6.25` candidate diff. Read every pending file completely, inspect the full
+diff, and scan for conflict markers. Do not reset, clean, stash, discard, or
+overwrite an unexpected change.
 
-If the state matches and the planning documents are intact:
+At the captured starting point, the required sequence was:
 
 1. Run `npm run scan:emdash`.
 2. Run `git diff --check`.
 3. Commit only the two planning paths as a local planning checkpoint.
 4. Do not push, deploy, publish, tag, or change a remote.
 
-Use a concise commit subject such as:
+The suggested commit subject was:
 
-`docs: plan the final 0.6.x closeout`
+`docs: plan the v0.6.25 stabilization checkpoint`
+
+That sequence is complete. Do not create a second planning checkpoint commit.
 
 ## Process and port recovery
 
@@ -131,31 +142,38 @@ push, remote change, or access change requires a new explicit instruction.
 
 ## Why v0.6.25 exists
 
-The current release identity is not fully synchronized:
+The starting release identity was not fully synchronized:
 
-- `package.json` says `0.6.24`;
-- both root version fields in `package-lock.json` say `0.6.23`;
-- the application footer says `v0.6.24`;
-- the latest local version tag is `v0.6.23`;
+- `package.json` said `0.6.24`;
+- both root version fields in `package-lock.json` said `0.6.23`;
+- the application footer said `v0.6.24`;
+- the latest local version tag was `v0.6.23`;
 - the earlier public application and the materially expanded successor were
   both published under the human-readable `v0.6.24` label.
+
+The current local candidate now aligns `package.json`, both root version fields
+in `package-lock.json`, and the application footer at `0.6.25`, `0.6.25`, and
+`v0.6.25`, respectively. It is not published or tagged. The public footer
+remains `v0.6.24`, and the latest local version tag remains `v0.6.23`.
 
 Do not rewrite or retroactively relabel that history. Exact Git receipt
 `e1a9084` preserves the published successor identity.
 
-The closeout creates one new, unique release:
+The checkpoint creates one new, unique release:
 
 > `v0.6.25`: current successor interface stabilization and release-identity
 > reconciliation, with no new engine or source capability.
 
-After it is published and tagged, the selected-place National Interagency Fire
-Center perimeter read opens the `v0.7.0` development line.
+It does not close the `0.6.x` line. Further evidence-driven interface tweaks
+and adjustments remain in `0.6.x`. The selected-place National Interagency
+Fire Center perimeter read opens the `v0.7.0` development line only after the
+interface line is explicitly closed.
 
 Historical `D-0.7.0`, `D-0.8.0`, and similar identifiers in comments are
 decision and planning references. They do not determine the application
 version.
 
-## Closeout outcome
+## Checkpoint outcome
 
 A person can use the current successor across desktop, mobile, and embed
 layouts without a known high-impact:
@@ -314,7 +332,7 @@ Only after the interface is stable:
    `0.6.25`.
 3. Change the application footer in `index.html` from `v0.6.24` to `v0.6.25`.
 4. Add or update one concise release-note surface identifying `v0.6.25` as the
-   final 0.6.x stabilization release.
+   verified stabilization checkpoint, not the final `0.6.x` release.
 5. Describe only behavior actually included and verification actually run.
 6. Do not change historical `v0.6.24` records in `ORIGIN.md`,
    `POST_MORTEM.md`, old handoffs, or existing commit history.
@@ -349,18 +367,19 @@ git status --short --branch
 
 Inspect the complete diff and confirm that it contains only:
 
-- evidence-driven closeout corrections;
+- evidence-driven checkpoint corrections;
 - synchronized `0.6.25` version metadata;
 - the concise release note;
 - necessary tests for the corrections.
 
 Do not run the full serial suite repeatedly. Run direct and affected tests
-while developing, then the serial suite once at final closeout.
+while developing, then the serial suite once for the final `v0.6.25`
+candidate.
 
 Create small coherent local commits at durable checkpoints. The final local
 release candidate should have a clean worktree and a release commit such as:
 
-`release: close the 0.6.x line at v0.6.25`
+`release: establish the v0.6.25 stabilization checkpoint`
 
 Do not claim the candidate is deployed or published.
 
@@ -373,7 +392,7 @@ After explicit authorization, use this order:
 
 1. Confirm the exact reviewed release commit.
 2. Deploy the Cloudflare Worker only if its code or revision changed. No Worker
-   change is expected for an interface-only closeout.
+   change is expected for an interface-only checkpoint.
 3. Publish the reviewed commit to public GitHub `main`.
 4. Wait for the GitHub Pages workflow to complete successfully.
 5. Verify the public subpath, entry asset, iframe behavior, URL state, point
@@ -388,7 +407,7 @@ Never force-push, reset history, rewrite a tag, or change a remote.
 
 ## Definition of done
 
-The 0.6.x line is closed only when:
+The `v0.6.25` stabilization checkpoint is complete only when:
 
 - the acceptance matrix has no known high-impact defect;
 - desktop, mobile, and embed behavior are coherent;
@@ -396,7 +415,7 @@ The 0.6.x line is closed only when:
 - the six honest source states remain intact;
 - URL state and iframe operation pass;
 - package metadata, package-lock metadata, and the footer all say `0.6.25`;
-- the release note describes the actual closeout;
+- the release note describes the actual checkpoint;
 - `npm run gate` passes;
 - `npm run test:serial` passes;
 - the local release candidate is committed with a clean worktree;
@@ -405,9 +424,13 @@ The 0.6.x line is closed only when:
 - local and public `main` identify the same release baseline;
 - no National Interagency Fire Center implementation entered the release.
 
+Completing this checkpoint does not close the `0.6.x` interface line. Continue
+subsequent evidence-driven interface tweaks and adjustments in `0.6.x`. An
+explicit decision to close that line is required before `v0.7.0` work begins.
+
 ## Items that do not block v0.6.25
 
-Do not delay the closeout for:
+Do not delay the checkpoint for:
 
 - the full historical source-catalog migration;
 - national selected-place proof outside the Pacific Northwest;
@@ -423,15 +446,19 @@ The old C-drive repository and its knowledge estate remain read-only. Recover a
 source receipt, build tool, or design artifact only when a later active
 milestone demonstrates that it is needed.
 
-## Next development after closeout
+## Development after the v0.6.25 checkpoint
 
-After `v0.6.25` is published, tagged, and established as the baseline:
+After `v0.6.25` is published, tagged, and established as the baseline,
+continue bounded, evidence-driven interface work in `0.6.x`. Do not treat this
+checkpoint as automatic authorization to open `v0.7.0`.
+
+After the interface line is explicitly closed:
 
 > Begin `v0.7.0` with one bounded milestone: a concise, independently gated
 > National Interagency Fire Center active-perimeter read for a selected place.
 
 Use the acceptance criteria preserved in `docs/SUCCESSOR_PLAN.md`. Do not begin
-that implementation inside the 0.6.x closeout.
+that implementation while the `0.6.x` interface line remains open.
 
 ## Acronym reference
 

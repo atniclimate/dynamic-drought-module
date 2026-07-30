@@ -50,19 +50,31 @@ layer states remain invariants.
   merge `83fa417` and the corrected publication record.
 - The local checkout has no configured Git remote. The existing GitHub Pages
   workflow on `main` remains the publication authority.
-- The public footer and `package.json` identify the application as `0.6.24`,
-  while both root fields in `package-lock.json` still say `0.6.23`; the latest
-  local version tag is `v0.6.23`. Preserve the published `v0.6.24` history and
-  close the current release line with one uniquely identified `v0.6.25`
-  stabilization release.
-- The `v0.6.25` interface stabilization and release-identity closeout is the
-  only active milestone. The selected-place National Interagency Fire Center
-  perimeter read is the next implementation and opens the `v0.7.0` line only
-  after that closeout.
+- The public application and footer remain at `v0.6.24` with exact Git receipt
+  `e1a9084`. The local candidate now aligns `package.json`, both root version
+  fields in `package-lock.json`, and the application footer at `0.6.25`,
+  `0.6.25`, and `v0.6.25`, respectively; it has not been published or tagged.
+  The latest local version tag remains `v0.6.23`. Preserve the published
+  `v0.6.24` history and establish one uniquely identified `v0.6.25`
+  stabilization checkpoint.
+- The `v0.6.25` interface stabilization and release-identity checkpoint is the
+  only active milestone. Additional evidence-driven interface tweaks and
+  adjustments remain in the `0.6.x` line after this checkpoint. The
+  selected-place National Interagency Fire Center perimeter read stays
+  deferred until the interface line is explicitly closed, at which point it
+  opens the `v0.7.0` line.
 - The active continuation brief is
   `docs/V0_6_X_CLOSEOUT_FRESH_SESSION_HANDOFF_2026-07-30.md`.
 
-Latest verification receipts:
+Current local `v0.6.25` candidate receipts:
+
+- `npm run gate`: passed.
+- `npm run test:serial`: 649 passed.
+- Focused two-test rerun: 2 passed.
+- Standard and 200-pixel embed viewport specification: 5 passed.
+- Root-host and GitHub Pages subpath static-host specification: 1 passed.
+
+Published `v0.6.24` verification receipts for exact Git receipt `e1a9084`:
 
 - `npm run gate`: passed.
 - GitHub Pages host, font, embed-guard, and hillshade coverage: 10 passed.
@@ -110,12 +122,13 @@ Use these state words precisely:
 - **deployed**: the external Worker or static artifact changed;
 - **published**: users can reach the successor release.
 
-### 2. Close the 0.6.x line at v0.6.25
+### 2. Establish the v0.6.25 stabilization checkpoint
 
 This is the only active milestone. It establishes a stable successor
-interface, reconciles release identity, and creates the regression baseline
-for the next engine milestone. It adds no data source, source capability,
-navigation model, or information architecture.
+checkpoint, reconciles release identity, and creates a verified regression
+baseline for continued `0.6.x` interface work. It is not the final `0.6.x`
+release and adds no data source, source capability, navigation model, or
+information architecture.
 
 Outcome: a person can use the current successor on desktop, mobile, and in an
 embed without a known high-impact functional, comprehension, accessibility,
@@ -136,19 +149,20 @@ Interface acceptance:
 - Confirm that observations, forecasts, alerts, HeatRisk, current conditions,
   future guidance, complete results, partial coverage, unavailable sources,
   no data, selected boundaries, and point-area fallbacks remain distinguishable.
-- Fix only a current defect that affects function, comprehension,
-  accessibility, responsive or embed integrity, URL restoration, or the
-  honesty of a source state. Defer aesthetic preference, broad redesign,
-  navigation change, CSS cleanup, component refactoring, and future-fire
-  interface work.
+- For `v0.6.25`, fix only a current defect that affects function,
+  comprehension, accessibility, responsive or embed integrity, URL
+  restoration, or the honesty of a source state. Further evidence-driven,
+  bounded interface tweaks may follow in later `0.6.x` releases. Defer broad
+  redesign, navigation change, CSS cleanup, component refactoring, and
+  future-fire interface work.
 
 Release-identity acceptance:
 
 - Set `package.json`, both root version fields in `package-lock.json`, and the
   application footer to `0.6.25` only after the interface changes are stable.
-- Add a concise release note that identifies `v0.6.25` as the final 0.6.x
-  stabilization release. Do not rewrite, relabel, or retag the existing
-  `v0.6.24` history.
+- Add a concise release note that identifies `v0.6.25` as a verified
+  stabilization checkpoint, not the final `0.6.x` release. Do not rewrite,
+  relabel, or retag the existing `v0.6.24` history.
 - Preserve the exact Git commit identifier as the authoritative build receipt.
 - After explicit publication authorization, publish the reviewed commit,
   verify the public receipt, create the matching `v0.6.25` tag on that exact
@@ -159,21 +173,23 @@ Verification:
 
 - Run focused Playwright coverage for every interface area changed.
 - Run `npm run gate` near completion.
-- Run `npm run test:serial` once at final closeout.
+- Run `npm run test:serial` once for the final `v0.6.25` candidate.
 - Repeat visual verification at desktop `1440x900`, mobile `390x844`, embed
   `400x600`, and the embed width floor `200x600`.
 - Verify root and GitHub Pages subpath assets, iframe operation, URL state,
   point heat, source states, and the exact release receipt before declaring the
   release published.
 
-The closeout does not require the historical source catalog, national coverage,
-National Interagency Fire Center implementation, Climate Prediction Center
-extremes research, water-parser corrections, a selected-place drought-index
-read, broad external user research, or old process archives to be completed.
+The checkpoint does not require the historical source catalog, national
+coverage, National Interagency Fire Center implementation, Climate Prediction
+Center extremes research, water-parser corrections, a selected-place
+drought-index read, broad external user research, or old process archives to
+be completed.
 
 ### 3. Expand the fire module in v0.7.0
 
-After `v0.6.25` is published and tagged, apply the same source fence to fire:
+Only after the `0.6.x` interface line is explicitly closed, apply the same
+source fence to fire:
 
 - canonical selected-place geography;
 - independent per-source capability;
@@ -230,11 +246,14 @@ Acceptance criteria:
 
 ### 4. Continue the engine-first successor pathway
 
-The selected-place National Interagency Fire Center milestone is the next
-implementation priority after the `v0.6.25` closeout. After it closes, choose
-the next bounded user-visible milestone from the engine directions below based
-on source readiness and user consequence. This is a directional product
-backlog, not a phase clock or authorization to develop the engines in parallel.
+The selected-place National Interagency Fire Center milestone remains the
+first `v0.7.0` implementation priority, but it does not begin automatically
+after the `v0.6.25` checkpoint. Continue evidence-driven interface work in
+`0.6.x` until that line is explicitly closed. After the fire milestone closes,
+choose the next bounded user-visible milestone from the engine directions
+below based on source readiness and user consequence. This is a directional
+product backlog, not a phase clock or authorization to develop the engines in
+parallel.
 
 Drought engine:
 
@@ -350,8 +369,8 @@ Development workflow:
 - One ordinary issue with outcome and acceptance criteria, not a harness.
 - Small, coherent commits at durable checkpoints.
 - Fast direct tests during implementation, affected Playwright coverage next,
-  the project gate near completion, and the full serial suite once at final
-  closeout.
+  the project gate near completion, and the full serial suite once for each
+  release candidate.
 - Concise progress updates during long work.
 - Screenshots, live-conformance notes, and test output are receipts, not a new
   review ecosystem.
@@ -395,14 +414,18 @@ upstream reliability, production configuration, or user comprehension.
 
 ## Current boundaries
 
-- Close `v0.6.25` first through bounded interface acceptance, release-identity
-  reconciliation, full verification, and an authorized publication.
-- Begin `v0.7.0` only after that closeout, with the selected-place National
-  Interagency Fire Center active-perimeter read as its one active milestone.
+- Establish `v0.6.25` first through bounded interface acceptance,
+  release-identity reconciliation, full verification, and an authorized
+  publication.
+- Keep subsequent evidence-driven interface tweaks and adjustments in `0.6.x`.
+  Begin `v0.7.0` only after the interface line is explicitly closed, with the
+  selected-place National Interagency Fire Center active-perimeter read as its
+  one active milestone.
 - No broad visual redesign, navigation rewrite, CSS cleanup, or component
-  refactor. During the closeout, change the interface only to correct a current
+  refactor. For `v0.6.25`, change the interface only to correct a current
   functional, comprehension, accessibility, responsive, embed, URL-state, or
-  honest-state defect.
+  honest-state defect. Keep later `0.6.x` adjustments similarly bounded and
+  evidence-driven.
 - No activation of the CPC extremes candidate until a separate source
   verification establishes transport, schema, cadence, coverage, terms, and
   honest absence.
