@@ -53,7 +53,10 @@ Latest verification receipts:
 - `npm --prefix workers/proxy audit`: zero findings.
 - Critical heat, cancellation, Worker-policy, embed, and URL-state coverage:
   52 passed.
-- `npm run test:serial`: 648 passed.
+- `npm run test:serial`: 649 passed.
+- Root-host and subpath-relative static assets, same-origin fonts, embed
+  behavior, URL state, and the bounded byte-identical hillshade fallback:
+  16 passed.
 - Responsive visual QA passed at desktop `1440x900`, mobile `390x844`, embed
   `400x600`, and the embed width floor `200x600`.
 - Dated live NWS conformance on 2026-07-29 passed for Seattle, Fairbanks,

@@ -3,7 +3,7 @@ import type { FeatureCollection } from 'geojson';
 
 import { gotoApp, search } from './helpers';
 
-const PREVIEW_URL = 'http://localhost:4173/dynamic-drought-module/';
+const PREVIEW_URL = 'http://localhost:4173/';
 const PLACE_ROOT = '#place-studio-root';
 const LAYERS_ROOT = '#layers-studio-root';
 

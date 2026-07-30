@@ -39,7 +39,7 @@ test.describe('self-hosted fonts', () => {
     // Every font file fetched came from our own origin at the base subpath.
     expect(woff2Requests.length, 'no font files were fetched at all').toBeGreaterThan(0);
     for (const url of woff2Requests) {
-      expect(url).toContain('/dynamic-drought-module/fonts/');
+      expect(url).toContain('/fonts/');
     }
 
     // The privacy guarantee itself: nothing left for a font CDN.

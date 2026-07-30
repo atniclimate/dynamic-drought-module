@@ -15,7 +15,7 @@ npm run test:report      # open the HTML report from the last run
 The `webServer` block in `playwright.config.ts` runs `npm run build && npm run
 preview`, so a stale `dist/` can never be verified and a build failure fails
 the run. The preview serves at the `base` subpath
-(`http://localhost:4173/dynamic-drought-module/`); the bare root 404s.
+(`http://localhost:4173/`).
 
 Locally, if you already have `npm run preview` running the suite reuses it
 (and skips the rebuild). In CI it always builds fresh.

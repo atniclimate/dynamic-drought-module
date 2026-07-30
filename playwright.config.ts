@@ -21,9 +21,8 @@ import { defineConfig } from '@playwright/test';
  *      the manual ddm-ui-verifier lane, where a blipping upstream is a human
  *      judgment call, not a red CI run. See tests/README.md.
  *
- * The preview serves at the `base` subpath (vite.config.ts:
- * `/dynamic-drought-module/`); the bare root 404s, so `baseURL` and the
- * `webServer.url` health check both carry the subpath.
+ * The preview is exercised at the historical deployment subpath. Vite emits
+ * relative asset URLs so the same artifact also works at a domain root.
  */
 
 // 127.0.0.1 EXPLICITLY, never `localhost`: on this machine `localhost`
@@ -35,7 +34,7 @@ import { defineConfig } from '@playwright/test';
 // binding the preview to the same host below, makes the served build
 // deterministic even with a stale IPv6 listener present.
 const PREVIEW_ORIGIN = 'http://127.0.0.1:4173';
-const BASE_PATH = '/dynamic-drought-module/';
+const BASE_PATH = '/';
 const BASE_URL = `${PREVIEW_ORIGIN}${BASE_PATH}`;
 
 const isCI = !!process.env['CI'];

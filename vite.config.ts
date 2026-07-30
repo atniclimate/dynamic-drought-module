@@ -24,19 +24,12 @@ function buildSha(): string {
 /**
  * Vite configuration for the Dynamic Drought Module (DDM).
  *
- * The deployed site lives at:
- *   https://atniclimate.github.io/dynamic-drought-module/
- *
- * The `base` setting is critical for GitHub Pages: without it, asset
- * URLs in the built HTML resolve to the domain root (atniclimate.github.io)
- * and 404 because the project is served from a subpath. With it set
- * correctly, assets resolve to /dynamic-drought-module/assets/...
- *
- * If the repository is ever renamed or moved to a custom domain, update
- * `base` accordingly (a custom domain on the apex would use base: '/').
+ * Production hosts may serve the static folder at a domain root or at the
+ * historical `/dynamic-drought-module/` subpath. Relative asset URLs work in
+ * both positions and keep a copied iframe deployment self-contained.
  */
 export default defineConfig({
-  base: '/dynamic-drought-module/',
+  base: './',
 
   define: {
     __DDM_BUILD_SHA__: JSON.stringify(buildSha()),

@@ -804,6 +804,13 @@ export const URLS = Object.freeze({
   // selection, 2026-07-14: 33.6 MB fits the Pages path; the z9 build is a
   // reproducible artifact, not shipped).
   hillshadePmtilesLocal: BASE_URL + 'data/hillshade-dem-pnw.pmtiles',
+  // Hosting-size fallback for the exact same committed z0-8 archive. The ATNI
+  // GitHub Pages copy was verified 2026-07-29 as 35,252,210 bytes with byte
+  // ranges, Access-Control-Allow-Origin: *, and a matching PMTiles header.
+  // Runtime uses this only after the deployer's bundled local copy fails its
+  // bounded header probe, so normal static deployments remain self-contained.
+  hillshadePmtilesFallback:
+    'https://atniclimate.github.io/dynamic-drought-module/data/hillshade-dem-pnw.pmtiles',
   tribalLandsLocal: BASE_URL + 'data/tribal-lands.geojson',
   treatyAreasLocal: BASE_URL + 'data/treaty-areas.geojson',
   // United States state boundaries, baked from the Census Bureau cartographic

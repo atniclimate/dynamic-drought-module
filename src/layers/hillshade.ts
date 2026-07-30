@@ -64,9 +64,12 @@ function reportStatus(state: 'loading' | 'ready' | 'error'): void {
  * tolerated (some dev servers ignore Range) because only the first bytes
  * are read from the stream before cancelling.
  */
-async function probeArchiveHeader(signal: AbortSignal): Promise<void> {
+async function probeArchiveHeader(
+  url: string,
+  signal: AbortSignal
+): Promise<void> {
   const response = await fetchWithBudget(
-    URLS.hillshadePmtilesLocal,
+    url,
     { headers: { Range: 'bytes=0-127' } },
     signal,
     PROBE_TIMEOUT_MS
@@ -93,6 +96,36 @@ async function probeArchiveHeader(signal: AbortSignal): Promise<void> {
 }
 
 /**
+ * Prefer the deployer's bundled archive. A host with a per-file size ceiling
+ * may omit it and use the verified byte-identical ATNI copy instead.
+ */
+export async function resolveHillshadeArchiveUrl(
+  signal: AbortSignal
+): Promise<string> {
+  try {
+    await probeArchiveHeader(URLS.hillshadePmtilesLocal, signal);
+    return URLS.hillshadePmtilesLocal;
+  } catch (localError) {
+    if (signal.aborted) throw localError;
+    try {
+      await probeArchiveHeader(URLS.hillshadePmtilesFallback, signal);
+      return URLS.hillshadePmtilesFallback;
+    } catch (fallbackError) {
+      if (signal.aborted) throw fallbackError;
+      const localMessage =
+        localError instanceof Error ? localError.message : String(localError);
+      const fallbackMessage =
+        fallbackError instanceof Error
+          ? fallbackError.message
+          : String(fallbackError);
+      throw new Error(
+        `local archive failed (${localMessage}); ATNI fallback failed (${fallbackMessage})`
+      );
+    }
+  }
+}
+
+/**
  * Probe the archive, then add the raster-dem source and the hillshade
  * layer. Idempotent: a second call with the source present is a no-op.
  */
@@ -107,8 +140,9 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   reportStatus('loading');
 
+  let archiveUrl: string;
   try {
-    await probeArchiveHeader(signal);
+    archiveUrl = await resolveHillshadeArchiveUrl(signal);
   } catch (err) {
     if (signal.aborted) return;
     console.warn('[hillshade] the terrain archive is unreachable or invalid.', err);
@@ -121,7 +155,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   try {
     map.addSource(SOURCE_ID, {
       type: 'raster-dem',
-      url: 'pmtiles://' + URLS.hillshadePmtilesLocal,
+      url: 'pmtiles://' + archiveUrl,
       encoding: 'terrarium',
       tileSize: 512
     });

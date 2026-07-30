@@ -94,7 +94,7 @@ never an unqualified `live`.
 ```powershell
 npm ci
 npm run dev
-# open http://localhost:5173/dynamic-drought-module/
+# open http://localhost:5173/
 ```
 
 Production build:
