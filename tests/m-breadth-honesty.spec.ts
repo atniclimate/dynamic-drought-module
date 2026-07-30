@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 import type { RegionKey } from '../src/config/regions';
+import { URLS } from '../src/config/urls';
 import {
   regionCapabilityLevel,
   regionCapabilityNote
@@ -30,6 +31,20 @@ function resourceUrls(context: BoundarySelectionContext): string[] {
   return buildResources(context)
     .map((resource) => resource.url)
     .filter((url): url is string => typeof url === 'string');
+}
+
+const NWS_PROXY_ROUTE = new RegExp(
+  `^${URLS.workerProxy.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/proxy\\?url=${encodeURIComponent(
+    `${URLS.nwsApi}/`
+  )}`
+);
+
+function nwsUpstreamUrl(requestUrl: string): string {
+  const upstream = new URL(requestUrl).searchParams.get('url');
+  if (upstream === null || !upstream.startsWith(`${URLS.nwsApi}/`)) {
+    throw new Error(`Expected a Worker-wrapped NWS URL, received ${requestUrl}`);
+  }
+  return upstream;
 }
 
 test.describe('M-BREADTH resource-routing honesty', () => {
@@ -101,8 +116,8 @@ test('impactSynthesis none keeps unrelated sources off while independent point h
     .click();
   await expect(page.locator('#brief-place-name')).toHaveText('Kansas');
 
-  await page.route('https://api.weather.gov/**', (route) => {
-    const url = new URL(route.request().url());
+  await page.route(NWS_PROXY_ROUTE, (route) => {
+    const url = new URL(nwsUpstreamUrl(route.request().url()));
     let body: unknown;
     if (url.pathname.startsWith('/points/')) {
       body = {
@@ -184,8 +199,8 @@ test('impactSynthesis none keeps unrelated sources off while independent point h
   const nwsRequests: string[] = [];
   page.on('request', (request) => {
     const url = request.url();
-    if (url.startsWith('https://api.weather.gov/')) {
-      nwsRequests.push(url);
+    if (NWS_PROXY_ROUTE.test(url)) {
+      nwsRequests.push(nwsUpstreamUrl(url));
       return;
     }
     if (

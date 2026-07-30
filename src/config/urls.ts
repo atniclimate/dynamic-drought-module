@@ -373,7 +373,7 @@ export const URLS = Object.freeze({
   // fetch User-Agent. Set `nwsApiUseWorker` true only in the same release that
   // follows deployment of the Worker allow-list revision in workers/proxy/.
   nwsApi: 'https://api.weather.gov',
-  nwsApiUseWorker: false as boolean,
+  nwsApiUseWorker: true as boolean,
 
   // NOAA NWS event-driven Watch/Warning/Advisory (WWA) MapServer, layer 1
   // (WatchesWarnings). Used by the heat and fire-weather alerts map layer:

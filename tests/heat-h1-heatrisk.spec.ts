@@ -233,13 +233,33 @@ async function stubHeatH1(
       body: emptyCollection()
     })
   );
-  await page.route('https://ddm-proxy.atniclimate.workers.dev/**', (route) =>
-    route.fulfill({
+  await page.route('https://ddm-proxy.atniclimate.workers.dev/**', async (route) => {
+    const target = new URL(route.request().url()).searchParams.get('url');
+    if (target?.startsWith('https://api.weather.gov/')) {
+      const upstream = new URL(target);
+      if (
+        options.delayNwsAlerts &&
+        upstream.pathname.includes('/alerts/')
+      ) {
+        nwsAlertsWaiting = true;
+        await nwsAlertsGate;
+      }
+      const body = upstream.pathname.includes('/alerts/')
+        ? emptyCollection()
+        : JSON.stringify({ properties: {} });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body
+      });
+      return;
+    }
+    await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: '[]'
-    })
-  );
+    });
+  });
   await page.route('https://api.weather.gov/**', async (route) => {
     const url = new URL(route.request().url());
     if (options.delayNwsAlerts && url.pathname.includes('/alerts/')) {

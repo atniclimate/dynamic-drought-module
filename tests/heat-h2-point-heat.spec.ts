@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
 import { resolveCanonicalGeography } from '../src/config/geography';
+import { URLS } from '../src/config/urls';
 import { ExpiringLruCache } from '../src/util/bounded-cache';
 import { createBriefingSkeleton } from '../src/impact/briefing';
 import { synthesizeHeatSources } from '../src/impact/heat-synthesis';
@@ -41,6 +42,26 @@ const FORECAST_URL =
   'https://api.weather.gov/gridpoints/TOP/31,80/forecast';
 const NEAR_STATION_URL = 'https://api.weather.gov/stations/KNEAR';
 const LATEST_URL = `${NEAR_STATION_URL}/observations/latest`;
+const NWS_PROXY_ROUTE = new RegExp(
+  `^${URLS.workerProxy.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/proxy\\?url=${encodeURIComponent(
+    `${URLS.nwsApi}/`
+  )}`
+);
+
+function nwsUpstreamUrl(requestUrl: string): string {
+  const request = new URL(requestUrl);
+  const worker = new URL(URLS.workerProxy);
+  const upstream = request.searchParams.get('url');
+  if (
+    request.origin !== worker.origin ||
+    request.pathname !== '/proxy' ||
+    upstream === null ||
+    !upstream.startsWith(`${URLS.nwsApi}/`)
+  ) {
+    throw new Error(`Expected a Worker-wrapped NWS URL, received ${requestUrl}`);
+  }
+  return upstream;
+}
 
 const POINT_PAYLOAD = {
   properties: {
@@ -205,7 +226,7 @@ test('point heat selects the geometrically nearest station and preserves sparse 
   const originalFetch = globalThis.fetch;
   const calls: string[] = [];
   globalThis.fetch = async (input) => {
-    const url = String(input);
+    const url = nwsUpstreamUrl(String(input));
     calls.push(url);
     return Response.json(responseFor(url));
   };
@@ -257,7 +278,7 @@ test('point heat and point forecast share discovery and stay within the six-requ
   const originalFetch = globalThis.fetch;
   const calls: string[] = [];
   globalThis.fetch = async (input) => {
-    const url = String(input);
+    const url = nwsUpstreamUrl(String(input));
     calls.push(url);
     return Response.json(responseFor(url));
   };
@@ -285,7 +306,7 @@ test('missing American Samoa discovery links become no data after one request', 
   const originalFetch = globalThis.fetch;
   const calls: string[] = [];
   globalThis.fetch = async (input) => {
-    calls.push(String(input));
+    calls.push(nwsUpstreamUrl(String(input)));
     return Response.json({
       properties: {
         forecastGridData: null,
@@ -315,7 +336,7 @@ test('missing American Samoa discovery links become no data after one request', 
 test('null optional observation and grid values remain absent rather than becoming zero', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input) => {
-    const url = String(input);
+    const url = nwsUpstreamUrl(String(input));
     if (url === POINT_URL) return Response.json(POINT_PAYLOAD);
     if (url === GRID_URL) {
       return Response.json({
@@ -488,8 +509,8 @@ test('valid-time parsing and the bounded cache retain exact intervals and evict 
 });
 
 async function stubBrowserNwsHeat(page: Page): Promise<void> {
-  await page.route('https://api.weather.gov/**', (route) => {
-    const url = new URL(route.request().url());
+  await page.route(NWS_PROXY_ROUTE, (route) => {
+    const url = new URL(nwsUpstreamUrl(route.request().url()));
     let body: unknown;
     if (url.pathname.startsWith('/points/')) {
       body = POINT_PAYLOAD;
@@ -584,8 +605,8 @@ test.describe('H2 critical-first surfaces', () => {
     const oldPointReleased = new Promise<void>((resolve) => {
       releaseOldPoint = resolve;
     });
-    await page.route('https://api.weather.gov/**', async (route) => {
-      const url = new URL(route.request().url());
+    await page.route(NWS_PROXY_ROUTE, async (route) => {
+      const url = new URL(nwsUpstreamUrl(route.request().url()));
       let body: unknown;
       if (url.pathname.startsWith('/points/')) {
         pointsRequestCount += 1;
@@ -691,7 +712,7 @@ test.describe('H2 critical-first surfaces', () => {
   }) => {
     let requestCount = 0;
     page.on('request', (request) => {
-      if (request.url().startsWith('https://api.weather.gov/')) {
+      if (NWS_PROXY_ROUTE.test(request.url())) {
         requestCount += 1;
       }
     });

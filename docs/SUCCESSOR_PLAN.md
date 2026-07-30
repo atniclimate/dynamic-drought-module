@@ -34,9 +34,15 @@ layer states remain invariants.
   `2026-07-29-nws-point-heat-v2` from `/healthz`. The v2 release correction
   caps the Worker's completed-response edge cache at 60 seconds while
   preserving the upstream Cache-Control header returned to clients.
-- Neither H2 commit is deployed or published.
-- `URLS.nwsApiUseWorker` remains `false` until the Worker revision is deployed
-  and verified.
+- Worker revision `2026-07-29-nws-point-heat-v2` is deployed at
+  `https://ddm-proxy.atniclimate.workers.dev` as Cloudflare version
+  `db84d0d3-454f-4fa0-bbb5-6c068025ddf9`.
+- Live Worker verification passed for `/healthz`, the revision identifier,
+  exact-host rejection, NWS response-body transparency, and Cross-Origin
+  Resource Sharing headers. Source-level policy coverage pins the identifying
+  User-Agent, redirect revalidation, and 60-second edge-cache ceiling.
+- `URLS.nwsApiUseWorker` is now `true` in the verified local application
+  release candidate. The static artifact is not yet deployed or published.
 - This successor repository has no Git remote and no automatic publication
   workflow.
 
@@ -44,9 +50,10 @@ Latest verification receipts:
 
 - `npm run gate`: passed.
 - `npm --prefix workers/proxy run typecheck`: passed.
-- Affected heat, mobile, embed, navigation, landscape, accessibility, and
-  Worker-policy coverage: 101 passed.
-- `npm run test:serial`: 646 passed.
+- `npm --prefix workers/proxy audit`: zero findings.
+- Critical heat, cancellation, Worker-policy, embed, and URL-state coverage:
+  52 passed.
+- `npm run test:serial`: 648 passed.
 - Responsive visual QA passed at desktop `1440x900`, mobile `390x844`, embed
   `400x600`, and the embed width floor `200x600`.
 - Dated live NWS conformance on 2026-07-29 passed for Seattle, Fairbanks,
