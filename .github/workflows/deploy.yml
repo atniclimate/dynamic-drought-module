@@ -1,0 +1,120 @@
+# Build the Dynamic Drought Module (DDM) with Vite and deploy the
+# resulting dist/ folder to GitHub Pages.
+#
+# This workflow is committed in Phase B (after package.json exists from
+# `npm create vite@latest`). Committing it before package.json exists will
+# cause `npm ci` to fail and surface a red X in the Actions tab.
+#
+# Before this workflow can deploy successfully, the maintainer must:
+#   1. In the repository Settings, navigate to Pages.
+#   2. Change the Source from "Deploy from a branch" to "GitHub Actions".
+#
+# Without that switch, this workflow runs and produces an artifact, but
+# Pages keeps serving from the previous branch source and the deploy
+# step will fail with a permissions or environment error.
+
+name: Build and deploy DDM to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Required for the deploy-pages action to authenticate with the Pages
+# OIDC token issuer and write the deployment.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Serialize deploys on a single "pages" group and cancel any superseded
+# in-progress run. GitHub Pages serves "latest commit wins", so when
+# several commits land in a burst there is no value in deploying the
+# intermediate states; collapsing to the newest commit also avoids the
+# back-to-back deployments that can trip the Pages backend into a
+# transient "Deployment failed, try again later" (observed 2026-07-02 on
+# a burst of docs commits). A superseded run reads as intentionally
+# cancelled rather than emailing a failure, which `false` would do for
+# every extra deploy it ran to completion.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (Node.js 22, Vite)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # TypeScript 7 is the native (Go) compiler; it installs a
+      # per-platform binary (@typescript/typescript-linux-x64 on this
+      # runner) as an optional dependency through npm ci and the lockfile.
+      # This step proves the native binary resolved on the Linux runner
+      # (not a stray global/editor compiler) before the build depends on
+      # it.
+      - name: Verify TypeScript compiler
+        run: |
+          npm exec tsc -- --version
+          npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify build output
+        run: |
+          ls -la dist
+          test -f dist/index.html
+
+      # The ratified bundle line (plan section 6, ratified at 100 kB gzip
+      # on the app entry chunk; maplibre vendor chunk exempt). A breach
+      # fails the deploy: never publish a build over the line.
+      - name: Bundle-size gate
+        run: npm run check:bundle
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
+    steps:
+      # The Pages backend intermittently fails the status poll with an
+      # upstream "Deployment failed, try again later" even though the build
+      # and artifact are fine (observed 2026-07-02, twice). The manual remedy
+      # (`gh run rerun <id> --failed`) succeeds immediately, so encode that
+      # remedy here: one in-workflow retry after a short settle, with no
+      # third-party retry action (the minimal-dependency posture). The live
+      # site is never at risk; the prior deploy keeps serving throughout.
+      - name: Deploy
+        id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: Wait before retrying the transient Pages failure
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 30
+
+      - name: Deploy (retry after transient failure)
+        id: deployment_retry
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v4

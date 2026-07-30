@@ -1,0 +1,164 @@
+# Scheduled upstream liveness monitor (critical-review #6 + operational-risk).
+#
+# The sharpest stewardship harm this product can cause is a silently dead feed:
+# a Tribe embeds the map, months later one of the ~26 upstream agency URLs drifts
+# (a FeatureServer is renamed, a layer id changes, a service is retired), and the
+# panel then shows blank or stale drought data during a drought emergency on the
+# Tribe's own official site, with no vendor and no maintainer watching.
+#
+# The client degrades a dead feed to an honest `unavailable` pill at fetch time,
+# but a serverless embed cannot monitor endpoint death in the background. This
+# workflow is the repo-side complement: it runs the drift monitor
+# (scripts/check-upstream-drift.mjs, `npm run check:drift`) on a schedule and
+# opens a GitHub issue when any upstream fails liveness, so the maintainer learns
+# of the drift and can push a fix that reaches every deployed embed at once. The
+# issue auto-closes on the next green run, so a transient agency blip does not
+# leave a stale alert.
+#
+# Scheduled workflows run only from the default branch, so this is inert until
+# the branch carrying it merges to main.
+
+name: Upstream liveness monitor
+
+on:
+  schedule:
+    # Daily at 13:00 UTC (early morning Pacific), before the workday.
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+
+# Least privilege: read the tree, and write issues to raise the drift alert.
+permissions:
+  contents: read
+  issues: write
+
+# One monitor run at a time; never cancel an in-progress probe.
+concurrency:
+  group: upstream-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    name: Probe upstream liveness
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Probe once; if it reports drift, wait and probe again, and alert only
+      # when the SECOND probe also fails. A single transient agency outage
+      # (which the client already tolerates by showing "unavailable") then does
+      # not open an issue; only a persistent failure does. The second probe's
+      # output is what lands in the issue body.
+      - name: Probe upstreams (with one transient-blip retry)
+        id: drift
+        shell: bash
+        run: |
+          set +e
+          npm run check:drift 2>&1 | tee drift-output.txt
+          code=${PIPESTATUS[0]}
+          if [ "$code" != "0" ]; then
+            echo "First probe reported drift; re-checking after 60s to filter a transient blip..."
+            sleep 60
+            npm run check:drift 2>&1 | tee drift-output.txt
+            code=${PIPESTATUS[0]}
+          fi
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Open or update the drift alert issue
+        if: steps.drift.outputs.exit_code != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let report = '';
+            try { report = fs.readFileSync('drift-output.txt', 'utf8'); } catch {}
+            // Keep the issue body well under the API limit.
+            const MAX = 20000;
+            if (report.length > MAX) report = report.slice(-MAX);
+            const label = 'upstream-drift';
+            const marker = '<!-- ddm-upstream-monitor -->';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              marker,
+              '## Upstream liveness drift detected',
+              '',
+              'The scheduled upstream monitor found one or more agency endpoints failing liveness',
+              '(network error, timeout, or HTTP status >= 400) on two consecutive probes.',
+              'A deployed embed may now be showing blank or stale data for the affected layer.',
+              '',
+              `Monitor run: ${runUrl}`,
+              '',
+              '```',
+              report.trim() || '(no probe output captured)',
+              '```',
+              '',
+              '_This issue auto-closes on the next green monitor run. Treat it as a release blocker: fix the upstream reference in `src/config/urls.ts` (or the layer module) and the fix reaches every deployed embed._'
+            ].join('\n');
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label
+            });
+            if (existing.data.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: 'Upstream liveness drift detected',
+                labels: [label],
+                body
+              });
+            }
+
+      - name: Close the drift alert issue on recovery
+        if: steps.drift.outputs.exit_code == '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = 'upstream-drift';
+            const open = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label
+            });
+            for (const issue of open.data) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: 'All upstream endpoints passed liveness on the latest monitor run; closing.'
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed'
+              });
+            }
+
+      # Surface the drift on the Actions tab too (a red run), after the issue is
+      # filed. The alert is the issue; this keeps the run history honest.
+      - name: Fail the run when drift persists
+        if: steps.drift.outputs.exit_code != '0'
+        run: |
+          echo "::error::Upstream liveness drift detected on two consecutive probes; see the opened issue."
+          exit 1
