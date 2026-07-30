@@ -7,9 +7,11 @@
  * ATNI archive.
  */
 import {
+  cpSync,
   copyFileSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   rmSync,
 } from 'node:fs';
 import { join } from 'node:path';
@@ -19,6 +21,7 @@ const index = join(dist, 'index.html');
 const localHillshade = join(dist, 'data', 'hillshade-dem-pnw.pmtiles');
 const serverDirectory = join(dist, 'server');
 const hostingDirectory = join(dist, '.openai');
+const clientDirectory = join(dist, 'client');
 const omitLocalHillshade = process.argv.includes('--omit-local-hillshade');
 
 if (!existsSync(index)) {
@@ -28,6 +31,18 @@ if (!existsSync(index)) {
 
 if (omitLocalHillshade) {
   rmSync(localHillshade, { force: true });
+}
+rmSync(clientDirectory, { recursive: true, force: true });
+mkdirSync(clientDirectory, { recursive: true });
+for (const entry of readdirSync(dist, { withFileTypes: true })) {
+  if (['.openai', '.vite', 'client', 'server'].includes(entry.name)) continue;
+  const source = join(dist, entry.name);
+  cpSync(source, join(clientDirectory, entry.name), {
+    recursive: entry.isDirectory(),
+    filter(candidate) {
+      return candidate !== localHillshade;
+    },
+  });
 }
 mkdirSync(serverDirectory, { recursive: true });
 mkdirSync(hostingDirectory, { recursive: true });
