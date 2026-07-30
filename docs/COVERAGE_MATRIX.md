@@ -30,7 +30,7 @@ supported; the note says why).
 ### Contiguous United States (CONUS)
 
 - **Display** (full): The national framing renders CONUS on the same basemap and condition surfaces.
-- **Selectable place** (partial): AIANNH/BIA and state selection exist nationally, but the behavior is unproven outside the PNW (N3 owns the proof).
+- **Selectable place** (partial): AIANNH/BIA and state selection exist nationally, but the behavior is unproven outside the PNW.
 - **Drought state** (partial): USDM polygons and the NIDIS SPI raster display cover CONUS; no gridded index feeds analysis or the briefing.
 - **Landscape signature** (none): No signature inputs are baked outside the planned PNW pipeline.
 - **Impact synthesis** (none): The briefing synthesis and resource routing are not validated outside the PNW.
@@ -53,7 +53,7 @@ supported; the note says why).
 
 ### Transboundary (Columbia Basin)
 
-- **Display** (none): No mixed-edition transboundary frame; N6 requires a tested US/Canada data seam first.
+- **Display** (none): No mixed-edition transboundary frame; a tested US/Canada data seam is required first.
 - **Selectable place** (none): No transboundary place catalog exists.
 - **Drought state** (none): US and Canadian drought editions differ; no reconciled surface exists.
 - **Landscape signature** (none): No transboundary signature inputs.

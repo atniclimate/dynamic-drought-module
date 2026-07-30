@@ -111,7 +111,7 @@ export const CAPABILITY_MATRIX: CapabilityMatrix = {
     },
     selectablePlace: {
       level: 'partial',
-      note: 'AIANNH/BIA and state selection exist nationally, but the behavior is unproven outside the PNW (N3 owns the proof).'
+      note: 'AIANNH/BIA and state selection exist nationally, but the behavior is unproven outside the PNW.'
     },
     droughtState: {
       level: 'partial',
@@ -173,7 +173,7 @@ export const CAPABILITY_MATRIX: CapabilityMatrix = {
   transboundary: {
     display: {
       level: 'none',
-      note: 'No mixed-edition transboundary frame; N6 requires a tested US/Canada data seam first.'
+      note: 'No mixed-edition transboundary frame; a tested US/Canada data seam is required first.'
     },
     selectablePlace: {
       level: 'none',
