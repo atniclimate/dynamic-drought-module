@@ -42,28 +42,21 @@ layer states remain invariants.
   Resource Sharing headers. Source-level policy coverage pins the identifying
   User-Agent, redirect revalidation, and 60-second edge-cache ceiling.
 - `URLS.nwsApiUseWorker` is now `true` in the verified local application
-  release candidate.
-- The static successor is deployed owner-only at
-  `https://dynamic-drought-module.indigenousaccess.chatgpt.site` as Sites
-  version 6. The deployed source receipt is
-  `0f1fdcedfea379d74f5c0aca26241430a0f294b6`, built from local release commit
-  `6fd6a9f`. Access remains limited to the owner, so this is deployed but not
-  published.
-- The Sites source snapshot omits only the host-incompatible duplicate
-  hillshade archive. The application uses the verified ATNI static archive
-  fallback when that local URL is absent.
-- This successor repository has no Git remote and no automatic publication
-  workflow.
+  release.
+- The static successor is deployed and published at
+  `https://atniclimate.github.io/dynamic-drought-module/` from GitHub `main`.
+  Pages workflow run `30513627797` published release merge `83fa417`.
+- The local checkout has no configured Git remote. The existing GitHub Pages
+  workflow on `main` remains the publication authority.
 
 Latest verification receipts:
 
 - `npm run gate`: passed.
-- Sites static adapter coverage: 2 passed.
-- `npm run build:sites`: passed; required server, client, and hosting outputs
-  were present and the duplicate hillshade archive was absent.
-- Owner-authenticated live static verification: root state URL returned 200,
-  the entry asset returned 200, and the entry contained the exact deployed
-  source receipt.
+- GitHub Pages host, font, embed-guard, and hillshade coverage: 10 passed.
+- GitHub Pages workflow run `30513627797`: build, bundle gate, artifact upload,
+  and deployment passed.
+- Public live verification: the subpath root and entry asset returned 200, and
+  the entry contained exact release receipt `83fa417`.
 - `npm --prefix workers/proxy run typecheck`: passed.
 - `npm --prefix workers/proxy audit`: zero findings.
 - Critical heat, cancellation, Worker-policy, embed, and URL-state coverage:
@@ -86,18 +79,15 @@ Latest verification receipts:
 
 ## Right sequence
 
-### 1. Authorize publication
+### 1. Maintain the operational release
 
-The reviewed Worker and owner-only static artifact are deployed. Publication
-remains a separate external change and requires explicit authorization.
+The reviewed Worker and GitHub Pages artifact are deployed, and the successor
+release is published.
 
-After publication is authorized:
-
-1. Confirm the intended audience and access mode.
-2. Change Sites access only to that approved audience.
-3. Verify the public or shared URL without an owner bypass.
-4. Confirm embed operation, URL state, point heat, and the deployed source
-   receipt from that audience path.
+For later releases, preserve the same sequence: verify locally, deploy the
+Worker only when its revision changes, push the reviewed release to GitHub
+`main`, wait for the Pages workflow, then verify the public subpath, embed
+operation, URL state, point heat, and exact deployed source receipt.
 
 Use these state words precisely:
 
@@ -205,8 +195,7 @@ Needs more evidence:
 - NWS schema variation across offices and territories;
 - real payload sizes and cache effectiveness;
 - real-user comprehension of cross-source heat wording;
-- real-device behavior at the full responsive viewport matrix;
-- deployed Worker and successor publication behavior.
+- real-device behavior at the full responsive viewport matrix.
 
 Treat a green test suite as evidence for code behavior, not as proof of
 upstream reliability, production configuration, or user comprehension.
