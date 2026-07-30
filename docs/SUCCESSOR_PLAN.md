@@ -45,18 +45,21 @@ layer states remain invariants.
   release.
 - The static successor is deployed and published at
   `https://atniclimate.github.io/dynamic-drought-module/` from GitHub `main`.
-  Pages workflow run `30513627797` published release merge `83fa417`.
+  Pages workflow run `30513860839` published `e1a9084`, which contains release
+  merge `83fa417` and the corrected publication record.
 - The local checkout has no configured Git remote. The existing GitHub Pages
   workflow on `main` remains the publication authority.
+- The active continuation brief is
+  `docs/FIRE_PATHWAY_FRESH_SESSION_HANDOFF_2026-07-29.md`.
 
 Latest verification receipts:
 
 - `npm run gate`: passed.
 - GitHub Pages host, font, embed-guard, and hillshade coverage: 10 passed.
-- GitHub Pages workflow run `30513627797`: build, bundle gate, artifact upload,
+- GitHub Pages workflow run `30513860839`: build, bundle gate, artifact upload,
   and deployment passed.
 - Public live verification: the subpath root and entry asset returned 200, and
-  the entry contained exact release receipt `83fa417`.
+  the entry contained exact release receipt `e1a9084`.
 - `npm --prefix workers/proxy run typecheck`: passed.
 - `npm --prefix workers/proxy audit`: zero findings.
 - Critical heat, cancellation, Worker-policy, embed, and URL-state coverage:

@@ -1,5 +1,9 @@
 # Fresh-session handoff: close H2 in the DDM successor
 
+> Historical handoff. H2 is complete and published. Resume from
+> `docs/FIRE_PATHWAY_FRESH_SESSION_HANDOFF_2026-07-29.md`; do not execute the
+> stale expected-state or release instructions below.
+
 Resume work in:
 
 `I:\dynamic-drought-module`
