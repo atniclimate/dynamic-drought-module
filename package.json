@@ -10,8 +10,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build && node scripts/prepare-sites-build.mjs",
-    "build:sites": "npm run build && node scripts/prepare-sites-build.mjs --omit-local-hillshade",
+    "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "playwright test",

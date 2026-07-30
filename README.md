@@ -107,9 +107,10 @@ npm run preview
 ```
 
 The ATNI deployment lives at
-`https://atniclimate.github.io/dynamic-drought-module/`. This scaffold
-does not include an automatic deployment workflow. Deployers run
-`npm run build` and serve the resulting `dist/` from any static web host.
+`https://atniclimate.github.io/dynamic-drought-module/` and is rebuilt on
+every push to `main` via `.github/workflows/deploy.yml`. Deployers
+self-hosting on their own infrastructure run `npm run build` and serve the
+resulting `dist/` from any static web host.
 
 ---
 
