@@ -31,7 +31,9 @@ layer states remain invariants.
 - Worker readiness is committed locally in
   `665effc feat: prepare NWS proxy for point heat`. It allowlists only
   `api.weather.gov`, supplies an identifying User-Agent, and reports revision
-  `2026-07-29-nws-point-heat-v1` from `/healthz`.
+  `2026-07-29-nws-point-heat-v2` from `/healthz`. The v2 release correction
+  caps the Worker's completed-response edge cache at 60 seconds while
+  preserving the upstream Cache-Control header returned to clients.
 - Neither H2 commit is deployed or published.
 - `URLS.nwsApiUseWorker` remains `false` until the Worker revision is deployed
   and verified.

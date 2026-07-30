@@ -105,10 +105,11 @@ const ALLOW_LIST: ReadonlyArray<RegExp> = [
 
 const USER_AGENT =
   "DDM-Proxy/0.1.0 (+https://github.com/atniclimate/dynamic-drought-module)";
-const WORKER_REVISION = "2026-07-29-nws-point-heat-v1";
+const WORKER_REVISION = "2026-07-29-nws-point-heat-v2";
 
 const UPSTREAM_TIMEOUT_MS = 12_000;
-const DEFAULT_CACHE_CONTROL = "public, max-age=60";
+const EDGE_CACHE_CONTROL = "public, max-age=60";
+const CACHED_ORIGIN_CACHE_CONTROL = "X-DDM-Origin-Cache-Control";
 
 // Abuse-throttle bounds (critical-review #4). The rate limit itself lives in the
 // platform binding (wrangler.toml [[ratelimits]]); these cap a single request's
@@ -262,7 +263,7 @@ function buildClientResponse(upstream: Response): Response {
     responseHeaders.set(name, value);
   }
   if (!responseHeaders.has("Cache-Control")) {
-    responseHeaders.set("Cache-Control", DEFAULT_CACHE_CONTROL);
+    responseHeaders.set("Cache-Control", EDGE_CACHE_CONTROL);
   }
   // Pass an upstream 429 through honestly (critical-review #4): keep its status
   // and its Retry-After so the client backs off, and supply a default hint if
@@ -415,8 +416,70 @@ function buildCacheKey(upstreamUrl: URL, method: string): Request {
 }
 
 function isCacheableMethod(method: string): boolean {
-  const normalized = method.toUpperCase();
-  return normalized === "GET" || normalized === "HEAD";
+  return method.toUpperCase() === "GET";
+}
+
+/**
+ * Respect upstream directives that forbid shared caching. Successful public
+ * responses may be cached, but their edge lifetime is capped separately.
+ */
+export function permitsEdgeCaching(response: Response): boolean {
+  const directives = (response.headers.get("Cache-Control") ?? "")
+    .toLowerCase()
+    .split(",")
+    .map((directive) => directive.trim());
+  return !directives.some((directive) => {
+    const [name, rawValue] = directive.split("=", 2);
+    if (name === "no-store" || name === "no-cache" || name === "private") {
+      return true;
+    }
+    return (
+      (name === "max-age" || name === "s-maxage") &&
+      Number(rawValue?.replaceAll('"', "")) === 0
+    );
+  });
+}
+
+/**
+ * Build the copy stored in caches.default. The original Cache-Control value is
+ * retained in an internal marker so cache hits can return the upstream header
+ * while Cloudflare expires its own copy after at most 60 seconds.
+ */
+export function prepareResponseForEdgeCache(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set(
+    CACHED_ORIGIN_CACHE_CONTROL,
+    headers.get("Cache-Control") ?? EDGE_CACHE_CONTROL
+  );
+  headers.set("Cache-Control", EDGE_CACHE_CONTROL);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+}
+
+/**
+ * Restore the upstream-facing response header on a cache hit. A missing marker
+ * identifies an entry written by an older Worker revision, which must be
+ * bypassed so the 60-second ceiling is not silently inherited.
+ */
+export function restoreResponseFromEdgeCache(
+  response: Response
+): Response | null {
+  const originCacheControl = response.headers.get(
+    CACHED_ORIGIN_CACHE_CONTROL
+  );
+  if (originCacheControl === null) return null;
+
+  const headers = new Headers(response.headers);
+  headers.set("Cache-Control", originCacheControl);
+  headers.delete(CACHED_ORIGIN_CACHE_CONTROL);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
 }
 
 export default {
@@ -513,9 +576,8 @@ export default {
     if (cacheable) {
       const cached = await cache.match(cacheKey);
       if (cached !== undefined) {
-        // The cached response already carries the Cross-Origin Resource
-        // Sharing (CORS) headers we injected when we wrote it.
-        return cached;
+        const restored = restoreResponseFromEdgeCache(cached);
+        if (restored !== null) return restored;
       }
     }
 
@@ -547,8 +609,14 @@ export default {
     // Cache only successful idempotent reads. We clone before handing back so
     // the body stream can be consumed twice (once by the cache, once by the
     // client). `ctx.waitUntil` lets the cache write outlive the response.
-    if (cacheable && clientResponse.ok) {
-      const responseToCache = clientResponse.clone();
+    if (
+      cacheable &&
+      clientResponse.ok &&
+      permitsEdgeCaching(clientResponse)
+    ) {
+      const responseToCache = prepareResponseForEdgeCache(
+        clientResponse.clone()
+      );
       ctx.waitUntil(cache.put(cacheKey, responseToCache));
     }
 
