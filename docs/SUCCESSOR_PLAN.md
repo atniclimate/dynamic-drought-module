@@ -51,22 +51,22 @@ layer states remain invariants.
 - The local checkout has no configured Git remote. The existing GitHub Pages
   workflow on `main` remains the publication authority.
 - The public application and footer remain at `v0.6.24` with exact Git receipt
-  `e1a9084`. The local candidate now aligns `package.json`, both root version
+  `e1a9084`. Local checkpoint `05767d4` aligns `package.json`, both root version
   fields in `package-lock.json`, and the application footer at `0.6.25`,
-  `0.6.25`, and `v0.6.25`, respectively; it has not been published or tagged.
-  The latest local version tag remains `v0.6.23`. Preserve the published
-  `v0.6.24` history and establish one uniquely identified `v0.6.25`
-  stabilization checkpoint.
-- The `v0.6.25` interface stabilization and release-identity checkpoint is the
-  only active milestone. Additional evidence-driven interface tweaks and
-  adjustments remain in the `0.6.x` line after this checkpoint. The
-  selected-place National Interagency Fire Center perimeter read stays
-  deferred until the interface line is explicitly closed, at which point it
-  opens the `v0.7.0` line.
+  `0.6.25`, and `v0.6.25`, respectively. It is verified, committed, and clean,
+  but it has not been published or tagged. The latest local version tag remains
+  `v0.6.23`. Preserve the published `v0.6.24` history.
+- The only active local product milestone is an interview with Patrick followed
+  by a finite plan of bounded `0.6.x` interface microtasks. This is
+  fine-tuning of existing presentation and comprehension, not feature or
+  engine work.
+- The selected-place National Interagency Fire Center perimeter read stays
+  deferred until the `0.6.x` interface line is explicitly closed, at which
+  point it opens the `v0.7.0` line.
 - The active continuation brief is
-  `docs/V0_6_X_CLOSEOUT_FRESH_SESSION_HANDOFF_2026-07-30.md`.
+  `docs/V0_6_X_INTERFACE_INTERVIEW_FRESH_SESSION_HANDOFF_2026-07-30.md`.
 
-Current local `v0.6.25` candidate receipts:
+Local `v0.6.25` checkpoint receipts:
 
 - `npm run gate`: passed.
 - `npm run test:serial`: 649 passed.
@@ -122,69 +122,44 @@ Use these state words precisely:
 - **deployed**: the external Worker or static artifact changed;
 - **published**: users can reach the successor release.
 
-### 2. Establish the v0.6.25 stabilization checkpoint
+### 2. Interview and plan the next 0.6.x interface microtasks
 
-This is the only active milestone. It establishes a stable successor
-checkpoint, reconciles release identity, and creates a verified regression
-baseline for continued `0.6.x` interface work. It is not the final `0.6.x`
-release and adds no data source, source capability, navigation model, or
-information architecture.
+This is the only active local product milestone. Begin with Patrick's design
+interview before changing code. Convert the answers into a finite phase plan of
+small, ordered microtasks, present it for review, and keep only the first
+microtask active.
 
-Outcome: a person can use the current successor on desktop, mobile, and in an
-embed without a known high-impact functional, comprehension, accessibility,
-responsive-layout, or honest-state defect. The published artifact has one
-human-readable version and one exact Git commit receipt.
+Outcome: the next interface work has a clear user-visible purpose, Patrick's
+design intent, exact surfaces and viewports, observable acceptance, explicit
+non-goals, and proportionate verification.
 
-Interface acceptance:
+In scope:
 
-- Review the bare opening, layer exploration, place search and selection,
-  selected-place briefing, time controls, HeatRisk sequence, source access,
-  keyboard order, and visible focus on desktop.
-- Review the established `390x844` mobile flow, including the navigation doors,
-  selected-place briefing, touch targets, bottom-sheet containment, long
-  labels, time intervals, and focus restoration.
-- Review `?embed=true`, iframe operation, attribution, source links,
-  selected-place reporting, and URL state at `400x600` and the `200x600`
-  embed-width floor.
-- Confirm that observations, forecasts, alerts, HeatRisk, current conditions,
-  future guidance, complete results, partial coverage, unavailable sources,
-  no data, selected boundaries, and point-area fallbacks remain distinguishable.
-- For `v0.6.25`, fix only a current defect that affects function,
-  comprehension, accessibility, responsive or embed integrity, URL
-  restoration, or the honesty of a source state. Further evidence-driven,
-  bounded interface tweaks may follow in later `0.6.x` releases. Defer broad
-  redesign, navigation change, CSS cleanup, component refactoring, and
-  future-fire interface work.
+- hierarchy, typography, spacing, density, color tokens, labels, affordances,
+  control consistency, responsive fit, accessibility, and comprehension;
+- the existing desktop, mobile, standard embed, and 200-pixel embed surfaces;
+- the smallest markup, style, configuration, and regression-test changes
+  required by an approved microtask.
 
-Release-identity acceptance:
+Out of scope:
 
-- Set `package.json`, both root version fields in `package-lock.json`, and the
-  application footer to `0.6.25` only after the interface changes are stable.
-- Add a concise release note that identifies `v0.6.25` as a verified
-  stabilization checkpoint, not the final `0.6.x` release. Do not rewrite,
-  relabel, or retag the existing `v0.6.24` history.
-- Preserve the exact Git commit identifier as the authoritative build receipt.
-- After explicit publication authorization, publish the reviewed commit,
-  verify the public receipt, create the matching `v0.6.25` tag on that exact
-  commit, and align local `main` and public GitHub `main` without rewriting
-  history.
+- new sources, source capabilities, engines, scores, content blocks, or data
+  pipelines;
+- National Interagency Fire Center or Climate Prediction Center feature work;
+- navigation or information-architecture rewrite;
+- broad visual redesign, general CSS cleanup, or component refactor;
+- publication, deployment, tagging, remote changes, branch alignment, or an
+  automatic `v0.6.26` assignment.
 
-Verification:
+Patrick's explicit design preference counts as product evidence for this
+fine-tuning stage. Every approved microtask must still carry one bounded
+visible outcome, observable acceptance, applicable viewport and accessibility
+criteria, preserved product invariants, focused verification, and a stop
+condition.
 
-- Run focused Playwright coverage for every interface area changed.
-- Run `npm run gate` near completion.
-- Run `npm run test:serial` once for the final `v0.6.25` candidate.
-- Repeat visual verification at desktop `1440x900`, mobile `390x844`, embed
-  `400x600`, and the embed width floor `200x600`.
-- Verify root and GitHub Pages subpath assets, iframe operation, URL state,
-  point heat, source states, and the exact release receipt before declaring the
-  release published.
-
-The checkpoint does not require the historical source catalog, national
-coverage, National Interagency Fire Center implementation, Climate Prediction
-Center extremes research, water-parser corrections, a selected-place
-drought-index read, broad external user research, or old process archives to
-be completed.
+Use a plain numbered phase plan, not a harness, ledger, queue, or second
+roadmap. After Patrick approves it, keep the concise active priority in this
+document and use ordinary issues and Git history for implementation detail.
 
 ### 3. Expand the fire module in v0.7.0
 
@@ -414,18 +389,16 @@ upstream reliability, production configuration, or user comprehension.
 
 ## Current boundaries
 
-- Establish `v0.6.25` first through bounded interface acceptance,
-  release-identity reconciliation, full verification, and an authorized
-  publication.
-- Keep subsequent evidence-driven interface tweaks and adjustments in `0.6.x`.
-  Begin `v0.7.0` only after the interface line is explicitly closed, with the
-  selected-place National Interagency Fire Center active-perimeter read as its
-  one active milestone.
+- Start the next session with Patrick's interface-design interview. Do not
+  implement a microtask until the interview synthesis and finite phase plan
+  have been reviewed.
+- Keep the approved fine-tuning microtasks in `0.6.x`. Begin `v0.7.0` only
+  after Patrick explicitly closes the interface line, with the selected-place
+  National Interagency Fire Center active-perimeter read as its one active
+  milestone.
 - No broad visual redesign, navigation rewrite, CSS cleanup, or component
-  refactor. For `v0.6.25`, change the interface only to correct a current
-  functional, comprehension, accessibility, responsive, embed, URL-state, or
-  honest-state defect. Keep later `0.6.x` adjustments similarly bounded and
-  evidence-driven.
+  refactor. Keep every `0.6.x` adjustment bounded to one approved
+  user-visible fine-tuning outcome.
 - No activation of the CPC extremes candidate until a separate source
   verification establishes transport, schema, cadence, coverage, terms, and
   honest absence.
