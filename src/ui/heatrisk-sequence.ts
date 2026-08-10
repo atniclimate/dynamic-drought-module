@@ -452,8 +452,11 @@ function clearActivationRead(): void {
 }
 
 function applyFrameDetail(detail: HeatRiskFrameDetail): void {
+  const sequenceUnchanged =
+    detail.frames === frames && detail.selectedDay === selectedDay;
   const freshLoading =
     detail.status === 'loading' && detail.frames.length === 0;
+  let activationChanged = false;
   if (detail.status === 'inactive') {
     activationGeneration += 1;
     activationOpen = false;
@@ -462,12 +465,22 @@ function applyFrameDetail(detail: HeatRiskFrameDetail): void {
     activationGeneration += 1;
     activationOpen = true;
     clearActivationRead();
+    activationChanged = true;
   }
   frameStatus = detail.status;
   frames = detail.frames;
   selectedDay = detail.selectedDay;
   if (detail.status === 'inactive') {
     hide();
+    return;
+  }
+  // Raster status updates do not change sequence content. Preserve the live
+  // buttons and focus while the current identify read is pending or cached.
+  if (
+    !activationChanged &&
+    sequenceUnchanged &&
+    (cachedRead !== null || pendingRead !== null)
+  ) {
     return;
   }
   void refreshRead();

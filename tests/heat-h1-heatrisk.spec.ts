@@ -585,16 +585,22 @@ test.describe('review regressions for HeatRisk honesty and lifecycle', () => {
     await expect
       .poll(receipt.isNwsAlertsWaiting)
       .toBe(true);
-    const cells = page.locator(
-      '#heatrisk-sequence [data-heatrisk-sequence-day]'
-    );
+    const cells = page.locator('#heatrisk-sequence [data-heatrisk-sequence-day]');
     await expect(cells).toHaveCount(7);
-    await cells.nth(3).evaluate((element) => element.click());
-    await expect(cells.nth(3)).toHaveAttribute('aria-pressed', 'true');
+    const day4 = page.locator(
+      '#heatrisk-sequence [data-heatrisk-sequence-day="4"]'
+    );
+    await expect(day4).toBeAttached();
+    // Keep this as a native, no-retry click. A redundant status event must
+    // not replace the live cell before its delegated click reaches the host.
+    await day4.evaluate((element) => element.click());
+    await expect
+      .poll(async () => new URLSearchParams(await search(page)).get('heatday'))
+      .toBe('4');
     await expect
       .poll(() => receipt.exportedTimes.includes(TIMES[3]))
       .toBe(true);
-    await page.waitForTimeout(500);
+    await expect(day4).toHaveAttribute('aria-pressed', 'true');
     receipt.releaseNwsAlerts();
 
     const heatClaim = page.locator(
