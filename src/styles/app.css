@@ -1513,11 +1513,11 @@ button.conditions-metric:hover {
   max-width: calc(100% - 220px);
 }
 
-/* When the satellite observation chip is showing, lift the dock clear of the
-   attribution control so the context line and key rows never intersect it. */
-body:has(#basemap-vintage:not([hidden])) .map-bottom-dock,
-body:has(#ground-vintage:not([hidden])) .map-bottom-dock {
-  bottom: 58px;
+/* When an imagery-vintage chip is showing, lift the dock clear of the
+   attribution and Recent controls so the context line never intersects them. */
+#app:not([data-sheet-detent]):has(#basemap-vintage:not([hidden])) .map-bottom-dock,
+#app:not([data-sheet-detent]):has(#ground-vintage:not([hidden])) .map-bottom-dock {
+  bottom: 117px;
 }
 
 /* Below MapLibre's 640px auto-compact threshold the attribution collapses
@@ -1620,7 +1620,7 @@ body:has(#ground-vintage:not([hidden])) .map-bottom-dock {
   border-style: dashed;
 }
 
-.map-bottom-dock > .historical-ground-chip {
+.map-bottom-dock > .basemap-imagery-chip {
   pointer-events: none;
 }
 
@@ -3216,6 +3216,15 @@ body:has(#ground-vintage:not([hidden])) .map-bottom-dock {
   #app[data-sheet-detent='peek'] .map-bottom-dock,
   #app[data-sheet-detent='half'] .map-bottom-dock {
     bottom: calc(var(--mobile-footer-h, 56px) + var(--sheet-height, 0px) + 10px);
+  }
+
+  /* MapLibre opens compact attribution on first load. In the edgeless
+     closed state, reserve its expanded disclosure plus the 44px Recent
+     control above the footer; peek and half remain governed by their
+     sheet heights above. */
+  #app[data-sheet-detent='closed']:has(#basemap-vintage:not([hidden])) .map-bottom-dock,
+  #app[data-sheet-detent='closed']:has(#ground-vintage:not([hidden])) .map-bottom-dock {
+    bottom: calc(var(--mobile-footer-h, 56px) + 144px);
   }
 
   /* --------------------------------------------------------------------------
