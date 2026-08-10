@@ -173,6 +173,81 @@ test('the HeatRisk opt-in reports a mixed-success request cycle as partial', () 
   expect(reports).toEqual(['degraded']);
 });
 
+test('completeness reports ready when the target source settles without map idle', () => {
+  const map = new FakeMap();
+  const reports: string[] = [];
+  watchRasterTiles(
+    map as unknown as maplibregl.Map,
+    'selected-frame',
+    (status) => reports.push(status),
+    {
+      reportInitialSuccess: true,
+      requestCompletenessDeadlineMs: 1_000
+    }
+  );
+
+  map.fire('sourcedata', {
+    sourceId: 'unrelated-source',
+    dataType: 'source',
+    isSourceLoaded: true
+  });
+  map.fire('sourcedata', {
+    sourceId: 'selected-frame',
+    dataType: 'source',
+    isSourceLoaded: true
+  });
+  expect(reports).toEqual([]);
+
+  map.fire('sourcedataloading', {
+    sourceId: 'selected-frame',
+    dataType: 'source',
+    tile: { tileID: { key: 'loaded-1' } }
+  });
+  map.fire('sourcedata', {
+    sourceId: 'selected-frame',
+    dataType: 'source',
+    isSourceLoaded: true,
+    tile: { tileID: { key: 'loaded-1' } }
+  });
+
+  expect(reports).toEqual(['ready']);
+});
+
+test('completeness reports partial when the target source settles with known holes', () => {
+  const map = new FakeMap();
+  const reports: string[] = [];
+  watchRasterTiles(
+    map as unknown as maplibregl.Map,
+    'selected-frame',
+    (status) => reports.push(status),
+    {
+      reportInitialSuccess: true,
+      requestCompletenessDeadlineMs: 1_000
+    }
+  );
+
+  for (const key of ['loaded-1', 'missing-1']) {
+    map.fire('sourcedataloading', {
+      sourceId: 'selected-frame',
+      dataType: 'source',
+      tile: { tileID: { key } }
+    });
+  }
+  map.fire('sourcedata', {
+    sourceId: 'selected-frame',
+    dataType: 'source',
+    isSourceLoaded: false,
+    tile: { tileID: { key: 'loaded-1' } }
+  });
+  map.fire('sourcedata', {
+    sourceId: 'selected-frame',
+    dataType: 'source',
+    isSourceLoaded: true
+  });
+
+  expect(reports).toEqual(['degraded']);
+});
+
 test('completeness waits through three early errors and reports mixed success as partial', () => {
   const map = new FakeMap();
   const reports: string[] = [];
