@@ -21,6 +21,7 @@ import { registry } from '../../state/registry';
 import { timeline } from '../../state/timeline';
 import { USDM_CATEGORIES } from '../../config/palette';
 import { getLayerDef } from '../../config/layers';
+import { classifyNifcIncidentType } from '../../config/wildfire-presentation';
 import { resolveStatusPillText } from './pill-text';
 
 // ---------------------------------------------------------------------------
@@ -211,9 +212,17 @@ export function droughtMetric(map: maplibregl.Map): { metric: Metric; dateMs: nu
 
   const feats = map.queryRenderedFeatures({ layers: [...presentFills] });
   if (feats.length === 0) {
-    // The USDM maps only D0 through D4 polygons; a viewport with none is
-    // drought-free, which is a real reading, not missing data.
-    return { metric: { value: 'None', sublabel: 'no drought in view', tone: 'none' }, dateMs: null };
+    // The USDM surface supplies D0 through D4 polygons, but this client has
+    // no analyzed-area mask. A zero rendered-feature query proves only that
+    // no category polygon is drawn here, not that the view is drought-free.
+    return {
+      metric: {
+        value: 'No polygon',
+        sublabel: 'no D0-D4 polygon rendered; no area mask to confirm no drought',
+        tone: 'none'
+      },
+      dateMs: null
+    };
   }
 
   let maxDm = -1;
@@ -227,7 +236,14 @@ export function droughtMetric(map: maplibregl.Map): { metric: Metric; dateMs: nu
 
   const cat = maxDm >= 0 && maxDm < USDM_CATEGORIES.length ? USDM_CATEGORIES[maxDm] : undefined;
   if (!cat) {
-    return { metric: { value: 'None', sublabel: 'no drought in view', tone: 'none' }, dateMs };
+    return {
+      metric: {
+        value: 'Unknown',
+        sublabel: 'rendered drought category unavailable',
+        tone: 'off'
+      },
+      dateMs
+    };
   }
   return {
     metric: { value: cat.code, sublabel: `${cat.label} in view`, tone: 'data', color: cat.color },
@@ -253,13 +269,13 @@ export function alertsMetric(map: maplibregl.Map): Metric {
 export function firesMetric(map: maplibregl.Map): Metric {
   if (!isLayerOn(FIRES_KEY)) return offMetric('wildfires');
   if (!map.getLayer(FIRES_FILL)) return pendingMetric(FIRES_KEY);
-  // Count wildfire (WF) and complex (CX) incidents; exclude prescribed burns
-  // (RX), which are intentional and not "active wildfires" in the hazard read.
+  // The owning layer already filters this fill to WF and CX. Retain the
+  // property check defensively so Prescribed fire can never enter this count.
   const feats = map
     .queryRenderedFeatures({ layers: [FIRES_FILL] })
     .filter((f) => {
       const cat = f.properties?.['attr_IncidentTypeCategory'];
-      return cat === 'WF' || cat === 'CX';
+      return classifyNifcIncidentType(cat) === 'wildfire';
     });
   // Prefer the stable WFIGS identifiers over the incident name (names are
   // reused across unrelated fires; identifiers are unique per incident).
@@ -274,7 +290,10 @@ export function firesMetric(map: maplibregl.Map): Metric {
   );
   return {
     value: String(n),
-    sublabel: n === 1 ? 'active wildfire' : 'active wildfires',
+    sublabel:
+      n === 1
+        ? 'mapped wildfire perimeter in view'
+        : 'mapped wildfire perimeters in view',
     tone: n > 0 ? 'data' : 'none'
   };
 }

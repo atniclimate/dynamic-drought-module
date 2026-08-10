@@ -8,9 +8,12 @@
  * (0.05 degree for Hawaii). Country-filtered extensions include southern
  * Mexico, Alaska and the Aleutians, and analyzed Canadian land omitted by the
  * original navigation silhouettes. Samples on assessed land that are not
- * covered by a drought polygon are the `none` class. Exact class ties retain
- * the less severe class. This is an overview, not a replacement for the
- * source polygons or a local drought determination.
+ * covered by a drought polygon are the `none` class. The display fill is an
+ * explicitly approximate area-weighted ordinal severity: None=0, D0=1,
+ * through D4=5, rounded to the nearest display class with exact half-step
+ * ties retained at the less severe class. This is a navigation overview, not
+ * an official regional drought classification, a replacement for the source
+ * polygons, or a local drought determination.
  *
  * The northern Canada qualification remains load-bearing: the NADM map marks
  * Nunavut as not analyzed, while the compact GeoJSON has no coverage-mask
@@ -61,9 +64,22 @@ const SUMMARY_ORDER: readonly DroughtSeverityCode[] = [
   ...NADM_DROUGHT_CODES,
 ];
 
+const SEVERITY_SCORE: Readonly<Record<DroughtSeverityCode, number>> = {
+  none: 0,
+  D0: 1,
+  D1: 2,
+  D2: 3,
+  D3: 4,
+  D4: 5,
+};
+
 type CoverageState = 'live' | 'live-partial';
 
 export interface FramingDroughtSummary {
+  /** Approximate area-weighted ordinal score, where None=0 through D4=5. */
+  readonly averageSeverityScore: number;
+  /** Presentation bucket nearest to averageSeverityScore; half ties round down. */
+  readonly averageClass: DroughtSeverityCode;
   readonly dominant: DroughtSeverityCode;
   readonly dominantPercent: number;
   /** D1 through D4 share. D0 is dry, but is not a drought class. */
@@ -372,6 +388,21 @@ function roundedPercent(value: number, total: number): number {
   return Math.round((value / total) * 1_000) / 10;
 }
 
+function roundedScore(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+/** Map an ordinal mean to its nearest drought class without overstating ties. */
+export function droughtAverageClassForScore(
+  score: number,
+): DroughtSeverityCode {
+  const index = Math.max(
+    0,
+    Math.min(SUMMARY_ORDER.length - 1, Math.floor(score + 0.5 - 1e-9)),
+  );
+  return SUMMARY_ORDER[index] ?? 'none';
+}
+
 function summarizeShape(
   areas: readonly FramingAnalysisArea[],
   prepared: PreparedNadm,
@@ -438,8 +469,15 @@ function summarizeShape(
   const distribution = Object.fromEntries(
     SUMMARY_ORDER.map((code) => [code, roundedPercent(weights[code], total)]),
   ) as Record<DroughtSeverityCode, number>;
+  const averageSeverityScore =
+    SUMMARY_ORDER.reduce(
+      (sum, code) => sum + weights[code] * SEVERITY_SCORE[code],
+      0,
+    ) / total;
 
   return {
+    averageSeverityScore: roundedScore(averageSeverityScore),
+    averageClass: droughtAverageClassForScore(averageSeverityScore),
     dominant,
     dominantPercent: distribution[dominant],
     droughtPercent: roundedPercent(

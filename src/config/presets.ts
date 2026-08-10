@@ -1,14 +1,14 @@
 /**
  * Question-first view presets (UX-2; ROADMAP "The UX track").
  *
- * Each preset is a named layer-set that answers a question a visitor
- * arrives with, rendered as a chip row in the sidebar. Applying a preset
- * REPLACES the active layer set (through the same activation and
+ * Each preset is a named scene that answers a question a visitor arrives
+ * with, rendered as a chip row in the sidebar. Applying a preset REPLACES
+ * the active layer set (through the same activation and
  * deactivation paths a manual toggle takes, so the registry, URL sync,
  * and status pills stay honest) and then leaves the user free to adjust:
  * presets set state without locking it. URL-as-state makes every preset
  * shareable and embeddable for free; there is no preset parameter, only
- * the `layers` list the preset produces.
+ * the granular `layers` and optional `basemap` state the preset produces.
  *
  * Constraint: a preset names at most ONE surface-role layer (the
  * one-surface-at-a-time invariant, UX-1). `resolveExclusiveSurface`
@@ -29,6 +29,8 @@ export interface ViewPreset {
   readonly label: string;
   /** Tooltip / accessible description of the question the preset answers. */
   readonly description: string;
+  /** Basemap requested only by an explicit click on this preset. */
+  readonly preferredBasemap?: 'satellite';
   /** Layer keys to activate, in activation order. At most one surface. */
   readonly layers: readonly string[];
 }
@@ -61,7 +63,8 @@ export const MOBILE_HAZARD_PRESETS: readonly ViewPreset[] = [
   {
     key: 'hazard-fire',
     label: 'Fire',
-    description: 'Wildfire: the SPC fire-weather outlook with active wildfire perimeters and smoke plumes',
+    description: 'Wildfire: recent NOAA GOES GeoColor context; the SPC fire-weather outlook with current mapped fire perimeters, including Wildfire and Prescribed fire, plus independently timed NOAA Hazard Mapping System (HMS) smoke plumes',
+    preferredBasemap: 'satellite',
     // hms-smoke is named explicitly (maintainer ruling 2026-07-15): applyPreset
     // takes the non-cascading activation path, so coActivateWith alone would
     // not bring smoke in, and a fire view without smoke is not the full read.
@@ -92,7 +95,8 @@ export const VIEW_PRESETS: readonly ViewPreset[] = [
   {
     key: 'fire-risk',
     label: 'Fire risk',
-    description: 'Fire weather threat: the SPC Day 1 fire-weather outlook with active wildfire perimeters and smoke plumes',
+    description: 'Fire weather threat: recent NOAA GOES GeoColor context; the SPC Day 1 fire-weather outlook with current mapped fire perimeters, including Wildfire and Prescribed fire, plus independently timed NOAA Hazard Mapping System (HMS) smoke plumes',
+    preferredBasemap: 'satellite',
     // Explicit hms-smoke for the same non-cascading reason as hazard-fire.
     layers: ['spc-fire-weather', 'nifc-fires', 'hms-smoke', 'aiannh']
   },

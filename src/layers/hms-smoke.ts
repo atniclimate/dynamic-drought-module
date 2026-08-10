@@ -16,40 +16,40 @@
  * itself holds only a short rolling window (observed: a single day).
  *
  * Structure mirrors nifc-fires.ts (the closest sibling): master abort
- * controller, honest no-data on an empty result, fill+outline before the
- * label glyphs, a legend registration, and a click popup.
+ * controller, honest no-data on an empty result, a borderless fill below
+ * the label glyphs, a legend registration, and a click popup.
  */
 
 import type maplibregl from 'maplibre-gl';
 import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
+import {
+  HMS_DENSITY_PRESENTATION,
+  HMS_OVERVIEW_QUALIFICATION,
+  buildHmsSmokeFillPaint,
+  parseArcGisPolygonFeatureCollection,
+  resolveHmsDensityPresentation
+} from '../config/wildfire-presentation';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import { escapeHtml } from '../util/escape';
-import { fetchWithBudget } from '../util/fetch';
+import { fetchJsonWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
 
 const LAYER_KEY = 'hms-smoke';
 const SOURCE_ID = 'hms-smoke';
 const FILL_LAYER_ID = 'hms-smoke-fill';
-const OUTLINE_LAYER_ID = 'hms-smoke-outline';
+const LEGACY_OUTLINE_LAYER_ID = 'hms-smoke-outline';
 
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
-export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID] as const;
+export const fadeLayerIds = [FILL_LAYER_ID] as const;
 
 /** Insert below the basemap label glyphs, matching the polygon-overlay convention. */
 const BEFORE_ID = 'first-symbol';
 
 /** Per-call network budget for the HMS query. */
 const FETCH_TIMEOUT_MS = 15_000;
-
-/** Density class colors: smoke grays deepening toward heavy. */
-const DENSITY_COLORS: Record<string, string> = {
-  Light: '#94a3b8',
-  Medium: '#eab308',
-  Heavy: '#9a3412'
-};
 
 /**
  * Master cancellation controller for the in-flight fetch. Aborted on
@@ -58,7 +58,7 @@ const DENSITY_COLORS: Record<string, string> = {
  */
 let masterController: AbortController | null = null;
 
-type HmsStatus = 'loading' | 'ready' | 'error' | 'no-data';
+type HmsStatus = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
 
 function reportStatus(state: HmsStatus): void {
   registry.setStatus(LAYER_KEY, state);
@@ -105,8 +105,9 @@ function buildQueryUrl(): string {
 }
 
 /**
- * Add the HMS smoke source plus fill and outline layers. Idempotent; an empty
- * result is `'no-data'` (no smoke drawn today is a real, good answer).
+ * Add the HMS smoke source plus its borderless fill. Idempotent; an empty
+ * result is `'no-data'` (no smoke drawn in the two-day query window is a
+ * real, good answer).
  */
 export async function activate(map: maplibregl.Map): Promise<void> {
   if (map.getSource(SOURCE_ID)) {
@@ -120,12 +121,19 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   reportStatus('loading');
 
   let geojson: FeatureCollection;
+  let truncated = false;
   try {
-    const response = await fetchWithBudget(buildQueryUrl(), null, signal, FETCH_TIMEOUT_MS);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    }
-    geojson = (await response.json()) as FeatureCollection;
+    const parsed = parseArcGisPolygonFeatureCollection(
+      await fetchJsonWithBudget(
+        buildQueryUrl(),
+        null,
+        signal,
+        FETCH_TIMEOUT_MS
+      ),
+      'NOAA HMS smoke'
+    );
+    geojson = parsed.collection;
+    truncated = parsed.truncated;
   } catch (err) {
     if (signal.aborted) return;
     console.warn('[hms-smoke] HMS smoke fetch failed.', err);
@@ -144,46 +152,18 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   });
 
   if (features.length === 0) {
-    reportStatus('no-data');
+    reportStatus(truncated ? 'degraded' : 'no-data');
     return;
   }
 
   const beforeId = resolveBeforeId(map);
-  const colorExpression: maplibregl.ExpressionSpecification = [
-    'match',
-    ['get', 'Density'],
-    'Light', DENSITY_COLORS.Light!,
-    'Medium', DENSITY_COLORS.Medium!,
-    'Heavy', DENSITY_COLORS.Heavy!,
-    DENSITY_COLORS.Light!
-  ];
 
   map.addLayer(
     {
       id: FILL_LAYER_ID,
       type: 'fill',
       source: SOURCE_ID,
-      paint: {
-        'fill-color': colorExpression,
-        // Smoke over land must stay readable; density is carried more by hue
-        // than by opacity so overlapping plumes do not stack to opaque.
-        'fill-opacity': 0.28
-      }
-    },
-    beforeId
-  );
-
-  map.addLayer(
-    {
-      id: OUTLINE_LAYER_ID,
-      type: 'line',
-      source: SOURCE_ID,
-      paint: {
-        'line-color': colorExpression,
-        'line-width': 1,
-        'line-opacity': 0.7,
-        'line-dasharray': [3, 2]
-      }
+      paint: buildHmsSmokeFillPaint()
     },
     beforeId
   );
@@ -195,43 +175,65 @@ export async function activate(map: maplibregl.Map): Promise<void> {
         body,
         'Satellite smoke plumes',
         [
-          { color: DENSITY_COLORS.Light!, label: 'Light smoke' },
-          { color: DENSITY_COLORS.Medium!, label: 'Medium smoke' },
-          { color: DENSITY_COLORS.Heavy!, label: 'Heavy smoke' }
+          {
+            color: HMS_DENSITY_PRESENTATION.Light.color,
+            label: HMS_DENSITY_PRESENTATION.Light.legendLabel
+          },
+          {
+            color: HMS_DENSITY_PRESENTATION.Medium.color,
+            label: HMS_DENSITY_PRESENTATION.Medium.legendLabel
+          },
+          {
+            color: HMS_DENSITY_PRESENTATION.Heavy.color,
+            label: HMS_DENSITY_PRESENTATION.Heavy.legendLabel
+          },
+          {
+            color: HMS_DENSITY_PRESENTATION.Unknown.color,
+            label: HMS_DENSITY_PRESENTATION.Unknown.legendLabel
+          }
         ],
-        'NOAA Hazard Mapping System, analyst-drawn from GOES imagery; current UTC day.'
+        HMS_OVERVIEW_QUALIFICATION
       )
   });
-  reportStatus('ready');
+  if (truncated) {
+    console.warn(
+      '[hms-smoke] HMS response reached the ArcGIS transfer limit; rendering available plumes as live (partial).'
+    );
+  }
+  reportStatus(truncated ? 'degraded' : 'ready');
 }
 
 /**
- * Abort any in-flight fetch and remove the fill, outline, and source. All
+ * Abort any in-flight fetch and remove the fill and source. All
  * guards defensive; symmetric with `activate`.
  */
+export function cancelActivation(): void {
+  masterController?.abort();
+}
+
 export function deactivate(map: maplibregl.Map): void {
-  if (masterController) {
-    masterController.abort();
-    masterController = null;
-  }
-  if (map.getLayer(OUTLINE_LAYER_ID)) map.removeLayer(OUTLINE_LAYER_ID);
+  cancelActivation();
+  masterController = null;
+  // Remove the retired outline defensively during a hot module replacement.
+  if (map.getLayer(LEGACY_OUTLINE_LAYER_ID)) map.removeLayer(LEGACY_OUTLINE_LAYER_ID);
   if (map.getLayer(FILL_LAYER_ID)) map.removeLayer(FILL_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   hideLegend(LAYER_KEY);
 }
 
 function buildHmsPopupHtml(props: GeoJsonProperties): string {
-  const density = typeof props?.['Density'] === 'string' ? props['Density'] : 'Unknown';
+  const density = resolveHmsDensityPresentation(props?.['Density']);
   const satellite = typeof props?.['Satellite'] === 'string' ? props['Satellite'] : '';
   const start = formatHmsTime(props?.['Start']);
   const end = formatHmsTime(props?.['End_']);
 
   return `
-    <div class="popup-title">${escapeHtml(density)} smoke</div>
+    <div class="popup-title">${escapeHtml(density.popupLabel)}</div>
     <div class="popup-agency">NOAA Hazard Mapping System</div>
     ${satellite ? `<div class="popup-treaty-meta">Detected by: ${escapeHtml(satellite)}</div>` : ''}
     ${start ? `<div class="popup-treaty-meta">Observed: ${escapeHtml(start)}${end ? ` to ${escapeHtml(end)}` : ''}</div>` : ''}
     <div class="popup-description">Analyst-drawn smoke plume from GOES satellite imagery. Density classes describe apparent smoke thickness (Light, Medium, Heavy), not ground-level air quality; check local air quality observations for exposure decisions.</div>
+    <div class="popup-description">Strategic context only, not tactical fire operations or evacuation guidance.</div>
     <div class="popup-links">
       <a href="https://www.ospo.noaa.gov/products/land/hms.html" target="_blank" rel="noopener">NOAA OSPO Hazard Mapping System</a>
     </div>
@@ -255,10 +257,9 @@ export function bindPopups(map: maplibregl.Map): void {
     kind: 'condition-surface',
     layerIds: [FILL_LAYER_ID],
     label: (feature) => {
-      const density = feature.properties?.['Density'];
-      return typeof density === 'string' && density.trim() !== ''
-        ? `${density} smoke`
-        : 'Smoke plume';
+      return resolveHmsDensityPresentation(
+        feature.properties?.['Density']
+      ).popupLabel;
     },
     respond: (feature) => ({
       content: buildHmsPopupHtml(feature.properties ?? {})

@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "test": "playwright test",
     "test:serial": "playwright test --workers=1",
+    "test:minimap-geometry": "node --test tests/minimap-geometry-artifact.test.mjs",
     "test:report": "playwright show-report",
     "scan:emdash": "node scripts/scan-emdash.mjs",
     "check:resources": "node scripts/check-resource-catalog.mjs",
@@ -32,6 +33,8 @@
     "build:landscape": ".venv\\Scripts\\python.exe -m scripts.landscape && node scripts/validate-landscape-artifact.mjs public/data/landscape-signature-pnw.json",
     "build:landscape:smoke": ".venv\\Scripts\\python.exe -m scripts.landscape --smoke --output scripts/.cache/landscape-smoke.json && node scripts/validate-landscape-artifact.mjs scripts/.cache/landscape-smoke.json",
     "build:ecoregion-tiles": "node scripts/build-ecoregion-tiles.mjs",
+    "build:minimap-geometry": "node scripts/build-minimap-geometry.mjs",
+    "build:minimap-whp": "node scripts/build-minimap-whp.mjs",
     "build:states": "node scripts/build-states.mjs",
     "build:tribal-roster": "node scripts/build-tribal-roster.mjs",
     "check:drift": "node scripts/check-upstream-drift.mjs"

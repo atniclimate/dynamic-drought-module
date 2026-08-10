@@ -1,6 +1,13 @@
 import { test, expect } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { gotoApp, search } from './helpers';
-import { FRAMINGS, framingFitBounds } from '../src/config/framings';
+import {
+  FRAMINGS,
+  FRAMING_KEYS,
+  framingFitBounds,
+} from '../src/config/framings';
+import type { FramingKey } from '../src/config/framings';
+import { buildMinimapWildfireQueryBody } from '../src/state/minimap-wildfire';
 
 test('the Alaska framing camera includes the wrapped western Aleutians', () => {
   const [[west], [east]] = framingFitBounds(FRAMINGS['alaska-northwest']);
@@ -122,6 +129,55 @@ const NADM_ANALYSIS_EXCLUSION_FIXTURE = {
   ],
 };
 
+const WILDFIRE_GEOMETRY_KEYS = new Map(
+  FRAMING_KEYS.map((key) => [
+    buildMinimapWildfireQueryBody(key).get('geometry'),
+    key,
+  ]),
+);
+
+async function stubWildfireMinimap(
+  page: Page,
+  counts: Readonly<Partial<Record<FramingKey, number>>> = {},
+  onPost?: () => void,
+): Promise<void> {
+  await page.route(
+    '**/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query**',
+    (route) => {
+      if (route.request().method() !== 'POST') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/geo+json',
+          body: JSON.stringify({ type: 'FeatureCollection', features: [] }),
+        });
+      }
+      onPost?.();
+      const body = new URLSearchParams(route.request().postData() ?? '');
+      const key = WILDFIRE_GEOMETRY_KEYS.get(body.get('geometry'));
+      if (key === undefined) {
+        return route.fulfill({
+          status: 400,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { message: 'Unknown test geometry' } }),
+        });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ count: counts[key] ?? 0 }),
+      });
+    },
+  );
+  await page.route('**/NOAA_Satellite_Smoke_Detection_*/FeatureServer/0/query**',
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify({ type: 'FeatureCollection', features: [] }),
+      }),
+  );
+}
+
 /**
  * S4b: the framing minimap, pointer and keyboard (the S4 design record
  * section 3; D-0.7.0-039/041/054). Passing this file is the ruled
@@ -171,6 +227,12 @@ test.describe('S4b minimap', () => {
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-lake'),
     ).toHaveCount(8);
+    await expect(
+      page.locator('.shell-minimap-map .shell-minimap-coastline'),
+    ).toHaveCount(1);
+    await expect(
+      page.locator('.shell-minimap-map .shell-minimap-mainland').first(),
+    ).toHaveAttribute('clip-path', 'url(#shell-minimap-physical-land)');
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-title'),
     ).toHaveText('Jump to region');
@@ -233,10 +295,108 @@ test.describe('S4b minimap', () => {
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-note'),
     ).toHaveCount(0);
-    // The desktop region grid is retired behind the minimap (staged:
-    // DOM preserved, display gone).
-    await expect(page.locator('#panel-region')).toBeHidden();
-    await expect(page.locator('#panel-region')).toBeAttached();
+    // The original region radiogroup now precedes the continental minimap in
+    // desktop Brief. The minimap keeps framing ownership, while the familiar
+    // jump list remains a visible same-node navigation route.
+    await expect(page.locator('#shell-region-host > #panel-region')).toBeVisible();
+    await expect(page.locator('#region-buttons[role="radiogroup"]')).toHaveCount(1);
+    await expect(page.locator('.shell-minimap-map [role="radiogroup"]')).toHaveCount(1);
+  });
+
+  test('loads dated Drought and verified Wildfire metrics only in their modes', async ({
+    page,
+  }) => {
+    let nadmRequests = 0;
+    let wildfirePosts = 0;
+    await page.route('**/NADM-current.geojson', (route) => {
+      nadmRequests += 1;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify(NADM_FIXTURE),
+      });
+    });
+    await stubWildfireMinimap(
+      page,
+      { 'alaska-northwest': 1 },
+      () => wildfirePosts++,
+    );
+
+    await gotoApp(page, '?view=brief&cluster=wildfire');
+    const minimap = page.locator('.shell-minimap-map');
+    await expect(minimap.locator('.shell-minimap-scale')).toHaveText(
+      'NIFC / WHP 2023',
+    );
+    await expect(minimap.locator('.shell-minimap-metric-note')).toContainText(
+      'Red marks a current mapped wildfire perimeter',
+    );
+    await expect(minimap.locator('.shell-minimap-metric-note')).toContainText(
+      'a zero count does not establish no active wildfire',
+    );
+    await expect(minimap.locator('.shell-minimap-metric-note')).toContainText(
+      'light below both thresholds, and dark for no data',
+    );
+    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveAttribute(
+      'role',
+      'status',
+    );
+    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveAttribute(
+      'aria-atomic',
+      'true',
+    );
+    await expect(minimap.locator('.shell-minimap-canvas')).toHaveAttribute(
+      'data-metric-context',
+      'wildfire',
+    );
+    await expect(minimap.locator('.shell-minimap-canvas')).toHaveAttribute(
+      'data-wildfire-status',
+      'live-partial',
+    );
+    await expect(
+      minimap.locator('[data-framing="alaska-northwest"]'),
+    ).toHaveAttribute('data-wildfire-condition', 'mapped-wildfire');
+    await expect(
+      minimap.locator('[data-framing="alaska-northwest"]'),
+    ).toHaveCSS('fill', 'rgb(215, 48, 39)');
+    const pacific = minimap.locator('[data-framing="pacific-coast"]');
+    await expect(pacific).toHaveAttribute(
+      'data-wildfire-condition',
+      'moderate-potential',
+    );
+    await expect(pacific).toHaveAttribute(
+      'data-wildfire-region-status',
+      'live-partial',
+    );
+    await expect(pacific).toHaveAttribute(
+      'aria-label',
+      /static strategic landscape potential, not current fire conditions or a forecast/i,
+    );
+    await expect(
+      minimap.locator('#shell-minimap-partial-pacific-coast rect'),
+    ).toHaveAttribute('fill', '#FFE066');
+    await expect(
+      minimap.locator('[data-framing="plains-prairies"]'),
+    ).toHaveAttribute('data-wildfire-condition', 'below-threshold');
+    await expect(
+      minimap.locator('[data-framing="mexico"]'),
+    ).toHaveAttribute('data-wildfire-condition', 'no-data');
+    expect(wildfirePosts).toBe(9);
+    expect(nadmRequests).toBe(0);
+
+    await page.locator('.shell-cluster-btn[data-cluster="drought"]').click();
+    await expect(minimap.locator('.shell-minimap-scale')).toHaveText(
+      'NADM · Jul 2026',
+    );
+    expect(nadmRequests).toBe(1);
+
+    await page.locator('.shell-cluster-btn[data-cluster="heat"]').click();
+    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveText(
+      'No verified Extreme Heat framing metric applied.',
+    );
+    await page.locator('.shell-cluster-btn[data-cluster="enso"]').click();
+    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveText(
+      'No verified ENSO framing metric applied.',
+    );
   });
 
   test('uses the legible Hawaii inset proportions from the desktop rail', async ({
@@ -389,6 +549,67 @@ test.describe('S4b minimap', () => {
     await expect(pacific).toBeFocused();
     await expect(arid).toHaveAttribute('aria-checked', 'true');
     expect(await search(page)).toContain('framing=arid-west');
+  });
+
+  test('ocean controls enter ENSO, fit one schematic ocean, and preserve the authored framing', async ({
+    page,
+  }) => {
+    await gotoApp(page, '?view=brief&framing=pacific-coast');
+    const minimap = page.locator('.shell-minimap-map');
+    await expect(minimap.locator('[data-ocean]')).toHaveCount(3);
+
+    const atlantic = minimap.locator('[data-ocean="atlantic"]');
+    await expect(atlantic).toHaveAttribute(
+      'aria-label',
+      /Switch to the El Nino \/ Southern Oscillation sea-surface-temperature anomaly display/,
+    );
+    await expect(atlantic).toHaveAttribute(
+      'aria-label',
+      /Schematic click affordance for camera navigation; not a boundary/,
+    );
+    await atlantic.click();
+    await expect
+      .poll(async () => {
+        const params = new URLSearchParams(await search(page));
+        return {
+          cluster: params.get('cluster'),
+          ocean: params.get('ocean'),
+          framing: params.get('framing'),
+        };
+      })
+      .toEqual({
+        cluster: 'enso',
+        ocean: 'atlantic',
+        framing: 'pacific-coast',
+      });
+    await expect(atlantic).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('input[data-layer-key="sst-anomaly"]')).toBeChecked();
+    await expect(minimap.locator('.shell-minimap-note')).toContainText(
+      'Ocean view: Atlantic Ocean',
+    );
+    await expect(minimap.locator('.shell-minimap-note')).toContainText(
+      'Preserved land framing: Pacific Coast',
+    );
+    await expect(
+      minimap.locator('[data-framing="pacific-coast"]'),
+    ).toHaveAttribute('aria-checked', 'false');
+
+    const arctic = minimap.locator('[data-ocean="arctic"]');
+    await arctic.focus();
+    await page.keyboard.press('Space');
+    await expect
+      .poll(async () => new URLSearchParams(await search(page)).get('ocean'))
+      .toBe('arctic');
+    await expect(arctic).toHaveAttribute('aria-pressed', 'true');
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(
+      page.locator('.shell-minimap-map [data-ocean="arctic"]'),
+    ).toHaveAttribute('aria-pressed', 'true');
+    const restored = new URLSearchParams(await search(page));
+    expect(restored.get('cluster')).toBe('enso');
+    expect(restored.get('ocean')).toBe('arctic');
+    expect(restored.get('framing')).toBe('pacific-coast');
   });
 
   test('ALL writes a restorable North America camera and survives reload', async ({

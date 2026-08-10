@@ -48,6 +48,10 @@ export interface LayerDef {
   readonly key: string;
   readonly name: string;
   readonly source: string;
+  /** Optional discoverability terms that do not alter the source-honest
+   * visible layer name. Used when a familiar hazard term is broader or
+   * narrower than the mapped product's formal label. */
+  readonly searchTerms?: readonly string[];
   /**
    * UX-1 role (see LayerRole in src/types/layer.ts). Surfaces are mutually
    * exclusive; the other three roles stack freely over the active surface.
@@ -75,7 +79,8 @@ export interface LayerDef {
    * URL / deep-link restore path (`applyLayerSet`), so a shared link stays
    * authoritative about exactly which layers were on. Cascades one level: a
    * co-activated partner does not re-trigger co-activation. Used by the
-   * wildfire event pair (Active Wildfires + Smoke Plumes, D-0.7.0-018).
+   * wildfire event pair (Current Mapped Fire Perimeters + Smoke Plumes,
+   * D-0.7.0-018).
    */
   readonly coActivateWith?: readonly string[];
   /**
@@ -179,7 +184,7 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'gridded-index', name: 'Gridded Drought Index (SPI)', source: 'NOAA NIDIS · raster tiles', role: 'surface', defaultOn: false, load: () => import('../layers/gridded-index') },
   // noDataLabel on the live agency layers below (usdm, wildfire pair, NWS
   // alerts, SPC, bia-reservations): a zero-feature live response is a real,
-  // good answer ("no smoke drawn today"), never an "empty placeholder"; the
+  // good answer ("no smoke drawn in the query window"), never an "empty placeholder"; the
   // placeholder wording stays only on the bundled deployer slots (tribal,
   // treaty). Unit C of the umbrella build + the Codex Unit C pass.
   DROUGHT_CONDITIONS_DEF,
@@ -201,7 +206,7 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'bia-reservations', name: 'Reservation Boundaries', source: 'BIA · AIAN-LAR (live)', role: 'reference', defaultOn: true, noDataLabel: 'no features returned for this view (AIAN-LAR does not cover every Tribal Nation)', load: () => import('../layers/bia-reservations') },
   { key: 'states', name: 'State Boundaries', source: 'US Census · bundled GeoJSON', role: 'reference', defaultOn: true, load: () => import('../layers/states') },
   { key: 'places', name: 'City & Town Labels', source: 'Natural Earth · bundled', role: 'reference', defaultOn: false, load: () => import('../layers/places') },
-  { key: 'nifc-fires', name: 'Active Wildfires (NIFC)', source: 'NIFC WFIGS · FeatureServer', role: 'event', defaultOn: false, coActivateWith: ['hms-smoke'], noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nifc-fires') },
+  { key: 'nifc-fires', name: 'Current Mapped Fire Perimeters (NIFC)', source: 'NIFC WFIGS · FeatureServer', searchTerms: ['wildfire', 'Prescribed fire', 'fire perimeter'], role: 'event', defaultOn: false, coActivateWith: ['hms-smoke'], noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nifc-fires') },
   // vocab-allow: names the NWS alert products layer, upstream data
   { key: 'nws-alerts', name: 'Heat & Fire Weather Alerts', source: 'NOAA NWS · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nws-alerts') },
   { key: 'hms-smoke', name: 'Smoke Plumes (HMS)', source: 'NOAA OSPO · FeatureServer', role: 'event', defaultOn: false, coActivateWith: ['nifc-fires'], noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/hms-smoke') },

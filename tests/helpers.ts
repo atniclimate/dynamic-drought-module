@@ -10,6 +10,24 @@
 
 import { expect, type Page, type Locator } from '@playwright/test';
 
+const TEST_GROUND_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64'
+);
+const groundStubbedPages = new WeakSet<Page>();
+
+export async function stubHistoricalGround(page: Page): Promise<void> {
+  if (groundStubbedPages.has(page)) return;
+  groundStubbedPages.add(page);
+  await page.route('**/wmts/1.0.0/s2cloudless_3857/**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      body: TEST_GROUND_PNG
+    })
+  );
+}
+
 /**
  * The six canonical status-pill strings, from `STATUS_PILL_TEXT` in
  * `src/ui/sidebar.ts`. A layer that is off (never activated, or deactivated)
@@ -127,6 +145,11 @@ export function stationValues(page: Page, id: string): Locator {
  * view-mode.ts): embed plus nothing that routes to the console.
  */
 export async function gotoApp(page: Page, query = ''): Promise<void> {
+  // The historical EOX ground is production-vetted separately. Routine
+  // deterministic browser tests use one local image for both its probe and
+  // viewport tiles so the full suite neither depends on nor floods the public
+  // service. Ground-specific specs call page.goto directly and own their route.
+  await stubHistoricalGround(page);
   await page.goto(query, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#preset-chips .preset-chip')).toHaveCount(PRESET_LABELS.length);
   await expect(page.locator('#region-buttons .region-btn')).not.toHaveCount(0);

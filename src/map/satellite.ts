@@ -315,7 +315,12 @@ async function proveFrameAvailable(
 
 function ensureImageryChip(): HTMLElement | null {
   const existing = document.getElementById('basemap-vintage');
-  if (existing) return existing;
+  if (existing) {
+    existing.setAttribute('role', 'status');
+    existing.setAttribute('aria-live', 'polite');
+    existing.setAttribute('aria-atomic', 'true');
+    return existing;
+  }
   const dock = document.getElementById('map-bottom-dock');
   const foot = dock?.querySelector('.map-dock-foot');
   if (!dock || !foot) return null;
@@ -323,6 +328,9 @@ function ensureImageryChip(): HTMLElement | null {
   // Preserve the established id because embeds and downstream CSS may use it.
   chip.id = 'basemap-vintage';
   chip.className = 'basemap-imagery-chip';
+  chip.setAttribute('role', 'status');
+  chip.setAttribute('aria-live', 'polite');
+  chip.setAttribute('aria-atomic', 'true');
   chip.hidden = true;
   dock.insertBefore(chip, foot);
   return chip;
@@ -522,7 +530,7 @@ function installFrame(
           'raster-contrast': 0.04
         }
       },
-      firstLayerIdAbove(map, ['background', 'basemap'])
+      firstLayerIdAbove(map, ['background', 'basemap', 'basemap-ground'])
     );
   } catch (error) {
     removeSatelliteSource(map);

@@ -50,6 +50,23 @@ export const URLS = Object.freeze({
   // tile requests (the policy's web-traffic attribution branch).
   basemapOSM: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
 
+  // EOxCloudless Sentinel-2 2016 mosaic, the historical shared ground.
+  // This is intentionally separate from `noaaMergedGeoColorImageServer`:
+  // EOX is a fixed 2016 visual context, while NOAA is a recent observed
+  // frame selected by `basemap=satellite`. The unversioned EOX layer id is
+  // explicitly identified as the 2016 mosaic by the live WMTS capabilities.
+  // License: Creative Commons Attribution 4.0. Required attribution and the
+  // historical-vintage warning render whenever the layer is visible.
+  // Verified 2026-08-09: the exact tile and capabilities endpoints returned
+  // HTTP 200, image/jpeg and application/xml respectively, with browser-safe
+  // origin-reflecting CORS. The tile advertised a seven-day cache. Runtime
+  // probes one known-data tile with a five-second budget before revealing the
+  // layer; subdued OpenStreetMap remains underneath as the automatic fallback.
+  eoxCloudless2016:
+    'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg',
+  eoxCloudless2016Probe:
+    'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/4/5/2.jpg',
+
   // NOAA NESDIS merged GOES East and West GeoColor, the opt-in recent
   // satellite basemap. This is the rolling, time-enabled 24-hour archive,
   // not the similarly named current-only service. Runtime queries a bounded

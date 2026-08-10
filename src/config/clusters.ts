@@ -66,6 +66,9 @@ export interface HazardClusterDef {
   /** Accessible description of what the cluster shows today; honest
    * about v1 scope. */
   readonly description: string;
+  /** Basemap requested only when a visitor explicitly chooses this cluster.
+   * Boot restore and service-internal recipe changes must not consume it. */
+  readonly preferredBasemap?: 'satellite';
   /**
    * Explicit hazard-layer recipe per temporal horizon, in activation
    * order; keys are LAYER_DEFS keys. At most one surface-role layer per
@@ -98,7 +101,9 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
   wildfire: {
     title: 'Wildfire',
     urlToken: 'wildfire',
-    description: 'Active wildfire perimeters and smoke plumes; outlook and potential reads at longer horizons.',
+    description:
+      'Recent NOAA GOES GeoColor context; current mapped fire perimeters (NIFC), distinguishing Wildfire and Prescribed fire, plus independently timed NOAA Hazard Mapping System (HMS) smoke plumes; outlook and potential reads at longer horizons.',
+    preferredBasemap: 'satellite',
     recipes: {
       // D-0.7.0-043 part 1: at the current register, perimeters plus
       // smoke ONLY; the potential read (WHP) stays out of the

@@ -10,9 +10,9 @@
  * switcher control (src/map/basemap-switcher.ts) owns the map side.
  *
  * The mode vocabulary is the STABLE URL token set (D-0.7.0-031): 'default'
- * (the desaturated analysis basemap, never emitted) and 'satellite' (the
- * opt-in imagery basemap; the token never names a provider or vintage, so
- * a future D-0.7.0-028 vintage change cannot break a shared link).
+ * (the historical shared ground with automatic OSM fallback, never emitted)
+ * and 'satellite' (the opt-in recent NOAA imagery context). The token stays
+ * provider-neutral, but its established recent-context meaning is preserved.
  */
 
 export type BasemapMode = 'default' | 'satellite';

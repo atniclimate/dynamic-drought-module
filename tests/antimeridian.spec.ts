@@ -339,6 +339,7 @@ test.describe('consumer behavior on a crossing selection (N2-A)', () => {
     await withFetchNifcClaims(async (fetchNifcClaims) => {
       const originalFetch = globalThis.fetch;
       const envelopes: string[] = [];
+      const outFields: string[] = [];
       globalThis.fetch = async (input) => {
         const rawUrl =
           typeof input === 'string'
@@ -348,6 +349,8 @@ test.describe('consumer behavior on a crossing selection (N2-A)', () => {
               : input.url;
         const envelope = new URL(rawUrl).searchParams.get('geometry');
         if (envelope) envelopes.push(envelope);
+        const fields = new URL(rawUrl).searchParams.get('outFields');
+        if (fields) outFields.push(fields);
         return new Response(
           JSON.stringify({ type: 'FeatureCollection', features: [] }),
           {
@@ -367,6 +370,10 @@ test.describe('consumer behavior on a crossing selection (N2-A)', () => {
           '178,51,180,53',
           '-180,51,-170,53'
         ]);
+        expect(outFields).toHaveLength(2);
+        for (const fields of outFields) {
+          expect(fields.split(',')).toContain('attr_IncidentTypeCategory');
+        }
       } finally {
         globalThis.fetch = originalFetch;
       }

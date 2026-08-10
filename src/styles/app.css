@@ -526,8 +526,8 @@ button.conditions-metric:hover {
 }
 
 /* An off metric (its layer is not active) reads as muted, so the eye lands on
-   the live numbers. A real zero ("no drought in view", "0 alerts") keeps full
-   contrast: it is an answer, not an absence. */
+   the live numbers. A zero count or explicit no-polygon read keeps full
+   contrast: it is an answer about the rendered view, not an inferred class. */
 .conditions-metric[data-tone='off'],
 .conditions-metric[data-tone='loading'] {
   opacity: 0.6;
@@ -909,14 +909,11 @@ button.conditions-metric:hover {
   display: none;
 }
 
-/* U3e / D-0.7.0-009: the region "jump to" list is a CONSOLE "where" control.
-   In Brief mode the place search (the Brief head) is the one "where" control,
-   so the whole region panel (the list, its heading, and the briefing trigger
-   that lives inside it) is hidden; Brief leads with the answer and its search.
-   The .region-btn elements stay in the DOM (the island pre-mount boot signal
-   counts them), just not displayed. On mobile the sheet detents already gate
-   #panel-region, and console mode is unaffected. */
-#app.view-brief #panel-region {
+/* The region list stays hidden in Brief only while it occupies its static
+   fallback seat. The mounted desktop Brief shell rehosts the SAME panel as
+   its current-region jump; console, mobile, embed, collapse, and pre-mount
+   keep the established fallback and sheet behavior. */
+#app.view-brief #panel-region-home + #panel-region {
   display: none;
 }
 
@@ -1488,9 +1485,8 @@ button.conditions-metric:hover {
 #map {
   width: 100%;
   height: 100%;
-  /* Light placeholder matching the style's background layer, so the first
-     paint before tiles arrive does not flash dark. */
-  background: #e9eef3;
+  /* Match the shared Firefly ground so first paint never flashes light. */
+  background: var(--bg-0);
 }
 
 /* MapLibre chrome theming. The migration's earlier `.leaflet-*` selectors
@@ -1519,7 +1515,8 @@ button.conditions-metric:hover {
 
 /* When the satellite observation chip is showing, lift the dock clear of the
    attribution control so the context line and key rows never intersect it. */
-body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
+body:has(#basemap-vintage:not([hidden])) .map-bottom-dock,
+body:has(#ground-vintage:not([hidden])) .map-bottom-dock {
   bottom: 58px;
 }
 
@@ -1529,6 +1526,27 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
    ON the toggle at 400x600 embed and intercepting its clicks, which locked
    users out of the data-source disclosure. */
 @media (max-width: 639px) {
+  /* The library's compact attribution expands to its intrinsic source line
+     on hover/focus. Clamp that expansion to the actual iframe width and keep
+     the disclosure button in its stable bottom-right seat, including the
+     200px embed floor. The generic attribution padding above otherwise
+     overrides MapLibre's reserved button space. */
+  .maplibregl-ctrl-attrib {
+    max-width: calc(100vw - 20px);
+  }
+  .maplibregl-ctrl-attrib.maplibregl-compact {
+    box-sizing: border-box;
+    min-width: 36px;
+    padding: 3px 28px 3px 8px !important;
+  }
+  .maplibregl-ctrl-attrib-inner {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  .maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib-button {
+    top: auto;
+    bottom: 0;
+  }
   .map-bottom-dock {
     right: 56px;
   }
@@ -1600,6 +1618,21 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
 
 .basemap-imagery-chip[data-status="loading"] {
   border-style: dashed;
+}
+
+.map-bottom-dock > .historical-ground-chip {
+  pointer-events: none;
+}
+
+.historical-ground-chip a {
+  color: var(--fg-0);
+  border-bottom-color: var(--fg-3);
+  pointer-events: auto;
+}
+
+.historical-ground-chip[data-status="fallback"] {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 55%, var(--line-strong));
 }
 
 /* Popups */
@@ -2778,7 +2811,7 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   background: transparent;
 }
 
-@media (min-width: 720px) {
+@media (min-width: 721px) {
   #place-studio-root {
     inset: 0 auto 0 0;
     width: min(560px, 100vw);
@@ -2819,7 +2852,7 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   width: 100%;
 }
 
-@media (max-width: 719px) {
+@media (max-width: 720px) {
   .place-studio-type-rail {
     grid-template-columns: repeat(4, minmax(112px, 1fr));
     overflow-x: auto;
@@ -3255,7 +3288,16 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
     row-gap: 3px;
   }
   #app[data-sheet-detent] .map-overlay-controls {
-    top: calc(env(safe-area-inset-top, 0px) + 64px);
+    /* `--mobile-map-key-height` is measured from the one live key by
+       src/ui/map-key.ts. The 48px fallback preserves the previous 64px
+       seat before the first measurement and in engines without
+       ResizeObserver. Dense Drought, Wildfire, HeatRisk, and NWS keys can
+       wrap without covering Share or Reset. */
+    top: calc(
+      env(safe-area-inset-top, 0px) +
+      var(--mobile-map-key-height, 48px) +
+      16px
+    );
     right: 8px;
   }
 
@@ -3281,7 +3323,11 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
      (centered, it collided with the Share and Reset stack; Codex visual
      pass, 2026-07-14). */
   #app[data-sheet-detent] .loading-indicator {
-    top: calc(env(safe-area-inset-top, 0px) + 64px);
+    top: calc(
+      env(safe-area-inset-top, 0px) +
+      var(--mobile-map-key-height, 48px) +
+      16px
+    );
     left: 8px;
     transform: none;
     max-width: 62vw;
@@ -5201,15 +5247,48 @@ a.impact-resource-link::after {
 
 /* ----------------------------------------------------------------------------
    S4: the main-screen shell (the 2026-07-18 design record; D-0.7.0-042/052/
-   072/074). Band order VIEW, MAP CONTEXT, WHEN, SHOWN NOW; the no-scroll
-   contract and the three-band height behavior live at the end of this
-   section. Desktop-only chrome: below 720px the mobile sheet and hazard
-   rail carry the same decisions, and embeds keep their shipped surface.
+   072/074). Desktop Brief order: VIEW, CONDITIONS IN VIEW, CURRENT REGION,
+   CONTINENTAL MINIMAP, WHEN, SHARE, REFINE. The no-scroll contract and the
+   three-band height behavior live at the end of this section. Below 720px
+   the mobile sheet and hazard rail carry the decisions, and embeds keep
+   their shipped surface.
    ---------------------------------------------------------------------------- */
 
 .shell {
   display: grid;
   gap: 10px;
+}
+
+/* Stable imperative seats for existing vanilla and island-owned DOM. The
+   panels lose their outer sidebar framing only while seated inside the one
+   shell panel; their IDs, descendants, listeners, and live state stay intact. */
+.shell-rehost {
+  min-width: 0;
+}
+.shell-rehost:empty {
+  display: none;
+}
+.shell-rehost > .panel {
+  padding: 0;
+  border-bottom: 0;
+}
+#shell-conditions-host > #conditions-strip .conditions-title {
+  display: none;
+}
+#shell-conditions-host > #conditions-strip .conditions-head {
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+#shell-share-host > #share-btn {
+  width: 100%;
+  min-height: 36px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+#shell-share-host > #share-btn:hover {
+  background: var(--bg-3);
+  border-color: var(--line-strong);
 }
 
 /* VIEW: the four hazard cluster buttons. */
@@ -5281,13 +5360,106 @@ a.impact-resource-link::after {
   overflow: hidden;
 }
 
-.shell-minimap-drawing {
-  display: block;
+.shell-minimap-oceans,
+.shell-minimap-region-group {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
 }
 
-.shell-minimap-drawing pattern path {
+.shell-minimap-oceans {
+  z-index: 0;
+  pointer-events: none;
+}
+
+.shell-minimap-region-group {
+  z-index: 1;
+  pointer-events: none;
+}
+
+.shell-minimap-ocean {
+  fill: rgba(34, 211, 238, 0.04);
+  stroke: transparent;
+  stroke-width: 1.2px;
+  transition:
+    fill 0.12s ease,
+    stroke 0.12s ease,
+    filter 0.12s ease;
+}
+
+.shell-minimap-ocean.active {
+  fill: rgba(34, 211, 238, 0.09);
+  stroke: rgba(34, 211, 238, 0.72);
+  filter: drop-shadow(0 0 5px rgba(34, 211, 238, 0.34));
+}
+
+.shell-minimap-ocean-doors {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.shell-minimap-ocean-door {
+  position: absolute;
+  appearance: none;
+  min-width: 48px;
+  min-height: 24px;
+  padding: 3px 6px;
+  background: rgba(11, 18, 32, 0.76);
+  color: var(--fg-3);
+  border: 1px solid rgba(34, 211, 238, 0.34);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-size: 8px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.shell-minimap-ocean-door:hover,
+.shell-minimap-ocean-door:focus-visible,
+.shell-minimap-ocean-door[aria-pressed='true'] {
+  background: rgba(8, 145, 178, 0.2);
+  color: var(--fg-0);
+  border-color: var(--accent);
+  box-shadow: 0 0 7px rgba(34, 211, 238, 0.3);
+  outline: none;
+}
+
+.shell-minimap-ocean-door-pacific {
+  left: 1.5%;
+  top: 39%;
+}
+
+.shell-minimap-ocean-door-arctic {
+  left: 50%;
+  top: 1.5%;
+  transform: translateX(-50%);
+}
+
+.shell-minimap-ocean-door-atlantic {
+  right: 1.5%;
+  top: 48%;
+}
+
+.shell-minimap-drawing {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.shell-minimap-drawing pattern path,
+.shell-minimap-hawaii-islands pattern path {
   fill: none;
   stroke: rgba(15, 23, 42, 0.62);
   stroke-width: 1.2px;
@@ -5300,8 +5472,18 @@ a.impact-resource-link::after {
   stroke-linejoin: round;
 }
 
+.shell-minimap-coastline {
+  pointer-events: none;
+  fill: none;
+  stroke: var(--fg-1);
+  stroke-width: 0.95px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .shell-minimap-region {
   cursor: pointer;
+  pointer-events: auto;
 }
 
 .shell-minimap-mainland {
@@ -5403,8 +5585,8 @@ a.impact-resource-link::after {
   outline: none;
 }
 
-.shell-minimap-canvas[data-drought-status="loading"] .shell-minimap-mainland,
-.shell-minimap-canvas[data-drought-status="loading"] .shell-minimap-island {
+.shell-minimap-canvas[data-minimap-status="loading"] .shell-minimap-mainland,
+.shell-minimap-canvas[data-minimap-status="loading"] .shell-minimap-island {
   animation: shell-minimap-loading 1.2s ease-in-out infinite alternate;
 }
 
@@ -5436,6 +5618,7 @@ a.impact-resource-link::after {
   text-transform: uppercase;
   padding: 3px 6px;
   cursor: pointer;
+  pointer-events: auto;
   transition:
     background 0.12s ease,
     border-color 0.12s ease,
@@ -5468,6 +5651,14 @@ a.impact-resource-link::after {
   color: var(--fg-2);
 }
 
+.shell-minimap-metric-note {
+  margin: 6px 0 0;
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--fg-2);
+}
+
 /* The persistent provenance caption (FramingDef.provenance, D-0.7.0-051):
    the authored-simplification qualification stays visible under the
    drawn shapes; quieter than the live note but never hidden. */
@@ -5481,13 +5672,17 @@ a.impact-resource-link::after {
 
 @media (prefers-reduced-motion: reduce) {
   .shell-minimap-mainland,
+  .shell-minimap-ocean,
+  .shell-minimap-ocean-door,
   .shell-minimap-hawaii,
   .shell-minimap-island,
-  .shell-minimap-all {
+  .shell-minimap-all,
+  .shell-cluster-btn,
+  #shell-share-host > #share-btn {
     transition: none;
   }
-  .shell-minimap-canvas[data-drought-status="loading"] .shell-minimap-mainland,
-  .shell-minimap-canvas[data-drought-status="loading"] .shell-minimap-island {
+  .shell-minimap-canvas[data-minimap-status="loading"] .shell-minimap-mainland,
+  .shell-minimap-canvas[data-minimap-status="loading"] .shell-minimap-island {
     animation: none;
   }
 }
@@ -5605,7 +5800,7 @@ a.impact-resource-link::after {
   gap: 4px;
 }
 
-/* SHOWN NOW: the honest display summary. */
+/* CONDITIONS IN VIEW: the honest display summary. */
 .shell-summary-primary {
   margin: 4px 0 0;
   font-family: var(--font-body);
@@ -5683,10 +5878,9 @@ a.impact-resource-link::after {
    record section 5: the SHAPE; the rendered spike sets the numbers).
 
    >= 721px wide (the desktop shell):
-     - #panel-region retires from the desktop column (S4b staged
-       retirement: the minimap is the desktop "where"); it is PRESERVED
-       for the mobile sheet until S6, and legacy region= URLs keep
-       working regardless.
+     - #panel-region moves into the ordered Brief shell after the conditions
+       read and before the minimap. The original node returns to its static
+       seat for console, mobile, embed, collapse, and pre-mount.
      - The desktop Brief column hides the full #time-bar in favor of the
        shell compact WHEN row (console and mobile keep the full rail).
    Height bands (desktop Brief, the launch-pad view):
@@ -5706,10 +5900,6 @@ a.impact-resource-link::after {
    ---------------------------------------------------------------------------- */
 
 @media (min-width: 721px) {
-  /* #panel-region needs no new rule here: desktop Brief already hides it
-     (the U3i demotion rule above), the minimap is Brief's "where", and
-     desktop CONSOLE keeps its jump-to list (retiring it there was never
-     sanctioned; u3i.spec.ts pins it visible). */
   /* Island-mount honesty: the full #time-bar stands down only once the
      shell island has actually mounted (#app.shell-ready, stamped by the
      island chunk). If the lazy chunk never arrives, Brief keeps its
@@ -5762,11 +5952,12 @@ a.impact-resource-link::after {
   .shell-cluster-btn,
   .shell-horizon-btn,
   .shell-popover-door,
+  #shell-share-host > #share-btn,
   .panel-response-close.icon-btn {
     min-height: 44px;
   }
   .shell-minimap-all {
-    min-height: 32px;
+    min-height: 44px;
     min-width: 44px;
   }
   .shell-time { min-height: 44px; }

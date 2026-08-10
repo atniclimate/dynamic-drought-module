@@ -6,7 +6,8 @@ import {
   initClusterService,
   onCommittedSnapshotChange,
   reconcileClusterWithLayerIntent,
-  requestCluster
+  requestCluster,
+  requestOcean
 } from '../src/state/cluster-service';
 import { LAYER_DEFS, getLayerDef } from '../src/config/layers';
 import { HAZARD_CLUSTERS } from '../src/config/clusters';
@@ -188,7 +189,7 @@ test.describe('S3 requestCluster (the transaction)', () => {
       // No stale non-intended status leaks into the snapshot.
       expect(snapshot.statuses.has('usdm')).toBe(false);
       expect(snapshot.summary.primary).toContain(
-        'Active Wildfires (National Interagency Fire Center, NIFC)'
+        'Current Mapped Fire Perimeters (National Interagency Fire Center, NIFC)'
       );
     } finally {
       dispose();
@@ -236,6 +237,49 @@ test.describe('S3 requestCluster (the transaction)', () => {
       expect(registry.getActiveKeys().has('sst-anomaly')).toBe(false);
       expect(checkedKeys().has('sst-anomaly')).toBe(false);
       expect(getHazardCluster()).toBe('wildfire');
+    } finally {
+      dispose();
+    }
+  });
+
+  test('an ocean request commits the ENSO recipe and ocean claim in one revision', () => {
+    resetWorld();
+    const dispose = initClusterService();
+    let publishes = 0;
+    const unsubscribe = onCommittedSnapshotChange(() => publishes++);
+    try {
+      const before = getCommittedSnapshot().revision;
+      requestOcean('atlantic');
+
+      const snapshot = getCommittedSnapshot();
+      expect(snapshot.revision).toBe(before + 1);
+      expect(publishes).toBe(1);
+      expect(snapshot.cluster).toBe('enso');
+      expect(snapshot.intendedKeys.has('sst-anomaly')).toBe(true);
+      expect(registry.getActiveKeys().has('sst-anomaly')).toBe(true);
+      expect(getHazardCluster()).toBe('enso');
+      expect(getOceanFraming()).toBe('atlantic');
+    } finally {
+      unsubscribe();
+      dispose();
+    }
+  });
+
+  test('an ocean request preserves a reference extra and demotes the clean ENSO claim', () => {
+    resetWorld();
+    const dispose = initClusterService();
+    try {
+      requestLayerOn('hydrography');
+      requestOcean('arctic');
+
+      const snapshot = getCommittedSnapshot();
+      expect(snapshot.cluster).toBe('custom');
+      expect(snapshot.intendedKeys.has('sst-anomaly')).toBe(true);
+      expect(snapshot.intendedKeys.has('hydrography')).toBe(true);
+      expect(registry.getActiveKeys().has('sst-anomaly')).toBe(true);
+      expect(registry.getActiveKeys().has('hydrography')).toBe(true);
+      expect(getHazardCluster()).toBe('drought');
+      expect(getOceanFraming()).toBeNull();
     } finally {
       dispose();
     }
@@ -381,7 +425,7 @@ test.describe('S3 snapshot revisions and honesty under later changes', () => {
       const after = getCommittedSnapshot();
       expect(after.revision).toBeGreaterThan(before.revision);
       expect(after.summary.caveat).toContain(
-        'Active Wildfires (National Interagency Fire Center, NIFC) is live with partial coverage'
+        'Current Mapped Fire Perimeters (National Interagency Fire Center, NIFC) is live with partial coverage'
       );
     } finally {
       dispose();
@@ -544,7 +588,7 @@ test.describe('S3 snapshot revisions and honesty under later changes', () => {
       expect(final.cluster).toBe('wildfire');
       expect(final.statuses.get('nifc-fires')).toBe('ready');
       expect(final.summary.primary).toContain(
-        'Active Wildfires (National Interagency Fire Center, NIFC)'
+        'Current Mapped Fire Perimeters (National Interagency Fire Center, NIFC)'
       );
       off();
     } finally {

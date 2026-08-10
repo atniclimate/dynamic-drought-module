@@ -61,6 +61,7 @@ import {
   setDroughtSurfacePresentation
 } from '../config/layers';
 import { MOBILE_HAZARD_PRESETS, VIEW_PRESETS } from '../config/presets';
+import type { ViewPreset } from '../config/presets';
 import {
   REGIONS,
   DEFAULT_REGION,
@@ -133,7 +134,7 @@ import {
   framingFitBounds
 } from '../config/framings';
 import { OCEANS } from '../config/oceans';
-import { applyBasemapMode } from '../map/basemap-switcher';
+import { applyBasemapMode, requestBasemapMode } from '../map/basemap-switcher';
 import { timeline } from '../state/timeline';
 import { resolveStatusPillText } from './island/pill-text';
 import {
@@ -607,9 +608,18 @@ function handleRadiogroupKey(
  * Build the question-first preset chip row from `VIEW_PRESETS`. Each chip
  * is a plain button (not a toggle: presets set state without locking it,
  * so no chip carries a pressed state) whose click applies the preset's
- * layer-set. The tooltip carries the question the preset answers.
+ * layer-set and any explicit preferred basemap. The tooltip carries the
+ * question the preset answers.
  */
-function buildPresetChips(_map: maplibregl.Map): void {
+function applyViewPreset(map: maplibregl.Map, preset: ViewPreset): void {
+  if (!controllerRef) return;
+  controllerRef.applyPreset(preset);
+  if (preset.preferredBasemap) {
+    requestBasemapMode(map, preset.preferredBasemap);
+  }
+}
+
+function buildPresetChips(map: maplibregl.Map): void {
   const container = document.getElementById('preset-chips');
   if (!container) return;
   container.innerHTML = '';
@@ -624,7 +634,7 @@ function buildPresetChips(_map: maplibregl.Map): void {
     // preserving the at-most-one-surface invariant) now lives in the
     // controller; the chip is a thin trigger.
     btn.addEventListener('click', () => {
-      controllerRef?.applyPreset(preset);
+      applyViewPreset(map, preset);
       // Mobile shell (the mockup's rule 5): a quick view applies its
       // preset and closes the sheet so the map answers. Desktop is
       // untouched (the sheet is never active there).
@@ -642,14 +652,15 @@ function buildPresetChips(_map: maplibregl.Map): void {
  * mockup's lower-right thumb rail). The rail's markup is static in
  * index.html; visibility is stylesheet-gated to the mobile shell's
  * map-visible detents, so this wiring is inert on desktop and in embed.
- * Each button applies its hazard preset through the one controller, and an
- * open sheet closes to the edgeless map (the mockup: a quick select is a
+ * Each button applies its hazard preset through the one controller, requests
+ * its preferred basemap when declared, and then an open sheet closes to the
+ * edgeless map (the mockup: a quick select is a
  * request to SEE the hazard map). The pressed state REFLECTS the registry
  * (the rail and the catalog share one state, per the mockup): a button
  * reads pressed while its surface layer is actually active, so the rail
  * never claims a hazard the map is not showing.
  */
-function wireHazardRail(): void {
+function wireHazardRail(map: maplibregl.Map): void {
   const rail = document.getElementById('hazard-rail');
   if (!rail) return;
   const buttons: Array<{ btn: HTMLButtonElement; surface: string }> = [];
@@ -663,7 +674,7 @@ function wireHazardRail(): void {
     const surface = preset.layers[0] ?? '';
     buttons.push({ btn, surface });
     btn.addEventListener('click', () => {
-      controllerRef?.applyPreset(preset);
+      applyViewPreset(map, preset);
       if (isSheetActive()) {
         const d = getSheetDetent();
         if (d === 'half' || d === 'full') setSheetDetent('closed');
@@ -1158,7 +1169,7 @@ export function buildSidebar(
 
   buildRegionButtons(map, handleRegion);
   buildPresetChips(map);
-  wireHazardRail();
+  wireHazardRail(map);
   buildTelemetryList(map);
   wireTelemetryReveal();
   wireTopLevelEvents(map);

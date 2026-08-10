@@ -26,8 +26,8 @@ test.describe('U3 the one search', () => {
     await gotoApp(page, '?view=console');
     await page.locator(searchInput).fill('wildfire');
 
-    // The Layers group shows the Active Wildfires layer, tagged with its kind
-    // and key so the wiring can route it.
+    // The Layers group shows Current Mapped Fire Perimeters, tagged with its
+    // kind and key so the wiring can route it.
     const layerResult = page.locator('[data-search-group="layer"] [data-search-kind="layer"][data-search-id="nifc-fires"]');
     await expect(layerResult).toBeVisible();
   });
@@ -38,7 +38,7 @@ test.describe('U3 the one search', () => {
     await gotoApp(page, '?view=console');
     await expect(layerCheckbox(page, 'nifc-fires')).not.toBeChecked();
 
-    await page.locator(searchInput).fill('active wildfires');
+    await page.locator(searchInput).fill('current mapped fire perimeters');
     await page.locator('[data-search-kind="layer"][data-search-id="nifc-fires"]').click();
 
     // The catalog checkbox reflects the search selection (and the query clears).

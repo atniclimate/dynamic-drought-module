@@ -75,7 +75,9 @@ function buildSyncItems(
         id: def.key,
         label: def.name,
         sublabel: def.source,
-        haystack: norm(`${def.name} ${def.source}`)
+        haystack: norm(
+          `${def.name} ${def.source} ${(def.searchTerms ?? []).join(' ')}`
+        )
       });
     }
   }

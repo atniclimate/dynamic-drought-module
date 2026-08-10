@@ -184,7 +184,7 @@ test.describe('S3 display summary: coverage honesty (the framing caveat)', () =>
       input(keys, allReady(keys), { cluster: 'wildfire', framing: 'mexico' })
     );
     expect(summary.primary).toContain(
-      'Active Wildfires (National Interagency Fire Center, NIFC)'
+      'Current Mapped Fire Perimeters (National Interagency Fire Center, NIFC)'
     );
     expect(summary.caveat).toContain('The current display layers do not cover Mexico');
   });

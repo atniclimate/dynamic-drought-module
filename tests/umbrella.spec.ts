@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import {
   gotoApp,
   layerCheckbox,
+  stubHistoricalGround,
   urlLayers,
   openTribalNationsDetails,
   ROLE_GROUPS
@@ -365,6 +366,7 @@ test.describe('partial-outage visibility (the final-pass finding 2)', () => {
     page
   }) => {
     await page.setViewportSize({ width: 400, height: 600 });
+    await stubHistoricalGround(page);
     const islandRequests: string[] = [];
     page.on('request', (req) => {
       if (/island-[^/]*\.js/.test(req.url())) islandRequests.push(req.url());
@@ -436,6 +438,7 @@ test.describe('the Brief-door Tribal Nations action', () => {
     page
   }) => {
     await routeAllTribalFixtures(page);
+    await stubHistoricalGround(page);
     // An embed boot hosts the action on the impact panel only (the
     // sidebar is collapsed); expanding exits embed mode and the Brief
     // head must gain the one instance so the umbrella's default-Brief
@@ -487,6 +490,7 @@ test.describe('the Brief-door action at 400px (mobile and embed)', () => {
     page
   }) => {
     await routeAllTribalFixtures(page);
+    await stubHistoricalGround(page);
     const islandRequests: string[] = [];
     page.on('request', (req) => {
       if (/island-[^/]*\.js/.test(req.url())) islandRequests.push(req.url());

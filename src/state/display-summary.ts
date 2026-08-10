@@ -84,7 +84,8 @@ const US_SCOPE_CAUTION_EXEMPT_KEYS: ReadonlySet<string> = new Set([
 const PROSE_LAYER_NAMES: Readonly<Record<string, string>> = {
   drought:
     'Drought Outlook (National Oceanic and Atmospheric Administration Climate Prediction Center, CPC)',
-  'nifc-fires': 'Active Wildfires (National Interagency Fire Center, NIFC)',
+  'nifc-fires':
+    'Current Mapped Fire Perimeters (National Interagency Fire Center, NIFC)',
   'hms-smoke': 'Smoke Plumes (Hazard Mapping System, HMS)'
 };
 

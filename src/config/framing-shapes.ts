@@ -4,8 +4,10 @@
  *
  * PROVENANCE (D-0.7.0-051): ATNI-authored editorial geometry for camera
  * navigation; an owned simplification, not an authoritative boundary of
- * any kind. Coarser than Environmental Protection Agency (EPA) Omernik
- * Level I. Every consumer must carry this labeling.
+ * any kind. The runtime clips these masks to Natural Earth 1:50m physical
+ * land for coastline presentation only. Coarser than Environmental
+ * Protection Agency (EPA) Omernik Level I. Every consumer must carry this
+ * labeling.
  *
  * VERIFICATION: the original shared mainland divides retain the edge-matched
  * topology verified in the 2026-08-04 S4 shell kit. Southern Mexico and the

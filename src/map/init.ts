@@ -47,10 +47,10 @@ const SCALE_MAX_WIDTH_PX = 160;
  * function deliberately does no further wiring so that initialization
  * stays a single, side-effect-light call.
  *
- * Open-data invariant: per CLAUDE.md section 4 rule 2, no proprietary tile
- * providers are configured. The base style uses OpenStreetMap standard
- * raster tiles, subdued via raster paint (see `buildBaseStyle()`); any
- * future basemap must remain an open-data source.
+ * Open-data invariant: no proprietary tile providers are configured. The
+ * base style uses the CC BY 4.0 EOxCloudless 2016 historical mosaic over a
+ * subdued OpenStreetMap fallback (see `buildBaseStyle()`); recent NOAA
+ * GeoColor remains a separate opt-in context.
  */
 export function createMap(containerId: string): maplibregl.Map {
   registerPmtilesProtocol();
@@ -91,9 +91,9 @@ export function createMap(containerId: string): maplibregl.Map {
       maxWidth: SCALE_MAX_WIDTH_PX
     })
   );
-  // The basemap switcher (U4d): satellite one tap away, never the default
-  // (D-0.7.0-005). Present in embeds too; `basemap=` is durable URL state
-  // (D-0.7.0-031) and an embedding site may pin it in its iframe src.
+  // The basemap switcher (U4d): recent NOAA context is one tap away from the
+  // historical shared ground. Present in embeds too; `basemap=` is durable
+  // URL state and an embedding site may pin it in its iframe src.
   // BOTTOM-right: the app's own overlay stack (Share view, About) owns the
   // map's top-right and intercepts pointer events there (caught by the U4d
   // switcher spec), so the switcher stacks in the corner MapLibre already

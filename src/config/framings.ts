@@ -100,7 +100,8 @@ export function framingFitBounds(
 
 const AUTHORED_NOTE =
   'ATNI-authored editorial framing for camera navigation; an owned ' +
-  'simplification, not an authoritative boundary of any kind.';
+  'simplification, not an authoritative boundary of any kind. Coastline ' +
+  'presentation is adapted from Natural Earth 1:50m physical land.';
 
 export const FRAMINGS: Record<FramingKey, FramingDef> = {
   'alaska-northwest': {

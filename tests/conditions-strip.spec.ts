@@ -34,9 +34,17 @@ test.describe('UX-3 conditions strip', () => {
     await expect(tiles).toHaveCount(1);
     await expect(tiles.nth(0)).toHaveAttribute('data-metric', 'drought');
 
-    // The strip is the first section in the scroll area, above Region.
-    const firstPanel = page.locator('.sidebar-scroll > .panel').first();
-    await expect(firstPanel).toHaveAttribute('id', 'conditions-strip');
+    // Desktop Brief moves the original strip below the shell's honest
+    // Conditions in view summary. Its old visual title stands down, while
+    // the valid-date slot and the one metric root stay on the same node.
+    await expect(page.locator('#shell-conditions-host > #conditions-strip')).toHaveCount(1);
+    await expect(page.locator('#shell-conditions-heading')).toHaveText('Conditions in view');
+    await expect(strip.locator('.conditions-title')).toBeHidden();
+    await expect(strip.locator('#conditions-date')).toBeAttached();
+
+    await page.locator('.view-switch [data-view="console"]').click();
+    await expect(page.locator('#conditions-strip-home + #conditions-strip')).toHaveCount(1);
+    await expect(strip.locator('.conditions-title')).toBeVisible();
   });
 
   test('metrics reflect the active set: off event tiles are absent, the active surface reflects', async ({
@@ -56,8 +64,9 @@ test.describe('UX-3 conditions strip', () => {
 
     // USDM is default-on, so once it activates the drought tile stops reading
     // the off-state sublabel and reflects the layer (loading, then a real
-    // category / none, or an honest unavailable if the upstream blips). This
-    // holds regardless of network: it proves the strip tracks the active set.
+    // category / explicit no-polygon read, or an honest unavailable if the
+    // upstream blips). This holds regardless of network: it proves the strip
+    // tracks the active set.
     await expect
       .poll(async () => drought.locator('.conditions-sublabel').textContent())
       .not.toBe('US Drought Monitor');
@@ -137,6 +146,32 @@ test.describe('UX-3 conditions strip', () => {
     const date = page.locator('#conditions-date');
     await expect(date).toHaveAttribute('data-stale', 'true');
     await expect(date).toContainText('stale, data as of');
+  });
+
+  test('an empty USDM artifact cannot become a confident no-drought reading', async ({
+    page
+  }) => {
+    const emptyUsdm = { type: 'FeatureCollection', features: [] };
+    await page.route('**/USDM_current/**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(emptyUsdm)
+      })
+    );
+
+    await gotoApp(page, '?region=washington_state&layers=usdm');
+    await waitForLayerSettled(page, 'usdm');
+    await expect(layerPill(page, 'usdm')).toHaveText(
+      'no coverage returned by the active drought source'
+    );
+
+    const drought = page.locator('.conditions-metric[data-metric="drought"]');
+    await expect(drought.locator('.conditions-value')).toHaveText('No polygon');
+    await expect(drought.locator('.conditions-sublabel')).toContainText(
+      'no D0-D4 polygon rendered'
+    );
+    await expect(drought).not.toContainText('no drought in view');
   });
 
   test('the tiles are real buttons with stable semantics and honest wording', async ({
@@ -232,14 +267,20 @@ test.describe('UX-3 conditions strip', () => {
     await gotoApp(page, '?view=console');
 
     // USDM is default-on, so the key is visible with six swatches: the
-    // leading "None" entry (U4b: bare basemap grey reads as "no drought",
-    // a deliberate state, never breakage) then the five categories (D0
+    // leading source-honest no-polygon entry, then the five categories (D0
     // through D4) sourced from the same USDM_CATEGORIES table as the map
     // fill. Registry-driven, no fetch: deterministic.
     const key = page.locator('#map-key');
     await expect(key).toBeVisible();
     await expect(key.locator('.map-key-swatch')).toHaveCount(6);
-    await expect(key.locator('.map-key-item').first()).toContainText('None');
+    await expect(key.locator('.map-key-item').first()).toContainText('No polygon');
+    await expect(key.locator('.map-key-qualification')).toContainText(
+      'D4 pink rim: contrast only; official category unchanged.'
+    );
+    await expect(key).toHaveAttribute(
+      'aria-label',
+      /without an analyzed-area mask it does not confirm no drought/
+    );
 
     // Turning the USDM surface off hides the key: it never claims a surface
     // that is not on the map.

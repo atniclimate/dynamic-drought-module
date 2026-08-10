@@ -7,8 +7,10 @@ import type maplibregl from 'maplibre-gl';
  *
  * The contract, bottom to top:
  *
- *   background -> basemap (OSM) -> basemap-satellite -> hillshade
- *     -> data layers (surfaces, boundaries, events) -> reference labels
+ *   background -> basemap (OSM fallback) -> basemap-ground (EOX 2016)
+ *     -> basemap-satellite (recent NOAA) -> hillshade
+ *     -> condition surfaces -> event overlays -> reference boundaries
+ *     -> reference labels
  *
  * Three mechanisms enforce it:
  *   1. `firstLayerIdAbove(map, skip)` computes an insertion anchor by
@@ -28,6 +30,7 @@ import type maplibregl from 'maplibre-gl';
 export const BOTTOM_STACK_IDS: readonly string[] = [
   'background',
   'basemap',
+  'basemap-ground',
   'basemap-satellite',
   'hillshade'
 ];
@@ -36,41 +39,85 @@ export const BOTTOM_STACK_IDS: readonly string[] = [
 const TOP_LABEL_IDS: readonly string[] = ['us-places-labels'];
 
 /**
- * The deterministic thematic chain (E1 deliverable 2, D-0.7.0-041 part 2;
- * the 2026-07-16 design review E1.3), bottom to top: the US Drought Monitor
- * surface, the state hairline, the Tribal Lands wash/outline, and the
- * Reservation Boundaries wash/outline. With the bottom stack below it and
- * the reference labels above it, the full contract reads:
- *
- *   basemap < hillshade < USDM < state hairline < Tribal Lands
- *     < Reservation Boundaries < labels
- *
- * The ids are mirrored literals from the owning layer modules (the same
- * mirroring pattern `BIA_FILL_LAYER_ID` uses in aiannh.ts) so the layer
- * chunks stay independent. `reassertThematicOrder` re-seats every present
- * member after each activation, so the stack is stable regardless of which
- * network fetch completed first; the existing AIANNH-below-BIA pair rule is
- * carried by the chain order itself. Layers not named here (events, treaty
- * hydrography, the other surfaces) keep their insertion-order
- * position ABOVE the chain; the ecoregion underlay stays below it.
+ * Condition surfaces, bottom to top. Every known surface is named here so
+ * one late network response cannot paint over sovereign and reference
+ * outlines. Dynamic SST frames insert immediately below the named Nino line
+ * in their owning module and therefore inherit the same ruled position.
  */
-export const THEMATIC_STACK_IDS: readonly string[] = [
-  // US Drought Monitor (src/layers/usdm.ts): both frame slots + change pair.
+export const CONDITION_SURFACE_IDS: readonly string[] = [
+  'gridded-index-raster',
+  'sst-anomaly',
+  'nino34-box-line',
+  'nino34-box-label',
+  'heatrisk',
+  'usfs-whp',
+  'drought-outlook-fill',
+  'drought-outlook-outline',
+  'spc-fire-weather-fill',
+  'spc-fire-weather-outline',
+  'nadm-drought-fill',
+  'nadm-drought-outline',
+  'cdm-drought-fill',
+  'cdm-drought-outline',
+  'bc-drought-fill',
+  'bc-drought-outline',
   'usdm-frame-a-fill',
   'usdm-frame-a-outline',
+  'usdm-frame-a-d4-rim',
   'usdm-frame-b-fill',
   'usdm-frame-b-outline',
+  'usdm-frame-b-d4-rim',
   'usdm-change-fill',
-  'usdm-change-outline',
-  // State hairline (src/layers/states.ts).
+  'usdm-change-outline'
+];
+
+/** Observed and advisory event overlays that stay above condition fields. */
+export const EVENT_OVERLAY_IDS: readonly string[] = [
+  'hms-smoke-fill',
+  'hms-smoke-outline',
+  'nifc-fires-fill',
+  'nifc-fires-outline',
+  'nifc-prescribed-fill',
+  'nifc-prescribed-outline',
+  'nifc-other-outline',
+  'nws-alerts-fill',
+  'nws-alerts-outline'
+];
+
+/**
+ * Reference boundaries, bottom to top. Agency Treaty polygons remain
+ * representations, not jurisdictional truth. This array governs paint order
+ * only and does not change the source or stewardship caveats of any module.
+ */
+export const REFERENCE_BOUNDARY_IDS: readonly string[] = [
+  'hydrography',
   'us-states-fill',
+  'us-states-casing',
   'us-states-outline',
-  // Tribal Lands wash/outline (src/layers/aiannh.ts); stays BELOW the pair.
+  'tribal-lands-fill',
+  'tribal-lands-outline',
   'aiannh-fill',
   'aiannh-outline',
-  // Reservation Boundaries wash/outline (src/layers/bia-reservations.ts).
   'bia-reservations-fill',
-  'bia-reservations-outline'
+  'bia-reservations-outline',
+  'treaty-areas-outline'
+];
+
+/**
+ * The complete deterministic thematic chain, bottom to top. With the bottom
+ * stack beneath it and reference labels above it, the full contract reads:
+ *
+ *   basemap < terrain < conditions < events < references < labels
+ *
+ * The ids are mirrored literals from the owning layer modules so lazy chunks
+ * stay independent. `reassertThematicOrder` re-seats every present member
+ * after each activation, so the stack is stable regardless of fetch
+ * completion order. The ecoregion context underlay stays below this chain.
+ */
+export const THEMATIC_STACK_IDS: readonly string[] = [
+  ...CONDITION_SURFACE_IDS,
+  ...EVENT_OVERLAY_IDS,
+  ...REFERENCE_BOUNDARY_IDS
 ];
 
 /**
@@ -115,13 +162,10 @@ export function reassertLabelOrder(map: maplibregl.Map): void {
 }
 
 /**
- * Re-seat the thematic chain (E1 deliverable 2): every present member of
- * `THEMATIC_STACK_IDS` moves, in chain order, to sit directly below the
- * lowest non-chain data layer (events and every other unnamed data layer
- * stay above the chain; the bottom stack and the ecoregion underlay stay
- * below it). Idempotent and cheap; the layer controller calls it after
- * each successful activation, beside `reassertLabelOrder`, so the stack
- * never depends on which activation's network fetch resolved first.
+ * Re-seat every known thematic member in the ruled chain. Idempotent and
+ * cheap; the layer controller calls it after each successful activation,
+ * beside `reassertLabelOrder`, so order never depends on which activation's
+ * network fetch resolved first.
  */
 export function reassertThematicOrder(map: maplibregl.Map): void {
   const skip = [...BOTTOM_STACK_IDS, ...BELOW_THEMATIC_IDS, ...THEMATIC_STACK_IDS];

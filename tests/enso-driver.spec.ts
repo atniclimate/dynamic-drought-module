@@ -24,12 +24,11 @@ test.describe('ENSO driver line', () => {
 
     // It is demoted into the display description, after the stable time rail.
     await expect(page.locator('#brief-display > #enso-driver')).toHaveCount(1);
-    // S4 (2026-07-18 design record): #shell-panel now sits between the brief
-    // head and the time rail, so assert presence and order of the four stable
-    // panel nodes rather than strict adjacency.
-    await expect(
-      page.locator('#brief-head ~ #shell-panel ~ #time-bar ~ #brief-display')
-    ).toHaveCount(1);
+    // The same Brief head now follows Share inside the desktop shell. The full
+    // time rail keeps its static fallback seat after the shell, and the ENSO
+    // driver remains owned by the post-time display description.
+    await expect(page.locator('#shell-refine-host > #brief-head')).toHaveCount(1);
+    await expect(page.locator('#shell-panel + #time-bar + #brief-display')).toHaveCount(1);
 
     // Expanding the disclosure shows the full odds-never-outcomes detail and
     // the source link; the detail must carry the honesty framing.

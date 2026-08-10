@@ -85,18 +85,36 @@ type Slot = 0 | 1;
 
 const fillId = (src: string): string => `${src}-fill`;
 const outlineId = (src: string): string => `${src}-outline`;
+const rimId = (src: string): string => `${src}-d4-rim`;
 
 /** Change-map view (the derivative register). */
 const CHANGE_SOURCE = 'usdm-change';
 const CHANGE_FILL = fillId(CHANGE_SOURCE);
 const CHANGE_OUTLINE = outlineId(CHANGE_SOURCE);
 
+/**
+ * A presentation-only D4 edge for legibility against the shared dark scene.
+ * It does not change, buffer, or reinterpret the official USDM category.
+ */
+export const USDM_D4_RIM_STYLE = {
+  color: '#f87171',
+  width: 1.5,
+  opacity: 0.9
+} as const;
+
+export const USDM_D4_RIM_LAYER_IDS = [
+  rimId(SLOT_SOURCES[0]),
+  rimId(SLOT_SOURCES[1])
+] as const;
+
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
 export const fadeLayerIds = [
   fillId(SLOT_SOURCES[0]),
   outlineId(SLOT_SOURCES[0]),
+  rimId(SLOT_SOURCES[0]),
   fillId(SLOT_SOURCES[1]),
   outlineId(SLOT_SOURCES[1]),
+  rimId(SLOT_SOURCES[1]),
   CHANGE_FILL,
   CHANGE_OUTLINE,
   'bc-drought-fill',
@@ -327,11 +345,32 @@ const changeColorExpression: maplibregl.ExpressionSpecification = [
   2, CHANGE_COLORS.worsened2
 ];
 
+/** Build one frame's presentation-only D4 edge. Exported as a pure seam so
+ * its source/category/style contract can be verified without network work. */
+export function buildD4RimLayerSpecification(
+  sourceId: string,
+  visible: boolean
+): maplibregl.LineLayerSpecification {
+  return {
+    id: rimId(sourceId),
+    type: 'line',
+    source: sourceId,
+    filter: ['==', ['get', 'DM'], 4],
+    layout: { visibility: visible ? 'visible' : 'none' },
+    paint: {
+      'line-color': USDM_D4_RIM_STYLE.color,
+      'line-width': USDM_D4_RIM_STYLE.width,
+      'line-opacity': USDM_D4_RIM_STYLE.opacity
+    }
+  };
+}
+
 function addPolygonPair(
   map: maplibregl.Map,
   sourceId: string,
   color: maplibregl.ExpressionSpecification,
-  visible: boolean
+  visible: boolean,
+  withD4Rim = false
 ): void {
   const beforeId = resolveBeforeId(map);
   const visibility = visible ? 'visible' : 'none';
@@ -363,6 +402,9 @@ function addPolygonPair(
       beforeId
     );
   }
+  if (withD4Rim && !map.getLayer(rimId(sourceId))) {
+    map.addLayer(buildD4RimLayerSpecification(sourceId, visible), beforeId);
+  }
 }
 
 const EMPTY_FC: GeoJSON.FeatureCollection = {
@@ -388,8 +430,8 @@ function ensureSources(map: maplibregl.Map, initial: GeoJSON.FeatureCollection):
       attribution: 'USDM change (NDMC / NOAA / USDA via drought.gov)'
     });
   }
-  addPolygonPair(map, SLOT_SOURCES[0], dmColorExpression, true);
-  addPolygonPair(map, SLOT_SOURCES[1], dmColorExpression, false);
+  addPolygonPair(map, SLOT_SOURCES[0], dmColorExpression, true, true);
+  addPolygonPair(map, SLOT_SOURCES[1], dmColorExpression, false, true);
   addPolygonPair(map, CHANGE_SOURCE, changeColorExpression, false);
 }
 
@@ -400,16 +442,24 @@ function setPairData(map: maplibregl.Map, sourceId: string, data: GeoJSON.Featur
 
 function setPairVisibility(map: maplibregl.Map, sourceId: string, visible: boolean): void {
   const visibility = visible ? 'visible' : 'none';
-  for (const id of [fillId(sourceId), outlineId(sourceId)]) {
+  for (const id of [fillId(sourceId), outlineId(sourceId), rimId(sourceId)]) {
     if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', visibility);
   }
 }
 
 function pairFadeTargets(sourceId: string): FadeTarget[] {
-  return [
+  const targets: FadeTarget[] = [
     { layerId: fillId(sourceId), prop: 'fill-opacity', target: FILL_OPACITY },
     { layerId: outlineId(sourceId), prop: 'line-opacity', target: OUTLINE_OPACITY }
   ];
+  if (sourceId !== CHANGE_SOURCE) {
+    targets.push({
+      layerId: rimId(sourceId),
+      prop: 'line-opacity',
+      target: USDM_D4_RIM_STYLE.opacity
+    });
+  }
+  return targets;
 }
 
 // ---------------------------------------------------------------------------
@@ -423,12 +473,12 @@ function showAbsoluteLegend(): void {
       renderSwatchLegend(
         body,
         'Drought monitor key',
-        // The none swatch leads (U4b): basemap grey is "no drought", a state.
+        // The no-polygon swatch names only what the renderer can prove.
         [USDM_NONE_SWATCH, ...USDM_CATEGORIES].map((c) => ({
           color: c.color,
           label: `${c.code} · ${c.label}`
         })),
-        'U.S. Drought Monitor · observed weekly conditions (NDMC / NOAA / USDA)'
+        'U.S. Drought Monitor · observed weekly conditions (NDMC / NOAA / USDA). No polygon means no D0-D4 category is drawn; without an analyzed-area mask it does not confirm no drought. D4 pink rim is presentation contrast only; official category unchanged.'
       )
   });
 }
@@ -743,9 +793,9 @@ async function activateUsdm(map: maplibregl.Map): Promise<void> {
   ensureSources(map, geojson);
 
   if (features.length === 0) {
-    // Every category absent (full national coverage, no drought) is rare
-    // but valid; without a MapDate there is no anchor for the rail, so
-    // the temporal controls stay down and the status says why.
+    // An empty artifact is a genuine no-data state. Without an analyzed-area
+    // mask it cannot be promoted to a national "no drought" conclusion; with
+    // no MapDate there is also no anchor for the temporal rail.
     reportStatus('no-data');
     return;
   }
@@ -800,7 +850,7 @@ function deactivateUsdm(map: maplibregl.Map): void {
   }
   stepEpoch++;
   for (const src of [...SLOT_SOURCES, CHANGE_SOURCE]) {
-    for (const id of [fillId(src), outlineId(src)]) {
+    for (const id of [fillId(src), outlineId(src), rimId(src)]) {
       if (map.getLayer(id)) map.removeLayer(id);
     }
     if (map.getSource(src)) map.removeSource(src);

@@ -170,7 +170,7 @@ test.describe('real layer-controller integration (DG-080 r2 finding 4)', () => {
       timeout: 45_000
     });
     await expect(page.locator('#shell-summary-primary')).toContainText(
-      'Active Wildfires (National Interagency Fire Center, NIFC)'
+      'Current Mapped Fire Perimeters (National Interagency Fire Center, NIFC)'
     );
 
     // NOW release the stale first-generation responses (same keys,
@@ -193,7 +193,7 @@ test.describe('real layer-controller integration (DG-080 r2 finding 4)', () => {
     // status class from the superseded generation.
     expect(await pillStatusClasses(page, 'usdm')).not.toContain('ready');
     await expect(page.locator('#shell-summary-primary')).toContainText(
-      'Active Wildfires (National Interagency Fire Center, NIFC)'
+      'Current Mapped Fire Perimeters (National Interagency Fire Center, NIFC)'
     );
     // The URL claim is the clean cluster, not a stale granular residue.
     await page.waitForFunction(() =>

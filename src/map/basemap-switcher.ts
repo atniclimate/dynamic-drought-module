@@ -10,8 +10,8 @@ import { showToast } from '../ui/overlay';
 /**
  * The basemap switcher (U4d, D-0.7.0-005 / D-0.7.0-031).
  *
- * One `IControl` button that flips between the desaturated analysis
- * default and opt-in recent satellite context; deliberately NOT a style
+ * One `IControl` button that flips between the historical shared ground
+ * and opt-in recent satellite context; deliberately NOT a style
  * gallery (the corpus's product-lens guardrail). The control stacks with
  * the existing attribution and scale controls, carries real button
  * semantics (aria-pressed reflects the satellite state), and stays
@@ -20,9 +20,10 @@ import { showToast } from '../ui/overlay';
  * pays for them (the P2 stage-5 lazy-chunk requirement).
  *
  * State custody: the store (src/state/basemap-store.ts) owns the mode and
- * the URL sync subscription; this control owns the map-side application
- * and the button. The boot path (`applyUrlStateSync`) seeds the store and
- * calls `applyBasemapMode` directly, so a `basemap=satellite` deep link
+ * the URL sync subscription; this module owns map-side application, the
+ * explicit-request helper, and the button. The boot path
+ * (`applyUrlStateSync`) seeds the store and calls `applyBasemapMode` directly,
+ * so a `basemap=satellite` deep link
  * renders without the control being clicked.
  */
 
@@ -48,6 +49,19 @@ export async function applyBasemapMode(
   }
 }
 
+/**
+ * Record and apply one explicit basemap request. Callers use this only for a
+ * visitor action, never while restoring or reconciling hazard state, so a
+ * later manual choice remains authoritative.
+ */
+export function requestBasemapMode(
+  map: maplibregl.Map,
+  mode: BasemapMode
+): void {
+  setBasemapMode(mode);
+  void applyBasemapMode(map, mode);
+}
+
 /** The one-button basemap switcher control. */
 export class BasemapSwitcherControl implements maplibregl.IControl {
   private container: HTMLElement | null = null;
@@ -63,10 +77,9 @@ export class BasemapSwitcherControl implements maplibregl.IControl {
     btn.setAttribute('aria-label', 'Recent NOAA satellite imagery');
     btn.title = 'Recent NOAA satellite imagery';
     // A text label rather than an icon font: self-hosted posture, and the
-    // label reads at control size. Relabeled from 'SAT' to 'Satellite' by
-    // E2 (D-0.7.0-058 ruling 2) so the switcher reads as one family with
-    // the Share view / Reset stack. Styled from tokens in app.css.
-    btn.textContent = 'Satellite';
+    // "Recent" keeps this source semantically separate from the historical
+    // Sentinel-2 ground already visible in the default scene.
+    btn.textContent = 'Recent';
 
     const reflect = (): void => {
       const on = getBasemapMode() === 'satellite';
@@ -83,8 +96,7 @@ export class BasemapSwitcherControl implements maplibregl.IControl {
       // Store first (URL and button state update immediately), then the
       // map-side application; a failed chunk reverts the store inside
       // applyBasemapMode.
-      setBasemapMode(next);
-      void applyBasemapMode(map, next);
+      requestBasemapMode(map, next);
     });
 
     container.appendChild(btn);

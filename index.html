@@ -45,6 +45,11 @@
 
       <div class="sidebar-scroll">
 
+        <!-- Stable fallback seat for the one conditions strip. The desktop
+             Brief shell moves the SAME section into its ordered host after
+             the lazy island mounts, then returns it here for every other
+             surface and for the island pre-mount fallback. -->
+        <span id="conditions-strip-home" hidden></span>
         <section class="panel conditions-strip" id="conditions-strip" aria-label="Conditions in view" hidden>
           <div class="conditions-head">
             <span class="conditions-title">Conditions in view</span>
@@ -53,20 +58,23 @@
           <div class="conditions-metrics" id="conditions-metrics" aria-live="polite" aria-atomic="true"></div>
         </section>
 
+        <!-- Stable fallback seat for the generated Brief head. The eligible
+             desktop Brief shell moves the SAME section below its share door;
+             console, mobile, embed, collapse, and pre-mount retain this seat. -->
+        <span id="brief-head-home" hidden></span>
         <!-- Brief head (U1, the two doors): the concise lede and the one place
              entry surface. Filled by src/ui/view-shell.ts and visible only in
-             Brief mode. It deliberately ends before the stable time-bar node:
-             regenerated Brief markup must never own the temporal renderer. -->
+             Brief mode. Regenerated markup never owns any shell host. -->
         <section class="panel brief-head" id="brief-head" aria-label="Drought briefing" hidden></section>
 
-        <!-- The S4 main-screen shell (the 2026-07-18 design record; ruled
-             band order VIEW, MAP CONTEXT, WHEN, SHOWN NOW): the four hazard
-             cluster buttons, the framing minimap, the compact temporal row,
-             and the honest display summary, rendered by the lazy Preact
-             shell island (src/ui/island/shell.tsx) into this static host.
+        <!-- The S4 main-screen shell (the 2026-07-18 design record): the four
+             hazard cluster buttons, honest conditions summary, same-node
+             conditions and region controls, continental minimap, compact
+             temporal row, share door, and same-node Brief refinement head,
+             rendered by the lazy Preact shell island into this static host.
              Stylesheet-gated: desktop only (below 720px the mobile sheet
              and hazard rail carry the same decisions), never in embed. -->
-        <section class="panel shell-panel" id="shell-panel" aria-label="View, framing, and display summary">
+        <section class="panel shell-panel" id="shell-panel" aria-label="Hazard view, conditions, region, framing, time, and share">
           <div id="shell-island"></div>
         </section>
 
@@ -126,6 +134,9 @@
           </div>
         </section>
 
+        <!-- Stable fallback seat for the one region radiogroup. Its desktop
+             Brief shell host never clones or rebuilds these controls. -->
+        <span id="panel-region-home" hidden></span>
         <section class="panel" id="panel-region">
           <h2 class="panel-title">Jump to region</h2>
           <div id="region-buttons" class="region-grid" role="radiogroup" aria-label="Jump to region"></div>
@@ -250,6 +261,10 @@
              build is still a preview, and hard rule 8 keeps the embed a
              first-class surface rather than one that hides its own status. -->
         <span class="test-preview-badge">Test preview</span>
+        <!-- Stable fallback seat for the one wired Share view button. The
+             desktop Brief shell rehosts this exact node; every other surface
+             returns it here beside Reset. -->
+        <span id="share-btn-home" hidden></span>
         <button id="share-btn" class="overlay-btn" title="Copy embed-ready link to clipboard">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
           <span>Share view</span>

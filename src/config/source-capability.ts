@@ -53,7 +53,7 @@ export const BRIEFING_SOURCE_LABELS: Readonly<
   heatRisk: 'NWS HeatRisk',
   usdm: 'U.S. Drought Monitor point category',
   dsci: 'U.S. Drought Monitor statewide DSCI',
-  nifc: 'NIFC active fire perimeters',
+  nifc: 'NIFC current mapped fire perimeters',
   cpcExtended: 'NOAA CPC extended-range outlooks',
   enso: 'ENSO phase context',
   waterSupply: 'NWRFC water-supply outlook',

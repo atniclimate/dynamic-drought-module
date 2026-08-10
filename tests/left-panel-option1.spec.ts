@@ -6,21 +6,27 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
   test('desktop reads place, time, display, then selection response', async ({ page }) => {
     await gotoApp(page, '?view=brief&layers=usdm');
 
-    const order = await page.locator('.sidebar-scroll').evaluate((scroll) => {
-      const children = Array.from(scroll.children);
-      return ['brief-head', 'time-bar', 'brief-display'].map((id) =>
-        children.indexOf(document.getElementById(id)!)
-      );
+    const shellOrder = await page.locator('#shell-panel .shell').evaluate((shell) => {
+      const children = Array.from(shell.children);
+      return [
+        '.shell-view',
+        '#shell-conditions-summary',
+        '#shell-region-host',
+        '.shell-minimap-map',
+        '.shell-when',
+        '#shell-share-host',
+        '#shell-refine-host'
+      ].map((selector) => children.findIndex((child) => child.matches(selector)));
     });
-    expect(order[0]).toBeGreaterThanOrEqual(0);
-    expect(order[0]).toBeLessThan(order[1]!);
-    expect(order[1]).toBeLessThan(order[2]!);
+    expect(shellOrder.every((index) => index >= 0)).toBe(true);
+    expect(shellOrder).toEqual([...shellOrder].sort((a, b) => a - b));
+    await expect(page.locator('#shell-panel + #time-bar + #brief-display')).toHaveCount(1);
 
     // S4 supersession (the 2026-07-18 design record, S4c): on the
     // desktop Brief shell the compact WHEN row plus the "More time"
     // popover carry the temporal surface, and the full #time-bar stands
     // down (attached for console/mobile, display gone here). The
-    // D-0.7.0-067 order contract above still holds on the DOM.
+    // D-0.7.0-067 stable-node contract above still holds on the DOM.
     await expect(page.locator('#time-bar')).toBeHidden();
     await expect(page.locator('#time-bar')).toBeAttached();
     await expect(page.locator('#shell-time')).toBeVisible();

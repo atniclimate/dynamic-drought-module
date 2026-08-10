@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { gotoApp, search, urlLayers } from './helpers';
+import { gotoApp, search, stubHistoricalGround, urlLayers } from './helpers';
 
 /**
  * U1 the two doors (D-ARCH-002), REWRITTEN for S2 (D-0.7.0-041): the
@@ -137,6 +137,7 @@ test.describe('U1 the two doors (view mode)', () => {
       if (/island-[^/]*\.js/.test(req.url())) islandRequests.push(req.url());
     });
 
+    await stubHistoricalGround(page);
     // Raw goto: gotoApp's catalog-independent signal would also work, but
     // the point here is exactly that no catalog exists to wait for.
     await page.goto('?embed=true', { waitUntil: 'domcontentloaded' });

@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 
-import { deriveMinimapDroughtSnapshot } from '../src/state/minimap-drought';
+import {
+  deriveMinimapDroughtSnapshot,
+  droughtAverageClassForScore,
+} from '../src/state/minimap-drought';
 import {
   FRAMING_ANALYSIS_AREAS,
   FRAMING_SHAPES,
@@ -111,6 +114,17 @@ function feature(
 }
 
 test.describe('North American minimap drought summaries', () => {
+  test('rounds the ordinal mean to the nearest class with half ties less severe', () => {
+    expect(droughtAverageClassForScore(0)).toBe('none');
+    expect(droughtAverageClassForScore(0.5)).toBe('none');
+    expect(droughtAverageClassForScore(0.500_001)).toBe('D0');
+    expect(droughtAverageClassForScore(1.5)).toBe('D0');
+    expect(droughtAverageClassForScore(1.500_001)).toBe('D1');
+    expect(droughtAverageClassForScore(4.5)).toBe('D3');
+    expect(droughtAverageClassForScore(4.500_001)).toBe('D4');
+    expect(droughtAverageClassForScore(5)).toBe('D4');
+  });
+
   test('uses the largest area share and preserves None as a real white-ramp class', () => {
     const snapshot = deriveMinimapDroughtSnapshot(
       {
@@ -138,7 +152,42 @@ test.describe('North American minimap drought summaries', () => {
       snapshot.summaries['pacific-coast']?.dominantPercent,
     ).toBeGreaterThan(50);
     expect(snapshot.summaries.hawaii?.dominant).toBe('none');
+    expect(snapshot.summaries.hawaii?.averageSeverityScore).toBe(0);
+    expect(snapshot.summaries.hawaii?.averageClass).toBe('none');
     expect(snapshot.summaries.hawaii?.dryOrDroughtPercent).toBe(0);
+  });
+
+  test('uses cosine latitude weights for a regional ordinal mean while retaining mode and impact fields', () => {
+    const snapshot = deriveMinimapDroughtSnapshot(
+      {
+        type: 'FeatureCollection',
+        features: [
+          feature('d4', '202607', [
+            [
+              [-119, 23.5],
+              [-86, 23.5],
+              [-86, 33],
+              [-119, 33],
+              [-119, 23.5],
+            ],
+          ]),
+        ],
+      },
+      LAND_FIXTURE,
+      ANALYSIS_EXCLUSION_FIXTURE,
+    );
+
+    const mexico = snapshot.summaries.mexico;
+    expect(mexico).toBeDefined();
+    expect(mexico?.dominant).toBe('none');
+    expect(mexico?.averageSeverityScore).toBeLessThan(2.5);
+    expect(mexico?.averageSeverityScore).toBeCloseTo(2.4, 1);
+    expect(mexico?.averageClass).toBe('D1');
+    expect(mexico?.distribution.none).toBeGreaterThan(50);
+    expect(mexico?.distribution.D4).toBeLessThan(50);
+    expect(mexico?.droughtPercent).toBe(mexico?.distribution.D4);
+    expect(mexico?.dryOrDroughtPercent).toBe(mexico?.distribution.D4);
+    expect(mexico?.coverage).toBe('live');
   });
 
   test('marks the far-north estimate partial and rejects mixed source months', () => {

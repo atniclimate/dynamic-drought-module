@@ -5,18 +5,20 @@ import { gotoApp, layerCheckbox } from './helpers';
 /**
  * U3f1: the wildfire event pair co-activates (D-0.7.0-018).
  *
- * Turning Active Wildfires (nifc-fires) on through a user toggle also turns on
- * Smoke Plumes (hms-smoke), and the reverse; each stays individually toggleable
- * off. Co-activation is a USER-TOGGLE affordance only: an inbound URL is
- * authoritative, so a deep link naming just one of the pair does NOT co-activate
- * the other (the sharer may have turned it off deliberately).
+ * Turning Current Mapped Fire Perimeters (nifc-fires) on through a user toggle
+ * also turns on Smoke Plumes (hms-smoke), and the reverse; each stays
+ * individually toggleable off. Co-activation is a USER-TOGGLE affordance only:
+ * an inbound URL is authoritative, so a deep link naming just one of the pair
+ * does NOT co-activate the other (the sharer may have turned it off deliberately).
  *
  * Every assertion is on checkbox intent, which the controller writes
  * synchronously through the island bridge, so the specs are independent of
  * whether the live NIFC / HMS fetches succeed in the test environment.
  */
 test.describe('U3f1 the wildfire event pair co-activates', () => {
-  test('toggling Active Wildfires on co-activates Smoke Plumes', async ({ page }) => {
+  test('toggling Current Mapped Fire Perimeters on co-activates Smoke Plumes', async ({
+    page
+  }) => {
     await gotoApp(page, '?view=console');
 
     await expect(layerCheckbox(page, 'nifc-fires')).not.toBeChecked();
@@ -28,7 +30,9 @@ test.describe('U3f1 the wildfire event pair co-activates', () => {
     await expect(layerCheckbox(page, 'hms-smoke')).toBeChecked();
   });
 
-  test('toggling Smoke Plumes on co-activates Active Wildfires (symmetric)', async ({ page }) => {
+  test('toggling Smoke Plumes on co-activates Current Mapped Fire Perimeters (symmetric)', async ({
+    page
+  }) => {
     await gotoApp(page, '?view=console');
 
     await layerCheckbox(page, 'hms-smoke').check();
@@ -43,7 +47,7 @@ test.describe('U3f1 the wildfire event pair co-activates', () => {
     await layerCheckbox(page, 'nifc-fires').check();
     await expect(layerCheckbox(page, 'hms-smoke')).toBeChecked();
 
-    // Turn only Smoke Plumes back off; Active Wildfires stays on.
+    // Turn only Smoke Plumes back off; Current Mapped Fire Perimeters stays on.
     await layerCheckbox(page, 'hms-smoke').uncheck();
 
     await expect(layerCheckbox(page, 'hms-smoke')).not.toBeChecked();

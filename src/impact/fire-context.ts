@@ -1,7 +1,7 @@
 /**
  * Fire-in-context composition (0.4.0 unit B1).
  *
- * Clicking an active NIFC wildfire perimeter composes existing reads for the
+ * Clicking a current mapped NIFC fire perimeter composes existing reads for the
  * clicked location into a short "Fire in context" block appended to the
  * perimeter popup: the US Drought Monitor (USDM) class beneath the point, and
  * the nearest telemetry stations from the station registry.
@@ -13,8 +13,8 @@
  *
  * Every branch is honest. When the USDM surface is off, the block says to turn
  * it on rather than inventing a class. When no D0 to D4 polygon covers the
- * point, that is a real drought-free reading, not missing data. The block never
- * fakes a value.
+ * point, the block reports that absence without inferring drought-free
+ * conditions because this client has no analyzed-area mask.
  */
 import maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
@@ -72,9 +72,10 @@ function droughtBeneathRow(map: maplibregl.Map, point: maplibregl.PointLike): st
   }
 
   if (maxDm < 0) {
-    // The USDM maps only D0 through D4 polygons; a point with none is a real
-    // drought-free reading, not missing data.
-    return contextRow('Drought beneath', 'No drought category here (D0 to D4 not mapped at this point).');
+    return contextRow(
+      'Drought beneath',
+      'No D0-D4 polygon rendered here. This client has no analyzed-area mask here, so this does not confirm no drought.'
+    );
   }
 
   const cat = maxDm < USDM_CATEGORIES.length ? USDM_CATEGORIES[maxDm] : undefined;

@@ -20,7 +20,7 @@
  *
  * Cancellation (CLAUDE.md section 6 invariant 5): master abort controller
  * superseded on each `activate`, aborted on `deactivate`, fetch through
- * `fetchWithBudget`, late responses dropped.
+ * `fetchJsonWithBudget`, late responses dropped.
  */
 
 import type maplibregl from 'maplibre-gl';
@@ -32,8 +32,9 @@ import {
   SPC_FIREWX_CATEGORIES,
   SPC_FIREWX_DEFAULT_COLOR
 } from '../config/palette';
+import { parseArcGisPolygonFeatureCollection } from '../config/wildfire-presentation';
 import { buildSpcFireWeatherPopupHtml } from '../ui/popups';
-import { fetchWithBudget } from '../util/fetch';
+import { fetchJsonWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 
 const LAYER_KEY = 'spc-fire-weather';
@@ -56,7 +57,7 @@ const BEFORE_ID = 'first-symbol';
 /** Per-call network budget for the outlook query. */
 const FETCH_TIMEOUT_MS = 15_000;
 
-type Status = 'loading' | 'ready' | 'error' | 'no-data';
+type Status = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
 
 /**
  * Master cancellation controller for the in-flight fetch. Aborted on
@@ -109,17 +110,19 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   reportStatus('loading');
 
   let geojson: FeatureCollection;
+  let truncated = false;
   try {
-    const response = await fetchWithBudget(
-      buildQueryUrl(),
-      null,
-      signal,
-      FETCH_TIMEOUT_MS
+    const parsed = parseArcGisPolygonFeatureCollection(
+      await fetchJsonWithBudget(
+        buildQueryUrl(),
+        null,
+        signal,
+        FETCH_TIMEOUT_MS
+      ),
+      'NOAA SPC fire-weather outlook'
     );
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    }
-    geojson = (await response.json()) as FeatureCollection;
+    geojson = parsed.collection;
+    truncated = parsed.truncated;
   } catch (err) {
     // Aborted means superseded or deactivated; drop silently per invariant 5.
     if (signal.aborted) return;
@@ -140,7 +143,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   });
 
   if (features.length === 0) {
-    reportStatus('no-data');
+    reportStatus(truncated ? 'degraded' : 'no-data');
     return;
   }
 
@@ -185,7 +188,12 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     beforeId
   );
 
-  reportStatus('ready');
+  if (truncated) {
+    console.warn(
+      '[spc-fire-weather] outlook response reached the ArcGIS transfer limit; rendering available categories as live (partial).'
+    );
+  }
+  reportStatus(truncated ? 'degraded' : 'ready');
 }
 
 /**
@@ -193,11 +201,13 @@ export async function activate(map: maplibregl.Map): Promise<void> {
  * guards are defensive so callers can invoke `deactivate` without first
  * verifying activation state.
  */
+export function cancelActivation(): void {
+  masterController?.abort();
+}
+
 export function deactivate(map: maplibregl.Map): void {
-  if (masterController) {
-    masterController.abort();
-    masterController = null;
-  }
+  cancelActivation();
+  masterController = null;
   if (map.getLayer(FILL_LAYER_ID)) map.removeLayer(FILL_LAYER_ID);
   if (map.getLayer(OUTLINE_LAYER_ID)) map.removeLayer(OUTLINE_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);

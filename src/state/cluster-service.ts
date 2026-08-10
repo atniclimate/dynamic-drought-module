@@ -62,6 +62,7 @@ import { HAZARD_CLUSTERS } from '../config/clusters';
 import type { HazardClusterKey, TemporalHorizonKey } from '../config/clusters';
 import { DEFAULT_ON_KEYS, LAYER_DEFS, getLayerDef } from '../config/layers';
 import type { FramingKey } from '../config/framings';
+import type { OceanKey } from '../config/oceans';
 import type { LayerStatus } from '../types/layer';
 import type { DisplaySummary, TimelineSnapshot } from '../types/display-summary';
 import { deriveDisplaySummary } from './display-summary';
@@ -307,7 +308,10 @@ function onKeys(): Set<string> {
  *      itself falls out of step 3.
  *   6. Publish a new CommittedShellSnapshot in this same JS turn.
  */
-export function requestCluster(key: HazardClusterKey): void {
+function applyCluster(
+  key: HazardClusterKey,
+  requestedOcean: OceanKey | null,
+): void {
   const horizon = timeline.horizon;
   const intent = composeClusterIntent(key, horizon);
   const intentSet: ReadonlySet<string> = new Set(intent);
@@ -335,7 +339,7 @@ export function requestCluster(key: HazardClusterKey): void {
       committedCluster = key;
       committedIntent = intentSet;
       committedHorizon = horizon;
-      setHazardCluster(key, key === 'enso' ? getOceanFraming() : null);
+      setHazardCluster(key, key === 'enso' ? requestedOcean : null);
     } else {
       // The demoted commit: recipe applied, extras kept, claim honest.
       committedCluster = 'custom';
@@ -347,6 +351,21 @@ export function requestCluster(key: HazardClusterKey): void {
     applying = false;
   }
   publish();
+}
+
+export function requestCluster(key: HazardClusterKey): void {
+  applyCluster(key, key === 'enso' ? getOceanFraming() : null);
+}
+
+/**
+ * Enter the ENSO display with one explicit schematic ocean camera claim.
+ * This shares the exact cluster transaction above, so the layer recipe,
+ * `cluster=enso&ocean=...` claim, and committed snapshot change together.
+ * The caller owns the camera fit because this state service deliberately has
+ * no MapLibre dependency.
+ */
+export function requestOcean(key: OceanKey): void {
+  applyCluster('enso', key);
 }
 
 /**

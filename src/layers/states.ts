@@ -35,10 +35,15 @@ import { registry } from '../state/registry';
 const LAYER_KEY = 'states';
 const SOURCE_ID = 'us-states';
 const FILL_LAYER_ID = 'us-states-fill';
+const CASING_LAYER_ID = 'us-states-casing';
 const OUTLINE_LAYER_ID = 'us-states-outline';
 
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
-export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID] as const;
+export const fadeLayerIds = [
+  FILL_LAYER_ID,
+  CASING_LAYER_ID,
+  OUTLINE_LAYER_ID
+] as const;
 
 /**
  * Symbol layer ID used as the `beforeId` anchor so the boundary stacks below
@@ -61,6 +66,7 @@ const OUTLINE_WIDTH_REGIONAL = 1.5;
 const OUTLINE_WIDTH_SELECTED = 2.4;
 const OUTLINE_OPACITY_NATIONAL = 0.5;
 const OUTLINE_OPACITY_REGIONAL = 0.7;
+const CASING_COLOR = '#07111f';
 
 type Status = 'loading' | 'ready' | 'error' | 'no-data';
 
@@ -141,6 +147,39 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   // Transparent hit area: MapLibre hit-tests fill layers regardless of paint
   // opacity, so this carries the click-to-briefing affordance without adding
   // any visual weight over the thematic layers.
+  // A quiet dark casing prevents the state hairline from disappearing on the
+  // historical imagery while preserving the outline as a reference, not a
+  // competing condition surface.
+  map.addLayer(
+    {
+      id: CASING_LAYER_ID,
+      type: 'line',
+      source: SOURCE_ID,
+      paint: {
+        'line-color': CASING_COLOR,
+        'line-width': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          3,
+          1.4,
+          8,
+          2.8
+        ],
+        'line-opacity': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          3,
+          0.72,
+          8,
+          0.84
+        ]
+      }
+    },
+    beforeId
+  );
+
   map.addLayer(
     {
       id: FILL_LAYER_ID,
@@ -240,6 +279,7 @@ export function deactivate(map: maplibregl.Map): void {
   }
   if (map.getLayer(FILL_LAYER_ID)) map.removeLayer(FILL_LAYER_ID);
   if (map.getLayer(OUTLINE_LAYER_ID)) map.removeLayer(OUTLINE_LAYER_ID);
+  if (map.getLayer(CASING_LAYER_ID)) map.removeLayer(CASING_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
 }
 

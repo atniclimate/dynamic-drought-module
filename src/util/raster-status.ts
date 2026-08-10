@@ -61,6 +61,12 @@ export interface RasterTileWatchOptions {
    * terminal state.
    */
   readonly requestCompletenessDeadlineMs?: number;
+  /**
+   * Outcome for an idle cycle with no selected-frame tile evidence. The
+   * default remains `ready` for existing bounded-coverage consumers. Shared
+   * ground sets `error` because it must prove at least one visible tile.
+   */
+  readonly emptyIdleOutcome?: 'ready' | 'error';
 }
 
 type RasterTileOutcome = 'ready' | 'degraded' | 'error';
@@ -230,7 +236,7 @@ export function watchRasterTiles(
   const onIdle = (): void => {
     if (deadlineMs === null || !requestCycleActive) return;
     clearDeadline();
-    reportCompleteness('ready');
+    reportCompleteness(options.emptyIdleOutcome ?? 'ready');
     requestCycleActive = false;
   };
 

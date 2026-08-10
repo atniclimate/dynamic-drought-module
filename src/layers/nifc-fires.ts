@@ -1,5 +1,5 @@
 /**
- * National Interagency Fire Center (NIFC) active wildland fire perimeters.
+ * National Interagency Fire Center (NIFC) current mapped fire perimeters.
  *
  * Source: Wildland Fire Interagency Geospatial Services (WFIGS) "Current
  * Interagency Fire Perimeters" feature service, hosted on the NIFC Open
@@ -14,8 +14,9 @@
  *   - WFIGS_Interagency_Perimeters_Current    (currently active fires)
  *   - WFIGS_Daily_Perimeters_Public           (daily snapshot)
  *   - WFIGS_Interagency_Perimeters_Certified  (post-incident, finalized)
- * For a "what is burning right now" overlay we want the
- * `_Current` view, which constrains to active incidents only.
+ * The `_Current` view supplies the agency's current mapped perimeter product;
+ * its incident categories still require the Wildfire, Prescribed fire, and
+ * other or unclassified presentation split below.
  *
  * Verification (2026-05-09):
  *   GET <URLS.nifcFires>/query?where=1%3D1&outFields=*&f=geojson
@@ -29,21 +30,27 @@
  *       `attr_IncidentSize`, `attr_FireDiscoveryDateTime`,
  *       `attr_POOState`).
  *
- * Render. WFIGS perimeters are polygons; we draw a translucent red fill
- * (`#dc2626` at 0.45 opacity) plus a darker outline (`#7f1d1d`) so the
- * shapes read clearly against both the basemap and over the
- * USDM and Wildfire Hazard Potential overlays. Click handlers expose
- * incident name, type category, size, discovery date, and state of
- * origin in the popup.
+ * Render. WFIGS perimeters are polygons. Wildfire and incident-complex
+ * records use a quiet warm treatment, Prescribed fire uses a neutral
+ * treatment, and other or unclassified records receive a neutral outline.
+ * No perimeter age is inferred from the service refresh cadence.
  */
 
 import type maplibregl from 'maplibre-gl';
 import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
+import {
+  NIFC_INCIDENT_PRESENTATION,
+  buildNifcFillPaint,
+  buildNifcIncidentFilter,
+  buildNifcLinePaint,
+  nifcIncidentTypeLabel,
+  parseArcGisPolygonFeatureCollection
+} from '../config/wildfire-presentation';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import { escapeHtml } from '../util/escape';
-import { fetchWithBudget } from '../util/fetch';
+import { fetchJsonWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
 import { buildFireContextHtml } from '../impact/fire-context';
@@ -52,9 +59,18 @@ const LAYER_KEY = 'nifc-fires';
 const SOURCE_ID = 'nifc-fires';
 const FILL_LAYER_ID = 'nifc-fires-fill';
 const OUTLINE_LAYER_ID = 'nifc-fires-outline';
+const PRESCRIBED_FILL_LAYER_ID = 'nifc-prescribed-fill';
+const PRESCRIBED_OUTLINE_LAYER_ID = 'nifc-prescribed-outline';
+const OTHER_OUTLINE_LAYER_ID = 'nifc-other-outline';
 
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
-export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID] as const;
+export const fadeLayerIds = [
+  FILL_LAYER_ID,
+  OUTLINE_LAYER_ID,
+  PRESCRIBED_FILL_LAYER_ID,
+  PRESCRIBED_OUTLINE_LAYER_ID,
+  OTHER_OUTLINE_LAYER_ID
+] as const;
 
 /**
  * Symbol layer ID used as the `beforeId` anchor when inserting fill and
@@ -74,7 +90,7 @@ const FETCH_TIMEOUT_MS = 15_000;
  */
 let masterController: AbortController | null = null;
 
-type NifcStatus = 'loading' | 'ready' | 'error' | 'no-data';
+type NifcStatus = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
 
 function reportStatus(state: NifcStatus): void {
   registry.setStatus(LAYER_KEY, state);
@@ -120,17 +136,19 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   reportStatus('loading');
 
   let geojson: FeatureCollection;
+  let truncated = false;
   try {
-    const response = await fetchWithBudget(
-      buildQueryUrl(),
-      null,
-      signal,
-      FETCH_TIMEOUT_MS
+    const parsed = parseArcGisPolygonFeatureCollection(
+      await fetchJsonWithBudget(
+        buildQueryUrl(),
+        null,
+        signal,
+        FETCH_TIMEOUT_MS
+      ),
+      'NIFC WFIGS'
     );
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    }
-    geojson = (await response.json()) as FeatureCollection;
+    geojson = parsed.collection;
+    truncated = parsed.truncated;
   } catch (err) {
     // Aborted means superseded or deactivated; drop silently per invariant 5.
     if (signal.aborted) return;
@@ -151,7 +169,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   });
 
   if (features.length === 0) {
-    reportStatus('no-data');
+    reportStatus(truncated ? 'degraded' : 'no-data');
     return;
   }
 
@@ -162,10 +180,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       id: FILL_LAYER_ID,
       type: 'fill',
       source: SOURCE_ID,
-      paint: {
-        'fill-color': '#dc2626',
-        'fill-opacity': 0.45
-      }
+      filter: buildNifcIncidentFilter('wildfire'),
+      paint: buildNifcFillPaint('wildfire')
     },
     beforeId
   );
@@ -175,11 +191,41 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       id: OUTLINE_LAYER_ID,
       type: 'line',
       source: SOURCE_ID,
-      paint: {
-        'line-color': '#7f1d1d',
-        'line-width': 1.4,
-        'line-opacity': 0.95
-      }
+      filter: buildNifcIncidentFilter('wildfire'),
+      paint: buildNifcLinePaint('wildfire')
+    },
+    beforeId
+  );
+
+  map.addLayer(
+    {
+      id: PRESCRIBED_FILL_LAYER_ID,
+      type: 'fill',
+      source: SOURCE_ID,
+      filter: buildNifcIncidentFilter('prescribed'),
+      paint: buildNifcFillPaint('prescribed')
+    },
+    beforeId
+  );
+
+  map.addLayer(
+    {
+      id: PRESCRIBED_OUTLINE_LAYER_ID,
+      type: 'line',
+      source: SOURCE_ID,
+      filter: buildNifcIncidentFilter('prescribed'),
+      paint: buildNifcLinePaint('prescribed')
+    },
+    beforeId
+  );
+
+  map.addLayer(
+    {
+      id: OTHER_OUTLINE_LAYER_ID,
+      type: 'line',
+      source: SOURCE_ID,
+      filter: buildNifcIncidentFilter('other'),
+      paint: buildNifcLinePaint('other')
     },
     beforeId
   );
@@ -189,12 +235,30 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     render: (body) =>
       renderSwatchLegend(
         body,
-        'Active wildfires',
-        [{ color: '#dc2626', label: 'Active fire perimeter' }],
-        'NIFC WFIGS current interagency perimeters.'
+        'Mapped fire perimeters',
+        [
+          {
+            color: NIFC_INCIDENT_PRESENTATION.wildfire.lineColor,
+            label: NIFC_INCIDENT_PRESENTATION.wildfire.legendLabel
+          },
+          {
+            color: NIFC_INCIDENT_PRESENTATION.prescribed.lineColor,
+            label: NIFC_INCIDENT_PRESENTATION.prescribed.legendLabel
+          },
+          {
+            color: NIFC_INCIDENT_PRESENTATION.other.lineColor,
+            label: NIFC_INCIDENT_PRESENTATION.other.legendLabel
+          }
+        ],
+        'NIFC WFIGS current interagency mapped perimeters. Service cadence does not establish individual perimeter age.'
       )
   });
-  reportStatus('ready');
+  if (truncated) {
+    console.warn(
+      '[nifc-fires] WFIGS response reached the ArcGIS transfer limit; rendering available perimeters as live (partial).'
+    );
+  }
+  reportStatus(truncated ? 'degraded' : 'ready');
 }
 
 /**
@@ -202,16 +266,21 @@ export async function activate(map: maplibregl.Map): Promise<void> {
  * guards are defensive so callers can invoke `deactivate` without first
  * verifying activation state.
  */
+export function cancelActivation(): void {
+  masterController?.abort();
+}
+
 export function deactivate(map: maplibregl.Map): void {
-  if (masterController) {
-    masterController.abort();
-    masterController = null;
-  }
-  if (map.getLayer(FILL_LAYER_ID)) {
-    map.removeLayer(FILL_LAYER_ID);
-  }
-  if (map.getLayer(OUTLINE_LAYER_ID)) {
-    map.removeLayer(OUTLINE_LAYER_ID);
+  cancelActivation();
+  masterController = null;
+  for (const id of [
+    OTHER_OUTLINE_LAYER_ID,
+    PRESCRIBED_OUTLINE_LAYER_ID,
+    PRESCRIBED_FILL_LAYER_ID,
+    OUTLINE_LAYER_ID,
+    FILL_LAYER_ID
+  ]) {
+    if (map.getLayer(id)) map.removeLayer(id);
   }
   if (map.getSource(SOURCE_ID)) {
     map.removeSource(SOURCE_ID);
@@ -223,7 +292,7 @@ export function deactivate(map: maplibregl.Map): void {
  * Resolve the most useful incident name from the WFIGS attribute schema.
  * `attr_IncidentName` is canonical, `poly_IncidentName` is the geometry
  * source's name (sometimes more specific), and `IncidentName` is the
- * legacy field name. Returns `'Active Wildland Fire'` if every candidate
+ * legacy field name. Returns a neutral mapped-perimeter label if every candidate
  * is blank.
  */
 function pickIncidentName(props: GeoJsonProperties): string {
@@ -237,7 +306,7 @@ function pickIncidentName(props: GeoJsonProperties): string {
     const s = String(candidate).trim();
     if (s !== '') return s;
   }
-  return 'Active Wildland Fire';
+  return 'Mapped Fire Perimeter';
 }
 
 /**
@@ -269,34 +338,14 @@ function formatAcres(value: unknown): string {
 }
 
 /**
- * Translate the WFIGS `attr_IncidentTypeCategory` short code to a human
- * label. Most active perimeters are `'WF'` (Wildfire); `'RX'` is a
- * prescribed fire and `'CX'` is a complex (multiple incidents managed
- * together). Unknown codes fall through unchanged.
- */
-function formatIncidentType(code: unknown): string {
-  if (typeof code !== 'string' || code.length === 0) return '';
-  switch (code.toUpperCase()) {
-    case 'WF':
-      return 'Wildfire';
-    case 'RX':
-      return 'Prescribed fire';
-    case 'CX':
-      return 'Incident complex';
-    default:
-      return code;
-  }
-}
-
-/**
- * Build the popup HTML for an active wildfire perimeter. Kept in-file for
+ * Build the popup HTML for a mapped NIFC perimeter. Kept in-file for
  * M9 (the M5 popups module is being written concurrently and we do not
  * want to fight over `src/ui/popups.ts`).
  */
 function buildNifcPopupHtml(props: GeoJsonProperties): string {
   const p = props ?? {};
   const incidentName = pickIncidentName(p);
-  const type = formatIncidentType(p.attr_IncidentTypeCategory);
+  const type = nifcIncidentTypeLabel(p.attr_IncidentTypeCategory);
   const acres = formatAcres(
     p.attr_IncidentSize ?? p.attr_DailyAcres ?? p.poly_GISAcres
   );
@@ -310,12 +359,13 @@ function buildNifcPopupHtml(props: GeoJsonProperties): string {
 
   return `
     <div class="popup-title">${escapeHtml(incidentName)}</div>
-    <div class="popup-agency">NIFC WFIGS - Active Perimeter</div>
+    <div class="popup-agency">NIFC WFIGS - Mapped Perimeter</div>
     ${type ? `<div class="popup-treaty-meta">Type: ${escapeHtml(type)}</div>` : ''}
     ${acres ? `<div class="popup-treaty-meta">Size: ${escapeHtml(acres)} acres</div>` : ''}
     ${discovered ? `<div class="popup-treaty-meta">Discovered: ${escapeHtml(discovered)}</div>` : ''}
     ${state ? `<div class="popup-treaty-meta">State: ${escapeHtml(String(state))}</div>` : ''}
-    <div class="popup-description">Perimeter sourced from the National Interagency Fire Center (NIFC) Wildland Fire Interagency Geospatial Services (WFIGS) feed. Updated approximately every five minutes during active operations.</div>
+    <div class="popup-description">Perimeter sourced from the National Interagency Fire Center (NIFC) Wildland Fire Interagency Geospatial Services (WFIGS) feed. The service is checked for updates approximately every five minutes during active operations; individual perimeter age can differ.</div>
+    <div class="popup-description">Strategic context only, not tactical fire operations or evacuation guidance.</div>
     <div class="popup-links">
       <a href="https://data-nifc.opendata.arcgis.com/" target="_blank" rel="noopener">NIFC Open Data</a>
       <a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>
@@ -332,7 +382,7 @@ function buildNifcPopupHtml(props: GeoJsonProperties): string {
 export function bindPopups(map: maplibregl.Map): void {
   registerClickTarget({
     kind: 'point-event',
-    layerIds: [FILL_LAYER_ID],
+    layerIds: [FILL_LAYER_ID, PRESCRIBED_FILL_LAYER_ID, OTHER_OUTLINE_LAYER_ID],
     label: (feature) => pickIncidentName(feature.properties ?? {}),
     // B1 fire-in-context: the incident metadata, then a composed read of the
     // drought class beneath the clicked point and the nearest telemetry
@@ -345,10 +395,12 @@ export function bindPopups(map: maplibregl.Map): void {
     })
   });
 
-  map.on('mouseenter', FILL_LAYER_ID, () => {
-    map.getCanvas().style.cursor = 'pointer';
-  });
-  map.on('mouseleave', FILL_LAYER_ID, () => {
-    map.getCanvas().style.cursor = '';
-  });
+  for (const id of [FILL_LAYER_ID, PRESCRIBED_FILL_LAYER_ID, OTHER_OUTLINE_LAYER_ID]) {
+    map.on('mouseenter', id, () => {
+      map.getCanvas().style.cursor = 'pointer';
+    });
+    map.on('mouseleave', id, () => {
+      map.getCanvas().style.cursor = '';
+    });
+  }
 }

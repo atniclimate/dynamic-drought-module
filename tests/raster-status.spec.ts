@@ -260,6 +260,25 @@ test('the HeatRisk completeness opt-in treats an empty idle cycle as complete', 
   expect(reports).toEqual(['ready']);
 });
 
+test('a completeness consumer can require positive tile evidence at idle', () => {
+  const map = new FakeMap();
+  const reports: string[] = [];
+  watchRasterTiles(
+    map as unknown as maplibregl.Map,
+    'historical-ground',
+    (status) => reports.push(status),
+    {
+      reportInitialSuccess: true,
+      requestCompletenessDeadlineMs: 1_000,
+      emptyIdleOutcome: 'error'
+    }
+  );
+
+  map.fire('idle', {});
+
+  expect(reports).toEqual(['error']);
+});
+
 test('the HeatRisk completeness opt-in retains its no-evidence deadline', async () => {
   const map = new FakeMap();
   const reports: string[] = [];

@@ -29,7 +29,7 @@ export type LayerStatus = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data'
  *   reference   a place boundary or line network a person orients by
  *               (states, ecoregions, Tribal, Treaty, reservations, rivers)
  *   event       a discrete, dated occurrence overlaid on the surface
- *               (active wildfires, weather alerts)
+ *               (mapped fire perimeters, weather alerts)
  *   stations    point telemetry markers
  *
  * References, events, and stations stack freely over the active surface;
