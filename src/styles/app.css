@@ -3224,7 +3224,9 @@ button.conditions-metric:hover {
      sheet heights above. */
   #app[data-sheet-detent='closed']:has(#basemap-vintage:not([hidden])) .map-bottom-dock,
   #app[data-sheet-detent='closed']:has(#ground-vintage:not([hidden])) .map-bottom-dock {
-    bottom: calc(var(--mobile-footer-h, 56px) + 144px);
+    /* The live observation qualification can wrap one line taller than the
+       deterministic tile fixture. Keep that settled copy above Recent too. */
+    bottom: calc(var(--mobile-footer-h, 56px) + 164px);
   }
 
   /* --------------------------------------------------------------------------

@@ -117,6 +117,10 @@ test.describe('U4 stage-5: bottom-chrome collisions stay fixed', () => {
       intersects(switcher, chipBox),
       `Recent control overlaps the mobile imagery chip: ${JSON.stringify({ switcher, chipBox })}`
     ).toBe(false);
+    expect(
+      switcher.y - (chipBox.y + chipBox.height),
+      `Recent control has insufficient clearance from the mobile imagery chip: ${JSON.stringify({ switcher, chipBox })}`
+    ).toBeGreaterThanOrEqual(9);
 
     await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
     const app = page.locator('#app');
