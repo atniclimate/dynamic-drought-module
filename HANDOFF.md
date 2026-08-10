@@ -1,24 +1,170 @@
 # Dynamic Drought Module fresh-session handoff
 
-Updated 2026-08-09.
+Updated 2026-08-10.
 
 ## Start here
 
 The Dynamic Drought Module (DDM) is an embeddable static MapLibre map for
-Tribal Nations, state agencies, federal partners, and researchers. The current
-checkpoint combines the North American drought minimap, bounded NOAA satellite
-context, lifecycle and status corrections, and a locally hardened Cloudflare
-Worker candidate.
+Tribal Nations, state agencies, federal partners, and researchers.
 
-The user-selected next focus is:
+The completed and pushed `0.6.25` feature checkpoint is
+`feature/heatrisk-legibility` at runtime acceptance SHA
+`7b19a9b733c65ed1fe8eeed69427461997fe3f70`. A later documentation-only
+true-up commit is the pushed branch tip; reproduce runtime acceptance from
+the SHA above.
 
-1. integrate one new interface component into the real application;
-2. improve the Drought display through that verified interface pattern;
-3. improve the Wildfire display as a separate source-honest pass.
+The final integration sequence is:
 
-Work on one visible milestone at a time. The exact component, reference, target
-surface, and supported viewports have not been supplied. Ask for those before
-implementation rather than guessing.
+- `f29aa79` `feat: integrate drought and wildfire interface`
+- `4dab788` `fix: settle raster status per source`
+- `2c67637` `fix: keep imagery chip clear of map controls`
+- `10c13de` `fix: preserve HeatRisk sequence interactions`
+- `7b19a9b` `fix: clear live imagery copy on mobile`
+
+This is a feature checkpoint and runtime acceptance point, not a release.
+There is no pull request, merge to `main`, tag, deployment, or version
+change authorized or completed by this true-up.
+
+## Completed product outcome
+
+### Integrated interface
+
+- The real desktop Brief shell now carries committed hazard and time-horizon
+  controls backed by the existing cluster and timeline services. It reports
+  committed, status-derived display truth rather than optimistic button state.
+- Drought and Wildfire are distinct compositions. Horizon changes re-resolve
+  the committed recipe coherently, while a custom granular layer set remains
+  custom and is not relabeled as a clean hazard composition.
+- The responsive and embed seams retain their existing hosts and URL behavior.
+  Explicit mobile Fire and quick Fire risk actions use the same bounded
+  Wildfire scene policy as the desktop action.
+
+### Drought truth and minimap
+
+- Weekly United States Drought Monitor rendering no longer turns an empty
+  D0-D4 polygon result into an all-clear. The visible claim is the literal
+  `No D0-D4 polygon rendered here.` unless a source-supported analyzed-area
+  statement is available.
+- Drought products remain separately named and timed. Weekly USDM, monthly
+  NADM and CDM, Province of British Columbia basin levels, and CPC outlooks
+  are not blended into one invented drought score.
+- The North America minimap retains the authored editorial framing geometry,
+  clips its presentation to pinned Natural Earth 1:50m physical land and
+  lakes, and uses monthly NADM polygons for an explicitly approximate
+  area-weighted navigation summary. It labels the result as an inference,
+  keeps `None`, missing, and not analyzed distinct, exposes the Nunavut proxy
+  exclusion as partial coverage, and adds a non-color D1-D4 impact channel.
+
+### Wildfire truth and minimap
+
+- NIFC Wildfire, Wildfire complex, Prescribed fire, and other mapped incident
+  types are classified and presented without painting prescribed fire as an
+  active wildfire.
+- HMS smoke uses distinct Light, Medium, Heavy, and unclassified presentation.
+  Missing or unknown density no longer falls through to Light, and smoke
+  opacity is disclosed as presentation rather than ground-level air quality.
+- SPC remains a Day 1 fire-weather outlook with its own valid period. United
+  States Forest Service Wildfire Hazard Potential remains static 2023,
+  270-meter United States strategic context, including its separately
+  published Alaska and Hawaii coverage, not current conditions or a forecast.
+- The Wildfire minimap first checks current mapped NIFC wildfire perimeters
+  for each authored framing, excluding prescribed fire. An unresolved current
+  check stays unknown and does not silently substitute WHP. Only after a
+  resolved zero-perimeter check may the display use qualified WHP context;
+  zero mapped perimeters never means no wildfire.
+- WHP percentages are scoped to classified United States land. Cross-border
+  framing and no-coverage states remain explicit.
+
+### Historical and recent imagery
+
+- The default shared ground is disclosed as EOX Sentinel-2 2016 historical
+  context, with subdued OpenStreetMap underneath and an honest fallback if the
+  bounded probe or requested tiles do not succeed.
+- Recent imagery is opt-in NOAA NESDIS merged GOES GeoColor. Activation
+  validates a bounded recent catalog, probes candidates newest first, and pins
+  the selected object and observation time so one viewport cannot mix frames.
+- An explicit desktop Wildfire, mobile Fire, or quick Fire risk action requests
+  recent GeoColor. A bare URL restore, boot-time cluster inference, horizon
+  change, or layer-status change does not silently override a visitor's
+  basemap choice. Manually turning Recent off remains authoritative.
+- If recent imagery fails, the default map is restored without dropping the
+  requested Wildfire layer intent.
+- NOAA GeoColor is contextual imagery. HMS smoke remains a separate,
+  independently timed analyst-drawn plume product and is never inferred from
+  the basemap.
+- Historical and recent imagery chips are polite atomic status regions and
+  remain clear of map controls in the verified responsive layouts.
+
+### Raster status and HeatRisk
+
+- Completeness-aware raster status can settle from target-source
+  `sourcedata` evidence without waiting for unrelated global map idle. It
+  still requires selected-frame request evidence and distinguishes complete,
+  partial, and failed cycles.
+- The HeatRisk seven-day sequence no longer rebuilds its live buttons for a
+  status-only raster event while an identify read is pending or cached. A
+  native click therefore reaches the live delegated handler, the URL-selected
+  day advances, and late superseded hydration cannot restore the old
+  classification.
+- Existing HeatRisk source honesty remains intact: exact advertised frame
+  times, exact-time identify reads, experimental labeling, no-data handling,
+  activation generations, cancellation, and valid-period copy.
+
+## Fresh-clone runtime acceptance
+
+The following receipts were collected from a clean fresh clone at
+`7b19a9b733c65ed1fe8eeed69427461997fe3f70`:
+
+- `npm ci`: PASS, 281 packages installed. npm reported 5 known
+  vulnerabilities: 1 moderate and 4 high.
+- `npm run gate`: PASS.
+- `npm run test:serial -- --reporter=dot`: PASS, 746 passed, 1 intentionally
+  skipped, and 0 failed across 747 tests in 101 files, 1095.9 seconds command
+  wall time (18.2 minutes reported by Playwright).
+
+The dependency advisories are recorded facts, not resolved by this checkpoint.
+Do not restate this acceptance as a zero-vulnerability result.
+
+Final in-app browser receipts are retained under
+`.playwright-cli/interface-integration/true-up-7b19a9b/`. They cover the
+desktop Drought scene and physical minimap, explicit Wildfire entry with live
+NOAA GeoColor and independently timed HMS smoke, the Atlantic ocean door and
+ENSO camera transition, and the 390 by 844 mobile Fire scene. The live mobile
+copy has a measured 10 pixel gap from `Recent` and does not intersect the
+expanded attribution disclosure.
+
+During that browser pass, the live NIFC perimeter request exhausted its
+bounded request twice. The app retained NOAA and HMS evidence, demoted the
+composition to a custom partial display, and did not invent a red region or a
+WHP fallback. This is honest failure behavior and current upstream-availability
+evidence, not a deterministic-suite failure.
+
+## Next-session decision
+
+Patrick makes the next product decision before more implementation:
+
+1. close `0.6.x` and separately authorize pull-request and release review; or
+2. name one more bounded, visible product outcome.
+
+Choosing to close `0.6.x` does not by itself authorize a pull request, merge,
+tag, deployment, Worker change, or version change. Those remain separate
+decisions. If Patrick names another outcome, keep it to one visible milestone
+with explicit target surfaces and acceptance criteria.
+
+## Git and publication boundary
+
+- The accepted runtime is `7b19a9b733c65ed1fe8eeed69427461997fe3f70`,
+  pushed on `feature/heatrisk-legibility`; the later documentation-only tip
+  carries this true-up record.
+- `origin/main` advanced separately to scheduled ENSO snapshot commit
+  `81f2c71b2a8eae2b5a52738a09046d215d5398b1`. At runtime acceptance,
+  `origin/main...7b19a9b` was 2 commits unique to main and 12 unique to the
+  feature, with merge base `e1a9084`. No reconciliation was performed.
+- Do not push `main`, open a pull request, merge, tag, deploy Pages, deploy
+  the Worker, or change the package version without explicit authorization.
+- `planning/Dynamic_Drought_Module_UI_Integration_Long_Run_Prompt_2026-08-09.md`
+  is user-supplied execution input. It remains intentionally untracked and
+  must stay excluded from commits.
 
 ## Read before changing code
 
@@ -26,179 +172,20 @@ implementation rather than guessing.
 | --- | --- |
 | `AGENTS.md` | Stewardship, product, engineering, and verification rules. |
 | `src/config/layers.ts` | Authoritative layer definitions and source names. |
-| `src/config/clusters.ts` | Drought and Wildfire horizon recipes. |
-| `src/state/cluster-service.ts` | Committed hazard, horizon, intended-layer, status, timeline, and summary snapshot. |
-| `src/state/display-summary.ts` | Status-derived user-facing display truth. |
-| `src/ui/island/shell.tsx` | Preferred desktop Brief seam for a new Preact component. |
-| `src/ui/island/index.tsx` | Lazy island boundary and alternate component host orchestration. |
-| `src/ui/island/minimap.tsx` | Monthly North American Drought Monitor overview and camera controls. |
-| `src/ui/island/strip-metrics.ts` | Existing compact Drought and fire metrics requiring absence review. |
-| `src/ui/map-key.ts` | Existing map legend selection and refresh behavior. |
-| `src/ui/sidebar.ts` | Legacy sidebar boot, URL synchronization, and mobile behavior. |
-| `src/styles/app.css` | Existing responsive tokens and desktop, mobile, and embed boundaries. |
-| `src/layers/nadm-drought.ts` | Good pattern for validated and atomic layer installation. |
-| `src/layers/nifc-fires.ts` | NIFC wildfire and prescribed-fire perimeter behavior. |
-| `src/layers/hms-smoke.ts` | HMS smoke plume display. |
-| `src/layers/spc-fire-weather.ts` | Storm Prediction Center Day 1 outlook display. |
-| `src/layers/usfs-whp.ts` | Static Wildfire Hazard Potential context. |
-| `src/impact/fire-context.ts` | Existing selected-place fire context and its semantic limits. |
-| `docs/SUCCESSOR_PLAN.md` | Current product sequence and longer-term engine boundaries. |
-
-The July handoffs under `planning/2026-07-successor-handoffs/` are historical
-records, not current instructions.
-
-## Verified checkpoint
-
-- The NADM minimap covers the United States, Canada, and Mexico without claiming
-  classifications outside the source domain. It distinguishes `None`, missing,
-  and not analyzed, and labels the Nunavut proxy exclusion `live (partial)`.
-- `framing=all` is durable URL state. Alaska uses one valid antimeridian fit
-  helper shared by boot and minimap interactions.
-- NOAA GeoColor is opt-in contextual imagery. It is bounded, cancellable,
-  validated before install, URL-sticky, and never presented as drought, smoke,
-  fire, or heat diagnosis.
-- Shared response-body reads are cancellable and time-bounded. Raster status
-  waits for a complete load cycle or deadline, and Wildfire Hazard Potential
-  does not report live before a tile succeeds.
-- Basemap subscriptions release correctly, Playwright always uses a fresh
-  preview build, and deployment CI runs the project gate.
-- Worker candidate `2026-08-09-route-hardening-v3` uses exact host and path
-  routes, redirect revalidation, bounded body reads, byte-transparent
-  responses, strict Cross-Origin Resource Sharing, and bounded safe caching.
-- Production still runs Worker v2. Live Cloudflare checks and direct-versus-
-  proxy byte hashes passed for AWDB, AgriMet, Hydromet, NWRFC, USDM DSCI, WHP,
-  and NWS. Wrangler OAuth works; this Worker requires no API secrets. Worker v3
-  was not deployed.
-
-Verification against the current tree:
-
-- `npm run gate`: passed.
-- `npm run test:serial -- --reporter=dot`: 686 of 686 passed on a fresh server.
-- Focused Worker policy suite: 14 of 14 passed.
-- Root and Worker typechecks: passed.
-- Worker deployment dry run and local health, allowed-route, and rejected-route
-  probes: passed.
-- Browser checks for default state, Hawaii, `framing=all` reload, embed mode,
-  satellite mode, and live WHP: passed without console warnings.
-- Root production audit and complete Worker audit: zero vulnerabilities.
-- `git diff --check` and drift-checker syntax: passed.
-
-Known external limits:
-
-- The aggregate drift command remains nonzero when unrelated USGS or NLCD
-  services time out and because optional soil overflow intermediates exceed
-  422 MB and are absent locally. Cloudflare-specific rows passed.
-- Five development-only advisories remain through `mapshaper`; npm offers only
-  a breaking forced downgrade.
-- GitHub issue 5 tracks the scheduled upstream monitor's missing Python
-  environment. It is not a Cloudflare failure.
-
-## Next milestone: new interface component
-
-First obtain the component reference or specification and settle:
-
-- whether it is a control or readout;
-- desktop Brief, mobile sheet, embed, studio, selected-place panel, or map
-  control placement;
-- selected-place, viewport, framing, or national scope;
-- whether any choice is durable URL state;
-- external code, font, license, network, authentication, or tracking
-  implications.
-
-For a desktop Brief component, prefer a named Preact child of
-`src/ui/island/shell.tsx`. Consume `CommittedShellSnapshot` and call existing
-service doors such as `requestCluster` and `requestHorizon`. Do not own a
-second layer-state machine or render optimistic intent as live data. Keep the
-component within an existing band or popover unless the user explicitly
-accepts more permanent density.
-
-The desktop shell is hidden on mobile and in embeds. If the component must
-appear there, design those hosts explicitly rather than assuming the shell
-placement covers them. A durable choice must survive URL reload, Back, embed,
-and canonical boot synchronization. Ephemeral disclosure and focus state
-should remain local.
-
-Minimum acceptance:
-
-- all six canonical states render distinctly;
-- source, edition, time, coverage, and qualifications remain visible;
-- keyboard, focus restoration, touch target, reduced-motion, and live-region
-  behavior match existing controls;
-- no broad navigation, CSS, or component rewrite;
-- network work, if any, validates unknown data and is cancellable,
-  time-bounded, and unable to revive after teardown;
-- the lazy bundle boundary and activation budgets remain green.
-
-## Drought display pass
-
-Use the new component pattern to make the active Drought product easier to
-understand without blending products:
-
-- Keep weekly USDM, monthly NADM, monthly CDM, Province of British Columbia
-  basin levels, CPC outlooks, and gridded indices separately named and timed.
-- Keep the minimap specifically monthly NADM. Do not recolor it for Wildfire or
-  derive a regional severity from a selected hazard button.
-- Do not convert zero rendered USDM polygons into a confident `None` claim
-  without an explicit analyzed-area mask. Prefer a literal statement such as
-  "No D0 through D4 polygon rendered here."
-- Drive the readout and legend from committed status-derived truth. A loading,
-  unavailable, partial, or no-data layer must not receive a confident
-  "Showing" claim.
-
-Choose one bounded Drought display outcome with the user before editing.
-
-## Wildfire display pass
-
-Preserve the distinct meanings and horizons:
-
-- NIFC perimeters are observed incidents. Separate or filter prescribed fire
-  rather than painting it as an active wildfire.
-- HMS smoke is an analyst-derived plume product. Unknown density must not be
-  silently presented as Light smoke.
-- SPC Day 1 is an outlook. Show its valid window and explain or reject unknown
-  categories.
-- WHP is static 2023, 270-meter, conterminous-United-States potential context,
-  not current conditions, an incident, or a forecast.
-- Source-specific no-data copy must describe what the national feed returned,
-  not imply the current viewport is safe.
-- Do not create a combined DDM fire score, ignition prediction, containment
-  claim, or all-clear.
-
-Presentation work in this pass does not automatically authorize the deferred
-selected-place NIFC engine or a `v0.7.0` release.
-
-## Verification for the next session
-
-Run the narrowest component and source tests while developing. At minimum,
-cover the new view model across all six states, malformed and delayed data,
-retry and cancellation, URL reload, and `?embed=true` where relevant.
-
-Likely focused suites include:
-
-- `tests/s4-shell.spec.ts`
-- `tests/display-summary.spec.ts`
-- `tests/island-premount.spec.ts`
-- `tests/url-state.spec.ts`
-- `tests/s2-url-migration.spec.ts`
-- `tests/s4-minimap.spec.ts` only when the minimap changes
-- affected Drought, NIFC, HMS, SPC, WHP, mobile, and embed specifications
-
-Finish any shared navigation, map lifecycle, state, or release-readiness
-change with `npm run gate` and `npm run test:serial`.
-
-## Git true-up boundary
-
-The intended upstream is
-`https://github.com/atniclimate/dynamic-drought-module.git`. Local
-`feature/heatrisk-legibility` contains six unpublished commits beyond the
-shared `e1a9084` base. GitHub `main` has one independent scheduled ENSO
-snapshot commit, `9983251`.
-
-This checkpoint must be published only to
-`origin/feature/heatrisk-legibility`. Do not push `main`, tag, deploy Pages,
-or deploy the Worker. Before new feature work, confirm the worktree is clean
-and the feature branch tracks its remote. Reconcile `origin/main` only as a
-separate clean-tree step and rerun the gate afterward.
+| `src/config/clusters.ts` | Drought and Wildfire horizon recipes and explicit recent-imagery preference. |
+| `src/state/cluster-service.ts` | Committed hazard, horizon, intended-layer, and status snapshot. |
+| `src/ui/island/shell.tsx` | Integrated desktop Brief controls and rehost lifecycle. |
+| `src/ui/island/minimap.tsx` | Drought and Wildfire navigation overview. |
+| `src/state/minimap-drought.ts` | Monthly NADM framing summaries and coverage semantics. |
+| `src/state/minimap-wildfire.ts` | Current mapped-perimeter checks and qualified WHP fallback. |
+| `src/config/wildfire-presentation.ts` | NIFC, HMS, and WHP presentation contracts. |
+| `src/map/historical-ground.ts` | Disclosed historical ground and fallback lifecycle. |
+| `src/map/satellite.ts` | Recent pinned NOAA GeoColor selection and refresh lifecycle. |
+| `src/map/basemap-switcher.ts` | Explicit basemap request and failure-reversion seam. |
+| `src/ui/heatrisk-sequence.ts` | HeatRisk sequence interaction and generation safety. |
+| `src/util/raster-status.ts` | Shared raster request-cycle status evidence. |
+| `docs/SUCCESSOR_PLAN.md` | Product sequence and longer-term engine boundaries. |
+| `docs/design/interface-integration/MODULE_TRACKING.yaml` | Integration scope, evidence, and module tracking. |
 
 ## Non-negotiables
 
@@ -217,5 +204,4 @@ separate clean-tree step and rerun the gate afterward.
 - Capitalize Tribe, Tribal, and Treaty appropriately. Do not author the U+2014
   em dash.
 - Preserve strict TypeScript, named exports, CSS custom-property tokens, and
-  ordinary Git history. Do not add a review harness, phase clock, queue, or
-  parallel status ledger.
+  ordinary Git history.

@@ -1,16 +1,21 @@
 schema_version: 1
-updated_at: "2026-08-10T03:57:12Z"
+updated_at: "2026-08-10T17:05:31Z"
 goal: >-
   Selectively graduate the four DDM design corpora into the authoritative
-  application as one locally verified interface across shared scene, left
+  application as one runtime-accepted interface across shared scene, left
   rail, Drought, Wildfire, mobile, and embed surfaces.
 
 baseline:
+  state: historical-pre-true-up
   branch: feature/heatrisk-legibility
   head: 96ab28d23fecb96804cf45d5519983fac991000e
   upstream: origin/feature/heatrisk-legibility
   upstream_divergence: "0 ahead, 0 behind"
-  origin_main_divergence: "7 ahead, 1 behind; merge base e1a9084ca86b1de3fa484cc78bea872781c350fe"
+  origin_main_divergence: >-
+    Historical baseline recorded 7 ahead and 1 behind. origin/main later
+    advanced independently to 81f2c71. At runtime acceptance the comparison
+    was 2 commits unique to main and 12 unique to the feature, with merge base
+    e1a9084.
   worktree_state: >-
     Clean tracked tree. One unrelated untracked user file is preserved:
     planning/Dynamic_Drought_Module_UI_Integration_Long_Run_Prompt_2026-08-09.md.
@@ -28,6 +33,53 @@ baseline:
   historical_serial_receipt: >-
     HANDOFF.md records 686 of 686 from an earlier checkpoint; it is historical
     and is not translated into a pass for this run.
+
+true_up:
+  state: visually-true-upped-runtime-accepted
+  runtime_acceptance_sha: 7b19a9b733c65ed1fe8eeed69427461997fe3f70
+  package_version: 0.6.25
+  implementation_commits:
+    - sha: f29aa79
+      subject: "feat: integrate drought and wildfire interface"
+    - sha: 4dab788
+      subject: "fix: settle raster status per source"
+    - sha: 2c67637
+      subject: "fix: keep imagery chip clear of map controls"
+    - sha: 10c13de
+      subject: "fix: preserve HeatRisk sequence interactions"
+    - sha: 7b19a9b
+      subject: "fix: clear live imagery copy on mobile"
+  feature_upstream_at_runtime_push:
+    upstream: origin/feature/heatrisk-legibility
+    ahead_behind: "0/0"
+    divergence: "0 ahead, 0 behind"
+  worktree_state: >-
+    The runtime acceptance commit was pushed to the feature upstream. The
+    fresh-clone acceptance tree was clean. The user-owned planning prompt is
+    preserved untracked and untouched in the working repository.
+  fresh_clone_acceptance:
+    source_sha: 7b19a9b733c65ed1fe8eeed69427461997fe3f70
+    worktree: clean
+    receipts:
+      - command: npm ci
+        state: passed
+        detail: 281 packages installed; npm reported 5 known vulnerabilities.
+      - command: npm run gate
+        state: passed
+      - command: npm run test:serial -- --reporter=dot
+        state: passed
+        detail: >-
+          746 passed, 1 intentionally skipped, and 0 failed across 747 tests
+          in 101 files / 1095.9s command wall / 18.2m Playwright / clean clone.
+  external_state:
+    pull_request: unchanged
+    origin_main: >-
+      Not changed by this true-up. It independently advanced to scheduled ENSO
+      snapshot commit 81f2c71b2a8eae2b5a52738a09046d215d5398b1.
+    tag: unchanged
+    pages: unchanged
+    worker: unchanged
+    package_version: unchanged at 0.6.25
 
 design_corpus:
   audit_status: completed
@@ -67,7 +119,9 @@ design_corpus:
         later URL/accessibility rulings outrank stale kit behavior.
   surface_matrix:
     - surface: shared-ground
-      newest_intent: Firefly-darkened EOX Sentinel-2 cloudless 2016 mosaic.
+      newest_intent: >-
+        Firefly-darkened historical ground with recent satellite imagery on an
+        explicit Wildfire, hazard-fire, fire-risk, or satellite action.
       donors:
         - unified-interface/UNIFIED_INTERFACE_DESIGN_2026-08-09.md
         - wildfire/prototypes/wildfire-composite.html
@@ -76,14 +130,20 @@ design_corpus:
         - src/map/init.ts
         - src/map/satellite.ts
         - src/state/basemap-store.ts
-      parity: absent
+      parity: completed-source-honest-adaptation
       decision: adopt
       behavior: >-
         Use the 2016 EOX mosaic as historical shared ground, retain subdued OSM
         underneath as automatic fallback, and keep basemap=satellite exclusively
-        for recent NOAA GeoColor. Always show vintage and attribution while EOX
-        renders. Do not copy the regional donor tile cache.
-      runtime_effect: One static raster source, one bounded boot probe, no backend.
+        for recent NOAA GeoColor. An explicit Wildfire cluster, hazard-fire or
+        fire-risk preset, or satellite choice requests recent imagery. Boot and
+        deep-link restore do not consume an action preference that the user did
+        not make. Always show source, vintage, and attribution for the raster
+        that actually settles.
+      runtime_effect: >-
+        EOX and NOAA keep separate source, clock, label, and failure custody.
+        Raster readiness settles from evidence for the requested source rather
+        than unrelated global map-idle events.
       verification:
         - historical ground source, failure, and NOAA isolation tests
         - shared viewport visual comparison
@@ -145,34 +205,56 @@ design_corpus:
         Recompose the existing committed status summary as Conditions in view,
         keep the full six-state vocabulary, and colocate its active time context.
     - surface: regional-navigation
-      newest_intent: Real target regions followed by ATNI-authored continental framings.
+      newest_intent: >-
+        Real target regions followed by ATNI-authored continental and ocean
+        framings over recognizable physical linework.
       donors:
         - unified-interface/prototypes/navigation-rail.html
         - s4-shell-kit/design/interaction-contract.md
       target_seam:
         - src/config/regions.ts
+        - src/config/oceans.ts
+        - src/config/minimap-geometry.ts
         - src/ui/sidebar.ts
         - src/ui/island/minimap.tsx
-      parity: partial
+      parity: completed-source-honest-adaptation
       decision: adapt
       behavior: >-
-        Add a compact shell door to the existing region command, keep region and
-        framing URL semantics distinct, and preserve camera-only framing behavior.
+        Add a compact shell door to the existing region command, keep region,
+        framing, and ocean URL semantics distinct, and preserve camera-only land
+        framing behavior. Pacific, Arctic, and Atlantic are separate keyboard and
+        pointer targets that enter ENSO with the matching ocean camera in one
+        committed transaction.
     - surface: continental-minimap
-      newest_intent: Mode-conditioned metrics only where a backed metric exists.
+      newest_intent: >-
+        Natural Earth physical coastline and lake linework with mode-conditioned,
+        source-backed Drought and Wildfire summaries.
       donors:
         - unified-interface/prototypes/framings-data.js
         - s4-shell-kit/code/geometry.mjs
       target_seam:
         - src/ui/island/minimap.tsx
         - src/state/minimap-drought.ts
+        - src/state/minimap-wildfire.ts
         - src/config/framing-shapes.ts
-      parity: direct S4 geometry parity; unified metric parity absent
+        - src/config/minimap-geometry.ts
+        - src/config/minimap-whp.ts
+      parity: completed-source-honest-adaptation
       decision: adapt
       behavior: >-
-        Preserve target S4-derived geometry and behavior. Show the separately
-        named monthly NADM summary only in Drought mode; use an explicit neutral
-        navigation state for Wildfire, Heat, ENSO, and custom views.
+        Clip the existing ATNI-authored framing hit areas to Natural Earth 1:50m
+        physical land and draw major lakes without adding state, province, or
+        sovereign-jurisdiction boundaries. In Drought mode, show the separately
+        named monthly NADM mean-severity class and outline D1 through D4 share.
+        In Wildfire mode, red requires a current mapped NIFC wildfire perimeter;
+        otherwise static 2023 United States Forest Service WHP is orange only
+        above 50 percent high or very high, and yellow only above 30 percent
+        moderate or higher. Heat, ENSO land framings, and custom views remain
+        explicitly neutral.
+      runtime_effect: >-
+        NADM summary work and nine count-only WFIGS framing queries are
+        cancellable and time-bounded. WHP is a bundled United States-only static
+        artifact and never stands in for a failed current-fire query.
     - surface: share-and-embed
       newest_intent: Share and embed actions in the unified rail.
       donors:
@@ -217,7 +299,10 @@ design_corpus:
         as contrast compensation, and replace maskless no-drought claims with
         bounded no-polygon wording.
     - surface: wildfire
-      newest_intent: Quiet mapped wildfire perimeters, distinct prescribed fire, cool borderless smoke.
+      newest_intent: >-
+        Quiet mapped wildfire perimeters, distinct prescribed fire, cool
+        borderless smoke, recent satellite context on explicit entry, and an
+        honest current-first minimap summary.
       donors:
         - wildfire/design/design-options.md
         - wildfire/design/smoke-spec.md
@@ -228,12 +313,15 @@ design_corpus:
         - src/layers/spc-fire-weather.ts
         - src/layers/usfs-whp.ts
         - src/ui/map-key.ts
-      parity: source wiring present; presentation and semantics partial
+        - src/state/minimap-wildfire.ts
+        - src/config/minimap-whp.ts
+      parity: completed-source-honest-adaptation
       decision: adapt
       behavior: >-
-        Use only existing perimeter, plume, outlook, and WHP sources. Split RX,
+        Use only accepted perimeter, plume, outlook, and WHP sources. Split RX,
         fix unknown smoke density, add source-honest keys, harden cancellation,
-        and retain strategic-not-tactical guidance.
+        request recent NOAA imagery only on explicit entry, and retain
+        strategic-not-tactical guidance.
     - surface: mobile
       newest_intent: Map-first, compact, 44 pixel controls, one responsive response surface.
       donors:
@@ -242,7 +330,7 @@ design_corpus:
       target_seam:
         - src/ui/mobile-sheet.ts
         - src/styles/app.css
-      parity: target architecture ahead; visual true-up required
+      parity: completed-and-runtime-accepted
       decision: adapt
       behavior: Preserve the existing one-sheet system and reconcile shared map styling and keys.
     - surface: embed
@@ -253,7 +341,7 @@ design_corpus:
         - index.html
         - src/styles/app.css
         - tests/embed-viewport.spec.ts
-      parity: target architecture ahead; 200 pixel crowding exists
+      parity: completed-and-runtime-accepted-at-200-pixel-floor
       decision: adapt
       behavior: Preserve embed isolation and improve tight-width control layout without adding chrome.
   conflicts:
@@ -262,18 +350,28 @@ design_corpus:
     - id: url-policy-missing
       resolution: docs/URL_SCHEMA_POLICY.md is absent; src/state/url.ts and URL tests are runtime authority.
     - id: eox-versus-noaa
-      resolution: Historical EOX ground and recent NOAA context keep separate source, clock, label, and failure custody.
+      resolution: >-
+        Historical EOX ground and recent NOAA context keep separate source,
+        clock, label, readiness, and failure custody. Wildfire, hazard-fire, and
+        fire-risk request NOAA only when the user explicitly chooses them.
     - id: s4-all-token
       resolution: Target durable framing=all supersedes the kit rule that omitted the parameter.
     - id: no-scroll
       resolution: Target measured scroll fallback supersedes the infeasible donor no-scroll target.
     - id: provisional-fire-metric
-      resolution: Do not use donor incident counts or tint bins because RX is included and no production point source exists.
+      resolution: >-
+        Reject donor point-incident counts and tint bins. The implemented metric
+        instead counts current mapped WFIGS WF and CX perimeters, excludes RX,
+        and uses the checked 2023 WHP artifact only when the current perimeter
+        query succeeds with zero.
     - id: d4-color-drift
       resolution: Measured #f87171 1.5 pixel rim supersedes stale prototype #ff4d4d and #ad0000 values.
   selected_visual_target:
     - Shared firefly scene with explicit historical ground truth and OSM fallback.
     - One dark left rail ordered mode, Conditions in view, region, continental framing, time, and share actions.
+    - Physical 1:50m continental coastline and lake linework, original ATNI-authored subregions, and three separate ocean actions.
+    - NADM mean-severity framing fills and D1 through D4 outline shares with coverage qualifications.
+    - Current mapped-fire-first Wildfire framing fills with static United States-only WHP fallback thresholds.
     - Official Drought palettes with a presentation-only D4 contrast rim.
     - Cool smoke, quiet wildfire perimeters, neutral prescribed-fire rings, and source-specific legends.
     - Existing mobile sheet, embed shell, URL, and response-foot architecture preserved.
@@ -297,8 +395,27 @@ sources:
       Sentinel data 2016).
     failure_behavior: Subdued OpenStreetMap remains underneath and a visible fallback notice replaces the vintage caption.
   - id: noaa-recent-geocolor
-    status: preserved
-    purpose: Recent bounded satellite context with pinned frame and observation time.
+    status: accepted
+    endpoint: https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/MERGEDGC_Last_24hr/ImageServer
+    purpose: >-
+      Recent bounded satellite context with a pinned frame and observation time;
+      requested by explicit Wildfire, hazard-fire, fire-risk, or satellite actions.
+    settlement: >-
+      Readiness and degradation settle from target-source evidence, not a global
+      map-idle event, so an unrelated source cannot clear or relabel the chip.
+    relationship: >-
+      This is recent visible imagery, not the smoke classification source. NOAA
+      HMS plume polygons retain their own retrieval and observation context.
+  - id: noaa-hms-smoke-plumes
+    status: accepted-live
+    endpoint: https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/NOAA_Satellite_Smoke_Detection_(v1)/FeatureServer/0
+    purpose: >-
+      Analyst-drawn GOES-East and GOES-West smoke plume polygons for the current
+      and previous UTC day, co-activated with mapped fire perimeters.
+    qualification: >-
+      Light, Medium, Heavy, and unknown describe apparent smoke thickness, not
+      ground-level air quality. The plume clock is independent of the selected
+      NOAA GeoColor frame and NIFC perimeter retrieval.
   - id: osm-fallback
     status: preserved
     purpose: Open, reliable fallback ground and map reference.
@@ -308,6 +425,65 @@ sources:
   - id: donor-wfigs-points
     status: rejected
     reason: Design snapshot only; no validated production point or hotspot source is wired.
+  - id: natural-earth-minimap-physical
+    status: accepted-static-presentation
+    product: Natural Earth 1:50m physical land and lakes, version 5.1.2
+    purpose: >-
+      Recognizable continental coastline and major-lake linework. The physical
+      geometry clips ATNI-authored navigation framings and does not introduce
+      state, province, Treaty, or sovereign-jurisdiction boundaries.
+    provenance: >-
+      Pinned land and lake GeoJSON downloads are SHA-256 verified by
+      scripts/build-minimap-geometry.mjs and compiled into
+      src/config/minimap-geometry.ts.
+    processing: >-
+      Simplified after Lambert azimuthal equal-area projection with a 12 km
+      interval and keep-shapes, then filtered below 250 square kilometers for
+      legible nav-scale islands.
+    license: public domain
+  - id: nadm-continental-monthly
+    status: accepted-live-summary
+    endpoint: https://www.ncei.noaa.gov/pub/data/nidis/geojson/na/nadm/NADM-current.geojson
+    purpose: >-
+      Monthly North American Drought Monitor mean-severity and D1 through D4
+      share summaries for the nine ATNI-authored land framings.
+    qualification: >-
+      Latitude-weighted sampling is approximate. It distinguishes assessed none
+      from no data, reports partial coverage, and discloses the Nunavut
+      analysis-mask proxy.
+    method: >-
+      A 0.5 degree overview grid, refined to 0.05 degree for Hawaii, weights
+      samples by cosine of latitude and rounds the ordinal mean to its nearest
+      display class with exact half ties resolving less severe.
+  - id: nifc-wfigs-current-interagency-perimeters
+    status: accepted-live-count-summary
+    endpoint: https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0
+    purpose: >-
+      Nine count-only spatial queries determine whether each framing intersects
+      at least one current mapped wildfire or incident-complex perimeter.
+    qualification: >-
+      The active-candidate filter admits WF and CX; RX does not qualify. Counts
+      describe mapped perimeters, not all incidents, and retrieval time is not
+      incident observation time. The nine-query feed refreshes five minutes
+      after each completed request set.
+  - id: usfs-whp-2023-minimap
+    status: accepted-static-derived-artifact
+    product: United States Forest Service Wildfire Hazard Potential 2023 classified, edition 4
+    service: https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer
+    doi: 10.2737/RDS-2015-0047-4
+    artifact_retrieved_at: "2026-08-10T06:06:40.385Z"
+    purpose: >-
+      United States-only strategic context when the current WFIGS query succeeds
+      with zero mapped wildfire perimeters.
+    thresholds: >-
+      Orange requires more than 50 percent high or very high. Yellow requires
+      more than 30 percent moderate or higher. Exact threshold values do not
+      pass, and unavailable current-fire data never falls through to WHP.
+    method: >-
+      Nearest-neighbor samples use cosine-latitude area weights at 0.05 degree
+      on the mainland and 0.01 degree for Hawaii; water is excluded from the
+      classified-land denominator.
+    qualification: Static strategic potential, not a forecast or current fire activity.
 
 invariants:
   - No sovereign-jurisdiction geometry is added or redistributed.
@@ -317,25 +493,55 @@ invariants:
   - loading, live, live (partial), unavailable, no data, and zoom in to load remain distinct.
   - Non-trivial network work is cancellable, time-bounded, and late responses cannot revive torn-down state.
   - EOX historical imagery never stands in for recent NOAA imagery or a current hazard source.
+  - A failed current WFIGS framing query never falls through to static WHP.
+  - Ocean click targets are schematic ENSO navigation, not claims about ocean boundaries.
   - No hotspot feed, incident point feed, fire score, synthetic incident, or new selected-fire engine is added.
   - No MapLibre upgrade, Worker change, deployment, analytics, tracking, or version change occurs.
   - Repository-authored text contains no U+2014 em dash.
 
 decisions:
   - id: DDM-UI-001
-    decision: Graduate EOX 2016 directly with a bounded probe and OSM fallback; do not copy donor tiles.
+    decision: >-
+      Graduate EOX 2016 directly with a bounded probe and OSM fallback; do not
+      copy donor tiles. Settle raster state from evidence for the requested
+      source rather than global map-idle state.
   - id: DDM-UI-002
-    decision: Preserve basemap=satellite as recent NOAA; the default token may render historical EOX shared ground.
+    decision: >-
+      Preserve basemap=satellite as recent NOAA; the default token may render
+      historical EOX shared ground. Wildfire, hazard-fire, and fire-risk request
+      NOAA only on an explicit user action, not during boot or URL restoration.
   - id: DDM-UI-003
     decision: Reuse the committed shell, cluster service, URL sync, and region command through named adapters.
   - id: DDM-UI-004
-    decision: Only Drought receives a backed continental metric; other modes show an explicit neutral navigation state.
+    decision: >-
+      Drought receives a backed NADM mean-severity and outline-share summary.
+      Wildfire receives a strict current-WFIGS-first summary with static WHP
+      thresholds only after a successful zero count. Heat, ENSO land framings,
+      and custom views remain explicitly neutral.
   - id: DDM-UI-005
     decision: Defer 3D terrain entry, point locators, pulse/glow, and recency rims pending a resolved entry/source contract.
   - id: DDM-UI-006
     decision: Split prescribed fire from wildfire within the existing WFIGS perimeter source.
   - id: DDM-UI-007
     decision: Render HMS density through one cool hue and opacity; unknown remains explicitly unclassified.
+  - id: DDM-UI-008
+    decision: >-
+      Use pinned Natural Earth 1:50m physical land and lakes for presentation
+      linework while preserving ATNI-authored subregions as the click geometry;
+      do not add state or province boundaries.
+  - id: DDM-UI-009
+    decision: >-
+      Make Pacific, Arctic, and Atlantic separate accessible controls. Each
+      click commits ENSO plus its ocean camera and URL state in one transaction.
+  - id: DDM-UI-010
+    decision: >-
+      A Wildfire minimap red state means at least one current mapped WFIGS WF or
+      CX perimeter, not an incident total. Static WHP orange and yellow states
+      are United States-only potential context and never imply current fire.
+  - id: DDM-UI-011
+    decision: >-
+      Preserve HeatRisk sequence DOM, focus, and delegated click targets across
+      redundant raster-status events while an identify read is pending or cached.
 
 work_units:
   - id: UI-01
@@ -396,9 +602,13 @@ work_units:
       Historical EOX source and capability probes are dated live checks, not
       deterministic CI. The passing batch used local fixtures for the probe and
       render tiles, including empty, mislabeled, partial, deadline, disposal,
-      NOAA-isolation, and fallback cases.
+      NOAA-isolation, and fallback cases. Commit 4dab788 then made raster
+      settlement source-specific, and that behavior passed the fresh-clone gate
+      and serial suite at the runtime acceptance SHA.
   - id: UI-03
-    user_visible_outcome: Unified desktop rail through the existing committed shell.
+    user_visible_outcome: >-
+      Unified desktop rail with physical continental linework, preserved
+      subregions, and separate accessible ocean navigation.
     dependencies: [UI-02]
     donor_references:
       - unified-interface/prototypes/navigation-rail.html
@@ -408,32 +618,50 @@ work_units:
       - src/ui/island/shell.tsx
       - src/ui/island/minimap.tsx
       - src/ui/sidebar.ts
+      - src/config/minimap-geometry.ts
+      - src/config/framing-shapes.ts
+      - src/config/oceans.ts
       - src/styles/app.css
     status: completed
     acceptance_criteria:
       - One committed mode selector
       - Conditions in view follows mode and stays status-derived
       - Region and framing controls reuse current URL and camera behavior
+      - Natural Earth linework does not replace the ATNI-authored subregions
+      - Pacific, Arctic, and Atlantic are separate keyboard and pointer targets
+      - Ocean selection commits ENSO, ocean camera, and URL state together
       - Share and embed actions reuse existing state
     verification:
       state: passed
-      commands:
-        - npm run test:serial -- tests/s4-shell.spec.ts tests/display-summary.spec.ts tests/island-premount.spec.ts tests/s4-minimap.spec.ts tests/url-state.spec.ts tests/s2-url-migration.spec.ts
-      time: "2026-08-10T03:24:00Z"
-      exit_code: 0
-      assertion_count: Core shell batch 65 passed; all additional scoped assertions passed in the 194 of 195 integration batch.
+      pre_true_up_scoped:
+        command: npm run test:serial -- tests/s4-shell.spec.ts tests/display-summary.spec.ts tests/island-premount.spec.ts tests/s4-minimap.spec.ts tests/url-state.spec.ts tests/s2-url-migration.spec.ts
+        time: "2026-08-10T03:24:00Z"
+        exit_code: 0
+        result: 65 shell-batch tests passed
+      true_up_acceptance:
+        batch: V-06-fresh-clone-runtime-acceptance
+        source_sha: 7b19a9b733c65ed1fe8eeed69427461997fe3f70
+        result: Covered by the green 747-test clean-clone matrix.
     receipts: []
-    notes: Preserve desktop scroll fallback, mobile sheet, and embed exclusion.
+    notes: >-
+      Preserve desktop scroll fallback, mobile sheet, and embed exclusion.
+      Natural Earth supplies only physical presentation linework; the existing
+      named framing geometry continues to own navigation.
   - id: UI-04
-    user_visible_outcome: Drought interface is legible and literal about polygon absence.
+    user_visible_outcome: >-
+      Drought is legible and literal about polygon absence, and its minimap
+      summarizes average monthly conditions across analyzed land.
     dependencies: [UI-02, UI-03]
     donor_references:
       - unified-interface/CONTRAST_REPORT_CU1_2026-08-09.md
     target_files:
       - src/config/palette.ts
+      - src/config/minimap-geometry.ts
       - src/layers/usdm.ts
       - src/ui/map-key.ts
+      - src/ui/island/minimap.tsx
       - src/ui/island/strip-metrics.ts
+      - src/state/minimap-drought.ts
       - src/impact/fire-context.ts
     status: completed
     acceptance_criteria:
@@ -441,17 +669,27 @@ work_units:
       - D4 rim is identified as presentation contrast
       - No rendered polygon is not translated into no Drought
       - Weekly, monthly, provincial, outlook, and index products remain separate
+      - Mean severity uses latitude-weighted NADM land samples and nearest class
+      - Exact half-class ties resolve lower and D1 through D4 share stays separate
+      - None, no data, unavailable, and partial coverage remain distinct
     verification:
       state: passed
-      commands:
-        - npm run test:serial -- tests/conditions-strip.spec.ts tests/minimap-drought.spec.ts tests/m-breadth-bc-drought.spec.ts tests/m-breadth-cdm-drought.spec.ts tests/m-breadth-nadm-drought.spec.ts tests/m-breadth-honesty.spec.ts tests/trio-hardening.spec.ts
-      time: "2026-08-10T03:20:00Z"
-      exit_code: null
-      assertion_count: All scoped assertions passed inside V-02a; Drought pure semantics also passed 4 of 4.
+      pre_true_up_scoped:
+        command: npm run test:serial -- tests/conditions-strip.spec.ts tests/minimap-drought.spec.ts tests/m-breadth-bc-drought.spec.ts tests/m-breadth-cdm-drought.spec.ts tests/m-breadth-nadm-drought.spec.ts tests/m-breadth-honesty.spec.ts tests/trio-hardening.spec.ts
+        time: "2026-08-10T03:20:00Z"
+        result: >-
+          Drought assertions passed inside V-02a; that broader batch failed only
+          on the separately repaired Wildfire search alias.
+      true_up_acceptance:
+        batch: V-06-fresh-clone-runtime-acceptance
+        source_sha: 7b19a9b733c65ed1fe8eeed69427461997fe3f70
+        result: Covered by the green 747-test clean-clone matrix.
     receipts: []
     notes: 3D terrain remains deferred; existing PNW hillshade remains available.
   - id: UI-05
-    user_visible_outcome: Wildfire view separates source meanings and remains strategic, not tactical.
+    user_visible_outcome: >-
+      Wildfire uses recent satellite context on explicit entry, separates source
+      meanings, and shows a current-first minimap without making tactical claims.
     dependencies: [UI-02, UI-03]
     donor_references:
       - wildfire/design/design-options.md
@@ -461,8 +699,15 @@ work_units:
       - src/layers/nifc-fires.ts
       - src/layers/hms-smoke.ts
       - src/layers/spc-fire-weather.ts
+      - src/config/clusters.ts
       - src/config/wildfire-presentation.ts
+      - src/config/minimap-whp.ts
+      - src/map/satellite.ts
       - src/ui/map-key.ts
+      - src/ui/island/minimap.tsx
+      - src/ui/island/shell.tsx
+      - src/state/cluster-service.ts
+      - src/state/minimap-wildfire.ts
       - src/impact/fire-context.ts
       - src/impact/sources.ts
     status: completed
@@ -472,13 +717,23 @@ work_units:
       - Fire count says mapped perimeters in view, not incidents
       - SPC and WHP retain outlook/static qualifications
       - Cancellation and late-response isolation hold
+      - Red requires at least one current mapped WFIGS WF or CX perimeter
+      - RX is excluded from the Wildfire minimap current-fire state
+      - Orange and yellow use strict 2023 WHP thresholds after a successful zero count
+      - A failed current-fire query never falls through to static potential
     verification:
       state: passed
-      commands:
-        - npm run test:serial -- tests/wildfire-source-semantics.spec.ts tests/layer-coactivation.spec.ts tests/cluster-service.spec.ts tests/cluster-controller-integration.spec.ts tests/conditions-strip.spec.ts tests/hazard-rail.spec.ts tests/interaction-coordinator.spec.ts tests/usfs-whp.spec.ts
-      time: "2026-08-10T03:24:00Z"
-      exit_code: 0
-      assertion_count: Core shell and Wildfire batch 65 passed; Wildfire pure and summary bundle 41 passed.
+      pre_true_up_scoped:
+        command: npm run test:serial -- tests/wildfire-source-semantics.spec.ts tests/layer-coactivation.spec.ts tests/cluster-service.spec.ts tests/cluster-controller-integration.spec.ts tests/conditions-strip.spec.ts tests/hazard-rail.spec.ts tests/interaction-coordinator.spec.ts tests/usfs-whp.spec.ts
+        time: "2026-08-10T03:24:00Z"
+        exit_code: 0
+        result: 65 shell and Wildfire tests passed
+      true_up_acceptance:
+        batch: V-06-fresh-clone-runtime-acceptance
+        source_sha: 7b19a9b733c65ed1fe8eeed69427461997fe3f70
+        result: >-
+          Current-first framing behavior and WHP thresholds are covered by the
+          green 747-test clean-clone matrix.
     receipts: []
     notes: No point glow, locator, pulse, hotspot, or selected-fire engine.
   - id: UI-06
@@ -489,25 +744,36 @@ work_units:
     target_files:
       - src/styles/app.css
       - src/ui/map-key.ts
+      - src/ui/heatrisk-sequence.ts
       - tests/helpers.ts
       - tests/interface-responsive.spec.ts
+      - tests/u4-stage5-overlap.spec.ts
+      - tests/heat-h1-heatrisk.spec.ts
     status: completed
     acceptance_criteria:
       - 720 and 721 pixel behavior is explicit
       - 390x844 and 844x390 remain map-first
       - 400x600 and 200x600 embeds remain contained
       - Keyboard, focus, 44 pixel coarse-pointer targets, and reduced motion pass
+      - Attribution clears the exact-time imagery chip and map controls at supported detents
+      - Redundant raster-status events preserve HeatRisk sequence focus and clicks
     verification:
       state: passed
-      commands:
-        - npm run test:serial -- tests/interface-responsive.spec.ts tests/mobile-sheet.spec.ts tests/landscape-viewport.spec.ts tests/embed-viewport.spec.ts tests/popup-viewport.spec.ts tests/impact-panel-a11y.spec.ts tests/studio-a11y.spec.ts
-      time: "2026-08-10T03:27:00Z"
-      exit_code: 0
-      assertion_count: 40 passed
+      pre_true_up_scoped:
+        command: npm run test:serial -- tests/interface-responsive.spec.ts tests/mobile-sheet.spec.ts tests/landscape-viewport.spec.ts tests/embed-viewport.spec.ts tests/popup-viewport.spec.ts tests/impact-panel-a11y.spec.ts tests/studio-a11y.spec.ts
+        time: "2026-08-10T03:27:00Z"
+        exit_code: 0
+        result: 40 responsive and accessibility tests passed
+      true_up_acceptance:
+        batch: V-06-fresh-clone-runtime-acceptance
+        source_sha: 7b19a9b733c65ed1fe8eeed69427461997fe3f70
+        result: >-
+          Attribution clearance and HeatRisk status-event interaction
+          preservation are covered by the green 747-test clean-clone matrix.
     receipts: []
     notes: Desktop shell remains excluded from mobile and embed surfaces.
   - id: UI-07
-    user_visible_outcome: Locally verified and visually inspected release candidate.
+    user_visible_outcome: Runtime-accepted implementation reproduced from a clean clone.
     dependencies: [UI-06]
     donor_references: []
     target_files:
@@ -515,24 +781,36 @@ work_units:
     status: completed
     acceptance_criteria:
       - Focused checks pass
+      - npm ci succeeds in a clean clone
       - npm run gate passes
-      - Full serial suite passes or a genuine external blocker is recorded
-      - Final production screenshots are inspected against the baseline
+      - Full serial suite passes at the runtime acceptance SHA
+      - Retained pre-true-up visuals stay labeled and final visual receipts use the acceptance SHA
     verification:
       state: passed
       commands:
+        - npm ci
         - npm run gate
         - npm run test:serial -- --reporter=dot
-      time: "2026-08-10T03:57:00Z"
+      time: not separately recorded in the fresh-clone receipt
       exit_code: 0
-      assertion_count: 720 full serial tests passed; release gate passed
-    receipts:
+      source_sha: 7b19a9b733c65ed1fe8eeed69427461997fe3f70
+      worktree: clean fresh clone
+      assertion_count: >-
+        746 passed, 1 intentionally skipped, and 0 failed across 747 tests in
+        101 files / 1095.9s command wall / 18.2m Playwright / clean clone
+      install_receipt: 281 packages installed; npm reported 5 known vulnerabilities
+      gate_receipt: passed
+    receipts: []
+    retained_pre_true_up_visual_metadata:
       - .playwright-cli/interface-integration/after/candidate-metadata.json
       - .playwright-cli/interface-integration/donors/donor-metadata.json
     notes: >-
-      Thirty-four local screenshots were captured and representative desktop,
-      breakpoint, mobile, landscape, and embed views were inspected. No push,
-      deploy, release, or version change occurred.
+      Retained local screenshots in before, donors, and after predate the five
+      implementation commits and are not final acceptance images. The final
+      true-up-7b19a9b receipt covers desktop, breakpoint, mobile, landscape,
+      and embed surfaces. The feature runtime was pushed at 0 ahead and 0
+      behind; no pull request, mainline, tag, Pages, Worker, or version change
+      was made.
 
 verification_batches:
   - id: V-00-before-build
@@ -652,12 +930,30 @@ verification_batches:
     command: npm run test:serial -- --reporter=dot
     time: "2026-08-10T03:45:00Z"
     exit_code: 0
-    assertion_count: 720 passed in 14.3 minutes
+    assertion_count: historical pre-true-up serial receipt; superseded by V-06
     receipt_path: null
+    scope: Pre-true-up implementation state only.
+  - id: V-06-fresh-clone-runtime-acceptance
+    state: passed
+    source_sha: 7b19a9b733c65ed1fe8eeed69427461997fe3f70
+    worktree: clean fresh clone
+    commands:
+      - command: npm ci
+        result: PASS
+        detail: 281 packages installed; npm reported 5 known vulnerabilities.
+      - command: npm run gate
+        result: PASS
+      - command: npm run test:serial -- --reporter=dot
+        result: PASS
+        detail: >-
+          746 passed, 1 intentionally skipped, and 0 failed across 747 tests
+          in 101 files / 1095.9s command wall / 18.2m Playwright / clean clone.
+    scope: Final runtime acceptance for the five true-up implementation commits.
 
 visual_receipts:
   - id: target-before
-    state: passed
+    state: retained-pre-true-up
+    phase: pre-true-up
     path: .playwright-cli/interface-integration/before
     viewports:
       - 1440x900
@@ -669,7 +965,8 @@ visual_receipts:
       - 200x600-embed
     surfaces: [drought, wildfire]
   - id: donor-isolation
-    state: passed
+    state: retained-pre-true-up
+    phase: pre-true-up
     path: .playwright-cli/interface-integration/donors
     files:
       - donor-unified-scene-1440x900.png
@@ -678,8 +975,9 @@ visual_receipts:
       - donor-wildfire-inspect-1440x900.png
       - donor-wildfire-mobile-390x844.png
       - donor-s4-walkthrough-1440x900.png
-  - id: target-after
-    state: passed
+  - id: target-after-pre-true-up
+    state: retained-pre-true-up
+    phase: pre-true-up
     path: .playwright-cli/interface-integration/after
     viewports:
       - 1440x900
@@ -691,18 +989,56 @@ visual_receipts:
       - 200x600-embed
     surfaces: [drought, wildfire]
     assertion_count: >-
-      14 screenshots; exact viewport dimensions, zero horizontal overflow,
-      zero map-key/control overlaps, correct embed shell exclusion, zero
-      console errors, and representative visual inspection passed.
+      Fourteen screenshots passed the checks recorded for the earlier candidate.
+      These images predate the true-up implementation commits and do not serve
+      as final visual acceptance for the runtime SHA.
+  - id: final-true-up-7b19a9b
+    state: passed
+    phase: final-true-up
+    source_sha: 7b19a9b733c65ed1fe8eeed69427461997fe3f70
+    path: .playwright-cli/interface-integration/true-up-7b19a9b
+    viewports:
+      - 1440x900
+      - 721x900
+      - 720x900
+      - 390x844
+      - 844x390
+      - 400x600-embed
+      - 200x600-embed
+    surfaces: [drought, wildfire, atlantic-ocean, enso, mobile-fire, embed]
+    files:
+      - desktop-drought-1440x900.jpg
+      - desktop-drought-minimap-scrolled.jpg
+      - desktop-wildfire-1440x900.jpg
+      - desktop-atlantic-ocean-1440x900.jpg
+      - mobile-fire-satellite-390x844-final.jpg
+      - drought-721x900.jpg
+      - drought-720x900.jpg
+      - drought-landscape-844x390.jpg
+      - drought-embed-400x600.jpg
+      - drought-embed-200x600.jpg
+    findings: >-
+      Physical minimap linework and ocean controls remained legible; the
+      Atlantic door committed ENSO and ocean URL state; Drought, breakpoint,
+      landscape, mobile, and embed chrome remained contained. The live mobile
+      NOAA qualification cleared Recent by 10 pixels and did not intersect the
+      expanded attribution disclosure. Two bounded live NIFC perimeter
+      requests timed out; the app demoted to custom partial without inventing
+      red or WHP fallback state.
 
 risks:
   - EOX exposes a public endpoint but no free-service availability guarantee; OSM fallback and visible failure copy are mandatory.
   - EOX 2016 is global historical context and can visually imply currency if its always-visible vintage line is clipped.
   - Donor scene and rail receipts validate standalone prototypes, not target integration.
   - Missing docs/URL_SCHEMA_POLICY.md increases reliance on source and tests as the URL authority.
-  - Live NIFC was unavailable in the before-state browser capture; deterministic fixtures must carry semantic tests.
+  - WFIGS is a live external service; an unavailable or timed-out framing count must remain unavailable and cannot fall through to WHP.
+  - WFIGS framing counts describe current mapped perimeters only, not every incident, and the retrieval clock is not an incident-observation clock.
+  - The 2023 WHP artifact is static, approximate, and United States-only; Mexico and Canada correctly report no WHP coverage.
+  - Natural Earth linework is generalized physical presentation geometry and must not be described as a state, province, Treaty, or sovereign-jurisdiction boundary.
   - The 200x600 embed remains intrinsically dense; compact attribution and dock containment are regression-tested at that floor.
   - Live NIFC field freshness semantics remain unverified, so no perimeter-recency claim or rim is authorized.
+  - npm reported 5 known vulnerabilities during the accepted clean-clone install; this tracker makes no remediation or exploitability claim.
+  - The final visual pass observed two bounded live NIFC perimeter timeouts; deterministic source fixtures passed, but upstream availability remains operational risk.
 
 blockers: []
 
@@ -713,29 +1049,42 @@ deferred:
     reason: No production incident-point or hotspot source is wired or authorized.
   - id: wildfire-recency-rims
     reason: Perimeter timestamp field semantics require live verification before a rim can claim recency.
-  - id: fire-framing-tint
-    reason: Donor metric includes prescribed fire and no current backed per-framing fire metric exists.
   - id: heat-enso-detail
     reason: Prompt limits these modes to compatibility and regression work.
   - id: donor-eox-cache
     reason: Regional and partial coverage cannot support the app-wide ground.
 
 next_action: >-
-  After reviewer approval, create one intentional commit that excludes the
-  user-owned planning prompt and ignored visual receipts. Fetch that commit in
-  a fresh workspace, run npm ci, npm run gate, and npm run test:serial --
-  --reporter=dot, then compare the separately retained visual receipts before
-  opening a pull request.
+  Pause implementation. Patrick must decide whether this checkpoint closes the
+  0.6.x interface line and separately authorize pull-request and release review,
+  or name one more bounded visible 0.6.x outcome. Selected-place NIFC work
+  remains deferred until explicit closure and authorization.
 closeout:
-  state: locally-verified-release-candidate
-  completed_at: "2026-08-10T03:57:12Z"
-  release_gate: passed
-  full_serial: 720 passed in 14.3 minutes
-  visual_receipts: 34 screenshots captured; representative matrix inspected
-  browser_console_errors: 0
-  preview_services: stopped
-  publication: none
+  state: true-upped-feature-checkpoint
+  completed_on: "2026-08-10"
+  runtime_acceptance_sha: 7b19a9b733c65ed1fe8eeed69427461997fe3f70
+  implementation_commits: [f29aa79, 4dab788, 2c67637, 10c13de, 7b19a9b]
+  dependency_install: passed; 281 packages installed; npm reported 5 known vulnerabilities
+  release_gate: passed in clean clone
+  full_serial: >-
+    746 passed, 1 intentionally skipped, and 0 failed across 747 tests in 101
+    files / 1095.9s command wall / 18.2m Playwright / clean clone
+  visual_receipts: >-
+    Final desktop, breakpoint, landscape, mobile, and embed receipts are under
+    .playwright-cli/interface-integration/true-up-7b19a9b. Earlier before,
+    donor, and after folders remain labeled pre-true-up.
+  publication:
+    pull_request: unchanged
+    origin_main: >-
+      Not changed by this true-up. It independently advanced to scheduled ENSO
+      snapshot commit 81f2c71b2a8eae2b5a52738a09046d215d5398b1.
+    tag: unchanged
+    pages: unchanged
+    worker: unchanged
   package_version: unchanged at 0.6.25
   git_state: >-
-    Authorized changes remain uncommitted. The unrelated user-owned planning
-    prompt remains untracked and untouched.
+    The runtime acceptance commit and later documentation-only true-up tip were
+    pushed to origin/feature/heatrisk-legibility. The final feature branch
+    matches its upstream. The fresh-clone acceptance tree was clean. The
+    user-owned planning prompt remains untracked, preserved, and untouched in
+    the working repository.
