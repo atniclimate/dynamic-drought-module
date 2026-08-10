@@ -25,6 +25,10 @@ The `0.6.25` interface integration is complete, accepted, and pushed on branch
 `feature/heatrisk-legibility` at runtime acceptance receipt
 `7b19a9b733c65ed1fe8eeed69427461997fe3f70`.
 
+The current pushed branch tip is the later documentation-only true-up
+`bb072a88b454a26f26a102a7a4b730b57205fa8c`. Runtime acceptance remains pinned
+to `7b19a9b`; the documentation commit is not a second runtime receipt.
+
 The accepted commit sequence is:
 
 - `f29aa79 feat: integrate drought and wildfire interface`
@@ -124,10 +128,17 @@ local true-up did not reverify or alter them:
   feature, with merge base `e1a9084`. This work did not reconcile or push
   `main`.
 
-## Next-session decision fork
+## What remains, in order
 
-There is no automatic continuation from the accepted `0.6.25` checkpoint.
-Patrick must choose one of two bounded paths:
+The interface-integration program is complete. The long-run integration prompt
+and `docs/design/interface-integration/MODULE_TRACKING.yaml` are historical
+inputs and acceptance receipts, not active roadmaps. Do not extend their unit,
+status, or manifest machinery into the next milestone.
+
+### 1. Make the `0.6.x` product decision
+
+There is no automatic implementation continuation from the accepted `0.6.25`
+checkpoint. Patrick must choose one of two bounded paths:
 
 1. Explicitly close the `0.6.x` interface line and separately authorize a
    pull-request and release review of the accepted checkpoint.
@@ -136,11 +147,40 @@ Patrick must choose one of two bounded paths:
 
 Closing the interface line does not itself authorize a pull request, merge,
 tag, Worker deployment, Pages deployment, publication, or version assignment.
-Those remain separate external actions.
+Those remain separate external actions. Any release review must reconcile the
+feature branch with the independently advanced `main`, true up release-facing
+prose, and review the recorded dependency advisories without turning historical
+receipts into claims about the current external state.
 
-The selected-place NIFC active-perimeter briefing remains deferred to
-`v0.7.0`. It does not open until Patrick explicitly closes `0.6.x`, and it is
-not implied by a release review of `0.6.25`.
+### 2. Close the evidence gaps appropriate to that decision
+
+Before publication, collect only the evidence needed for the selected path:
+
+- direct real-device review across the responsive and embed matrix;
+- deterministic regression coverage after any reconciliation with `main`;
+- dated live-source checks that are clearly separated from fixture-backed
+  acceptance;
+- a bounded accessibility and Content Security Policy review for the release
+  candidate; and
+- a plan for post-publication upstream monitoring and user-comprehension work.
+
+Nationwide selected-place behavior outside the Pacific Northwest and
+comprehension with Tribal natural-resource staff, emergency managers, and
+agency users remain product-evidence gaps. They are not implied complete by the
+green browser suite.
+
+### 3. Open the first `v0.7.0` engine milestone only when authorized
+
+The selected-place National Interagency Fire Center (NIFC) active-perimeter
+briefing remains the first shaped `v0.7.0` milestone. It is distinct from the
+completed regional Wildfire minimap count and does not open until Patrick
+explicitly closes `0.6.x` and authorizes the new milestone.
+
+### 4. Select later work from the bounded backlog
+
+After the NIFC milestone, choose one source-fenced engine or usability outcome
+at a time. The longer-term directions below and `docs/IDEAS.md` are the
+candidate pool; neither authorizes parallel implementation.
 
 ## Accepted source and presentation boundaries
 
@@ -250,6 +290,33 @@ Water:
 - Keep proprietary providers, authentication, analytics, telemetry, and
   tracking out of the static application.
 
+## Skills and bounded agent roles
+
+Use skills at the point where their procedure is needed; do not turn them into
+a second delivery system.
+
+| Work | Skill or role | Apply it when | Boundary |
+| --- | --- | --- | --- |
+| Source or layer feasibility | `build-static-gis-layers` | Before adopting NIFC selected-place queries, CPC guidance, gridded drought, vegetation stress, water, fire, or ocean candidates | Verify the exact machine endpoint, licence, Cross-Origin Resource Sharing, time, extent, missing data, limits, and static-client fit before runtime work. |
+| Candidate discovery | DDM data-scout agent | A milestone has a named information need but no verified endpoint | Return candidate records only. Do not edit runtime configuration or treat discovery as verification. |
+| Independent source verification | DDM source-verifier agent | After scouting and before source selection | Recheck transport, payload shape, completeness, freshness, licence, and failure semantics independently. Record source fact separately from inference. |
+| Runtime implementation | Candidate `ddm-layer-runtime` skill | After a source contract is accepted | Encode current activation, cancellation, bounded cache, URL/embed isolation, and all six layer states. Rebuild this from current runtime authority rather than copying the legacy four-state layer skill. |
+| Responsive and visual acceptance | `browser:control-in-app-browser` plus a candidate DDM UI-verifier role | At the end of each visible slice and before release review | Use existing focused Playwright specs and the viewport matrix. Keep screenshots as receipts, not a review ledger. Use `chrome:control-chrome` only when existing signed-in Chrome state is required. |
+| Exploratory charts or comparisons | `visualize:visualize` | During a bounded design decision for a chart, sequence, or comparison | Exploration does not authorize a production visualization or a new data claim. |
+| Tribal stewardship and resource routing | Candidate `ddm-tribal-stewardship` skill and, only when scoped, a land-resource research agent | Before changing Tribal or Treaty presentation, selection, custody, or resource routing | Preserve no redistribution, formal names, representation caveats, and deployer custody. Do not create or acquire sovereign polygons. |
+| Pull request and review | GitHub orientation, comment, and continuous-integration skills | Only after the corresponding external action is authorized | Use general GitHub orientation for read-only review. Use CI-fix or review-comment workflows only for an actual pull request, and use publish/push workflow only with explicit authorization. |
+
+The useful legacy roles are data scout, source verifier, and UI verifier. An
+impact analyst or land-resource analyst should be introduced only for a named,
+evidence-bounded content milestone. Do not import the old `pickup`, `trueup`,
+phase-harness, automatic write-back, or self-improving-suite machinery.
+
+If repeated work justifies repository-specific skills, create only thin
+current-contract skills for source integrity, layer runtime, browser
+acceptance, and Tribal stewardship. Author them with `skill-creator` after the
+first concrete milestone exposes the reusable procedure; do not create them as
+planning ceremony.
+
 ## Confidence and validation focus
 
 High confidence at the accepted runtime:
@@ -288,8 +355,9 @@ reliability, production configuration, or user comprehension.
 
 ## Current boundaries
 
-- Start the next session from the accepted runtime receipt and this decision
-  fork. Do not reopen completed interface integration by default.
+- Start the next implementation session from the accepted runtime receipt and
+  the ordered decisions above. Do not reopen completed interface integration
+  by default.
 - Do not begin the selected-place NIFC engine until Patrick explicitly closes
   `0.6.x` and opens the `v0.7.0` milestone.
 - Do not add a DDM severity score, blended hazard score, ignition prediction,

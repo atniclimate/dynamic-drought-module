@@ -1,7 +1,7 @@
 schema_version: 1
-updated: 2026-07-30
+updated: 2026-08-10
 scope: successor_candidate_sources
-runtime_authority: src/config/urls.ts
+runtime_authority: src/config/layers.ts and the runtime source contracts
 notes:
   - Entries in this file are research candidates, not shipped capabilities.
   - Candidate status does not authorize runtime requests, proxy access, bundling, deployment, or publication.

@@ -3,9 +3,10 @@
 <!-- GENERATED FILE. Do not edit by hand: edit src/config/capability-matrix.ts
      and run `npm run build:coverage-matrix`. `npm run gate` fails on drift. -->
 
-What the Dynamic Drought Module (DDM) actually does today for each coverage
-family, as recorded in `src/config/capability-matrix.ts` (the source of
-truth; this file is generated from it). Levels: **full** (shipped and
+Current selected-place, drought, landscape, and impact capability for each
+coverage family, as recorded in `src/config/capability-matrix.ts` (the source of
+truth for these axes; this file is not an inventory of every map layer or
+regional overview). Levels: **full** (shipped and
 verified), **partial** (shipped with the named limitation), **none** (not
 supported; the note says why).
 
@@ -145,8 +146,9 @@ water sources.
 
 ## Fire follow-on
 
-The fire module should receive the same architectural expansion: canonical
-geography, independent per-source capability, time-aware source contracts,
-cross-source synthesis that preserves issuer support, and bounded
-cancellable caching. This record does not activate or broaden a fire source;
-that work requires its own implementation and verification.
+The current Wildfire display and regional minimap are shipped separately from
+this selected-place matrix. The planned selected-place fire expansion needs
+canonical geography, independent per-source capability, time-aware source
+contracts, issuer-preserving synthesis, and bounded cancellable caching.
+This matrix does not claim that selected-place milestone is implemented or
+authorize a broader fire source.
