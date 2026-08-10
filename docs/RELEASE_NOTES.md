@@ -2,10 +2,8 @@
 
 ## v0.6.25
 
-`v0.6.25` is the current local package and feature checkpoint. It has not been
-merged to `main`, tagged, published, or deployed. The public application
-remains on the separately recorded `v0.6.24` release until those actions are
-explicitly authorized.
+`v0.6.25` is the current published application. The interface release was
+merged to `main` in `9c35bbf` and deployed to GitHub Pages on 2026-08-10.
 
 The checkpoint integrates Drought and Wildfire into one responsive Brief rail,
 while preserving URL state, mobile behavior, embeds, sidebar controls, and the
@@ -23,12 +21,11 @@ raster settlement to the selected source, kept the mobile imagery disclosure
 clear of controls, and prevented late HeatRisk hydration from overwriting a
 user-selected day.
 
-The accepted runtime is commit `7b19a9b733c65ed1fe8eeed69427461997fe3f70`.
-Fresh-clone verification passed `npm ci`, `npm run gate`, and
-`npm run test:serial -- --reporter=dot` with 746 passed, 1 intentionally
-skipped, and 0 failed across 747 tests in 101 files. Final desktop, responsive,
-mobile, and embed visual receipts are stored under
-`.playwright-cli/interface-integration/true-up-7b19a9b/`.
+The feature runtime was accepted at
+`7b19a9b733c65ed1fe8eeed69427461997fe3f70`. The merged `main` release passed
+`npm ci`, `npm run gate`, and `npm run test:serial -- --reporter=dot` with 746
+passed, 1 intentionally skipped, and 0 failed across 747 tests in 101 files.
+The GitHub Pages workflow repeated the release gate before deployment.
 
 This checkpoint includes regional NIFC framing counts but not the deferred
 selected-place NIFC briefing engine. Opening that engine remains a separate

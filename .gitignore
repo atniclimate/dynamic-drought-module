@@ -10,22 +10,10 @@ Thumbs.db
 .env.*
 !.env.example
 
-# Phase B handoff bundle (kept local; relocated into place during Phase B)
-.handoff/
-
-# Session-specific handoff prompt (not part of the shipped baseline)
-KICKOFF.md
-
 # Build output / dependencies
 node_modules/
 dist/
 .vite/
-
-# Background-task transcripts (when running with subagents)
-*.tasks.output
-
-# Claude Code transient scheduled-task lock
-.claude/scheduled_tasks.lock
 
 # Python build-time toolchain for the P9 landscape signature (build-time only,
 # never shipped to the browser; the client consumes only the baked JSON snapshot)
@@ -36,23 +24,8 @@ __pycache__/
 # P9 raster download / windowed-read cache (large; fetched at build time, not committed)
 scripts/.cache/
 
-# Hillshade PMTiles staging output, kept local until hosting is decided.
+# Local data-building output
 tiles-staging/
-
-# Local reference material, never published: the pre-migration Leaflet
-# baseline (a copy of the separate drought-region-maps repository) and
-# the canonical skills under .claude/skills/ (the root skills/ path holds
-# only local reference files). The pattern is anchored to the repository
-# root so it does not swallow new files under .claude/skills/.
-drought-region-maps/
-/skills/
-
-# research/: the markdown plans, meta-analysis, and evidence logs ARE
-# tracked, but source PDFs (typically copyrighted journal articles) stay
-# local; redistributing them from a CC BY-NC-SA repository is a license and
-# copyright problem. Keep seed papers in research/ locally; commit the prose.
-research/**/*.pdf
-research/**/*.PDF
 
 # Playwright browser-verification session artifacts
 .playwright-cli/
@@ -63,11 +36,35 @@ test-results/
 playwright-report/
 blob-report/
 
-# graphify: graph outputs are committed; machine-local state is not
-graphify-out/.graphify_python
-graphify-out/.graphify_root
-graphify-out/cache/
-graphify-out/cost.json
-
 # wrangler dev local state (workers/proxy)
 workers/proxy/.wrangler/
+
+# Local agent, session, planning, and research material. These files may stay
+# in a working copy, but they are not part of the public application source.
+**/AGENTS.md
+**/CLAUDE.md
+**/*HANDOFF*.md
+**/*POST_MORTEM*.md
+**/*POST-MORTEM*.md
+/KICKOFF.md
+/ORIGIN.md
+/.agent/
+/.agents/
+/.claude/
+/.codex/
+/.handoff/
+/drought-region-maps/
+/planning/
+/post-mortem/
+/research/
+/reviews/
+/skills/
+*.tasks.output
+
+# Local product planning and execution receipts
+/docs/IDEAS.md
+/docs/SOURCES_CATALOG.yaml
+/docs/SUCCESSOR_PLAN.md
+/docs/handoffs/
+/docs/prompts/
+**/MODULE_TRACKING.yaml

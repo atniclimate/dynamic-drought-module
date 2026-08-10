@@ -129,10 +129,10 @@ current URL.
 
 Display-state parameters also round-trip (`view` for the Brief/console
 mode, `week` for the USDM archive, `dmode`, `sst`, `outlook`, `basemap`);
-the authoritative grammar for every parameter is
-`docs/URL_SCHEMA_POLICY.md`. Old shared links keep working: `tribal` is
-still a valid key (now the deployer-data slot, off by default and not
-shown in the default interface; naming it in `layers` turns it on and
+the authoritative grammar is implemented in `src/state/url.ts` and pinned by
+the URL-state and legacy-link browser tests. Old shared links keep working:
+`tribal` is still a valid key (now the deployer-data slot, off by default and
+not shown in the default interface; naming it in `layers` turns it on and
 reveals its toggle), and legacy layer lists resolve deterministically.
 
 Because condition surfaces render one at a time, a `layers` list naming
@@ -316,11 +316,10 @@ honestly as unavailable.
 This repository carries the deployable application, bundled assets,
 browser test suite, product data builders, validation gates, and optional
 Cloudflare Worker. Run `npm run gate` for the static build and product
-checks, and `npm run test:serial` for the full browser suite. Project
-operating rules are in `AGENTS.md`; donor provenance and scaffold
-boundaries are in `ORIGIN.md`. Current successor priorities, release
-boundaries, confidence gaps, and approved improvement directions are in
-[`docs/SUCCESSOR_PLAN.md`](docs/SUCCESSOR_PLAN.md).
+checks, and `npm run test:serial` for the full browser suite. Public release
+history is in [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md), and the
+generated coverage record is in
+[`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md).
 
 ## Browser support
 
