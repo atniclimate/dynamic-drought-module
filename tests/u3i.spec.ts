@@ -48,10 +48,9 @@ const REGION_KEYS = Object.keys(REGIONS) as RegionKey[];
 
 /**
  * The region grid became a plain, secondary single-column "jump to" list with
- * full-word `region.label` names (replacing the abbreviated `short`), and it is
- * hidden entirely in Brief, where the search is the one "where" control. The
- * `#region-buttons` / `.region-btn` / `data-region-key` radiogroup contract is
- * unchanged (the island pre-mount boot signal still counts the buttons).
+ * full-word `region.label` names (replacing the abbreviated `short`). Desktop
+ * Brief now rehosts that same radiogroup ahead of the continental minimap; the
+ * `#region-buttons` / `.region-btn` / `data-region-key` contract is unchanged.
  */
 test.describe('U3i region demotion (D-0.7.0-009)', () => {
   test('console: the jump-to list shows full-word labels with radiogroup semantics', async ({
@@ -59,7 +58,7 @@ test.describe('U3i region demotion (D-0.7.0-009)', () => {
   }) => {
     await gotoApp(page, '?view=console');
 
-    // A visible console "where" control (Brief hides it; see the next test).
+    // A visible console "where" control in its static fallback seat.
     await expect(page.locator('#panel-region')).toBeVisible();
     await expect(page.locator('#region-buttons')).toHaveAttribute('role', 'radiogroup');
 
@@ -84,22 +83,18 @@ test.describe('U3i region demotion (D-0.7.0-009)', () => {
     await expect(regionButton(page, DEFAULT_REGION)).toHaveClass(/\bactive\b/);
   });
 
-  test('brief: the region jump-to panel is hidden (the search is the one "where")', async ({
+  test('brief: the same region jump-to panel is seated before the minimap', async ({
     page
   }) => {
     await gotoApp(page); // bare URL => Brief
 
     await expect(page.locator('#app')).toHaveClass(/\bview-brief\b/);
 
-    // #app.view-brief #panel-region { display: none } (app.css).
-    await expect(page.locator('#panel-region')).toBeHidden();
-    await expect(regionButton(page, DEFAULT_REGION)).toBeHidden();
-
-    // The buttons stay in the DOM (the island pre-mount boot signal counts them),
-    // just not displayed.
+    await expect(page.locator('#shell-region-host > #panel-region')).toBeVisible();
+    await expect(regionButton(page, DEFAULT_REGION)).toBeVisible();
     await expect(page.locator('#region-buttons .region-btn')).toHaveCount(REGION_KEYS.length);
 
-    // The surviving "where" control in Brief is the head search.
+    // The existing Brief search remains available in its later refinement seat.
     await expect(page.locator('#brief-search [data-ddm-search]')).toBeVisible();
   });
 });

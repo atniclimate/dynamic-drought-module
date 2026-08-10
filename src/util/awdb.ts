@@ -20,7 +20,7 @@
  */
 
 import { URLS } from '../config/urls';
-import { fetchWithBudget } from './fetch';
+import { fetchBufferedWithBudget } from './fetch';
 import type { StationValue, TelemetryFreshness } from '../types/station';
 
 /** Per-call network budget, matching the popup hydration budget. */
@@ -77,7 +77,7 @@ export async function fetchAwdbDailySeries(
 
   let resp: Response;
   try {
-    resp = await fetchWithBudget(directUrl, {}, signal, FETCH_TIMEOUT_MS);
+    resp = await fetchBufferedWithBudget(directUrl, {}, signal, FETCH_TIMEOUT_MS);
     // The AWDB backend sits behind a load balancer with session affinity
     // and throws intermittent 5xx (observed live during verification,
     // 2026-07-01). The Worker's different egress path has a real chance of
@@ -89,7 +89,7 @@ export async function fetchAwdbDailySeries(
     if (signal?.aborted) throw err;
     if (URLS.workerProxy === '') throw err;
     const proxied = `${URLS.workerProxy}/proxy?url=${encodeURIComponent(directUrl)}`;
-    resp = await fetchWithBudget(proxied, {}, signal, FETCH_TIMEOUT_MS);
+    resp = await fetchBufferedWithBudget(proxied, {}, signal, FETCH_TIMEOUT_MS);
   }
   if (!resp.ok) throw new Error(`AWDB HTTP ${resp.status}`);
   return parseAwdbPayload(await resp.json());

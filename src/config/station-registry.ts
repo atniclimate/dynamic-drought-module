@@ -13,7 +13,7 @@ import type {
   StationViewportDiscoveryRequest,
   ViewportBounds
 } from '../types/station-network';
-import { fetchWithBudget } from '../util/fetch';
+import { fetchBufferedWithBudget, fetchWithBudget } from '../util/fetch';
 import { quantizeBbox } from '../util/bbox';
 import { isObject } from '../util/guards';
 
@@ -1613,11 +1613,16 @@ async function fetchAgrimetStationList(
   // stations honestly instead (#17).
   if (URLS.workerProxy === '') return [];
   // The AgriMet origin sends no CORS header, so the request must go through the
-  // Worker proxy (www.usbr.gov is already on the allow-list). The response is a
+  // Worker proxy (this exact AgriMet path is in the route table). The response is a
   // JavaScript data file (application/x-javascript), not JSON; read it as text
   // and extract the single-quoted string assigned to `agrimet_sites`.
   const proxied = `${URLS.workerProxy}/proxy?url=${encodeURIComponent(URLS.usbrAgrimetSitesJs)}`;
-  const response = await fetchWithBudget(proxied, {}, signal, AGRIMET_DISCOVERY_TIMEOUT_MS);
+  const response = await fetchBufferedWithBudget(
+    proxied,
+    {},
+    signal,
+    AGRIMET_DISCOVERY_TIMEOUT_MS
+  );
   if (!response.ok) {
     throw new Error(`USBR AgriMet station discovery HTTP ${response.status}`);
   }

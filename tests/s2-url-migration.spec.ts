@@ -48,10 +48,11 @@ const SURFACE_KEYS = new Set(
 // ---------------------------------------------------------------------------
 
 test.describe('S2 parse grammar (Node)', () => {
-  test('framing= accepts exactly the nine FramingKey tokens; everything else is the ALL state', () => {
+  test('framing= accepts the nine shape keys plus the explicit ALL camera', () => {
     for (const key of FRAMING_KEYS) {
       expect(parseFramingParam(key)).toBe(key);
     }
+    expect(parseFramingParam('all')).toBe('all');
     expect(parseFramingParam(null)).toBeNull();
     expect(parseFramingParam('')).toBeNull();
     expect(parseFramingParam('national')).toBeNull();
@@ -356,7 +357,7 @@ test.describe('S2 framing= and the legacy links in the browser', () => {
     expect(params.get('region')).toBeNull();
   });
 
-  test('an unknown framing token reads as the ALL state and is dropped', async ({ page }) => {
+  test('an unknown framing token returns camera custody to the legacy region and is dropped', async ({ page }) => {
     await gotoApp(page, '?framing=atlantis');
 
     await waitForLayerSettled(page, 'states');
@@ -366,7 +367,7 @@ test.describe('S2 framing= and the legacy links in the browser', () => {
     expect(params.get('region')).toBe('washington_state');
   });
 
-  test('a region click clears the framing back to ALL (one camera vocabulary)', async ({
+  test('a region click clears the minimap framing (one camera vocabulary)', async ({
     page
   }) => {
     await gotoApp(page, '?framing=pacific-coast');

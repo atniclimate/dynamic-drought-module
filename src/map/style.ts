@@ -4,27 +4,19 @@ import { URLS } from '../config/urls';
 /**
  * Build the base MapLibre GL JavaScript style specification.
  *
- * Returns a minimal style: a light background layer plus the OpenStreetMap
- * (OSM) standard raster basemap. Per-feature layer modules append their own
- * sources and layers on top at runtime via `map.addSource()` /
- * `map.addLayer()`, so the style file stays small and each layer owns its
- * own paint and visibility logic.
+ * Returns a minimal shared scene: a dark background, subdued OpenStreetMap
+ * (OSM) fallback, and the historical EOxCloudless Sentinel-2 2016 ground.
+ * The EOX layer starts hidden and is revealed only after the bounded probe in
+ * `src/map/historical-ground.ts` succeeds. Per-feature layer modules append
+ * their own sources and layers on top at runtime via `map.addSource()` /
+ * `map.addLayer()`, so the style file stays small and each layer owns its own
+ * paint and visibility logic.
  *
- * Subdued basemap. The drought layers (especially the bright USDM D0-D4
- * ramp) are the focus, so the basemap is deliberately muted: OSM standard
- * tiles desaturated and flattened with raster paint, drawn at partial
- * opacity, so the result reads as a near-neutral light backdrop while roads
- * and labels still give spatial reference for watersheds, reservations, and
- * reservoirs. The basemap stays an open, pre-approved provider (CLAUDE.md
- * rule 2; no proprietary tiles). The paint values below are tuned starting
- * points; iterate them in the browser with USDM on over the Columbia
- * headwaters, Yakima, and Klamath, where the warm ramp sits over both
- * forested and arid OSM tones.
- *
- * The light background layer is load-bearing: the app chrome behind the map
- * is dark slate, so a partly-transparent basemap composited directly over it
- * would look muddy. Compositing over a light background instead pushes the
- * basemap toward a clean light gray.
+ * The EOX paint is the selected Firefly Candidate A treatment from the design
+ * transfer: dark enough for one-scene continuity while retaining land-cover
+ * texture beneath official condition palettes. OSM is always present below
+ * it and uses a matching dark treatment, so an EOX outage degrades to a map,
+ * never a blank rectangle. The sources remain open and require no key.
  *
  * Glyphs note (0.7.0 U0a): the `glyphs` template points at the SELF-HOSTED
  * PBF files under `public/fonts/glyphs/` (provenance and license in
@@ -35,8 +27,9 @@ import { URLS } from '../config/urls';
  * absolute from the page origin because a relative glyphs URL is not
  * reliably resolved across MapLibre versions.
  *
- * Attribution covers OpenStreetMap (OSM) contributors. MapLibre surfaces it
- * through the AttributionControl added in `createMap` (see `src/map/init.ts`).
+ * Attribution covers OpenStreetMap (OSM) contributors and EOxCloudless. The
+ * latter is also repeated in the always-visible historical-ground caption so
+ * compact attribution controls cannot hide the imagery identity or vintage.
  */
 export function buildBaseStyle(): maplibregl.StyleSpecification {
   return {
@@ -61,6 +54,18 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
           '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         minzoom: 0,
         maxzoom: 19
+      },
+      'basemap-ground': {
+        type: 'raster',
+        tiles: [URLS.eoxCloudless2016],
+        tileSize: 256,
+        minzoom: 0,
+        maxzoom: 14,
+        attribution:
+          '<a href="https://cloudless.eox.at">EOxCloudless</a> by ' +
+          '<a href="https://eox.at">EOX IT Services GmbH</a> ' +
+          '(Contains modified Copernicus Sentinel data 2016), ' +
+          '<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>'
       }
     },
     layers: [
@@ -68,7 +73,7 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
         id: 'background',
         type: 'background',
         paint: {
-          'background-color': '#e9eef3'
+          'background-color': '#0b1220'
         }
       },
       {
@@ -76,13 +81,27 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
         type: 'raster',
         source: 'basemap',
         paint: {
-          // Subdue OSM so the drought ramp dominates. Tuned starting values
-          // (maintainer, 2026-05-21); iterate in the browser with USDM on.
-          'raster-saturation': -0.8,
-          'raster-brightness-min': 0.6,
-          'raster-brightness-max': 1.0,
-          'raster-contrast': -0.3,
-          'raster-opacity': 0.7
+          // Dark fallback in the same visual family as the historical ground.
+          'raster-saturation': -1,
+          'raster-brightness-min': 0.04,
+          'raster-brightness-max': 0.42,
+          'raster-contrast': 0.12,
+          'raster-opacity': 0.72
+        }
+      },
+      {
+        id: 'basemap-ground',
+        type: 'raster',
+        source: 'basemap-ground',
+        layout: { visibility: 'none' },
+        paint: {
+          // Firefly Candidate A. These values affect presentation only; the
+          // pixels remain the fixed EOX Sentinel-2 2016 mosaic.
+          'raster-brightness-min': 0,
+          'raster-brightness-max': 0.62,
+          'raster-saturation': -0.55,
+          'raster-contrast': 0.1,
+          'raster-opacity': 1
         }
       }
     ]

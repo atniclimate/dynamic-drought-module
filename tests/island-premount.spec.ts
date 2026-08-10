@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { urlLayers } from './helpers';
+import { stubHistoricalGround, urlLayers } from './helpers';
 
 /**
  * Pre-mount door regression (ADR 0002 condition 6).
@@ -125,10 +125,16 @@ async function stubSst(page: Page): Promise<void> {
  * checkbox assertion proves the window actually holds.
  */
 async function gotoWithoutIsland(page: Page, query: string): Promise<void> {
+  await stubHistoricalGround(page);
   await page.route(/island-[^/]*\.js$/, (route) => route.abort());
   await page.goto(query, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#region-buttons .region-btn')).not.toHaveCount(0);
   await expect(page.locator('input[data-layer-key]')).toHaveCount(0);
+  await expect(page.locator('#shell-panel')).toBeHidden();
+  await expect(page.locator('#conditions-strip-home + #conditions-strip')).toHaveCount(1);
+  await expect(page.locator('#brief-head-home + #brief-head')).toHaveCount(1);
+  await expect(page.locator('#panel-region-home + #panel-region')).toHaveCount(1);
+  await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
 }
 
 test.describe('pre-mount doors (ADR 0002 condition 6)', () => {

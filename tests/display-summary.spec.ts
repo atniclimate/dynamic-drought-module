@@ -184,7 +184,7 @@ test.describe('S3 display summary: coverage honesty (the framing caveat)', () =>
       input(keys, allReady(keys), { cluster: 'wildfire', framing: 'mexico' })
     );
     expect(summary.primary).toContain(
-      'Active Wildfires (National Interagency Fire Center, NIFC)'
+      'Current Mapped Fire Perimeters (National Interagency Fire Center, NIFC)'
     );
     expect(summary.caveat).toContain('The current display layers do not cover Mexico');
   });
@@ -217,6 +217,15 @@ test.describe('S3 display summary: coverage honesty (the framing caveat)', () =>
       input(keys, allReady(keys), { cluster: 'enso', framing: 'mexico' })
     );
     expect(summary.primary).toContain('Ocean Temperature Anomaly');
+    expect(summary.caveat).toBeNull();
+  });
+
+  test('the tri-national NADM surface does not trigger a false Mexico coverage warning', () => {
+    const keys = [...REFERENCE_KEYS, 'nadm-drought'];
+    const summary = deriveDisplaySummary(
+      input(keys, allReady(keys), { framing: 'mexico' })
+    );
+    expect(summary.primary).toContain('North American Drought Monitor');
     expect(summary.caveat).toBeNull();
   });
 

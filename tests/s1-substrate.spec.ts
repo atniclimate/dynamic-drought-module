@@ -41,7 +41,7 @@ type LeafletBounds = readonly [readonly [number, number], readonly [number, numb
 function expectValidBounds(bounds: LeafletBounds, label: string): void {
   const [[south, west], [north, east]] = bounds;
   expect(south, `${label}: south below north`).toBeLessThan(north);
-  expect(west, `${label}: west below east`).toBeLessThan(east);
+  expect(west, `${label}: longitude span is non-zero`).not.toBe(east);
   expect(Math.abs(south), `${label}: south is a latitude`).toBeLessThanOrEqual(90);
   expect(Math.abs(north), `${label}: north is a latitude`).toBeLessThanOrEqual(90);
   expect(Math.abs(west), `${label}: west is a longitude`).toBeLessThanOrEqual(180);

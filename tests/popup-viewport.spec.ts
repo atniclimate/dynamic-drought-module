@@ -6,6 +6,7 @@ import {
   MIN_USABLE_REGION_HEIGHT_PX,
   MIN_USABLE_REGION_WIDTH_PX
 } from '../src/ui/popup-viewport';
+import { SHEET_DETENT_SIZE } from '../src/ui/mobile-sheet';
 
 /**
  * U-UX-FIX-1 DEF-3 and DEF-4 (usability triage 2026-07-24): MapLibre
@@ -264,9 +265,19 @@ test.describe('DEF-3 finding 1: half sheet plus footer occlusion (390x844, touch
     await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'half');
 
-    const sheetTop = await page
-      .locator('#sidebar')
-      .evaluate((el) => el.getBoundingClientRect().top);
+    const sidebar = page.locator('#sidebar');
+    const viewportHeight = await page.evaluate(() => window.innerHeight);
+    // The detent attribute changes synchronously, while the sheet height
+    // transitions for 250 ms. Wait for the rendered geometry so a loaded
+    // runner cannot sample the old (closed) edge and click below the
+    // synthetic boundary for every retry.
+    await expect
+      .poll(async () => sidebar.evaluate((el) => el.getBoundingClientRect().height), {
+        message: 'the sheet never reached its half-detent height',
+        timeout: 3_000
+      })
+      .toBeCloseTo(viewportHeight * SHEET_DETENT_SIZE.halfFraction, 0);
+    const sheetTop = await sidebar.evaluate((el) => el.getBoundingClientRect().top);
     const mapBox = await page.locator('#map').boundingBox();
     expect(mapBox).not.toBeNull();
 
@@ -305,6 +316,9 @@ test.describe('DEF-3 finding 1: half sheet plus footer occlusion (390x844, touch
     const links = popup.locator('.popup-links a');
     await expect(links).toHaveCount(2);
     for (const link of await links.all()) {
+      await link.evaluate((element) =>
+        element.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+      );
       await expectHitTestReachable(link, 'popup source link above the sheet');
     }
     await expectHitTestReachable(

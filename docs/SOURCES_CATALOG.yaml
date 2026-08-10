@@ -1,0 +1,52 @@
+schema_version: 1
+updated: 2026-08-10
+scope: successor_candidate_sources
+runtime_authority: src/config/layers.ts and the runtime source contracts
+notes:
+  - Entries in this file are research candidates, not shipped capabilities.
+  - Candidate status does not authorize runtime requests, proxy access, bundling, deployment, or publication.
+sources:
+  - id: noaa-cpc-week2-probabilistic-extremes
+    status: candidate
+    issuer: NOAA Climate Prediction Center
+    product: Week-2 Probabilistic Extremes Tool
+    landing_page: https://www.cpc.ncep.noaa.gov/products/predictions/threats/extremesTool.php
+    description_page: https://www.cpc.ncep.noaa.gov/products/predictions/threats/extremesToolAbout.php
+    captured_on: 2026-07-30
+    page_review:
+      status: reviewed
+      findings:
+        - CPC describes the product as calibrated and bias-corrected GEFS model guidance for week 2.
+        - CPC says the guidance informs its official U.S. Week-2 Hazards Outlook but is not itself the official outlook.
+        - The description names maximum temperature, minimum temperature, accumulated precipitation, and maximum wind variables.
+        - The landing page exposes shapefile download directories and also lists snow water equivalent, which must be reconciled with the four-variable description.
+        - CPC describes the guidance domain as global and the forecast cycle as the current day's 00Z GEFS update.
+    temporal_meaning:
+      lead: week 2
+      valid_window: days 8 through 14
+      kind: calibrated probabilistic model guidance
+    possible_engine_roles:
+      - drought context
+      - heat outlook context
+      - fire-weather context
+      - water and snow context
+    runtime_verification:
+      status: not_started
+      required:
+        - identify a stable machine endpoint without scraping the interactive page
+        - verify response schema and geometry
+        - verify update cadence and archive behavior
+        - verify exact spatial support and missing-data behavior
+        - verify Cross-Origin Resource Sharing posture
+        - verify redistribution and use terms
+        - measure payload and request budget
+    qualifications:
+      - Preserve each issuer variable, probability, percentile, threshold, and valid period separately.
+      - Do not present model guidance as an observation or as an official CPC hazards outlook.
+      - Do not blend the source with HeatRisk, drought class, fire incidents, smoke, alerts, or water observations.
+      - Do not derive a DDM severity, hazard, fire-risk, drought-risk, heat-risk, or water-risk score.
+    activation:
+      runtime: false
+      worker_allowlist: false
+      capability_claim: false
+      publication_commitment: false

@@ -3,9 +3,10 @@
 <!-- GENERATED FILE. Do not edit by hand: edit src/config/capability-matrix.ts
      and run `npm run build:coverage-matrix`. `npm run gate` fails on drift. -->
 
-What the Dynamic Drought Module (DDM) actually does today for each coverage
-family, as recorded in `src/config/capability-matrix.ts` (the source of
-truth; this file is generated from it). Levels: **full** (shipped and
+Current selected-place, drought, landscape, and impact capability for each
+coverage family, as recorded in `src/config/capability-matrix.ts` (the source of
+truth for these axes; this file is not an inventory of every map layer or
+regional overview). Levels: **full** (shipped and
 verified), **partial** (shipped with the named limitation), **none** (not
 supported; the note says why).
 
@@ -23,14 +24,14 @@ supported; the note says why).
 
 - **Display** (full): The shipped framings render the PNW as the primary region.
 - **Selectable place** (full): Tribal Nations, states, ecoregions, and watersheds are selectable typed places (watershed lists come from the live USGS WBD service); municipal labels are display-only.
-- **Drought state** (partial): US Drought Monitor (USDM) polygons, DSCI, and the NIDIS SPI raster display; no gridded index feeds analysis or the briefing yet (the MCO value path lands in 0.8.0).
+- **Drought state** (partial): US Drought Monitor (USDM) polygons, DSCI, and the NIDIS SPI raster display; no gridded index feeds analysis or the briefing yet.
 - **Landscape signature** (partial): The briefing lazily renders the baked terrain, soil, land-cover, and fuels signature for exact PNW Level III and IV ecoregion selections; other boundary kinds stay explicitly unavailable rather than being remapped to one ecoregion.
 - **Impact synthesis** (partial): The shipped briefing composes USDM, outlooks, and telemetry with the evidence contract and shows the signature as separately labeled static ecoregion context; no gridded index input or signature-derived claim yet.
 
 ### Contiguous United States (CONUS)
 
 - **Display** (full): The national framing renders CONUS on the same basemap and condition surfaces.
-- **Selectable place** (partial): AIANNH/BIA and state selection exist nationally, but the behavior is unproven outside the PNW (N3 owns the proof).
+- **Selectable place** (partial): AIANNH/BIA and state selection exist nationally, but the behavior is unproven outside the PNW.
 - **Drought state** (partial): USDM polygons and the NIDIS SPI raster display cover CONUS; no gridded index feeds analysis or the briefing.
 - **Landscape signature** (none): No signature inputs are baked outside the planned PNW pipeline.
 - **Impact synthesis** (none): The briefing synthesis and resource routing are not validated outside the PNW.
@@ -53,7 +54,7 @@ supported; the note says why).
 
 ### Transboundary (Columbia Basin)
 
-- **Display** (none): No mixed-edition transboundary frame; N6 requires a tested US/Canada data seam first.
+- **Display** (none): No mixed-edition transboundary frame; a tested US/Canada data seam is required first.
 - **Selectable place** (none): No transboundary place catalog exists.
 - **Drought state** (none): US and Canadian drought editions differ; no reconciled surface exists.
 - **Landscape signature** (none): No transboundary signature inputs.
@@ -145,8 +146,9 @@ water sources.
 
 ## Fire follow-on
 
-The fire module should receive the same architectural expansion: canonical
-geography, independent per-source capability, time-aware source contracts,
-cross-source synthesis that preserves issuer support, and bounded
-cancellable caching. This record does not activate or broaden a fire source;
-that work requires its own implementation and verification.
+The current Wildfire display and regional minimap are shipped separately from
+this selected-place matrix. The planned selected-place fire expansion needs
+canonical geography, independent per-source capability, time-aware source
+contracts, issuer-preserving synthesis, and bounded cancellable caching.
+This matrix does not claim that selected-place milestone is implemented or
+authorize a broader fire source.

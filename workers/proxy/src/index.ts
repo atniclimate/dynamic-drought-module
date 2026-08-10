@@ -2,38 +2,13 @@
  * Dynamic Drought Module (DDM) Cross-Origin Resource Sharing (CORS) proxy.
  *
  * This Cloudflare Worker is a thin, stateless shim. It accepts requests at
- * `/proxy?url=<encoded_upstream_url>`, validates the upstream host against a
- * small allow-list of public agency telemetry endpoints, forwards the request
- * (without cookies or Authorization), returns the upstream body unchanged, and
- * injects the CORS response headers a browser needs to consume the body.
+ * `/proxy?url=<encoded_upstream_url>`, validates the upstream URL against a
+ * small table of exact public agency read routes, forwards a minimal request,
+ * returns the upstream bytes unchanged, and injects the CORS response headers
+ * a browser needs to consume the body.
  *
- * Allow-listed upstreams (host-only check):
- *   - Natural Resources Conservation Service (NRCS) Air-Water Database (AWDB):
- *     any subdomain of `sc.egov.usda.gov`.
- *   - United States Army Corps of Engineers (USACE) Dataquery 2.0:
- *     any subdomain of `usace.army.mil`.
- *   - United States Bureau of Reclamation (USBR) Hydromet:
- *     `usbr.gov` or `www.usbr.gov`.
- *   - Northwest River Forecast Center (NWRFC) of the National Oceanic and
- *     Atmospheric Administration (NOAA): `nwrfc.noaa.gov` or `www.nwrfc.noaa.gov`.
- *   - NOAA Climate Prediction Center (CPC): any subdomain of `cpc.ncep.noaa.gov`
- *     (the Oceanic Nino Index and other indices are served without Cross-Origin
- *     Resource Sharing headers; the default path is a build-time snapshot, but
- *     the host is allow-listed for anything that must be fetched live).
- *   - Bureau of Indian Affairs (BIA) map hosts: `biamaps.geoplatform.gov`
- *     (the live American Indian and Alaska Native Land Area Representation host)
- *     and `biamaps.doi.gov` (the fallback host). The geoplatform host serves
- *     reflective CORS today; the allow-list entry is a resilience path.
- *   - Federal GeoPlatform imagery host: `imagery.geoplatform.gov` (the USFS
- *     Wildfire Hazard Potential ImageServer). Its `exportImage` CORS is
- *     INTERMITTENT in real browsers (2026-07-09: 49 of 49 tile responses
- *     arrived without Access-Control-Allow-Origin while a curl probe with an
- *     Origin header got the origin-echoed value; `Vary: Origin` cache-variant
- *     behavior suspected), so the client routes WHP tiles through this Worker
- *     unconditionally (0.7.0 H3).
- *   - National Weather Service public API: `api.weather.gov`. Browser fetch
- *     cannot set the required identifying User-Agent, so the Worker supplies
- *     the DDM identity while preserving the upstream body.
+ * The route table below covers only the exact AWDB, AgriMet, Hydromet, NWRFC,
+ * USDM DSCI, USFS WHP, and NWS read operations used by the current DDM client.
  *
  * Anything outside the allow-list is rejected with 403 Forbidden.
  *
@@ -42,15 +17,14 @@
  *   - The Worker MUST NOT cache aggressively (default time-to-live 60 seconds).
  *   - The Worker MUST NOT log request bodies, headers, or query strings.
  *   - The Worker MUST NOT add tracking, analytics, or telemetry collection.
- *   - The Worker MUST strip `cookie` and `authorization` headers before
- *     forwarding to upstream.
+ *   - The Worker MUST forward only normalized Accept plus its fixed User-Agent.
  *
  * Operational notes:
  *   - The upstream fetch is bounded by a 12 second timeout, matching the
  *     in-browser per-mirror budget used by the client.
- *   - Successful responses are stored in `caches.default` keyed by the request
- *     URL plus method, so repeated requests within the time-to-live are served
- *     from the Cloudflare edge cache instead of re-hitting the upstream.
+ *   - Status-200 GET responses are stored in `caches.default` keyed by the
+ *     upstream URL plus normalized Accept, so repeated reads within the
+ *     time-to-live are served without mixing media-type variants.
  *   - Health check at `GET /healthz` returns a small JSON document with no
  *     allow-list enforcement, for uptime monitoring.
  *   - Abuse throttle (critical-review #4). An allow-listed CORS shim with no
@@ -60,64 +34,73 @@
  *     agency. Three guards keep it a shim without becoming a relay: a per-client
  *     rate limit via the platform Rate Limiting binding (fails OPEN if the
  *     binding is not configured, so a fork or local run still works); a request
- *     body and `url`-length cap; and honest pass-through of an upstream 429 with
- *     its Retry-After. None of this transforms bodies or adds state beyond the
- *     platform primitives, so the shim contract (CLAUDE.md rule 7) holds.
+ *     exact read-route policy and `url`-length cap; and honest pass-through of
+ *     an upstream 429 with its Retry-After. None of this transforms bodies or
+ *     adds state beyond the platform primitives, so the shim contract holds.
  */
 
-const ALLOW_LIST: ReadonlyArray<RegExp> = [
-  // NRCS AWDB. The published hosts are `wcc.sc.egov.usda.gov` and
-  // `wcc-nwcc.sc.egov.usda.gov`; the regex matches any single-label
-  // subdomain of `sc.egov.usda.gov` to absorb future hostname changes.
-  /^[a-z0-9-]+\.sc\.egov\.usda\.gov$/i,
-  // USACE Dataquery 2.0. Published hosts include `www.nwd-wc.usace.army.mil`
-  // and `lockproduction.usace.army.mil`; the regex matches any subdomain of
-  // `usace.army.mil` (and `usace.army.mil` itself).
-  /^([a-z0-9-]+\.)*usace\.army\.mil$/i,
-  // USBR Hydromet. `www.usbr.gov` is the canonical host; bare `usbr.gov` is
-  // accepted for resilience to redirect chains.
-  /^(www\.)?usbr\.gov$/i,
-  // NWRFC. `www.nwrfc.noaa.gov` is the canonical host; bare `nwrfc.noaa.gov`
-  // is accepted for resilience to redirect chains.
-  /^(www\.)?nwrfc\.noaa\.gov$/i,
-  // NOAA CPC. Indices (the Oceanic Nino Index, Relative ONI, Southern
-  // Oscillation Index, detrended Nino 3.4) and the analysis pages live under
-  // `cpc.ncep.noaa.gov`; the regex matches any subdomain (and the apex).
-  /^([a-z0-9-]+\.)*cpc\.ncep\.noaa\.gov$/i,
-  // BIA map hosts: the live AIAN-LAR host (`biamaps.geoplatform.gov`) and the
-  // fallback (`biamaps.doi.gov`).
-  /^biamaps\.(geoplatform\.gov|doi\.gov)$/i,
-  // Federal GeoPlatform imagery host (USFS Wildfire Hazard Potential
-  // ImageServer). Added 2026-07-09 (0.7.0 H3): the upstream's exportImage
-  // CORS is intermittent in real browsers, so WHP tiles ride this Worker.
-  /^imagery\.geoplatform\.gov$/i,
-  // NDMC USDM Data Services (the DSCI drought-severity statistics behind
-  // the impact panel's trend chart). Added 2026-07-14 (the 0.6.8 publish
-  // verification): the upstream emitted Access-Control-Allow-Origin
-  // through 2026-07-08 and has since stopped (three consecutive probes
-  // with a real Origin, no ACAO, no Vary), so the trend fetch rides this
-  // Worker per the vary-origin intermittency doctrine.
-  /^usdmdataservices\.unl\.edu$/i,
-  // NWS API. Added for point heat so the upstream receives the Worker's
-  // identifying User-Agent. The body remains byte-transparent.
-  /^api\.weather\.gov$/i
-];
+const EXACT_PATHS_BY_HOST: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  [
+    "wcc.sc.egov.usda.gov",
+    new Set([
+      "/awdbRestApi/services/v1/data",
+      "/awdbRestApi/services/v1/stations"
+    ])
+  ],
+  [
+    "www.usbr.gov",
+    new Set([
+      "/gp/agrimet/data_files/AgrimetSites.js",
+      "/pn-bin/webarccsv.pl"
+    ])
+  ],
+  ["www.nwrfc.noaa.gov", new Set(["/water_supply/ws_report_csv.cgi"])],
+  [
+    "usdmdataservices.unl.edu",
+    new Set(["/api/StateStatistics/GetDSCI"])
+  ],
+  [
+    "imagery.geoplatform.gov",
+    new Set([
+      "/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer/exportImage"
+    ])
+  ]
+]);
+
+const NWS_POINT_PATH = /^\/points\/-?\d{1,2}(?:\.\d{1,4})?,-?\d{1,3}(?:\.\d{1,4})?$/;
+const NWS_GRIDPOINT_PATH =
+  /^\/gridpoints\/[a-z0-9]{3,4}\/-?\d+,-?\d+(?:\/(?:stations|forecast))?$/i;
+const NWS_LATEST_OBSERVATION_PATH =
+  /^\/stations\/[a-z0-9-]+\/observations\/latest$/i;
+
+/** True only for an exact read route used by the current DDM runtime. */
+export function isAllowedRoute(upstreamUrl: URL): boolean {
+  const exactPaths = EXACT_PATHS_BY_HOST.get(upstreamUrl.hostname);
+  if (exactPaths?.has(upstreamUrl.pathname)) return true;
+  if (upstreamUrl.hostname !== "api.weather.gov") return false;
+  return (
+    NWS_POINT_PATH.test(upstreamUrl.pathname) ||
+    NWS_GRIDPOINT_PATH.test(upstreamUrl.pathname) ||
+    NWS_LATEST_OBSERVATION_PATH.test(upstreamUrl.pathname) ||
+    upstreamUrl.pathname === "/alerts/active"
+  );
+}
 
 const USER_AGENT =
   "DDM-Proxy/0.1.0 (+https://github.com/atniclimate/dynamic-drought-module)";
-const WORKER_REVISION = "2026-07-29-nws-point-heat-v2";
+const WORKER_REVISION = "2026-08-09-route-hardening-v3";
 
 const UPSTREAM_TIMEOUT_MS = 12_000;
-const EDGE_CACHE_CONTROL = "public, max-age=60";
+const EDGE_CACHE_MAX_AGE_SECONDS = 60;
+const EDGE_CACHE_CONTROL = `public, max-age=${EDGE_CACHE_MAX_AGE_SECONDS}`;
 const CACHED_ORIGIN_CACHE_CONTROL = "X-DDM-Origin-Cache-Control";
 
 // Abuse-throttle bounds (critical-review #4). The rate limit itself lives in the
 // platform binding (wrangler.toml [[ratelimits]]); these cap a single request's
-// size so a hostile caller cannot force large upstream reads or oversized URLs.
-// The allow-listed upstreams are read endpoints that take short query strings and
-// small POST bodies, so these ceilings are far above any legitimate call.
+// size so a hostile caller cannot force oversized upstream URLs. Every allowed
+// route is a GET/HEAD read, so no request-body allowance is needed.
 const MAX_UPSTREAM_URL_LENGTH = 2048;
-const MAX_REQUEST_BODY_BYTES = 64 * 1024;
+const MAX_ACCEPT_LENGTH = 512;
 const RATE_LIMIT_RETRY_AFTER_SECONDS = 60;
 
 /**
@@ -133,19 +116,9 @@ interface Env {
 
 const CORS_HEADERS: Readonly<Record<string, string>> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type"
+  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+  "Access-Control-Allow-Headers": "Accept"
 };
-
-// Headers that must never be forwarded to upstream from the inbound request.
-// Cookies and Authorization are stripped per the no-authentication policy
-// (CLAUDE.md section 4 rule 3); Host is set by `fetch()` from the upstream URL
-// and must not be carried over from the inbound request.
-const HEADERS_TO_STRIP_FROM_REQUEST: ReadonlySet<string> = new Set([
-  "cookie",
-  "authorization",
-  "host"
-]);
 
 // Headers from the upstream response that we deliberately do not pass through:
 // `set-cookie` is dropped to avoid laundering session state, and connection /
@@ -157,10 +130,6 @@ const HEADERS_TO_STRIP_FROM_RESPONSE: ReadonlySet<string> = new Set([
   "transfer-encoding",
   "upgrade"
 ]);
-
-function isAllowedHost(host: string): boolean {
-  return ALLOW_LIST.some((rx) => rx.test(host));
-}
 
 function jsonError(
   status: number,
@@ -210,22 +179,26 @@ function healthResponse(): Response {
 }
 
 /**
- * Build the upstream Request from the inbound Request. Method, body, and
- * most headers are preserved; cookies, Authorization, and Host are stripped.
- * The User-Agent is always set so upstream operators can attribute the traffic.
+ * Build the minimal upstream Request. Only normalized Accept and the fixed
+ * identifying User-Agent are forwarded. Host is derived from the URL by the
+ * Workers runtime; no inbound authentication, forwarding, or browser metadata
+ * crosses the proxy boundary.
  */
-function buildUpstreamRequest(inbound: Request, upstreamUrl: URL): Request {
-  const upstreamHeaders = new Headers();
-  for (const [name, value] of inbound.headers) {
-    if (HEADERS_TO_STRIP_FROM_REQUEST.has(name.toLowerCase())) {
-      continue;
-    }
-    upstreamHeaders.set(name, value);
-  }
-  upstreamHeaders.set("User-Agent", USER_AGENT);
-  upstreamHeaders.set("Host", upstreamUrl.host);
+export function normalizeAccept(inbound: Request): string {
+  const accept = inbound.headers.get("Accept")?.trim();
+  return accept && accept.length > 0 && accept.length <= MAX_ACCEPT_LENGTH
+    ? accept
+    : "*/*";
+}
 
-  const init: RequestInit = {
+export function buildUpstreamRequest(
+  inbound: Request,
+  upstreamUrl: URL
+): Request {
+  const upstreamHeaders = new Headers({ Accept: normalizeAccept(inbound) });
+  upstreamHeaders.set("User-Agent", USER_AGENT);
+
+  return new Request(upstreamUrl.toString(), {
     method: inbound.method,
     headers: upstreamHeaders,
     // Redirects are NOT followed automatically: the runtime would chase a 3xx
@@ -233,16 +206,7 @@ function buildUpstreamRequest(inbound: Request, upstreamUrl: URL): Request {
     // forgery amplification). `fetchUpstreamWithTimeout` follows redirects
     // manually, re-validating each hop's host against the allow-list.
     redirect: "manual"
-  };
-
-  // GET and HEAD requests must not carry a body. For other methods, forward
-  // the body as a stream to avoid buffering large payloads in memory.
-  const method = inbound.method.toUpperCase();
-  if (method !== "GET" && method !== "HEAD" && inbound.body !== null) {
-    init.body = inbound.body;
-  }
-
-  return new Request(upstreamUrl.toString(), init);
+  });
 }
 
 /**
@@ -251,10 +215,14 @@ function buildUpstreamRequest(inbound: Request, upstreamUrl: URL): Request {
  * the body is passed through unchanged; the upstream `Cache-Control` is kept
  * if present, otherwise a short default time-to-live is applied.
  */
-function buildClientResponse(upstream: Response): Response {
+export function buildClientResponse(upstream: Response): Response {
   const responseHeaders = new Headers();
   for (const [name, value] of upstream.headers) {
-    if (HEADERS_TO_STRIP_FROM_RESPONSE.has(name.toLowerCase())) {
+    const normalizedName = name.toLowerCase();
+    if (
+      HEADERS_TO_STRIP_FROM_RESPONSE.has(normalizedName) ||
+      normalizedName.startsWith("access-control-")
+    ) {
       continue;
     }
     responseHeaders.set(name, value);
@@ -283,16 +251,17 @@ function buildClientResponse(upstream: Response): Response {
  * Parse the `url` query parameter and validate it. Returns the parsed URL on
  * success, or a Response describing the failure.
  */
-function parseAndValidateUpstream(request: Request): URL | Response {
+export function parseAndValidateUpstream(request: Request): URL | Response {
   const requestUrl = new URL(request.url);
-  const target = requestUrl.searchParams.get("url");
-  if (target === null || target === "") {
+  const targets = requestUrl.searchParams.getAll("url");
+  if (targets.length !== 1 || targets[0] === "") {
     return jsonError(
       400,
-      "missing_url",
-      "Query parameter 'url' is required and must be a fully qualified upstream URL."
+      targets.length === 0 ? "missing_url" : "invalid_url_count",
+      "Exactly one non-empty 'url' query parameter is required."
     );
   }
+  const target = targets[0];
 
   // Cap the upstream URL length before parsing (critical-review #4). An
   // allow-listed read endpoint never needs a multi-kilobyte URL; a very long
@@ -316,19 +285,35 @@ function parseAndValidateUpstream(request: Request): URL | Response {
     );
   }
 
-  if (upstreamUrl.protocol !== "http:" && upstreamUrl.protocol !== "https:") {
+  if (upstreamUrl.protocol !== "https:") {
     return jsonError(
       400,
       "unsupported_scheme",
-      "Only http and https upstream URLs are supported."
+      "Only https upstream URLs are supported."
     );
   }
 
-  if (!isAllowedHost(upstreamUrl.hostname)) {
+  if (upstreamUrl.username !== "" || upstreamUrl.password !== "") {
+    return jsonError(
+      400,
+      "credentials_not_allowed",
+      "Upstream URLs must not contain credentials."
+    );
+  }
+
+  if (upstreamUrl.port !== "") {
+    return jsonError(
+      400,
+      "port_not_allowed",
+      "Upstream URLs must use the default HTTPS port."
+    );
+  }
+
+  if (!isAllowedRoute(upstreamUrl)) {
     return jsonError(
       403,
-      "host_not_allowed",
-      `Upstream host '${upstreamUrl.hostname}' is not on the proxy allow-list.`
+      "route_not_allowed",
+      `Upstream route '${upstreamUrl.hostname}${upstreamUrl.pathname}' is not on the proxy allow-list.`
     );
   }
 
@@ -340,31 +325,43 @@ const MAX_REDIRECT_HOPS = 5;
 
 /**
  * Fetch the upstream with a hard timeout, following redirects MANUALLY so each
- * hop's host is re-validated against the allow-list. A 3xx whose Location is
- * off the allow-list (or not http/https, or malformed) fails closed with a
- * 403/502 rather than being chased; this closes the redirect-bypass SSRF hole
- * that `redirect: "follow"` would open. Request bodies are not replayed across
- * redirects (the allow-listed upstreams are read endpoints), so a followed hop
- * is re-issued as GET (or HEAD) with the same headers. AbortController is wired
- * so the runtime tears down the request cleanly when the deadline expires; the
- * timeout spans all hops.
+ * complete URL is re-validated against the exact route table. The final body is
+ * buffered as bytes before the timer is cleared, so the deadline covers DNS,
+ * headers, redirects, and body consumption. Rebuilding a Response from that
+ * ArrayBuffer preserves the exact bytes without interpreting them.
  */
-async function fetchUpstreamWithTimeout(
+export async function fetchUpstreamWithTimeout(
   upstreamRequest: Request,
-  timeoutMs: number
+  timeoutMs: number,
+  fetchImpl: typeof fetch = fetch
 ): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(
+    () =>
+      controller.abort(
+        new DOMException("Upstream request timed out.", "TimeoutError")
+      ),
+    timeoutMs
+  );
   try {
     let request = upstreamRequest;
     for (let hop = 0; ; hop++) {
-      const resp = await fetch(request, { signal: controller.signal });
+      const resp = await fetchImpl(request, { signal: controller.signal });
       const isRedirect = resp.status >= 300 && resp.status < 400;
       const location = isRedirect ? resp.headers.get("location") : null;
       if (!location) {
-        return resp;
+        const body =
+          request.method.toUpperCase() === "HEAD" || resp.body === null
+            ? null
+            : await resp.arrayBuffer();
+        return new Response(body, {
+          status: resp.status,
+          statusText: resp.statusText,
+          headers: resp.headers
+        });
       }
       if (hop >= MAX_REDIRECT_HOPS) {
+        await resp.body?.cancel();
         return jsonError(
           508,
           "too_many_redirects",
@@ -375,6 +372,7 @@ async function fetchUpstreamWithTimeout(
       try {
         next = new URL(location, request.url);
       } catch {
+        await resp.body?.cancel();
         return jsonError(
           502,
           "invalid_redirect",
@@ -382,19 +380,23 @@ async function fetchUpstreamWithTimeout(
         );
       }
       if (
-        (next.protocol !== "http:" && next.protocol !== "https:") ||
-        !isAllowedHost(next.hostname)
+        next.protocol !== "https:" ||
+        next.username !== "" ||
+        next.password !== "" ||
+        next.port !== "" ||
+        !isAllowedRoute(next)
       ) {
+        await resp.body?.cancel();
         return jsonError(
           403,
           "redirect_not_allowed",
-          `Upstream redirected to '${next.hostname}', which is not on the proxy allow-list.`
+          `Upstream redirected to '${next.hostname}${next.pathname}', which is not on the proxy allow-list.`
         );
       }
+      await resp.body?.cancel();
       const followHeaders = new Headers(request.headers);
-      followHeaders.set("Host", next.host);
       request = new Request(next.toString(), {
-        method: request.method.toUpperCase() === "HEAD" ? "HEAD" : "GET",
+        method: request.method,
         headers: followHeaders,
         redirect: "manual"
       });
@@ -405,14 +407,17 @@ async function fetchUpstreamWithTimeout(
 }
 
 /**
- * Build the cache key for a given upstream URL and method. Caching is keyed on
- * the upstream URL (not on the proxy request URL) so that different proxy
- * paths that resolve to the same upstream share a cache entry. We only cache
- * idempotent reads (GET and HEAD).
+ * Build the cache key for one normalized representation. Caching is keyed on
+ * the upstream URL plus Accept so a response that varies by media type cannot
+ * be served to a different client representation.
  */
-function buildCacheKey(upstreamUrl: URL, method: string): Request {
-  const normalizedMethod = method.toUpperCase();
-  return new Request(upstreamUrl.toString(), { method: normalizedMethod });
+export function buildCacheKey(upstreamUrl: URL, accept: string): Request {
+  const cacheUrl = new URL(upstreamUrl.toString());
+  cacheUrl.searchParams.append("__ddm_accept", accept);
+  return new Request(cacheUrl.toString(), {
+    method: "GET",
+    headers: { Accept: accept }
+  });
 }
 
 function isCacheableMethod(method: string): boolean {
@@ -424,12 +429,19 @@ function isCacheableMethod(method: string): boolean {
  * responses may be cached, but their edge lifetime is capped separately.
  */
 export function permitsEdgeCaching(response: Response): boolean {
+  if (response.status !== 200) return false;
+  const vary = (response.headers.get("Vary") ?? "")
+    .split(",")
+    .map((value) => value.trim());
+  if (vary.includes("*")) return false;
+
   const directives = (response.headers.get("Cache-Control") ?? "")
     .toLowerCase()
     .split(",")
     .map((directive) => directive.trim());
   return !directives.some((directive) => {
-    const [name, rawValue] = directive.split("=", 2);
+    const [rawName, rawValue] = directive.split("=", 2);
+    const name = rawName?.trim();
     if (name === "no-store" || name === "no-cache" || name === "private") {
       return true;
     }
@@ -438,6 +450,30 @@ export function permitsEdgeCaching(response: Response): boolean {
       Number(rawValue?.replaceAll('"', "")) === 0
     );
   });
+}
+
+function edgeCacheMaxAge(response: Response): number {
+  const directives = (response.headers.get("Cache-Control") ?? "")
+    .toLowerCase()
+    .split(",")
+    .map((directive) => directive.trim());
+
+  for (const directiveName of ["s-maxage", "max-age"] as const) {
+    const directive = directives.find((candidate) => {
+      const [name] = candidate.split("=", 1);
+      return name?.trim() === directiveName;
+    });
+    if (directive === undefined) continue;
+    const [, rawValue] = directive.split("=", 2);
+    const normalizedValue = rawValue?.trim().replaceAll('"', "") ?? "";
+    if (!/^\d+$/.test(normalizedValue)) continue;
+    return Math.min(
+      EDGE_CACHE_MAX_AGE_SECONDS,
+      Number.parseInt(normalizedValue, 10)
+    );
+  }
+
+  return EDGE_CACHE_MAX_AGE_SECONDS;
 }
 
 /**
@@ -451,7 +487,10 @@ export function prepareResponseForEdgeCache(response: Response): Response {
     CACHED_ORIGIN_CACHE_CONTROL,
     headers.get("Cache-Control") ?? EDGE_CACHE_CONTROL
   );
-  headers.set("Cache-Control", EDGE_CACHE_CONTROL);
+  headers.set(
+    "Cache-Control",
+    `public, max-age=${edgeCacheMaxAge(response)}`
+  );
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -516,15 +555,14 @@ export default {
       );
     }
 
-    // Allow only methods we have a defined story for. PUT, DELETE, PATCH are
-    // not currently used by any DDM client and are rejected to keep the
-    // attack surface small.
+    // The current DDM routes are reads. Reject every mutating method to keep
+    // this shim incapable of submitting state changes to an allowed agency.
     const method = request.method.toUpperCase();
-    if (method !== "GET" && method !== "HEAD" && method !== "POST") {
+    if (method !== "GET" && method !== "HEAD") {
       return jsonError(
         405,
         "method_not_allowed",
-        "The /proxy endpoint accepts GET, HEAD, POST, and OPTIONS."
+        "The /proxy endpoint accepts GET, HEAD, and OPTIONS."
       );
     }
 
@@ -546,23 +584,6 @@ export default {
       }
     }
 
-    // Cap the request body (critical-review #4). The allow-listed upstreams take
-    // small query bodies, so a declared Content-Length above the ceiling is
-    // rejected before we open an upstream connection.
-    if (method === "POST") {
-      const declaredLength = request.headers.get("content-length");
-      if (declaredLength !== null) {
-        const bytes = Number(declaredLength);
-        if (Number.isFinite(bytes) && bytes > MAX_REQUEST_BODY_BYTES) {
-          return jsonError(
-            413,
-            "request_too_large",
-            `Request body exceeds the ${MAX_REQUEST_BODY_BYTES}-byte proxy limit.`
-          );
-        }
-      }
-    }
-
     const upstreamOrError = parseAndValidateUpstream(request);
     if (upstreamOrError instanceof Response) {
       return upstreamOrError;
@@ -571,7 +592,7 @@ export default {
 
     const cache = caches.default;
     const cacheable = isCacheableMethod(method);
-    const cacheKey = buildCacheKey(upstreamUrl, method);
+    const cacheKey = buildCacheKey(upstreamUrl, normalizeAccept(request));
 
     if (cacheable) {
       const cached = await cache.match(cacheKey);
@@ -606,18 +627,17 @@ export default {
 
     const clientResponse = buildClientResponse(upstreamResponse);
 
-    // Cache only successful idempotent reads. We clone before handing back so
+    // Cache only status-200 idempotent reads. We clone before handing back so
     // the body stream can be consumed twice (once by the cache, once by the
     // client). `ctx.waitUntil` lets the cache write outlive the response.
     if (
       cacheable &&
-      clientResponse.ok &&
       permitsEdgeCaching(clientResponse)
     ) {
       const responseToCache = prepareResponseForEdgeCache(
         clientResponse.clone()
       );
-      ctx.waitUntil(cache.put(cacheKey, responseToCache));
+      ctx.waitUntil(cache.put(cacheKey, responseToCache).catch(() => undefined));
     }
 
     return clientResponse;

@@ -1,7 +1,7 @@
 import { REGIONS, DEFAULT_REGION } from '../config/regions';
 import type { RegionKey } from '../config/regions';
 import { DEFAULT_ON_KEYS, resolveExclusiveSurface } from '../config/layers';
-import type { FramingKey } from '../config/framings';
+import type { FramingSelection } from '../config/framings';
 import { HAZARD_CLUSTERS } from '../config/clusters';
 import type { HazardClusterKey } from '../config/clusters';
 import type { OceanKey } from '../config/oceans';
@@ -49,9 +49,9 @@ import type { TemporalHorizonKey } from '../config/clusters';
  * D-0.7.0-039/041/042/044/053; the precedence table lives in
  * docs/URL_SCHEMA_POLICY.md):
  *
- *   framing  one of the nine editorial FramingKey tokens; absence is the
- *            ALL state (D-0.7.0-041: absence is the truth), and the
- *            legacy `region=national` alias stays on the region path
+ *   framing  one of the nine editorial keys, or `all` for the explicit
+ *            North American minimap camera; absence leaves the legacy
+ *            `region=` camera in control
  *   cluster  wildfire | heat | enso; Drought, the default display, is
  *            absence (D-0.7.0-044); `layers=` outranks it on parse
  *   ocean    pacific | arctic | atlantic; valid only beside
@@ -96,9 +96,8 @@ export interface ParsedUrlParams {
   /** Basemap mode from `basemap=` (U4d, D-0.7.0-031); only the exact
    * token 'satellite' selects satellite, anything else is 'default'. */
   readonly basemap: BasemapMode;
-  /** Framing context from `framing=`; null is the ALL state
-   * (D-0.7.0-039/041). */
-  readonly framing: FramingKey | null;
+  /** Minimap camera from `framing=`; null leaves `region=` in control. */
+  readonly framing: FramingSelection;
   /** Hazard cluster from `cluster=`; 'drought' (absence) when missing,
    * unknown, or outranked by an explicit `layers=` (D-0.7.0-044). */
   readonly cluster: HazardClusterKey;
@@ -152,10 +151,10 @@ export function syncHeatRiskDayParam(day: number | null): void {
  *     (D-0.7.0-042/053); otherwise it parses to null and is dropped on
  *     the next sync.
  *   - `framing=` is independent of both (camera-only context); unknown
- *     tokens read as the ALL state.
+ *     tokens read as no explicit minimap camera.
  */
 export function parseShellParams(params: URLSearchParams): {
-  framing: FramingKey | null;
+  framing: FramingSelection;
   cluster: HazardClusterKey;
   ocean: OceanKey | null;
 } {
@@ -185,11 +184,9 @@ export function parseUrlParams(): ParsedUrlParams {
   const params = new URLSearchParams(window.location.search);
 
   // The `region=national` legacy alias needs no special handling here:
-  // it resolves through REGIONS exactly as every other legacy region
-  // value (honored forever, D-0.7.0-039), and it normalizes to the ALL
-  // framing state simply by never producing a `framing=` token (absence
-  // is the truth, D-0.7.0-041; no framing key exists for the national
-  // fit because absence IS the national default).
+  // it resolves through REGIONS exactly as every other legacy region value
+  // (honored forever, D-0.7.0-039). It does not produce a `framing=` token;
+  // the distinct minimap ALL camera uses the explicit `framing=all` token.
   const rawRegion = params.get('region');
   const region: RegionKey =
     rawRegion !== null && Object.prototype.hasOwnProperty.call(REGIONS, rawRegion)
@@ -315,10 +312,9 @@ export interface UrlSyncState {
   /** Basemap mode; emitted as `basemap=satellite` only when non-default,
    * so the default URL stays clean (the `view=` pattern, D-0.7.0-031). */
   readonly basemap?: BasemapMode;
-  /** Framing context; emitted as `framing=` only when non-null (absence
-   * is the ALL state, D-0.7.0-041). Callers pass `region: null` while a
-   * framing is active so the URL never claims two cameras at once. */
-  readonly framing?: FramingKey | null;
+  /** Minimap camera; emitted only when non-null. Callers pass `region: null`
+   * while a minimap camera is active so the URL claims one camera. */
+  readonly framing?: FramingSelection;
   /** Hazard cluster; while non-'drought' it REPLACES `layers=` in the
    * emitted URL (the durable-truth model, D-0.7.0-044: the clean
    * cluster is the one-word claim; the granular list returns the moment

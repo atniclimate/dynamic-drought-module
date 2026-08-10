@@ -3,11 +3,12 @@
  * D-0.7.0-042/052/074; ADR 0002: new UI surfaces are Preact islands).
  *
  * The left panel is a LAUNCH PAD, not a dashboard: one control per
- * decision, in the ruled order VIEW (which hazard) -> MAP CONTEXT
- * (where; the S4b minimap) -> WHEN (the compact temporal row; detail
- * behind the S4c "More time" popover) -> SHOWN NOW (the honest S3
- * DisplaySummary). Depth lives in the studios; the doors to them stay
- * where E1 put them (src/ui/view-shell.ts renders the capability-gated
+ * decision, in the ruled order VIEW (which hazard) -> CONDITIONS IN VIEW
+ * (the honest S3 DisplaySummary plus live metrics) -> CURRENT REGION ->
+ * MAP CONTEXT (the S4b minimap) -> WHEN (the compact temporal row; detail
+ * behind the S4c "More time" popover) -> SHARE -> REFINE. Depth lives in
+ * the studios; the doors to them stay where E1 put them
+ * (src/ui/view-shell.ts renders the capability-gated
  * PLACE/LAYERS pair against the real studio-route API, including the
  * embed link-out form, so this island deliberately does NOT duplicate
  * that surface).
@@ -38,11 +39,11 @@ import type maplibregl from 'maplibre-gl';
 import { render } from 'preact';
 import { signal } from '@preact/signals';
 import type { ReadonlySignal } from '@preact/signals';
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS, TEMPORAL_HORIZON_KEYS } from '../../config/clusters';
 import type { HazardClusterKey, TemporalHorizonKey } from '../../config/clusters';
-import type { FramingKey } from '../../config/framings';
+import type { FramingSelection } from '../../config/framings';
 import { getLayerDef } from '../../config/layers';
 import {
   getCommittedSnapshot,
@@ -52,6 +53,7 @@ import {
   requestHorizon
 } from '../../state/cluster-service';
 import type { CommittedShellSnapshot } from '../../state/cluster-service';
+import { requestBasemapMode } from '../../map/basemap-switcher';
 import { onTimeBarSpecChange } from '../time-bar';
 import { Minimap } from './minimap';
 import { TimeCompact } from './time-popover';
@@ -62,6 +64,144 @@ const HORIZON_LABELS: Readonly<Record<TemporalHorizonKey, string>> = {
   'weeks-ahead': 'Weeks ahead',
   'season-ahead': 'Season ahead'
 };
+
+const DESKTOP_SHELL_QUERY = '(min-width: 721px)';
+
+const SHELL_REHOST_SEATS = [
+  {
+    nodeId: 'conditions-strip',
+    homeId: 'conditions-strip-home',
+    hostId: 'shell-conditions-host'
+  },
+  {
+    nodeId: 'panel-region',
+    homeId: 'panel-region-home',
+    hostId: 'shell-region-host'
+  },
+  {
+    nodeId: 'share-btn',
+    homeId: 'share-btn-home',
+    hostId: 'shell-share-host'
+  },
+  {
+    nodeId: 'brief-head',
+    homeId: 'brief-head-home',
+    hostId: 'shell-refine-host'
+  }
+] as const;
+
+interface ShellRehostSeat {
+  readonly node: HTMLElement;
+  readonly home: HTMLElement;
+  readonly host: HTMLElement;
+}
+
+function shellRehostSeats(): readonly ShellRehostSeat[] | null {
+  const seats: ShellRehostSeat[] = [];
+  for (const ids of SHELL_REHOST_SEATS) {
+    const node = document.getElementById(ids.nodeId);
+    const home = document.getElementById(ids.homeId);
+    const host = document.getElementById(ids.hostId);
+    if (!node || !home || !host) return null;
+    seats.push({ node, home, host });
+  }
+  return seats;
+}
+
+/**
+ * Seat the existing conditions, region, share, and Brief-head nodes inside
+ * the ordered desktop Brief shell. No surface is cloned or rewired: moving
+ * each node preserves its island root, controls, listeners, and live state.
+ * Every ineligible presentation returns all four nodes to static HTML homes.
+ */
+function useDesktopBriefRehost(): void {
+  useLayoutEffect(() => {
+    const app = document.getElementById('app');
+    const widthQuery = window.matchMedia(DESKTOP_SHELL_QUERY);
+    const seats = shellRehostSeats();
+    if (!app || !seats) return;
+
+    // A media-query restyle can hide the old host before its change callback
+    // runs. Chromium then moves focus to the document body, so reading only
+    // `document.activeElement` inside sync would lose the user's focused
+    // control. Remember the last focus within a rehosted node; any deliberate
+    // focus elsewhere clears it through the same focusin listener.
+    let lastRehostFocus: HTMLElement | null =
+      document.activeElement instanceof HTMLElement &&
+      seats.some(({ node }) => node.contains(document.activeElement))
+        ? document.activeElement
+        : null;
+    const rememberRehostFocus = (event: FocusEvent): void => {
+      const target = event.target;
+      lastRehostFocus =
+        target instanceof HTMLElement &&
+        seats.some(({ node }) => node.contains(target))
+          ? target
+          : null;
+    };
+    document.addEventListener('focusin', rememberRehostFocus);
+
+    const sync = (): void => {
+      const activeFocus =
+        document.activeElement instanceof HTMLElement &&
+        seats.some(({ node }) => node.contains(document.activeElement))
+          ? document.activeElement
+          : null;
+      const documentOwnsFocus =
+        document.activeElement === document.body ||
+        document.activeElement === document.documentElement;
+      const focused =
+        activeFocus ??
+        (documentOwnsFocus &&
+        lastRehostFocus?.isConnected &&
+        seats.some(({ node }) => node.contains(lastRehostFocus))
+          ? lastRehostFocus
+          : null);
+      const useShell =
+        seats.every(({ node, home, host }) =>
+          node.isConnected && home.isConnected && host.isConnected
+        ) &&
+        widthQuery.matches &&
+        app.classList.contains('view-brief') &&
+        !app.classList.contains('embed') &&
+        !app.classList.contains('sidebar-collapsed');
+
+      for (const { node, home, host } of seats) {
+        if (useShell) {
+          if (node.parentElement !== host) host.appendChild(node);
+        } else if (
+          node.parentElement !== home.parentElement ||
+          node.previousElementSibling !== home
+        ) {
+          home.insertAdjacentElement('afterend', node);
+        }
+      }
+
+      if (
+        focused &&
+        focused.isConnected &&
+        document.activeElement !== focused &&
+        focused.getClientRects().length > 0
+      ) {
+        focused.focus({ preventScroll: true });
+      }
+    };
+
+    const observer = new MutationObserver(sync);
+    observer.observe(app, { attributes: true, attributeFilter: ['class'] });
+    widthQuery.addEventListener('change', sync);
+    sync();
+
+    return () => {
+      observer.disconnect();
+      widthQuery.removeEventListener('change', sync);
+      document.removeEventListener('focusin', rememberRehostFocus);
+      for (const { node, home } of seats) {
+        if (home.isConnected) home.insertAdjacentElement('afterend', node);
+      }
+    };
+  }, []);
+}
 
 /** Whether the committed display is still settling: any intended
  * non-reference layer without a terminal status. Reference boundaries
@@ -109,7 +249,7 @@ function customHorizonDisabledReason(
 interface ShellProps {
   readonly map: maplibregl.Map;
   readonly snap: ReadonlySignal<CommittedShellSnapshot>;
-  readonly framing: ReadonlySignal<FramingKey | null>;
+  readonly framing: ReadonlySignal<FramingSelection>;
   readonly specTick: ReadonlySignal<number>;
 }
 
@@ -122,10 +262,12 @@ interface ShellProps {
  */
 function MinimapPopover({
   map,
-  framing
+  framing,
+  metricContext
 }: {
   readonly map: maplibregl.Map;
-  readonly framing: ReadonlySignal<FramingKey | null>;
+  readonly framing: ReadonlySignal<FramingSelection>;
+  readonly metricContext: CommittedShellSnapshot['cluster'];
 }) {
   const doorRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -154,18 +296,27 @@ function MinimapPopover({
         ref={popRef}
         aria-label="Map framing"
       >
-        <Minimap map={map} framing={framing} idPrefix="shell-minimap-pop" />
+        <Minimap
+          map={map}
+          framing={framing}
+          idPrefix="shell-minimap-pop"
+          metricContext={metricContext}
+        />
       </div>
     </div>
   );
 }
 
 function Shell({ map, snap, framing, specTick }: ShellProps) {
+  useDesktopBriefRehost();
+
   const snapshot = snap.value;
   const pending = isPending(snapshot);
 
   const chooseCluster = (key: HazardClusterKey): void => {
     requestCluster(key);
+    const preferredBasemap = HAZARD_CLUSTERS[key].preferredBasemap;
+    if (preferredBasemap) requestBasemapMode(map, preferredBasemap);
   };
 
   const chooseHorizon = (key: TemporalHorizonKey): void => {
@@ -208,10 +359,46 @@ function Shell({ map, snap, framing, specTick }: ShellProps) {
         })}
       </div>
 
+      <section
+        class="shell-summary"
+        id="shell-conditions-summary"
+        aria-labelledby="shell-conditions-heading"
+      >
+        <h2 class="panel-title" id="shell-conditions-heading">Conditions in view</h2>
+        <p class="shell-summary-primary" id="shell-summary-primary">
+          {snapshot.summary.primary}
+        </p>
+        {/* The live region stays PERSISTENTLY rendered and visible; only
+            its text swaps. A region that is unhidden in the same render
+            that sets its text is unreliably announced across screen
+            readers (NVDA/Firefox drop it), so hidden/display toggling is
+            deliberately avoided; an empty paragraph renders nothing. */}
+        <p
+          class="shell-summary-caveat"
+          id="shell-summary-caveat"
+          aria-live="polite"
+        >
+          {snapshot.summary.caveat ?? ''}
+        </p>
+      </section>
+
+      <div class="shell-rehost" id="shell-conditions-host" />
+
+      <div class="shell-rehost" id="shell-region-host" />
+
       <div class="shell-minimap-map">
-        <Minimap map={map} framing={framing} idPrefix="shell-minimap" />
+        <Minimap
+          map={map}
+          framing={framing}
+          idPrefix="shell-minimap"
+          metricContext={snapshot.cluster}
+        />
       </div>
-      <MinimapPopover map={map} framing={framing} />
+      <MinimapPopover
+        map={map}
+        framing={framing}
+        metricContext={snapshot.cluster}
+      />
 
       <div class="shell-when" role="group" aria-label="Time horizon">
         <div class="shell-horizons">
@@ -238,24 +425,9 @@ function Shell({ map, snap, framing, specTick }: ShellProps) {
         <TimeCompact specTick={specTick} />
       </div>
 
-      <section class="shell-summary" aria-label="What is shown">
-        <h2 class="panel-title">Shown now</h2>
-        <p class="shell-summary-primary" id="shell-summary-primary">
-          {snapshot.summary.primary}
-        </p>
-        {/* The live region stays PERSISTENTLY rendered and visible; only
-            its text swaps. A region that is unhidden in the same render
-            that sets its text is unreliably announced across screen
-            readers (NVDA/Firefox drop it), so hidden/display toggling is
-            deliberately avoided; an empty paragraph renders nothing. */}
-        <p
-          class="shell-summary-caveat"
-          id="shell-summary-caveat"
-          aria-live="polite"
-        >
-          {snapshot.summary.caveat ?? ''}
-        </p>
-      </section>
+      <div class="shell-rehost shell-share-host" id="shell-share-host" />
+
+      <div class="shell-rehost" id="shell-refine-host" />
     </div>
   );
 }
@@ -272,7 +444,7 @@ export function mountShell(host: HTMLElement, map: maplibregl.Map): void {
 
   const first = getCommittedSnapshot();
   const snap = signal<CommittedShellSnapshot>(first);
-  const framing = signal<FramingKey | null>(first.framing);
+  const framing = signal<FramingSelection>(first.framing);
   onCommittedSnapshotChange(() => {
     const s = getCommittedSnapshot();
     snap.value = s;

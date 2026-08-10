@@ -1,163 +1,753 @@
 import type maplibregl from 'maplibre-gl';
+
 import { URLS } from '../config/urls';
-import { firstLayerIdAbove } from './layer-order';
 import { setBasemapMode } from '../state/basemap-store';
 import { showToast } from '../ui/overlay';
+import { fetchJsonWithBudget } from '../util/fetch';
+import { isObject } from '../util/guards';
+import {
+  watchRasterTiles,
+  type RasterTileWatch
+} from '../util/raster-status';
+import { firstLayerIdAbove } from './layer-order';
 
 /**
- * The opt-in satellite basemap uses the EOX Sentinel-2 cloudless 2016
- * mosaic under CC BY 4.0. Browser transport was verified 2026-07-14.
+ * Opt-in recent satellite context from NOAA NESDIS.
  *
- * This module rides a LAZY chunk (the P2 stage-5 entry-budget rule): the
- * switcher control and the boot path import it dynamically, so a user who
- * never touches satellite never downloads it. It owns three things:
+ * The service is a rolling 24-hour merged GOES East and West GeoColor image
+ * catalog. Activation queries a bounded set of recent catalog items, rejects
+ * stale or future-dated records, and probes them newest to oldest before it
+ * pins every exportImage tile to the selected object id and observation time.
+ * That pin is load-bearing: the image endpoint advertises a 12-hour cache, and
+ * an unpinned "latest" request could mix scans across one viewport.
  *
- *   1. The satellite raster source + layer, inserted into the permanent
- *      bottom stack (src/map/layer-order.ts) directly above the subdued
- *      OSM 'basemap' layer, below hillshade and every data layer, in ANY
- *      activation order (the stage-5 adversarial major 2).
- *   2. The visibility swap plus FAILURE CUSTODY (stage-5 major 6): the
- *      source add and layer add are transactional (a partial setup is
- *      rolled back, never left to poison a retry), and a map error event
- *      on the satellite source (EOX down, offline, blocked) reverts the
- *      whole mode: OSM back, chip hidden, store and URL back to default,
- *      one honest toast. The URL must never claim a satellite view that
- *      is not on screen (invariant 6).
- *   3. The HONESTY SPLIT (D-028 binding condition 2): the ruled legal
- *      attribution VERBATIM as visible text (stage-5 major 1: the URL is
- *      part of the string, so it renders as visible linked text, not a
- *      hidden href), plus the separate plain-language vintage notice
- *      visible whenever the satellite basemap is selected, embeds
- *      included.
- *
- * The satellite layer is deliberately NOT desaturated: it is a one-tap
- * terrain/context inspection surface, and muting it would defeat the
- * inspection (the analysis default remains the subdued OSM basemap).
+ * OpenStreetMap stays visible underneath. GOES coverage stops near 76 degrees
+ * latitude, and transparent or missing imagery must reveal the default map,
+ * never a blank surface. The chip keeps observation time and interpretation
+ * caveats separate from the hazard layers above it.
  */
 
 const SOURCE_ID = 'basemap-satellite';
 const LAYER_ID = 'basemap-satellite';
+const METADATA_TIMEOUT_MS = 10_000;
+const TILE_COMPLETENESS_DEADLINE_MS = 30_000;
+const CANDIDATE_PROBE_TIMEOUT_MS = 35_000;
+const FRAME_SELECTION_TIMEOUT_MS = 55_000;
+const REFRESH_INTERVAL_MS = 10 * 60_000;
+const RECENT_FRAME_MS = 45 * 60_000;
+const MAX_FRAME_AGE_MS = 26 * 60 * 60_000;
+const MAX_FUTURE_SKEW_MS = 15 * 60_000;
+const MAX_CANDIDATE_FRAMES = 4;
 
 /**
- * The exact legal attribution EOX publishes for the CC BY vintages,
- * captured verbatim 2026-07-14 (EVIDENCE_EOX_2026-07-14.md probe 5):
- * "EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH
- * (Contains modified Copernicus Sentinel data 2016 & 2017)".
- * The URL stays VISIBLE text (it is part of the ruled string) and is
- * also the link target.
+ * A z4 known-data control over the central United States and southern Canada.
+ * The fixed control avoids treating an Arctic or off-coverage viewport as a
+ * failed frame, while still exercising the exact pinned ImageServer export
+ * path that MapLibre uses.
  */
-const EOX_ATTRIBUTION =
-  'EOxCloudless <a href="https://cloudless.eox.at">https://cloudless.eox.at</a> ' +
-  'by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016 &amp; 2017)';
+export const SATELLITE_PROBE_BBOX =
+  '-12523442.7142433,5009377.08569731,-10018754.1713946,7514065.62854597';
 
-/** The plain vintage statement (distinct from the legal attribution). */
-const VINTAGE_TEXT = 'Satellite mosaic: 2016 (context only, not current conditions)';
+const ATTRIBUTION =
+  '<a href="https://www.nesdis.noaa.gov/imagery/satellite-maps" ' +
+  'target="_blank" rel="noopener">NOAA NESDIS GOES GeoColor</a>';
 
-/** Whether the map-level error listener for satellite tiles is wired. */
-let errorListenerWired = false;
+export interface SatelliteFrame {
+  readonly objectId: number;
+  readonly name: string;
+  readonly startTime: number;
+  readonly endTime: number;
+}
 
-/** Find or create the vintage notice chip in the shared bottom dock. Its
- * OWN dock row (not inside the space-between foot row): squeezed between
- * the map key and the ATNI badge it wrapped to six lines at 400 px (the
- * U4 stage-5 matrix finding). */
-function ensureVintageChip(): HTMLElement | null {
+let activeMap: maplibregl.Map | null = null;
+let metadataController: AbortController | null = null;
+let tileWatch: RasterTileWatch | null = null;
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+let activationEpoch = 0;
+let currentFrame: SatelliteFrame | null = null;
+type FrameStatus = 'live' | 'live-partial';
+let frameStatus: FrameStatus | null = null;
+
+function finiteNumber(value: unknown): number | null {
+  const number = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function parseFrameFeature(value: unknown): SatelliteFrame | null {
+  if (!isObject(value) || !isObject(value.attributes)) return null;
+  const attributes = value.attributes;
+  const objectId = finiteNumber(
+    attributes.objectid ?? attributes.OBJECTID ?? attributes.ObjectId
+  );
+  const startTime = finiteNumber(
+    attributes.start_time ?? attributes.START_TIME ?? attributes.Start_Time
+  );
+  const endTime = finiteNumber(
+    attributes.end_time ?? attributes.END_TIME ?? attributes.End_Time
+  );
+  const name = String(attributes.name ?? attributes.NAME ?? '').trim();
+
+  if (
+    objectId === null ||
+    !Number.isInteger(objectId) ||
+    objectId <= 0 ||
+    startTime === null ||
+    endTime === null ||
+    startTime <= 0 ||
+    endTime < startTime ||
+    endTime - startTime > 30 * 60_000 ||
+    name.length === 0
+  ) {
+    return null;
+  }
+  return { objectId, name, startTime, endTime };
+}
+
+export function isSatelliteFrameRecent(
+  frame: SatelliteFrame,
+  now = Date.now()
+): boolean {
+  const age = now - frame.endTime;
+  return age >= -MAX_FUTURE_SKEW_MS && age <= MAX_FRAME_AGE_MS;
+}
+
+/**
+ * Validate and sort the bounded ArcGIS candidate response. A malformed,
+ * stale, or future-dated newest feature does not hide a usable earlier frame.
+ */
+export function parseSatelliteFrames(
+  value: unknown,
+  now = Date.now()
+): readonly SatelliteFrame[] {
+  if (!isObject(value)) throw new Error('Satellite metadata is not an object.');
+  if (isObject(value.error)) {
+    throw new Error('Satellite metadata service returned an ArcGIS error.');
+  }
+  const features = value.features;
+  if (!Array.isArray(features) || features.length === 0) {
+    throw new Error('Satellite metadata has no recent frame.');
+  }
+
+  const seen = new Set<number>();
+  const frames = features
+    .map(parseFrameFeature)
+    .filter((frame): frame is SatelliteFrame => frame !== null)
+    .filter((frame) => isSatelliteFrameRecent(frame, now))
+    .sort((a, b) => b.endTime - a.endTime)
+    .filter((frame) => {
+      if (seen.has(frame.objectId)) return false;
+      seen.add(frame.objectId);
+      return true;
+    });
+
+  if (frames.length === 0) {
+    throw new Error('Satellite metadata has no valid recent frame.');
+  }
+  return frames;
+}
+
+/** Retained as the small single-frame parser contract used by older tests. */
+export function parseLatestSatelliteFrame(
+  value: unknown,
+  now = Date.now()
+): SatelliteFrame {
+  return parseSatelliteFrames(value, now)[0];
+}
+
+function latestFrameQueryUrl(): string {
+  const params = new URLSearchParams({
+    where: '1=1',
+    outFields: 'objectid,name,start_time,end_time',
+    returnGeometry: 'false',
+    orderByFields: 'end_time DESC',
+    resultRecordCount: String(MAX_CANDIDATE_FRAMES),
+    f: 'json'
+  });
+  return `${URLS.noaaMergedGeoColorImageServer}/query?${params.toString()}`;
+}
+
+/** Build a MapLibre WMS-style tile template pinned to exactly one frame. */
+export function satelliteTileTemplate(frame: SatelliteFrame): string {
+  const mosaicRule = encodeURIComponent(
+    JSON.stringify({
+      mosaicMethod: 'esriMosaicLockRaster',
+      lockRasterIds: [String(frame.objectId)]
+    })
+  );
+  return (
+    `${URLS.noaaMergedGeoColorImageServer}/exportImage?` +
+    'bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&' +
+    `format=jpgpng&transparent=true&time=${frame.startTime}&` +
+    `mosaicRule=${mosaicRule}&f=image`
+  );
+}
+
+export function satelliteProbeUrl(frame: SatelliteFrame): string {
+  return satelliteTileTemplate(frame).replace(
+    '{bbox-epsg-3857}',
+    SATELLITE_PROBE_BBOX
+  );
+}
+
+function abortError(): DOMException {
+  return new DOMException('Aborted', 'AbortError');
+}
+
+function isSupportedRaster(contentType: string, bytes: Uint8Array): boolean {
+  if (contentType.startsWith('image/png')) {
+    return (
+      bytes.length >= 8 &&
+      bytes[0] === 0x89 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x4e &&
+      bytes[3] === 0x47
+    );
+  }
+  if (contentType.startsWith('image/jpeg')) {
+    return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  }
+  return false;
+}
+
+/** Decode the control image and reject blank, off-coverage, or wrong-size responses. */
+async function validateProbeImage(
+  bytes: Uint8Array,
+  contentType: string,
+  signal: AbortSignal
+): Promise<void> {
+  if (!isSupportedRaster(contentType, bytes)) {
+    throw new Error('Satellite probe did not return a supported raster image.');
+  }
+  if (signal.aborted) throw abortError();
+
+  const imageBuffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(imageBuffer).set(bytes);
+  const objectUrl = URL.createObjectURL(
+    new Blob([imageBuffer], { type: contentType })
+  );
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const image = new Image();
+      let settled = false;
+      const finish = (error?: Error): void => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener('abort', onAbort);
+        image.onload = null;
+        image.onerror = null;
+        if (error) reject(error);
+        else resolve();
+      };
+      const onAbort = (): void => {
+        image.src = '';
+        finish(abortError());
+      };
+
+      image.onload = () => {
+        try {
+          if (image.naturalWidth !== 256 || image.naturalHeight !== 256) {
+            throw new Error('Satellite probe image dimensions are not 256 by 256.');
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = 16;
+          canvas.height = 16;
+          const context = canvas.getContext('2d', { willReadFrequently: true });
+          if (!context) throw new Error('Satellite probe image could not be inspected.');
+          context.drawImage(image, 0, 0, 16, 16);
+          const pixels = context.getImageData(0, 0, 16, 16).data;
+          let opaquePixels = 0;
+          let minimum = 255;
+          let maximum = 0;
+          for (let index = 0; index < pixels.length; index += 4) {
+            if (pixels[index + 3] === 0) continue;
+            opaquePixels++;
+            const luminance =
+              pixels[index] * 0.2126 +
+              pixels[index + 1] * 0.7152 +
+              pixels[index + 2] * 0.0722;
+            minimum = Math.min(minimum, luminance);
+            maximum = Math.max(maximum, luminance);
+          }
+          if (opaquePixels < 4 || maximum - minimum < 2) {
+            throw new Error('Satellite probe image is blank or uniform.');
+          }
+          finish();
+        } catch (error) {
+          finish(error instanceof Error ? error : new Error(String(error)));
+        }
+      };
+      image.onerror = () => finish(new Error('Satellite probe image could not be decoded.'));
+      signal.addEventListener('abort', onAbort, { once: true });
+      image.src = objectUrl;
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function proveFrameAvailable(
+  frame: SatelliteFrame,
+  masterSignal: AbortSignal
+): Promise<void> {
+  if (masterSignal.aborted) throw abortError();
+  const controller = new AbortController();
+  const onMasterAbort = (): void => controller.abort();
+  masterSignal.addEventListener('abort', onMasterAbort);
+  const timer = setTimeout(() => controller.abort(), CANDIDATE_PROBE_TIMEOUT_MS);
+  try {
+    const response = await fetch(satelliteProbeUrl(frame), {
+      cache: 'no-store',
+      credentials: 'omit',
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      throw new Error(`Satellite probe returned HTTP ${response.status}.`);
+    }
+    const contentType = (response.headers.get('content-type') ?? '').toLowerCase();
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (controller.signal.aborted) throw abortError();
+    await validateProbeImage(bytes, contentType, controller.signal);
+  } finally {
+    clearTimeout(timer);
+    masterSignal.removeEventListener('abort', onMasterAbort);
+  }
+}
+
+function ensureImageryChip(): HTMLElement | null {
   const existing = document.getElementById('basemap-vintage');
-  if (existing) return existing;
+  if (existing) {
+    existing.setAttribute('role', 'status');
+    existing.setAttribute('aria-live', 'polite');
+    existing.setAttribute('aria-atomic', 'true');
+    return existing;
+  }
   const dock = document.getElementById('map-bottom-dock');
   const foot = dock?.querySelector('.map-dock-foot');
   if (!dock || !foot) return null;
   const chip = document.createElement('div');
+  // Preserve the established id because embeds and downstream CSS may use it.
   chip.id = 'basemap-vintage';
-  chip.className = 'basemap-vintage-chip';
-  chip.textContent = VINTAGE_TEXT;
+  chip.className = 'basemap-imagery-chip';
+  chip.setAttribute('role', 'status');
+  chip.setAttribute('aria-live', 'polite');
+  chip.setAttribute('aria-atomic', 'true');
   chip.hidden = true;
   dock.insertBefore(chip, foot);
   return chip;
 }
 
-/**
- * Revert to the default basemap after a satellite failure: restore OSM,
- * hide the chip, hand the mode back to the store (which re-syncs the URL)
- * and say so once. Safe to call repeatedly.
- */
-function revertToDefault(map: maplibregl.Map, reason: string): void {
-  console.warn(`[basemap] satellite reverted: ${reason}`);
-  if (map.getLayer(LAYER_ID)) {
-    map.setLayoutProperty(LAYER_ID, 'visibility', 'none');
-  }
-  if (map.getLayer('basemap')) {
-    map.setLayoutProperty('basemap', 'visibility', 'visible');
-  }
-  const chip = ensureVintageChip();
-  if (chip) chip.hidden = true;
-  setBasemapMode('default');
-  showToast('Satellite imagery is unavailable right now.');
+function formatUtc(milliseconds: number, includeDate: boolean): string {
+  return new Intl.DateTimeFormat('en-US', {
+    ...(includeDate
+      ? { month: 'short', day: 'numeric', year: 'numeric' }
+      : {}),
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: 'UTC'
+  }).format(new Date(milliseconds));
 }
 
-/**
- * Show or hide the satellite basemap. Idempotent; adds the source and
- * layer on first activation, transactionally. The OSM basemap layer's
- * visibility is the inverse, so exactly one basemap renders (and only one
- * attribution shows) at a time.
- */
-export function setSatelliteActive(map: maplibregl.Map, active: boolean): void {
-  if (active && !map.getSource(SOURCE_ID)) {
-    try {
-      map.addSource(SOURCE_ID, {
+function observationRange(frame: SatelliteFrame): string {
+  const start = new Date(frame.startTime);
+  const end = new Date(frame.endTime);
+  const sameDay =
+    start.getUTCFullYear() === end.getUTCFullYear() &&
+    start.getUTCMonth() === end.getUTCMonth() &&
+    start.getUTCDate() === end.getUTCDate();
+  return sameDay
+    ? `${formatUtc(frame.startTime, true)} to ${formatUtc(frame.endTime, false)} UTC`
+    : `${formatUtc(frame.startTime, true)} to ${formatUtc(frame.endTime, true)} UTC`;
+}
+
+type ImageryStatus = 'loading' | 'live' | 'live-partial';
+
+function showChip(
+  status: ImageryStatus,
+  frame: SatelliteFrame | null,
+  refreshDelayed = false
+): void {
+  const chip = ensureImageryChip();
+  if (!chip) return;
+  chip.hidden = false;
+  chip.dataset.status = status;
+  if (status === 'loading' || frame === null) {
+    chip.textContent = 'Recent NOAA satellite imagery · loading';
+    return;
+  }
+  const state = status === 'live-partial' ? 'live (partial)' : 'live';
+  const age = Date.now() - frame.endTime;
+  const freshness = age >= 0 && age <= RECENT_FRAME_MS
+    ? 'near-real-time'
+    : 'latest available';
+  const delayed = refreshDelayed ? ' · refresh delayed' : '';
+  chip.textContent =
+    `NOAA GOES GeoColor · ${state} · observed ${observationRange(frame)} · ` +
+    `${freshness}${delayed}. Context only; daytime approximate true color, nighttime ` +
+    'infrared with static lights; clouds can obscure land and smoke. ' +
+    'Coverage ends near 76°N.';
+}
+
+function clearRefreshTimer(): void {
+  if (refreshTimer !== null) clearTimeout(refreshTimer);
+  refreshTimer = null;
+}
+
+function removeSatelliteArtifacts(map: maplibregl.Map): void {
+  if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
+  if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+}
+
+function removeSatelliteSource(map: maplibregl.Map): void {
+  tileWatch?.detach();
+  tileWatch = null;
+  removeSatelliteArtifacts(map);
+}
+
+function deactivate(map: maplibregl.Map): void {
+  activationEpoch++;
+  metadataController?.abort();
+  metadataController = null;
+  clearRefreshTimer();
+  removeSatelliteSource(map);
+  const chip = ensureImageryChip();
+  if (chip) chip.hidden = true;
+  activeMap = null;
+  currentFrame = null;
+  frameStatus = null;
+}
+
+function revertToDefault(map: maplibregl.Map, reason: string): void {
+  if (activeMap !== map) return;
+  console.warn(`[basemap] recent satellite imagery reverted: ${reason}`);
+  deactivate(map);
+  setBasemapMode('default');
+  showToast('Recent satellite imagery is unavailable. Default map restored.');
+}
+
+interface InstalledFrame {
+  readonly frame: SatelliteFrame;
+  readonly status: FrameStatus | null;
+}
+
+function sameFrame(a: SatelliteFrame, b: SatelliteFrame): boolean {
+  return (
+    a.objectId === b.objectId &&
+    a.startTime === b.startTime &&
+    a.endTime === b.endTime
+  );
+}
+
+function watchFrameTiles(
+  map: maplibregl.Map,
+  frame: SatelliteFrame,
+  epoch: number,
+  previous: InstalledFrame | null,
+  refreshDelayed: boolean
+): void {
+  let rollback = previous;
+  tileWatch?.detach();
+  tileWatch = watchRasterTiles(
+    map,
+    SOURCE_ID,
+    (status) => {
+      if (
+        epoch !== activationEpoch ||
+        activeMap !== map ||
+        currentFrame === null ||
+        !sameFrame(currentFrame, frame)
+      ) {
+        return;
+      }
+      if (status === 'error') {
+        const fallback = rollback;
+        rollback = null;
+        if (fallback && isSatelliteFrameRecent(fallback.frame)) {
+          console.warn(
+            '[basemap] selected satellite refresh frame failed; restoring the previous frame.'
+          );
+          removeSatelliteSource(map);
+          try {
+            installFrame(
+              map,
+              fallback.frame,
+              epoch,
+              null,
+              fallback.status,
+              true
+            );
+          } catch (error) {
+            revertToDefault(map, `previous frame could not be restored (${String(error)})`);
+          }
+          return;
+        }
+        revertToDefault(map, 'selected-frame tiles did not load');
+        return;
+      }
+      rollback = null;
+      frameStatus = status === 'degraded' ? 'live-partial' : 'live';
+      showChip(frameStatus, currentFrame, refreshDelayed);
+    },
+    {
+      reportInitialSuccess: true,
+      requestCompletenessDeadlineMs: TILE_COMPLETENESS_DEADLINE_MS
+    }
+  );
+}
+
+function installFrame(
+  map: maplibregl.Map,
+  frame: SatelliteFrame,
+  epoch: number,
+  previous: InstalledFrame | null,
+  initialStatus: FrameStatus | null = null,
+  refreshDelayed = false
+): void {
+  const tiles = [satelliteTileTemplate(frame)];
+  currentFrame = frame;
+  frameStatus = initialStatus;
+  showChip(initialStatus ?? 'loading', frame, refreshDelayed);
+
+  try {
+    watchFrameTiles(map, frame, epoch, previous, refreshDelayed);
+    map.addSource(SOURCE_ID, {
+      type: 'raster',
+      tiles,
+      tileSize: 256,
+      attribution: ATTRIBUTION,
+      minzoom: 0,
+      maxzoom: 7,
+      bounds: [-180, -76.49019873, 180, 76.45880127]
+    });
+    map.addLayer(
+      {
+        id: LAYER_ID,
         type: 'raster',
-        tiles: [URLS.basemapSatellite],
-        tileSize: 256,
-        attribution: EOX_ATTRIBUTION,
-        minzoom: 0,
-        // The 2016 mosaic is published to zoom 14 (10 m-class imagery),
-        // which matches the map's own maxZoom.
-        maxzoom: 14
-      });
-      // Into the bottom stack: above 'basemap', below hillshade and every
-      // data layer, regardless of what activated first.
-      map.addLayer(
-        {
-          id: LAYER_ID,
-          type: 'raster',
-          source: SOURCE_ID,
-          layout: { visibility: 'visible' }
-        },
-        firstLayerIdAbove(map, ['background', 'basemap'])
+        source: SOURCE_ID,
+        paint: {
+          'raster-opacity': 0.92,
+          'raster-saturation': -0.12,
+          'raster-contrast': 0.04
+        }
+      },
+      firstLayerIdAbove(map, ['background', 'basemap', 'basemap-ground'])
+    );
+  } catch (error) {
+    removeSatelliteSource(map);
+    if (currentFrame !== null && sameFrame(currentFrame, frame)) {
+      currentFrame = null;
+      frameStatus = null;
+    }
+    throw error;
+  }
+}
+
+function replaceFrame(
+  map: maplibregl.Map,
+  frame: SatelliteFrame,
+  epoch: number
+): void {
+  const previous = currentFrame === null
+    ? null
+    : { frame: currentFrame, status: frameStatus };
+  removeSatelliteSource(map);
+  try {
+    installFrame(map, frame, epoch, previous);
+  } catch (error) {
+    if (previous) {
+      try {
+        installFrame(
+          map,
+          previous.frame,
+          epoch,
+          null,
+          previous.status,
+          true
+        );
+      } catch (restoreError) {
+        throw new Error(
+          `Satellite frame swap and rollback failed (${String(error)}; ${String(restoreError)}).`
+        );
+      }
+    }
+    throw error;
+  }
+}
+
+async function fetchCandidateFrames(
+  signal: AbortSignal
+): Promise<readonly SatelliteFrame[]> {
+  const value = await fetchJsonWithBudget(
+    latestFrameQueryUrl(),
+    { cache: 'no-store', credentials: 'omit' },
+    signal,
+    METADATA_TIMEOUT_MS
+  );
+  return parseSatelliteFrames(value);
+}
+
+interface CandidateSelection {
+  readonly frame: SatelliteFrame | null;
+  readonly attempted: boolean;
+}
+
+async function selectUsableFrame(
+  frames: readonly SatelliteFrame[],
+  installed: SatelliteFrame | null,
+  signal: AbortSignal
+): Promise<CandidateSelection> {
+  let attempted = false;
+  for (const frame of frames) {
+    if (installed) {
+      if (sameFrame(frame, installed)) continue;
+      if (frame.endTime < installed.endTime) continue;
+    }
+    attempted = true;
+    try {
+      await proveFrameAvailable(frame, signal);
+      return { frame, attempted };
+    } catch (error) {
+      if (signal.aborted) throw error;
+      console.warn(
+        `[basemap] satellite frame ${frame.objectId} failed its known-data probe.`,
+        error
       );
-    } catch (err) {
-      // Transactional rollback (stage-5 major 6): a half-built setup must
-      // not survive to make the NEXT activation a silent no-op.
-      if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
-      if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
-      revertToDefault(map, `setup failed (${String(err)})`);
+    }
+  }
+  return { frame: null, attempted };
+}
+
+async function refreshFrame(
+  map: maplibregl.Map,
+  epoch: number,
+  initial: boolean
+): Promise<void> {
+  metadataController?.abort();
+  const controller = new AbortController();
+  metadataController = controller;
+  let selectionTimedOut = false;
+  const selectionTimer = setTimeout(() => {
+    selectionTimedOut = true;
+    controller.abort();
+  }, FRAME_SELECTION_TIMEOUT_MS);
+  try {
+    const frames = await fetchCandidateFrames(controller.signal);
+    if (
+      controller.signal.aborted ||
+      epoch !== activationEpoch ||
+      activeMap !== map
+    ) {
       return;
     }
 
-    if (!errorListenerWired) {
-      errorListenerWired = true;
-      // Tile/source failures arrive asynchronously; while satellite is the
-      // active basemap they mean the user is looking at a blank map the
-      // URL still claims, so the mode reverts honestly. One revert per
-      // failure burst: reverting flips visibility, and the guard below
-      // ignores errors while the layer is already hidden.
-      map.on('error', (e: { sourceId?: string }) => {
-        if (e?.sourceId !== SOURCE_ID) return;
-        const visible =
-          map.getLayer(LAYER_ID) &&
-          map.getLayoutProperty(LAYER_ID, 'visibility') !== 'none';
-        if (!visible) return;
-        revertToDefault(map, 'tile or source error');
-      });
+    if (
+      !initial &&
+      currentFrame !== null &&
+      frames.length > 0 &&
+      sameFrame(frames[0], currentFrame)
+    ) {
+      showChip(frameStatus ?? 'loading', currentFrame);
+      return;
     }
+
+    const installed = currentFrame;
+    const selection = await selectUsableFrame(
+      frames,
+      initial ? null : installed,
+      controller.signal
+    );
+    if (
+      controller.signal.aborted ||
+      epoch !== activationEpoch ||
+      activeMap !== map
+    ) {
+      return;
+    }
+
+    if (selection.frame === null) {
+      if (
+        !initial &&
+        installed !== null &&
+        isSatelliteFrameRecent(installed) &&
+        map.getSource(SOURCE_ID)
+      ) {
+        showChip(frameStatus ?? 'loading', installed, selection.attempted);
+        return;
+      }
+      throw new Error('No recent satellite candidate passed its image probe.');
+    }
+
+    replaceFrame(map, selection.frame, epoch);
+  } catch (error) {
+    if (
+      (controller.signal.aborted && !selectionTimedOut) ||
+      epoch !== activationEpoch ||
+      activeMap !== map
+    ) {
+      return;
+    }
+    if (
+      !initial &&
+      currentFrame !== null &&
+      isSatelliteFrameRecent(currentFrame) &&
+      map.getSource(SOURCE_ID)
+    ) {
+      console.warn('[basemap] satellite frame refresh delayed.', error);
+      showChip(frameStatus ?? 'loading', currentFrame, true);
+      return;
+    }
+    // A recent installed frame returned above. Any remaining case is either
+    // an initial failure, a missing source, or an installed frame that has
+    // aged beyond the rolling-catalog policy. Do not leave stale imagery
+    // mounted merely because its MapLibre source still exists.
+    revertToDefault(map, `frame lookup failed (${String(error)})`);
+  } finally {
+    clearTimeout(selectionTimer);
+    if (metadataController === controller) metadataController = null;
+  }
+}
+
+function scheduleRefresh(map: maplibregl.Map, epoch: number): void {
+  clearRefreshTimer();
+  refreshTimer = setTimeout(() => {
+    refreshTimer = null;
+    if (epoch !== activationEpoch || activeMap !== map) return;
+    void refreshFrame(map, epoch, false).finally(() => {
+      if (epoch === activationEpoch && activeMap === map) {
+        scheduleRefresh(map, epoch);
+      }
+    });
+  }, REFRESH_INTERVAL_MS);
+}
+
+/**
+ * Show or hide recent satellite imagery. Metadata and tile requests are
+ * bounded or cancelled when the user switches off, and activation is
+ * transactional so a failed frame cannot leave the URL claiming imagery.
+ */
+export async function setSatelliteActive(
+  map: maplibregl.Map,
+  active: boolean
+): Promise<void> {
+  if (!active) {
+    if (activeMap === map) {
+      deactivate(map);
+    } else {
+      // Do not abort or detach another map's active source during teardown.
+      removeSatelliteArtifacts(map);
+    }
+    return;
   }
 
-  if (map.getLayer(LAYER_ID)) {
-    map.setLayoutProperty(LAYER_ID, 'visibility', active ? 'visible' : 'none');
-  }
-  if (map.getLayer('basemap')) {
-    map.setLayoutProperty('basemap', 'visibility', active ? 'none' : 'visible');
-  }
+  if (activeMap === map) return;
+  if (activeMap && activeMap !== map) deactivate(activeMap);
 
-  const chip = ensureVintageChip();
-  if (chip) chip.hidden = !active;
+  activationEpoch++;
+  const epoch = activationEpoch;
+  activeMap = map;
+  showChip('loading', null);
+  await refreshFrame(map, epoch, true);
+  if (epoch === activationEpoch && activeMap === map) {
+    scheduleRefresh(map, epoch);
+  }
 }

@@ -81,6 +81,7 @@ import { watchRasterTiles, type RasterTileWatch } from '../util/raster-status';
 const LAYER_KEY = 'usfs-whp';
 const SOURCE_ID = 'usfs-whp';
 const LAYER_ID = 'usfs-whp';
+const TILE_SUCCESS_DEADLINE_MS = 10_000;
 
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
 export const fadeLayerIds = [LAYER_ID] as const;
@@ -88,7 +89,7 @@ export const fadeLayerIds = [LAYER_ID] as const;
 /** The tile-load honesty watcher (util/raster-status.ts); null when inactive. */
 let tileWatch: RasterTileWatch | null = null;
 
-type WhpStatus = 'loading' | 'ready' | 'error';
+type WhpStatus = 'loading' | 'ready' | 'degraded' | 'error';
 
 function reportStatus(state: WhpStatus): void {
   registry.setStatus(LAYER_KEY, state);
@@ -180,8 +181,10 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     }
 
     tileWatch?.detach();
-    tileWatch = watchRasterTiles(map, SOURCE_ID, reportStatus);
-    reportStatus('ready');
+    tileWatch = watchRasterTiles(map, SOURCE_ID, reportStatus, {
+      reportInitialSuccess: true,
+      requestCompletenessDeadlineMs: TILE_SUCCESS_DEADLINE_MS
+    });
   } catch (err) {
     console.warn('[usfs-whp] activation failed.', err);
     reportStatus('error');

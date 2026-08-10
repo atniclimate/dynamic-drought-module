@@ -5,6 +5,57 @@
  */
 
 /* ---------------------------------------------------------------------------
+ * North American drought minimap
+ *
+ * The minimap is a condition overview, so it uses the shared D0 through D4
+ * drought ramp rather than editorial region colors. `none` is deliberately
+ * white, per the map convention. Loading and unavailable states are separate
+ * UI states and never receive a drought color.
+ * ------------------------------------------------------------------------- */
+
+export type DroughtSeverityCode = 'none' | 'D0' | 'D1' | 'D2' | 'D3' | 'D4';
+
+export const MINIMAP_DROUGHT_COLORS: Readonly<
+  Record<DroughtSeverityCode, string>
+> = {
+  none: '#FFFFFF',
+  D0: '#FFFF00',
+  D1: '#FCD37F',
+  D2: '#FFAA00',
+  D3: '#E60000',
+  D4: '#730000'
+};
+
+/* ---------------------------------------------------------------------------
+ * Wildfire minimap evidence hierarchy
+ *
+ * These colors encode three different, explicitly labelled conditions. Red
+ * requires a positive current mapped NIFC wildfire-perimeter query. Orange and
+ * yellow are static 2023 United States Forest Service WHP threshold summaries
+ * used only after that current query returns zero. Neutral states never imply
+ * that no wildfire exists.
+ * ------------------------------------------------------------------------- */
+
+export type MinimapWildfireColorKey =
+  | 'mapped-wildfire'
+  | 'high-potential'
+  | 'moderate-potential'
+  | 'below-threshold'
+  | 'no-data'
+  | 'unavailable';
+
+export const MINIMAP_WILDFIRE_COLORS: Readonly<
+  Record<MinimapWildfireColorKey, string>
+> = {
+  'mapped-wildfire': '#D73027',
+  'high-potential': '#FF9F1C',
+  'moderate-potential': '#FFE066',
+  'below-threshold': '#E2E8F0',
+  'no-data': '#334155',
+  'unavailable': '#1E293B'
+};
+
+/* ---------------------------------------------------------------------------
  * Ecoregions (EPA Level III)
  *
  * Names match the `US_L3NAME` field. The palette is designed to evoke
@@ -173,19 +224,19 @@ export const USDM_CATEGORIES: ReadonlyArray<UsdmCategory> = [
 ];
 
 /**
- * The "none" swatch (U4b, 0.7.0). Areas under no USDM category render as
- * the bare desaturated basemap, and the design corpus found that grey reads
- * as "broken", not "drought-free". This entry names that grey in the key so
- * absence reads as a deliberate state. Kept OUTSIDE `USDM_CATEGORIES`:
- * consumers index that array by drought level (`USDM_CATEGORIES[dm]`), so a
- * sixth element would shift the D0-D4 mapping. The color approximates the
- * desaturated basemap the user actually sees (raster-saturation -0.8 over
- * OSM), not a data value; it never paints a map fill.
+ * The no-polygon swatch. USDM publishes D0 through D4 polygons but does not
+ * provide an analyzed-area mask in this client, so bare ground cannot be
+ * promoted to a confident "no drought" reading. This entry names what the
+ * renderer can prove: no D0-D4 category is drawn. Kept OUTSIDE
+ * `USDM_CATEGORIES`: consumers index that array by drought level
+ * (`USDM_CATEGORIES[dm]`), so a sixth element would shift the D0-D4 mapping.
+ * The dark slate approximates the shared ground scene, not a data value; it
+ * never paints a map fill.
  */
 export const USDM_NONE_SWATCH: Readonly<{ code: string; label: string; color: string }> = {
-  code: 'None',
-  label: 'No drought',
-  color: '#e2e4e6'
+  code: 'No polygon',
+  label: 'No D0-D4 category drawn',
+  color: '#253247'
 };
 
 /* ---------------------------------------------------------------------------

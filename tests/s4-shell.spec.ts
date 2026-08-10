@@ -129,6 +129,62 @@ test.describe('S4a desktop shell boot', () => {
     await expect(page.locator('#panel-quick-views')).toBeHidden();
     await expect(page.locator('#panel-quick-views')).toBeAttached();
   });
+
+  test('desktop Brief seats the same controls in the ruled shell order and restores them for console and collapse', async ({
+    page
+  }) => {
+    await gotoApp(page);
+
+    const shellOrder = await page.locator('#shell-panel .shell').evaluate((shell) => {
+      const children = Array.from(shell.children);
+      const indexOf = (selector: string): number =>
+        children.findIndex((child) => child.matches(selector));
+      return [
+        '.shell-view',
+        '#shell-conditions-summary',
+        '#shell-conditions-host',
+        '#shell-region-host',
+        '.shell-minimap-map',
+        '.shell-when',
+        '#shell-share-host',
+        '#shell-refine-host'
+      ].map(indexOf);
+    });
+    expect(shellOrder).toEqual([...shellOrder].sort((a, b) => a - b));
+    expect(shellOrder.every((index) => index >= 0)).toBe(true);
+
+    for (const id of ['conditions-strip', 'panel-region', 'share-btn', 'brief-head']) {
+      await expect(page.locator(`#${id}`)).toHaveCount(1);
+    }
+    await expect(page.locator('#shell-conditions-host > #conditions-strip')).toHaveCount(1);
+    await expect(page.locator('#shell-region-host > #panel-region')).toHaveCount(1);
+    await expect(page.locator('#shell-share-host > #share-btn')).toHaveCount(1);
+    await expect(page.locator('#shell-refine-host > #brief-head')).toHaveCount(1);
+    await expect(page.locator('#shell-conditions-heading')).toHaveText('Conditions in view');
+    await expect(page.locator('#shell-conditions-host .conditions-title')).toBeHidden();
+
+    // Existing behavior rides the moved nodes: region navigation still owns
+    // URL state, and the one share listener still produces its toast.
+    await page.locator('.region-btn[data-region-key="central_oregon"]').click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('region')).toBe('central_oregon');
+    await page.locator('#share-btn').click();
+    await expect(page.locator('#copy-toast')).toBeVisible();
+    await expect(page.locator('#copy-toast')).toContainText(/Link copied|Copy blocked/);
+
+    await page.locator('.view-switch [data-view="console"]').click();
+    await expect(page.locator('#conditions-strip-home + #conditions-strip')).toHaveCount(1);
+    await expect(page.locator('#panel-region-home + #panel-region')).toHaveCount(1);
+    await expect(page.locator('#share-btn-home + #share-btn')).toHaveCount(1);
+    await expect(page.locator('#brief-head-home + #brief-head')).toHaveCount(1);
+    await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
+
+    await page.locator('.view-switch [data-view="brief"]').click();
+    await page.locator('#sidebar-collapse').click();
+    await expect(page.locator('#conditions-strip-home + #conditions-strip')).toHaveCount(1);
+    await expect(page.locator('#panel-region-home + #panel-region')).toHaveCount(1);
+    await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
+    await expect(page.locator('#brief-head-home + #brief-head')).toHaveCount(1);
+  });
 });
 
 test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => {
@@ -576,6 +632,10 @@ test.describe('S4a mobile shape (390x844)', () => {
     // S4b staged retirement: #panel-region is PRESERVED for the mobile
     // sheet until S6 supplies labeled touch tiles.
     await expect(page.locator('#panel-region')).toBeAttached();
+    await expect(page.locator('#conditions-strip-home + #conditions-strip')).toHaveCount(1);
+    await expect(page.locator('#panel-region-home + #panel-region')).toHaveCount(1);
+    await expect(page.locator('#brief-head-home + #brief-head')).toHaveCount(1);
+    await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
   });
 });
 
@@ -584,6 +644,10 @@ test.describe('S4a embed guarantee', () => {
     await gotoApp(page, '?embed=true');
     await expect(page.locator('#shell-panel')).toBeHidden();
     await expect(page.locator('#panel-response')).toBeHidden();
+    await expect(page.locator('#conditions-strip-home + #conditions-strip')).toHaveCount(1);
+    await expect(page.locator('#panel-region-home + #panel-region')).toHaveCount(1);
+    await expect(page.locator('#brief-head-home + #brief-head')).toHaveCount(1);
+    await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
   });
 });
 

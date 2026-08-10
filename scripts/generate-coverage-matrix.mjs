@@ -102,13 +102,16 @@ function renderDoc() {
   );
   lines.push('');
   lines.push(
-    'What the Dynamic Drought Module (DDM) actually does today for each coverage'
+    'Current selected-place, drought, landscape, and impact capability for each'
   );
   lines.push(
-    'family, as recorded in `src/config/capability-matrix.ts` (the source of'
+    'coverage family, as recorded in `src/config/capability-matrix.ts` (the source of'
   );
   lines.push(
-    'truth; this file is generated from it). Levels: **full** (shipped and'
+    'truth for these axes; this file is not an inventory of every map layer or'
+  );
+  lines.push(
+    'regional overview). Levels: **full** (shipped and'
   );
   lines.push(
     'verified), **partial** (shipped with the named limitation), **none** (not'
@@ -190,18 +193,21 @@ function renderDoc() {
   lines.push('## Fire follow-on');
   lines.push('');
   lines.push(
-    'The fire module should receive the same architectural expansion: canonical'
+    'The current Wildfire display and regional minimap are shipped separately from'
   );
   lines.push(
-    'geography, independent per-source capability, time-aware source contracts,'
+    'this selected-place matrix. The planned selected-place fire expansion needs'
   );
   lines.push(
-    'cross-source synthesis that preserves issuer support, and bounded'
+    'canonical geography, independent per-source capability, time-aware source'
   );
   lines.push(
-    'cancellable caching. This record does not activate or broaden a fire source;'
+    'contracts, issuer-preserving synthesis, and bounded cancellable caching.'
   );
-  lines.push('that work requires its own implementation and verification.');
+  lines.push(
+    'This matrix does not claim that selected-place milestone is implemented or'
+  );
+  lines.push('authorize a broader fire source.');
   lines.push('');
   return lines.join('\n');
 }

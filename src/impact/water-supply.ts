@@ -24,7 +24,7 @@
  */
 
 import { URLS } from '../config/urls';
-import { fetchWithBudget } from '../util/fetch';
+import { fetchBufferedWithBudget } from '../util/fetch';
 import { makeClaim, todayIso } from './evidence';
 import { resolveStateCode } from './resources';
 import type { BoundarySelectionContext, SourcedClaim } from './types';
@@ -197,7 +197,7 @@ export async function fetchWaterSupplyClaims(
 
   let rows: WsRow[];
   try {
-    const resp = await fetchWithBudget(proxied, {}, signal, TIMEOUT_MS);
+    const resp = await fetchBufferedWithBudget(proxied, {}, signal, TIMEOUT_MS);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     rows = parseWsReport(await resp.text());
   } catch {

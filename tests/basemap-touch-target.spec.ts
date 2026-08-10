@@ -1,4 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { BasemapSwitcherControl } from '../src/map/basemap-switcher';
+import {
+  getBasemapMode,
+  setBasemapMode
+} from '../src/state/basemap-store';
 import { gotoApp } from './helpers';
 
 /**
@@ -37,10 +42,83 @@ test.describe('DEG-2 the Satellite toggle touch target (390x844)', () => {
 test.describe('DEG-2 desktop keeps the compact control family', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
+  test('a removed switcher releases its basemap-store subscription', () => {
+    type FakeElement = {
+      attributes: Map<string, string>;
+      children: FakeElement[];
+      classList: { toggle: (name: string, force?: boolean) => void };
+      className: string;
+      removed: boolean;
+      setAttribute: (name: string, value: string) => void;
+      addEventListener: () => void;
+      appendChild: (child: FakeElement) => FakeElement;
+      remove: () => void;
+      textContent: string;
+      title: string;
+      type: string;
+    };
+
+    const created: FakeElement[] = [];
+    const makeElement = (): FakeElement => {
+      const element: FakeElement = {
+        attributes: new Map(),
+        children: [],
+        classList: { toggle: () => {} },
+        className: '',
+        removed: false,
+        setAttribute(name, value) {
+          element.attributes.set(name, value);
+        },
+        addEventListener: () => {},
+        appendChild(child) {
+          element.children.push(child);
+          return child;
+        },
+        remove() {
+          element.removed = true;
+        },
+        textContent: '',
+        title: '',
+        type: ''
+      };
+      created.push(element);
+      return element;
+    };
+
+    const originalDocument = globalThis.document;
+    const original = getBasemapMode();
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: { createElement: makeElement }
+    });
+
+    try {
+      const control = new BasemapSwitcherControl();
+      const container = control.onAdd({} as never);
+      const button = created[1];
+      const before = button?.attributes.get('aria-pressed');
+
+      control.onRemove();
+      setBasemapMode(original === 'default' ? 'satellite' : 'default');
+
+      expect(container).toBe(created[0]);
+      expect(created[0]?.removed).toBe(true);
+      expect(button?.attributes.get('aria-pressed')).toBe(before);
+    } finally {
+      setBasemapMode(original);
+      Object.defineProperty(globalThis, 'document', {
+        configurable: true,
+        value: originalDocument
+      });
+    }
+  });
+
   test('the desktop switcher stays in the one-family stack, unchanged', async ({
     page
   }) => {
-    await gotoApp(page);
+    // Console keeps Share in the on-map control family. Desktop Brief moves
+    // the same wired button into its ordered shell, where it is full width.
+    await gotoApp(page, '?view=console');
     const btn = page.locator('.basemap-switcher-btn');
     await expect(btn).toBeVisible();
     const box = await btn.boundingBox();

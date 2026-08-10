@@ -63,11 +63,14 @@ const SENTENCE_ROLE_ORDER: readonly LayerRole[] = [
 ];
 
 /**
- * Display layers that are NOT US-scoped (global coverage), so a framing
- * coverage caution does not apply to them. Every other non-reference
- * layer (surface, event, or stations) is a US-scoped agency product.
+ * Display layers for which the framing's generic US-scope caution does not
+ * apply. The ocean anomaly is global; NADM is the tri-national continental
+ * product. Every other exception needs an explicit coverage contract.
  */
-const GLOBAL_COVERAGE_KEYS: ReadonlySet<string> = new Set(['sst-anomaly']);
+const US_SCOPE_CAUTION_EXEMPT_KEYS: ReadonlySet<string> = new Set([
+  'sst-anomaly',
+  'nadm-drought'
+]);
 
 /**
  * Prose names for layers whose compact catalog labels lead with a bare
@@ -81,7 +84,8 @@ const GLOBAL_COVERAGE_KEYS: ReadonlySet<string> = new Set(['sst-anomaly']);
 const PROSE_LAYER_NAMES: Readonly<Record<string, string>> = {
   drought:
     'Drought Outlook (National Oceanic and Atmospheric Administration Climate Prediction Center, CPC)',
-  'nifc-fires': 'Active Wildfires (National Interagency Fire Center, NIFC)',
+  'nifc-fires':
+    'Current Mapped Fire Perimeters (National Interagency Fire Center, NIFC)',
   'hms-smoke': 'Smoke Plumes (Hazard Mapping System, HMS)'
 };
 
@@ -186,7 +190,8 @@ export const deriveDisplaySummary: DeriveDisplaySummary = (input) => {
 
   const framingDef = input.framing !== null ? FRAMINGS[input.framing] : null;
   const hasUsScopedDisplayLayer = intended.some(
-    (def) => def.role !== 'reference' && !GLOBAL_COVERAGE_KEYS.has(def.key)
+    (def) =>
+      def.role !== 'reference' && !US_SCOPE_CAUTION_EXEMPT_KEYS.has(def.key)
   );
   if (framingDef?.coverageNote !== undefined && hasUsScopedDisplayLayer) {
     const coverage = userFacingCoverageClause(framingDef.coverageNote);

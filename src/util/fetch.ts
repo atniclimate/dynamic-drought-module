@@ -60,6 +60,47 @@ export async function fetchWithBudget(
  * when response headers arrive. The response body is read through an explicit
  * reader so an abort can cancel a stalled stream before JSON parsing finishes.
  */
+async function readBodyBytes(
+  response: Response,
+  signal: AbortSignal
+): Promise<ArrayBuffer | null> {
+  if (response.body === null) return null;
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+  const cancelBody = (): void => {
+    void reader.cancel().catch(() => undefined);
+  };
+  signal.addEventListener('abort', cancelBody);
+
+  try {
+    if (signal.aborted) {
+      await reader.cancel().catch(() => undefined);
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
+    while (true) {
+      const chunk = await reader.read();
+      if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+      if (chunk.done) break;
+      chunks.push(chunk.value);
+      byteLength += chunk.value.byteLength;
+    }
+
+    const bytes = new Uint8Array(byteLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return bytes.buffer;
+  } finally {
+    signal.removeEventListener('abort', cancelBody);
+    reader.releaseLock();
+  }
+}
+
 export async function fetchJsonWithBudget(
   url: string,
   opts: RequestInit | null,
@@ -72,13 +113,8 @@ export async function fetchJsonWithBudget(
     throw new DOMException('Aborted', 'AbortError');
   }
 
-  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-  const cancelBody = (): void => {
-    void reader?.cancel().catch(() => undefined);
-  };
   const onMasterAbort = (): void => ctrl.abort();
   if (masterSignal) masterSignal.addEventListener('abort', onMasterAbort);
-  ctrl.signal.addEventListener('abort', cancelBody);
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
 
   try {
@@ -86,30 +122,138 @@ export async function fetchJsonWithBudget(
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} ${response.statusText}`);
     }
-    if (!response.body) return response.json() as Promise<unknown>;
-
-    reader = response.body.getReader();
-    if (ctrl.signal.aborted) {
-      await reader.cancel().catch(() => undefined);
-      throw new DOMException('Aborted', 'AbortError');
-    }
-
-    const decoder = new TextDecoder();
-    let text = '';
-    while (true) {
-      const chunk = await reader.read();
-      if (ctrl.signal.aborted) throw new DOMException('Aborted', 'AbortError');
-      if (chunk.done) break;
-      text += decoder.decode(chunk.value, { stream: true });
-    }
-    text += decoder.decode();
-    return JSON.parse(text) as unknown;
+    const bytes = await readBodyBytes(response, ctrl.signal);
+    return JSON.parse(new TextDecoder().decode(bytes ?? new Uint8Array())) as unknown;
   } finally {
     clearTimeout(timer);
-    ctrl.signal.removeEventListener('abort', cancelBody);
     if (masterSignal) masterSignal.removeEventListener('abort', onMasterAbort);
-    reader?.releaseLock();
   }
+}
+
+/**
+ * Fetch a response and retain cancellation ownership until its exact body bytes
+ * have arrived. Use this when callers need status and headers before parsing;
+ * unlike `fetchWithBudget`, the timeout cannot expire between headers and body.
+ */
+export async function fetchBufferedWithBudget(
+  url: string,
+  opts: RequestInit | null,
+  masterSignal: AbortSignal | null,
+  timeoutMs: number
+): Promise<Response> {
+  const ctrl = new AbortController();
+  if (masterSignal?.aborted) {
+    ctrl.abort();
+    throw new DOMException('Aborted', 'AbortError');
+  }
+  const onMasterAbort = (): void => ctrl.abort();
+  masterSignal?.addEventListener('abort', onMasterAbort);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...(opts ?? {}), signal: ctrl.signal });
+    const body = await readBodyBytes(response, ctrl.signal);
+    if (ctrl.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    return new Response(body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers
+    });
+  } finally {
+    clearTimeout(timer);
+    masterSignal?.removeEventListener('abort', onMasterAbort);
+  }
+}
+
+interface SharedJsonRequest {
+  promise: Promise<unknown>;
+  controller: AbortController | null;
+  consumers: number;
+}
+
+const sharedJsonRequests = new Map<string, SharedJsonRequest>();
+
+/**
+ * Drop a shared artifact after a consumer rejects its payload shape. A
+ * fulfilled transport is otherwise retained for the page lifetime, so schema
+ * validation failures must explicitly make the next activation fetch again.
+ */
+export function invalidateSharedJsonRequest(key: string): void {
+  const request = sharedJsonRequests.get(key);
+  if (request === undefined) return;
+  sharedJsonRequests.delete(key);
+  request.controller?.abort();
+}
+
+/**
+ * Share one page-lifetime JSON artifact across concurrent consumers. Each
+ * caller can cancel its own wait; the transport is cancelled when its final
+ * consumer leaves before completion. Failed requests are evicted for retry.
+ */
+export function fetchSharedJsonWithBudget(
+  key: string,
+  url: string,
+  opts: RequestInit | null,
+  signal: AbortSignal,
+  timeoutMs: number,
+): Promise<unknown> {
+  if (signal.aborted) {
+    return Promise.reject(new DOMException('Aborted', 'AbortError'));
+  }
+
+  let request = sharedJsonRequests.get(key);
+  if (request === undefined) {
+    const controller = new AbortController();
+    const next: SharedJsonRequest = {
+      promise: Promise.resolve(undefined),
+      controller,
+      consumers: 0,
+    };
+    next.promise = fetchJsonWithBudget(
+      url,
+      opts,
+      controller.signal,
+      timeoutMs,
+    ).then(
+      (value) => {
+        next.controller = null;
+        return value;
+      },
+      (error: unknown) => {
+        if (sharedJsonRequests.get(key) === next) {
+          sharedJsonRequests.delete(key);
+        }
+        next.controller = null;
+        throw error;
+      },
+    );
+    sharedJsonRequests.set(key, next);
+    request = next;
+  }
+  request.consumers++;
+
+  return new Promise<unknown>((resolve, reject) => {
+    let finished = false;
+    const finish = (error: unknown, value?: unknown): void => {
+      if (finished) return;
+      finished = true;
+      signal.removeEventListener('abort', onAbort);
+      request.consumers = Math.max(0, request.consumers - 1);
+      if (request.consumers === 0 && request.controller !== null) {
+        if (sharedJsonRequests.get(key) === request) {
+          sharedJsonRequests.delete(key);
+        }
+        request.controller.abort();
+      }
+      if (error === null) resolve(value);
+      else reject(error);
+    };
+    const onAbort = (): void =>
+      finish(new DOMException('Aborted', 'AbortError'));
+
+    signal.addEventListener('abort', onAbort, { once: true });
+    if (signal.aborted) onAbort();
+    else void request.promise.then((value) => finish(null, value), finish);
+  });
 }
 
 /**

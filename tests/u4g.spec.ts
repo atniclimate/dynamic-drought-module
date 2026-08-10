@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { URLS } from '../src/config/urls';
 import { resolveHillshadeArchiveUrl } from '../src/layers/hillshade';
 import { gotoApp, layerCheckbox, waitForLayerSettled, search } from './helpers';
+import { stubRecentSatellite } from './satellite-fixture';
 
 /**
  * U4g: the terrain-shading (hillshade) layer over the bundled raster-dem
@@ -105,6 +106,7 @@ test.describe('U4g: terrain shading', () => {
   test('the boot console stays clean with hillshade and satellite together', async ({
     page
   }) => {
+    await stubRecentSatellite(page);
     // Combination 5 of the cartography matrix (satellite + hillshade + one
     // surface): the style must validate with all three stacked.
     const styleErrors: string[] = [];

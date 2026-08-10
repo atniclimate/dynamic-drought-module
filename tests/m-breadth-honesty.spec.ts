@@ -105,6 +105,7 @@ for (const provenance of [
 test('impactSynthesis none keeps unrelated sources off while independent point heat runs', async ({
   page
 }) => {
+  await page.clock.setFixedTime('2026-07-29T12:30:00+00:00');
   await gotoApp(page, '?region=national&layers=states&view=brief');
   expect(new URL(page.url()).searchParams.get('region')).toBe('national');
 

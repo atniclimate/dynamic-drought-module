@@ -31,13 +31,17 @@ import {
   SPC_FIREWX_CATEGORIES
 } from '../config/palette';
 import { getDroughtSurfacePresentation } from '../config/layers';
+import {
+  NIFC_INCIDENT_PRESENTATION,
+  USFS_WHP_PRESENTATION
+} from '../config/wildfire-presentation';
 import { escapeHtml } from '../util/escape';
 import {
   createHeatRiskSequenceLoader,
   type HeatRiskFrameEventDetail
 } from './heatrisk-sequence-loader';
 
-interface KeySpec {
+export interface KeySpec {
   readonly label: string;
   readonly ariaLabel: string;
   readonly itemsHtml: string;
@@ -84,6 +88,8 @@ const HEATRISK_DAY_SELECT_EVENT = 'ddm:heatrisk-day-select';
 const CDM_SNAPSHOT_EVENT = 'ddm:cdm-snapshot';
 const NADM_SNAPSHOT_EVENT = 'ddm:nadm-snapshot';
 const NWS_SNAPSHOT_EVENT = 'ddm:nws-products-snapshot';
+const MOBILE_MAP_KEY_QUERY = '(max-width: 720px)';
+const MOBILE_MAP_KEY_HEIGHT_PROPERTY = '--mobile-map-key-height';
 
 let heatRiskFrames: readonly HeatRiskFrame[] = [];
 let heatRiskSelectedDay: number | null = null;
@@ -96,6 +102,72 @@ let heatRiskHasCoverage: boolean | null = null;
 let nwsSnapshotStatus: NwsSnapshotEventDetail['status'] = 'inactive';
 let nwsSnapshotAsOf: number | null = null;
 let nwsSnapshotTruncated = false;
+let disposeMapKeyLayout: (() => void) | null = null;
+
+interface MapKeyLayoutWatch {
+  readonly schedule: () => void;
+  readonly dispose: () => void;
+}
+
+/**
+ * Keep the mobile Share, Reset, and loading chrome below the one live key.
+ * Key content is status-derived and can wrap after a registry update, a font
+ * swap, text scaling, or a viewport change, so a fixed pixel offset cannot be
+ * honest. The measured height is presentation state only and never enters the
+ * URL or layer state.
+ */
+function watchMapKeyLayout(host: HTMLElement): MapKeyLayoutWatch {
+  const app = document.getElementById('app');
+  if (!app) {
+    return { schedule: () => {}, dispose: () => {} };
+  }
+
+  const widthQuery = window.matchMedia(MOBILE_MAP_KEY_QUERY);
+  let frame: number | null = null;
+  let disposed = false;
+
+  const measure = (): void => {
+    frame = null;
+    if (disposed) return;
+    if (!widthQuery.matches || host.hidden || !host.isConnected) {
+      app.style.removeProperty(MOBILE_MAP_KEY_HEIGHT_PROPERTY);
+      return;
+    }
+    const height = Math.ceil(host.getBoundingClientRect().height);
+    if (height > 0) {
+      app.style.setProperty(MOBILE_MAP_KEY_HEIGHT_PROPERTY, `${height}px`);
+    } else {
+      app.style.removeProperty(MOBILE_MAP_KEY_HEIGHT_PROPERTY);
+    }
+  };
+
+  const schedule = (): void => {
+    if (disposed || frame !== null) return;
+    frame = window.requestAnimationFrame(measure);
+  };
+
+  const observer =
+    typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null;
+  observer?.observe(host);
+  widthQuery.addEventListener('change', schedule);
+  window.addEventListener('resize', schedule);
+  void document.fonts?.ready.then(schedule);
+  schedule();
+
+  return {
+    schedule,
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      observer?.disconnect();
+      widthQuery.removeEventListener('change', schedule);
+      window.removeEventListener('resize', schedule);
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      frame = null;
+      app.style.removeProperty(MOBILE_MAP_KEY_HEIGHT_PROPERTY);
+    }
+  };
+}
 
 function swatchItem(color: string, code: string): string {
   return `<span class="map-key-item"><span class="map-key-swatch" style="background:${escapeHtml(
@@ -121,10 +193,12 @@ function droughtKey(): KeySpec {
   return {
     label: 'Drought',
     ariaLabel:
-      'Drought category key, D0 abnormally dry through D4 exceptional drought',
-    itemsHtml: [USDM_NONE_SWATCH, ...USDM_CATEGORIES]
-      .map((c) => swatchItem(c.color, c.code))
-      .join('')
+      'Drought category key, D0 abnormally dry through D4 exceptional drought. No polygon means no D0-D4 category is drawn; without an analyzed-area mask it does not confirm no drought. The pink D4 rim is presentation contrast only; the official category is unchanged.',
+    itemsHtml:
+      [USDM_NONE_SWATCH, ...USDM_CATEGORIES]
+        .map((c) => swatchItem(c.color, c.code))
+        .join('') +
+      '<span class="map-key-qualification">D4 pink rim: contrast only; official category unchanged.</span>'
   };
 }
 
@@ -327,18 +401,67 @@ function nadmKey(): KeySpec {
   };
 }
 
-function fireKey(withOutlook: boolean): KeySpec {
-  const outlook = withOutlook
-    ? SPC_FIREWX_CATEGORIES.map((c) => swatchItem(c.color, c.label)).join('')
+export function buildFireKey(activeKeys: ReadonlySet<string>): KeySpec {
+  const includeSpcOutlook = activeKeys.has('spc-fire-weather');
+  const includeNifcPerimeters = activeKeys.has('nifc-fires');
+  if (!includeSpcOutlook && !includeNifcPerimeters) {
+    throw new Error('A fire key requires at least one active fire product.');
+  }
+  const outlook = includeSpcOutlook
+    ? '<span class="map-key-scale" data-spc-fire-weather-key>' +
+      '<strong class="map-key-scale-label">SPC Day 1 outlook</strong>' +
+      SPC_FIREWX_CATEGORIES.map((c) => swatchItem(c.color, c.label)).join('') +
+      '</span>'
     : '';
-  const perimeter =
-    '<span class="map-key-item"><span class="map-key-fire-dot"></span>Active fire</span>';
+  const perimeters = includeNifcPerimeters
+    ? '<span class="map-key-scale" data-nifc-perimeter-key>' +
+      '<strong class="map-key-scale-label">NIFC WFIGS current mapped perimeters</strong>' +
+      swatchItem(
+        NIFC_INCIDENT_PRESENTATION.wildfire.lineColor,
+        NIFC_INCIDENT_PRESENTATION.wildfire.legendLabel
+      ) +
+      swatchItem(
+        NIFC_INCIDENT_PRESENTATION.prescribed.lineColor,
+        NIFC_INCIDENT_PRESENTATION.prescribed.legendLabel
+      ) +
+      swatchItem(
+        NIFC_INCIDENT_PRESENTATION.other.lineColor,
+        NIFC_INCIDENT_PRESENTATION.other.legendLabel
+      ) +
+      '</span>'
+    : '';
+  const ariaParts: string[] = [];
+  if (includeSpcOutlook) {
+    ariaParts.push(
+      'Storm Prediction Center (SPC) Day 1 fire-weather outlook categories.'
+    );
+  }
+  if (includeNifcPerimeters) {
+    ariaParts.push(
+      'National Interagency Fire Center (NIFC) current mapped Wildfire perimeters, Prescribed fire perimeters, and other or unclassified fire perimeters.'
+    );
+  }
   return {
     label: 'Fire',
-    ariaLabel: withOutlook
-      ? 'Fire weather key, the SPC outlook categories with NIFC active-fire perimeters'
-      : 'Active wildfire key, NIFC perimeters and incident points',
-    itemsHtml: outlook + perimeter
+    ariaLabel: ariaParts.join(' '),
+    itemsHtml: outlook + perimeters
+  };
+}
+
+export function buildWhpKey(): KeySpec {
+  return {
+    label: 'Wildfire potential',
+    ariaLabel: USFS_WHP_PRESENTATION.qualification,
+    itemsHtml:
+      '<span class="map-key-scale" data-usfs-whp-key>' +
+      '<strong class="map-key-scale-label">USFS Wildfire Hazard Potential</strong>' +
+      USFS_WHP_PRESENTATION.categories
+        .map((category) => swatchItem(category.color, category.label))
+        .join('') +
+      '</span>' +
+      `<span class="map-key-qualification">${escapeHtml(
+        USFS_WHP_PRESENTATION.qualification
+      )}</span>`
   };
 }
 
@@ -347,11 +470,16 @@ function activeKey(): KeySpec | null {
   const active = registry.getActiveKeys();
   let spec: KeySpec | null = null;
   if (active.has('heatrisk')) spec = heatKey();
-  else if (active.has('spc-fire-weather')) spec = fireKey(true);
+  else if (active.has('spc-fire-weather')) {
+    spec = buildFireKey(active);
+  }
+  else if (active.has('usfs-whp')) spec = buildWhpKey();
   else if (active.has('cdm-drought')) spec = cdmKey();
   else if (active.has('nadm-drought')) spec = nadmKey();
   else if (active.has('usdm')) spec = droughtKey();
-  else if (active.has('nifc-fires')) spec = fireKey(false);
+  else if (active.has('nifc-fires')) {
+    spec = buildFireKey(active);
+  }
 
   if (!active.has('nws-alerts')) return spec;
   const snapshot = nwsSnapshotQualification();
@@ -375,6 +503,9 @@ function activeKey(): KeySpec | null {
 export function initMapKey(): void {
   const host = document.getElementById('map-key');
   if (!host) return;
+  disposeMapKeyLayout?.();
+  const layout = watchMapKeyLayout(host);
+  disposeMapKeyLayout = layout.dispose;
   const heatRiskSequenceLoader = createHeatRiskSequenceLoader(
     () => import('./heatrisk-sequence'),
     (err) => {
@@ -387,6 +518,7 @@ export function initMapKey(): void {
     const spec = activeKey();
     if (!spec) {
       host.hidden = true;
+      layout.schedule();
       return;
     }
     const html =
@@ -402,6 +534,7 @@ export function initMapKey(): void {
     host.setAttribute('role', isInteractive ? 'group' : 'img');
     host.style.pointerEvents = isInteractive ? 'auto' : '';
     host.hidden = false;
+    layout.schedule();
   };
 
   host.addEventListener('change', (event) => {

@@ -23,6 +23,7 @@
 
 import { URLS } from '../config/urls';
 import { HEATRISK_CATEGORIES } from '../config/palette';
+import { buildNifcAreaPerimeterClaim } from '../config/wildfire-presentation';
 import {
   loadServiceEnvelopePieces,
   mergeByStableIdentifier
@@ -493,21 +494,22 @@ export async function fetchDsciTrendClaims(
 }
 
 // ---------------------------------------------------------------------------
-// Current: active NIFC wildfire perimeters near the selection
+// Current: mapped NIFC fire perimeters near the selection
 // ---------------------------------------------------------------------------
 
 /**
  * Query the National Interagency Fire Center (NIFC) current-perimeters
- * FeatureServer for active fires intersecting the selection's bounding box (or
- * a small box around the click when no geometry bbox is available). Reports the
- * count as an observation; zero active perimeters is also a plain observation.
+ * FeatureServer for current mapped fire perimeters intersecting the selection's
+ * bounding box (or a small box around the click when no geometry bbox is
+ * available). Wildfire, Prescribed fire, and unclassified records stay
+ * distinct; zero mapped perimeters is also a plain observation.
  */
 export async function fetchNifcClaims(
   context: BoundarySelectionContext,
   signal: AbortSignal
 ): Promise<SourceResult> {
   const { lng, lat } = context.lngLat;
-  const source = 'NIFC active fire perimeters (WFIGS)';
+  const source = 'NIFC current mapped fire perimeters (WFIGS)';
   const sourceUrl = 'https://data-nifc.opendata.arcgis.com/';
   const incompleteCrossingEnvelope =
     !context.serviceBbox &&
@@ -518,7 +520,7 @@ export async function fetchNifcClaims(
     return {
       claims: [],
       ok: false,
-      note: 'The NIFC active-fire service could not query the complete selection envelope.'
+      note: 'The NIFC current-perimeters service could not query the complete selection envelope.'
     };
   }
   const requestBbox =
@@ -534,7 +536,7 @@ export async function fetchNifcClaims(
         const envelope = piece.map(round4).join(',');
         const query = esriEnvelopeQuery(
           envelope,
-          'attr_UniqueFireIdentifier,attr_IncidentName',
+          'attr_UniqueFireIdentifier,attr_IncidentName,attr_IncidentTypeCategory',
           50
         );
         return fetchJson(
@@ -554,11 +556,13 @@ export async function fetchNifcClaims(
         return typeof id === 'string' || typeof id === 'number' ? id : null;
       }
     );
-    const count = features.length;
-    const text =
-      count === 0
-        ? 'No active NIFC wildfire perimeters intersect this area right now.'
-        : `${count} active wildfire ${count === 1 ? 'perimeter' : 'perimeters'} (NIFC) ${count === 1 ? 'intersects' : 'intersect'} this area right now.`;
+    const text = buildNifcAreaPerimeterClaim(
+      features.map((feature) =>
+        isObject(feature) && isObject(feature.properties)
+          ? feature.properties.attr_IncidentTypeCategory
+          : undefined
+      )
+    );
     // Mapped incident perimeters and their count: directly observed.
     return {
       ok: true,
@@ -569,7 +573,7 @@ export async function fetchNifcClaims(
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
     console.warn('[impact] NIFC query failed.', err);
-    return { claims: [], ok: false, note: 'The NIFC active-fire service did not respond.' };
+    return { claims: [], ok: false, note: 'The NIFC current-perimeters service did not respond.' };
   }
 }
 

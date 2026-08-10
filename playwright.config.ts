@@ -108,12 +108,12 @@ export default defineConfig({
   ],
 
   webServer: {
-    // Build then serve the production bundle. Locally this guarantees a fresh
-    // `dist/`; in CI the same command runs on the runner. `reuseExistingServer`
-    // lets a developer keep a `npm run preview` running between local runs.
+    // Build then serve the production bundle for every run. Refuse an existing
+    // listener on the verification port so the suite cannot silently exercise
+    // another worktree's server or a stale `dist/` artifact.
     command: 'npm run build && npm run preview -- --host 127.0.0.1 --strictPort',
     url: BASE_URL,
-    reuseExistingServer: !isCI,
+    reuseExistingServer: false,
     // The build (tsc plus vite) plus preview startup can take a while on a cold
     // CI runner; give it room.
     timeout: 180_000,

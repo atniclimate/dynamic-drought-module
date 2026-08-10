@@ -1,6 +1,14 @@
 import { test, expect } from '@playwright/test';
 
 import { gotoApp, layerCheckbox, search, waitForLayerSettled } from './helpers';
+import {
+  failRecentSatelliteTiles,
+  SATELLITE_FRAME,
+  SATELLITE_NEW_FRAME,
+  satelliteObservationRangeText,
+  type SatelliteStubController,
+  stubRecentSatellite
+} from './satellite-fixture';
 
 /**
  * U4d: the basemap switcher and the `basemap=` URL parameter
@@ -9,12 +17,17 @@ import { gotoApp, layerCheckbox, search, waitForLayerSettled } from './helpers';
  * ADDITIVE specs only: the existing url-state and embed suites are
  * UNMODIFIED (the D-031 spec posture). These pin the parameter's edge
  * cases (unknown, empty, duplicate first-wins), the default-omission
- * canonical write, embed stickiness, and the honesty chip: the vintage
- * notice is visible exactly when the satellite basemap is selected.
+ * canonical write, embed stickiness, and the honesty chip: the exact
+ * observation time is visible exactly when satellite is selected.
  */
 
 const SWITCHER = '.basemap-switcher-btn';
-const VINTAGE_CHIP = '#basemap-vintage';
+const IMAGERY_CHIP = '#basemap-vintage';
+let satelliteStub: SatelliteStubController;
+
+test.beforeEach(async ({ page }) => {
+  satelliteStub = await stubRecentSatellite(page);
+});
 
 test.describe('U4d: the basemap= parameter', () => {
   test('absent parameter stays absent through the boot canonical write', async ({
@@ -87,54 +100,117 @@ test.describe('U4d: the switcher control and the honesty chip', () => {
     await btn.click();
     await expect(btn).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(async () => search(page)).toContain('basemap=satellite');
-    // The vintage notice appears with the imagery (the D-028 honesty
-    // split: a plain statement, not just the legal attribution).
-    await expect(page.locator(VINTAGE_CHIP)).toBeVisible();
+    // The observation notice appears with the imagery as a plain statement,
+    // separate from legal attribution.
+    await expect(page.locator(IMAGERY_CHIP)).toBeVisible();
 
     await btn.click();
     await expect(btn).toHaveAttribute('aria-pressed', 'false');
     await expect.poll(async () => search(page)).not.toContain('basemap=');
-    await expect(page.locator(VINTAGE_CHIP)).toBeHidden();
+    await expect(page.locator(IMAGERY_CHIP)).toBeHidden();
   });
 
-  test('a satellite deep link shows the vintage notice without a click', async ({
+  test('a satellite deep link shows exact frame context without a click', async ({
     page
   }) => {
     await gotoApp(page, '?view=console&basemap=satellite');
-    await expect(page.locator(VINTAGE_CHIP)).toBeVisible();
-    // The notice names the mosaic year and its context-only framing.
-    await expect(page.locator(VINTAGE_CHIP)).toContainText(/20\d\d/);
-    await expect(page.locator(VINTAGE_CHIP)).toContainText(/not current conditions/i);
+    const chip = page.locator(IMAGERY_CHIP);
+    await expect(chip).toBeVisible();
+    await expect(chip).toContainText(satelliteObservationRangeText(SATELLITE_FRAME));
+    await expect(chip).toContainText('Context only');
+    await expect(chip).toContainText('daytime approximate true color');
+    await expect(chip).toContainText('nighttime infrared with static lights');
+    await expect(chip).toContainText('Coverage ends near 76°N');
   });
 
-  test('the ruled EOX attribution renders VERBATIM as visible text (D-028 condition 2)', async ({
+  test('a bad newest frame falls back to the previous recent candidate', async ({
+    page
+  }) => {
+    satelliteStub.setFrames([SATELLITE_NEW_FRAME, SATELLITE_FRAME]);
+    satelliteStub.failProbeFrame(SATELLITE_NEW_FRAME.objectId);
+
+    await gotoApp(page, '?view=console&basemap=satellite');
+    const chip = page.locator(IMAGERY_CHIP);
+    await expect(chip).toContainText(satelliteObservationRangeText(SATELLITE_FRAME));
+    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
+    expect(satelliteStub.probeFrameIds).toContain(SATELLITE_NEW_FRAME.objectId);
+    expect(satelliteStub.probeFrameIds).toContain(SATELLITE_FRAME.objectId);
+  });
+
+  test('a bad rendered refresh restores the last known-good frame', async ({
+    page
+  }) => {
+    await page.clock.install();
+    await gotoApp(page, '?view=console&basemap=satellite');
+    const chip = page.locator(IMAGERY_CHIP);
+    await expect(chip).toContainText(satelliteObservationRangeText(SATELLITE_FRAME));
+
+    satelliteStub.setFrames([SATELLITE_NEW_FRAME, SATELLITE_FRAME]);
+    satelliteStub.failRenderedFrame(SATELLITE_NEW_FRAME.objectId);
+    await page.clock.fastForward(10 * 60_000);
+
+    await expect.poll(() =>
+      satelliteStub.renderedFrameIds.includes(SATELLITE_NEW_FRAME.objectId)
+    ).toBe(true);
+    // The selected-frame completeness deadline is clock-driven. Once the
+    // failed refresh has actually requested a rendered tile, advance the
+    // installed test clock so the bounded rollback can resolve deterministically.
+    await page.clock.fastForward(31_000);
+    await expect(chip).toContainText(satelliteObservationRangeText(SATELLITE_FRAME));
+    await expect(chip).toContainText('refresh delayed');
+    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
+    expect(await search(page)).toContain('basemap=satellite');
+  });
+
+  test('an installed frame is removed after it ages beyond the source policy', async ({
+    page
+  }) => {
+    const endTime = Date.now() - (26 * 60 * 60_000 - 5 * 60_000);
+    const expiringFrame = {
+      objectId: 9025,
+      name: 'MERGEDGC.10-minute.fixture_expiring.color',
+      startTime: endTime - 9 * 60_000,
+      endTime
+    };
+    satelliteStub.setFrames([expiringFrame]);
+    await page.clock.install();
+    await gotoApp(page, '?view=console&basemap=satellite');
+
+    const chip = page.locator(IMAGERY_CHIP);
+    await expect(chip).toContainText(
+      satelliteObservationRangeText(expiringFrame)
+    );
+    await page.clock.fastForward(10 * 60_000);
+
+    await expect(page.locator(SWITCHER)).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+    await expect.poll(async () => search(page)).not.toContain('basemap=');
+    await expect(chip).toBeHidden();
+  });
+
+  test('NOAA imagery and the visible default-map underlay are both attributed', async ({
     page
   }) => {
     await gotoApp(page, '?view=console&basemap=satellite');
     const attrib = page.locator('.maplibregl-ctrl-attrib');
-    // The exact legal string from EVIDENCE_EOX_2026-07-14.md, including the
-    // visible URL (the stage-5 adversarial major 1: a hidden href is not
-    // the unchanged visible string the ruling requires).
-    await expect(attrib).toContainText(
-      'EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH ' +
-        '(Contains modified Copernicus Sentinel data 2016 & 2017)'
-    );
-    await expect(attrib).not.toContainText('OpenStreetMap');
+    await expect(attrib).toContainText('NOAA NESDIS GOES GeoColor');
+    await expect(attrib).toContainText('OpenStreetMap');
   });
 
-  test('a dead satellite tile host reverts the mode honestly (D-028 failure custody)', async ({
+  test('dead selected-frame tiles revert the mode honestly', async ({
     page
   }) => {
-    // Kill every EOX request before boot: the URL must not keep claiming a
-    // satellite view that cannot render (invariant 6; the stage-5
-    // adversarial major 6).
-    await page.route('**tiles.maps.eox.at**', (route) => route.abort());
+    // Kill every pinned frame request before boot: the URL must not keep
+    // claiming a satellite view that cannot render.
+    await failRecentSatelliteTiles(page);
     await gotoApp(page, '?view=console&basemap=satellite');
 
     const btn = page.locator(SWITCHER);
     await expect(btn).toHaveAttribute('aria-pressed', 'false', { timeout: 30_000 });
     await expect.poll(async () => search(page)).not.toContain('basemap=');
-    await expect(page.locator(VINTAGE_CHIP)).toBeHidden();
+    await expect(page.locator(IMAGERY_CHIP)).toBeHidden();
     // The default basemap is back on screen (its attribution returns).
     await expect(page.locator('.maplibregl-ctrl-attrib')).toContainText('OpenStreetMap');
   });

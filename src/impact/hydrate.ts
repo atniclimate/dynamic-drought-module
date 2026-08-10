@@ -11,7 +11,7 @@
  * place after each horizon settles.
  *
  * Source-to-horizon mapping (ddm-drought-impact-modeling temporal framing):
- *   Current     USDM category at the point, active NIFC perimeters, active NWS
+ *   Current     USDM category at the point, mapped NIFC perimeters, active NWS
  *               red-flag and extreme-heat alerts. Observations, plainly stated.
  *   Near-term   Selected NWS HeatRisk forecast classification, NWS point
  *               forecast (temperature tendency), plus the cited CPC 6-10 and

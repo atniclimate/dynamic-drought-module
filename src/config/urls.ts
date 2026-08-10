@@ -50,23 +50,39 @@ export const URLS = Object.freeze({
   // tile requests (the policy's web-traffic attribution branch).
   basemapOSM: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
 
-  // EOX Sentinel-2 cloudless, the opt-in satellite basemap (U4d,
-  // D-0.7.0-028 ruled 2026-07-14). The unversioned s2cloudless_3857 id IS
-  // the 2016 mosaic (CC BY 4.0; the 2018+ vintages are NC-SA and are NOT
-  // used); no versioned 2016 id exists, so the drift monitor pins the
-  // capabilities text as the vintage tripwire. WMTS RESTful template in
-  // EOX's {z}/{TileRow}/{TileCol} = {z}/{y}/{x} order. Verified live
-  // 2026-07-14: tiles 200 image/jpeg, ACAO wildcard + origin reflection
-  // (browser-safe from Pages origins, no Worker involved). Opt-in only, never
-  // the default (D-0.7.0-005); June 2026 EOxCloudless rebrand is branding
-  // only, tiles.maps.eox.at remains the sanctioned host.
-  basemapSatellite:
+  // EOxCloudless Sentinel-2 2016 mosaic, the historical shared ground.
+  // This is intentionally separate from `noaaMergedGeoColorImageServer`:
+  // EOX is a fixed 2016 visual context, while NOAA is a recent observed
+  // frame selected by `basemap=satellite`. The unversioned EOX layer id is
+  // explicitly identified as the 2016 mosaic by the live WMTS capabilities.
+  // License: Creative Commons Attribution 4.0. Required attribution and the
+  // historical-vintage warning render whenever the layer is visible.
+  // Verified 2026-08-09: the exact tile and capabilities endpoints returned
+  // HTTP 200, image/jpeg and application/xml respectively, with browser-safe
+  // origin-reflecting CORS. The tile advertised a seven-day cache. Runtime
+  // probes one known-data tile with a five-second budget before revealing the
+  // layer; subdued OpenStreetMap remains underneath as the automatic fallback.
+  eoxCloudless2016:
     'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg',
-  // The vintage tripwire target (the D-028 binding condition 1): the
-  // capabilities XML whose s2cloudless layer text must keep identifying
-  // the unversioned id as the 2016 CC BY mosaic.
-  basemapSatelliteCapabilities:
-    'https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml',
+  eoxCloudless2016Probe:
+    'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/4/5/2.jpg',
+
+  // NOAA NESDIS merged GOES East and West GeoColor, the opt-in recent
+  // satellite basemap. This is the rolling, time-enabled 24-hour archive,
+  // not the similarly named current-only service. Runtime queries a bounded
+  // set of recent frames, rejects stale or future-dated records, probes them
+  // newest to oldest, then pins every exportImage tile to the selected object
+  // id and observation time. This prevents a viewport from mixing scans and
+  // defeats the service's otherwise ambiguous 12-hour tile cache. New frames
+  // arrive every 10 or 15 minutes; the client refreshes metadata every 10
+  // minutes while active. Coverage ends near 76.46 degrees north and south,
+  // so the subdued OpenStreetMap layer remains underneath.
+  // Verified 2026-08-05: query and exportImage return HTTP 200 without
+  // authentication, correctly reflect browser origins for CORS, and expose
+  // objectid, name, start_time, and end_time. Direct browser access only; no
+  // Worker proxy is involved.
+  noaaMergedGeoColorImageServer:
+    'https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/MERGEDGC_Last_24hr/ImageServer',
 
   // ---------- Hydrography (live OSM via Overpass API) ----------
   // Mirrors are tried in order with a 12s per-call timeout and 350ms
@@ -156,7 +172,7 @@ export const URLS = Object.freeze({
   // wildcard posture, so direct browser fetch works; this supersedes the
   // older "CORS restricted, proxy required" note in the agency-data skill,
   // which described the SOAP-era service). Access method: API (REST JSON).
-  // Route: direct fetch primary; the host stays on the Worker allow-list and
+  // Route: direct fetch primary; this exact path stays in the Worker route table and
   // the same request through `${workerProxy}/proxy?url=...` was verified the
   // same day (HTTP 200, body unchanged) as the resilience path if the
   // agency's CORS posture drifts. Daily values post once per day; the latest
@@ -197,8 +213,8 @@ export const URLS = Object.freeze({
   // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, Content-Type
   // application/json, Access-Control-Allow-Origin: * (genuine wildcard,
   // confirmed with no Origin header, the app origin, and an unrelated test
-  // origin). Direct fetch; no Worker proxy needed (the host is already on
-  // the allow-list via nrcsAwdbRest; the same request through the Worker
+  // origin). Direct fetch; no Worker proxy needed (this exact path is also in
+  // the Worker route table; the same request through the Worker
   // returned a byte-identical body the same day, as the resilience path).
   nrcsAwdbStations: 'https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/stations',
 
@@ -364,14 +380,13 @@ export const URLS = Object.freeze({
   // heat), point observations, raw grid guidance, and point forecasts. NWS
   // requires an identifying User-Agent. Browsers discard a caller-supplied
   // User-Agent, so the production-identification path is the allow-listed
-  // Worker. Direct mode remains the safe default until that Worker revision is
-  // explicitly deployed; it also preserves graceful operation for forks.
+  // Worker. Direct mode remains a graceful fallback for forks without a Worker.
   //   - Active alerts:  `${nwsApi}/alerts/active?point=<lat>,<lon>`
   //   - Point metadata: `${nwsApi}/points/<lat>,<lon>` (returns the forecast URL)
   // Re-verified 2026-07-29: alerts, points, grid data, station lists, and
   // latest observations returned CORS-open JSON. Chromium discarded a custom
   // fetch User-Agent. Set `nwsApiUseWorker` true only in the same release that
-  // follows deployment of the Worker allow-list revision in workers/proxy/.
+  // follows deployment of a matching Worker route revision in workers/proxy/.
   nwsApi: 'https://api.weather.gov',
   nwsApiUseWorker: true as boolean,
 
@@ -501,7 +516,7 @@ export const URLS = Object.freeze({
   // host STOPPED emitting Access-Control-Allow-Origin (three consecutive
   // probes with a real Origin header, no ACAO, no Vary; both earlier
   // verifications above recorded ACAO present). The DSCI trend fetch now
-  // rides the Worker proxy (src/impact/sources.ts; ALLOW_LIST entry added
+  // rides the Worker proxy (src/impact/sources.ts; exact route entry added
   // same day), per the vary-origin intermittency doctrine. If a later
   // probe shows the header restored, KEEP the Worker route: intermittent
   // CORS is the failure mode the doctrine exists for.
@@ -591,7 +606,7 @@ export const URLS = Object.freeze({
   // answering with it, and a same-day curl probe got the header again; the
   // posture is INTERMITTENT (Vary: Origin cache-variant suspected). The
   // layer module therefore routes tiles through `${workerProxy}/proxy`
-  // (imagery.geoplatform.gov is on the Worker allow-list); this URL is the
+  // (this exact exportImage path is in the Worker route table); this URL is the
   // upstream base only, never fetched directly by the browser anymore.
   usfsWhp:
     'https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer',
@@ -1050,6 +1065,28 @@ export const URLS = Object.freeze({
   // only; the sibling .json extension remains the TopoJSON trap.
   nadmCurrentGeojson:
     'https://www.ncei.noaa.gov/pub/data/nidis/geojson/na/nadm/NADM-current.geojson',
+  // NCEI's companion country base. The minimap filters this file to the US,
+  // Canada, and Mexico before estimating area shares, so ocean and neighboring
+  // countries cannot be mislabeled as `None`. It is a land-analysis mask, not
+  // a jurisdictional display layer and is never rendered or redistributed.
+  // Verified 2026-08-05: HTTP 200, application/geo+json, wildcard CORS,
+  // 96,827 bytes, FIPS_CNTRY country codes, Polygon/MultiPolygon geometry.
+  // The file does not identify NADM's drought-not-analyzed areas in Nunavut;
+  // the far-north minimap summary must remain live (partial).
+  nadmNorthAmericaBaseGeojson:
+    'https://www.ncei.noaa.gov/pub/data/nidis/geojson/na/base/northamerica.geojson',
+  // Statistics Canada 2021 Census Digital Boundary File, province and
+  // territory layer, filtered to Nunavut and generalized to 0.01 degrees by
+  // the documented ArcGIS maxAllowableOffset query. NADM's published maps
+  // shade Nunavut as drought not analyzed, but its machine files omit that
+  // mask. The minimap therefore intersects this boundary with NCEI land and
+  // removes it from the denominator as an explicitly partial analysis-mask
+  // proxy. It is never rendered or redistributed. The Digital Boundary File
+  // includes coastal water, which is why it must only subtract from land.
+  // Verified 2026-08-05: one 19,962-byte GeoJSON Polygon, PRUID 62,
+  // origin-reflecting CORS, Open Government Licence - Canada.
+  statsCanNunavutBoundaryGeojson:
+    'https://geo.statcan.gc.ca/geo_wa/rest/services/2021/Digital_boundary_files/MapServer/0/query?f=geojson&geometryPrecision=5&maxAllowableOffset=0.01&outFields=PRUID%2CDGUID%2CPRNAME%2CPRENAME%2CPRFNAME%2CPREABBR%2CPRFABBR%2CLANDAREA&outSR=4326&returnGeometry=true&where=PRUID%20%3D%20%2762%27',
 
   // Canadian Drought Monitor (CDM, Agriculture and Agri-Food Canada) monthly
   // bulk archive. Consumer substitutes <year>/<yymm>: .../areasofDrought/
@@ -1108,8 +1145,8 @@ export const URLS = Object.freeze({
   // ---------- Cloudflare Worker proxy ----------
   // The deployed DDM CORS proxy (workers/proxy/, `npm run deploy` there).
   // Request format: `${workerProxy}/proxy?url=<encoded_upstream_url>`;
-  // upstreams outside the Worker's allow-list (NRCS Air-Water Database
-  // (AWDB), USACE Dataquery, USBR Hydromet, NWRFC, CPC, BIA map hosts) are
+  // only the exact AWDB, AgriMet, Hydromet, NWRFC, USDM DSCI, WHP exportImage,
+  // and NWS read paths used by the runtime are accepted; everything else is
   // rejected with 403. Deployed 2026-07-01 to the atniclimate workers.dev
   // subdomain; health check at `${workerProxy}/healthz`. Callers must still
   // detect an empty string and fail gracefully so a fork without a deployed

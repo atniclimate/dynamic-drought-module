@@ -2,6 +2,9 @@ import { test, expect } from '@playwright/test';
 
 import {
   BOTTOM_STACK_IDS,
+  CONDITION_SURFACE_IDS,
+  EVENT_OVERLAY_IDS,
+  REFERENCE_BOUNDARY_IDS,
   THEMATIC_STACK_IDS,
   firstLayerIdAbove,
   reassertLabelOrder,
@@ -49,12 +52,18 @@ function fakeMap(ids: string[]): {
 
 test.describe('layer-order: bottom-stack insertion', () => {
   test('satellite inserted late lands under an existing hillshade and data', () => {
-    const map = fakeMap(['background', 'basemap', 'hillshade', 'usdm-fill']);
-    // Satellite skips only background+basemap, so its anchor is hillshade:
+    const map = fakeMap([
+      'background',
+      'basemap',
+      'basemap-ground',
+      'hillshade',
+      'usdm-fill'
+    ]);
+    // Recent satellite skips the persistent ground stack, so its anchor is hillshade:
     // it inserts below hillshade, inside the stack.
     const beforeId = firstLayerIdAbove(
       map as never,
-      ['background', 'basemap']
+      ['background', 'basemap', 'basemap-ground']
     );
     expect(beforeId).toBe('hillshade');
   });
@@ -113,8 +122,38 @@ test.describe('layer-order: thematic reassert (E1 deliverable 2)', () => {
     const idx = (id: string): number => THEMATIC_STACK_IDS.indexOf(id);
     expect(idx('usdm-frame-a-fill')).toBeGreaterThanOrEqual(0);
     expect(idx('usdm-frame-a-fill')).toBeLessThan(idx('us-states-outline'));
+    expect(idx('hms-smoke-fill')).toBeGreaterThan(idx('usdm-frame-a-fill'));
+    expect(idx('hms-smoke-fill')).toBeLessThan(idx('us-states-casing'));
     expect(idx('us-states-outline')).toBeLessThan(idx('aiannh-fill'));
     expect(idx('aiannh-fill')).toBeLessThan(idx('bia-reservations-fill'));
+  });
+
+  test('the complete chain has explicit condition, event, and reference bands', () => {
+    expect(THEMATIC_STACK_IDS).toEqual([
+      ...CONDITION_SURFACE_IDS,
+      ...EVENT_OVERLAY_IDS,
+      ...REFERENCE_BOUNDARY_IDS
+    ]);
+    expect(CONDITION_SURFACE_IDS).toEqual(
+      expect.arrayContaining([
+        'gridded-index-raster',
+        'sst-anomaly',
+        'heatrisk',
+        'usfs-whp',
+        'nadm-drought-fill',
+        'cdm-drought-fill',
+        'bc-drought-fill'
+      ])
+    );
+    expect(REFERENCE_BOUNDARY_IDS).toEqual(
+      expect.arrayContaining([
+        'us-states-casing',
+        'tribal-lands-outline',
+        'aiannh-outline',
+        'bia-reservations-outline',
+        'treaty-areas-outline'
+      ])
+    );
   });
 
   test('a scrambled completion order is re-seated to the ruled stack', () => {
@@ -170,7 +209,7 @@ test.describe('layer-order: thematic reassert (E1 deliverable 2)', () => {
     ]);
   });
 
-  test('events stay above the chain; the ecoregion underlay stays below it', () => {
+  test('events stay above conditions and below references; ecoregions stay below', () => {
     const map = fakeMap([
       'background',
       'basemap',
@@ -186,9 +225,9 @@ test.describe('layer-order: thematic reassert (E1 deliverable 2)', () => {
       'basemap',
       'ecoregions-l3-fill',
       'usdm-frame-a-fill',
+      'nifc-fires-fill',
       'aiannh-fill',
-      'bia-reservations-fill',
-      'nifc-fires-fill'
+      'bia-reservations-fill'
     ]);
   });
 

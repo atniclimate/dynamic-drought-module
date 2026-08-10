@@ -3,13 +3,13 @@
 `atniclimate/dynamic-drought-module` (the running version is stamped in
 the application footer)
 
-An embeddable, serverless web map for seeing drought conditions anywhere
-in the United States and understanding what they mean for a place: current
-drought status, wildfire and extreme heat risk, water and snowpack
-telemetry, and the public resources that address the impacts, routed by
-the place a user selects. Built by ATNI Climate (Affiliated Tribes of
-Northwest Indians) with a Pacific Northwest (PNW) focus and a national
-framing.
+An embeddable, serverless web map for seeing drought across North America
+and understanding conditions for supported places: current drought status,
+wildfire and extreme heat risk, water and snowpack telemetry, and public
+resources that address the impacts. The monthly continental overview covers
+the United States, Canada, and Mexico; detailed place analysis remains
+strongest in the United States and deepest in the Pacific Northwest (PNW).
+Built by ATNI Climate (Affiliated Tribes of Northwest Indians).
 
 **For a deployer, the module is a static folder.** Build it once, serve it
 from any web host, embed it in any page with an `<iframe>`. There is no
@@ -185,6 +185,23 @@ Monitor inside the `british_columbia` framing; it has no separate layer
 key. Table trued up 2026-07-28; it had drifted six layers behind the
 shipped set.)
 
+The framing minimap derives its colors from the current monthly
+[North American Drought Monitor](https://www.drought.gov/data-maps-tools/north-american-drought-monitor-nadm).
+Each authored framing uses its most prevalent
+assessed-land class from white `None` through dark-red `D4`; a dark outline
+adds the total D1-D4 share so a prevalent `None` class cannot hide material
+drought. NADM does not publish its exact analyzed-area mask. The minimap
+therefore excludes Nunavut using a Statistics Canada 2021 Digital Boundary
+File as an analysis-mask proxy and reports the northern framing as
+`live (partial)`. The proxy is used only for calculation, never rendered as
+boundary or jurisdictional geometry.
+
+Nunavut proxy source: Government of Canada; Statistics Canada; Statistical
+Geomatics Centre, 2021 Digital Boundary Files, reference date January 1,
+2021. Contains information licensed under the
+[Open Government Licence - Canada](https://open.canada.ca/en/open-government-licence-canada).
+Adapted for DDM; no endorsement is implied.
+
 Every live endpoint in `src/config/urls.ts` carries a verification
 metadata block (HTTP status, content type, CORS posture, response-shape
 caveats, verification date). Read it before touching a fetcher.
@@ -215,22 +232,38 @@ instructions are in [`public/data/README.md`](public/data/README.md).
 
 ### About the basemap and hydrography
 
-The basemap is OpenStreetMap standard raster tiles, subdued via raster
-paint so the condition surfaces dominate. No proprietary tile providers,
-ever. Hydrography queries the volunteer-run Overpass API (three-mirror
-failover, viewport-driven, dormant below zoom 7); institutional
-deployments expecting heavy concurrency should plan for the planned
-National Hydrography Dataset PMTiles bundle.
+The default basemap is OpenStreetMap standard raster tiles, subdued via
+raster paint so the condition surfaces dominate. The optional Satellite
+mode uses [NOAA NESDIS merged GOES East and West GeoColor](https://www.nesdis.noaa.gov/imagery/satellite-maps)
+from its rolling 24-hour archive. It queries a bounded set of recent catalog
+items and selects the newest frame that passes a known-data image probe, then
+pins all tiles to that one observed frame. The map displays the exact UTC
+observation range and checks for a new frame every 10 minutes while active. A
+failed refresh leaves the last known-good recent frame in place. OpenStreetMap
+remains underneath because GOES coverage ends near 76 degrees north and
+imagery can contain clouds or gaps. GeoColor is context only: daytime areas
+approximate true color, while nighttime areas use infrared and static
+reference lights.
+
+Hazard choices do not silently change the imagery product. Future
+satellite-derived drought indicators, wildfire thermal detections, or land
+surface temperature products belong in separately named layers with their
+own status, timestamp, caveat, and legend. No proprietary tile providers,
+authentication, or application backend are added. Hydrography queries the
+volunteer-run Overpass API (three-mirror failover, viewport-driven, dormant
+below zoom 7); institutional deployments expecting heavy concurrency should
+plan for the planned National Hydrography Dataset PMTiles bundle.
 
 ### The Cloudflare Worker proxy (optional)
 
 Most sources serve the browser directly. The allow-list in
 `workers/proxy/src/index.ts` (mirrored in the `wrangler.toml` header) is
-the authoritative set of proxied upstreams; it has grown beyond the
-original telemetry trio to eight host families, including the USFS
-Wildfire Hazard Potential tiles and the US Drought Monitor DSCI service.
+the authoritative set of proxied upstream routes. It permits only the exact
+AWDB, AgriMet, Hydromet, NWRFC, USFS Wildfire Hazard Potential, US Drought
+Monitor DSCI, and `api.weather.gov` reads used by the application.
 The Worker in `workers/proxy/` is a CORS shim
-with a strict allow-list; it adds a header and changes nothing else.
+with a strict allow-list; it returns upstream body bytes unchanged and injects
+the browser-facing CORS headers.
 Deploy it with `wrangler` and set `URLS.workerProxy` to enable those
 sources; without it, the module still runs and reports those values
 honestly as unavailable.

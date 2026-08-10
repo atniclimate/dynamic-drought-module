@@ -14,7 +14,7 @@
  * ready, zero, error). A tile is an answer followed by an immediate
  * action: it exposes `aria-pressed` from the layer's on-state, keeps
  * status and action distinct in the accessible name ("14 active
- * wildfires. Active Wildfires (NIFC) layer on. Press to hide."), and
+ * fire perimeters. Current Mapped Fire Perimeters (NIFC) layer on. Press to hide."), and
  * routes its action through the shared toggle command, never a naive
  * controller call. The drought tile additionally discloses that showing
  * the US Drought Monitor replaces the current condition surface (USDM

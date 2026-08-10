@@ -10,13 +10,10 @@
  * every change re-emits the canonical URL, and `pushUrl` reads
  * `getFraming()` when composing the sync state.
  *
- * ABSENCE IS THE TRUTH (D-0.7.0-041 part 1): the ALL state is a null
- * framing, and `framing=` is written only while a non-ALL framing is
- * active. The legacy `region=national` link is honored as an alias of
- * that ALL state: it keeps its exact camera behavior through the legacy
- * `region` path (honored forever, D-0.7.0-039) and never produces a
- * `framing=` token, because no framing token exists for the national
- * fit; the national default camera is what absence means.
+ * Null means no explicit minimap camera, so the legacy `region=` path owns the
+ * view. The minimap's distinct North American ALL camera uses `framing=all`;
+ * this keeps an explicit ALL choice restorable without changing the honored
+ * `region=national` legacy camera.
  *
  * A framing is CAMERA-ONLY: setting one here never selects a briefing
  * place, never changes the hazard cluster, and never claims coverage.
@@ -25,23 +22,23 @@
  */
 
 import { FRAMINGS } from '../config/framings';
-import type { FramingKey } from '../config/framings';
+import type { FramingKey, FramingSelection } from '../config/framings';
 
-let current: FramingKey | null = null;
+let current: FramingSelection = null;
 
 const listeners = new Set<() => void>();
 
-/** The active framing, or null for the ALL state (the default). */
-export function getFraming(): FramingKey | null {
+/** The active minimap camera token, or null while legacy region state owns it. */
+export function getFraming(): FramingSelection {
   return current;
 }
 
 /**
- * Record a framing change (null clears back to ALL) and notify
+ * Record a framing change (null returns camera custody to `region=`) and notify
  * subscribers. Idempotent: setting the current value again emits
  * nothing, so a boot-time seed never triggers a redundant URL write.
  */
-export function setFraming(next: FramingKey | null): void {
+export function setFraming(next: FramingSelection): void {
   if (next === current) return;
   current = next;
   for (const fn of [...listeners]) {
@@ -62,13 +59,12 @@ export function onFramingChange(fn: () => void): () => void {
 }
 
 /**
- * Parse a raw `framing=` parameter value. Only the nine FramingKey
- * tokens select a framing; anything else (absent, empty, unknown) reads
- * as null, the ALL state, per the URL-schema policy's unknown-value
- * rule. Null is also what a duplicate-free canonical write re-derives,
- * so an invalid token is dropped on the next sync rather than echoed.
+ * Parse a raw `framing=` parameter value. The nine shape keys and the explicit
+ * `all` camera are valid; anything else reads as null and is dropped on the
+ * next canonical write.
  */
-export function parseFramingParam(raw: string | null): FramingKey | null {
+export function parseFramingParam(raw: string | null): FramingSelection {
+  if (raw === 'all') return 'all';
   if (raw !== null && Object.prototype.hasOwnProperty.call(FRAMINGS, raw)) {
     return raw as FramingKey;
   }

@@ -17,6 +17,7 @@ import { initMobileSheet } from './ui/mobile-sheet';
 import { initViewShell } from './ui/view-shell';
 import { initPlaceEmphasis } from './state/place-emphasis';
 import { initLocatedBoundary } from './state/located-boundary';
+import { initHistoricalGround } from './map/historical-ground';
 
 /**
  * Dynamic Drought Module (DDM) boot.
@@ -165,6 +166,12 @@ async function boot(): Promise<void> {
     }
     map.once('load', () => resolve());
   });
+
+  // Reveal the shared historical ground only after a bounded known-data
+  // probe. OSM is already visible underneath, so boot and failure both retain
+  // a usable map. Recent NOAA imagery remains a separate URL-backed mode.
+  const disposeHistoricalGround = initHistoricalGround(map);
+  map.once('remove', disposeHistoricalGround);
 
   // Click targets register with the InteractionCoordinator on a layer's
   // FIRST activation (the layer-controller's bindPopups seam), not up

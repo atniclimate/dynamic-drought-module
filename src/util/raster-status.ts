@@ -61,6 +61,12 @@ export interface RasterTileWatchOptions {
    * terminal state.
    */
   readonly requestCompletenessDeadlineMs?: number;
+  /**
+   * Outcome for an idle cycle with no selected-frame tile evidence. The
+   * default remains `ready` for existing bounded-coverage consumers. Shared
+   * ground sets `error` because it must prove at least one visible tile.
+   */
+  readonly emptyIdleOutcome?: 'ready' | 'error';
 }
 
 type RasterTileOutcome = 'ready' | 'degraded' | 'error';
@@ -69,6 +75,7 @@ type BasicRasterTileOutcome = Exclude<RasterTileOutcome, 'degraded'>;
 type RasterTileEvent = {
   readonly sourceId?: string;
   readonly dataType?: string;
+  readonly isSourceLoaded?: boolean;
   readonly tile?: unknown;
 };
 
@@ -174,8 +181,23 @@ export function watchRasterTiles(
     scheduleDeadline();
   };
 
+  const finishRequestCycle = (
+    emptyCycleOutcome: RasterTileOutcome = 'error'
+  ): void => {
+    clearDeadline();
+    reportCompleteness(emptyCycleOutcome);
+    requestCycleActive = false;
+  };
+
   const onError = (e: { error?: Error; sourceId?: string }): void => {
     if (e.sourceId !== sourceId) return;
+    // Completeness-aware consumers need the whole request cycle before they
+    // can distinguish total failure from usable partial coverage. The
+    // sourcedataloading set already records each failed request, so idle or
+    // the deadline will report `error` when none succeeded and `degraded`
+    // when at least one did. Keep the three-error shortcut only for legacy
+    // consumers that do not opt in to request accounting.
+    if (deadlineMs !== null) return;
     const now = Date.now();
     errorTimes = errorTimes.filter((t) => now - t < WINDOW_MS);
     errorTimes.push(now);
@@ -195,20 +217,31 @@ export function watchRasterTiles(
   };
 
   const onSourceData = (e: RasterTileEvent): void => {
-    if (e.sourceId !== sourceId || e.dataType !== 'source' || !e.tile) return;
-    errorTimes = [];
-    if (deadlineMs !== null) {
-      const key = tileEventKey(e);
-      if (key === null) return;
-      beginRequestCycle();
-      requestedTiles.add(key);
-      successfulTiles.add(key);
-      return;
+    if (e.sourceId !== sourceId || e.dataType !== 'source') return;
+    if (e.tile) {
+      errorTimes = [];
+      if (deadlineMs !== null) {
+        const key = tileEventKey(e);
+        if (key !== null) {
+          beginRequestCycle();
+          requestedTiles.add(key);
+          successfulTiles.add(key);
+        }
+      } else if (degraded || !initialSuccessReported) {
+        degraded = false;
+        initialSuccessReported = true;
+        reportOutcome('ready');
+      }
     }
-    if (degraded || !initialSuccessReported) {
-      degraded = false;
-      initialSuccessReported = true;
-      reportOutcome('ready');
+    // A source-loaded metadata event can precede viewport tile requests.
+    // Require tile evidence before completing independently of map idle.
+    if (
+      deadlineMs !== null &&
+      requestCycleActive &&
+      requestedTiles.size > 0 &&
+      e.isSourceLoaded === true
+    ) {
+      finishRequestCycle(options.emptyIdleOutcome ?? 'ready');
     }
   };
 
@@ -222,9 +255,7 @@ export function watchRasterTiles(
 
   const onIdle = (): void => {
     if (deadlineMs === null || !requestCycleActive) return;
-    clearDeadline();
-    reportCompleteness('ready');
-    requestCycleActive = false;
+    finishRequestCycle(options.emptyIdleOutcome ?? 'ready');
   };
 
   map.on('error', onError);
