@@ -176,6 +176,13 @@ export function watchRasterTiles(
 
   const onError = (e: { error?: Error; sourceId?: string }): void => {
     if (e.sourceId !== sourceId) return;
+    // Completeness-aware consumers need the whole request cycle before they
+    // can distinguish total failure from usable partial coverage. The
+    // sourcedataloading set already records each failed request, so idle or
+    // the deadline will report `error` when none succeeded and `degraded`
+    // when at least one did. Keep the three-error shortcut only for legacy
+    // consumers that do not opt in to request accounting.
+    if (deadlineMs !== null) return;
     const now = Date.now();
     errorTimes = errorTimes.filter((t) => now - t < WINDOW_MS);
     errorTimes.push(now);

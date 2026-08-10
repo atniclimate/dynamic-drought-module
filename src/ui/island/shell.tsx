@@ -42,7 +42,7 @@ import { useEffect, useRef } from 'preact/hooks';
 
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS, TEMPORAL_HORIZON_KEYS } from '../../config/clusters';
 import type { HazardClusterKey, TemporalHorizonKey } from '../../config/clusters';
-import type { FramingKey } from '../../config/framings';
+import type { FramingSelection } from '../../config/framings';
 import { getLayerDef } from '../../config/layers';
 import {
   getCommittedSnapshot,
@@ -109,7 +109,7 @@ function customHorizonDisabledReason(
 interface ShellProps {
   readonly map: maplibregl.Map;
   readonly snap: ReadonlySignal<CommittedShellSnapshot>;
-  readonly framing: ReadonlySignal<FramingKey | null>;
+  readonly framing: ReadonlySignal<FramingSelection>;
   readonly specTick: ReadonlySignal<number>;
 }
 
@@ -125,7 +125,7 @@ function MinimapPopover({
   framing
 }: {
   readonly map: maplibregl.Map;
-  readonly framing: ReadonlySignal<FramingKey | null>;
+  readonly framing: ReadonlySignal<FramingSelection>;
 }) {
   const doorRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -272,7 +272,7 @@ export function mountShell(host: HTMLElement, map: maplibregl.Map): void {
 
   const first = getCommittedSnapshot();
   const snap = signal<CommittedShellSnapshot>(first);
-  const framing = signal<FramingKey | null>(first.framing);
+  const framing = signal<FramingSelection>(first.framing);
   onCommittedSnapshotChange(() => {
     const s = getCommittedSnapshot();
     snap.value = s;

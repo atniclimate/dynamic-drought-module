@@ -186,6 +186,60 @@ test.describe('North American Drought Monitor continental context', () => {
     await expect(page.locator('#map-key')).toBeHidden();
   });
 
+  test('an empty valid collection reports no data instead of unavailable', async ({
+    page
+  }) => {
+    await routeBasemap(page);
+    await routeNadm(page, fixture([]), []);
+    await gotoApp(
+      page,
+      '?region=british_columbia&layers=nadm-drought&view=console'
+    );
+
+    await expect(layerPill(page, 'nadm-drought')).toHaveText(
+      'no continental polygons returned by the active source'
+    );
+    await expect(layerCheckbox(page, 'nadm-drought')).toBeChecked();
+    await expect(
+      page.locator('#legend-panel [data-legend="nadm-drought"]')
+    ).toHaveCount(0);
+  });
+
+  test('malformed polygon coordinates leave no ready state and a later retry can recover', async ({
+    page
+  }) => {
+    await routeBasemap(page);
+    let requests = 0;
+    await page.route(NADM_URL, (route) => {
+      requests++;
+      const body =
+        requests === 1
+          ? fixture([
+              {
+                ...feature('d2'),
+                geometry: { type: 'Polygon', coordinates: [[[-120, 50]]] }
+              }
+            ])
+          : fixture([feature('d2')]);
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify(body)
+      });
+    });
+
+    await gotoApp(
+      page,
+      '?region=british_columbia&layers=nadm-drought&view=console'
+    );
+    await expect(layerPill(page, 'nadm-drought')).toHaveText('unavailable');
+    await expect(layerCheckbox(page, 'nadm-drought')).not.toBeChecked();
+
+    await layerCheckbox(page, 'nadm-drought').click();
+    await expect(layerPill(page, 'nadm-drought')).toHaveText('live');
+    expect(requests).toBe(2);
+  });
+
   test('fetch failure is unavailable and cannot serialize as a clean month', async ({
     page
   }) => {

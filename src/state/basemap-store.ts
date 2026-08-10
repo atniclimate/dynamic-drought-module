@@ -40,10 +40,12 @@ export function setBasemapMode(next: BasemapMode): void {
   });
 }
 
-/** Subscribe to basemap-mode changes. No unsubscribe is needed today
- * (subscribers live for the page lifetime, like the timeline's). */
-export function onBasemapChange(fn: () => void): void {
+/** Subscribe to basemap-mode changes. Returns an unsubscribe function. */
+export function onBasemapChange(fn: () => void): () => void {
   listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
 }
 
 /**

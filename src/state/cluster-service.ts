@@ -213,7 +213,8 @@ function capture(): CommittedShellSnapshot {
     sstDate: timeline.sstDate,
     outlookRange: timeline.outlookRange
   };
-  const framing = getFraming();
+  const framingSelection = getFraming();
+  const framing = framingSelection === 'all' ? null : framingSelection;
   const summary = deriveDisplaySummary({
     cluster,
     framing,

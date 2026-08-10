@@ -9,13 +9,9 @@ import {
   routeGeojson,
   syntheticAiannhBody
 } from './tribal-fixtures';
+import { stubRecentSatellite } from './satellite-fixture';
 
 const STUDIO = '#layers-studio-root';
-const TRANSPARENT_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-  'base64'
-);
-
 const STATES_BODY = {
   type: 'FeatureCollection',
   features: [
@@ -47,9 +43,7 @@ async function stubPlaces(page: Page): Promise<void> {
 }
 
 async function stubSatellite(page: Page): Promise<void> {
-  await page.route('**/tiles.maps.eox.at/**', (route) =>
-    route.fulfill({ status: 200, contentType: 'image/png', body: TRANSPARENT_PNG })
-  );
+  await stubRecentSatellite(page);
 }
 
 test.describe('LAYERS studio behavior', () => {
@@ -123,7 +117,7 @@ test.describe('LAYERS studio behavior', () => {
     await stubSatellite(page);
     await gotoApp(page, '?layers=&view=brief&studio=layers');
     let studio = page.locator(STUDIO);
-    let satellite = studio.getByRole('button', { name: 'Satellite imagery' });
+    let satellite = studio.getByRole('button', { name: 'Recent NOAA satellite imagery' });
     await expect(satellite).toHaveAttribute('aria-pressed', 'false');
     await satellite.click();
     await expect(satellite).toHaveAttribute('aria-pressed', 'true');
@@ -132,7 +126,7 @@ test.describe('LAYERS studio behavior', () => {
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     studio = page.locator(STUDIO);
-    satellite = studio.getByRole('button', { name: 'Satellite imagery' });
+    satellite = studio.getByRole('button', { name: 'Recent NOAA satellite imagery' });
     await expect(satellite).toHaveAttribute('aria-pressed', 'true');
     await satellite.click();
     await expect(satellite).toHaveAttribute('aria-pressed', 'false');

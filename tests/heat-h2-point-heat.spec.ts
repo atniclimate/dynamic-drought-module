@@ -581,6 +581,7 @@ test.describe('H2 critical-first surfaces', () => {
     page
   }) => {
     await page.setViewportSize({ width: 400, height: 600 });
+    await page.clock.setFixedTime('2026-07-29T12:30:00+00:00');
     await stubBrowserNwsHeat(page);
     await gotoApp(page, '?embed=true&select=state:WA');
 

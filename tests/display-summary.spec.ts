@@ -220,6 +220,15 @@ test.describe('S3 display summary: coverage honesty (the framing caveat)', () =>
     expect(summary.caveat).toBeNull();
   });
 
+  test('the tri-national NADM surface does not trigger a false Mexico coverage warning', () => {
+    const keys = [...REFERENCE_KEYS, 'nadm-drought'];
+    const summary = deriveDisplaySummary(
+      input(keys, allReady(keys), { framing: 'mexico' })
+    );
+    expect(summary.primary).toContain('North American Drought Monitor');
+    expect(summary.caveat).toBeNull();
+  });
+
   test('a framing without a coverage note adds no caveat', () => {
     const summary = deriveDisplaySummary(
       input(DROUGHT_KEYS, allReady(DROUGHT_KEYS), { framing: 'arid-west' })

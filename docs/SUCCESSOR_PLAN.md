@@ -1,6 +1,6 @@
 # DDM successor plan
 
-Updated 2026-07-30.
+Updated 2026-08-09.
 
 This is the concise product plan for the successor repository. It is not a
 phase ledger, review queue, or second implementation clock. Keep it current by
@@ -38,6 +38,10 @@ layer states remain invariants.
 - Worker revision `2026-07-29-nws-point-heat-v2` is deployed at
   `https://ddm-proxy.atniclimate.workers.dev` as Cloudflare version
   `db84d0d3-454f-4fa0-bbb5-6c068025ddf9`.
+- A local `2026-08-09-route-hardening-v3` candidate narrows that policy to the
+  exact runtime paths, bounds body consumption, and hardens header, redirect,
+  and cache handling. It has not been deployed; v2 remains the live revision
+  until a separate Worker deployment is authorized.
 - Live Worker verification passed for `/healthz`, the revision identifier,
   exact-host rejection, NWS response-body transparency, and Cross-Origin
   Resource Sharing headers. Source-level policy coverage pins the identifying
@@ -48,25 +52,76 @@ layer states remain invariants.
   `https://atniclimate.github.io/dynamic-drought-module/` from GitHub `main`.
   Pages workflow run `30513860839` published `e1a9084`, which contains release
   merge `83fa417` and the corrected publication record.
-- The local checkout has no configured Git remote. The existing GitHub Pages
-  workflow on `main` remains the publication authority.
+- The true-up publishes only `feature/heatrisk-legibility` to
+  `atniclimate/dynamic-drought-module`. GitHub `main` remains the publication
+  authority and is independently one scheduled ENSO snapshot commit ahead of
+  the shared release base. Do not push `main` as part of this checkpoint.
 - The public application and footer remain at `v0.6.24` with exact Git receipt
   `e1a9084`. Local checkpoint `05767d4` aligns `package.json`, both root version
   fields in `package-lock.json`, and the application footer at `0.6.25`,
-  `0.6.25`, and `v0.6.25`, respectively. It is verified, committed, and clean,
-  but it has not been published or tagged. The latest local version tag remains
+  `0.6.25`, and `v0.6.25`, respectively. That checkpoint is committed but has
+  not been published or tagged. The latest local version tag remains
   `v0.6.23`. Preserve the published `v0.6.24` history.
-- The only active local product milestone is an interview with Patrick followed
-  by a finite plan of bounded `0.6.x` interface microtasks. This is
-  fine-tuning of existing presentation and comprehension, not feature or
-  engine work.
+- The current feature checkpoint contains verified North America work:
+  the minimap derives monthly North American Drought Monitor summaries for the
+  United States, Canada, and Mexico; distinguishes `None` from unavailable and
+  not analyzed; uses a Statistics Canada Nunavut boundary as a non-displayed
+  analysis-mask proxy; visibly marks the affected far-north summary
+  `live (partial)`; and expands its framing through southern Mexico, the
+  Aleutians, northern Canada, and Newfoundland.
+- Patrick's first direct visual-review pass is implemented in the production
+  minimap: region hover is a soft visual glow with no description popup, the
+  compact key is removed, the default framing sentence is a divider, selected
+  coverage and provenance remain visible, and `All` fits the North American
+  minimap extent. Keyboard and accessible-name behavior remain covered.
+- Hazard-button-specific regional colors remain deferred. The Wildfire,
+  Extreme Heat, and ENSO recipes do not expose one comparable region-level
+  severity contract, and the interface must not infer one from the selected
+  button.
+- The existing opt-in NOAA NESDIS merged GOES East and West GeoColor mode is
+  hardened locally around verified live frames. It pins one recent frame,
+  probes known imagery before install, keeps OpenStreetMap beneath partial
+  coverage, and falls back or rolls back when candidate imagery fails.
+- An adversarial source review retained one common satellite context instead
+  of silently swapping basemaps by hazard. Future drought, wildfire, and heat
+  remote-sensing products remain separately named analytic overlays with their
+  own legends, time, and interpretation limits.
+- A code and Cloudflare review added cancellable response-body reads,
+  completeness-aware raster status, honest WHP activation, subscription
+  cleanup, fresh-server Playwright behavior, deployment-gate coverage, and a
+  local exact-route Worker v3 candidate. Production Worker v2 remains live.
+- The active product milestone is one new interface component followed by
+  separately bounded Drought and Wildfire display improvements. Confirm the
+  component reference, placement, supported viewports, and state contract
+  before implementation. This does not authorize deployment or a version
+  change.
 - The selected-place National Interagency Fire Center perimeter read stays
   deferred until the `0.6.x` interface line is explicitly closed, at which
   point it opens the `v0.7.0` line.
-- The active continuation brief is
-  `docs/V0_6_X_INTERFACE_INTERVIEW_FRESH_SESSION_HANDOFF_2026-07-30.md`.
+- The active continuation brief is the root `HANDOFF.md`.
 
-Local `v0.6.25` checkpoint receipts:
+Current feature-checkpoint receipts:
+
+- `npm run gate`: passed.
+- `npm run test:serial -- --reporter=dot`: 686 of 686 passed on a fresh server.
+- Root and Worker typechecks: passed.
+- Focused Worker policy suite: 14 of 14 passed.
+- Worker deployment dry run and local health, allowed-route, and rejected-route
+  probes: passed.
+- Browser checks passed for framing, reload, embed, satellite, and live WHP
+  without console warnings.
+- Direct-versus-proxy body hashes passed for AWDB, AgriMet, Hydromet, NWRFC,
+  USDM DSCI, WHP, and NWS. Wrangler OAuth works and the Worker requires no API
+  secrets.
+- Root production audit and complete Worker audit: zero vulnerabilities. Five
+  development-only findings remain through `mapshaper`, for which npm offers
+  only a breaking forced downgrade.
+- Aggregate drift remains nonzero when unrelated USGS or NLCD services time
+  out and because optional soil overflow intermediates exceeding 422 MB are
+  absent. Cloudflare-specific rows passed. GitHub issue 5 tracks the scheduled
+  monitor's missing Python environment.
+
+Historical local `v0.6.25` checkpoint receipts:
 
 - `npm run gate`: passed.
 - `npm run test:serial`: 649 passed.
@@ -122,44 +177,43 @@ Use these state words precisely:
 - **deployed**: the external Worker or static artifact changed;
 - **published**: users can reach the successor release.
 
-### 2. Interview and plan the next 0.6.x interface microtasks
+### 2. Integrate one interface component, then improve hazard displays
 
-This is the only active local product milestone. Begin with Patrick's design
-interview before changing code. Convert the answers into a finite phase plan of
-small, ordered microtasks, present it for review, and keep only the first
-microtask active.
+This is the only active local product milestone. Begin from the verified
+feature checkpoint and the root `HANDOFF.md`. Confirm the component reference,
+role, target surface, supported desktop, mobile, and embed viewports, and
+durable-state requirements before writing code.
 
-Outcome: the next interface work has a clear user-visible purpose, Patrick's
-design intent, exact surfaces and viewports, observable acceptance, explicit
-non-goals, and proportionate verification.
+Outcome: the new component reports committed display truth and provides a
+clearer Drought and Wildfire read without blending sources or inventing a
+severity score.
 
-In scope:
+Ordered next actions:
 
-- hierarchy, typography, spacing, density, color tokens, labels, affordances,
-  control consistency, responsive fit, accessibility, and comprehension;
-- the existing desktop, mobile, standard embed, and 200-pixel embed surfaces;
-- the smallest markup, style, configuration, and regression-test changes
-  required by an approved microtask.
+1. Integrate the component as one bounded production change. For a desktop
+   Brief component, prefer a named Preact child of `src/ui/island/shell.tsx`
+   driven by `CommittedShellSnapshot` and existing service commands. Design
+   separate mobile or embed placement explicitly when those surfaces are in
+   scope.
+2. Verify all six states, accessibility, responsive placement, URL behavior
+   for durable choices, lazy loading, cancellation, and teardown before using
+   the pattern elsewhere.
+3. Improve one Drought display outcome. Keep weekly USDM, monthly NADM, monthly
+   CDM, Province of British Columbia levels, CPC outlooks, and gridded indices
+   separately named and timed. Do not infer `None` from zero rendered polygons
+   without a verified analyzed-area mask.
+4. Improve one Wildfire display outcome. Keep NIFC incidents, prescribed fire,
+   HMS smoke, SPC outlooks, and static WHP context distinct. Show source time,
+   coverage, and source-specific absence; do not imply safety or combine them
+   into a fire score.
+5. Run focused suites after each bounded pass, then `npm run gate` and
+   `npm run test:serial` for shared state, navigation, map lifecycle, or release
+   readiness.
 
-Out of scope:
-
-- new sources, source capabilities, engines, scores, content blocks, or data
-  pipelines;
-- National Interagency Fire Center or Climate Prediction Center feature work;
-- navigation or information-architecture rewrite;
-- broad visual redesign, general CSS cleanup, or component refactor;
-- publication, deployment, tagging, remote changes, branch alignment, or an
-  automatic `v0.6.26` assignment.
-
-Patrick's explicit design preference counts as product evidence for this
-fine-tuning stage. Every approved microtask must still carry one bounded
-visible outcome, observable acceptance, applicable viewport and accessibility
-criteria, preserved product invariants, focused verification, and a stop
-condition.
-
-Use a plain numbered phase plan, not a harness, ledger, queue, or second
-roadmap. After Patrick approves it, keep the concise active priority in this
-document and use ordinary issues and Git history for implementation detail.
+This milestone does not authorize a new data source, engine, score, broad
+redesign, publication, deployment, tag, Worker change, or automatic
+`v0.6.26` assignment. Presentation work does not automatically open the
+deferred selected-place NIFC engine or the `v0.7.0` release line.
 
 ### 3. Expand the fire module in v0.7.0
 
@@ -389,16 +443,18 @@ upstream reliability, production configuration, or user comprehension.
 
 ## Current boundaries
 
-- Start the next session with Patrick's interface-design interview. Do not
-  implement a microtask until the interview synthesis and finite phase plan
-  have been reviewed.
-- Keep the approved fine-tuning microtasks in `0.6.x`. Begin `v0.7.0` only
-  after Patrick explicitly closes the interface line, with the selected-place
-  National Interagency Fire Center active-perimeter read as its one active
+- Start the next session from root `HANDOFF.md` and the clean, pushed feature
+  checkpoint. Ask for the new component reference, placement, and supported
+  viewports before implementation.
+- Work in sequence: component integration, one Drought display outcome, then
+  one Wildfire display outcome. Keep each independently reviewable.
+- Keep this presentation work in `0.6.x`. Begin `v0.7.0` only after Patrick
+  explicitly closes the interface line, with the selected-place National
+  Interagency Fire Center active-perimeter read as its one active engine
   milestone.
 - No broad visual redesign, navigation rewrite, CSS cleanup, or component
-  refactor. Keep every `0.6.x` adjustment bounded to one approved
-  user-visible fine-tuning outcome.
+  refactor. Reuse committed snapshot and service contracts instead of adding a
+  second state machine.
 - No activation of the CPC extremes candidate until a separate source
   verification establishes transport, schema, cadence, coverage, terms, and
   honest absence.
@@ -410,5 +466,6 @@ upstream reliability, production configuration, or user comprehension.
   system.
 - No wholesale import of the C-drive estate. Recover source evidence, build
   tooling, or design material only when the active milestone needs it.
-- No push, deployment, publication, tag push, or remote change without
-  explicit authorization.
+- The true-up may publish only `feature/heatrisk-legibility`. No `main` push,
+  deployment, publication, tag push, or external-service change without
+  separate authorization.

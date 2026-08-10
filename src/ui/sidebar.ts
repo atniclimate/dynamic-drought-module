@@ -127,7 +127,11 @@ import {
   setHazardCluster
 } from '../state/cluster-store';
 import { reconcileClusterWithLayerIntent } from '../state/cluster-service';
-import { FRAMINGS } from '../config/framings';
+import {
+  ALL_FRAMING_BOUNDS,
+  FRAMINGS,
+  framingFitBounds
+} from '../config/framings';
 import { OCEANS } from '../config/oceans';
 import { applyBasemapMode } from '../map/basemap-switcher';
 import { timeline } from '../state/timeline';
@@ -304,8 +308,8 @@ function selectRegion(
   }
 
   // An EXPLICIT region choice (click or arrow-key; silent marks the boot
-  // fit) is a legacy camera gesture: it clears the framing context back
-  // to ALL and drops any ocean camera claim, so the URL never asserts
+  // fit) is a legacy camera gesture: it clears the minimap camera and drops
+  // any ocean camera claim, so the URL never asserts
   // two cameras at once (S2, D-0.7.0-041/044/053). The hazard cluster
   // itself persists (camera gestures never change the display).
   if (!silent) {
@@ -388,10 +392,10 @@ function checkedLayerKeys(): Set<string> {
  * thin wrapper so callers do not have to assemble the snapshot.
  */
 function pushUrl(): void {
-  // Camera exclusivity (S2): while a framing is active the URL carries
+  // Camera exclusivity (S2): while a minimap camera is active the URL carries
   // `framing=` INSTEAD of `region=` (one camera vocabulary claimed at a
-  // time); a null framing keeps the legacy region emission byte for
-  // byte. The cluster/ocean pair rides the durable-truth model inside
+  // time); `framing=all` preserves the explicit North American ALL fit, while
+  // null keeps the legacy region emission. The cluster/ocean pair rides the durable-truth model inside
   // syncUrl (D-0.7.0-044): a clean cluster replaces `layers=`.
   const framing = getFraming();
   syncUrl({
@@ -1069,17 +1073,14 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // Both are camera-only: they select nothing and brief nothing.
   const cameraDef = params.ocean
     ? OCEANS[params.ocean]
-    : params.framing
-      ? FRAMINGS[params.framing]
-      : null;
+    : params.framing === 'all'
+      ? { bounds: ALL_FRAMING_BOUNDS, padding: 0 }
+      : params.framing
+        ? FRAMINGS[params.framing]
+        : null;
   if (cameraDef) {
-    const [[south, west], [north, east]] = cameraDef.bounds;
-    const pad = cameraDef.padding;
     map.fitBounds(
-      [
-        [west - pad, south - pad],
-        [east + pad, north + pad]
-      ],
+      framingFitBounds(cameraDef),
       { padding: 20, animate: false }
     );
   }

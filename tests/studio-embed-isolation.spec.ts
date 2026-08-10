@@ -3,13 +3,10 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { FRAMINGS, type FramingKey } from '../src/config/framings';
 import { gotoApp } from './helpers';
 import { AIANNH_ROUTE, BIA_ROUTE, emptyCollectionBody, routeGeojson } from './tribal-fixtures';
+import { stubRecentSatellite } from './satellite-fixture';
 
 type Box = NonNullable<Awaited<ReturnType<Locator['boundingBox']>>>;
 
-const TRANSPARENT_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-  'base64'
-);
 const FRAMING = Object.keys(FRAMINGS)[0] as FramingKey;
 const STUDIO_CHUNK = /\/(?:island|layers-studio|place-studio)-[^/]+\.js(?:\?.*)?$/;
 
@@ -34,9 +31,7 @@ async function stubEmbedDependencies(page: Page): Promise<void> {
       body: JSON.stringify({ type: 'FeatureCollection', features: [] })
     })
   );
-  await page.route('**/tiles.maps.eox.at/**', (route) =>
-    route.fulfill({ status: 200, contentType: 'image/png', body: TRANSPARENT_PNG })
-  );
+  await stubRecentSatellite(page);
   await page.route('**/gibs.earthdata.nasa.gov/**', (route) =>
     route.fulfill({ status: 503, contentType: 'text/plain', body: 'Synthetic offline response' })
   );

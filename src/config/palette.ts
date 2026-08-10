@@ -5,6 +5,28 @@
  */
 
 /* ---------------------------------------------------------------------------
+ * North American drought minimap
+ *
+ * The minimap is a condition overview, so it uses the shared D0 through D4
+ * drought ramp rather than editorial region colors. `none` is deliberately
+ * white, per the map convention. Loading and unavailable states are separate
+ * UI states and never receive a drought color.
+ * ------------------------------------------------------------------------- */
+
+export type DroughtSeverityCode = 'none' | 'D0' | 'D1' | 'D2' | 'D3' | 'D4';
+
+export const MINIMAP_DROUGHT_COLORS: Readonly<
+  Record<DroughtSeverityCode, string>
+> = {
+  none: '#FFFFFF',
+  D0: '#FFFF00',
+  D1: '#FCD37F',
+  D2: '#FFAA00',
+  D3: '#E60000',
+  D4: '#730000'
+};
+
+/* ---------------------------------------------------------------------------
  * Ecoregions (EPA Level III)
  *
  * Names match the `US_L3NAME` field. The palette is designed to evoke

@@ -2,16 +2,11 @@
 #
 # This Worker exists solely to inject Cross-Origin Resource Sharing (CORS) headers
 # onto responses from a small allow-list of public agency endpoints. The
-# allow-list is defined in src/index.ts (ALLOW_LIST) and currently covers:
-# NRCS Air-Water Database, USACE Dataquery 2.0, USBR Hydromet, NWRFC (the
-# telemetry endpoints), plus NOAA CPC (El Nino / Southern Oscillation indices),
-# the BIA map hosts (reservation boundaries), the federal GeoPlatform
-# imagery host imagery.geoplatform.gov (USFS Wildfire Hazard Potential tiles;
-# added 2026-07-09, 0.7.0 H3, because the upstream's exportImage CORS is
-# intermittent in real browsers), and the NDMC USDM Data Services host
-# usdmdataservices.unl.edu (the DSCI trend statistics; added 2026-07-14
-# after the upstream stopped emitting CORS headers), and api.weather.gov so
-# NWS point-heat requests carry the Worker's identifying User-Agent. It does
+# exact route table is defined in src/index.ts and currently covers only the
+# reads used by the application: NRCS AWDB data and station discovery; USBR
+# AgriMet registry and Hydromet daily CGI; the NWRFC water-supply report; USDM
+# DSCI statistics; USFS Wildfire Hazard Potential exportImage tiles; and NWS
+# points, gridpoints, station/latest-observation, and active-alert reads. It does
 # not transform response bodies, does not authenticate, does not log requests,
 # and does not collect telemetry. See workers/proxy/src/index.ts for the logic
 # and CLAUDE.md section 4 rule 3 for the no-tracking, no-analytics policy.

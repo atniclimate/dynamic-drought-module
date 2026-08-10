@@ -1517,9 +1517,8 @@ button.conditions-metric:hover {
   max-width: calc(100% - 220px);
 }
 
-/* When the satellite vintage chip is showing, the attribution bar can wrap
-   to two lines (the long EOxCloudless legal string); lift the dock clear of
-   it so the chip and key rows never intersect the bar. */
+/* When the satellite observation chip is showing, lift the dock clear of the
+   attribution control so the context line and key rows never intersect it. */
 body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   bottom: 58px;
 }
@@ -1582,20 +1581,25 @@ body:has(#basemap-vintage:not([hidden])) .map-bottom-dock {
   box-shadow: inset 0 0 0 1px var(--accent-strong);
 }
 
-/* The satellite vintage notice (U4d, D-0.7.0-028 honesty split): a plain
-   statement distinct from the legal attribution, visible whenever the
-   satellite basemap is selected, embeds included. Lives in the shared
-   bottom dock so it composes with the notices and the legend chip. */
-.basemap-vintage-chip {
+/* The satellite observation notice: exact UTC frame time and interpretation
+   cautions, distinct from legal attribution and visible in embeds. */
+.basemap-imagery-chip {
+  max-width: min(720px, calc(100% - 24px));
   background: rgba(15, 23, 42, 0.85);
   color: var(--fg-1);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   font-family: var(--font-body);
   font-size: 10.5px;
+  line-height: 1.35;
   letter-spacing: 0.02em;
   padding: 3px 9px;
   pointer-events: none;
+  text-align: center;
+}
+
+.basemap-imagery-chip[data-status="loading"] {
+  border-style: dashed;
 }
 
 /* Popups */
@@ -4422,7 +4426,6 @@ a.impact-resource-link::after {
   padding-top: 6px;
 }
 
-
 /* ----------------------------------------------------------------------------
    0.3.0 design pass: typographic finish, brand surfaces, on-map key
    ---------------------------------------------------------------------------- */
@@ -4452,7 +4455,6 @@ a.impact-resource-link::after {
 .sidebar-footer p {
   text-wrap: pretty;
 }
-
 
 /* Bottom fade on the sidebar scroller: a row cut by the fold reads as
    "more below" rather than as a rendering accident. */
@@ -5247,57 +5249,185 @@ a.impact-resource-link::after {
 }
 
 /* MAP CONTEXT: the framing minimap. */
+.shell-minimap-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.shell-minimap-title {
+  margin: 0;
+}
+
+.shell-minimap-scale {
+  color: var(--fg-3);
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-caps-sm);
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
 .shell-minimap-canvas {
   position: relative;
   width: 100%;
-  aspect-ratio: 2 / 1;
-  background: var(--bg-2);
+  aspect-ratio: 660 / 348;
+  background: var(--bg-1);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
 
+.shell-minimap-drawing {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.shell-minimap-drawing pattern path {
+  fill: none;
+  stroke: rgba(15, 23, 42, 0.62);
+  stroke-width: 1.2px;
+}
+
+.shell-minimap-impact {
+  pointer-events: none;
+  fill: none;
+  stroke: rgba(15, 23, 42, 0.78);
+  stroke-linejoin: round;
+}
+
 .shell-minimap-region {
-  position: absolute;
-  appearance: none;
-  background: rgba(6, 182, 212, 0.06);
-  border: 1px solid var(--line-strong);
-  border-radius: 2px;
-  min-width: 14px;
-  min-height: 12px;
-  padding: 0;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
 }
-.shell-minimap-region:hover {
-  background: rgba(6, 182, 212, 0.16);
+
+.shell-minimap-mainland {
+  fill: var(--bg-3);
+  fill-opacity: 1;
+  stroke: var(--bg-0);
+  stroke-width: 1.1px;
+  stroke-linejoin: round;
+  transition:
+    fill-opacity 0.12s ease,
+    stroke 0.12s ease,
+    stroke-width 0.12s ease,
+    filter 0.12s ease;
+}
+.shell-minimap-mainland:hover {
+  stroke: var(--accent);
+  stroke-width: 1.6px;
+  filter:
+    drop-shadow(0 0 3px var(--accent))
+    drop-shadow(0 0 7px var(--accent-soft));
+}
+.shell-minimap-mainland.active {
+  stroke: var(--accent);
+  stroke-width: 2px;
+}
+.shell-minimap-mainland:focus-visible {
+  outline: none;
+  stroke: var(--accent);
+  stroke-width: 2px;
+  filter:
+    drop-shadow(0 0 3px var(--accent))
+    drop-shadow(0 0 7px var(--accent-soft));
+}
+
+/* Schematic orientation anchors. They sit over the interactive region
+   paths but never intercept a pointer or keyboard gesture. */
+.shell-minimap-lake {
+  pointer-events: none;
+  fill: var(--bg-1);
+  fill-opacity: 0.9;
+  stroke: var(--bg-0);
+  stroke-width: 0.7px;
+}
+
+/* Hawaii is intentionally enlarged and detached from the mainland
+   projection. The dashed frame, not an individual island, is the one
+   complete hit target and fits the real island-chain bounds. */
+.shell-minimap-hawaii {
+  position: absolute;
+  left: 2.7%;
+  top: 56.7%;
+  z-index: 2;
+  appearance: none;
+  width: 25.7%;
+  height: 39%;
+  background: rgba(11, 18, 32, 0.5);
+  color: var(--fg-2);
+  border: 1px dashed var(--fg-3);
+  border-radius: 3px;
+  padding: 0;
+  text-align: left;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease,
+    color 0.12s ease;
+}
+.shell-minimap-hawaii-label {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  z-index: 1;
+  font-family: var(--font-display);
+  font-size: 8px;
+  font-weight: var(--fw-subtitle);
+  line-height: 1;
+  white-space: nowrap;
+}
+.shell-minimap-hawaii-islands {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.shell-minimap-island {
+  fill: var(--bg-3);
+  fill-opacity: 1;
+  stroke: var(--bg-0);
+  stroke-width: 1px;
+}
+.shell-minimap-hawaii:hover,
+.shell-minimap-hawaii.active,
+.shell-minimap-hawaii:focus-visible {
+  color: var(--fg-0);
   border-color: var(--accent);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 0 10px var(--accent-soft);
+  outline: none;
 }
-.shell-minimap-region.active {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
+
+.shell-minimap-canvas[data-drought-status="loading"] .shell-minimap-mainland,
+.shell-minimap-canvas[data-drought-status="loading"] .shell-minimap-island {
+  animation: shell-minimap-loading 1.2s ease-in-out infinite alternate;
 }
-.shell-minimap-region:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-/* The Hawaii enlarged inset (spike round 4 item 6): the real bounds are
-   tiny at this scale, so the button floor above already enlarges it; the
-   inset styling marks it as schematic. */
-.shell-minimap-region.inset {
-  border-style: dashed;
+
+@keyframes shell-minimap-loading {
+  from {
+    fill-opacity: 0.52;
+  }
+  to {
+    fill-opacity: 0.9;
+  }
 }
 
 .shell-minimap-all {
   position: absolute;
-  top: 4px;
-  left: 4px;
-  z-index: 20;
+  right: 1.52%;
+  bottom: 5.61%;
+  z-index: 3;
   appearance: none;
-  background: var(--bg-1);
-  color: var(--fg-2);
-  border: 1px solid var(--line);
+  min-width: 36px;
+  height: 30px;
+  background: var(--bg-2);
+  color: var(--fg-1);
+  border: 1px solid var(--fg-3);
   border-radius: var(--radius-sm);
   font-family: var(--font-display);
   font-size: 9px;
@@ -5306,11 +5436,28 @@ a.impact-resource-link::after {
   text-transform: uppercase;
   padding: 3px 6px;
   cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+.shell-minimap-all:hover,
+.shell-minimap-all:focus-visible {
+  border-color: var(--accent);
+  color: var(--fg-0);
+  outline: none;
 }
 .shell-minimap-all[aria-checked='true'] {
   background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.shell-minimap-divider {
+  width: 100%;
+  margin: 8px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
 }
 
 .shell-minimap-note {
@@ -5330,6 +5477,19 @@ a.impact-resource-link::after {
   font-size: 10px;
   line-height: 1.45;
   color: var(--fg-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-minimap-mainland,
+  .shell-minimap-hawaii,
+  .shell-minimap-island,
+  .shell-minimap-all {
+    transition: none;
+  }
+  .shell-minimap-canvas[data-drought-status="loading"] .shell-minimap-mainland,
+  .shell-minimap-canvas[data-drought-status="loading"] .shell-minimap-island {
+    animation: none;
+  }
 }
 
 /* WHEN: horizon chips plus the compact temporal row. */
@@ -5595,9 +5755,9 @@ a.impact-resource-link::after {
    >= 721px gets the desktop shell: tablets, landscape phones). The
    repository-wide 44px touch floor remains separately-owned backlog per
    the design record; these rules keep the lane from SHIPPING new
-   sub-floor targets on the surfaces it authors. The minimap rectangles
-   keep their honest geometry; their floor rises so the smallest framing
-   stays tappable. */
+   sub-floor targets on the surfaces it authors. The minimap silhouettes
+   keep their honest authored geometry; the Hawaii frame is already larger
+   than this floor and ALL receives the explicit width accommodation. */
 @media (pointer: coarse) and (min-width: 721px) {
   .shell-cluster-btn,
   .shell-horizon-btn,
@@ -5608,10 +5768,6 @@ a.impact-resource-link::after {
   .shell-minimap-all {
     min-height: 32px;
     min-width: 44px;
-  }
-  .shell-minimap-region {
-    min-width: 24px;
-    min-height: 20px;
   }
   .shell-time { min-height: 44px; }
 }

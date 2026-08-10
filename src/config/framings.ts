@@ -28,9 +28,10 @@
  * shell's job (S4): a Mexico click under a US-scoped display must say
  * so.
  *
- * The ALL state is deliberately NOT a framing entry: absence is the
- * truth (D-0.7.0-041). A null framing means the national default fit;
- * no `framing=` parameter is written for it.
+ * The ALL state is not an editorial framing entry. A user-selected ALL camera
+ * serializes as `framing=all` so the North American extent survives reload;
+ * null still means no explicit minimap camera and leaves the legacy region
+ * path in control.
  *
  * Bounds use the repository's Leaflet order `[[south, west],
  * [north, east]]` (the same convention as `REGIONS`; the conversion to
@@ -56,12 +57,24 @@ export type FramingKey =
   | 'mexico'
   | 'hawaii';
 
+/** Durable minimap camera state. `all` is a camera token, not a shape key. */
+export type FramingSelection = FramingKey | 'all' | null;
+
+/** Leaflet-order bounds used by the minimap's explicit ALL camera. */
+export const ALL_FRAMING_BOUNDS = [
+  [14, -188],
+  [84, -52],
+] as const;
+
 export interface FramingDef {
   /** Display label (tooltips, assistive names; the minimap drawing
    * itself is label-free for pointer users, D-0.7.0-054). */
   readonly label: string;
   /** Camera fit bounds, Leaflet order [[south, west], [north, east]]. */
-  readonly bounds: readonly [readonly [number, number], readonly [number, number]];
+  readonly bounds: readonly [
+    readonly [number, number],
+    readonly [number, number],
+  ];
   /** Symmetric fit padding in degrees. */
   readonly padding: number;
   /** The honest label consumers must carry: where this shape came from
@@ -70,6 +83,19 @@ export interface FramingDef {
   /** One-line coverage caution for the shell's honesty surfaces, when a
    * framing extends beyond the US-scoped display layers. */
   readonly coverageNote?: string;
+}
+
+/** Convert and pad one framing for a compact MapLibre fit across the dateline. */
+export function framingFitBounds(
+  framing: Pick<FramingDef, 'bounds' | 'padding'>
+): [[number, number], [number, number]] {
+  const [[south, west], [north, encodedEast]] = framing.bounds;
+  const east = encodedEast < west ? encodedEast + 360 : encodedEast;
+  const pad = framing.padding;
+  return [
+    [west - pad, south - pad],
+    [east + pad, north + pad]
+  ];
 }
 
 const AUTHORED_NOTE =
@@ -82,68 +108,96 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
     // Split out of Boreal & Arctic (round 4 item 4) along the northern
     // Rockies and Mackenzie Mountains trend: Alaska, Yukon, and
     // northwestern British Columbia as one navigable area of focus.
-    // The west bound stops short of the Aleutian antimeridian crossing
-    // for the same reason as REGIONS.alaska (documented there).
-    bounds: [[51.0, -170.0], [71.5, -123.0]],
+    // Encoded crossing bounds keep the western Aleutians in the same compact
+    // camera fit as Alaska and northwestern Canada.
+    bounds: [
+      [50.0, 172.0],
+      [72.0, -123.0],
+    ],
     padding: 1.0,
     provenance: AUTHORED_NOTE,
-    coverageNote: 'US display layers cover Alaska variably; Yukon and British Columbia are outside US-scoped sources.'
+    coverageNote:
+      'US display layers cover Alaska variably; Yukon and British Columbia are outside US-scoped sources. The monthly North American Drought Monitor informs this minimap across Alaska and the Aleutians.',
   },
   'boreal-arctic': {
     label: 'Boreal & Arctic Far North',
     // East of the Alaska & Northwest divide: NWT, Nunavut, the northern
     // prairie provinces, boreal Ontario/Quebec, and Labrador.
-    bounds: [[50.0, -130.0], [73.5, -52.0]],
+    bounds: [
+      [50.0, -141.5],
+      [83.5, -52.0],
+    ],
     padding: 1.0,
     provenance: AUTHORED_NOTE,
-    coverageNote: 'Mostly outside US-scoped display sources; per-layer status stays honest here.'
+    coverageNote:
+      'Mostly outside US-scoped display sources; per-layer status stays honest here. The monthly continental drought summary excludes Nunavut with an analysis-mask proxy and is partial in the far north.',
   },
   'pacific-coast': {
     label: 'Pacific Coast & Northwest Cascades',
     // Coastal British Columbia through Washington, Oregon, and
     // northwestern California; the Columbia-Fraser sphere.
-    bounds: [[38.0, -130.5], [56.5, -113.5]],
+    bounds: [
+      [38.0, -130.5],
+      [56.5, -113.5],
+    ],
     padding: 0.5,
     provenance: AUTHORED_NOTE,
-    coverageNote: 'British Columbia portions are outside US-scoped display sources.'
+    coverageNote:
+      'British Columbia portions are outside US-scoped display sources. The monthly North American Drought Monitor informs the minimap across the border.',
   },
   'arid-west': {
     label: 'Arid West & Desert Southwest',
-    bounds: [[31.0, -124.5], [44.5, -102.0]],
+    bounds: [
+      [31.0, -124.5],
+      [44.5, -102.0],
+    ],
     padding: 0.5,
-    provenance: AUTHORED_NOTE
+    provenance: AUTHORED_NOTE,
   },
   'plains-prairies': {
     label: 'Agricultural Great Plains & Prairies',
-    bounds: [[33.5, -110.5], [55.5, -89.5]],
+    bounds: [
+      [33.5, -110.5],
+      [55.5, -89.5],
+    ],
     padding: 0.5,
     provenance: AUTHORED_NOTE,
-    coverageNote: 'The prairie provinces are outside US-scoped display sources.'
+    coverageNote:
+      'The prairie provinces are outside US-scoped display sources. The monthly North American Drought Monitor informs the minimap across them.',
   },
   'eastern-forests': {
     label: 'Eastern Forests & Great Lakes',
-    bounds: [[38.0, -95.5], [50.5, -59.0]],
+    bounds: [
+      [38.0, -95.5],
+      [52.0, -52.0],
+    ],
     padding: 0.5,
     provenance: AUTHORED_NOTE,
-    coverageNote: 'Ontario, Quebec, and the Maritimes are outside US-scoped display sources.'
+    coverageNote:
+      'Ontario, Quebec, and the Maritimes are outside US-scoped display sources. The monthly North American Drought Monitor informs the minimap across Canada.',
   },
   'southeast-gulf': {
     label: 'Southeast & Gulf Coast',
-    bounds: [[24.4, -100.5], [39.0, -74.5]],
+    bounds: [
+      [24.4, -100.5],
+      [39.0, -74.5],
+    ],
     padding: 0.5,
-    provenance: AUTHORED_NOTE
+    provenance: AUTHORED_NOTE,
   },
   mexico: {
     label: 'Mexico',
-    // Camera-only framing riding North American Drought Monitor
-    // coverage (round 4 item 5; D-0.7.0-048 item 14: no Mexico place
-    // catalogs, NADM display wiring unscheduled, full integration
-    // deferred to post-1.0 with intent). Clipped near latitude 17.5,
-    // matching the spike's schematic southern clip.
-    bounds: [[17.5, -118.5], [32.8, -85.5]],
+    // Camera-only framing riding North American Drought Monitor coverage.
+    // Mexico place catalogs and local briefings remain out of scope. The
+    // camera includes the full country extent represented by NADM.
+    bounds: [
+      [14.0, -119.0],
+      [33.0, -86.0],
+    ],
     padding: 0.5,
     provenance: AUTHORED_NOTE,
-    coverageNote: 'The current display layers do not cover Mexico; the shell must say so on this framing.'
+    coverageNote:
+      'The current display layers do not cover Mexico. The monthly North American Drought Monitor informs this minimap in Mexico; place selection and local briefings are unavailable.',
   },
   hawaii: {
     label: 'Hawaii',
@@ -151,11 +205,15 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
     // but clicking it fits the REAL island-chain bounds; kept equal to
     // REGIONS.hawaii so the framing and the legacy region land the same
     // camera (pinned in tests/s1-substrate.spec.ts).
-    bounds: [[18.5, -160.5], [22.5, -154.5]],
+    bounds: [
+      [18.5, -160.5],
+      [22.5, -154.5],
+    ],
     padding: 0.3,
     provenance: AUTHORED_NOTE,
-    coverageNote: 'Layer coverage varies for Hawaii; per-layer status stays honest here.'
-  }
+    coverageNote:
+      'Layer coverage varies for Hawaii; per-layer status stays honest here. The monthly North American Drought Monitor informs this minimap.',
+  },
 };
 
 /** The framing keys in the minimap's presentation order (spike round 4:
@@ -170,5 +228,5 @@ export const FRAMING_KEYS: readonly FramingKey[] = [
   'eastern-forests',
   'southeast-gulf',
   'mexico',
-  'hawaii'
+  'hawaii',
 ];

@@ -23,14 +23,16 @@ import {
 } from '../ui/legend-registry';
 import { clearTimeBar, setTimeBar } from '../ui/time-bar';
 import { escapeHtml } from '../util/escape';
-import { fetchWithBudget } from '../util/fetch';
+import {
+  fetchSharedJsonWithBudget,
+  invalidateSharedJsonRequest
+} from '../util/fetch';
 
 const LAYER_KEY = 'nadm-drought';
 const SOURCE_ID = 'nadm-drought-areas';
 const FILL_ID = 'nadm-drought-fill';
 const OUTLINE_ID = 'nadm-drought-outline';
 const BEFORE_ID = 'first-symbol';
-const FETCH_TIMEOUT_MS = 15_000;
 const FILL_OPACITY = 0.48;
 const OUTLINE_OPACITY = 0.45;
 const SNAPSHOT_EVENT = 'ddm:nadm-snapshot';
@@ -69,21 +71,45 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function normalizeYearMonth(value: unknown): string {
-  if (typeof value !== 'string' || !/^\d{4}(0[1-9]|1[0-2])$/.test(value)) {
+  const raw = String(value ?? '').trim();
+  if (!/^\d{4}(0[1-9]|1[0-2])$/.test(raw)) {
     throw new Error(`NADM YEAR_MONTH is invalid: ${String(value)}.`);
   }
-  return `${value.slice(0, 4)}-${value.slice(4)}`;
+  return `${raw.slice(0, 4)}-${raw.slice(4)}`;
 }
 
-function validateSnapshot(value: unknown): NadmSnapshot {
+// Keep this lightweight validation local so activating the map layer does not
+// pull the minimap's richer geometry helpers into its first-load chunk.
+function hasPolygonCoordinates(geometry: Record<string, unknown>): boolean {
+  const isPosition = (value: unknown): boolean =>
+    Array.isArray(value) &&
+    value.length >= 2 &&
+    typeof value[0] === 'number' &&
+    Number.isFinite(value[0]) &&
+    typeof value[1] === 'number' &&
+    Number.isFinite(value[1]);
+  const isRing = (value: unknown): boolean =>
+    Array.isArray(value) && value.length >= 4 && value.every(isPosition);
+  const isPolygon = (value: unknown): boolean =>
+    Array.isArray(value) && value.length > 0 && value.every(isRing);
+  const coordinates = geometry['coordinates'];
+  return geometry['type'] === 'Polygon'
+    ? isPolygon(coordinates)
+    : geometry['type'] === 'MultiPolygon' &&
+        Array.isArray(coordinates) &&
+        coordinates.length > 0 &&
+        coordinates.every(isPolygon);
+}
+
+function validateSnapshot(value: unknown): NadmSnapshot | null {
   if (
     !isRecord(value) ||
     value['type'] !== 'FeatureCollection' ||
-    !Array.isArray(value['features']) ||
-    value['features'].length === 0
+    !Array.isArray(value['features'])
   ) {
-    throw new Error('NADM response is not a non-empty FeatureCollection.');
+    throw new Error('NADM response is not a FeatureCollection.');
   }
+  if (value['features'].length === 0) return null;
 
   let month: string | null = null;
   for (const feature of value['features']) {
@@ -92,13 +118,15 @@ function validateSnapshot(value: unknown): NadmSnapshot {
       feature['type'] !== 'Feature' ||
       !isRecord(feature['properties']) ||
       !isRecord(feature['geometry']) ||
-      !['Polygon', 'MultiPolygon'].includes(String(feature['geometry']['type']))
+      !hasPolygonCoordinates(feature['geometry'])
     ) {
       throw new Error('NADM response contains a malformed polygon feature.');
     }
     const category = String(feature['properties']['DROUGHTCAT']).toLowerCase();
     if (!CLASS_CODES.includes(category as ClassCode)) {
-      throw new Error(`NADM DROUGHTCAT is invalid: ${category}.`);
+      throw new Error(
+        `NADM DROUGHTCAT is invalid: ${String(feature['properties']['DROUGHTCAT'])}.`
+      );
     }
     const featureMonth = normalizeYearMonth(feature['properties']['YEAR_MONTH']);
     if (month !== null && featureMonth !== month) {
@@ -214,26 +242,42 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   const signal = masterController.signal;
   registry.setStatus(LAYER_KEY, 'loading');
 
-  let snapshot: NadmSnapshot;
+  let snapshot: NadmSnapshot | null;
   try {
-    const response = await fetchWithBudget(
-      URLS.nadmCurrentGeojson,
-      null,
-      signal,
-      FETCH_TIMEOUT_MS
+    snapshot = validateSnapshot(
+      await fetchSharedJsonWithBudget(
+        'nadm-current',
+        URLS.nadmCurrentGeojson,
+        { cache: 'no-store' },
+        signal,
+        15_000
+      )
     );
-    if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    snapshot = validateSnapshot(await response.json());
   } catch (error) {
     if (signal.aborted) return;
+    invalidateSharedJsonRequest('nadm-current');
     console.warn('[nadm-drought] continental GeoJSON load failed.', error);
     registry.setStatus(LAYER_KEY, 'error');
     return;
   }
   if (signal.aborted) return;
 
+  if (snapshot === null) {
+    registry.setStatus(LAYER_KEY, 'no-data');
+    return;
+  }
+
+  try {
+    installMapState(map, snapshot.collection);
+  } catch (error) {
+    if (map.getLayer(FILL_ID)) map.removeLayer(FILL_ID);
+    if (map.getLayer(OUTLINE_ID)) map.removeLayer(OUTLINE_ID);
+    if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+    console.warn('[nadm-drought] map installation failed.', error);
+    registry.setStatus(LAYER_KEY, 'error');
+    return;
+  }
   activeSnapshot = snapshot;
-  installMapState(map, snapshot.collection);
   showNadmLegend(snapshot.month);
   showNadmTimeBar(snapshot.month);
   dispatchSnapshot('ready', snapshot.month);

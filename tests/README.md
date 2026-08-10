@@ -17,8 +17,8 @@ preview`, so a stale `dist/` can never be verified and a build failure fails
 the run. The preview serves at the `base` subpath
 (`http://localhost:4173/`).
 
-Locally, if you already have `npm run preview` running the suite reuses it
-(and skips the rebuild). In CI it always builds fresh.
+Every run owns that preview process. If another process is already listening
+on port 4173, the suite fails instead of reusing an unattributed build.
 
 ## What it asserts, and what it deliberately does not
 
@@ -61,10 +61,10 @@ judgment call rather than a red CI run. The telemetry spec here asserts only
 the honest-status contract (terminal, not a specific number), which is what a
 regression would actually break.
 
-Because the suite is wired into a **non-blocking** workflow
-(`.github/workflows/smoke.yml`), it never gates the Pages deploy: a transient
-upstream outage cannot block a release, consistent with the honest-`unavailable`
-philosophy the app itself follows.
+The browser suite is currently a manual release check; it is not run by the
+Pages deploy workflow. The deploy runs the root non-browser gate. Run the
+focused affected specs during development and `npm run test:serial` when a
+change affects shared navigation, map lifecycle, state, or release readiness.
 
 ## Headless WebGL
 

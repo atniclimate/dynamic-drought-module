@@ -3,13 +3,10 @@ import { expect, test, type Page } from '@playwright/test';
 import { FRAMINGS, type FramingKey } from '../src/config/framings';
 import { parseShellParams, parseStudioParam } from '../src/state/url';
 import { gotoApp, waitForLayerSettled } from './helpers';
+import { stubRecentSatellite } from './satellite-fixture';
 import { AIANNH_ROUTE, BIA_ROUTE, emptyCollectionBody, routeGeojson } from './tribal-fixtures';
 
 const FRAMING = Object.keys(FRAMINGS)[0] as FramingKey;
-const TRANSPARENT_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-  'base64'
-);
 const TERMINAL_CLASSES = ['ready', 'degraded', 'error', 'no-data', 'zoom-in'] as const;
 
 interface MatrixCase {
@@ -104,9 +101,7 @@ async function stubMatrixDependencies(page: Page): Promise<void> {
       })
     );
   }
-  await page.route('**/tiles.maps.eox.at/**', (route) =>
-    route.fulfill({ status: 200, contentType: 'image/png', body: TRANSPARENT_PNG })
-  );
+  await stubRecentSatellite(page);
   await page.route('**/gibs.earthdata.nasa.gov/**', (route) =>
     route.fulfill({ status: 503, contentType: 'text/plain', body: 'Synthetic offline response' })
   );

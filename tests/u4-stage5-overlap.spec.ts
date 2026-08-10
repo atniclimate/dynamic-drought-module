@@ -1,12 +1,13 @@
 import { test, expect } from '@playwright/test';
 
 import { gotoApp, layerCheckbox } from './helpers';
+import { stubRecentSatellite } from './satellite-fixture';
 
 /**
  * U4 stage-5 matrix findings, pinned (the browser pass caught three
  * bottom-chrome collisions): the embed viewport gets the auto-compact
  * attribution control; the desktop attribution bar never reaches the
- * scale control; the satellite vintage chip gets its own dock row and the
+ * scale control; the satellite observation chip gets its own dock row and the
  * dock lifts clear of a wrapped attribution bar.
  */
 
@@ -29,6 +30,10 @@ function intersects(
 }
 
 test.describe('U4 stage-5: bottom-chrome collisions stay fixed', () => {
+  test.beforeEach(async ({ page }) => {
+    await stubRecentSatellite(page);
+  });
+
   test('the 400x600 embed gets the compact attribution control', async ({ page }) => {
     await page.setViewportSize({ width: 400, height: 600 });
     await gotoApp(page, '?embed=true&view=console');
@@ -70,10 +75,10 @@ test.describe('U4 stage-5: bottom-chrome collisions stay fixed', () => {
     const chip = await box(page, '#basemap-vintage');
 
     expect(intersects(attrib, scale), 'attribution overlaps the scale control').toBe(false);
-    expect(intersects(attrib, chip), 'attribution overlaps the vintage chip').toBe(false);
+    expect(intersects(attrib, chip), 'attribution overlaps the imagery chip').toBe(false);
   });
 
-  test('the vintage chip stays readable at 400px (its own dock row, no squeeze)', async ({
+  test('the observation chip stays readable at 400px', async ({
     page
   }) => {
     await page.setViewportSize({ width: 400, height: 600 });
@@ -82,8 +87,7 @@ test.describe('U4 stage-5: bottom-chrome collisions stay fixed', () => {
     await expect(chip).toBeVisible();
     const b = await chip.boundingBox();
     if (!b) throw new Error('chip has no box');
-    // Two text lines at most (the six-line squeeze read as a wall of text).
-    expect(b.height, `chip is ${b.height}px tall`).toBeLessThanOrEqual(40);
+    expect(b.height, `chip is ${b.height}px tall`).toBeLessThanOrEqual(64);
   });
 
   test('places labels stay above a surface activated after them (the reassert hook)', async ({

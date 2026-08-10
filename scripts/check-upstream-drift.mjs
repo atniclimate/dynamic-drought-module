@@ -19,10 +19,11 @@
  * responses reached real browsers WITHOUT the Access-Control-Allow-Origin
  * header: liveness without CORS lies. Every probe therefore sends an Origin
  * header and reports the returned CORS header in the detail column; probes
- * marked `corsRequired` (the through-Worker tile path, where the Worker
- * must always inject the header) FAIL when it is absent. Upstream-direct
- * CORS values are informational only, because several upstreams are
- * intermittent (that is the lesson).
+ * marked `corsRequired` (the through-Worker paths, where the Worker must
+ * always inject the header) FAIL unless the value is either `*` or the exact
+ * browser Origin sent by this monitor. Upstream-direct CORS values are
+ * informational only, because several upstreams are intermittent (that is
+ * the lesson).
  *
  * Run with: `npm run check:drift`. Exit code 1 when any endpoint fails, so a
  * scheduled runner (Task Scheduler, cron, or a future GitHub Action) can
@@ -43,6 +44,9 @@ const CONCURRENCY = 5;
 
 /** The production origin; sent on every probe so CORS posture is observable. */
 const BROWSER_ORIGIN = 'https://atniclimate.github.io';
+// This pins the live deployment, not the newer local Worker candidate. Update
+// it atomically with an authorized Worker deployment.
+const EXPECTED_WORKER_REVISION = '2026-07-29-nws-point-heat-v2';
 
 /** S1 landscape vintage rows. Pinned disappearance is a failure. A newer
  * served vintage is a warning and review trigger, never a build failure. */
@@ -89,6 +93,19 @@ const LANDSCAPE_PROBES = [
 const WHP_EXPORT_IMAGE_QUERY =
   '/exportImage?bbox=-13887106,5700582,-13877106,5710582&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=true&f=image';
 
+/** A small, anonymous NWS metadata read already used by the point-heat client. */
+const NWS_POINT_PROBE_PATH = '/points/38.5,-97.5';
+
+/** The exact DSCI read shape used by the runtime, with a small fixed window. */
+const USDM_DSCI_PROBE_PATH =
+  '/StateStatistics/GetDSCI?' +
+  new URLSearchParams({
+    aoi: '53',
+    startdate: '1/1/2026',
+    enddate: '1/7/2026',
+    statisticsType: '1'
+  }).toString();
+
 /** Substitutions that turn a tile/parameter template into one probeable URL. */
 const TEMPLATE_SUBSTITUTIONS = [
   ['{z}', '3'],
@@ -110,10 +127,34 @@ const PROBE_SUFFIXES = new Map([
   ['nifcRawsFeatureServer', '?f=json'],
   ['cpcWeeklySstAnomalyMapServer', '?f=json'],
   ['biaLarFeatureServer', '?f=json'],
+  // Probe the same bounded station-network discovery used by the runtime.
+  [
+    'nrcsAwdbStations',
+    '?stationTriplets=%2A%3A%2A%3ASNTL&activeOnly=true&returnStationElements=false'
+  ],
+  // These NOAA MapServer roots can return an HTML page or a gateway error;
+  // exercise the GeoJSON query paths the layers actually consume.
+  [
+    'spcFireWeatherOutlookMapServer',
+    '/1/query?where=1%3D1&outFields=dn%2Cvalid%2Cexpire&outSR=4326&f=geojson'
+  ],
+  [
+    'cpcDroughtOutlookVectorMapServer',
+    '/4/query?where=1%3D1&outFields=outlook%2Cfcst_date%2Ctarget%2Cidp_filedate' +
+      '&outSR=4326&f=geojson&maxAllowableOffset=0.01&geometryPrecision=4'
+  ],
+  // The recent satellite client needs a queryable, time-stamped catalog,
+  // not only a healthy ImageServer root.
+  [
+    'noaaMergedGeoColorImageServer',
+    '/query?where=1%3D1&outFields=objectid%2Cname%2Cstart_time%2Cend_time' +
+      '&returnGeometry=false&orderByFields=end_time%20DESC' +
+      '&resultRecordCount=4&f=json'
+  ],
   // Parameterized APIs: a bare root 400s by design; probe a minimal real call.
   ['usgsIV', '?format=json&sites=01646500&parameterCd=00060&siteStatus=all'],
   ['nrcsAwdbRest', '?stationTriplets=679:WA:SNTL&elements=WTEQ&duration=DAILY&beginDate=2026-01-01&endDate=2026-01-02'],
-  ['usdmDataServices', '/USStatistics/GetDroughtSeverityStatisticsByArea?aoi=us&startdate=1/1/2026&enddate=1/7/2026&statisticsType=1'],
+  ['usdmDataServices', USDM_DSCI_PROBE_PATH],
   // Tile ROOT with the template living in the consumer; probe one real tile.
   ['nidisGriddedTileRoot', '/ce-ACIS_NRCC_NN-spi-90d/3/1/2.png'],
   // A representative exportImage tile, not just the capability document
@@ -127,30 +168,98 @@ const PROBE_SUFFIXES = new Map([
 
 /** Content tripwires: keys whose response BODY must satisfy a validator,
  * or the probe FAILS even on HTTP 200. A validator returns null when the
- * body passes, or a human-readable miss description. First use: the
- * D-0.7.0-028 vintage tripwire. No versioned 2016 EOX id exists, so the
- * unversioned s2cloudless_3857 id is pinned to the 2016 CC BY mosaic only
- * by EOX's published capabilities text; if that text stops saying so, the
- * pin has silently broken and the satellite option must be pulled pending
- * review (the D-0.7.0-026b evidence-disappears pattern). The check is
- * SCOPED to the capabilities <Layer> element whose identifier is exactly
- * s2cloudless_3857 (the stage-5 adversarial medium 10: whole-body
- * substring search could false-pass on strings surviving elsewhere in a
- * changed document). Reference text in EVIDENCE_EOX_2026-07-14.md. */
+ * body passes, or a human-readable miss description. */
 const CONTENT_TRIPWIRES = new Map([
   [
-    'basemapSatelliteCapabilities',
+    'workerProxy',
     (body) => {
-      const blocks = body.split('<Layer>').slice(1).map((b) => b.split('</Layer>')[0]);
-      const target = blocks.find((b) =>
-        /<ows:Identifier>\s*s2cloudless_3857\s*<\/ows:Identifier>/.test(b)
-      );
-      if (!target) return 'no <Layer> with identifier s2cloudless_3857';
-      if (!target.includes('for 2016')) {
-        return 'the s2cloudless_3857 layer no longer identifies itself as the 2016 mosaic';
+      let payload;
+      try {
+        payload = JSON.parse(body);
+      } catch {
+        return 'Worker health check no longer returns JSON';
       }
-      if (!/CC\s*BY|Creative Commons Attribution/i.test(target)) {
-        return 'the s2cloudless_3857 layer no longer declares CC BY';
+      if (
+        payload?.status !== 'ok' ||
+        payload?.worker !== 'ddm-proxy' ||
+        payload?.revision !== EXPECTED_WORKER_REVISION
+      ) {
+        return (
+          'Worker health identity mismatch; expected ' +
+          `status=ok, worker=ddm-proxy, revision=${EXPECTED_WORKER_REVISION}`
+        );
+      }
+      return null;
+    }
+  ],
+  [
+    'workerProxy->nwsPoint',
+    (body) => {
+      let payload;
+      try {
+        payload = JSON.parse(body);
+      } catch {
+        return 'proxied NWS point response is not JSON';
+      }
+      const properties = payload?.properties;
+      if (properties === null || typeof properties !== 'object') {
+        return 'proxied NWS point response has no properties object';
+      }
+      for (const key of [
+        'forecast',
+        'forecastGridData',
+        'observationStations'
+      ]) {
+        const value = properties[key];
+        if (typeof value !== 'string' || value.length === 0) {
+          return `proxied NWS point response has no usable ${key} URL`;
+        }
+        try {
+          const endpoint = new URL(value);
+          if (
+            endpoint.protocol !== 'https:' ||
+            endpoint.hostname !== 'api.weather.gov'
+          ) {
+            return `proxied NWS point response has an unexpected ${key} origin`;
+          }
+        } catch {
+          return `proxied NWS point response has an invalid ${key} URL`;
+        }
+      }
+      return null;
+    }
+  ],
+  [
+    'noaaMergedGeoColorImageServer',
+    (body) => {
+      let payload;
+      try {
+        payload = JSON.parse(body);
+      } catch {
+        return 'latest-frame query no longer returns JSON';
+      }
+      const now = Date.now();
+      const features = Array.isArray(payload?.features) ? payload.features : [];
+      const validCandidate = features.some((feature) => {
+        const attributes = feature?.attributes;
+        const objectId = Number(attributes?.objectid ?? attributes?.OBJECTID);
+        const startTime = Number(attributes?.start_time ?? attributes?.START_TIME);
+        const endTime = Number(attributes?.end_time ?? attributes?.END_TIME);
+        const age = now - endTime;
+        return (
+          Number.isInteger(objectId) &&
+          objectId > 0 &&
+          Number.isFinite(startTime) &&
+          Number.isFinite(endTime) &&
+          startTime > 0 &&
+          endTime >= startTime &&
+          endTime - startTime <= 30 * 60_000 &&
+          age >= -15 * 60_000 &&
+          age <= 26 * 60 * 60_000
+        );
+      });
+      if (!validCandidate) {
+        return 'latest-frame query has no structurally valid frame inside the 26-hour freshness window';
       }
       return null;
     }
@@ -250,7 +359,8 @@ async function check(entry) {
     });
     const type = resp.headers.get('content-type') ?? '(none)';
     const acao = resp.headers.get('access-control-allow-origin');
-    const corsMissing = Boolean(entry.corsRequired) && acao === null;
+    const corsCompatible = acao === '*' || acao === BROWSER_ORIGIN;
+    const corsInvalid = Boolean(entry.corsRequired) && !corsCompatible;
     let tripwireMiss = null;
     let warning = null;
     const tripwire = CONTENT_TRIPWIRES.get(entry.key);
@@ -263,10 +373,12 @@ async function check(entry) {
         warning = result.warning;
       }
     }
-    const ok = resp.status < 400 && !corsMissing && tripwireMiss === null;
+    const ok = resp.status < 400 && !corsInvalid && tripwireMiss === null;
     const detail =
       `HTTP ${resp.status} ${type}; cors=${acao ?? 'ABSENT'}` +
-      (corsMissing ? ' (required on this path)' : '') +
+      (corsInvalid
+        ? ` (required '*' or '${BROWSER_ORIGIN}' on this path)`
+        : '') +
       (tripwireMiss !== null ? `; TRIPWIRE: ${tripwireMiss}` : '') +
       (warning !== null ? `; WARNING: ${warning}` : '');
     return { key: entry.key, url, ok, warning, detail };
@@ -282,14 +394,19 @@ function checkSoilDrift() {
   const root = join(__dirname, '..');
   const windowsPython = join(root, '.venv', 'Scripts', 'python.exe');
   const posixPython = join(root, '.venv', 'bin', 'python');
-  const python = existsSync(windowsPython) ? windowsPython : posixPython;
-  if (!existsSync(python)) {
+  const pythonCandidates = process.platform === 'win32'
+    ? [windowsPython, posixPython]
+    : [posixPython, windowsPython];
+  const python = pythonCandidates.find((candidate) => existsSync(candidate));
+  if (python === undefined) {
     return {
       key: 'landscapeSoilVintage',
       url: 'Soil Data Access drift_check',
       ok: false,
       warning: null,
-      detail: `project Python environment is missing at ${python}`
+      detail:
+        'project Python environment is missing; checked ' +
+        pythonCandidates.join(', ')
     };
   }
   const child = spawnSync(
@@ -389,27 +506,13 @@ async function main() {
   }
   entries.push(...LANDSCAPE_PROBES);
 
-  // A configured tripwire whose key stopped matching an extracted URL is a
-  // DISARMED tripwire, which must fail loudly rather than silently skip
-  // (the stage-5 adversarial medium 10).
-  const activeTripwireKeys = landscapeOnly
-    ? new Set(LANDSCAPE_PROBES.map((entry) => entry.key))
-    : new Set(CONTENT_TRIPWIRES.keys());
-  for (const key of activeTripwireKeys) {
-    if (!entries.some((e) => e.key === key)) {
-      console.error(
-        `Tripwire key "${key}" not found among the extracted urls.ts entries; the tripwire is disarmed.`
-      );
-      process.exit(1);
-    }
-  }
-
   // Synthetic probe: the WHP tile THROUGH the Worker proxy, the path
   // production tiles actually ride since 0.7.0 H3. The Worker must always
   // inject the CORS header, so its absence here is a real failure (a stale
   // Worker deploy missing the imagery.geoplatform.gov allow-list entry
   // shows up as HTTP 403 on this row).
   const workerProxy = entries.find((e) => e.key === 'workerProxy');
+  if (workerProxy) workerProxy.corsRequired = true;
   const usfsWhp = entries.find((e) => e.key === 'usfsWhp');
   if (workerProxy && usfsWhp) {
     entries.push({
@@ -432,6 +535,34 @@ async function main() {
       url: `${workerProxy.url}/proxy?url=${encodeURIComponent(usdm.url + suffix)}`,
       corsRequired: true
     });
+  }
+
+  // NWS point metadata THROUGH the Worker exercises the production path that
+  // supplies the identifying User-Agent and verifies browser-compatible CORS
+  // plus the exact metadata links consumed by point heat.
+  const nwsApi = entries.find((e) => e.key === 'nwsApi');
+  if (workerProxy && nwsApi) {
+    const upstream = nwsApi.url + NWS_POINT_PROBE_PATH;
+    entries.push({
+      key: 'workerProxy->nwsPoint',
+      url: `${workerProxy.url}/proxy?url=${encodeURIComponent(upstream)}`,
+      corsRequired: true
+    });
+  }
+
+  // A configured tripwire whose key stopped matching an extracted or
+  // synthetic URL is a DISARMED tripwire, which must fail loudly rather than
+  // silently skip (the stage-5 adversarial medium 10).
+  const activeTripwireKeys = landscapeOnly
+    ? new Set(LANDSCAPE_PROBES.map((entry) => entry.key))
+    : new Set(CONTENT_TRIPWIRES.keys());
+  for (const key of activeTripwireKeys) {
+    if (!entries.some((e) => e.key === key)) {
+      console.error(
+        `Tripwire key "${key}" not found among the extracted urls.ts entries; the tripwire is disarmed.`
+      );
+      process.exit(1);
+    }
   }
 
   console.log(`Probing ${entries.length} upstream endpoints (timeout ${TIMEOUT_MS / 1000}s, concurrency ${CONCURRENCY})...\n`);

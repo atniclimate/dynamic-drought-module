@@ -81,9 +81,9 @@ export function createMap(containerId: string): maplibregl.Map {
   // browser matrix caught the forced full bar colliding with the legend
   // chip and the ATNI badge on the first-class 400x600 embed viewport;
   // the collapsed control is the accepted attribution pattern there, and
-  // the satellite vintage notice stays independently visible in the dock
-  // (the D-028 split; the review's only never-collapse requirement is the
-  // vintage, not the legal bar).
+  // the satellite observation notice stays independently visible in the dock
+  // (the review's only never-collapse requirement is the observation
+  // context, not the legal bar).
   map.addControl(new maplibregl.AttributionControl());
   map.addControl(
     new maplibregl.ScaleControl({
