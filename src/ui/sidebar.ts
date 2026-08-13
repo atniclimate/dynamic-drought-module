@@ -130,9 +130,11 @@ import {
 import { reconcileClusterWithLayerIntent } from '../state/cluster-service';
 import {
   ALL_FRAMING_BOUNDS,
+  FRAMING_KEYS,
   FRAMINGS,
   framingFitBounds
 } from '../config/framings';
+import type { FramingKey } from '../config/framings';
 import { OCEANS } from '../config/oceans';
 import { applyBasemapMode, requestBasemapMode } from '../map/basemap-switcher';
 import { timeline } from '../state/timeline';
@@ -348,14 +350,7 @@ function selectRegion(
     }
   );
 
-  document.querySelectorAll<HTMLButtonElement>('.region-btn').forEach((btn) => {
-    const isActive = btn.dataset['regionKey'] === key;
-    btn.classList.toggle('active', isActive);
-    btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
-    // Roving tabindex: the active button is focusable via Tab; the
-    // others are reachable only via arrow keys within the radiogroup.
-    btn.tabIndex = isActive ? 0 : -1;
-  });
+  syncRegionSelect();
 
   // Keep the keyboard briefing trigger in sync with the active region (#9).
   updateRegionBriefingTrigger(key);
@@ -418,54 +413,75 @@ function pushUrl(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Region radiogroup builder + keyboard navigation
+// Region and minimap-framing selector
 // ---------------------------------------------------------------------------
 
-/**
- * Build the region radiogroup. Each region key produces a `<button>`
- * with `role="radio"` and `aria-checked` so the group reads as a
- * radiogroup to assistive tech.
- *
- * Keyboard: ArrowUp / ArrowLeft cycle to the previous region;
- * ArrowDown / ArrowRight cycle to the next; Home / End jump to first
- * / last. Activation uses standard click semantics (Enter, Space).
- */
-function buildRegionButtons(
+function syncRegionSelect(): void {
+  const select = document.getElementById('region-select');
+  if (!(select instanceof HTMLSelectElement)) return;
+  const framing = getFraming();
+  select.value = framing !== null
+    ? `framing:${framing}`
+    : `region:${STATE.currentRegion ?? DEFAULT_REGION}`;
+}
+
+/** Build one dropdown that follows minimap choices while preserving every
+ * established detailed `region=` camera as a second option group. */
+function buildRegionSelect(
   map: maplibregl.Map,
   onRegionSelect: (key: RegionKey) => void
 ): void {
-  const container = document.getElementById('region-buttons');
-  if (!container) return;
-  container.innerHTML = '';
+  const select = document.getElementById('region-select');
+  if (!(select instanceof HTMLSelectElement)) return;
+  select.replaceChildren();
 
-  const entries = Object.entries(REGIONS) as Array<[RegionKey, Region]>;
+  const overviewGroup = document.createElement('optgroup');
+  overviewGroup.label = 'North America overview';
+  const allOption = document.createElement('option');
+  allOption.value = 'framing:all';
+  allOption.textContent = 'All of North America';
+  overviewGroup.appendChild(allOption);
+  for (const key of FRAMING_KEYS) {
+    const option = document.createElement('option');
+    option.value = `framing:${key}`;
+    option.textContent = FRAMINGS[key].label;
+    overviewGroup.appendChild(option);
+  }
 
-  entries.forEach(([key, region]) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'region-btn';
-    btn.dataset['regionKey'] = key;
-    btn.setAttribute('role', 'radio');
-    btn.setAttribute('aria-checked', 'false');
-    btn.title = region.description;
-    // U3e (D-0.7.0-009): the demoted "jump to" list carries full-word region
-    // names (the grid's abbreviated `short` labels are retired); the short
-    // description stays as the hover title.
-    btn.textContent = region.label;
-    btn.tabIndex = -1;
-    btn.addEventListener('click', () => {
-      onRegionSelect(key);
-      // Keep keyboard focus on the just-selected button so the visual
-      // focus ring remains where the user expects after activation.
-      btn.focus();
-    });
-    container.appendChild(btn);
-  });
+  const detailGroup = document.createElement('optgroup');
+  detailGroup.label = 'Detailed regions';
+  for (const [key, region] of Object.entries(REGIONS) as Array<[RegionKey, Region]>) {
+    const option = document.createElement('option');
+    option.value = `region:${key}`;
+    option.textContent = region.label;
+    option.title = region.description;
+    detailGroup.appendChild(option);
+  }
+  select.append(overviewGroup, detailGroup);
 
-  // Radiogroup keyboard navigation. Listening at the container so the
-  // handler does not have to be re-bound for every button.
-  container.addEventListener('keydown', (event: KeyboardEvent) => {
-    handleRadiogroupKey(event, map, onRegionSelect);
+  select.addEventListener('change', () => {
+    const [kind, rawKey] = select.value.split(':', 2);
+    if (kind === 'region' && rawKey && rawKey in REGIONS) {
+      onRegionSelect(rawKey as RegionKey);
+      return;
+    }
+    if (kind !== 'framing') return;
+    clearOceanFraming();
+    if (rawKey === 'all') {
+      setFraming('all');
+      map.fitBounds(
+        framingFitBounds({ bounds: ALL_FRAMING_BOUNDS, padding: 0 }),
+        { padding: 20, animate: !prefersReducedMotion() }
+      );
+      return;
+    }
+    if (!rawKey || !(rawKey in FRAMINGS)) return;
+    const key = rawKey as FramingKey;
+    setFraming(key);
+    map.fitBounds(
+      framingFitBounds(FRAMINGS[key]),
+      { padding: 20, animate: !prefersReducedMotion() }
+    );
   });
 
   // The keyboard-reachable drought impact briefing trigger (critical-review
@@ -500,8 +516,9 @@ function buildRegionButtons(
       guard: () => isCurrentBriefingIntent(intent)
     });
   });
-  container.insertAdjacentElement('afterend', briefingBtn);
+  select.insertAdjacentElement('afterend', briefingBtn);
   // Reflect the region active at build time (boot applies it again via selectRegion).
+  syncRegionSelect();
   updateRegionBriefingTrigger(STATE.currentRegion);
 }
 
@@ -532,59 +549,6 @@ function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): v
   btn.hidden = false;
   btn.textContent = `Drought impact briefing: ${anchor.label}`;
   btn.setAttribute('aria-label', `Open the drought impact briefing for ${anchor.label}`);
-}
-
-/**
- * Roving-tabindex handler for the region radiogroup. Cycles selection
- * (and focus) on the four arrow keys; jumps to first/last on Home/End.
- *
- * Note that pressing an arrow key both moves focus and changes the
- * active region, matching the standard radiogroup pattern (selection
- * follows focus). This is the WAI-ARIA radiogroup keyboard contract.
- */
-function handleRadiogroupKey(
-  event: KeyboardEvent,
-  _map: maplibregl.Map,
-  onRegionSelect: (key: RegionKey) => void
-): void {
-  const keys = Object.keys(REGIONS) as RegionKey[];
-  if (keys.length === 0) return;
-
-  const currentKey = STATE.currentRegion ?? keys[0];
-  if (currentKey === undefined) return;
-  const idx = keys.indexOf(currentKey);
-  let nextIdx: number | null = null;
-
-  switch (event.key) {
-    case 'ArrowDown':
-    case 'ArrowRight':
-      nextIdx = (idx + 1) % keys.length;
-      break;
-    case 'ArrowUp':
-    case 'ArrowLeft':
-      nextIdx = (idx - 1 + keys.length) % keys.length;
-      break;
-    case 'Home':
-      nextIdx = 0;
-      break;
-    case 'End':
-      nextIdx = keys.length - 1;
-      break;
-    default:
-      return;
-  }
-
-  if (nextIdx === null) return;
-  event.preventDefault();
-  const target = keys[nextIdx];
-  if (target === undefined) return;
-  onRegionSelect(target);
-
-  // Move focus to the now-active button.
-  const btn = document.querySelector<HTMLButtonElement>(
-    `.region-btn[data-region-key="${cssAttrEscape(target)}"]`
-  );
-  if (btn) btn.focus();
 }
 
 // ---------------------------------------------------------------------------
@@ -1167,7 +1131,7 @@ export function buildSidebar(
     onRegionSelect(key);
   };
 
-  buildRegionButtons(map, handleRegion);
+  buildRegionSelect(map, handleRegion);
   buildPresetChips(map);
   wireHazardRail(map);
   buildTelemetryList(map);
@@ -1326,7 +1290,10 @@ export function buildSidebar(
   // framing change rewrites `framing=`/`region=`, and a cluster change
   // swaps between the one-word `cluster=` claim and the granular
   // `layers=` list (D-0.7.0-044).
-  onFramingChange(pushUrl);
+  onFramingChange(() => {
+    syncRegionSelect();
+    pushUrl();
+  });
   onHazardClusterChange(pushUrl);
 
   // The front-door trigger (F3): when a map place is selected or cleared, the

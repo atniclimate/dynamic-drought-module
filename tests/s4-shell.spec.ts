@@ -46,11 +46,11 @@ test.describe('S4a desktop shell boot', () => {
     await expect(
       page.locator('.shell-cluster-btn[data-cluster="drought"]')
     ).toHaveAttribute('data-pending', 'false', { timeout: 45_000 });
-    // The primary is the honest grammar: a Showing sentence, or the
-    // honest empty statement if nothing rendered (an upstream outage is
-    // a legitimate terminal state; the summary must never fake one).
+    // The status-derived sentence remains in the accessibility tree for
+    // diagnostics, but the redundant visible inventory is retired.
     const primary = page.locator('#shell-summary-primary');
     await expect(primary).toHaveText(/^(Showing |No layers are displayed yet\.)/);
+    await expect(primary).not.toBeInViewport();
   });
 
   test('choosing Wildfire commits the cluster and writes the one-word URL claim', async ({
@@ -69,6 +69,21 @@ test.describe('S4a desktop shell boot', () => {
     );
     // A clean cluster replaces the granular list (D-0.7.0-044).
     expect(await search(page)).not.toContain('layers=');
+  });
+
+  test('the briefing region label follows the selected hazard without a visible heading', async ({ page }) => {
+    await gotoApp(page);
+    await expect(page.locator('#brief-head-title')).toHaveCount(0);
+    await expect(page.locator('#brief-head')).toHaveAttribute('aria-label', 'Drought briefing');
+
+    for (const [key, heading] of [
+      ['wildfire', 'Wildfire briefing'],
+      ['heat', 'Extreme Heat briefing'],
+      ['enso', 'ENSO briefing']
+      ] as const) {
+      await page.locator(`.shell-cluster-btn[data-cluster="${key}"]`).click();
+      await expect(page.locator('#brief-head')).toHaveAttribute('aria-label', heading);
+    }
   });
 
   test('the empty heat/season-ahead recipe yields the honest no-surface primary', async ({
@@ -142,30 +157,31 @@ test.describe('S4a desktop shell boot', () => {
       return [
         '.shell-view',
         '#shell-conditions-summary',
-        '#shell-conditions-host',
-        '#shell-region-host',
         '.shell-minimap-map',
+        '.shell-minimap-popover-wrap',
+        '#shell-region-host',
+        '#shell-refine-host',
         '.shell-when',
-        '#shell-share-host',
-        '#shell-refine-host'
+        '#shell-share-host'
       ].map(indexOf);
     });
     expect(shellOrder).toEqual([...shellOrder].sort((a, b) => a - b));
     expect(shellOrder.every((index) => index >= 0)).toBe(true);
 
-    for (const id of ['conditions-strip', 'panel-region', 'share-btn', 'brief-head']) {
+    for (const id of ['conditions-strip', 'legend-panel', 'panel-region', 'share-btn', 'brief-head']) {
       await expect(page.locator(`#${id}`)).toHaveCount(1);
     }
-    await expect(page.locator('#shell-conditions-host > #conditions-strip')).toHaveCount(1);
+    await expect(page.locator('#conditions-strip-dock > #conditions-strip')).toHaveCount(1);
+    await expect(page.locator('#sidebar-key-host > #legend-panel')).toHaveCount(1);
     await expect(page.locator('#shell-region-host > #panel-region')).toHaveCount(1);
     await expect(page.locator('#shell-share-host > #share-btn')).toHaveCount(1);
     await expect(page.locator('#shell-refine-host > #brief-head')).toHaveCount(1);
     await expect(page.locator('#shell-conditions-heading')).toHaveText('Conditions in view');
-    await expect(page.locator('#shell-conditions-host .conditions-title')).toBeHidden();
+    await expect(page.locator('#conditions-strip-dock .conditions-title')).toBeHidden();
 
     // Existing behavior rides the moved nodes: region navigation still owns
     // URL state, and the one share listener still produces its toast.
-    await page.locator('.region-btn[data-region-key="central_oregon"]').click();
+    await page.locator('#region-select').selectOption('region:central_oregon');
     await expect.poll(() => new URL(page.url()).searchParams.get('region')).toBe('central_oregon');
     await page.locator('#share-btn').click();
     await expect(page.locator('#copy-toast')).toBeVisible();
@@ -173,6 +189,7 @@ test.describe('S4a desktop shell boot', () => {
 
     await page.locator('.view-switch [data-view="console"]').click();
     await expect(page.locator('#conditions-strip-home + #conditions-strip')).toHaveCount(1);
+    await expect(page.locator('#legend-panel-home + #legend-panel')).toHaveCount(1);
     await expect(page.locator('#panel-region-home + #panel-region')).toHaveCount(1);
     await expect(page.locator('#share-btn-home + #share-btn')).toHaveCount(1);
     await expect(page.locator('#brief-head-home + #brief-head')).toHaveCount(1);
@@ -181,6 +198,7 @@ test.describe('S4a desktop shell boot', () => {
     await page.locator('.view-switch [data-view="brief"]').click();
     await page.locator('#sidebar-collapse').click();
     await expect(page.locator('#conditions-strip-home + #conditions-strip')).toHaveCount(1);
+    await expect(page.locator('#legend-panel-home + #legend-panel')).toHaveCount(1);
     await expect(page.locator('#panel-region-home + #panel-region')).toHaveCount(1);
     await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
     await expect(page.locator('#brief-head-home + #brief-head')).toHaveCount(1);
@@ -251,19 +269,12 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
     expect(await search(page)).toContain('outlook=monthly');
   });
 
-  test('the outlook jump from the USDM bar commits the matching horizon chip in the same gesture', async ({
+  test('the current NADM view switches to the monthly outlook in one gesture', async ({
     page
   }) => {
     await routeCpcOutlook(page);
     await gotoApp(page);
-    // The USDM surface installs its spec; the compact WHEN row mirrors it.
-    await expect(page.locator('#shell-time[data-has-spec="true"]')).toBeVisible({
-      timeout: 45_000
-    });
-    await page.locator('#shell-time-more').click();
-    await page
-      .locator('#shell-time-popover .time-bar-jump', { hasText: 'Monthly outlook' })
-      .click();
+    await page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]').click();
     // The pressed chip claims the register the map is being switched to,
     // through the one temporal authority (requestHorizon), and the clean
     // Drought claim survives the instrument switch.

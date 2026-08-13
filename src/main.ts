@@ -17,7 +17,6 @@ import { initMobileSheet } from './ui/mobile-sheet';
 import { initViewShell } from './ui/view-shell';
 import { initPlaceEmphasis } from './state/place-emphasis';
 import { initLocatedBoundary } from './state/located-boundary';
-import { initHistoricalGround } from './map/historical-ground';
 
 /**
  * Dynamic Drought Module (DDM) boot.
@@ -167,12 +166,6 @@ async function boot(): Promise<void> {
     map.once('load', () => resolve());
   });
 
-  // Reveal the shared historical ground only after a bounded known-data
-  // probe. OSM is already visible underneath, so boot and failure both retain
-  // a usable map. Recent NOAA imagery remains a separate URL-backed mode.
-  const disposeHistoricalGround = initHistoricalGround(map);
-  map.once('remove', disposeHistoricalGround);
-
   // Click targets register with the InteractionCoordinator on a layer's
   // FIRST activation (the layer-controller's bindPopups seam), not up
   // front, so a layer's module and its click wiring arrive together in
@@ -219,13 +212,6 @@ async function boot(): Promise<void> {
   // land area, it lights that live-fetched geometry so it reads regardless of
   // the BIA layer's viewport; this wires the clear-on-close seam.
   initLocatedBoundary(map);
-
-  // The ENSO driver line (0.4.0 B2): the one-line climate-driver read under
-  // the conditions strip, from the bundled snapshot. Hidden on any failure.
-  void import('./ui/enso-driver').then(
-    ({ buildEnsoDriver }) => buildEnsoDriver(),
-    () => undefined
-  );
 
   // The mobile bottom sheet (U2, D-0.7.0-017): below 720px the sidebar
   // becomes the one three-detent sheet; never in embed. Before the view

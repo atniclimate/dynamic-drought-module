@@ -123,7 +123,7 @@ test.describe('studio embed isolation at 400x600', () => {
         expect(href.searchParams.get('dmode')).toBe('chg1');
         expect(href.searchParams.get('sst')).toBe('2024-07-01');
         expect(href.searchParams.get('outlook')).toBe('monthly');
-        expect(href.searchParams.get('basemap')).toBe('satellite');
+        expect(href.searchParams.get('basemap')).toBeNull();
         // No hash assertion: URL fragments are not part of the ruled DDM
         // URL schema (URL-as-state rides the query string), and syncUrl
         // canonicalizes to pathname + query by design. The lane's original

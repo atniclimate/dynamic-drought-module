@@ -3,7 +3,8 @@ import { test, expect } from '@playwright/test';
 import {
   gotoApp,
   layerCheckbox,
-  regionButton,
+  regionSelect,
+  selectRegion,
   search,
   urlLayers,
   waitForLayerSettled,
@@ -377,7 +378,7 @@ test.describe('S2 framing= and the legacy links in the browser', () => {
 
     // An explicit legacy region choice is a camera gesture: the framing
     // context resets and region= returns to the URL.
-    await regionButton(page, 'central_oregon').click();
+    await selectRegion(page, 'central_oregon');
     await expect
       .poll(async () => new URLSearchParams(await search(page)).get('framing'))
       .toBeNull();
@@ -391,7 +392,7 @@ test.describe('S2 framing= and the legacy links in the browser', () => {
   }) => {
     // An ordinary curated region: honored exactly as today.
     await gotoApp(page, '?region=central_oregon&layers=usdm');
-    await expect(regionButton(page, 'central_oregon')).toHaveAttribute('aria-checked', 'true');
+    await expect(regionSelect(page)).toHaveValue('region:central_oregon');
     await expect(layerCheckbox(page, 'usdm')).toBeChecked();
 
     // The national alias: still a valid region (the camera fit rides
@@ -404,7 +405,7 @@ test.describe('S2 framing= and the legacy links in the browser', () => {
     // assertion flips to expect region absent (see TODO [0.7.0] and
     // docs/URL_SCHEMA_POLICY.md, the region=national row).
     await gotoApp(page, '?region=national');
-    await expect(regionButton(page, 'national')).toHaveAttribute('aria-checked', 'true');
+    await expect(regionSelect(page)).toHaveValue('region:national');
     await waitForLayerSettled(page, 'states');
     const params = new URLSearchParams(await search(page));
     expect(params.get('region')).toBe('national');

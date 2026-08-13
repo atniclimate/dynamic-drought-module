@@ -400,12 +400,6 @@ function metricIsPartial(
   );
 }
 
-/** The distinct provenance notes across the drawn framing set, for the
- * at-rest caption (no framing committed, all nine shapes still drawn). */
-const ALL_PROVENANCE_NOTES: string = [
-  ...new Set(FRAMING_KEYS.map((key) => FRAMINGS[key].provenance)),
-].join(' ');
-
 /** Commit a minimap choice: store write plus camera fit, one gesture. */
 function choose(map: maplibregl.Map, key: FramingKey | null): void {
   // A framing choice is an explicit camera gesture: it drops any ocean
@@ -689,7 +683,7 @@ export function Minimap({
               onClick={() => chooseOcean(map, key)}
               onKeyDown={(event) => onOceanKeyDown(event, key)}
             >
-              {key}
+              {OCEANS[key].label}
             </button>
           ))}
         </div>
@@ -1040,13 +1034,7 @@ export function Minimap({
           Ocean view: {OCEANS[activeOcean].label}. {OCEANS[activeOcean].provenance}
         </p>
       ) : null}
-      {showDroughtMetric ? (
-        <p class="shell-minimap-metric-note" aria-live="polite">
-          Fill: approximate area-weighted NADM mean category index (None=0 to
-          D4=5), not an issued regional category. Outline: D1 through D4 land
-          share.
-        </p>
-      ) : showWildfireMetric ? (
+      {showDroughtMetric ? null : showWildfireMetric ? (
         <p
           class="shell-minimap-metric-note"
           role="status"
@@ -1055,27 +1043,7 @@ export function Minimap({
         >
           {wildfireMetricNote(wildfire)}
         </p>
-      ) : (
-        <p class="shell-minimap-metric-note" aria-live="polite">
-          {NEUTRAL_METRIC_NOTES[metricContext]}
-        </p>
-      )}
-      {/* The persistent line carries the committed framing's required
-          provenance (FramingDef.provenance, D-0.7.0-051; DG-080 review
-          blocker 2) so the visible caption never presents authored geometry
-          as an authoritative boundary. */}
-      <p class="shell-minimap-provenance">
-        {activeDef === null
-          ? // No framing committed, but the nine authored shapes are
-            // drawn regardless; the qualification applies to the drawing
-            // itself. The distinct provenance notes of the drawn set are
-            // shown (today all nine share one authored-simplification
-            // statement, so this renders as the one sentence; a future
-            // divergent entry would surface its own note rather than be
-            // silently folded).
-            ALL_PROVENANCE_NOTES
-          : activeDef.provenance}
-      </p>
+      ) : null}
     </div>
   );
 }

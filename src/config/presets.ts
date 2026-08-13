@@ -51,8 +51,8 @@ export const MOBILE_HAZARD_PRESETS: readonly ViewPreset[] = [
   {
     key: 'hazard-drought',
     label: 'Drought',
-    description: 'Current drought conditions: the weekly US Drought Monitor',
-    layers: ['usdm', 'aiannh']
+    description: 'Current drought conditions: the tri-national North American Drought Monitor',
+    layers: ['nadm-drought', 'aiannh']
   },
   {
     key: 'hazard-heat',
@@ -76,8 +76,8 @@ export const VIEW_PRESETS: readonly ViewPreset[] = [
   {
     key: 'right-now',
     label: 'Right now',
-    description: 'Current drought conditions: the weekly US Drought Monitor with live telemetry stations',
-    layers: ['usdm', 'aiannh', 'telemetry']
+    description: 'Current drought conditions: the tri-national North American Drought Monitor with live telemetry stations',
+    layers: ['nadm-drought', 'aiannh', 'telemetry']
   },
   {
     key: 'this-week',

@@ -55,6 +55,11 @@ import type {
   StudioRoute,
   StudioRouteChangeSource
 } from '../state/studio-route';
+import { HAZARD_CLUSTERS } from '../config/clusters';
+import {
+  getCommittedSnapshot,
+  onCommittedSnapshotChange
+} from '../state/cluster-service';
 
 const LAYERS_STUDIO_ENTRY_ID = 'layers-studio-entry';
 const PLACE_STUDIO_ENTRY_ID = 'place-studio-entry';
@@ -321,7 +326,6 @@ function buildBriefHead(map: maplibregl.Map): void {
   if (!head) return;
 
   head.innerHTML = `
-    <h2 class="panel-title">Drought briefing</h2>
     <p class="brief-head-lede">Select a Tribal land area, reservation, state, or watershed to read local drought conditions.</p>
     <p class="brief-place-context" id="brief-place-context" aria-live="polite" hidden>
       <span>Selected place</span>
@@ -330,6 +334,7 @@ function buildBriefHead(map: maplibregl.Map): void {
     </p>
     <div id="brief-search"></div>
   `;
+  syncBriefingTitle();
   refreshLayersStudioEntry();
 
   // The compact Tribal Nations action (umbrella Unit F) moved here from
@@ -346,6 +351,14 @@ function buildBriefHead(map: maplibregl.Map): void {
   }
 
   mountBriefSearch(map);
+}
+
+function syncBriefingTitle(): void {
+  const head = document.getElementById('brief-head');
+  if (!head) return;
+  const selectedHazard = getCommittedSnapshot().selectedHazard;
+  const label = `${HAZARD_CLUSTERS[selectedHazard].title} briefing`;
+  head.setAttribute('aria-label', label);
 }
 
 /**
@@ -538,6 +551,7 @@ export function initViewShell(map: maplibregl.Map): void {
   buildModeSwitch();
   buildBriefDisplay();
   buildBriefHead(map);
+  onCommittedSnapshotChange(syncBriefingTitle);
   syncBriefSelection(getPlaceSelection());
   applyModeClass(getViewMode());
   syncPlaceStudioRoute(getStudioRoute());

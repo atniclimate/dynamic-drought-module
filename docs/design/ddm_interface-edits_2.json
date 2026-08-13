@@ -1,0 +1,400 @@
+{
+  "pageURL": "http://127.0.0.1:4174/?region=washington_state&layers=hillshade%2Cnadm-drought%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+  "generated": "2026-08-13T20:47:23.832Z",
+  "annotations": [
+    {
+      "n": 1,
+      "timestamp": "2026-08-13T20:37:00.876Z",
+      "pageURL": "http://127.0.0.1:4174/?region=washington_state&layers=hillshade%2Cnadm-drought%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "Content / text",
+      "instruction": "This text can be removed",
+      "selector": "#shell-summary-primary",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#shell-panel > div#shell-island > div.shell > section#shell-conditions-summary > p#shell-summary-primary",
+      "tag": "p",
+      "id": "shell-summary-primary",
+      "classes": [
+        "shell-summary-primary"
+      ],
+      "textPreview": "Showing North American Drought Monitor with Terrain Shading, Tribal Lands, Reservation Boundaries, and State Boundaries.",
+      "boundingBox": {
+        "x": 18,
+        "y": 219,
+        "w": 295,
+        "h": 54
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(203, 213, 225)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": ""
+      },
+      "htmlSnippet": "<p class=\"shell-summary-primary\" id=\"shell-summary-primary\">Showing North American Drought Monitor with Terrain Shading, Tribal Lands, Reservation Boundaries, and State Boundaries.</p>"
+    },
+    {
+      "n": 2,
+      "timestamp": "2026-08-13T20:38:41.221Z",
+      "pageURL": "http://127.0.0.1:4174/?region=washington_state&layers=hillshade%2Cnadm-drought%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "Content / text",
+      "instruction": "Label \"D4 Exceptional Drought\" One Line",
+      "selector": "button.conditions-metric",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#shell-panel > div#shell-island > div.shell > div#shell-conditions-host > section#conditions-strip > div#conditions-metrics > button.conditions-metric",
+      "tag": "button",
+      "id": null,
+      "classes": [
+        "conditions-metric"
+      ],
+      "textPreview": "D4Exceptional drought in view",
+      "boundingBox": {
+        "x": 18,
+        "y": 289,
+        "w": 295,
+        "h": 52
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "flex",
+        "zIndex": "auto",
+        "color": "rgb(241, 245, 249)",
+        "background": "rgb(19, 31, 54)",
+        "font": ""
+      },
+      "htmlSnippet": "<button type=\"button\" class=\"conditions-metric\" data-metric=\"drought\" data-tone=\"data\" aria-pressed=\"true\" aria-label=\"D4 Exceptional drought in view. North American Drought Monitor layer on. Press to hide.\" title=\"Hide North American Drought Monitor\"><span class=\"conditions-value\" style=\"color: rgb(115, 0, 0);\">D4</span><span class=\"conditions-sublabel\">Exceptional drought in view</span></button>"
+    },
+    {
+      "n": 3,
+      "timestamp": "2026-08-13T20:39:31.315Z",
+      "pageURL": "http://127.0.0.1:4174/?region=washington_state&layers=hillshade%2Cnadm-drought%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "Layout / position",
+      "instruction": "This Section Goes to the Bottom; see note about Key",
+      "selector": "button.conditions-metric",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#shell-panel > div#shell-island > div.shell > div#shell-conditions-host > section#conditions-strip > div#conditions-metrics > button.conditions-metric",
+      "tag": "button",
+      "id": null,
+      "classes": [
+        "conditions-metric"
+      ],
+      "textPreview": "D4Exceptional drought in view",
+      "boundingBox": {
+        "x": 18,
+        "y": 289,
+        "w": 295,
+        "h": 52
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "flex",
+        "zIndex": "auto",
+        "color": "rgb(241, 245, 249)",
+        "background": "rgb(19, 31, 54)",
+        "font": ""
+      },
+      "htmlSnippet": "<button type=\"button\" class=\"conditions-metric\" data-metric=\"drought\" data-tone=\"data\" aria-pressed=\"true\" aria-label=\"D4 Exceptional drought in view. North American Drought Monitor layer on. Press to hide.\" title=\"Hide North American Drought Monitor\"><span class=\"conditions-value\" style=\"color: rgb(115, 0, 0);\">D4</span><span class=\"conditions-sublabel\">Exceptional drought in view</span></button>"
+    },
+    {
+      "n": 4,
+      "timestamp": "2026-08-13T20:40:50.268Z",
+      "pageURL": "http://127.0.0.1:4174/?region=washington_state&layers=hillshade%2Cnadm-drought%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "Layout / position",
+      "instruction": "This Section is where the \"D4 Exceptional Drought or other indicator depending on selected region goes; The box is \"frozen\" at the bottom",
+      "selector": "#legend-panel",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#legend-panel",
+      "tag": "section",
+      "id": "legend-panel",
+      "classes": [
+        "panel",
+        "legend-panel"
+      ],
+      "textPreview": "Legend North American Drought Monitor · June 2026D0 · Abnormally dryD1 · Moderate droughtD2 · Severe droughtD3 · Extreme",
+      "boundingBox": {
+        "x": 0,
+        "y": 727,
+        "w": 331,
+        "h": 262
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(241, 245, 249)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": ""
+      },
+      "htmlSnippet": "<section class=\"panel legend-panel\" id=\"legend-panel\">\n  …(truncated, 928 chars total)…\n</section>"
+    },
+    {
+      "n": 5,
+      "timestamp": "2026-08-13T20:41:08.331Z",
+      "pageURL": "http://127.0.0.1:4174/?region=washington_state&layers=hillshade%2Cnadm-drought%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "Content / text",
+      "instruction": "This Text can be removed",
+      "selector": "p.legend-note",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#legend-panel > div#legend-sections > div.legend-section > p.legend-note",
+      "tag": "p",
+      "id": null,
+      "classes": [
+        "legend-note"
+      ],
+      "textPreview": "Tri-national monthly consensus · published 2 to 3 weeks after month-end · no polygon means no coverage from this source,",
+      "boundingBox": {
+        "x": 18,
+        "y": 925,
+        "w": 295,
+        "h": 45
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(100, 116, 139)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": ""
+      },
+      "htmlSnippet": "<p class=\"legend-note\">Tri-national monthly consensus · published 2 to 3 weeks after month-end · no polygon means no coverage from this source, not class zero</p>"
+    },
+    {
+      "n": 6,
+      "timestamp": "2026-08-13T20:42:01.913Z",
+      "pageURL": "http://127.0.0.1:4174/?region=washington_state&layers=hillshade%2Cnadm-drought%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "CSS / styling",
+      "instruction": "The Card that says  \"NOAA GOES GeoColor...\" and text should be removed",
+      "selector": "canvas.maplibregl-canvas",
+      "domPath": "html > body.app-body > div#app > main#map-container > div#map > div.maplibregl-canvas-container.maplibregl-interactive.maplibregl-touch-drag-pan > canvas.maplibregl-canvas",
+      "tag": "canvas",
+      "id": null,
+      "classes": [
+        "maplibregl-canvas"
+      ],
+      "textPreview": null,
+      "boundingBox": {
+        "x": 340,
+        "y": 0,
+        "w": 1025,
+        "h": 993
+      },
+      "relevantComputedStyle": {
+        "position": "absolute",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(241, 245, 249)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": "12px / 20px Lexend, system-ui, -apple-system, \"Segoe UI\", sans-serif"
+      },
+      "htmlSnippet": "<canvas class=\"maplibregl-canvas\" tabindex=\"0\" aria-label=\"Map\" role=\"region\" width=\"1025\" height=\"993\" style=\"width: 1025px; height: 993px;\"></canvas>"
+    },
+    {
+      "n": 7,
+      "timestamp": "2026-08-13T20:42:51.156Z",
+      "pageURL": "http://127.0.0.1:4174/?region=washington_state&layers=hillshade%2Cnadm-drought%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "CSS / styling",
+      "instruction": "The Color coding for each regional cell that shows average conditional color needs to be restored.",
+      "selector": "div.shell-minimap-map:nth-of-type(3) > div.shell-minimap > div.shell-minimap-canvas:nth-of-type(2)",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#shell-panel > div#shell-island > div.shell > div.shell-minimap-map > div.shell-minimap > div.shell-minimap-canvas",
+      "tag": "div",
+      "id": null,
+      "classes": [
+        "shell-minimap-canvas"
+      ],
+      "textPreview": "Pacific OceanArctic OceanAtlantic OceanHawaii (enlarged)All",
+      "boundingBox": {
+        "x": 18,
+        "y": 374,
+        "w": 295,
+        "h": 156
+      },
+      "relevantComputedStyle": {
+        "position": "relative",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(241, 245, 249)",
+        "background": "rgb(15, 23, 42)",
+        "font": ""
+      },
+      "htmlSnippet": "<div class=\"shell-minimap-canvas\" data-drought-status=\"neutral\" data-wildfire-status=\"neutral\" data-minimap-status=\"neutral\" data-metric-context=\"custom\">\n  …(truncated, 81124 chars total)…\n</div>"
+    },
+    {
+      "n": 8,
+      "timestamp": "2026-08-13T20:43:35.111Z",
+      "pageURL": "http://127.0.0.1:4174/?region=washington_state&layers=hillshade%2Cnadm-drought%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "CSS / styling",
+      "instruction": "Hawaii shape needs to be more prominent contrast; this may re-emerge once the regional average conditions are restored",
+      "selector": "#shell-minimap-hawaii",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#shell-panel > div#shell-island > div.shell > div.shell-minimap-map > div.shell-minimap > div.shell-minimap-canvas > div.shell-minimap-region-group > button#shell-minimap-hawaii",
+      "tag": "button",
+      "id": "shell-minimap-hawaii",
+      "classes": [
+        "shell-minimap-region",
+        "shell-minimap-hawaii"
+      ],
+      "textPreview": "Hawaii (enlarged)",
+      "boundingBox": {
+        "x": 27,
+        "y": 462,
+        "w": 75,
+        "h": 60
+      },
+      "relevantComputedStyle": {
+        "position": "absolute",
+        "display": "block",
+        "zIndex": "2",
+        "color": "rgb(148, 163, 184)",
+        "background": "rgba(11, 18, 32, 0.5)",
+        "font": "13.3333px Arial"
+      },
+      "htmlSnippet": "<button type=\"button\" id=\"shell-minimap-hawaii\" class=\"shell-minimap-region shell-minimap-hawaii\" role=\"radio\" aria-checked=\"false\" aria-label=\"Hawaii. Layer coverage varies for Hawaii. No verified custom-display framing metric applied. Click fits the camera. Camera-only; selects nothing. ATNI-authored editorial framing for camera navigation; an owned simplification, not an authoritative boundary of any kind. Coastline presentation is adapted from Natural Earth 1:50m physical land.\" tabindex=\"-1\" data-framing=\"hawaii\" data-drought-class=\"neutral\" data-drought-coverage=\"neutral\" data-wildfire-condition=\"neutral\" data-wildfire-region-status=\"neutral\">\n  …(truncated, 2160 chars total)…\n</button>"
+    },
+    {
+      "n": 9,
+      "timestamp": "2026-08-13T20:44:27.061Z",
+      "pageURL": "http://127.0.0.1:4174/?region=washington_state&layers=hillshade%2Cnadm-drought%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "CSS / styling",
+      "instruction": "The km/mi  should be merged together, no space between the cards",
+      "selector": "div.maplibregl-ctrl.maplibregl-ctrl-scale:nth-of-type(1)",
+      "domPath": "html > body.app-body > div#app > main#map-container > div#map > div.maplibregl-control-container > div.maplibregl-ctrl-bottom-left > div.maplibregl-ctrl.maplibregl-ctrl-scale",
+      "tag": "div",
+      "id": null,
+      "classes": [
+        "maplibregl-ctrl",
+        "maplibregl-ctrl-scale"
+      ],
+      "textPreview": "100 km",
+      "boundingBox": {
+        "x": 350,
+        "y": 927,
+        "w": 94,
+        "h": 23
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(203, 213, 225)",
+        "background": "rgba(15, 23, 42, 0.85)",
+        "font": ""
+      },
+      "htmlSnippet": "<div class=\"maplibregl-ctrl maplibregl-ctrl-scale\" style=\"width: 94.0967px;\">100&nbsp;km</div>"
+    },
+    {
+      "n": 10,
+      "timestamp": "2026-08-13T20:45:52.251Z",
+      "pageURL": "http://127.0.0.1:4174/?region=washington_state&layers=hillshade%2Cnadm-drought%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "CSS / styling",
+      "instruction": "This line text can be removed",
+      "selector": "#brief-head-title",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#shell-panel > div#shell-island > div.shell > div#shell-refine-host > section#brief-head > h2#brief-head-title",
+      "tag": "h2",
+      "id": "brief-head-title",
+      "classes": [
+        "panel-title"
+      ],
+      "textPreview": "Drought briefing",
+      "boundingBox": {
+        "x": 18,
+        "y": 462,
+        "w": 295,
+        "h": 17
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(148, 163, 184)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": ""
+      },
+      "htmlSnippet": "<h2 class=\"panel-title\" id=\"brief-head-title\">Drought briefing</h2>"
+    },
+    {
+      "n": 11,
+      "timestamp": "2026-08-13T20:46:45.675Z",
+      "pageURL": "http://127.0.0.1:4174/?region=washington_state&layers=hillshade%2Cnadm-drought%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "CSS / styling",
+      "instruction": "The \"Select a Tribal land...\" and Search Bar should be located below the minimap",
+      "selector": "#brief-head",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#shell-panel > div#shell-island > div.shell > div#shell-refine-host > section#brief-head",
+      "tag": "section",
+      "id": "brief-head",
+      "classes": [
+        "panel",
+        "brief-head"
+      ],
+      "textPreview": "Drought briefing Select a Tribal land area, reservation, state, or watershed to read local drought conditions. Selected ",
+      "boundingBox": {
+        "x": 18,
+        "y": 729,
+        "w": 295,
+        "h": 110
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(241, 245, 249)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": ""
+      },
+      "htmlSnippet": "<section class=\"panel brief-head\" id=\"brief-head\" aria-label=\"Drought briefing\">\n  …(truncated, 979 chars total)…\n</section>"
+    },
+    {
+      "n": 12,
+      "timestamp": "2026-08-13T20:46:59.525Z",
+      "pageURL": "http://127.0.0.1:4174/?region=washington_state&layers=hillshade%2Cnadm-drought%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "CSS / styling",
+      "instruction": "This Text can be removed",
+      "selector": "div.shell-minimap-map:nth-of-type(3) > div.shell-minimap > p.shell-minimap-metric-note",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#shell-panel > div#shell-island > div.shell > div.shell-minimap-map > div.shell-minimap > p.shell-minimap-metric-note",
+      "tag": "p",
+      "id": null,
+      "classes": [
+        "shell-minimap-metric-note"
+      ],
+      "textPreview": "No verified custom-display framing metric applied.",
+      "boundingBox": {
+        "x": 18,
+        "y": 484,
+        "w": 295,
+        "h": 15
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(148, 163, 184)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": ""
+      },
+      "htmlSnippet": "<p class=\"shell-minimap-metric-note\" aria-live=\"polite\">No verified custom-display framing metric applied.</p>"
+    },
+    {
+      "n": 13,
+      "timestamp": "2026-08-13T20:47:13.602Z",
+      "pageURL": "http://127.0.0.1:4174/?region=washington_state&layers=hillshade%2Cnadm-drought%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "CSS / styling",
+      "instruction": "This text can be removed",
+      "selector": "label.panel-title",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#shell-panel > div#shell-island > div.shell > div#shell-region-host > section#panel-region > label.panel-title",
+      "tag": "label",
+      "id": null,
+      "classes": [
+        "panel-title"
+      ],
+      "textPreview": "Jump to region",
+      "boundingBox": {
+        "x": 18,
+        "y": 514,
+        "w": 124,
+        "h": 13
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "inline",
+        "zIndex": "auto",
+        "color": "rgb(148, 163, 184)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": ""
+      },
+      "htmlSnippet": "<label class=\"panel-title\" for=\"region-select\">Jump to region</label>"
+    }
+  ]
+}

@@ -31,14 +31,12 @@ import {
 const LAYER_KEY = 'nadm-drought';
 const SOURCE_ID = 'nadm-drought-areas';
 const FILL_ID = 'nadm-drought-fill';
-const OUTLINE_ID = 'nadm-drought-outline';
 const BEFORE_ID = 'first-symbol';
 const FILL_OPACITY = 0.48;
-const OUTLINE_OPACITY = 0.45;
 const SNAPSHOT_EVENT = 'ddm:nadm-snapshot';
 const CLASS_CODES = ['d0', 'd1', 'd2', 'd3', 'd4'] as const;
 
-export const fadeLayerIds = [FILL_ID, OUTLINE_ID] as const;
+export const fadeLayerIds = [FILL_ID] as const;
 
 type ClassCode = (typeof CLASS_CODES)[number];
 
@@ -154,16 +152,21 @@ function monthLabel(month: string): string {
 function showNadmLegend(month: string): void {
   showLegend(LAYER_KEY, {
     order: LEGEND_ORDER.surface,
-    render: (body) =>
+    render: (body) => {
       renderSwatchLegend(
         body,
         `North American Drought Monitor · ${monthLabel(month)}`,
         NADM_CATEGORIES.map((entry) => ({
           color: entry.color,
           label: `${entry.code} · ${entry.label}`
-        })),
-        'Tri-national monthly consensus · published 2 to 3 weeks after month-end · no polygon means no coverage from this source, not class zero'
-      )
+        }))
+      );
+      const caveat = document.createElement('p');
+      caveat.className = 'legend-semantic-note sr-only';
+      caveat.textContent =
+        'Tri-national monthly consensus; published 2 to 3 weeks after month-end; no polygon means no coverage from this source, not class zero.';
+      body.appendChild(caveat);
+    }
   });
 }
 
@@ -215,21 +218,6 @@ function installMapState(
       beforeId
     );
   }
-  if (!map.getLayer(OUTLINE_ID)) {
-    map.addLayer(
-      {
-        id: OUTLINE_ID,
-        type: 'line',
-        source: SOURCE_ID,
-        paint: {
-          'line-color': COLOR_EXPRESSION,
-          'line-opacity': OUTLINE_OPACITY,
-          'line-width': 0.5
-        }
-      },
-      beforeId
-    );
-  }
 }
 
 export async function activate(map: maplibregl.Map): Promise<void> {
@@ -271,7 +259,6 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     installMapState(map, snapshot.collection);
   } catch (error) {
     if (map.getLayer(FILL_ID)) map.removeLayer(FILL_ID);
-    if (map.getLayer(OUTLINE_ID)) map.removeLayer(OUTLINE_ID);
     if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
     console.warn('[nadm-drought] map installation failed.', error);
     registry.setStatus(LAYER_KEY, 'error');
@@ -292,7 +279,6 @@ export function deactivate(map: maplibregl.Map): void {
   masterController?.abort();
   masterController = null;
   if (map.getLayer(FILL_ID)) map.removeLayer(FILL_ID);
-  if (map.getLayer(OUTLINE_ID)) map.removeLayer(OUTLINE_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   activeSnapshot = null;
   hideLegend(LAYER_KEY);

@@ -3,7 +3,7 @@ import {
   gotoApp,
   layerCheckbox,
   layerPill,
-  regionButton,
+  regionSelect,
   urlLayers,
   search,
   waitForLayerSettled,
@@ -85,8 +85,7 @@ test.describe('URL as state', () => {
     await gotoApp(page, '?region=central_oregon&layers=usdm,tribal');
 
     // Region restored.
-    await expect(regionButton(page, 'central_oregon')).toHaveAttribute('aria-checked', 'true');
-    await expect(regionButton(page, 'washington_state')).toHaveAttribute('aria-checked', 'false');
+    await expect(regionSelect(page)).toHaveValue('region:central_oregon');
 
     // Exactly the named layers are on; an explicit layer list overrides the
     // default-on set, so an unnamed layer (telemetry) is off here.
@@ -196,7 +195,7 @@ test.describe('URL as state', () => {
     // brief embed never mounts the catalog island at all (headroom C1), so
     // no pill DOM exists here. The assertions are unchanged.)
     await expect
-      .poll(async () => (await urlLayers(page)).has('usdm'), { timeout: 25_000 })
+      .poll(async () => (await urlLayers(page)).has('nadm-drought'), { timeout: 25_000 })
       .toBe(true);
     expect(await search(page)).toContain('embed=true');
   });

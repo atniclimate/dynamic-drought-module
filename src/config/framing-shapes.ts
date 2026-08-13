@@ -580,49 +580,6 @@ export const FRAMING_SUPPLEMENTAL_SHAPES: Readonly<
       [-187.45, 53.15],
     ],
   ],
-  'boreal-arctic': [
-    [
-      [-128, 73],
-      [-126, 71.8],
-      [-121, 71.4],
-      [-117.5, 72.8],
-      [-119.5, 74.5],
-      [-124.5, 75],
-    ],
-    [
-      [-116, 70.5],
-      [-112, 69.5],
-      [-105, 69.7],
-      [-102, 72],
-      [-106, 73.5],
-      [-112, 73.2],
-    ],
-    [
-      [-109, 75],
-      [-106, 74],
-      [-96, 74],
-      [-92, 77],
-      [-96, 79],
-      [-104, 78.5],
-    ],
-    [
-      [-90, 67],
-      [-83, 64],
-      [-72, 65],
-      [-62, 70],
-      [-64, 75],
-      [-73, 77],
-      [-82, 73],
-    ],
-    [
-      [-82, 76],
-      [-74, 75],
-      [-61, 78],
-      [-64, 82.8],
-      [-74, 83.2],
-      [-82, 80],
-    ],
-  ],
   'eastern-forests': [
     [
       [-59.5, 47.5],
@@ -663,7 +620,6 @@ export const FRAMING_ANALYSIS_AREAS: Readonly<
   ],
   'boreal-arctic': [
     { shape: FRAMING_SHAPES['boreal-arctic'], countries: ['CA'] },
-    { shape: analysisRectangle(-141.5, 68, -52, 84), countries: ['CA'] },
   ],
   'eastern-forests': [
     { shape: FRAMING_SHAPES['eastern-forests'], countries: ['US', 'CA'] },

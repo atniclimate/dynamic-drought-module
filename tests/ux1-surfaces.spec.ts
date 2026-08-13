@@ -47,15 +47,15 @@ test.describe('UX-1 role groups and exclusive surfaces', () => {
     // hides the Brief-mode catalog behind the console door.
     await gotoApp(page, '?view=console');
 
-    // Default-on surface is the US Drought Monitor. Let its initial activation
-    // settle before toggling, so the exclusivity removal is not racing usdm's
+    // Default-on surface is the North American Drought Monitor. Let its initial activation
+    // settle before toggling, so the exclusivity removal is not racing NADM's
     // own in-flight boot activation.
-    await expect(layerCheckbox(page, 'usdm')).toBeChecked();
-    await waitForLayerSettled(page, 'usdm');
+    await expect(layerCheckbox(page, 'nadm-drought')).toBeChecked();
+    await waitForLayerSettled(page, 'nadm-drought');
 
-    // Turning on HeatRisk must turn USDM off.
+    // Turning on HeatRisk must turn NADM off.
     await layerCheckbox(page, 'heatrisk').check();
-    await expect(layerCheckbox(page, 'usdm')).not.toBeChecked();
+    await expect(layerCheckbox(page, 'nadm-drought')).not.toBeChecked();
     await expect(layerCheckbox(page, 'heatrisk')).toBeChecked();
 
     // Exactly one surface is checked, and it is heatrisk.
@@ -65,14 +65,14 @@ test.describe('UX-1 role groups and exclusive surfaces', () => {
       else await expect(cb).not.toBeChecked();
     }
 
-    // The URL tracks exactly one surface: usdm dropped, heatrisk present.
+    // The URL tracks exactly one surface: NADM dropped, heatrisk present.
     // heatrisk enters the URL only after its activate() resolves, which on a
     // slow-upstream day legitimately exceeds the default 10-second expect
     // ceiling (its metadata fetch alone carries a 10-second budget before the
     // stay-on contract resolves it); 25 seconds matches waitForLayerSettled.
     // (This exact poll flaked in CI on 2026-07-03 under the default ceiling.)
     await expect
-      .poll(async () => (await urlLayers(page)).has('usdm'), { timeout: 25_000 })
+      .poll(async () => (await urlLayers(page)).has('nadm-drought'), { timeout: 25_000 })
       .toBe(false);
     await expect
       .poll(async () => (await urlLayers(page)).has('heatrisk'), { timeout: 25_000 })
@@ -101,14 +101,14 @@ test.describe('UX-1 role groups and exclusive surfaces', () => {
     // Brief-mode catalog behind the console door).
     await gotoApp(page, '?view=console');
 
-    // USDM is on and, once settled, carries a terminal status pill.
-    await waitForLayerSettled(page, 'usdm');
-    await expect(layerPill(page, 'usdm')).not.toBeEmpty();
+    // NADM is on and, once settled, carries a terminal status pill.
+    await waitForLayerSettled(page, 'nadm-drought');
+    await expect(layerPill(page, 'nadm-drought')).not.toBeEmpty();
 
-    // Turning on another surface deactivates USDM; an off layer has no load
+    // Turning on another surface deactivates NADM; an off layer has no load
     // status, so its pill returns to the empty pre-activation state.
     await layerCheckbox(page, 'heatrisk').check();
-    await expect(layerPill(page, 'usdm')).toBeEmpty();
+    await expect(layerPill(page, 'nadm-drought')).toBeEmpty();
   });
 });
 

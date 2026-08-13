@@ -99,7 +99,7 @@ const CHANGE_OUTLINE = outlineId(CHANGE_SOURCE);
 export const USDM_D4_RIM_STYLE = {
   color: '#f87171',
   width: 1.5,
-  opacity: 0.9
+  opacity: 0
 } as const;
 
 export const USDM_D4_RIM_LAYER_IDS = [
@@ -139,7 +139,7 @@ const FETCH_TIMEOUT_MS = 20_000;
  * the boundary chain.
  */
 const FILL_OPACITY = 0.54;
-const OUTLINE_OPACITY = 0.45;
+const OUTLINE_OPACITY = 0;
 const OUTLINE_WIDTH = 0.4;
 
 /** Rail depth: 52 stops covers a full water year of weekly frames. */

@@ -11,11 +11,12 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
       return [
         '.shell-view',
         '#shell-conditions-summary',
-        '#shell-region-host',
         '.shell-minimap-map',
+        '.shell-minimap-popover-wrap',
+        '#shell-region-host',
+        '#shell-refine-host',
         '.shell-when',
-        '#shell-share-host',
-        '#shell-refine-host'
+        '#shell-share-host'
       ].map((selector) => children.findIndex((child) => child.matches(selector)));
     });
     expect(shellOrder.every((index) => index >= 0)).toBe(true);
@@ -32,7 +33,7 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     await expect(page.locator('#shell-time')).toBeVisible();
     await expect(page.locator('#brief-display')).toBeVisible();
     await expect(page.locator('#brief-display #studio-entry-pair')).toBeVisible();
-    await expect(page.locator('#brief-display #enso-driver')).toBeVisible();
+    await expect(page.locator('#brief-display #enso-driver')).toHaveCount(0);
     await expect(page.locator('#brief-selection-summary')).toBeHidden();
     await expect(page.locator('#impact-panel')).toHaveCount(0);
 

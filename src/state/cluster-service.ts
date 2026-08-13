@@ -87,6 +87,9 @@ import { requestLayerOff, requestLayerOnExact } from '../ui/layer-toggle-command
 export interface CommittedShellSnapshot {
   /** Monotonic publish counter; a re-derivation bumps it. */
   readonly revision: number;
+  /** The hazard view the user most recently chose. This remains stable when
+   * a failed surface honestly demotes the exact displayed set to `custom`. */
+  readonly selectedHazard: HazardClusterKey;
   /** The committed cluster, or 'custom' once the granular intent has
    * diverged from any cluster's composition (D-0.7.0-044). */
   readonly cluster: HazardClusterKey | 'custom';
@@ -114,6 +117,8 @@ let committedIntent: ReadonlySet<string> | null = null;
  * snapshot self-consistent: the horizon field and the intendedKeys it
  * pairs with always come from the same resolution. */
 let committedHorizon: TemporalHorizonKey | null = null;
+/** User-facing hazard intent, separate from exact-set cluster honesty. */
+let selectedHazard: HazardClusterKey = getHazardCluster();
 let current: CommittedShellSnapshot | null = null;
 /** True while requestCluster (or a service-internal store write) is
  * mid-transaction; subscriptions stand down so no intermediate state is
@@ -226,6 +231,7 @@ function capture(): CommittedShellSnapshot {
   revision += 1;
   return {
     revision,
+    selectedHazard,
     cluster,
     horizon,
     framing,
@@ -312,6 +318,7 @@ function applyCluster(
   key: HazardClusterKey,
   requestedOcean: OceanKey | null,
 ): void {
+  selectedHazard = key;
   const horizon = timeline.horizon;
   const intent = composeClusterIntent(key, horizon);
   const intentSet: ReadonlySet<string> = new Set(intent);
@@ -462,6 +469,11 @@ export function reconcileClusterWithLayerIntent(checked: ReadonlySet<string>): v
  */
 export function initClusterService(): () => void {
   if (disposer !== null) return disposer;
+  // URL state is parsed after this module is evaluated. Seed the user-facing
+  // hazard from the parsed store here so a direct cluster= deep link does not
+  // inherit the module's earlier Drought default.
+  selectedHazard = getHazardCluster();
+  current = null;
   const unsubscribers = [
     registry.on('change', () => {
       if (!applying) publish();
@@ -501,6 +513,7 @@ export function initClusterService(): () => void {
       if (applying) return;
       // An external store write (the boot seed, the Place studio
       // restore) is a new committed claim: re-derive from the store.
+      selectedHazard = getHazardCluster();
       committedCluster = null;
       committedIntent = null;
       committedHorizon = null;

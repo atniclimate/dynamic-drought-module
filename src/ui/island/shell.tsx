@@ -71,7 +71,12 @@ const SHELL_REHOST_SEATS = [
   {
     nodeId: 'conditions-strip',
     homeId: 'conditions-strip-home',
-    hostId: 'shell-conditions-host'
+    hostId: 'conditions-strip-dock'
+  },
+  {
+    nodeId: 'legend-panel',
+    homeId: 'legend-panel-home',
+    hostId: 'sidebar-key-host'
   },
   {
     nodeId: 'panel-region',
@@ -109,10 +114,11 @@ function shellRehostSeats(): readonly ShellRehostSeat[] | null {
 }
 
 /**
- * Seat the existing conditions, region, share, and Brief-head nodes inside
- * the ordered desktop Brief shell. No surface is cloned or rewired: moving
- * each node preserves its island root, controls, listeners, and live state.
- * Every ineligible presentation returns all four nodes to static HTML homes.
+ * Seat the existing region, share, and Brief-head nodes inside the ordered
+ * desktop Brief shell, and its condition readout plus legend in the fixed
+ * sidebar dock. No surface is cloned or rewired: moving each node preserves
+ * its island root, controls, listeners, and live state. Every ineligible
+ * presentation returns all five nodes to static HTML homes.
  */
 function useDesktopBriefRehost(): void {
   useLayoutEffect(() => {
@@ -364,8 +370,8 @@ function Shell({ map, snap, framing, specTick }: ShellProps) {
         id="shell-conditions-summary"
         aria-labelledby="shell-conditions-heading"
       >
-        <h2 class="panel-title" id="shell-conditions-heading">Conditions in view</h2>
-        <p class="shell-summary-primary" id="shell-summary-primary">
+        <h2 class="panel-title sr-only" id="shell-conditions-heading">Conditions in view</h2>
+        <p class="shell-summary-primary sr-only" id="shell-summary-primary">
           {snapshot.summary.primary}
         </p>
         {/* The live region stays PERSISTENTLY rendered and visible; only
@@ -382,23 +388,21 @@ function Shell({ map, snap, framing, specTick }: ShellProps) {
         </p>
       </section>
 
-      <div class="shell-rehost" id="shell-conditions-host" />
-
-      <div class="shell-rehost" id="shell-region-host" />
-
       <div class="shell-minimap-map">
         <Minimap
           map={map}
           framing={framing}
           idPrefix="shell-minimap"
-          metricContext={snapshot.cluster}
+          metricContext={snapshot.selectedHazard}
         />
       </div>
       <MinimapPopover
         map={map}
         framing={framing}
-        metricContext={snapshot.cluster}
+        metricContext={snapshot.selectedHazard}
       />
+      <div class="shell-rehost" id="shell-region-host" />
+      <div class="shell-rehost shell-search-host" id="shell-refine-host" />
 
       <div class="shell-when" role="group" aria-label="Time horizon">
         <div class="shell-horizons">
@@ -427,7 +431,6 @@ function Shell({ map, snap, framing, specTick }: ShellProps) {
 
       <div class="shell-rehost shell-share-host" id="shell-share-host" />
 
-      <div class="shell-rehost" id="shell-refine-host" />
     </div>
   );
 }

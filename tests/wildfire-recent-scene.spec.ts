@@ -54,13 +54,13 @@ test.describe('explicit Wildfire and Fire recent scenes', () => {
     await page.locator(WILDFIRE).click();
 
     await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
-    await expect.poll(async () => search(page)).toContain('basemap=satellite');
+    await expect.poll(async () => search(page)).not.toContain('basemap=');
     await expect.poll(async () => search(page)).toContain('cluster=wildfire');
     await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();
     await expect(layerCheckbox(page, 'hms-smoke')).toBeChecked();
 
     const chip = page.locator(CHIP);
-    await expect(chip).toBeVisible();
+    await expect(chip).not.toBeInViewport();
     await expect(chip).toHaveAttribute('role', 'status');
     await expect(chip).toHaveAttribute('aria-live', 'polite');
     await expect(chip).toHaveAttribute('aria-atomic', 'true');
@@ -71,15 +71,15 @@ test.describe('explicit Wildfire and Fire recent scenes', () => {
     );
   });
 
-  test('a bare Wildfire deep link does not infer a basemap preference', async ({
+  test('a bare Wildfire deep link retains the satellite default', async ({
     page
   }) => {
     await gotoApp(page, '?cluster=wildfire');
 
     await expect(page.locator(WILDFIRE)).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
     expect(await search(page)).not.toContain('basemap=');
-    await expect(page.locator(CHIP)).toBeHidden();
+    await expect(page.locator(CHIP)).not.toBeInViewport();
   });
 
   test('manual Recent off survives Wildfire horizon and layer-status changes', async ({
@@ -88,18 +88,18 @@ test.describe('explicit Wildfire and Fire recent scenes', () => {
     await gotoApp(page);
     await page.locator(WILDFIRE).click();
     await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator(CHIP)).toBeVisible();
+    await expect(page.locator(CHIP)).not.toBeInViewport();
 
     await page.locator(SWITCHER).click();
     await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'false');
-    await expect.poll(async () => search(page)).not.toContain('basemap=');
+    await expect.poll(async () => search(page)).toContain('basemap=default');
 
     await page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]').click();
     await waitForLayerSettled(page, 'spc-fire-weather');
 
     await expect(page.locator(WILDFIRE)).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'false');
-    expect(await search(page)).not.toContain('basemap=');
+    expect(await search(page)).toContain('basemap=default');
     await expect(page.locator(CHIP)).toBeHidden();
   });
 
@@ -113,7 +113,7 @@ test.describe('explicit Wildfire and Fire recent scenes', () => {
     await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'false', {
       timeout: 30_000
     });
-    await expect.poll(async () => search(page)).not.toContain('basemap=');
+    await expect.poll(async () => search(page)).toContain('basemap=default');
     await expect(page.locator(WILDFIRE)).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(async () => search(page)).toContain('cluster=wildfire');
     await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();
@@ -127,7 +127,7 @@ test.describe('explicit Wildfire and Fire recent scenes', () => {
     await page.locator('#hazard-rail button[data-preset="hazard-fire"]').click();
 
     await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
-    await expect.poll(async () => search(page)).toContain('basemap=satellite');
+    await expect.poll(async () => search(page)).not.toContain('basemap=');
     await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();
     await expect(layerCheckbox(page, 'hms-smoke')).toBeChecked();
   });
@@ -141,7 +141,7 @@ test.describe('explicit Wildfire and Fire recent scenes', () => {
       .click();
 
     await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
-    await expect.poll(async () => search(page)).toContain('basemap=satellite');
+    await expect.poll(async () => search(page)).not.toContain('basemap=');
     await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();
     await expect(layerCheckbox(page, 'hms-smoke')).toBeChecked();
   });

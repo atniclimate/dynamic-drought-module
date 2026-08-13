@@ -85,7 +85,7 @@ test.describe('minimal LAYERS studio', () => {
     await expect(studio.locator('[data-ddm-search]')).toBeVisible();
     await expect(studio.locator('.layer-group')).toHaveCount(ROLE_GROUPS.length);
     await expect(studio.locator('#panel-telemetry')).toBeVisible();
-    await expect(studio.locator('.basemap-switcher-btn')).toHaveText('Recent');
+    await expect(studio.locator('.basemap-switcher-btn')).toHaveText('SAT');
 
     const placeGroup = studio
       .locator('.layer-group')

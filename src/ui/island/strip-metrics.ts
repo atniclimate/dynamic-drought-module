@@ -19,7 +19,7 @@ import type { GeoJsonProperties } from 'geojson';
 
 import { registry } from '../../state/registry';
 import { timeline } from '../../state/timeline';
-import { USDM_CATEGORIES } from '../../config/palette';
+import { NADM_CATEGORIES, USDM_CATEGORIES } from '../../config/palette';
 import { getLayerDef } from '../../config/layers';
 import { classifyNifcIncidentType } from '../../config/wildfire-presentation';
 import { resolveStatusPillText } from './pill-text';
@@ -43,6 +43,8 @@ const USDM_FILLS = ['usdm-frame-a-fill', 'usdm-frame-b-fill'] as const;
 // The change-map fill (the derivative register); rendered when the user
 // swaps the absolute categories for the 1-week / 4-week change view.
 const USDM_CHANGE_FILL = 'usdm-change-fill';
+const NADM_KEY = 'nadm-drought';
+const NADM_FILL = 'nadm-drought-fill';
 
 const ALERTS_KEY = 'nws-alerts';
 const ALERTS_FILL = 'nws-alerts-fill';
@@ -178,11 +180,63 @@ function isLayerOn(key: string): boolean {
   return registry.getActiveKeys().has(key) || registry.getStatus(key) === 'loading';
 }
 
-export function droughtMetric(map: maplibregl.Map): { metric: Metric; dateMs: number | null } {
+export function droughtMetric(
+  map: maplibregl.Map,
+  preferredKey: typeof USDM_KEY | typeof NADM_KEY = NADM_KEY
+): { metric: Metric; dateMs: number | null } {
+  if (isLayerOn(NADM_KEY)) {
+    if (!map.getLayer(NADM_FILL)) {
+      return { metric: pendingMetric(NADM_KEY), dateMs: null };
+    }
+    const features = map.queryRenderedFeatures({ layers: [NADM_FILL] });
+    if (features.length === 0) {
+      return {
+        metric: {
+          value: 'No polygon',
+          sublabel: 'no NADM category polygon rendered in view',
+          tone: 'none'
+        },
+        dateMs: null
+      };
+    }
+    let maxIndex = -1;
+    for (const feature of features) {
+      const raw = String(feature.properties?.['DROUGHTCAT'] ?? '').toUpperCase();
+      const index = NADM_CATEGORIES.findIndex((category) => category.code === raw);
+      if (index > maxIndex) maxIndex = index;
+    }
+    const category = maxIndex >= 0 ? NADM_CATEGORIES[maxIndex] : undefined;
+    return category
+      ? {
+          metric: {
+            value: category.code,
+            sublabel: `${category.label} in view`,
+            tone: 'data',
+            color: category.color
+          },
+          dateMs: null
+        }
+      : {
+          metric: {
+            value: 'Unknown',
+            sublabel: 'rendered drought category unavailable',
+            tone: 'off'
+          },
+          dateMs: null
+        };
+  }
+
   if (!isLayerOn(USDM_KEY)) {
     // A deliberate small-caps state phrase (styled via data-tone), not a
     // dash that could read as missing data; the sublabel names the layer.
-    return { metric: offMetric('US Drought Monitor'), dateMs: null };
+    return {
+      metric: offMetric(
+        preferredKey === USDM_KEY
+          ? 'US Drought Monitor'
+          : 'North American Drought Monitor'
+      ),
+      dateMs: null
+    };
   }
 
   // The change-map register (0.5.0b): the absolute categories are hidden,

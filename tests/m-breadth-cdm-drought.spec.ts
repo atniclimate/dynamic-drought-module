@@ -223,15 +223,15 @@ test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
       'bare map means no polygon coverage in this artifact, not class zero'
     );
     await expect(page.locator('#time-bar')).toContainText('Month June 2026');
-    await expect(page.locator('#map-key')).toContainText('June 2026');
-    await expect(page.locator('#map-key')).toContainText(
-      'No polygon: no coverage in artifact'
-    );
+    await expect(page.locator('#map-key')).toBeHidden();
     const legendLicense = legend.getByRole('link', { name: LICENSE_TITLE });
     await expect(legendLicense).toHaveAttribute('href', LICENSE_URL);
-    const attributionLicense = page
-      .locator('.maplibregl-ctrl-attrib')
-      .getByRole('link', { name: LICENSE_TITLE });
+    const attribution = page.locator('.maplibregl-ctrl-attrib');
+    await expect(attribution).not.toHaveClass(/maplibregl-compact-show/);
+    await attribution.locator('.maplibregl-ctrl-attrib-button').click();
+    const attributionLicense = attribution.getByRole('link', {
+      name: LICENSE_TITLE
+    });
     await expect(attributionLicense).toHaveAttribute('href', LICENSE_URL);
     expect(upstreamRequests).toEqual([]);
 
@@ -241,11 +241,7 @@ test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
     await expect(legendLicense).toBeVisible();
     await expect(legendLicense).toHaveText(LICENSE_TITLE);
     await expect(legendLicense).toHaveAttribute('href', LICENSE_URL);
-    const keyLicense = page
-      .locator('#map-key')
-      .getByRole('link', { name: LICENSE_TITLE });
-    await expect(keyLicense).toBeVisible();
-    await expect(keyLicense).toHaveAttribute('href', LICENSE_URL);
+    await expect(page.locator('#map-key')).toBeHidden();
   });
 
   test('embed on-map key renders the exact licence title and link', async ({

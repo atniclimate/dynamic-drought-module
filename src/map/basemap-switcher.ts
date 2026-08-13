@@ -10,8 +10,8 @@ import { showToast } from '../ui/overlay';
 /**
  * The basemap switcher (U4d, D-0.7.0-005 / D-0.7.0-031).
  *
- * One `IControl` button that flips between the historical shared ground
- * and opt-in recent satellite context; deliberately NOT a style
+ * One `IControl` button that flips recent satellite context on and off over
+ * the subdued OpenStreetMap ground; deliberately NOT a style
  * gallery (the corpus's product-lens guardrail). The control stacks with
  * the existing attribution and scale controls, carries real button
  * semantics (aria-pressed reflects the satellite state), and stays
@@ -74,12 +74,11 @@ export class BasemapSwitcherControl implements maplibregl.IControl {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'basemap-switcher-btn';
-    btn.setAttribute('aria-label', 'Recent NOAA satellite imagery');
-    btn.title = 'Recent NOAA satellite imagery';
-    // A text label rather than an icon font: self-hosted posture, and the
-    // "Recent" keeps this source semantically separate from the historical
-    // Sentinel-2 ground already visible in the default scene.
-    btn.textContent = 'Recent';
+    btn.setAttribute('aria-label', 'Satellite imagery');
+    btn.setAttribute('aria-describedby', 'basemap-vintage');
+    btn.title = 'Toggle satellite imagery';
+    // A short text label keeps the control legible without an icon font.
+    btn.textContent = 'SAT';
 
     const reflect = (): void => {
       const on = getBasemapMode() === 'satellite';

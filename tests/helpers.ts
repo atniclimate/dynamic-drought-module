@@ -9,14 +9,31 @@
  */
 
 import { expect, type Page, type Locator } from '@playwright/test';
+import { stubRecentSatellite } from './satellite-fixture';
 
 const TEST_GROUND_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
   'base64'
 );
 const groundStubbedPages = new WeakSet<Page>();
+const nadmStubbedPages = new WeakSet<Page>();
+
+const TEST_NADM_SNAPSHOT = {
+  type: 'FeatureCollection',
+  features: [
+    {
+      type: 'Feature',
+      properties: { DROUGHTCAT: 'd2', YEAR_MONTH: '202606' },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[[-140, 20], [-50, 20], [-50, 75], [-140, 75], [-140, 20]]]
+      }
+    }
+  ]
+} as const;
 
 export async function stubHistoricalGround(page: Page): Promise<void> {
+  await stubRecentSatellite(page);
   if (groundStubbedPages.has(page)) return;
   groundStubbedPages.add(page);
   await page.route('**/wmts/1.0.0/s2cloudless_3857/**', (route) =>
@@ -24,6 +41,18 @@ export async function stubHistoricalGround(page: Page): Promise<void> {
       status: 200,
       contentType: 'image/png',
       body: TEST_GROUND_PNG
+    })
+  );
+}
+
+async function stubDefaultNadm(page: Page): Promise<void> {
+  if (nadmStubbedPages.has(page)) return;
+  nadmStubbedPages.add(page);
+  await page.route('**/NADM-current.geojson', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/geo+json',
+      body: JSON.stringify(TEST_NADM_SNAPSHOT)
     })
   );
 }
@@ -80,7 +109,7 @@ export const PRESET_LABELS: readonly string[] = [
  * docs/URL_SCHEMA_POLICY.md. Hillshade joined 2026-07-16 (E1 deliverable 4,
  * D-0.7.0-043 part 3: terrain shading is part of the calm default
  * composition). */
-export const DEFAULT_ON = ['usdm', 'aiannh', 'bia-reservations', 'states', 'hillshade'] as const;
+export const DEFAULT_ON = ['nadm-drought', 'aiannh', 'bia-reservations', 'states', 'hillshade'] as const;
 
 /** Surface-role keys (mutually exclusive), mirroring `role: 'surface'` rows in `LAYER_DEFS`.
  * sst-anomaly joined 2026-07-10 (alignment-review catch: the mirror had
@@ -111,9 +140,19 @@ export function layerPill(page: Page, key: string): Locator {
   return page.locator(`[data-layer-status="${key}"]`);
 }
 
-/** The region radio button for a region key. */
+/** The detailed-region option for a region key. */
 export function regionButton(page: Page, key: string): Locator {
-  return page.locator(`.region-btn[data-region-key="${key}"]`);
+  return page.locator(`#region-select option[value="region:${key}"]`);
+}
+
+/** The combined overview and detailed-region dropdown. */
+export function regionSelect(page: Page): Locator {
+  return page.locator('#region-select');
+}
+
+/** Choose one established detailed camera from the combined region select. */
+export async function selectRegion(page: Page, key: string): Promise<void> {
+  await page.locator('#region-select').selectOption(`region:${key}`);
 }
 
 /** The telemetry value slot for a station id. */
@@ -150,9 +189,12 @@ export async function gotoApp(page: Page, query = ''): Promise<void> {
   // viewport tiles so the full suite neither depends on nor floods the public
   // service. Ground-specific specs call page.goto directly and own their route.
   await stubHistoricalGround(page);
+  if (!/[?&](?:layers|cluster)=/.test(query)) {
+    await stubDefaultNadm(page);
+  }
   await page.goto(query, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#preset-chips .preset-chip')).toHaveCount(PRESET_LABELS.length);
-  await expect(page.locator('#region-buttons .region-btn')).not.toHaveCount(0);
+  await expect(page.locator('#region-select option')).not.toHaveCount(0);
   const isEmbed = /[?&]embed=(true|1)\b/.test(query);
   const isConsole =
     /[?&]view=console\b/.test(query) ||

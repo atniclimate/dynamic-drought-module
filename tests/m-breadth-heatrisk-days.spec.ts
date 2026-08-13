@@ -270,8 +270,8 @@ test.describe('U-HEATRISK-DAYS multi-day read', () => {
     // chrome. Its syncUrl call must preserve both the selected HeatRisk day
     // and the embed flag.
     await page
-      .locator('.region-btn[data-region-key="central_oregon"]')
-      .evaluate((button: HTMLButtonElement) => button.click());
+      .locator('#region-select')
+      .selectOption('region:central_oregon', { force: true });
     await expect
       .poll(async () => new URLSearchParams(await search(page)).get('region'))
       .toBe('central_oregon');

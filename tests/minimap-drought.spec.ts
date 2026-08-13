@@ -307,7 +307,7 @@ test.describe('North American minimap drought summaries', () => {
     ).toBeGreaterThan(0);
   });
 
-  test('analysis areas reach the full authored continental extent', () => {
+  test('analysis areas reach the authored extent without the Arctic lobe', () => {
     const mexicoSouth = Math.min(
       ...FRAMING_SHAPES.mexico.map((point) => point[1]),
     );
@@ -329,7 +329,8 @@ test.describe('North American minimap drought summaries', () => {
 
     expect(mexicoSouth).toBeLessThan(15);
     expect(alaskaWest).toBeLessThanOrEqual(-188);
-    expect(canadaNorth).toBeGreaterThanOrEqual(84);
+    expect(canadaNorth).toBeGreaterThanOrEqual(71);
+    expect(canadaNorth).toBeLessThanOrEqual(72);
     expect(canadaEast).toBeGreaterThanOrEqual(-52);
   });
 });

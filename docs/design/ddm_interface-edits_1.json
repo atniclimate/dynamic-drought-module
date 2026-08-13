@@ -1,0 +1,430 @@
+{
+  "pageURL": "https://atniclimate.github.io/dynamic-drought-module/?region=washington_state&layers=hillshade%2Cusdm%2Caiannh%2Cbia-reservations%2Cstates&view=brief&basemap=satellite",
+  "generated": "2026-08-13T16:41:19.124Z",
+  "annotations": [
+    {
+      "n": 1,
+      "timestamp": "2026-08-13T16:31:25.034Z",
+      "pageURL": "https://atniclimate.github.io/dynamic-drought-module/?region=washington_state&layers=hillshade%2Cusdm%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "CSS / styling",
+      "instruction": "",
+      "selector": "#shell-summary-primary",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#shell-panel > div#shell-island > div.shell > section#shell-conditions-summary > p#shell-summary-primary",
+      "tag": "p",
+      "id": "shell-summary-primary",
+      "classes": [
+        "shell-summary-primary"
+      ],
+      "textPreview": "Showing US Drought Monitor with Terrain Shading, Tribal Lands, Reservation Boundaries, and State Boundaries.",
+      "boundingBox": {
+        "x": 18,
+        "y": 218,
+        "w": 295,
+        "h": 54
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(203, 213, 225)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": ""
+      },
+      "htmlSnippet": "<p class=\"shell-summary-primary\" id=\"shell-summary-primary\">Showing US Drought Monitor with Terrain Shading, Tribal Lands, Reservation Boundaries, and State Boundaries.</p>"
+    },
+    {
+      "n": 2,
+      "timestamp": "2026-08-13T16:32:41.466Z",
+      "pageURL": "https://atniclimate.github.io/dynamic-drought-module/?region=washington_state&layers=hillshade%2Cusdm%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "Other",
+      "instruction": "This should be a drop down, under the minimap, it needs to reflect the minimap region selected",
+      "selector": "#panel-region",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#shell-panel > div#shell-island > div.shell > div#shell-region-host > section#panel-region",
+      "tag": "section",
+      "id": "panel-region",
+      "classes": [
+        "panel"
+      ],
+      "textPreview": "Jump to region Washington StateColumbia & Snake River BasinWestern & Northern CascadesCentral OregonSouthwest Washington",
+      "boundingBox": {
+        "x": 18,
+        "y": 364,
+        "w": 295,
+        "h": 381
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(241, 245, 249)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": ""
+      },
+      "htmlSnippet": "<section class=\"panel\" id=\"panel-region\">\n  …(truncated, 2912 chars total)…\n</section>"
+    },
+    {
+      "n": 3,
+      "timestamp": "2026-08-13T16:33:41.371Z",
+      "pageURL": "https://atniclimate.github.io/dynamic-drought-module/?region=washington_state&layers=hillshade%2Cusdm%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "Other",
+      "instruction": "Buttons \"ARCTIC\" should instead select the Arctic Ocean; same with \"PACIFIC\" and \"ATLANTIC\" and doesn't need box",
+      "selector": "#shell-minimap-ocean-arctic",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#shell-panel > div#shell-island > div.shell > div.shell-minimap-map > div.shell-minimap > div.shell-minimap-canvas > div.shell-minimap-ocean-doors > button#shell-minimap-ocean-arctic",
+      "tag": "button",
+      "id": "shell-minimap-ocean-arctic",
+      "classes": [
+        "shell-minimap-ocean-door",
+        "shell-minimap-ocean-door-arctic"
+      ],
+      "textPreview": "arctic",
+      "boundingBox": {
+        "x": 142,
+        "y": 781,
+        "w": 48,
+        "h": 24
+      },
+      "relevantComputedStyle": {
+        "position": "absolute",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(100, 116, 139)",
+        "background": "rgba(11, 18, 32, 0.76)",
+        "font": "490 8px \"League Spartan\", system-ui, -apple-system, \"Segoe UI\", sans-serif"
+      },
+      "htmlSnippet": "<button type=\"button\" id=\"shell-minimap-ocean-arctic\" class=\"shell-minimap-ocean-door shell-minimap-ocean-door-arctic\" aria-pressed=\"false\" aria-label=\"Arctic Ocean. Switch to the El Nino / Southern Oscillation sea-surface-temperature anomaly display and fit this ocean camera. Schematic click affordance for camera navigation; not a boundary of any kind.\" data-ocean=\"arctic\">arctic</button>"
+    },
+    {
+      "n": 4,
+      "timestamp": "2026-08-13T16:34:28.584Z",
+      "pageURL": "https://atniclimate.github.io/dynamic-drought-module/?region=washington_state&layers=hillshade%2Cusdm%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "Other",
+      "instruction": "The top lobe (possibly Greenland) can but cut, just the northern contiguous Canada is needed",
+      "selector": "#shell-minimap-boreal-arctic",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#shell-panel > div#shell-island > div.shell > div.shell-minimap-map > div.shell-minimap > div.shell-minimap-canvas > div.shell-minimap-region-group > svg.shell-minimap-drawing > path#shell-minimap-boreal-arctic",
+      "tag": "path",
+      "id": "shell-minimap-boreal-arctic",
+      "classes": [
+        "shell-minimap-region",
+        "shell-minimap-mainland"
+      ],
+      "textPreview": null,
+      "boundingBox": {
+        "x": 130,
+        "y": 781,
+        "w": 172,
+        "h": 77
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "inline",
+        "zIndex": "auto",
+        "color": "rgb(241, 245, 249)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": ""
+      },
+      "htmlSnippet": "<path id=\"shell-minimap-boreal-arctic\" class=\"shell-minimap-region shell-minimap-mainland\" d=\"M250.4,69.9L250.9,80.6L258.2,85.4L271.8,88.3L283.9,97.1L296.0,105.3L303.3,112.6L306.7,118.4L310.6,123.7L314.5,138.3L327.6,141.7L335.3,139.0L340.7,141.7L345.0,144.6L352.8,146.1L356.7,145.1L368.8,143.6L383.4,147.5L400.4,149.5L417.4,152.9L431.9,157.2L444.0,162.1L450.6,167.9L463.5,169.9L478.0,166.9L495.0,168.4L512.0,171.8L526.5,175.2L541.1,178.1L555.7,178.6L567.8,175.2L579.9,170.3L591.1,167.4L604.2,164.5L612.4,164.3L624.6,163.1L635.7,158.0L639.1,156.3L641.6,153.6L636.2,147.0L621.7,138.6L614.4,133.0L602.7,118.9L599.3,114.5L580.4,125.7L573.1,119.4L574.6,111.1L564.9,104.8L549.8,104.1L533.3,105.8L531.9,112.1L532.4,124.0L540.6,134.9L526.5,142.7L525.1,158.7L513.4,150.9L499.4,139.8L480.4,131.5L464.4,131.0L455.4,122.5L457.6,111.1L464.4,105.8L467.3,102.6L475.3,99.5L485.3,92.7L496.5,84.4L478.0,77.6L476.6,74.0L466.9,70.9L457.1,60.7L447.4,70.4L447.4,74.7L427.1,78.1L381.0,77.2L368.8,77.6L347.0,74.7L327.6,67.9L310.6,69.9L286.3,68.4L265.9,69.9ZM291.2,53.4L300.9,59.2L325.1,61.1L342.1,54.4L332.4,46.1L308.2,43.7ZM349.4,65.5L368.8,70.4L402.8,69.4L417.4,58.2L397.9,51.0L368.8,52.4ZM383.4,43.7L397.9,48.5L446.5,48.5L465.9,34.0L446.5,24.3L407.6,26.7ZM475.6,82.5L509.6,97.1L562.9,92.2L611.5,67.9L601.8,43.7L558.1,34.0L514.4,53.4ZM514.4,38.8L553.2,43.7L616.3,29.1L601.8,5.8L553.2,3.9L514.4,19.4Z\" role=\"radio\" aria-checked=\"false\" aria-label=\"Boreal &amp; Arctic Far North. Mostly outside US-scoped display sources. Approximate area-weighted mean category index: D0 · Abnormally dry, score 0.7 on the ordinal scale None=0 through D4=5. This navigation overview is inferred from NADM polygons, not an NADM-issued regional category. Most prevalent assessed-land condition: None · no drought, approximately 62.6% of assessed land. D1 through D4 drought: 17.5%. NADM Jun 2026. Coverage is partial. The Nunavut analysis-mask proxy excludes approximately 25.6% of this framing's land. Click fits the camera. Camera-only; selects nothing. ATNI-authored editorial framing for camera navigation; an owned simplification, not an authoritative boundary of any kind. Coastline presentation is adapted from Natural Earth 1:50m physical land.\" tabIndex=\"-1\" focusable=\"true\" vectorEffect=\"non-scaling-stroke\" clip-path=\"url(#shell-minimap-physical-land)\" data-framing=\"boreal-arctic\" data-drought-class=\"D0\" data-drought-coverage=\"live-partial\" data-wildfire-condition=\"neutral\" data-wildfire-region-status=\"neutral\" data-drought-dominant=\"none\" data-not-analyzed-percent=\"25.6\" style=\"fill: url(&quot;#shell-minimap-partial-boreal-arctic&quot;);\">\n  …(truncated, 2623 chars total)…\n</path>"
+    },
+    {
+      "n": 5,
+      "timestamp": "2026-08-13T16:35:04.693Z",
+      "pageURL": "https://atniclimate.github.io/dynamic-drought-module/?region=washington_state&layers=hillshade%2Cusdm%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "Content / text",
+      "instruction": "This text  does not need to be displayed",
+      "selector": "div.shell-minimap-map:nth-of-type(4) > div.shell-minimap > p.shell-minimap-metric-note:nth-of-type(1)",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#shell-panel > div#shell-island > div.shell > div.shell-minimap-map > div.shell-minimap > p.shell-minimap-metric-note",
+      "tag": "p",
+      "id": null,
+      "classes": [
+        "shell-minimap-metric-note"
+      ],
+      "textPreview": "Fill: approximate area-weighted NADM mean category index (None=0 to D4=5), not an issued regional category. Outline: D1 ",
+      "boundingBox": {
+        "x": 18,
+        "y": 356,
+        "w": 295,
+        "h": 46
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(148, 163, 184)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": ""
+      },
+      "htmlSnippet": "<p class=\"shell-minimap-metric-note\" aria-live=\"polite\">Fill: approximate area-weighted NADM mean category index (None=0 to D4=5), not an issued regional category. Outline: D1 through D4 land share.</p>"
+    },
+    {
+      "n": 6,
+      "timestamp": "2026-08-13T16:35:19.638Z",
+      "pageURL": "https://atniclimate.github.io/dynamic-drought-module/?region=washington_state&layers=hillshade%2Cusdm%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "Content / text",
+      "instruction": "This text does not need to be displayed",
+      "selector": "div.shell-minimap-map:nth-of-type(4) > div.shell-minimap > p.shell-minimap-provenance:nth-of-type(2)",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#shell-panel > div#shell-island > div.shell > div.shell-minimap-map > div.shell-minimap > p.shell-minimap-provenance",
+      "tag": "p",
+      "id": null,
+      "classes": [
+        "shell-minimap-provenance"
+      ],
+      "textPreview": "ATNI-authored editorial framing for camera navigation; an owned simplification, not an authoritative boundary of any kin",
+      "boundingBox": {
+        "x": 18,
+        "y": 405,
+        "w": 295,
+        "h": 58
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(100, 116, 139)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": ""
+      },
+      "htmlSnippet": "<p class=\"shell-minimap-provenance\">ATNI-authored editorial framing for camera navigation; an owned simplification, not an authoritative boundary of any kind. Coastline presentation is adapted from Natural Earth 1:50m physical land.</p>"
+    },
+    {
+      "n": 7,
+      "timestamp": "2026-08-13T16:36:24.726Z",
+      "pageURL": "https://atniclimate.github.io/dynamic-drought-module/?region=washington_state&layers=hillshade%2Cusdm%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "Content / text",
+      "instruction": "Note that this will update depending on the screen selection \"DROUGHT BRIEFING\" for Drought Page, \"WILDFIRE BRIEFING\" for Wildfire Page, etc.",
+      "selector": "#brief-head > h2.panel-title",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#shell-panel > div#shell-island > div.shell > div#shell-refine-host > section#brief-head > h2.panel-title",
+      "tag": "h2",
+      "id": null,
+      "classes": [
+        "panel-title"
+      ],
+      "textPreview": "Drought briefing",
+      "boundingBox": {
+        "x": 18,
+        "y": 578,
+        "w": 295,
+        "h": 17
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(148, 163, 184)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": ""
+      },
+      "htmlSnippet": "<h2 class=\"panel-title\">Drought briefing</h2>"
+    },
+    {
+      "n": 8,
+      "timestamp": "2026-08-13T16:36:56.226Z",
+      "pageURL": "https://atniclimate.github.io/dynamic-drought-module/?region=washington_state&layers=hillshade%2Cusdm%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "Content / text",
+      "instruction": "This does not need to show here",
+      "selector": "summary.enso-driver-line",
+      "domPath": "html > body.app-body > div#app > aside#sidebar > div.sidebar-scroll > section#brief-display > div#enso-driver > details.enso-driver-details > summary.enso-driver-line",
+      "tag": "summary",
+      "id": null,
+      "classes": [
+        "enso-driver-line"
+      ],
+      "textPreview": "ENSO driver neutral · RONI +0.98 (MJJ 2026; preliminary and may change) little long-range signal",
+      "boundingBox": {
+        "x": 18,
+        "y": 740,
+        "w": 295,
+        "h": 17
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "flex",
+        "zIndex": "auto",
+        "color": "rgb(241, 245, 249)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": ""
+      },
+      "htmlSnippet": "<summary class=\"enso-driver-line\">\n          <span class=\"enso-driver-kicker\">ENSO driver</span>\n          <span class=\"enso-driver-value\">neutral · RONI +0.98 (MJJ 2026; preliminary and may change)</span>\n          <span class=\"enso-driver-tilt\">little long-range signal</span>\n        </summary>"
+    },
+    {
+      "n": 9,
+      "timestamp": "2026-08-13T16:38:17.913Z",
+      "pageURL": "https://atniclimate.github.io/dynamic-drought-module/?region=washington_state&layers=hillshade%2Cusdm%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "Content / text",
+      "instruction": "The floating text \"Historical ground....\" can be removed. The DROUGHT Key is visible in the leftside navigation box and can be removed from the main map.",
+      "selector": "canvas.maplibregl-canvas",
+      "domPath": "html > body.app-body > div#app > main#map-container > div#map > div.maplibregl-canvas-container.maplibregl-interactive.maplibregl-touch-drag-pan > canvas.maplibregl-canvas",
+      "tag": "canvas",
+      "id": null,
+      "classes": [
+        "maplibregl-canvas"
+      ],
+      "textPreview": null,
+      "boundingBox": {
+        "x": 340,
+        "y": 0,
+        "w": 1177,
+        "h": 1103
+      },
+      "relevantComputedStyle": {
+        "position": "absolute",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(241, 245, 249)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": "12px / 20px Lexend, system-ui, -apple-system, \"Segoe UI\", sans-serif"
+      },
+      "htmlSnippet": "<canvas class=\"maplibregl-canvas\" tabindex=\"0\" aria-label=\"Map\" role=\"region\" width=\"1059\" height=\"992\" style=\"width: 1177px; height: 1103px;\"></canvas>"
+    },
+    {
+      "n": 10,
+      "timestamp": "2026-08-13T16:38:36.748Z",
+      "pageURL": "https://atniclimate.github.io/dynamic-drought-module/?region=washington_state&layers=hillshade%2Cusdm%2Caiannh%2Cbia-reservations%2Cstates&view=brief",
+      "category": "Content / text",
+      "instruction": "This Box can be removed, and also on mobile site",
+      "selector": "div.maplibregl-ctrl-attrib-inner",
+      "domPath": "html > body.app-body > div#app > main#map-container > div#map > div.maplibregl-control-container > div.maplibregl-ctrl-bottom-right > details.maplibregl-ctrl.maplibregl-ctrl-attrib.maplibregl-compact > div.maplibregl-ctrl-attrib-inner",
+      "tag": "div",
+      "id": null,
+      "classes": [
+        "maplibregl-ctrl-attrib-inner"
+      ],
+      "textPreview": "BIA AIAN-LAR | US Census Bureau | US Census AIANNH | USDM (NDMC / NOAA / USDA) | MapLibre | © OpenStreetMap contributors",
+      "boundingBox": {
+        "x": 542,
+        "y": 1050,
+        "w": 957,
+        "h": 40
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(148, 163, 184)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": "10px / 20px Lexend, system-ui, -apple-system, \"Segoe UI\", sans-serif"
+      },
+      "htmlSnippet": "<div class=\"maplibregl-ctrl-attrib-inner\">BIA AIAN-LAR | US <span class=\"recall-entity-class\" recall-entity-id=\"c4d077ae-bcf3-47a5-90e0-caa9738fc8e2\" id=\"rab-highlight-tutorial-id\" style=\"z-index: 6; position: relative;\">Census Bureau</span> | US Census AIANNH | USDM (NDMC / NOAA / USDA) | <a href=\"https://maplibre.org/\" target=\"_blank\">MapLibre</a> | © <a href=\"https://www.openstreetmap.org/copyright\"><span class=\"recall-entity-class\" recall-entity-id=\"dd055efb-6425-4925-92c0-a1cd14744948\" id=\"rab-highlight-tutorial-id\" style=\"z-index: 6; position: relative;\">OpenStreetMap</span></a> contributors | <a href=\"https://cloudless.eox.at\">EOxCloudless</a> by <a href=\"https://eox.at\">EOX IT Services GmbH</a> (Contains modified Copernicus Sentinel data 2016), <a href=\"https://creativecommons.org/licenses/by/4.0/\">CC BY 4.0</a></div>"
+    },
+    {
+      "n": 11,
+      "timestamp": "2026-08-13T16:39:47.697Z",
+      "pageURL": "https://atniclimate.github.io/dynamic-drought-module/?region=washington_state&layers=hillshade%2Cusdm%2Caiannh%2Cbia-reservations%2Cstates&view=brief&basemap=satellite",
+      "category": "Content / text",
+      "instruction": "This should be a simple SAT Button, toggles satellite view on and off, default view is satellite on",
+      "selector": "button.basemap-switcher-btn",
+      "domPath": "html > body.app-body > div#app > main#map-container > div#map > div.maplibregl-control-container > div.maplibregl-ctrl-bottom-right > div.maplibregl-ctrl.maplibregl-ctrl-group > button.basemap-switcher-btn.active",
+      "tag": "button",
+      "id": null,
+      "classes": [
+        "basemap-switcher-btn",
+        "active"
+      ],
+      "textPreview": "Recent",
+      "boundingBox": {
+        "x": 1403,
+        "y": 998,
+        "w": 104,
+        "h": 29
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(6, 182, 212)",
+        "background": "rgba(6, 182, 212, 0.14)",
+        "font": "490 10px \"League Spartan\", system-ui, -apple-system, \"Segoe UI\", sans-serif"
+      },
+      "htmlSnippet": "<button type=\"button\" class=\"basemap-switcher-btn active\" aria-label=\"Recent NOAA satellite imagery\" title=\"Recent NOAA satellite imagery\" aria-pressed=\"true\">Recent</button>"
+    },
+    {
+      "n": 12,
+      "timestamp": "2026-08-13T16:40:15.191Z",
+      "pageURL": "https://atniclimate.github.io/dynamic-drought-module/?region=washington_state&layers=hillshade%2Cusdm%2Caiannh%2Cbia-reservations%2Cstates&view=brief&basemap=satellite",
+      "category": "Content / text",
+      "instruction": "ND Drought Monitor coverage needs to extend to Canada and Mexic",
+      "selector": "canvas.maplibregl-canvas",
+      "domPath": "html > body.app-body > div#app > main#map-container > div#map > div.maplibregl-canvas-container.maplibregl-interactive.maplibregl-touch-drag-pan > canvas.maplibregl-canvas",
+      "tag": "canvas",
+      "id": null,
+      "classes": [
+        "maplibregl-canvas"
+      ],
+      "textPreview": null,
+      "boundingBox": {
+        "x": 340,
+        "y": 0,
+        "w": 1177,
+        "h": 1103
+      },
+      "relevantComputedStyle": {
+        "position": "absolute",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(241, 245, 249)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": "12px / 20px Lexend, system-ui, -apple-system, \"Segoe UI\", sans-serif"
+      },
+      "htmlSnippet": "<canvas class=\"maplibregl-canvas\" tabindex=\"0\" aria-label=\"Map\" role=\"region\" width=\"1059\" height=\"992\" style=\"width: 1177px; height: 1103px;\"></canvas>"
+    },
+    {
+      "n": 13,
+      "timestamp": "2026-08-13T16:40:47.586Z",
+      "pageURL": "https://atniclimate.github.io/dynamic-drought-module/?region=washington_state&layers=hillshade%2Cusdm%2Caiannh%2Cbia-reservations%2Cstates&view=brief&basemap=satellite",
+      "category": "Content / text",
+      "instruction": "Drought severity polygon border should not have outline",
+      "selector": "canvas.maplibregl-canvas",
+      "domPath": "html > body.app-body > div#app > main#map-container > div#map > div.maplibregl-canvas-container.maplibregl-interactive.maplibregl-touch-drag-pan > canvas.maplibregl-canvas",
+      "tag": "canvas",
+      "id": null,
+      "classes": [
+        "maplibregl-canvas"
+      ],
+      "textPreview": null,
+      "boundingBox": {
+        "x": 340,
+        "y": 0,
+        "w": 1177,
+        "h": 1103
+      },
+      "relevantComputedStyle": {
+        "position": "absolute",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(241, 245, 249)",
+        "background": "rgba(0, 0, 0, 0)",
+        "font": "12px / 20px Lexend, system-ui, -apple-system, \"Segoe UI\", sans-serif"
+      },
+      "htmlSnippet": "<canvas class=\"maplibregl-canvas\" tabindex=\"0\" aria-label=\"Map\" role=\"region\" width=\"1059\" height=\"992\" style=\"width: 1177px; height: 1103px;\"></canvas>"
+    },
+    {
+      "n": 14,
+      "timestamp": "2026-08-13T16:41:14.477Z",
+      "pageURL": "https://atniclimate.github.io/dynamic-drought-module/?region=washington_state&layers=hillshade%2Cusdm%2Caiannh%2Cbia-reservations%2Cstates&view=brief&basemap=satellite",
+      "category": "Content / text",
+      "instruction": "This should be a scale for both standard and metric",
+      "selector": "div.maplibregl-ctrl.maplibregl-ctrl-scale",
+      "domPath": "html > body.app-body > div#app > main#map-container > div#map > div.maplibregl-control-container > div.maplibregl-ctrl-bottom-left > div.maplibregl-ctrl.maplibregl-ctrl-scale",
+      "tag": "div",
+      "id": null,
+      "classes": [
+        "maplibregl-ctrl",
+        "maplibregl-ctrl-scale"
+      ],
+      "textPreview": "50 mi",
+      "boundingBox": {
+        "x": 350,
+        "y": 1070,
+        "w": 131,
+        "h": 23
+      },
+      "relevantComputedStyle": {
+        "position": "static",
+        "display": "block",
+        "zIndex": "auto",
+        "color": "rgb(203, 213, 225)",
+        "background": "rgba(15, 23, 42, 0.85)",
+        "font": ""
+      },
+      "htmlSnippet": "<div class=\"maplibregl-ctrl maplibregl-ctrl-scale\" style=\"width: 130.543px;\">50&nbsp;mi</div>"
+    }
+  ]
+}

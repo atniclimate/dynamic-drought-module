@@ -9,8 +9,8 @@ import {
 } from './helpers';
 
 /**
- * UX-3 conditions strip: a dated at-a-glance summary at the top of the
- * sidebar. Data model is "reflect the map" (honest): a metric shows a number
+ * UX-3 conditions strip: a dated at-a-glance summary of the rendered map.
+ * Data model is "reflect the map" (honest): a metric shows a number
  * only when its layer is active and rendered. Since E1 deliverable 6
  * (D-0.7.0-041 part 2, review E1.4) the off-state Alerts and Fires tiles
  * retire outright: the strip keeps the drought reading and the date line
@@ -34,13 +34,28 @@ test.describe('UX-3 conditions strip', () => {
     await expect(tiles).toHaveCount(1);
     await expect(tiles.nth(0)).toHaveAttribute('data-metric', 'drought');
 
-    // Desktop Brief moves the original strip below the shell's honest
-    // Conditions in view summary. Its old visual title stands down, while
-    // the valid-date slot and the one metric root stay on the same node.
-    await expect(page.locator('#shell-conditions-host > #conditions-strip')).toHaveCount(1);
+    // Desktop Brief moves the original strip into the frozen sidebar foot.
+    // Its old visual title stands down, while the valid-date slot and the one
+    // metric root stay on the same node.
+    await expect(page.locator('#conditions-strip-dock > #conditions-strip')).toHaveCount(1);
     await expect(page.locator('#shell-conditions-heading')).toHaveText('Conditions in view');
     await expect(strip.locator('.conditions-title')).toBeHidden();
     await expect(strip.locator('#conditions-date')).toBeAttached();
+
+    await waitForLayerSettled(page, 'nadm-drought');
+    const drought = tiles.nth(0);
+    await expect(drought).toHaveAttribute('data-tone', 'data');
+    const oneLine = await drought.evaluate((tile) => {
+      const value = tile.querySelector<HTMLElement>('.conditions-value');
+      const label = tile.querySelector<HTMLElement>('.conditions-sublabel');
+      if (!value || !label) return false;
+      const valueRect = value.getBoundingClientRect();
+      const labelRect = label.getBoundingClientRect();
+      return valueRect.bottom >= labelRect.top && labelRect.bottom >= valueRect.top;
+    });
+    expect(oneLine).toBe(true);
+    await expect(drought.locator('.conditions-sublabel')).not.toContainText('in view');
+    await expect(drought).toHaveAttribute('aria-label', /in view/i);
 
     await page.locator('.view-switch [data-view="console"]').click();
     await expect(page.locator('#conditions-strip-home + #conditions-strip')).toHaveCount(1);
@@ -70,6 +85,18 @@ test.describe('UX-3 conditions strip', () => {
     await expect
       .poll(async () => drought.locator('.conditions-sublabel').textContent())
       .not.toBe('US Drought Monitor');
+  });
+
+  test('desktop Brief keeps the full categorical legend behind the frozen receipt Key', async ({
+    page
+  }) => {
+    await gotoApp(page);
+    await waitForLayerSettled(page, 'nadm-drought');
+    const key = page.locator('.sidebar-key-disclosure > summary');
+    await expect(key).toBeVisible();
+    await expect(page.locator('#sidebar-key-host > #legend-panel')).toBeHidden();
+    await key.click();
+    await expect(page.locator('#sidebar-key-host > #legend-panel')).toBeVisible();
   });
 
   test('the fires tile appears and reflects the wildfire layer once it is on', async ({
@@ -184,7 +211,7 @@ test.describe('UX-3 conditions strip', () => {
     const fires = page.locator('.conditions-metric[data-metric="fires"]');
 
     // Real button semantics (guardrail spec: never a sometimes-button),
-    // with aria-pressed from the layer's on-state. USDM is default-on; the
+    // with aria-pressed from the layer's on-state. NADM is default-on; the
     // two event layers are off and their tiles retired (E1 deliverable 6),
     // so the pressed/off wording contract is asserted on the drought tile
     // (its off state is exercised by the release-blocker spec below).
@@ -202,32 +229,16 @@ test.describe('UX-3 conditions strip', () => {
   test('RELEASE BLOCKER (D-0.7.0-008): the drought tile label, announcement, and catalog sync move together', async ({
     page
   }) => {
-    // A deterministic USDM week so the re-show reaches `live` regardless
-    // of the upstream's mood.
-    const usdmFc = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: { DM: 2, MapDate: Date.now() - 24 * 60 * 60 * 1000 },
-          geometry: {
-            type: 'Polygon',
-            coordinates: [[[-125, 42], [-116, 42], [-116, 49], [-125, 49], [-125, 42]]]
-          }
-        }
-      ]
-    };
-    const fulfill = (route: Parameters<Parameters<typeof page.route>[1]>[0]): Promise<void> =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(usdmFc)
-      });
-    await page.route('**/USDM_current/**', fulfill);
-    await page.route('**/USDM_archive/**', fulfill);
-
-    await gotoApp(page, '?region=washington_state&layers=usdm');
-    await waitForLayerSettled(page, 'usdm');
+    await gotoApp(page, '?region=washington_state');
+    for (const key of [
+      'hillshade',
+      'nadm-drought',
+      'aiannh',
+      'bia-reservations',
+      'states'
+    ]) {
+      await waitForLayerSettled(page, key);
+    }
 
     const tile = page.locator('.conditions-metric[data-metric="drought"]');
     const live = page.locator('#layer-status-live');
@@ -241,51 +252,41 @@ test.describe('UX-3 conditions strip', () => {
     // relabels to the off wording WITH the surface-replacement disclosure
     // (the guardrail spec's named risk: USDM replaces the active surface).
     await tile.click();
-    await expect.poll(async () => !(await urlLayers(page)).has('usdm')).toBe(true);
-    await expect(layerCheckbox(page, 'usdm')).not.toBeChecked();
-    await expect(live).toHaveText('US Drought Monitor: off');
+    await expect.poll(async () => !(await urlLayers(page)).has('nadm-drought')).toBe(true);
+    await expect(layerCheckbox(page, 'nadm-drought')).not.toBeChecked();
+    await expect(live).toHaveText('North American Drought Monitor: off');
     await expect(tile).toHaveAttribute('aria-pressed', 'false');
     await expect(tile.locator('.conditions-value')).toHaveText('Layer off');
     const offLabel = (await tile.getAttribute('aria-label')) ?? '';
-    expect(offLabel).toContain('US Drought Monitor layer off');
+    expect(offLabel).toContain('North American Drought Monitor layer off');
     expect(offLabel).toContain('replaces the current condition surface');
 
     // Press to show: the surface returns through the shared toggle command,
     // so the URL, the checkbox, the pill, and the announcement move as one.
     await tile.click();
-    await expect.poll(async () => (await urlLayers(page)).has('usdm')).toBe(true);
-    await expect(layerCheckbox(page, 'usdm')).toBeChecked();
-    await waitForLayerSettled(page, 'usdm');
-    await expect(layerPill(page, 'usdm')).toHaveText(PILL.live);
-    await expect(live).toHaveText('US Drought Monitor: live');
+    await expect.poll(async () => (await urlLayers(page)).has('nadm-drought')).toBe(true);
+    await expect(layerCheckbox(page, 'nadm-drought')).toBeChecked();
+    await waitForLayerSettled(page, 'nadm-drought');
+    await expect(layerPill(page, 'nadm-drought')).toHaveText(PILL.live);
+    await expect(live).toHaveText('North American Drought Monitor: live');
     await expect(tile).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('the on-map drought key reflects the USDM surface', async ({ page }) => {
+  test('the full app relies on the sidebar drought key', async ({ page }) => {
     // Console boot: the uncheck below drives the catalog checkbox, and E1
     // deliverable 1 hides the Brief-mode catalog behind the console door.
     await gotoApp(page, '?view=console');
 
-    // USDM is default-on, so the key is visible with six swatches: the
-    // leading source-honest no-polygon entry, then the five categories (D0
-    // through D4) sourced from the same USDM_CATEGORIES table as the map
-    // fill. Registry-driven, no fetch: deterministic.
+    // The default NADM surface is explained in the sidebar and the redundant
+    // full-app map key stays hidden. Embed mode retains the compact key.
     const key = page.locator('#map-key');
-    await expect(key).toBeVisible();
-    await expect(key.locator('.map-key-swatch')).toHaveCount(6);
-    await expect(key.locator('.map-key-item').first()).toContainText('No polygon');
-    await expect(key.locator('.map-key-qualification')).toContainText(
-      'D4 pink rim: contrast only; official category unchanged.'
-    );
-    await expect(key).toHaveAttribute(
-      'aria-label',
-      /without an analyzed-area mask it does not confirm no drought/
-    );
+    await expect(key).toBeHidden();
+    await expect(page.locator('#legend-panel [data-legend="nadm-drought"]')).toBeVisible();
 
     // Turning the USDM surface off hides the key: it never claims a surface
     // that is not on the map.
-    await waitForLayerSettled(page, 'usdm');
-    await layerCheckbox(page, 'usdm').uncheck();
+    await waitForLayerSettled(page, 'nadm-drought');
+    await layerCheckbox(page, 'nadm-drought').uncheck();
     await expect(key).toBeHidden();
   });
 });

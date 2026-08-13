@@ -87,10 +87,10 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
     // this tooltip is the cluster's first prose use of the agency name,
     // so both acronyms are spelled out here; later uses stay compact.
     description:
-      'Current drought conditions and the National Oceanic and Atmospheric Administration (NOAA) Climate Prediction Center (CPC) drought outlooks.',
+      'Current North American Drought Monitor conditions and the National Oceanic and Atmospheric Administration (NOAA) Climate Prediction Center (CPC) drought outlooks.',
     recipes: {
-      // The weekly US Drought Monitor is the current read.
-      current: ['usdm'],
+      // The monthly tri-national product is the current continental read.
+      current: ['nadm-drought'],
       // Both outlook horizons render the CPC outlook surface; the
       // timeline store's outlook range (monthly vs seasonal) selects
       // the register within it.

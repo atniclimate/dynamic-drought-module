@@ -5,7 +5,8 @@ import {
   gotoApp,
   layerCheckbox,
   layerPill,
-  regionButton
+  regionSelect,
+  selectRegion
 } from './helpers';
 
 const BC_HOST = 'services1.arcgis.com';
@@ -171,10 +172,7 @@ test.describe('U7 British Columbia basin drought display', () => {
       '?region=british_columbia&layers=usdm&view=console'
     );
 
-    await expect(regionButton(page, 'british_columbia')).toHaveAttribute(
-      'aria-checked',
-      'true'
-    );
+    await expect(regionSelect(page)).toHaveValue('region:british_columbia');
     await expect(layerPill(page, 'usdm')).toHaveText('live');
     await expect(droughtRow(page)).toContainText(
       'British Columbia Basin Drought Levels'
@@ -201,10 +199,7 @@ test.describe('U7 British Columbia basin drought display', () => {
     await expect(page.locator('#time-bar')).toContainText(
       'No update means not measured right now'
     );
-    await expect(page.locator('#map-key')).toContainText(
-      'Province of British Columbia · 2026-07-23'
-    );
-    await expect(page.locator('#map-key')).toContainText('No update');
+    await expect(page.locator('#map-key')).toBeHidden();
     await expect(page.locator('.maplibregl-ctrl-attrib')).toContainText(
       'Province of British Columbia'
     );
@@ -231,7 +226,7 @@ test.describe('U7 British Columbia basin drought display', () => {
     const legend = page.locator('#legend-panel [data-legend="usdm"]');
     await expect(legend).toContainText('U.S. Drought Monitor');
 
-    await regionButton(page, 'british_columbia').click();
+    await selectRegion(page, 'british_columbia');
     await expect(layerPill(page, 'usdm')).toHaveText('live');
     await expect(legend).toContainText('Province of British Columbia');
     await expect(legend).not.toContainText('U.S. Drought Monitor');
@@ -239,7 +234,7 @@ test.describe('U7 British Columbia basin drought display', () => {
       'US Drought Monitor week'
     );
 
-    await regionButton(page, 'washington_state').click();
+    await selectRegion(page, 'washington_state');
     await expect(layerPill(page, 'usdm')).toHaveText('live');
     await expect(legend).toContainText('U.S. Drought Monitor');
     await expect(legend).not.toContainText('Province of British Columbia');
@@ -263,18 +258,15 @@ test.describe('U7 British Columbia basin drought display', () => {
     await expect(layerPill(page, 'usdm')).toHaveText('live');
     const legend = page.locator('#legend-panel [data-legend="usdm"]');
 
-    await regionButton(page, 'british_columbia').click();
+    await selectRegion(page, 'british_columbia');
     await expect.poll(() => bcRequests.length).toBe(1);
-    await regionButton(page, 'washington_state').click();
+    await selectRegion(page, 'washington_state');
     await expect(layerPill(page, 'usdm')).toHaveText('live');
     await expect(legend).toContainText('U.S. Drought Monitor');
 
     releaseBc();
     await page.waitForTimeout(500);
-    await expect(regionButton(page, 'washington_state')).toHaveAttribute(
-      'aria-checked',
-      'true'
-    );
+    await expect(regionSelect(page)).toHaveValue('region:washington_state');
     await expect(legend).toContainText('U.S. Drought Monitor');
     await expect(legend).not.toContainText('Province of British Columbia');
     await expect(page.locator('#map-key')).not.toContainText(
@@ -369,7 +361,7 @@ test.describe('U7 British Columbia basin drought display', () => {
 
     await page.waitForTimeout(250);
     const resourceRequestsBeforeSwitch = briefingResourceRequests.length;
-    await regionButton(page, 'british_columbia').click();
+    await selectRegion(page, 'british_columbia');
     await expect(layerPill(page, 'usdm')).toHaveText('live');
     await expect(panel).toBeHidden();
     await expect(page.locator('#region-briefing-btn')).toBeHidden();
@@ -385,9 +377,7 @@ test.describe('U7 British Columbia basin drought display', () => {
     await expect(
       page.locator('#legend-panel [data-legend="usdm"]')
     ).toContainText('Province of British Columbia');
-    await expect(page.locator('#map-key')).toContainText(
-      'Province of British Columbia'
-    );
+    await expect(page.locator('#map-key')).toBeHidden();
   });
 
   test('no British Columbia source geometry is committed under public data', () => {

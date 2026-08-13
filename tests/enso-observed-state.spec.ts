@@ -93,21 +93,11 @@ test.describe('ENSO observed-state repair', () => {
     expect(snapshot.probabilities).toBeUndefined();
   });
 
-  test('driver detail carries continuity, analyzed monthly, and supporting agreement reads', async ({
+  test('the standalone ENSO driver line is removed from the interface', async ({
     page
   }) => {
     await gotoApp(page);
-
-    const driver = page.locator('#enso-driver');
-    await expect(driver).toBeVisible();
-    await expect(driver.locator('.enso-driver-value')).toContainText('RONI');
-    await driver.locator('.enso-driver-line').click();
-
-    const detail = driver.locator('.enso-driver-detail');
-    await expect(detail).toContainText('historical-continuity Oceanic Nino Index');
-    await expect(detail).toContainText('analyzed monthly Nino 3.4');
-    await expect(detail).toContainText('ocean-atmosphere agreement flag only');
-    await expect(detail).toContainText('not a forecast');
+    await expect(page.locator('#enso-driver')).toHaveCount(0);
   });
 
   test('preliminary seasonal values say they may change in every rendered surface', async ({
@@ -119,20 +109,7 @@ test.describe('ENSO observed-state repair', () => {
 
     await gotoApp(page, '?select=state:WA');
 
-    const driver = page.locator('#enso-driver');
-    await expect(driver).toBeVisible();
-    await expect.soft(driver.locator('.enso-driver-value')).toContainText(
-      /RONI [+-]?\d+\.\d{2} \([A-Z]{3} \d{4}; preliminary and may change\)/
-    );
-    await driver.locator('.enso-driver-line').click();
-
-    const detail = driver.locator('.enso-driver-detail');
-    await expect.soft(detail).toContainText(
-      /operational RONI [+-]?\d+\.\d{2} \([A-Z]{3} \d{4}; preliminary and may change\)/
-    );
-    await expect.soft(detail).toContainText(
-      /Oceanic Nino Index \(ONI [+-]?\d+\.\d{2}, preliminary and may change\)/
-    );
+    await expect(page.locator('#enso-driver')).toHaveCount(0);
 
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible({ timeout: 15_000 });
@@ -152,7 +129,7 @@ test.describe('ENSO observed-state repair', () => {
     await expect(analyzed.first()).not.toContainText(/preliminary/i);
   });
 
-  test('missing optional Nino 3.4 and SOI blocks still render the seasonal indices', async ({
+  test('missing optional Nino 3.4 and SOI blocks do not restore the retired driver', async ({
     page
   }) => {
     const snapshot: Record<string, unknown> = { ...readSnapshot() };
@@ -167,17 +144,11 @@ test.describe('ENSO observed-state repair', () => {
     );
 
     await gotoApp(page);
-    const driver = page.locator('#enso-driver');
-    await expect(driver).toBeVisible();
-    await expect(driver.locator('.enso-driver-value')).toContainText('RONI');
-    await driver.locator('.enso-driver-line').click();
-    await expect(driver.locator('.enso-driver-detail')).toContainText(
-      'historical-continuity Oceanic Nino Index'
-    );
+    await expect(page.locator('#enso-driver')).toHaveCount(0);
   });
 
   for (const block of ['nino34', 'soi'] as const) {
-    test(`present malformed optional ${block} block still renders the seasonal indices`, async ({
+    test(`present malformed optional ${block} block does not restore the retired driver`, async ({
       page
     }) => {
       const snapshot: Record<string, unknown> = {
@@ -193,17 +164,7 @@ test.describe('ENSO observed-state repair', () => {
       );
 
       await gotoApp(page);
-      const driver = page.locator('#enso-driver');
-      await expect(driver).toBeVisible();
-      await expect(driver.locator('.enso-driver-value')).toContainText('RONI');
-      await driver.locator('.enso-driver-line').click();
-      const detail = driver.locator('.enso-driver-detail');
-      await expect(detail).toContainText('historical-continuity Oceanic Nino Index');
-      await expect(detail).not.toContainText(
-        block === 'nino34'
-          ? 'analyzed monthly Nino 3.4'
-          : 'ocean-atmosphere agreement flag only'
-      );
+      await expect(page.locator('#enso-driver')).toHaveCount(0);
     });
   }
 
