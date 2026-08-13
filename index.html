@@ -45,10 +45,9 @@
 
       <div class="sidebar-scroll">
 
-        <!-- Stable fallback seat for the one conditions strip. The desktop
-             Brief shell moves the SAME section into its ordered host after
-             the lazy island mounts, then returns it here for every other
-             surface and for the island pre-mount fallback. -->
+        <!-- Stable fallback seat for the one conditions strip. Desktop Brief
+             moves the SAME section into the fixed sidebar dock below; every
+             other surface and the island pre-mount fallback retain this seat. -->
         <span id="conditions-strip-home" hidden></span>
         <section class="panel conditions-strip" id="conditions-strip" aria-label="Conditions in view" hidden>
           <div class="conditions-head">
@@ -59,7 +58,7 @@
         </section>
 
         <!-- Stable fallback seat for the generated Brief head. The eligible
-             desktop Brief shell moves the SAME section below its share door;
+             desktop Brief shell moves the SAME section below its minimap;
              console, mobile, embed, collapse, and pre-mount retain this seat. -->
         <span id="brief-head-home" hidden></span>
         <!-- Brief head (U1, the two doors): the concise lede and the one place
@@ -69,8 +68,8 @@
 
         <!-- The S4 main-screen shell (the 2026-07-18 design record): the four
              hazard cluster buttons, honest conditions summary, same-node
-             conditions and region controls, continental minimap, compact
-             temporal row, share door, and same-node Brief refinement head,
+             region controls, continental minimap, compact temporal row,
+             share door, and same-node Brief place search,
              rendered by the lazy Preact shell island into this static host.
              Stylesheet-gated: desktop only (below 720px the mobile sheet
              and hazard rail carry the same decisions), never in embed. -->
@@ -95,7 +94,6 @@
                the shell island (S4): the S3 DisplaySummary renders the live,
                status-derived truth there, so a hand-authored placeholder
                sentence here would be a second, staler description. -->
-          <div class="enso-driver" id="enso-driver" aria-label="ENSO driver" hidden></div>
           <div id="layers-studio-entry-host"></div>
           <div id="brief-secondary-actions"></div>
           <div class="brief-selection-summary" id="brief-selection-summary" hidden>
@@ -138,8 +136,8 @@
              Brief shell host never clones or rebuilds these controls. -->
         <span id="panel-region-home" hidden></span>
         <section class="panel" id="panel-region">
-          <h2 class="panel-title">Jump to region</h2>
-          <div id="region-buttons" class="region-grid" role="radiogroup" aria-label="Jump to region"></div>
+          <label class="panel-title sr-only" for="region-select">Jump to region</label>
+          <select id="region-select" class="region-select" aria-label="Jump to region"></select>
         </section>
 
         <!-- The Quick views preset panel (UX-2). On the desktop BRIEF
@@ -187,6 +185,7 @@
           </div>
         </section>
 
+        <span id="legend-panel-home" hidden></span>
         <section class="panel legend-panel" id="legend-panel" hidden>
           <h2 class="panel-title">Legend</h2>
           <div id="legend-sections"></div>
@@ -218,6 +217,19 @@
            OUTSIDE .sidebar-scroll so the no-scroll contract and the foot's
            own scroll region cannot fight. -->
       <div id="panel-response" class="panel-response"></div>
+
+      <!-- Desktop Brief keeps the current rendered-condition readout pinned
+           below the scrolling controls. The shell rehosts the existing
+           #conditions-strip here, preserving its listeners and status. Its
+           full categorical legend remains available through the compact Key
+           disclosure; Console and mobile return both nodes to their homes. -->
+      <div id="sidebar-bottom-dock" class="sidebar-bottom-dock">
+        <div id="conditions-strip-dock" class="conditions-strip-dock"></div>
+        <details class="sidebar-key-disclosure">
+          <summary>Key</summary>
+          <div id="sidebar-key-host" class="sidebar-key-host"></div>
+        </details>
+      </div>
 
       <footer class="sidebar-footer">
         <p>A project of ATNI Climate (Affiliated Tribes of Northwest Indians)</p>

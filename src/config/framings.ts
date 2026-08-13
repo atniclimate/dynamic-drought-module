@@ -121,17 +121,18 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
       'US display layers cover Alaska variably; Yukon and British Columbia are outside US-scoped sources. The monthly North American Drought Monitor informs this minimap across Alaska and the Aleutians.',
   },
   'boreal-arctic': {
-    label: 'Boreal & Arctic Far North',
-    // East of the Alaska & Northwest divide: NWT, Nunavut, the northern
-    // prairie provinces, boreal Ontario/Quebec, and Labrador.
+    label: 'Boreal Northern Canada',
+    // East of the Alaska & Northwest divide across contiguous northern
+    // Canada. The Arctic Archipelago is deliberately outside this compact
+    // navigation framing.
     bounds: [
       [50.0, -141.5],
-      [83.5, -52.0],
+      [72.0, -52.0],
     ],
     padding: 1.0,
     provenance: AUTHORED_NOTE,
     coverageNote:
-      'Mostly outside US-scoped display sources; per-layer status stays honest here. The monthly continental drought summary excludes Nunavut with an analysis-mask proxy and is partial in the far north.',
+      'Mostly outside US-scoped display sources; per-layer status stays honest here. The monthly continental drought summary uses an analysis-mask proxy for Nunavut and is partial in northern Canada.',
   },
   'pacific-coast': {
     label: 'Pacific Coast & Northwest Cascades',

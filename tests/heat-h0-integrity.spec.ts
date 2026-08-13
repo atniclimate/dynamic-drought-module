@@ -4,7 +4,7 @@ import {
   gotoApp,
   layerCheckbox,
   layerPill,
-  regionButton
+  selectRegion
 } from './helpers';
 
 const HEATRISK_PATH =
@@ -186,7 +186,7 @@ test('HeatRisk is live only at a contiguous United States map center', async ({
   );
 
   for (const region of ['alaska', 'hawaii'] as const) {
-    await regionButton(page, region).click();
+    await selectRegion(page, region);
     await expect(layerPill(page, 'heatrisk'), region).toContainText(
       'no data'
     );
@@ -195,7 +195,7 @@ test('HeatRisk is live only at a contiguous United States map center', async ({
     ).toContainText('No HeatRisk data at the map center.');
   }
 
-  await regionButton(page, 'washington_state').click();
+  await selectRegion(page, 'washington_state');
   await expect(layerPill(page, 'heatrisk')).toHaveText('live');
 });
 

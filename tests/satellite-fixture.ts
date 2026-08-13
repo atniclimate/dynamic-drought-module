@@ -80,10 +80,14 @@ export interface SatelliteStubController {
   failRenderedFrame(objectId: number): void;
 }
 
+const stubbedPages = new WeakMap<Page, SatelliteStubController>();
+
 export async function stubRecentSatellite(
   page: Page,
   options: SatelliteStubOptions = {}
 ): Promise<SatelliteStubController> {
+  const existing = stubbedPages.get(page);
+  if (existing) return existing;
   let frames = [...(options.frames ?? [SATELLITE_FRAME])];
   const failedProbeFrameIds = new Set(options.failedProbeFrameIds ?? []);
   const failedRenderedFrameIds = new Set(options.failedRenderedFrameIds ?? []);
@@ -137,7 +141,7 @@ export async function stubRecentSatellite(
     }
   );
 
-  return {
+  const controller: SatelliteStubController = {
     probeFrameIds,
     renderedFrameIds,
     setFrames(nextFrames): void {
@@ -150,6 +154,8 @@ export async function stubRecentSatellite(
       failedRenderedFrameIds.add(objectId);
     }
   };
+  stubbedPages.set(page, controller);
+  return controller;
 }
 
 export async function failRecentSatelliteTiles(page: Page): Promise<void> {

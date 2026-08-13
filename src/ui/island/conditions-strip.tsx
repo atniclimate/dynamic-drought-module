@@ -29,7 +29,7 @@
  */
 
 import type maplibregl from 'maplibre-gl';
-import { useEffect } from 'preact/hooks';
+import { useEffect, useRef } from 'preact/hooks';
 import type { ReadonlySignal } from '@preact/signals';
 
 import { getLayerDef } from '../../config/layers';
@@ -50,7 +50,6 @@ import type { Metric } from './strip-metrics';
  * surface, so showing it replaces whatever condition surface is on).
  */
 const TILE_LAYER: Record<string, { key: string; disclose: boolean }> = {
-  drought: { key: 'usdm', disclose: true },
   alerts: { key: 'nws-alerts', disclose: false },
   fires: { key: 'nifc-fires', disclose: false }
 };
@@ -81,7 +80,7 @@ function tileAriaLabel(name: string, m: Metric, isOn: boolean, disclose: boolean
   const action = isOn
     ? ` ${name} layer on. Press to hide.`
     : ` Press to show.${
-        disclose ? ' Showing the US Drought Monitor replaces the current condition surface.' : ''
+        disclose ? ` Showing ${name} replaces the current condition surface.` : ''
       }`;
   return `${status}${stale}${action}`;
 }
@@ -89,14 +88,14 @@ function tileAriaLabel(name: string, m: Metric, isOn: boolean, disclose: boolean
 function MetricTile({
   id,
   m,
-  isOn
+  isOn,
+  tile
 }: {
   id: string;
   m: Metric;
   isOn: boolean;
+  tile: { key: string; disclose: boolean };
 }) {
-  const tile = TILE_LAYER[id];
-  if (!tile) return null;
   const name = getLayerDef(tile.key)?.name ?? tile.key;
 
   const onClick = (): void => {
@@ -129,7 +128,10 @@ function MetricTile({
         {m.value}
       </span>
       <span class="conditions-sublabel">
-        {m.sublabel}
+        {m.sublabel.replace(/ in view$/i, '')}
+        {m.sublabel.toLowerCase().endsWith(' in view') ? (
+          <span class="sr-only"> in the current map view</span>
+        ) : null}
         {m.stale ? <span class="conditions-stale-tag">stale</span> : null}
       </span>
       {!isOn && m.tone === 'off' ? <span class="conditions-action">Show</span> : null}
@@ -150,12 +152,25 @@ export function ConditionsStrip({ map, tick, checked }: StripProps) {
   // the map is actually rendering (the reflect-the-map contract).
   void tick.value;
 
-  const drought = droughtMetric(map);
+  const lastDroughtLayer = useRef<'usdm' | 'nadm-drought'>('nadm-drought');
+  if (checked.value.get('usdm')) lastDroughtLayer.current = 'usdm';
+  else if (checked.value.get('nadm-drought')) {
+    lastDroughtLayer.current = 'nadm-drought';
+  }
+  const drought = droughtMetric(map, lastDroughtLayer.current);
   const alerts = alertsMetric(map);
   const fires = firesMetric(map);
+  const droughtLayer = {
+    key: lastDroughtLayer.current,
+    disclose: true
+  };
+  const tileLayers: Record<string, { key: string; disclose: boolean }> = {
+    ...TILE_LAYER,
+    drought: droughtLayer
+  };
 
   const isOn = (id: string): boolean => {
-    const tile = TILE_LAYER[id];
+    const tile = tileLayers[id];
     return tile ? (checked.value.get(tile.key) ?? false) : false;
   };
 
@@ -169,7 +184,10 @@ export function ConditionsStrip({ map, tick, checked }: StripProps) {
   // (critical-review #6): the category still shows, but the tile and the date
   // line both say so, rather than presenting an old week as current.
   const droughtStale =
-    !viewingHistory && drought.metric.tone === 'data' && isUsdmStale(drought.dateMs);
+    droughtLayer.key === 'usdm' &&
+    !viewingHistory &&
+    drought.metric.tone === 'data' &&
+    isUsdmStale(drought.dateMs);
   const droughtTile: Metric = droughtStale ? { ...drought.metric, stale: true } : drought.metric;
 
   useEffect(() => {
@@ -202,12 +220,11 @@ export function ConditionsStrip({ map, tick, checked }: StripProps) {
   // live reading plus the hide action.
   const alertsOn = isOn('alerts');
   const firesOn = isOn('fires');
-
   return (
     <>
-      <MetricTile id="drought" m={droughtTile} isOn={isOn('drought')} />
-      {alertsOn ? <MetricTile id="alerts" m={alerts} isOn={alertsOn} /> : null}
-      {firesOn ? <MetricTile id="fires" m={fires} isOn={firesOn} /> : null}
+      <MetricTile id="drought" m={droughtTile} isOn={isOn('drought')} tile={droughtLayer} />
+      {alertsOn ? <MetricTile id="alerts" m={alerts} isOn={alertsOn} tile={TILE_LAYER.alerts!} /> : null}
+      {firesOn ? <MetricTile id="fires" m={fires} isOn={firesOn} tile={TILE_LAYER.fires!} /> : null}
     </>
   );
 }

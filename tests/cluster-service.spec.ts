@@ -153,7 +153,7 @@ test.describe('S3 requestCluster (the transaction)', () => {
     resetWorld();
     const dispose = initClusterService();
     try {
-      expect(registry.getActiveKeys().has('usdm')).toBe(true);
+      expect(registry.getActiveKeys().has('nadm-drought')).toBe(true);
 
       let notified = 0;
       const off = onCommittedSnapshotChange(() => {
@@ -168,8 +168,8 @@ test.describe('S3 requestCluster (the transaction)', () => {
         expect(checkedKeys().has(key), `${key} stays checked`).toBe(true);
       }
       // The old cluster's exclusive surface is gone.
-      expect(registry.getActiveKeys().has('usdm')).toBe(false);
-      expect(checkedKeys().has('usdm')).toBe(false);
+      expect(registry.getActiveKeys().has('nadm-drought')).toBe(false);
+      expect(checkedKeys().has('nadm-drought')).toBe(false);
       // The new recipe (the explicit co-pair) is on.
       expect(registry.getActiveKeys().has('nifc-fires')).toBe(true);
       expect(registry.getActiveKeys().has('hms-smoke')).toBe(true);
@@ -187,7 +187,7 @@ test.describe('S3 requestCluster (the transaction)', () => {
         [...composeClusterIntent('wildfire', 'current')].sort()
       );
       // No stale non-intended status leaks into the snapshot.
-      expect(snapshot.statuses.has('usdm')).toBe(false);
+      expect(snapshot.statuses.has('nadm-drought')).toBe(false);
       expect(snapshot.summary.primary).toContain(
         'Current Mapped Fire Perimeters (National Interagency Fire Center, NIFC)'
       );

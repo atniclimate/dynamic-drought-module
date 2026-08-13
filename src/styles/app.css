@@ -836,47 +836,28 @@ button.conditions-metric:hover {
    Region selector
    ---------------------------------------------------------------------------- */
 
-/* U3e (D-0.7.0-009): the region selector is demoted from the prominent
-   two-column button grid to a plain, secondary "jump to" list. Brief mode
-   carries place selection as the primary "where" control; this list is the
-   quiet way to jump the map to a preset framing. Rows are transparent list
-   items (not filled buttons) with a quiet accent marker on the active row,
-   so the list reads as secondary and does not compete with the search. The
-   radiogroup semantics (role, roving tabindex, arrow keys) are unchanged. */
-.region-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.region-btn {
-  appearance: none;
+/* One compact selector serves both the continental minimap framings and the
+   established detailed region cameras. */
+.region-select {
+  appearance: auto;
   width: 100%;
-  background: transparent;
-  color: var(--fg-2);
-  border: 0;
-  border-radius: var(--radius-sm);
-  padding: 6px 10px;
-  font-family: var(--font-display);
-  font-size: 11.5px;
-  font-weight: var(--fw-subtitle);
-  letter-spacing: 0.02em;
-  text-align: left;
-  cursor: pointer;
-  transition: color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
-  line-height: 1.2;
-  min-height: 30px;
-  display: flex;
-  align-items: center;
-}
-.region-btn:hover {
+  min-height: 38px;
   background: var(--bg-2);
   color: var(--fg-0);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 7px 9px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
 }
-.region-btn.active {
-  background: var(--accent-soft);
-  color: var(--fg-0);
-  box-shadow: inset 2px 0 0 var(--accent);
+.region-select:hover,
+.region-select:focus {
+  background: var(--bg-2);
+  border-color: var(--accent);
 }
 
 /* The keyboard-reachable drought impact briefing trigger (#9): a full-width
@@ -1513,9 +1494,25 @@ button.conditions-metric:hover {
   max-width: calc(100% - 220px);
 }
 
-/* When an imagery-vintage chip is showing, lift the dock clear of the
-   attribution and Recent controls so the context line never intersects them. */
-#app:not([data-sheet-detent]):has(#basemap-vintage:not([hidden])) .map-bottom-dock,
+/* Attribution remains available through the standard disclosure control, but
+   the closed state does not leave a persistent text box over the map. */
+.maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) {
+  min-width: 24px;
+  max-width: 24px;
+  min-height: 24px;
+  padding: 0 !important;
+  background: transparent !important;
+}
+.maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show)
+  .maplibregl-ctrl-attrib-button {
+  width: 24px;
+  height: 24px;
+  background-color: rgba(15, 23, 42, 0.72);
+  border-radius: 50%;
+}
+
+/* The historical-ground notice remains visible when needed, so lift the dock
+   clear of it. Satellite observation detail is carried assistively by SAT. */
 #app:not([data-sheet-detent]):has(#ground-vintage:not([hidden])) .map-bottom-dock {
   bottom: 117px;
 }
@@ -1564,6 +1561,23 @@ button.conditions-metric:hover {
   font-weight: var(--fw-body);
   letter-spacing: 0.02em;
   padding: 1px 6px !important;
+}
+
+/* The two generated scale controls remain independently sized because their
+   physical lengths carry meaning, but read as one joined metric/imperial key. */
+.maplibregl-ctrl-bottom-left > .maplibregl-ctrl-scale:first-of-type {
+  margin-bottom: 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+.maplibregl-ctrl-bottom-left > .maplibregl-ctrl-scale + .maplibregl-ctrl-scale {
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+}
+
+/* The full app already carries drought categories in the sidebar. Other
+   on-map keys keep their controls and qualifications, while the compact
+   embed retains its drought key because it has no sidebar. */
+#app:not(.embed) #map-key[data-key-family='drought'] {
+  display: none !important;
 }
 
 /* The basemap switcher button (U4d): the DESIGN MODEL of the map control
@@ -1622,6 +1636,23 @@ button.conditions-metric:hover {
 
 .map-bottom-dock > .basemap-imagery-chip {
   pointer-events: none;
+}
+
+/* The SAT control exposes this live status as its accessible description.
+   The former full-width observation card no longer covers the map. */
+#basemap-vintage.basemap-imagery-chip.sr-only {
+  left: -10000px;
+  width: 1px;
+  max-width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.legend-semantic-note.sr-only {
+  left: -10000px;
 }
 
 .historical-ground-chip a {
@@ -3222,7 +3253,6 @@ button.conditions-metric:hover {
      closed state, reserve its expanded disclosure plus the 44px Recent
      control above the footer; peek and half remain governed by their
      sheet heights above. */
-  #app[data-sheet-detent='closed']:has(#basemap-vintage:not([hidden])) .map-bottom-dock,
   #app[data-sheet-detent='closed']:has(#ground-vintage:not([hidden])) .map-bottom-dock {
     /* The live observation qualification can wrap one line taller than the
        deterministic tile fixture. Keep that settled copy above Recent too. */
@@ -3355,7 +3385,7 @@ button.conditions-metric:hover {
     padding: 10px 14px;
     font-size: 12px;
   }
-  #app[data-sheet-detent] .region-btn { min-height: 44px; }
+  #app[data-sheet-detent] .region-select { min-height: 44px; }
   #app[data-sheet-detent] .sheet-report-door { min-height: 44px; }
   #app[data-sheet-detent] .time-bar-step,
   #app[data-sheet-detent] .time-bar-play,
@@ -4496,7 +4526,7 @@ a.impact-resource-link::after {
   .status-pill,
   .layer-toggle-status,
   .preset-chip,
-  .region-btn,
+  .region-select,
   .conditions-value {
     text-box: trim-both cap alphabetic;
   }
@@ -4755,6 +4785,18 @@ a.impact-resource-link::after {
 }
 
 @media (max-width: 240px) {
+  .studio-linkout-pair .layers-studio-linkout {
+    min-height: 44px;
+    padding: 5px 3px;
+    font-size: 9.5px;
+    line-height: 1.15;
+  }
+  .basemap-imagery-chip {
+    max-width: 100%;
+    padding: 3px 5px;
+    font-size: 9.5px;
+    line-height: 1.2;
+  }
   .map-key {
     gap: 4px;
     padding: 4px 5px;
@@ -4949,6 +4991,9 @@ a.impact-resource-link::after {
     left: 8px;
     right: 8px;
     bottom: 28px;
+  }
+  .app-shell.embed .map-bottom-dock {
+    bottom: 42px;
   }
   .time-bar {
     padding: 7px 9px 6px;
@@ -5283,13 +5328,6 @@ a.impact-resource-link::after {
   padding: 0;
   border-bottom: 0;
 }
-#shell-conditions-host > #conditions-strip .conditions-title {
-  display: none;
-}
-#shell-conditions-host > #conditions-strip .conditions-head {
-  justify-content: flex-end;
-  margin-bottom: 6px;
-}
 #shell-share-host > #share-btn {
   width: 100%;
   min-height: 36px;
@@ -5415,13 +5453,13 @@ a.impact-resource-link::after {
 .shell-minimap-ocean-door {
   position: absolute;
   appearance: none;
-  min-width: 48px;
+  min-width: 64px;
   min-height: 24px;
-  padding: 3px 6px;
-  background: rgba(11, 18, 32, 0.76);
+  padding: 3px 4px;
+  background: transparent;
   color: var(--fg-3);
-  border: 1px solid rgba(34, 211, 238, 0.34);
-  border-radius: var(--radius-sm);
+  border: 0;
+  border-radius: 0;
   font-family: var(--font-display);
   font-size: 8px;
   font-weight: var(--fw-subtitle);
@@ -5439,11 +5477,13 @@ a.impact-resource-link::after {
 .shell-minimap-ocean-door:hover,
 .shell-minimap-ocean-door:focus-visible,
 .shell-minimap-ocean-door[aria-pressed='true'] {
-  background: rgba(8, 145, 178, 0.2);
+  background: transparent;
   color: var(--fg-0);
-  border-color: var(--accent);
-  box-shadow: 0 0 7px rgba(34, 211, 238, 0.3);
-  outline: none;
+  border-color: transparent;
+  box-shadow: none;
+  outline: 1px dotted var(--accent);
+  outline-offset: 1px;
+  text-shadow: 0 0 7px rgba(34, 211, 238, 0.5);
 }
 
 .shell-minimap-ocean-door-pacific {
@@ -5550,9 +5590,9 @@ a.impact-resource-link::after {
   appearance: none;
   width: 25.7%;
   height: 39%;
-  background: rgba(11, 18, 32, 0.5);
-  color: var(--fg-2);
-  border: 1px dashed var(--fg-3);
+  background: rgba(11, 18, 32, 0.78);
+  color: var(--fg-0);
+  border: 1px dashed rgba(241, 245, 249, 0.72);
   border-radius: 3px;
   padding: 0;
   text-align: left;
@@ -5571,6 +5611,7 @@ a.impact-resource-link::after {
   font-weight: var(--fw-subtitle);
   line-height: 1;
   white-space: nowrap;
+  text-shadow: 0 1px 3px var(--bg-0), 0 0 5px var(--bg-0);
 }
 .shell-minimap-hawaii-islands {
   position: absolute;
@@ -5582,8 +5623,9 @@ a.impact-resource-link::after {
 .shell-minimap-island {
   fill: var(--bg-3);
   fill-opacity: 1;
-  stroke: var(--bg-0);
-  stroke-width: 1px;
+  stroke: var(--fg-0);
+  stroke-width: 1.5px;
+  paint-order: stroke fill;
 }
 .shell-minimap-hawaii:hover,
 .shell-minimap-hawaii.active,
@@ -5673,14 +5715,6 @@ a.impact-resource-link::after {
 /* The persistent provenance caption (FramingDef.provenance, D-0.7.0-051):
    the authored-simplification qualification stays visible under the
    drawn shapes; quieter than the live note but never hidden. */
-.shell-minimap-provenance {
-  margin: 3px 0 0;
-  font-family: var(--font-body);
-  font-size: 10px;
-  line-height: 1.45;
-  color: var(--fg-3);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .shell-minimap-mainland,
   .shell-minimap-ocean,
@@ -5819,6 +5853,10 @@ a.impact-resource-link::after {
   line-height: 1.5;
   color: var(--fg-1);
 }
+.shell-summary-primary.sr-only {
+  left: -10000px;
+  margin: -1px;
+}
 .shell-summary-caveat {
   margin: 4px 0 0;
   font-family: var(--font-body);
@@ -5830,6 +5868,117 @@ a.impact-resource-link::after {
    display-toggled: that defeats aria-live announcement); when empty it
    just collapses its margin. */
 .shell-summary-caveat:empty { margin: 0; }
+
+/* Desktop Brief replaces the former long legend footer with one frozen
+   rendered-condition receipt. The same full legend remains reachable through
+   a compact Key disclosure and returns to its ordinary Console/mobile seat. */
+.sidebar-bottom-dock {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 7px;
+  flex-shrink: 0;
+  padding: 8px 10px 10px;
+  background: var(--bg-1);
+  border-top: 1px solid var(--line-strong);
+  box-shadow: 0 -8px 20px rgba(0, 0, 0, 0.18);
+}
+.sidebar-bottom-dock:not(:has(#conditions-strip:not([hidden]), #legend-panel:not([hidden]))) {
+  display: none;
+}
+.conditions-strip-dock {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.conditions-strip-dock:empty { display: none; }
+#conditions-strip-dock > #conditions-strip {
+  padding: 0;
+  border: 0;
+}
+#conditions-strip-dock .conditions-title { display: none; }
+#conditions-strip-dock .conditions-head {
+  justify-content: flex-end;
+  margin-bottom: 5px;
+}
+#conditions-strip-dock .conditions-metrics {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 5px;
+}
+#conditions-strip-dock .conditions-metric[data-tone='data'] {
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: baseline;
+  gap: 7px;
+  padding: 8px 10px;
+}
+#conditions-strip-dock .conditions-metric[data-tone='data'] .conditions-value {
+  flex: 0 0 auto;
+  font-size: 18px;
+  text-shadow: 0 0 1px rgba(241, 245, 249, 0.72);
+}
+#conditions-strip-dock .conditions-metric[data-tone='data'] .conditions-sublabel {
+  min-width: 0;
+  color: var(--fg-1);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: var(--fw-subtitle);
+  line-height: 1.2;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+.sidebar-key-disclosure {
+  position: relative;
+  flex: 0 0 auto;
+}
+.sidebar-key-disclosure:not(:has(#legend-panel:not([hidden]))) {
+  display: none;
+}
+.sidebar-key-disclosure > summary {
+  min-width: 44px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  list-style: none;
+  cursor: pointer;
+  background: var(--bg-2);
+  color: var(--fg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+}
+.sidebar-key-disclosure > summary::-webkit-details-marker { display: none; }
+.sidebar-key-disclosure > summary:hover,
+.sidebar-key-disclosure > summary:focus-visible,
+.sidebar-key-disclosure[open] > summary {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.sidebar-key-host {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 7px);
+  z-index: 20;
+  width: calc(var(--sidebar-w) - 20px);
+  max-width: calc(100vw - 20px);
+  max-height: min(52vh, 480px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bg-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+}
+.sidebar-key-host > #legend-panel {
+  padding: 12px;
+  border: 0;
+}
+.sidebar-key-host > #legend-panel > .panel-title { display: none; }
 
 /* ----------------------------------------------------------------------------
    S4c: the panel-foot response. Outside .sidebar-scroll, so the frozen

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { gotoApp, layerCheckbox, regionButton, DEFAULT_ON, ROLE_GROUPS } from './helpers';
+import { gotoApp, layerCheckbox, regionSelect, DEFAULT_ON, ROLE_GROUPS } from './helpers';
 
 /**
  * Boot smoke: the app comes up in a headless software-WebGL browser, the map
@@ -50,8 +50,8 @@ test.describe('boot', () => {
       ).toBe((DEFAULT_ON as readonly string[]).includes(row.key));
     }
 
-    // The default region (washington_state) is the active radio.
-    await expect(regionButton(page, 'washington_state')).toHaveAttribute('aria-checked', 'true');
+    // The default detailed camera is selected in the combined dropdown.
+    await expect(regionSelect(page)).toHaveValue('region:washington_state');
 
     // UX-3 framing pass: the sidebar carries domain vocabulary, not GIS jargon.
     const titles = page.locator('.sidebar-scroll .panel-title');

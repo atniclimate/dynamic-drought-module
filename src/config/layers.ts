@@ -168,7 +168,7 @@ const DROUGHT_CONDITIONS_DEF: LayerDef = {
     return droughtSurfacePresentation.source;
   },
   role: 'surface',
-  defaultOn: true,
+  defaultOn: false,
   noDataLabel: 'no coverage returned by the active drought source',
   load: () => import('../layers/usdm')
 };
@@ -189,7 +189,7 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   // treaty). Unit C of the umbrella build + the Codex Unit C pass.
   DROUGHT_CONDITIONS_DEF,
   { key: 'cdm-drought', name: 'Canadian Drought Monitor', source: 'Agriculture and Agri-Food Canada · committed monthly snapshot', role: 'surface', defaultOn: false, load: () => import('../layers/cdm-drought') },
-  { key: 'nadm-drought', name: 'North American Drought Monitor', source: 'Tri-national consensus · NCEI direct GeoJSON', role: 'surface', defaultOn: false, noDataLabel: 'no continental polygons returned by the active source', load: () => import('../layers/nadm-drought') },
+  { key: 'nadm-drought', name: 'North American Drought Monitor', source: 'Tri-national consensus · NCEI direct GeoJSON', role: 'surface', defaultOn: true, noDataLabel: 'no continental polygons returned by the active source', load: () => import('../layers/nadm-drought') },
   // The Tribal Nations members (D-0.7.0-032/033, narrowed by D-0.7.0-038):
   // the two live present-day layers are default-on (Tribal Nations MUST
   // display); the two bundled deployer slots are default-off, ui-hidden, and

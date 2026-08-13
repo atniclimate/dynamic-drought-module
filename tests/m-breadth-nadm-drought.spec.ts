@@ -94,28 +94,26 @@ test.describe('North American Drought Monitor continental context', () => {
     await expect(legend).toContainText(
       'North American Drought Monitor · June 2026'
     );
-    await expect(legend).toContainText('Tri-national monthly consensus');
-    await expect(legend).toContainText(
+    await expect(legend.locator('.legend-note')).toHaveCount(0);
+    const caveat = legend.locator('.sr-only');
+    await expect(caveat).toContainText('Tri-national monthly consensus');
+    await expect(caveat).toContainText(
       'published 2 to 3 weeks after month-end'
     );
-    await expect(legend).toContainText(
+    await expect(caveat).toContainText(
       'no polygon means no coverage from this source, not class zero'
     );
+    await expect(caveat).not.toBeInViewport();
     await expect(page.locator('#time-bar')).toContainText(
       'Consensus month June 2026'
     );
-    await expect(page.locator('#map-key')).toContainText(
-      'June 2026 · tri-national consensus'
-    );
-    await expect(page.locator('#map-key')).toContainText(
-      'No polygon: no source coverage'
-    );
+    await expect(page.locator('#map-key')).toBeHidden();
 
     await page.emulateMedia({ media: 'print' });
     await expect(page.locator('#time-bar')).toContainText(
       'Consensus month June 2026'
     );
-    await expect(legend).toContainText('Tri-national monthly consensus');
+    await expect(caveat).toContainText('Tri-national monthly consensus');
   });
 
   test('popup names the consensus product and never infers a polygon issuer', async ({

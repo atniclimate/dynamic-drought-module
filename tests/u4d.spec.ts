@@ -16,9 +16,9 @@ import {
  *
  * ADDITIVE specs only: the existing url-state and embed suites are
  * UNMODIFIED (the D-031 spec posture). These pin the parameter's edge
- * cases (unknown, empty, duplicate first-wins), the default-omission
- * canonical write, embed stickiness, and the honesty chip: the exact
- * observation time is visible exactly when satellite is selected.
+ * cases, the satellite-default canonical write, explicit off-state
+ * stickiness, and the SAT description: exact observation detail is available
+ * to assistive technology exactly when satellite is selected.
  */
 
 const SWITCHER = '.basemap-switcher-btn';
@@ -36,78 +36,88 @@ test.describe('U4d: the basemap= parameter', () => {
     await gotoApp(page, '?view=console');
     // The boot write has already run (gotoApp settles on built chrome).
     expect(await search(page)).not.toContain('basemap=');
-    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator(SWITCHER)).toHaveText('SAT');
   });
 
-  test('basemap=satellite seeds the mode and survives an unrelated sync', async ({
+  test('the established satellite token canonicalizes to the default omission', async ({
     page
   }) => {
     await gotoApp(page, '?view=console&basemap=satellite');
     await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
-    expect(await search(page)).toContain('basemap=satellite');
+    expect(await search(page)).not.toContain('basemap=');
 
     // An unrelated durable-state change (a layer toggle) re-emits the URL;
-    // the basemap token must ride along (invariant 2 stickiness).
+    // Satellite remains active through the unrelated write.
     await waitForLayerSettled(page, 'states');
     await layerCheckbox(page, 'states').uncheck();
-    await expect.poll(async () => search(page)).toContain('basemap=satellite');
+    await expect.poll(async () => search(page)).not.toContain('basemap=');
   });
 
-  test('unknown and empty tokens read as the default and canonicalize away', async ({
+  test('unknown and empty tokens read as the satellite default and canonicalize away', async ({
     page
   }) => {
     await gotoApp(page, '?view=console&basemap=bogus');
-    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
     expect(await search(page)).not.toContain('basemap=');
 
     await gotoApp(page, '?view=console&basemap=');
-    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
     expect(await search(page)).not.toContain('basemap=');
   });
 
-  test('a duplicated parameter is malformed and pins to the default, both orders', async ({
+  test('a duplicated parameter is malformed and pins to the satellite default', async ({
     page
   }) => {
     // D-0.7.0-031 edge-case rule (re-pinned by the stage-5 adversarial
     // major 5): ambiguity is rejected, never resolved by position.
     await gotoApp(page, '?view=console&basemap=satellite&basemap=bogus');
-    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
     expect(await search(page)).not.toContain('basemap=');
 
     await gotoApp(page, '?view=console&basemap=bogus&basemap=satellite');
-    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
     expect(await search(page)).not.toContain('basemap=');
   });
 
-  test('embeds honor basemap=satellite and keep it sticky', async ({ page }) => {
+  test('embeds honor the satellite default without a redundant token', async ({ page }) => {
     await page.setViewportSize({ width: 400, height: 600 });
     await gotoApp(page, '?embed=true&view=console&basemap=satellite');
     await expect(page.locator('#app')).toHaveClass(/embed/);
-    expect(await search(page)).toContain('basemap=satellite');
+    expect(await search(page)).not.toContain('basemap=');
     expect(await search(page)).toContain('embed=true');
+  });
+
+  test('basemap=default records and preserves an explicit satellite-off choice', async ({ page }) => {
+    await gotoApp(page, '?view=console&basemap=default');
+    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'false');
+    expect(await search(page)).toContain('basemap=default');
+    await waitForLayerSettled(page, 'states');
+    await layerCheckbox(page, 'states').uncheck();
+    await expect.poll(async () => search(page)).toContain('basemap=default');
   });
 });
 
-test.describe('U4d: the switcher control and the honesty chip', () => {
+test.describe('U4d: the switcher control and assistive observation status', () => {
   test('the switcher toggles satellite on and off with real button semantics', async ({
     page
   }) => {
     await gotoApp(page, '?view=console');
     const btn = page.locator(SWITCHER);
-    await expect(btn).toHaveAttribute('aria-pressed', 'false');
+    await expect(btn).toHaveAttribute('aria-pressed', 'true');
     await expect(btn).toHaveAccessibleName(/satellite/i);
+    await expect(btn).toHaveAttribute('aria-describedby', 'basemap-vintage');
+    await expect(page.locator(IMAGERY_CHIP)).not.toBeInViewport();
+
+    await btn.click();
+    await expect(btn).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(async () => search(page)).toContain('basemap=default');
+    await expect(page.locator(IMAGERY_CHIP)).toBeHidden();
 
     await btn.click();
     await expect(btn).toHaveAttribute('aria-pressed', 'true');
-    await expect.poll(async () => search(page)).toContain('basemap=satellite');
-    // The observation notice appears with the imagery as a plain statement,
-    // separate from legal attribution.
-    await expect(page.locator(IMAGERY_CHIP)).toBeVisible();
-
-    await btn.click();
-    await expect(btn).toHaveAttribute('aria-pressed', 'false');
     await expect.poll(async () => search(page)).not.toContain('basemap=');
-    await expect(page.locator(IMAGERY_CHIP)).toBeHidden();
+    await expect(page.locator(IMAGERY_CHIP)).not.toBeInViewport();
   });
 
   test('a satellite deep link shows exact frame context without a click', async ({
@@ -115,12 +125,13 @@ test.describe('U4d: the switcher control and the honesty chip', () => {
   }) => {
     await gotoApp(page, '?view=console&basemap=satellite');
     const chip = page.locator(IMAGERY_CHIP);
-    await expect(chip).toBeVisible();
+    await expect(chip).not.toBeInViewport();
     await expect(chip).toContainText(satelliteObservationRangeText(SATELLITE_FRAME));
     await expect(chip).toContainText('Context only');
     await expect(chip).toContainText('daytime approximate true color');
     await expect(chip).toContainText('nighttime infrared with static lights');
     await expect(chip).toContainText('Coverage ends near 76°N');
+    await expect(page.locator(SWITCHER)).toHaveAccessibleDescription(/NOAA GOES GeoColor/);
   });
 
   test('a bad newest frame falls back to the previous recent candidate', async ({
@@ -159,7 +170,7 @@ test.describe('U4d: the switcher control and the honesty chip', () => {
     await expect(chip).toContainText(satelliteObservationRangeText(SATELLITE_FRAME));
     await expect(chip).toContainText('refresh delayed');
     await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
-    expect(await search(page)).toContain('basemap=satellite');
+    expect(await search(page)).not.toContain('basemap=');
   });
 
   test('an installed frame is removed after it ages beyond the source policy', async ({
@@ -186,7 +197,7 @@ test.describe('U4d: the switcher control and the honesty chip', () => {
       'aria-pressed',
       'false'
     );
-    await expect.poll(async () => search(page)).not.toContain('basemap=');
+    await expect.poll(async () => search(page)).toContain('basemap=default');
     await expect(chip).toBeHidden();
   });
 
@@ -209,7 +220,7 @@ test.describe('U4d: the switcher control and the honesty chip', () => {
 
     const btn = page.locator(SWITCHER);
     await expect(btn).toHaveAttribute('aria-pressed', 'false', { timeout: 30_000 });
-    await expect.poll(async () => search(page)).not.toContain('basemap=');
+    await expect.poll(async () => search(page)).toContain('basemap=default');
     await expect(page.locator(IMAGERY_CHIP)).toBeHidden();
     // The default basemap is back on screen (its attribution returns).
     await expect(page.locator('.maplibregl-ctrl-attrib')).toContainText('OpenStreetMap');

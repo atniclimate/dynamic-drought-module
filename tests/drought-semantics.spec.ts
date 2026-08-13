@@ -59,7 +59,7 @@ test('fire context does not infer no drought without an analyzed-area mask', () 
   expect(html).toContain('does not confirm no drought');
 });
 
-test('every absolute USDM frame carries the ratified D4 contrast rim', () => {
+test('every absolute USDM frame keeps polygon borders visually absent', () => {
   expect(USDM_D4_RIM_LAYER_IDS).toEqual([
     'usdm-frame-a-d4-rim',
     'usdm-frame-b-d4-rim'
@@ -67,7 +67,7 @@ test('every absolute USDM frame carries the ratified D4 contrast rim', () => {
   expect(USDM_D4_RIM_STYLE).toEqual({
     color: '#f87171',
     width: 1.5,
-    opacity: 0.9
+    opacity: 0
   });
 
   const visible = buildD4RimLayerSpecification('usdm-frame-a', true);
@@ -78,7 +78,7 @@ test('every absolute USDM frame carries the ratified D4 contrast rim', () => {
   expect(visible.paint).toEqual({
     'line-color': '#f87171',
     'line-width': 1.5,
-    'line-opacity': 0.9
+    'line-opacity': 0
   });
 
   const hidden = buildD4RimLayerSpecification('usdm-frame-b', false);

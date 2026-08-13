@@ -193,12 +193,11 @@ function droughtKey(): KeySpec {
   return {
     label: 'Drought',
     ariaLabel:
-      'Drought category key, D0 abnormally dry through D4 exceptional drought. No polygon means no D0-D4 category is drawn; without an analyzed-area mask it does not confirm no drought. The pink D4 rim is presentation contrast only; the official category is unchanged.',
+      'Drought category key, D0 abnormally dry through D4 exceptional drought. No polygon means no D0-D4 category is drawn; without an analyzed-area mask it does not confirm no drought.',
     itemsHtml:
       [USDM_NONE_SWATCH, ...USDM_CATEGORIES]
         .map((c) => swatchItem(c.color, c.code))
-        .join('') +
-      '<span class="map-key-qualification">D4 pink rim: contrast only; official category unchanged.</span>'
+        .join('')
   };
 }
 
@@ -518,6 +517,7 @@ export function initMapKey(): void {
     const spec = activeKey();
     if (!spec) {
       host.hidden = true;
+      delete host.dataset.keyFamily;
       layout.schedule();
       return;
     }
@@ -529,6 +529,10 @@ export function initMapKey(): void {
       host.setAttribute('aria-label', spec.ariaLabel);
     }
     const active = registry.getActiveKeys();
+    host.dataset.keyFamily =
+      active.has('usdm') || active.has('nadm-drought') || active.has('cdm-drought')
+        ? 'drought'
+        : 'other';
     const isInteractive =
       active.has('heatrisk') || (active.has('cdm-drought') && cdmLicense !== null);
     host.setAttribute('role', isInteractive ? 'group' : 'img');

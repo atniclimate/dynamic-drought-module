@@ -46,7 +46,7 @@ test.describe('the mobile hazard rail (390x844)', () => {
     // The default-on drought surface presses the Drought button (the rail
     // reflects the registry, it never claims a hazard the map is not
     // showing).
-    await waitForLayerSettled(page, 'usdm');
+    await waitForLayerSettled(page, 'nadm-drought');
     await expect(buttons.nth(0)).toHaveAttribute('aria-pressed', 'true');
     await expect(buttons.nth(2)).toHaveAttribute('aria-pressed', 'false');
   });
@@ -60,7 +60,7 @@ test.describe('the mobile hazard rail (390x844)', () => {
 
     // Settle the default-on surface before the preset swap (the helpers'
     // documented precondition for deterministic URL assertions).
-    await waitForLayerSettled(page, 'usdm');
+    await waitForLayerSettled(page, 'nadm-drought');
 
     const fireBtn = page.locator('#hazard-rail button[data-preset="hazard-fire"]');
     await fireBtn.click();
@@ -77,7 +77,7 @@ test.describe('the mobile hazard rail (390x844)', () => {
             layers.has('nifc-fires') &&
             layers.has('hms-smoke') &&
             layers.has('aiannh') &&
-            !layers.has('usdm')
+            !layers.has('nadm-drought')
           );
         },
         // The live SPC and NIFC activations run through real fetches;

@@ -316,6 +316,7 @@ async function proveFrameAvailable(
 function ensureImageryChip(): HTMLElement | null {
   const existing = document.getElementById('basemap-vintage');
   if (existing) {
+    existing.classList.add('sr-only');
     existing.setAttribute('role', 'status');
     existing.setAttribute('aria-live', 'polite');
     existing.setAttribute('aria-atomic', 'true');
@@ -327,7 +328,7 @@ function ensureImageryChip(): HTMLElement | null {
   const chip = document.createElement('div');
   // Preserve the established id because embeds and downstream CSS may use it.
   chip.id = 'basemap-vintage';
-  chip.className = 'basemap-imagery-chip';
+  chip.className = 'basemap-imagery-chip sr-only';
   chip.setAttribute('role', 'status');
   chip.setAttribute('aria-live', 'polite');
   chip.setAttribute('aria-atomic', 'true');

@@ -173,12 +173,10 @@ test.describe('the exact desktop and mobile boundary', () => {
     await expect
       .poll(() =>
         app.evaluate((element) =>
-          Number.parseFloat(
-            element.style.getPropertyValue('--mobile-map-key-height')
-          )
+          element.style.getPropertyValue('--mobile-map-key-height')
         )
       )
-      .toBeGreaterThan(0);
+      .toBe('');
 
     await page.setViewportSize({ width: 721, height: 844 });
     await expect(app).not.toHaveAttribute('data-sheet-detent', /.+/);
@@ -223,15 +221,12 @@ test.describe('the exact desktop and mobile boundary', () => {
 test.describe('mobile key growth at 390x844', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('the dense Drought key stays above Share, Reset, and loading chrome', async ({
+  test('the redundant full-app Drought key stays removed', async ({
     page
   }) => {
     await gotoApp(page);
-    await expect(page.locator('#map-key .map-key-item')).toHaveCount(6);
-    await expect(page.locator('#map-key .map-key-qualification')).toContainText(
-      'D4 pink rim'
-    );
-    await expectMobileKeyClearance(page, '.map-key-qualification');
+    await expect(page.locator('#map-key')).toBeHidden();
+    await expect(page.locator('#app')).not.toHaveAttribute('style', /mobile-map-key-height/);
   });
 
   test('the denser Wildfire weeks-ahead key stays above the same chrome', async ({
@@ -301,7 +296,7 @@ test.describe('short landscape coarse-pointer shell', () => {
 });
 
 for (const width of [400, 200]) {
-  test(`the ${width}x600 embed contains dense Wildfire chrome, vintage, and attribution`, async ({
+  test(`the ${width}x600 embed contains dense Wildfire chrome and compact attribution`, async ({
     page
   }) => {
     await page.setViewportSize({ width, height: 600 });
@@ -315,9 +310,7 @@ for (const width of [400, 200]) {
     await expect(page.locator('#map-key [data-spc-fire-weather-key]')).toBeVisible();
     await expect(page.locator('#map-key [data-nifc-perimeter-key]')).toBeVisible();
 
-    const vintage = page.locator('#ground-vintage');
-    await expect(vintage).toHaveAttribute('data-status', 'live');
-    await expect(vintage).toContainText('Sentinel-2 2016');
+    await expect(page.locator('#ground-vintage')).toHaveCount(0);
     const attribution = page.locator('.maplibregl-ctrl-attrib');
     const attributionToggle = page.locator('.maplibregl-ctrl-attrib-button');
     await expect(attribution).toHaveClass(/maplibregl-compact/);
@@ -329,7 +322,7 @@ for (const width of [400, 200]) {
     expect(intersects(overlayBox, dockBox), 'top controls overlap the bottom dock').toBe(false);
 
     const attributionBox = await rect(attributionToggle);
-    for (const selector of ['#ground-vintage', '#map-key', '.embed-brand']) {
+    for (const selector of ['#map-key', '.embed-brand']) {
       const itemBox = await rect(page.locator(selector));
       expect(
         intersects(attributionBox, itemBox),

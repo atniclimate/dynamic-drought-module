@@ -4,19 +4,11 @@ import { URLS } from '../config/urls';
 /**
  * Build the base MapLibre GL JavaScript style specification.
  *
- * Returns a minimal shared scene: a dark background, subdued OpenStreetMap
- * (OSM) fallback, and the historical EOxCloudless Sentinel-2 2016 ground.
- * The EOX layer starts hidden and is revealed only after the bounded probe in
- * `src/map/historical-ground.ts` succeeds. Per-feature layer modules append
+ * Returns a minimal shared scene: a dark background and subdued OpenStreetMap
+ * (OSM) ground beneath the default-on recent satellite context. Per-feature layer modules append
  * their own sources and layers on top at runtime via `map.addSource()` /
  * `map.addLayer()`, so the style file stays small and each layer owns its own
  * paint and visibility logic.
- *
- * The EOX paint is the selected Firefly Candidate A treatment from the design
- * transfer: dark enough for one-scene continuity while retaining land-cover
- * texture beneath official condition palettes. OSM is always present below
- * it and uses a matching dark treatment, so an EOX outage degrades to a map,
- * never a blank rectangle. The sources remain open and require no key.
  *
  * Glyphs note (0.7.0 U0a): the `glyphs` template points at the SELF-HOSTED
  * PBF files under `public/fonts/glyphs/` (provenance and license in
@@ -27,9 +19,8 @@ import { URLS } from '../config/urls';
  * absolute from the page origin because a relative glyphs URL is not
  * reliably resolved across MapLibre versions.
  *
- * Attribution covers OpenStreetMap (OSM) contributors and EOxCloudless. The
- * latter is also repeated in the always-visible historical-ground caption so
- * compact attribution controls cannot hide the imagery identity or vintage.
+ * Attribution covers OpenStreetMap contributors. Recent NOAA imagery adds its
+ * own source attribution when active.
  */
 export function buildBaseStyle(): maplibregl.StyleSpecification {
   return {
@@ -54,18 +45,6 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
           '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         minzoom: 0,
         maxzoom: 19
-      },
-      'basemap-ground': {
-        type: 'raster',
-        tiles: [URLS.eoxCloudless2016],
-        tileSize: 256,
-        minzoom: 0,
-        maxzoom: 14,
-        attribution:
-          '<a href="https://cloudless.eox.at">EOxCloudless</a> by ' +
-          '<a href="https://eox.at">EOX IT Services GmbH</a> ' +
-          '(Contains modified Copernicus Sentinel data 2016), ' +
-          '<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>'
       }
     },
     layers: [
@@ -87,21 +66,6 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
           'raster-brightness-max': 0.42,
           'raster-contrast': 0.12,
           'raster-opacity': 0.72
-        }
-      },
-      {
-        id: 'basemap-ground',
-        type: 'raster',
-        source: 'basemap-ground',
-        layout: { visibility: 'none' },
-        paint: {
-          // Firefly Candidate A. These values affect presentation only; the
-          // pixels remain the fixed EOX Sentinel-2 2016 mosaic.
-          'raster-brightness-min': 0,
-          'raster-brightness-max': 0.62,
-          'raster-saturation': -0.55,
-          'raster-contrast': 0.1,
-          'raster-opacity': 1
         }
       }
     ]

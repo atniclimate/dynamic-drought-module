@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import type maplibregl from 'maplibre-gl';
 
-import { gotoApp, regionButton, layerCheckbox, layerPill } from './helpers';
+import { gotoApp, regionButton, regionSelect, layerCheckbox, layerPill } from './helpers';
 import { REGIONS, DEFAULT_REGION, type RegionKey } from '../src/config/regions';
 import {
   TRIBAL_FAMILY_COLOR,
@@ -47,24 +47,22 @@ const REGION_KEYS = Object.keys(REGIONS) as RegionKey[];
 // ---------------------------------------------------------------------------
 
 /**
- * The region grid became a plain, secondary single-column "jump to" list with
- * full-word `region.label` names (replacing the abbreviated `short`). Desktop
- * Brief now rehosts that same radiogroup ahead of the continental minimap; the
- * `#region-buttons` / `.region-btn` / `data-region-key` contract is unchanged.
+ * The region grid became one combined overview and detailed-camera dropdown
+ * with full-word `region.label` names (replacing the abbreviated `short`).
+ * Desktop Brief rehosts that same control directly below the minimap.
  */
 test.describe('U3i region demotion (D-0.7.0-009)', () => {
-  test('console: the jump-to list shows full-word labels with radiogroup semantics', async ({
+  test('console: the jump-to dropdown shows full-word labels with select semantics', async ({
     page
   }) => {
     await gotoApp(page, '?view=console');
 
     // A visible console "where" control in its static fallback seat.
     await expect(page.locator('#panel-region')).toBeVisible();
-    await expect(page.locator('#region-buttons')).toHaveAttribute('role', 'radiogroup');
+    await expect(regionSelect(page)).toHaveAttribute('aria-label', /region/i);
 
-    // Every region renders as a radio option.
-    await expect(page.locator('#region-buttons .region-btn')).toHaveCount(REGION_KEYS.length);
-    await expect(page.locator('#region-buttons .region-btn[role="radio"]')).toHaveCount(
+    // Every detailed region renders in the second option group.
+    await expect(page.locator('#region-select optgroup').nth(1).locator('option')).toHaveCount(
       REGION_KEYS.length
     );
 
@@ -76,14 +74,10 @@ test.describe('U3i region demotion (D-0.7.0-009)', () => {
       await expect(regionButton(page, key)).toHaveText(REGIONS[key].label);
     }
 
-    // Radiogroup: exactly one option is checked (the default region), and it is
-    // the active one.
-    await expect(page.locator('#region-buttons .region-btn[aria-checked="true"]')).toHaveCount(1);
-    await expect(regionButton(page, DEFAULT_REGION)).toHaveAttribute('aria-checked', 'true');
-    await expect(regionButton(page, DEFAULT_REGION)).toHaveClass(/\bactive\b/);
+    await expect(regionSelect(page)).toHaveValue(`region:${DEFAULT_REGION}`);
   });
 
-  test('brief: the same region jump-to panel is seated before the minimap', async ({
+  test('brief: the same region jump-to panel is seated below the minimap and before search', async ({
     page
   }) => {
     await gotoApp(page); // bare URL => Brief
@@ -91,10 +85,14 @@ test.describe('U3i region demotion (D-0.7.0-009)', () => {
     await expect(page.locator('#app')).toHaveClass(/\bview-brief\b/);
 
     await expect(page.locator('#shell-region-host > #panel-region')).toBeVisible();
-    await expect(regionButton(page, DEFAULT_REGION)).toBeVisible();
-    await expect(page.locator('#region-buttons .region-btn')).toHaveCount(REGION_KEYS.length);
+    await expect(regionSelect(page)).toBeVisible();
+    await expect(regionButton(page, DEFAULT_REGION)).toHaveCount(1);
+    await expect(
+      page.locator('.shell-minimap-popover-wrap + #shell-region-host')
+    ).toHaveCount(1);
+    await expect(page.locator('#shell-region-host + #shell-refine-host')).toHaveCount(1);
 
-    // The existing Brief search remains available in its later refinement seat.
+    // The existing Brief search remains available immediately after the jump.
     await expect(page.locator('#brief-search [data-ddm-search]')).toBeVisible();
   });
 });

@@ -85,7 +85,8 @@ test.describe('E1 hard fence: the sovereign default set never narrows', () => {
     // D-0.7.0-038): E1 tunes paint and order, never membership.
     expect(getLayerDef('aiannh')?.defaultOn).toBe(true);
     expect(getLayerDef('bia-reservations')?.defaultOn).toBe(true);
-    expect(getLayerDef('usdm')?.defaultOn).toBe(true);
+    expect(getLayerDef('nadm-drought')?.defaultOn).toBe(true);
+    expect(getLayerDef('usdm')?.defaultOn).toBe(false);
     expect(getLayerDef('states')?.defaultOn).toBe(true);
   });
 });

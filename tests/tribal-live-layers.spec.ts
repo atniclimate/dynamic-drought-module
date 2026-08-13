@@ -3,7 +3,7 @@ import {
   gotoApp,
   layerCheckbox,
   layerPill,
-  regionButton,
+  selectRegion,
   urlLayers,
   waitForLayerSettled
 } from './helpers';
@@ -268,7 +268,7 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
 
     // A region change moves the camera far outside the cached envelope; the
     // debounced moveend refresh fetches the Alaska view and setDatas it.
-    await regionButton(page, 'alaska').click();
+    await selectRegion(page, 'alaska');
     await expect(layerPill(page, 'aiannh')).toHaveText(
       'no features returned for this view (Census-defined Tribal areas only)',
       { timeout: 25_000 }
@@ -298,7 +298,7 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
     await waitForLayerSettled(page, 'aiannh');
     await expect(layerPill(page, 'aiannh')).toHaveText('live');
 
-    await regionButton(page, 'alaska').click();
+    await selectRegion(page, 'alaska');
     // The failed refresh reports honestly (the rendered data is stale for
     // this view) and the umbrella card's health line names the outage while
     // the intent stays selected (a refresh failure never unchecks).
@@ -337,7 +337,7 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
     await expect(layerPill(page, 'aiannh')).toHaveText('live');
 
     failRefresh = true;
-    await regionButton(page, 'columbia_snake_basin').click();
+    await selectRegion(page, 'columbia_snake_basin');
     await expect(layerPill(page, 'aiannh')).toHaveText('unavailable', {
       timeout: 25_000
     });
@@ -374,7 +374,7 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
     await expect(layerPill(page, 'bia-reservations')).toHaveText('live');
 
     failRefresh = true;
-    await regionButton(page, 'columbia_snake_basin').click();
+    await selectRegion(page, 'columbia_snake_basin');
     await expect(layerPill(page, 'bia-reservations')).toHaveText('unavailable', {
       timeout: 25_000
     });

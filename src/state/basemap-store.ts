@@ -9,19 +9,19 @@
  * sync state. The store deliberately knows nothing about MapLibre; the
  * switcher control (src/map/basemap-switcher.ts) owns the map side.
  *
- * The mode vocabulary is the STABLE URL token set (D-0.7.0-031): 'default'
- * (the historical shared ground with automatic OSM fallback, never emitted)
- * and 'satellite' (the opt-in recent NOAA imagery context). The token stays
- * provider-neutral, but its established recent-context meaning is preserved.
+ * The mode vocabulary is the stable URL token set: 'default' (the subdued
+ * OpenStreetMap ground) and 'satellite' (recent NOAA imagery context). Recent
+ * satellite is the product default and is therefore omitted from canonical
+ * URLs; `basemap=default` records an explicit off choice.
  */
 
 export type BasemapMode = 'default' | 'satellite';
 
-let mode: BasemapMode = 'default';
+let mode: BasemapMode = 'satellite';
 
 const listeners = new Set<() => void>();
 
-/** The active basemap mode; 'default' until a switch or URL seed. */
+/** The active basemap mode; 'satellite' until a switch or URL seed. */
 export function getBasemapMode(): BasemapMode {
   return mode;
 }
@@ -50,11 +50,10 @@ export function onBasemapChange(fn: () => void): () => void {
 
 /**
  * Parse a raw `basemap=` parameter value to a mode. Only the exact token
- * 'satellite' selects satellite; anything else (absent, empty, unknown,
- * or a duplicate whose first value is not the token) reads as 'default',
- * per the URL-schema policy's unknown-value rule and the D-0.7.0-031
- * edge-case pin.
+ * 'default' turns satellite imagery off. The established `satellite` token,
+ * an absent parameter, and malformed values all resolve to the product
+ * default.
  */
 export function parseBasemapParam(raw: string | null): BasemapMode {
-  return raw === 'satellite' ? 'satellite' : 'default';
+  return raw === 'default' ? 'default' : 'satellite';
 }

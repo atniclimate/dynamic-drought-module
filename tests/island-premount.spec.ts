@@ -128,7 +128,7 @@ async function gotoWithoutIsland(page: Page, query: string): Promise<void> {
   await stubHistoricalGround(page);
   await page.route(/island-[^/]*\.js$/, (route) => route.abort());
   await page.goto(query, { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('#region-buttons .region-btn')).not.toHaveCount(0);
+  await expect(page.locator('#region-select option')).not.toHaveCount(0);
   await expect(page.locator('input[data-layer-key]')).toHaveCount(0);
   await expect(page.locator('#shell-panel')).toBeHidden();
   await expect(page.locator('#conditions-strip-home + #conditions-strip')).toHaveCount(1);
@@ -195,7 +195,7 @@ test.describe('pre-mount doors (ADR 0002 condition 6)', () => {
     await expect(page.locator('input[data-layer-key]')).toHaveCount(0);
   });
 
-  test('the ENSO driver activates the ocean surface with no checkbox DOM', async ({
+  test('the retired ENSO driver stays absent with no checkbox DOM', async ({
     page
   }) => {
     await stubSst(page);
@@ -203,20 +203,8 @@ test.describe('pre-mount doors (ADR 0002 condition 6)', () => {
     // an unstubbed default-on activation would add live-network noise.
     await gotoWithoutIsland(page, '?view=brief&layers=');
 
-    // The driver line renders from the bundled snapshot; expand the
-    // disclosure to reach the action.
-    const section = page.locator('#enso-driver');
-    await expect(section).toBeVisible();
-    await section.locator('summary').click();
-    await section.locator('#enso-view-pacific').click();
-
-    await expect
-      .poll(
-        async () => (await urlLayers(page)).has('sst-anomaly'),
-        { message: 'View the Pacific never activated the SST surface', timeout: 25_000 }
-      )
-      .toBe(true);
-
+    await expect(page.locator('#enso-driver')).toHaveCount(0);
+    await expect.poll(async () => (await urlLayers(page)).has('sst-anomaly')).toBe(false);
     await expect(page.locator('input[data-layer-key]')).toHaveCount(0);
   });
 });

@@ -23,6 +23,26 @@ async function clickCenterForFootResponse(page: Page): Promise<void> {
   }).toPass({ timeout: 30_000 });
 }
 
+async function stubUsdmTimeSurface(page: Page): Promise<void> {
+  const body = JSON.stringify({
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        properties: { DM: 2, MapDate: Date.UTC(2026, 7, 11) },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [[[-125, 42], [-116, 42], [-116, 49], [-125, 49], [-125, 42]]]
+        }
+      }
+    ]
+  });
+  const fulfill = (route: Parameters<Parameters<Page['route']>[1]>[0]) =>
+    route.fulfill({ status: 200, contentType: 'application/geo+json', body });
+  await page.route('**/USDM_current/**', fulfill);
+  await page.route('**/USDM_archive/**', fulfill);
+}
+
 test.describe('S4c panel-foot response', () => {
   test('a place-bearing click lands at the panel foot, frozen head over scrolling body, no popup', async ({
     page
@@ -63,7 +83,8 @@ test.describe('S4c time-bar desktop seat (DG-080 review finding 4)', () => {
   test('a real temporal owner install keeps the bar seated after the shell panel in Brief and Console', async ({
     page
   }) => {
-    await gotoApp(page);
+    await stubUsdmTimeSurface(page);
+    await gotoApp(page, '?view=brief&layers=usdm');
     // The USDM surface installs its TimeBarSpec on activation; every
     // install re-runs syncTimeBarHost, which used to reseat the bar
     // directly after #brief-head, above the shell, undoing the static
@@ -86,7 +107,8 @@ test.describe('S4c compact/detail temporal adapters', () => {
   test('the compact WHEN row mirrors the installed spec; More time opens the detail; Escape restores focus', async ({
     page
   }) => {
-    await gotoApp(page);
+    await stubUsdmTimeSurface(page);
+    await gotoApp(page, '?view=brief&layers=usdm');
     // The USDM surface installs its TimeBarSpec on activation; the
     // compact row mirrors it through the facade.
     const timeRow = page.locator('#shell-time[data-has-spec="true"]');

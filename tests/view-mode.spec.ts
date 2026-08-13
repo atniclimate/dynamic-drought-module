@@ -138,6 +138,23 @@ test.describe('U1 the two doors (view mode)', () => {
     });
 
     await stubHistoricalGround(page);
+    await page.route('**/NADM-current.geojson', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify({
+          type: 'FeatureCollection',
+          features: [{
+            type: 'Feature',
+            properties: { DROUGHTCAT: 'd0', YEAR_MONTH: '202607' },
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[[-125, 45], [-115, 45], [-115, 50], [-125, 50], [-125, 45]]]
+            }
+          }]
+        })
+      })
+    );
     // Raw goto: gotoApp's catalog-independent signal would also work, but
     // the point here is exactly that no catalog exists to wait for.
     await page.goto('?embed=true', { waitUntil: 'domcontentloaded' });
@@ -147,7 +164,7 @@ test.describe('U1 the two doors (view mode)', () => {
     // The default layer set still activates with no catalog DOM at all
     // (the shared toggle command and the bridge are the doors since U1b).
     await expect
-      .poll(async () => (await urlLayers(page)).has('usdm'), { timeout: 25_000 })
+      .poll(async () => (await urlLayers(page)).has('nadm-drought'), { timeout: 25_000 })
       .toBe(true);
 
     // No briefing opens unsolicited (D-0.7.0-041; the old zero-click

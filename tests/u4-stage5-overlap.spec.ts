@@ -6,15 +6,24 @@ import { stubRecentSatellite } from './satellite-fixture';
 /**
  * U4 stage-5 matrix findings, pinned (the browser pass caught three
  * bottom-chrome collisions): the embed viewport gets the auto-compact
- * attribution control; the desktop attribution bar never reaches the
- * scale control; the satellite observation chip gets its own dock row and the
- * dock lifts clear of a wrapped attribution bar.
+ * attribution control; the desktop attribution bar never reaches the joined
+ * scale controls; satellite observation detail remains available through SAT
+ * without placing a card over the map.
  */
 
 async function box(page: import('@playwright/test').Page, selector: string) {
   const b = await page.locator(selector).boundingBox();
   if (!b) throw new Error(`${selector} has no box`);
   return b;
+}
+
+async function boxes(page: import('@playwright/test').Page, selector: string) {
+  return page.locator(selector).evaluateAll((elements) =>
+    elements.map((element) => {
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    })
+  );
 }
 
 function intersects(
@@ -37,9 +46,11 @@ test.describe('U4 stage-5: bottom-chrome collisions stay fixed', () => {
   test('the 400x600 embed gets the compact attribution control', async ({ page }) => {
     await page.setViewportSize({ width: 400, height: 600 });
     await gotoApp(page, '?embed=true&view=console');
-    // MapLibre auto-compacts below 640px map width; the collapsed control
-    // frees the bottom bar the legend chip and ATNI badge sit on.
-    await expect(page.locator('.maplibregl-ctrl-attrib')).toHaveClass(/maplibregl-compact/);
+    // The disclosure starts compact and closed, freeing the bottom bar the
+    // legend chip and ATNI badge sit on while keeping credits one tap away.
+    const attribution = page.locator('.maplibregl-ctrl-attrib');
+    await expect(attribution).toHaveClass(/maplibregl-compact/);
+    await expect(attribution).not.toHaveClass(/maplibregl-compact-show/);
   });
 
   test('the embed attribution toggle is clickable, never under the brand badge', async ({
@@ -63,7 +74,7 @@ test.describe('U4 stage-5: bottom-chrome collisions stay fixed', () => {
     ).toBe(false);
   });
 
-  test('at 1024 with satellite on, the attribution clears the scale and the chip', async ({
+  test('at 1024 with satellite on, attribution clears the joined scales and no status card covers the map', async ({
     page
   }) => {
     await page.setViewportSize({ width: 1024, height: 768 });
@@ -75,22 +86,23 @@ test.describe('U4 stage-5: bottom-chrome collisions stay fixed', () => {
     await page.evaluate(() => document.fonts.ready);
 
     const attrib = await box(page, '.maplibregl-ctrl-attrib');
-    const scale = await box(page, '.maplibregl-ctrl-scale');
-    const chip = await box(page, '#basemap-vintage');
-    const switcher = await box(
-      page,
-      '.maplibregl-ctrl-group:has(.basemap-switcher-btn)'
-    );
-
-    expect(intersects(attrib, scale), 'attribution overlaps the scale control').toBe(false);
-    expect(intersects(attrib, chip), 'attribution overlaps the imagery chip').toBe(false);
+    const scales = await boxes(page, '.maplibregl-ctrl-scale');
+    expect(scales).toHaveLength(2);
+    for (const scale of scales) {
+      expect(intersects(attrib, scale), 'attribution overlaps a scale control').toBe(false);
+    }
+    const orderedScales = [...scales].sort((a, b) => a.y - b.y);
+    const scaleGap = orderedScales[1]!.y -
+      (orderedScales[0]!.y + orderedScales[0]!.height);
+    expect(Math.abs(scaleGap), `scale controls have a ${scaleGap}px gap`).toBeLessThanOrEqual(1);
     expect(
-      intersects(switcher, chip),
-      `Recent control overlaps the imagery chip: ${JSON.stringify({ switcher, chip })}`
-    ).toBe(false);
+      Math.abs(orderedScales[1]!.x - orderedScales[0]!.x),
+      'joined scale controls do not share a left edge'
+    ).toBeLessThanOrEqual(1);
+    await expect(page.locator('#basemap-vintage')).not.toBeInViewport();
   });
 
-  test('the mobile sheet keeps the satellite chip clear of bottom controls', async ({
+  test('mobile keeps the assistive satellite status off the map and its controls reachable', async ({
     page
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -102,49 +114,33 @@ test.describe('U4 stage-5: bottom-chrome collisions stay fixed', () => {
     await page.evaluate(() => document.fonts.ready);
 
     const attribution = page.locator('.maplibregl-ctrl-attrib');
-    await expect(attribution).toHaveClass(/maplibregl-compact-show/);
+    await expect(attribution).toHaveClass(/maplibregl-compact/);
+    await expect(attribution).not.toHaveClass(/maplibregl-compact-show/);
     const attrib = await box(page, '.maplibregl-ctrl-attrib');
-    const chipBox = await box(page, '#basemap-vintage');
     const switcher = await box(
       page,
       '.maplibregl-ctrl-group:has(.basemap-switcher-btn)'
     );
-    expect(
-      intersects(attrib, chipBox),
-      `compact attribution overlaps the mobile imagery chip: ${JSON.stringify({ attrib, chipBox })}`
-    ).toBe(false);
-    expect(
-      intersects(switcher, chipBox),
-      `Recent control overlaps the mobile imagery chip: ${JSON.stringify({ switcher, chipBox })}`
-    ).toBe(false);
-    expect(
-      switcher.y - (chipBox.y + chipBox.height),
-      `Recent control has insufficient clearance from the mobile imagery chip: ${JSON.stringify({ switcher, chipBox })}`
-    ).toBeGreaterThanOrEqual(9);
+    expect(intersects(attrib, switcher), 'compact attribution overlaps SAT').toBe(false);
+    await expect(chip).not.toBeInViewport();
 
     await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
     const app = page.locator('#app');
     await expect(app).toHaveAttribute('data-sheet-detent', 'half');
-    await expect
-      .poll(async () => {
-        const settledChip = await box(page, '#basemap-vintage');
-        const sheet = await box(page, '.sidebar');
-        return sheet.y - (settledChip.y + settledChip.height);
-      })
-      .toBeGreaterThanOrEqual(9);
+    await expect(chip).not.toBeInViewport();
   });
 
-  test('the observation chip stays readable at 400px', async ({
+  test('the observation status remains an accessible SAT description at 400px', async ({
     page
   }) => {
     await page.setViewportSize({ width: 400, height: 600 });
     await gotoApp(page, '?embed=true&view=console&basemap=satellite');
     const chip = page.locator('#basemap-vintage');
     await expect(chip).toHaveAttribute('data-status', 'live');
-    await page.evaluate(() => document.fonts.ready);
-    const b = await chip.boundingBox();
-    if (!b) throw new Error('chip has no box');
-    expect(b.height, `chip is ${b.height}px tall`).toBeLessThanOrEqual(68);
+    await expect(chip).not.toBeInViewport();
+    await expect(page.locator('.basemap-switcher-btn')).toHaveAccessibleDescription(
+      /NOAA GOES GeoColor/
+    );
   });
 
   test('places labels stay above a surface activated after them (the reassert hook)', async ({

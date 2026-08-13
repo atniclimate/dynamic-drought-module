@@ -31,11 +31,11 @@ test.describe('DEG-2 the Satellite toggle touch target (390x844)', () => {
 
     // The button still works at the grown size: one tap flips the state
     // (aria-pressed carries it; real button semantics).
-    await expect(btn).toHaveAttribute('aria-pressed', 'false');
-    await btn.click();
     await expect(btn).toHaveAttribute('aria-pressed', 'true');
     await btn.click();
     await expect(btn).toHaveAttribute('aria-pressed', 'false');
+    await btn.click();
+    await expect(btn).toHaveAttribute('aria-pressed', 'true');
   });
 });
 

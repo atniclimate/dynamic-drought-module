@@ -117,19 +117,19 @@ test.describe('LAYERS studio behavior', () => {
     await stubSatellite(page);
     await gotoApp(page, '?layers=&view=brief&studio=layers');
     let studio = page.locator(STUDIO);
-    let satellite = studio.getByRole('button', { name: 'Recent NOAA satellite imagery' });
-    await expect(satellite).toHaveAttribute('aria-pressed', 'false');
-    await satellite.click();
+    let satellite = studio.getByRole('button', { name: 'Satellite imagery' });
     await expect(satellite).toHaveAttribute('aria-pressed', 'true');
+    await satellite.click();
+    await expect(satellite).toHaveAttribute('aria-pressed', 'false');
     await expect.poll(async () => new URLSearchParams(await search(page)).get('basemap'))
-      .toBe('satellite');
+      .toBe('default');
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     studio = page.locator(STUDIO);
-    satellite = studio.getByRole('button', { name: 'Recent NOAA satellite imagery' });
-    await expect(satellite).toHaveAttribute('aria-pressed', 'true');
-    await satellite.click();
+    satellite = studio.getByRole('button', { name: 'Satellite imagery' });
     await expect(satellite).toHaveAttribute('aria-pressed', 'false');
+    await satellite.click();
+    await expect(satellite).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(async () => new URLSearchParams(await search(page)).has('basemap'))
       .toBe(false);
   });

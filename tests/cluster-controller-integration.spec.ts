@@ -148,7 +148,7 @@ test.describe('real layer-controller integration (DG-080 r2 finding 4)', () => {
     await expect(droughtBtn).toHaveAttribute('aria-pressed', 'true');
     await expect(wildfireBtn).toHaveAttribute('aria-pressed', 'false');
     await expect(layerCheckbox(page, 'nifc-fires')).not.toBeChecked();
-    await expect(layerCheckbox(page, 'usdm')).toBeChecked();
+    await expect(layerCheckbox(page, 'nadm-drought')).toBeChecked();
 
     // A again: fresh wildfire generation, released normally.
     hold = false;
@@ -156,7 +156,7 @@ test.describe('real layer-controller integration (DG-080 r2 finding 4)', () => {
     await expect(wildfireBtn).toHaveAttribute('aria-pressed', 'true');
     await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();
     await expect(layerCheckbox(page, 'hms-smoke')).toBeChecked();
-    await expect(layerCheckbox(page, 'usdm')).not.toBeChecked();
+    await expect(layerCheckbox(page, 'nadm-drought')).not.toBeChecked();
 
     // The fresh generation settles live through the real controller and
     // registry (module status writes included).

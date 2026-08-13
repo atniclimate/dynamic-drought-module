@@ -66,7 +66,7 @@ const MATRIX: readonly MatrixCase[] = [
       dmode: 'chg1',
       sst: '2024-07-01',
       outlook: 'monthly',
-      basemap: 'satellite'
+      basemap: null
     }
   }
 ];

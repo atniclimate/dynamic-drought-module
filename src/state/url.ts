@@ -93,8 +93,8 @@ export interface ParsedUrlParams {
   /** One-based HeatRisk frame position from `heatday=`, or null for the
    * first currently advertised frame. */
   readonly heatRiskDay: number | null;
-  /** Basemap mode from `basemap=` (U4d, D-0.7.0-031); only the exact
-   * token 'satellite' selects satellite, anything else is 'default'. */
+  /** Basemap mode from `basemap=`; `default` turns the default-on satellite
+   * context off, while absence selects satellite. */
   readonly basemap: BasemapMode;
   /** Minimap camera from `framing=`; null leaves `region=` in control. */
   readonly framing: FramingSelection;
@@ -242,12 +242,12 @@ export function parseUrlParams(): ParsedUrlParams {
     horizon,
     heatRiskDay: parseHeatRiskDayParam(params),
     // A DUPLICATED basemap parameter is malformed input and pins to the
-    // default in BOTH orders (D-0.7.0-031 edge-case rule; the stage-5
+    // product default in BOTH orders (D-0.7.0-031 edge-case rule; the stage-5
     // adversarial major 5 caught a first-wins drift here): ambiguity is
     // rejected, not resolved by position.
     basemap:
       params.getAll('basemap').length > 1
-        ? 'default'
+        ? 'satellite'
         : parseBasemapParam(params.get('basemap')),
     framing: shell.framing,
     cluster: shell.cluster,
@@ -309,8 +309,8 @@ export interface UrlSyncState {
   readonly outlookRange?: OutlookRange;
   /** Committed temporal horizon; omitted for the current horizon. */
   readonly horizon?: TemporalHorizonKey;
-  /** Basemap mode; emitted as `basemap=satellite` only when non-default,
-   * so the default URL stays clean (the `view=` pattern, D-0.7.0-031). */
+  /** Basemap mode; emitted as `basemap=default` only when satellite is off,
+   * so the product-default URL stays clean. */
   readonly basemap?: BasemapMode;
   /** Minimap camera; emitted only when non-null. Callers pass `region: null`
    * while a minimap camera is active so the URL claims one camera. */
@@ -403,7 +403,7 @@ export function syncUrl(state: UrlSyncState): void {
   if (heatRiskDay !== null && heatRiskDay > 1) {
     params.set('heatday', String(heatRiskDay));
   }
-  if (state.basemap === 'satellite') {
+  if (state.basemap === 'default') {
     params.set('basemap', state.basemap);
   }
   if (state.studio === 'layers' || state.studio === 'place') {

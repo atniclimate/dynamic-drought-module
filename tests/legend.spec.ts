@@ -28,17 +28,17 @@ test.describe('UX-3 unified legend registry', () => {
     await gotoApp(page, '?view=console');
     // Settle the default surface first so its own activation cannot race the
     // swap below (an in-flight activation could re-add its section).
-    await waitForLayerSettled(page, 'usdm');
+    await waitForLayerSettled(page, 'nadm-drought');
 
     // Turn on a raster surface (synchronous legend) and the bundled ecoregion
-    // reference (synchronous legend). The surface deactivates usdm.
+    // reference (synchronous legend). The surface deactivates NADM.
     await layerCheckbox(page, 'drought').check();
     await layerCheckbox(page, 'ecoregions').check();
 
     const panel = page.locator('#legend-panel');
     await expect(panel).toBeVisible();
 
-    // One panel, two sections, ordered surface then reference (usdm gone).
+    // One panel, two sections, ordered surface then reference (NADM gone).
     await expect
       .poll(() => sectionKeys(page))
       .toEqual(['drought', 'ecoregions']);
@@ -56,7 +56,7 @@ test.describe('UX-3 unified legend registry', () => {
 
   test('switching the surface swaps only the surface section', async ({ page }) => {
     await gotoApp(page, '?view=console'); // catalog-driving spec (E1 deliverable 1)
-    await waitForLayerSettled(page, 'usdm');
+    await waitForLayerSettled(page, 'nadm-drought');
     await layerCheckbox(page, 'drought').check();
     await layerCheckbox(page, 'ecoregions').check();
     await expect.poll(() => sectionKeys(page)).toEqual(['drought', 'ecoregions']);
@@ -71,7 +71,7 @@ test.describe('UX-3 unified legend registry', () => {
 
   test('the panel hides when the last legend layer is turned off', async ({ page }) => {
     await gotoApp(page, '?view=console'); // catalog-driving spec (E1 deliverable 1)
-    await waitForLayerSettled(page, 'usdm');
+    await waitForLayerSettled(page, 'nadm-drought');
     await layerCheckbox(page, 'drought').check();
     await expect(page.locator('#legend-panel')).toBeVisible();
 

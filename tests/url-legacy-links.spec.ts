@@ -3,6 +3,7 @@ import {
   gotoApp,
   layerCheckbox,
   regionButton,
+  regionSelect,
   urlLayers,
   search,
   waitForLayerSettled,
@@ -30,7 +31,7 @@ test.describe('URL legacy links and tolerant reading', () => {
 
     // The known parameter still resolves and the app boots normally
     // (gotoApp already asserted the sidebar built).
-    await expect(regionButton(page, 'central_oregon')).toHaveAttribute('aria-checked', 'true');
+    await expect(regionSelect(page)).toHaveValue('region:central_oregon');
   });
 
   test('an unknown region value falls back to the default region (policy rule 2)', async ({ page }) => {
@@ -38,7 +39,7 @@ test.describe('URL legacy links and tolerant reading', () => {
 
     // Unknown region resolves to DEFAULT_REGION (washington_state), never
     // a blank map, and no phantom region button is invented.
-    await expect(regionButton(page, 'washington_state')).toHaveAttribute('aria-checked', 'true');
+    await expect(regionSelect(page)).toHaveValue('region:washington_state');
     await expect(regionButton(page, 'atlantis')).toHaveCount(0);
   });
 
@@ -148,7 +149,7 @@ test.describe('URL legacy links and tolerant reading', () => {
     // `select` is a one-shot deep-link command; a malformed value parses
     // to null and is skipped, and the app boots normally.
     await gotoApp(page, '?select=garbage');
-    await expect(regionButton(page, 'washington_state')).toHaveAttribute('aria-checked', 'true');
+    await expect(regionSelect(page)).toHaveValue('region:washington_state');
   });
 
   test('the one-shot select parameter is not re-emitted into the URL (policy rule 8)', async ({ page }) => {
@@ -162,12 +163,12 @@ test.describe('URL legacy links and tolerant reading', () => {
     // so the layer stays registered and in the URL even on a bad-network
     // day. Both polls carry the doctrine's 25s ceiling.
     await gotoApp(page, '?select=state:WA');
-    await waitForLayerSettled(page, 'usdm');
+    await waitForLayerSettled(page, 'nadm-drought');
     await expect
       .poll(async () => (await search(page)).includes('select='), { timeout: 25_000 })
       .toBe(false);
     await expect
-      .poll(async () => (await urlLayers(page)).has('usdm'), { timeout: 25_000 })
+      .poll(async () => (await urlLayers(page)).has('nadm-drought'), { timeout: 25_000 })
       .toBe(true);
   });
 });

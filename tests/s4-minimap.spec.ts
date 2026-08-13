@@ -238,7 +238,7 @@ test.describe('S4b minimap', () => {
     ).toHaveText('Jump to region');
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-scale'),
-    ).toHaveText('NADM · Jul 2026');
+    ).toHaveText('NADM · Jun 2026');
     await expect(
       page.locator('.shell-minimap-map [role="radiogroup"]'),
     ).toHaveAttribute(
@@ -295,12 +295,19 @@ test.describe('S4b minimap', () => {
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-note'),
     ).toHaveCount(0);
-    // The original region radiogroup now precedes the continental minimap in
-    // desktop Brief. The minimap keeps framing ownership, while the familiar
-    // jump list remains a visible same-node navigation route.
+    // The compact minimap door, combined dropdown, then place refinement
+    // follow the inline minimap and retain the detailed legacy cameras.
     await expect(page.locator('#shell-region-host > #panel-region')).toBeVisible();
-    await expect(page.locator('#region-buttons[role="radiogroup"]')).toHaveCount(1);
+    await expect(
+      page.locator('.shell-minimap-popover-wrap + #shell-region-host'),
+    ).toHaveCount(1);
+    await expect(page.locator('#shell-region-host + #shell-refine-host')).toHaveCount(1);
+    await expect(page.locator('#region-select')).toHaveValue('region:washington_state');
+    await expect(page.locator('#region-select optgroup')).toHaveCount(2);
     await expect(page.locator('.shell-minimap-map [role="radiogroup"]')).toHaveCount(1);
+    await expect(
+      page.locator('.shell-minimap-map [data-framing="boreal-arctic"]'),
+    ).toHaveAttribute('d', /^[^M]*M[^M]*$/);
   });
 
   test('loads dated Drought and verified Wildfire metrics only in their modes', async ({
@@ -390,13 +397,27 @@ test.describe('S4b minimap', () => {
     expect(nadmRequests).toBe(1);
 
     await page.locator('.shell-cluster-btn[data-cluster="heat"]').click();
-    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveText(
-      'No verified Extreme Heat framing metric applied.',
-    );
+    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
     await page.locator('.shell-cluster-btn[data-cluster="enso"]').click();
-    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveText(
-      'No verified ENSO framing metric applied.',
+    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
+  });
+
+  test('the annotated granular drought URL keeps the selected drought metric and regional fills', async ({
+    page,
+  }) => {
+    await gotoApp(
+      page,
+      '?region=washington_state&layers=hillshade%2Cnadm-drought%2Caiannh%2Cbia-reservations%2Cstates&view=brief',
     );
+    const minimap = page.locator('.shell-minimap-map');
+    await expect(minimap.locator('.shell-minimap-canvas')).toHaveAttribute(
+      'data-metric-context',
+      'drought',
+    );
+    const pacific = minimap.locator('[data-framing="pacific-coast"]');
+    await expect(pacific).toHaveAttribute('data-drought-class', 'D2');
+    await expect(pacific).toHaveCSS('fill', 'rgb(255, 170, 0)');
+    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
   });
 
   test('uses the legible Hawaii inset proportions from the desktop rail', async ({
@@ -427,6 +448,9 @@ test.describe('S4b minimap', () => {
     expect(proportions.top).toBeCloseTo(0.567, 2);
     expect(proportions.width).toBeCloseTo(0.257, 2);
     expect(proportions.height).toBeCloseTo(0.39, 2);
+    await expect(
+      page.locator('.shell-minimap-map .shell-minimap-island').first(),
+    ).toHaveCSS('stroke', 'rgb(241, 245, 249)');
   });
 
   test('removes minimap transitions when reduced motion is requested', async ({
@@ -487,7 +511,7 @@ test.describe('S4b minimap', () => {
     ).toHaveAttribute('aria-checked', 'true');
   });
 
-  test('the required framing provenance rides the accessible name and caption (DG-080 blocker 2)', async ({
+  test('the required framing provenance remains in the accessible name without repeated visible copy', async ({
     page,
   }) => {
     await gotoApp(page);
@@ -501,16 +525,11 @@ test.describe('S4b minimap', () => {
     await expect(region).toHaveAttribute('aria-label', qualification);
     // Pointer hover stays visual-only; no native description popup.
     expect(await region.getAttribute('title')).toBeNull();
-    // Caption surfaces: the persistent provenance line qualifies the
-    // drawn shapes even before any framing commits...
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-provenance'),
-    ).toHaveText(qualification);
-    // ...and stays with the committed framing's own note after a commit.
+    ).toHaveCount(0);
     await region.click();
-    await expect(
-      page.locator('.shell-minimap-map .shell-minimap-provenance'),
-    ).toHaveText(qualification);
+    await expect(page.locator('#region-select')).toHaveValue('framing:pacific-coast');
     // Coverage copy stays a separate sentence; it does not substitute
     // for the geometry provenance.
     await expect(

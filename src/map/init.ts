@@ -34,8 +34,8 @@ const DEFAULT_MIN_ZOOM = MAP_MIN_ZOOM;
 const DEFAULT_MAX_ZOOM = 14;
 
 /**
- * Maximum width in CSS pixels of the scale control, expressed in imperial
- * units (miles / feet) per the project's domestic-US audience.
+ * Maximum width in CSS pixels of each scale control. The paired imperial and
+ * metric bars keep both common measurement systems visible at once.
  */
 const SCALE_MAX_WIDTH_PX = 160;
 
@@ -48,9 +48,8 @@ const SCALE_MAX_WIDTH_PX = 160;
  * stays a single, side-effect-light call.
  *
  * Open-data invariant: no proprietary tile providers are configured. The
- * base style uses the CC BY 4.0 EOxCloudless 2016 historical mosaic over a
- * subdued OpenStreetMap fallback (see `buildBaseStyle()`); recent NOAA
- * GeoColor remains a separate opt-in context.
+ * base style uses a subdued OpenStreetMap base (see `buildBaseStyle()`);
+ * recent NOAA GeoColor is the default satellite context.
  */
 export function createMap(containerId: string): maplibregl.Map {
   registerPmtilesProtocol();
@@ -76,23 +75,41 @@ export function createMap(containerId: string): maplibregl.Map {
     attributionControl: false
   });
 
-  // AUTO-compact (the MapLibre default): a full bar on desktop, collapsed
-  // to the standard info toggle below 640 px map width. The U4 stage-5
-  // browser matrix caught the forced full bar colliding with the legend
-  // chip and the ATNI badge on the first-class 400x600 embed viewport;
-  // the collapsed control is the accepted attribution pattern there, and
-  // the satellite observation notice stays independently visible in the dock
-  // (the review's only never-collapse requirement is the observation
-  // context, not the legal bar).
-  map.addControl(new maplibregl.AttributionControl());
+  // Keep attribution behind MapLibre's standard disclosure button at every
+  // viewport size. The sources remain reachable without a persistent text box
+  // covering the map.
+  map.addControl(new maplibregl.AttributionControl({ compact: true }));
+  // MapLibre initially expands a newly added compact control. Start it closed
+  // so credits are one disclosure tap away without covering the map on load.
+  // Source metadata can populate the control after it is added, so close it
+  // after the first style or source update that makes it compact.
+  const closeInitialAttribution = (): void => {
+    const attribution = map
+      .getContainer()
+      .querySelector<HTMLElement>('.maplibregl-ctrl-attrib');
+    if (!attribution?.classList.contains('maplibregl-compact')) return;
+    attribution.classList.remove('maplibregl-compact-show');
+    attribution.removeAttribute('open');
+    map.off('styledata', closeInitialAttribution);
+    map.off('sourcedata', closeInitialAttribution);
+  };
+  map.on('styledata', closeInitialAttribution);
+  map.on('sourcedata', closeInitialAttribution);
+  closeInitialAttribution();
   map.addControl(
     new maplibregl.ScaleControl({
       unit: 'imperial',
       maxWidth: SCALE_MAX_WIDTH_PX
     })
   );
+  map.addControl(
+    new maplibregl.ScaleControl({
+      unit: 'metric',
+      maxWidth: SCALE_MAX_WIDTH_PX
+    })
+  );
   // The basemap switcher (U4d): recent NOAA context is one tap away from the
-  // historical shared ground. Present in embeds too; `basemap=` is durable
+  // standard base. Present in embeds too; `basemap=` is durable
   // URL state and an embedding site may pin it in its iframe src.
   // BOTTOM-right: the app's own overlay stack (Share view, About) owns the
   // map's top-right and intercepts pointer events there (caught by the U4d

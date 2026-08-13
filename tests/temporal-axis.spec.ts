@@ -212,7 +212,9 @@ test.describe('0.5.0b temporal axis', () => {
     // The strip names the view instead of faking a worst-category number.
     const drought = page.locator('.conditions-metric[data-metric="drought"]');
     await expect(drought.locator('.conditions-value')).toHaveText('1-wk');
-    await expect(drought.locator('.conditions-sublabel')).toContainText('drought change in view');
+    await expect(drought.locator('.conditions-sublabel')).toContainText('drought change');
+    await expect(drought.locator('.conditions-sublabel')).not.toContainText('drought change in view');
+    await expect(drought).toHaveAttribute('aria-label', /drought change in view/i);
   });
 
   test('the outlook jump changes instrument: register switch, Issued stamp, honest URL', async ({
