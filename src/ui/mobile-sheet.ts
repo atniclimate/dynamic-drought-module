@@ -547,7 +547,7 @@ function buildSheetPlaceStudioEntry(): void {
   placeButton.id = 'sheet-place-studio-entry';
   placeButton.className = 'sheet-report-door sheet-place-studio-entry';
   placeButton.textContent = 'PLACE';
-  placeButton.title = 'Open the PLACE studio: choose a place for the briefing';
+  // Accessible name only (W2-D7): no title that duplicates it verbatim.
   placeButton.setAttribute(
     'aria-label',
     'Open the PLACE studio: choose a place for the briefing'

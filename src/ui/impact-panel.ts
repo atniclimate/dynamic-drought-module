@@ -111,7 +111,7 @@ export function ensureImpactPanelShell(): ImpactPanelShell {
         <h2 id="impact-panel-title" class="impact-panel-title"></h2>
         <p class="impact-panel-kind"></p>
       </div>
-      <button type="button" class="impact-panel-close" aria-label="Close briefing" title="Close briefing">
+      <button type="button" class="impact-panel-close" aria-label="Close briefing">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </header>
@@ -180,8 +180,8 @@ export function syncImpactPanelHost(): void {
     if (entering) host.appendChild(panel);
     panel.classList.add('sheet-hosted');
     panel.setAttribute('aria-modal', 'false');
+    // Accessible name only (W2-D7): no title duplicating it verbatim.
     closeBtn?.setAttribute('aria-label', 'Close the full report');
-    closeBtn?.setAttribute('title', 'Close the full report');
     if (entering && !panel.hidden && getViewMode() === 'console') {
       driveSheetForReport('full');
     }
@@ -191,7 +191,6 @@ export function syncImpactPanelHost(): void {
   if (panel.parentElement !== document.body) document.body.appendChild(panel);
   panel.classList.remove('sheet-hosted');
   closeBtn?.setAttribute('aria-label', 'Close briefing');
-  closeBtn?.setAttribute('title', 'Close briefing');
   if (!panel.hidden) panel.setAttribute('aria-modal', 'true');
 }
 

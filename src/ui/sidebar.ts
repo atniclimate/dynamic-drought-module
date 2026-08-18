@@ -631,7 +631,8 @@ function wireHazardRail(map: maplibregl.Map): void {
   for (const btn of rail.querySelectorAll<HTMLButtonElement>('button[data-preset]')) {
     const preset = MOBILE_HAZARD_PRESETS.find((p) => p.key === btn.dataset.preset);
     if (!preset) continue;
-    btn.title = preset.description;
+    // Accessible name only (W2-D7): a title that duplicates the accessible
+    // name verbatim adds a redundant tooltip and double speech, not information.
     btn.setAttribute('aria-label', preset.description);
     // The preset's first layer is its condition surface (the table is
     // ordered surface-first); the pressed state mirrors that layer.

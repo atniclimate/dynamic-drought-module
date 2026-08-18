@@ -71,10 +71,14 @@ test.describe('PS-CORE PLACE studio', () => {
     const pair = page.locator('#studio-entry-pair');
     await expect(pair.locator('#place-studio-entry')).toHaveText('PLACE');
     await expect(pair.locator('#layers-studio-entry')).toHaveText('LAYERS');
+    // W2-D7: the accessible name stands alone; no title duplicates it.
     await expect(pair.locator('#place-studio-entry')).toHaveAttribute(
-      'title',
+      'aria-label',
       'Open the PLACE studio: choose a place for the briefing'
     );
+    expect(
+      await pair.locator('#place-studio-entry').getAttribute('title')
+    ).toBeNull();
 
     const beforeLength = await page.evaluate(() => window.history.length);
     await pair.locator('#place-studio-entry').click();
