@@ -59,17 +59,32 @@ export function initMapInformation(): void {
 
   const render = (): void => {
     const active = registry.getActiveKeys();
-    const definitions = LAYER_DEFS.filter((definition) => active.has(definition.key));
-    const keyContext = mapKey?.hidden
-      ? ''
-      : (mapKey?.getAttribute('aria-label')?.trim() ?? '');
+    // W2-D6: a source whose activation is still in flight is listed with
+    // its loading status instead of being dropped; a deactivated source
+    // (including a failed activation the controller unchecked) keeps its
+    // honest absence.
+    const definitions = LAYER_DEFS.filter(
+      (definition) =>
+        active.has(definition.key) ||
+        registry.getStatus(definition.key) === 'loading'
+    );
     const vintage = document.getElementById('basemap-vintage')?.textContent?.trim() ?? '';
 
-    const contextParts = [keyContext];
-    if (getBasemapMode() === 'satellite' && vintage) contextParts.push(vintage);
-    current.textContent =
-      contextParts.filter(Boolean).join(' ') ||
-      'Active map sources and their current states are listed below.';
+    // W2-D8: the opening line leads with what this panel uniquely adds
+    // (the active view and the basemap state with its observation window)
+    // instead of restating the on-map key's aria text verbatim while that
+    // key is visible directly beneath the panel.
+    const surface =
+      definitions.find(
+        (definition) => definition.role === 'surface' && active.has(definition.key)
+      ) ?? definitions.find((definition) => definition.role === 'surface');
+    const contextParts = [
+      surface ? `Active view: ${surface.name}.` : 'No condition surface is on.',
+      getBasemapMode() === 'satellite'
+        ? `Satellite imagery basemap.${vintage ? ` ${vintage}` : ''}`
+        : 'Default OpenStreetMap basemap.'
+    ];
+    current.textContent = contextParts.join(' ');
 
     sources.replaceChildren();
     for (const definition of definitions) {

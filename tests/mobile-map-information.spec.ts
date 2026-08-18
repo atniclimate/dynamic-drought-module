@@ -198,12 +198,27 @@ test.describe('mobile map-information disclosure (390x844)', () => {
     const infoButton = page.getByRole('button', { name: 'Map information' });
     const panel = page.locator('#map-info-panel');
     const sourceList = page.locator('#map-info-sources');
+    const contextLine = page.locator('#map-info-current');
     const ensoButton = page.locator('#hazard-rail button[data-preset="hazard-enso"]');
     const satelliteButton = page.locator('.basemap-switcher-btn');
 
     await infoButton.click();
     await expect(panel).toBeVisible();
     await expect(sourceList).toContainText('North American Drought Monitor');
+
+    // W2-D8: the panel opens with what it uniquely adds (the active view
+    // and the basemap state), never a verbatim restatement of the on-map
+    // key aria text that sits directly beneath it.
+    await expect(contextLine).toContainText(
+      'Active view: North American Drought Monitor.'
+    );
+    await expect(contextLine).toContainText('basemap');
+    const keyAria =
+      (await page.locator('#map-key').getAttribute('aria-label')) ?? '';
+    expect(keyAria.length).toBeGreaterThan(0);
+    expect(((await contextLine.textContent()) ?? '').includes(keyAria)).toBe(
+      false
+    );
 
     for (const control of [
       page.locator('#share-btn'),
@@ -250,6 +265,9 @@ test.describe('mobile map-information disclosure (390x844)', () => {
     await expect(infoButton).toHaveAttribute('aria-expanded', 'true');
     await expect(sourceList).toContainText('Ocean Temperature Anomaly');
     await expect(sourceList).not.toContainText('North American Drought Monitor');
+    await expect(contextLine).toContainText(
+      'Active view: Ocean Temperature Anomaly.'
+    );
 
     // The existing Satellite button remains equally usable above the panel.
     await expect(satelliteButton).toHaveAttribute('aria-pressed', 'true');
@@ -257,6 +275,109 @@ test.describe('mobile map-information disclosure (390x844)', () => {
     await expect(satelliteButton).toHaveAttribute('aria-pressed', 'false');
     await expect(page).toHaveURL(/(?:\?|&)basemap=default(?:&|$)/);
     await expect(panel).toBeVisible();
+  });
+});
+
+test.describe('still-loading sources stay visible during live activation (W2-D6)', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('the info panel lists a loading NIFC source and the Fire key names its loading section', async ({
+    page
+  }) => {
+    const fireFixture = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {
+            attr_UniqueFireIdentifier: 'w2-d6-fire-1',
+            attr_IncidentName: 'Loading Fixture',
+            attr_IncidentTypeCategory: 'WF',
+            Density: 'Light',
+            dn: 5
+          },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-121, 44],
+                [-120, 44],
+                [-120, 45],
+                [-121, 44]
+              ]
+            ]
+          }
+        }
+      ]
+    };
+    // SPC and smoke resolve immediately; the NIFC perimeter response is
+    // HELD so the activation is genuinely in flight when we look.
+    await page.route(
+      (url) =>
+        url.href.includes('NOAA_Satellite_Smoke_Detection') ||
+        url.href.includes('/SPC_firewx/MapServer/1/query'),
+      (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/geo+json',
+          body: JSON.stringify(fireFixture)
+        })
+    );
+    let releaseNifc: (() => void) | null = null;
+    const nifcGate = new Promise<void>((resolve) => {
+      releaseNifc = resolve;
+    });
+    await page.route(
+      (url) => url.href.includes('WFIGS_Interagency_Perimeters_Current'),
+      async (route) => {
+        await nifcGate;
+        try {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/geo+json',
+            body: JSON.stringify(fireFixture)
+          });
+        } catch {
+          // The page may already be closing when the gate releases.
+        }
+      }
+    );
+
+    await gotoApp(page);
+    await page.locator('#hazard-rail button[data-preset="hazard-fire"]').click();
+
+    // The Fire key renders the SPC scale AND names the still-loading NIFC
+    // section as a placeholder row instead of omitting it (W2-D6).
+    const key = page.locator('#map-key');
+    await expect(key.locator('[data-spc-fire-weather-key]')).toBeVisible();
+    await expect(key.locator('[data-nifc-perimeter-key]')).toContainText(
+      'NIFC WFIGS current mapped perimeters'
+    );
+    await expect(
+      key.locator('[data-key-loading="nifc-fires"]')
+    ).toContainText('loading');
+
+    // The info panel lists the loading source with its loading status.
+    await page.getByRole('button', { name: 'Map information' }).click();
+    const sourceList = page.locator('#map-info-sources');
+    const nifcRow = sourceList.locator('li', {
+      hasText: 'Current Mapped Fire Perimeters (NIFC)'
+    });
+    await expect(nifcRow).toHaveCount(1);
+    await expect(nifcRow.locator('.map-info-source-state')).toHaveText(
+      'loading...'
+    );
+
+    // Release the held response: the placeholder resolves into the real
+    // perimeter rows and the panel row leaves the loading state.
+    releaseNifc?.();
+    await expect(key.locator('[data-key-loading="nifc-fires"]')).toHaveCount(0, {
+      timeout: 15_000
+    });
+    await expect(nifcRow.locator('.map-info-source-state')).not.toHaveText(
+      'loading...',
+      { timeout: 15_000 }
+    );
   });
 });
 
