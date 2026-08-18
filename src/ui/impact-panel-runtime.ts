@@ -83,7 +83,7 @@ let openToken = 0;
 /**
  * Master abort controller for the active briefing's live hydration. Aborted on
  * close and on reopen so superseded fetches are cancelled and cannot render
- * into a torn-down panel (CLAUDE.md section 6 invariant 5).
+ * into a torn-down panel (the cancellation invariant).
  */
 let activeController: AbortController | null = null;
 
@@ -109,7 +109,7 @@ let panelSelection: PlaceSelection | null = null;
 
 /**
  * Horizon pill wording follows the canonical six-state vocabulary
- * (CLAUDE.md section 6 invariant 3; the island's STATUS_PILL_TEXT is the
+ * (a project invariant; the island's STATUS_PILL_TEXT is the
  * layer-side table). A horizon has only four states; each maps to its
  * canonical string, never a per-surface synonym: the pre-U2 "partial"
  * drifted from "live (partial)" and was flagged by the 2026-07-10 design
@@ -705,5 +705,5 @@ export function setImpactPanelCloseHook(hook: () => void): void {
 // (src/map/interaction-coordinator.ts) now owns the one click response,
 // so it sets the place selection, routes the active mobile Brief sheet,
 // wires the `[data-ddm-impact-trigger]` button, and clears the selection
-// on response close (only if still current). The facade-freeze record of
-// the removal is docs/facade-freeze.md with the ADR 0001 note.
+// on response close (only if still current). The removal was recorded as
+// a deliberate facade-freeze decision (the ADR 0001 note).

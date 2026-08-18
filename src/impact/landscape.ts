@@ -418,8 +418,8 @@ export function isLandscapeBundle(value: unknown): value is LandscapeBundle {
  * Load the landscape-signature artifact. Never throws for absence, shape,
  * or version problems: every failure is `{ ok: false, reason, note }`.
  * A response that completes after the master signal aborted is reported
- * as 'aborted', never returned as success (late responses to superseded
- * operations are dropped; CLAUDE.md section 6 rule 5).
+ * as 'aborted', never returned as success (the cancellation invariant:
+ * late responses to superseded operations are dropped).
  */
 export async function loadLandscapeSignature(
   opts?: LandscapeLoadOptions
@@ -459,7 +459,7 @@ export async function loadLandscapeSignatureAtUrl(
     // transport threw (an AbortError, a TypeError from a torn stream, a
     // SyntaxError from a truncated body), a superseded operation is
     // reported 'aborted' and its outcome dropped, never surfaced as an
-    // availability or parse statement (CLAUDE.md section 6 rule 5).
+    // availability or parse statement (the cancellation invariant).
     if (signal?.aborted) {
       return {
         ok: false,

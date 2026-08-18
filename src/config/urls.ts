@@ -651,8 +651,8 @@ export const URLS = Object.freeze({
   // reservations, joint-use areas), so it closes the confirmed Oklahoma gap
   // (biaLarFeatureServer returns zero features for Oklahoma). Consumed LIVE,
   // not bundled: activation-time agency fetch commits no sovereign polygons to
-  // the repository and does not engage CLAUDE.md hard rule 1 (exactly like
-  // biaLarFeatureServer). Layer 47 is the comprehensive layer; per-type
+  // the repository and does not engage the no-redistribution hard rule (exactly
+  // like biaLarFeatureServer). Layer 47 is the comprehensive layer; per-type
   // siblings exist (2 Federal reservations, 3 off-reservation trust land, 7
   // OTSA, 10 joint-use, 4 state reservations, 5 Hawaiian Home Lands, 6 Alaska
   // Native Village Statistical Areas). Consumer appends
@@ -676,7 +676,7 @@ export const URLS = Object.freeze({
   // returned 25 OTSA. Vintage "January 1, 2025". maxRecordCount 100000 (no
   // truncation risk). Provenance chain for the D-0.7.0-032 T0 condition:
   // publisher US Census Bureau, a federal statistical product, activation-time
-  // fetch, full record in docs/ddm-tribal-geography-tier-assessment-2026-07-15.md.
+  // fetch (recorded in the 2026-07-15 tier assessment).
   // Anti-scrape note: the ArcGIS REST /query path, not the TIGERweb viewer.
   censusAiannhMapServer:
     'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/AIANNHA/MapServer',
@@ -832,9 +832,9 @@ export const URLS = Object.freeze({
   // boundary file (1:20,000,000 generalization, 2023 vintage, public domain)
   // by scripts/build-states.mjs (`npm run build:states`; source download
   // verified HTTP 200 on 2026-07-01). Public administrative reference data,
-  // not sovereign-jurisdiction polygons, so bundling is consistent with
-  // CLAUDE.md hard rule 1. Provenance is recorded in the file's `metadata`
-  // foreign member.
+  // not sovereign-jurisdiction polygons, so bundling is consistent with the
+  // no-redistribution hard rule. Provenance is recorded in the file's
+  // `metadata` foreign member.
   usStatesLocal: BASE_URL + 'data/us-states.geojson',
   // Municipal place labels (U4e; Natural Earth 1:10m populated places,
   // public domain, US subset; built by scripts/build-places.mjs with the
@@ -856,8 +856,8 @@ export const URLS = Object.freeze({
   // Per-state resource catalog base (0.6.0 R2). Public resource LINKS are not
   // sovereign data, so the catalog ships in-repo (D-0.6.0-004); each state's
   // rows live at `<base>data/resources/<lowercase-two-letter-code>.json` and are
-  // fetched only for the clicked state (lazy). Schema and doctrine:
-  // docs/resource-catalog-schema.md.
+  // fetched only for the clicked state (lazy). The schema is enforced by
+  // scripts/check-resource-catalog.mjs and src/impact/resource-catalog.ts.
   resourcesLocalBase: BASE_URL + 'data/resources/',
 
   // ---------- NASA GIBS sea surface temperature anomaly (B2, keyless WMTS) ----------

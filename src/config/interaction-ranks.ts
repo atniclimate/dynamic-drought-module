@@ -1,8 +1,7 @@
 /**
  * Interaction target precedence for the InteractionCoordinator (S1;
- * D-0.7.0-041 part 2, adopting the ratified Codex design review,
- * C:/dev/_reviews/ddm/2026-07-16_desktop-first-open-design.md section
- * B; the cross-cutting hover/click cleanliness item in the region shell
+ * D-0.7.0-041 part 2, adopting the ratified 2026-07-16 Codex design
+ * review; the cross-cutting hover/click cleanliness item in the region shell
  * decision register).
  *
  * THE RULE: smallest intentional subject before contextual surface.
@@ -17,8 +16,8 @@
  * target, and ranking it higher would make sovereign geography visible
  * but unreachable.
  *
- * S1 lands only this table; the coordinator that consumes it is a later
- * unit (it feeds S4 and the embed response feeds S6). (The Unit I
+ * The coordinator that consumes this table is
+ * src/map/interaction-coordinator.ts. (The Unit I
  * related-cessions probe this note once described was retired with the
  * live Treaty layer, D-0.7.0-065.)
  */

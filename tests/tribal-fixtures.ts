@@ -1,7 +1,7 @@
 /**
  * Synthetic Tribal-geography fixtures for the umbrella-build specs.
  *
- * HARD RULE 1 GUARD (CLAUDE.md section 4; the plan-attack standing guard):
+ * NO-REDISTRIBUTION GUARD (a project hard rule; the plan-attack standing guard):
  * nothing in this file is, or resembles, a real AIANNH or AIAN-LAR
  * polygon. Every geometry is a hand-authored rectangle placed inside the
  * default Washington State viewport purely so a map click can hit it, and

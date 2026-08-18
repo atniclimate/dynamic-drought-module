@@ -5,7 +5,7 @@
  * "what": the selected US Drought Monitor (USDM) week, the USDM view mode
  * (absolute categories or the change map), and the selected Sea Surface
  * Temperature (SST) anomaly frame date. All of it round-trips through the
- * URL (CLAUDE.md section 6 invariant 2) via three parameters the sidebar's
+ * URL (the URL-as-state invariant) via three parameters the sidebar's
  * `pushUrl` serializes and `applyUrlState` restores:
  *
  *   week    YYYYMMDD USDM valid-Tuesday; absent = the current week
@@ -32,7 +32,7 @@
  * selects the RECIPE a cluster boot composes: without it a shared
  * cluster=wildfire&horizon=season-ahead link would reboot at the
  * current-horizon recipe and show the recipient a different display
- * than the sharer saw (CLAUDE.md section 6 invariant 2). The timeline
+ * than the sharer saw (the URL-as-state invariant). The timeline
  * owns the horizon-to-register mapping in BOTH directions
  * (`outlookRangeForHorizon` / the setter logic below): 'current' reads
  * the observed registers (usdmWeek / usdmMode / sstDate), while the two

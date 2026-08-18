@@ -4,7 +4,7 @@
  * fixed readout names what sits beneath it, drawn from whichever layers are
  * active: the state, the ecoregion, the drought category, and the river under
  * the cursor (the last folds in the river-name tooltip the Leaflet port
- * dropped; TODO.md [0.3.0]).
+ * dropped).
  *
  * Like the conditions strip, the inspector only reflects what is rendered: it
  * queries a layer only when that layer's fill or line is present, so it never

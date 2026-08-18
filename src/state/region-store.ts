@@ -10,8 +10,8 @@
  * store: the sidebar's `selectRegion` writes it, consumers may read it, and
  * the issuer-aware drought controller subscribes to region changes.
  *
- * This was deliberately deferred from the Phase 1 (BIA reservation) work; see
- * docs/KERNEL_INTEGRATION_CONTINUATION.md section 11. Keeping it minimal (a
+ * This was deliberately deferred from the Phase 1 (BIA reservation)
+ * work. Keeping it minimal (a
  * getter, setter, and narrow listener set over a module-level variable)
  * avoids reintroducing the coupling the LayerRegistry event bus was built to
  * remove.

@@ -131,7 +131,7 @@ export function buildTribalPopupHtml(props: GeoJsonProperties): string {
  * Reads `LARNAME`, `CLASSIFICATION`, `REGION`, and `GISACRES`, all interpolated
  * through `escapeHtml`.
  *
- * Stewardship (CLAUDE.md sections 2 and 4; D-0.8.0-052): LAR definition
+ * Stewardship (a project hard rule; D-0.8.0-052): LAR definition
  * publication, continuing service updates, browser retrieval date, and
  * BIA-mission authority are separate facts. The representation is never
  * legal, survey, or jurisdictional truth. Tribal sovereignty and a Tribe's
@@ -196,7 +196,7 @@ function resolveAiannhSubtype(code: string): { label: string; isLegal: boolean }
  * Areas (AIANNH) feature (the live `aiannh` layer). Reads `NAME`, `AIANNHCC`
  * (subtype), and `BASENAME`, all interpolated through `escapeHtml`.
  *
- * Stewardship (D-0.7.0-033; CLAUDE.md section 2): AIANNH is a US Census
+ * Stewardship (D-0.7.0-033; a project hard rule): AIANNH is a US Census
  * Bureau product, fetched live at activation time, not bundled by DDM. It
  * spans both legal reservation/trust-land geographies and statistical
  * geographies (Oklahoma Tribal Statistical Areas and the like). A statistical

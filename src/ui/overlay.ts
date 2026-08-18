@@ -27,7 +27,7 @@
  * `#copy-toast`) live in `index.html`; their styles live in
  * `src/styles/app.css`. This module owns only the show/hide state machine.
  *
- * See CLAUDE.md section 8 for the named-export contract.
+ * The named exports are a frozen cross-module contract; do not rename them.
  */
 
 /**

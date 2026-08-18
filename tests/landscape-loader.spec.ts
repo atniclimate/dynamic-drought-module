@@ -209,7 +209,7 @@ test.describe('loadLandscapeSignature', () => {
     // The transport resolves successfully, but the master signal aborted
     // while the body was in flight: the loader's final aborted check must
     // report 'aborted' rather than handing a superseded snapshot to the
-    // caller (CLAUDE.md section 6 rule 5).
+    // caller (the cancellation invariant).
     const controller = new AbortController();
     const result = await loadLandscapeSignature({
       url: URL_UNDER_TEST,

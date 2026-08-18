@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 import { gotoApp, stationValues, PILL } from './helpers';
 
 /**
- * Telemetry honesty backbone (T1 through T3 and the 0.2.1 Tier A pass,
- * CHANGES.md). The manual ddm-ui-verifier lane asserts the exact live values
+ * Telemetry honesty backbone (T1 through T3 and the 0.2.1 Tier A
+ * pass). The manual ddm-ui-verifier lane asserts the exact live values
  * ("Forebay 75.4 ft"); those are flaky against live upstreams and do not
  * belong in an every-push gate. What IS deterministic, and what this suite
  * guards, is the honest-status contract:

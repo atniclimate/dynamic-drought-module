@@ -9,7 +9,7 @@
  * Hawaiian Home Lands, state reservations, and joint-use areas. This closes
  * the Oklahoma gap where AIAN-LAR returns zero features.
  *
- * Stewardship (CLAUDE.md section 2; the Unit A source-aware boundary model):
+ * Stewardship (the Unit A source-aware boundary model):
  * AIANNH spans legal and statistical geographies. The per-feature legal vs
  * statistical distinction is drawn by `AIANNHCC` in `buildAiannhPopupHtml`
  * (src/ui/popups.ts); a statistical area is never labeled as jurisdiction or
@@ -19,12 +19,12 @@
  * reservations: two agencies' representations, separately labeled, never
  * blended into one dataset.
  *
- * NON-REDISTRIBUTION GUARD (CLAUDE.md hard rule 1; the plan-attack standing
+ * NON-REDISTRIBUTION GUARD (a project hard rule; the plan-attack standing
  * guard): every AIANNH response is transient. It lives in the in-memory
  * session cache below and the MapLibre source, and nowhere else: never
  * committed, never emitted by the default build, never written to disk, and
  * never copied into a test fixture. Live-fetch of a public federal product is
- * not redistribution; see docs/ddm-tribal-geography-tier-assessment-2026-07-15.md.
+ * not redistribution (the 2026-07-15 tier assessment).
  *
  * Source: `URLS.censusAiannhMapServer` layer 47 (verified 2026-07-15; see
  * urls.ts for the full provenance receipt). CORS is reflected-origin; no
@@ -44,7 +44,7 @@
  * `deactivate`. `bia-reservations.ts` carries the same lifecycle so the two
  * behave as peers under the Tribal Nations umbrella.
  *
- * Cancellation (CLAUDE.md section 6 invariant 5): every fetch goes through
+ * Cancellation (the cancellation invariant): every fetch goes through
  * `fetchWithBudget` with a per-call timeout and a master abort signal that
  * fires on `deactivate` or on a superseding fetch. Late responses to
  * superseded requests are dropped, not rendered. A cache hit renders

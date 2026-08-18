@@ -25,7 +25,7 @@ import { deriveViewMode } from '../src/state/view-mode';
 
 /**
  * S2: the region-shell URL migration (D-0.7.0-039/041/042/044/046/053;
- * docs/URL_SCHEMA_POLICY.md, the region-shell precedence table).
+ * this suite pins the region-shell precedence table in full).
  *
  * Two halves, matching the suite's established shapes:
  *
@@ -84,7 +84,7 @@ test.describe('S2 parse grammar (Node)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Node: the precedence table (docs/URL_SCHEMA_POLICY.md)
+// Node: the precedence table
 // ---------------------------------------------------------------------------
 
 test.describe('S2 precedence table (Node)', () => {
@@ -399,11 +399,14 @@ test.describe('S2 framing= and the legacy links in the browser', () => {
     // REGIONS.national as always), still re-emitted as region=national,
     // and it produces NO framing token. NOTE the deliberate staging
     // (Codex S2 finding 1, reconciled): D-0.7.0-041's full
-    // normalization to absence is S4's, because dropping the parameter
-    // before S4 flips the bare-URL camera would re-camera this legacy
-    // link to the retired Washington default. When S4 lands, this
-    // assertion flips to expect region absent (see TODO [0.7.0] and
-    // docs/URL_SCHEMA_POLICY.md, the region=national row).
+    // normalization to absence waits on the bare-URL default camera,
+    // because dropping the parameter while a bare URL still boots the
+    // Washington fit would re-camera this legacy link to that retired
+    // default. That precondition still holds today: DEFAULT_REGION in
+    // src/config/regions.ts is 'washington_state' and neither syncUrl
+    // nor pushUrl normalizes region=national to absence. This assertion
+    // flips to expect region absent only when the bare-URL camera stops
+    // defaulting to Washington and the serializer drops the token.
     await gotoApp(page, '?region=national');
     await expect(regionSelect(page)).toHaveValue('region:national');
     await waitForLayerSettled(page, 'states');

@@ -18,7 +18,7 @@ import { HAZARD_CLUSTERS } from './clusters';
  * surfaces is a config bug; keep the table honest by construction.
  *
  * Tribal Lands appears in every preset: whose land you are looking at is
- * part of every question this module answers (CLAUDE.md section 2). Since
+ * part of every question this module answers (a stewardship rule). Since
  * the Tribal Nations umbrella build (D-0.7.0-032/033), the key that carries
  * it is `aiannh`, the LIVE US Census layer that actually renders on the
  * reference deployment; the `tribal` deployer own-data slot ships empty and

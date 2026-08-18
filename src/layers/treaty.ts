@@ -6,12 +6,13 @@
  * styling spec; no fill is drawn so underlying basemap and overlays remain
  * visible.
  *
- * Stewardship note (CLAUDE.md section 2): Treaty boundaries are a
+ * Stewardship note: Treaty boundaries are a
  * representation of Treaty cession areas, not a definitive depiction of
- * Tribal jurisdiction. The popup framing required by section 2 lives in
- * `buildTreatyPopupHtml` and is reused verbatim from this module's click
- * handler. The repository ships an empty FeatureCollection placeholder per
- * CLAUDE.md section 4 rule 1; deployers populate `data/treaty-areas.geojson`
+ * Tribal jurisdiction. The mandatory popup framing carrying that caveat lives
+ * in `buildTreatyPopupHtml` and is reused verbatim from this module's click
+ * handler. The repository ships an empty FeatureCollection placeholder
+ * because the project never redistributes sovereign-jurisdiction polygons;
+ * deployers populate `data/treaty-areas.geojson`
  * under their own authorizations.
  *
  * Per-feature color: MapLibre data-driven property expressions cannot call
@@ -77,8 +78,8 @@ function pickTreatyName(props: GeoJsonProperties): string | null {
  * is a no-op once the source and layer exist.
  *
  * Empty FeatureCollection is treated as the "deployer has not populated
- * polygons yet" case (CLAUDE.md section 6 invariant 4) and surfaces as
- * 'no-data' rather than an error.
+ * polygons yet" case (absent data is an expected state, not a failure) and
+ * surfaces as 'no-data' rather than an error.
  */
 export async function activate(map: maplibregl.Map): Promise<void> {
   if (map.getLayer(OUTLINE_LAYER_ID)) {
@@ -199,10 +200,11 @@ export function deactivate(map: maplibregl.Map): void {
 /**
  * Wires a click handler on the outline layer that opens a MapLibre popup
  * with HTML produced by `buildTreatyPopupHtml`. The mandatory stewardship
- * framing required by CLAUDE.md section 2 lives inside that factory. The
+ * framing (boundaries as representations) lives inside that factory. The
  * full formal Tribe names (Confederated Tribes and Bands of the Yakama
  * Nation, Nez Perce Tribe, Quinault Indian Nation) come through
- * `pickTreatyEntry` inside the popup factory (CLAUDE.md section 4 rule 6).
+ * `pickTreatyEntry` inside the popup factory; full formal names are a
+ * project hard rule.
  *
  * Cursor affordance: switch to the pointer cursor on hover so users see
  * that Treaty outlines are interactive even though they are hollow.

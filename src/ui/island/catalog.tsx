@@ -151,8 +151,8 @@ interface UmbrellaProps extends CatalogProps {
 
 /**
  * The Tribal Nations umbrella (D-0.7.0-033; Unit F): the featured group
- * card inside the reference role group, per the Codex front-end
- * consultation (C:\dev\_reviews\ddm\2026-07-15_unit-F-frontend-codex.md).
+ * card inside the reference role group, per the 2026-07-15 Codex front-end
+ * consultation.
  * Two SEPARATE controls: the prominent activation button is a command (it
  * requests the configured live member set on through the bridge-safe
  * shared door; no aria-expanded, no aria-pressed, never disabled), and the

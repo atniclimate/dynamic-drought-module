@@ -1,6 +1,6 @@
 /**
  * Per-feature activation budgets + the eager import-graph assertion
- * (0.8.0 T-P0-7; WORKPLAN rev 2; reworked at its DG-080-REVIEW).
+ * (0.8.0 T-P0-7; reworked at its DG-080-REVIEW).
  *
  * WHAT THIS GATE PROVES (and only this; the boundary is stated
  * honestly rather than generously):
@@ -144,7 +144,7 @@ const EAGER_FORBIDDEN = [
   {
     name: 'landscape-artifact loader',
     pattern: /src\/impact\/landscape\.ts$/,
-    reason: 'The T-M0-3 loader is lazy by contract (WORKPLAN: the import-graph assertion proves the loader stays out of the eager graph). Absent today; this guards it forward.',
+    reason: 'The T-M0-3 loader is lazy by contract (the import-graph assertion proves the loader stays out of the eager graph). Absent today; this guards it forward.',
   },
   {
     name: 'impact briefing cluster panel runtime',

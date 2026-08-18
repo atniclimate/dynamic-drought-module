@@ -21,8 +21,8 @@
  * module ships no specific Tribe's resource links; the slot is generic and
  * deployer-populated.
  *
- * Every URL below was cataloged and verified by the prior session (see
- * docs/KERNEL_INTEGRATION_CONTINUATION.md section 3); they are link-outs, never
+ * Every URL below was cataloged and verified before shipping; they are
+ * link-outs, never
  * scraped, and open in a new tab.
  */
 
@@ -75,8 +75,8 @@ export const STATE_LABEL: Record<StateCode, string> = {
  * back to the active region framing. The national explore framing has no
  * primary state, so a non-state selection there resolves to null and the
  * routing degrades honestly to the national federal set. (Point-in-state
- * resolution for non-state clicks under the national framing is a tracked
- * follow-up; see TODO.md.)
+ * resolution for non-state clicks under the national framing is a known
+ * follow-up, not yet implemented.)
  */
 export function resolveStateCode(
   context: BoundarySelectionContext
@@ -246,7 +246,7 @@ function biaRegionalResource(
  * added asynchronously after the panel opens (F3; the open-then-rehydrate path,
  * `rehydrateResourcesFromCatalog` in `src/ui/impact-panel.ts`; D-0.6.0-009). The
  * panel renders resources grouped by tier, so the state group simply appears
- * when the catalog answers. See `docs/resource-catalog-schema.md`.
+ * when the catalog answers.
  */
 export function buildResources(context: BoundarySelectionContext): ResourceLink[] {
   const state = resolveStateCode(context);

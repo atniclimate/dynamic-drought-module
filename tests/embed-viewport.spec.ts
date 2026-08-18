@@ -2,7 +2,8 @@ import { test, expect } from '@playwright/test';
 import { gotoApp, stubHistoricalGround } from './helpers';
 
 /**
- * The small-viewport embed contract (H1, 0.6.2; CLAUDE.md section 4 rule 8).
+ * The small-viewport embed contract (H1, 0.6.2; a project hard rule: the
+ * 400px iframe embed is first-class).
  *
  * A 400px iframe is the FIRST-CLASS embed case, and it sits under the 720px
  * responsive breakpoint, where the app shell switches from side-by-side

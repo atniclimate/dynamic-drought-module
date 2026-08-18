@@ -7,7 +7,7 @@
  * runs its source fetches concurrently and reports its own status, so a slow
  * or failing source for one horizon never blocks another and never blocks the
  * panel. The master `signal` cancels every in-flight fetch on panel close or
- * reopen (CLAUDE.md section 6 invariant 5); `onUpdate` re-renders the panel in
+ * reopen (the cancellation invariant); `onUpdate` re-renders the panel in
  * place after each horizon settles.
  *
  * Source-to-horizon mapping (ddm-drought-impact-modeling temporal framing):

@@ -28,8 +28,8 @@
  * baseline. MapLibre expects `[longitude, latitude]`. The conversion happens
  * here at the boundary, not in the config table.
  *
- * Status reporting is `console.info` for now; M7 wires it through the
- * LayerRegistry alongside the other layer modules.
+ * Status reporting goes through the LayerRegistry (`registry.setStatus`)
+ * alongside the other layer modules.
  */
 
 import maplibregl from 'maplibre-gl';

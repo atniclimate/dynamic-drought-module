@@ -132,7 +132,7 @@ test.describe('UX-3 conditions strip', () => {
   test('a frozen USDM feed degrades to an explicit stale read, not a confident current one', async ({
     page
   }) => {
-    // Regression for docs/ddm-critical-review-2026-07-07.md #6: a drifted or
+    // Regression for critical-review finding #6 (2026-07-07): a drifted or
     // frozen upstream that keeps returning an OLD week used to render as if it
     // were current drought. Serve a valid D3 polygon over the Pacific Northwest
     // whose MapDate is years old; the reading must still show (it is the best

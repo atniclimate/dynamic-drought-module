@@ -15,8 +15,7 @@
  * Doctrine: ddm-drought-impact-modeling (#6) owns the temporal framing and the
  * index-to-impact translation; ddm-tribal-context-threading (#9) owns the
  * resource routing and the stewardship order; ddm-enso-correlation (#7)
- * supplies the long-range modifier. See docs/KERNEL_INTEGRATION_CONTINUATION.md
- * sections 5, 6, and 12.
+ * supplies the long-range modifier.
  */
 
 import type { RegionKey } from '../config/regions';
@@ -368,8 +367,8 @@ export interface BoundarySelectionContext {
 
 /**
  * The full composed briefing the panel renders. `landCaveat` carries the
- * representation caveat for Tribal and Treaty boundaries (preserved in every
- * panel per CLAUDE.md section 2); it is empty for an ecoregion.
+ * representation caveat for Tribal and Treaty boundaries (a stewardship hard
+ * rule: preserved in every panel); it is empty for an ecoregion.
  */
 export interface ImpactBriefing {
   readonly context: BoundarySelectionContext;

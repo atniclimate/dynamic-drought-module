@@ -195,7 +195,7 @@ const FETCH_TIMEOUT_MS = 15_000;
 /**
  * Master cancellation controller for the in-flight fetch. Aborted on
  * `deactivate` and replaced on each `activate` so a superseded request can
- * never render into a torn-down layer (CLAUDE.md section 6 invariant 5).
+ * never render into a torn-down layer (the cancellation invariant).
  */
 let masterController: AbortController | null = null;
 

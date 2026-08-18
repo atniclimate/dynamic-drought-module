@@ -1,6 +1,6 @@
 /**
  * Shared tile-load watcher for raster layers: the debounced tile-error
- * honesty policy (TODO.md [0.3.0], designed 2026-07-02).
+ * honesty policy (designed 2026-07-02).
  *
  * The gap it closes: a raster layer registers its XYZ or WMS tile template
  * and reports `ready`, but MapLibre fetches tiles lazily, so a tile-load

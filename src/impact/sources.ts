@@ -6,8 +6,8 @@
  * claims it produced and whether the fetch succeeded. The orchestrator
  * (`hydrate.ts`) assembles these into the three temporal horizons.
  *
- * Honesty contract (CLAUDE.md section 6 invariant 6; ddm-drought-impact-
- * modeling): observations are stated plainly with their source; outlooks are
+ * Honesty contract (a core project invariant; the ddm-drought-impact-
+ * modeling doctrine): observations are stated plainly with their source; outlooks are
  * stated as probabilities or tendencies. A fetch that fails returns `ok:false`
  * so the horizon can say so honestly rather than inventing a value. A fetch
  * that succeeds but finds nothing (no active alerts, no fires) returns
@@ -15,8 +15,7 @@
  * master abort signal and per-call timeout active through body consumption,
  * so a hung host never blocks the panel (invariant 5).
  *
- * Verified sources (see docs/KERNEL_INTEGRATION_CONTINUATION.md section 3 and
- * src/config/urls.ts): USDM FeatureServer (CORS *), NIFC perimeters
+ * Verified sources (see src/config/urls.ts): USDM FeatureServer (CORS *), NIFC perimeters
  * FeatureServer (CORS *), NWS api.weather.gov alerts and point forecast
  * (CORS *).
  */

@@ -12,7 +12,7 @@
  *
  * Anything outside the allow-list is rejected with 403 Forbidden.
  *
- * Hard rules (see CLAUDE.md section 4):
+ * Hard rules from the project stewardship policy:
  *   - The Worker MUST NOT transform response bodies.
  *   - The Worker MUST NOT cache aggressively (default time-to-live 60 seconds).
  *   - The Worker MUST NOT log request bodies, headers, or query strings.

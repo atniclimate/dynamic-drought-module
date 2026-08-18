@@ -74,7 +74,7 @@ export const REGIONS: Record<RegionKey, Region> = {
     coverageFamily: 'pnw',
     // The basin's identity geography reaches into British Columbia, which
     // no US edition covers ('us-portion'); state membership is deliberately
-    // not inferred (fuzzy basin membership; docs/EXPANSION_PLAN_070.md).
+    // not inferred (fuzzy basin membership).
     sourceEditions: [{ source: 'usdm', cadence: 'weekly', scope: 'us-portion' }]
   },
   cascades: {

@@ -18,8 +18,7 @@ import {
 /**
  * The Tribal Nations umbrella UI (Unit F, D-0.7.0-033): the featured group
  * card in the Place role group plus the eager Brief-door action. Built to
- * the Codex front-end consultation
- * (C:\dev\_reviews\ddm\2026-07-15_unit-F-frontend-codex.md): two separate
+ * the 2026-07-15 Codex front-end consultation: two separate
  * controls (a command button and a details disclosure), permanently mounted
  * member rows behind a native `hidden` region, group provenance controlled
  * by the role group's Sources state, and the compact Brief action that

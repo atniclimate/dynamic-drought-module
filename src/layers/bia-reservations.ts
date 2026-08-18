@@ -11,7 +11,7 @@
  *
  * Unlike the bundled
  * `tribal-lands.geojson` placeholder (the deployer's own-data slot, empty by
- * default per CLAUDE.md hard rule 1), this layer is fetched live from the BIA
+ * default per the no-redistribution hard rule), this layer is fetched live from the BIA
  * FeatureServer. Live consumption of a public federal source commits no
  * sovereign polygons to the repository, exactly like the United States
  * Drought Monitor and National Interagency Fire Center layers. The two
@@ -38,12 +38,11 @@
  * substantially the same view renders instantly with no network call. A real
  * region change still misses the cache and fetches fresh.
  * The cache is never committed anywhere and adds nothing to the repository;
- * it is a browser-session optimization, not a data-bundling change (CLAUDE.md
- * hard rule 1 is unaffected; see
- * `docs/ddm-tribal-geography-tier-assessment-2026-07-15.md`).
+ * it is a browser-session optimization, not a data-bundling change (the
+ * no-redistribution hard rule is unaffected).
  *
  * Viewport refresh (the Tribal Nations umbrella build; formerly finding 3 of
- * `C:\dev\_reviews\ddm\2026-07-15_tribal-boundary-live-fetch-review.md`):
+ * the 2026-07-15 live-fetch review):
  * while active, a debounced `moveend` handler refetches the current view and
  * swaps the data into the EXISTING source with `setData` (never a second
  * source), guarded by a request-identity token plus the master abort signal
@@ -58,7 +57,7 @@
  * throwing past it. A response flagged `exceededTransferLimit` by the
  * service is logged, not silently treated as complete.
  *
- * Cancellation (CLAUDE.md section 6 invariant 5): the fetch goes through
+ * Cancellation (the cancellation invariant): the fetch goes through
  * `fetchWithBudget` with a per-call timeout and a master abort signal that
  * fires on `deactivate` or on a superseding `activate`. A late response to a
  * superseded or torn-down activation is dropped, not rendered. A cache hit
@@ -476,8 +475,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
  * a valid, non-error response with no intersecting features reflects what
  * BIA AIAN-LAR returns for this query, not a verified absence of Tribal
  * presence (AIAN-LAR does not cover most Oklahoma Tribal Statistical Areas or
- * landless Tribes; confirmed 2026-07-15, see
- * docs/ddm-tribal-geography-tier-assessment-2026-07-15.md).
+ * landless Tribes; confirmed 2026-07-15, the tier assessment).
  */
 function applyFeatureCollection(
   map: maplibregl.Map,

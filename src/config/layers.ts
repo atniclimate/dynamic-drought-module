@@ -4,8 +4,8 @@ import type { LayerRole } from '../types/layer';
 
 /**
  * Layer module contract: every layer file under `src/layers/` exports
- * `activate`, `deactivate`, and (optionally) `bindPopups` per CLAUDE.md
- * section 8. The registry below pairs each module with the UI metadata
+ * `activate`, `deactivate`, and (optionally) `bindPopups`; these names are
+ * a frozen contract. The registry below pairs each module with the UI metadata
  * the sidebar (M8) consumes when building the toggle list.
  */
 export interface LayerModule {
@@ -16,11 +16,11 @@ export interface LayerModule {
    * Optional synchronous cancellation seam, invoked by the layer controller
    * the moment off intent is recorded, BEFORE the serialized teardown op
    * reaches the module. A module with a long-running activation fetch aborts
-   * it here immediately (CLAUDE.md section 6 invariant 5) instead of letting
+   * it here immediately (the cancellation invariant) instead of letting
    * it run out its network budget behind the per-key op queue; it must NOT
    * touch map state (sources/layers), which remains `deactivate`'s job.
    * Added with the Tribal Nations umbrella build (Codex Unit B finding 1,
-   * C:\dev\_reviews\ddm\2026-07-15_unit-B-codex.md).
+   * 2026-07-15).
    */
   cancelActivation?(): void;
   /**
@@ -37,7 +37,7 @@ export interface LayerModule {
  *
  * `load` is a dynamic import of the layer module, so each layer's code is its
  * own chunk fetched on first activation rather than shipped in the initial
- * bundle. This honors CLAUDE.md section 6 invariant 3 (lazy-loaded layers) at
+ * bundle. This honors the lazy-loaded-layers invariant at
  * the CODE level, not just the data level: before this, activation was lazy but
  * all fifteen modules were eagerly imported into the main chunk. The default-on
  * layers load at boot as before; the rest arrive on first toggle.
@@ -103,7 +103,7 @@ export interface LayerDef {
  *
  * Default-on is the demo-ready set (deliberately changed by the Tribal
  * Nations umbrella build, D-0.7.0-032/033, then narrowed by Unit I,
- * D-0.7.0-038; both recorded in docs/URL_SCHEMA_POLICY.md as deliberate
+ * D-0.7.0-038; both were ratified as deliberate
  * default changes, not silent ones): US Drought Monitor (the headline
  * drought layer), the two live PRESENT-DAY Tribal-geography layers (Census
  * AIANNH Tribal Lands and BIA Reservation Boundaries; Tribal Nations MUST
@@ -243,7 +243,7 @@ export const LAYER_ROLE_ORDER: readonly LayerRole[] = [
  * parameters written before UX-1, when several surfaces could be active at
  * once and old shared links may still name them all. `syncUrl` serializes
  * the active set in activation order, so the first surface in an old link
- * is the one its author turned on first. Documented in CHANGES.md (UX-1).
+ * is the one its author turned on first (a UX-1 decision).
  */
 export function resolveExclusiveSurface(keys: readonly string[]): string[] {
   let surfaceSeen = false;

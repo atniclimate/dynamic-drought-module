@@ -8,8 +8,9 @@
    files so every dist/ copy carries them). Both families ship as variable
    fonts, so one file per family and subset covers every weight the app uses;
    unicode-range keeps latin-ext lazy (fetched only if a glyph needs it).
-   No third-party font request: the module observes the user, it does not
-   report on them (CLAUDE.md section 4 rule 3). */
+   No third-party font request: the project's no-tracking stewardship rule is
+   that the module observes the landscape for the user, it does not report on
+   them. */
 @font-face {
   font-family: 'League Spartan';
   font-style: normal;
@@ -2980,7 +2981,7 @@ button.conditions-metric:hover {
  * rule of equal specificity. Without this guard the overlay never actually
  * hides, so `hideLoading()` left a stuck "Loading ..." pill on screen after
  * every layer finished loading. This restores the hidden semantics. (Baseline
- * bug found during the Phase D Phase 8 browser verification; not in TODO.md.)
+ * bug found during browser verification.)
  */
 .loading-indicator[hidden] {
   display: none;
@@ -3046,8 +3047,7 @@ button.conditions-metric:hover {
 }
 
 /* ----------------------------------------------------------------------------
-   The mobile bottom sheet (0.7.0 U2; ratified detent model D-0.7.0-017,
-   build spec docs/ddm-detent-model-2026-07-09.md).
+   The mobile bottom sheet (0.7.0 U2; ratified detent model D-0.7.0-017).
 
    Below 720px, when src/ui/mobile-sheet.ts stamps `data-sheet-detent` on
    #app, the sidebar element becomes the ONE bottom sheet over a
@@ -5596,7 +5596,7 @@ a.impact-resource-link::after {
 
 /* U3c: the one search (search.tsx)
    The single input searching Places, Tribal land areas, and Layers
-   (design-lens-product-2026-07-10.md U3: "one search box and one set of
+   (the 2026-07-10 design-lens U3 ruling: "one search box and one set of
    grouped results"). Tokens only: --bg-0/1/2, --line, --line-strong,
    --fg-0/2/3, --accent, --radius-sm/md, the display/body font pair, and
    the 0.2s ease transition length already used by .layer-toggle and the

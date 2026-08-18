@@ -9,7 +9,7 @@ import {
 } from './helpers';
 
 /**
- * UX-2 (CHANGES.md 2026-07-01): question-first view presets. Each chip
+ * UX-2 (2026-07-01): question-first view presets. Each chip
  * REPLACES the active layer set through the same activation and deactivation
  * paths a manual toggle takes, so the UX-1 surface exclusivity holds for free.
  *

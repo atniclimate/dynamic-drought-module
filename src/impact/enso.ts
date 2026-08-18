@@ -92,7 +92,7 @@ interface EnsoSnapshot {
   readonly probabilities?: EnsoProbabilities;
 }
 
-// Acronym convention (CLAUDE.md section 5): RONI is spelled out here because
+// Acronym convention (spell out on first use): RONI is spelled out here because
 // this string is user-facing claim-source copy and is the first place a reader
 // meets the index. U-ENSO-REPAIR briefly shipped a bare "operational RONI"
 // here; the full-suite run caught it through tests/evidence-contract.spec.ts,

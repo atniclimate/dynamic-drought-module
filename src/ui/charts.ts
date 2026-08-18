@@ -9,7 +9,7 @@
  * (so `prefers-reduced-motion` is inherently respected). Meaning is never
  * carried by hue alone: every series and segment is directly labeled.
  *
- * Honesty rules (ddm-data-visualization; CLAUDE.md section 6 invariant 6):
+ * Honesty rules (ddm-data-visualization; the data-honesty invariant):
  * observations are plotted solid; a probabilistic outlook is rendered as a
  * probability (tercile split), never collapsed to a single deterministic line.
  * A small attribution names the source and, where relevant, the issuance date,
