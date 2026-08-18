@@ -335,7 +335,11 @@ test.describe('perimeter evidence cancellation', () => {
     await expect(panel).toBeVisible();
     await expect(panel.locator('.impact-panel-title')).toHaveText('Washington');
 
-    // Reopen for Oregon before Washington's delayed response lands.
+    // Close, then reopen for Oregon before Washington's delayed response
+    // lands (the close and the reopen each abort the superseded hydration;
+    // the panel is modal while open, so it is closed before the door click).
+    await panel.locator('.impact-panel-close').click();
+    await expect(panel).toBeHidden();
     await page.locator('#place-studio-entry').click();
     await page.locator('#place-type-state').click();
     await page.locator('#place-studio-search').fill('Oregon');
