@@ -317,6 +317,15 @@ const FEATURE_BUDGETS = [
     dataAssets: [],
   },
   {
+    key: 'nifc-perimeter-evidence-briefing',
+    label: 'Selected-place NIFC current-perimeter intersection evidence (polygon-exact POST query against WFIGS_Interagency_Perimeters_Current; 23.8 kB measured first-activation static closure on 2026-08-18, of which the dedicated evidence chunk is 2.3 kB gzip and the rest is the shared impact hydrator closure also counted by point-heat-briefing; one request; the 1 MB network ceiling covers a dense statewide boundary POST body plus an attributes-only response capped at 2,000 records)',
+    rootModules: ['src/impact/nifc-perimeter-evidence.ts'],
+    activationJsGzipKb: 25.0,
+    networkBytes: 1_000_000,
+    requestCount: 1,
+    dataAssets: [],
+  },
+  {
     key: 'bc-basin-drought',
     label: 'Province of British Columbia basin drought levels (measured 3,908,396 bytes and one request with the 0.01-degree generalized query on 2026-07-27)',
     rootModules: ['src/layers/bc-drought.ts'],
