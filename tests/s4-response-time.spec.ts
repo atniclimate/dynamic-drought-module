@@ -120,9 +120,12 @@ test.describe('S4c compact/detail temporal adapters', () => {
     await expect(page.locator('#time-bar')).toBeHidden();
 
     const more = page.locator('#shell-time-more');
+    // W2-D9: the More time door is a disclosure and reports its state.
+    await expect(more).toHaveAttribute('aria-expanded', 'false');
     await more.click();
     const popover = page.locator('#shell-time-popover');
     await expect(popover).toBeVisible();
+    await expect(more).toHaveAttribute('aria-expanded', 'true');
     // The detail renders from the same spec: the USDM stepped rail (an
     // authored product: a discrete rail, never a Play control).
     await expect(popover.locator('.shell-time-detail')).toBeVisible();
@@ -134,5 +137,6 @@ test.describe('S4c compact/detail temporal adapters', () => {
     await page.keyboard.press('Escape');
     await expect(popover).toBeHidden();
     await expect(more).toBeFocused();
+    await expect(more).toHaveAttribute('aria-expanded', 'false');
   });
 });

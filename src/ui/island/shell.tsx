@@ -292,6 +292,7 @@ function MinimapPopover({
         class="shell-popover-door"
         ref={doorRef}
         popovertarget="shell-minimap-popover"
+        aria-expanded={popRef.current?.matches(':popover-open') ?? false}
       >
         Map areas
       </button>
