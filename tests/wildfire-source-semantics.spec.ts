@@ -533,6 +533,43 @@ test('fire key composition reflects SPC-only, NIFC-only, and combined active set
   }
 });
 
+test('a still-loading fire product renders a named loading section, never an omission (W2-D6)', () => {
+  // NIFC in flight beside a live SPC outlook: the section is named with a
+  // loading row instead of silently absent.
+  const nifcLoading = buildFireKey(
+    new Set(['spc-fire-weather']),
+    new Set(['nifc-fires'])
+  );
+  expect(nifcLoading.itemsHtml).toContain('data-spc-fire-weather-key');
+  expect(nifcLoading.itemsHtml).toContain('data-nifc-perimeter-key');
+  expect(nifcLoading.itemsHtml).toContain('data-key-loading="nifc-fires"');
+  expect(nifcLoading.ariaLabel).toContain(
+    'National Interagency Fire Center (NIFC) current mapped fire perimeters loading.'
+  );
+
+  // The reverse: SPC loading beside live perimeters.
+  const spcLoading = buildFireKey(
+    new Set(['nifc-fires']),
+    new Set(['spc-fire-weather'])
+  );
+  expect(spcLoading.itemsHtml).toContain('data-key-loading="spc-fire-weather"');
+  expect(spcLoading.ariaLabel).toContain(
+    'Storm Prediction Center (SPC) Day 1 fire-weather outlook loading.'
+  );
+  expect(spcLoading.ariaLabel).toContain('current mapped Wildfire perimeters');
+
+  // Loading-only is enough to earn the key (activation continuity).
+  const bothLoading = buildFireKey(
+    new Set(),
+    new Set(['spc-fire-weather', 'nifc-fires'])
+  );
+  expect(bothLoading.itemsHtml).toContain('data-key-loading="spc-fire-weather"');
+  expect(bothLoading.itemsHtml).toContain('data-key-loading="nifc-fires"');
+
+  // Absence semantics unchanged: nothing active or loading still throws.
+  expect(() => buildFireKey(new Set(), new Set())).toThrow();
+});
+
 test('map-key family precedence matches the rendered key for mixed active sets', () => {
   expect(
     resolveMapKeyFamily(
@@ -548,6 +585,12 @@ test('map-key family precedence matches the rendered key for mixed active sets',
     'drought'
   );
   expect(resolveMapKeyFamily(new Set(['nifc-fires']))).toBe('fire');
+  // The SST anomaly surface outranks the NIFC event fallback like every
+  // other condition surface, and carries no hazard family (W2-D1).
+  expect(resolveMapKeyFamily(new Set(['sst-anomaly', 'nifc-fires']))).toBe(
+    'other'
+  );
+  expect(resolveMapKeyFamily(new Set(['sst-anomaly']))).toBe('other');
 });
 
 test('static WHP key carries five classes and its source qualification', () => {

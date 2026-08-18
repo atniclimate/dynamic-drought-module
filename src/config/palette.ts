@@ -494,3 +494,25 @@ export const SPC_FIREWX_CATEGORIES: ReadonlyArray<{
 ];
 
 export const SPC_FIREWX_DEFAULT_COLOR = '#9ca3af';
+
+/* ---------------------------------------------------------------------------
+ * Sea surface temperature (SST) anomaly qualitative scale
+ *
+ * The ENSO ocean surface (src/layers/sst-anomaly.ts) renders NASA GIBS
+ * GHRSST MUR anomaly tiles that are colorized upstream; the GIBS metadata
+ * states no climatology baseline, so this scale stays deliberately
+ * qualitative (warmer / near / cooler) and never asserts a numeric ramp.
+ * ONE table drives both the sidebar legend and the on-map key so the two
+ * surfaces cannot drift.
+ * ------------------------------------------------------------------------- */
+
+export const SST_ANOMALY_SCALE: ReadonlyArray<{
+  readonly color: string;
+  readonly label: string;
+}> = [
+  { color: '#b2182b', label: 'Warmer than usual' },
+  { color: '#f7f7f7', label: 'Near usual' },
+  { color: '#2166ac', label: 'Cooler than usual' }
+];
+
+export const SST_ANOMALY_LEGEND_TITLE = 'Ocean temperature anomaly';

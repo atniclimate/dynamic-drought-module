@@ -26,6 +26,7 @@ import {
   HEATRISK_CATEGORIES,
   NADM_CATEGORIES,
   NWS_ALERT_COLORS,
+  SST_ANOMALY_SCALE,
   USDM_CATEGORIES,
   USDM_NONE_SWATCH,
   SPC_FIREWX_CATEGORIES
@@ -85,11 +86,17 @@ interface NadmSnapshotEventDetail {
   readonly month: string | null;
 }
 
+interface SstSnapshotEventDetail {
+  readonly status: 'ready' | 'inactive';
+  readonly date: string | null;
+}
+
 const HEATRISK_FRAMES_EVENT = 'ddm:heatrisk-frames';
 const HEATRISK_DAY_SELECT_EVENT = 'ddm:heatrisk-day-select';
 const CDM_SNAPSHOT_EVENT = 'ddm:cdm-snapshot';
 const NADM_SNAPSHOT_EVENT = 'ddm:nadm-snapshot';
 const NWS_SNAPSHOT_EVENT = 'ddm:nws-products-snapshot';
+const SST_SNAPSHOT_EVENT = 'ddm:sst-snapshot';
 const MOBILE_MAP_KEY_QUERY = '(max-width: 720px)';
 const MOBILE_MAP_KEY_HEIGHT_PROPERTY = '--mobile-map-key-height';
 
@@ -100,6 +107,7 @@ let cdmMonth: string | null = null;
 let cdmClasses: CdmSnapshotEventDetail['classes'] = [];
 let cdmLicense: CdmSnapshotEventDetail['license'] = null;
 let nadmMonth: string | null = null;
+let sstObservedDate: string | null = null;
 let heatRiskHasCoverage: boolean | null = null;
 let nwsSnapshotStatus: NwsSnapshotEventDetail['status'] = 'inactive';
 let nwsSnapshotAsOf: number | null = null;
@@ -187,6 +195,9 @@ export function resolveMapKeyFamily(
   ) {
     return 'drought';
   }
+  // The SST anomaly surface outranks the NIFC event fallback like every
+  // other condition surface; its key carries no hazard family styling.
+  if (active.has('sst-anomaly')) return 'other';
   if (active.has('nifc-fires')) return 'fire';
   return 'other';
 }
@@ -220,6 +231,50 @@ function droughtKey(): KeySpec {
       [USDM_NONE_SWATCH, ...USDM_CATEGORIES]
         .map((c) => swatchItem(c.color, c.code))
         .join('')
+  };
+}
+
+function formatSstDate(iso: string): string {
+  const [year, month, day] = iso.split('-').map(Number);
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC'
+  }).format(new Date(Date.UTC(year!, month! - 1, day! )));
+}
+
+/**
+ * The ENSO ocean-surface key (W2-D1): the one quick view that previously
+ * had no on-map scale. Swatches and wording come from the shared
+ * SST_ANOMALY_SCALE table (src/config/palette.ts), the same table the
+ * sidebar legend renders, so the two surfaces cannot drift. The observed
+ * date mirrors the frame the ddm:sst-snapshot event announced (the same
+ * date the temporal stamp shows); the scale stays qualitative because the
+ * GIBS metadata states no climatology baseline.
+ */
+function sstKey(): KeySpec {
+  const observed = sstObservedDate
+    ? ` Observed ${formatSstDate(sstObservedDate)}.`
+    : '';
+  const first = SST_ANOMALY_SCALE[0]!;
+  const last = SST_ANOMALY_SCALE.at(-1)!;
+  return {
+    label: 'Ocean temperature',
+    ariaLabel:
+      `Ocean temperature anomaly key, ${first.label.toLowerCase()} through ${last.label.toLowerCase()}, a qualitative scale.` +
+      observed +
+      ' NASA GIBS GHRSST MUR SST anomaly.',
+    itemsHtml:
+      (sstObservedDate
+        ? `<span class="map-key-item" data-sst-observed>Observed ${escapeHtml(
+            formatSstDate(sstObservedDate)
+          )}</span>`
+        : '') +
+      '<span class="map-key-scale" data-sst-anomaly-key>' +
+      SST_ANOMALY_SCALE.map((entry) => swatchItem(entry.color, entry.label)).join('') +
+      '</span>' +
+      '<span class="map-key-item" data-sst-attribution>NASA GIBS GHRSST MUR</span>'
   };
 }
 
@@ -422,44 +477,73 @@ function nadmKey(): KeySpec {
   };
 }
 
-export function buildFireKey(activeKeys: ReadonlySet<string>): KeySpec {
+/** A placeholder row for a still-loading key section (W2-D6): the section
+ * is named rather than omitted, so live activation never silently drops a
+ * source from the reference. 'unavailable' keeps its absence semantics. */
+function loadingSectionRow(key: string): string {
+  return (
+    `<span class="map-key-item map-key-loading" data-key-loading="${escapeHtml(key)}">` +
+    'loading</span>'
+  );
+}
+
+export function buildFireKey(
+  activeKeys: ReadonlySet<string>,
+  loadingKeys: ReadonlySet<string> = new Set()
+): KeySpec {
   const includeSpcOutlook = activeKeys.has('spc-fire-weather');
   const includeNifcPerimeters = activeKeys.has('nifc-fires');
-  if (!includeSpcOutlook && !includeNifcPerimeters) {
+  const spcLoading = !includeSpcOutlook && loadingKeys.has('spc-fire-weather');
+  const nifcLoading = !includeNifcPerimeters && loadingKeys.has('nifc-fires');
+  if (!includeSpcOutlook && !includeNifcPerimeters && !spcLoading && !nifcLoading) {
     throw new Error('A fire key requires at least one active fire product.');
   }
-  const outlook = includeSpcOutlook
-    ? '<span class="map-key-scale" data-spc-fire-weather-key>' +
-      '<strong class="map-key-scale-label">SPC Day 1 outlook</strong>' +
-      SPC_FIREWX_CATEGORIES.map((c) => swatchItem(c.color, c.label)).join('') +
-      '</span>'
-    : '';
-  const perimeters = includeNifcPerimeters
-    ? '<span class="map-key-scale" data-nifc-perimeter-key>' +
-      '<strong class="map-key-scale-label">NIFC WFIGS current mapped perimeters</strong>' +
-      swatchItem(
-        NIFC_INCIDENT_PRESENTATION.wildfire.lineColor,
-        NIFC_INCIDENT_PRESENTATION.wildfire.legendLabel
-      ) +
-      swatchItem(
-        NIFC_INCIDENT_PRESENTATION.prescribed.lineColor,
-        NIFC_INCIDENT_PRESENTATION.prescribed.legendLabel
-      ) +
-      swatchItem(
-        NIFC_INCIDENT_PRESENTATION.other.lineColor,
-        NIFC_INCIDENT_PRESENTATION.other.legendLabel
-      ) +
-      '</span>'
-    : '';
+  const outlook =
+    includeSpcOutlook || spcLoading
+      ? '<span class="map-key-scale" data-spc-fire-weather-key>' +
+        '<strong class="map-key-scale-label">SPC Day 1 outlook</strong>' +
+        (spcLoading
+          ? loadingSectionRow('spc-fire-weather')
+          : SPC_FIREWX_CATEGORIES.map((c) => swatchItem(c.color, c.label)).join('')) +
+        '</span>'
+      : '';
+  const perimeters =
+    includeNifcPerimeters || nifcLoading
+      ? '<span class="map-key-scale" data-nifc-perimeter-key>' +
+        '<strong class="map-key-scale-label">NIFC WFIGS current mapped perimeters</strong>' +
+        (nifcLoading
+          ? loadingSectionRow('nifc-fires')
+          : swatchItem(
+              NIFC_INCIDENT_PRESENTATION.wildfire.lineColor,
+              NIFC_INCIDENT_PRESENTATION.wildfire.legendLabel
+            ) +
+            swatchItem(
+              NIFC_INCIDENT_PRESENTATION.prescribed.lineColor,
+              NIFC_INCIDENT_PRESENTATION.prescribed.legendLabel
+            ) +
+            swatchItem(
+              NIFC_INCIDENT_PRESENTATION.other.lineColor,
+              NIFC_INCIDENT_PRESENTATION.other.legendLabel
+            )) +
+        '</span>'
+      : '';
   const ariaParts: string[] = [];
   if (includeSpcOutlook) {
     ariaParts.push(
       'Storm Prediction Center (SPC) Day 1 fire-weather outlook categories.'
     );
+  } else if (spcLoading) {
+    ariaParts.push(
+      'Storm Prediction Center (SPC) Day 1 fire-weather outlook loading.'
+    );
   }
   if (includeNifcPerimeters) {
     ariaParts.push(
       'National Interagency Fire Center (NIFC) current mapped Wildfire perimeters, Prescribed fire perimeters, and other or unclassified fire perimeters.'
+    );
+  } else if (nifcLoading) {
+    ariaParts.push(
+      'National Interagency Fire Center (NIFC) current mapped fire perimeters loading.'
     );
   }
   return {
@@ -486,23 +570,96 @@ export function buildWhpKey(): KeySpec {
   };
 }
 
+/** The layer keys that can earn (or contribute to) the on-map key, with
+ * the label a whole-key loading placeholder renders under (W2-D6). */
+const KEY_ELIGIBLE_LABELS: Readonly<Record<string, string>> = {
+  heatrisk: 'HeatRisk',
+  'spc-fire-weather': 'Fire',
+  'usfs-whp': 'Wildfire potential',
+  'cdm-drought': 'Canada drought',
+  'nadm-drought': 'North America drought',
+  usdm: 'Drought',
+  'sst-anomaly': 'Ocean temperature',
+  'nifc-fires': 'Fire',
+  'nws-alerts': 'Products'
+};
+
+interface KeyEligibility {
+  /** Registered-active keys (the registry's post-activation truth). */
+  readonly active: ReadonlySet<string>;
+  /** Key-eligible layers still in their 'loading' state (not yet active). */
+  readonly loading: ReadonlySet<string>;
+  /** Union: what the key strip should acknowledge right now. */
+  readonly eligible: ReadonlySet<string>;
+}
+
+/** Active keys plus key-eligible layers whose activation is in flight.
+ * A still-loading source earns a named placeholder, never an omission
+ * (W2-D6); terminal states (error and friends) keep absence semantics. */
+function keyEligibility(): KeyEligibility {
+  const active = registry.getActiveKeys();
+  const loading = new Set<string>();
+  for (const key of Object.keys(KEY_ELIGIBLE_LABELS)) {
+    if (!active.has(key) && registry.getStatus(key) === 'loading') {
+      loading.add(key);
+    }
+  }
+  return { active, loading, eligible: new Set([...active, ...loading]) };
+}
+
+/** A whole-key loading placeholder: the label plus one 'loading' row. */
+function loadingKeySpec(key: string): KeySpec {
+  const label = KEY_ELIGIBLE_LABELS[key] ?? key;
+  return {
+    label,
+    ariaLabel: `${label} key loading.`,
+    itemsHtml: loadingSectionRow(key)
+  };
+}
+
 /** The key the active layer set earns, or null to hide the strip. */
 function activeKey(): KeySpec | null {
-  const active = registry.getActiveKeys();
+  const { active, loading, eligible } = keyEligibility();
   let spec: KeySpec | null = null;
-  if (active.has('heatrisk')) spec = heatKey();
-  else if (active.has('spc-fire-weather')) {
-    spec = buildFireKey(active);
-  }
-  else if (active.has('usfs-whp')) spec = buildWhpKey();
-  else if (active.has('cdm-drought')) spec = cdmKey();
-  else if (active.has('nadm-drought')) spec = nadmKey();
-  else if (active.has('usdm')) spec = droughtKey();
-  else if (active.has('nifc-fires')) {
-    spec = buildFireKey(active);
+  if (eligible.has('heatrisk')) {
+    spec = active.has('heatrisk') ? heatKey() : loadingKeySpec('heatrisk');
+  } else if (eligible.has('spc-fire-weather')) {
+    spec = buildFireKey(active, loading);
+  } else if (eligible.has('usfs-whp')) {
+    spec = active.has('usfs-whp') ? buildWhpKey() : loadingKeySpec('usfs-whp');
+  } else if (eligible.has('cdm-drought')) {
+    spec = active.has('cdm-drought') ? cdmKey() : loadingKeySpec('cdm-drought');
+  } else if (eligible.has('nadm-drought')) {
+    spec = active.has('nadm-drought') ? nadmKey() : loadingKeySpec('nadm-drought');
+  } else if (eligible.has('usdm')) {
+    spec = active.has('usdm') ? droughtKey() : loadingKeySpec('usdm');
+  } else if (eligible.has('sst-anomaly')) {
+    spec = active.has('sst-anomaly') ? sstKey() : loadingKeySpec('sst-anomaly');
+  } else if (eligible.has('nifc-fires')) {
+    spec = buildFireKey(active, loading);
   }
 
-  if (!active.has('nws-alerts')) return spec;
+  if (!eligible.has('nws-alerts')) return spec;
+  if (loading.has('nws-alerts')) {
+    // Activation in flight: a named placeholder row (W2-D6), not the full
+    // product scale, which would claim a surface not yet on the map.
+    const loadingHtml =
+      '<span class="map-key-qualification map-key-loading" data-key-loading="nws-alerts">' +
+      'NWS products loading</span>';
+    const loadingAria = 'National Weather Service event products loading.';
+    if (spec) {
+      return {
+        ...spec,
+        ariaLabel: `${spec.ariaLabel} ${loadingAria}`,
+        itemsHtml: spec.itemsHtml + loadingHtml
+      };
+    }
+    return {
+      label: 'Products',
+      ariaLabel: loadingAria,
+      itemsHtml: loadingHtml
+    };
+  }
   const snapshot = nwsSnapshotQualification();
   const products = nwsProductKey();
   if (spec) {
@@ -555,6 +712,7 @@ export function initMapKey(): void {
   const widthQuery = window.matchMedia(MOBILE_MAP_KEY_QUERY);
   let rendered = '';
   let family: MapKeyFamily = 'other';
+  let keyLabel = '';
   let baseInteractive = false;
   let canExpand = false;
   let expanded = false;
@@ -570,17 +728,20 @@ export function initMapKey(): void {
     expanded = canExpand && next;
     host.dataset.keyExpanded = String(expanded);
     expandButton.setAttribute('aria-expanded', String(expanded));
+    const name = keyLabel ? `${keyLabel} map key` : 'map key';
     expandButton.setAttribute(
       'aria-label',
-      expanded ? 'Collapse Fire map key' : 'Expand Fire map key'
+      expanded ? `Collapse ${name}` : `Expand ${name}`
     );
     layout.schedule();
   };
 
   const checkOverflow = (): void => {
     overflowFrame = null;
-    const eligible =
-      widthQuery.matches && family === 'fire' && !host.hidden && host.isConnected;
+    // W2-D4: the measured-overflow disclosure is no longer Fire-only. Any
+    // key that genuinely overflows its collapsed capacity on a narrow
+    // viewport (the phone shell or a narrow embed) earns the chevron.
+    const eligible = widthQuery.matches && !host.hidden && host.isConnected;
     let nextCanExpand = false;
     if (eligible) {
       const collapsedHeight = Number.parseFloat(
@@ -643,6 +804,7 @@ export function initMapKey(): void {
       layout.schedule();
       return;
     }
+    keyLabel = spec.label;
     const html =
       `<span class="map-key-label">${escapeHtml(spec.label)}</span>` + spec.itemsHtml;
     if (html !== rendered) {
@@ -651,8 +813,11 @@ export function initMapKey(): void {
       host.setAttribute('aria-label', spec.ariaLabel);
       setExpanded(false);
     }
-    const active = registry.getActiveKeys();
-    family = resolveMapKeyFamily(active);
+    // The family follows what the strip acknowledges (active plus loading
+    // placeholders), so a loading key seats under the same CSS its ready
+    // form will use.
+    const { active, eligible } = keyEligibility();
+    family = resolveMapKeyFamily(eligible);
     host.dataset.keyFamily = family;
     baseInteractive =
       active.has('heatrisk') || (active.has('cdm-drought') && cdmLicense !== null);
@@ -710,10 +875,19 @@ export function initMapKey(): void {
     nadmMonth = detail.status === 'ready' ? detail.month : null;
     update();
   });
+  window.addEventListener(SST_SNAPSHOT_EVENT, (event) => {
+    const detail = (event as CustomEvent<SstSnapshotEventDetail>).detail;
+    if (!detail) return;
+    sstObservedDate = detail.status === 'ready' ? detail.date : null;
+    update();
+  });
 
   registry.on('change', update);
-  registry.on('status-change', (key) => {
-    if (key === 'usdm') update();
+  // Every status transition can change the strip now that a loading key
+  // renders a placeholder (W2-D6); the render diffs, so a status that does
+  // not change the HTML is a cheap no-op.
+  registry.on('status-change', () => {
+    update();
   });
   update();
 }

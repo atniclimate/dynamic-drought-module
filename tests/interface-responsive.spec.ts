@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+import { SST_ANOMALY_SCALE } from '../src/config/palette';
 import { gotoApp } from './helpers';
 
 interface Rect {
@@ -95,7 +96,7 @@ async function expectMobileKeyClearance(
   const key = page.locator('#map-key');
   const controls = page.locator('.map-overlay-controls');
   await expect(key).toBeVisible();
-  await expect(key.locator(contentSelector)).toBeVisible();
+  await expect(key.locator(contentSelector).first()).toBeVisible();
   await expect(controls).toBeVisible();
 
   // Utilities now own an independent right column at the same safe-area top.
@@ -171,13 +172,15 @@ test.describe('the exact desktop and mobile boundary', () => {
         (element) => element === document.getElementById('share-btn')
       )
     ).toBe(true);
+    // The 720px shell now carries the drought key (W2-D2), so the measured
+    // key height is SET here and must be cleaned on the way back up.
     await expect
       .poll(() =>
         app.evaluate((element) =>
           element.style.getPropertyValue('--mobile-map-key-height')
         )
       )
-      .toBe('');
+      .toMatch(/^\d+(\.\d+)?px$/);
 
     await page.setViewportSize({ width: 721, height: 844 });
     await expect(app).not.toHaveAttribute('data-sheet-detent', /.+/);
@@ -222,12 +225,33 @@ test.describe('the exact desktop and mobile boundary', () => {
 test.describe('mobile key growth at 390x844', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('the redundant full-app Drought key stays removed', async ({
+  test('the phone shell keeps the drought key; the desktop shell defers to the sidebar legend (W2-D2)', async ({
     page
   }) => {
     await gotoApp(page);
-    await expect(page.locator('#map-key')).toBeHidden();
-    await expect(page.locator('#app')).not.toHaveAttribute('style', /mobile-map-key-height/);
+    // The 390px shell has no visible sidebar legend, so the default NADM
+    // surface earns its on-map key exactly like Fire and Heat, seated by
+    // the same measured-height machinery.
+    const key = page.locator('#map-key');
+    await expect(key).toBeVisible();
+    await expect(key).toHaveAttribute('data-key-family', 'drought');
+    await expect(key.locator('.map-key-label')).toHaveText('North America drought');
+    await expectMobileKeyClearance(page, '.map-key-item');
+
+    // The desktop shell keeps the established suppression: the sidebar
+    // legend is the drought reference there and the on-map key would
+    // restate it.
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(key).toBeHidden();
+    await expect
+      .poll(() =>
+        page
+          .locator('#app')
+          .evaluate((element) =>
+            element.style.getPropertyValue('--mobile-map-key-height')
+          )
+      )
+      .toBe('');
   });
 
   test('the Fire card reserves the utility spine and stacks both key sections', async ({
@@ -338,6 +362,13 @@ test.describe('mobile key growth at 390x844', () => {
     const key = page.locator('#map-key');
     const expander = page.locator('#map-key-expand');
     await expect(key.locator('[data-nifc-perimeter-key]')).toBeVisible();
+    // Wait for the READY key: during activation the sections render W2-D6
+    // loading placeholders, and the ready re-render replaces the content
+    // (which would wipe the synthetic rows appended below).
+    await expect(key.locator('[data-key-loading]')).toHaveCount(0);
+    await expect(
+      key.locator('[data-nifc-perimeter-key] .map-key-item')
+    ).toHaveCount(3);
     await expect(expander).toBeHidden();
 
     await key.locator('[data-nifc-perimeter-key]').evaluate((section) => {
@@ -371,6 +402,123 @@ test.describe('mobile key growth at 390x844', () => {
     await expect(key).toHaveAttribute('data-key-family', 'drought');
     await expect(expander).toHaveAttribute('aria-expanded', 'false');
     await expect(expander).toBeHidden();
+  });
+});
+
+const SST_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64'
+);
+
+/** Deterministic GIBS stubs: a one-week P1D window and transparent tiles
+ * (the tests/temporal-axis.spec.ts idiom). */
+async function stubSstAnomaly(page: Page): Promise<void> {
+  await page.route(
+    (url) => url.href.includes('DescribeDomains'),
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'text/xml',
+        body:
+          "<Domains xmlns:ows='http://www.opengis.net/ows/1.1'><DimensionDomain>" +
+          '<ows:Identifier>time</ows:Identifier>' +
+          '<Domain>2026-07-01/2026-07-07/P1D</Domain>' +
+          '<Size>1</Size></DimensionDomain></Domains>'
+      })
+  );
+  await page.route(
+    (url) => url.href.includes('GHRSST_L4_MUR') && url.pathname.endsWith('.png'),
+    (route) =>
+      route.fulfill({ status: 200, contentType: 'image/png', body: SST_PNG })
+  );
+}
+
+/** Assert the one shared SST scale renders in the on-map key (W2-D1). */
+async function expectSstKeyContent(
+  page: Page,
+  root: ReturnType<Page['locator']>
+): Promise<void> {
+  await expect(root.locator('.map-key-label')).toHaveText('Ocean temperature');
+  const swatches = root.locator('[data-sst-anomaly-key] .map-key-item');
+  await expect(swatches).toHaveCount(SST_ANOMALY_SCALE.length);
+  for (let index = 0; index < SST_ANOMALY_SCALE.length; index += 1) {
+    const entry = SST_ANOMALY_SCALE[index]!;
+    await expect(swatches.nth(index)).toContainText(entry.label);
+    const rendered = await swatches
+      .nth(index)
+      .locator('.map-key-swatch')
+      .evaluate((element) => getComputedStyle(element).backgroundColor);
+    const hex = entry.color.replace('#', '');
+    const rgb = `rgb(${parseInt(hex.slice(0, 2), 16)}, ${parseInt(
+      hex.slice(2, 4),
+      16
+    )}, ${parseInt(hex.slice(4, 6), 16)})`;
+    expect(rendered, `${entry.label} swatch color`).toBe(rgb);
+  }
+  await expect(root.locator('[data-sst-attribution]')).toHaveText(
+    'NASA GIBS GHRSST MUR'
+  );
+  await expect(root.locator('[data-sst-observed]')).toHaveText(
+    'Observed Jul 7, 2026'
+  );
+  const aria = (await root.getAttribute('aria-label')) ?? '';
+  expect(aria).toContain('NASA GIBS GHRSST MUR');
+  expect(aria).toContain('Observed Jul 7, 2026');
+}
+
+test.describe('the ENSO ocean key reaches every surface (W2-D1)', () => {
+  test('the phone quick view renders the SST anomaly key like Fire and Heat', async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await stubSstAnomaly(page);
+    await gotoApp(page, '?layers=sst-anomaly,aiannh');
+
+    const key = page.locator('#map-key');
+    await expect(key).toBeVisible();
+    await expectSstKeyContent(page, key);
+    await expectMobileKeyClearance(page, '[data-sst-anomaly-key]');
+  });
+
+  test('the 200x600 embed renders a reachable SST anomaly scale', async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 200, height: 600 });
+    await stubSstAnomaly(page);
+    await gotoApp(page, '?embed=true&layers=sst-anomaly');
+
+    const key = page.locator('#map-key');
+    await expect(key).toBeVisible();
+    await expectSstKeyContent(page, key);
+    const keyBox = await rect(key);
+    expect(keyBox.left).toBeGreaterThanOrEqual(0);
+    expect(keyBox.right).toBeLessThanOrEqual(200);
+    await expectNoHorizontalOverflow(page, 200);
+    // The embed date stamp still carries the observed date; the key states
+    // the same date rather than a second, different one.
+    await expect(page.locator('#embed-date-stamp')).toContainText(
+      'Observed Jul 7, 2026'
+    );
+  });
+
+  test('the 400x600 embed renders the SST anomaly key', async ({ page }) => {
+    await page.setViewportSize({ width: 400, height: 600 });
+    await stubSstAnomaly(page);
+    await gotoApp(page, '?embed=true&layers=sst-anomaly');
+    const key = page.locator('#map-key');
+    await expect(key).toBeVisible();
+    await expectSstKeyContent(page, key);
+  });
+
+  test('the desktop shell renders the SST anomaly key in the map dock', async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await stubSstAnomaly(page);
+    await gotoApp(page, '?layers=sst-anomaly,aiannh');
+    const key = page.locator('#map-key');
+    await expect(key).toBeVisible();
+    await expectSstKeyContent(page, key);
   });
 });
 
