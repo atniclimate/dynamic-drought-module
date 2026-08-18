@@ -31,7 +31,7 @@
  *       `attr_POOState`).
  *
  * Render. WFIGS perimeters are polygons. Wildfire and incident-complex
- * records use a quiet warm treatment, Prescribed fire uses a neutral
+ * records use a restrained orange pulse, Prescribed fire uses a neutral
  * treatment, and other or unclassified records receive a neutral outline.
  * No perimeter age is inferred from the service refresh cadence.
  */
@@ -41,16 +41,21 @@ import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
 import {
+  NIFC_INCIDENT_TYPE_PROPERTY,
   NIFC_INCIDENT_PRESENTATION,
+  WILDFIRE_PULSE_DURATION_MS,
   buildNifcFillPaint,
   buildNifcIncidentFilter,
   buildNifcLinePaint,
+  classifyNifcIncidentType,
+  interpolateWildfirePulseColor,
   nifcIncidentTypeLabel,
   parseArcGisPolygonFeatureCollection
 } from '../config/wildfire-presentation';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import { escapeHtml } from '../util/escape';
 import { fetchJsonWithBudget } from '../util/fetch';
+import { prefersReducedMotion } from '../util/motion';
 import { registry } from '../state/registry';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
 import { buildFireContextHtml } from '../impact/fire-context';
@@ -62,6 +67,110 @@ const OUTLINE_LAYER_ID = 'nifc-fires-outline';
 const PRESCRIBED_FILL_LAYER_ID = 'nifc-prescribed-fill';
 const PRESCRIBED_OUTLINE_LAYER_ID = 'nifc-prescribed-outline';
 const OTHER_OUTLINE_LAYER_ID = 'nifc-other-outline';
+
+/** The only MapLibre paint properties animated by the wildfire pulse. */
+export const WILDFIRE_PULSE_PAINT_TARGETS = [
+  { layerId: FILL_LAYER_ID, paintProperty: 'fill-color' },
+  { layerId: OUTLINE_LAYER_ID, paintProperty: 'line-color' }
+] as const;
+
+/** About 17 paint updates per second, while requestAnimationFrame owns timing. */
+const WILDFIRE_PULSE_PAINT_INTERVAL_MS = 60;
+
+/**
+ * One layer-level animation owner. Every WF/CX feature shares these two
+ * filtered MapLibre layers, so no feature-level timer or DOM animation is
+ * needed. Visibility and layer-existence guards avoid background/stale work.
+ */
+class WildfirePulseController {
+  private frameId: number | null = null;
+  private originMs: number | null = null;
+  private lastPaintAtMs = Number.NEGATIVE_INFINITY;
+  private stopped = false;
+
+  constructor(private readonly map: maplibregl.Map) {}
+
+  start(): void {
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    this.scheduleFrame();
+  }
+
+  stop(): void {
+    if (this.stopped) return;
+    this.stopped = true;
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    this.cancelFrame();
+  }
+
+  private readonly onVisibilityChange = (): void => {
+    if (this.stopped) return;
+    if (document.hidden) {
+      this.cancelFrame();
+      return;
+    }
+    this.scheduleFrame();
+  };
+
+  private readonly paintFrame = (timestampMs: number): void => {
+    this.frameId = null;
+    if (this.stopped || document.hidden) return;
+
+    // Begin at the canonical static midpoint, then ease toward the hot end.
+    this.originMs ??= timestampMs - WILDFIRE_PULSE_DURATION_MS / 4;
+    if (timestampMs - this.lastPaintAtMs >= WILDFIRE_PULSE_PAINT_INTERVAL_MS) {
+      const color = interpolateWildfirePulseColor(timestampMs - this.originMs);
+      let foundTarget = false;
+      for (const target of WILDFIRE_PULSE_PAINT_TARGETS) {
+        if (!this.map.getLayer(target.layerId)) continue;
+        foundTarget = true;
+        this.map.setPaintProperty(
+          target.layerId,
+          target.paintProperty,
+          color
+        );
+      }
+      if (!foundTarget) {
+        this.stop();
+        return;
+      }
+      this.lastPaintAtMs = timestampMs;
+    }
+    this.scheduleFrame();
+  };
+
+  private scheduleFrame(): void {
+    if (this.stopped || document.hidden || this.frameId !== null) return;
+    this.frameId = window.requestAnimationFrame(this.paintFrame);
+  }
+
+  private cancelFrame(): void {
+    if (this.frameId === null) return;
+    window.cancelAnimationFrame(this.frameId);
+    this.frameId = null;
+  }
+}
+
+let wildfirePulseController: WildfirePulseController | null = null;
+
+function stopWildfirePulse(): void {
+  wildfirePulseController?.stop();
+  wildfirePulseController = null;
+}
+
+function startWildfirePulse(map: maplibregl.Map): void {
+  stopWildfirePulse();
+  if (
+    prefersReducedMotion() ||
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    typeof window.requestAnimationFrame !== 'function' ||
+    typeof window.cancelAnimationFrame !== 'function'
+  ) {
+    return;
+  }
+  wildfirePulseController = new WildfirePulseController(map);
+  wildfirePulseController.start();
+}
 
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
 export const fadeLayerIds = [
@@ -230,6 +339,14 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     beforeId
   );
 
+  const hasWildfirePerimeter = features.some(
+    (feature) =>
+      classifyNifcIncidentType(
+        feature.properties?.[NIFC_INCIDENT_TYPE_PROPERTY]
+      ) === 'wildfire'
+  );
+  if (hasWildfirePerimeter) startWildfirePulse(map);
+
   showLegend(LAYER_KEY, {
     order: LEGEND_ORDER.event + 1,
     render: (body) =>
@@ -267,10 +384,14 @@ export async function activate(map: maplibregl.Map): Promise<void> {
  * verifying activation state.
  */
 export function cancelActivation(): void {
+  // Keep animation teardown in deactivate(). This hook can be followed by a
+  // rapid on intent that skips queued map teardown, so stopping here without a
+  // matching resume hook would strand an otherwise active layer.
   masterController?.abort();
 }
 
 export function deactivate(map: maplibregl.Map): void {
+  stopWildfirePulse();
   cancelActivation();
   masterController = null;
   for (const id of [

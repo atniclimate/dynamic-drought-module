@@ -5,12 +5,16 @@ import {
   HMS_OVERVIEW_QUALIFICATION,
   NIFC_INCIDENT_PRESENTATION,
   USFS_WHP_PRESENTATION,
+  WILDFIRE_PULSE_COLORS,
+  WILDFIRE_PULSE_DURATION_MS,
+  WILDFIRE_STATIC_COLOR,
   buildHmsSmokeFillPaint,
   buildNifcAreaPerimeterClaim,
   buildNifcFillPaint,
   buildNifcIncidentFilter,
   buildNifcLinePaint,
   classifyNifcIncidentType,
+  interpolateWildfirePulseColor,
   nifcIncidentTypeLabel,
   parseArcGisPolygonFeatureCollection,
   resolveHmsDensityPresentation
@@ -23,7 +27,8 @@ import {
 import {
   activate as activateNifc,
   cancelActivation as cancelNifc,
-  deactivate as deactivateNifc
+  deactivate as deactivateNifc,
+  WILDFIRE_PULSE_PAINT_TARGETS
 } from '../src/layers/nifc-fires';
 import {
   activate as activateSpc,
@@ -31,7 +36,11 @@ import {
   deactivate as deactivateSpc
 } from '../src/layers/spc-fire-weather';
 import { registry } from '../src/state/registry';
-import { buildFireKey, buildWhpKey } from '../src/ui/map-key';
+import {
+  buildFireKey,
+  buildWhpKey,
+  resolveMapKeyFamily
+} from '../src/ui/map-key';
 
 const VALID_POLYGON_COLLECTION = {
   type: 'FeatureCollection',
@@ -54,13 +63,48 @@ const VALID_POLYGON_COLLECTION = {
   ]
 } as const;
 
+const MIXED_FIRE_COLLECTION = {
+  type: 'FeatureCollection',
+  features: ['WF', 'RX', 'OTHER'].map((incidentType, index) => ({
+    type: 'Feature',
+    properties: { attr_IncidentTypeCategory: incidentType },
+    geometry: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [-121 + index, 45],
+          [-120 + index, 45],
+          [-120 + index, 46],
+          [-121 + index, 45]
+        ]
+      ]
+    }
+  }))
+} as const;
+
+interface PaintChange {
+  readonly layerId: string;
+  readonly paintProperty: string;
+  readonly value: unknown;
+}
+
 function fakeMapHarness(): {
   readonly map: Parameters<typeof activateNifc>[0];
   readonly sources: Set<string>;
   readonly layers: Set<string>;
+  readonly layerSpecs: Map<
+    string,
+    { readonly id: string; readonly paint?: Readonly<Record<string, unknown>> }
+  >;
+  readonly paintChanges: PaintChange[];
 } {
   const sources = new Set<string>();
   const layers = new Set<string>();
+  const layerSpecs = new Map<
+    string,
+    { readonly id: string; readonly paint?: Readonly<Record<string, unknown>> }
+  >();
+  const paintChanges: PaintChange[] = [];
   const map = {
     getSource: (id: string) => (sources.has(id) ? {} : undefined),
     addSource: (id: string) => {
@@ -69,15 +113,104 @@ function fakeMapHarness(): {
     removeSource: (id: string) => {
       sources.delete(id);
     },
-    getLayer: (id: string) => (layers.has(id) ? {} : undefined),
-    addLayer: (layer: { id: string }) => {
+    getLayer: (id: string) => layerSpecs.get(id),
+    addLayer: (layer: {
+      id: string;
+      paint?: Readonly<Record<string, unknown>>;
+    }) => {
       layers.add(layer.id);
+      layerSpecs.set(layer.id, layer);
     },
     removeLayer: (id: string) => {
       layers.delete(id);
+      layerSpecs.delete(id);
+    },
+    setPaintProperty: (layerId: string, paintProperty: string, value: unknown) => {
+      paintChanges.push({ layerId, paintProperty, value });
     }
   } as unknown as Parameters<typeof activateNifc>[0];
-  return { map, sources, layers };
+  return { map, sources, layers, layerSpecs, paintChanges };
+}
+
+function installAnimationBrowser(reducedMotion: boolean): {
+  readonly frames: Map<number, (timestamp: number) => void>;
+  readonly canceledFrames: number[];
+  readonly visibilityListenerCount: () => number;
+  readonly takeNextFrame: () => (timestamp: number) => void;
+  readonly setHidden: (hidden: boolean) => void;
+  readonly restore: () => void;
+} {
+  const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const documentDescriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    'document'
+  );
+  const frames = new Map<number, (timestamp: number) => void>();
+  const canceledFrames: number[] = [];
+  const visibilityListeners = new Set<() => void>();
+  let nextFrameId = 1;
+  let documentHidden = false;
+
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      matchMedia: () => ({ matches: reducedMotion }),
+      requestAnimationFrame: (callback: (timestamp: number) => void) => {
+        const id = nextFrameId++;
+        frames.set(id, callback);
+        return id;
+      },
+      cancelAnimationFrame: (id: number) => {
+        canceledFrames.push(id);
+        frames.delete(id);
+      }
+    }
+  });
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: {
+      get hidden() {
+        return documentHidden;
+      },
+      getElementById: () => null,
+      addEventListener: (type: string, listener: () => void) => {
+        if (type === 'visibilitychange') visibilityListeners.add(listener);
+      },
+      removeEventListener: (type: string, listener: () => void) => {
+        if (type === 'visibilitychange') visibilityListeners.delete(listener);
+      }
+    }
+  });
+
+  return {
+    frames,
+    canceledFrames,
+    visibilityListenerCount: () => visibilityListeners.size,
+    takeNextFrame: () => {
+      const next = frames.entries().next().value as
+        | [number, (timestamp: number) => void]
+        | undefined;
+      if (!next) throw new Error('No wildfire animation frame was scheduled.');
+      frames.delete(next[0]);
+      return next[1];
+    },
+    setHidden: (hidden: boolean) => {
+      documentHidden = hidden;
+      for (const listener of [...visibilityListeners]) listener();
+    },
+    restore: () => {
+      if (windowDescriptor) {
+        Object.defineProperty(globalThis, 'window', windowDescriptor);
+      } else {
+        Reflect.deleteProperty(globalThis, 'window');
+      }
+      if (documentDescriptor) {
+        Object.defineProperty(globalThis, 'document', documentDescriptor);
+      } else {
+        Reflect.deleteProperty(globalThis, 'document');
+      }
+    }
+  };
 }
 
 test('NIFC splits wildfire, Prescribed fire, and unclassified perimeters', () => {
@@ -116,6 +249,166 @@ test('NIFC splits wildfire, Prescribed fire, and unclassified perimeters', () =>
     'line-color': NIFC_INCIDENT_PRESENTATION.other.lineColor,
     'line-dasharray': [2, 2]
   });
+});
+
+test('wildfire pulse palette has an exact static midpoint and deterministic interpolation', () => {
+  expect(WILDFIRE_PULSE_COLORS).toEqual([
+    '#ff3300',
+    '#ff4c00',
+    '#ff6600'
+  ]);
+  expect(WILDFIRE_STATIC_COLOR).toBe('#ff4c00');
+  expect(NIFC_INCIDENT_PRESENTATION.wildfire.fillColor).toBe(
+    WILDFIRE_STATIC_COLOR
+  );
+  expect(NIFC_INCIDENT_PRESENTATION.wildfire.lineColor).toBe(
+    WILDFIRE_STATIC_COLOR
+  );
+
+  const quarterCycle = WILDFIRE_PULSE_DURATION_MS / 4;
+  expect(interpolateWildfirePulseColor(0)).toBe('#ff3300');
+  expect(interpolateWildfirePulseColor(quarterCycle)).toBe('#ff4c00');
+  expect(interpolateWildfirePulseColor(quarterCycle * 2)).toBe('#ff6600');
+  expect(interpolateWildfirePulseColor(quarterCycle * 3)).toBe('#ff4c00');
+  expect(interpolateWildfirePulseColor(WILDFIRE_PULSE_DURATION_MS)).toBe(
+    '#ff3300'
+  );
+  expect(interpolateWildfirePulseColor(Number.NaN)).toBe(
+    WILDFIRE_STATIC_COLOR
+  );
+  expect(interpolateWildfirePulseColor(quarterCycle / 2)).not.toBe(
+    WILDFIRE_PULSE_COLORS[0]
+  );
+  expect(interpolateWildfirePulseColor(quarterCycle / 2)).not.toBe(
+    WILDFIRE_PULSE_COLORS[1]
+  );
+
+  expect(buildNifcFillPaint('wildfire')).toMatchObject({
+    'fill-color': WILDFIRE_STATIC_COLOR,
+    'fill-color-transition': { duration: 0, delay: 0 }
+  });
+  expect(buildNifcLinePaint('wildfire')).toMatchObject({
+    'line-color': WILDFIRE_STATIC_COLOR,
+    'line-color-transition': { duration: 0, delay: 0 }
+  });
+});
+
+test('NIFC pulse updates only WF/CX paint and deactivation cancels stale frames', async () => {
+  const originalFetch = globalThis.fetch;
+  const browser = installAnimationBrowser(false);
+  const harness = fakeMapHarness();
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify(MIXED_FIRE_COLLECTION), {
+      status: 200,
+      headers: { 'content-type': 'application/geo+json' }
+    });
+
+  try {
+    await activateNifc(harness.map);
+
+    expect(WILDFIRE_PULSE_PAINT_TARGETS).toEqual([
+      { layerId: 'nifc-fires-fill', paintProperty: 'fill-color' },
+      { layerId: 'nifc-fires-outline', paintProperty: 'line-color' }
+    ]);
+    expect(browser.frames.size).toBe(1);
+    expect(browser.visibilityListenerCount()).toBe(1);
+
+    const firstFrameAt = 1_000;
+    browser.takeNextFrame()(firstFrameAt);
+    expect(harness.paintChanges).toEqual([
+      {
+        layerId: 'nifc-fires-fill',
+        paintProperty: 'fill-color',
+        value: WILDFIRE_STATIC_COLOR
+      },
+      {
+        layerId: 'nifc-fires-outline',
+        paintProperty: 'line-color',
+        value: WILDFIRE_STATIC_COLOR
+      }
+    ]);
+
+    browser.takeNextFrame()(
+      firstFrameAt + WILDFIRE_PULSE_DURATION_MS / 4
+    );
+    expect(harness.paintChanges.slice(-2)).toEqual([
+      {
+        layerId: 'nifc-fires-fill',
+        paintProperty: 'fill-color',
+        value: WILDFIRE_PULSE_COLORS[2]
+      },
+      {
+        layerId: 'nifc-fires-outline',
+        paintProperty: 'line-color',
+        value: WILDFIRE_PULSE_COLORS[2]
+      }
+    ]);
+    expect(
+      harness.paintChanges.some(
+        ({ layerId }) =>
+          layerId.includes('prescribed') || layerId.includes('other')
+      )
+    ).toBe(false);
+
+    browser.setHidden(true);
+    expect(browser.frames.size).toBe(0);
+    expect(browser.canceledFrames).toHaveLength(1);
+    browser.setHidden(false);
+    expect(browser.frames.size).toBe(1);
+
+    const staleFrame = [...browser.frames.values()][0];
+    expect(staleFrame).toBeDefined();
+    const paintCountBeforeDeactivate = harness.paintChanges.length;
+    deactivateNifc(harness.map);
+    expect(browser.frames.size).toBe(0);
+    expect(browser.visibilityListenerCount()).toBe(0);
+    expect(browser.canceledFrames).toHaveLength(2);
+
+    staleFrame?.(firstFrameAt + WILDFIRE_PULSE_DURATION_MS / 2);
+    expect(harness.paintChanges).toHaveLength(paintCountBeforeDeactivate);
+    expect(harness.layers.size).toBe(0);
+  } finally {
+    deactivateNifc(harness.map);
+    registry.deactivate('nifc-fires');
+    globalThis.fetch = originalFetch;
+    browser.restore();
+  }
+});
+
+test('reduced motion keeps wildfire paint static and schedules no pulse', async () => {
+  const originalFetch = globalThis.fetch;
+  const browser = installAnimationBrowser(true);
+  const harness = fakeMapHarness();
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify(MIXED_FIRE_COLLECTION), {
+      status: 200,
+      headers: { 'content-type': 'application/geo+json' }
+    });
+
+  try {
+    await activateNifc(harness.map);
+
+    expect(browser.frames.size).toBe(0);
+    expect(browser.visibilityListenerCount()).toBe(0);
+    expect(harness.paintChanges).toHaveLength(0);
+    expect(harness.layerSpecs.get('nifc-fires-fill')?.paint).toMatchObject({
+      'fill-color': WILDFIRE_STATIC_COLOR
+    });
+    expect(harness.layerSpecs.get('nifc-fires-outline')?.paint).toMatchObject({
+      'line-color': WILDFIRE_STATIC_COLOR
+    });
+    expect(harness.layerSpecs.get('nifc-prescribed-fill')?.paint).toMatchObject({
+      'fill-color': NIFC_INCIDENT_PRESENTATION.prescribed.fillColor
+    });
+    expect(harness.layerSpecs.get('nifc-other-outline')?.paint).toMatchObject({
+      'line-color': NIFC_INCIDENT_PRESENTATION.other.lineColor
+    });
+  } finally {
+    deactivateNifc(harness.map);
+    registry.deactivate('nifc-fires');
+    globalThis.fetch = originalFetch;
+    browser.restore();
+  }
 });
 
 test('selected-area NIFC copy keeps Wildfire, Prescribed fire, and other counts distinct', () => {
@@ -238,6 +531,23 @@ test('fire key composition reflects SPC-only, NIFC-only, and combined active set
     expect(contract).not.toMatch(/incident points?/i);
     expect(contract).not.toMatch(/hotspots?/i);
   }
+});
+
+test('map-key family precedence matches the rendered key for mixed active sets', () => {
+  expect(
+    resolveMapKeyFamily(
+      new Set(['heatrisk', 'spc-fire-weather', 'nadm-drought', 'nifc-fires'])
+    )
+  ).toBe('heat');
+  expect(
+    resolveMapKeyFamily(
+      new Set(['spc-fire-weather', 'nadm-drought', 'nifc-fires'])
+    )
+  ).toBe('fire');
+  expect(resolveMapKeyFamily(new Set(['nadm-drought', 'nifc-fires']))).toBe(
+    'drought'
+  );
+  expect(resolveMapKeyFamily(new Set(['nifc-fires']))).toBe('fire');
 });
 
 test('static WHP key carries five classes and its source qualification', () => {

@@ -13,6 +13,7 @@ import { onTypedPlaceChange } from './state/typed-place';
 import { buildSidebar } from './ui/sidebar';
 import { initHoverInspector } from './ui/hover-inspector';
 import { initMapKey } from './ui/map-key';
+import { initMapInformation } from './ui/map-information';
 import { initMobileSheet } from './ui/mobile-sheet';
 import { initViewShell } from './ui/view-shell';
 import { initPlaceEmphasis } from './state/place-emphasis';
@@ -201,6 +202,10 @@ async function boot(): Promise<void> {
   // The on-map drought key (0.3.0 design pass): the opening view and the
   // embed answer "what do the colors mean" without the sidebar legend.
   initMapKey();
+
+  // The mobile information disclosure mirrors the active key, governed layer
+  // names, sources, and six-state registry without creating durable map state.
+  initMapInformation();
 
   // Selected-place emphasis (U3h, headroom A1): the chosen boundary stays lit
   // while its popup or briefing is open. This wires only the close seam (clear
