@@ -93,6 +93,10 @@ export interface ParsedUrlParams {
   /** One-based HeatRisk frame position from `heatday=`, or null for the
    * first currently advertised frame. */
   readonly heatRiskDay: number | null;
+  /** Desktop 3D Fire mode preference from `fire3d=`; only the exact token
+   * `true` turns it on. Presentation-only: it never changes which layers
+   * are displayed or what any surface claims. */
+  readonly fire3d: boolean;
   /** Basemap mode from `basemap=`; `default` turns the default-on satellite
    * context off, while absence selects satellite. */
   readonly basemap: BasemapMode;
@@ -132,6 +136,34 @@ export function syncHeatRiskDayParam(day: number | null): void {
     params.set('heatday', String(day));
   } else {
     params.delete('heatday');
+  }
+  const query = params.toString();
+  const url = window.location.pathname + (query === '' ? '' : `?${query}`);
+  window.history.replaceState(window.history.state, '', url);
+}
+
+/**
+ * Parse the additive 3D Fire mode flag (`fire3d=`). Only the exact single
+ * token `true` turns the mode preference on; absence, any other value, and
+ * a duplicated parameter all read as off (the heatday malformed-input
+ * discipline: ambiguity is rejected, not resolved by position).
+ */
+export function parseFire3dParam(params = new URLSearchParams(window.location.search)): boolean {
+  const values = params.getAll('fire3d');
+  return values.length === 1 && values[0] === 'true';
+}
+
+/**
+ * Replace only the 3D Fire mode parameter while preserving every other
+ * current URL field, including `embed=true` (the syncHeatRiskDayParam
+ * idiom). Off is absence: the default URL stays clean.
+ */
+export function syncFire3dParam(enabled: boolean): void {
+  const params = new URLSearchParams(window.location.search);
+  if (enabled) {
+    params.set('fire3d', 'true');
+  } else {
+    params.delete('fire3d');
   }
   const query = params.toString();
   const url = window.location.pathname + (query === '' ? '' : `?${query}`);
@@ -241,6 +273,7 @@ export function parseUrlParams(): ParsedUrlParams {
     outlookRange: parseOutlookRange(params.get('outlook')),
     horizon,
     heatRiskDay: parseHeatRiskDayParam(params),
+    fire3d: parseFire3dParam(params),
     // A DUPLICATED basemap parameter is malformed input and pins to the
     // product default in BOTH orders (D-0.7.0-031 edge-case rule; the stage-5
     // adversarial major 5 caught a first-wins drift here): ambiguity is
@@ -345,6 +378,10 @@ export function syncUrl(state: UrlSyncState): void {
   const heatRiskDay = parseHeatRiskDayParam(
     new URLSearchParams(window.location.search)
   );
+  // The 3D Fire mode likewise owns its additive flag (its store writes it
+  // through syncFire3dParam); read it fresh here so ordinary state writes
+  // preserve an active mode instead of erasing it.
+  const fire3d = parseFire3dParam(new URLSearchParams(window.location.search));
   const params = new URLSearchParams();
 
   if (state.region) {
@@ -402,6 +439,9 @@ export function syncUrl(state: UrlSyncState): void {
   }
   if (heatRiskDay !== null && heatRiskDay > 1) {
     params.set('heatday', String(heatRiskDay));
+  }
+  if (fire3d) {
+    params.set('fire3d', 'true');
   }
   if (state.basemap === 'default') {
     params.set('basemap', state.basemap);
