@@ -8,10 +8,9 @@
 # Future committed snapshots (the landscape signature, USDM archive frames)
 # join this workflow as they land.
 #
-# The commit lands on main, which triggers the Pages deploy, so the live
-# embed serves the fresh snapshot without any manual step. Scheduled
-# workflows run only from the default branch, so this is inert until the
-# branch carrying it merges to main.
+# The workflow token's push does not recursively trigger another workflow.
+# After a changed snapshot is pushed, this workflow explicitly dispatches the
+# Pages workflow on main so the live embed receives the new artifact.
 
 name: Refresh committed data snapshots
 
@@ -23,6 +22,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
   # Raise a GitHub issue when a scheduled rebuild fails (critical-review #12).
   # A silent `build:enso` failure (a CPC ascii-table drift) or a suspended
   # workflow otherwise lets the snapshot age past its 45-day hedge unnoticed.
@@ -36,12 +36,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          ref: main
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
@@ -54,12 +56,14 @@ jobs:
       # a snapshot the app would reject must never be committed, whatever
       # builder version produced it.
       - name: Validate the snapshot against the consumer contract
-        run: node scripts/validate-enso-snapshot.mjs public/data/enso-indices.json
+        run: npm run check:enso
 
       - name: Commit when the snapshot changed
+        id: snapshot
         run: |
           if git diff --quiet public/data/enso-indices.json; then
             echo "Snapshot unchanged; nothing to commit."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git config user.name "github-actions[bot]"
@@ -67,6 +71,19 @@ jobs:
           git add public/data/enso-indices.json
           git commit -m "Refresh ENSO snapshot (scheduled)"
           git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch Pages for the committed snapshot
+        if: steps.snapshot.outputs.changed == 'true'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'deploy.yml',
+              ref: 'main'
+            });
 
       # Alert on any failure above (critical-review #12). Treat a red refresh as
       # a release blocker: the ENSO snapshot is aging toward its staleness hedge
@@ -74,10 +91,22 @@ jobs:
       # issue auto-closes on the next successful refresh.
       - name: Open a refresh-failure issue
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const label = 'snapshot-refresh-failed';
+            try {
+              await github.rest.issues.getLabel({
+                owner: context.repo.owner, repo: context.repo.repo, name: label
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner, repo: context.repo.repo,
+                name: label, color: 'b60205',
+                description: 'Scheduled committed-snapshot refresh failed'
+              });
+            }
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const body = [
               '<!-- ddm-snapshot-refresh -->',
@@ -111,7 +140,7 @@ jobs:
       # Close the refresh-failure issue after a successful run.
       - name: Close the refresh-failure issue on success
         if: success()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const label = 'snapshot-refresh-failed';

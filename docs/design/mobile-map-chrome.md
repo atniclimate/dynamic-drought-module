@@ -4,6 +4,12 @@ This note records the presentation contract for the map-first phone view. It
 applies only when the mobile sheet is active at 720 CSS pixels or narrower.
 Desktop and embed placement remain owned by their existing shells.
 
+Implemented by
+[pull request 7](https://github.com/atniclimate/dynamic-drought-module/pull/7),
+merged as `eed7967` on 2026-08-18. Runtime code and tests remain authoritative
+when implementation details change. The design-corpus authority and durable
+convergence doctrine are recorded in [`README.md`](README.md).
+
 ## Tokens
 
 - Glass surfaces use `#004040`, `rgba(0, 64, 64, 0.30)` when backdrop blur is

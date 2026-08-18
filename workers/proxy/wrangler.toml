@@ -9,7 +9,7 @@
 # points, gridpoints, station/latest-observation, and active-alert reads. It does
 # not transform response bodies, does not authenticate, does not log requests,
 # and does not collect telemetry. See workers/proxy/src/index.ts for the logic
-# and CLAUDE.md section 4 rule 3 for the no-tracking, no-analytics policy.
+# and the project stewardship rules for the no-tracking, no-analytics policy.
 #
 # Deployer notes:
 #   1. Run `npm install` inside `workers/proxy/` before the first `npm run dev`.

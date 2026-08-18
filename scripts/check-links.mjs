@@ -6,9 +6,10 @@
  * The module's sourcing doctrine is "strongly verified": every endpoint and
  * resource link is live-checked before it enters the codebase, with a dated
  * verification stamp. Verification decays silently as agencies reorganize
- * their sites; this script re-checks the links so decay surfaces as a
- * scheduled-workflow failure (and an issue) instead of a broken link a user
- * discovers during a drought emergency.
+ * their sites; this manual external-network audit re-checks the links so a
+ * maintainer can find decay before a user discovers a broken link during a
+ * drought emergency. It intentionally stays outside the deterministic release
+ * gate because transient third-party availability must not block a deployment.
  *
  * Scope: literal URLs in the scanned source files. Templated URLs (query
  * parameters filled at runtime, tile templates) are skipped; the endpoint

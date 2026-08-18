@@ -1,22 +1,19 @@
 # Scheduled upstream liveness monitor (critical-review #6 + operational-risk).
 #
-# The sharpest stewardship harm this product can cause is a silently dead feed:
-# a Tribe embeds the map, months later one of the ~26 upstream agency URLs drifts
-# (a FeatureServer is renamed, a layer id changes, a service is retired), and the
-# panel then shows blank or stale drought data during a drought emergency on the
-# Tribe's own official site, with no vendor and no maintainer watching.
+# The sharpest stewardship harm this product can cause is a silently dead
+# runtime feed. The monitor labels every probe as runtime, build, or candidate.
+# Runtime and build failures are actionable; unwired candidate failures remain
+# visible warnings but cannot make this workflow red. Bounded checks whose
+# digest-bound inputs are intentionally absent from the public checkout report
+# an explicit SKIP instead of manufacturing a pass or failing on prerequisites.
 #
 # The client degrades a dead feed to an honest `unavailable` pill at fetch time,
 # but a serverless embed cannot monitor endpoint death in the background. This
 # workflow is the repo-side complement: it runs the drift monitor
 # (scripts/check-upstream-drift.mjs, `npm run check:drift`) on a schedule and
-# opens a GitHub issue when any upstream fails liveness, so the maintainer learns
-# of the drift and can push a fix that reaches every deployed embed at once. The
-# issue auto-closes on the next green run, so a transient agency blip does not
-# leave a stale alert.
-#
-# Scheduled workflows run only from the default branch, so this is inert until
-# the branch carrying it merges to main.
+# opens a GitHub issue when a runtime or build source persistently fails. Only a
+# runtime row implies possible deployed impact; a build row threatens a future
+# artifact refresh. The issue auto-closes on the next run with no blocking rows.
 
 name: Upstream liveness monitor
 
@@ -40,19 +37,32 @@ jobs:
   monitor:
     name: Probe upstream liveness
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: scripts/requirements-landscape.txt
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install pinned landscape drift environment
+        shell: bash
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --disable-pip-version-check -r scripts/requirements-landscape.txt
 
       # Probe once; if it reports drift, wait and probe again, and alert only
       # when the SECOND probe also fails. A single transient agency outage
@@ -77,7 +87,7 @@ jobs:
 
       - name: Open or update the drift alert issue
         if: steps.drift.outputs.exit_code != '0'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
@@ -93,9 +103,11 @@ jobs:
               marker,
               '## Upstream liveness drift detected',
               '',
-              'The scheduled upstream monitor found one or more agency endpoints failing liveness',
-              '(network error, timeout, or HTTP status >= 400) on two consecutive probes.',
-              'A deployed embed may now be showing blank or stale data for the affected layer.',
+              'The scheduled upstream monitor found one or more blocking runtime or build-source failures',
+              '(network error, timeout, HTTP status >= 400, or a failed source contract) on two consecutive probes.',
+              'Rows marked `runtime` may affect deployed embeds. Rows marked `build` threaten a future',
+              'artifact refresh but do not prove deployed breakage. Unwired `candidate` failures are warnings',
+              'and do not make the run red.',
               '',
               `Monitor run: ${runUrl}`,
               '',
@@ -103,7 +115,7 @@ jobs:
               report.trim() || '(no probe output captured)',
               '```',
               '',
-              '_This issue auto-closes on the next green monitor run. Treat it as a release blocker: fix the upstream reference in `src/config/urls.ts` (or the layer module) and the fix reaches every deployed embed._'
+              '_This issue auto-closes when no runtime or build-source failures remain. Review the tiered report before deciding whether a deployed fix or a build-pipeline repair is required._'
             ].join('\n');
             const existing = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
@@ -130,7 +142,7 @@ jobs:
 
       - name: Close the drift alert issue on recovery
         if: steps.drift.outputs.exit_code == '0'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const label = 'upstream-drift';
@@ -145,7 +157,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issue.number,
-                body: 'All upstream endpoints passed liveness on the latest monitor run; closing.'
+                body: 'All runnable runtime and build-source probes passed on the latest monitor run; candidate warnings and explicitly reported bounded-check skips, if any, are nonblocking. Closing.'
               });
               await github.rest.issues.update({
                 owner: context.repo.owner,
@@ -155,10 +167,10 @@ jobs:
               });
             }
 
-      # Surface the drift on the Actions tab too (a red run), after the issue is
-      # filed. The alert is the issue; this keeps the run history honest.
-      - name: Fail the run when drift persists
+      # Surface blocking runtime or build drift on the Actions tab after the
+      # issue is filed. Candidate-only warnings leave the run green.
+      - name: Fail the run when blocking drift persists
         if: steps.drift.outputs.exit_code != '0'
         run: |
-          echo "::error::Upstream liveness drift detected on two consecutive probes; see the opened issue."
+          echo "::error::Blocking runtime or build-source drift persisted across two probes; see the opened issue."
           exit 1

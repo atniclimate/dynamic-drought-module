@@ -14,8 +14,10 @@ npm run test:report      # open the HTML report from the last run
 
 The `webServer` block in `playwright.config.ts` runs `npm run build && npm run
 preview`, so a stale `dist/` can never be verified and a build failure fails
-the run. The preview serves at the `base` subpath
-(`http://localhost:4173/`).
+the run. The general suite uses `http://127.0.0.1:4173/`. A focused
+`deployment-subpath.spec.ts` case maps the same production artifact to
+`/dynamic-drought-module/`, the GitHub Pages repository seat, and verifies
+that its relative entry assets and application boot work there.
 
 Every run owns that preview process. If another process is already listening
 on port 4173, the suite fails instead of reusing an unattributed build.
@@ -61,8 +63,9 @@ judgment call rather than a red CI run. The telemetry spec here asserts only
 the honest-status contract (terminal, not a specific number), which is what a
 regression would actually break.
 
-The browser suite is currently a manual release check; it is not run by the
-Pages deploy workflow. The deploy runs the root non-browser gate. Run the
+Pull requests run the deterministic root gate, Worker typecheck, and serial
+browser suite without deploying the optional Worker. The Pages workflow runs
+the root gate and serial browser suite before uploading its artifact. Run
 focused affected specs during development and `npm run test:serial` when a
 change affects shared navigation, map lifecycle, state, or release readiness.
 

@@ -3,8 +3,8 @@
 MapLibre symbol layers (map text labels) fetch glyph files in Protocol
 Buffer (PBF) format, 256 codepoints per file. Serving them from this
 directory keeps the module serverless and self-contained: no third-party
-font host sees the deployment's traffic (0.7.0 U0a; the no-tracking
-posture in CLAUDE.md section 4 rule 3).
+font host sees the deployment's traffic. This preserves the project's
+no-tracking and self-hosted static architecture.
 
 ## Contents
 
@@ -15,9 +15,9 @@ posture in CLAUDE.md section 4 rule 3).
   range fails visibly (the label does not draw), never silently.
 - `glyphs/Noto Sans Regular/512-767.pbf`: the Spacing Modifier Letters
   range carrying the okina (U+02BB), needed by the GNIS-official Hawaiian
-  municipal names (D-0.7.0-030, ruled 2026-07-14; today only Līhuʻe).
+  municipal names (as of 2026-07-14, only Līhuʻe).
   Downloaded 2026-07-14 from the same MapLibre demotiles endpoint
-  (95,728 bytes, matching the stage-2 audit figure). Lazy at runtime:
+  (95,728 bytes). Lazy at runtime:
   MapLibre fetches a range file only when a rendered label needs it.
 
 ## Provenance and license

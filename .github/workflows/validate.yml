@@ -1,0 +1,55 @@
+# Deterministic pull-request validation. This workflow validates Worker source
+# but never deploys the optional Worker; that remains an explicitly authorized
+# manual operation from workers/proxy/.
+
+name: Validate DDM
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Gate, Worker typecheck, and browser suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            workers/proxy/package-lock.json
+
+      - name: Install application dependencies
+        run: npm ci
+
+      - name: Verify TypeScript compiler
+        run: npm exec tsc -- --version
+
+      - name: Run deterministic release gate
+        run: npm run gate
+
+      - name: Install Worker dependencies
+        run: npm --prefix workers/proxy ci
+
+      - name: Typecheck Worker without deploying
+        run: npm --prefix workers/proxy run typecheck
+
+      - name: Install Chromium for browser verification
+        run: npx playwright install --with-deps chromium
+
+      - name: Run serial browser verification
+        run: npm run test:serial -- --reporter=dot
