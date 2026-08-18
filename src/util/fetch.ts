@@ -3,8 +3,8 @@
  *
  * Direct ports of `fetchWithBudget` and `sleepUnlessAborted` from the
  * vanilla `app.js` v0.1.x baseline (lines ~1374 to 1413). These are the
- * primitives behind the architectural invariant in CLAUDE.md section 6
- * rule 5: every non-trivial network operation must respect a master
+ * primitives behind the project's cancellation
+ * invariant: every non-trivial network operation must respect a master
  * cancellation signal AND a per-call timeout, and late-arriving responses
  * to superseded operations are dropped rather than rendered.
  *

@@ -6,13 +6,13 @@
  * properties and geometry plus the click `lngLat`. This module turns that into
  * the typed context the briefing composer consumes: it resolves a display
  * title per boundary kind, attaches the representation caveat for Tribal and
- * Treaty boundaries (CLAUDE.md section 2), derives a bounding box from the
+ * Treaty boundaries (the boundaries-are-representations stewardship rule),
+ * derives a bounding box from the
  * feature geometry for later query clipping, carries a compact service
  * envelope for antimeridian crossings, and reads the active region key from
  * the shared region store.
  *
- * Identifying the land is step 1 of the land-resource-analyst flow
- * (docs/KERNEL_INTEGRATION_CONTINUATION.md section 12).
+ * Identifying the land is step 1 of the land-resource-analyst flow.
  */
 
 import type { GeoJsonProperties, Geometry, Position } from 'geojson';
@@ -27,7 +27,7 @@ import type { BoundaryKind, BoundarySelectionContext } from './types';
 /**
  * The representation caveat carried for sovereign-jurisdiction boundaries.
  * Mirrors the language in the BIA and Treaty popups; preserved in every panel
- * built from such a selection (CLAUDE.md section 2, hard rule honored in
+ * built from such a selection (a stewardship hard rule, honored in
  * popups.ts).
  */
 const REPRESENTATION_CAVEAT =

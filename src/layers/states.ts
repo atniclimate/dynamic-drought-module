@@ -10,12 +10,12 @@
  * routing resolved to that state.
  *
  * Stewardship: state boundaries are public administrative reference data, not
- * sovereign-jurisdiction polygons, so bundling them is consistent with
- * CLAUDE.md hard rule 1. A state selection never carries the representation
+ * sovereign-jurisdiction polygons, so bundling them is consistent with the
+ * no-redistribution hard rule. A state selection never carries the representation
  * caveat and never displaces a Tribal selection; the stewardship-ordered
  * resource list (Tribe's-own slot first) applies to every briefing.
  *
- * Cancellation (CLAUDE.md section 6 invariant 5): the bundled-file fetch goes
+ * Cancellation (the cancellation invariant): the bundled-file fetch goes
  * through `fetchWithBudget` with a per-call timeout and a master abort signal
  * that fires on `deactivate` or a superseding `activate`, matching the
  * hardened usdm / nifc-fires / bia-reservations pattern.

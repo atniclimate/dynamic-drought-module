@@ -87,8 +87,8 @@ export const PRESET_LABELS: readonly string[] = [
  * states joined 2026-07-12 (U4c, boundaries as chrome). The Tribal Nations
  * umbrella build (D-0.7.0-032/033, 2026-07-15) deliberately swapped the
  * bundled `tribal` placeholder for live Tribal-geography layers. The current
- * default carries the two present-day layers. The changes are recorded in
- * docs/URL_SCHEMA_POLICY.md. Hillshade joined 2026-07-16 (E1 deliverable 4,
+ * default carries the two present-day layers. Each change was a ratified,
+ * deliberate default change. Hillshade joined 2026-07-16 (E1 deliverable 4,
  * D-0.7.0-043 part 3: terrain shading is part of the calm default
  * composition). */
 export const DEFAULT_ON = ['nadm-drought', 'aiannh', 'bia-reservations', 'states', 'hillshade'] as const;

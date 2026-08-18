@@ -74,7 +74,7 @@ const US_SCOPE_CAUTION_EXEMPT_KEYS: ReadonlySet<string> = new Set([
 
 /**
  * Prose names for layers whose compact catalog labels lead with a bare
- * acronym (CLAUDE.md section 5: spell out on first use, then
+ * acronym (the acronym convention: spell out on first use, then
  * abbreviate; DG-080 review finding 7, r2 finding 5). The summary
  * sentence can be the first visible use of CPC, NIFC, or HMS, so the
  * prose expands them fully (including the parent agency: a bare "NOAA"

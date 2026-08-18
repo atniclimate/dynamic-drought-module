@@ -10,7 +10,7 @@
  * MapLibre GeoJSON source whose `data` is replaced on each successful
  * fetch and a single line layer that draws every way at once.
  *
- * Cancellation contract (CLAUDE.md section 6 rule 5; preserved verbatim
+ * Cancellation contract (the cancellation invariant; preserved verbatim
  * from v0.1.x):
  *
  *   1. A single module-level `currentController: AbortController | null`
@@ -37,8 +37,8 @@
  * fetch. Bbox stays in Leaflet `[s, w, n, e]` order to match the cache
  * layout from v0.1.x; `quantizeBbox` lives in `../util/bbox`.
  *
- * Status reporting uses `console.info('[hydrography]', state)` for now;
- * Milestone 7 (M7) wires this to the real LayerRegistry.
+ * Status reporting goes through the LayerRegistry (`registry.setStatus`,
+ * via the local `setStatus` helper below).
  */
 
 import maplibregl from 'maplibre-gl';
@@ -183,11 +183,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   // Wire the debounced moveend handler. The handler closes over `map`
   // so subsequent fetches use whatever bounds the user has panned to.
-  // Tooltips on rivers: MapLibre has no `bindTooltip` like Leaflet, so
-  // hover tooltips on individual rivers are skipped.
-  // CHANGES.md note: river name tooltips on hover dropped in the
-  // MapLibre port; can be re-added later as a `mousemove` popup if
-  // required.
+  // (River names under the cursor are surfaced by the shared hover
+  // inspector, src/ui/hover-inspector.ts, not by a per-river tooltip.)
   // Guarded like the addSource/addLayer calls above: a double activation
   // without an intervening deactivate (the sidebar serializes operations,
   // but this module must not rely on its caller) would otherwise overwrite
@@ -241,7 +238,7 @@ export function deactivate(map: maplibregl.Map): void {
 }
 
 // ---------------------------------------------------------------------------
-// fetchOSMWaterways (exported per CLAUDE.md section 8)
+// fetchOSMWaterways (a frozen named export)
 // ---------------------------------------------------------------------------
 
 /**
@@ -302,8 +299,7 @@ export async function fetchOSMWaterways(
   let lastErr: unknown = null;
 
   // TODO(pmtiles): replace live Overpass mirror cycling with a static
-  // PMTiles bundle of clipped USGS NHD hydrography. See CLAUDE.md
-  // section 10 for the migration-time stance.
+  // PMTiles bundle of clipped USGS NHD hydrography.
   const mirrors = URLS.overpassMirrors;
   for (let i = 0; i < mirrors.length; i++) {
     if (signal.aborted) return emptyFeatureCollection();

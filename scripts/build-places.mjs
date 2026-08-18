@@ -4,9 +4,9 @@
  * Source: Natural Earth 1:10m Populated Places (simple attributes), PUBLIC
  * DOMAIN (https://www.naturalearthdata.com/about/terms-of-use/), filtered to
  * United States places. Municipal names and point locations are public
- * reference data, not sovereign-jurisdiction polygons (CLAUDE.md hard rule 1
- * protects Tribal, Treaty, and sovereign-jurisdiction data; this bundles
- * neither). The raster basemap's baked-in labels cannot be toggled, so a
+ * reference data, not sovereign-jurisdiction polygons (the no-redistribution
+ * hard rule protects Tribal, Treaty, and sovereign-jurisdiction data; this
+ * bundles neither). The raster basemap's baked-in labels cannot be toggled, so a
  * small bundled symbol source is the only honest municipal-labels delivery.
  *
  * SCALERANK is Natural Earth's zoom-density field (0 = always shown,

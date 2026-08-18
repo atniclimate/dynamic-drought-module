@@ -549,7 +549,7 @@ function cancelInFlight(): void {
  * serialized teardown op reaches this module. Without it, turning Drought
  * off during activation could not reach any abort path, because the queued
  * `deactivate` waits on the very promise it needs to cancel (DG-080 r4
- * finding 2; CLAUDE.md section 6 invariant 5). Touches no map state;
+ * finding 2; the cancellation invariant). Touches no map state;
  * `deactivate` still owns the serialized source and layer removal.
  */
 export function cancelActivation(): void {

@@ -5,11 +5,12 @@
  * The state-scoped resource links a briefing routes to are DATA, not code:
  * per-state JSON files under `public/data/resources/<code>.json`, fetched only
  * for the state a click resolves to (lazy). This module loads and validates
- * them; the schema and the routing doctrine are documented in
- * `docs/resource-catalog-schema.md`, which is the system of record.
+ * them; the build gate `scripts/check-resource-catalog.mjs` enforces the same
+ * schema strictly and is the system of record for it.
  *
  * Stewardship: public resource LINKS are not sovereign data, so the catalog
- * ships in-repo (unlike boundary polygons; CLAUDE.md hard rule 1). The
+ * ships in-repo (unlike boundary polygons, which the project never
+ * redistributes). The
  * stewardship ORDER (the Tribe's own resources first, then federal, then state,
  * then BIA regional) is owned by the panel composition in `src/impact/`, not by
  * this file; this file supplies the state tier only. A state file's rows are

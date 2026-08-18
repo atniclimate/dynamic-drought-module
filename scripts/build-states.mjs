@@ -5,8 +5,8 @@
  * states, 1:20,000,000 generalization, 2023 vintage, public domain
  * (https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html).
  * State boundaries are public administrative reference data, not
- * sovereign-jurisdiction polygons, so bundling them is consistent with
- * CLAUDE.md hard rule 1 (the rule protects Tribal, Treaty, and
+ * sovereign-jurisdiction polygons, so bundling them is consistent with the
+ * no-redistribution hard rule (the rule protects Tribal, Treaty, and
  * sovereign-jurisdiction data).
  *
  * The 1:20,000,000 generalization is deliberately coarse: the layer exists as

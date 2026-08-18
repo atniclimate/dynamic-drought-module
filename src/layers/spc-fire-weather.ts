@@ -18,7 +18,7 @@
  * common good-news case (no elevated fire weather anywhere today) and
  * renders as `'no-data'`, never as an error. Updated up to five times daily.
  *
- * Cancellation (CLAUDE.md section 6 invariant 5): master abort controller
+ * Cancellation (the cancellation invariant): master abort controller
  * superseded on each `activate`, aborted on `deactivate`, fetch through
  * `fetchJsonWithBudget`, late responses dropped.
  */

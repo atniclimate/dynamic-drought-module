@@ -7,7 +7,8 @@ import { gotoApp } from './helpers';
  * The brand fonts (League Spartan, Lexend) are served from public/fonts/,
  * not from Google Fonts; a third-party font request would leak the user's
  * IP address and the embedding page URL to Google on every load, against
- * CLAUDE.md section 4 rule 3 (the module observes the user; it does not
+ * the project's no-tracking stewardship rule (the module observes the
+ * landscape for the user; it does not
  * report on them). This spec pins both halves of the guarantee: the fonts
  * really load (no silent fallback to system-ui), and no request reaches a
  * font CDN. Deterministic: same-origin fetches only, no live agency data.

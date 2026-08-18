@@ -83,7 +83,7 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
   drought: {
     title: 'Drought',
     urlToken: null,
-    // First-use expansion (CLAUDE.md section 5; DG-080 r2 finding 5):
+    // First-use acronym expansion (DG-080 r2 finding 5):
     // this tooltip is the cluster's first prose use of the agency name,
     // so both acronyms are spelled out here; later uses stay compact.
     description:
@@ -137,7 +137,7 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
   enso: {
     title: 'ENSO',
     urlToken: 'enso',
-    // First-use expansion (CLAUDE.md section 5; DG-080 review finding
+    // First-use acronym expansion (DG-080 review finding
     // 7): the ruled compact button title stays 'ENSO'; the description
     // (the button's title text) spells the acronym out.
     description: 'The sea-surface-temperature anomaly display with the current El Nino / Southern Oscillation (ENSO) index snapshot.',

@@ -1,5 +1,5 @@
 /**
- * Layer add/remove fade transitions (TODO [0.3.0]).
+ * Layer add/remove fade transitions.
  *
  * MapLibre animates paint properties when a `*-transition` is set on them,
  * but adding or removing a layer is instant, and the layer modules remove
