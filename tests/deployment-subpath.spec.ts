@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
-import { ROLE_GROUPS, stubHistoricalGround } from './helpers';
+import { ROLE_GROUPS } from './helpers';
+import { stubRecentSatellite } from './satellite-fixture';
 
 test('the production artifact boots from the GitHub Pages subpath', async ({
   page,
@@ -37,7 +38,7 @@ test('the production artifact boots from the GitHub Pages subpath', async ({
     }
   });
 
-  await stubHistoricalGround(page);
+  await stubRecentSatellite(page);
   await page.goto(
     '/dynamic-drought-module/?view=console&layers=states',
     { waitUntil: 'domcontentloaded' },

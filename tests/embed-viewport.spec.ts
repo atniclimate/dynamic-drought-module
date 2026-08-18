@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { gotoApp, stubHistoricalGround } from './helpers';
+import { gotoApp } from './helpers';
+import { stubRecentSatellite } from './satellite-fixture';
 
 /**
  * The small-viewport embed contract (H1, 0.6.2; CLAUDE.md section 4 rule 8).
@@ -56,7 +57,7 @@ test.describe('Embed at 200x600 (minimum-width iframe floor)', () => {
   test('opens inside an iframe with contained map chrome and no mobile navigation', async ({
     page
   }) => {
-    await stubHistoricalGround(page);
+    await stubRecentSatellite(page);
     await page.route('**/embed-width-floor-host.html', async (route) => {
       await route.fulfill({
         contentType: 'text/html',

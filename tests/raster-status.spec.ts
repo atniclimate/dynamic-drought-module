@@ -340,7 +340,7 @@ test('a completeness consumer can require positive tile evidence at idle', () =>
   const reports: string[] = [];
   watchRasterTiles(
     map as unknown as maplibregl.Map,
-    'historical-ground',
+    'completeness-consumer',
     (status) => reports.push(status),
     {
       reportInitialSuccess: true,

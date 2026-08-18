@@ -531,7 +531,7 @@ function installFrame(
           'raster-contrast': 0.04
         }
       },
-      firstLayerIdAbove(map, ['background', 'basemap', 'basemap-ground'])
+      firstLayerIdAbove(map, ['background', 'basemap'])
     );
   } catch (error) {
     removeSatelliteSource(map);

@@ -172,11 +172,6 @@ const EAGER_FORBIDDEN = [
     reason: 'The impact briefing cluster is a first-use cost; location containment geometry must never ride the initial static set.',
   },
   {
-    name: 'impact briefing cluster ENSO driver',
-    pattern: /src\/ui\/enso-driver\.ts$/,
-    reason: 'The impact briefing cluster is a first-use cost; the El Nino / Southern Oscillation driver must never ride the initial static set.',
-  },
-  {
     name: 'impact briefing cluster claim renderer',
     pattern: /src\/ui\/claim-render\.ts$/,
     reason: 'The impact briefing cluster is a first-use cost; claim evidence rendering must never ride the initial static set.',
@@ -247,7 +242,6 @@ const IMPACT_EAGER_RULE_CONTRACT = [
   ['impact briefing cluster recovery runtime entry', '../../src/ui/impact-panel-runtime-recovery.ts'],
   ['impact briefing cluster location identity', '../../src/state/location-identity.ts'],
   ['impact briefing cluster point-in-polygon', '../../src/util/point-in-polygon.ts'],
-  ['impact briefing cluster ENSO driver', '../../src/ui/enso-driver.ts'],
   ['impact briefing cluster claim renderer', '../../src/ui/claim-render.ts'],
   ['impact briefing cluster chart renderer', '../../src/ui/charts.ts'],
   ['impact briefing cluster boundary context', '../../src/impact/context.ts'],
@@ -840,7 +834,6 @@ const SELF_TEST_CASES = [
         '../../src/ui/impact-panel-runtime-recovery.ts',
         '../../src/state/location-identity.ts',
         '../../src/util/point-in-polygon.ts',
-        '../../src/ui/enso-driver.ts',
         '../../src/ui/claim-render.ts',
         '../../src/ui/charts.ts',
         '../../src/impact/context.ts',

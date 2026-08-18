@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { gotoApp, search, stubHistoricalGround, urlLayers } from './helpers';
+import { gotoApp, search, urlLayers } from './helpers';
+import { stubRecentSatellite } from './satellite-fixture';
 
 /**
  * U1 the two doors (D-ARCH-002), REWRITTEN for S2 (D-0.7.0-041): the
@@ -137,7 +138,7 @@ test.describe('U1 the two doors (view mode)', () => {
       if (/island-[^/]*\.js/.test(req.url())) islandRequests.push(req.url());
     });
 
-    await stubHistoricalGround(page);
+    await stubRecentSatellite(page);
     await page.route('**/NADM-current.geojson', (route) =>
       route.fulfill({
         status: 200,

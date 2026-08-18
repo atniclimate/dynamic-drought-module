@@ -55,8 +55,6 @@ export const DRIFT_TIERS = Object.freeze({
  * to candidate or build-only status instead of silently losing protection. */
 export const CANDIDATE_SOURCE_KEYS = new Set([
   'basemapTopo',
-  'eoxCloudless2016',
-  'eoxCloudless2016Probe',
   'cpcDroughtWMS',
   'biaTribalLeadersDirectory',
   'waEcologyCededLands',
