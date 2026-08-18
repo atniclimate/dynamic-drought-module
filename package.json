@@ -6,7 +6,7 @@
   "description": "Embeddable static web map with North American drought context, recent satellite imagery, and detailed United States hazard and telemetry views, deepest in the Pacific Northwest.",
   "license": "PolyForm-Strict-1.0.0",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "dev": "vite",
@@ -15,9 +15,11 @@
     "typecheck": "tsc --noEmit",
     "test": "playwright test",
     "test:serial": "playwright test --workers=1",
+    "test:drift-contract": "node --test tests/upstream-drift-contract.test.mjs",
     "test:minimap-geometry": "node --test tests/minimap-geometry-artifact.test.mjs",
     "test:report": "playwright show-report",
     "scan:emdash": "node scripts/scan-emdash.mjs",
+    "check:links": "node scripts/check-links.mjs",
     "check:resources": "node scripts/check-resource-catalog.mjs",
     "check:public-tree": "node scripts/check-public-tree.mjs",
     "check:bundle": "node scripts/check-bundle-size.mjs",
@@ -27,12 +29,13 @@
     "check:activation": "node scripts/check-activation-budget.mjs",
     "check:landscape-schema": "node scripts/validate-landscape-artifact.mjs scripts/landscape/tests/fixtures/corrected/snapshot_terrain_l3.json && node scripts/validate-landscape-artifact.mjs public/data/landscape-signature-pnw.json",
     "build:coverage-matrix": "node scripts/generate-coverage-matrix.mjs",
-    "gate": "npm run build && npm run scan:emdash && npm run check:public-tree && npm run check:resources && npm run check:bundle && npm run check:activation && npm run check:places && npm run check:coverage && npm run check:vocabulary && npm run check:landscape-schema && npm run check:enso",
+    "gate": "npm run build && npm run scan:emdash && npm run check:public-tree && npm run check:resources && npm run check:bundle && npm run check:activation && npm run check:places && npm run check:coverage && npm run check:vocabulary && npm run check:landscape-schema && npm run check:enso && npm run test:drift-contract && npm run test:minimap-geometry",
     "build:enso": "node scripts/build-enso-snapshot.mjs",
     "check:enso": "node scripts/validate-enso-snapshot.mjs public/data/enso-indices.json",
     "build:cdm": "node scripts/build-cdm-snapshot.mjs",
     "build:landscape": ".venv\\Scripts\\python.exe -m scripts.landscape && node scripts/validate-landscape-artifact.mjs public/data/landscape-signature-pnw.json",
     "build:landscape:smoke": ".venv\\Scripts\\python.exe -m scripts.landscape --smoke --output scripts/.cache/landscape-smoke.json && node scripts/validate-landscape-artifact.mjs scripts/.cache/landscape-smoke.json",
+    "build:places": "node scripts/build-places.mjs",
     "build:ecoregion-tiles": "node scripts/build-ecoregion-tiles.mjs",
     "build:minimap-geometry": "node scripts/build-minimap-geometry.mjs",
     "build:minimap-whp": "node scripts/build-minimap-whp.mjs",

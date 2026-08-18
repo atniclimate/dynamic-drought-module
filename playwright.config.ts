@@ -21,8 +21,9 @@ import { defineConfig } from '@playwright/test';
  *      the manual ddm-ui-verifier lane, where a blipping upstream is a human
  *      judgment call, not a red CI run. See tests/README.md.
  *
- * The preview is exercised at the historical deployment subpath. Vite emits
- * relative asset URLs so the same artifact also works at a domain root.
+ * The general suite uses the domain root. A focused deployment-subpath spec
+ * also boots the production artifact from `/dynamic-drought-module/` and
+ * verifies that its relative entry assets load from that seat.
  */
 
 // 127.0.0.1 EXPLICITLY, never `localhost`: on this machine `localhost`

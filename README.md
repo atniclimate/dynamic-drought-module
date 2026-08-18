@@ -64,9 +64,11 @@ self-hosting and data population.
   never blended. Deployers can additionally load their own Tribal Lands
   and Treaty Areas data into two default-off slots (URL-addressed; not
   shown in the default interface).
-- **Events**: active wildfire perimeters (National Interagency Fire
-  Center) and active National Weather Service (NWS) heat and fire-weather
-  alerts.
+- **Events**: current mapped fire perimeters from the National Interagency
+  Fire Center, with Wildfire and Wildfire Complex, Prescribed fire, and
+  other or unclassified perimeters kept distinct; NOAA Hazard Mapping System
+  smoke plumes; plus active National Weather Service (NWS) heat and
+  fire-weather alerts.
 - **Stations**: live water and snowpack telemetry with values in the
   sidebar and popups: USGS streamgages, NRCS SNOTEL snowpack, USBR
   Hydromet reservoir storage and AgriMet agricultural observations, and
@@ -90,6 +92,9 @@ never an unqualified `live`.
 ---
 
 ## Quick start
+
+Use Node.js 22.12 or newer from a supported release line. The repository
+`.nvmrc` selects the pinned Node.js 22 runtime used by validation workflows.
 
 ```powershell
 npm ci
@@ -123,14 +128,21 @@ current URL.
 | Param | Values | Default |
 | ----- | ------ | ------- |
 | `region` | `washington_state`, `columbia_snake_basin`, `cascades`, `central_oregon`, `southwest_washington`, `south_puget_sound`, `national`, `alaska`, `hawaii`, `british_columbia` | `washington_state` |
-| `layers` | comma-separated keys from the table below | `usdm,aiannh,bia-reservations,states,hillshade` |
+| `layers` | comma-separated keys from the table below | `hillshade,nadm-drought,aiannh,bia-reservations,states` |
+| `framing` | one of the nine ATNI-authored editorial framing keys, or `all` | none; `region` remains in control |
+| `cluster` | `wildfire`, `heat`, or `enso`; an explicit `layers` list outranks it | Drought, encoded by absence |
+| `ocean` | `pacific`, `arctic`, or `atlantic`, only with `cluster=enso` | none |
 | `select` | `state:<postal code>` (for example `state:WA`): opens the map focused on that boundary with its impact briefing open; applied once, then dropped from the URL | none |
 | `embed` | `true` or `1` (hides the sidebar for clean iframe presentation) | `false` |
+| `view` | `brief` or `console` | derived from the rest of the URL; a bare URL opens Brief |
+| `horizon` | `weeks-ahead` or `season-ahead` | current |
+| `basemap` | `default` explicitly turns recent satellite imagery off; the legacy `satellite` token remains valid | recent satellite imagery, encoded by absence |
+| `studio` | `layers` or `place` | none |
 
-Display-state parameters also round-trip (`view` for the Brief/console
-mode, `week` for the USDM archive, `dmode`, `sst`, `outlook`, `basemap`);
-the authoritative grammar is implemented in `src/state/url.ts` and pinned by
-the URL-state and legacy-link browser tests. Old shared links keep working:
+Temporal display parameters also round-trip (`week` for the USDM archive,
+`dmode`, `sst`, `outlook`, and `heatday`). The authoritative grammar is
+implemented in `src/state/url.ts` and pinned by the URL-state and legacy-link
+browser tests. Old shared links keep working:
 `tribal` is still a valid key (now the deployer-data slot, off by default and
 not shown in the default interface; naming it in `layers` turns it on and
 reveals its toggle), and legacy layer lists resolve deterministically.
@@ -165,7 +177,7 @@ several surfaces resolves deterministically to the first surface named
 | `usfs-whp` | Wildfire Hazard Potential | surface | USFS GeoPlatform ImageServer (live) |
 | `cdm-drought` | Canadian Drought Monitor (snapshot) | surface | Agriculture and Agri-Food Canada, bundled monthly snapshot |
 | `nadm-drought` | North American Drought Monitor | surface | NOAA NCEI GeoJSON (live) |
-| `sst-anomaly` | Sea surface temperature anomaly | surface | NASA GIBS WMTS (live) |
+| `sst-anomaly` | Ocean Temperature Anomaly | surface | NASA GIBS WMTS (live) |
 | `states` | State Boundaries | reference | US Census, bundled GeoJSON (default-on) |
 | `hillshade` | Terrain shading | reference | USGS 3DEP, bundled PMTiles (default-on) |
 | `ecoregions` | Ecoregions (Level III/IV) | reference | EPA Omernik, bundled PMTiles |
@@ -175,26 +187,27 @@ several surfaces resolves deterministically to the first surface named
 | `tribal` | Tribal Lands (your own data) | reference | deployer slot, bundled EMPTY PLACEHOLDER, default-off, URL-only (no catalog row until turned on) |
 | `treaty` | Treaty Areas (your own data) | reference | deployer slot, bundled EMPTY PLACEHOLDER, default-off, URL-only (no catalog row until turned on) |
 | `hydrography` | Rivers | reference | OpenStreetMap via Overpass (live) |
-| `nifc-fires` | Active Wildfires | event | NIFC WFIGS FeatureServer (live) |
+| `nifc-fires` | Current Mapped Fire Perimeters (NIFC) | event | NIFC WFIGS FeatureServer (live) |
 | `hms-smoke` | Smoke plumes | event | NOAA HMS FeatureServer (live) |
 | `nws-alerts` | Heat & Fire Weather Alerts | event | NOAA NWS MapServer (live) |
 | `telemetry` | Telemetry Stations | stations | USGS, NRCS, USBR, USACE (live) |
 
 (The British Columbia drought-levels surface swaps in for the US Drought
 Monitor inside the `british_columbia` framing; it has no separate layer
-key. Table trued up 2026-07-28; it had drifted six layers behind the
-shipped set.)
+key. Table trued up against the runtime registry on 2026-08-18.)
 
 The framing minimap derives its colors from the current monthly
 [North American Drought Monitor](https://www.drought.gov/data-maps-tools/north-american-drought-monitor-nadm).
-Each authored framing uses its most prevalent
-assessed-land class from white `None` through dark-red `D4`; a dark outline
-adds the total D1-D4 share so a prevalent `None` class cannot hide material
-drought. NADM does not publish its exact analyzed-area mask. The minimap
-therefore excludes Nunavut using a Statistics Canada 2021 Digital Boundary
-File as an analysis-mask proxy and reports the northern framing as
-`live (partial)`. The proxy is used only for calculation, never rendered as
-boundary or jurisdictional geometry.
+Each authored framing uses an approximate cosine-latitude-weighted ordinal
+mean of assessed land, from white `None` through dark-red `D4`, for its fill.
+A separate outline carries the total D1-D4 share so the mean cannot hide
+material drought extent. The most prevalent class and distribution remain
+available as supporting detail, but they do not determine the fill. NADM does
+not publish its exact analyzed-area mask. The minimap therefore excludes
+Nunavut using a Statistics Canada 2021 Digital Boundary File as an
+analysis-mask proxy and reports the northern framing as `live (partial)`. The
+proxy is used only for calculation, never rendered as boundary or
+jurisdictional geometry.
 
 Nunavut proxy source: Government of Canada; Statistics Canada; Statistical
 Geomatics Centre, 2021 Digital Boundary Files, reference date January 1,
@@ -232,20 +245,27 @@ instructions are in [`public/data/README.md`](public/data/README.md).
 
 ### About the basemap and hydrography
 
-The default basemap is OpenStreetMap standard raster tiles, subdued via
-raster paint so the condition surfaces dominate. The optional Satellite
-mode uses [NOAA NESDIS merged GOES East and West GeoColor](https://www.nesdis.noaa.gov/imagery/satellite-maps)
-from its rolling 24-hour archive. It queries a bounded set of recent catalog
-items and selects the newest frame that passes a known-data image probe, then
-pins all tiles to that one observed frame. The map displays the exact UTC
-observation range and checks for a new frame every 10 minutes while active. A
-failed refresh leaves the last known-good recent frame in place. OpenStreetMap
-remains underneath because GOES coverage ends near 76 degrees north and
-imagery can contain clouds or gaps. GeoColor is context only: daytime areas
-approximate true color, while nighttime areas use infrared and static
-reference lights.
+The product-default basemap uses
+[NOAA NESDIS merged GOES East and West GeoColor](https://www.nesdis.noaa.gov/imagery/satellite-maps)
+from its rolling 24-hour archive. The Satellite control turns that recent
+context on and off without creating a second state system. An absent
+`basemap` parameter means satellite is on; `basemap=default` records the
+explicit satellite-off choice and shows subdued OpenStreetMap ground.
 
-Hazard choices do not silently change the imagery product. Future
+The recent-imagery lifecycle queries a bounded set of catalog items and
+selects the newest frame that passes a known-data image probe, then pins all
+tiles to that one observed frame. The map displays the exact UTC observation
+range and checks for a new frame every 10 minutes while active. A failed
+refresh leaves the last known-good recent frame in place. If initial
+activation fails, the basemap store and URL return honestly to `default`.
+OpenStreetMap remains underneath because GOES coverage ends near 76 degrees
+north and imagery can contain clouds or gaps. GeoColor is context only:
+daytime areas approximate true color, while nighttime areas use infrared and
+static reference lights.
+
+Explicit Fire and Wildfire controls may request recent GeoColor as part of
+their governed scene, but boot reconciliation and unrelated layer or horizon
+changes do not override a visitor's manual basemap choice. Future
 satellite-derived drought indicators, wildfire thermal detections, or land
 surface temperature products belong in separately named layers with their
 own status, timestamp, caveat, and legend. No proprietary tile providers,
@@ -290,10 +310,13 @@ honestly as unavailable.
   redistributed: the federal representations are fetched live per session
   (no-store), and the deployer-owned slots ship empty for population
   under the deployer's own authorizations.
-- **Mobile and accessibility.** The sidebar stacks above the map below
-  720 pixels; region selection is arrow-key navigable; status changes are
-  announced through a polite live region; embed semantics survive
-  collapse and expand.
+- **Mobile and accessibility.** Outside embed mode, the map-first phone view
+  at 720 pixels and narrower uses footer navigation and a three-detent bottom
+  sheet. Shared map controls retain 44-pixel or larger targets, accessible
+  names, keyboard focus, safe-area seating, and reduced-motion behavior.
+  Region selection is arrow-key navigable; status changes are announced
+  through a polite live region; embed semantics remain owned by the separate
+  embed shell.
 
 ---
 
@@ -319,11 +342,13 @@ Cloudflare Worker. Run `npm run gate` for the static build and product
 checks, and `npm run test:serial` for the full browser suite. Public release
 history is in [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md), and the
 generated coverage record is in
-[`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md).
+[`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md). Design-document
+authority and the durable convergence doctrine are in
+[`docs/design/README.md`](docs/design/README.md).
 
 ## Browser support
 
-Any evergreen browser (Chrome, Edge, Firefox, Safari 14 or newer).
+Any evergreen browser (Chrome, Edge, Firefox, Safari 15.5 or newer).
 MapLibre GL JavaScript requires WebGL 1.
 
 ## Attribution and licensing

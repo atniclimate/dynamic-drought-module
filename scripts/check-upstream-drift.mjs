@@ -25,15 +25,17 @@
  * informational only, because several upstreams are intermittent (that is
  * the lesson).
  *
- * Run with: `npm run check:drift`. Exit code 1 when any endpoint fails, so a
- * scheduled runner (Task Scheduler, cron, or a future GitHub Action) can
- * alert on drift. Model-free by design; no AI in the loop.
+ * Run with: `npm run check:drift`. Runtime and build-source failures return
+ * exit code 1 so the scheduled GitHub Action can alert on actionable drift.
+ * Candidate-source failures are reported as nonblocking warnings because an
+ * unwired research candidate cannot break a deployed embed. Model-free by
+ * design; no AI in the loop.
  */
 
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -41,6 +43,46 @@ const URLS_PATH = join(__dirname, '..', 'src', 'config', 'urls.ts');
 
 const TIMEOUT_MS = 15_000;
 const CONCURRENCY = 5;
+
+export const DRIFT_TIERS = Object.freeze({
+  RUNTIME: 'runtime',
+  BUILD: 'build',
+  CANDIDATE: 'candidate'
+});
+
+/** URLS is also the vetted-source notebook, so not every literal is shipped.
+ * New keys default to runtime: a maintainer must explicitly lower an endpoint
+ * to candidate or build-only status instead of silently losing protection. */
+export const CANDIDATE_SOURCE_KEYS = new Set([
+  'basemapTopo',
+  'eoxCloudless2016',
+  'eoxCloudless2016Probe',
+  'cpcDroughtWMS',
+  'biaTribalLeadersDirectory',
+  'waEcologyCededLands',
+  'cecEcoregionsL3FeatureServer',
+  'cpcWeeklySstAnomalyMapServer',
+  'epaAirNowCurrentFeatureServer',
+  'nifcHistoricPerimetersFeatureServer',
+  'usgsVegdriWeeklyWms',
+  'usgsQuickdriWeeklyWms'
+]);
+
+export const BUILD_SOURCE_KEYS = new Set([
+  'cdmDroughtAreasZipRoot',
+  'landscapeLandfireRelease',
+  'landscapeNlcdCollection',
+  'landscapeNlcdPinnedTime',
+  'landscapeWhpEdition4Zip',
+  'landscapeWhpDoi',
+  'landscapeSoilVintage'
+]);
+
+export function sourceTierForKey(key) {
+  if (CANDIDATE_SOURCE_KEYS.has(key)) return DRIFT_TIERS.CANDIDATE;
+  if (BUILD_SOURCE_KEYS.has(key)) return DRIFT_TIERS.BUILD;
+  return DRIFT_TIERS.RUNTIME;
+}
 
 /** The production origin; sent on every probe so CORS posture is observable. */
 const BROWSER_ORIGIN = 'https://atniclimate.github.io';
@@ -323,12 +365,12 @@ const CONTENT_TRIPWIRES = new Map([
   ]
 ]);
 
-function extractUrls(source) {
+export function extractUrls(source) {
   const out = [];
-  const re = /^\s*(\w+):\s*\n?\s*'(https:\/\/[^']+)'/gm;
+  const re = /^\s*(\w+):\s*\n?\s*(['"])(https:\/\/[^'"]+)\2/gm;
   let m;
   while ((m = re.exec(source)) !== null) {
-    out.push({ key: m[1], url: m[2] });
+    out.push({ key: m[1], url: m[3], tier: sourceTierForKey(m[1]) });
   }
   return out;
 }
@@ -345,6 +387,7 @@ function probeUrl(entry) {
 
 async function check(entry) {
   const url = probeUrl(entry);
+  const tier = entry.tier ?? sourceTierForKey(entry.key);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -381,10 +424,10 @@ async function check(entry) {
         : '') +
       (tripwireMiss !== null ? `; TRIPWIRE: ${tripwireMiss}` : '') +
       (warning !== null ? `; WARNING: ${warning}` : '');
-    return { key: entry.key, url, ok, warning, detail };
+    return { key: entry.key, url, tier, ok, warning, detail };
   } catch (err) {
     const reason = err && err.name === 'AbortError' ? `timeout ${TIMEOUT_MS}ms` : String(err && err.cause ? err.cause : err);
-    return { key: entry.key, url, ok: false, detail: reason };
+    return { key: entry.key, url, tier, ok: false, warning: null, detail: reason };
   } finally {
     clearTimeout(timer);
   }
@@ -392,6 +435,22 @@ async function check(entry) {
 
 function checkSoilDrift() {
   const root = join(__dirname, '..');
+  const soilInputState = soilDriftInputState(root);
+  if (soilInputState === 'missing') {
+    return {
+      key: 'landscapeSoilVintage',
+      url: 'Soil Data Access drift_check',
+      tier: DRIFT_TIERS.BUILD,
+      ok: true,
+      skipped: true,
+      warning:
+        'soil vintage drift check not run: the lean checkout omits the ' +
+        'digest-bound soil intermediate data',
+      detail:
+        'SKIPPED: the committed manifest is present, but neither the three ' +
+        'committed soil data files nor their bound guard-overflow copy is available'
+    };
+  }
   const windowsPython = join(root, '.venv', 'Scripts', 'python.exe');
   const posixPython = join(root, '.venv', 'bin', 'python');
   const pythonCandidates = process.platform === 'win32'
@@ -402,6 +461,7 @@ function checkSoilDrift() {
     return {
       key: 'landscapeSoilVintage',
       url: 'Soil Data Access drift_check',
+      tier: DRIFT_TIERS.BUILD,
       ok: false,
       warning: null,
       detail:
@@ -427,6 +487,7 @@ function checkSoilDrift() {
     return {
       key: 'landscapeSoilVintage',
       url: 'Soil Data Access drift_check',
+      tier: DRIFT_TIERS.BUILD,
       ok: false,
       warning: null,
       detail: reason
@@ -456,6 +517,7 @@ function checkSoilDrift() {
     return {
       key: 'landscapeSoilVintage',
       url: 'Soil Data Access drift_check',
+      tier: DRIFT_TIERS.BUILD,
       ok: true,
       warning,
       detail:
@@ -468,6 +530,7 @@ function checkSoilDrift() {
     return {
       key: 'landscapeSoilVintage',
       url: 'Soil Data Access drift_check',
+      tier: DRIFT_TIERS.BUILD,
       ok: false,
       warning: null,
       detail: `invalid bounded drift receipt: ${err.message}`
@@ -486,6 +549,87 @@ async function run(entries) {
   }
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
   return results;
+}
+
+const SOIL_INTERMEDIATE_DATA_NAMES = [
+  'histogram-l3.json',
+  'histogram-l4.json',
+  'sda-rows.json'
+];
+
+/**
+ * Report whether the bounded soil drift command can validate its recorded
+ * vintage identity. Public checkouts intentionally retain only MANIFEST.json;
+ * the large digest-bound inputs live either beside it in a stewardship
+ * workspace or in the guard-overflow cache.
+ */
+export function soilDriftInputState(root, isFile = existsSync) {
+  const fy = 'FY2025';
+  const committed = join(
+    root,
+    'scripts',
+    'landscape',
+    'intermediates',
+    'soil',
+    fy
+  );
+  if (
+    SOIL_INTERMEDIATE_DATA_NAMES.every((name) => isFile(join(committed, name)))
+  ) {
+    return 'committed';
+  }
+
+  const overflow = join(
+    root,
+    'scripts',
+    '.cache',
+    'soil',
+    'intermediates-overflow',
+    fy
+  );
+  if (
+    SOIL_INTERMEDIATE_DATA_NAMES.every((name) => isFile(join(overflow, name))) &&
+    isFile(join(overflow, 'INPUT-BINDING.json'))
+  ) {
+    return 'overflow';
+  }
+  return 'missing';
+}
+
+export function classifyDriftResults(results) {
+  const runtimeFailures = [];
+  const buildFailures = [];
+  const candidateFailures = [];
+  const warnings = [];
+  const skipped = [];
+
+  for (const result of results) {
+    const tier = result.tier ?? sourceTierForKey(result.key);
+    if (result.skipped) {
+      skipped.push({ ...result, tier });
+      continue;
+    }
+    if (result.ok) {
+      if (result.warning) warnings.push({ ...result, tier });
+      continue;
+    }
+    if (tier === DRIFT_TIERS.CANDIDATE) {
+      candidateFailures.push({ ...result, tier });
+    } else if (tier === DRIFT_TIERS.BUILD) {
+      buildFailures.push({ ...result, tier });
+    } else {
+      runtimeFailures.push({ ...result, tier });
+    }
+  }
+
+  return {
+    runtimeFailures,
+    buildFailures,
+    candidateFailures,
+    warnings,
+    skipped,
+    blockingFailures: [...runtimeFailures, ...buildFailures]
+  };
 }
 
 async function main() {
@@ -569,26 +713,68 @@ async function main() {
   const results = await run(entries);
   results.push(checkSoilDrift());
 
-  const failures = results.filter((r) => !r.ok);
-  const warnings = results.filter((r) => r.ok && r.warning);
+  const classification = classifyDriftResults(results);
+  const allFailures = [
+    ...classification.runtimeFailures,
+    ...classification.buildFailures,
+    ...classification.candidateFailures
+  ];
   const width = Math.max(...results.map((r) => r.key.length));
   for (const r of results) {
-    const state = !r.ok ? 'FAIL' : r.warning ? 'WARN' : 'ok  ';
-    console.log(`${state}  ${r.key.padEnd(width)}  ${r.detail}`);
+    const tier = r.tier ?? sourceTierForKey(r.key);
+    const state = r.skipped
+      ? 'SKIP'
+      : !r.ok
+      ? tier === DRIFT_TIERS.CANDIDATE ? 'WARN' : 'FAIL'
+      : r.warning ? 'WARN' : 'ok  ';
+    console.log(
+      `${state}  [${tier.padEnd(9)}]  ${r.key.padEnd(width)}  ${r.detail}`
+    );
   }
 
+  const attemptedCount = results.length - classification.skipped.length;
   console.log(
-    `\n${results.length - failures.length}/${results.length} endpoints answered; ` +
-      (failures.length
-        ? `${failures.length} FAILED: ${failures.map((f) => f.key).join(', ')}`
-        : warnings.length
-          ? `${warnings.length} vintage WARNING: ${warnings.map((w) => w.key).join(', ')}`
-          : 'no drift detected.')
+    `\n${attemptedCount - allFailures.length}/${attemptedCount} probed endpoints answered.`
   );
-  if (failures.length > 0) process.exit(1);
+  if (classification.runtimeFailures.length > 0) {
+    console.log(
+      `Runtime failures (possible deployed impact): ${classification.runtimeFailures.map((f) => f.key).join(', ')}`
+    );
+  }
+  if (classification.buildFailures.length > 0) {
+    console.log(
+      `Build-source failures (future artifact risk, not proof of deployed impact): ${classification.buildFailures.map((f) => f.key).join(', ')}`
+    );
+  }
+  if (classification.candidateFailures.length > 0) {
+    console.log(
+      `Candidate warnings (nonblocking, not wired): ${classification.candidateFailures.map((f) => f.key).join(', ')}`
+    );
+  }
+  if (classification.warnings.length > 0) {
+    console.log(
+      `Source warnings: ${classification.warnings.map((w) => w.key).join(', ')}`
+    );
+  }
+  if (classification.skipped.length > 0) {
+    console.log(
+      `Skipped bounded checks: ${classification.skipped.map((r) => r.key).join(', ')}`
+    );
+  }
+  if (
+    allFailures.length === 0 &&
+    classification.warnings.length === 0 &&
+    classification.skipped.length === 0
+  ) {
+    console.log('No drift detected.');
+  }
+  if (classification.blockingFailures.length > 0) process.exit(1);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const invokedPath = process.argv[1] ? resolve(process.argv[1]) : '';
+if (invokedPath === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

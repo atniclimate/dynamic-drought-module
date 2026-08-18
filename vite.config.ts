@@ -7,15 +7,21 @@ import { execSync } from 'node:child_process';
  * 2026-07-28: verification suites have twice tested the wrong server;
  * an exit code is not attributable to a build without this). Resolution
  * order: an explicit DDM_BUILD_SHA (CI/publish can inject), else the
- * local git HEAD, else 'unknown' (never fail the build over it).
+ * local git HEAD plus a dirty marker when the working tree differs, else
+ * 'unknown' (never fail the build over it).
  */
 function buildSha(): string {
   if (process.env.DDM_BUILD_SHA) return process.env.DDM_BUILD_SHA;
   try {
-    return execSync('git rev-parse HEAD', {
+    const head = execSync('git rev-parse HEAD', {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
+    const status = execSync('git status --porcelain --untracked-files=normal', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return status.length > 0 ? `${head}-dirty` : head;
   } catch {
     return 'unknown';
   }
