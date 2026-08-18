@@ -60,7 +60,7 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
         type: 'raster',
         source: 'basemap',
         paint: {
-          // Dark fallback in the same visual family as the historical ground.
+          // Dark fallback in the same visual family as the satellite basemap.
           'raster-saturation': -1,
           'raster-brightness-min': 0.04,
           'raster-brightness-max': 0.42,

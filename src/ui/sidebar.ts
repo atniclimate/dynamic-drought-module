@@ -1121,9 +1121,9 @@ export function buildSidebar(
   };
   controllerRef = createLayerController(map, view);
   // Arm the shared toggle command (ADR 0002 condition 2): the DOM-free
-  // door for the time bar's instrument switches, the ENSO driver, the
-  // telemetry list, and the conditions tiles. Bound before any DOM
-  // builder or boot path can invoke it.
+  // door for the time bar's instrument switches, the telemetry list, and
+  // the conditions tiles. Bound before any DOM builder or boot path can
+  // invoke it.
   bindLayerToggleController(controllerRef);
 
   const handleRegion = (key: RegionKey): void => {

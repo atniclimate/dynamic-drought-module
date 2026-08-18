@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
-import { stubHistoricalGround, urlLayers } from './helpers';
+import { urlLayers } from './helpers';
+import { stubRecentSatellite } from './satellite-fixture';
 
 /**
  * Pre-mount door regression (ADR 0002 condition 6).
@@ -125,7 +126,7 @@ async function stubSst(page: Page): Promise<void> {
  * checkbox assertion proves the window actually holds.
  */
 async function gotoWithoutIsland(page: Page, query: string): Promise<void> {
-  await stubHistoricalGround(page);
+  await stubRecentSatellite(page);
   await page.route(/island-[^/]*\.js$/, (route) => route.abort());
   await page.goto(query, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#region-select option')).not.toHaveCount(0);

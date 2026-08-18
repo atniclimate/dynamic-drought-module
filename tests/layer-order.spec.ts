@@ -55,15 +55,14 @@ test.describe('layer-order: bottom-stack insertion', () => {
     const map = fakeMap([
       'background',
       'basemap',
-      'basemap-ground',
       'hillshade',
       'usdm-fill'
     ]);
-    // Recent satellite skips the persistent ground stack, so its anchor is hillshade:
-    // it inserts below hillshade, inside the stack.
+    // Recent satellite skips the persistent basemap pair, so its anchor is
+    // hillshade: it inserts below hillshade, inside the stack.
     const beforeId = firstLayerIdAbove(
       map as never,
-      ['background', 'basemap', 'basemap-ground']
+      ['background', 'basemap']
     );
     expect(beforeId).toBe('hillshade');
   });
