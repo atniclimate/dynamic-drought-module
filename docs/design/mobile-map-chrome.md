@@ -39,6 +39,15 @@ vertically. A disclosure is rendered only when the measured key content
 actually exceeds its collapsed capacity, and expansion is bounded above the
 sheet and footer.
 
+The phone Fire quick view deliberately composes the SPC Day 1 fire-weather
+outlook alongside the current NIFC perimeters and HMS smoke plumes. The
+desktop Wildfire cluster separates those products by temporal horizon
+(perimeters plus smoke at Current; the outlook joins at Next seven days),
+but the phone shell has no horizon control, so its one Fire read carries
+the outlook as well. This is a governed, intended divergence from the
+desktop current-horizon recipe, not drift; both compositions are recorded
+in `src/config/clusters.ts` and `src/config/presets.ts`.
+
 The circular information control opens a non-modal glass region across the map
 stage. It blocks pointer interaction with the map canvas, while the persistent
 right controls and the information toggle stay above it. Its content is
