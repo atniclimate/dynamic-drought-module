@@ -111,12 +111,86 @@ export type NifcIncidentClass = 'wildfire' | 'prescribed' | 'other';
 
 export const NIFC_INCIDENT_TYPE_PROPERTY = 'attr_IncidentTypeCategory';
 
+/**
+ * Restrained presentation-only pulse for current mapped Wildfire / Wildfire
+ * Complex perimeters. The midpoint is also the static and reduced-motion
+ * color so the legend never depends on animation to communicate the class.
+ */
+export const WILDFIRE_PULSE_COLORS = [
+  '#ff3300',
+  '#ff4c00',
+  '#ff6600'
+] as const;
+
+export const WILDFIRE_STATIC_COLOR = WILDFIRE_PULSE_COLORS[1];
+
+/** One complete low-to-high-to-low pulse. */
+export const WILDFIRE_PULSE_DURATION_MS = 1_800;
+
+const WILDFIRE_PULSE_KEYFRAMES = [
+  WILDFIRE_PULSE_COLORS[0],
+  WILDFIRE_PULSE_COLORS[1],
+  WILDFIRE_PULSE_COLORS[2],
+  WILDFIRE_PULSE_COLORS[1],
+  WILDFIRE_PULSE_COLORS[0]
+] as const;
+
+type RgbColor = readonly [red: number, green: number, blue: number];
+
+function parseHexColor(color: string): RgbColor {
+  return [
+    Number.parseInt(color.slice(1, 3), 16),
+    Number.parseInt(color.slice(3, 5), 16),
+    Number.parseInt(color.slice(5, 7), 16)
+  ];
+}
+
+function interpolateHexColor(
+  from: string,
+  to: string,
+  progress: number
+): string {
+  const start = parseHexColor(from);
+  const end = parseHexColor(to);
+  const channel = (index: number): string =>
+    Math.round(start[index]! + (end[index]! - start[index]!) * progress)
+      .toString(16)
+      .padStart(2, '0');
+  return `#${channel(0)}${channel(1)}${channel(2)}`;
+}
+
+/**
+ * Pure pulse interpolation seam. Exact quarter-cycle keyframes are the three
+ * canonical colors; sine easing keeps the reversal at each extreme gentle.
+ */
+export function interpolateWildfirePulseColor(elapsedMs: number): string {
+  if (!Number.isFinite(elapsedMs)) return WILDFIRE_STATIC_COLOR;
+  const wrapped =
+    ((elapsedMs % WILDFIRE_PULSE_DURATION_MS) +
+      WILDFIRE_PULSE_DURATION_MS) %
+    WILDFIRE_PULSE_DURATION_MS;
+  const position =
+    (wrapped / WILDFIRE_PULSE_DURATION_MS) *
+    (WILDFIRE_PULSE_KEYFRAMES.length - 1);
+  const segment = Math.min(
+    Math.floor(position),
+    WILDFIRE_PULSE_KEYFRAMES.length - 2
+  );
+  const segmentProgress = position - segment;
+  const easedProgress = (1 - Math.cos(Math.PI * segmentProgress)) / 2;
+  return interpolateHexColor(
+    WILDFIRE_PULSE_KEYFRAMES[segment]!,
+    WILDFIRE_PULSE_KEYFRAMES[segment + 1]!,
+    easedProgress
+  );
+}
+
 export const NIFC_INCIDENT_PRESENTATION = {
   wildfire: {
     codes: ['WF', 'CX'] as const,
-    fillColor: '#7f1d1d',
+    fillColor: WILDFIRE_STATIC_COLOR,
     fillOpacity: 0.16,
-    lineColor: '#c2410c',
+    lineColor: WILDFIRE_STATIC_COLOR,
     lineOpacity: 0.82,
     lineWidth: 1.5,
     legendLabel: 'Mapped wildfire perimeter'
@@ -246,7 +320,10 @@ export function buildNifcFillPaint(
   const presentation = NIFC_INCIDENT_PRESENTATION[incidentClass];
   return {
     'fill-color': presentation.fillColor,
-    'fill-opacity': presentation.fillOpacity
+    'fill-opacity': presentation.fillOpacity,
+    ...(incidentClass === 'wildfire'
+      ? { 'fill-color-transition': { duration: 0, delay: 0 } }
+      : {})
   };
 }
 
@@ -258,6 +335,9 @@ export function buildNifcLinePaint(
     'line-color': presentation.lineColor,
     'line-opacity': presentation.lineOpacity,
     'line-width': presentation.lineWidth,
+    ...(incidentClass === 'wildfire'
+      ? { 'line-color-transition': { duration: 0, delay: 0 } }
+      : {}),
     ...(incidentClass === 'other'
       ? { 'line-dasharray': [...NIFC_INCIDENT_PRESENTATION.other.lineDasharray] }
       : {})

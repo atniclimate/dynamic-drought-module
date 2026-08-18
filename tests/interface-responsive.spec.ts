@@ -98,12 +98,12 @@ async function expectMobileKeyClearance(
   await expect(key.locator(contentSelector)).toBeVisible();
   await expect(controls).toBeVisible();
 
-  // The observer publishes the live key height. The controls and loading
-  // seat consume that same value, so content growth cannot make them cross.
+  // Utilities now own an independent right column at the same safe-area top.
+  // The key reserves that column horizontally instead of pushing it down.
   await expect
     .poll(async () => {
       const [keyBox, controlsBox] = await Promise.all([rect(key), rect(controls)]);
-      return controlsBox.top - keyBox.bottom;
+      return controlsBox.left - keyBox.right;
     })
     .toBeGreaterThanOrEqual(7);
 
@@ -125,9 +125,10 @@ async function expectMobileKeyClearance(
     Number.parseFloat(getComputedStyle(element).top)
   );
   const controlsBox = await rect(controls);
-  expect(Math.abs(loadingTop - controlsBox.top)).toBeLessThanOrEqual(1);
-
   const keyBox = await rect(key);
+  expect(Math.abs(controlsBox.top - keyBox.top)).toBeLessThanOrEqual(1);
+  expect(loadingTop - keyBox.bottom).toBeGreaterThanOrEqual(7);
+  expect(intersects(keyBox, controlsBox)).toBe(false);
   expect(keyBox.left).toBeGreaterThanOrEqual(0);
   expect(keyBox.right).toBeLessThanOrEqual(390);
   expect(controlsBox.left).toBeGreaterThanOrEqual(0);
@@ -229,14 +230,147 @@ test.describe('mobile key growth at 390x844', () => {
     await expect(page.locator('#app')).not.toHaveAttribute('style', /mobile-map-key-height/);
   });
 
-  test('the denser Wildfire weeks-ahead key stays above the same chrome', async ({
+  test('the Fire card reserves the utility spine and stacks both key sections', async ({
     page
   }) => {
     await stubWildfireMapProducts(page);
     await gotoApp(page, '?cluster=wildfire&horizon=weeks-ahead');
-    await expect(page.locator('#map-key [data-spc-fire-weather-key]')).toBeVisible();
-    await expect(page.locator('#map-key [data-nifc-perimeter-key]')).toBeVisible();
+    const key = page.locator('#map-key');
+    await expect(key.locator('[data-spc-fire-weather-key]')).toBeVisible();
+    await expect(key.locator('[data-nifc-perimeter-key]')).toBeVisible();
+    await expect(key).toHaveAttribute('data-key-family', 'fire');
     await expectMobileKeyClearance(page, '[data-nifc-perimeter-key]');
+
+    const keyBox = await rect(key);
+    expect(keyBox.width).toBeGreaterThanOrEqual(300);
+    expect(keyBox.height).toBeGreaterThanOrEqual(180);
+    const chrome = await key.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        backdrop:
+          style.backdropFilter ||
+          style.getPropertyValue('-webkit-backdrop-filter'),
+        background: style.backgroundColor,
+        radius: style.borderRadius
+      };
+    });
+    expect(chrome.radius).toBe('4px');
+    expect(chrome.background).toBe('rgba(0, 64, 64, 0.3)');
+    expect(chrome.backdrop).toContain('blur(15px)');
+
+    for (const section of [
+      '[data-spc-fire-weather-key]',
+      '[data-nifc-perimeter-key]'
+    ]) {
+      const itemBoxes = await key.locator(`${section} .map-key-item`).evaluateAll(
+        (items) =>
+          items.map((item) => {
+            const box = item.getBoundingClientRect();
+            return { top: box.top, bottom: box.bottom };
+          })
+      );
+      expect(itemBoxes).toHaveLength(3);
+      for (let index = 1; index < itemBoxes.length; index += 1) {
+        expect(itemBoxes[index]!.top).toBeGreaterThanOrEqual(
+          itemBoxes[index - 1]!.bottom
+        );
+      }
+    }
+    await expect(page.locator('#map-key-expand')).toBeHidden();
+  });
+
+  test('both source-calculated scale controls render as transparent dynamic rulers', async ({
+    page
+  }) => {
+    await gotoApp(page);
+    const scales = page.locator('.maplibregl-ctrl-scale');
+    await expect(scales).toHaveCount(2);
+
+    const before = await scales.evaluateAll((elements) =>
+      elements.map((element) => ({
+        text: element.textContent?.trim() ?? '',
+        width: element.getBoundingClientRect().width
+      }))
+    );
+    const rulerStyles = await scales.evaluateAll((elements) =>
+      elements.map((element) => {
+        const style = getComputedStyle(element);
+        const startTick = getComputedStyle(element, '::before');
+        const endTick = getComputedStyle(element, '::after');
+        return {
+          background: style.backgroundColor,
+          bottomRule: style.borderBottomStyle,
+          startTick: startTick.content,
+          endTick: endTick.content
+        };
+      })
+    );
+    for (const style of rulerStyles) {
+      expect(style.background).toBe('rgba(0, 0, 0, 0)');
+      expect(style.bottomRule).not.toBe('none');
+      expect(style.startTick).not.toBe('none');
+      expect(style.endTick).not.toBe('none');
+    }
+
+    const canvas = page.locator('.maplibregl-canvas');
+    await canvas.focus();
+    await page.keyboard.press('+');
+    await page.keyboard.press('+');
+    await page.keyboard.press('+');
+
+    await expect
+      .poll(() =>
+        scales.evaluateAll((elements) =>
+          elements.map((element) => ({
+            text: element.textContent?.trim() ?? '',
+            width: element.getBoundingClientRect().width
+          }))
+        )
+      )
+      .not.toEqual(before);
+  });
+
+  test('the Fire disclosure appears only for real overflow and expands within the map stage', async ({
+    page
+  }) => {
+    await stubWildfireMapProducts(page);
+    await gotoApp(page, '?cluster=wildfire&horizon=weeks-ahead');
+    const key = page.locator('#map-key');
+    const expander = page.locator('#map-key-expand');
+    await expect(key.locator('[data-nifc-perimeter-key]')).toBeVisible();
+    await expect(expander).toBeHidden();
+
+    await key.locator('[data-nifc-perimeter-key]').evaluate((section) => {
+      for (let index = 0; index < 12; index += 1) {
+        const item = document.createElement('span');
+        item.className = 'map-key-item';
+        item.textContent = `Additional governed key item ${index + 1}`;
+        section.append(item);
+      }
+    });
+
+    await expect(expander).toBeVisible();
+    await expect(expander).toHaveAttribute('aria-expanded', 'false');
+    await expect(key).toHaveAttribute('role', 'group');
+    await expander.focus();
+    await expander.press('Enter');
+    await expect(expander).toHaveAttribute('aria-expanded', 'true');
+    await expect(key).toHaveAttribute('data-key-expanded', 'true');
+
+    const [keyBox, footerBox] = await Promise.all([
+      rect(key),
+      rect(page.locator('#mobile-footer-nav'))
+    ]);
+    expect(keyBox.bottom).toBeLessThanOrEqual(footerBox.top);
+
+    await page.locator('#hazard-rail button[data-preset="hazard-drought"]').click();
+    await expect(key).toBeVisible();
+    await expect(key.locator('.map-key-label')).toHaveText(
+      'North America drought'
+    );
+    await expect(key).toHaveAttribute('data-key-family', 'drought');
+    await expect(expander).toHaveAttribute('aria-expanded', 'false');
+    await expect(expander).toBeHidden();
   });
 });
 

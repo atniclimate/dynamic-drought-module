@@ -47,6 +47,8 @@ export interface KeySpec {
   readonly itemsHtml: string;
 }
 
+export type MapKeyFamily = 'drought' | 'heat' | 'fire' | 'other';
+
 interface HeatRiskFrame {
   readonly day: number;
   readonly validTime: number;
@@ -103,6 +105,7 @@ let nwsSnapshotStatus: NwsSnapshotEventDetail['status'] = 'inactive';
 let nwsSnapshotAsOf: number | null = null;
 let nwsSnapshotTruncated = false;
 let disposeMapKeyLayout: (() => void) | null = null;
+let disposeMapKeyOverflow: (() => void) | null = null;
 
 interface MapKeyLayoutWatch {
   readonly schedule: () => void;
@@ -110,7 +113,7 @@ interface MapKeyLayoutWatch {
 }
 
 /**
- * Keep the mobile Share, Reset, and loading chrome below the one live key.
+ * Keep the mobile loading chrome below the one live key.
  * Key content is status-derived and can wrap after a registry update, a font
  * swap, text scaling, or a viewport change, so a fixed pixel offset cannot be
  * honest. The measured height is presentation state only and never enters the
@@ -167,6 +170,25 @@ function watchMapKeyLayout(host: HTMLElement): MapKeyLayoutWatch {
       app.style.removeProperty(MOBILE_MAP_KEY_HEIGHT_PROPERTY);
     }
   };
+}
+
+/** Presentation-only family for semantic CSS hooks and disclosure behavior. */
+export function resolveMapKeyFamily(
+  active: ReadonlySet<string>
+): MapKeyFamily {
+  // Keep this precedence identical to activeKey(): the family describes the
+  // key that is actually rendered when a custom URL activates mixed layers.
+  if (active.has('heatrisk')) return 'heat';
+  if (active.has('spc-fire-weather') || active.has('usfs-whp')) return 'fire';
+  if (
+    active.has('usdm') ||
+    active.has('nadm-drought') ||
+    active.has('cdm-drought')
+  ) {
+    return 'drought';
+  }
+  if (active.has('nifc-fires')) return 'fire';
+  return 'other';
 }
 
 function swatchItem(color: string, code: string): string {
@@ -503,6 +525,7 @@ export function initMapKey(): void {
   const host = document.getElementById('map-key');
   if (!host) return;
   disposeMapKeyLayout?.();
+  disposeMapKeyOverflow?.();
   const layout = watchMapKeyLayout(host);
   disposeMapKeyLayout = layout.dispose;
   const heatRiskSequenceLoader = createHeatRiskSequenceLoader(
@@ -512,12 +535,111 @@ export function initMapKey(): void {
     }
   );
 
+  const content = document.createElement('div');
+  content.id = 'map-key-content';
+  content.className = 'map-key-content';
+
+  const expandButton = document.createElement('button');
+  expandButton.id = 'map-key-expand';
+  expandButton.className = 'map-key-expand';
+  expandButton.type = 'button';
+  expandButton.hidden = true;
+  expandButton.setAttribute('aria-label', 'Expand Fire map key');
+  expandButton.setAttribute('aria-controls', content.id);
+  expandButton.setAttribute('aria-expanded', 'false');
+  expandButton.innerHTML =
+    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"/></svg>';
+
+  host.replaceChildren(content, expandButton);
+
+  const widthQuery = window.matchMedia(MOBILE_MAP_KEY_QUERY);
   let rendered = '';
+  let family: MapKeyFamily = 'other';
+  let baseInteractive = false;
+  let canExpand = false;
+  let expanded = false;
+  let overflowFrame: number | null = null;
+
+  const reflectInteraction = (): void => {
+    const interactive = baseInteractive || canExpand;
+    host.setAttribute('role', interactive ? 'group' : 'img');
+    host.style.pointerEvents = interactive ? 'auto' : '';
+  };
+
+  const setExpanded = (next: boolean): void => {
+    expanded = canExpand && next;
+    host.dataset.keyExpanded = String(expanded);
+    expandButton.setAttribute('aria-expanded', String(expanded));
+    expandButton.setAttribute(
+      'aria-label',
+      expanded ? 'Collapse Fire map key' : 'Expand Fire map key'
+    );
+    layout.schedule();
+  };
+
+  const checkOverflow = (): void => {
+    overflowFrame = null;
+    const eligible =
+      widthQuery.matches && family === 'fire' && !host.hidden && host.isConnected;
+    let nextCanExpand = false;
+    if (eligible) {
+      const collapsedHeight = Number.parseFloat(
+        getComputedStyle(content).getPropertyValue(
+          '--mobile-map-key-collapsed-height'
+        )
+      );
+      const limit = Number.isFinite(collapsedHeight)
+        ? collapsedHeight
+        : content.clientHeight;
+      nextCanExpand = content.scrollHeight > limit + 1;
+    }
+
+    canExpand = nextCanExpand;
+    expandButton.hidden = !canExpand;
+    if (canExpand) host.dataset.keyOverflow = 'true';
+    else delete host.dataset.keyOverflow;
+    if (!canExpand) setExpanded(false);
+    reflectInteraction();
+    layout.schedule();
+  };
+
+  const scheduleOverflow = (): void => {
+    if (overflowFrame !== null) return;
+    overflowFrame = window.requestAnimationFrame(checkOverflow);
+  };
+
+  const overflowObserver =
+    typeof ResizeObserver === 'function'
+      ? new ResizeObserver(scheduleOverflow)
+      : null;
+  overflowObserver?.observe(content);
+  const mutationObserver = new MutationObserver(scheduleOverflow);
+  mutationObserver.observe(content, { childList: true, subtree: true });
+  widthQuery.addEventListener('change', scheduleOverflow);
+  window.addEventListener('resize', scheduleOverflow);
+  void document.fonts?.ready.then(scheduleOverflow);
+  expandButton.addEventListener('click', () => setExpanded(!expanded));
+
+  disposeMapKeyOverflow = () => {
+    overflowObserver?.disconnect();
+    mutationObserver.disconnect();
+    widthQuery.removeEventListener('change', scheduleOverflow);
+    window.removeEventListener('resize', scheduleOverflow);
+    if (overflowFrame !== null) window.cancelAnimationFrame(overflowFrame);
+    overflowFrame = null;
+  };
+
   const update = (): void => {
     const spec = activeKey();
     if (!spec) {
       host.hidden = true;
       delete host.dataset.keyFamily;
+      delete host.dataset.keyOverflow;
+      canExpand = false;
+      baseInteractive = false;
+      expandButton.hidden = true;
+      setExpanded(false);
+      reflectInteraction();
       layout.schedule();
       return;
     }
@@ -525,19 +647,18 @@ export function initMapKey(): void {
       `<span class="map-key-label">${escapeHtml(spec.label)}</span>` + spec.itemsHtml;
     if (html !== rendered) {
       rendered = html;
-      host.innerHTML = html;
+      content.innerHTML = html;
       host.setAttribute('aria-label', spec.ariaLabel);
+      setExpanded(false);
     }
     const active = registry.getActiveKeys();
-    host.dataset.keyFamily =
-      active.has('usdm') || active.has('nadm-drought') || active.has('cdm-drought')
-        ? 'drought'
-        : 'other';
-    const isInteractive =
+    family = resolveMapKeyFamily(active);
+    host.dataset.keyFamily = family;
+    baseInteractive =
       active.has('heatrisk') || (active.has('cdm-drought') && cdmLicense !== null);
-    host.setAttribute('role', isInteractive ? 'group' : 'img');
-    host.style.pointerEvents = isInteractive ? 'auto' : '';
+    reflectInteraction();
     host.hidden = false;
+    scheduleOverflow();
     layout.schedule();
   };
 

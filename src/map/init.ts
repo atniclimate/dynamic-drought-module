@@ -111,10 +111,9 @@ export function createMap(containerId: string): maplibregl.Map {
   // The basemap switcher (U4d): recent NOAA context is one tap away from the
   // standard base. Present in embeds too; `basemap=` is durable
   // URL state and an embedding site may pin it in its iframe src.
-  // BOTTOM-right: the app's own overlay stack (Share view, About) owns the
-  // map's top-right and intercepts pointer events there (caught by the U4d
-  // switcher spec), so the switcher stacks in the corner MapLibre already
-  // owns, directly above the attribution control.
+  // BOTTOM-right keeps MapLibre ownership and embed/desktop placement. Mobile
+  // CSS seats this same control below the quick-view rail without duplicating
+  // its store, URL, or lazy Satellite behavior.
   map.addControl(new BasemapSwitcherControl(), 'bottom-right');
 
   return map;

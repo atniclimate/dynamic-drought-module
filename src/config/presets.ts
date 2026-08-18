@@ -1,3 +1,5 @@
+import { HAZARD_CLUSTERS } from './clusters';
+
 /**
  * Question-first view presets (UX-2; ROADMAP "The UX track").
  *
@@ -39,8 +41,8 @@ export interface ViewPreset {
  * The mobile hazard rail's quick selections (0.7.0 mobile shell; from the
  * 2026-07-11 ideation's hazard rail, built per the maintainer's 2026-07-14
  * direction with Codex-sol design input). Hazard-named rather than
- * question-named: on a phone the visitor reaches for "drought", "heat",
- * "fire", not a temporal frame. Same ViewPreset semantics as the chip row
+ * question-named: on a phone the visitor reaches for ENSO, fire, drought, or
+ * heat, not a temporal frame. Same ViewPreset semantics as the chip row
  * (REPLACE the active set through the controller; at most one surface;
  * never locked), and deliberately slim layer sets: the rail's job is the
  * fastest honest read of one hazard, not a composed view. NOT exclusive
@@ -48,6 +50,12 @@ export interface ViewPreset {
  * (the drought to heat to fire combined read stays reachable).
  */
 export const MOBILE_HAZARD_PRESETS: readonly ViewPreset[] = [
+  {
+    key: 'hazard-enso',
+    label: 'ENSO',
+    description: HAZARD_CLUSTERS.enso.description,
+    layers: ['sst-anomaly', 'aiannh']
+  },
   {
     key: 'hazard-drought',
     label: 'Drought',
