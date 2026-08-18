@@ -576,6 +576,24 @@ export const URLS = Object.freeze({
   nifcFires:
     'https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0',
 
+  // ---------- WFIGS current incident locations (documented, NOT wired) --
+  // Wildland Fire Interagency Geospatial Services (WFIGS) Current Incident
+  // Locations, the point-feature sibling of nifcFires on the same NIFC Open
+  // Data Hub org: every reported incident as a point, including incidents
+  // that have no mapped perimeter yet. Documented so the selected-place
+  // perimeter-evidence section's perimeters-vs-incidents qualification cites
+  // a verified endpoint, and so a Phase 2 live incident cross-reference has
+  // a ready contract; NO runtime fetch consumes it yet (listed in
+  // CANDIDATE_SOURCE_KEYS in scripts/check-upstream-drift.mjs, so the drift
+  // monitor treats it as a nonblocking candidate).
+  // Fields verified on the live layer: IncidentName, IncidentSize,
+  // PercentContained, IncidentTypeCategory, FireDiscoveryDateTime, POOState,
+  // GACC.
+  // Verified 2026-08-18: HTTP 200, Access-Control-Allow-Origin: *
+  // (wildcard); `/query` with `f=geojson` returns a point FeatureCollection.
+  nifcIncidentLocations:
+    'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations_Current/FeatureServer/0',
+
   // ---------- USDA Forest Service (USFS) Wildfire Hazard Potential ------
   // Wildfire Hazard Potential (WHP), classified five-class raster
   // (1=Very Low through 5=Very High; values 6-7 cover non-burnable

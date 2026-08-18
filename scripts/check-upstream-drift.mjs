@@ -62,6 +62,10 @@ export const CANDIDATE_SOURCE_KEYS = new Set([
   'cpcWeeklySstAnomalyMapServer',
   'epaAirNowCurrentFeatureServer',
   'nifcHistoricPerimetersFeatureServer',
+  // Documented-but-unwired WFIGS incident-locations endpoint (see the
+  // nifcIncidentLocations entry in src/config/urls.ts): a research/Phase 2
+  // candidate, not a shipped runtime dependency.
+  'nifcIncidentLocations',
   'usgsVegdriWeeklyWms',
   'usgsQuickdriWeeklyWms'
 ]);

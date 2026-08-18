@@ -126,6 +126,12 @@ test('the current URL registry keeps representative lifecycle tiers distinct', a
 
   assert.equal(byKey.get('workerProxy')?.tier, DRIFT_TIERS.RUNTIME);
   assert.equal(byKey.get('nifcFires')?.tier, DRIFT_TIERS.RUNTIME);
+  // Documented-but-unwired WFIGS incident locations stays a nonblocking
+  // candidate until a runtime consumer ships.
+  assert.equal(
+    byKey.get('nifcIncidentLocations')?.tier,
+    DRIFT_TIERS.CANDIDATE,
+  );
   assert.equal(
     byKey.get('cdmDroughtAreasZipRoot')?.tier,
     DRIFT_TIERS.BUILD,
