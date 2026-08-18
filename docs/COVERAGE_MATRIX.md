@@ -144,11 +144,61 @@ water sources.
 - **Active alerts** (unavailable): The selected point has no recognized source geography.
 - **HeatRisk** (unavailable): The selected point has no recognized source geography.
 
-## Fire follow-on
+## Independent fire-evidence capability
 
-The current Wildfire display and regional minimap are shipped separately from
-this selected-place matrix. The planned selected-place fire expansion needs
-canonical geography, independent per-source capability, time-aware source
-contracts, issuer-preserving synthesis, and bounded cancellable caching.
-This matrix does not claim that selected-place milestone is implemented or
-authorize a broader fire source.
+The selected-place NIFC mapped-perimeter evidence queries the current
+WFIGS perimeters service with the selection's own boundary geometry. It
+uses canonical selected-place geography and independent source policy,
+independent of the impactSynthesis axis above; never blended with the
+regional minimap wildfire count or with the Current-horizon envelope-based
+fire-perimeter claim.
+
+| Canonical geography | Mapped-perimeter intersection |
+| --- | --- |
+| Contiguous United States and District of Columbia | available |
+| Alaska | available |
+| Hawaii | available |
+| Puerto Rico | available |
+| Guam, Northern Mariana Islands, and U.S. Virgin Islands | available |
+| American Samoa | available |
+| Canada | unavailable |
+| Transboundary selection without country identity | unavailable |
+| Unknown geography | unavailable |
+
+### Fire-evidence qualifications
+
+#### Contiguous United States and District of Columbia
+
+- **Mapped-perimeter intersection** (available): WFIGS current mapped perimeters cover CONUS.
+
+#### Alaska
+
+- **Mapped-perimeter intersection** (available): WFIGS current mapped perimeters cover Alaska.
+
+#### Hawaii
+
+- **Mapped-perimeter intersection** (available): WFIGS current mapped perimeters cover Hawaii.
+
+#### Puerto Rico
+
+- **Mapped-perimeter intersection** (available): WFIGS current mapped perimeters cover Puerto Rico.
+
+#### Guam, Northern Mariana Islands, and U.S. Virgin Islands
+
+- **Mapped-perimeter intersection** (available): WFIGS current mapped perimeters cover this United States territory.
+
+#### American Samoa
+
+- **Mapped-perimeter intersection** (available): WFIGS current mapped perimeters cover American Samoa.
+
+#### Canada
+
+- **Mapped-perimeter intersection** (unavailable): WFIGS is a United States interagency service and is not used for Canada.
+
+#### Transboundary selection without country identity
+
+- **Mapped-perimeter intersection** (unavailable): No point source runs until the selected point has a country-specific identity.
+
+#### Unknown geography
+
+- **Mapped-perimeter intersection** (unavailable): The selected point has no recognized source geography.

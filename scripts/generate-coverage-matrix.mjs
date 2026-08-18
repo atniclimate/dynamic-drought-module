@@ -58,6 +58,7 @@ const {
   CANONICAL_GEOGRAPHY_LABELS
 } = await import('../src/config/geography.ts');
 const {
+  NATIONAL_FIRE_SOURCE_CAPABILITY,
   NATIONAL_HEAT_SOURCE_CAPABILITY
 } = await import('../src/config/source-capability.ts');
 
@@ -190,24 +191,46 @@ function renderDoc() {
     }
   }
   lines.push('');
-  lines.push('## Fire follow-on');
+  lines.push('## Independent fire-evidence capability');
   lines.push('');
   lines.push(
-    'The current Wildfire display and regional minimap are shipped separately from'
+    'The selected-place NIFC mapped-perimeter evidence queries the current'
   );
   lines.push(
-    'this selected-place matrix. The planned selected-place fire expansion needs'
+    "WFIGS perimeters service with the selection's own boundary geometry. It"
   );
   lines.push(
-    'canonical geography, independent per-source capability, time-aware source'
+    'uses canonical selected-place geography and independent source policy,'
   );
   lines.push(
-    'contracts, issuer-preserving synthesis, and bounded cancellable caching.'
+    'independent of the impactSynthesis axis above; never blended with the'
   );
   lines.push(
-    'This matrix does not claim that selected-place milestone is implemented or'
+    'regional minimap wildfire count or with the Current-horizon envelope-based'
   );
-  lines.push('authorize a broader fire source.');
+  lines.push('fire-perimeter claim.');
+  lines.push('');
+  const fireHeader = ['Canonical geography', 'Mapped-perimeter intersection'];
+  lines.push(`| ${fireHeader.join(' | ')} |`);
+  lines.push(`|${fireHeader.map(() => ' --- ').join('|')}|`);
+  for (const geography of CANONICAL_GEOGRAPHY_KEYS) {
+    const row = NATIONAL_FIRE_SOURCE_CAPABILITY[geography];
+    lines.push(
+      `| ${CANONICAL_GEOGRAPHY_LABELS[geography]} | ` +
+        `${row.nifcPerimeterEvidence.state} |`
+    );
+  }
+  lines.push('');
+  lines.push('### Fire-evidence qualifications');
+  for (const geography of CANONICAL_GEOGRAPHY_KEYS) {
+    const row = NATIONAL_FIRE_SOURCE_CAPABILITY[geography];
+    lines.push('');
+    lines.push(`#### ${CANONICAL_GEOGRAPHY_LABELS[geography]}`);
+    lines.push('');
+    lines.push(
+      `- **Mapped-perimeter intersection** (${row.nifcPerimeterEvidence.state}): ${row.nifcPerimeterEvidence.note}`
+    );
+  }
   lines.push('');
   return lines.join('\n');
 }
