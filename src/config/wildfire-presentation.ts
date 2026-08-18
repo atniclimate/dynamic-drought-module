@@ -432,6 +432,66 @@ export function buildHmsSmokeFillPaint(): NonNullable<
   };
 }
 
+/**
+ * Vertical scale for the 3D smoke volume (W4): each density class's stylized
+ * extrusion height is its 2D veil opacity times this many meters, so the
+ * vertical ranking can never disagree with the ruled opacity ranking.
+ */
+export const HMS_VOLUME_HEIGHT_SCALE_METERS = 4000;
+
+/** Honest legend line for the 3D smoke volume. */
+export const HMS_VOLUME_QUALIFICATION =
+  'Vertical extent is a stylized encoding of the issuer\'s density class (Light, Medium, Heavy), not measured plume height, concentration, or transport.';
+
+/**
+ * Exact paint installed by the 3D smoke volume layer (hms-smoke-volume).
+ *
+ * Heights are the 2D veil opacities times HMS_VOLUME_HEIGHT_SCALE_METERS,
+ * baked as literals so the paint is auditable at a glance: Light 0.08 to
+ * 320 m, Medium 0.17 to 680 m, Heavy 0.33 to 1320 m, Unknown 0.12 to 480 m.
+ * The match mirrors buildHmsSmokeFillPaint, including the guard that an
+ * Unknown density NEVER falls through to the Light class. Colors match the
+ * 2D veil exactly.
+ *
+ * fill-extrusion-opacity is not data-driven in the MapLibre style
+ * specification, so the per-class opacity ramp of the flat veil cannot be
+ * reproduced per feature here; the volume carries density in its height and
+ * keeps one mid-ramp translucency (the 2D Medium veil) so overlapping
+ * plumes still read through each other.
+ */
+export const HMS_VOLUME_OPACITY = HMS_DENSITY_PRESENTATION.Medium.opacity;
+
+export function buildHmsSmokeVolumePaint(): NonNullable<
+  maplibregl.FillExtrusionLayerSpecification['paint']
+> {
+  return {
+    'fill-extrusion-color': [
+      'match',
+      NORMALIZED_HMS_DENSITY,
+      'LIGHT',
+      HMS_DENSITY_PRESENTATION.Light.color,
+      'MEDIUM',
+      HMS_DENSITY_PRESENTATION.Medium.color,
+      'HEAVY',
+      HMS_DENSITY_PRESENTATION.Heavy.color,
+      HMS_DENSITY_PRESENTATION.Unknown.color
+    ],
+    'fill-extrusion-height': [
+      'match',
+      NORMALIZED_HMS_DENSITY,
+      'LIGHT',
+      320,
+      'MEDIUM',
+      680,
+      'HEAVY',
+      1320,
+      480
+    ],
+    'fill-extrusion-base': 0,
+    'fill-extrusion-opacity': HMS_VOLUME_OPACITY
+  };
+}
+
 /** Static United States Forest Service Wildfire Hazard Potential key. */
 export const USFS_WHP_PRESENTATION = {
   categories: [
