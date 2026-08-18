@@ -18,6 +18,8 @@
  * supplies the long-range modifier.
  */
 
+import type { Geometry } from 'geojson';
+
 import type { RegionKey } from '../config/regions';
 import type { BriefingSourcePolicy } from './source-policy';
 import type { LayerStatus } from '../types/layer';
@@ -285,6 +287,41 @@ export interface PointHeatBriefing {
   grid: PointHeatGridGuidance;
 }
 
+/**
+ * The selected-place NIFC mapped-perimeter evidence section: current mapped
+ * WFIGS fire perimeters intersecting the selection's own boundary geometry
+ * (a polygon-exact server-side intersection, not the bounding-rectangle
+ * Current-horizon claim and not the regional minimap count). Its own lane
+ * beside `pointHeat` and `landscape`, never blended into a horizon.
+ *
+ *   ready      the query completed; `count` is exact (including a verified 0)
+ *   degraded   the query hit the service's record limit; `count` is a
+ *              verified lower bound (`truncated` is true)
+ *   error      the query failed or could not run; `count` is null (unknown,
+ *              never presented as zero)
+ */
+export interface PerimeterEvidenceSection {
+  readonly status: LayerStatus;
+  /** Honest note carried on 'error' (and optionally on 'degraded'). */
+  readonly note?: string;
+  /** Exact on 'ready' (including 0); a lower bound on 'degraded'; null when unknown. */
+  readonly count: number | null;
+  /** True when the service reported `exceededTransferLimit`. */
+  readonly truncated: boolean;
+  /** Per-category counts over the received records, or null when unknown. */
+  readonly breakdown: {
+    readonly wildfire: number;
+    readonly prescribed: number;
+    readonly other: number;
+  } | null;
+  /**
+   * The full ISO 8601 instant the query completed, distinct from the claim's
+   * day-granularity `dates` (the claim contract is day-only by design).
+   */
+  readonly queriedAtUtc: string | null;
+  readonly claim: SourcedClaim | null;
+}
+
 export type HeatSourceReadKey =
   | 'pointHeat'
   | 'heatRisk'
@@ -361,6 +398,16 @@ export interface BoundarySelectionContext {
    * exists.
    */
   readonly bboxCrossesAntimeridian?: boolean;
+  /**
+   * The selection's live boundary geometry, exactly as the boundary source
+   * already delivered it (a layer click feature, a Place studio resolution,
+   * or a deep-link boundary fetch). Session memory only: it exists for the
+   * life of this in-memory selection so geometry-exact services can query
+   * the actual shape, and it is never serialized, persisted, or written to
+   * any storage layer (the sovereignty rule; deep links re-fetch geometry
+   * live). Absent when the selection carried no geometry.
+   */
+  readonly geometry?: Geometry;
   /** Active region key, or null if no region is selected yet. */
   readonly regionKey: RegionKey | null;
 }
@@ -382,6 +429,8 @@ export interface ImpactBriefing {
   /** Lazy, static ecoregion context. Replaced when its artifact read settles. */
   landscape: LandscapeContext;
   pointHeat: PointHeatBriefing;
+  /** Geometry-exact NIFC mapped-perimeter evidence for the selection. */
+  perimeterEvidence: PerimeterEvidenceSection;
   heatSynthesis: HeatSynthesis;
   readonly horizons: {
     current: Horizon;

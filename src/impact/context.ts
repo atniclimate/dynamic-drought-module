@@ -172,6 +172,9 @@ export function buildBoundaryContext(
     ...(bbox ? { bbox } : {}),
     ...(serviceBbox ? { serviceBbox } : {}),
     ...(crossesAntimeridian ? { bboxCrossesAntimeridian: true } : {}),
+    // Retain the selection's live geometry for geometry-exact services
+    // (session memory only; never persisted; see the field's doc comment).
+    ...(geometry ? { geometry } : {}),
     regionKey: getCurrentRegion()
   };
 }
