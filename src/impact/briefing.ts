@@ -97,6 +97,19 @@ export function createBriefingSkeleton(
         metrics: []
       }
     },
+    perimeterEvidence: {
+      status: sourceMayRun(sourcePolicy, 'nifcPerimeterEvidence')
+        ? 'loading'
+        : 'error',
+      ...(sourceMayRun(sourcePolicy, 'nifcPerimeterEvidence')
+        ? {}
+        : { note: sourcePolicy.sources.nifcPerimeterEvidence.note }),
+      count: null,
+      truncated: false,
+      breakdown: null,
+      queriedAtUtc: null,
+      claim: null
+    },
     heatSynthesis: {
       status:
         sourceMayRun(sourcePolicy, 'pointHeat') ||

@@ -4,6 +4,7 @@ import {
 } from '../config/geography';
 import {
   BRIEFING_SOURCE_KEYS,
+  NATIONAL_FIRE_SOURCE_CAPABILITY,
   NATIONAL_HEAT_SOURCE_CAPABILITY,
   type BriefingSourceKey,
   type SourceCapabilityCell
@@ -47,6 +48,7 @@ export function briefingSourcePolicy(
 ): BriefingSourcePolicy {
   const geography = resolveCanonicalGeography(context);
   const heat = NATIONAL_HEAT_SOURCE_CAPABILITY[geography.key];
+  const fire = NATIONAL_FIRE_SOURCE_CAPABILITY[geography.key];
   const impactLevel = regionCapabilityLevel(
     context.regionKey,
     'impactSynthesis'
@@ -65,6 +67,10 @@ export function briefingSourcePolicy(
       key === 'heatRisk'
     ) {
       sources[key] = heat[key];
+    } else if (key === 'nifcPerimeterEvidence') {
+      // Geometry-exact fire evidence rides canonical geography, independent
+      // of the regional droughtEnabled axis (exactly like the heat keys).
+      sources[key] = fire.nifcPerimeterEvidence;
     } else {
       sources[key] = regionalCell(
         droughtEnabled,

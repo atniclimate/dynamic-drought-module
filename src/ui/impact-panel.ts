@@ -367,6 +367,7 @@ function unavailableBriefing(
         usdm: { state: 'unavailable', note: UNAVAILABLE_NOTE },
         dsci: { state: 'unavailable', note: UNAVAILABLE_NOTE },
         nifc: { state: 'unavailable', note: UNAVAILABLE_NOTE },
+        nifcPerimeterEvidence: { state: 'unavailable', note: UNAVAILABLE_NOTE },
         cpcExtended: { state: 'unavailable', note: UNAVAILABLE_NOTE },
         enso: { state: 'unavailable', note: UNAVAILABLE_NOTE },
         waterSupply: { state: 'unavailable', note: UNAVAILABLE_NOTE },
@@ -396,6 +397,15 @@ function unavailableBriefing(
         note: UNAVAILABLE_NOTE,
         metrics: []
       }
+    },
+    perimeterEvidence: {
+      status: 'error',
+      note: UNAVAILABLE_NOTE,
+      count: null,
+      truncated: false,
+      breakdown: null,
+      queriedAtUtc: null,
+      claim: null
     },
     heatSynthesis: {
       status: 'error',

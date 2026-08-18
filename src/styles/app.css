@@ -4132,6 +4132,60 @@ button.telemetry-item {
   color: var(--fg-2);
 }
 
+.perimeter-evidence {
+  margin-bottom: 22px;
+  padding: 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+.perimeter-evidence .impact-section-title {
+  margin-bottom: 2px;
+  color: var(--fg-0);
+}
+.perimeter-evidence-scope,
+.perimeter-evidence-state,
+.perimeter-evidence-meta {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+.perimeter-evidence-scope {
+  margin-bottom: 10px;
+}
+.perimeter-evidence-meta {
+  margin-top: 8px;
+}
+.perimeter-evidence-pill {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-feature-settings: 'tnum' 1;
+  color: var(--fg-3);
+  white-space: nowrap;
+}
+.perimeter-evidence-pill-loading {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.perimeter-evidence-pill-ready {
+  color: var(--good);
+  border-color: var(--good);
+}
+.perimeter-evidence-pill-degraded {
+  color: var(--accent);
+  border-color: var(--accent-strong);
+}
+.perimeter-evidence-pill-error,
+.perimeter-evidence-pill-no-data,
+.perimeter-evidence-pill-zoom-in {
+  color: var(--fg-3);
+  font-style: italic;
+}
+
 .impact-horizons { margin-bottom: 22px; }
 
 .impact-horizon {

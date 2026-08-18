@@ -13,6 +13,7 @@ export type BriefingSourceKey =
   | 'usdm'
   | 'dsci'
   | 'nifc'
+  | 'nifcPerimeterEvidence'
   | 'cpcExtended'
   | 'enso'
   | 'waterSupply'
@@ -36,6 +37,7 @@ export const BRIEFING_SOURCE_KEYS: readonly BriefingSourceKey[] = [
   'usdm',
   'dsci',
   'nifc',
+  'nifcPerimeterEvidence',
   'cpcExtended',
   'enso',
   'waterSupply',
@@ -54,6 +56,8 @@ export const BRIEFING_SOURCE_LABELS: Readonly<
   usdm: 'U.S. Drought Monitor point category',
   dsci: 'U.S. Drought Monitor statewide DSCI',
   nifc: 'NIFC current mapped fire perimeters',
+  nifcPerimeterEvidence:
+    'NIFC current mapped fire perimeters intersecting this place',
   cpcExtended: 'NOAA CPC extended-range outlooks',
   enso: 'ENSO phase context',
   waterSupply: 'NWRFC water-supply outlook',
@@ -176,5 +180,67 @@ export const NATIONAL_HEAT_SOURCE_CAPABILITY: Readonly<
     nwsForecast: unavailable('The selected point has no recognized source geography.'),
     nwsAlerts: unavailable('The selected point has no recognized source geography.'),
     heatRisk: unavailable('The selected point has no recognized source geography.')
+  }
+};
+
+type NationalFireSourceKey = 'nifcPerimeterEvidence';
+
+/**
+ * Canonical geography policy for the geometry-exact NIFC mapped-perimeter
+ * evidence. Independent of the regional impactSynthesis axis, exactly like
+ * the heat table above: WFIGS is a United States interagency service, so
+ * availability rides the selection's canonical geography, never the PNW
+ * coverage-family matrix.
+ */
+export const NATIONAL_FIRE_SOURCE_CAPABILITY: Readonly<
+  Record<
+    CanonicalGeographyKey,
+    Readonly<Record<NationalFireSourceKey, SourceCapabilityCell>>
+  >
+> = {
+  conus: {
+    nifcPerimeterEvidence: available(
+      'WFIGS current mapped perimeters cover CONUS.'
+    )
+  },
+  alaska: {
+    nifcPerimeterEvidence: available(
+      'WFIGS current mapped perimeters cover Alaska.'
+    )
+  },
+  hawaii: {
+    nifcPerimeterEvidence: available(
+      'WFIGS current mapped perimeters cover Hawaii.'
+    )
+  },
+  'puerto-rico': {
+    nifcPerimeterEvidence: available(
+      'WFIGS current mapped perimeters cover Puerto Rico.'
+    )
+  },
+  'served-territory': {
+    nifcPerimeterEvidence: available(
+      'WFIGS current mapped perimeters cover this United States territory.'
+    )
+  },
+  'american-samoa': {
+    nifcPerimeterEvidence: available(
+      'WFIGS current mapped perimeters cover American Samoa.'
+    )
+  },
+  canada: {
+    nifcPerimeterEvidence: unavailable(
+      'WFIGS is a United States interagency service and is not used for Canada.'
+    )
+  },
+  transboundary: {
+    nifcPerimeterEvidence: unavailable(
+      'No point source runs until the selected point has a country-specific identity.'
+    )
+  },
+  unknown: {
+    nifcPerimeterEvidence: unavailable(
+      'The selected point has no recognized source geography.'
+    )
   }
 };

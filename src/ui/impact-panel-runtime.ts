@@ -44,6 +44,7 @@ import type {
   Horizon,
   HorizonStatus,
   ImpactBriefing,
+  PerimeterEvidenceSection,
   PointHeatBriefing,
   PointHeatMetricSeries,
   ResourceLink,
@@ -356,6 +357,51 @@ function renderPointHeat(
   `;
 }
 
+/**
+ * Render the geometry-exact NIFC mapped-perimeter evidence section. The
+ * standing scope paragraph is shown regardless of status: it is what keeps
+ * this section legible beside the bounding-rectangle Current-horizon claim
+ * and honest about what "mapped perimeters" does and does not cover.
+ */
+function renderPerimeterEvidence(
+  section: PerimeterEvidenceSection,
+  landTitle: string
+): string {
+  const scope = `This reads current mapped NIFC fire perimeters intersecting ${landTitle}'s own boundary shape, queried directly, not a bounding rectangle around it and not the regional minimap count. It counts mapped fire perimeters only, not all active incidents: a newly detected or small fire may have no mapped perimeter yet. Perimeters also age out of this service, smaller fires after about 3 days without an update and larger fires after 8 to 14 days, so a contained or older fire may no longer appear here.`;
+  let body: string;
+  if (section.status === 'loading') {
+    body =
+      '<p class="perimeter-evidence-state">Querying current mapped NIFC fire perimeters...</p>';
+  } else if (section.claim) {
+    body = renderClaim(section.claim);
+    if (section.note) {
+      body += `<p class="impact-horizon-note">${escapeHtml(section.note)}</p>`;
+    }
+  } else {
+    body = `<p class="impact-horizon-note">${escapeHtml(
+      section.note ?? SOURCE_PILL_TEXT[section.status]
+    )}</p>`;
+  }
+  const meta = section.queriedAtUtc
+    ? `<p class="perimeter-evidence-meta">Queried <time datetime="${escapeHtml(
+        section.queriedAtUtc
+      )}">${escapeHtml(
+        section.queriedAtUtc
+      )}</time>. NIFC WFIGS mapped perimeters refresh approximately every 5 minutes; the underlying perimeter source can lag up to 15 minutes behind real conditions.</p>`
+    : '';
+  return `
+    <section class="perimeter-evidence" aria-label="Current mapped fire perimeters">
+      <div class="impact-horizon-head">
+        <h3 class="impact-section-title">Current mapped fire perimeters</h3>
+        <span class="perimeter-evidence-pill perimeter-evidence-pill-${section.status}">${escapeHtml(SOURCE_PILL_TEXT[section.status])}</span>
+      </div>
+      <p class="perimeter-evidence-scope">${escapeHtml(scope)}</p>
+      ${body}
+      ${meta}
+    </section>
+  `;
+}
+
 /** Render one resource link, or the empty-by-default Tribe's-own affordance. */
 function renderResource(resource: ResourceLink): string {
   const hasLink = typeof resource.url === 'string' && resource.url.startsWith('https://');
@@ -432,6 +478,7 @@ function renderBody(
   return `
     ${caveat}
     ${renderPointHeat(briefing.pointHeat, briefing.heatSynthesis)}
+    ${renderPerimeterEvidence(briefing.perimeterEvidence, briefing.landTitle)}
     ${renderLandscapeContext(briefing.landscape)}
     ${impact}
     ${renderResources(briefing.resources)}

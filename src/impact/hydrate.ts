@@ -162,6 +162,35 @@ export async function hydrateBriefing(
         })
     : Promise.resolve();
 
+  // The geometry-exact NIFC perimeter-evidence lane: dynamically imported
+  // (its own lazy chunk, like point heat), gated only by its own canonical-
+  // geography policy, never by droughtEnabled, and never blocking a horizon.
+  const perimeterEvidence = sourceMayRun(sourcePolicy, 'nifcPerimeterEvidence')
+    ? import('./nifc-perimeter-evidence')
+        .then(({ fetchPerimeterEvidence }) =>
+          fetchPerimeterEvidence(context, signal)
+        )
+        .then((section) => {
+          if (signal.aborted) return;
+          briefing.perimeterEvidence = section;
+          onUpdate();
+        })
+        .catch((err: unknown) => {
+          if (signal.aborted) return;
+          console.warn('[impact] perimeter evidence hydration failed.', err);
+          briefing.perimeterEvidence = {
+            status: 'error',
+            note: 'The NIFC current-perimeters source did not respond. Whether a mapped perimeter intersects this place is unknown right now.',
+            count: null,
+            truncated: false,
+            breakdown: null,
+            queriedAtUtc: null,
+            claim: null
+          };
+          onUpdate();
+        })
+    : Promise.resolve();
+
   let nearTermBase: readonly [SourceResult, SourceResult] | null = null;
   let latestHeatRisk: SourceResult | null = null;
 
@@ -289,5 +318,11 @@ export async function hydrateBriefing(
   })();
 
   if (heatPending === 0) publishHeatSynthesis();
-  await Promise.all([longRange, current, nearTerm, pointHeat]);
+  await Promise.all([
+    longRange,
+    current,
+    nearTerm,
+    pointHeat,
+    perimeterEvidence
+  ]);
 }
