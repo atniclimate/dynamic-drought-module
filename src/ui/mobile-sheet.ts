@@ -320,7 +320,12 @@ function stepDetent(direction: 1 | -1): void {
   const order: SheetDetent[] = ['closed', 'peek', 'half', 'full'];
   const idx = order.indexOf(detent);
   const next = order[Math.min(order.length - 1, Math.max(0, idx + direction))];
-  if (next && next !== detent) setSheetDetent(next);
+  if (next && next !== detent) {
+    setSheetDetent(next);
+    // First-use hint (W2-D11): a MANUAL arrival at peek is the moment the
+    // grabber affordance is in hand; the once-ever guard still applies.
+    if (next === 'peek') showHintOnce();
+  }
 }
 
 function cycleDetent(): void {
@@ -332,6 +337,8 @@ function cycleDetent(): void {
   const idx = order.indexOf(detent);
   const next = order[(idx + 1) % order.length]!;
   setSheetDetent(next);
+  // First-use hint on a manual arrival at peek (W2-D11); once-ever.
+  if (next === 'peek') showHintOnce();
 }
 
 // ---------------------------------------------------------------------------
@@ -382,6 +389,8 @@ function wireGrabber(): void {
         scheduleSettle();
       } else {
         setSheetDetent(target);
+        // First-use hint on a manual drag to peek (W2-D11); once-ever.
+        if (target === 'peek') showHintOnce();
       }
     }
   };
