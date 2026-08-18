@@ -272,6 +272,89 @@ test.describe('UX-3 conditions strip', () => {
     await expect(tile).toHaveAttribute('aria-pressed', 'true');
   });
 
+  test('a non-drought view leads with its own tiles; the off drought anchor renders last (W2-D10)', async ({
+    page
+  }) => {
+    // A heat-style view: alerts on, no drought surface. The strip keeps
+    // the drought anchor tile (the one road back to the drought surface)
+    // but demotes its off state behind the active hazard's own read.
+    const alertFixture = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {
+            prod_type: 'Heat Advisory',
+            onset: '2026-08-18T08:00:00-07:00',
+            ends: '2026-08-19T20:00:00-07:00',
+            expiration: Date.now() + 86_400_000,
+            wfo: 'KPDT'
+          },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-125, 42],
+                [-116, 42],
+                [-116, 49],
+                [-125, 49],
+                [-125, 42]
+              ]
+            ]
+          }
+        }
+      ]
+    };
+    await page.route('**/WWA/watch_warn_adv/MapServer/1/query**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify(alertFixture)
+      })
+    );
+    // Deterministic NADM for the show-again leg (gotoApp skips its default
+    // stub when the query names layers).
+    await page.route('**/NADM-current.geojson', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify({
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              properties: { DROUGHTCAT: 'd2', YEAR_MONTH: '202606' },
+              geometry: {
+                type: 'Polygon',
+                coordinates: [
+                  [[-140, 20], [-50, 20], [-50, 75], [-140, 75], [-140, 20]]
+                ]
+              }
+            }
+          ]
+        })
+      })
+    );
+
+    await gotoApp(page, '?view=console&layers=nws-alerts');
+    await waitForLayerSettled(page, 'nws-alerts');
+
+    const tiles = page.locator('#conditions-metrics .conditions-metric');
+    await expect(tiles).toHaveCount(2);
+    await expect(tiles.nth(0)).toHaveAttribute('data-metric', 'alerts');
+    await expect(tiles.nth(1)).toHaveAttribute('data-metric', 'drought');
+    const droughtTile = tiles.nth(1);
+    await expect(droughtTile.locator('.conditions-value')).toHaveText('Layer off');
+    await expect(droughtTile.locator('.conditions-action')).toHaveText('Show');
+
+    // The drought view itself is unchanged: turning the surface on returns
+    // its tile to the front.
+    await droughtTile.click();
+    await waitForLayerSettled(page, 'nadm-drought');
+    await expect(tiles.nth(0)).toHaveAttribute('data-metric', 'drought');
+    await expect(tiles.nth(0)).toHaveAttribute('aria-pressed', 'true');
+  });
+
   test('the full app relies on the sidebar drought key', async ({ page }) => {
     // Console boot: the uncheck below drives the catalog checkbox, and E1
     // deliverable 1 hides the Brief-mode catalog behind the console door.

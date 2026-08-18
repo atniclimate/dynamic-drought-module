@@ -220,11 +220,21 @@ export function ConditionsStrip({ map, tick, checked }: StripProps) {
   // live reading plus the hide action.
   const alertsOn = isOn('alerts');
   const firesOn = isOn('fires');
+  // W2-D10: in a non-drought view the strip leads with the ACTIVE hazard's
+  // own tiles; the drought tile stays (the strip's identity and the one
+  // road back to the drought surface) but its off-state anchor renders
+  // LAST rather than fronting another hazard's read. The drought view
+  // itself is unchanged: with its layer on, the drought tile still leads.
+  const droughtOn = isOn('drought');
+  const droughtTileNode = (
+    <MetricTile id="drought" m={droughtTile} isOn={droughtOn} tile={droughtLayer} />
+  );
   return (
     <>
-      <MetricTile id="drought" m={droughtTile} isOn={isOn('drought')} tile={droughtLayer} />
+      {droughtOn ? droughtTileNode : null}
       {alertsOn ? <MetricTile id="alerts" m={alerts} isOn={alertsOn} tile={TILE_LAYER.alerts!} /> : null}
       {firesOn ? <MetricTile id="fires" m={fires} isOn={firesOn} tile={TILE_LAYER.fires!} /> : null}
+      {!droughtOn ? droughtTileNode : null}
     </>
   );
 }
