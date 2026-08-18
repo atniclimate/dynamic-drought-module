@@ -12,7 +12,7 @@ import { gotoApp, layerCheckbox, urlLayers, search } from './helpers';
  *   - Crossing observed -> outlook is a real surface switch that visibly
  *     changes instrument (register attribute, Issued stamp).
  *   - Temporal state round-trips through the URL and preserves embed=true
- *     (CLAUDE.md section 6 invariant 2).
+ *     (the URL-as-state invariant).
  */
 
 // Two consecutive stub weeks: the "current" release and the prior Tuesday.

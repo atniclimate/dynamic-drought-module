@@ -34,7 +34,6 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
       // and is enabled at the map-init seam in src/map/init.ts via
       // `map.setTerrain({ source: 'terrain' })`. Nothing else in the DDM
       // needs to change; the layer modules and UI are terrain-agnostic.
-      // Contract details: docs/interop/GEOBASE-BRIDGE.md.
       basemap: {
         type: 'raster',
         tiles: [URLS.basemapOSM],
@@ -60,7 +59,7 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
         type: 'raster',
         source: 'basemap',
         paint: {
-          // Dark fallback in the same visual family as the historical ground.
+          // Dark fallback in the same visual family as the satellite basemap.
           'raster-saturation': -1,
           'raster-brightness-min': 0.04,
           'raster-brightness-max': 0.42,

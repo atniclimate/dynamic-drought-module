@@ -11,7 +11,7 @@ import {
 } from './helpers';
 
 /**
- * The URL-schema stability policy (docs/URL_SCHEMA_POLICY.md, unit A1):
+ * The URL-schema stability policy (unit A1):
  * a link ever shared must keep working as the parameter schema grows.
  * This spec asserts the tolerant-reading half of that contract, which
  * url-state.spec.ts does not cover (that spec covers the happy-path

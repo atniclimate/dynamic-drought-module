@@ -11,7 +11,7 @@ import {
 } from './helpers';
 
 /**
- * UX-1 (CHANGES.md 2026-07-01): the map distinguishes place from state
+ * UX-1 (2026-07-01): the map distinguishes place from state
  * structurally. Layers are grouped by role, and condition surfaces are
  * mutually exclusive.
  *

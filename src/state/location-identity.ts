@@ -20,8 +20,8 @@
  *     Tribal / reservation land the point falls WITHIN, from active Tribal
  *     boundary layers through the subtype-aware D-0.8.0-052 matrix. Honest
  *     null otherwise. NEVER auto-fetch a national boundary layer per click
- *     (a bandwidth and stewardship cost; CLAUDE.md section 2, the
- *     empty-placeholder rule).
+ *     (a bandwidth and stewardship cost; the empty-placeholder
+ *     stewardship rule).
  *   - COUNTY: null this phase (D-0.6.0-007). A bundled/offline county source is
  *     a fast-follow, never a per-click service; `county` already allows null.
  *

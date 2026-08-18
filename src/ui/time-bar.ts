@@ -12,7 +12,7 @@
  *     register shows a hard VALID date in the accent cyan and display
  *     face; the outlook register swaps instrument to an ISSUED date plus
  *     valid-through range in the warn amber and body face. The change is
- *     deliberate and unmistakable (CLAUDE.md section 6 invariant 6).
+ *     deliberate and unmistakable (the temporal-honesty invariant).
  *
  * The bar lives in the SIDEBAR after place and before the display description
  * (Option 1, D-0.7.0-067; the floating map-bottom bar remains retired). On the

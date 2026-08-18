@@ -16,7 +16,7 @@
  *      (AIAN-LAR) FeatureServer's distinct LARNAME values: the land areas the
  *      live map layer can locate. Names only (returnDistinctValues, no geometry).
  *
- * STEWARDSHIP (CLAUDE.md hard rules 1, 5, 6):
+ * STEWARDSHIP (project hard rules):
  *   - NO polygons, coordinates, or geometry are ever fetched or written. The
  *     search jumps to a land area by querying the LIVE AIAN-LAR service for its
  *     extent at selection time (U3d); this build produces only NAMES.
@@ -128,13 +128,13 @@ function decodeEntities(s) {
     .replace(/&quot;/g, '"');
 }
 
-// Hard rule 4 (no U+2014) targets authored prose; verbatim federal and BIA
-// source names are otherwise exempt (maintainer, 2026-07-11, to be
-// acknowledged in CLAUDE.md at the sprint trueup). The maintainer did rule
+// The no-em-dash rule (no U+2014) targets authored prose; verbatim federal and
+// BIA source names are otherwise exempt (maintainer ruling,
+// 2026-07-11). The maintainer did rule
 // that the two compound names the Federal Register renders with em dashes
 // (the Fort Sill and Chickahominy names) ship with hyphens; normalize em
 // dashes to hyphens here so a regeneration preserves that rendering. Names
-// are otherwise carried verbatim and never abbreviated (hard rule 6). The
+// are otherwise carried verbatim and never abbreviated (a hard rule). The
 // escape keeps this script free of the literal byte (scripts/ is scanned).
 function noEmDash(s) {
   // String.fromCharCode keeps the literal U+2014 byte out of this scanned
@@ -456,11 +456,11 @@ async function main() {
   // The crosswalk audit ships alongside the roster in public/data. It is a
   // transparency artifact (how each land area maps to a federally recognized
   // Tribe). Names are carried from the Federal Register and BIA verbatim and
-  // never abbreviated (hard rule 6); the only normalization is noEmDash
+  // never abbreviated (a hard rule); the only normalization is noEmDash
   // (above), which renders the em-dash compound names with hyphens per the
   // maintainer ruling (2026-07-11). public/ stays out of the em-dash scan
   // because that scan targets authored prose, not verbatim source data (a
-  // rule-4 refinement to be acknowledged in CLAUDE.md at the sprint trueup).
+  // ratified refinement of the no-em-dash rule).
   await writeFile(
     resolve(DATA_DIR, 'tribal-larname-crosswalk.json'),
     JSON.stringify(crosswalkOut, null, 2) + '\n',

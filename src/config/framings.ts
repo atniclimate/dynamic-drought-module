@@ -1,7 +1,7 @@
 /**
  * Editorial camera framings for the region shell (S1; D-0.7.0-039,
- * D-0.7.0-051; plan 9.11; the four-round region-selector spike,
- * docs/design/REGION_BASIN_DRILLDOWN_SPIKE_2026-07-15.md round 4).
+ * D-0.7.0-051; the four-round region-selector spike, round 4,
+ * 2026-07-15).
  *
  * The nine framings are the ONLY camera vocabulary the shell UI offers
  * (D-0.7.0-039). They are deliberately distinct from two other place

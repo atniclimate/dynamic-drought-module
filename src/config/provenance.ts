@@ -11,9 +11,9 @@
  * so it survives desktop, mobile, and the 400 pixel embed. The Tribal
  * Nations umbrella (Unit F) hosts the same note at the group container.
  *
- * Wording rules: CLAUDE.md section 2 (representations, never jurisdictional
- * truth), hard rule 4 (no em dash), hard rules 5 and 6 (capitalization; no
- * abbreviated Tribe names).
+ * Wording rules, all project hard rules: representations, never
+ * jurisdictional truth; no em dash; Tribal/Nation capitalization; no
+ * abbreviated Tribe names.
  */
 
 /**

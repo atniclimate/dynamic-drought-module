@@ -1,6 +1,6 @@
 /**
  * The six canonical layer load states surfaced through the sidebar status
- * pill (see CLAUDE.md §6 Architecture invariant 3). The internal value is
+ * pill (the canonical status vocabulary, a fixed contract). The internal value is
  * what code stores; the displayed pill text is the responsibility of the
  * UI layer (src/ui/sidebar.ts).
  *

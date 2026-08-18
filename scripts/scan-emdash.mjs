@@ -1,5 +1,5 @@
 /**
- * Em-dash scan (CLAUDE.md section 4, rule 4): no U+2014 anywhere in the
+ * Em-dash scan (a project hard rule): no U+2014 anywhere in the
  * covered paths. This is the local npm-script mirror of the byte-level
  * project quality gate; coverage includes src, index.html, tests, docs,
  * workers, scripts, and root *.md, with node_modules excluded

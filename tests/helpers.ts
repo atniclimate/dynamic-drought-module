@@ -11,11 +11,6 @@
 import { expect, type Page, type Locator } from '@playwright/test';
 import { stubRecentSatellite } from './satellite-fixture';
 
-const TEST_GROUND_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-  'base64'
-);
-const groundStubbedPages = new WeakSet<Page>();
 const nadmStubbedPages = new WeakSet<Page>();
 
 const TEST_NADM_SNAPSHOT = {
@@ -31,19 +26,6 @@ const TEST_NADM_SNAPSHOT = {
     }
   ]
 } as const;
-
-export async function stubHistoricalGround(page: Page): Promise<void> {
-  await stubRecentSatellite(page);
-  if (groundStubbedPages.has(page)) return;
-  groundStubbedPages.add(page);
-  await page.route('**/wmts/1.0.0/s2cloudless_3857/**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'image/png',
-      body: TEST_GROUND_PNG
-    })
-  );
-}
 
 async function stubDefaultNadm(page: Page): Promise<void> {
   if (nadmStubbedPages.has(page)) return;
@@ -105,8 +87,8 @@ export const PRESET_LABELS: readonly string[] = [
  * states joined 2026-07-12 (U4c, boundaries as chrome). The Tribal Nations
  * umbrella build (D-0.7.0-032/033, 2026-07-15) deliberately swapped the
  * bundled `tribal` placeholder for live Tribal-geography layers. The current
- * default carries the two present-day layers. The changes are recorded in
- * docs/URL_SCHEMA_POLICY.md. Hillshade joined 2026-07-16 (E1 deliverable 4,
+ * default carries the two present-day layers. Each change was a ratified,
+ * deliberate default change. Hillshade joined 2026-07-16 (E1 deliverable 4,
  * D-0.7.0-043 part 3: terrain shading is part of the calm default
  * composition). */
 export const DEFAULT_ON = ['nadm-drought', 'aiannh', 'bia-reservations', 'states', 'hillshade'] as const;
@@ -184,11 +166,9 @@ export function stationValues(page: Page, id: string): Locator {
  * view-mode.ts): embed plus nothing that routes to the console.
  */
 export async function gotoApp(page: Page, query = ''): Promise<void> {
-  // The historical EOX ground is production-vetted separately. Routine
-  // deterministic browser tests use one local image for both its probe and
-  // viewport tiles so the full suite neither depends on nor floods the public
-  // service. Ground-specific specs call page.goto directly and own their route.
-  await stubHistoricalGround(page);
+  // Routine deterministic browser tests stub the recent-satellite service so
+  // the full suite neither depends on nor floods the public endpoint.
+  await stubRecentSatellite(page);
   if (!/[?&](?:layers|cluster)=/.test(query)) {
     await stubDefaultNadm(page);
   }

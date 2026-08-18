@@ -78,7 +78,7 @@ export const CAPABILITY_LEVEL_RANK: Readonly<Record<CapabilityLevel, number>> =
   };
 
 /**
- * Initial values ratified in the 0.8.0 WORKPLAN (T-P0-3, "today's truth" as
+ * Initial values ratified for 0.8.0 (T-P0-3, "today's truth" as
  * of 2026-07-21). Every cell carries the limiting fact in its note.
  */
 export const CAPABILITY_MATRIX: CapabilityMatrix = {

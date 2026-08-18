@@ -50,23 +50,6 @@ export const URLS = Object.freeze({
   // tile requests (the policy's web-traffic attribution branch).
   basemapOSM: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
 
-  // EOxCloudless Sentinel-2 2016 mosaic, the historical shared ground.
-  // This is intentionally separate from `noaaMergedGeoColorImageServer`:
-  // EOX is a fixed 2016 visual context, while NOAA is a recent observed
-  // frame selected by `basemap=satellite`. The unversioned EOX layer id is
-  // explicitly identified as the 2016 mosaic by the live WMTS capabilities.
-  // License: Creative Commons Attribution 4.0. Required attribution and the
-  // historical-vintage warning render whenever the layer is visible.
-  // Verified 2026-08-09: the exact tile and capabilities endpoints returned
-  // HTTP 200, image/jpeg and application/xml respectively, with browser-safe
-  // origin-reflecting CORS. The tile advertised a seven-day cache. Runtime
-  // probes one known-data tile with a five-second budget before revealing the
-  // layer; subdued OpenStreetMap remains underneath as the automatic fallback.
-  eoxCloudless2016:
-    'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg',
-  eoxCloudless2016Probe:
-    'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/4/5/2.jpg',
-
   // NOAA NESDIS merged GOES East and West GeoColor, the opt-in recent
   // satellite basemap. This is the rolling, time-enabled 24-hour archive,
   // not the similarly named current-only service. Runtime queries a bounded
@@ -491,9 +474,12 @@ export const URLS = Object.freeze({
   // application/json, Access-Control-Allow-Origin: *, returns an array of
   // { name, mapDate, dsci } weekly records.
   //
-  // A second path on the same base drives the temporal-axis scrubber: the
-  // per-category area-percent series used to enumerate valid USDM weeks and
-  // populate the sidebar statistics for a scrubbed week.
+  // A second path on the same base is a DOCUMENTED CANDIDATE only: nothing in
+  // src/ consumes it today, and the path is absent from the Worker proxy
+  // allowlist (workers/proxy/src/index.ts pins GetDSCI alone), so wiring it
+  // up would require a Worker allowlist addition first. It is the
+  // per-category area-percent series that could enumerate valid USDM weeks
+  // and populate per-week sidebar statistics.
   //   `${usdmDataServices}/StateStatistics/GetDroughtSeverityStatisticsByAreaPercent
   //    ?aoi=<fips>&startdate=M/D/YYYY&enddate=M/D/YYYY&statisticsType=1`
   // Send `Accept: application/json` (defaults to CSV like GetDSCI; the
@@ -651,8 +637,8 @@ export const URLS = Object.freeze({
   // reservations, joint-use areas), so it closes the confirmed Oklahoma gap
   // (biaLarFeatureServer returns zero features for Oklahoma). Consumed LIVE,
   // not bundled: activation-time agency fetch commits no sovereign polygons to
-  // the repository and does not engage CLAUDE.md hard rule 1 (exactly like
-  // biaLarFeatureServer). Layer 47 is the comprehensive layer; per-type
+  // the repository and does not engage the no-redistribution hard rule (exactly
+  // like biaLarFeatureServer). Layer 47 is the comprehensive layer; per-type
   // siblings exist (2 Federal reservations, 3 off-reservation trust land, 7
   // OTSA, 10 joint-use, 4 state reservations, 5 Hawaiian Home Lands, 6 Alaska
   // Native Village Statistical Areas). Consumer appends
@@ -676,7 +662,7 @@ export const URLS = Object.freeze({
   // returned 25 OTSA. Vintage "January 1, 2025". maxRecordCount 100000 (no
   // truncation risk). Provenance chain for the D-0.7.0-032 T0 condition:
   // publisher US Census Bureau, a federal statistical product, activation-time
-  // fetch, full record in docs/ddm-tribal-geography-tier-assessment-2026-07-15.md.
+  // fetch (recorded in the 2026-07-15 tier assessment).
   // Anti-scrape note: the ArcGIS REST /query path, not the TIGERweb viewer.
   censusAiannhMapServer:
     'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/AIANNHA/MapServer',
@@ -832,9 +818,9 @@ export const URLS = Object.freeze({
   // boundary file (1:20,000,000 generalization, 2023 vintage, public domain)
   // by scripts/build-states.mjs (`npm run build:states`; source download
   // verified HTTP 200 on 2026-07-01). Public administrative reference data,
-  // not sovereign-jurisdiction polygons, so bundling is consistent with
-  // CLAUDE.md hard rule 1. Provenance is recorded in the file's `metadata`
-  // foreign member.
+  // not sovereign-jurisdiction polygons, so bundling is consistent with the
+  // no-redistribution hard rule. Provenance is recorded in the file's
+  // `metadata` foreign member.
   usStatesLocal: BASE_URL + 'data/us-states.geojson',
   // Municipal place labels (U4e; Natural Earth 1:10m populated places,
   // public domain, US subset; built by scripts/build-places.mjs with the
@@ -856,8 +842,8 @@ export const URLS = Object.freeze({
   // Per-state resource catalog base (0.6.0 R2). Public resource LINKS are not
   // sovereign data, so the catalog ships in-repo (D-0.6.0-004); each state's
   // rows live at `<base>data/resources/<lowercase-two-letter-code>.json` and are
-  // fetched only for the clicked state (lazy). Schema and doctrine:
-  // docs/resource-catalog-schema.md.
+  // fetched only for the clicked state (lazy). The schema is enforced by
+  // scripts/check-resource-catalog.mjs and src/impact/resource-catalog.ts.
   resourcesLocalBase: BASE_URL + 'data/resources/',
 
   // ---------- NASA GIBS sea surface temperature anomaly (B2, keyless WMTS) ----------

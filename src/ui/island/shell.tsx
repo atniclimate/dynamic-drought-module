@@ -348,8 +348,8 @@ function Shell({ map, snap, framing, specTick }: ShellProps) {
               aria-pressed={committed}
               data-pending={committed && pending ? 'true' : 'false'}
               title={def.description}
-              // First-use expansion for the one acronym title (CLAUDE.md
-              // section 5; DG-080 review finding 7): the ruled visual
+              // First-use acronym expansion (DG-080
+              // review finding 7): the ruled visual
               // label stays 'ENSO'; the accessible name spells it out
               // (and contains the visible label, per WCAG label-in-name).
               aria-label={

@@ -92,7 +92,7 @@ interface EnsoSnapshot {
   readonly probabilities?: EnsoProbabilities;
 }
 
-// Acronym convention (CLAUDE.md section 5): RONI is spelled out here because
+// Acronym convention (spell out on first use): RONI is spelled out here because
 // this string is user-facing claim-source copy and is the first place a reader
 // meets the index. U-ENSO-REPAIR briefly shipped a bare "operational RONI"
 // here; the full-suite run caught it through tests/evidence-contract.spec.ts,
@@ -449,53 +449,6 @@ async function loadEnsoSnapshot(signal: AbortSignal): Promise<EnsoSnapshot> {
     ...(soi ? { soi } : {}),
     ...(probabilities ? { probabilities } : {})
   };
-}
-
-/** The compact read for the sidebar ENSO driver line. */
-export interface EnsoDriverSummary {
-  /** "El Nino", "La Nina", or "neutral". */
-  readonly phaseName: string;
-  /** For example "RONI -0.48 (FMA 2026)". */
-  readonly latest: string;
-  /** A five-or-so-word Pacific Northwest tilt, phase-appropriate. */
-  readonly shortTilt: string;
-  /** The full tilt paragraph (odds-never-outcomes, modulators named). */
-  readonly detail: string;
-  /** Snapshot retrieval date, for provenance. */
-  readonly retrieved: string;
-  /** Source link for the details block. */
-  readonly sourceUrl: string;
-}
-
-const SHORT_TILT: Record<EnsoPhase, string> = {
-  'el-nino': 'winters tilt warmer and drier here',
-  'la-nina': 'winters tilt cooler and wetter here',
-  neutral: 'little long-range signal'
-};
-
-export async function fetchEnsoDriverSummary(
-  signal: AbortSignal
-): Promise<EnsoDriverSummary | null> {
-  try {
-    const snap = await loadEnsoSnapshot(signal);
-    if (signal.aborted) return null;
-    return {
-      phaseName: PHASE_NAME[snap.roni.phase],
-      latest: `RONI ${latestStr(snap.roni.latest)}`,
-      shortTilt: SHORT_TILT[snap.roni.phase],
-      detail:
-        `${tiltText(snap.roni.phase, snap.roni.latest, snap.retrieved)} ${oniContinuity(snap.roni, snap.oni)}` +
-        (snap.nino34 ? ` ${nino34Text(snap.nino34)}` : '') +
-        (snap.soi ? ` ${soiAgreementText(snap.roni, snap.soi)}` : '') +
-        (snap.probabilities ? ` ${plumeHeadline(snap.probabilities)}` : '') +
-        snapshotProvenance(snap),
-      retrieved: snap.retrieved,
-      sourceUrl: snap.roni.sourceUrl
-    };
-  } catch (err) {
-    if (!signal.aborted) console.warn('[enso] driver summary read failed.', err);
-    return null;
-  }
 }
 
 function claimDates(retrieved: string, published?: string): {

@@ -1,7 +1,6 @@
 /**
  * The atomic cluster service (S3; D-0.7.0-042/043/044/052/053/074; the
- * S3 handoff as amended by the conductor 2026-07-24; design record
- * docs/design/S4_MAINSCREEN_SHELL_DESIGN_2026-07-18.md section 3).
+ * S3 handoff as amended by the conductor 2026-07-24).
  *
  * S3 makes the committed hazard cluster actually resolve and apply its
  * horizon-aware recipe, and publishes ONE coherent committed shell
@@ -307,8 +306,8 @@ function onKeys(): Set<string> {
  *      still applies but the claim commits DEMOTED: the snapshot reads
  *      'custom', the committed intent folds the extras in, and the
  *      store stays at 'drought' (absence) so the URL keeps the granular
- *      `layers=` truth (D-0.7.0-044 exact-set semantics; CLAUDE.md
- *      section 6 invariant 2: the URL never claims a cluster the
+ *      `layers=` truth (D-0.7.0-044 exact-set semantics; the
+ *      URL-as-truth invariant: the URL never claims a cluster the
  *      display is not). Either way, choosing a non-ENSO cluster clears
  *      the ocean framing (D-0.7.0-053 exclusivity); the SST display
  *      itself falls out of step 3.
@@ -463,8 +462,7 @@ export function reconcileClusterWithLayerIntent(checked: ReadonlySet<string>): v
 /**
  * Subscribe the snapshot to its inputs so it RE-DERIVES (a new
  * revision) on registry, timeline, framing, and external cluster-store
- * changes. Idempotent; returns a disposer. Called by S4/boot later; in
- * this lane it is exercised by the specs. Every subscription stands
+ * changes. Idempotent; returns a disposer. Every subscription stands
  * down while a transaction is applying (the final publish covers it).
  */
 export function initClusterService(): () => void {

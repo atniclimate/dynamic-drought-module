@@ -46,8 +46,8 @@ import type { TemporalHorizonKey } from '../config/clusters';
  *            position only against the service's advertised granule list
  *
  * plus the region-shell trio (S2, the additive URL migration;
- * D-0.7.0-039/041/042/044/053; the precedence table lives in
- * docs/URL_SCHEMA_POLICY.md):
+ * D-0.7.0-039/041/042/044/053; the precedence rules are exercised by
+ * tests/s2-url-migration.spec.ts):
  *
  *   framing  one of the nine editorial keys, or `all` for the explicit
  *            North American minimap camera; absence leaves the legacy
@@ -61,8 +61,8 @@ import type { TemporalHorizonKey } from '../config/clusters';
  *            parameter
  *
  * This module is a direct port of the vanilla `app.js` parseUrlParams and
- * syncUrl functions (~lines 342-378 of the v0.1.x baseline). See CLAUDE.md
- * section 8 for the named-export contract.
+ * syncUrl functions (~lines 342-378 of the v0.1.x baseline). The named
+ * exports are a frozen cross-module contract; do not rename them.
  */
 
 export interface ParsedUrlParams {

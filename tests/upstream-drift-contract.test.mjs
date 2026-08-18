@@ -134,13 +134,5 @@ test('the current URL registry keeps representative lifecycle tiers distinct', a
     byKey.get('usgsVegdriWeeklyWms')?.tier,
     DRIFT_TIERS.CANDIDATE,
   );
-  assert.equal(
-    byKey.get('eoxCloudless2016')?.tier,
-    DRIFT_TIERS.CANDIDATE,
-  );
-  assert.equal(
-    byKey.get('eoxCloudless2016Probe')?.tier,
-    DRIFT_TIERS.CANDIDATE,
-  );
   assert.equal(new Set(entries.map(({ key }) => key)).size, entries.length);
 });

@@ -18,7 +18,7 @@ import {
 } from './tribal-fixtures';
 
 /**
- * URL-as-state (CLAUDE.md section 6 invariant 2): region selection, layer
+ * URL-as-state (a core project invariant): region selection, layer
  * toggles, and the embed flag round-trip through `window.location.search`.
  * A shared or embedded link must restore the view it encodes, and every
  * toggle must be reflected back into the URL.
@@ -120,7 +120,7 @@ test.describe('URL as state', () => {
     await expect(layerPill(page, 'places')).toBeEmpty();
 
     // Toggle it on AGAIN: the second activation reuses the cached layer
-    // module (CLAUDE.md section 6 invariant 3: subsequent toggles flip a
+    // module (the lazy-load contract: subsequent toggles flip a
     // cached source/layer set; the chunk import happened on the first
     // toggle) and must land in the same honest terminal state. This is the
     // cheapest deterministic probe of the lazy-load re-activation path.
@@ -131,7 +131,7 @@ test.describe('URL as state', () => {
   });
 
   test('a layer whose activation fails without throwing never enters the share URL', async ({ page }) => {
-    // Regression for docs/ddm-critical-review-2026-07-07.md #2: a non-throwing
+    // Regression for critical-review finding #2 (2026-07-07): a non-throwing
     // activate() failure (the module catches its own fetch error, calls
     // reportStatus('error'), and returns) used to resolve normally, so the
     // spine ran registry.activate and the failed key was counted in the pill
@@ -164,7 +164,7 @@ test.describe('URL as state', () => {
     await expect(page.locator('#app')).toHaveClass(/\bembed\b/);
 
     // In embed mode the sidebar is hidden and the floating expand button is
-    // the escape hatch back to the full chrome (CLAUDE.md section 4 rule 8:
+    // the escape hatch back to the full chrome (a project hard rule:
     // collapse/expand and the embed contract are first-class).
     const expand = page.locator('#sidebar-expand');
     await expect(expand).toBeVisible();
@@ -186,7 +186,7 @@ test.describe('URL as state', () => {
 
     // Boot fires syncUrl repeatedly (the region fit, then each default-on
     // layer as it activates). The embed flag must survive every one of those
-    // rewrites (CLAUDE.md section 6 invariant 2: embed preservation is
+    // rewrites (the URL-as-state invariant: embed preservation is
     // mandatory). The settle signal is the layer key ENTERING the URL: that
     // write only happens after the activation's registry change fires
     // syncUrl, so several rewrites are guaranteed to have run by then.

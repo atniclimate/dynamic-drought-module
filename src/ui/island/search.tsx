@@ -1,8 +1,8 @@
 /**
  * The one search (U3c, 0.7.0): a single input that searches across
  * Places, Tribal land areas, and Layers, rendering grouped results.
- * Ports the ratified U3 note verbatim (design-lens-product-2026-07-10.md
- * section 3, DESIGN_CORPUS.md): "one search box and one set of grouped
+ * Ports the ratified U3 note verbatim (the 2026-07-10 design-lens
+ * ruling): "one search box and one set of grouped
  * results," reachable identically from wherever a caller mounts it, with
  * no visible fuzzy-match confidence score. Specialized hosts may omit
  * result kinds that cannot act visibly on that surface.
@@ -31,7 +31,7 @@
  * mapping); this file performs plain substring matching over whatever
  * text arrives and never fetches or redistributes boundary data.
  * "Tribal" stays capitalized throughout, including in the loading and
- * empty-state copy, per CLAUDE.md section 4.
+ * empty-state copy (a project hard rule).
  *
  * Honest empty and zero-result copy (written before ship, per the
  * design-lens insist-on): Tribal Nation names often will not match

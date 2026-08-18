@@ -11,7 +11,7 @@ import type { LayerStatus } from '../types/layer';
  * polling, and so future modules (telemetry, hydrography) get a single
  * place to coordinate.
  *
- * See CLAUDE.md section 8 for the named-export contract: this module
+ * The named exports are a frozen cross-module contract: this module
  * exports the `LayerRegistry` class and a process-wide singleton
  * `registry` instance. Two events are emitted:
  *
@@ -53,7 +53,7 @@ export class LayerRegistry {
     // Clear the recorded load status too, so a `change` subscriber that
     // reads getStatus() after deactivate sees "off" (undefined) rather
     // than the layer's last terminal status (adversarial-review finding,
-    // docs/archive/ddm-adversarial-review-activation-spine-2026-07-06.md).
+    // 2026-07-06).
     this.statusByKey.delete(key);
     this.emitChange();
   }

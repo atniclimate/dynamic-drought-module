@@ -15,7 +15,7 @@
  *     cadence and shows the date readout); this module only guarantees the
  *     fade duration is predictable.
  *
- * The bright line (CLAUDE.md section 6 invariant 6, endorsed by both review
+ * The bright line (the data-honesty invariant, endorsed by both review
  * passes): analyst-authored polygons are never tweened. A crossfade is
  * visually distinct from a morph precisely because the geometry snaps and
  * only opacity moves; keep it that way.

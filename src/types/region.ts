@@ -34,8 +34,8 @@ export interface RegionBriefingAnchor {
 import type { CoverageFamilyKey } from './capability-matrix';
 
 /**
- * Selector grouping for the region list (0.8.0 T-M0-4, the N4a substrate;
- * the "group field" of docs/EXPANSION_PLAN_070.md). DISTINCT from
+ * Selector grouping for the region list (0.8.0 T-M0-4, the N4a
+ * substrate). DISTINCT from
  * `coverageFamily`: grouping is a user-facing selector concept, coverage
  * family is capability truth, and two regions may share one capability row
  * while belonging to different groups. Today: 'pnw' for the six curated
@@ -98,7 +98,7 @@ export interface Region {
    * enumerable without inference (a single-state framing). OMITTED means
    * "not enumerated here", never "no states": the Columbia and Snake
    * basin's membership is deliberately not inferred (fuzzy basin
-   * membership; docs/EXPANSION_PLAN_070.md), and the national framing's
+   * membership), and the national framing's
    * identity is the contiguous United States as a whole.
    */
   readonly memberStates?: readonly string[];

@@ -9,8 +9,7 @@ import {
 } from './helpers';
 
 /**
- * U2: the mobile bottom sheet (ratified detent model D-0.7.0-017; build
- * spec docs/ddm-detent-model-2026-07-09.md).
+ * U2: the mobile bottom sheet (ratified detent model D-0.7.0-017).
  *
  * Below 720px the sidebar is ONE bottom sheet with three detents that are
  * information depths: peek (the conditions strip), half (the at-hand

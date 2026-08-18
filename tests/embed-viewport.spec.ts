@@ -1,8 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { gotoApp, stubHistoricalGround } from './helpers';
+import { gotoApp } from './helpers';
+import { stubRecentSatellite } from './satellite-fixture';
 
 /**
- * The small-viewport embed contract (H1, 0.6.2; CLAUDE.md section 4 rule 8).
+ * The small-viewport embed contract (H1, 0.6.2; a project hard rule: the
+ * 400px iframe embed is first-class).
  *
  * A 400px iframe is the FIRST-CLASS embed case, and it sits under the 720px
  * responsive breakpoint, where the app shell switches from side-by-side
@@ -56,7 +58,7 @@ test.describe('Embed at 200x600 (minimum-width iframe floor)', () => {
   test('opens inside an iframe with contained map chrome and no mobile navigation', async ({
     page
   }) => {
-    await stubHistoricalGround(page);
+    await stubRecentSatellite(page);
     await page.route('**/embed-width-floor-host.html', async (route) => {
       await route.fulfill({
         contentType: 'text/html',

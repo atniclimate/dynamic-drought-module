@@ -1,6 +1,5 @@
 /**
- * The mobile bottom sheet (0.7.0 U2; ratified detent model D-0.7.0-017,
- * build spec docs/ddm-detent-model-2026-07-09.md).
+ * The mobile bottom sheet (0.7.0 U2; ratified detent model D-0.7.0-017).
  *
  * Below 720 pixels the sidebar element becomes ONE bottom sheet over a
  * full-viewport map, with three detents that are information depths, not
@@ -11,7 +10,7 @@
  * off `#app[data-sheet-detent]` plus the existing `view-brief` and
  * `view-console` mode classes; this module owns the detent itself.
  *
- * Contract points, all from the ratified spec:
+ * Contract points, all from the ratified detent model:
  *
  * - The detent is EPHEMERAL presentation state: never written to the URL,
  *   never a second state machine. The only persisted flags remain `embed`,
@@ -28,8 +27,8 @@
  * - Brief opens at half (the answer over the map); console opens at peek
  *   (map-first). A mode switch while the sheet is active re-seats the
  *   detent the same way.
- * - Every detent settle calls `map.resize()` (CLAUDE.md section 6
- *   invariant 7) and reports through `onSheetDetentSettle` so the camera
+ * - Every detent settle calls `map.resize()` (the map-resize
+ *   invariant) and reports through `onSheetDetentSettle` so the camera
  *   padding path can react without this module importing camera code.
  *
  * The at-hand block (the half detent's Brief content) renders from the

@@ -2,7 +2,7 @@
  * Layer-activation state machine for the Dynamic Drought Module (DDM).
  *
  * Extracted from `src/ui/sidebar.ts` in phase 0.6.0 (the spine extraction,
- * decision D-ARCH-004; docs/ARCH_UX_PATHWAY_1.0.md appendix A). The sidebar
+ * decision D-ARCH-004). The sidebar
  * kept the activation logic since the vanilla port; this module now owns it
  * so the view layer (vanilla today, a possible Preact island in 0.7.0) can be
  * reshaped without touching the activation contract, and so the domain no
@@ -14,7 +14,7 @@
  * announcing to the live region) are inverted through the `LayerControllerView`
  * adapter the sidebar supplies, instead of being done inline with
  * `document.querySelector`. No behavior change; the existing Playwright specs
- * prove it (docs/ARCH_UX_PATHWAY_1.0.md appendix A test strategy).
+ * prove it.
  *
  * What stays in the sidebar: DOM construction (region buttons, toggle rows,
  * preset chips, telemetry list), the status-pill and live-region DOM, region
@@ -114,8 +114,7 @@ export function createLayerController(
    * original activation fetch was being cancelled). Without this, the
    * cancelled original could pass the boolean check, register a layer whose
    * fetch never completed (no source on the map), and starve the queued real
-   * reactivation (Codex Unit B re-verify finding 1, 2026-07-15,
-   * C:\dev\_reviews\ddm\2026-07-15_unit-B-codex-reverify.md).
+   * reactivation (Codex Unit B re-verify finding 1, 2026-07-15).
    */
   const intentGen = new Map<string, number>();
 
@@ -216,7 +215,7 @@ export function createLayerController(
         // status as a failed activation and mirror the thrown-error cleanup:
         // never registry.activate on anything but a genuine on state (ready,
         // no-data, or zoom-in). This protects the URL-as-state invariant
-        // (CLAUDE.md section 6 invariant 2). See docs/ddm-critical-review-2026-07-07.md #2.
+        // (critical-review finding #2, 2026-07-07).
         if (registry.getStatus(def.key) === 'error') {
           view.setCheckbox(def.key, false);
           desiredOn.set(def.key, false);

@@ -8,8 +8,9 @@
    files so every dist/ copy carries them). Both families ship as variable
    fonts, so one file per family and subset covers every weight the app uses;
    unicode-range keeps latin-ext lazy (fetched only if a glyph needs it).
-   No third-party font request: the module observes the user, it does not
-   report on them (CLAUDE.md section 4 rule 3). */
+   No third-party font request: the project's no-tracking stewardship rule is
+   that the module observes the landscape for the user, it does not report on
+   them. */
 @font-face {
   font-family: 'League Spartan';
   font-style: normal;
@@ -663,12 +664,6 @@ button.conditions-metric:hover {
   color: var(--fg-2);
 }
 
-.brief-display-summary {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--fg-1);
-}
 #layers-studio-entry-host { margin-top: 12px; }
 #layers-studio-entry-host:empty { display: none; }
 #brief-secondary-actions .tribal-nations-brief-row { padding: 10px 0 0; }
@@ -707,29 +702,6 @@ button.conditions-metric:hover {
 }
 .brief-full-report-link:hover { color: var(--fg-0); }
 
-.brief-place-label {
-  display: block;
-  font-family: var(--font-display);
-  font-size: 10px;
-  font-weight: var(--fw-subtitle);
-  letter-spacing: var(--track-caps-sm);
-  text-transform: uppercase;
-  color: var(--fg-3);
-  margin-bottom: 4px;
-}
-
-.brief-place-select {
-  width: 100%;
-  font-family: var(--font-body);
-  font-size: 12px;
-  color: var(--fg-0);
-  background: var(--bg-2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  padding: 7px 8px;
-  margin-bottom: 10px;
-}
-
 .brief-console-door {
   display: block;
   width: 100%;
@@ -750,96 +722,6 @@ button.conditions-metric:hover {
 .brief-console-door:hover {
   border-color: var(--accent-strong);
   color: var(--fg-0);
-}
-
-/* ----------------------------------------------------------------------------
-   ENSO driver line (0.4.0 B2): one compact climate-driver line inside the
-   post-time display description. It is not a strip tile (the strip reflects
-   the map; ENSO is a driver). Disclosure carries the full tilt text.
-   ---------------------------------------------------------------------------- */
-
-.enso-driver {
-  margin-top: 9px;
-  padding: 7px 0 0;
-  border-top: 1px dashed var(--line);
-}
-.enso-driver-line {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-  min-width: 0;
-  white-space: nowrap;
-  cursor: pointer;
-  list-style: none;
-}
-.enso-driver-line::-webkit-details-marker {
-  display: none;
-}
-.enso-driver-line::after {
-  content: '+';
-  margin-left: auto;
-  color: var(--fg-3);
-  font-family: var(--font-body);
-  font-size: 12px;
-  line-height: 1;
-}
-.enso-driver-details[open] .enso-driver-line::after {
-  content: '\2212'; /* minus sign */
-}
-.enso-driver-kicker {
-  font-family: var(--font-display);
-  font-weight: var(--fw-title);
-  font-size: 10px;
-  letter-spacing: var(--track-caps-sm);
-  text-transform: uppercase;
-  color: var(--fg-2);
-}
-.enso-driver-value {
-  font-family: var(--font-body);
-  font-feature-settings: 'tnum' 1;
-  font-size: 11.5px;
-  font-weight: var(--fw-strong);
-  color: var(--fg-0);
-  flex-shrink: 0;
-}
-.enso-driver-tilt {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-family: var(--font-body);
-  font-size: 10.5px;
-  color: var(--fg-3);
-}
-.enso-driver-detail {
-  margin: 8px 0 4px;
-  font-family: var(--font-body);
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--fg-1);
-}
-.enso-driver-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 2px;
-}
-.enso-driver-pacific {
-  font-family: var(--font-body);
-  font-size: 10.5px;
-  font-weight: var(--fw-strong);
-  color: var(--accent);
-  background: none;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  padding: 3px 8px;
-  cursor: pointer;
-}
-.enso-driver-pacific:hover {
-  border-color: var(--accent);
-}
-.enso-driver-source {
-  font-size: 10.5px;
-  color: var(--accent);
 }
 
 /* ----------------------------------------------------------------------------
@@ -1521,12 +1403,6 @@ button.conditions-metric:hover {
   border-radius: 50%;
 }
 
-/* The historical-ground notice remains visible when needed, so lift the dock
-   clear of it. Satellite observation detail is carried assistively by SAT. */
-#app:not([data-sheet-detent]):has(#ground-vintage:not([hidden])) .map-bottom-dock {
-  bottom: 117px;
-}
-
 /* Below MapLibre's 640px auto-compact threshold the attribution collapses
    to a corner toggle; keep the dock (and the brand badge riding its right
    edge) clear of that corner. The live 0.6.9 pass caught the badge sitting
@@ -1668,17 +1544,6 @@ button.conditions-metric:hover {
 
 .legend-semantic-note.sr-only {
   left: -10000px;
-}
-
-.historical-ground-chip a {
-  color: var(--fg-0);
-  border-bottom-color: var(--fg-3);
-  pointer-events: auto;
-}
-
-.historical-ground-chip[data-status="fallback"] {
-  color: var(--warn);
-  border-color: color-mix(in srgb, var(--warn) 55%, var(--line-strong));
 }
 
 /* Popups */
@@ -2980,7 +2845,7 @@ button.conditions-metric:hover {
  * rule of equal specificity. Without this guard the overlay never actually
  * hides, so `hideLoading()` left a stuck "Loading ..." pill on screen after
  * every layer finished loading. This restores the hidden semantics. (Baseline
- * bug found during the Phase D Phase 8 browser verification; not in TODO.md.)
+ * bug found during browser verification.)
  */
 .loading-indicator[hidden] {
   display: none;
@@ -3046,8 +2911,7 @@ button.conditions-metric:hover {
 }
 
 /* ----------------------------------------------------------------------------
-   The mobile bottom sheet (0.7.0 U2; ratified detent model D-0.7.0-017,
-   build spec docs/ddm-detent-model-2026-07-09.md).
+   The mobile bottom sheet (0.7.0 U2; ratified detent model D-0.7.0-017).
 
    Below 720px, when src/ui/mobile-sheet.ts stamps `data-sheet-detent` on
    #app, the sidebar element becomes the ONE bottom sheet over a
@@ -3262,16 +3126,6 @@ button.conditions-metric:hover {
   #app[data-sheet-detent='peek'] .map-bottom-dock,
   #app[data-sheet-detent='half'] .map-bottom-dock {
     bottom: calc(var(--mobile-footer-h, 56px) + var(--sheet-height, 0px) + 10px);
-  }
-
-  /* MapLibre opens compact attribution on first load. In the edgeless
-     closed state, reserve its expanded disclosure plus the 44px Recent
-     control above the footer; peek and half remain governed by their
-     sheet heights above. */
-  #app[data-sheet-detent='closed']:has(#ground-vintage:not([hidden])) .map-bottom-dock {
-    /* The live observation qualification can wrap one line taller than the
-       deterministic tile fixture. Keep that settled copy above Recent too. */
-    bottom: calc(var(--mobile-footer-h, 56px) + 164px);
   }
 
   /* --------------------------------------------------------------------------
@@ -3676,16 +3530,6 @@ button.conditions-metric:hover {
   font-size: 10.5px;
   text-align: right;
   white-space: nowrap;
-}
-
-/* The fire key's active-fire glyph (the NIFC incident point). */
-.map-key-fire-dot {
-  width: 10px;
-  height: 10px;
-  display: inline-block;
-  border-radius: 50%;
-  background: #ef3123;
-  box-shadow: 0 0 0 3px rgba(239, 49, 35, 0.22);
 }
 
 /* The grabber: a real button, the only gesture surface that moves the
@@ -5596,7 +5440,7 @@ a.impact-resource-link::after {
 
 /* U3c: the one search (search.tsx)
    The single input searching Places, Tribal land areas, and Layers
-   (design-lens-product-2026-07-10.md U3: "one search box and one set of
+   (the 2026-07-10 design-lens U3 ruling: "one search box and one set of
    grouped results"). Tokens only: --bg-0/1/2, --line, --line-strong,
    --fg-0/2/3, --accent, --radius-sm/md, the display/body font pair, and
    the 0.2s ease transition length already used by .layer-toggle and the

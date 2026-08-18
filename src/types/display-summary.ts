@@ -11,12 +11,12 @@
  * registry's canonical six statuses into a sentence plus an optional
  * caveat.
  *
- * S1 lands the pure types and the derivation contract below; the
- * grammar implementation and the rendering island are later units (S3
- * publishes the committed snapshot the summary derives from; S4
- * renders it; S5 adds the ocean-temperature sentence).
+ * This file holds the pure types and the derivation contract; the
+ * grammar implementation is `deriveDisplaySummary` in
+ * src/state/display-summary.ts, and the cluster service publishes the
+ * committed snapshot the summary derives from.
  *
- * DERIVATION CONTRACT (the grammar a later unit implements):
+ * DERIVATION CONTRACT (the grammar the implementation follows):
  *
  *   ready     include under "Showing".
  *   degraded  include under "Showing partial coverage from" and name
@@ -76,5 +76,5 @@ export interface DisplaySummary {
   readonly caveat: string | null;
 }
 
-/** The pure derivation a later unit implements against this contract. */
+/** The pure derivation contract (implemented in src/state/display-summary.ts). */
 export type DeriveDisplaySummary = (input: DisplaySummaryInput) => DisplaySummary;

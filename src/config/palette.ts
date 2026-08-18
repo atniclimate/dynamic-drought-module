@@ -353,15 +353,15 @@ export function pickTreatyColor(name: string | null | undefined): string {
  * deployer-populated, empty by default), Treaty Areas (hollow cession-area
  * outlines, colored by TREATY_COLORS above), and Bureau of Indian Affairs (BIA)
  * reservation boundaries (American Indian and Alaska Native Land Area
- * Representation, AIAN-LAR, fetched live per CLAUDE.md hard rule 1: live
- * consumption, not redistribution). D-0.7.0-019 groups all three into ONE
+ * Representation, AIAN-LAR, fetched live per the no-redistribution hard rule:
+ * live consumption, not redistribution). D-0.7.0-019 groups all three into ONE
  * magenta-to-violet tone family so a reader sees them as related "whose place is
  * this" layers, distinguished by opacity and line style rather than three
  * unrelated hues (the prior warm-orange Tribal Lands, seven-hue Treaty spread,
  * and indigo reservations). The visible reservation surface of record is the
- * LIVE BIA layer; the bundled Tribal Lands placeholder ships empty (CLAUDE.md
- * sections 2 and 4), so on the reference deployment the BIA magenta is what a
- * reader actually sees.
+ * LIVE BIA layer; the bundled Tribal Lands placeholder ships empty (the
+ * empty-placeholder stewardship rule), so on the reference deployment the BIA
+ * magenta is what a reader actually sees.
  *
  * Opacity hierarchy (ddm-visual-styling-and-readability, the 0.3 to 0.6 fill
  * band): Tribal Lands (deployer-authorized, so fillable) sits highest; BIA

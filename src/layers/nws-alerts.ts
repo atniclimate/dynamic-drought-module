@@ -21,7 +21,7 @@
  * speaks the severity language users already know from weather.gov rather
  * than inventing its own.
  *
- * Cancellation (CLAUDE.md section 6 invariant 5): master abort controller
+ * Cancellation (the cancellation invariant): master abort controller
  * superseded on each `activate`, aborted on `deactivate`, fetch through
  * `fetchJsonWithBudget`, late responses dropped.
  */

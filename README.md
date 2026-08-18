@@ -346,6 +346,32 @@ generated coverage record is in
 authority and the durable convergence doctrine are in
 [`docs/design/README.md`](docs/design/README.md).
 
+### Dependency overrides
+
+`package.json` pins two `overrides` so the full `npm audit` (dev
+dependencies included) reports zero vulnerabilities. Both target the
+dev-only `mapshaper` chain, which is used exclusively by four offline
+maintainer-run artifact builders (`scripts/build-states.mjs`,
+`scripts/build-minimap-geometry.mjs`, `scripts/build-cdm-snapshot.mjs`,
+`scripts/build-ecoregion-tiles.mjs`) and never ships in the bundle.
+
+- `adm-zip: ^0.6.0` lifts mapshaper's zip helper past
+  GHSA-xcpc-8h2w-3j85. mapshaper calls it as a plain function
+  constructor for `.zip` read and write, and 0.6.0 keeps that export
+  shape; both directions are exercised by regenerating the committed
+  minimap artifact after any mapshaper upgrade.
+- `@ngageoint/geopackage: npm:noop2@^2.0.0` replaces the GeoPackage
+  subtree with an empty module. That subtree pins `image-size` 0.8.x
+  (GHSA-w3rx-r6r6-pgpr, GHSA-5p2g-fcmc-qvqq, no fixed release exists)
+  and a vulnerable `file-type`, so the only honest fix is removing it.
+  mapshaper requires the library lazily and only for `.gpkg` input or
+  output (guarded require sites in `mapshaper.js`: `importGeoPackage`
+  and `exportGeoPackage`), and every pipeline here feeds mapshaper
+  GeoJSON buffers or fflate-unzipped shapefile members, never `.gpkg`.
+  A `.gpkg` request now stops with mapshaper's own "GeoPackage library
+  is not loaded" message. Drop this override if a pipeline ever needs
+  GeoPackage I/O and the upstream chain has a patched `image-size`.
+
 ## Browser support
 
 Any evergreen browser (Chrome, Edge, Firefox, Safari 15.5 or newer).

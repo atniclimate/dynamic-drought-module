@@ -2,11 +2,11 @@ import { test, expect } from '@playwright/test';
 import {
   gotoApp,
   layerCheckbox,
-  stubHistoricalGround,
   urlLayers,
   openTribalNationsDetails,
   ROLE_GROUPS
 } from './helpers';
+import { stubRecentSatellite } from './satellite-fixture';
 import {
   AIANNH_ROUTE,
   BIA_ROUTE,
@@ -18,8 +18,7 @@ import {
 /**
  * The Tribal Nations umbrella UI (Unit F, D-0.7.0-033): the featured group
  * card in the Place role group plus the eager Brief-door action. Built to
- * the Codex front-end consultation
- * (C:\dev\_reviews\ddm\2026-07-15_unit-F-frontend-codex.md): two separate
+ * the 2026-07-15 Codex front-end consultation: two separate
  * controls (a command button and a details disclosure), permanently mounted
  * member rows behind a native `hidden` region, group provenance controlled
  * by the role group's Sources state, and the compact Brief action that
@@ -366,7 +365,7 @@ test.describe('partial-outage visibility (the final-pass finding 2)', () => {
     page
   }) => {
     await page.setViewportSize({ width: 400, height: 600 });
-    await stubHistoricalGround(page);
+    await stubRecentSatellite(page);
     const islandRequests: string[] = [];
     page.on('request', (req) => {
       if (/island-[^/]*\.js/.test(req.url())) islandRequests.push(req.url());
@@ -438,7 +437,7 @@ test.describe('the Brief-door Tribal Nations action', () => {
     page
   }) => {
     await routeAllTribalFixtures(page);
-    await stubHistoricalGround(page);
+    await stubRecentSatellite(page);
     // An embed boot hosts the action on the impact panel only (the
     // sidebar is collapsed); expanding exits embed mode and the Brief
     // head must gain the one instance so the umbrella's default-Brief
@@ -490,7 +489,7 @@ test.describe('the Brief-door action at 400px (mobile and embed)', () => {
     page
   }) => {
     await routeAllTribalFixtures(page);
-    await stubHistoricalGround(page);
+    await stubRecentSatellite(page);
     const islandRequests: string[] = [];
     page.on('request', (req) => {
       if (/island-[^/]*\.js/.test(req.url())) islandRequests.push(req.url());

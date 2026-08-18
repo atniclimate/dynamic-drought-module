@@ -5,8 +5,7 @@ import { getLayerDef, DEFAULT_ON_KEYS } from '../src/config/layers';
 
 /**
  * E1, the calm-the-page slice (D-0.7.0-041 part 2; D-0.7.0-043 parts 3 and
- * 4; the 2026-07-16 design review section E1; the handoff
- * docs/prompts/HANDOFF_E1_2026-07-16.md).
+ * 4; the 2026-07-16 design review section E1 and its handoff).
  *
  * Deliverable 1 (interim progressive disclosure), deliverable 4 (hillshade
  * default-on), and the never-narrow-the-sovereign-set fence are pinned

@@ -4,7 +4,7 @@
  * This module is the TypeScript port of the vanilla `app.js` UI builders
  * (`buildRegionButtons`, `buildLayerToggles`, `buildTelemetryList`),
  * status-pill helper (`setLayerStatus`), and `wireTopLevelEvents`. It also
- * picks up the [next-polish] accessibility quick wins from `TODO.md`:
+ * picks up the accessibility quick wins:
  *
  *   - Region radiogroup arrow-key navigation (Up/Down/Left/Right cycle,
  *     Home/End first/last). Tab still moves between radiogroups.
@@ -26,12 +26,12 @@
  *
  *   2. Per-layer status pills: rendered by the Preact island (the
  *      `resolveStatusPillText` copy lives in `src/ui/island/pill-text.ts`),
- *      driven by the registry's `status-change` event. The frozen-contract
- *      name `setLayerStatusInPill` from CLAUDE.md section 8 no longer
+ *      driven by the registry's `status-change` event. The once-frozen
+ *      named export `setLayerStatusInPill` no longer
  *      exists as a function; the island subscription replaced it
  *      (corrected 2026-07-28, ground-truth audit).
  *
- * Deviation note (per CLAUDE.md section 12): the kickoff prescribed
+ * Deviation note (recorded deliberately): the kickoff prescribed
  * splitting share, overlay, and sidebar into three files. We keep the
  * three-file split, with this module owning only the sidebar lifecycle.
  * `wireShareButton` lives in `./share`; `showLoading` / `hideLoading` /
@@ -849,7 +849,7 @@ function hydrateStationValues(): void {
 /**
  * Registry hook for the value lifecycle: first telemetry activation
  * hydrates once per session; a telemetry layer-off aborts anything still
- * in flight (CLAUDE.md section 6 invariant 5). Values already rendered
+ * in flight (the cancellation invariant). Values already rendered
  * stay rendered; the list is catalog metadata plus last-known readings,
  * not something to blank on toggle.
  */
@@ -1041,8 +1041,7 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // winning camera ever paints.
   selectRegion(map, params.region, true);
 
-  // The boot camera precedence (S2; the table in
-  // docs/URL_SCHEMA_POLICY.md): `ocean=` (the most specific gesture,
+  // The boot camera precedence (S2): `ocean=` (the most specific gesture,
   // pairing display with camera, D-0.7.0-053) wins over `framing=`
   // (D-0.7.0-039/041), which wins over the legacy `region=` fit above.
   // Both are camera-only: they select nothing and brief nothing.
@@ -1121,9 +1120,9 @@ export function buildSidebar(
   };
   controllerRef = createLayerController(map, view);
   // Arm the shared toggle command (ADR 0002 condition 2): the DOM-free
-  // door for the time bar's instrument switches, the ENSO driver, the
-  // telemetry list, and the conditions tiles. Bound before any DOM
-  // builder or boot path can invoke it.
+  // door for the time bar's instrument switches, the telemetry list, and
+  // the conditions tiles. Bound before any DOM builder or boot path can
+  // invoke it.
   bindLayerToggleController(controllerRef);
 
   const handleRegion = (key: RegionKey): void => {

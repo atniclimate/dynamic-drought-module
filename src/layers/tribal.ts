@@ -1,7 +1,7 @@
 /**
  * Tribal Lands layer (port of vanilla `app.js` `loadTribalLands`).
  *
- * Stewardship note (see CLAUDE.md sections 2 and 4): the bundled
+ * Stewardship note (a project hard rule): the bundled
  * `public/data/tribal-lands.geojson` ships as an empty FeatureCollection by
  * deliberate design. The Dynamic Drought Module does not redistribute
  * sovereign-jurisdiction polygons. Each deployer (Tribal Nation, state
@@ -80,7 +80,7 @@ function resolveBeforeId(map: maplibregl.Map): string | undefined {
  * has not been cleaned up), the function exits early after re-reporting
  * status so the registry still observes a terminal state.
  *
- * Per CLAUDE.md section 2, an empty FeatureCollection is the expected
+ * Per the no-redistribution stewardship rule, an empty FeatureCollection is the expected
  * first-run state. We still attach the (empty) source so the registry can
  * cheaply re-render once a deployer populates the file, but we do not add
  * the visible fill / outline layers when there is nothing to draw.
