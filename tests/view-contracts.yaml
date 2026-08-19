@@ -1,0 +1,209 @@
+# View-contract matrix: cross-view consistency for the DDM shell
+# ---------------------------------------------------------------------------
+# COMMITTED TEST DATA, not a process ledger. Each row is one transition
+# through the application's views, expressed as a start URL, a sequence of
+# user actions, and the invariants that must hold afterwards.
+# `tests/view-contracts.spec.ts` reads this file and runs every row.
+#
+# Why data instead of prose specs: the individual view behaviors are already
+# covered in depth (cluster-service, s4-shell, fire3d-mode, url-state). What
+# was missing was a single place that says what must stay true ACROSS the
+# views as a person moves between them, and that a later change extends by
+# adding a row rather than by writing a new spec file. Groups later in this
+# refinement run add their rows here (power toggle, zoom gates, globe,
+# satellite issuer per zoom).
+#
+# Schema
+# ------
+# id            kebab-case, unique; becomes the Playwright test title
+# description   one sentence: the contract, not the mechanics
+# url           query string handed to `gotoApp` ('' for a bare boot)
+# stub_wildfire when true, pin NIFC / HMS / SPC / EIA before boot
+# timeout_ms    per-row budget; raise it for rows that build terrain
+# steps         ordered actions (see the step vocabulary below)
+# expect        invariants asserted after the last step
+#
+# Step vocabulary (one key per step)
+#   click_cluster: <drought|wildfire|heat|enso>
+#   fire3d: <on|off>                 click the 3D toggle, assert aria-pressed
+#   select_region: <region key>      the combined region select
+#   set_layer: { key: <layer>, on: <bool> }
+#   wait_settled: <layer key>        wait for a terminal status pill
+#   wait_fire3d: <active|inactive>   wait for the document stamp
+#   reload: true                     reload at the current URL
+#
+# Expectation vocabulary
+#   cluster_pressed: <key|none>      that button pressed, the other three not;
+#                                    `none` asserts a custom display (a
+#                                    granular `layers=` claim commits no view)
+#   url_params: { name: value }      value `null` asserts the param is absent
+#   url_layers_include: [keys]       tokens that must appear in `layers=`
+#   url_layers_exclude: [keys]
+#   fire3d_stamp: <active|inactive|absent>
+#   fire3d_context_includes: [keys]  tokens in data-ddm-fire3d-context
+#   fire3d_toggle: <pressed|unpressed|absent>
+#   layers_checked: [keys]
+#   layers_unchecked: [keys]
+#   selector_counts: { "<css>": <n> }
+# ---------------------------------------------------------------------------
+
+rows:
+  - id: boot-defaults-to-the-drought-view
+    description: >
+      A bare boot commits the Drought view, claims nothing in the URL, and
+      offers no 3D control (3D belongs to the Fire view alone).
+    url: ''
+    steps: []
+    expect:
+      cluster_pressed: drought
+      url_params:
+        cluster: null
+        fire3d: null
+      fire3d_stamp: absent
+      fire3d_toggle: absent
+
+  - id: committing-wildfire-writes-the-one-word-claim
+    description: >
+      Choosing Wildfire commits the cluster, replaces any granular layer list
+      with the one-word URL claim, and reveals the 3D control unpressed.
+    url: ''
+    steps:
+      - click_cluster: wildfire
+    expect:
+      cluster_pressed: wildfire
+      url_params:
+        cluster: wildfire
+        layers: null
+      fire3d_toggle: unpressed
+      fire3d_stamp: absent
+
+  - id: entering-3d-stamps-the-scene-and-the-url
+    description: >
+      The 3D toggle activates the scene, writes the durable preference to the
+      URL, and brings up the three context layers.
+    url: '?cluster=wildfire'
+    stub_wildfire: true
+    timeout_ms: 150000
+    steps:
+      - wait_settled: hms-smoke
+      - fire3d: on
+      - wait_fire3d: active
+    expect:
+      cluster_pressed: wildfire
+      url_params:
+        fire3d: 'true'
+      fire3d_stamp: active
+      fire3d_toggle: pressed
+      fire3d_context_includes: [fuels, power, structures]
+
+  - id: leaving-3d-clears-the-scene-and-the-parameter
+    description: >
+      Turning the toggle off returns the flat scene and drops the parameter,
+      so a share of the flat view never claims 3D.
+    url: '?cluster=wildfire&fire3d=true'
+    stub_wildfire: true
+    timeout_ms: 150000
+    steps:
+      - wait_fire3d: active
+      - fire3d: off
+      - wait_fire3d: inactive
+    expect:
+      fire3d_stamp: inactive
+      fire3d_toggle: unpressed
+      url_params:
+        fire3d: null
+        cluster: wildfire
+
+  - id: 3d-exits-with-the-cluster-and-re-applies-on-return
+    description: >
+      Leaving the Fire view exits the scene and hides the control, but the
+      preference survives in the URL and re-applies on return. This is the
+      contract documented at src/state/fire3d-store.ts:8-13.
+    url: '?cluster=wildfire&fire3d=true'
+    stub_wildfire: true
+    timeout_ms: 180000
+    steps:
+      - wait_fire3d: active
+      - click_cluster: drought
+      - wait_fire3d: inactive
+      - click_cluster: wildfire
+      - wait_fire3d: active
+    expect:
+      cluster_pressed: wildfire
+      fire3d_stamp: active
+      fire3d_toggle: pressed
+      url_params:
+        fire3d: 'true'
+
+  - id: a-region-jump-preserves-the-3d-preference
+    description: >
+      An ordinary camera write must not drop an unrelated durable parameter
+      (the heatday preservation idiom inside syncUrl).
+    url: '?cluster=wildfire&fire3d=true'
+    stub_wildfire: true
+    timeout_ms: 150000
+    steps:
+      - wait_fire3d: active
+      - select_region: central_oregon
+    expect:
+      fire3d_stamp: active
+      url_params:
+        region: central_oregon
+        fire3d: 'true'
+        cluster: wildfire
+
+  - id: a-granular-layers-link-is-a-custom-display-not-a-cluster-claim
+    description: >
+      An old share naming explicit layers honors the named layer and commits
+      NO cluster: the granular list is the display truth, so the shell claims
+      none of the four hazard views. `parseShellParams` reading 'drought'
+      beside a `layers=` list (src/state/url.ts:194-196) is the parse-layer
+      base only; the committed display is 'custom'
+      (src/state/cluster-service.ts:351) and the chrome must not claim
+      otherwise.
+    url: '?layers=usdm'
+    steps: []
+    expect:
+      cluster_pressed: none
+      layers_checked: [usdm]
+      url_layers_include: [usdm]
+      url_params:
+        cluster: null
+      fire3d_toggle: absent
+
+  - id: an-embedded-3d-share-carries-its-own-disclosure
+    description: >
+      An embed has no shell chrome, so the 3D scene must carry its honesty
+      note as in-map chrome instead of losing it.
+    url: '?cluster=wildfire&fire3d=true&embed=true'
+    stub_wildfire: true
+    timeout_ms: 150000
+    steps:
+      - wait_fire3d: active
+    expect:
+      fire3d_stamp: active
+      selector_counts:
+        '#fire3d-embed-note': 1
+      url_params:
+        embed: 'true'
+        fire3d: 'true'
+
+  - id: a-reloaded-3d-share-boots-back-into-the-same-view
+    description: >
+      The URL is the whole restorable claim: reloading a shared 3D Fire link
+      returns the same committed cluster, the same scene, and the same
+      pressed control.
+    url: '?cluster=wildfire&fire3d=true'
+    stub_wildfire: true
+    timeout_ms: 180000
+    steps:
+      - wait_fire3d: active
+      - reload: true
+      - wait_fire3d: active
+    expect:
+      cluster_pressed: wildfire
+      fire3d_stamp: active
+      fire3d_toggle: pressed
+      url_params:
+        cluster: wildfire
+        fire3d: 'true'
