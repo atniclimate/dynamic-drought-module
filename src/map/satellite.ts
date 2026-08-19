@@ -363,6 +363,29 @@ function observationRange(frame: SatelliteFrame): string {
 
 type ImageryStatus = 'loading' | 'live' | 'live-partial';
 
+/**
+ * What this imagery covers, and what its edges are.
+ *
+ * The product is a merged mosaic of the GOES East and West full disks, so
+ * its geometry is two circles, not a rectangle: coverage ends near 76
+ * degrees north and south AND runs out on the far side of both disks
+ * (roughly between the eastern Atlantic and the western Pacific), where the
+ * service returns fully transparent pixels and the subdued base map shows
+ * through. Probed live 2026-08-19: `exportImage` over central Africa and
+ * south Asia returned a 334-byte fully transparent PNG at every sample,
+ * while the service's own declared extent claims the whole globe. The
+ * declared extent is what the raster source's `bounds` follow, because a
+ * single rectangle cannot describe a footprint that wraps the
+ * antimeridian; the honest move is to say what the edges mean rather than
+ * to cull tiles that might carry data.
+ *
+ * The daylight boundary is likewise inherent: GeoColor renders the lit and
+ * unlit halves differently, so a visible seam crosses the mosaic wherever
+ * the terminator falls. Neither edge is a fault to hide.
+ */
+export const SATELLITE_COVERAGE_NOTE =
+  'Coverage is the GOES East and West disks: it ends near 76 degrees north and south, and the base map shows through beyond the disks. The daylight boundary crosses the mosaic as a visible seam.';
+
 function showChip(
   status: ImageryStatus,
   frame: SatelliteFrame | null,
@@ -386,7 +409,7 @@ function showChip(
     `NOAA GOES GeoColor · ${state} · observed ${observationRange(frame)} · ` +
     `${freshness}${delayed}. Context only; daytime approximate true color, nighttime ` +
     'infrared with static lights; clouds can obscure land and smoke. ' +
-    'Coverage ends near 76°N.';
+    `${SATELLITE_COVERAGE_NOTE}`;
 }
 
 function clearRefreshTimer(): void {

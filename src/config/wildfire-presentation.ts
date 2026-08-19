@@ -185,6 +185,17 @@ export function interpolateWildfirePulseColor(elapsedMs: number): string {
   );
 }
 
+/**
+ * Perimeter presentation by incident class.
+ *
+ * Outline weights doubled 2026-08-19 on owner direction (3 / 2.8 / 2.4 from
+ * 1.5 / 1.4 / 1.2): at overview framing over the satellite basemap the
+ * hairlines were too thin to read. The RATIO between the three classes is
+ * preserved, so the visual ranking that separates a mapped wildfire from a
+ * prescribed burn from an unclassified record is unchanged. Weight is
+ * legibility only; it carries no claim about size, intensity, or certainty,
+ * and the fills and opacities are untouched.
+ */
 export const NIFC_INCIDENT_PRESENTATION = {
   wildfire: {
     codes: ['WF', 'CX'] as const,
@@ -192,7 +203,7 @@ export const NIFC_INCIDENT_PRESENTATION = {
     fillOpacity: 0.16,
     lineColor: WILDFIRE_STATIC_COLOR,
     lineOpacity: 0.82,
-    lineWidth: 1.5,
+    lineWidth: 3,
     legendLabel: 'Mapped wildfire perimeter'
   },
   prescribed: {
@@ -201,14 +212,14 @@ export const NIFC_INCIDENT_PRESENTATION = {
     fillOpacity: 0.08,
     lineColor: '#cbd5e1',
     lineOpacity: 0.82,
-    lineWidth: 1.4,
+    lineWidth: 2.8,
     legendLabel: 'Prescribed fire perimeter'
   },
   other: {
     codes: [] as const,
     lineColor: '#94a3b8',
     lineOpacity: 0.78,
-    lineWidth: 1.2,
+    lineWidth: 2.4,
     lineDasharray: [2, 2] as const,
     legendLabel: 'Other or unclassified fire perimeter'
   }

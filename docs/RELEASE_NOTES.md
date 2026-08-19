@@ -8,6 +8,42 @@ through the normal Pages workflow. Repository release tags currently stop at
 `v0.6.23`; neither the August 13 nor August 18 refinement assigned a new tag
 or package version.
 
+### 2026-08-19: map chrome seats, heavier perimeters, honest satellite edges
+
+[Pull request 18](https://github.com/atniclimate/dynamic-drought-module/pull/18)
+carried seven presentation changes from the owner's review. Nothing here
+changes what a layer claims.
+
+- NIFC perimeter outlines doubled to 3 / 2.8 / 2.4 pixels with their
+  ratios intact, so the ranking that separates a mapped wildfire from a
+  prescribed burn from an unclassified record is unchanged and only
+  legibility moved. Terrain exaggeration in the 3D Fire view doubled to
+  2.4; the stylized smoke heights and the issuer's published building
+  heights deliberately do not scale with it.
+- The satellite toggle and the on-map key joined Share and Reset in the
+  desktop top-right column, which is where the E2 ruling already said the
+  map buttons belonged as one family. Both are node rehosts through one
+  helper, so live content, listeners, control state, and focus ride
+  along, and both are desktop-only: the phone shell and the embed keep
+  the seats their layouts were designed around.
+- The desktop bottom-right corner now reads, right to left: a
+  question-mark circle (this application's map-information disclosure,
+  which was built for it and only lacked a desktop seat), MapLibre's
+  compact attribution circle, and the pre-1.0 preview badge. The
+  attribution keeps its own reachable seat, and the badge yields while
+  that disclosure is expanded rather than covering it.
+- Six live probes replaced a guess about the satellite basemap: areas
+  outside coverage were never painting white, they were fully transparent
+  with the base map showing through, and the source bounds already
+  matched the issuer's declared extent. The real footprint is two GOES
+  disks whose union wraps the antimeridian and cannot be one rectangle,
+  so the interface states what the edges mean instead of culling tiles
+  that might carry data.
+
+Validation: `npm run typecheck` and `npm run gate` clean; the responsive,
+embed, satellite, map-information, and wildfire-semantics specs green at
+one worker.
+
 ### 2026-08-19: a cross-view contract net for the shell
 
 [Pull request 17](https://github.com/atniclimate/dynamic-drought-module/pull/17)

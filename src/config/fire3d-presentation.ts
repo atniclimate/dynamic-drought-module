@@ -17,11 +17,23 @@ import { HILLSHADE_SHADOW } from './palette';
  */
 
 /**
- * Vertical exaggeration for the 3D terrain. Deliberately restrained: relief
- * should read as context under the fire perimeters, not as a dramatized
- * landscape that implies fire behavior.
+ * Vertical exaggeration for the 3D terrain.
+ *
+ * Doubled from 1.2 to 2.4 on owner direction 2026-08-19: at the regional
+ * camera distance the Cascades read as a gentle swell rather than as the
+ * terrain a fire is moving through, and relief is the whole reason the
+ * pitched scene exists.
+ *
+ * Exaggeration is a VIEWING transform on published elevation, not a claim:
+ * it changes nothing about what any layer says. Two couplings to keep in
+ * mind when tuning it, because neither scales with this number:
+ *  - the smoke volume's extrusion heights are literal meters and stay
+ *    literal, so raising this makes stylized plumes read shorter against
+ *    the relief (see HMS_VOLUME_HEIGHT_SCALE_METERS);
+ *  - building extrusions are the issuer's published heights in meters and
+ *    must stay so; they are not to be scaled to "match" the terrain.
  */
-export const FIRE3D_TERRAIN_EXAGGERATION = 1.2;
+export const FIRE3D_TERRAIN_EXAGGERATION = 2.4;
 
 /** Camera pitch while the mode is active, in degrees. */
 export const FIRE3D_PITCH_DEGREES = 60;

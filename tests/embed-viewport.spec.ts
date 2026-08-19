@@ -510,7 +510,7 @@ test.describe('Embed at 200x600 (minimum-width iframe floor)', () => {
 });
 
 test.describe('The shared bottom overlay dock (H2; rehost E2, D-0.7.0-058)', () => {
-  test('the dock holds the notices, the map key, and the embed date stamp; the time bar lives in the sidebar', async ({ page }) => {
+  test('the dock holds the notices, the key home seat, and the embed date stamp; the time bar lives in the sidebar', async ({ page }) => {
     await gotoApp(page);
 
     // E2 (D-0.7.0-058 ruling 1): the time bar rehosted into the sidebar
@@ -525,7 +525,15 @@ test.describe('The shared bottom overlay dock (H2; rehost E2, D-0.7.0-058)', () 
     // minimal embed valid-date stamp (hidden outside embed mode).
     await expect(page.locator('#map-bottom-dock #map-notices')).toHaveCount(1);
     await expect(page.locator('#map-bottom-dock #embed-date-stamp')).toHaveCount(1);
-    await expect(page.locator('#map-bottom-dock .map-dock-foot #map-key')).toHaveCount(1);
     await expect(page.locator('#embed-date-stamp')).toBeHidden();
+
+    // The key's dock seat became the FALLBACK on 2026-08-19 (owner
+    // direction): the desktop shell moves the key into the top-right
+    // control column, leaving its home marker behind so phones and embeds
+    // still get the dock layout they were designed around.
+    await expect(
+      page.locator('#map-bottom-dock .map-dock-foot #map-key-home')
+    ).toHaveCount(1);
+    await expect(page.locator('#map-key-overlay-host > #map-key')).toHaveCount(1);
   });
 });

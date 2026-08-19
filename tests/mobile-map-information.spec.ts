@@ -381,12 +381,36 @@ test.describe('still-loading sources stay visible during live activation (W2-D6)
   });
 });
 
-test.describe('map information stays out of desktop and embed chrome', () => {
-  test('a desktop viewport keeps the information disclosure hidden', async ({ page }) => {
+test.describe('map information reaches the desktop and stays out of embeds', () => {
+  // Owner direction 2026-08-19: the round bottom-right button carries a
+  // question mark, and it is THIS disclosure rather than MapLibre's
+  // attribution circle beside it. The panel was desktop-capable all along
+  // (it reads the same registry); only its seat was missing.
+  test('a desktop viewport offers the question-mark disclosure and opens it in place', async ({
+    page
+  }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await gotoApp(page);
-    await expect(page.locator('#map-info-btn')).toBeHidden();
+
+    const button = page.locator('#map-info-btn');
+    await expect(button).toBeVisible();
+    await expect(button).toHaveAttribute('aria-label', 'Map information');
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
     await expect(page.locator('#map-info-panel')).toBeHidden();
+
+    await button.click();
+    await expect(button).toHaveAttribute('aria-expanded', 'true');
+    const panel = page.locator('#map-info-panel');
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText('Map information');
+    // The disclosure is ephemeral chrome and never enters URL state.
+    expect(await page.evaluate(() => window.location.search)).not.toContain(
+      'info'
+    );
+
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
   });
 
   test('a 400x600 embed keeps the information disclosure hidden', async ({ page }) => {
