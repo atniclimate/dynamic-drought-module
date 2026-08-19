@@ -27,6 +27,9 @@ export function wireShellPopover(
 
   const onToggle = (event: Event): void => {
     const state = (event as ToggleEvent).newState;
+    // The door is a disclosure: reflect the popover's open state on it
+    // (W2-D9) so it matches the app's other aria-expanded disclosures.
+    getDoor()?.setAttribute('aria-expanded', String(state === 'open'));
     if (state === 'open') {
       pop
         .querySelector<HTMLElement>('button:not([disabled]), input, [tabindex="0"]')

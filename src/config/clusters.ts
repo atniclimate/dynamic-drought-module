@@ -107,7 +107,11 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
     recipes: {
       // D-0.7.0-043 part 1: at the current register, perimeters plus
       // smoke ONLY; the potential read (WHP) stays out of the
-      // present-conditions read.
+      // present-conditions read. The phone Fire quick view
+      // (MOBILE_HAZARD_PRESETS in src/config/presets.ts) deliberately
+      // diverges: it adds the SPC Day 1 outlook to this pair because the
+      // phone shell has no horizon control. That is a governed, recorded
+      // divergence (docs/design/mobile-map-chrome.md), not drift.
       current: ['nifc-fires', 'hms-smoke'],
       // Near-term: the SPC fire-weather outlook over the live events.
       'weeks-ahead': ['spc-fire-weather', 'nifc-fires', 'hms-smoke'],

@@ -1459,11 +1459,16 @@ button.conditions-metric:hover {
   border-radius: 0 0 var(--radius-sm) var(--radius-sm);
 }
 
-/* The full app already carries drought categories in the sidebar. Other
+/* The desktop app already carries drought categories in the sidebar. Other
    on-map keys keep their controls and qualifications, while the compact
-   embed retains its drought key because it has no sidebar. */
-#app:not(.embed) #map-key[data-key-family='drought'] {
-  display: none !important;
+   embed retains its drought key because it has no sidebar. Scoped to the
+   desktop shell only (W2-D2): below 721px the sidebar legend is off screen
+   behind the sheet, so the phone shell keeps its drought key exactly like
+   Fire and Heat. */
+@media (min-width: 721px) {
+  #app:not(.embed) #map-key[data-key-family='drought'] {
+    display: none !important;
+  }
 }
 
 /* The basemap switcher button (U4d): the DESIGN MODEL of the map control
@@ -4633,6 +4638,22 @@ a.impact-resource-link::after {
   color: var(--fg-1);
   font: inherit;
 }
+/* W2-D3: on coarse pointers and narrow viewports the HeatRisk valid-date
+   select gets a real >=44px touch box (the desktop pointer keeps the
+   compact strip presentation above). */
+@media (pointer: coarse), (max-width: 720px) {
+  .map-key [data-heatrisk-date] {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .map-key [data-heatrisk-day] {
+    min-height: 44px;
+    max-width: 200px;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+}
 .map-key-scale {
   display: flex;
   flex: 1 1 100%;
@@ -4672,8 +4693,13 @@ a.impact-resource-link::after {
 }
 .map-key-expand[hidden] { display: none !important; }
 
+/* W2-D4: the phone key card and the measured-overflow disclosure apply to
+   EVERY key family, not only Fire; any key that genuinely overflows its
+   collapsed capacity earns the chevron (eligibility is measured in
+   src/ui/map-key.ts). The swatch-row grid keys off a real swatch child so
+   control rows (the HeatRisk valid-date select) keep their natural flow. */
 @media (max-width: 720px) {
-  #app[data-sheet-detent] #map-key[data-key-family='fire'] {
+  #app[data-sheet-detent] #map-key {
     padding: 11px 12px 9px;
     background-color: var(--rich-black);
     border: 1px solid var(--rich-black-border);
@@ -4681,7 +4707,7 @@ a.impact-resource-link::after {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.26);
     color: var(--fg-1);
   }
-  #app[data-sheet-detent] #map-key[data-key-family='fire'] .map-key-content {
+  #app[data-sheet-detent] #map-key .map-key-content {
     --mobile-map-key-collapsed-height: inherit;
     flex-direction: column;
     align-items: stretch;
@@ -4692,7 +4718,7 @@ a.impact-resource-link::after {
     transition: max-height 180ms ease;
   }
   #app[data-sheet-detent]
-    #map-key[data-key-family='fire'][data-key-expanded='true']
+    #map-key[data-key-expanded='true']
     .map-key-content {
     max-height: calc(
       100vh -
@@ -4716,41 +4742,46 @@ a.impact-resource-link::after {
     overscroll-behavior: contain;
     padding-right: 3px;
   }
-  #app[data-sheet-detent] #map-key[data-key-family='fire'] .map-key-label {
+  #app[data-sheet-detent] #map-key .map-key-label {
     font-size: 11px;
     line-height: 1;
     letter-spacing: 0.12em;
     color: var(--fg-0);
   }
-  #app[data-sheet-detent] #map-key[data-key-family='fire'] .map-key-scale {
+  #app[data-sheet-detent] #map-key .map-key-scale {
     flex-direction: column;
     align-items: stretch;
     flex-wrap: nowrap;
     gap: 3px;
   }
-  #app[data-sheet-detent] #map-key[data-key-family='fire'] .map-key-scale-label {
+  #app[data-sheet-detent] #map-key .map-key-scale-label {
     margin-bottom: 2px;
     font-size: 10px;
     line-height: 1.25;
     color: var(--fg-0);
   }
-  #app[data-sheet-detent] #map-key[data-key-family='fire'] .map-key-item {
-    display: grid;
-    grid-template-columns: 13px minmax(0, 1fr);
-    align-items: center;
-    gap: 6px;
+  #app[data-sheet-detent] #map-key .map-key-item {
     min-height: 18px;
     font-size: 10.5px;
     line-height: 1.25;
     white-space: normal;
   }
-  #app[data-sheet-detent] #map-key[data-key-family='fire'] .map-key-swatch {
+  #app[data-sheet-detent] #map-key .map-key-item:has(> .map-key-swatch) {
+    display: grid;
+    grid-template-columns: 13px minmax(0, 1fr);
+    align-items: center;
+    gap: 6px;
+  }
+  #app[data-sheet-detent] #map-key .map-key-swatch {
     width: 12px;
     height: 10px;
     border-radius: 2px;
   }
   #app[data-sheet-detent]
-    #map-key[data-key-family='fire'][data-key-overflow='true']
+    #map-key[data-key-overflow='true']
+    .map-key-expand,
+  .app-shell.embed
+    #map-key[data-key-overflow='true']
     .map-key-expand {
     appearance: none;
     display: flex;
@@ -4768,15 +4799,41 @@ a.impact-resource-link::after {
     cursor: pointer;
   }
   #app[data-sheet-detent]
-    #map-key[data-key-family='fire'][data-key-expanded='true']
+    #map-key[data-key-expanded='true']
+    .map-key-expand svg,
+  .app-shell.embed
+    #map-key[data-key-expanded='true']
     .map-key-expand svg {
     transform: rotate(180deg);
+  }
+
+  /* Narrow embeds share the measured collapse (W2-D4): the sidebar-less
+     iframe keeps its established wrapped-strip presentation, but an
+     oversized key clamps to the shared collapsed capacity and expands
+     within the viewport rather than consuming half the iframe. */
+  .app-shell.embed #map-key .map-key-content {
+    max-height: var(--mobile-map-key-collapsed-height);
+    overflow: hidden;
+    transition: max-height 180ms ease;
+  }
+  .app-shell.embed #map-key[data-key-expanded='true'] .map-key-content {
+    max-height: calc(100vh - 140px);
+    max-height: calc(100dvh - 140px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 3px;
+  }
+  .app-shell.embed #map-key[data-key-overflow='true'] .map-key-expand {
+    padding: 0;
+    /* The phone card's negative pull rides its larger bottom padding; the
+       embed strip has none, so keep the chevron inside the key box. */
+    margin: 3px 0 0;
   }
 }
 
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   @media (max-width: 720px) {
-    #app[data-sheet-detent] #map-key[data-key-family='fire'] {
+    #app[data-sheet-detent] #map-key {
       background-color: var(--rich-black-glass);
       -webkit-backdrop-filter: blur(var(--rich-black-blur));
       backdrop-filter: blur(var(--rich-black-blur));
@@ -4790,10 +4847,15 @@ a.impact-resource-link::after {
     --mobile-map-control-gap: 6px;
     --mobile-map-key-collapsed-height: 190px;
   }
+  /* The short narrow embed shares the tighter collapsed capacity. */
+  .app-shell.embed {
+    --mobile-map-key-collapsed-height: 190px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #app[data-sheet-detent] #map-key[data-key-family='fire'] .map-key-content {
+  #app[data-sheet-detent] #map-key .map-key-content,
+  .app-shell.embed #map-key .map-key-content {
     transition: none;
   }
   #app[data-sheet-detent]
@@ -5056,6 +5118,9 @@ a.impact-resource-link::after {
   .app-shell.embed .map-key {
     width: 100%;
     max-width: 100%;
+    /* W2-D4: the stacked full-width key ends above the bottom-right SAT
+       control column instead of running its bottom rows underneath it. */
+    margin-bottom: 14px;
   }
   .app-shell.embed .embed-brand {
     align-self: flex-end;

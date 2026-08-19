@@ -143,6 +143,44 @@ test.describe('the mobile hazard rail (390x844)', () => {
     await expect(buttons.nth(3)).toHaveAttribute('aria-pressed', 'false');
   });
 
+  test('accessible names stand alone: no title duplicates them verbatim (W2-D7)', async ({
+    page
+  }) => {
+    await gotoApp(page);
+
+    // The four hazard-rail buttons carry aria-labels only; a title that
+    // restates the accessible name verbatim is a redundant tooltip plus
+    // double speech, not information.
+    const buttons = page.locator('#hazard-rail .hazard-rail-btn');
+    await expect(buttons).toHaveCount(4);
+    for (const button of await buttons.all()) {
+      expect(await button.getAttribute('title')).toBeNull();
+      expect(((await button.getAttribute('aria-label')) ?? '').length).toBeGreaterThan(0);
+    }
+
+    // The sidebar collapse/expand pair and the ATNI seal trigger follow
+    // the same rule.
+    for (const selector of ['#sidebar-collapse', '#sidebar-expand', '.brand-seal']) {
+      const element = page.locator(selector);
+      expect(await element.getAttribute('title'), selector).toBeNull();
+      expect(
+        ((await element.getAttribute('aria-label')) ?? '').length,
+        selector
+      ).toBeGreaterThan(0);
+    }
+
+    // Controls whose title ADDS information keep it (the spot-check's
+    // counterexamples): Share and Reset describe their action targets.
+    await expect(page.locator('#share-btn')).toHaveAttribute(
+      'title',
+      'Copy embed-ready link to clipboard'
+    );
+    await expect(page.locator('#reset-btn')).toHaveAttribute(
+      'title',
+      'Reset to selected region bounds'
+    );
+  });
+
   test('tapping ENSO applies the shipped SST anomaly preset through shareable URL state', async ({
     page
   }) => {

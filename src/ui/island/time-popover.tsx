@@ -185,6 +185,10 @@ export function TimeCompact({ specTick }: TimeCompactProps) {
             ref={moreRef}
             popovertarget="shell-time-popover"
             title={spec.stamp.detail}
+            // Derived from the live popover state so a spec-tick re-render
+            // while the card is open cannot clobber the discipline's toggle
+            // reflection (W2-D9).
+            aria-expanded={popRef.current?.matches(':popover-open') ?? false}
           >
             More time
           </button>

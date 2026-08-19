@@ -346,6 +346,40 @@ test.describe('U-HEATRISK-DAYS multi-day read', () => {
     expect(new URLSearchParams(await search(page)).get('heatday')).toBe('2');
   });
 
+  test('the valid-date select keeps its compact desktop face', async ({
+    page
+  }) => {
+    const exportedTimes: number[] = [];
+    await routeHeatRisk(page, exportedTimes);
+    await gotoApp(page, '?layers=heatrisk&view=console');
+    const box = await heatDaySelect(page).boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.height).toBeLessThanOrEqual(32);
+  });
+
+  test.describe('coarse-pointer phone (W2-D3)', () => {
+    // hasTouch flips Chromium's (pointer: coarse) media on, the geometry
+    // the W2-D3 touch-floor rule targets.
+    test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+    test('the valid-date select meets the 44px touch floor', async ({
+      page
+    }) => {
+      const exportedTimes: number[] = [];
+      await routeHeatRisk(page, exportedTimes);
+      await gotoApp(page, '?layers=heatrisk');
+
+      expect(
+        await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches)
+      ).toBe(true);
+      const select = heatDaySelect(page);
+      await expect(select).toBeVisible();
+      const box = await select.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+    });
+  });
+
   test('missing time metadata fails honestly without querying or drawing a frame', async ({
     page
   }) => {

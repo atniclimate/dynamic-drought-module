@@ -212,6 +212,48 @@ test.describe('U2 the mobile bottom sheet (390x844)', () => {
     await expect(page.locator('#sheet-grabber')).toBeHidden();
   });
 
+  test('the first-use hint fires on the first MANUAL arrival at peek, once ever (W2-D11)', async ({
+    page
+  }) => {
+    await gotoApp(page);
+    const app = page.locator('#app');
+    const hint = page.locator('.sheet-hint');
+
+    // A normal phone boot lands CLOSED: no hint fires on a surface whose
+    // grabber is not even visible yet.
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
+    await expect(hint).toHaveCount(0);
+
+    // Raise the sheet through a footer door (a programmatic arrival at
+    // half; still no hint), then step DOWN to peek by hand: the first
+    // manual arrival at peek shows the one-time hint.
+    await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(hint).toHaveCount(0);
+    await page.locator('#sheet-grabber').focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'peek');
+    await expect(hint).toBeVisible();
+    await expect(hint).toContainText('Drag up for the full briefing');
+
+    // Any detent move dismisses it, and the localStorage guard makes the
+    // dismissal permanent: a second manual arrival shows nothing.
+    await page.keyboard.press('ArrowUp');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(hint).toHaveCount(0);
+    await page.keyboard.press('ArrowDown');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'peek');
+    await expect(hint).toHaveCount(0);
+
+    // The guard survives a reload (once EVER, not once per session).
+    await gotoApp(page);
+    await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
+    await page.locator('#sheet-grabber').focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'peek');
+    await expect(hint).toHaveCount(0);
+  });
+
   test('the "All layers" door expands the console sheet to the full catalog', async ({
     page
   }) => {

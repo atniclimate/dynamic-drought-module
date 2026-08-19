@@ -435,7 +435,6 @@ export function refreshLayersStudioEntry(): void {
     placeLink.href = fullSitePlaceStudioUrl();
     placeLink.target = '_blank';
     placeLink.rel = 'noopener';
-    placeLink.title = PLACE_STUDIO_ENTRY_TITLE;
     placeLink.textContent = 'Open place selection on the full site';
     placeLink.addEventListener('click', () => {
       placeLink.href = fullSitePlaceStudioUrl();
@@ -447,7 +446,6 @@ export function refreshLayersStudioEntry(): void {
     layersLink.href = fullSiteLayersStudioUrl();
     layersLink.target = '_blank';
     layersLink.rel = 'noopener';
-    layersLink.title = LAYERS_STUDIO_ENTRY_TITLE;
     layersLink.textContent = 'Open layer controls on the full site';
     layersLink.addEventListener('click', () => {
       layersLink.href = fullSiteLayersStudioUrl();
@@ -470,8 +468,8 @@ export function refreshLayersStudioEntry(): void {
   placeButton.id = PLACE_STUDIO_ENTRY_ID;
   placeButton.className = 'brief-console-door place-studio-entry';
   placeButton.textContent = 'PLACE';
+  // Accessible name only (W2-D7): no title that duplicates it verbatim.
   placeButton.setAttribute('aria-label', PLACE_STUDIO_ENTRY_TITLE);
-  placeButton.title = PLACE_STUDIO_ENTRY_TITLE;
   placeButton.addEventListener('click', () => {
     placeStudioOpener = placeButton;
     enterPlaceStudio();
@@ -483,7 +481,6 @@ export function refreshLayersStudioEntry(): void {
   layersButton.className = 'brief-console-door layers-studio-entry';
   layersButton.textContent = 'LAYERS';
   layersButton.setAttribute('aria-label', LAYERS_STUDIO_ENTRY_TITLE);
-  layersButton.title = LAYERS_STUDIO_ENTRY_TITLE;
   layersButton.addEventListener('click', enterLayersStudio);
 
   pair.append(placeButton, layersButton);

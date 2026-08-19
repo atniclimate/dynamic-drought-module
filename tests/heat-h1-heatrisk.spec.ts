@@ -811,8 +811,41 @@ for (const viewport of [
       expect(item.left).toBeGreaterThanOrEqual(metrics.left - 1);
       expect(item.right).toBeLessThanOrEqual(metrics.right + 1);
       expect(item.top).toBeGreaterThanOrEqual(metrics.top - 1);
-      expect(item.bottom).toBeLessThanOrEqual(metrics.bottom + 1);
       expect(item.fontSize).toBeGreaterThanOrEqual(9.5);
+    }
+
+    // W2-D4: an oversized key collapses to the shared capacity behind the
+    // measured chevron instead of consuming the iframe. Without overflow
+    // the old full-containment contract holds unchanged; with it, every
+    // item is reachable through the bounded expansion's scroll.
+    const expander = page.locator('#map-key-expand');
+    if (await expander.isHidden()) {
+      for (const item of metrics.itemBoxes) {
+        expect(item.bottom).toBeLessThanOrEqual(metrics.bottom + 1);
+      }
+    } else {
+      const content = page.locator('#map-key-content');
+      const collapsedHeight = await content.evaluate(
+        (element) => element.getBoundingClientRect().height
+      );
+      expect(collapsedHeight).toBeLessThanOrEqual(225);
+      await expander.click();
+      await expect(expander).toHaveAttribute('aria-expanded', 'true');
+      const expandedBox = await key.boundingBox();
+      expect(expandedBox).not.toBeNull();
+      expect(expandedBox!.y).toBeGreaterThanOrEqual(0);
+      expect(expandedBox!.y + expandedBox!.height).toBeLessThanOrEqual(
+        viewport.height
+      );
+      const reachedEnd = await content.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+        return element.scrollTop + element.clientHeight >= element.scrollHeight - 1;
+      });
+      expect(reachedEnd, 'the expanded key content cannot scroll to its end').toBe(
+        true
+      );
+      await expander.click();
+      await expect(expander).toHaveAttribute('aria-expanded', 'false');
     }
 
     const keyBox = await key.boundingBox();

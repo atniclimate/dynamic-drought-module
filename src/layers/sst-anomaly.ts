@@ -46,6 +46,10 @@
 import type maplibregl from 'maplibre-gl';
 
 import { URLS } from '../config/urls';
+import {
+  SST_ANOMALY_LEGEND_TITLE,
+  SST_ANOMALY_SCALE
+} from '../config/palette';
 import { registry } from '../state/registry';
 import { timeline } from '../state/timeline';
 import { fetchWithBudget, sleepUnlessAborted } from '../util/fetch';
@@ -57,6 +61,15 @@ import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/
 import { showToast } from '../ui/overlay';
 
 const LAYER_KEY = 'sst-anomaly';
+/**
+ * On-map key snapshot event (the map-key module's established snapshot
+ * pattern, e.g. ddm:nadm-snapshot): announces the displayed frame's
+ * observed date so the compact key can state it without reaching into
+ * this module. Dispatched with a null date while only the provider's
+ * `default` (latest) frame is up, with the real date once the TIME axis
+ * is enumerated, and as inactive on deactivate.
+ */
+const SST_SNAPSHOT_EVENT = 'ddm:sst-snapshot';
 const SOURCE_ID = 'sst-anomaly';
 const LAYER_ID = 'sst-anomaly';
 const NINO_SOURCE_ID = 'nino34-box';
@@ -97,6 +110,16 @@ type SstStatus = 'loading' | 'ready' | 'error';
 
 function reportStatus(state: SstStatus): void {
   registry.setStatus(LAYER_KEY, state);
+}
+
+/** Announce the displayed frame date to the on-map key (see the constant). */
+function emitSstSnapshot(
+  status: 'ready' | 'inactive',
+  date: string | null
+): void {
+  window.dispatchEvent(
+    new CustomEvent(SST_SNAPSHOT_EVENT, { detail: { status, date } })
+  );
 }
 
 const NINO34_BOX: GeoJSON.Feature = {
@@ -353,6 +376,7 @@ function installTimeBar(map: maplibregl.Map): void {
   if (dates.length === 0) return;
   const date = dates[dateIndex] ?? dates[dates.length - 1]!;
   const reduced = prefersReducedMotion();
+  emitSstSnapshot('ready', date);
 
   setTimeBar(LAYER_KEY, {
     ariaLabel: 'Sea surface temperature anomaly timeline',
@@ -476,12 +500,10 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       render: (body) =>
         renderSwatchLegend(
           body,
-          'Ocean temperature anomaly',
-          [
-            { color: '#b2182b', label: 'Warmer than usual' },
-            { color: '#f7f7f7', label: 'Near usual' },
-            { color: '#2166ac', label: 'Cooler than usual' }
-          ],
+          SST_ANOMALY_LEGEND_TITLE,
+          // The one shared scale (src/config/palette.ts): the sidebar legend
+          // and the on-map key read the same table so they cannot drift.
+          SST_ANOMALY_SCALE,
           'NASA GHRSST MUR daily anomaly · the dashed box is Nino 3.4, the region the ENSO index measures'
         )
     });
@@ -492,6 +514,9 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     }
 
     reportStatus('ready');
+    // The key can state the surface before the TIME axis resolves; the
+    // observed date follows once installTimeBar runs with real dates.
+    emitSstSnapshot('ready', null);
   } catch (err) {
     console.warn('[sst-anomaly] activation failed.', err);
     reportStatus('error');
@@ -570,6 +595,7 @@ export function deactivate(map: maplibregl.Map): void {
   clearTimeBar(LAYER_KEY);
   hideLegend(LAYER_KEY);
   timeline.setSstDate(null);
+  emitSstSnapshot('inactive', null);
 }
 
 /**
