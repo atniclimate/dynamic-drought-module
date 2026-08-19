@@ -23,9 +23,10 @@
  * Usage: npm run build:power-tiles
  */
 
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { PMTiles } from 'pmtiles';
+import { transformWithOxc } from 'vite';
 import { geojsonLayersToPmtiles } from './lib/geojson-to-pmtiles.mjs';
 
 const SERVICE =
@@ -34,7 +35,9 @@ const PNW_BBOX = [-125, 41.5, -110.5, 49.5]; // matches the terrain bake exactly
 const PNW_CENTER = [-119, 45.5, 5];
 const MAX_ZOOM = 10;
 const PAGE_SIZE = 2000;
-const MAX_PAGES = 10;
+/** Generous page budget; EXHAUSTING it with data remaining is a hard
+ * failure below, never a silent truncation. */
+const MAX_PAGES = 15;
 /** The PNW envelope held 6,941 lines at extract time (2026-08-19 UTC);
  * a count far outside that band means the archive changed shape. */
 const MIN_EXPECTED_FEATURES = 5_000;
@@ -76,11 +79,39 @@ async function fetchPage(offset) {
   return body;
 }
 
+/**
+ * Import the runtime width table (TypeScript, type-only imports) through
+ * the oxc-transpile pattern and fail when the extract carries a
+ * VOLT_CLASS the table does not map.
+ */
+async function assertVoltClassDomainCovered(features) {
+  const sourcePath = fileURLToPath(
+    new URL('../src/config/wildfire-presentation.ts', import.meta.url)
+  );
+  const source = await readFile(sourcePath, 'utf8');
+  const transpiled = await transformWithOxc(source, sourcePath, { lang: 'ts' });
+  const encoded = Buffer.from(transpiled.code).toString('base64');
+  const mod = await import(`data:text/javascript;base64,${encoded}`);
+  const mapped = new Set((mod.POWER_LINE_WIDTHS ?? []).map(([voltClass]) => voltClass));
+  if (mapped.size === 0) throw new Error('POWER_LINE_WIDTHS not found in the runtime table');
+  const seen = new Set(
+    features.map((f) => String(f.properties?.VOLT_CLASS ?? 'NOT AVAILABLE'))
+  );
+  const unmapped = [...seen].filter((voltClass) => !mapped.has(voltClass));
+  if (unmapped.length > 0) {
+    throw new Error(
+      `extract carries voltage class(es) the runtime width table does not map: ${unmapped.join(', ')}; update POWER_LINE_WIDTHS deliberately`
+    );
+  }
+  console.log(`  voltage classes covered by the runtime table: ${[...seen].sort().join(', ')}`);
+}
+
 async function main() {
   console.log('power transmission-line bake (archived HIFLD copy, PNW box)');
   console.log(`  service: ${SERVICE}`);
 
   const features = [];
+  let exhausted = false;
   for (let page = 0; page < MAX_PAGES; page++) {
     const body = await fetchPage(features.length);
     features.push(...body.features);
@@ -89,7 +120,16 @@ async function main() {
       body.exceededTransferLimit === true ||
       body.properties?.exceededTransferLimit === true ||
       body.features.length === PAGE_SIZE;
-    if (!more || body.features.length === 0) break;
+    if (!more || body.features.length === 0) {
+      exhausted = true;
+      break;
+    }
+  }
+  if (!exhausted) {
+    // A truncated archive is a lie about coverage; refuse to bake it.
+    throw new Error(
+      `page budget (${MAX_PAGES}) spent with the server still reporting more data; refusing to bake a truncated archive`
+    );
   }
   if (features.length < MIN_EXPECTED_FEATURES || features.length > MAX_EXPECTED_FEATURES) {
     throw new Error(
@@ -99,6 +139,11 @@ async function main() {
 
   // Verbatim attributes; no recoding of issuer sentinels.
   const fc = { type: 'FeatureCollection', features };
+
+  // The runtime width table must cover every voltage class actually in
+  // the extract: an unseen class would silently ride the match fallback,
+  // so a domain change forces a conscious presentation update instead.
+  await assertVoltClassDomainCovered(features);
 
   const attribution =
     'U.S. Electric Power Transmission Lines (HIFLD, U.S. Government), via the Esri ' +

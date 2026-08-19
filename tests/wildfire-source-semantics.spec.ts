@@ -3,9 +3,11 @@ import { expect, test } from '@playwright/test';
 import {
   FBFM40_PRESENTATION,
   FUELS_DRAPE_OPACITY,
-  POWER_CONTEXT_QUALIFICATION,
   POWER_LINE_COLOR,
   POWER_LINE_WIDTHS,
+  POWER_LINES_QUALIFICATION,
+  POWER_PLANTS_QUALIFICATION,
+  POWER_SHARED_QUALIFICATION,
   buildPowerLinePaint,
   HMS_DENSITY_PRESENTATION,
   HMS_OVERVIEW_QUALIFICATION,
@@ -612,14 +614,23 @@ test('the power context maps issuer voltage classes to width only, with the arch
   // The match falls back to the thinnest width for any unseen class.
   expect(width[width.length - 1]).toBe(0.6);
 
-  // The qualification pins the archive currency caveat and the honest
-  // absence of substations and distribution lines.
-  expect(POWER_CONTEXT_QUALIFICATION).toMatch(/ARCHIVED/);
-  expect(POWER_CONTEXT_QUALIFICATION).toMatch(/2024-09-30/);
-  expect(POWER_CONTEXT_QUALIFICATION).toMatch(
+  // The qualifications pin the archive currency caveat, the mixed-status
+  // disclosure, the dashed unknown-class treatment, the plants' bounded
+  // meaning, and the honest absence of substations and distribution
+  // lines. Composed per active surface in src/layers/power-3d.ts so no
+  // sentence ever describes a layer that is not in the scene.
+  expect(POWER_LINES_QUALIFICATION).toMatch(/ARCHIVED/);
+  expect(POWER_LINES_QUALIFICATION).toMatch(/2024-09-30/);
+  expect(POWER_LINES_QUALIFICATION).toMatch(/inactive or status-unknown/i);
+  expect(POWER_LINES_QUALIFICATION).toMatch(/dashed at the thinnest width/i);
+  expect(POWER_PLANTS_QUALIFICATION).toMatch(/EIA inventory locations/);
+  expect(POWER_PLANTS_QUALIFICATION).toMatch(/location only, not capacity or fuel/i);
+  expect(POWER_SHARED_QUALIFICATION).toMatch(
     /never for siting or safety-critical decisions/i
   );
-  expect(POWER_CONTEXT_QUALIFICATION).toMatch(/substations and distribution lines/i);
+  expect(POWER_SHARED_QUALIFICATION).toMatch(
+    /substations and distribution lines have no authoritative public national source/i
+  );
 });
 
 test('fire key composition reflects SPC-only, NIFC-only, and combined active sets', () => {

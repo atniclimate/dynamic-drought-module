@@ -135,6 +135,9 @@ let smokeVolumeOn = false;
 let smokeModule: typeof import('../layers/hms-smoke-volume') | null = null;
 let contextModule: typeof import('./fire3d-context') | null = null;
 let contextKeys: readonly string[] = [];
+/** Truthful per-layer embed disclosure lines, composed at activation from
+ * what actually rendered (never static claims). */
+let contextEmbedLines: readonly string[] = [];
 let contextAbort: AbortController | null = null;
 
 /** The latest mode status. */
@@ -178,12 +181,7 @@ function syncEmbedNote(active: boolean): void {
   const lines = [
     FIRE3D_NON_PREDICTION_NOTE,
     FIRE3D_COVERAGE_NOTE,
-    ...contextKeys.map(
-      (key) =>
-        contextModule?.EMBED_CONTEXT_LINES[
-          key as keyof typeof contextModule.EMBED_CONTEXT_LINES
-        ] ?? ''
-    )
+    ...contextEmbedLines
   ].filter((line) => line.length > 0);
   const note = existing ?? document.createElement('p');
   note.id = EMBED_NOTE_ID;
@@ -265,6 +263,7 @@ function rollbackScene(map: maplibregl.Map): void {
   }
   if (contextModule) contextModule.deactivateContextLayers(map);
   contextKeys = [];
+  contextEmbedLines = [];
   if (smokeVolumeOn && smokeModule) {
     smokeModule.deactivateSmokeVolume(map);
     if (!registry.getActiveKeys().has('hms-smoke')) {
@@ -400,15 +399,21 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
   if (myGeneration !== generation || !active) return;
   if (contextModule) {
     contextAbort = new AbortController();
-    let keys: readonly string[] = [];
+    let activation: import('./fire3d-context').Fire3DContextActivation = {
+      keys: [],
+      embedLines: []
+    };
     try {
-      keys = await contextModule.activateContextLayers(map, contextAbort.signal);
+      activation = await contextModule.activateContextLayers(
+        map,
+        contextAbort.signal
+      );
     } catch (err) {
-      keys = [];
       console.warn('[fire3d] context layers failed to activate.', err);
     }
     if (myGeneration !== generation || !active) return;
-    contextKeys = keys;
+    contextKeys = activation.keys;
+    contextEmbedLines = activation.embedLines;
   }
   publishStatus('active', null);
 }

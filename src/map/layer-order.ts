@@ -79,6 +79,7 @@ export const CONDITION_SURFACE_IDS: readonly string[] = [
  */
 export const CONTEXT_OVERLAY_IDS: readonly string[] = [
   'power-lines',
+  'power-lines-unknown',
   'power-plants'
 ];
 

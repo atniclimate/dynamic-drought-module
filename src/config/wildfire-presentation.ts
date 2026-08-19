@@ -641,5 +641,17 @@ export function buildPowerPlantPaint(): NonNullable<
   };
 }
 
-export const POWER_CONTEXT_QUALIFICATION =
-  'Transmission lines: HIFLD (U.S. Government) ARCHIVED snapshot, last data update 2024-09-30, no longer maintained; line width follows the issuer\'s voltage class and unknown values draw thinnest. Not comprehensive or current; never for siting or safety-critical decisions. Substations and distribution lines have no honest public source and are absent by design.';
+/**
+ * The power legend note is COMPOSED from these parts so it only ever
+ * describes surfaces actually in the scene (either source may degrade
+ * alone): the lines part when the archive is on, the plants part when the
+ * live fetch succeeded, and the shared closing always.
+ */
+export const POWER_LINES_QUALIFICATION =
+  'Transmission lines: HIFLD (U.S. Government) ARCHIVED snapshot, last data update 2024-09-30, no longer maintained; includes records the issuer marks inactive or status-unknown, drawn identically; line width follows the issuer\'s voltage class, and an unknown class draws dashed at the thinnest width.';
+
+export const POWER_PLANTS_QUALIFICATION =
+  'Power plants: EIA inventory locations (Forms 860/860M); symbols mark location only, not capacity or fuel.';
+
+export const POWER_SHARED_QUALIFICATION =
+  'Not comprehensive or current; never for siting or safety-critical decisions. Substations and distribution lines have no authoritative public national source and are absent by design.';

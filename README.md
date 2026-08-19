@@ -289,7 +289,9 @@ federal HIFLD dataset (baked once, last data update 2024-09-30, with
 that currency caveat always in the legend) and live power plants from
 the U.S. Energy Information Administration, labeled with the issuer's
 own reporting period. Substations and distribution lines are absent by
-design; no honest public source exists for either.
+design: substation locations are withheld by the publishing agencies for
+security reasons, and no authoritative public national
+distribution-circuit dataset exists.
 
 The view is a 3D context view, deliberately not a "digital twin": that
 phrase is a term of art for systems that bundle physics-based fire

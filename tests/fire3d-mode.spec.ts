@@ -13,8 +13,10 @@ import {
   FBFM40_PRESENTATION,
   FUELS_DRAPE_OPACITY,
   HMS_VOLUME_QUALIFICATION,
-  POWER_CONTEXT_QUALIFICATION
+  POWER_LINES_QUALIFICATION,
+  POWER_SHARED_QUALIFICATION
 } from '../src/config/wildfire-presentation';
+import { activateContextLayers } from '../src/map/fire3d-context';
 import {
   getFire3DStatus,
   setFire3DActive,
@@ -317,6 +319,13 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
       type: 'line',
       source: 'power-lines'
     });
+    // Unknown voltage class rides its own dashed layer so missing issuer
+    // data never reads as a definite low-voltage line.
+    expect(harness.layerSpecs.get('power-lines-unknown')).toMatchObject({
+      type: 'line',
+      source: 'power-lines',
+      paint: { 'line-dasharray': [2, 2] }
+    });
     expect(harness.sources.get('power-plants')).toMatchObject({
       type: 'geojson'
     });
@@ -341,6 +350,7 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     expect(harness.sources.has('power-lines')).toBe(false);
     expect(harness.sources.has('power-plants')).toBe(false);
     expect(harness.layerSpecs.has('power-lines')).toBe(false);
+    expect(harness.layerSpecs.has('power-lines-unknown')).toBe(false);
     expect(harness.layerSpecs.has('power-plants')).toBe(false);
     expect(harness.skyCalls.at(-1)).toEqual(FIRE3D_SKY_CLEAR_SPECIFICATION);
     expect(harness.layerSpecs.has('hms-smoke-volume')).toBe(false);
@@ -446,6 +456,40 @@ test('a corrupt fuels archive degrades only the drape; the scene stays active', 
     setFire3DActive(map, false);
     setFire3DPreference(false);
     restoreFetch();
+    browser.restore();
+  }
+});
+
+test('a partial power activation composes a truthful embed line (plants only)', async () => {
+  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+  // Fuels and the lines archive are corrupt; only the live plants read
+  // succeeds: the embed disclosure may name ONLY the plants.
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes('Power_Plants_in_the_US')) {
+      return new Response(JSON.stringify(PLANTS_STUB_FC), { status: 200 });
+    }
+    return new Response('<html>not tiles</html>', { status: 200 });
+  }) as typeof fetch;
+  const harness = fakeMapHarness({ pitch: 0, bearing: 0 });
+
+  try {
+    const controller = new AbortController();
+    const activation = await activateContextLayers(
+      harness.map,
+      controller.signal
+    );
+    expect(activation.keys).toEqual(['power']);
+    expect(activation.embedLines).toHaveLength(1);
+    expect(activation.embedLines[0]).toContain(
+      'EIA power plants (reporting period 2025-02)'
+    );
+    expect(activation.embedLines[0]).not.toContain('HIFLD');
+    expect(harness.layerSpecs.has('power-plants')).toBe(true);
+    expect(harness.layerSpecs.has('power-lines')).toBe(false);
+  } finally {
+    globalThis.fetch = originalFetch;
     browser.restore();
   }
 });
@@ -631,6 +675,8 @@ test.describe('W3/W4 browser truth', () => {
     let demRequests = 0;
     let fuelsBytes = 0;
     let fuelsRequests = 0;
+    let powerBytes = 0;
+    let powerRequests = 0;
     page.on('response', (response) => {
       const url = response.url();
       const length = Number(response.headers()['content-length']);
@@ -640,6 +686,9 @@ test.describe('W3/W4 browser truth', () => {
       } else if (url.includes('fuels-fbfm40-pnw.pmtiles')) {
         fuelsRequests += 1;
         if (Number.isFinite(length)) fuelsBytes += length;
+      } else if (url.includes('power-lines-pnw.pmtiles')) {
+        powerRequests += 1;
+        if (Number.isFinite(length)) powerBytes += length;
       }
     });
 
@@ -697,7 +746,10 @@ test.describe('W3/W4 browser truth', () => {
     await expect(powerLegend).toHaveCount(1);
     await expect
       .poll(() => powerLegend.textContent())
-      .toContain(POWER_CONTEXT_QUALIFICATION);
+      .toContain(POWER_LINES_QUALIFICATION);
+    await expect
+      .poll(() => powerLegend.textContent())
+      .toContain(POWER_SHARED_QUALIFICATION);
     await expect
       .poll(() => powerLegend.textContent())
       .toContain('reporting period 2025-02');
@@ -720,6 +772,9 @@ test.describe('W3/W4 browser truth', () => {
     );
     console.log(
       `[fire3d-budget] fuels archive transport: ${fuelsBytes} bytes over ${fuelsRequests} requests`
+    );
+    console.log(
+      `[fire3d-budget] power-lines archive transport: ${powerBytes} bytes over ${powerRequests} requests (the live EIA plants read is stubbed here; its real measure is 174,970 raw bytes in one request, probed 2026-08-18)`
     );
 
     // Toggle off: the flat scene returns and the flag drops.
@@ -804,6 +859,9 @@ test.describe('W3/W4 browser truth', () => {
     await expect
       .poll(() => embedNote.textContent())
       .toContain('HIFLD transmission lines');
+    await expect
+      .poll(() => embedNote.textContent())
+      .toContain('reporting period 2025-02');
     await page.screenshot({
       path: 'fire3d-evidence/fire3d-embed-disclosure.png'
     });

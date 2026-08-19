@@ -348,11 +348,11 @@ const FEATURE_BUDGETS = [
   },
   {
     key: 'fire3d-mode',
-    label: 'Desktop 3D Fire mode: terrain + camera + sky orchestrator, the volumetric smoke companion, and the issuer-published context chunk (measured 6.7 kB gzip across 7 chunks on 2026-08-18 after the context chunk landed; archive transport at 1280x720 the same day measured 2,278,573 terrain bytes over 19 ranged requests plus 1,215,252 fuels-drape bytes over 11; the smoke and context roots are reached via dynamic import from the first root and are invisible to the static closure walk, so ALL roots are declared)',
+    label: 'Desktop 3D Fire mode: terrain + camera + sky orchestrator, the volumetric smoke companion, and the issuer-published context chunk with the fuels drape and power context (measured 8.0 kB gzip across 7 chunks on 2026-08-18 after the power context landed; archive transport at 1280x720 measured 2,278,573 terrain bytes over 19 ranged requests, 1,215,252 fuels-drape bytes over 11, and 159,819 transmission-line bytes over 10, plus one live EIA plants read probed at 174,970 raw bytes; the smoke and context roots are reached via dynamic import from the first root and are invisible to the static closure walk, so ALL roots are declared)',
     rootModules: ['src/map/fire3d.ts', 'src/layers/hms-smoke-volume.ts', 'src/map/fire3d-context.ts'],
     activationJsGzipKb: 8.5,
-    networkBytes: 4_200_000,
-    requestCount: 36,
+    networkBytes: 4_600_000,
+    requestCount: 50,
     dataAssets: [{
       // MUST equal SIZE_BUDGET_BYTES in scripts/build-fuels-tiles.mjs so a
       // rebake cannot pass the builder and fail this gate (or vice versa).
