@@ -104,6 +104,18 @@ state-curated set).
   vintage, retrieval date, and the snapshot-not-a-prediction caveat are
   recorded in the archive attribution and repeated in the in-app legend.
   Loaded only while the 3D Fire view is active.
+- `power-lines-pnw.pmtiles`: Pacific Northwest transmission lines for the
+  3D Fire view's power context (built by `npm run build:power-tiles`).
+  A one-time extract of the ARCHIVED federal HIFLD dataset via the public
+  Esri Federal User Community copy (accessInformation "U.S. Government";
+  Extract capability enabled; the item states it is archived with last
+  data update 2024-09-30; some geometries carry OpenStreetMap provenance,
+  credited in the attribution). 6,941 features, 2,580,885 bytes, retrieved
+  2026-08-19 UTC. Issuer sentinel attributes are preserved verbatim
+  (VOLTAGE -999999, VOLT_CLASS 'NOT AVAILABLE'). The in-app qualification
+  carries the mandatory caveat: not comprehensive or current, never for
+  siting or safety-critical decisions. Loaded only while the 3D Fire view
+  is active.
 - `us-places.json`: municipal label points (Natural Earth, built by
   `npm run build:states` tooling; see scripts/).
 - `tribal-roster.json` + `tribal-larname-crosswalk.json`: the

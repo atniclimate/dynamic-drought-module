@@ -21,9 +21,13 @@
 import type maplibregl from 'maplibre-gl';
 
 import { activateFuelsDrape, deactivateFuelsDrape } from '../layers/fuels-3d';
+import {
+  activatePowerContext,
+  deactivatePowerContext
+} from '../layers/power-3d';
 
 /** Stable keys for the context layers, in activation order. */
-export type Fire3DContextKey = 'fuels';
+export type Fire3DContextKey = 'fuels' | 'power';
 
 /**
  * One-line vintage-and-caveat statements per context layer for the embed
@@ -33,7 +37,9 @@ export type Fire3DContextKey = 'fuels';
  */
 export const EMBED_CONTEXT_LINES: Record<Fire3DContextKey, string> = {
   fuels:
-    'Fuel colors: LANDFIRE 2024 fuel model classes, a translucent static snapshot at reduced resolution.'
+    'Fuel colors: LANDFIRE 2024 fuel model classes, a translucent static snapshot at reduced resolution.',
+  power:
+    'Power: HIFLD transmission lines (archived, last updated 2024-09-30) and live EIA plants; not for siting or safety decisions.'
 };
 
 /**
@@ -54,6 +60,12 @@ export async function activateContextLayers(
     console.warn('[fire3d-context] the fuels drape failed to activate.', err);
   }
 
+  try {
+    if (await activatePowerContext(map, signal)) active.push('power');
+  } catch (err) {
+    console.warn('[fire3d-context] the power context failed to activate.', err);
+  }
+
   if (signal.aborted) {
     deactivateContextLayers(map);
     return [];
@@ -64,4 +76,5 @@ export async function activateContextLayers(
 /** Remove every context layer. Defensive; safe when never activated. */
 export function deactivateContextLayers(map: maplibregl.Map): void {
   deactivateFuelsDrape(map);
+  deactivatePowerContext(map);
 }

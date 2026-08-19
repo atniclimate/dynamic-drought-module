@@ -358,6 +358,11 @@ const FEATURE_BUDGETS = [
       // rebake cannot pass the builder and fail this gate (or vice versa).
       path: 'data/fuels-fbfm40-pnw.pmtiles',
       maxBytes: 30_000_000,
+    }, {
+      // MUST equal MAX_ARCHIVE_BYTES in scripts/build-power-tiles.mjs
+      // (same cross-gate agreement rule).
+      path: 'data/power-lines-pnw.pmtiles',
+      maxBytes: 8_000_000,
     }],
   },
 ];

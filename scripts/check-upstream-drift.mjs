@@ -178,6 +178,14 @@ const PROBE_SUFFIXES = new Map([
   ['nifcRawsFeatureServer', '?f=json'],
   ['cpcWeeklySstAnomalyMapServer', '?f=json'],
   ['biaLarFeatureServer', '?f=json'],
+  // The 3D Fire power context's live plants read: probe the bounded
+  // envelope count the runtime shape depends on, not just the root.
+  [
+    'eiaPowerPlantsFeatureLayer',
+    '/query?where=1%3D1&geometry=-125,41.5,-110.5,49.5' +
+      '&geometryType=esriGeometryEnvelope&inSR=4326' +
+      '&spatialRel=esriSpatialRelIntersects&returnCountOnly=true&f=json'
+  ],
   // Probe the same bounded station-network discovery used by the runtime.
   [
     'nrcsAwdbStations',

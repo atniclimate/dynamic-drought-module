@@ -575,3 +575,71 @@ export const FBFM40_PRESENTATION = {
 
 /** Drape opacity: fuel classes stay context under perimeters and smoke. */
 export const FUELS_DRAPE_OPACITY = 0.5;
+
+/**
+ * Power infrastructure context for the desktop 3D Fire mode.
+ *
+ * Transmission lines: the ARCHIVED federal HIFLD dataset via the Esri
+ * Federal User Community copy (public, Extract-enabled, accessInformation
+ * "U.S. Government"; last data update 2024-09-30), baked once by
+ * scripts/build-power-tiles.mjs. The issuer's VOLT_CLASS attribute drives
+ * line WIDTH only, a presentation ramp over the issuer's own classes; one
+ * color for every line so the layer never reads as a data ramp. Issuer
+ * sentinels are preserved: VOLT_CLASS 'NOT AVAILABLE' draws at the
+ * thinnest width and the qualification says so.
+ *
+ * Plants: the U.S. Energy Information Administration layer (EIA Forms
+ * 860/860M), fetched live; the Period attribute carries the issuer's own
+ * reporting vintage and the legend prints it.
+ */
+export const POWER_LINE_COLOR = '#e8eef5';
+export const POWER_LINE_OPACITY = 0.75;
+
+/** Width per issuer VOLT_CLASS (kV); the seven classes served inside the
+ * PNW envelope, verified live 2026-08-19 UTC. Unknown classes draw at the
+ * thinnest width, disclosed in the qualification. */
+export const POWER_LINE_WIDTHS: readonly (readonly [string, number])[] = [
+  ['UNDER 100', 0.6],
+  ['100-161', 1.0],
+  ['220-287', 1.4],
+  ['345', 1.8],
+  ['500', 2.2],
+  ['DC', 1.8],
+  ['NOT AVAILABLE', 0.6]
+];
+
+export function buildPowerLinePaint(): NonNullable<
+  maplibregl.LineLayerSpecification['paint']
+> {
+  return {
+    'line-color': POWER_LINE_COLOR,
+    'line-opacity': POWER_LINE_OPACITY,
+    'line-width': [
+      'match',
+      ['get', 'VOLT_CLASS'],
+      ...POWER_LINE_WIDTHS.flatMap(([voltClass, width]) => [voltClass, width]),
+      0.6
+    ] as unknown as maplibregl.DataDrivenPropertyValueSpecification<number>
+  };
+}
+
+export const POWER_PLANT_PRESENTATION = {
+  color: '#ffd166',
+  strokeColor: '#0b1220',
+  radius: 3.5
+} as const;
+
+export function buildPowerPlantPaint(): NonNullable<
+  maplibregl.CircleLayerSpecification['paint']
+> {
+  return {
+    'circle-color': POWER_PLANT_PRESENTATION.color,
+    'circle-stroke-color': POWER_PLANT_PRESENTATION.strokeColor,
+    'circle-stroke-width': 1,
+    'circle-radius': POWER_PLANT_PRESENTATION.radius,
+    'circle-opacity': 0.9
+  };
+}
+
+export const POWER_CONTEXT_QUALIFICATION =
+  'Transmission lines: HIFLD (U.S. Government) ARCHIVED snapshot, last data update 2024-09-30, no longer maintained; line width follows the issuer\'s voltage class and unknown values draw thinnest. Not comprehensive or current; never for siting or safety-critical decisions. Substations and distribution lines have no honest public source and are absent by design.';

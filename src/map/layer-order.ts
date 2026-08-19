@@ -71,6 +71,17 @@ export const CONDITION_SURFACE_IDS: readonly string[] = [
   'usdm-change-outline'
 ];
 
+/**
+ * 3D Fire context overlays (issuer-published infrastructure context):
+ * above condition fields so lines and plant points stay readable over the
+ * fuels drape, below event overlays so mapped incidents always read on
+ * top. Present only while the 3D Fire mode is active.
+ */
+export const CONTEXT_OVERLAY_IDS: readonly string[] = [
+  'power-lines',
+  'power-plants'
+];
+
 /** Observed and advisory event overlays that stay above condition fields. */
 export const EVENT_OVERLAY_IDS: readonly string[] = [
   'hms-smoke-fill',
@@ -117,6 +128,7 @@ export const REFERENCE_BOUNDARY_IDS: readonly string[] = [
  */
 export const THEMATIC_STACK_IDS: readonly string[] = [
   ...CONDITION_SURFACE_IDS,
+  ...CONTEXT_OVERLAY_IDS,
   ...EVENT_OVERLAY_IDS,
   ...REFERENCE_BOUNDARY_IDS
 ];

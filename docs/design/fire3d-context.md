@@ -72,6 +72,27 @@ that layer alone), carries its issuer's own palette and an explicit
 vintage-and-caveat legend, and appears in the production-observable
 `data-ddm-fire3d-context` stamp only when actually in the scene.
 
+The power context specifically: transmission lines come from the ARCHIVED
+federal HIFLD dataset (the HIFLD Open program was discontinued
+2025-08-26; the surviving public Esri Federal User Community copy states
+plainly that it is archived, unmaintained, and last updated 2024-09-30),
+so DDM bakes a one-time extract rather than adding an orphaned archive to
+the live-fetch registry, and the qualification carries the currency
+caveat wherever the lines render. Line width follows the issuer's own
+voltage classes with the unknown sentinel drawn thinnest, and one color
+for every line so the layer never reads as a severity ramp. Plants come
+live from the independently maintained EIA layer, labeled with the
+issuer's reporting period. Substations and distribution-voltage circuits
+are deliberately absent: both EIA and the former HIFLD program withhold
+substation locations for security reasons, no unified public national
+distribution source exists, and the qualification says so instead of
+letting the absence imply their nonexistence. A California-only CPUC High
+Fire Threat District layer was evaluated and declined: its license is a
+use-scoped regulatory disclaimer (Decision D.17-12-024), not an
+affirmative open-data grant, and an uncaptioned state-specific layer
+would falsely imply lower risk where the true difference is that no
+equivalent dataset exists elsewhere.
+
 The fuels drape specifically: LANDFIRE LF2024 FBFM40, chosen over EVT
 (thousands of classes with no readable legend) and over LF2025 (a phased
 mosaic that renders silent all-black pixels in unreleased GeoAreas until
