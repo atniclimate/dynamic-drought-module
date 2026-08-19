@@ -78,6 +78,8 @@ export const CONDITION_SURFACE_IDS: readonly string[] = [
  * top. Present only while the 3D Fire mode is active.
  */
 export const CONTEXT_OVERLAY_IDS: readonly string[] = [
+  'structures-3d',
+  'structures-3d-est',
   'power-lines',
   'power-lines-unknown',
   'power-plants'

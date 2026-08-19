@@ -116,6 +116,41 @@ state-curated set).
   carries the mandatory caveat: not comprehensive or current, never for
   siting or safety-critical decisions. Loaded only while the 3D Fire view
   is active.
+- `structures-central-oregon.pmtiles`: building footprints for the 3D
+  Fire view's structures context (Overture Maps Foundation buildings
+  theme, ODbL, release 2026-07-22.0; includes OpenStreetMap and other
+  open sources; extracted by `scripts/extract-overture-buildings.py`,
+  baked by `npm run build:structures-tiles`). 189,769 footprints,
+  7,950,204 bytes, z13-14, retrieved 2026-08-19 UTC; 72% carry an
+  issuer-published height (`h`, meters, kept only at 0.1 m or above so a
+  sub-decimeter record cannot flatten a building out of both height
+  layers) and the app draws the rest at a disclosed placeholder height. Coverage is the `central_oregon` region
+  framing ONLY: the full PNW box holds 9.16 million footprints, projected
+  from the measured per-building tile rate at roughly 240 MB (z14-only)
+  to 380 MB (the shipped z13-14 scheme), beyond the same-origin hosting
+  path.
+
+  **Deployer path for another region.** The extract is parameterized
+  (`.venv/Scripts/python.exe scripts/extract-overture-buildings.py
+  --bbox minLon,minLat,maxLon,maxLat --out scripts/.cache/overture-buildings-central-oregon.json`;
+  it writes a `.meta.json` provenance sidecar the bake requires, and the
+  Overture release bucket keeps only ~60 days of releases, so re-pin
+  `--release` to the newest monthly id after 2026-09-21). Changing
+  regions is a DELIBERATE edit set, not just a new bbox; the bake
+  hard-fails on a sidecar bbox that disagrees with its constants, and
+  the in-app disclosures are cross-gated against the bake. Update, all
+  named for the region they claim: `BBOX`, `CENTER`, the expected
+  feature band, and the output filename in
+  `scripts/build-structures-tiles.mjs`; the region wording in
+  `STRUCTURES_QUALIFICATION` (`src/config/wildfire-presentation.ts`),
+  `FIRE3D_COVERAGE_NOTE` (`src/config/fire3d-presentation.ts`), and the
+  structures embed line (`src/map/fire3d-context.ts`); plus
+  `structuresPmtilesLocal` in `src/config/urls.ts` and the dataAssets
+  path in `scripts/check-activation-budget.mjs` if the filename changes.
+  The bake refuses to write when the qualification's release id or
+  published-height share no longer matches the extract.
+
+  Loaded only while the 3D Fire view is active.
 - `us-places.json`: municipal label points (Natural Earth, built by
   `npm run build:states` tooling; see scripts/).
 - `tribal-roster.json` + `tribal-larname-crosswalk.json`: the

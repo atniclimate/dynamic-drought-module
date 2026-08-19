@@ -1,0 +1,5 @@
+# The structures-extract toolchain (scripts/extract-overture-buildings.py).
+# Deliberately separate from requirements-landscape.txt: that set is pinned
+# EXACTLY for byte-stable parity fixtures, and duckdb (a zero-dependency
+# wheel) is installed alongside it without disturbing those pins.
+duckdb==1.5.5

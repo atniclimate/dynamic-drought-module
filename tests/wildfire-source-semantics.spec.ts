@@ -8,7 +8,11 @@ import {
   POWER_LINES_QUALIFICATION,
   POWER_PLANTS_QUALIFICATION,
   POWER_SHARED_QUALIFICATION,
+  STRUCTURES_PRESENTATION,
+  STRUCTURES_QUALIFICATION,
   buildPowerLinePaint,
+  buildStructuresMeasuredPaint,
+  buildStructuresPlaceholderPaint,
   HMS_DENSITY_PRESENTATION,
   HMS_OVERVIEW_QUALIFICATION,
   HMS_VOLUME_HEIGHT_SCALE_METERS,
@@ -47,6 +51,8 @@ import {
   cancelActivation as cancelSpc,
   deactivate as deactivateSpc
 } from '../src/layers/spc-fire-weather';
+import { FIRE3D_COVERAGE_NOTE } from '../src/config/fire3d-presentation';
+import { STRUCTURES_EMBED_LINE } from '../src/map/fire3d-context';
 import { registry } from '../src/state/registry';
 import {
   buildFireKey,
@@ -630,6 +636,80 @@ test('the power context maps issuer voltage classes to width only, with the arch
   );
   expect(POWER_SHARED_QUALIFICATION).toMatch(
     /substations and distribution lines have no authoritative public national source/i
+  );
+});
+
+test('the committed structures archive and every in-app disclosure agree on release, share, and region', async () => {
+  // The archive's own attribution (written by the bake from the extract's
+  // provenance sidecar) is the ground truth; the UI constants may never
+  // drift from it, or the legend misdescribes the artifact.
+  const { readFileSync } = await import('node:fs');
+  const { PMTiles } = await import('pmtiles');
+  const bytes = readFileSync('public/data/structures-central-oregon.pmtiles');
+  const reader = new PMTiles({
+    getKey: () => 'test',
+    getBytes: async (offset: number, length: number) => {
+      const slice = bytes.subarray(offset, offset + length);
+      return {
+        data: slice.buffer.slice(slice.byteOffset, slice.byteOffset + slice.byteLength)
+      };
+    }
+  });
+  const meta = (await reader.getMetadata()) as { attribution: string };
+  const attribution = meta.attribution;
+
+  const release = /release (\d{4}-\d{2}-\d{2}\.\d+)/.exec(attribution)?.[1];
+  const share = /(\d+)% of footprints/.exec(attribution)?.[1];
+  expect(release).toBeTruthy();
+  expect(share).toBeTruthy();
+  expect(attribution).toContain('central Oregon pilot coverage only');
+
+  expect(STRUCTURES_QUALIFICATION).toContain(`release ${release}`);
+  expect(STRUCTURES_QUALIFICATION).toContain(`${share} percent`);
+  expect(STRUCTURES_QUALIFICATION).toMatch(/central Oregon pilot coverage only/i);
+  expect(FIRE3D_COVERAGE_NOTE).toMatch(/central Oregon/);
+  expect(STRUCTURES_EMBED_LINE).toMatch(/central Oregon/);
+});
+
+test('the structures context separates published heights from disclosed placeholders', () => {
+  // Two visibly different tones: the placeholder read must never pass as
+  // a measured one.
+  expect(STRUCTURES_PRESENTATION.measuredColor).not.toBe(
+    STRUCTURES_PRESENTATION.placeholderColor
+  );
+
+  // Published heights extrude verbatim; placeholders follow the disclosed
+  // rule (three meters per published floor, otherwise the fixed
+  // placeholder), never an estimate dressed as data.
+  const measured = buildStructuresMeasuredPaint();
+  expect(measured['fill-extrusion-height']).toEqual(['get', 'h']);
+  expect(measured['fill-extrusion-color']).toBe(
+    STRUCTURES_PRESENTATION.measuredColor
+  );
+  const placeholder = buildStructuresPlaceholderPaint();
+  expect(placeholder['fill-extrusion-height']).toEqual([
+    'case',
+    ['has', 'f'],
+    ['*', ['get', 'f'], STRUCTURES_PRESENTATION.metersPerFloor],
+    STRUCTURES_PRESENTATION.placeholderMeters
+  ]);
+  expect(placeholder['fill-extrusion-color']).toBe(
+    STRUCTURES_PRESENTATION.placeholderColor
+  );
+  // fill-extrusion-opacity is not data-driven, so both layers share one
+  // constant translucency (the smoke-volume constraint).
+  expect(measured['fill-extrusion-opacity']).toBe(
+    placeholder['fill-extrusion-opacity']
+  );
+
+  // The qualification pins the license, the pilot coverage, the height
+  // split, and what the footprints are NOT.
+  expect(STRUCTURES_QUALIFICATION).toMatch(/ODbL/);
+  expect(STRUCTURES_QUALIFICATION).toMatch(/release 2026-07-22\.0/);
+  expect(STRUCTURES_QUALIFICATION).toMatch(/central Oregon pilot coverage only/i);
+  expect(STRUCTURES_QUALIFICATION).toMatch(/placeholder height/i);
+  expect(STRUCTURES_QUALIFICATION).toMatch(
+    /not parcel, occupancy, or condition records/i
   );
 });
 
