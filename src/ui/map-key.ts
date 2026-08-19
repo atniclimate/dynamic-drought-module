@@ -41,6 +41,7 @@ import {
   createHeatRiskSequenceLoader,
   type HeatRiskFrameEventDetail
 } from './heatrisk-sequence-loader';
+import { watchDesktopMapSeat } from './map-control-seat';
 
 export interface KeySpec {
   readonly label: string;
@@ -114,6 +115,29 @@ let nwsSnapshotAsOf: number | null = null;
 let nwsSnapshotTruncated = false;
 let disposeMapKeyLayout: (() => void) | null = null;
 let disposeMapKeyOverflow: (() => void) | null = null;
+let disposeMapKeySeat: (() => void) | null = null;
+
+/**
+ * Seat the on-map key beside the map controls on the desktop shell, and
+ * return it to its bottom-dock home everywhere else (owner direction,
+ * 2026-08-19: the Fire key belongs with the controls at the top right, not
+ * alone in the bottom-left corner). Phones and embeds keep the dock seat
+ * their layouts were designed around; see src/ui/map-control-seat.ts.
+ */
+function watchMapKeySeat(host: HTMLElement): () => void {
+  const home = document.getElementById('map-key-home');
+  const overlayHost = document.getElementById('map-key-overlay-host');
+  if (!home || !overlayHost) return () => {};
+  return watchDesktopMapSeat(host, overlayHost, () => {
+    if (!home.isConnected) return;
+    if (
+      host.parentElement !== home.parentElement ||
+      host.previousElementSibling !== home
+    ) {
+      home.insertAdjacentElement('afterend', host);
+    }
+  });
+}
 
 interface MapKeyLayoutWatch {
   readonly schedule: () => void;
@@ -683,8 +707,10 @@ export function initMapKey(): void {
   if (!host) return;
   disposeMapKeyLayout?.();
   disposeMapKeyOverflow?.();
+  disposeMapKeySeat?.();
   const layout = watchMapKeyLayout(host);
   disposeMapKeyLayout = layout.dispose;
+  disposeMapKeySeat = watchMapKeySeat(host);
   const heatRiskSequenceLoader = createHeatRiskSequenceLoader(
     () => import('./heatrisk-sequence'),
     (err) => {

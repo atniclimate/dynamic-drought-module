@@ -285,6 +285,23 @@
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
           <span class="map-control-label">Reset</span>
         </button>
+
+        <!-- Desktop seat for the satellite control (owner direction,
+             2026-08-19). The control is MapLibre's, added bottom-right in
+             src/map/init.ts and moved here by the desktop shell so the
+             three map buttons finally read as the one family the E2 ruling
+             describes. Phones and embeds keep the bottom-right seat their
+             layouts were designed around. -->
+        <div id="basemap-switcher-overlay-host" class="map-overlay-seat"></div>
+
+        <!-- Desktop seat for the on-map key (owner direction, 2026-08-19).
+             The key's static home stays in the bottom dock below; the
+             desktop shell moves the SAME node here so phones and embeds
+             keep the dock layout they were designed around. The satellite
+             control is inserted just above this host at runtime
+             (src/map/init.ts), so the desktop column reads Share, Reset,
+             Satellite, then the key for the committed hazard view. -->
+        <div id="map-key-overlay-host" class="map-overlay-seat"></div>
       </div>
 
       <!-- The mobile hazard rail (0.7.0 mobile shell): the quick hazard
@@ -314,8 +331,15 @@
         </button>
       </div>
 
-      <button id="map-info-btn" class="map-info-btn" type="button" aria-label="Map information" aria-controls="map-info-panel" aria-expanded="false">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7h.01"/></svg>
+      <!-- The map-information disclosure. The glyph is a QUESTION MARK
+           (owner direction, 2026-08-19): the round button asks "what am I
+           looking at?", which is exactly what the panel answers (active
+           view, every active source with its status, basemap and its
+           observation window). It is a distinct control from MapLibre's
+           compact attribution circle beside it, which carries the license
+           credits and must stay reachable. -->
+      <button id="map-info-btn" class="map-info-btn" type="button" aria-label="Map information" title="Map information: active view, sources, and basemap" aria-controls="map-info-panel" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.4a2.7 2.7 0 1 1 3.4 2.6c-.55.18-.9.7-.9 1.28v.62"/><path d="M12 17.2h.01"/></svg>
       </button>
 
       <section id="map-info-panel" class="map-info-panel" role="region" aria-labelledby="map-info-title" tabindex="-1" hidden>
@@ -348,6 +372,10 @@
         <div id="embed-date-stamp" class="embed-date-stamp" hidden></div>
 
         <div class="map-dock-foot">
+          <!-- Stable fallback seat for the on-map key, the same idiom the
+               Share button uses above: phones, embeds, and any presentation
+               without the desktop shell return the key to this dock seat. -->
+          <span id="map-key-home" hidden></span>
           <div id="map-key" class="map-key" role="img" aria-label="Drought category key, D0 abnormally dry through D4 exceptional drought" hidden></div>
 
           <a class="embed-brand" href="https://atniclimate.github.io/dynamic-drought-module/" target="_blank" rel="noopener" aria-label="Open the full Dynamic Drought Module by ATNI Climate">

@@ -510,7 +510,7 @@ test.describe('the ENSO ocean key reaches every surface (W2-D1)', () => {
     await expectSstKeyContent(page, key);
   });
 
-  test('the desktop shell renders the SST anomaly key in the map dock', async ({
+  test('the desktop shell renders the SST anomaly key in the control column', async ({
     page
   }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -519,6 +519,83 @@ test.describe('the ENSO ocean key reaches every surface (W2-D1)', () => {
     const key = page.locator('#map-key');
     await expect(key).toBeVisible();
     await expectSstKeyContent(page, key);
+  });
+});
+
+/**
+ * Owner direction 2026-08-19 moved four pieces of chrome. Three joined the
+ * desktop control column (Share and Reset were already there, the satellite
+ * toggle and the on-map key moved in), and the pre-1.0 preview badge moved
+ * out of that column into the bottom-right corner beside the round buttons.
+ *
+ * The contract these cases hold is not "the pixels look right"; it is that
+ * the move is DESKTOP ONLY, that the attribution stays reachable, and that
+ * the preview badge never covers either round control. The phone shell and
+ * the embed were designed around the old seats and keep them.
+ */
+test.describe('the 2026-08-19 map chrome seats', () => {
+  test('the desktop column holds the satellite control and the key, and the corner reads badge, attribution, question mark', async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await gotoApp(page, '?view=console');
+
+    await expect(
+      page.locator('#basemap-switcher-overlay-host > .basemap-switcher-control')
+    ).toHaveCount(1);
+    await expect(page.locator('#map-key-overlay-host > #map-key')).toHaveCount(1);
+
+    // The satellite control seats BELOW Reset, which is what makes the three
+    // buttons one family rather than two conventions in one corner.
+    const reset = await rect(page.locator('#reset-btn'));
+    const satellite = await rect(page.locator('.basemap-switcher-control'));
+    expect(satellite.top).toBeGreaterThanOrEqual(reset.bottom - 1);
+    expect(Math.abs(satellite.right - reset.right)).toBeLessThanOrEqual(2);
+
+    // The corner, right to left: the question mark, the compact
+    // attribution, the preview badge. None of them overlap.
+    const info = await rect(page.locator('.map-info-btn'));
+    const attribution = await rect(page.locator('.maplibregl-ctrl-attrib'));
+    const badge = await rect(page.locator('.test-preview-badge'));
+    await expect(page.locator('.map-info-btn')).toBeVisible();
+    expect(attribution.right).toBeLessThanOrEqual(info.left);
+    expect(badge.right).toBeLessThanOrEqual(attribution.left);
+    expect(intersects(badge, info)).toBe(false);
+    expect(intersects(badge, attribution)).toBe(false);
+    expect(info.bottom).toBeLessThanOrEqual(800);
+
+    // The license disclosure is still one click away and still says who
+    // owns the base map. Burying it to make room for app chrome would be a
+    // license problem, not a layout preference.
+    await page.locator('.maplibregl-ctrl-attrib-button').click();
+    await expect(page.locator('.maplibregl-ctrl-attrib-inner')).toContainText(
+      'OpenStreetMap'
+    );
+  });
+
+  test('a phone keeps the dock key seat and the thumb-zone satellite control', async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoApp(page, '');
+
+    await expect(page.locator('.map-dock-foot > #map-key')).toHaveCount(1);
+    await expect(
+      page.locator('.maplibregl-ctrl-bottom-right .basemap-switcher-control')
+    ).toHaveCount(1);
+    await expect(page.locator('#map-key-overlay-host > #map-key')).toHaveCount(0);
+  });
+
+  test('an embed keeps the dock key seat and MapLibre\'s satellite corner', async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 800, height: 600 });
+    await gotoApp(page, '?cluster=wildfire&embed=true');
+
+    await expect(page.locator('.map-dock-foot > #map-key')).toHaveCount(1);
+    await expect(
+      page.locator('.maplibregl-ctrl-bottom-right .basemap-switcher-control')
+    ).toHaveCount(1);
   });
 });
 

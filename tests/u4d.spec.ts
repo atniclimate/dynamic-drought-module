@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 
+import { SATELLITE_COVERAGE_NOTE } from '../src/map/satellite';
 import { gotoApp, layerCheckbox, search, waitForLayerSettled } from './helpers';
 import {
   failRecentSatelliteTiles,
@@ -130,7 +131,11 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     await expect(chip).toContainText('Context only');
     await expect(chip).toContainText('daytime approximate true color');
     await expect(chip).toContainText('nighttime infrared with static lights');
-    await expect(chip).toContainText('Coverage ends near 76°N');
+    // The coverage clause names the product's real geometry (two GOES
+    // disks, not a rectangle) and its inherent daylight seam, so a viewer
+    // reading a bright edge or a base-map gap knows which it is. Asserted
+    // against the exported constant so the copy and the spec cannot drift.
+    await expect(chip).toContainText(SATELLITE_COVERAGE_NOTE);
     await expect(page.locator(SWITCHER)).toHaveAccessibleDescription(/NOAA GOES GeoColor/);
   });
 
