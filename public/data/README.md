@@ -116,6 +116,22 @@ state-curated set).
   carries the mandatory caveat: not comprehensive or current, never for
   siting or safety-critical decisions. Loaded only while the 3D Fire view
   is active.
+- `structures-central-oregon.pmtiles`: building footprints for the 3D
+  Fire view's structures context (Overture Maps Foundation buildings
+  theme, ODbL, release 2026-07-22.0; includes OpenStreetMap and other
+  open sources; extracted by `scripts/extract-overture-buildings.py`,
+  baked by `npm run build:structures-tiles`). 189,769 footprints,
+  7,950,340 bytes, z13-14, retrieved 2026-08-19 UTC; 72% carry an
+  issuer-published height (`h`, meters) and the app draws the rest at a
+  disclosed placeholder height. Coverage is the `central_oregon` region
+  framing ONLY: the full PNW box holds 9.16 million footprints (roughly
+  240 MB of tiles), beyond the same-origin hosting path. A deployer can
+  bake any region with
+  `.venv/Scripts/python.exe scripts/extract-overture-buildings.py --bbox minLon,minLat,maxLon,maxLat --out scripts/.cache/overture-buildings-central-oregon.json`
+  followed by the bake (adjust the bounds constants when changing
+  regions; the Overture release bucket keeps only ~60 days of releases,
+  so re-pin `--release` to the newest monthly id). Loaded only while the
+  3D Fire view is active.
 - `us-places.json`: municipal label points (Natural Earth, built by
   `npm run build:states` tooling; see scripts/).
 - `tribal-roster.json` + `tribal-larname-crosswalk.json`: the

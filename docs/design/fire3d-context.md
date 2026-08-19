@@ -93,6 +93,27 @@ affirmative open-data grant, and an uncaptioned state-specific layer
 would falsely imply lower risk where the true difference is that no
 equivalent dataset exists elsewhere.
 
+The structures context specifically: Overture Maps Foundation building
+footprints (ODbL), chosen over Microsoft's standalone footprint sets
+because Overture fuses them with OpenStreetMap and carries real height
+attributes largely derived from public USGS 3DEP lidar. Scope is the
+run's recorded fork: the full PNW terrain box holds 9,160,813 footprints,
+roughly 240 MB of z14 vector tiles at the empirically measured 26 bytes
+per building, which no same-origin Pages path can carry; the committed
+bake therefore covers the central_oregon region framing only, the
+coverage note and legend both say so, and the extract script's --bbox
+parameter is the deployer path for any other region (the losing
+argument, a many-state split-archive scheme, loses on repository weight
+and clone cost). Height honesty is a two-layer split: published heights
+extrude verbatim in the measured tone; everything else draws visibly
+dimmer at a disclosed placeholder rule (three meters per published
+floor, otherwise four meters), because fill-extrusion opacity is not
+data-driven and a single tone would let placeholders pass as
+measurements. The bake never estimates a height the issuer did not
+publish. Azure and Bing 3D city meshes were disqualified outright
+(API-key-gated commercial services covering curated metros, not the
+rural and Tribal geography this project serves).
+
 The fuels drape specifically: LANDFIRE LF2024 FBFM40, chosen over EVT
 (thousands of classes with no readable legend) and over LF2025 (a phased
 mosaic that renders silent all-black pixels in unreleased GeoAreas until

@@ -33,9 +33,13 @@ import {
   deactivatePowerContext
 } from '../layers/power-3d';
 import type { PowerContextState } from '../layers/power-3d';
+import {
+  activateStructures,
+  deactivateStructures
+} from '../layers/structures-3d';
 
 /** Stable keys for the context layers, in activation order. */
-export type Fire3DContextKey = 'fuels' | 'power';
+export type Fire3DContextKey = 'fuels' | 'power' | 'structures';
 
 /** What the orchestrator publishes: the active keys, and one embed
  * disclosure line per active key describing exactly what is rendered. */
@@ -46,6 +50,9 @@ export interface Fire3DContextActivation {
 
 const FUELS_EMBED_LINE =
   'Fuel colors: LANDFIRE 2024 fuel model classes, a translucent static snapshot at reduced resolution.';
+
+const STRUCTURES_EMBED_LINE =
+  'Buildings: Overture footprints (ODbL), central Oregon pilot bake only; dimmer buildings draw at a disclosed placeholder height.';
 
 /** Compose the power embed line from the surfaces actually in the scene. */
 export function buildPowerEmbedLine(state: PowerContextState): string {
@@ -97,6 +104,15 @@ export async function activateContextLayers(
     console.warn('[fire3d-context] the power context failed to activate.', err);
   }
 
+  try {
+    if (await activateStructures(map, signal)) {
+      keys.push('structures');
+      embedLines.push(STRUCTURES_EMBED_LINE);
+    }
+  } catch (err) {
+    console.warn('[fire3d-context] the structures context failed to activate.', err);
+  }
+
   if (signal.aborted) {
     deactivateContextLayers(map);
     return EMPTY_ACTIVATION;
@@ -108,4 +124,5 @@ export async function activateContextLayers(
 export function deactivateContextLayers(map: maplibregl.Map): void {
   deactivateFuelsDrape(map);
   deactivatePowerContext(map);
+  deactivateStructures(map);
 }

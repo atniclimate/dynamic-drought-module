@@ -831,6 +831,16 @@ export const URLS = Object.freeze({
   // carries the mandatory currency caveat. Loaded only while the 3D Fire
   // mode is active.
   powerLinesPmtilesLocal: BASE_URL + 'data/power-lines-pnw.pmtiles',
+  // Central Oregon building footprints for the desktop 3D Fire mode:
+  // Overture Maps Foundation buildings theme (ODbL; fuses OpenStreetMap,
+  // Microsoft, Esri, and Google open building sets), extracted by
+  // scripts/extract-overture-buildings.py and baked by
+  // scripts/build-structures-tiles.mjs (`npm run build:structures-tiles`).
+  // The committed default covers the central_oregon region framing only
+  // (a full-PNW bake measured roughly 240 MB and was rejected; the extract
+  // script's --bbox parameter is the deployer path for other regions).
+  // z13-14 vector tiles; loaded only while the 3D Fire mode is active.
+  structuresPmtilesLocal: BASE_URL + 'data/structures-central-oregon.pmtiles',
   tribalLandsLocal: BASE_URL + 'data/tribal-lands.geojson',
   treatyAreasLocal: BASE_URL + 'data/treaty-areas.geojson',
   // United States state boundaries, baked from the Census Bureau cartographic

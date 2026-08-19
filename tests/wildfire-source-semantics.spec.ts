@@ -8,7 +8,11 @@ import {
   POWER_LINES_QUALIFICATION,
   POWER_PLANTS_QUALIFICATION,
   POWER_SHARED_QUALIFICATION,
+  STRUCTURES_PRESENTATION,
+  STRUCTURES_QUALIFICATION,
   buildPowerLinePaint,
+  buildStructuresMeasuredPaint,
+  buildStructuresPlaceholderPaint,
   HMS_DENSITY_PRESENTATION,
   HMS_OVERVIEW_QUALIFICATION,
   HMS_VOLUME_HEIGHT_SCALE_METERS,
@@ -630,6 +634,48 @@ test('the power context maps issuer voltage classes to width only, with the arch
   );
   expect(POWER_SHARED_QUALIFICATION).toMatch(
     /substations and distribution lines have no authoritative public national source/i
+  );
+});
+
+test('the structures context separates published heights from disclosed placeholders', () => {
+  // Two visibly different tones: the placeholder read must never pass as
+  // a measured one.
+  expect(STRUCTURES_PRESENTATION.measuredColor).not.toBe(
+    STRUCTURES_PRESENTATION.placeholderColor
+  );
+
+  // Published heights extrude verbatim; placeholders follow the disclosed
+  // rule (three meters per published floor, otherwise the fixed
+  // placeholder), never an estimate dressed as data.
+  const measured = buildStructuresMeasuredPaint();
+  expect(measured['fill-extrusion-height']).toEqual(['get', 'h']);
+  expect(measured['fill-extrusion-color']).toBe(
+    STRUCTURES_PRESENTATION.measuredColor
+  );
+  const placeholder = buildStructuresPlaceholderPaint();
+  expect(placeholder['fill-extrusion-height']).toEqual([
+    'case',
+    ['has', 'f'],
+    ['*', ['get', 'f'], STRUCTURES_PRESENTATION.metersPerFloor],
+    STRUCTURES_PRESENTATION.placeholderMeters
+  ]);
+  expect(placeholder['fill-extrusion-color']).toBe(
+    STRUCTURES_PRESENTATION.placeholderColor
+  );
+  // fill-extrusion-opacity is not data-driven, so both layers share one
+  // constant translucency (the smoke-volume constraint).
+  expect(measured['fill-extrusion-opacity']).toBe(
+    placeholder['fill-extrusion-opacity']
+  );
+
+  // The qualification pins the license, the pilot coverage, the height
+  // split, and what the footprints are NOT.
+  expect(STRUCTURES_QUALIFICATION).toMatch(/ODbL/);
+  expect(STRUCTURES_QUALIFICATION).toMatch(/release 2026-07-22\.0/);
+  expect(STRUCTURES_QUALIFICATION).toMatch(/central Oregon pilot coverage only/i);
+  expect(STRUCTURES_QUALIFICATION).toMatch(/placeholder height/i);
+  expect(STRUCTURES_QUALIFICATION).toMatch(
+    /not parcel, occupancy, or condition records/i
   );
 });
 
