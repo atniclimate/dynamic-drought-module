@@ -69,5 +69,16 @@ export const FIRE3D_SKY_CLEAR_SPECIFICATION: maplibregl.SkySpecification = {
 export const FIRE3D_COVERAGE_NOTE =
   'Terrain relief covers the Pacific Northwest data bake; outside it the ground renders flat.';
 
+/**
+ * Always-visible non-prediction disclosure for the 3D view and its context
+ * layers. Peer-reviewed interview work on wildfire visualizations (Edgeley
+ * et al. 2024, Fire Ecology 20:45, DOI 10.1186/s42408-024-00278-8) found
+ * viewers over-trust fire visuals even when told otherwise in docs, so the
+ * statement lives in the interface itself, beside the toggle, never in a
+ * dismissible tooltip or documentation only.
+ */
+export const FIRE3D_NON_PREDICTION_NOTE =
+  'The 3D view shows each source\'s published data as context. It computes no fire behavior: nothing here shows or implies spread, ignition, or an all-clear.';
+
 /** The desktop gate; mirrors the shell's DESKTOP_SHELL_QUERY breakpoint. */
 export const FIRE3D_MIN_WIDTH_QUERY = '(min-width: 721px)';

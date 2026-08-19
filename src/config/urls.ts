@@ -812,6 +812,15 @@ export const URLS = Object.freeze({
   // bounded header probe, so normal static deployments remain self-contained.
   hillshadePmtilesFallback:
     'https://atniclimate.github.io/dynamic-drought-module/data/hillshade-dem-pnw.pmtiles',
+  // The PNW LANDFIRE fuel-model drape for the desktop 3D Fire mode: LF2024
+  // Scott and Burgan 40 Fire Behavior Fuel Models (FBFM40), CONUS, rendered
+  // server-side by the LANDFIRE ImageServer's own class colors and baked to
+  // PNG PMTiles by scripts/build-fuels-tiles.mjs (`npm run build:fuels-tiles`;
+  // U.S. Public Domain, USGS-produced; vintage, retrieval date, and the
+  // reduced-resolution disclosure are recorded in the archive attribution).
+  // Loaded only while the 3D Fire mode is active, via the pmtiles protocol's
+  // ranged reads, exactly like the hillshade archive above.
+  fuelsFbfm40PmtilesLocal: BASE_URL + 'data/fuels-fbfm40-pnw.pmtiles',
   tribalLandsLocal: BASE_URL + 'data/tribal-lands.geojson',
   treatyAreasLocal: BASE_URL + 'data/treaty-areas.geojson',
   // United States state boundaries, baked from the Census Bureau cartographic

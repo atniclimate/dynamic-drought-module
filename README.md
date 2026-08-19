@@ -274,6 +274,28 @@ volunteer-run Overpass API (three-mirror failover, viewport-driven, dormant
 below zoom 7); institutional deployments expecting heavy concurrency should
 plan for the planned National Hydrography Dataset PMTiles bundle.
 
+### The desktop 3D Fire view
+
+On desktop widths, the Fire view offers a 3D toggle: terrain relief from
+the bundled Pacific Northwest USGS 3DEP archive under a pitched camera,
+with the NOAA HMS smoke plumes re-presented as a stylized volume (vertical
+extent encodes the issuer's density class, never measured plume height)
+and issuer-published landscape context draped over the relief. The first
+context layer is the LANDFIRE 2024 Scott and Burgan 40 fuel-model
+classification (FBFM40), baked to a bundled archive with LANDFIRE's own
+class colors at reduced resolution from the 30 m source.
+
+The view is a 3D context view, deliberately not a "digital twin": that
+phrase is a term of art for systems that bundle physics-based fire
+simulation with rendering, and this module runs no simulation of any
+kind. The control carries two always-visible notes: the terrain coverage
+statement, and a non-prediction disclosure stating that nothing in the
+view shows or implies fire spread, ignition, or an all-clear. Wildland
+fire science context for reading the terrain (for example, that fires
+tend to spread faster uphill because rising heat preheats upslope fuels)
+is published in NWCG's *Introduction to Wildland Fire Behavior* (S-190);
+the module states no such inference about any specific incident.
+
 ### The Cloudflare Worker proxy (optional)
 
 Most sources serve the browser directly. The allow-list in

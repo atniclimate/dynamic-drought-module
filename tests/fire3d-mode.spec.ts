@@ -3,12 +3,17 @@ import { expect, test, type Page, type Route } from '@playwright/test';
 import {
   FIRE3D_CAMERA_TRANSITION_MS,
   FIRE3D_COVERAGE_NOTE,
+  FIRE3D_NON_PREDICTION_NOTE,
   FIRE3D_PITCH_DEGREES,
   FIRE3D_SKY_CLEAR_SPECIFICATION,
   FIRE3D_SKY_SPECIFICATION,
   FIRE3D_TERRAIN_EXAGGERATION
 } from '../src/config/fire3d-presentation';
-import { HMS_VOLUME_QUALIFICATION } from '../src/config/wildfire-presentation';
+import {
+  FBFM40_PRESENTATION,
+  FUELS_DRAPE_OPACITY,
+  HMS_VOLUME_QUALIFICATION
+} from '../src/config/wildfire-presentation';
 import {
   getFire3DStatus,
   setFire3DActive,
@@ -172,6 +177,21 @@ function stubCorruptFetch(): () => void {
   };
 }
 
+/** Valid PMTiles for every archive EXCEPT the fuels drape (corrupt). */
+function stubFuelsCorruptFetch(): () => void {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes('fuels-fbfm40')) {
+      return new Response('<html>not tiles</html>', { status: 200 });
+    }
+    return new Response(PMTILES_V3_HEADER_PREFIX, { status: 206 });
+  }) as typeof fetch;
+  return () => {
+    globalThis.fetch = originalFetch;
+  };
+}
+
 test('activation builds terrain, sky, camera, and the smoke volume; deactivation restores everything', async () => {
   const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
   const restoreFetch = stubPmtilesFetch();
@@ -227,10 +247,29 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
       harness.layerOrder.indexOf('hms-smoke-fill') + 1
     );
 
+    // W-CTX: the fuels drape rides the context chunk over its bundled
+    // archive, at the ruled condition-surface position below the smoke.
+    expect(getFire3DStatus().contextLayers).toEqual(['fuels']);
+    expect(harness.sources.get('fuels-fbfm40')).toMatchObject({
+      type: 'raster',
+      tileSize: 512
+    });
+    expect(harness.layerSpecs.get('fuels-fbfm40')).toMatchObject({
+      type: 'raster',
+      source: 'fuels-fbfm40',
+      paint: { 'raster-opacity': FUELS_DRAPE_OPACITY }
+    });
+    expect(harness.layerOrder.indexOf('fuels-fbfm40')).toBeLessThan(
+      harness.layerOrder.indexOf('hms-smoke-fill')
+    );
+
     setFire3DActive(map, false);
     expect(getFire3DStatus().state).toBe('inactive');
+    expect(getFire3DStatus().contextLayers).toEqual([]);
     expect(harness.getTerrain()).toBeNull();
     expect(harness.sources.has('fire3d-terrain-dem')).toBe(false);
+    expect(harness.sources.has('fuels-fbfm40')).toBe(false);
+    expect(harness.layerSpecs.has('fuels-fbfm40')).toBe(false);
     expect(harness.skyCalls.at(-1)).toEqual(FIRE3D_SKY_CLEAR_SPECIFICATION);
     expect(harness.layerSpecs.has('hms-smoke-volume')).toBe(false);
     expect(harness.layoutChanges.at(-1)).toEqual({
@@ -309,6 +348,30 @@ test('a corrupt archive fails the probe before any map mutation and drops fire3d
     expect(browser.search()).toContain('cluster=wildfire');
   } finally {
     setFire3DActive(map, false);
+    restoreFetch();
+    browser.restore();
+  }
+});
+
+test('a corrupt fuels archive degrades only the drape; the scene stays active', async () => {
+  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+  const restoreFetch = stubFuelsCorruptFetch();
+  const harness = fakeMapHarness({ pitch: 0, bearing: 0 });
+  const { map } = harness;
+
+  try {
+    setFire3DActive(map, true);
+    await expect.poll(() => getFire3DStatus().state).toBe('active');
+
+    // Terrain succeeded; the fuels drape alone degraded, with no partial
+    // fuels state left on the map.
+    expect(harness.getTerrain()).not.toBeNull();
+    expect(getFire3DStatus().contextLayers).toEqual([]);
+    expect(harness.sources.has('fuels-fbfm40')).toBe(false);
+    expect(harness.layerSpecs.has('fuels-fbfm40')).toBe(false);
+  } finally {
+    setFire3DActive(map, false);
+    setFire3DPreference(false);
     restoreFetch();
     browser.restore();
   }
@@ -441,6 +504,12 @@ function fire3dSmokeStamp(page: Page): Promise<string | undefined> {
   );
 }
 
+function fire3dContextStamp(page: Page): Promise<string | undefined> {
+  return page.evaluate(
+    () => document.documentElement.dataset['ddmFire3dContext']
+  );
+}
+
 const TOGGLE = '.shell-fire3d-btn';
 
 test.describe('W3/W4 browser truth', () => {
@@ -458,11 +527,18 @@ test.describe('W3/W4 browser truth', () => {
     // archive with ranges).
     let demBytes = 0;
     let demRequests = 0;
+    let fuelsBytes = 0;
+    let fuelsRequests = 0;
     page.on('response', (response) => {
-      if (!response.url().includes('hillshade-dem-pnw.pmtiles')) return;
-      demRequests += 1;
+      const url = response.url();
       const length = Number(response.headers()['content-length']);
-      if (Number.isFinite(length)) demBytes += length;
+      if (url.includes('hillshade-dem-pnw.pmtiles')) {
+        demRequests += 1;
+        if (Number.isFinite(length)) demBytes += length;
+      } else if (url.includes('fuels-fbfm40-pnw.pmtiles')) {
+        fuelsRequests += 1;
+        if (Number.isFinite(length)) fuelsBytes += length;
+      }
     });
 
     await gotoApp(page, '?cluster=wildfire');
@@ -471,8 +547,14 @@ test.describe('W3/W4 browser truth', () => {
     const toggle = page.locator(TOGGLE);
     await expect(toggle).toBeVisible();
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    await expect(page.locator('.shell-fire3d-note')).toHaveText(
-      FIRE3D_COVERAGE_NOTE
+    // Both honesty notes render whenever the control does: coverage, and
+    // the non-prediction disclosure (never a dismissible tooltip).
+    await expect(page.locator('.shell-fire3d-note')).toHaveText([
+      FIRE3D_COVERAGE_NOTE,
+      FIRE3D_NON_PREDICTION_NOTE
+    ]);
+    await expect(page.locator('[data-fire3d-disclosure]')).toHaveText(
+      FIRE3D_NON_PREDICTION_NOTE
     );
 
     await toggle.click();
@@ -495,6 +577,19 @@ test.describe('W3/W4 browser truth', () => {
       .poll(() => volumeLegend.textContent())
       .toContain(HMS_VOLUME_QUALIFICATION);
 
+    // W-CTX: the fuels drape activated over the bundled archive; its
+    // legend carries the issuer palette and the snapshot qualification.
+    await expect
+      .poll(() => fire3dContextStamp(page), { timeout: 30_000 })
+      .toBe('fuels');
+    const fuelsLegend = page.locator(
+      '.legend-section[data-legend="fuels-fbfm40"]'
+    );
+    await expect(fuelsLegend).toHaveCount(1);
+    await expect
+      .poll(() => fuelsLegend.textContent())
+      .toContain(FBFM40_PRESENTATION.qualification);
+
     // Let terrain tiles land (a bounded wait; live basemap tiles make
     // networkidle nondeterministic), then capture the pitched-scene
     // evidence.
@@ -508,6 +603,9 @@ test.describe('W3/W4 browser truth', () => {
     console.log(
       `[fire3d-budget] terrain archive transport: ${demBytes} bytes over ${demRequests} requests`
     );
+    console.log(
+      `[fire3d-budget] fuels archive transport: ${fuelsBytes} bytes over ${fuelsRequests} requests`
+    );
 
     // Toggle off: the flat scene returns and the flag drops.
     await toggle.click();
@@ -515,6 +613,8 @@ test.describe('W3/W4 browser truth', () => {
     await expect.poll(() => fire3dStamp(page)).toBe('inactive');
     await expect.poll(async () => search(page)).not.toContain('fire3d');
     await expect(volumeLegend).toHaveCount(0);
+    await expect(fuelsLegend).toHaveCount(0);
+    expect(await fire3dContextStamp(page)).toBeUndefined();
   });
 
   test('a shared fire3d link boots active and ordinary URL writes preserve the flag', async ({
@@ -655,6 +755,9 @@ test.describe('W3/W4 browser truth', () => {
   test('one extra reference layer keeps the scene; losing every fire layer or the cluster exits it', async ({
     page
   }) => {
+    // The fuels drape's tile fan-out on the software renderer pushes this
+    // multi-toggle walk past the default budget; give it explicit room.
+    test.setTimeout(120_000);
     await stubWildfireFeeds(page);
     await gotoApp(page, '?cluster=wildfire&view=console&fire3d=true');
 

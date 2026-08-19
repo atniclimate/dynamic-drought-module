@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 
 import {
+  FBFM40_PRESENTATION,
+  FUELS_DRAPE_OPACITY,
   HMS_DENSITY_PRESENTATION,
   HMS_OVERVIEW_QUALIFICATION,
   HMS_VOLUME_HEIGHT_SCALE_METERS,
@@ -545,6 +547,38 @@ test('smoke volume heights are the 2D opacities scaled, rank identically, and Un
   expect(HMS_VOLUME_QUALIFICATION).toMatch(
     /not measured plume height, concentration, or transport/i
   );
+});
+
+test('the FBFM40 drape key carries the issuer palette verbatim and a snapshot qualification', () => {
+  const codes = FBFM40_PRESENTATION.classes.map((c) => c.code);
+  // The full issuer key, one row per served class, no invented grouping:
+  // 5 nonburnable NB classes plus the 39 served burnable models (the
+  // LF2024 CONUS legend fetched at bake time; GR9 is not served there).
+  expect(codes).toHaveLength(44);
+  expect(new Set(codes).size).toBe(44);
+  const families = new Set(codes.map((code) => code.replace(/\d+$/, '')));
+  expect([...families].sort()).toEqual(['GR', 'GS', 'NB', 'SB', 'SH', 'TL', 'TU']);
+  for (const entry of FBFM40_PRESENTATION.classes) {
+    expect(entry.color).toMatch(/^#[0-9a-f]{6}$/);
+    expect(entry.label.length).toBeGreaterThan(3);
+  }
+  // Spot-check issuer colors against the fetched LF2024 legend evidence.
+  const byCode = new Map(FBFM40_PRESENTATION.classes.map((c) => [c.code, c.color]));
+  expect(byCode.get('NB8')).toBe('#000ed6');
+  expect(byCode.get('TU5')).toBe('#267300');
+  expect(byCode.get('TL5')).toBe('#bee8ff');
+  expect(byCode.get('SB2')).toBe('#c500ff');
+
+  // The qualification names the vintage and denies the prediction read.
+  expect(FBFM40_PRESENTATION.qualification).toMatch(/LANDFIRE 2024/);
+  expect(FBFM40_PRESENTATION.qualification).toMatch(/reduced resolution/i);
+  expect(FBFM40_PRESENTATION.qualification).toMatch(
+    /not current conditions, fire behavior, or a forecast/i
+  );
+
+  // The drape stays translucent context under perimeters and smoke.
+  expect(FUELS_DRAPE_OPACITY).toBeGreaterThan(0);
+  expect(FUELS_DRAPE_OPACITY).toBeLessThanOrEqual(0.6);
 });
 
 test('fire key composition reflects SPC-only, NIFC-only, and combined active sets', () => {

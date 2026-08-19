@@ -25,7 +25,8 @@ import { useEffect, useState } from 'preact/hooks';
 
 import {
   FIRE3D_COVERAGE_NOTE,
-  FIRE3D_MIN_WIDTH_QUERY
+  FIRE3D_MIN_WIDTH_QUERY,
+  FIRE3D_NON_PREDICTION_NOTE
 } from '../../config/fire3d-presentation';
 import type { HazardClusterKey } from '../../config/clusters';
 import type { Fire3DStatus } from '../../map/fire3d';
@@ -123,6 +124,12 @@ export function Fire3DControl({
         {statusLine(status)}
       </p>
       <p class="shell-fire3d-note">{FIRE3D_COVERAGE_NOTE}</p>
+      {/* The non-prediction disclosure renders whenever the control does
+          (never a dismissible tooltip): viewers over-trust fire visuals,
+          so the boundary statement lives in the interface itself. */}
+      <p class="shell-fire3d-note" data-fire3d-disclosure>
+        {FIRE3D_NON_PREDICTION_NOTE}
+      </p>
     </div>
   );
 }

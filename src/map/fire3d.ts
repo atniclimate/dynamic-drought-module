@@ -21,6 +21,9 @@
  *   3. Post-probe tile failures (watchRasterTiles): same rollback ladder.
  *   4. Volumetric smoke failure: NON-fatal partial degrade; terrain stays,
  *      the flat smoke veil stays visible.
+ *   5. Context-layer failure (fire3d-context.ts, the issuer-published
+ *      landscape context): NON-fatal per layer; each missing context layer
+ *      degrades alone and the scene keeps everything else.
  *
  * Meaning constraints carried through: perimeters remain mapped incident
  * representations draped over relief (render-to-texture), the reduced-motion
@@ -72,6 +75,9 @@ export interface Fire3DStatus {
   /** True while the volumetric smoke read is in place beside the terrain;
    * false while active with the flat veil only (partial degrade). */
   readonly smokeVolume: boolean;
+  /** The context layers actually in the scene (issuer-published landscape
+   * context; empty while inactive or when every context layer degraded). */
+  readonly contextLayers: readonly string[];
 }
 
 export interface Fire3DGateInput {
@@ -109,7 +115,8 @@ export function shouldFire3DBeActive(input: Fire3DGateInput): boolean {
 let status: Fire3DStatus = {
   state: 'inactive',
   reason: null,
-  smokeVolume: false
+  smokeVolume: false,
+  contextLayers: []
 };
 const statusListeners = new Set<() => void>();
 
@@ -124,6 +131,9 @@ let savedCamera: { readonly pitch: number; readonly bearing: number } | null =
 let tileWatch: RasterTileWatch | null = null;
 let smokeVolumeOn = false;
 let smokeModule: typeof import('../layers/hms-smoke-volume') | null = null;
+let contextModule: typeof import('./fire3d-context') | null = null;
+let contextKeys: readonly string[] = [];
+let contextAbort: AbortController | null = null;
 
 /** The latest mode status. */
 export function getFire3DStatus(): Fire3DStatus {
@@ -142,7 +152,12 @@ function publishStatus(
   state: Fire3DStatus['state'],
   reason: string | null
 ): void {
-  status = { state, reason, smokeVolume: state === 'active' && smokeVolumeOn };
+  status = {
+    state,
+    reason,
+    smokeVolume: state === 'active' && smokeVolumeOn,
+    contextLayers: state === 'active' ? contextKeys : []
+  };
   // Production-observable truth stamp (the dev-only __ddmMap handle is
   // dead-code-eliminated from dist/, so the verification suite reads mode
   // state from here; the stamp is written from what the map actually
@@ -154,6 +169,11 @@ function publishStatus(
       root.dataset.ddmFire3dSmoke = smokeVolumeOn ? 'volume' : 'flat';
     } else {
       delete root.dataset.ddmFire3dSmoke;
+    }
+    if (state === 'active' && contextKeys.length > 0) {
+      root.dataset.ddmFire3dContext = contextKeys.join(' ');
+    } else {
+      delete root.dataset.ddmFire3dContext;
     }
   }
   statusListeners.forEach((fn) => {
@@ -193,6 +213,12 @@ function rollbackScene(map: maplibregl.Map): void {
     tileWatch.detach();
     tileWatch = null;
   }
+  if (contextAbort) {
+    contextAbort.abort();
+    contextAbort = null;
+  }
+  if (contextModule) contextModule.deactivateContextLayers(map);
+  contextKeys = [];
   if (smokeVolumeOn && smokeModule) {
     smokeModule.deactivateSmokeVolume(map);
     if (!registry.getActiveKeys().has('hms-smoke')) {
@@ -312,6 +338,31 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
         err
       );
     }
+  }
+
+  // W-CTX: the issuer-published context layers ride their own lazy chunk
+  // and are non-fatal by contract; each missing layer degrades alone.
+  try {
+    contextModule = contextModule ?? (await import('./fire3d-context'));
+  } catch (err) {
+    contextModule = null;
+    console.warn(
+      '[fire3d] the context chunk failed to load; the scene keeps terrain and smoke.',
+      err
+    );
+  }
+  if (myGeneration !== generation || !active) return;
+  if (contextModule) {
+    contextAbort = new AbortController();
+    let keys: readonly string[] = [];
+    try {
+      keys = await contextModule.activateContextLayers(map, contextAbort.signal);
+    } catch (err) {
+      keys = [];
+      console.warn('[fire3d] context layers failed to activate.', err);
+    }
+    if (myGeneration !== generation || !active) return;
+    contextKeys = keys;
   }
   publishStatus('active', null);
 }

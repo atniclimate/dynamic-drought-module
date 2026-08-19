@@ -73,7 +73,8 @@ export const BUILD_SOURCE_KEYS = new Set([
   'landscapeNlcdPinnedTime',
   'landscapeWhpEdition4Zip',
   'landscapeWhpDoi',
-  'landscapeSoilVintage'
+  'landscapeSoilVintage',
+  'fuelsFbfm40Release'
 ]);
 
 export function sourceTierForKey(key) {
@@ -94,6 +95,16 @@ const LANDSCAPE_PROBES = [
   {
     key: 'landscapeLandfireRelease',
     url: 'https://lfps.usgs.gov/arcgis/rest/services?f=pjson'
+  },
+  {
+    // The 3D Fire fuels drape bake pin (scripts/build-fuels-tiles.mjs):
+    // LF2024 FBFM40 CONUS, the newest complete-CONUS vintage as of
+    // 2026-08-18 (LF2025 is a phased GeoArea release through December
+    // 2026). Pinned disappearance is a build failure.
+    key: 'fuelsFbfm40Release',
+    url:
+      'https://lfps.usgs.gov/arcgis/rest/services/Landfire_LF2024/' +
+      'LF2024_FBFM40_CONUS/ImageServer?f=pjson'
   },
   {
     key: 'landscapeNlcdCollection',
@@ -319,6 +330,25 @@ const CONTENT_TRIPWIRES = new Map([
             `newer LANDFIRE release folder observed: LF${Math.max(...newer)}; ` +
             'pinned release code 240 (LF2023) remains available'
         };
+      }
+      return null;
+    }
+  ],
+  [
+    'fuelsFbfm40Release',
+    (body) => {
+      let payload;
+      try {
+        payload = JSON.parse(body);
+      } catch {
+        return 'LF2024 FBFM40 ImageServer metadata is not JSON';
+      }
+      if (payload?.error) {
+        return 'pinned LF2024 FBFM40 CONUS ImageServer is no longer served';
+      }
+      const pixelSize = Number(payload?.pixelSizeX);
+      if (!Number.isFinite(pixelSize) || Math.round(pixelSize) !== 30) {
+        return 'LF2024 FBFM40 CONUS no longer reports the 30 m source resolution the bake was measured against';
       }
       return null;
     }

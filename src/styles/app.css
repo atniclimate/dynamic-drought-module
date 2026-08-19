@@ -1292,6 +1292,14 @@ button.conditions-metric:hover {
   overflow-y: auto;
   padding-right: 4px;
 }
+/* The 3D Fire fuels drape lists the issuer's full 44-class FBFM40 key
+   (grouped swatches would misstate colors that are not hue-grouped);
+   cap and scroll it the way the ecoregion list already does. */
+.legend-section[data-legend='fuels-fbfm40'] .legend {
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
 
 /* Gridded drought-index (SPI) legend: product selector + orientation ramp.
    The ramp is an approximate dry-to-wet orientation aid; the authoritative

@@ -16,6 +16,7 @@ than silently treating either one as a veto.
 | --- | --- |
 | [`README.md`](README.md) | This index and the durable product-design doctrine. |
 | [`mobile-map-chrome.md`](mobile-map-chrome.md) | Current presentation contract for the map-first phone chrome implemented by pull request 7. |
+| [`fire3d-context.md`](fire3d-context.md) | Honesty framing for the desktop 3D Fire context view: the no-fire-behavior-modeling line, the "not a digital twin" naming decision, and the in-interface non-prediction disclosure. |
 | [`ddm_interface-edits_1.json`](ddm_interface-edits_1.json) and [`ddm_interface-edits_2.json`](ddm_interface-edits_2.json) | Immutable owner-annotation captures that informed pull request 6. They preserve the input as received; they are not an active plan, literal pixel specification, or current completion checklist. |
 | `interface-integration/MODULE_TRACKING.yaml`, when present in a local stewardship workspace | Local-only historical scope and acceptance receipt for the August 10 interface-integration checkpoint. Its branch, commit, test, and publication state are frozen historical facts and must not be extended as a current status system. |
 

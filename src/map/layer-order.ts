@@ -44,6 +44,7 @@ const TOP_LABEL_IDS: readonly string[] = ['us-places-labels'];
  * in their owning module and therefore inherit the same ruled position.
  */
 export const CONDITION_SURFACE_IDS: readonly string[] = [
+  'fuels-fbfm40',
   'gridded-index-raster',
   'sst-anomaly',
   'nino34-box-line',
