@@ -3,12 +3,16 @@ import { expect, test } from '@playwright/test';
 import {
   HMS_DENSITY_PRESENTATION,
   HMS_OVERVIEW_QUALIFICATION,
+  HMS_VOLUME_HEIGHT_SCALE_METERS,
+  HMS_VOLUME_OPACITY,
+  HMS_VOLUME_QUALIFICATION,
   NIFC_INCIDENT_PRESENTATION,
   USFS_WHP_PRESENTATION,
   WILDFIRE_PULSE_COLORS,
   WILDFIRE_PULSE_DURATION_MS,
   WILDFIRE_STATIC_COLOR,
   buildHmsSmokeFillPaint,
+  buildHmsSmokeVolumePaint,
   buildNifcAreaPerimeterClaim,
   buildNifcFillPaint,
   buildNifcIncidentFilter,
@@ -479,6 +483,68 @@ test('HMS uses one cool veil and an explicit unclassified fallback', () => {
     'current or previous UTC day'
   );
   expect(HMS_OVERVIEW_QUALIFICATION).not.toMatch(/current UTC day\./);
+});
+
+test('smoke volume heights are the 2D opacities scaled, rank identically, and Unknown never falls to Light', () => {
+  const paint = buildHmsSmokeVolumePaint();
+  const height = paint['fill-extrusion-height'] as unknown[];
+
+  // Exact match-expression shape, mirroring buildHmsSmokeFillPaint: the
+  // Unknown class is the FALLBACK branch, never routed through 'LIGHT'.
+  expect(height).toEqual([
+    'match',
+    ['upcase', ['to-string', ['coalesce', ['get', 'Density'], '']]],
+    'LIGHT',
+    320,
+    'MEDIUM',
+    680,
+    'HEAVY',
+    1320,
+    480
+  ]);
+
+  const heights = {
+    Light: 320,
+    Medium: 680,
+    Heavy: 1320,
+    Unknown: 480
+  } as const;
+  const classes = ['Light', 'Medium', 'Heavy', 'Unknown'] as const;
+
+  // The baked literals are exactly the 2D veil opacities times one scale.
+  for (const cls of classes) {
+    expect(heights[cls]).toBeCloseTo(
+      HMS_DENSITY_PRESENTATION[cls].opacity * HMS_VOLUME_HEIGHT_SCALE_METERS,
+      6
+    );
+  }
+
+  // Height ranking matches the ruled opacity ranking exactly.
+  const byOpacity = [...classes].sort(
+    (a, b) => HMS_DENSITY_PRESENTATION[a].opacity - HMS_DENSITY_PRESENTATION[b].opacity
+  );
+  const byHeight = [...classes].sort((a, b) => heights[a] - heights[b]);
+  expect(byHeight).toEqual(byOpacity);
+
+  // Unknown is visually distinct from Light in the vertical read too.
+  expect(heights.Unknown).not.toBe(heights.Light);
+  expect(heights.Unknown).toBeGreaterThan(heights.Light);
+  expect(heights.Unknown).toBeLessThan(heights.Medium);
+
+  // Colors mirror the 2D veil exactly; the volume translucency is the
+  // ruled mid-ramp constant (fill-extrusion-opacity is not data-driven).
+  expect(paint['fill-extrusion-color']).toEqual(
+    buildHmsSmokeFillPaint()['fill-color']
+  );
+  expect(paint['fill-extrusion-opacity']).toBe(HMS_VOLUME_OPACITY);
+  expect(HMS_VOLUME_OPACITY).toBe(HMS_DENSITY_PRESENTATION.Medium.opacity);
+  expect(paint['fill-extrusion-base']).toBe(0);
+
+  // The legend qualification states what the vertical treatment is NOT.
+  expect(HMS_VOLUME_QUALIFICATION).toMatch(/stylized/i);
+  expect(HMS_VOLUME_QUALIFICATION).toMatch(
+    /not measured plume height, concentration, or transport/i
+  );
 });
 
 test('fire key composition reflects SPC-only, NIFC-only, and combined active sets', () => {

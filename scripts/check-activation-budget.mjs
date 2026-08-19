@@ -346,6 +346,15 @@ const FEATURE_BUDGETS = [
     requestCount: 1,
     dataAssets: [],
   },
+  {
+    key: 'fire3d-mode',
+    label: 'Desktop 3D Fire mode: terrain + camera + sky orchestrator plus the volumetric smoke companion (measured 5.7 kB gzip across 6 chunks and 2,278,573 archive-transport bytes over 19 ranged requests at 1280x720 on 2026-08-18; smoke volume re-presents the already-fetched hms-smoke source, adding no requests of its own; the second root is reached via dynamic import from the first and is invisible to the static closure walk, so BOTH roots are declared)',
+    rootModules: ['src/map/fire3d.ts', 'src/layers/hms-smoke-volume.ts'],
+    activationJsGzipKb: 6.8,
+    networkBytes: 2_800_000,
+    requestCount: 23,
+    dataAssets: [],
+  },
 ];
 
 /* ------------------------------------------------------------------ */

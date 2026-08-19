@@ -55,6 +55,7 @@ import {
 import type { CommittedShellSnapshot } from '../../state/cluster-service';
 import { requestBasemapMode } from '../../map/basemap-switcher';
 import { onTimeBarSpecChange } from '../time-bar';
+import { Fire3DControl } from './fire3d-control';
 import { Minimap } from './minimap';
 import { TimeCompact } from './time-popover';
 import { wireShellPopover } from './popover-discipline';
@@ -365,6 +366,8 @@ function Shell({ map, snap, framing, specTick }: ShellProps) {
           );
         })}
       </div>
+
+      <Fire3DControl cluster={snapshot.cluster} />
 
       <section
         class="shell-summary"

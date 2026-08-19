@@ -25,8 +25,18 @@ test('the production artifact boots from the GitHub Pages subpath', async ({
   const sameOriginFailures: string[] = [];
   const runtimeErrors: string[] = [];
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
+  // Console errors count as subpath evidence only when they concern this
+  // origin. Live agency endpoints can blip (a CORS header drops, a service
+  // times out) in any environment; the client already degrades those to
+  // honest statuses, and this spec's claim is the deployment seat, not
+  // upstream health. Script errors (pageerror above) always count.
+  const externalOrigin = /https?:\/\/(?!127\.0\.0\.1:4173)[^\s'")]+/;
   page.on('console', (message) => {
-    if (message.type() === 'error') runtimeErrors.push(message.text());
+    if (message.type() !== 'error') return;
+    const text = message.text();
+    const locationUrl = message.location().url ?? '';
+    if (externalOrigin.test(locationUrl) || externalOrigin.test(text)) return;
+    runtimeErrors.push(text);
   });
   page.on('response', (response) => {
     const url = new URL(response.url());
