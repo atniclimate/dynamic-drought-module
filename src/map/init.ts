@@ -142,7 +142,12 @@ function seatBasemapSwitcherOnDesktop(map: maplibregl.Map): void {
     .getContainer()
     .querySelector<HTMLElement>('.maplibregl-ctrl-bottom-right');
   if (!node || !host || !corner) return;
-  watchDesktopMapSeat(node, host, () => {
-    if (node.parentElement !== corner) corner.appendChild(node);
+  watchDesktopMapSeat({
+    node,
+    host,
+    home: corner,
+    placeHome: () => {
+      if (node.parentElement !== corner) corner.appendChild(node);
+    }
   });
 }

@@ -13,44 +13,68 @@
  * listeners, control state, and focus survive the move. This is the idiom
  * the desktop Brief shell already uses for the Share button and the legend
  * (src/ui/island/shell.tsx), narrowed to one node and one condition.
+ *
+ * COOPERATION IS THE HARD PART. The LAYERS studio also rehosts the
+ * satellite control, into its own header, and restores it on close
+ * (src/ui/island/layers-studio.tsx). Two watchers pulling one node in
+ * opposite directions is a fight neither wins: the first version of this
+ * helper moved the control out of the studio header the moment the studio
+ * opened, and the studio's own specs caught it. So this watcher claims
+ * ownership only while the node sits in one of the two seats it manages.
+ * Anything else holding the node is left alone, and the node returns to
+ * this watcher's care when that owner puts it back.
  */
 
 /** Mirrors DESKTOP_SHELL_QUERY and the stylesheet's desktop breakpoint. */
 const DESKTOP_MAP_SEAT_QUERY = '(min-width: 721px)';
 
+export interface DesktopMapSeat {
+  /** The chrome node that moves. */
+  readonly node: HTMLElement;
+  /** Where it sits on the desktop shell. */
+  readonly host: HTMLElement;
+  /** The container it belongs to everywhere else. */
+  readonly home: HTMLElement;
+  /** Idempotent placement inside `home`; runs whenever the seat does not apply. */
+  readonly placeHome: () => void;
+}
+
 /**
- * Move `node` into `host` while the desktop seat applies, and call
- * `restore` otherwise. `restore` must be idempotent: it runs on every
- * evaluation, including the first.
- *
- * Returns a dispose function that stops watching and restores the node.
+ * Keep one node in its desktop seat while the desktop shell applies, and in
+ * its home seat otherwise. Returns a dispose function that stops watching
+ * and returns the node home.
  */
-export function watchDesktopMapSeat(
-  node: HTMLElement,
-  host: HTMLElement,
-  restore: () => void
-): () => void {
+export function watchDesktopMapSeat(seat: DesktopMapSeat): () => void {
   const app = document.getElementById('app');
   if (!app) return () => {};
 
   const widthQuery = window.matchMedia(DESKTOP_MAP_SEAT_QUERY);
 
+  /**
+   * True only while this watcher is the node's current custodian. A
+   * detached node (or one another surface has borrowed) is not ours to
+   * move.
+   */
+  const ours = (): boolean => {
+    const parent = seat.node.parentElement;
+    return parent === seat.host || parent === seat.home;
+  };
+
   const sync = (): void => {
-    const useHost =
-      widthQuery.matches &&
-      !app.classList.contains('embed') &&
-      node.isConnected &&
-      host.isConnected;
+    if (!seat.host.isConnected || !seat.home.isConnected) return;
+    if (!ours()) return;
+    const useHost = widthQuery.matches && !app.classList.contains('embed');
     if (useHost) {
-      if (node.parentElement !== host) host.appendChild(node);
+      if (seat.node.parentElement !== seat.host) seat.host.appendChild(seat.node);
       return;
     }
-    restore();
+    seat.placeHome();
   };
 
   // The embed class is stamped on #app during boot and can land after this
   // watcher starts, so the seat follows the class rather than reading it
-  // once.
+  // once. The same observer re-evaluates when a full-screen route releases
+  // the chrome it borrowed.
   const observer = new MutationObserver(sync);
   observer.observe(app, { attributes: true, attributeFilter: ['class'] });
   widthQuery.addEventListener('change', sync);
@@ -59,6 +83,6 @@ export function watchDesktopMapSeat(
   return () => {
     observer.disconnect();
     widthQuery.removeEventListener('change', sync);
-    restore();
+    if (ours()) seat.placeHome();
   };
 }

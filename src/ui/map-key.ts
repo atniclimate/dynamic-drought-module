@@ -124,17 +124,22 @@ let disposeMapKeySeat: (() => void) | null = null;
  * alone in the bottom-left corner). Phones and embeds keep the dock seat
  * their layouts were designed around; see src/ui/map-control-seat.ts.
  */
-function watchMapKeySeat(host: HTMLElement): () => void {
-  const home = document.getElementById('map-key-home');
+function watchMapKeySeat(node: HTMLElement): () => void {
+  const marker = document.getElementById('map-key-home');
   const overlayHost = document.getElementById('map-key-overlay-host');
-  if (!home || !overlayHost) return () => {};
-  return watchDesktopMapSeat(host, overlayHost, () => {
-    if (!home.isConnected) return;
-    if (
-      host.parentElement !== home.parentElement ||
-      host.previousElementSibling !== home
-    ) {
-      home.insertAdjacentElement('afterend', host);
+  const dock = marker?.parentElement ?? null;
+  if (!marker || !overlayHost || !dock) return () => {};
+  return watchDesktopMapSeat({
+    node,
+    host: overlayHost,
+    home: dock,
+    placeHome: () => {
+      if (
+        node.parentElement !== dock ||
+        node.previousElementSibling !== marker
+      ) {
+        marker.insertAdjacentElement('afterend', node);
+      }
     }
   });
 }
