@@ -1,0 +1,710 @@
+import { expect, test, type Page, type Route } from '@playwright/test';
+
+import {
+  FIRE3D_CAMERA_TRANSITION_MS,
+  FIRE3D_COVERAGE_NOTE,
+  FIRE3D_PITCH_DEGREES,
+  FIRE3D_SKY_CLEAR_SPECIFICATION,
+  FIRE3D_SKY_SPECIFICATION,
+  FIRE3D_TERRAIN_EXAGGERATION
+} from '../src/config/fire3d-presentation';
+import { HMS_VOLUME_QUALIFICATION } from '../src/config/wildfire-presentation';
+import {
+  getFire3DStatus,
+  setFire3DActive,
+  shouldFire3DBeActive
+} from '../src/map/fire3d';
+import {
+  getFire3DPreference,
+  seedFire3DPreference,
+  setFire3DPreference
+} from '../src/state/fire3d-store';
+import { parseFire3dParam, syncFire3dParam } from '../src/state/url';
+import {
+  PMTILES_V3_HEADER_PREFIX,
+  fakeMapHarness,
+  installFakeBrowser
+} from './map-harness';
+import { gotoApp, layerCheckbox, search, waitForLayerSettled } from './helpers';
+
+/**
+ * W3/W4 desktop 3D Fire mode.
+ *
+ * Node-level cases drive the orchestrator against the shared fake map
+ * (tests/map-harness.ts): the production build carries no dev map handle,
+ * so terrain/sky/camera truth is asserted here at the module seam, and the
+ * browser cases assert the production-observable stamps
+ * (data-ddm-fire3d / data-ddm-fire3d-smoke on the document element, the
+ * control chrome, and the URL).
+ */
+
+// ---------------------------------------------------------------------------
+// Node: URL parameter round trip (the heatday idiom)
+// ---------------------------------------------------------------------------
+
+test('fire3d parses only the exact single token true', () => {
+  expect(parseFire3dParam(new URLSearchParams(''))).toBe(false);
+  expect(parseFire3dParam(new URLSearchParams('fire3d=true'))).toBe(true);
+  expect(parseFire3dParam(new URLSearchParams('fire3d=1'))).toBe(false);
+  expect(parseFire3dParam(new URLSearchParams('fire3d=TRUE'))).toBe(false);
+  expect(parseFire3dParam(new URLSearchParams('fire3d='))).toBe(false);
+  expect(
+    parseFire3dParam(new URLSearchParams('fire3d=true&fire3d=true'))
+  ).toBe(false);
+});
+
+test('syncFire3dParam round-trips through the URL and preserves neighbors', () => {
+  const browser = installFakeBrowser({
+    search: '?cluster=wildfire&embed=true'
+  });
+  try {
+    syncFire3dParam(true);
+    expect(browser.search()).toContain('fire3d=true');
+    expect(browser.search()).toContain('cluster=wildfire');
+    expect(browser.search()).toContain('embed=true');
+    expect(
+      parseFire3dParam(new URLSearchParams(browser.search()))
+    ).toBe(true);
+
+    syncFire3dParam(false);
+    expect(browser.search()).not.toContain('fire3d');
+    expect(browser.search()).toContain('cluster=wildfire');
+    expect(browser.search()).toContain('embed=true');
+  } finally {
+    browser.restore();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Node: the activation gate (entry vs stay-alive, the IC refinement)
+// ---------------------------------------------------------------------------
+
+test('the gate requires wildfire for entry but survives a custom demotion with a fire event layer', () => {
+  const base = {
+    preference: true,
+    desktopViewport: true,
+    committedCluster: 'wildfire' as const,
+    activeLayerKeys: new Set<string>(['nifc-fires', 'hms-smoke']),
+    currentlyActive: false
+  };
+
+  expect(shouldFire3DBeActive(base)).toBe(true);
+  expect(shouldFire3DBeActive({ ...base, preference: false })).toBe(false);
+  expect(shouldFire3DBeActive({ ...base, desktopViewport: false })).toBe(false);
+
+  // ENTRY requires the committed cluster to BE wildfire: custom never
+  // enters, even with fire event layers on.
+  expect(
+    shouldFire3DBeActive({ ...base, committedCluster: 'custom' })
+  ).toBe(false);
+  expect(
+    shouldFire3DBeActive({ ...base, committedCluster: 'heat' })
+  ).toBe(false);
+
+  // Once ACTIVE, an honest custom demotion keeps the scene while a fire
+  // event layer remains in the active set (one extra reference layer must
+  // not collapse the scene)...
+  const active = { ...base, currentlyActive: true };
+  expect(
+    shouldFire3DBeActive({
+      ...active,
+      committedCluster: 'custom',
+      activeLayerKeys: new Set(['nifc-fires', 'treaty'])
+    })
+  ).toBe(true);
+  expect(
+    shouldFire3DBeActive({
+      ...active,
+      committedCluster: 'custom',
+      activeLayerKeys: new Set(['hms-smoke'])
+    })
+  ).toBe(true);
+
+  // ...but removing every fire event layer, switching to another cluster,
+  // toggling off, or a narrow viewport exits.
+  expect(
+    shouldFire3DBeActive({
+      ...active,
+      committedCluster: 'custom',
+      activeLayerKeys: new Set(['treaty', 'states'])
+    })
+  ).toBe(false);
+  expect(
+    shouldFire3DBeActive({ ...active, committedCluster: 'drought' })
+  ).toBe(false);
+  expect(
+    shouldFire3DBeActive({
+      ...active,
+      committedCluster: 'custom',
+      activeLayerKeys: new Set(['hms-smoke']),
+      preference: false
+    })
+  ).toBe(false);
+  expect(
+    shouldFire3DBeActive({
+      ...active,
+      committedCluster: 'custom',
+      activeLayerKeys: new Set(['hms-smoke']),
+      desktopViewport: false
+    })
+  ).toBe(false);
+});
+
+// ---------------------------------------------------------------------------
+// Node: the scene ladder against the fake map
+// ---------------------------------------------------------------------------
+
+function stubPmtilesFetch(): () => void {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(PMTILES_V3_HEADER_PREFIX, { status: 206 });
+  return () => {
+    globalThis.fetch = originalFetch;
+  };
+}
+
+function stubCorruptFetch(): () => void {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response('<html>not tiles</html>', { status: 200 });
+  return () => {
+    globalThis.fetch = originalFetch;
+  };
+}
+
+test('activation builds terrain, sky, camera, and the smoke volume; deactivation restores everything', async () => {
+  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+  const restoreFetch = stubPmtilesFetch();
+  const harness = fakeMapHarness({ pitch: 15, bearing: 30 });
+  const { map } = harness;
+
+  // A live hms-smoke activation is already on the fake map.
+  map.addSource('hms-smoke', { type: 'geojson' } as never);
+  map.addLayer({ id: 'hms-smoke-fill', type: 'fill', source: 'hms-smoke' } as never);
+
+  try {
+    setFire3DActive(map, true);
+    await expect.poll(() => getFire3DStatus().state).toBe('active');
+
+    // Terrain rides its OWN source, never the hillshade layer's.
+    expect(harness.getTerrain()).toEqual({
+      source: 'fire3d-terrain-dem',
+      exaggeration: FIRE3D_TERRAIN_EXAGGERATION
+    });
+    const dem = harness.sources.get('fire3d-terrain-dem');
+    expect(dem).toMatchObject({
+      type: 'raster-dem',
+      encoding: 'terrarium',
+      tileSize: 512
+    });
+    expect(String((dem as { url?: string }).url)).toMatch(/^pmtiles:\/\//);
+    expect(harness.skyCalls[0]).toEqual(FIRE3D_SKY_SPECIFICATION);
+
+    // Motion allowed: an ease to the ruled pitch, at the ruled duration.
+    expect(harness.cameraCalls[0]).toEqual({
+      kind: 'easeTo',
+      options: {
+        pitch: FIRE3D_PITCH_DEGREES,
+        duration: FIRE3D_CAMERA_TRANSITION_MS
+      }
+    });
+    expect(harness.camera.pitch).toBe(FIRE3D_PITCH_DEGREES);
+
+    // W4: the volume rides the EXISTING hms-smoke source; the flat veil is
+    // hidden, not removed.
+    expect(getFire3DStatus().smokeVolume).toBe(true);
+    expect(harness.layerSpecs.get('hms-smoke-volume')).toMatchObject({
+      type: 'fill-extrusion',
+      source: 'hms-smoke'
+    });
+    expect(harness.layoutChanges).toContainEqual({
+      layerId: 'hms-smoke-fill',
+      name: 'visibility',
+      value: 'none'
+    });
+    // Ruled order: the volume sits directly above the flat veil.
+    expect(harness.layerOrder.indexOf('hms-smoke-volume')).toBe(
+      harness.layerOrder.indexOf('hms-smoke-fill') + 1
+    );
+
+    setFire3DActive(map, false);
+    expect(getFire3DStatus().state).toBe('inactive');
+    expect(harness.getTerrain()).toBeNull();
+    expect(harness.sources.has('fire3d-terrain-dem')).toBe(false);
+    expect(harness.skyCalls.at(-1)).toEqual(FIRE3D_SKY_CLEAR_SPECIFICATION);
+    expect(harness.layerSpecs.has('hms-smoke-volume')).toBe(false);
+    expect(harness.layoutChanges.at(-1)).toEqual({
+      layerId: 'hms-smoke-fill',
+      name: 'visibility',
+      value: 'visible'
+    });
+    // The prior camera comes back exactly.
+    expect(harness.cameraCalls.at(-1)).toEqual({
+      kind: 'easeTo',
+      options: { pitch: 15, bearing: 30, duration: FIRE3D_CAMERA_TRANSITION_MS }
+    });
+    expect(harness.camera).toEqual({ pitch: 15, bearing: 30 });
+    // The tile watch detached with the scene.
+    expect(harness.listenerCount('error')).toBe(0);
+  } finally {
+    setFire3DActive(map, false);
+    restoreFetch();
+    browser.restore();
+  }
+});
+
+test('reduced motion jumps the camera instead of easing, both directions', async () => {
+  const browser = installFakeBrowser({ desktop: true, reducedMotion: true });
+  const restoreFetch = stubPmtilesFetch();
+  const harness = fakeMapHarness({ pitch: 5, bearing: 10 });
+  const { map } = harness;
+
+  try {
+    setFire3DActive(map, true);
+    await expect.poll(() => getFire3DStatus().state).toBe('active');
+    expect(harness.cameraCalls[0]).toEqual({
+      kind: 'jumpTo',
+      options: { pitch: FIRE3D_PITCH_DEGREES }
+    });
+
+    setFire3DActive(map, false);
+    expect(harness.cameraCalls.at(-1)).toEqual({
+      kind: 'jumpTo',
+      options: { pitch: 5, bearing: 10 }
+    });
+    expect(
+      harness.cameraCalls.every((call) => call.kind === 'jumpTo')
+    ).toBe(true);
+  } finally {
+    setFire3DActive(map, false);
+    restoreFetch();
+    browser.restore();
+  }
+});
+
+test('a corrupt archive fails the probe before any map mutation and drops fire3d from the URL', async () => {
+  const browser = installFakeBrowser({
+    desktop: true,
+    search: '?cluster=wildfire&fire3d=true'
+  });
+  const restoreFetch = stubCorruptFetch();
+  const harness = fakeMapHarness({ pitch: 0, bearing: 0 });
+  const { map } = harness;
+
+  try {
+    seedFire3DPreference(true);
+    setFire3DActive(map, true);
+    await expect.poll(() => getFire3DStatus().state).toBe('unavailable');
+
+    expect(getFire3DStatus().reason).toMatch(/terrain archive/i);
+    // Nothing was mutated: the probe failed before setup began.
+    expect(harness.getTerrain()).toBeNull();
+    expect(harness.sources.size).toBe(0);
+    expect(harness.skyCalls).toHaveLength(0);
+    expect(harness.cameraCalls).toHaveLength(0);
+    // The honest demotion dropped the preference AND the URL flag while
+    // preserving the neighbors.
+    expect(getFire3DPreference()).toBe(false);
+    expect(browser.search()).not.toContain('fire3d');
+    expect(browser.search()).toContain('cluster=wildfire');
+  } finally {
+    setFire3DActive(map, false);
+    restoreFetch();
+    browser.restore();
+  }
+});
+
+test('post-probe terrain tile failures roll the scene back transactionally', async () => {
+  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+  const restoreFetch = stubPmtilesFetch();
+  const harness = fakeMapHarness({ pitch: 12, bearing: -20 });
+  const { map } = harness;
+
+  try {
+    seedFire3DPreference(true);
+    setFire3DActive(map, true);
+    await expect.poll(() => getFire3DStatus().state).toBe('active');
+    expect(harness.getTerrain()).not.toBeNull();
+
+    // Three tile errors inside the rolling window with no successful load
+    // in between: the shared watcher's honest degrade threshold.
+    for (let i = 0; i < 3; i += 1) {
+      harness.emit('error', {
+        sourceId: 'fire3d-terrain-dem',
+        error: new Error(`synthetic tile failure ${i}`)
+      });
+    }
+
+    expect(getFire3DStatus().state).toBe('unavailable');
+    expect(getFire3DStatus().reason).toMatch(/terrain tiles/i);
+    expect(harness.getTerrain()).toBeNull();
+    expect(harness.sources.has('fire3d-terrain-dem')).toBe(false);
+    expect(harness.skyCalls.at(-1)).toEqual(FIRE3D_SKY_CLEAR_SPECIFICATION);
+    expect(harness.camera).toEqual({ pitch: 12, bearing: -20 });
+    expect(getFire3DPreference()).toBe(false);
+    expect(harness.listenerCount('error')).toBe(0);
+  } finally {
+    setFire3DActive(map, false);
+    setFire3DPreference(false);
+    restoreFetch();
+    browser.restore();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Browser: the production build end to end
+// ---------------------------------------------------------------------------
+
+const PNW_POLYGON = (west: number, south: number) => ({
+  type: 'Polygon',
+  coordinates: [
+    [
+      [west, south],
+      [west + 0.6, south],
+      [west + 0.6, south + 0.45],
+      [west, south + 0.45],
+      [west, south]
+    ]
+  ]
+});
+
+const NIFC_STUB = {
+  type: 'FeatureCollection',
+  features: [
+    {
+      type: 'Feature',
+      properties: {
+        attr_IncidentTypeCategory: 'WF',
+        poly_IncidentName: 'Synthetic Ridge'
+      },
+      geometry: PNW_POLYGON(-121.4, 44.6)
+    },
+    {
+      type: 'Feature',
+      properties: {
+        attr_IncidentTypeCategory: 'WF',
+        poly_IncidentName: 'Synthetic Butte'
+      },
+      geometry: PNW_POLYGON(-119.9, 46.1)
+    }
+  ]
+};
+
+const HMS_STUB = {
+  type: 'FeatureCollection',
+  features: (
+    [
+      ['Light', -122.4, 44.2],
+      ['Medium', -120.9, 45.2],
+      ['Heavy', -119.4, 46.4]
+    ] as const
+  ).map(([density, west, south]) => ({
+    type: 'Feature',
+    properties: {
+      Density: density,
+      Satellite: 'GOES-WEST',
+      Start: '2026230 1200',
+      End_: '2026230 1800'
+    },
+    geometry: PNW_POLYGON(west, south)
+  }))
+};
+
+async function stubWildfireFeeds(page: Page): Promise<void> {
+  const fulfillJson = (route: Route, body: unknown): Promise<void> =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/geo+json',
+      body: JSON.stringify(body)
+    });
+  await page.route(
+    (url) => url.href.includes('WFIGS_Interagency_Perimeters_Current'),
+    (route) => fulfillJson(route, NIFC_STUB)
+  );
+  await page.route(
+    (url) => url.href.includes('NOAA_Satellite_Smoke_Detection'),
+    (route) => fulfillJson(route, HMS_STUB)
+  );
+  await page.route(
+    (url) => url.href.includes('SPC_firewx'),
+    (route) => fulfillJson(route, { type: 'FeatureCollection', features: [] })
+  );
+}
+
+function fire3dStamp(page: Page): Promise<string | undefined> {
+  return page.evaluate(() => document.documentElement.dataset['ddmFire3d']);
+}
+
+function fire3dSmokeStamp(page: Page): Promise<string | undefined> {
+  return page.evaluate(
+    () => document.documentElement.dataset['ddmFire3dSmoke']
+  );
+}
+
+const TOGGLE = '.shell-fire3d-btn';
+
+test.describe('W3/W4 browser truth', () => {
+  test('the desktop toggle activates the 3D scene with the volume legend, then exits cleanly', async ({
+    page
+  }) => {
+    // Terrain probe, DEM tile fan-out, and full-page screenshots on the
+    // software renderer overrun the default budget; this is the one
+    // evidence-bearing case, so it gets explicit room.
+    test.setTimeout(180_000);
+    await stubWildfireFeeds(page);
+
+    // Measure the terrain archive's real transport for the activation
+    // budget row (logged, not asserted; the preview serves the bundled
+    // archive with ranges).
+    let demBytes = 0;
+    let demRequests = 0;
+    page.on('response', (response) => {
+      if (!response.url().includes('hillshade-dem-pnw.pmtiles')) return;
+      demRequests += 1;
+      const length = Number(response.headers()['content-length']);
+      if (Number.isFinite(length)) demBytes += length;
+    });
+
+    await gotoApp(page, '?cluster=wildfire');
+    await waitForLayerSettled(page, 'hms-smoke');
+
+    const toggle = page.locator(TOGGLE);
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('.shell-fire3d-note')).toHaveText(
+      FIRE3D_COVERAGE_NOTE
+    );
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(async () => search(page)).toContain('fire3d=true');
+    await expect
+      .poll(() => fire3dStamp(page), { timeout: 30_000 })
+      .toBe('active');
+    await expect.poll(() => fire3dSmokeStamp(page)).toBe('volume');
+    await expect(
+      page.locator('.shell-fire3d-status')
+    ).toHaveAttribute('data-fire3d-status', 'active');
+
+    // The volume legend carries the honest vertical qualification.
+    const volumeLegend = page.locator(
+      '.legend-section[data-legend="hms-smoke-volume"]'
+    );
+    await expect(volumeLegend).toHaveCount(1);
+    await expect
+      .poll(() => volumeLegend.textContent())
+      .toContain(HMS_VOLUME_QUALIFICATION);
+
+    // Let terrain tiles land (a bounded wait; live basemap tiles make
+    // networkidle nondeterministic), then capture the pitched-scene
+    // evidence.
+    await page.waitForTimeout(4_000);
+    await page.screenshot({
+      path: 'fire3d-evidence/fire3d-active-desktop.png'
+    });
+    await page
+      .locator('#shell-panel')
+      .screenshot({ path: 'fire3d-evidence/fire3d-control-coverage-note.png' });
+    console.log(
+      `[fire3d-budget] terrain archive transport: ${demBytes} bytes over ${demRequests} requests`
+    );
+
+    // Toggle off: the flat scene returns and the flag drops.
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(() => fire3dStamp(page)).toBe('inactive');
+    await expect.poll(async () => search(page)).not.toContain('fire3d');
+    await expect(volumeLegend).toHaveCount(0);
+  });
+
+  test('a shared fire3d link boots active and ordinary URL writes preserve the flag', async ({
+    page
+  }) => {
+    await stubWildfireFeeds(page);
+    await gotoApp(page, '?cluster=wildfire&fire3d=true');
+
+    await expect
+      .poll(() => fire3dStamp(page), { timeout: 30_000 })
+      .toBe('active');
+    await expect(page.locator(TOGGLE)).toHaveAttribute('aria-pressed', 'true');
+    expect(await search(page)).toContain('fire3d=true');
+
+    // An unrelated ordinary region write must preserve the flag (the
+    // heatday preservation idiom inside syncUrl).
+    await page
+      .locator('#region-select')
+      .selectOption('region:central_oregon', { force: true });
+    await expect
+      .poll(async () => new URLSearchParams(await search(page)).get('region'))
+      .toBe('central_oregon');
+    expect(await search(page)).toContain('fire3d=true');
+  });
+
+  test('reduced motion still enters and leaves the 3D scene', async ({
+    page
+  }) => {
+    test.setTimeout(120_000);
+    await stubWildfireFeeds(page);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await gotoApp(page, '?cluster=wildfire&fire3d=true');
+
+    await expect
+      .poll(() => fire3dStamp(page), { timeout: 30_000 })
+      .toBe('active');
+    await page.waitForTimeout(4_000);
+    await page.screenshot({
+      path: 'fire3d-evidence/fire3d-reduced-motion.png'
+    });
+
+    await page.locator(TOGGLE).click();
+    await expect.poll(() => fire3dStamp(page)).toBe('inactive');
+    await expect.poll(async () => search(page)).not.toContain('fire3d');
+  });
+
+  test('embed stays chrome-inert while a URL-named fire3d still drives the map effect', async ({
+    page
+  }) => {
+    await stubWildfireFeeds(page);
+    await gotoApp(page, '?cluster=wildfire&fire3d=true&embed=true');
+
+    await expect
+      .poll(() => fire3dStamp(page), { timeout: 30_000 })
+      .toBe('active');
+    // The shell panel is hidden in embeds, so the toggle is inert chrome.
+    await expect(page.locator(TOGGLE)).not.toBeVisible();
+    expect(await search(page)).toContain('embed=true');
+    expect(await search(page)).toContain('fire3d=true');
+  });
+
+  test('an embed without the flag never activates and never gains it', async ({
+    page
+  }) => {
+    await stubWildfireFeeds(page);
+    await gotoApp(page, '?cluster=wildfire&embed=true');
+
+    await page.waitForTimeout(3_000);
+    expect(await fire3dStamp(page)).not.toBe('active');
+    expect(await search(page)).not.toContain('fire3d');
+  });
+
+  test('a mobile viewport never fetches the 3D chunks', async ({ page }) => {
+    await stubWildfireFeeds(page);
+    // Only the 3D chunks themselves are forbidden on mobile. The tiny
+    // fire3d-presentation constants chunk legitimately rides the shell
+    // island (the control needs the coverage note and breakpoint), and
+    // the document URL itself carries the fire3d parameter.
+    const chunkRequests: string[] = [];
+    page.on('request', (request) => {
+      if (
+        /assets\/(?:fire3d-(?!presentation)|hms-smoke-volume-)/.test(
+          request.url()
+        )
+      ) {
+        chunkRequests.push(request.url());
+      }
+    });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoApp(page, '?cluster=wildfire&fire3d=true');
+    await page.waitForTimeout(3_000);
+
+    expect(chunkRequests).toEqual([]);
+    expect(await fire3dStamp(page)).toBeUndefined();
+  });
+
+  test('a corrupt archive reads unavailable in the control and drops the flag', async ({
+    page
+  }) => {
+    await stubWildfireFeeds(page);
+    // Boot against the REAL bundled archive first: the default-on
+    // hillshade layer shares the archive, and corrupting it at boot would
+    // fail hillshade, honestly demote the cluster to custom, and hide
+    // this control before the click. Only the fire3d probe sees the
+    // corruption.
+    await gotoApp(page, '?cluster=wildfire');
+    await waitForLayerSettled(page, 'hillshade');
+
+    // One glob covers the bundled path AND the ATNI fallback copy (both
+    // end in the same file name), so the resolver honestly exhausts its
+    // ladder (the u4g corrupt-archive fixture idiom).
+    await page.route('**/hillshade-dem-pnw.pmtiles*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<html>not tiles</html>'
+      })
+    );
+
+    const toggle = page.locator(TOGGLE);
+    await toggle.click();
+    // The corrupt probe fails within milliseconds, so the pressed state is
+    // transient by design (the press flip itself is asserted in the
+    // desktop activation case); this case asserts the terminal truths.
+    await expect
+      .poll(() => fire3dStamp(page), { timeout: 30_000 })
+      .toBe('unavailable');
+    await expect(page.locator('.shell-fire3d-status')).toContainText(
+      'Unavailable'
+    );
+    // The honest demotion: preference off, flag gone, cluster preserved.
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(async () => search(page)).not.toContain('fire3d');
+    expect(await search(page)).toContain('cluster=wildfire');
+  });
+
+  test('one extra reference layer keeps the scene; losing every fire layer or the cluster exits it', async ({
+    page
+  }) => {
+    await stubWildfireFeeds(page);
+    await gotoApp(page, '?cluster=wildfire&view=console&fire3d=true');
+
+    await expect
+      .poll(() => fire3dStamp(page), { timeout: 30_000 })
+      .toBe('active');
+    await waitForLayerSettled(page, 'nifc-fires');
+    await waitForLayerSettled(page, 'hms-smoke');
+
+    // Add one bundled reference layer: the display honestly demotes to a
+    // custom layer set (cluster= leaves the URL) but the scene stays.
+    await layerCheckbox(page, 'places').check();
+    await waitForLayerSettled(page, 'places');
+    await expect.poll(async () => search(page)).not.toContain('cluster=');
+    expect(await fire3dStamp(page)).toBe('active');
+
+    // Removing the smoke layer keeps terrain but honestly downgrades the
+    // smoke read to (absent) flat; the volume never outlives its layer.
+    await layerCheckbox(page, 'hms-smoke').uncheck();
+    await expect.poll(() => fire3dSmokeStamp(page)).toBe('flat');
+    expect(await fire3dStamp(page)).toBe('active');
+    await expect(
+      page.locator('.legend-section[data-legend="hms-smoke-volume"]')
+    ).toHaveCount(0);
+
+    // Removing the last fire event layer exits the scene; the durable
+    // preference (and its URL flag) survives for the next Fire view.
+    await layerCheckbox(page, 'nifc-fires').uncheck();
+    await expect.poll(() => fire3dStamp(page)).toBe('inactive');
+    expect(await search(page)).toContain('fire3d=true');
+  });
+
+  test('switching clusters exits the scene and hides the control without dropping the preference', async ({
+    page
+  }) => {
+    await stubWildfireFeeds(page);
+    await gotoApp(page, '?cluster=wildfire&fire3d=true');
+    await expect
+      .poll(() => fire3dStamp(page), { timeout: 30_000 })
+      .toBe('active');
+
+    await page.locator('.shell-cluster-btn[data-cluster="drought"]').click();
+    await expect.poll(() => fire3dStamp(page)).toBe('inactive');
+    await expect(page.locator(TOGGLE)).toHaveCount(0);
+    // The durable preference stays; re-entering the Fire view restores 3D.
+    expect(await search(page)).toContain('fire3d=true');
+
+    await page.locator('.shell-cluster-btn[data-cluster="wildfire"]').click();
+    await expect
+      .poll(() => fire3dStamp(page), { timeout: 30_000 })
+      .toBe('active');
+  });
+});

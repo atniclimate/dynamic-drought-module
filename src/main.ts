@@ -207,6 +207,28 @@ async function boot(): Promise<void> {
   // names, sources, and six-state registry without creating durable map state.
   initMapInformation();
 
+  // The desktop 3D Fire mode (W3/W4) rides its own lazy chunk behind the
+  // shell's desktop breakpoint, so a mobile boot never fetches it. A boot
+  // below the breakpoint arms a one-shot widen listener instead: the mode's
+  // toggle only renders on desktop widths, and a later resize into them
+  // must find a live controller rather than an inert control.
+  const fire3dViewport = window.matchMedia('(min-width: 721px)');
+  const loadFire3D = (): void => {
+    void import('./map/fire3d').then(({ initFire3DController }) => {
+      initFire3DController(map);
+    });
+  };
+  if (fire3dViewport.matches) {
+    loadFire3D();
+  } else {
+    const onWiden = (): void => {
+      if (!fire3dViewport.matches) return;
+      fire3dViewport.removeEventListener('change', onWiden);
+      loadFire3D();
+    };
+    fire3dViewport.addEventListener('change', onWiden);
+  }
+
   // Selected-place emphasis (U3h, headroom A1): the chosen boundary stays lit
   // while its popup or briefing is open. This wires only the close seam (clear
   // on place-selection null); the set side lives in the coordinator's

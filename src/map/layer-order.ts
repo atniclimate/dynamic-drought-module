@@ -73,6 +73,7 @@ export const CONDITION_SURFACE_IDS: readonly string[] = [
 /** Observed and advisory event overlays that stay above condition fields. */
 export const EVENT_OVERLAY_IDS: readonly string[] = [
   'hms-smoke-fill',
+  'hms-smoke-volume',
   'hms-smoke-outline',
   'nifc-fires-fill',
   'nifc-fires-outline',

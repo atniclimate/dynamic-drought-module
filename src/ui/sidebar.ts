@@ -119,6 +119,7 @@ import {
 } from '../state/view-mode';
 import { installPopupViewportContainment } from './popup-viewport';
 import { getBasemapMode, onBasemapChange, setBasemapMode } from '../state/basemap-store';
+import { seedFire3DPreference } from '../state/fire3d-store';
 import { getFraming, onFramingChange, setFraming } from '../state/framing-store';
 import {
   clearOceanFraming,
@@ -1017,6 +1018,13 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   if (params.basemap === 'satellite') {
     void applyBasemapMode(map, 'satellite');
   }
+
+  // Seed the 3D Fire mode preference beside the basemap seed and for the
+  // same reason: a `fire3d=true` deep link must survive the first canonical
+  // write (syncUrl re-reads the parameter fresh). The seed never writes the
+  // URL; the orchestrator (src/map/fire3d.ts, a desktop-only lazy chunk
+  // loaded from main.ts) observes the store and applies the map side.
+  seedFire3DPreference(params.fire3d);
 
   // The studio composes with all map state. Seed it only after every
   // underlying store above is ready, and before selectRegion performs the
