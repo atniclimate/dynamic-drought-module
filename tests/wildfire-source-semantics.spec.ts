@@ -16,6 +16,7 @@ import {
   HMS_DENSITY_PRESENTATION,
   HMS_OVERVIEW_QUALIFICATION,
   HMS_VOLUME_HEIGHT_SCALE_METERS,
+  HMS_VOLUME_HEIGHTS,
   HMS_VOLUME_OPACITY,
   HMS_VOLUME_QUALIFICATION,
   NIFC_INCIDENT_PRESENTATION,
@@ -509,27 +510,31 @@ test('smoke volume heights are the 2D opacities scaled, rank identically, and Un
     'match',
     ['upcase', ['to-string', ['coalesce', ['get', 'Density'], '']]],
     'LIGHT',
-    320,
+    HMS_VOLUME_HEIGHTS.Light,
     'MEDIUM',
-    680,
+    HMS_VOLUME_HEIGHTS.Medium,
     'HEAVY',
-    1320,
-    480
+    HMS_VOLUME_HEIGHTS.Heavy,
+    HMS_VOLUME_HEIGHTS.Unknown
   ]);
 
-  const heights = {
-    Light: 320,
-    Medium: 680,
-    Heavy: 1320,
-    Unknown: 480
-  } as const;
+  // The heights are DERIVED, not typed twice. Until 2026-08-19 they were
+  // hand-copied literals in the paint and again in the legend, which is a
+  // drift waiting to happen the moment the scale moves; the scale moved
+  // that same day (4,000 to 10,000 m, because a plume hundreds of
+  // kilometres wide and 320 m tall had nothing to read as volume).
+  const heights = HMS_VOLUME_HEIGHTS;
   const classes = ['Light', 'Medium', 'Heavy', 'Unknown'] as const;
 
-  // The baked literals are exactly the 2D veil opacities times one scale.
+  // Each height is the 2D veil opacity times one scale, rounded to 10 m so
+  // the legend reads as stylized rather than as a spurious measurement.
   for (const cls of classes) {
-    expect(heights[cls]).toBeCloseTo(
-      HMS_DENSITY_PRESENTATION[cls].opacity * HMS_VOLUME_HEIGHT_SCALE_METERS,
-      6
+    expect(heights[cls]).toBe(
+      Math.round(
+        (HMS_DENSITY_PRESENTATION[cls].opacity *
+          HMS_VOLUME_HEIGHT_SCALE_METERS) /
+          10
+      ) * 10
     );
   }
 

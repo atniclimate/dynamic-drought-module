@@ -5908,6 +5908,18 @@ a.impact-resource-link::after {
   line-height: 1.35;
 }
 
+/* The empty-smoke answer (2026-08-19). Same type as the notes beside it,
+   one step brighter, because it reports the state of a live source rather
+   than a standing caveat: a person who just turned the volume on and sees
+   nothing needs this sentence to read as the answer, not as fine print.
+   It carries its own class so the standing notes stay countable. */
+.shell-fire3d-empty {
+  margin: 0;
+  color: var(--fg-2);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
 /* MAP CONTEXT: the framing minimap. */
 .shell-minimap-heading {
   display: flex;

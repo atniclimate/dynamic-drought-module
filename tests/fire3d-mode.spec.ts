@@ -809,7 +809,41 @@ test.describe('W3/W4 browser truth', () => {
     });
   });
 
-  test('an embed without the flag never activates and never gains it', async ({
+  test('an empty smoke read says so in the 3D control instead of looking broken', async ({
+  page
+}) => {
+  test.setTimeout(150_000);
+  await stubWildfireFeeds(page);
+  // Registered AFTER the shared stub, so it wins: HMS answers with a valid
+  // but EMPTY collection, which is an ordinary and correct answer from a
+  // daytime satellite analysis product.
+  await page.route(
+    (url) => url.href.includes('NOAA_Satellite_Smoke_Detection'),
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify({ type: 'FeatureCollection', features: [] })
+      })
+  );
+  await gotoApp(page, '?cluster=wildfire&fire3d=true');
+
+  await expect
+    .poll(() => fire3dStamp(page), { timeout: 60_000 })
+    .toBe('active');
+
+  // The scene still reports the volume, because the source is there and
+  // the extrusion is over it; there is simply nothing in it. Without the
+  // line below, that reads as a broken feature rather than an answer.
+  const empty = page.locator('[data-fire3d-empty-smoke]');
+  await expect(empty).toBeVisible();
+  await expect(empty).toContainText('No current smoke plumes in view');
+  // The standing notes stay countable: the empty line carries its own
+  // class so it cannot be mistaken for one of them.
+  await expect(page.locator('.shell-fire3d-note')).toHaveCount(2);
+});
+
+test('an embed without the flag never activates and never gains it', async ({
     page
   }) => {
     await stubWildfireFeeds(page);

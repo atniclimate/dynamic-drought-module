@@ -447,8 +447,38 @@ export function buildHmsSmokeFillPaint(): NonNullable<
  * Vertical scale for the 3D smoke volume (W4): each density class's stylized
  * extrusion height is its 2D veil opacity times this many meters, so the
  * vertical ranking can never disagree with the ruled opacity ranking.
+ *
+ * RAISED from 4,000 to 10,000 on 2026-08-19, after the owner reported that
+ * volumetric smoke "doesn't seem to work" and the diagnosis showed it was
+ * rendering the whole time. HMS plumes are regional swaths, hundreds of
+ * kilometres across; at 320 to 1,320 m a plume was a 300:1 sheet, and the
+ * terrain it sits over reads up to about 7 km tall at the scene's 2.4x
+ * exaggeration, which the smoke deliberately does NOT share. The volume
+ * was there and had nothing to read as volume.
+ *
+ * Raising the scale is honest because the heights were never measurements:
+ * HMS_VOLUME_QUALIFICATION already says the vertical extent is a stylized
+ * encoding of the issuer's density class, and it still says exactly that.
+ * The ranking, the opacity coupling, and the class-to-height derivation are
+ * unchanged; only the constant moved. Nothing here claims a plume top.
  */
-export const HMS_VOLUME_HEIGHT_SCALE_METERS = 4000;
+export const HMS_VOLUME_HEIGHT_SCALE_METERS = 10_000;
+
+/**
+ * The stylized height per density class, DERIVED rather than typed twice.
+ *
+ * These numbers appear in the extrusion paint and, word for word, in the
+ * legend a person reads. Before this table they were hand-copied literals
+ * in both places, which is a drift waiting to happen the moment the scale
+ * changes. Rounded to the nearest 10 m so the legend reads as a stylized
+ * figure rather than a spurious measurement.
+ */
+export const HMS_VOLUME_HEIGHTS: Readonly<Record<HmsDensityClass, number>> = {
+  Light: Math.round((HMS_DENSITY_PRESENTATION.Light.opacity * HMS_VOLUME_HEIGHT_SCALE_METERS) / 10) * 10,
+  Medium: Math.round((HMS_DENSITY_PRESENTATION.Medium.opacity * HMS_VOLUME_HEIGHT_SCALE_METERS) / 10) * 10,
+  Heavy: Math.round((HMS_DENSITY_PRESENTATION.Heavy.opacity * HMS_VOLUME_HEIGHT_SCALE_METERS) / 10) * 10,
+  Unknown: Math.round((HMS_DENSITY_PRESENTATION.Unknown.opacity * HMS_VOLUME_HEIGHT_SCALE_METERS) / 10) * 10
+};
 
 /** Honest legend line for the 3D smoke volume. */
 export const HMS_VOLUME_QUALIFICATION =
@@ -457,12 +487,13 @@ export const HMS_VOLUME_QUALIFICATION =
 /**
  * Exact paint installed by the 3D smoke volume layer (hms-smoke-volume).
  *
- * Heights are the 2D veil opacities times HMS_VOLUME_HEIGHT_SCALE_METERS,
- * baked as literals so the paint is auditable at a glance: Light 0.08 to
- * 320 m, Medium 0.17 to 680 m, Heavy 0.33 to 1320 m, Unknown 0.12 to 480 m.
- * The match mirrors buildHmsSmokeFillPaint, including the guard that an
- * Unknown density NEVER falls through to the Light class. Colors match the
- * 2D veil exactly.
+ * Heights come from HMS_VOLUME_HEIGHTS, which derives them from the 2D veil
+ * opacities times HMS_VOLUME_HEIGHT_SCALE_METERS. They used to be baked
+ * here as literals AND typed again in the legend; deriving them once means
+ * a scale change cannot leave the legend describing heights the map is not
+ * drawing. The match mirrors buildHmsSmokeFillPaint, including the guard
+ * that an Unknown density NEVER falls through to the Light class. Colors
+ * match the 2D veil exactly.
  *
  * fill-extrusion-opacity is not data-driven in the MapLibre style
  * specification, so the per-class opacity ramp of the flat veil cannot be
@@ -491,12 +522,12 @@ export function buildHmsSmokeVolumePaint(): NonNullable<
       'match',
       NORMALIZED_HMS_DENSITY,
       'LIGHT',
-      320,
+      HMS_VOLUME_HEIGHTS.Light,
       'MEDIUM',
-      680,
+      HMS_VOLUME_HEIGHTS.Medium,
       'HEAVY',
-      1320,
-      480
+      HMS_VOLUME_HEIGHTS.Heavy,
+      HMS_VOLUME_HEIGHTS.Unknown
     ],
     'fill-extrusion-base': 0,
     'fill-extrusion-opacity': HMS_VOLUME_OPACITY
