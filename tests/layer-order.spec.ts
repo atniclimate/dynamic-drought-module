@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 import {
   BOTTOM_STACK_IDS,
   CONDITION_SURFACE_IDS,
+  CONTEXT_OVERLAY_IDS,
   EVENT_OVERLAY_IDS,
   REFERENCE_BOUNDARY_IDS,
   THEMATIC_STACK_IDS,
@@ -128,8 +129,12 @@ test.describe('layer-order: thematic reassert (E1 deliverable 2)', () => {
   });
 
   test('the complete chain has explicit condition, event, and reference bands', () => {
+    // The 3D Fire context overlays (W-CTX) seat between condition
+    // surfaces and event overlays: infrastructure context reads over the
+    // fuels drape while mapped incidents always read on top.
     expect(THEMATIC_STACK_IDS).toEqual([
       ...CONDITION_SURFACE_IDS,
+      ...CONTEXT_OVERLAY_IDS,
       ...EVENT_OVERLAY_IDS,
       ...REFERENCE_BOUNDARY_IDS
     ]);

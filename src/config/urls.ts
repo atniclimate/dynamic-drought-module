@@ -821,6 +821,16 @@ export const URLS = Object.freeze({
   // Loaded only while the 3D Fire mode is active, via the pmtiles protocol's
   // ranged reads, exactly like the hillshade archive above.
   fuelsFbfm40PmtilesLocal: BASE_URL + 'data/fuels-fbfm40-pnw.pmtiles',
+  // PNW transmission lines for the desktop 3D Fire mode: a one-time build
+  // extract (scripts/build-power-tiles.mjs, `npm run build:power-tiles`) of
+  // the ARCHIVED federal HIFLD dataset via the public Esri Federal User
+  // Community copy (Extract capability enabled; accessInformation "U.S.
+  // Government"; the item states it is archived with last data update
+  // 2024-09-30). Deliberately baked rather than fetched live: an orphaned
+  // archive is not a runtime dependency, and the in-app qualification
+  // carries the mandatory currency caveat. Loaded only while the 3D Fire
+  // mode is active.
+  powerLinesPmtilesLocal: BASE_URL + 'data/power-lines-pnw.pmtiles',
   tribalLandsLocal: BASE_URL + 'data/tribal-lands.geojson',
   treatyAreasLocal: BASE_URL + 'data/treaty-areas.geojson',
   // United States state boundaries, baked from the Census Bureau cartographic
@@ -932,6 +942,20 @@ export const URLS = Object.freeze({
   // UNVERIFIED: copyrightText is empty; do not assert a license in UI copy.
   noaaHmsSmokeFeatureServer:
     'https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/NOAA_Satellite_Smoke_Detection_(v1)/FeatureServer/0',
+
+  // U.S. Energy Information Administration power plants (EIA Forms
+  // 860/860M), the point companion to the baked transmission-line archive
+  // in the 3D Fire mode's power context. Verified 2026-08-18 PDT: hosted by
+  // the Esri Federal User Community org, item b063316fac7345dba4bae96eaa813b2f,
+  // public, independently maintained (item modified 2026-08-05;
+  // dataLastEditDate 2025-07-01; record Period '202502'), CORS
+  // Access-Control-Allow-Origin: *, Cache-Control public max-age 3600.
+  // The PNW envelope returned 625 points in one request (~25 KB gzipped
+  // with the trimmed outFields). licenseInfo is Esri MLA boilerplate over
+  // U.S. federal data; attribute "Energy Information Administration (EIA)"
+  // and surface the Period vintage rather than implying real-time.
+  eiaPowerPlantsFeatureLayer:
+    'https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/Power_Plants_in_the_US/FeatureServer/0',
 
   // EPA AirNow current monitor readings (the KEYLESS ArcGIS layer behind
   // fire.airnow.gov; api.airnow.gov is keyed and correctly bypassed).

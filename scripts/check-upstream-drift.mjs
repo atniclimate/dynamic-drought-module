@@ -178,6 +178,17 @@ const PROBE_SUFFIXES = new Map([
   ['nifcRawsFeatureServer', '?f=json'],
   ['cpcWeeklySstAnomalyMapServer', '?f=json'],
   ['biaLarFeatureServer', '?f=json'],
+  // The 3D Fire power context's live plants read: probe one real record
+  // with the Period vintage field, so an ArcGIS error riding HTTP 200 or
+  // a vanished Period attribute FAILS via the content tripwire below
+  // instead of passing as a healthy status line.
+  [
+    'eiaPowerPlantsFeatureLayer',
+    '/query?where=1%3D1&geometry=-125,41.5,-110.5,49.5' +
+      '&geometryType=esriGeometryEnvelope&inSR=4326' +
+      '&spatialRel=esriSpatialRelIntersects&outFields=Period' +
+      '&returnGeometry=false&resultRecordCount=1&f=json'
+  ],
   // Probe the same bounded station-network discovery used by the runtime.
   [
     'nrcsAwdbStations',
@@ -330,6 +341,25 @@ const CONTENT_TRIPWIRES = new Map([
             `newer LANDFIRE release folder observed: LF${Math.max(...newer)}; ` +
             'pinned release code 240 (LF2023) remains available'
         };
+      }
+      return null;
+    }
+  ],
+  [
+    'eiaPowerPlantsFeatureLayer',
+    (body) => {
+      let payload;
+      try {
+        payload = JSON.parse(body);
+      } catch {
+        return 'EIA power-plant probe response is not JSON';
+      }
+      if (payload?.error) {
+        return 'EIA power-plant layer returned an ArcGIS error envelope (a 200-with-error body)';
+      }
+      const period = payload?.features?.[0]?.attributes?.Period;
+      if (typeof period !== 'string' || !/^\d{6}$/.test(period)) {
+        return 'EIA power-plant probe record carries no YYYYMM Period attribute; the legend vintage line would misreport';
       }
       return null;
     }

@@ -3,6 +3,12 @@ import { expect, test } from '@playwright/test';
 import {
   FBFM40_PRESENTATION,
   FUELS_DRAPE_OPACITY,
+  POWER_LINE_COLOR,
+  POWER_LINE_WIDTHS,
+  POWER_LINES_QUALIFICATION,
+  POWER_PLANTS_QUALIFICATION,
+  POWER_SHARED_QUALIFICATION,
+  buildPowerLinePaint,
   HMS_DENSITY_PRESENTATION,
   HMS_OVERVIEW_QUALIFICATION,
   HMS_VOLUME_HEIGHT_SCALE_METERS,
@@ -580,6 +586,51 @@ test('the FBFM40 drape key carries the issuer palette verbatim and a snapshot qu
   // The drape stays translucent context under perimeters and smoke.
   expect(FUELS_DRAPE_OPACITY).toBeGreaterThan(0);
   expect(FUELS_DRAPE_OPACITY).toBeLessThanOrEqual(0.6);
+});
+
+test('the power context maps issuer voltage classes to width only, with the archive caveat pinned', () => {
+  // Exactly the seven VOLT_CLASS values served inside the PNW envelope
+  // (verified live 2026-08-19 UTC), unknowns included as their own class.
+  const byClass = new Map<string, number>(
+    POWER_LINE_WIDTHS as readonly (readonly [string, number])[]
+  );
+  expect([...byClass.keys()].sort()).toEqual(
+    ['100-161', '220-287', '345', '500', 'DC', 'NOT AVAILABLE', 'UNDER 100'].sort()
+  );
+  // Width follows the issuer's kV ordering; the unknown sentinel draws
+  // thinnest so absence of data never reads as high voltage.
+  const kvOrder = ['UNDER 100', '100-161', '220-287', '345', '500'];
+  for (let i = 1; i < kvOrder.length; i++) {
+    expect(byClass.get(kvOrder[i])!).toBeGreaterThan(byClass.get(kvOrder[i - 1])!);
+  }
+  expect(byClass.get('NOT AVAILABLE')).toBe(byClass.get('UNDER 100'));
+
+  // One color for every line: the paint carries no data-driven color, so
+  // the layer can never read as a severity ramp.
+  const paint = buildPowerLinePaint();
+  expect(paint['line-color']).toBe(POWER_LINE_COLOR);
+  const width = paint['line-width'] as unknown[];
+  expect(width[0]).toBe('match');
+  // The match falls back to the thinnest width for any unseen class.
+  expect(width[width.length - 1]).toBe(0.6);
+
+  // The qualifications pin the archive currency caveat, the mixed-status
+  // disclosure, the dashed unknown-class treatment, the plants' bounded
+  // meaning, and the honest absence of substations and distribution
+  // lines. Composed per active surface in src/layers/power-3d.ts so no
+  // sentence ever describes a layer that is not in the scene.
+  expect(POWER_LINES_QUALIFICATION).toMatch(/ARCHIVED/);
+  expect(POWER_LINES_QUALIFICATION).toMatch(/2024-09-30/);
+  expect(POWER_LINES_QUALIFICATION).toMatch(/inactive or status-unknown/i);
+  expect(POWER_LINES_QUALIFICATION).toMatch(/dashed at the thinnest width/i);
+  expect(POWER_PLANTS_QUALIFICATION).toMatch(/EIA inventory locations/);
+  expect(POWER_PLANTS_QUALIFICATION).toMatch(/location only, not capacity or fuel/i);
+  expect(POWER_SHARED_QUALIFICATION).toMatch(
+    /never for siting or safety-critical decisions/i
+  );
+  expect(POWER_SHARED_QUALIFICATION).toMatch(
+    /substations and distribution lines have no authoritative public national source/i
+  );
 });
 
 test('fire key composition reflects SPC-only, NIFC-only, and combined active sets', () => {

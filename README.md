@@ -283,7 +283,15 @@ extent encodes the issuer's density class, never measured plume height)
 and issuer-published landscape context draped over the relief. The first
 context layer is the LANDFIRE 2024 Scott and Burgan 40 fuel-model
 classification (FBFM40), baked to a bundled archive with LANDFIRE's own
-class colors at reduced resolution from the 30 m source.
+class colors at reduced resolution from the 30 m source. Power
+infrastructure context joins it: transmission lines from the ARCHIVED
+federal HIFLD dataset (baked once, last data update 2024-09-30, with
+that currency caveat always in the legend) and live power plants from
+the U.S. Energy Information Administration, labeled with the issuer's
+own reporting period. Substations and distribution lines are absent by
+design: substation locations are withheld by the publishing agencies for
+security reasons, and no authoritative public national
+distribution-circuit dataset exists.
 
 The view is a 3D context view, deliberately not a "digital twin": that
 phrase is a term of art for systems that bundle physics-based fire

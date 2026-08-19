@@ -8,6 +8,41 @@ through the normal Pages workflow. Repository release tags currently stop at
 `v0.6.23`; neither the August 13 nor August 18 refinement assigned a new tag
 or package version.
 
+### 2026-08-19: power infrastructure context for the 3D Fire view
+
+[Pull request 14](https://github.com/atniclimate/dynamic-drought-module/pull/14)
+added the second issuer-published context layer set to the desktop 3D Fire
+mode: transmission lines baked from the archived federal HIFLD dataset plus
+live EIA power plants, riding the same `fire3d` activation as non-fatal
+companions of the fuels drape.
+
+- The transmission lines are a bundled 2,580,885-byte vector PMTiles archive
+  (6,941 features, z0-10), a one-time bake of the ARCHIVED HIFLD dataset via
+  the public Esri Federal User Community copy (the HIFLD Open program was
+  discontinued 2025-08-26; the item states it is archived, unmaintained,
+  last updated 2024-09-30). The in-app qualification carries the mandatory
+  currency caveat, the mixed operational-status disclosure, and the honest
+  absence statement for substations and distribution lines. Line width
+  follows the issuer's seven voltage classes in a single color; unknown
+  voltage draws dashed at the thinnest width so missing issuer data never
+  reads as a definite low-voltage line.
+- Power plants come live from the independently maintained EIA layer in one
+  bounded, cancellable request, and the legend prints the issuer's reporting
+  Period computed across all features, never the word "live". The EIA layer
+  joined the upstream-drift monitor with a content tripwire.
+- Every disclosure is composed from what actually rendered: a partial
+  degrade names only its live half, in the legend and the embed chip alike.
+  Both surfaces seat in a new context-overlay band between condition
+  surfaces and event overlays.
+- A California-only CPUC High Fire Threat District layer was evaluated and
+  declined on license and framing grounds, recorded in
+  [`design/fire3d-context.md`](design/fire3d-context.md).
+
+Validation: `npm run gate` clean; the fire3d and wildfire-source-semantics
+specs passed 35/35 serially; the full serial browser run at the stack head
+reported 792 passed with only the known SPC preset flake, recorded on the
+pull request before merge.
+
 ### 2026-08-18: LANDFIRE fuel-model drape for the 3D Fire view
 
 [Pull request 12](https://github.com/atniclimate/dynamic-drought-module/pull/12)

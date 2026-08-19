@@ -38,6 +38,7 @@
     "build:places": "node scripts/build-places.mjs",
     "build:ecoregion-tiles": "node scripts/build-ecoregion-tiles.mjs",
     "build:fuels-tiles": "node scripts/build-fuels-tiles.mjs",
+    "build:power-tiles": "node scripts/build-power-tiles.mjs",
     "build:minimap-geometry": "node scripts/build-minimap-geometry.mjs",
     "build:minimap-whp": "node scripts/build-minimap-whp.mjs",
     "build:states": "node scripts/build-states.mjs",
