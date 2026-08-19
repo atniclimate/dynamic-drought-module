@@ -86,6 +86,11 @@ function exportImageParams(bbox, tileSize) {
   });
 }
 
+/** Drop an unwanted response body so the connection is not pinned. */
+function discardBody(response) {
+  void response.body?.cancel().catch(() => undefined);
+}
+
 /** Fetch one rendered PNG tile, trying f=image then the two-step f=json href. */
 async function fetchRenderedTile(endpoint, bbox, tileSize) {
   const direct = `${endpoint}/exportImage?${exportImageParams(bbox, tileSize).toString()}`;
@@ -93,11 +98,13 @@ async function fetchRenderedTile(endpoint, bbox, tileSize) {
   if (directRes.ok && (directRes.headers.get('content-type') ?? '').includes('image/png')) {
     return Buffer.from(await directRes.arrayBuffer());
   }
+  discardBody(directRes);
   // Two-step: ask for the rendered file's href, then fetch the href.
   const params = exportImageParams(bbox, tileSize);
   params.set('f', 'json');
   const jsonRes = await fetch(`${endpoint}/exportImage?${params.toString()}`);
   if (!jsonRes.ok) {
+    discardBody(jsonRes);
     throw new Error(`exportImage f=json HTTP ${jsonRes.status}`);
   }
   const body = await jsonRes.json();
@@ -105,7 +112,10 @@ async function fetchRenderedTile(endpoint, bbox, tileSize) {
     throw new Error(`exportImage rejected: ${JSON.stringify(body.error ?? body).slice(0, 160)}`);
   }
   const hrefRes = await fetch(body.href);
-  if (!hrefRes.ok) throw new Error(`rendered href HTTP ${hrefRes.status}`);
+  if (!hrefRes.ok) {
+    discardBody(hrefRes);
+    throw new Error(`rendered href HTTP ${hrefRes.status}`);
+  }
   const bytes = Buffer.from(await hrefRes.arrayBuffer());
   if (bytes.length < 8 || bytes.readUInt32BE(0) !== 0x89504e47) {
     throw new Error('rendered href did not return a PNG');
@@ -113,20 +123,25 @@ async function fetchRenderedTile(endpoint, bbox, tileSize) {
   return bytes;
 }
 
-/** Classify a decoded PNG's pixels: fully transparent, all opaque black, or data. */
+/**
+ * Classify a decoded PNG's pixels: fully transparent, unpopulated (opaque
+ * black beyond a stray-pixel tolerance; no issuer palette in scope uses
+ * pure black, so opaque black is always upstream nodata painted opaque),
+ * or data. The 1% tolerance admits stray edge pixels without letting a
+ * GeoArea boundary ship a mostly-black tile as "data".
+ */
 function classifyPixels(png) {
-  let anyOpaque = false;
-  let anyNonBlackOpaque = false;
+  let opaque = 0;
+  let opaqueBlack = 0;
   for (let i = 0; i < png.data.length; i += 4) {
     if (png.data[i + 3] === 0) continue;
-    anyOpaque = true;
-    if (png.data[i] !== 0 || png.data[i + 1] !== 0 || png.data[i + 2] !== 0) {
-      anyNonBlackOpaque = true;
-      break;
+    opaque += 1;
+    if (png.data[i] === 0 && png.data[i + 1] === 0 && png.data[i + 2] === 0) {
+      opaqueBlack += 1;
     }
   }
-  if (!anyOpaque) return 'transparent';
-  if (!anyNonBlackOpaque) return 'opaque-black';
+  if (opaque === 0) return 'transparent';
+  if (opaqueBlack / opaque > 0.01) return 'opaque-black';
   return 'data';
 }
 
@@ -150,6 +165,9 @@ async function runLimited(items, limit, worker) {
  *   bounds         [minLon, minLat, maxLon, maxLat] bake box (WGS 84)
  *   minZoom, maxZoom, tileSize
  *   concurrency, requestDelayMs, progressEvery
+ *   maxTransparentTiles  ceiling on fully transparent tiles; the caller
+ *                  declares how many of its bake-box tiles legitimately sit
+ *                  outside the source's coverage, and one more fails the bake
  *   center         [lon, lat, zoom]
  *   metadata       PMTiles JSON metadata (name, attribution, ...)
  *   canary         { lon, lat, zoom, paletteHex: string[] } a point that must
@@ -175,12 +193,13 @@ export async function buildRenderedRasterPmtiles(opts) {
   const counts = { data: 0, transparent: 0 };
   let completed = 0;
   const rendered = await runLimited(work, opts.concurrency, async ({ z, x, y }) => {
-    const bbox = tileBoundsMercator(z, x, y);
-    const bytes = await retry(`tile ${z}/${x}/${y}`, () =>
-      fetchRenderedTile(opts.endpoint, bbox, opts.tileSize)
-    );
+    // Decode inside the retried closure: a truncated or corrupt PNG body
+    // is retried like any transport failure instead of failing the bake.
+    const { bytes, kind } = await retry(`tile ${z}/${x}/${y}`, async () => {
+      const fetched = await fetchRenderedTile(opts.endpoint, tileBoundsMercator(z, x, y), opts.tileSize);
+      return { bytes: fetched, kind: classifyPixels(PNG.sync.read(fetched)) };
+    });
     if (opts.requestDelayMs > 0) await delay(opts.requestDelayMs);
-    const kind = classifyPixels(PNG.sync.read(bytes));
     completed++;
     if (completed === work.length || completed % opts.progressEvery === 0) {
       const elapsed = ((performance.now() - started) / 1000).toFixed(1);
@@ -189,7 +208,7 @@ export async function buildRenderedRasterPmtiles(opts) {
     if (kind === 'opaque-black') {
       // The unpopulated-mosaic signature: refuse to bake a black lie.
       throw new Error(
-        `tile ${z}/${x}/${y} rendered ALL opaque black: the mosaic is unpopulated here; refusing to bake`
+        `tile ${z}/${x}/${y} rendered opaque black beyond the stray-pixel tolerance: the mosaic is unpopulated here; refusing to bake`
       );
     }
     if (kind === 'transparent') {
@@ -199,6 +218,18 @@ export async function buildRenderedRasterPmtiles(opts) {
     counts.data++;
     return { z, x, y, tileId: zxyToTileId(z, x, y), data: bytes };
   });
+
+  // Silent-hole ceiling: transparent tiles are legitimate only OUTSIDE the
+  // source's coverage (ocean, another country). The caller states how many
+  // such tiles its bake box can honestly contain; a count above that means
+  // the server started returning empty renders inside coverage, and a bake
+  // full of quiet holes must fail rather than ship.
+  if (counts.transparent > opts.maxTransparentTiles) {
+    throw new Error(
+      `${counts.transparent} fully transparent tiles exceed the declared out-of-coverage ceiling ` +
+        `(${opts.maxTransparentTiles}); the server is returning empty renders inside coverage`
+    );
+  }
 
   const tiles = rendered.filter(Boolean).sort((a, b) => a.tileId - b.tileId);
 

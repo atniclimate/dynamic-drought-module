@@ -100,9 +100,10 @@ state-curated set).
   USGS-produced). Server-rendered PNG tiles carrying LANDFIRE's own
   published class colors, zooms 0-8 at 512 px (reduced resolution from
   the 30 m source; measured 25,749,464 bytes at bake, retrieved
-  2026-08-18). The vintage, retrieval date, and the snapshot-not-a-
-  prediction caveat are recorded in the archive attribution and repeated
-  in the in-app legend. Loaded only while the 3D Fire view is active.
+  2026-08-19 UTC, matching the archive attribution's own clock). The
+  vintage, retrieval date, and the snapshot-not-a-prediction caveat are
+  recorded in the archive attribution and repeated in the in-app legend.
+  Loaded only while the 3D Fire view is active.
 - `us-places.json`: municipal label points (Natural Earth, built by
   `npm run build:states` tooling; see scripts/).
 - `tribal-roster.json` + `tribal-larname-crosswalk.json`: the

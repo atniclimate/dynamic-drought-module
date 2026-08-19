@@ -511,12 +511,15 @@ export const USFS_WHP_PRESENTATION = {
  * (FBFM40) drape for the desktop 3D Fire mode (the fuels context layer).
  *
  * The colors are the ISSUER'S published class colors, decoded verbatim from
- * the LF2024_FBFM40_CONUS ImageServer legend endpoint on 2026-08-18
- * (scripts/build-fuels-tiles.mjs caches the fetched legend beside the bake);
- * the archive's pixels are rendered server-side by the same issuer palette,
- * so this table describes the map without recoloring anything. Class names
- * are the standard Scott and Burgan (2005) fuel model names as published in
- * the LANDFIRE FBFM40 data dictionary.
+ * the LF2024_FBFM40_CONUS ImageServer legend endpoint on 2026-08-19 UTC
+ * (the bake's own retrieval clock; scripts/build-fuels-tiles.mjs re-fetches
+ * the legend on every rebake and HARD-FAILS when this table and the served
+ * legend disagree, so the archive's pixels and this key cannot drift
+ * apart). The drape layer draws these colors translucent
+ * (FUELS_DRAPE_OPACITY) so terrain and incident layers stay legible; the
+ * qualification below discloses that. Class names are the standard Scott
+ * and Burgan (2005) fuel model names as published in the LANDFIRE FBFM40
+ * data dictionary.
  */
 export const FBFM40_PRESENTATION = {
   classes: [
@@ -567,7 +570,7 @@ export const FBFM40_PRESENTATION = {
   ],
   qualification:
     // vocab-allow: honesty disclaimer distinguishes the static fuel snapshot from a forecast
-    'LANDFIRE 2024 fuel model classes (Scott and Burgan 40), shown with LANDFIRE\'s published class colors at reduced resolution from the 30 m source; a static classified snapshot of vegetation as fuel, not current conditions, fire behavior, or a forecast.'
+    'LANDFIRE 2024 fuel model classes (Scott and Burgan 40), shown with LANDFIRE\'s published class colors, drawn translucent at reduced resolution from the 30 m source; a static classified snapshot of vegetation as fuel, not current conditions, fire behavior, or a forecast.'
 } as const;
 
 /** Drape opacity: fuel classes stay context under perimeters and smoke. */

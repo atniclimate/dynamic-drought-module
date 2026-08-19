@@ -354,8 +354,10 @@ const FEATURE_BUDGETS = [
     networkBytes: 4_200_000,
     requestCount: 36,
     dataAssets: [{
+      // MUST equal SIZE_BUDGET_BYTES in scripts/build-fuels-tiles.mjs so a
+      // rebake cannot pass the builder and fail this gate (or vice versa).
       path: 'data/fuels-fbfm40-pnw.pmtiles',
-      maxBytes: 26_000_000,
+      maxBytes: 30_000_000,
     }],
   },
 ];

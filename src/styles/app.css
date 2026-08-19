@@ -4584,6 +4584,28 @@ a.impact-resource-link::after {
 .embed-brand:hover { color: var(--fg-0); border-color: var(--accent-strong); }
 .app-shell.embed .embed-brand { display: inline-flex; }
 
+/* The 3D Fire embed disclosure (src/map/fire3d.ts syncEmbedNote): embeds
+   hide the sidebar chrome that carries the mode's coverage note,
+   non-prediction disclosure, and context legends, so while the scene is
+   active the statements ride the map itself. Non-interactive by design. */
+.fire3d-embed-note {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  margin: 0;
+  max-width: min(680px, calc(100% - 24px));
+  padding: 6px 12px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  color: var(--fg-2);
+  font-size: 11px;
+  line-height: 1.45;
+  pointer-events: none;
+}
+
 /* On-map drought key (see src/ui/map-key.ts): bottom-left above the scale
    bar, same chrome as the overlay buttons. */
 .map-key {

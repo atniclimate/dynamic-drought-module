@@ -53,6 +53,15 @@ Fire control renders an always-visible non-prediction disclosure
 (`FIRE3D_NON_PREDICTION_NOTE`) beside the always-visible coverage note,
 never a dismissible tooltip and never documentation-only.
 
+Embeds are the sharpest case: they hide the sidebar chrome (the control's
+notes and the legend panel) while a URL-named `fire3d=true` still drives
+the scene, and embedding is exactly the third-party distribution context
+where the correction is most likely to be absent. While the mode is
+active in an embed, the orchestrator therefore prints the disclosure, the
+coverage note, and each active context layer's vintage line directly on
+the map surface (`#fire3d-embed-note`, non-interactive, never
+dismissible).
+
 ## Context-layer contract
 
 Context layers are presentation companions owned by the fire3d context

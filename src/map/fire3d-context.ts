@@ -26,6 +26,17 @@ import { activateFuelsDrape, deactivateFuelsDrape } from '../layers/fuels-3d';
 export type Fire3DContextKey = 'fuels';
 
 /**
+ * One-line vintage-and-caveat statements per context layer for the embed
+ * disclosure chip: embeds hide the sidebar (control notes and the legend),
+ * so the orchestrator prints these with the mode's own notes directly on
+ * the map surface while the scene is active.
+ */
+export const EMBED_CONTEXT_LINES: Record<Fire3DContextKey, string> = {
+  fuels:
+    'Fuel colors: LANDFIRE 2024 fuel model classes, a translucent static snapshot at reduced resolution.'
+};
+
+/**
  * Activate every context layer, tolerating individual failures. Returns
  * the keys that actually activated (the orchestrator publishes them as
  * production-observable truth). The signal aborts in-flight probes and

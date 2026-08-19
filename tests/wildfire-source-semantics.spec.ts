@@ -572,6 +572,7 @@ test('the FBFM40 drape key carries the issuer palette verbatim and a snapshot qu
   // The qualification names the vintage and denies the prediction read.
   expect(FBFM40_PRESENTATION.qualification).toMatch(/LANDFIRE 2024/);
   expect(FBFM40_PRESENTATION.qualification).toMatch(/reduced resolution/i);
+  expect(FBFM40_PRESENTATION.qualification).toMatch(/translucent/i);
   expect(FBFM40_PRESENTATION.qualification).toMatch(
     /not current conditions, fire behavior, or a forecast/i
   );

@@ -36,7 +36,9 @@ import type maplibregl from 'maplibre-gl';
 import type { HazardClusterKey } from '../config/clusters';
 import {
   FIRE3D_CAMERA_TRANSITION_MS,
+  FIRE3D_COVERAGE_NOTE,
   FIRE3D_MIN_WIDTH_QUERY,
+  FIRE3D_NON_PREDICTION_NOTE,
   FIRE3D_PITCH_DEGREES,
   FIRE3D_SKY_CLEAR_SPECIFICATION,
   FIRE3D_SKY_SPECIFICATION,
@@ -148,6 +150,49 @@ export function onFire3DStatusChange(fn: () => void): () => void {
   };
 }
 
+/** The embed disclosure chip's element id (also asserted by tests). */
+const EMBED_NOTE_ID = 'fire3d-embed-note';
+
+/**
+ * Embeds hide the sidebar chrome that carries the coverage note, the
+ * non-prediction disclosure, and the context legends, while a URL-named
+ * fire3d=true still drives the scene. The honesty surfaces therefore
+ * travel with the map itself there: a persistent, non-interactive note
+ * rendered while the mode is active (Edgeley et al. 2024: the disclosure
+ * may never be documentation-only). No-op outside embed mode and in
+ * non-DOM test environments.
+ */
+function syncEmbedNote(active: boolean): void {
+  if (
+    typeof document === 'undefined' ||
+    typeof document.querySelector !== 'function'
+  ) {
+    return;
+  }
+  const shell = document.querySelector('.app-shell.embed');
+  const existing = document.getElementById(EMBED_NOTE_ID);
+  if (!active || !shell) {
+    existing?.remove();
+    return;
+  }
+  const lines = [
+    FIRE3D_NON_PREDICTION_NOTE,
+    FIRE3D_COVERAGE_NOTE,
+    ...contextKeys.map(
+      (key) =>
+        contextModule?.EMBED_CONTEXT_LINES[
+          key as keyof typeof contextModule.EMBED_CONTEXT_LINES
+        ] ?? ''
+    )
+  ].filter((line) => line.length > 0);
+  const note = existing ?? document.createElement('p');
+  note.id = EMBED_NOTE_ID;
+  note.className = 'fire3d-embed-note';
+  note.setAttribute('role', 'note');
+  note.textContent = lines.join(' ');
+  if (!existing) shell.appendChild(note);
+}
+
 function publishStatus(
   state: Fire3DStatus['state'],
   reason: string | null
@@ -175,6 +220,7 @@ function publishStatus(
     } else {
       delete root.dataset.ddmFire3dContext;
     }
+    syncEmbedNote(state === 'active');
   }
   statusListeners.forEach((fn) => {
     fn();

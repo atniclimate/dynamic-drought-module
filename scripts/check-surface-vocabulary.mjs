@@ -58,8 +58,8 @@ const FIXTURE_DIR = 'tests/fixtures/vocabulary';
 // no simulation, so surface copy claiming either would overclaim exactly
 // what the 3D view must disclaim. An upstream product whose verbatim name
 // carries the word takes the same vocab-allow pragma as the other rows.
-const BANNED = /\b(warning|alert|forecast)s?\b|\bdigital[\s-]?twins?\b|\bsimulat(?:es?|ed|ions?|ing|or)\b/gi;
-const CAPITALIZED_TOKEN = /^(Warning|Alert|Forecast|Simulation)s?$/;
+const BANNED = /\b(warning|alert|forecast)s?\b|\bdigital[\s-]?twins?\b|\bsimulat(?:es?|ed|ions?|ing|ors?)\b/gi;
+const CAPITALIZED_TOKEN = /^(Warning|Alert|Forecast|Simulation|Simulator|Simulated|Simulating)s?$/;
 const PRAGMA = /vocab-allow:\s*(.*?)\s*(?:\*\/.*)?$/;
 const DIAGNOSTIC_LINE = /console\.(warn|error|log|info|debug)\s*\(|new\s+Error\s*\(/;
 

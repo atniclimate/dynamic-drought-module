@@ -589,6 +589,9 @@ test.describe('W3/W4 browser truth', () => {
     await expect
       .poll(() => fuelsLegend.textContent())
       .toContain(FBFM40_PRESENTATION.qualification);
+    // The embed disclosure chip is embed-only chrome; the desktop shell
+    // already carries the notes, so no chip appears here.
+    await expect(page.locator('#fire3d-embed-note')).toHaveCount(0);
 
     // Let terrain tiles land (a bounded wait; live basemap tiles make
     // networkidle nondeterministic), then capture the pitched-scene
@@ -674,6 +677,20 @@ test.describe('W3/W4 browser truth', () => {
     await expect(page.locator(TOGGLE)).not.toBeVisible();
     expect(await search(page)).toContain('embed=true');
     expect(await search(page)).toContain('fire3d=true');
+
+    // The honesty surfaces travel with the map in embeds: the disclosure
+    // chip renders while the scene is active, carrying the non-prediction
+    // statement, the coverage note, and the fuels vintage line.
+    const embedNote = page.locator('#fire3d-embed-note');
+    await expect(embedNote).toBeVisible();
+    await expect(embedNote).toContainText(FIRE3D_NON_PREDICTION_NOTE);
+    await expect(embedNote).toContainText(FIRE3D_COVERAGE_NOTE);
+    await expect
+      .poll(() => embedNote.textContent(), { timeout: 30_000 })
+      .toContain('LANDFIRE 2024');
+    await page.screenshot({
+      path: 'fire3d-evidence/fire3d-embed-disclosure.png'
+    });
   });
 
   test('an embed without the flag never activates and never gains it', async ({
@@ -685,6 +702,8 @@ test.describe('W3/W4 browser truth', () => {
     await page.waitForTimeout(3_000);
     expect(await fire3dStamp(page)).not.toBe('active');
     expect(await search(page)).not.toContain('fire3d');
+    // No scene, no chip.
+    await expect(page.locator('#fire3d-embed-note')).toHaveCount(0);
   });
 
   test('a mobile viewport never fetches the 3D chunks', async ({ page }) => {
