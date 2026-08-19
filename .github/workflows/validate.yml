@@ -19,7 +19,12 @@ jobs:
   validate:
     name: Gate, Worker typecheck, and browser suite
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 45 was fitted to the pre-3D suite; the fire3d context layers'
+    # ranged-tile traffic grew the serial browser step (20.9 minutes on a
+    # fast local machine, 2026-08-18), and the first W-CTX validate run
+    # spent its whole budget and was killed mid-suite. 75 keeps honest
+    # room without masking a genuine hang for long.
+    timeout-minutes: 75
     steps:
       - name: Checkout
         uses: actions/checkout@v7
