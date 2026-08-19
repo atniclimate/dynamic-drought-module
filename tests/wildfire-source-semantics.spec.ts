@@ -634,8 +634,21 @@ test('the power context maps issuer voltage classes to width only, with the arch
   expect(POWER_SHARED_QUALIFICATION).toMatch(
     /never for siting or safety-critical decisions/i
   );
+  // The absence statement grew a REASON on 2026-08-19: naming what is
+  // missing was never the hard part; naming whose decision it is, and
+  // that absence is not evidence of nonexistence, is what keeps a sparse
+  // transmission network from reading as the whole grid.
   expect(POWER_SHARED_QUALIFICATION).toMatch(
-    /substations and distribution lines have no authoritative public national source/i
+    /substations and distribution circuits are absent because no authoritative public national source publishes them/i
+  );
+  expect(POWER_SHARED_QUALIFICATION).toMatch(
+    /held privately by utilities/i
+  );
+  expect(POWER_SHARED_QUALIFICATION).toMatch(
+    /withheld for security since 2022/i
+  );
+  expect(POWER_SHARED_QUALIFICATION).toMatch(
+    /not evidence that none are present/i
   );
 });
 
