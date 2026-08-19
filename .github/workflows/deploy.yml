@@ -36,7 +36,12 @@ jobs:
   build:
     name: Build and browser-verify
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Mirrors validate.yml: the 3D context ranged-tile traffic grew the
+    # serial browser step past the old 45-minute budget (the bed62ee
+    # deploy run was killed at exactly 45 on 2026-08-19, leaving main
+    # undeployed). 75 keeps honest room without masking a genuine hang
+    # for long.
+    timeout-minutes: 75
     steps:
       - name: Checkout
         uses: actions/checkout@v7
