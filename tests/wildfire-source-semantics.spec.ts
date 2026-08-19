@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 
 import {
+  DRAPE_OPACITY,
   FBFM40_PRESENTATION,
-  FUELS_DRAPE_OPACITY,
   POWER_LINE_COLOR,
   POWER_LINE_WIDTHS,
   POWER_LINES_QUALIFICATION,
@@ -561,7 +561,13 @@ test('smoke volume heights are the 2D opacities scaled, rank identically, and Un
   );
 });
 
-test('the FBFM40 drape key carries the issuer palette verbatim and a snapshot qualification', () => {
+/**
+ * The FBFM40 table outlived the drape it fed: the 3D scene swapped to the
+ * hazard drape on 2026-08-19, and scripts/build-fuels-tiles.mjs remains the
+ * restore path, which cross-checks this table against the served LANDFIRE
+ * legend on every rebake. The table therefore still has to be true.
+ */
+test('the retired FBFM40 key still carries the issuer palette verbatim and a snapshot qualification', () => {
   const codes = FBFM40_PRESENTATION.classes.map((c) => c.code);
   // The full issuer key, one row per served class, no invented grouping:
   // 5 nonburnable NB classes plus the 39 served burnable models (the
@@ -589,9 +595,55 @@ test('the FBFM40 drape key carries the issuer palette verbatim and a snapshot qu
     /not current conditions, fire behavior, or a forecast/i
   );
 
+});
+
+/**
+ * The hazard drape that replaced it, and the reason the swap was possible
+ * at all: WHP is a published hazard scale, so no recoloring was needed to
+ * answer the owner's "yellow through red" ask.
+ */
+test('the WHP drape key mirrors the issuer legend exactly, including its two non-hazard classes', () => {
+  const categories = USFS_WHP_PRESENTATION.categories;
+  // SEVEN, not five. The raster carries values 1-7 and the issuer legend
+  // names all seven; the two beyond the hazard scale paint pixels on the
+  // map and so must appear in the key. Before 2026-08-19 this table listed
+  // five classes in colors the service does not use, so grey and blue
+  // areas rendered with nothing in the key to explain them.
+  expect(categories).toHaveLength(7);
+  expect(categories.map((c) => c.label)).toEqual([
+    'Very Low',
+    'Low',
+    'Moderate',
+    'High',
+    'Very High',
+    'Non-burnable',
+    'Water'
+  ]);
+  // The issuer's own swatch colors, decoded from its legend endpoint and
+  // re-verified by scripts/build-whp-tiles.mjs on every rebake.
+  expect(categories.map((c) => c.color)).toEqual([
+    '#38a300',
+    '#a3ff94',
+    '#ffff63',
+    '#ffa300',
+    '#ed1e00',
+    '#e1e1e1',
+    '#0070e1'
+  ]);
+  // The five hazard classes ARE the yellow-through-red progression the
+  // owner asked for, without DDM choosing a single color.
+  expect(USFS_WHP_PRESENTATION.qualification).toMatch(/2023 edition/);
+  expect(USFS_WHP_PRESENTATION.qualification).toMatch(/270 m resolution/);
+  expect(USFS_WHP_PRESENTATION.qualification).toMatch(
+    /not current fire conditions or a forecast/i
+  );
+  // The two non-hazard classes are named as such, so neither reads as a
+  // hazard rating of zero.
+  expect(USFS_WHP_PRESENTATION.qualification).toMatch(/non-hazard classes/i);
+
   // The drape stays translucent context under perimeters and smoke.
-  expect(FUELS_DRAPE_OPACITY).toBeGreaterThan(0);
-  expect(FUELS_DRAPE_OPACITY).toBeLessThanOrEqual(0.6);
+  expect(DRAPE_OPACITY).toBeGreaterThan(0);
+  expect(DRAPE_OPACITY).toBeLessThanOrEqual(0.6);
 });
 
 test('the power context maps issuer voltage classes to width only, with the archive caveat pinned', () => {

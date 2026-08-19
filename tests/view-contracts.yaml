@@ -82,9 +82,10 @@ rows:
   - id: entering-3d-stamps-the-scene-and-the-url
     description: >
       The 3D toggle activates the scene, writes the durable preference to the
-      URL, and brings up the context layers the mode owns. Power is not among
-      them: it became a catalog layer on 2026-08-19 and is off unless someone
-      asks for it (see the two power rows below).
+      URL, and brings up the context layers the mode owns: the WHP hazard
+      drape and the structures pilot. Power is not among them, since it
+      became a catalog layer on 2026-08-19 and is off unless someone asks
+      for it (see the two power rows below).
     url: '?cluster=wildfire'
     stub_wildfire: true
     timeout_ms: 150000
@@ -98,7 +99,7 @@ rows:
         fire3d: 'true'
       fire3d_stamp: active
       fire3d_toggle: pressed
-      fire3d_context_includes: [fuels, structures]
+      fire3d_context_includes: [whp, structures]
 
   - id: leaving-3d-clears-the-scene-and-the-parameter
     description: >
@@ -207,7 +208,7 @@ rows:
       - wait_fire3d: active
     expect:
       layers_unchecked: [power-infrastructure]
-      fire3d_context_includes: [fuels, structures]
+      fire3d_context_includes: [whp, structures]
       fire3d_context_excludes: [power]
 
   - id: the-power-toggle-governs-the-3d-scene-too

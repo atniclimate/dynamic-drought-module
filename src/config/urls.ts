@@ -820,7 +820,21 @@ export const URLS = Object.freeze({
   // reduced-resolution disclosure are recorded in the archive attribution).
   // Loaded only while the 3D Fire mode is active, via the pmtiles protocol's
   // ranged reads, exactly like the hillshade archive above.
+  // RETIRED FROM THE SCENE 2026-08-19 (owner direction): the fuel-model
+  // drape was replaced by the hazard drape below, and the 25.7 MB archive
+  // was removed from the working tree so it stops riding every deploy.
+  // The builder and this path stay so the layer can be restored as an
+  // opt-in without re-deriving anything; git history holds the archive.
   fuelsFbfm40PmtilesLocal: BASE_URL + 'data/fuels-fbfm40-pnw.pmtiles',
+  // The PNW Wildfire Hazard Potential drape for the desktop 3D Fire mode:
+  // the USDA Forest Service Rocky Mountain Research Station's 2023 WHP
+  // classification, rendered server-side in the issuer's own class colors
+  // by the same GeoPlatform ImageServer the flat `usfs-whp` layer uses,
+  // and baked to PNG PMTiles by scripts/build-whp-tiles.mjs
+  // (`npm run build:whp-tiles`; public domain; vintage, retrieval date,
+  // and the reduced-resolution disclosure are recorded in the archive
+  // attribution). Loaded only while the 3D Fire mode is active.
+  whp2023PmtilesLocal: BASE_URL + 'data/whp-2023-pnw.pmtiles',
   // PNW transmission lines for the desktop 3D Fire mode: a one-time build
   // extract (scripts/build-power-tiles.mjs, `npm run build:power-tiles`) of
   // the ARCHIVED federal HIFLD dataset via the public Esri Federal User

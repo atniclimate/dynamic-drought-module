@@ -503,18 +503,43 @@ export function buildHmsSmokeVolumePaint(): NonNullable<
   };
 }
 
-/** Static United States Forest Service Wildfire Hazard Potential key. */
+/**
+ * Static United States Forest Service Wildfire Hazard Potential key.
+ *
+ * CORRECTED 2026-08-19, and the correction is the point. This table
+ * previously listed five classes in a ColorBrewer RdYlGn ramp
+ * (#1a9850, #91cf60, #fee08b, #fc8d59, #d73027). The service renders
+ * neither those colors nor only five classes. Its own legend endpoint
+ * serves SEVEN entries in the colors below, and an exportImage sample
+ * over central Oregon contained exactly those seven values and nothing
+ * else (probed live 2026-08-19). So the key on screen described a
+ * different image than the one beside it, and the two classes that carry
+ * no hazard rating, non-burnable land and water, rendered with no legend
+ * entry at all.
+ *
+ * The values here are now the issuer's, decoded from the legend
+ * endpoint's own swatches, and scripts/build-whp-tiles.mjs re-fetches
+ * that legend on every bake and HARD-FAILS when this table and the served
+ * legend disagree, exactly as the fuels bake does. A legend and its
+ * raster cannot drift apart again without the build stopping.
+ *
+ * The last two entries are deliberately kept: they are not hazard
+ * ratings, they DO paint pixels, and a person seeing grey and blue areas
+ * deserves to know what they are rather than guessing at a missing class.
+ */
 export const USFS_WHP_PRESENTATION = {
   categories: [
-    { label: 'Very Low', color: '#1a9850' },
-    { label: 'Low', color: '#91cf60' },
-    { label: 'Moderate', color: '#fee08b' },
-    { label: 'High', color: '#fc8d59' },
-    { label: 'Very High', color: '#d73027' }
+    { label: 'Very Low', color: '#38a300' },
+    { label: 'Low', color: '#a3ff94' },
+    { label: 'Moderate', color: '#ffff63' },
+    { label: 'High', color: '#ffa300' },
+    { label: 'Very High', color: '#ed1e00' },
+    { label: 'Non-burnable', color: '#e1e1e1' },
+    { label: 'Water', color: '#0070e1' }
   ],
   qualification:
     // vocab-allow: honesty disclaimer distinguishes static WHP from a forecast
-    'United States Forest Service Wildfire Hazard Potential, static 2023 edition, 270 m resolution, conterminous United States (CONUS) only; potential context, not current fire conditions or a forecast.'
+    'United States Forest Service Wildfire Hazard Potential, static 2023 edition, 270 m resolution, conterminous United States (CONUS) only; potential context, not current fire conditions or a forecast. The last two classes are the issuer\'s non-hazard classes: they mark land that does not carry fire and open water, not a hazard rating.'
 } as const;
 
 /**
@@ -526,9 +551,11 @@ export const USFS_WHP_PRESENTATION = {
  * (the bake's own retrieval clock; scripts/build-fuels-tiles.mjs re-fetches
  * the legend on every rebake and HARD-FAILS when this table and the served
  * legend disagree, so the archive's pixels and this key cannot drift
- * apart). The drape layer draws these colors translucent
- * (FUELS_DRAPE_OPACITY) so terrain and incident layers stay legible; the
- * qualification below discloses that. Class names are the standard Scott
+ * apart). The drape drew these colors translucent (DRAPE_OPACITY) so
+ * terrain and incident layers stayed legible; the qualification below
+ * discloses that. RETIRED FROM THE SCENE 2026-08-19: the hazard drape
+ * replaced it, and this table now serves the builder's cross-check and a
+ * possible future opt-in rather than a rendering layer. Class names are the standard Scott
  * and Burgan (2005) fuel model names as published in the LANDFIRE FBFM40
  * data dictionary.
  */
@@ -584,8 +611,16 @@ export const FBFM40_PRESENTATION = {
     'LANDFIRE 2024 fuel model classes (Scott and Burgan 40), shown with LANDFIRE\'s published class colors, drawn translucent at reduced resolution from the 30 m source; a static classified snapshot of vegetation as fuel, not current conditions, fire behavior, or a forecast.'
 } as const;
 
-/** Drape opacity: fuel classes stay context under perimeters and smoke. */
-export const FUELS_DRAPE_OPACITY = 0.5;
+/**
+ * Drape opacity for the 3D scene's landscape surface.
+ *
+ * Named for the role rather than the layer since 2026-08-19, when the
+ * fuel-model drape was replaced by the hazard drape: half opacity is what
+ * keeps a full-viewport classified surface as CONTEXT beneath the
+ * perimeters, smoke, and infrastructure that carry the incident, rather
+ * than a wall of color the eye reads first. The value is unchanged.
+ */
+export const DRAPE_OPACITY = 0.5;
 
 /**
  * Power infrastructure context for the desktop 3D Fire mode.

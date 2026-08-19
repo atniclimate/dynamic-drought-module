@@ -348,16 +348,18 @@ const FEATURE_BUDGETS = [
   },
   {
     key: 'fire3d-mode',
-    label: 'Desktop 3D Fire mode: terrain + camera + sky orchestrator, the volumetric smoke companion, and the issuer-published context chunk with the fuels drape and structures pilot (archive transport at 1280x720 measured 2,278,573 terrain bytes over 19 ranged requests and 1,215,252 fuels-drape bytes over 11; the z13-14 structures archive measured 16,512 activation-time bytes over 2 ranged reads with tile reads only when zoomed into the pilot area; power infrastructure left this closure 2026-08-19 when it became its own catalog layer, below; the smoke and context roots are reached via dynamic import from the first root and are invisible to the static closure walk, so ALL roots are declared)',
+    label: 'Desktop 3D Fire mode: terrain + camera + sky orchestrator, the volumetric smoke companion, and the issuer-published context chunk with the WHP 2023 hazard drape and the structures pilot (archive transport at 1280x720 measured 2,278,573 terrain bytes over 19 ranged requests; the hazard drape replaced the 25.7 MB FBFM40 fuels drape 2026-08-19 at roughly half the archive weight, and its transport is logged by the fire3d spec; the z13-14 structures archive measured 16,512 activation-time bytes over 2 ranged reads with tile reads only when zoomed into the pilot area; power infrastructure left this closure 2026-08-19 when it became its own catalog layer, below; the smoke and context roots are reached via dynamic import from the first root and are invisible to the static closure walk, so ALL roots are declared)',
     rootModules: ['src/map/fire3d.ts', 'src/layers/hms-smoke-volume.ts', 'src/map/fire3d-context.ts'],
     activationJsGzipKb: 10.0,
     networkBytes: 4_800_000,
     requestCount: 56,
     dataAssets: [{
-      // MUST equal SIZE_BUDGET_BYTES in scripts/build-fuels-tiles.mjs so a
+      // MUST equal SIZE_BUDGET_BYTES in scripts/build-whp-tiles.mjs so a
       // rebake cannot pass the builder and fail this gate (or vice versa).
-      path: 'data/fuels-fbfm40-pnw.pmtiles',
-      maxBytes: 30_000_000,
+      // The retired FBFM40 row left with its archive on 2026-08-19; the
+      // builder stays as a restore path and would need its row back.
+      path: 'data/whp-2023-pnw.pmtiles',
+      maxBytes: 16_000_000,
     }, {
       // MUST equal MAX_ARCHIVE_BYTES in scripts/build-structures-tiles.mjs
       // (same cross-gate agreement rule).

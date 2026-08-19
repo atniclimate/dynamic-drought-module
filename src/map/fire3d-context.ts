@@ -27,7 +27,7 @@
 
 import type maplibregl from 'maplibre-gl';
 
-import { activateFuelsDrape, deactivateFuelsDrape } from '../layers/fuels-3d';
+import { activateWhpDrape, deactivateWhpDrape } from '../layers/whp-3d';
 import { getPowerContextState } from '../state/power-context';
 import type { PowerContextState } from '../state/power-context';
 import {
@@ -36,7 +36,7 @@ import {
 } from '../layers/structures-3d';
 
 /** Stable keys for the context layers, in activation order. */
-export type Fire3DContextKey = 'fuels' | 'power' | 'structures';
+export type Fire3DContextKey = 'whp' | 'power' | 'structures';
 
 /** What the orchestrator publishes: the active keys, and one embed
  * disclosure line per active key describing exactly what is rendered. */
@@ -45,8 +45,8 @@ export interface Fire3DContextActivation {
   readonly embedLines: readonly string[];
 }
 
-const FUELS_EMBED_LINE =
-  'Fuel colors: LANDFIRE 2024 fuel model classes, a translucent static snapshot at reduced resolution.';
+const WHP_EMBED_LINE =
+  'Hazard colors: USFS Wildfire Hazard Potential 2023, the issuer\'s published classes, a translucent static snapshot at reduced resolution; not current fire conditions.';
 
 /** Exported for the disclosure cross-gate test beside the archive. */
 export const STRUCTURES_EMBED_LINE =
@@ -84,12 +84,12 @@ export async function activateContextLayers(
   const embedLines: string[] = [];
 
   try {
-    if (await activateFuelsDrape(map, signal)) {
-      keys.push('fuels');
-      embedLines.push(FUELS_EMBED_LINE);
+    if (await activateWhpDrape(map, signal)) {
+      keys.push('whp');
+      embedLines.push(WHP_EMBED_LINE);
     }
   } catch (err) {
-    console.warn('[fire3d-context] the fuels drape failed to activate.', err);
+    console.warn('[fire3d-context] the hazard drape failed to activate.', err);
   }
 
   // Power infrastructure is a CATALOG layer since 2026-08-19 (owner
@@ -126,6 +126,6 @@ export async function activateContextLayers(
  * switched on.
  */
 export function deactivateContextLayers(map: maplibregl.Map): void {
-  deactivateFuelsDrape(map);
+  deactivateWhpDrape(map);
   deactivateStructures(map);
 }

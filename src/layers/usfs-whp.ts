@@ -63,13 +63,24 @@
  *       regression above; the header is not reliably present).
  *
  * Render. Raster source at 0.55 opacity so the basemap and
- * the USDM/Treaty/Tribal overlays remain legible underneath. The
- * conventional five-class palette is encoded server-side in the
- * `WHP_CLS_2023_8bit` raster function, so we do not need to recolor on
- * the client; we only choose the layer opacity. The reference palette
- * for the legend (rendered by M8 sidebar work, not this module) is
- * `['#1a9850', '#91cf60', '#fee08b', '#fc8d59', '#d73027']` matching
- * Very Low, Low, Moderate, High, Very High.
+ * the USDM/Treaty/Tribal overlays remain legible underneath. The palette
+ * is encoded server-side in the `WHP_CLS_2023_8bit` raster function, so
+ * we do not recolor on the client; we only choose the layer opacity.
+ *
+ * The legend lives in `USFS_WHP_PRESENTATION`
+ * (src/config/wildfire-presentation.ts), and it was CORRECTED on
+ * 2026-08-19. This comment previously named a five-entry ColorBrewer ramp
+ * (`#1a9850, #91cf60, #fee08b, #fc8d59, #d73027`) as the reference
+ * palette. That is not what this service renders. Its own legend endpoint
+ * serves SEVEN entries: `#38a300` Very Low, `#a3ff94` Low, `#ffff63`
+ * Moderate, `#ffa300` High, `#ed1e00` Very High, plus `#e1e1e1`
+ * Non-burnable and `#0070e1` Water, and an exportImage sample over
+ * central Oregon contained exactly those seven values. The key therefore
+ * described a different image than the one on screen, and the two
+ * non-hazard classes painted pixels with no legend entry at all.
+ * `scripts/build-whp-tiles.mjs` now re-fetches the issuer legend on every
+ * bake of the 3D drape and hard-fails on any disagreement with the
+ * committed table, so the two cannot drift apart again unnoticed.
  */
 
 import type maplibregl from 'maplibre-gl';

@@ -10,10 +10,10 @@ import {
   FIRE3D_TERRAIN_EXAGGERATION
 } from '../src/config/fire3d-presentation';
 import {
-  FBFM40_PRESENTATION,
-  FUELS_DRAPE_OPACITY,
+  DRAPE_OPACITY,
   HMS_VOLUME_QUALIFICATION,
-  STRUCTURES_QUALIFICATION
+  STRUCTURES_QUALIFICATION,
+  USFS_WHP_PRESENTATION
 } from '../src/config/wildfire-presentation';
 import {
   getFire3DStatus,
@@ -25,6 +25,11 @@ import {
   seedFire3DPreference,
   setFire3DPreference
 } from '../src/state/fire3d-store';
+import {
+  activateContextLayers,
+  deactivateContextLayers
+} from '../src/map/fire3d-context';
+import { registry } from '../src/state/registry';
 import { parseFire3dParam, syncFire3dParam } from '../src/state/url';
 import {
   PMTILES_V3_HEADER_PREFIX,
@@ -186,13 +191,12 @@ function stubCorruptFetch(): () => void {
   };
 }
 
-/** Valid PMTiles for every archive EXCEPT the fuels drape (corrupt);
- * plants stay live-stubbed so the power context still activates. */
-function stubFuelsCorruptFetch(): () => void {
+/** Valid PMTiles for every archive EXCEPT the hazard drape (corrupt). */
+function stubDrapeCorruptFetch(): () => void {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (url.includes('fuels-fbfm40')) {
+    if (url.includes('whp-2023')) {
       return new Response('<html>not tiles</html>', { status: 200 });
     }
     if (url.includes('Power_Plants_in_the_US')) {
@@ -260,22 +264,30 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
       harness.layerOrder.indexOf('hms-smoke-fill') + 1
     );
 
-    // W-CTX: the fuels drape rides the context chunk over its bundled
-    // archive, at the ruled condition-surface position below the smoke.
+    // The hazard drape rides the context chunk over its bundled archive,
+    // at the ruled condition-surface position below the smoke. It replaced
+    // the fuel-model drape on 2026-08-19: the owner asked for a risk read,
+    // and WHP is a published hazard scale where FBFM40 is a fuel-model
+    // classification that would have had to be repainted to pretend.
     // Power infrastructure left this list on 2026-08-19: it is a catalog
     // layer now, off by default, and this orchestrator only reports it when
     // a person has turned it on (tests/power-layer.spec.ts owns its truth).
-    expect(getFire3DStatus().contextLayers).toEqual(['fuels', 'structures']);
-    expect(harness.sources.get('fuels-fbfm40')).toMatchObject({
+    expect(getFire3DStatus().contextLayers).toEqual(['whp', 'structures']);
+    expect(harness.sources.get('whp-2023')).toMatchObject({
       type: 'raster',
       tileSize: 512
     });
-    expect(harness.layerSpecs.get('fuels-fbfm40')).toMatchObject({
+    expect(harness.layerSpecs.get('whp-2023')).toMatchObject({
       type: 'raster',
-      source: 'fuels-fbfm40',
-      paint: { 'raster-opacity': FUELS_DRAPE_OPACITY }
+      source: 'whp-2023',
+      paint: {
+        'raster-opacity': DRAPE_OPACITY,
+        // A categorical raster must not blend two class colors into a
+        // third that appears in no legend.
+        'raster-resampling': 'nearest'
+      }
     });
-    expect(harness.layerOrder.indexOf('fuels-fbfm40')).toBeLessThan(
+    expect(harness.layerOrder.indexOf('whp-2023')).toBeLessThan(
       harness.layerOrder.indexOf('hms-smoke-fill')
     );
 
@@ -303,7 +315,7 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
       filter: ['!', ['has', 'h']]
     });
     expect(harness.layerOrder.indexOf('structures-3d')).toBeGreaterThan(
-      harness.layerOrder.indexOf('fuels-fbfm40')
+      harness.layerOrder.indexOf('whp-2023')
     );
     expect(harness.layerOrder.indexOf('structures-3d-est')).toBeLessThan(
       harness.layerOrder.indexOf('hms-smoke-fill')
@@ -314,8 +326,8 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     expect(getFire3DStatus().contextLayers).toEqual([]);
     expect(harness.getTerrain()).toBeNull();
     expect(harness.sources.has('fire3d-terrain-dem')).toBe(false);
-    expect(harness.sources.has('fuels-fbfm40')).toBe(false);
-    expect(harness.layerSpecs.has('fuels-fbfm40')).toBe(false);
+    expect(harness.sources.has('whp-2023')).toBe(false);
+    expect(harness.layerSpecs.has('whp-2023')).toBe(false);
     expect(harness.sources.has('power-lines')).toBe(false);
     expect(harness.sources.has('power-plants')).toBe(false);
     expect(harness.layerSpecs.has('power-lines')).toBe(false);
@@ -407,9 +419,56 @@ test('a corrupt archive fails the probe before any map mutation and drops fire3d
   }
 });
 
-test('a corrupt fuels archive degrades only the drape; the scene stays active', async () => {
+test('the hazard drape stands down while the flat WHP surface is on, and leaves when it arrives', async () => {
   const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
-  const restoreFetch = stubFuelsCorruptFetch();
+  const restoreFetch = stubPmtilesFetch();
+  const harness = fakeMapHarness({ pitch: 0, bearing: 0 });
+
+  try {
+    // The wildfire cluster's season-ahead horizon activates exactly this
+    // flat layer (src/config/clusters.ts:119), so the pairing is real.
+    // Both draw the SAME USFS product from the same service: stacked they
+    // would double one classification's translucency, print two legends
+    // for one issuer, and show the Pacific Northwest bake box as a hard
+    // rectangular seam over the live conterminous-US layer.
+    registry.activate('usfs-whp');
+    const controller = new AbortController();
+    const activation = await activateContextLayers(
+      harness.map,
+      controller.signal
+    );
+
+    expect(activation.keys).not.toContain('whp');
+    expect(harness.sources.has('whp-2023')).toBe(false);
+    expect(harness.layerSpecs.has('whp-2023')).toBe(false);
+    // No embed line either: a disclosure may only describe what rendered.
+    expect(activation.embedLines.join(' ')).not.toContain(
+      'Wildfire Hazard Potential'
+    );
+
+    // With the flat layer off, the drape activates as usual...
+    registry.deactivate('usfs-whp');
+    deactivateContextLayers(harness.map);
+    const second = await activateContextLayers(harness.map, controller.signal);
+    expect(second.keys).toContain('whp');
+    expect(harness.layerSpecs.has('whp-2023')).toBe(true);
+
+    // ...and it leaves the moment the flat layer is switched on, because a
+    // horizon change can do that while the scene is already up.
+    registry.activate('usfs-whp');
+    expect(harness.layerSpecs.has('whp-2023')).toBe(false);
+    expect(harness.sources.has('whp-2023')).toBe(false);
+  } finally {
+    registry.deactivate('usfs-whp');
+    deactivateContextLayers(harness.map);
+    restoreFetch();
+    browser.restore();
+  }
+});
+
+test('a corrupt hazard archive degrades only the drape; the scene stays active', async () => {
+  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+  const restoreFetch = stubDrapeCorruptFetch();
   const harness = fakeMapHarness({ pitch: 0, bearing: 0 });
   const { map } = harness;
 
@@ -417,12 +476,12 @@ test('a corrupt fuels archive degrades only the drape; the scene stays active', 
     setFire3DActive(map, true);
     await expect.poll(() => getFire3DStatus().state).toBe('active');
 
-    // Terrain succeeded; the fuels drape alone degraded, with no partial
-    // fuels state left on the map, while the other context stayed.
+    // Terrain succeeded; the hazard drape alone degraded, with no partial
+    // drape state left on the map, while the other context stayed.
     expect(harness.getTerrain()).not.toBeNull();
     expect(getFire3DStatus().contextLayers).toEqual(['structures']);
-    expect(harness.sources.has('fuels-fbfm40')).toBe(false);
-    expect(harness.layerSpecs.has('fuels-fbfm40')).toBe(false);
+    expect(harness.sources.has('whp-2023')).toBe(false);
+    expect(harness.layerSpecs.has('whp-2023')).toBe(false);
     expect(harness.layerSpecs.has('structures-3d')).toBe(true);
   } finally {
     setFire3DActive(map, false);
@@ -452,7 +511,7 @@ test('a corrupt structures archive degrades only the buildings; the rest stays',
     setFire3DActive(map, true);
     await expect.poll(() => getFire3DStatus().state).toBe('active');
 
-    expect(getFire3DStatus().contextLayers).toEqual(['fuels']);
+    expect(getFire3DStatus().contextLayers).toEqual(['whp']);
     expect(harness.sources.has('structures-3d')).toBe(false);
     expect(harness.layerSpecs.has('structures-3d')).toBe(false);
     expect(harness.layerSpecs.has('structures-3d-est')).toBe(false);
@@ -538,8 +597,8 @@ test.describe('W3/W4 browser truth', () => {
     // archive with ranges).
     let demBytes = 0;
     let demRequests = 0;
-    let fuelsBytes = 0;
-    let fuelsRequests = 0;
+    let drapeBytes = 0;
+    let drapeRequests = 0;
     let powerBytes = 0;
     let powerRequests = 0;
     let structuresBytes = 0;
@@ -550,9 +609,9 @@ test.describe('W3/W4 browser truth', () => {
       if (url.includes('hillshade-dem-pnw.pmtiles')) {
         demRequests += 1;
         if (Number.isFinite(length)) demBytes += length;
-      } else if (url.includes('fuels-fbfm40-pnw.pmtiles')) {
-        fuelsRequests += 1;
-        if (Number.isFinite(length)) fuelsBytes += length;
+      } else if (url.includes('whp-2023-pnw.pmtiles')) {
+        drapeRequests += 1;
+        if (Number.isFinite(length)) drapeBytes += length;
       } else if (url.includes('power-lines-pnw.pmtiles')) {
         powerRequests += 1;
         if (Number.isFinite(length)) powerBytes += length;
@@ -604,14 +663,14 @@ test.describe('W3/W4 browser truth', () => {
     // and its legend must not appear while it is off.
     await expect
       .poll(() => fire3dContextStamp(page), { timeout: 30_000 })
-      .toBe('fuels structures');
-    const fuelsLegend = page.locator(
-      '.legend-section[data-legend="fuels-fbfm40"]'
+      .toBe('whp structures');
+    const hazardLegend = page.locator(
+      '.legend-section[data-legend="whp-2023"]'
     );
-    await expect(fuelsLegend).toHaveCount(1);
+    await expect(hazardLegend).toHaveCount(1);
     await expect
-      .poll(() => fuelsLegend.textContent())
-      .toContain(FBFM40_PRESENTATION.qualification);
+      .poll(() => hazardLegend.textContent())
+      .toContain(USFS_WHP_PRESENTATION.qualification);
     const powerLegend = page.locator(
       '.legend-section[data-legend="power-context"]'
     );
@@ -641,7 +700,7 @@ test.describe('W3/W4 browser truth', () => {
       `[fire3d-budget] terrain archive transport: ${demBytes} bytes over ${demRequests} requests`
     );
     console.log(
-      `[fire3d-budget] fuels archive transport: ${fuelsBytes} bytes over ${fuelsRequests} requests`
+      `[fire3d-budget] hazard drape archive transport: ${drapeBytes} bytes over ${drapeRequests} requests`
     );
     console.log(
       `[fire3d-budget] power-lines archive transport: ${powerBytes} bytes over ${powerRequests} requests (ZERO is the expected reading since 2026-08-19: power is a catalog layer, off by default, so the 3D scene no longer pulls it. Its own budget row lives under the power-infrastructure feature in scripts/check-activation-budget.mjs)`
@@ -656,7 +715,7 @@ test.describe('W3/W4 browser truth', () => {
     await expect.poll(() => fire3dStamp(page)).toBe('inactive');
     await expect.poll(async () => search(page)).not.toContain('fire3d');
     await expect(volumeLegend).toHaveCount(0);
-    await expect(fuelsLegend).toHaveCount(0);
+    await expect(hazardLegend).toHaveCount(0);
     await expect(powerLegend).toHaveCount(0);
     await expect(structuresLegend).toHaveCount(0);
     expect(await fire3dContextStamp(page)).toBeUndefined();
@@ -728,16 +787,16 @@ test.describe('W3/W4 browser truth', () => {
 
     // The honesty surfaces travel with the map in embeds: the disclosure
     // chip renders while the scene is active, carrying the non-prediction
-    // statement, the coverage note, and the fuels vintage line.
+    // statement, the coverage note, and the hazard drape's vintage line.
     const embedNote = page.locator('#fire3d-embed-note');
     await expect(embedNote).toBeVisible();
     await expect(embedNote).toContainText(FIRE3D_NON_PREDICTION_NOTE);
     await expect(embedNote).toContainText(FIRE3D_COVERAGE_NOTE);
     await expect
       .poll(() => embedNote.textContent(), { timeout: 30_000 })
-      .toContain('LANDFIRE 2024');
+      .toContain('Wildfire Hazard Potential 2023');
     await expect
-      .poll(() => embedNote.textContent())
+      .poll(() => embedNote.textContent(), { timeout: 30_000 })
       .toContain('Overture footprints');
     // ...and it describes ONLY what rendered. Power infrastructure is a
     // catalog layer since 2026-08-19 and is off in this embed, so the chip
@@ -831,7 +890,7 @@ test.describe('W3/W4 browser truth', () => {
   test('one extra reference layer keeps the scene; losing every fire layer or the cluster exits it', async ({
     page
   }) => {
-    // The fuels drape's tile fan-out on the software renderer pushes this
+    // The drape's tile fan-out on the software renderer pushes this
     // multi-toggle walk past the default budget; give it explicit room.
     test.setTimeout(120_000);
     await stubWildfireFeeds(page);
