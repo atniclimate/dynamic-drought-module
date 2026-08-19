@@ -8,6 +8,37 @@ through the normal Pages workflow. Repository release tags currently stop at
 `v0.6.23`; neither the August 13 nor August 18 refinement assigned a new tag
 or package version.
 
+### 2026-08-19: Overture building structures pilot for the 3D Fire view
+
+[Pull request 15](https://github.com/atniclimate/dynamic-drought-module/pull/15)
+added the third issuer-published context layer to the desktop 3D Fire mode:
+building structures from the Overture Maps Foundation buildings theme
+(ODbL), extruded over the terrain from zoom 13 as a central Oregon pilot.
+
+- The bundled archive is 7,950,204 bytes (189,769 footprints, z13-14,
+  release 2026-07-22.0). Two fill-extrusion layers keep height honesty
+  visible: footprints with an issuer-published height (72 percent of the
+  bake) rise to it in the measured tone; the rest draw visibly dimmer at a
+  disclosed placeholder rule. Nothing estimates a height the issuer did
+  not publish.
+- Provenance flows instead of being hand-typed: the extract writes a
+  sidecar the bake requires, the attribution is built entirely from the
+  sidecar, and the bake hard-fails if the in-app qualification drifts from
+  the extract. A test reads the committed archive's attribution and
+  asserts the qualification, coverage note, and embed line agree with it.
+- The pilot scope is stated in the coverage note and the legend; the
+  full-PNW alternative was declined as a projection of roughly 240 MB of
+  z14 tiles (roughly 380 MB at the shipped z13-14 scheme) from the
+  measured per-building rate. `scripts/extract-overture-buildings.py
+  --bbox` is the documented deployer path for any other region, and the
+  pinned release objects expire from the Overture bucket 2026-09-21.
+
+Validation: `npm run gate` clean; the fire3d and wildfire-source-semantics
+specs passed 38/38 serially including the archive-vs-disclosures cross-gate
+test; the full serial browser run at this stack head reported 792 passed
+with only the known SPC preset flake, recorded on the pull request before
+merge.
+
 ### 2026-08-19: power infrastructure context for the 3D Fire view
 
 [Pull request 14](https://github.com/atniclimate/dynamic-drought-module/pull/14)
