@@ -348,12 +348,17 @@ const FEATURE_BUDGETS = [
   },
   {
     key: 'fire3d-mode',
-    label: 'Desktop 3D Fire mode: terrain + camera + sky orchestrator plus the volumetric smoke companion (measured 5.7 kB gzip across 6 chunks and 2,278,573 archive-transport bytes over 19 ranged requests at 1280x720 on 2026-08-18; smoke volume re-presents the already-fetched hms-smoke source, adding no requests of its own; the second root is reached via dynamic import from the first and is invisible to the static closure walk, so BOTH roots are declared)',
-    rootModules: ['src/map/fire3d.ts', 'src/layers/hms-smoke-volume.ts'],
-    activationJsGzipKb: 6.8,
-    networkBytes: 2_800_000,
-    requestCount: 23,
-    dataAssets: [],
+    label: 'Desktop 3D Fire mode: terrain + camera + sky orchestrator, the volumetric smoke companion, and the issuer-published context chunk (measured 6.7 kB gzip across 7 chunks on 2026-08-18 after the context chunk landed; archive transport at 1280x720 the same day measured 2,278,573 terrain bytes over 19 ranged requests plus 1,215,252 fuels-drape bytes over 11; the smoke and context roots are reached via dynamic import from the first root and are invisible to the static closure walk, so ALL roots are declared)',
+    rootModules: ['src/map/fire3d.ts', 'src/layers/hms-smoke-volume.ts', 'src/map/fire3d-context.ts'],
+    activationJsGzipKb: 8.5,
+    networkBytes: 4_200_000,
+    requestCount: 36,
+    dataAssets: [{
+      // MUST equal SIZE_BUDGET_BYTES in scripts/build-fuels-tiles.mjs so a
+      // rebake cannot pass the builder and fail this gate (or vice versa).
+      path: 'data/fuels-fbfm40-pnw.pmtiles',
+      maxBytes: 30_000_000,
+    }],
   },
 ];
 

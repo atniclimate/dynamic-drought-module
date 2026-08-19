@@ -51,8 +51,15 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SCOPE_DIRS = ['src'];
 const FIXTURE_DIR = 'tests/fixtures/vocabulary';
 
-const BANNED = /\b(warning|alert|forecast)s?\b/gi;
-const CAPITALIZED_TOKEN = /^(Warning|Alert|Forecast)s?$/;
+// "digital twin" and "simulation" joined the banned list with the 3D Fire
+// context work (W-CTX): in the wildfire-visualization field "digital twin"
+// is a term of art for systems that bundle physics-based fire simulation
+// with rendering (NASA Wildfire Digital Twin, FIRETWIN), and DDM computes
+// no simulation, so surface copy claiming either would overclaim exactly
+// what the 3D view must disclaim. An upstream product whose verbatim name
+// carries the word takes the same vocab-allow pragma as the other rows.
+const BANNED = /\b(warning|alert|forecast)s?\b|\bdigital[\s-]?twins?\b|\bsimulat(?:es?|ed|ions?|ing|ors?)\b/gi;
+const CAPITALIZED_TOKEN = /^(Warning|Alert|Forecast|Simulation|Simulator|Simulated|Simulating)s?$/;
 const PRAGMA = /vocab-allow:\s*(.*?)\s*(?:\*\/.*)?$/;
 const DIAGNOSTIC_LINE = /console\.(warn|error|log|info|debug)\s*\(|new\s+Error\s*\(/;
 
@@ -376,7 +383,9 @@ function lintFile(absPath) {
     if (!prose.trim().includes(' ')) {
       if (!CAPITALIZED_TOKEN.test(prose.trim())) continue;
     }
-    const words = [...prose.matchAll(BANNED)].map((m) => m[1].toLowerCase());
+    // Group 1 exists only for the original word family; the phrase and
+    // simulation alternatives report their whole match.
+    const words = [...prose.matchAll(BANNED)].map((m) => (m[1] ?? m[0]).toLowerCase());
     if (words.length === 0) continue;
     const anchorSrcLine = srcLines[lit.anchor - 1] ?? '';
     if (DIAGNOSTIC_LINE.test(anchorSrcLine)) continue;

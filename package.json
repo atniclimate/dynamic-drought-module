@@ -37,6 +37,7 @@
     "build:landscape:smoke": ".venv\\Scripts\\python.exe -m scripts.landscape --smoke --output scripts/.cache/landscape-smoke.json && node scripts/validate-landscape-artifact.mjs scripts/.cache/landscape-smoke.json",
     "build:places": "node scripts/build-places.mjs",
     "build:ecoregion-tiles": "node scripts/build-ecoregion-tiles.mjs",
+    "build:fuels-tiles": "node scripts/build-fuels-tiles.mjs",
     "build:minimap-geometry": "node scripts/build-minimap-geometry.mjs",
     "build:minimap-whp": "node scripts/build-minimap-whp.mjs",
     "build:states": "node scripts/build-states.mjs",

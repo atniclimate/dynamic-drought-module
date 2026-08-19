@@ -505,3 +505,73 @@ export const USFS_WHP_PRESENTATION = {
     // vocab-allow: honesty disclaimer distinguishes static WHP from a forecast
     'United States Forest Service Wildfire Hazard Potential, static 2023 edition, 270 m resolution, conterminous United States (CONUS) only; potential context, not current fire conditions or a forecast.'
 } as const;
+
+/**
+ * LANDFIRE 2024 (LF2024) Scott and Burgan 40 Fire Behavior Fuel Models
+ * (FBFM40) drape for the desktop 3D Fire mode (the fuels context layer).
+ *
+ * The colors are the ISSUER'S published class colors, decoded verbatim from
+ * the LF2024_FBFM40_CONUS ImageServer legend endpoint on 2026-08-19 UTC
+ * (the bake's own retrieval clock; scripts/build-fuels-tiles.mjs re-fetches
+ * the legend on every rebake and HARD-FAILS when this table and the served
+ * legend disagree, so the archive's pixels and this key cannot drift
+ * apart). The drape layer draws these colors translucent
+ * (FUELS_DRAPE_OPACITY) so terrain and incident layers stay legible; the
+ * qualification below discloses that. Class names are the standard Scott
+ * and Burgan (2005) fuel model names as published in the LANDFIRE FBFM40
+ * data dictionary.
+ */
+export const FBFM40_PRESENTATION = {
+  classes: [
+    { code: 'NB1', label: 'Urban or developed', color: '#686868' },
+    { code: 'NB2', label: 'Snow or ice', color: '#e1e1e1' },
+    { code: 'NB3', label: 'Agricultural', color: '#ffeded' },
+    { code: 'NB8', label: 'Open water', color: '#000ed6' },
+    { code: 'NB9', label: 'Bare ground', color: '#4d6e70' },
+    { code: 'GR1', label: 'Short, sparse dry climate grass', color: '#ffebbe' },
+    { code: 'GR2', label: 'Low load, dry climate grass', color: '#ffd373' },
+    { code: 'GR3', label: 'Low load, very coarse humid climate grass', color: '#ffec8b' },
+    { code: 'GR4', label: 'Moderate load, dry climate grass', color: '#ffff73' },
+    { code: 'GR5', label: 'Low load, humid climate grass', color: '#f5de29' },
+    { code: 'GR6', label: 'Moderate load, humid climate grass', color: '#e6e640' },
+    { code: 'GR7', label: 'High load, dry climate grass', color: '#cdc673' },
+    { code: 'GR8', label: 'High load, very coarse humid climate grass', color: '#8b864e' },
+    { code: 'GS1', label: 'Low load, dry climate grass-shrub', color: '#ffaa00' },
+    { code: 'GS2', label: 'Moderate load, dry climate grass-shrub', color: '#ffa77f' },
+    { code: 'GS3', label: 'Moderate load, humid climate grass-shrub', color: '#ff6300' },
+    { code: 'GS4', label: 'High load, humid climate grass-shrub', color: '#cd6600' },
+    { code: 'SH1', label: 'Low load dry climate shrub', color: '#d7c29e' },
+    { code: 'SH2', label: 'Moderate load dry climate shrub', color: '#d7b09e' },
+    { code: 'SH3', label: 'Moderate load, humid climate shrub', color: '#cd8966' },
+    { code: 'SH4', label: 'Low load, humid climate timber-shrub', color: '#895a44' },
+    { code: 'SH5', label: 'High load, dry climate shrub', color: '#cdaa66' },
+    { code: 'SH6', label: 'Low load, humid climate shrub', color: '#ed7044' },
+    { code: 'SH7', label: 'Very high load, dry climate shrub', color: '#cd7d39' },
+    { code: 'SH8', label: 'High load, humid climate shrub', color: '#a83800' },
+    { code: 'SH9', label: 'Very high load, humid climate shrub', color: '#731a00' },
+    { code: 'TU1', label: 'Low load dry climate timber-grass-shrub', color: '#e9ffbe' },
+    { code: 'TU2', label: 'Moderate load, humid climate timber-shrub', color: '#aaff00' },
+    { code: 'TU3', label: 'Moderate load, humid climate timber-grass-shrub', color: '#b4d79e' },
+    { code: 'TU4', label: 'Dwarf conifer with understory', color: '#70a800' },
+    { code: 'TU5', label: 'Very high load, dry climate timber-shrub', color: '#267300' },
+    { code: 'TL1', label: 'Low load compact conifer litter', color: '#beffe8' },
+    { code: 'TL2', label: 'Low load broadleaf litter', color: '#00ffc5' },
+    { code: 'TL3', label: 'Moderate load conifer litter', color: '#bed2ff' },
+    { code: 'TL4', label: 'Small downed logs', color: '#7b68ee' },
+    { code: 'TL5', label: 'High load conifer litter', color: '#bee8ff' },
+    { code: 'TL6', label: 'Moderate load broadleaf litter', color: '#00c5ff' },
+    { code: 'TL7', label: 'Large downed logs', color: '#0084a8' },
+    { code: 'TL8', label: 'Long-needle litter', color: '#005ce6' },
+    { code: 'TL9', label: 'Very high load broadleaf litter', color: '#4d6e91' },
+    { code: 'SB1', label: 'Low load activity fuel', color: '#e8beff' },
+    { code: 'SB2', label: 'Moderate load activity fuel or low load blowdown', color: '#c500ff' },
+    { code: 'SB3', label: 'High load activity fuel or moderate load blowdown', color: '#ffbee8' },
+    { code: 'SB4', label: 'High load blowdown', color: '#ff7f7f' }
+  ],
+  qualification:
+    // vocab-allow: honesty disclaimer distinguishes the static fuel snapshot from a forecast
+    'LANDFIRE 2024 fuel model classes (Scott and Burgan 40), shown with LANDFIRE\'s published class colors, drawn translucent at reduced resolution from the 30 m source; a static classified snapshot of vegetation as fuel, not current conditions, fire behavior, or a forecast.'
+} as const;
+
+/** Drape opacity: fuel classes stay context under perimeters and smoke. */
+export const FUELS_DRAPE_OPACITY = 0.5;

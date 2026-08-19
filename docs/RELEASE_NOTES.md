@@ -8,6 +8,32 @@ through the normal Pages workflow. Repository release tags currently stop at
 `v0.6.23`; neither the August 13 nor August 18 refinement assigned a new tag
 or package version.
 
+### 2026-08-18: LANDFIRE fuel-model drape for the 3D Fire view
+
+[Pull request 12](https://github.com/atniclimate/dynamic-drought-module/pull/12)
+added the first issuer-published context layer to the desktop 3D Fire mode
+(itself merged earlier the same day in `5679477`): a LANDFIRE 2024 Scott and
+Burgan 40 fuel-model (FBFM40) drape over the 3D terrain.
+
+- The drape is a bundled 25,749,464-byte PNG PMTiles archive (z0-8, 512 px)
+  whose pixels were rendered by the LANDFIRE ImageServer's own class colors;
+  the module chooses no palette and computes nothing from the classes. The
+  in-app legend lists the issuer's full 44-class key with a
+  snapshot-not-a-prediction qualification, and the bake refuses
+  all-opaque-black tiles (the unpopulated-mosaic signature that made LF2025
+  unsafe to bake before its December 2026 completion).
+- Context layers ride the existing `fire3d` activation as non-fatal
+  companions; the active set is observable at `data-ddm-fire3d-context`.
+- The 3D Fire control now carries an always-visible non-prediction
+  disclosure beside the coverage note, and "digital twin" and "simulation"
+  joined the surface-vocabulary banned list. The durable honesty doctrine
+  for the context view is tracked in
+  [`design/fire3d-context.md`](design/fire3d-context.md).
+
+Validation: `npm run gate` clean; the fire3d and wildfire-source-semantics
+specs passed (17 and 15 tests); the full serial browser run before merge is
+recorded on the pull request.
+
 ### 2026-08-18: mobile map interface refinement
 
 [Pull request 7](https://github.com/atniclimate/dynamic-drought-module/pull/7)
