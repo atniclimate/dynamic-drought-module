@@ -28,11 +28,8 @@
 import type maplibregl from 'maplibre-gl';
 
 import { activateFuelsDrape, deactivateFuelsDrape } from '../layers/fuels-3d';
-import {
-  activatePowerContext,
-  deactivatePowerContext
-} from '../layers/power-3d';
-import type { PowerContextState } from '../layers/power-3d';
+import { getPowerContextState } from '../state/power-context';
+import type { PowerContextState } from '../state/power-context';
 import {
   activateStructures,
   deactivateStructures
@@ -95,14 +92,15 @@ export async function activateContextLayers(
     console.warn('[fire3d-context] the fuels drape failed to activate.', err);
   }
 
-  try {
-    const power = await activatePowerContext(map, signal);
-    if (power !== null) {
-      keys.push('power');
-      embedLines.push(buildPowerEmbedLine(power));
-    }
-  } catch (err) {
-    console.warn('[fire3d-context] the power context failed to activate.', err);
+  // Power infrastructure is a CATALOG layer since 2026-08-19 (owner
+  // direction): one toggle governs it in every view, including this one,
+  // and it is off by default. This orchestrator therefore never activates
+  // it. It only READS whether the layer is currently rendering, so the 3D
+  // scene's embed disclosure keeps describing exactly what is on screen.
+  const power = getPowerContextState();
+  if (power !== null) {
+    keys.push('power');
+    embedLines.push(buildPowerEmbedLine(power));
   }
 
   try {
@@ -121,9 +119,13 @@ export async function activateContextLayers(
   return { keys, embedLines };
 }
 
-/** Remove every context layer. Defensive; safe when never activated. */
+/**
+ * Remove every context layer this orchestrator owns. Power is deliberately
+ * absent: it is a catalog layer with its own lifecycle, and tearing it down
+ * when the 3D scene exits would silently turn off something the person
+ * switched on.
+ */
 export function deactivateContextLayers(map: maplibregl.Map): void {
   deactivateFuelsDrape(map);
-  deactivatePowerContext(map);
   deactivateStructures(map);
 }

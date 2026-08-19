@@ -348,7 +348,7 @@ const FEATURE_BUDGETS = [
   },
   {
     key: 'fire3d-mode',
-    label: 'Desktop 3D Fire mode: terrain + camera + sky orchestrator, the volumetric smoke companion, and the issuer-published context chunk with the fuels drape, power context, and structures pilot (archive transport at 1280x720 measured 2,278,573 terrain bytes over 19 ranged requests, 1,215,252 fuels-drape bytes over 11, and 159,819 transmission-line bytes over 10, plus one live EIA plants read probed at 174,970 raw bytes; the z13-14 structures archive measured 16,512 activation-time bytes over 2 ranged reads with tile reads only when zoomed into the pilot area; the smoke and context roots are reached via dynamic import from the first root and are invisible to the static closure walk, so ALL roots are declared)',
+    label: 'Desktop 3D Fire mode: terrain + camera + sky orchestrator, the volumetric smoke companion, and the issuer-published context chunk with the fuels drape and structures pilot (archive transport at 1280x720 measured 2,278,573 terrain bytes over 19 ranged requests and 1,215,252 fuels-drape bytes over 11; the z13-14 structures archive measured 16,512 activation-time bytes over 2 ranged reads with tile reads only when zoomed into the pilot area; power infrastructure left this closure 2026-08-19 when it became its own catalog layer, below; the smoke and context roots are reached via dynamic import from the first root and are invisible to the static closure walk, so ALL roots are declared)',
     rootModules: ['src/map/fire3d.ts', 'src/layers/hms-smoke-volume.ts', 'src/map/fire3d-context.ts'],
     activationJsGzipKb: 10.0,
     networkBytes: 4_800_000,
@@ -359,15 +359,24 @@ const FEATURE_BUDGETS = [
       path: 'data/fuels-fbfm40-pnw.pmtiles',
       maxBytes: 30_000_000,
     }, {
-      // MUST equal MAX_ARCHIVE_BYTES in scripts/build-power-tiles.mjs
-      // (same cross-gate agreement rule).
-      path: 'data/power-lines-pnw.pmtiles',
-      maxBytes: 8_000_000,
-    }, {
       // MUST equal MAX_ARCHIVE_BYTES in scripts/build-structures-tiles.mjs
       // (same cross-gate agreement rule).
       path: 'data/structures-central-oregon.pmtiles',
       maxBytes: 16_000_000,
+    }],
+  },
+  {
+    key: 'power-infrastructure',
+    label: 'Power lines and plants as a catalog layer (owner direction 2026-08-19; it left the 3D Fire closure above). Nothing is fetched below zoom 6, where the layer reports zoom in to load. Above the gate: the bundled z0-11 transmission archive over ranged requests, plus ONE bounded live EIA plants read probed at 174,970 raw bytes',
+    rootModules: ['src/layers/power-3d.ts'],
+    activationJsGzipKb: 4.7,
+    networkBytes: 1_200_000,
+    requestCount: 20,
+    dataAssets: [{
+      // MUST equal MAX_ARCHIVE_BYTES in scripts/build-power-tiles.mjs
+      // (the same cross-gate agreement rule as the assets above).
+      path: 'data/power-lines-pnw.pmtiles',
+      maxBytes: 8_000_000,
     }],
   },
 ];

@@ -72,6 +72,23 @@ that layer alone), carries its issuer's own palette and an explicit
 vintage-and-caveat legend, and appears in the production-observable
 `data-ddm-fire3d-context` stamp only when actually in the scene.
 
+Power infrastructure LEFT that contract on 2026-08-19, on owner
+direction, and the exception is worth stating because it marks the
+boundary of the pattern. Riding the scene's activation meant the layer
+was unconditionally on wherever the scene was, and unavailable
+everywhere else; a person could neither turn it off when it crowded the
+view nor turn it on to answer an ordinary question in the flat map. It
+is now an ordinary catalog row, off by default, governed by one toggle
+in every view including the 3D scene, and drawn only from zoom 6 (below
+that it reports the canonical `zoom in to load` rather than painting a
+continental smear). The orchestrator no longer activates it; it reads
+whether the layer is rendering so the 3D scene's embed disclosure still
+describes exactly what is on screen. The test for whether a companion
+should become a catalog row is that question: does a person have a
+reason to want it separately from the scene? Terrain relief, the fuels
+drape, and the structures pilot are all answers ABOUT the scene's
+framing. The grid is a thing a person asks about on its own.
+
 The power context specifically: transmission lines come from the ARCHIVED
 federal HIFLD dataset (the HIFLD Open program was discontinued
 2025-08-26; the surviving public Esri Federal User Community copy states
@@ -82,11 +99,37 @@ caveat wherever the lines render. Line width follows the issuer's own
 voltage classes with the unknown sentinel drawn thinnest, and one color
 for every line so the layer never reads as a severity ramp. Plants come
 live from the independently maintained EIA layer, labeled with the
-issuer's reporting period. Substations and distribution-voltage circuits
-are deliberately absent: both EIA and the former HIFLD program withhold
-substation locations for security reasons, no unified public national
-distribution source exists, and the qualification says so instead of
-letting the absence imply their nonexistence. A California-only CPUC High
+issuer's reporting period. Plant symbols group at low zoom with their
+count printed, because several hundred unclustered dots across a region
+read as noise rather than as information; the count is a count of issuer
+records and never a capacity. Clicking either surface answers with the
+issuer's own fields, and the issuer's unknown sentinels stay unknowns:
+a `-999999` voltage and a `NOT AVAILABLE` owner print as "not
+published", never as a value.
+
+Substations and distribution-voltage circuits are deliberately absent,
+re-verified 2026-08-19 against the owner's request for distribution
+lines. There is no authoritative public national distribution dataset,
+and that is by design rather than by oversight: distribution networks
+are utility-proprietary, and federal substation locations have been
+withheld on security grounds since 2022. The qualification therefore
+names both absences AND whose choice they are, and closes by saying that
+absence here is not evidence that none are present. Wording matters:
+"absent by design" alone reads as a DDM decision when the decision
+belongs to the issuers, and a viewer looking at a sparse transmission
+network could otherwise conclude it is the whole grid.
+
+The remaining option, declined for now and recorded as a follow-up
+rather than a silent gap: OpenStreetMap `power=minor_line` and
+`power=line` could carry a volunteer-mapped distribution layer under
+ODbL. It would have to arrive as its own visibly distinct layer with its
+own legend row, its own attribution, and an explicit "incomplete,
+volunteer-mapped" disclosure, because its coverage varies enormously by
+locality. It must never be blended into the HIFLD layer: one issuer, one
+legend, per layer, and a mixed layer would let sparse volunteer coverage
+read as a federal statement of absence.
+
+A California-only CPUC High
 Fire Threat District layer was evaluated and declined: its license is a
 use-scoped regulatory disclaimer (Decision D.17-12-024), not an
 affirmative open-data grant, and an uncaptioned state-specific layer

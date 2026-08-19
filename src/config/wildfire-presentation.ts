@@ -653,6 +653,58 @@ export function buildPowerPlantPaint(): NonNullable<
 }
 
 /**
+ * Clustered plant symbols (2026-08-19 owner direction: the unclustered
+ * dots "cluster poorly" and read as noise at regional framing).
+ *
+ * A cluster circle is a COUNT of issuer records, nothing more: it is the
+ * same yellow as a single plant, dimmed and outlined so it never reads as
+ * one large plant, and it prints its own count. Radius steps with the
+ * count so a person can rank groups at a glance without the size implying
+ * capacity, which the symbols explicitly do not carry.
+ */
+export const POWER_PLANT_CLUSTER_PRESENTATION = {
+  color: '#c8a23f',
+  strokeColor: '#ffd166',
+  textColor: '#0b1220',
+  /** [count threshold, radius] steps, smallest first. */
+  radiusSteps: [
+    [0, 9],
+    [10, 13],
+    [40, 17]
+  ] as readonly (readonly [number, number])[]
+} as const;
+
+export function buildPowerPlantClusterPaint(): NonNullable<
+  maplibregl.CircleLayerSpecification['paint']
+> {
+  const [, base] = POWER_PLANT_CLUSTER_PRESENTATION.radiusSteps[0]!;
+  const steps = POWER_PLANT_CLUSTER_PRESENTATION.radiusSteps.slice(1);
+  return {
+    'circle-color': POWER_PLANT_CLUSTER_PRESENTATION.color,
+    'circle-stroke-color': POWER_PLANT_CLUSTER_PRESENTATION.strokeColor,
+    'circle-stroke-width': 1,
+    'circle-opacity': 0.88,
+    'circle-radius': [
+      'step',
+      ['get', 'point_count'],
+      base,
+      ...steps.flatMap(([threshold, radius]) => [threshold, radius])
+    ] as unknown as maplibregl.DataDrivenPropertyValueSpecification<number>
+  };
+}
+
+/**
+ * The zoom at which the power surfaces draw.
+ *
+ * Owner direction 2026-08-19: "electrical infrastructure should appear
+ * when zoomed in". Below this the layer reports the honest `zoom in to
+ * load` state instead of painting a continental smear of lines and dots
+ * that can be neither read nor clicked. Six is roughly a multi-state
+ * frame, where an individual line still separates from its neighbor.
+ */
+export const POWER_MIN_ZOOM = 6;
+
+/**
  * The power legend note is COMPOSED from these parts so it only ever
  * describes surfaces actually in the scene (either source may degrade
  * alone): the lines part when the archive is on, the plants part when the
@@ -662,10 +714,22 @@ export const POWER_LINES_QUALIFICATION =
   'Transmission lines: HIFLD (U.S. Government) ARCHIVED snapshot, last data update 2024-09-30, no longer maintained; includes records the issuer marks inactive or status-unknown, drawn identically; line width follows the issuer\'s voltage class, and an unknown class draws dashed at the thinnest width.';
 
 export const POWER_PLANTS_QUALIFICATION =
-  'Power plants: EIA inventory locations (Forms 860/860M); symbols mark location only, not capacity or fuel.';
+  'Power plants: EIA inventory locations (Forms 860/860M); symbols mark location only, not capacity or fuel. Grouped symbols count issuer records in view; the count is not a capacity.';
 
+/**
+ * The absence statement.
+ *
+ * Re-verified 2026-08-19: there is no authoritative public national
+ * dataset of distribution circuits, and that is by design rather than by
+ * oversight. Distribution networks are utility-proprietary, and the
+ * federal substation layer has been withheld on security grounds since
+ * 2022. A viewer who sees only long transmission lines could reasonably
+ * conclude the sparse network IS the grid, so the interface says plainly
+ * what is missing and why. Naming the reason matters: "absent by design"
+ * alone reads as a DDM choice, when the choice belongs to the issuers.
+ */
 export const POWER_SHARED_QUALIFICATION =
-  'Not comprehensive or current; never for siting or safety-critical decisions. Substations and distribution lines have no authoritative public national source and are absent by design.';
+  'Not comprehensive or current; never for siting or safety-critical decisions. Substations and distribution circuits are absent because no authoritative public national source publishes them: distribution networks are held privately by utilities, and substation locations have been withheld for security since 2022. Their absence here is not evidence that none are present.';
 
 /**
  * Structures context for the desktop 3D Fire mode: Overture Maps

@@ -30,6 +30,7 @@
 #   set_layer: { key: <layer>, on: <bool> }
 #   wait_settled: <layer key>        wait for a terminal status pill
 #   wait_fire3d: <active|inactive>   wait for the document stamp
+#   zoom_out: <n>                    press the map's own zoom-out key n times
 #   reload: true                     reload at the current URL
 #
 # Expectation vocabulary
@@ -44,6 +45,7 @@
 #   fire3d_toggle: <pressed|unpressed|absent>
 #   layers_checked: [keys]
 #   layers_unchecked: [keys]
+#   layer_status: { <key>: <raw LayerStatus, e.g. ready|zoom-in|degraded> }
 #   selector_counts: { "<css>": <n> }
 # ---------------------------------------------------------------------------
 
@@ -80,7 +82,9 @@ rows:
   - id: entering-3d-stamps-the-scene-and-the-url
     description: >
       The 3D toggle activates the scene, writes the durable preference to the
-      URL, and brings up the three context layers.
+      URL, and brings up the context layers the mode owns. Power is not among
+      them: it became a catalog layer on 2026-08-19 and is off unless someone
+      asks for it (see the two power rows below).
     url: '?cluster=wildfire'
     stub_wildfire: true
     timeout_ms: 150000
@@ -94,7 +98,7 @@ rows:
         fire3d: 'true'
       fire3d_stamp: active
       fire3d_toggle: pressed
-      fire3d_context_includes: [fuels, power, structures]
+      fire3d_context_includes: [fuels, structures]
 
   - id: leaving-3d-clears-the-scene-and-the-parameter
     description: >
@@ -187,6 +191,71 @@ rows:
       url_params:
         embed: 'true'
         fire3d: 'true'
+
+  - id: power-infrastructure-is-off-until-someone-asks-for-it
+    description: >
+      Power infrastructure is a catalog layer that starts off, and the 3D
+      Fire scene does not turn it on behind the toggle. Before 2026-08-19 it
+      rode the scene's own activation and was always on there; one toggle
+      now governs it everywhere.
+    url: '?cluster=wildfire'
+    stub_wildfire: true
+    timeout_ms: 150000
+    steps:
+      - wait_settled: hms-smoke
+      - fire3d: on
+      - wait_fire3d: active
+    expect:
+      layers_unchecked: [power-infrastructure]
+      fire3d_context_includes: [fuels, structures]
+      fire3d_context_excludes: [power]
+
+  - id: the-power-toggle-governs-the-3d-scene-too
+    description: >
+      The catalog toggle is the ONE decision: turned on while the 3D scene
+      is up, power draws in that scene and reports live, and the scene stays
+      up through the custom demotion that any extra layer causes.
+      Order matters, and the reason is worth stating: entering 3D requires a
+      COMMITTED wildfire cluster, and switching a layer on demotes the
+      display to custom, so power must be switched on after the scene rather
+      than before it. The same is true of any extra layer; it is not
+      something power introduced. The scene's context stamp is written once
+      at activation and therefore still reads 'fuels structures' here. That
+      under-claims rather than over-claims, and no user-facing disclosure is
+      affected: the legend is written by the power layer itself, and the
+      embed chip only renders in embeds, where the layer set is fixed at
+      boot and cannot change under it.
+    url: '?cluster=wildfire'
+    stub_wildfire: true
+    timeout_ms: 180000
+    steps:
+      - wait_settled: hms-smoke
+      - fire3d: on
+      - wait_fire3d: active
+      - set_layer: { key: power-infrastructure, on: true }
+    expect:
+      layers_checked: [power-infrastructure]
+      layer_status:
+        power-infrastructure: ready
+      fire3d_stamp: active
+      url_layers_include: [power-infrastructure]
+
+  - id: power-below-its-zoom-gate-says-zoom-in-to-load
+    description: >
+      Zoomed out past the gate the layer draws nothing and says so in the
+      canonical vocabulary, instead of painting a continental smear that can
+      be neither read nor clicked.
+    url: '?cluster=wildfire'
+    stub_wildfire: true
+    timeout_ms: 180000
+    steps:
+      - wait_settled: hms-smoke
+      - set_layer: { key: power-infrastructure, on: true }
+      - zoom_out: 3
+    expect:
+      layers_checked: [power-infrastructure]
+      layer_status:
+        power-infrastructure: zoom-in
 
   - id: a-reloaded-3d-share-boots-back-into-the-same-view
     description: >

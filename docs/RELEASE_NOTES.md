@@ -8,6 +8,39 @@ through the normal Pages workflow. Repository release tags currently stop at
 `v0.6.23`; neither the August 13 nor August 18 refinement assigned a new tag
 or package version.
 
+### 2026-08-19: power infrastructure becomes a layer a person can turn on
+
+[Pull request 21](https://github.com/atniclimate/dynamic-drought-module/pull/21)
+answered the owner's second review item. The power context had been a
+companion of the 3D Fire scene, which made it always on there, unavailable
+everywhere else, unreadable at regional framing, and silent on click.
+
+- It is now an ordinary catalog row, off by default, governed by one toggle
+  in every view including the 3D scene. That is a deliberate default
+  change: the 3D scene no longer brings power up on its own, and its
+  context stamp says so.
+- Nothing is fetched below zoom 6; the layer reports the canonical `zoom in
+  to load` there rather than painting a continental smear. Above the gate
+  the plant points group with their count printed, in a dimmed variant of
+  the plant color so a group never reads as one large plant, and a cluster
+  click zooms to where the issuer's own records separate.
+- Both surfaces answer a click with the issuer's published fields. The
+  issuer's unknown sentinels stay unknowns: a `-999999` voltage and a
+  `NOT AVAILABLE` owner print as "not published".
+- The absence statement grew a reason. Substations and distribution
+  circuits are absent because no authoritative public national source
+  publishes them, and the interface now says whose decision that is and
+  that absence is not evidence that none are present.
+- The transmission archive was rebaked from zoom 10 to zoom 11
+  (3,827,596 bytes, 3,816 tiles). It stopped there because the shared
+  PMTiles writer emits a single root directory, and at zoom 12 that
+  directory runs past the 16,384 bytes every reader fetches first,
+  producing an archive that opens nowhere. The writer now refuses to write
+  such a file; every shipped archive was audited and all are safe.
+
+Validation: `npm run typecheck` and `npm run gate` clean; the power,
+3D mode, view-contract, and layer-order specs green at one worker.
+
 ### 2026-08-19: map chrome seats, heavier perimeters, honest satellite edges
 
 [Pull request 18](https://github.com/atniclimate/dynamic-drought-module/pull/18)

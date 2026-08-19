@@ -34,6 +34,27 @@ const TILETYPE_MVT = 1;
 const HEADER_BYTES = 127;
 
 /**
+ * The reader's first-request budget.
+ *
+ * The `pmtiles` library (and every other conforming reader) fetches the
+ * first 16,384 bytes of an archive and expects the header AND the whole
+ * root directory to be inside it. This writer emits a single root
+ * directory with one entry per tile, so a bake deep enough to push that
+ * directory past the budget produces a file that opens nowhere: the
+ * reader gunzips a truncated buffer and fails with an unexpected end of
+ * file, AFTER the bake has already written the artifact.
+ *
+ * Measured 2026-08-19 while deepening the transmission bake: at zoom 12
+ * (10,069 tiles) the root directory reached 18,678 bytes and the archive
+ * was unreadable; at zoom 11 (3,816 tiles) it is 7,399 bytes and reads
+ * cleanly. Every other shipped archive sits between 540 and 8,201 bytes.
+ * The real fix for deeper bakes is leaf directories, which this writer
+ * deliberately does not implement; until then this refuses to write a
+ * file no reader can open.
+ */
+const READER_FIRST_REQUEST_BYTES = 16_384;
+
+/**
  * Map a tile z/x/y to its PMTiles tile id (Hilbert-curve ordering). This is the
  * canonical algorithm from the PMTiles specification, inlined so the build step
  * never imports the browser-targeted `pmtiles` module into Node. The smoke test
@@ -153,6 +174,14 @@ export function writePmtiles({
 
   const rootDirOffset = HEADER_BYTES;
   const rootDirLength = rootDirGz.length;
+  if (rootDirOffset + rootDirLength > READER_FIRST_REQUEST_BYTES) {
+    throw new Error(
+      `root directory would end at byte ${rootDirOffset + rootDirLength}, past the ` +
+        `${READER_FIRST_REQUEST_BYTES}-byte first request every PMTiles reader makes; ` +
+        `${entries.length} tiles is too many for a single root directory. Bake a shallower ` +
+        'max zoom, or teach this writer leaf directories.'
+    );
+  }
   const metadataOffset = rootDirOffset + rootDirLength;
   const metadataLength = metadataGz.length;
   const leafDirOffset = metadataOffset + metadataLength;
