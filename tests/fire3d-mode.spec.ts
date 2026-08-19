@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import {
   FIRE3D_CAMERA_TRANSITION_MS,
@@ -35,6 +35,7 @@ import {
   installFakeBrowser
 } from './map-harness';
 import { gotoApp, layerCheckbox, search, waitForLayerSettled } from './helpers';
+import { PLANTS_STUB_FC, stubWildfireFeeds } from './wildfire-fixtures';
 
 /**
  * W3/W4 desktop 3D Fire mode.
@@ -164,23 +165,6 @@ test('the gate requires wildfire for entry but survives a custom demotion with a
 // ---------------------------------------------------------------------------
 
 /** One synthetic EIA plant with the issuer's Period vintage attribute. */
-const PLANTS_STUB_FC = {
-  type: 'FeatureCollection',
-  features: [
-    {
-      type: 'Feature',
-      properties: {
-        Plant_Name: 'Synthetic Falls',
-        PrimSource: 'hydroelectric',
-        Total_MW: 24,
-        Utility_Na: 'Synthetic Power',
-        Period: '202502'
-      },
-      geometry: { type: 'Point', coordinates: [-120.5, 45.0] }
-    }
-  ]
-};
-
 /** Valid PMTiles for every archive probe; a real FeatureCollection for the
  * live EIA plants query (the two fetch shapes the 3D mode issues). */
 function stubPmtilesFetch(): () => void {
@@ -623,87 +607,6 @@ test('post-probe terrain tile failures roll the scene back transactionally', asy
 // ---------------------------------------------------------------------------
 // Browser: the production build end to end
 // ---------------------------------------------------------------------------
-
-const PNW_POLYGON = (west: number, south: number) => ({
-  type: 'Polygon',
-  coordinates: [
-    [
-      [west, south],
-      [west + 0.6, south],
-      [west + 0.6, south + 0.45],
-      [west, south + 0.45],
-      [west, south]
-    ]
-  ]
-});
-
-const NIFC_STUB = {
-  type: 'FeatureCollection',
-  features: [
-    {
-      type: 'Feature',
-      properties: {
-        attr_IncidentTypeCategory: 'WF',
-        poly_IncidentName: 'Synthetic Ridge'
-      },
-      geometry: PNW_POLYGON(-121.4, 44.6)
-    },
-    {
-      type: 'Feature',
-      properties: {
-        attr_IncidentTypeCategory: 'WF',
-        poly_IncidentName: 'Synthetic Butte'
-      },
-      geometry: PNW_POLYGON(-119.9, 46.1)
-    }
-  ]
-};
-
-const HMS_STUB = {
-  type: 'FeatureCollection',
-  features: (
-    [
-      ['Light', -122.4, 44.2],
-      ['Medium', -120.9, 45.2],
-      ['Heavy', -119.4, 46.4]
-    ] as const
-  ).map(([density, west, south]) => ({
-    type: 'Feature',
-    properties: {
-      Density: density,
-      Satellite: 'GOES-WEST',
-      Start: '2026230 1200',
-      End_: '2026230 1800'
-    },
-    geometry: PNW_POLYGON(west, south)
-  }))
-};
-
-async function stubWildfireFeeds(page: Page): Promise<void> {
-  const fulfillJson = (route: Route, body: unknown): Promise<void> =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/geo+json',
-      body: JSON.stringify(body)
-    });
-  await page.route(
-    (url) => url.href.includes('WFIGS_Interagency_Perimeters_Current'),
-    (route) => fulfillJson(route, NIFC_STUB)
-  );
-  await page.route(
-    (url) => url.href.includes('NOAA_Satellite_Smoke_Detection'),
-    (route) => fulfillJson(route, HMS_STUB)
-  );
-  await page.route(
-    (url) => url.href.includes('SPC_firewx'),
-    (route) => fulfillJson(route, { type: 'FeatureCollection', features: [] })
-  );
-  // The 3D power context's live EIA plants read stays hermetic in tests.
-  await page.route(
-    (url) => url.href.includes('Power_Plants_in_the_US'),
-    (route) => fulfillJson(route, PLANTS_STUB_FC)
-  );
-}
 
 function fire3dStamp(page: Page): Promise<string | undefined> {
   return page.evaluate(() => document.documentElement.dataset['ddmFire3d']);
