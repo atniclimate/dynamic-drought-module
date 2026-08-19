@@ -22,6 +22,8 @@ export interface FakeLayerSpec {
   readonly id: string;
   readonly type?: string;
   readonly source?: string;
+  /** Zoom gate, for layers that refuse to draw below a framing. */
+  readonly minzoom?: number;
   readonly paint?: Readonly<Record<string, unknown>>;
   layout?: Record<string, unknown>;
 }
@@ -55,11 +57,19 @@ export interface FakeMapHarness {
   /** Dispatch a map event to listeners bound via map.on. */
   emit(type: string, event: unknown): void;
   listenerCount(type: string): number;
+  /**
+   * Move the camera's zoom and fire `moveend`, the way a real pan or zoom
+   * settles. Zoom-gated layers watch that event, so a spec drives the gate
+   * through the same seam the application does.
+   */
+  setZoom(next: number): void;
+  getZoom(): number;
 }
 
 export function fakeMapHarness(initial?: {
   readonly pitch?: number;
   readonly bearing?: number;
+  readonly zoom?: number;
 }): FakeMapHarness {
   const sources = new Map<string, Record<string, unknown>>();
   const layerOrder: string[] = [];
@@ -75,6 +85,9 @@ export function fakeMapHarness(initial?: {
     bearing: initial?.bearing ?? 0
   };
   let terrain: { source: string; exaggeration?: number } | null = null;
+  // The default sits above every zoom gate in the application, so a spec
+  // that does not care about zoom behaves as it always did.
+  let zoom = initial?.zoom ?? 8;
 
   const applyCameraOptions = (options: Record<string, unknown>): void => {
     if (typeof options['pitch'] === 'number') camera.pitch = options['pitch'];
@@ -142,6 +155,7 @@ export function fakeMapHarness(initial?: {
     },
     getPitch: () => camera.pitch,
     getBearing: () => camera.bearing,
+    getZoom: () => zoom,
     easeTo: (options: Record<string, unknown>) => {
       cameraCalls.push({ kind: 'easeTo', options });
       applyCameraOptions(options);
@@ -177,7 +191,14 @@ export function fakeMapHarness(initial?: {
         listener(event);
       }
     },
-    listenerCount: (type: string) => listeners.get(type)?.size ?? 0
+    listenerCount: (type: string) => listeners.get(type)?.size ?? 0,
+    setZoom: (next: number) => {
+      zoom = next;
+      for (const listener of [...(listeners.get('moveend') ?? [])]) {
+        listener({});
+      }
+    },
+    getZoom: () => zoom
   };
 }
 

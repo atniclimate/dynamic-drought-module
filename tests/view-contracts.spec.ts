@@ -3,7 +3,13 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { parse } from 'yaml';
 
-import { gotoApp, layerCheckbox, search, waitForLayerSettled } from './helpers';
+import {
+  gotoApp,
+  layerCheckbox,
+  layerPill,
+  search,
+  waitForLayerSettled
+} from './helpers';
 import { stubWildfireFeeds } from './wildfire-fixtures';
 
 /**
@@ -50,6 +56,7 @@ type Step =
   | { set_layer: { key: string; on: boolean } }
   | { wait_settled: string }
   | { wait_fire3d: 'active' | 'inactive' }
+  | { zoom_out: number }
   | { reload: true };
 
 interface Expectations {
@@ -59,9 +66,12 @@ interface Expectations {
   url_layers_exclude?: string[];
   fire3d_stamp?: 'active' | 'inactive' | 'absent';
   fire3d_context_includes?: string[];
+  fire3d_context_excludes?: string[];
   fire3d_toggle?: 'pressed' | 'unpressed' | 'absent';
   layers_checked?: string[];
   layers_unchecked?: string[];
+  /** Raw LayerStatus class on the catalog pill, keyed by layer key. */
+  layer_status?: Record<string, string>;
   selector_counts?: Record<string, number>;
 }
 
@@ -164,6 +174,19 @@ async function runStep(page: Page, step: Step): Promise<void> {
     return;
   }
 
+  if ('zoom_out' in step) {
+    // The production build carries no dev map handle, so the camera moves
+    // through the real control surface: MapLibre gives its canvas
+    // tabIndex 0, and the minus key is its own zoom-out binding.
+    const canvas = page.locator('#map canvas').first();
+    await canvas.focus();
+    for (let i = 0; i < step.zoom_out; i += 1) {
+      await page.keyboard.press('Minus');
+      await page.waitForTimeout(350);
+    }
+    return;
+  }
+
   if ('reload' in step) {
     await page.reload({ waitUntil: 'domcontentloaded' });
     // Boot is finished when the sidebar has rebuilt, the same
@@ -236,11 +259,14 @@ async function assertExpectations(
     }
   }
 
-  if (wanted.fire3d_context_includes) {
+  if (wanted.fire3d_context_includes || wanted.fire3d_context_excludes) {
     const stamp = (await fire3dContextStamp(page)) ?? '';
     const tokens = new Set(stamp.split(/\s+/).filter(Boolean));
-    for (const key of wanted.fire3d_context_includes) {
+    for (const key of wanted.fire3d_context_includes ?? []) {
       expect(tokens, `3D context should include ${key}`).toContain(key);
+    }
+    for (const key of wanted.fire3d_context_excludes ?? []) {
+      expect(tokens, `3D context should not include ${key}`).not.toContain(key);
     }
   }
 
@@ -261,6 +287,20 @@ async function assertExpectations(
   }
   for (const key of wanted.layers_unchecked ?? []) {
     await expect(layerCheckbox(page, key), `layer ${key}`).not.toBeChecked();
+  }
+
+  for (const [key, status] of Object.entries(wanted.layer_status ?? {})) {
+    // The RAW status word rides the pill as a CSS class, which is the
+    // stable contract now that the displayed text varies per layer.
+    await expect
+      .poll(
+        async () => {
+          const cls = (await layerPill(page, key).getAttribute('class')) ?? '';
+          return cls.split(/\s+/);
+        },
+        { message: `layer ${key} status`, timeout: FIRE3D_STAMP_TIMEOUT_MS }
+      )
+      .toContain(status);
   }
 
   for (const [selector, count] of Object.entries(

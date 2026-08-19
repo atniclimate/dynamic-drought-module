@@ -13,11 +13,8 @@ import {
   FBFM40_PRESENTATION,
   FUELS_DRAPE_OPACITY,
   HMS_VOLUME_QUALIFICATION,
-  POWER_LINES_QUALIFICATION,
-  POWER_SHARED_QUALIFICATION,
   STRUCTURES_QUALIFICATION
 } from '../src/config/wildfire-presentation';
-import { activateContextLayers } from '../src/map/fire3d-context';
 import {
   getFire3DStatus,
   setFire3DActive,
@@ -208,25 +205,6 @@ function stubFuelsCorruptFetch(): () => void {
   };
 }
 
-/** Fuels healthy; BOTH power sources fail (corrupt lines archive, an
- * error-shaped plants response). */
-function stubPowerDeadFetch(): () => void {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async (input: RequestInfo | URL) => {
-    const url = String(input);
-    if (url.includes('power-lines')) {
-      return new Response('<html>not tiles</html>', { status: 200 });
-    }
-    if (url.includes('Power_Plants_in_the_US')) {
-      return new Response('<html>service down</html>', { status: 503 });
-    }
-    return new Response(PMTILES_V3_HEADER_PREFIX, { status: 206 });
-  }) as typeof fetch;
-  return () => {
-    globalThis.fetch = originalFetch;
-  };
-}
-
 test('activation builds terrain, sky, camera, and the smoke volume; deactivation restores everything', async () => {
   const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
   const restoreFetch = stubPmtilesFetch();
@@ -284,11 +262,10 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
 
     // W-CTX: the fuels drape rides the context chunk over its bundled
     // archive, at the ruled condition-surface position below the smoke.
-    expect(getFire3DStatus().contextLayers).toEqual([
-      'fuels',
-      'power',
-      'structures'
-    ]);
+    // Power infrastructure left this list on 2026-08-19: it is a catalog
+    // layer now, off by default, and this orchestrator only reports it when
+    // a person has turned it on (tests/power-layer.spec.ts owns its truth).
+    expect(getFire3DStatus().contextLayers).toEqual(['fuels', 'structures']);
     expect(harness.sources.get('fuels-fbfm40')).toMatchObject({
       type: 'raster',
       tileSize: 512
@@ -302,32 +279,10 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
       harness.layerOrder.indexOf('hms-smoke-fill')
     );
 
-    // The power context: baked lines plus the live-stubbed plants, seated
-    // between the drape and the event overlays.
-    expect(harness.layerSpecs.get('power-lines')).toMatchObject({
-      type: 'line',
-      source: 'power-lines'
-    });
-    // Unknown voltage class rides its own dashed layer so missing issuer
-    // data never reads as a definite low-voltage line.
-    expect(harness.layerSpecs.get('power-lines-unknown')).toMatchObject({
-      type: 'line',
-      source: 'power-lines',
-      paint: { 'line-dasharray': [2, 2] }
-    });
-    expect(harness.sources.get('power-plants')).toMatchObject({
-      type: 'geojson'
-    });
-    expect(harness.layerSpecs.get('power-plants')).toMatchObject({
-      type: 'circle',
-      source: 'power-plants'
-    });
-    expect(harness.layerOrder.indexOf('power-lines')).toBeGreaterThan(
-      harness.layerOrder.indexOf('fuels-fbfm40')
-    );
-    expect(harness.layerOrder.indexOf('power-lines')).toBeLessThan(
-      harness.layerOrder.indexOf('hms-smoke-fill')
-    );
+    // The 3D scene must not bring power up on its own any more: the
+    // catalog toggle is the one decision, and it is off here.
+    expect(harness.sources.has('power-lines')).toBe(false);
+    expect(harness.sources.has('power-plants')).toBe(false);
 
     // Structures: one source, two extrusion layers splitting published
     // heights from disclosed placeholders, seated with the context
@@ -347,8 +302,8 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
       source: 'structures-3d',
       filter: ['!', ['has', 'h']]
     });
-    expect(harness.layerOrder.indexOf('structures-3d')).toBeLessThan(
-      harness.layerOrder.indexOf('power-lines')
+    expect(harness.layerOrder.indexOf('structures-3d')).toBeGreaterThan(
+      harness.layerOrder.indexOf('fuels-fbfm40')
     );
     expect(harness.layerOrder.indexOf('structures-3d-est')).toBeLessThan(
       harness.layerOrder.indexOf('hms-smoke-fill')
@@ -465,48 +420,14 @@ test('a corrupt fuels archive degrades only the drape; the scene stays active', 
     // Terrain succeeded; the fuels drape alone degraded, with no partial
     // fuels state left on the map, while the other context stayed.
     expect(harness.getTerrain()).not.toBeNull();
-    expect(getFire3DStatus().contextLayers).toEqual(['power', 'structures']);
+    expect(getFire3DStatus().contextLayers).toEqual(['structures']);
     expect(harness.sources.has('fuels-fbfm40')).toBe(false);
     expect(harness.layerSpecs.has('fuels-fbfm40')).toBe(false);
-    expect(harness.layerSpecs.has('power-lines')).toBe(true);
+    expect(harness.layerSpecs.has('structures-3d')).toBe(true);
   } finally {
     setFire3DActive(map, false);
     setFire3DPreference(false);
     restoreFetch();
-    browser.restore();
-  }
-});
-
-test('a partial power activation composes a truthful embed line (plants only)', async () => {
-  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
-  // Fuels and the lines archive are corrupt; only the live plants read
-  // succeeds: the embed disclosure may name ONLY the plants.
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async (input: RequestInfo | URL) => {
-    const url = String(input);
-    if (url.includes('Power_Plants_in_the_US')) {
-      return new Response(JSON.stringify(PLANTS_STUB_FC), { status: 200 });
-    }
-    return new Response('<html>not tiles</html>', { status: 200 });
-  }) as typeof fetch;
-  const harness = fakeMapHarness({ pitch: 0, bearing: 0 });
-
-  try {
-    const controller = new AbortController();
-    const activation = await activateContextLayers(
-      harness.map,
-      controller.signal
-    );
-    expect(activation.keys).toEqual(['power']);
-    expect(activation.embedLines).toHaveLength(1);
-    expect(activation.embedLines[0]).toContain(
-      'EIA power plants (reporting period 2025-02)'
-    );
-    expect(activation.embedLines[0]).not.toContain('HIFLD');
-    expect(harness.layerSpecs.has('power-plants')).toBe(true);
-    expect(harness.layerSpecs.has('power-lines')).toBe(false);
-  } finally {
-    globalThis.fetch = originalFetch;
     browser.restore();
   }
 });
@@ -531,7 +452,7 @@ test('a corrupt structures archive degrades only the buildings; the rest stays',
     setFire3DActive(map, true);
     await expect.poll(() => getFire3DStatus().state).toBe('active');
 
-    expect(getFire3DStatus().contextLayers).toEqual(['fuels', 'power']);
+    expect(getFire3DStatus().contextLayers).toEqual(['fuels']);
     expect(harness.sources.has('structures-3d')).toBe(false);
     expect(harness.layerSpecs.has('structures-3d')).toBe(false);
     expect(harness.layerSpecs.has('structures-3d-est')).toBe(false);
@@ -539,30 +460,6 @@ test('a corrupt structures archive degrades only the buildings; the rest stays',
     setFire3DActive(map, false);
     setFire3DPreference(false);
     globalThis.fetch = originalFetch;
-    browser.restore();
-  }
-});
-
-test('a dead power pair degrades only the power context; fuels stays', async () => {
-  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
-  const restoreFetch = stubPowerDeadFetch();
-  const harness = fakeMapHarness({ pitch: 0, bearing: 0 });
-  const { map } = harness;
-
-  try {
-    setFire3DActive(map, true);
-    await expect.poll(() => getFire3DStatus().state).toBe('active');
-
-    expect(getFire3DStatus().contextLayers).toEqual(['fuels', 'structures']);
-    expect(harness.layerSpecs.has('fuels-fbfm40')).toBe(true);
-    expect(harness.sources.has('power-lines')).toBe(false);
-    expect(harness.sources.has('power-plants')).toBe(false);
-    expect(harness.layerSpecs.has('power-lines')).toBe(false);
-    expect(harness.layerSpecs.has('power-plants')).toBe(false);
-  } finally {
-    setFire3DActive(map, false);
-    setFire3DPreference(false);
-    restoreFetch();
     browser.restore();
   }
 });
@@ -701,11 +598,13 @@ test.describe('W3/W4 browser truth', () => {
       .poll(() => volumeLegend.textContent())
       .toContain(HMS_VOLUME_QUALIFICATION);
 
-    // W-CTX: all three context layers activated; each legend carries its
-    // issuer palette or caveat qualification.
+    // The context layers this mode OWNS activated, each with its issuer
+    // palette or caveat qualification. Power is not among them since
+    // 2026-08-19: it is a catalog layer, off unless someone asks for it,
+    // and its legend must not appear while it is off.
     await expect
       .poll(() => fire3dContextStamp(page), { timeout: 30_000 })
-      .toBe('fuels power structures');
+      .toBe('fuels structures');
     const fuelsLegend = page.locator(
       '.legend-section[data-legend="fuels-fbfm40"]'
     );
@@ -716,16 +615,7 @@ test.describe('W3/W4 browser truth', () => {
     const powerLegend = page.locator(
       '.legend-section[data-legend="power-context"]'
     );
-    await expect(powerLegend).toHaveCount(1);
-    await expect
-      .poll(() => powerLegend.textContent())
-      .toContain(POWER_LINES_QUALIFICATION);
-    await expect
-      .poll(() => powerLegend.textContent())
-      .toContain(POWER_SHARED_QUALIFICATION);
-    await expect
-      .poll(() => powerLegend.textContent())
-      .toContain('reporting period 2025-02');
+    await expect(powerLegend).toHaveCount(0);
     const structuresLegend = page.locator(
       '.legend-section[data-legend="structures-3d"]'
     );
@@ -754,7 +644,7 @@ test.describe('W3/W4 browser truth', () => {
       `[fire3d-budget] fuels archive transport: ${fuelsBytes} bytes over ${fuelsRequests} requests`
     );
     console.log(
-      `[fire3d-budget] power-lines archive transport: ${powerBytes} bytes over ${powerRequests} requests (the live EIA plants read is stubbed here; its real measure is 174,970 raw bytes in one request, probed 2026-08-18)`
+      `[fire3d-budget] power-lines archive transport: ${powerBytes} bytes over ${powerRequests} requests (ZERO is the expected reading since 2026-08-19: power is a catalog layer, off by default, so the 3D scene no longer pulls it. Its own budget row lives under the power-infrastructure feature in scripts/check-activation-budget.mjs)`
     );
     console.log(
       `[fire3d-budget] structures archive transport: ${structuresBytes} bytes over ${structuresRequests} requests (z13-14 tiles load only when zoomed into the pilot area; this view measures the activation-time header and directory reads)`
@@ -789,8 +679,14 @@ test.describe('W3/W4 browser truth', () => {
     await page
       .locator('#region-select')
       .selectOption('region:central_oregon', { force: true });
+    // 20 s, not the default 10: the write itself is synchronous, but the
+    // gesture competes with terrain tile work on the software renderer, and
+    // a starved frame should not be what decides a URL contract. The same
+    // budget is used for the URL assertions in the view-contract matrix.
     await expect
-      .poll(async () => new URLSearchParams(await search(page)).get('region'))
+      .poll(async () => new URLSearchParams(await search(page)).get('region'), {
+        timeout: 20_000
+      })
       .toBe('central_oregon');
     expect(await search(page)).toContain('fire3d=true');
   });
@@ -842,13 +738,13 @@ test.describe('W3/W4 browser truth', () => {
       .toContain('LANDFIRE 2024');
     await expect
       .poll(() => embedNote.textContent())
-      .toContain('HIFLD transmission lines');
-    await expect
-      .poll(() => embedNote.textContent())
-      .toContain('reporting period 2025-02');
-    await expect
-      .poll(() => embedNote.textContent())
       .toContain('Overture footprints');
+    // ...and it describes ONLY what rendered. Power infrastructure is a
+    // catalog layer since 2026-08-19 and is off in this embed, so the chip
+    // must not claim a grid the viewer cannot see.
+    await expect
+      .poll(() => embedNote.textContent())
+      .not.toContain('HIFLD transmission lines');
     await page.screenshot({
       path: 'fire3d-evidence/fire3d-embed-disclosure.png'
     });
