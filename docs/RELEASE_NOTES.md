@@ -8,6 +8,31 @@ through the normal Pages workflow. Repository release tags currently stop at
 `v0.6.23`; neither the August 13 nor August 18 refinement assigned a new tag
 or package version.
 
+### 2026-08-19: a cross-view contract net for the shell
+
+[Pull request 17](https://github.com/atniclimate/dynamic-drought-module/pull/17)
+added `tests/view-contracts.yaml` and its runner: a matrix of view
+transitions asserting what must stay true as a person moves between the
+views, rather than what each view does in isolation.
+
+- Each row is a start URL, an ordered walk (commit a cluster, enter 3D,
+  jump a region, reload), and the invariants that must hold at the end:
+  URL parameters, which hazard button reads pressed, the document-element
+  3D stamps, catalog checkbox state, and chrome presence. Everything
+  asserted is production-observable, so the rows bind to the deployed
+  artifact.
+- The first nine rows caught one belief that was wrong: a granular
+  `?layers=` deep link commits no cluster at all. The display is
+  `custom` and every hazard button reads unpressed, which is the honest
+  chrome for a URL that never claimed a view. The row records the real
+  contract.
+- The wildfire upstream stubs moved into `tests/wildfire-fixtures.ts`
+  so the 3D mode spec and the contract matrix drive one hermetic world.
+  No dependency was added.
+
+Validation: `npm run gate` clean; the 3D mode spec and the new matrix
+ran 29 passed at one worker, real exit 0.
+
 ### 2026-08-19: Overture building structures pilot for the 3D Fire view
 
 [Pull request 15](https://github.com/atniclimate/dynamic-drought-module/pull/15)
