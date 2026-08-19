@@ -24,6 +24,7 @@ import type maplibregl from 'maplibre-gl';
 
 import {
   HMS_DENSITY_PRESENTATION,
+  HMS_VOLUME_HEIGHTS,
   HMS_VOLUME_QUALIFICATION,
   buildHmsSmokeVolumePaint
 } from '../config/wildfire-presentation';
@@ -75,22 +76,26 @@ export function activateSmokeVolume(map: maplibregl.Map): boolean {
       renderSwatchLegend(
         body,
         'Smoke volume (3D view)',
+        // Heights are read from the SAME derived table the extrusion paint
+        // uses, so the legend cannot describe a rise the map is not
+        // drawing. They were hand-typed literals in both places until
+        // 2026-08-19.
         [
           {
             color: HMS_DENSITY_PRESENTATION.Light.color,
-            label: 'Light smoke (stylized 320 m rise)'
+            label: `Light smoke (stylized ${HMS_VOLUME_HEIGHTS.Light} m rise)`
           },
           {
             color: HMS_DENSITY_PRESENTATION.Medium.color,
-            label: 'Medium smoke (stylized 680 m rise)'
+            label: `Medium smoke (stylized ${HMS_VOLUME_HEIGHTS.Medium} m rise)`
           },
           {
             color: HMS_DENSITY_PRESENTATION.Heavy.color,
-            label: 'Heavy smoke (stylized 1320 m rise)'
+            label: `Heavy smoke (stylized ${HMS_VOLUME_HEIGHTS.Heavy} m rise)`
           },
           {
             color: HMS_DENSITY_PRESENTATION.Unknown.color,
-            label: 'Unclassified smoke density (stylized 480 m rise)'
+            label: `Unclassified smoke density (stylized ${HMS_VOLUME_HEIGHTS.Unknown} m rise)`
           }
         ],
         HMS_VOLUME_QUALIFICATION

@@ -8,6 +8,33 @@ through the normal Pages workflow. Repository release tags currently stop at
 `v0.6.23`; neither the August 13 nor August 18 refinement assigned a new tag
 or package version.
 
+### 2026-08-19: the smoke volume gets height, and an empty sky gets a sentence
+
+[Pull request 23](https://github.com/atniclimate/dynamic-drought-module/pull/23)
+answered the owner's report that volumetric smoke "doesn't seem to work".
+It was working. Two separate things made it unreadable, and both are fixed.
+
+- When the issuer returns no plumes, which is an ordinary correct answer
+  from a daytime satellite analysis product, the 3D control now says so
+  directly instead of leaving the sidebar pill to carry it several
+  sections away. The line is derived from the smoke layer's own status, so
+  the two surfaces cannot disagree.
+- The stylized extrusion heights rose from 320 / 680 / 1320 m to
+  800 / 1700 / 3300 m. The reason is measured, not assumed: 25 live plumes
+  in the Pacific Northwest averaged 205 to 635 km across, so a Heavy plume
+  was a 278:1 sheet standing about 18 percent as tall as the apparent
+  terrain relief it had to read against. It now stands about 46 percent,
+  and still below the highest terrain, so a stylized density encoding
+  never towers over real mountains.
+- The heights are now derived once from the scale and the veil opacities
+  rather than hand-typed in the paint and again in the legend, so a future
+  scale change cannot leave the legend describing a rise the map is not
+  drawing. The qualification is unchanged and still refuses the
+  measurement reading.
+
+Validation: `npm run gate` clean; the 3D mode and wildfire-semantics
+specs green at one worker.
+
 ### 2026-08-19: the 3D scene drapes hazard instead of fuel models
 
 [Pull request 22](https://github.com/atniclimate/dynamic-drought-module/pull/22)

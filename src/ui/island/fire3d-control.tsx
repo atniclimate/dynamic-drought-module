@@ -11,9 +11,12 @@
  * The button mirrors the PREFERENCE (the user's durable ask, aria-pressed
  * flips with the click); the status line underneath tells the honest truth
  * about the scene (checking, active with or without the smoke volume,
- * unavailable with the reason). The coverage note renders whenever the
- * control does: the terrain bake is Pacific Northwest only and the control
- * must never imply national relief.
+ * unavailable with the reason), and since 2026-08-19 a fourth line
+ * appears when the smoke volume is on and the issuer returned no plumes,
+ * so an empty sky reads as an answer instead of a broken feature. The
+ * coverage note renders whenever the control does: the terrain bake is
+ * Pacific Northwest only and the control must never imply national
+ * relief.
  *
  * Chunk discipline: only TYPES are imported from the fire3d orchestrator
  * (erased at build), so this island never pulls the 3D chunk statically;
@@ -35,6 +38,10 @@ import {
   onFire3DPreferenceChange,
   setFire3DPreference
 } from '../../state/fire3d-store';
+import { registry } from '../../state/registry';
+
+/** The catalog key whose emptiness the 3D control reports. */
+const HMS_SMOKE_LAYER_KEY = 'hms-smoke';
 
 function statusLine(status: Fire3DStatus | null): string {
   if (status === null) return '';
@@ -52,6 +59,29 @@ function statusLine(status: Fire3DStatus | null): string {
   }
 }
 
+/**
+ * The empty-smoke line (owner report, 2026-08-19: volumetric smoke
+ * "doesn't seem to work").
+ *
+ * One of the two things that report could mean is that HMS genuinely had
+ * no plumes in view at that hour, which is an ordinary and correct answer
+ * from a daytime satellite analysis product. The catalog pill said so, in
+ * the sidebar, in small type, several sections away from the 3D control a
+ * person was looking at. So the scene said "Active: terrain relief with
+ * the smoke volume" while there was no smoke to have volume, and the
+ * absence read as a broken feature instead of an answer.
+ *
+ * This line puts the answer where the question is. It is derived from the
+ * layer's own registry status rather than from a second source of truth,
+ * so it can never disagree with the pill.
+ */
+function emptySmokeLine(status: Fire3DStatus | null, smokeStatus: string | undefined): string {
+  if (status?.state !== 'active' || !status.smokeVolume) return '';
+  return smokeStatus === 'no-data'
+    ? 'No current smoke plumes in view; the issuer returned none for this area.'
+    : '';
+}
+
 export function Fire3DControl({
   cluster
 }: {
@@ -62,6 +92,9 @@ export function Fire3DControl({
   );
   const [preference, setPreference] = useState<boolean>(getFire3DPreference);
   const [status, setStatus] = useState<Fire3DStatus | null>(null);
+  const [smokeStatus, setSmokeStatus] = useState<string | undefined>(() =>
+    registry.getStatus(HMS_SMOKE_LAYER_KEY)
+  );
 
   useEffect(() => {
     const query = window.matchMedia(FIRE3D_MIN_WIDTH_QUERY);
@@ -78,6 +111,18 @@ export function Fire3DControl({
     () =>
       onFire3DPreferenceChange(() => {
         setPreference(getFire3DPreference());
+      }),
+    []
+  );
+
+  // The smoke layer's own status is the single source for the empty-smoke
+  // line, so the 3D control and the catalog pill can never disagree about
+  // whether the issuer returned anything.
+  useEffect(
+    () =>
+      registry.on('status-change', (key) => {
+        if (key !== HMS_SMOKE_LAYER_KEY) return;
+        setSmokeStatus(registry.getStatus(HMS_SMOKE_LAYER_KEY));
       }),
     []
   );
@@ -123,6 +168,11 @@ export function Fire3DControl({
       >
         {statusLine(status)}
       </p>
+      {emptySmokeLine(status, smokeStatus) ? (
+        <p class="shell-fire3d-empty" data-fire3d-empty-smoke>
+          {emptySmokeLine(status, smokeStatus)}
+        </p>
+      ) : null}
       <p class="shell-fire3d-note">{FIRE3D_COVERAGE_NOTE}</p>
       {/* The non-prediction disclosure renders whenever the control does
           (never a dismissible tooltip): viewers over-trust fire visuals,
