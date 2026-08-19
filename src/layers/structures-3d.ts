@@ -108,7 +108,9 @@ export async function activateStructures(
   }
 
   showLegend(LEGEND_KEY, {
-    order: LEGEND_ORDER.event + 5,
+    // After the stations slot: the event band is full (smoke volume at
+    // +3, power at +4) and event+5 would collide with LEGEND_ORDER.stations.
+    order: LEGEND_ORDER.stations + 1,
     render: (body) =>
       renderSwatchLegend(
         body,

@@ -67,7 +67,7 @@ export const FIRE3D_SKY_CLEAR_SPECIFICATION: maplibregl.SkySpecification = {
  * mode must not imply national relief.
  */
 export const FIRE3D_COVERAGE_NOTE =
-  'Terrain relief covers the Pacific Northwest data bake; outside it the ground renders flat. Structures cover the central Oregon pilot bake only.';
+  'Terrain relief covers the Pacific Northwest data bake; outside it the ground renders flat. Bundled structure data covers the central Oregon pilot area only, from zoom 13.';
 
 /**
  * Always-visible non-prediction disclosure for the 3D view and its context

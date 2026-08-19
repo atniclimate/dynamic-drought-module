@@ -51,8 +51,9 @@ export interface Fire3DContextActivation {
 const FUELS_EMBED_LINE =
   'Fuel colors: LANDFIRE 2024 fuel model classes, a translucent static snapshot at reduced resolution.';
 
-const STRUCTURES_EMBED_LINE =
-  'Buildings: Overture footprints (ODbL), central Oregon pilot bake only; dimmer buildings draw at a disclosed placeholder height.';
+/** Exported for the disclosure cross-gate test beside the archive. */
+export const STRUCTURES_EMBED_LINE =
+  'Buildings: Overture footprints (ODbL), central Oregon pilot bake only, drawn from zoom 13; dimmer buildings draw at a disclosed placeholder height.';
 
 /** Compose the power embed line from the surfaces actually in the scene. */
 export function buildPowerEmbedLine(state: PowerContextState): string {

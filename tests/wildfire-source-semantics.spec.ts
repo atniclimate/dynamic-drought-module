@@ -51,6 +51,8 @@ import {
   cancelActivation as cancelSpc,
   deactivate as deactivateSpc
 } from '../src/layers/spc-fire-weather';
+import { FIRE3D_COVERAGE_NOTE } from '../src/config/fire3d-presentation';
+import { STRUCTURES_EMBED_LINE } from '../src/map/fire3d-context';
 import { registry } from '../src/state/registry';
 import {
   buildFireKey,
@@ -635,6 +637,38 @@ test('the power context maps issuer voltage classes to width only, with the arch
   expect(POWER_SHARED_QUALIFICATION).toMatch(
     /substations and distribution lines have no authoritative public national source/i
   );
+});
+
+test('the committed structures archive and every in-app disclosure agree on release, share, and region', async () => {
+  // The archive's own attribution (written by the bake from the extract's
+  // provenance sidecar) is the ground truth; the UI constants may never
+  // drift from it, or the legend misdescribes the artifact.
+  const { readFileSync } = await import('node:fs');
+  const { PMTiles } = await import('pmtiles');
+  const bytes = readFileSync('public/data/structures-central-oregon.pmtiles');
+  const reader = new PMTiles({
+    getKey: () => 'test',
+    getBytes: async (offset: number, length: number) => {
+      const slice = bytes.subarray(offset, offset + length);
+      return {
+        data: slice.buffer.slice(slice.byteOffset, slice.byteOffset + slice.byteLength)
+      };
+    }
+  });
+  const meta = (await reader.getMetadata()) as { attribution: string };
+  const attribution = meta.attribution;
+
+  const release = /release (\d{4}-\d{2}-\d{2}\.\d+)/.exec(attribution)?.[1];
+  const share = /(\d+)% of footprints/.exec(attribution)?.[1];
+  expect(release).toBeTruthy();
+  expect(share).toBeTruthy();
+  expect(attribution).toContain('central Oregon pilot coverage only');
+
+  expect(STRUCTURES_QUALIFICATION).toContain(`release ${release}`);
+  expect(STRUCTURES_QUALIFICATION).toContain(`${share} percent`);
+  expect(STRUCTURES_QUALIFICATION).toMatch(/central Oregon pilot coverage only/i);
+  expect(FIRE3D_COVERAGE_NOTE).toMatch(/central Oregon/);
+  expect(STRUCTURES_EMBED_LINE).toMatch(/central Oregon/);
 });
 
 test('the structures context separates published heights from disclosed placeholders', () => {

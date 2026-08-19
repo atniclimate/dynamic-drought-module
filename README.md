@@ -298,10 +298,12 @@ theme (ODbL), extruded over the terrain from zoom 13: footprints with an
 issuer-published height rise to it, and the rest draw in a visibly
 dimmer tone at a disclosed placeholder height. The committed bake covers
 the central Oregon region framing only; a full Pacific Northwest bake
-measured roughly 240 MB of tiles (9.16 million footprints) and cannot
-ride the same-origin hosting path, so the extract script's `--bbox`
-parameter is the documented route for a deployer to bake their own
-region (see `public/data/README.md`).
+was projected from the measured per-building tile rate at roughly
+240 MB for z14-only tiles (about 380 MB at the shipped z13-14 scheme,
+9.16 million footprints either way) and cannot ride the same-origin
+hosting path, so the extract script's `--bbox` parameter is the
+documented route for a deployer to bake their own region (see
+`public/data/README.md`).
 
 The view is a 3D context view, deliberately not a "digital twin": that
 phrase is a term of art for systems that bundle physics-based fire

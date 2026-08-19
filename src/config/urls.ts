@@ -837,8 +837,10 @@ export const URLS = Object.freeze({
   // scripts/extract-overture-buildings.py and baked by
   // scripts/build-structures-tiles.mjs (`npm run build:structures-tiles`).
   // The committed default covers the central_oregon region framing only
-  // (a full-PNW bake measured roughly 240 MB and was rejected; the extract
-  // script's --bbox parameter is the deployer path for other regions).
+  // (a full-PNW bake was PROJECTED at roughly 240 MB for z14-only tiles,
+  // about 380 MB at the shipped z13-14 scheme, from the measured
+  // per-building rate, and rejected; the extract script's --bbox
+  // parameter is the deployer path for other regions).
   // z13-14 vector tiles; loaded only while the 3D Fire mode is active.
   structuresPmtilesLocal: BASE_URL + 'data/structures-central-oregon.pmtiles',
   tribalLandsLocal: BASE_URL + 'data/tribal-lands.geojson',

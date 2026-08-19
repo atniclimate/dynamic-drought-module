@@ -351,13 +351,17 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     expect(harness.sources.get('structures-3d')).toMatchObject({
       type: 'vector'
     });
+    // The height-honesty split is load-bearing: published heights and
+    // placeholders may never share a layer, so the filters are pinned.
     expect(harness.layerSpecs.get('structures-3d')).toMatchObject({
       type: 'fill-extrusion',
-      source: 'structures-3d'
+      source: 'structures-3d',
+      filter: ['has', 'h']
     });
     expect(harness.layerSpecs.get('structures-3d-est')).toMatchObject({
       type: 'fill-extrusion',
-      source: 'structures-3d'
+      source: 'structures-3d',
+      filter: ['!', ['has', 'h']]
     });
     expect(harness.layerOrder.indexOf('structures-3d')).toBeLessThan(
       harness.layerOrder.indexOf('power-lines')
@@ -738,6 +742,8 @@ test.describe('W3/W4 browser truth', () => {
     let fuelsRequests = 0;
     let powerBytes = 0;
     let powerRequests = 0;
+    let structuresBytes = 0;
+    let structuresRequests = 0;
     page.on('response', (response) => {
       const url = response.url();
       const length = Number(response.headers()['content-length']);
@@ -750,6 +756,9 @@ test.describe('W3/W4 browser truth', () => {
       } else if (url.includes('power-lines-pnw.pmtiles')) {
         powerRequests += 1;
         if (Number.isFinite(length)) powerBytes += length;
+      } else if (url.includes('structures-central-oregon.pmtiles')) {
+        structuresRequests += 1;
+        if (Number.isFinite(length)) structuresBytes += length;
       }
     });
 
@@ -843,6 +852,9 @@ test.describe('W3/W4 browser truth', () => {
     );
     console.log(
       `[fire3d-budget] power-lines archive transport: ${powerBytes} bytes over ${powerRequests} requests (the live EIA plants read is stubbed here; its real measure is 174,970 raw bytes in one request, probed 2026-08-18)`
+    );
+    console.log(
+      `[fire3d-budget] structures archive transport: ${structuresBytes} bytes over ${structuresRequests} requests (z13-14 tiles load only when zoomed into the pilot area; this view measures the activation-time header and directory reads)`
     );
 
     // Toggle off: the flat scene returns and the flag drops.

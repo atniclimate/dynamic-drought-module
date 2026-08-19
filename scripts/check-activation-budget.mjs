@@ -348,7 +348,7 @@ const FEATURE_BUDGETS = [
   },
   {
     key: 'fire3d-mode',
-    label: 'Desktop 3D Fire mode: terrain + camera + sky orchestrator, the volumetric smoke companion, and the issuer-published context chunk with the fuels drape, power context, and structures pilot (archive transport at 1280x720 measured 2,278,573 terrain bytes over 19 ranged requests, 1,215,252 fuels-drape bytes over 11, and 159,819 transmission-line bytes over 10, plus one live EIA plants read probed at 174,970 raw bytes; the z13-14 structures archive adds header and directory reads at activation and tile reads only when zoomed into the pilot area; the smoke and context roots are reached via dynamic import from the first root and are invisible to the static closure walk, so ALL roots are declared)',
+    label: 'Desktop 3D Fire mode: terrain + camera + sky orchestrator, the volumetric smoke companion, and the issuer-published context chunk with the fuels drape, power context, and structures pilot (archive transport at 1280x720 measured 2,278,573 terrain bytes over 19 ranged requests, 1,215,252 fuels-drape bytes over 11, and 159,819 transmission-line bytes over 10, plus one live EIA plants read probed at 174,970 raw bytes; the z13-14 structures archive measured 16,512 activation-time bytes over 2 ranged reads with tile reads only when zoomed into the pilot area; the smoke and context roots are reached via dynamic import from the first root and are invisible to the static closure walk, so ALL roots are declared)',
     rootModules: ['src/map/fire3d.ts', 'src/layers/hms-smoke-volume.ts', 'src/map/fire3d-context.ts'],
     activationJsGzipKb: 10.0,
     networkBytes: 4_800_000,

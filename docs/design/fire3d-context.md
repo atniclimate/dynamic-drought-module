@@ -98,8 +98,10 @@ footprints (ODbL), chosen over Microsoft's standalone footprint sets
 because Overture fuses them with OpenStreetMap and carries real height
 attributes largely derived from public USGS 3DEP lidar. Scope is the
 run's recorded fork: the full PNW terrain box holds 9,160,813 footprints,
-roughly 240 MB of z14 vector tiles at the empirically measured 26 bytes
-per building, which no same-origin Pages path can carry; the committed
+PROJECTED (never baked) at roughly 240 MB of z14-only vector tiles from
+the empirically measured 26 bytes per building, and roughly 380 MB at
+the shipped z13-14 scheme's measured 42 bytes per building; neither fits
+any same-origin Pages path. The committed
 bake therefore covers the central_oregon region framing only, the
 coverage note and legend both say so, and the extract script's --bbox
 parameter is the deployer path for any other region (the losing
