@@ -63,7 +63,16 @@ export const CANDIDATE_SOURCE_KEYS = new Set([
   'epaAirNowCurrentFeatureServer',
   'nifcHistoricPerimetersFeatureServer',
   'usgsVegdriWeeklyWms',
-  'usgsQuickdriWeeklyWms'
+  'usgsQuickdriWeeklyWms',
+  // Demoted from build to candidate 2026-08-19: the FBFM40 fuel-model
+  // drape was replaced in the 3D scene by the USFS Wildfire Hazard
+  // Potential drape (owner direction), and its archive left the working
+  // tree. scripts/build-fuels-tiles.mjs stays as the restore path, so the
+  // pin is still worth WATCHING, but a vanished upstream for a layer
+  // nothing renders must not fail a build. The live bake pin that DOES
+  // block is the WHP ImageServer, already probed at runtime tier through
+  // the `usfsWhp` endpoint the flat layer shares.
+  'fuelsFbfm40Release'
 ]);
 
 export const BUILD_SOURCE_KEYS = new Set([
@@ -73,8 +82,7 @@ export const BUILD_SOURCE_KEYS = new Set([
   'landscapeNlcdPinnedTime',
   'landscapeWhpEdition4Zip',
   'landscapeWhpDoi',
-  'landscapeSoilVintage',
-  'fuelsFbfm40Release'
+  'landscapeSoilVintage'
 ]);
 
 export function sourceTierForKey(key) {
@@ -97,10 +105,12 @@ const LANDSCAPE_PROBES = [
     url: 'https://lfps.usgs.gov/arcgis/rest/services?f=pjson'
   },
   {
-    // The 3D Fire fuels drape bake pin (scripts/build-fuels-tiles.mjs):
+    // The RETIRED fuels drape's bake pin (scripts/build-fuels-tiles.mjs):
     // LF2024 FBFM40 CONUS, the newest complete-CONUS vintage as of
     // 2026-08-18 (LF2025 is a phased GeoArea release through December
-    // 2026). Pinned disappearance is a build failure.
+    // 2026). Candidate tier since 2026-08-19: the drape it fed no longer
+    // ships, so a disappearance here is a warning and a review trigger,
+    // not a build failure.
     key: 'fuelsFbfm40Release',
     url:
       'https://lfps.usgs.gov/arcgis/rest/services/Landfire_LF2024/' +

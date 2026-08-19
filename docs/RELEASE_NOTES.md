@@ -8,6 +8,39 @@ through the normal Pages workflow. Repository release tags currently stop at
 `v0.6.23`; neither the August 13 nor August 18 refinement assigned a new tag
 or package version.
 
+### 2026-08-19: the 3D scene drapes hazard instead of fuel models
+
+[Pull request 22](https://github.com/atniclimate/dynamic-drought-module/pull/22)
+answered the owner's request for "only the yellow through red colors to
+indicate risk" by changing the issuer rather than the colors.
+
+- The LANDFIRE FBFM40 fuel-model drape left the 3D Fire scene, replaced by
+  USFS Wildfire Hazard Potential 2023 from the same service the flat
+  `usfs-whp` layer already uses. FBFM40 is a fuel-model classification, not
+  a hazard scale, so recoloring its 44 classes into a risk ramp would have
+  fabricated a claim its issuer never made. WHP already publishes a
+  green-through-red hazard scale; a central Oregon sample measured 86
+  percent of pixels in the yellow, orange, and red band.
+- The bake found a shipped honesty defect and closed it. The in-app WHP key
+  listed five classes in a ColorBrewer ramp while the service renders seven
+  classes in different colors, so the key described a different image than
+  the map, and the two non-hazard classes (non-burnable land and water)
+  painted pixels with no legend entry at all. The key now mirrors the
+  issuer's own legend, and the bake re-fetches that legend on every run and
+  refuses to build when the two disagree.
+- The drape draws with nearest-neighbor resampling. A categorical raster
+  blended between classes produces colors that appear in no legend, which
+  at the scene's over-zoom would be most of the visible boundary pixels.
+- Deploy weight fell by about 12 MB: the 25.7 MB fuel-model archive left
+  the tree and the 13.6 MB hazard archive replaced it. The fuels builder
+  stays as a restore path, and its upstream drift pin dropped to a warning
+  tier so an unmaintained upstream for an unrendered layer cannot fail a
+  build.
+
+Validation: `npm run gate` clean, including the new archive against its
+16 MB ceiling; the 3D mode, wildfire-semantics, WHP, and view-contract
+specs green at one worker.
+
 ### 2026-08-19: power infrastructure becomes a layer a person can turn on
 
 [Pull request 21](https://github.com/atniclimate/dynamic-drought-module/pull/21)
