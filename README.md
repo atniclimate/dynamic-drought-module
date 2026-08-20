@@ -41,6 +41,15 @@ permission from ATNI Climate with provenance tracking. See `LICENSE`,
 including the additional ATNI permission that covers noncommercial
 self-hosting and data population.
 
+## Current development baseline
+
+The source package remains `0.6.25`. It includes the interface, Fire 3D,
+Wildfire Hazard Potential, structures, power, and smoke-volume refinements
+described below. A merged commit is not by itself proof that the public site is
+running it; the exact source-to-live divergence observed on 2026-08-20 is
+recorded in [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md). The next phased
+work is summarized in [`ROADMAP.md`](ROADMAP.md).
+
 ---
 
 ## What the module shows
@@ -138,6 +147,7 @@ current URL.
 | `horizon` | `weeks-ahead` or `season-ahead` | current |
 | `basemap` | `default` explicitly turns recent satellite imagery off; the legacy `satellite` token remains valid | recent satellite imagery, encoded by absence |
 | `studio` | `layers` or `place` | none |
+| `fire3d` | exact token `true`; entry requires a desktop viewport and the committed Wildfire cluster, while an active scene may remain through a custom layer stack as long as a Fire event layer remains | `false`, encoded by absence |
 
 Temporal display parameters also round-trip (`week` for the USDM archive,
 `dmode`, `sst`, `outlook`, and `heatday`). The authoritative grammar is
@@ -191,10 +201,11 @@ several surfaces resolves deterministically to the first surface named
 | `hms-smoke` | Smoke plumes | event | NOAA HMS FeatureServer (live) |
 | `nws-alerts` | Heat & Fire Weather Alerts | event | NOAA NWS MapServer (live) |
 | `telemetry` | Telemetry Stations | stations | USGS, NRCS, USBR, USACE (live) |
+| `power-infrastructure` | Power Lines & Plants | reference | archived HIFLD transmission lines and live EIA plants, default-off |
 
 (The British Columbia drought-levels surface swaps in for the US Drought
 Monitor inside the `british_columbia` framing; it has no separate layer
-key. Table trued up against the runtime registry on 2026-08-18.)
+key. Table aligned with the runtime registry on 2026-08-20.)
 
 The framing minimap derives its colors from the current monthly
 [North American Drought Monitor](https://www.drought.gov/data-maps-tools/north-american-drought-monitor-nadm).
@@ -281,16 +292,19 @@ the bundled Pacific Northwest USGS 3DEP archive under a pitched camera,
 with the NOAA HMS smoke plumes re-presented as a stylized volume (vertical
 extent encodes the issuer's density class, never measured plume height)
 and issuer-published landscape context draped over the relief. The first
-context layer is the LANDFIRE 2024 Scott and Burgan 40 fuel-model
-classification (FBFM40), baked to a bundled archive with LANDFIRE's own
-class colors at reduced resolution from the 30 m source. Power
-infrastructure context joins it: transmission lines from the ARCHIVED
-federal HIFLD dataset (baked once, last data update 2024-09-30, with
-that currency caveat always in the legend) and live power plants from
-the U.S. Energy Information Administration, labeled with the issuer's
-own reporting period. Substations and distribution lines are absent by
-design: substation locations are withheld by the publishing agencies for
-security reasons, and no authoritative public national
+context layer is USFS Wildfire Hazard Potential 2023, baked to a bundled
+archive with the issuer's categorical colors and nearest-neighbor sampling so
+class boundaries never acquire invented colors. It is a long-term hazard
+context, not an incident forecast.
+
+Power infrastructure is a separate, default-off catalog layer that can be used
+in flat or 3D views. It is not activated automatically by Fire 3D. Its
+transmission lines come from the ARCHIVED federal HIFLD dataset (baked once,
+last data update 2024-09-30, with that currency caveat always in the legend),
+and its live power plants come from the U.S. Energy Information
+Administration, labeled with the issuer's own reporting period. Substations
+and distribution lines are absent: substation locations are withheld by the
+publishing agencies for security reasons, and no authoritative public national
 distribution-circuit dataset exists.
 
 Building structures come from the Overture Maps Foundation buildings
@@ -386,7 +400,10 @@ history is in [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md), and the
 generated coverage record is in
 [`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md). Design-document
 authority and the durable convergence doctrine are in
-[`docs/design/README.md`](docs/design/README.md).
+[`docs/design/README.md`](docs/design/README.md). The public development
+sequence is in [`ROADMAP.md`](ROADMAP.md), its canonical task definitions are
+in [`docs/ROADMAP.yaml`](docs/ROADMAP.yaml), and setup, architecture, layer,
+testing, and release guidance is in [`DEVELOPER.md`](DEVELOPER.md).
 
 ### Dependency overrides
 

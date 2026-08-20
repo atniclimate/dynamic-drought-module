@@ -1,14 +1,15 @@
 # The 3D Fire context view: honesty framing
 
 Durable design doctrine for the desktop 3D Fire mode and the context
-layers draped into it (fuels, and any later structure or infrastructure
-context). This note records naming and disclosure decisions and their
-evidence; the runtime and its tests remain the functional truth.
+layers presented with it: terrain, Wildfire Hazard Potential, smoke, and a
+bounded structures pilot. Power infrastructure remains an independent catalog
+layer. This note records naming and disclosure decisions and their evidence;
+the runtime and its tests remain the functional truth.
 
 ## Show context; never model behavior
 
 The 3D view exists so a person can see mapped fire representations in
-their landscape: relief, fuels, and (in later slices) structures and
+their landscape: relief, long-term hazard, smoke, structures, and optional
 infrastructure, each retaining its own issuer, vintage, and legend. The
 line it must never cross: no DDM-computed spread ellipse, rate of spread,
 flame length, ignition probability, structures-at-risk count,
@@ -85,7 +86,7 @@ continental smear). The orchestrator no longer activates it; it reads
 whether the layer is rendering so the 3D scene's embed disclosure still
 describes exactly what is on screen. The test for whether a companion
 should become a catalog row is that question: does a person have a
-reason to want it separately from the scene? Terrain relief, the fuels
+reason to want it separately from the scene? Terrain relief, the hazard
 drape, and the structures pilot are all answers ABOUT the scene's
 framing. The grid is a thing a person asks about on its own.
 
@@ -159,12 +160,21 @@ publish. Azure and Bing 3D city meshes were disqualified outright
 (API-key-gated commercial services covering curated metros, not the
 rural and Tribal geography this project serves).
 
-The fuels drape specifically: LANDFIRE LF2024 FBFM40, chosen over EVT
-(thousands of classes with no readable legend) and over LF2025 (a phased
-mosaic that renders silent all-black pixels in unreleased GeoAreas until
-December 2026). LANDFIRE's canopy bulk density and canopy base height
-layers are deliberately unused anywhere: LANDFIRE documents them as
-inputs to fire-behavior-prediction systems, and DDM computes nothing
-from fuels data. The bake refuses all-opaque-black tiles (the
-unpopulated-mosaic signature) and proves the issuer palette with a
-canary tile before writing the archive.
+The hazard drape specifically: USFS Wildfire Hazard Potential 2023 from the
+same public service used by the flat `usfs-whp` catalog layer. WHP is a static
+long-term hazard classification, not current fire conditions, a spread model,
+or a forecast. The bundled Pacific Northwest archive carries the issuer's own
+seven categorical classes and its retrieval and vintage metadata. The bake
+fetches and verifies the issuer legend, applies nearest-neighbor resampling,
+and refuses a palette disagreement so boundaries cannot acquire colors the
+issuer never assigned.
+
+The live flat layer wins whenever both versions are eligible. Drawing the
+snapshot drape and live surface together would double one issuer's opacity,
+repeat its legend, and expose the snapshot boundary as a false visual seam.
+The Fire 3D orchestrator watches the catalog layer and removes its own drape
+when the live layer turns on; it restores the drape only after the scene is
+re-entered. The earlier LANDFIRE fuel-model
+drape is retired from the scene because a fuel classification could not
+honestly be recolored as hazard; its builder remains only as an offline restore
+and research path.

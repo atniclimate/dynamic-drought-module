@@ -1,0 +1,1078 @@
+schema_version: 1
+roadmap_id: "ddm-forward-roadmap"
+updated_on: "2026-08-20"
+product:
+  name: "Dynamic Drought Module"
+  short_name: "DDM"
+  package_version: "0.6.25"
+  repository: "https://github.com/atniclimate/dynamic-drought-module"
+  live_site: "https://atniclimate.github.io/dynamic-drought-module/"
+
+purpose: >
+  Define the durable development sequence, phase goals, software components,
+  microtasks, dependencies, decision gates, and acceptance evidence for DDM.
+  This file defines work; it does not duplicate live task status.
+
+authority:
+  owner_direction: >
+    Current written owner direction, annotations, and direct corrections govern
+    product intent for the requested slice.
+  runtime_truth:
+    - "src/config/layers.ts"
+    - "src/config/urls.ts"
+    - "src/state/"
+    - "src/map/"
+    - "src/ui/"
+    - "tests/"
+  design_doctrine: "docs/design/README.md"
+  operational_status:
+    system: "Asana"
+    project_gid: "1216247186784838"
+    rule: >
+      Asana carries assignee, due date, and live completion state. Stable task
+      IDs from this file are included in Asana task names and descriptions.
+  execution_evidence:
+    - "GitHub issues and pull requests"
+    - "ordinary Git history"
+    - "docs/RELEASE_NOTES.md"
+    - "successful validation workflows"
+    - "the deployed application build marker"
+  prohibited_tracking_fields:
+    - "status"
+    - "assignee"
+    - "due_date"
+    - "percent_complete"
+  non_authority:
+    - "Historical artifacts when they disagree with runtime or current owner direction"
+
+plan_rules:
+  - "Work on one bounded user-visible outcome at a time after prerequisite work."
+  - "Do not infer authorization to deploy, tag, merge, or change an external service."
+  - "Do not add a blended drought, fire, smoke, infrastructure, or climate severity score."
+  - "Keep every issuer, clock, geography, limitation, legend, and uncertainty distinct."
+  - "Preserve URL-as-state, embed operation, responsive controls, and static hosting."
+  - "Keep non-trivial network work cancellable and time-bounded through body consumption."
+  - "Preserve loading, live, live (partial), unavailable, no data, and zoom in to load."
+  - "Do not redistribute Tribal, Treaty, or other sovereign-jurisdiction polygons."
+  - "Describe agency Tribal and Treaty polygons as representations, not jurisdictional truth."
+  - "Do not add proprietary providers, credentials, tracking, analytics, or telemetry."
+
+component_catalog:
+  release_delivery:
+    paths:
+      - ".github/workflows/"
+      - "vite.config.ts"
+      - "scripts/check-upstream-drift.mjs"
+      - "workers/proxy/"
+    concerns:
+      - "GitHub Pages"
+      - "Cloudflare Worker"
+      - "build identity"
+      - "CI evidence"
+      - "range-safe static delivery"
+  state_and_lifecycle:
+    paths:
+      - "src/state/"
+      - "src/util/fetch.ts"
+      - "src/config/layers.ts"
+      - "src/types/layer.ts"
+    concerns:
+      - "URL state"
+      - "activation and cancellation"
+      - "status semantics"
+      - "late-response protection"
+  interface:
+    paths:
+      - "src/ui/"
+      - "src/styles/app.css"
+      - "src/config/presets.ts"
+      - "src/config/clusters.ts"
+    concerns:
+      - "desktop, tablet, phone, and embed"
+      - "keyboard and assistive technology"
+      - "reduced motion"
+      - "source and time receipts"
+  map_and_visualization:
+    paths:
+      - "src/map/"
+      - "src/layers/"
+      - "src/config/palette.ts"
+      - "src/config/wildfire-presentation.ts"
+    concerns:
+      - "MapLibre lifecycle"
+      - "layer ordering"
+      - "2D and 3D presentation"
+      - "raster hierarchy"
+      - "accessible legends"
+  impact_and_place:
+    paths:
+      - "src/impact/"
+      - "src/config/capability-matrix.ts"
+      - "src/state/typed-place.ts"
+    concerns:
+      - "selected-place evidence"
+      - "regional coverage"
+      - "ENSO interpretation"
+      - "resource routing"
+  data_pipelines:
+    paths:
+      - "scripts/"
+      - "public/data/"
+    concerns:
+      - "source vetting"
+      - "static artifacts"
+      - "PMTiles"
+      - "snapshot provenance"
+      - "artifact budgets"
+  verification:
+    paths:
+      - "tests/"
+      - "scripts/check-activation-budget.mjs"
+      - "scripts/check-bundle-size.mjs"
+    concerns:
+      - "strict TypeScript"
+      - "deterministic gate"
+      - "targeted browser tests"
+      - "serial release suite"
+      - "live production probes"
+  documentation:
+    paths:
+      - "README.md"
+      - "DEVELOPER.md"
+      - "ROADMAP.md"
+      - "docs/"
+      - "public/data/README.md"
+    concerns:
+      - "public behavior and source qualifications"
+      - "planned scope and dependencies"
+      - "maintainer and release evidence"
+
+completed_foundation:
+  - id: "DDM-B00"
+    name: "Initial v0.6.25 interface-integration publication"
+    completed_on: "2026-08-10"
+    release_family: "0.6.25"
+    outcomes:
+      - "Drought and Wildfire entered one responsive Brief rail."
+      - "URL state, mobile behavior, embeds, sidebar controls, and the six layer states were preserved."
+      - "The governed minimap, recent imagery, and source-fenced Wildfire overview were published."
+    evidence:
+      pull_requests: []
+      commits:
+        - "7b19a9b733c65ed1fe8eeed69427461997fe3f70"
+        - "9c35bbf3c6051433f928fe4f5a0af83acb749ba8"
+  - id: "DDM-B01"
+    name: "Owner-directed desktop and mobile interface convergence"
+    completed_on: "2026-08-18"
+    release_family: "0.6.25"
+    outcomes:
+      - "Answer-first Brief and console views share governed state."
+      - "The phone map uses a bottom sheet, footer doors, and one-hand controls."
+      - "Drought, Wildfire, Heat, ENSO, and satellite quick views are available."
+      - "URL state, share/reset, embeds, keyboard use, and reduced motion are preserved."
+    evidence:
+      pull_requests: [6, 7]
+      commits:
+        - "300703e42cf1ac7b807dd713d6b456b674f711a2"
+        - "eed7967dea2e9f34214794ca158eb65eebc30113"
+  - id: "DDM-B02"
+    name: "Documentation, CI, monitor, and runtime alignment"
+    completed_on: "2026-08-18"
+    release_family: "0.6.25"
+    outcomes:
+      - "Public documentation and runtime contracts were reconciled."
+      - "Validation, snapshot refresh, and upstream monitoring were strengthened."
+      - "Retired interface and source residue was removed."
+    evidence:
+      pull_requests: [8, 9]
+      commits:
+        - "0af49fc79fc848de831a4014b88da3e9778c8cc4"
+        - "dd85795763b87d6b83d0765d90066b7176505ebf"
+  - id: "DDM-B03"
+    name: "Desktop 3D Fire context and cross-view contracts"
+    completed_on: "2026-08-19"
+    release_family: "0.6.25"
+    outcomes:
+      - "Desktop Fire can enter a URL-governed pitched terrain view."
+      - "HMS smoke density classes have a qualified stylized vertical presentation."
+      - "Embeds retain coverage and non-prediction disclosures."
+      - "Cross-view behavior is represented in a data-driven browser contract matrix."
+    evidence:
+      pull_requests: [10, 11, 17]
+      commits:
+        - "567947736b6f2dff4ee3b29832bae5357679b316"
+        - "b1b735934f88e3eee592a7a0bb3c4561b180596a"
+        - "407eb8964976d14fe0c53ccbbf7a5a97c14d4cc0"
+  - id: "DDM-B04"
+    name: "Fire landscape, infrastructure, and structures context"
+    completed_on: "2026-08-19"
+    release_family: "0.6.25"
+    outcomes:
+      - "USFS Wildfire Hazard Potential replaced the visually misleading fuel-model drape."
+      - "Power infrastructure became an independent, off-by-default catalog layer."
+      - "Power plants cluster and power surfaces answer clicks with issuer fields."
+      - "A central Oregon Overture structures pilot distinguishes published and placeholder heights."
+    evidence:
+      pull_requests: [12, 14, 15, 21, 22]
+      commits:
+        - "a6fd8054fbc495e45ce8ff644227eaff21be91e1"
+        - "423ac0cda687ad4c5d9b7fc8816a3804d2d536d1"
+        - "bed62ee1535ebe3518671b9c45e9cf80a69c03f7"
+        - "d7be6cb5c49496cb5124bd89a337c02e84114ced"
+        - "8faa1e759d4736d7c0052afa1d664a14573f040d"
+  - id: "DDM-B05"
+    name: "Owner-reviewed Fire presentation refinements"
+    completed_on: "2026-08-19"
+    release_family: "0.6.25"
+    outcomes:
+      - "Desktop map controls and Fire key occupy the owner-directed seats."
+      - "NIFC perimeter outlines and terrain relief are more legible."
+      - "Smoke empty-state and stylized-height explanations are visible in the 3D control."
+      - "Issuer palettes and absence qualifications are aligned with runtime behavior."
+    evidence:
+      pull_requests: [18, 23]
+      commits:
+        - "da8fc0303cde02adf780343a87d12d35c36c3be3"
+        - "b8141f00e28d337666222781078b745f99d7fc36"
+  - id: "DDM-B06"
+    name: "Deployment browser-suite timeout parity"
+    completed_on: "2026-08-19"
+    release_family: "0.6.25"
+    outcomes:
+      - "The Pages browser-verification job received the same 75-minute ceiling as Validate."
+      - "The change corrected a proven 45-minute suite cutoff but did not claim to solve later browser-install hangs."
+    evidence:
+      pull_requests: [16]
+      commits:
+        - "aa759af3a7edb8625c06d32146633d1b1d3e66e5"
+
+phases:
+  - id: "DDM-P0"
+    name: "Release convergence and platform truth"
+    goal: >
+      Make source, validation evidence, GitHub Pages, and the optional Worker
+      agree before new product capability is treated as released.
+    components:
+      - "release_delivery"
+      - "verification"
+      - "map_and_visualization"
+    entry_dependencies: []
+    non_goals:
+      - "Treat a larger CI timeout as the browser-provisioning fix."
+      - "Migrate hosting without measured field evidence and owner authorization."
+      - "Deploy, merge, tag, or publish the Worker as an implied planning action."
+    exit_evidence:
+      - "The accepted commit passes the deterministic gate and full serial browser suite."
+      - "The production build marker equals the accepted main commit."
+      - "The authorized Worker revision equals reviewed source and rejects off-route requests."
+      - "Release diagnostics are retained without collecting user telemetry."
+    tasks:
+      - id: "DDM-P0-T01"
+        name: "Make Playwright browser provisioning deterministic"
+        components: ["release_delivery", "verification"]
+        goal: "Remove the package-install hang that can consume the whole deploy budget."
+        outputs:
+          - "A version-matched browser provisioning strategy."
+          - "A bounded failure mode with useful logs."
+        acceptance:
+          - "A hosted validation run reaches browser tests reliably."
+          - "Raising the job timeout is not the only mitigation."
+        dependencies: []
+        external_authorization: "No deployment authorization implied."
+      - id: "DDM-P0-T02"
+        name: "Resolve repeatable browser contract failures"
+        components: ["state_and_lifecycle", "interface", "verification"]
+        goal: "Restore clean cluster, Fire 3D reload, satellite fallback, and minimap behavior."
+        outputs:
+          - "Controlled fixtures for the repeatable failures."
+          - "Code or expectation corrections supported by runtime evidence."
+        acceptance:
+          - "Affected specifications pass without depending on retries."
+          - "One full serial suite exits zero."
+        dependencies: ["DDM-P0-T01"]
+        external_authorization: "None."
+      - id: "DDM-P0-T03"
+        name: "Decide and reconcile the MapLibre 5 prerequisite"
+        components: ["map_and_visualization", "verification", "release_delivery"]
+        goal: "Make an explicit owner decision on the globe prerequisite and its measured cost."
+        outputs:
+          - "A current-main integration of the isolated upgrade or a documented decline."
+          - "A MapLibre 4 versus 5 bundle, terrain-transfer, and suite-time receipt."
+        acceptance:
+          - "The decision cites the approximately 63 KiB gzip vendor increase and terrain cost."
+          - "If accepted, the isolated upgrade passes gate and serial verification."
+        dependencies: ["DDM-P0-T02"]
+        decision_gate: "DDM-D01"
+        external_authorization: "A merge remains separately authorized."
+      - id: "DDM-P0-T04"
+        name: "Add source-to-production divergence detection"
+        components: ["release_delivery", "verification"]
+        goal: "Detect when main and the deployed Pages build remain different after a grace period."
+        outputs:
+          - "A build identity check."
+          - "One durable alert with automatic recovery closure."
+        acceptance:
+          - "The check distinguishes a cancelled deploy from a successful release."
+          - "Repeated checks do not create duplicate alerts."
+        dependencies: ["DDM-P0-T01"]
+        external_authorization: "External issue creation behavior requires owner review."
+      - id: "DDM-P0-T05"
+        name: "Converge the hardened Worker revision"
+        components: ["release_delivery", "state_and_lifecycle"]
+        goal: "Replace the broad live relay with the reviewed exact-route implementation."
+        outputs:
+          - "Pre-deploy route, method, redirect, timeout, cache, and byte-transparency evidence."
+          - "Post-deploy health, negative-path, CORS, and body hash evidence."
+          - "An atomically updated expected revision in monitoring."
+        acceptance:
+          - "GET, HEAD, and OPTIONS work only for allowlisted routes."
+          - "POST and off-route relay probes are rejected."
+          - "No application logic, credentials, analytics, or telemetry are added."
+        dependencies: []
+        decision_gate: "DDM-D07"
+        external_authorization: "Explicit Worker deployment authorization required."
+      - id: "DDM-P0-T06"
+        name: "Retain browser failure and flake diagnostics"
+        components: ["release_delivery", "verification"]
+        goal: "Make hosted failures diagnosable without rerunning a 40 to 50 minute suite blindly."
+        outputs:
+          - "Short-retention reports, traces, and screenshots for failures and retries."
+        acceptance:
+          - "Artifacts upload only when useful and contain no user data."
+        dependencies: ["DDM-P0-T01"]
+        external_authorization: "None."
+      - id: "DDM-P0-T07"
+        name: "Harden workflow supply-chain references"
+        components: ["release_delivery"]
+        goal: "Replace movable action tags with reviewed immutable commit references."
+        outputs:
+          - "Pinned action SHAs with update policy."
+        acceptance:
+          - "Workflow permissions remain minimal."
+          - "Automated dependency updates can propose later SHA changes for review."
+        dependencies: ["DDM-P0-T01"]
+        external_authorization: "Repository setting changes remain separately authorized."
+      - id: "DDM-P0-T08"
+        name: "Publish and prove the accepted Pages build"
+        components: ["release_delivery", "verification"]
+        goal: "Restore source-to-live convergence through a bounded, observable Pages release."
+        outputs:
+          - "An accepted main commit published through the normal Pages workflow."
+          - "Live build-marker, per-run nonce, root, subpath, embed, cache, and PMTiles range receipts."
+        acceptance:
+          - "The live build marker equals the accepted main commit."
+          - "The live build nonce is non-dev and attributable to the completed workflow run."
+          - "The deployment completed rather than being cancelled or superseded."
+          - "Large static archives answer valid byte-range requests."
+        dependencies: ["DDM-P0-T01", "DDM-P0-T02"]
+        external_authorization: "Explicit merge and Pages deployment authorization required."
+      - id: "DDM-P0-T09"
+        name: "Prove or decline globe projection"
+        components: ["map_and_visualization", "interface", "verification"]
+        goal: "Resolve whether a globe materially improves global context without weakening terrain, Fire 3D, URL, embed, or device contracts."
+        outputs:
+          - "A measured accept-or-decline decision with browser evidence."
+          - "A bounded implementation and fallback only if accepted."
+        acceptance:
+          - "Terrain and Fire 3D remain honest and controllable."
+          - "Phone, tablet, desktop, reduced-motion, and embed behavior are verified."
+          - "A decline records the measured reason and removes no current capability."
+        dependencies: ["DDM-P0-T03"]
+        decision_gate: "DDM-D01"
+        external_authorization: "Owner decision required before adopting the projection."
+      - id: "DDM-P0-T10"
+        name: "Prove or decline global low-zoom NASA GIBS imagery"
+        components: ["data_pipelines", "map_and_visualization", "verification"]
+        goal: "Test a separately named daily global context layer without confusing it with VIIRS thermal anomalies or the recent GOES basemap."
+        outputs:
+          - "Source, date, tile-matrix, CORS, attribution, and visual-hierarchy evidence."
+          - "A bounded implementation and fallback only if accepted."
+        acceptance:
+          - "The layer has its own status, timestamp, qualification, and legend or information receipt."
+          - "Global context does not imply current Fire detection or drought assessment."
+          - "A decline records the measured source, performance, or product reason."
+        dependencies: ["DDM-P0-T03", "DDM-P0-T09"]
+        decision_gate: "DDM-D01"
+        external_authorization: "Source adoption requires completed licensing, CORS, and drift review."
+      - id: "DDM-P0-T11"
+        name: "Close MapLibre and imagery release evidence"
+        components: ["release_delivery", "verification", "documentation"]
+        goal: "Reconcile the selected projection and imagery outcome across runtime, tests, documentation, and live evidence."
+        outputs:
+          - "Final gate and serial-suite receipts."
+          - "Updated source metadata, coverage record, maintainer guidance, and release notes where applicable."
+          - "A committed roadmap checker for identifiers, components, dependencies, decision gates, and prohibited mutable fields."
+        acceptance:
+          - "Accepted and declined conditional work is recorded without implying unshipped capability."
+          - "The deployed build, source commit, public documentation, and rollback point agree."
+          - "The canonical YAML parses and its reference graph resolves without duplicate IDs or cycles."
+        dependencies: ["DDM-P0-T08", "DDM-P0-T09", "DDM-P0-T10"]
+        external_authorization: "Explicit merge, tag, and deployment authorization required."
+
+  - id: "DDM-P1"
+    name: "Network lifecycle and failure honesty"
+    goal: >
+      Ensure cancellation, response-body deadlines, activation failures, and
+      optional chunk failures remain bounded and visible on weak connections.
+    components:
+      - "state_and_lifecycle"
+      - "interface"
+      - "verification"
+    entry_dependencies: ["DDM-P0"]
+    non_goals:
+      - "Rewrite the layer architecture wholesale."
+      - "Hide source, parsing, or activation failures behind a generic blank state."
+    exit_evidence:
+      - "Representative headers-then-stall requests abort on timeout and layer-off intent."
+      - "Every network-awaiting activation has a prompt cancellation path."
+      - "Thrown activation errors preserve the unavailable answer and correct URL state."
+      - "Core controls survive failure of optional search code."
+    tasks:
+      - id: "DDM-P1-T01"
+        name: "Move response-body consumers under full deadlines"
+        components: ["state_and_lifecycle", "data_pipelines"]
+        goal: "Prevent JSON, text, XML, and probe bodies from outliving timeout ownership."
+        outputs:
+          - "Migration to full-body JSON or buffered helpers."
+          - "A static check for header-only fetch followed by body consumption."
+        acceptance:
+          - "A stalled body aborts on timeout and master cancellation."
+        dependencies: []
+        external_authorization: "None."
+      - id: "DDM-P1-T02"
+        name: "Complete the layer cancellation seam"
+        components: ["state_and_lifecycle", "map_and_visualization"]
+        goal: "Abort superseded activation work immediately instead of waiting for queued teardown."
+        outputs:
+          - "Cancellation inventory."
+          - "Missing cancelActivation exports and shared abort helpers."
+        acceptance:
+          - "Held JSON, PMTiles, and viewport discovery requests abort promptly."
+          - "Late responses cannot render after intent changes."
+        dependencies: ["DDM-P1-T01"]
+        external_authorization: "None."
+      - id: "DDM-P1-T03"
+        name: "Unify activation failure handling"
+        components: ["state_and_lifecycle", "interface"]
+        goal: "Preserve the visible unavailable state for thrown and non-thrown failures."
+        outputs:
+          - "One fail-activation path."
+          - "Import-rejection and activation-throw tests."
+        acceptance:
+          - "Checkbox and URL self-correct."
+          - "Unavailable remains visible and is announced once."
+        dependencies: []
+        external_authorization: "None."
+      - id: "DDM-P1-T04"
+        name: "Isolate core sidebar loading from optional search"
+        components: ["interface", "state_and_lifecycle"]
+        goal: "Keep catalog and conditions controls usable when search code fails."
+        outputs:
+          - "Independent lazy boundaries."
+          - "Accessible retry for a core control failure."
+        acceptance:
+          - "Search failure degrades search only."
+          - "A core island retry can succeed after an initial chunk failure."
+        dependencies: []
+        external_authorization: "None."
+      - id: "DDM-P1-T05"
+        name: "Type-link internal layer keys"
+        components: ["state_and_lifecycle", "interface"]
+        goal: "Catch catalog, preset, coactivation, and cluster recipe key drift at compile time."
+        outputs:
+          - "A derived internal LayerKey type."
+        acceptance:
+          - "External URL parsing still accepts and validates strings."
+          - "Internal recipe typos fail type checking."
+        dependencies: ["DDM-P1-T03"]
+        external_authorization: "None."
+      - id: "DDM-P1-T06"
+        name: "Align Fire data-query scopes"
+        components: ["data_pipelines", "map_and_visualization", "state_and_lifecycle"]
+        goal: "Measure whether NIFC and HMS national requests should become bounded viewport requests."
+        outputs:
+          - "Transfer and record-count measurements."
+          - "A debounced, cancellable, date-aware design if change is justified."
+        acceptance:
+          - "Outside-current-request never reads as no data."
+          - "No change is made without a measured benefit."
+        dependencies: ["DDM-P1-T01", "DDM-P1-T02"]
+        external_authorization: "None."
+      - id: "DDM-P1-T07"
+        name: "Update landscape-signature source pins"
+        components: ["data_pipelines", "verification"]
+        goal: "Review LANDFIRE and Annual NLCD vintages without silently changing the byte-stable landscape contract."
+        outputs:
+          - "Reviewed source-version decision, regenerated parity fixtures when adopted, and a fresh artifact validation receipt."
+        acceptance:
+          - "A phased or incomplete upstream mosaic cannot become the national default."
+          - "Fixture and public-artifact changes are explicit and source-qualified."
+        dependencies: ["DDM-P0"]
+        github_issues: [13]
+        external_authorization: "Source-version adoption requires owner review of changed landscape meaning."
+
+  - id: "DDM-P2"
+    name: "Responsive and cross-view interaction coherence"
+    goal: >
+      Close tablet, Fire 3D escape, ENSO camera, and cross-view interaction
+      gaps while preserving one shared state architecture.
+    components:
+      - "interface"
+      - "state_and_lifecycle"
+      - "map_and_visualization"
+      - "verification"
+    entry_dependencies: ["DDM-P1"]
+    non_goals:
+      - "Create a separate mobile or tablet state system."
+      - "Treat one viewport screenshot as responsive acceptance."
+    exit_evidence:
+      - "Phone, tablet, desktop, and embed tasks complete without control overlap."
+      - "Fire 3D always has a direct and shareable exit rule."
+      - "ENSO opens on visible Pacific evidence."
+      - "Real-device review complements viewport automation."
+    tasks:
+      - id: "DDM-P2-T01"
+        name: "Define the tablet layout contract"
+        components: ["interface", "verification"]
+        goal: "Choose a coherent layout for 721 through 1024 pixel and coarse-pointer contexts."
+        outputs:
+          - "Minimum useful map width and sidebar bounds."
+          - "Portrait, landscape, short-height, and 200 percent zoom cases."
+        acceptance:
+          - "Owner review selects compact desktop, mobile shell, or a bounded hybrid."
+          - "Tests cover 721, 768, 820, 900, and 1024 pixel widths."
+        dependencies: []
+        decision_gate: "DDM-D02"
+        external_authorization: "None."
+      - id: "DDM-P2-T02"
+        name: "Resolve Fire 3D custom-state escape"
+        components: ["interface", "state_and_lifecycle", "map_and_visualization"]
+        goal: "Prevent an active Fire 3D scene from losing its only direct off control."
+        outputs:
+          - "A persistent control or automatic-exit rule."
+        acceptance:
+          - "The selected rule is reflected in URL and browser contracts."
+        dependencies: []
+        decision_gate: "DDM-D03"
+        external_authorization: "None."
+      - id: "DDM-P2-T03"
+        name: "Give ENSO a shareable Pacific camera contract"
+        components: ["interface", "state_and_lifecycle", "map_and_visualization"]
+        goal: "Stop ENSO quick views from opening an ocean surface over an inland camera."
+        outputs:
+          - "A Pacific framing and explicit basemap policy."
+        acceptance:
+          - "Fire-to-ENSO, share, reload, reset, phone, and desktop cases agree."
+        dependencies: []
+        decision_gate: "DDM-D04"
+        external_authorization: "None."
+      - id: "DDM-P2-T04"
+        name: "Defer the Fire 3D controller until eligible"
+        components: ["interface", "map_and_visualization"]
+        goal: "Avoid loading Fire 3D code on an ordinary desktop Drought boot."
+        outputs:
+          - "A light eligibility watcher."
+          - "Before-and-after request and activation measurements."
+        acceptance:
+          - "Bare desktop Drought does not request the Fire 3D controller chunk."
+          - "Deep links and Wildfire activation remain reliable."
+        dependencies: ["DDM-P2-T02"]
+        external_authorization: "None."
+      - id: "DDM-P2-T05"
+        name: "Complete task-based responsive verification"
+        components: ["interface", "verification"]
+        goal: "Verify meaningful tasks instead of breakpoint appearance alone."
+        outputs:
+          - "Select, hazard switch, status read, share, reset, information, and mode-exit scenarios."
+        acceptance:
+          - "Keyboard, screen reader, reduced motion, high contrast, safe area, and bright-light review are represented."
+        dependencies: ["DDM-P2-T01", "DDM-P2-T02", "DDM-P2-T03"]
+        external_authorization: "None."
+      - id: "DDM-P2-T06"
+        name: "Run a real-device field ergonomics pass"
+        components: ["interface", "verification"]
+        goal: "Validate touch, scrolling, orientation, and iframe behavior outside emulation."
+        outputs:
+          - "A bounded owner review on iOS, Android, tablet portrait/landscape, and small iframe."
+        acceptance:
+          - "Findings are filed as issues or accepted with evidence."
+        dependencies: ["DDM-P2-T05"]
+        external_authorization: "No analytics or telemetry may be enabled."
+
+  - id: "DDM-P3"
+    name: "Fire evidence and visual hierarchy"
+    goal: >
+      Make current Fire evidence calmer, more legible, and more actionable
+      before adding a modeled vertical smoke product.
+    components:
+      - "map_and_visualization"
+      - "impact_and_place"
+      - "data_pipelines"
+      - "interface"
+    entry_dependencies: ["DDM-P2"]
+    non_goals:
+      - "Attribute an air-quality observation or satellite detection to a specific wildfire."
+      - "Interpolate AirNow monitor points into a continuous surface."
+      - "Blend Fire sources into a DDM severity or exposure score."
+    exit_evidence:
+      - "A person can distinguish current, forecast, strategic, and unavailable evidence quickly."
+      - "Each Fire source retains its issuer, time, legend, geography, and limitation."
+      - "Any new live source passes browser-safety and stewardship probes."
+    tasks:
+      - id: "DDM-P3-T01"
+        name: "Add a Fire source and time receipt"
+        components: ["interface", "map_and_visualization"]
+        goal: "Align observation, update, issue, initialization, valid, and forecast times without combining them."
+        outputs:
+          - "Source-specific time lanes in the Fire panel and click receipt."
+        acceptance:
+          - "No single undated current label represents multiple clocks."
+        dependencies: []
+        external_authorization: "None."
+      - id: "DDM-P3-T02"
+        name: "Subordinate full-surface context"
+        components: ["map_and_visualization", "interface"]
+        goal: "Keep WHP and other static surfaces from visually outranking current event evidence."
+        outputs:
+          - "Zoom, opacity, focus, and optionality policy."
+          - "Contour, mask, or selected-place alternatives where useful."
+        acceptance:
+          - "Issuer palettes remain intact and no shared severity ramp is introduced."
+        dependencies: ["DDM-P3-T01"]
+        external_authorization: "None."
+      - id: "DDM-P3-T03"
+        name: "Pilot EPA AirNow monitor points"
+        components: ["data_pipelines", "map_and_visualization", "impact_and_place"]
+        goal: "Add preliminary current monitor context without interpolating a surface or attributing smoke to wildfire."
+        outputs:
+          - "Bounded viewport query, point layer, nearest-monitor receipt, and accessible table."
+        acceptance:
+          - "Nullable pollutants, valid time, preliminary status, and distance are preserved."
+          - "No monitor does not imply clean air."
+        dependencies: ["DDM-P1", "DDM-P3-T01"]
+        decision_gate: "DDM-D05"
+        external_authorization: "Source adoption requires completed licensing and drift checks."
+      - id: "DDM-P3-T04"
+        name: "Resolve the NASA GIBS VIIRS thermal-anomaly canary"
+        components: ["data_pipelines", "map_and_visualization"]
+        goal: "Determine whether one public, keyless satellite-detection layer is browser-safe and honest."
+        outputs:
+          - "A known-nonempty tile probe and empty-tile contract."
+          - "CRS, time, CORS, attribution, source-layer, and freshness evidence."
+        acceptance:
+          - "Detection is never labeled a confirmed fire, perimeter, ignition, intensity, or all-clear."
+          - "If probes fail, the candidate is declined without a runtime placeholder."
+        dependencies: ["DDM-P3-T01"]
+        decision_gate: "DDM-D05"
+        external_authorization: "None."
+      - id: "DDM-P3-T05"
+        name: "Add selected-place mapped-fire evidence"
+        components: ["impact_and_place", "state_and_lifecycle"]
+        goal: "Answer whether current mapped NIFC perimeters intersect the selected place."
+        outputs:
+          - "An independent selected-place query and evidence card."
+        acceptance:
+          - "Regional minimap counts are not reused as selected-place evidence."
+          - "Zero mapped intersections is explicitly not an all-clear."
+        dependencies: ["DDM-P1", "DDM-P3-T01"]
+        decision_gate: "DDM-D05"
+        external_authorization: "None."
+      - id: "DDM-P3-T06"
+        name: "Review infrastructure exposure language"
+        components: ["impact_and_place", "map_and_visualization"]
+        goal: "Describe intersections or proximity without claiming damage, vulnerability, service loss, or jurisdiction."
+        outputs:
+          - "Qualification and popup/briefing language for existing power and structures context."
+        acceptance:
+          - "Incomplete or security-withheld assets never read as a comprehensive inventory."
+        dependencies: ["DDM-P3-T05"]
+        external_authorization: "None."
+      - id: "DDM-P3-T07"
+        name: "Evaluate incomplete volunteer-mapped distribution circuits"
+        components: ["data_pipelines", "map_and_visualization"]
+        goal: "Decide whether a separately attributed OpenStreetMap layer adds value without implying completeness."
+        outputs:
+          - "Coverage, license, performance, and comprehension evidence."
+        acceptance:
+          - "The layer remains separate from federal transmission data if adopted."
+        dependencies: ["DDM-P3-T06"]
+        github_issues: [20]
+        external_authorization: "Source adoption requires owner approval."
+
+  - id: "DDM-P4"
+    name: "ENSO observed-state product"
+    goal: >
+      Make ENSO answer one clear current-state question before adding forecast
+      probabilities or more ocean imagery.
+    components:
+      - "impact_and_place"
+      - "map_and_visualization"
+      - "interface"
+      - "data_pipelines"
+    entry_dependencies: ["DDM-P2"]
+    non_goals:
+      - "Restore a probability plume without an official, machine-readable source and reviewed semantics."
+      - "Make a full-screen sea-surface-temperature raster the only small-screen answer."
+    exit_evidence:
+      - "The quick view lands on visible Pacific evidence."
+      - "Observed indices and forecast guidance cannot be confused."
+      - "Regional statements are season-conditioned, probabilistic, and reviewed."
+    tasks:
+      - id: "DDM-P4-T01"
+        name: "Define the primary ENSO user question"
+        components: ["impact_and_place", "interface"]
+        goal: "Choose the smallest question the next ENSO slice can answer completely."
+        outputs:
+          - "Owner-approved question, audience, and evidence hierarchy."
+        acceptance:
+          - "The question does not imply deterministic local outcomes."
+        dependencies: ["DDM-P2-T03"]
+        decision_gate: "DDM-D11"
+        external_authorization: "None."
+      - id: "DDM-P4-T02"
+        name: "Build an index-first ENSO card"
+        components: ["impact_and_place", "interface"]
+        goal: "Lead with observed RONI, ONI, Nino 3.4, and SOI rather than a full-screen raster."
+        outputs:
+          - "A small history and agreement chart with source dates."
+        acceptance:
+          - "Current phase, historical continuity, companion index, and agreement are distinct."
+        dependencies: ["DDM-P4-T01"]
+        external_authorization: "None."
+      - id: "DDM-P4-T03"
+        name: "Review and season-gate regional ENSO copy"
+        components: ["impact_and_place"]
+        goal: "Align Pacific Northwest tendency language with geography, target season, and uncertainty."
+        outputs:
+          - "Regional climatologist review and revised copy."
+        acceptance:
+          - "Winter and following-fire-season statements do not appear without temporal context."
+        dependencies: ["DDM-P4-T01"]
+        external_authorization: "External scientific review requires coordination."
+      - id: "DDM-P4-T04"
+        name: "Prototype an offline Pacific Hovmoller artifact"
+        components: ["data_pipelines", "map_and_visualization"]
+        goal: "Test a compact longitude-time view from an official OISST or ERSST source."
+        outputs:
+          - "Source, schema, size, accessibility, and stale-data evaluation."
+        acceptance:
+          - "The artifact remains observation context and fits static delivery budgets."
+        dependencies: ["DDM-P4-T02"]
+        external_authorization: "Source adoption requires completed license and provenance review."
+      - id: "DDM-P4-T05"
+        name: "Resolve an official machine-readable probability source"
+        components: ["data_pipelines", "impact_and_place"]
+        goal: "Find issuer-published ENSO category probabilities or document the method required for a derived product."
+        outputs:
+          - "Machine access, cadence, license, hindcast, calibration, and skill evidence."
+        acceptance:
+          - "No HTML scraping or image digitization is restored."
+          - "A derived probability is not adopted without explicit method and owner approval."
+        dependencies: ["DDM-P4-T03"]
+        decision_gate: "DDM-D06"
+        external_authorization: "Derived science requires explicit owner authorization."
+      - id: "DDM-P4-T06"
+        name: "Align ENSO horizon controls with real products"
+        components: ["interface", "state_and_lifecycle"]
+        goal: "Remove or relabel horizon choices that activate no source-distinct evidence."
+        outputs:
+          - "Current, weeks-ahead, and season-ahead product contract."
+        acceptance:
+          - "Every visible horizon has a distinct source-backed meaning or is absent."
+        dependencies: ["DDM-P4-T02", "DDM-P4-T05"]
+        external_authorization: "None."
+
+  - id: "DDM-P5"
+    name: "Smoke altitude and volume research"
+    goal: >
+      Test whether a bounded offline model artifact can add useful vertical
+      smoke context without relabeling HMS or shipping a heavy generic voxel engine.
+    components:
+      - "data_pipelines"
+      - "map_and_visualization"
+      - "verification"
+    entry_dependencies: ["DDM-P3", "DDM-P4"]
+    non_goals:
+      - "Relabel the stylized HMS density veil as measured plume altitude or concentration."
+      - "Ship NEXRAD classification as an operational smoke product after one case study."
+      - "Add an unbounded generic voxel engine or real-time model backend."
+    exit_evidence:
+      - "A one-region HRRR pilot carries initialization, valid time, lead, units, altitude, and uncertainty."
+      - "Desktop, mobile fallback, accessibility, and payload budgets are measured."
+      - "NEXRAD remains research-only unless multi-variable validation supports a stable claim."
+    tasks:
+      - id: "DDM-P5-T01"
+        name: "Resolve HRRR particulate semantics"
+        components: ["data_pipelines"]
+        goal: "Identify the exact native-level variables, units, vertical coordinates, and smoke/background meaning."
+        outputs:
+          - "Primary-source variable contract and public-facing label."
+        acceptance:
+          - "The chosen field is not called fire-emitted smoke unless NOAA documentation supports it."
+        dependencies: []
+        decision_gate: "DDM-D08"
+        external_authorization: "None."
+      - id: "DDM-P5-T02"
+        name: "Select one HRRR pilot event and region"
+        components: ["data_pipelines", "impact_and_place"]
+        goal: "Bound the experiment to one model cycle, region, event, and short valid-time sequence."
+        outputs:
+          - "Event, bbox, source cycle, validation sources, and stop criteria."
+        acceptance:
+          - "The choice has useful independent HMS or satellite context."
+        dependencies: ["DDM-P5-T01"]
+        decision_gate: "DDM-D08"
+        external_authorization: "None."
+      - id: "DDM-P5-T03"
+        name: "Build the offline HRRR subset pipeline"
+        components: ["data_pipelines"]
+        goal: "Convert large GRIB2 native-level inputs into bounded static artifacts."
+        outputs:
+          - "Spatial and vertical subset, quality checks, interpolation, quantization, compression, and manifest."
+        acceptance:
+          - "Every frame records issuer, variable, units, initialization, valid time, lead, resolution, coverage, processing version, and uncertainty."
+        dependencies: ["DDM-P5-T02"]
+        external_authorization: "No runtime authentication or server is added."
+      - id: "DDM-P5-T04"
+        name: "Compare vertical curtain and sparse altitude-shell presentations"
+        components: ["map_and_visualization", "interface"]
+        goal: "Choose the least complex presentation that materially improves understanding."
+        outputs:
+          - "Curtain, slice, and sparse-isosurface prototypes."
+          - "A 2D footprint and accessible text equivalent."
+        acceptance:
+          - "The display is labeled NOAA model guidance, not observation or DDM prediction."
+        dependencies: ["DDM-P5-T03"]
+        external_authorization: "None."
+      - id: "DDM-P5-T05"
+        name: "Set and test smoke artifact budgets"
+        components: ["verification", "map_and_visualization"]
+        goal: "Bound transfer, memory, frame time, activation delay, and mobile fallback."
+        outputs:
+          - "Predeclared desktop and mobile limits."
+        acceptance:
+          - "The initial target is below 5 MB per visible frame and below 20 MB for an optional short sequence, unless evidence justifies a different bound."
+          - "Flat HMS remains available when model artifacts are absent or stale."
+        dependencies: ["DDM-P5-T04"]
+        external_authorization: "None."
+      - id: "DDM-P5-T06"
+        name: "Run one NEXRAD multi-variable case study"
+        components: ["data_pipelines", "map_and_visualization"]
+        goal: "Evaluate radar-observed nonmeteorological plume geometry without treating low correlation coefficient as a smoke detector."
+        outputs:
+          - "Offline gridding, precipitation and clutter controls, beam geometry, confidence masks, and comparison panels."
+        acceptance:
+          - "Reflectivity, correlation coefficient, differential reflectivity, velocity, range, terrain, and biological scatter are considered."
+          - "The work stops if classification cannot support an explainable claim."
+        dependencies: ["DDM-P5-T02"]
+        decision_gate: "DDM-D08"
+        external_authorization: "Research only; no operational adoption implied."
+      - id: "DDM-P5-T07"
+        name: "Use historical vertical sources only for validation"
+        components: ["data_pipelines", "verification"]
+        goal: "Evaluate AIRS or CLIMCAPS, CALIPSO, and MISR within their real temporal and vertical limits."
+        outputs:
+          - "Matched historical comparisons and limitation notes."
+        acceptance:
+          - "No sparse curtain or broad CO sensitivity is extrapolated into a current full plume volume."
+        dependencies: ["DDM-P5-T02"]
+        external_authorization: "None."
+
+  - id: "DDM-P6"
+    name: "Field capability, coverage, and release readiness"
+    goal: >
+      Select one bounded reach or field outcome, strengthen measured delivery,
+      and produce a verified public release without building every candidate at once.
+    components:
+      - "impact_and_place"
+      - "interface"
+      - "release_delivery"
+      - "data_pipelines"
+      - "verification"
+    entry_dependencies: ["DDM-P5"]
+    non_goals:
+      - "Implement every candidate field or coverage outcome in one release."
+      - "Move large archives to a new service before range, cache, privacy, cost, and rollback evidence exists."
+    selection_rule: >
+      The owner selects one primary capability or coverage outcome before
+      implementation. Unselected candidates remain candidates, not commitments.
+    exit_evidence:
+      - "The selected outcome has source, state, responsive, accessibility, and acceptance contracts."
+      - "Field-style performance is measured without user telemetry."
+      - "The release commit, tag decision, deployed build, and public notes agree."
+    tasks:
+      - id: "DDM-P6-T01"
+        name: "Select one field or coverage outcome"
+        components: ["impact_and_place", "interface"]
+        goal: "Choose one outcome from offline field mode, export, saved places, gridded drought, vegetation stress, snow drought, marine heatwave, multi-day fire potential, or one coverage expansion."
+        outputs:
+          - "Owner-selected user need, surfaces, geography, source contract, and acceptance evidence."
+        acceptance:
+          - "Only one primary outcome enters implementation."
+        dependencies: []
+        decision_gate: "DDM-D09"
+        external_authorization: "Owner selection required."
+      - id: "DDM-P6-T02"
+        name: "Implement the selected bounded outcome"
+        components: ["impact_and_place", "interface", "data_pipelines"]
+        goal: "Deliver the selected outcome through existing state and stewardship contracts."
+        outputs:
+          - "Implementation, source receipt, failure states, documentation, and tests."
+        acceptance:
+          - "No unrelated candidate is pulled into scope."
+        dependencies: ["DDM-P6-T01"]
+        external_authorization: "Source and service changes require separate approval."
+      - id: "DDM-P6-T03"
+        name: "Benchmark field-style static delivery"
+        components: ["release_delivery", "verification"]
+        goal: "Measure cold startup and PMTiles range behavior under rural bandwidth and latency."
+        outputs:
+          - "Request, transfer, map-ready, and interaction-ready measurements."
+        acceptance:
+          - "Measurements are local or synthetic and collect no user telemetry."
+          - "Hosting migration is considered only for a demonstrated bottleneck."
+        dependencies: ["DDM-P0"]
+        external_authorization: "None."
+      - id: "DDM-P6-T04"
+        name: "Resolve PMTiles directory and archive-layout limits"
+        components: ["data_pipelines", "release_delivery"]
+        goal: "Prevent deep bakes from exceeding the reader's first-request directory capacity."
+        outputs:
+          - "Leaf-directory writer support and deep-archive verification."
+        acceptance:
+          - "A deep test archive opens through bounded range requests."
+        dependencies: ["DDM-P6-T03"]
+        github_issues: [19]
+        external_authorization: "None."
+      - id: "DDM-P6-T05"
+        name: "Resolve production source-map and hosting policy"
+        components: ["release_delivery"]
+        goal: "Choose whether production source maps remain public and whether any asset-host experiment is justified."
+        outputs:
+          - "Source-map policy and benchmarked GitHub Pages versus alternative-host decision."
+        acceptance:
+          - "Cloudflare Pages is not treated as drop-in while an archive exceeds its per-file limit."
+          - "Any object-storage trial proves range, CORS, cache, privacy, rollback, cost, and portability."
+        dependencies: ["DDM-P6-T03", "DDM-P6-T04"]
+        decision_gate: "DDM-D10"
+        external_authorization: "Hosting or storage changes require explicit owner authorization."
+      - id: "DDM-P6-T06"
+        name: "Complete release evidence and maintainer guidance"
+        components: ["release_delivery", "verification"]
+        goal: "Close the chosen release with truthful documentation and production evidence."
+        outputs:
+          - "Gate and serial results."
+          - "Responsive and source evidence."
+          - "Release notes, version/tag decision, deployed build check, and rollback point."
+        acceptance:
+          - "The deployed build marker equals the released commit."
+          - "Skipped or failed verification is reported explicitly."
+          - "No tag, merge, or deploy occurs without authorization."
+        dependencies: ["DDM-P6-T02", "DDM-P6-T05"]
+        external_authorization: "Explicit merge, tag, and deployment authorization required."
+
+research_dispositions:
+  - id: "DDM-R01"
+    name: "Global Climate Hazard Scan"
+    sources: ["https://hazard.degreeday.org/"]
+    classification: "design comparison only"
+    use:
+      - "Study question framing, progressive disclosure, and global-to-local movement."
+    limits:
+      - "Do not copy or scrape the service."
+      - "Do not reproduce proprietary indicative wildfire modeling or blended hazard scores."
+  - id: "DDM-R02"
+    name: "Planette IFS Archive"
+    sources: ["https://github.com/planetteAI/planette_ifs_archive"]
+    classification: "offline hindcast and method research"
+    use:
+      - "Evaluate ENSO and seasonal-method skill against archived reforecast or hindcast data."
+    limits:
+      - "The archive is not a current operational forecast."
+      - "Resolve dataset and repository licensing before adoption or redistribution."
+  - id: "DDM-R03"
+    name: "VoxCity"
+    sources: ["https://github.com/kunifujiwara/VoxCity"]
+    classification: "offline visualization-pipeline inspiration"
+    use:
+      - "Study sparse voxel preparation, urban context, and export patterns."
+    limits:
+      - "Do not add Python, GDAL, Google Earth Engine, or simulation dependencies to the static browser runtime."
+      - "Do not imply that a city voxel is an infrastructure exposure or fire-impact result."
+  - id: "DDM-R04"
+    name: "CAMS Global Fire Assimilation System"
+    sources: ["https://atmosphere.copernicus.eu/global-fire-emissions"]
+    classification: "research reference, not a current runtime source"
+    use:
+      - "Compare modeled fire-emission and injection-height concepts during offline smoke research."
+    limits:
+      - "Account and license acceptance conflict with the keyless static-client preference."
+      - "Modeled emissions and injection height are not transported smoke concentration or incident truth."
+  - id: "DDM-R05"
+    name: "NOAA NEXRAD Level II"
+    sources: ["https://registry.opendata.aws/noaa-nexrad/"]
+    classification: "single-event research case study"
+    use:
+      - "Test multi-elevation reflectivity, correlation coefficient, and other polarimetric evidence against known events."
+    limits:
+      - "Low correlation coefficient is not smoke-specific and can include ash, debris, biological targets, or other clutter."
+      - "Coverage cones, quality control, classification uncertainty, and false positives must remain visible."
+  - id: "DDM-R06"
+    name: "NOAA HRRR-Smoke"
+    sources: ["https://registry.opendata.aws/noaa-hrrr-pds/"]
+    classification: "preferred bounded smoke-altitude pilot candidate"
+    use:
+      - "Prepare one owner-run offline event subset with vertical model guidance and sparse browser-safe presentation."
+    limits:
+      - "Publish initialization, valid time, lead, variable, units, vertical coordinate, and uncertainty."
+      - "Never label model guidance as an observation or DDM prediction."
+  - id: "DDM-R07"
+    name: "AIRS or CLIMCAPS, CALIPSO, and MISR vertical products"
+    sources:
+      - "https://worldview.earthdata.nasa.gov/"
+      - "https://www.earthdata.nasa.gov/news/data-alert-climcaps-processing-system-derived-carbon-monoxide-mass-mixing-ratio"
+      - "https://www.earthdata.nasa.gov/data/tools/asdc-calipso-search-subset-tool"
+      - "https://misr.jpl.nasa.gov/get-data/misr-plume-height-project-2/"
+    classification: "historical validation and education"
+    use:
+      - "Compare historical column, curtain, and plume-top evidence with a bounded modeled event."
+    limits:
+      - "AIRS and CLIMCAPS carbon-monoxide retrievals have limited vertical information and product-specific quality caveats."
+      - "The flagged CLIMCAPS co_mmr_midtrop derived variable must not be used."
+      - "CALIPSO operations ended in 2023, and MISR plume-height coverage is episodic."
+      - "These products do not provide an operational current 3D smoke volume."
+
+decision_gates:
+  - id: "DDM-D01"
+    question: "Is the globe benefit worth the measured MapLibre 5 baseline and terrain cost?"
+    needed_by: ["DDM-P0-T03", "DDM-P0-T09", "DDM-P0-T10"]
+  - id: "DDM-D02"
+    question: "Should tablet portrait use compact desktop, the phone shell, or a bounded hybrid?"
+    needed_by: ["DDM-P2-T01"]
+  - id: "DDM-D03"
+    question: "Should Fire 3D remain controllable after custom demotion or exit automatically?"
+    needed_by: ["DDM-P2-T02"]
+  - id: "DDM-D04"
+    question: "Which Pacific camera and basemap policy should ENSO quick view establish?"
+    needed_by: ["DDM-P2-T03"]
+  - id: "DDM-D05"
+    question: "Which qualified Fire evidence pilot leads after hierarchy: AirNow, VIIRS, or selected-place evidence?"
+    needed_by: ["DDM-P3-T03", "DDM-P3-T04", "DDM-P3-T05"]
+  - id: "DDM-D06"
+    question: "Must ENSO probabilities be issuer-published, or may DDM adopt a reviewed derived method?"
+    needed_by: ["DDM-P4-T05"]
+  - id: "DDM-D07"
+    question: "Does the no-telemetry rule require explicitly disabling provider invocation logs containing full URLs?"
+    needed_by: ["DDM-P0-T05"]
+  - id: "DDM-D08"
+    question: "Which event, region, artifact budget, and mobile fallback should govern smoke-altitude research?"
+    needed_by: ["DDM-P5"]
+  - id: "DDM-D09"
+    question: "Which one field-capability or coverage outcome follows the smoke research phase?"
+    needed_by: ["DDM-P6-T01"]
+  - id: "DDM-D10"
+    question: "Should production source maps remain public, and is any hosting experiment justified by field measurements?"
+    needed_by: ["DDM-P6-T05"]
+  - id: "DDM-D11"
+    question: "Which current ENSO question, audience, and evidence hierarchy should the first index-first product answer?"
+    needed_by: ["DDM-P4-T01"]

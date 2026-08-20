@@ -8,6 +8,14 @@ through the normal Pages workflow. Repository release tags currently stop at
 `v0.6.23`; neither the August 13 nor August 18 refinement assigned a new tag
 or package version.
 
+Current source baseline, observed 2026-08-20: pull request 23 is merged at
+`b8141f00e28d337666222781078b745f99d7fc36`, but the public Pages application
+still reports build `aa759af3a7edb8625c06d32146633d1b1d3e66e5`. The latest
+deployment attempt for `main` was cancelled while provisioning Chromium, so
+merged source history does not yet prove that the August 19 Fire refinements
+are live. This note records the divergence; it does not assign a new release
+or deployment claim.
+
 ### 2026-08-19: the smoke volume gets height, and an empty sky gets a sentence
 
 [Pull request 23](https://github.com/atniclimate/dynamic-drought-module/pull/23)

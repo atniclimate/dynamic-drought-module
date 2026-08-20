@@ -1,7 +1,7 @@
 # Design documentation
 
 This directory preserves owner input, current presentation contracts, and
-historical implementation receipts without turning any of them into a second
+historical implementation evidence without turning any of them into a second
 roadmap. Runtime source, state contracts, accessibility behavior, and tests are
 authoritative when an older artifact disagrees with the shipped application.
 Current written owner direction, review comments, and direct corrections
@@ -15,10 +15,11 @@ than silently treating either one as a veto.
 | Artifact | Role |
 | --- | --- |
 | [`README.md`](README.md) | This index and the durable product-design doctrine. |
+| [`../../ROADMAP.md`](../../ROADMAP.md) | Public phase synopsis and route to the canonical task definitions. |
+| [`../ROADMAP.yaml`](../ROADMAP.yaml) | Canonical planned scope, dependencies, decision gates, component tags, non-goals, and acceptance evidence. Asana owns mutable execution status. |
 | [`mobile-map-chrome.md`](mobile-map-chrome.md) | Current presentation contract for the map-first phone chrome implemented by pull request 7. |
 | [`fire3d-context.md`](fire3d-context.md) | Honesty framing for the desktop 3D Fire context view: the no-fire-behavior-modeling line, the "not a digital twin" naming decision, and the in-interface non-prediction disclosure. |
 | [`ddm_interface-edits_1.json`](ddm_interface-edits_1.json) and [`ddm_interface-edits_2.json`](ddm_interface-edits_2.json) | Immutable owner-annotation captures that informed pull request 6. They preserve the input as received; they are not an active plan, literal pixel specification, or current completion checklist. |
-| `interface-integration/MODULE_TRACKING.yaml`, when present in a local stewardship workspace | Local-only historical scope and acceptance receipt for the August 10 interface-integration checkpoint. Its branch, commit, test, and publication state are frozen historical facts and must not be extended as a current status system. |
 
 Owner markup communicates hierarchy, relationships, emphasis, and intended
 interaction. Its sketch colors and geometry are not automatically literal UI
@@ -26,10 +27,10 @@ colors or fixed coordinates. A shipped implementation translates that intent
 through the current data, state, responsive, accessibility, and stewardship
 contracts.
 
-Completed and deployed changes belong in
-[`../RELEASE_NOTES.md`](../RELEASE_NOTES.md). Local handoff, successor-plan,
-and idea-bank documents are separate working records that are intentionally
-excluded from the published design corpus. Do not duplicate their status here.
+Merged product changes and observed deployment facts belong in
+[`../RELEASE_NOTES.md`](../RELEASE_NOTES.md). The roadmap defines planned
+scope, Asana carries execution state, and runtime plus tests define implemented
+behavior. Do not duplicate those roles in this design index.
 
 ## Convergence doctrine
 
@@ -118,12 +119,12 @@ purpose and stewardship
 -> presentation and interaction
 -> accessibility and failure behavior
 -> tests and live observation
--> true-up
+-> documentation and release evidence
 ```
 
-True-up closes the loop by separating current authority from historical
-receipts, recording known limits, and leaving one coherent foundation for the
-next bounded decision.
+Documentation and release evidence close the loop by separating current
+authority from historical evidence, recording known limits, and leaving one
+coherent foundation for the next bounded decision.
 
 ## Convergence check
 
