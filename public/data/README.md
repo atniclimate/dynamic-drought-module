@@ -92,30 +92,33 @@ state-curated set).
 - `ecoregions-pnw.pmtiles`: EPA Omernik ecoregions, the served artifact
   (built by `npm run build:ecoregion-tiles`); `ecoregions-pnw.geojson`
   is the legacy placeholder retained for compatibility.
-- `hillshade-dem-pnw.pmtiles`: terrain hillshade (USGS 3DEP-derived,
-  built by `npm run build:hillshade-tiles`).
-- `fuels-fbfm40-pnw.pmtiles`: LANDFIRE 2024 (LF2024) Scott and Burgan 40
-  Fire Behavior Fuel Models (FBFM40) drape for the desktop 3D Fire view
-  (built by `npm run build:fuels-tiles`; U.S. Public Domain,
-  USGS-produced). Server-rendered PNG tiles carrying LANDFIRE's own
-  published class colors, zooms 0-8 at 512 px (reduced resolution from
-  the 30 m source; measured 25,749,464 bytes at bake, retrieved
-  2026-08-19 UTC, matching the archive attribution's own clock). The
-  vintage, retrieval date, and the snapshot-not-a-prediction caveat are
-  recorded in the archive attribution and repeated in the in-app legend.
-  Loaded only while the 3D Fire view is active.
+- `hillshade-dem-pnw.pmtiles`: retained terrain hillshade derived from USGS
+  3DEP. The repository does not currently expose a supported rebuild command.
+- `whp-2023-pnw.pmtiles`: USFS Wildfire Hazard Potential 2023 drape for
+  the desktop 3D Fire view (built by `npm run build:whp-tiles`; U.S. Public
+  Domain, USDA Forest Service Rocky Mountain Research Station). Server-rendered
+  PNG tiles carry the issuer's own seven published classes, zooms 0-8 at
+  512 px, 149 tiles, 13,582,961 bytes, retrieved 2026-08-19 UTC. The bake
+  verifies the current issuer legend and uses categorical resampling so class
+  boundaries never acquire invented colors. The archive attribution and
+  in-app legend identify it as a static long-term hazard classification, not
+  current fire conditions or a prediction. It loads only while the 3D Fire
+  view is active and stands down when the live flat `usfs-whp` layer is on.
 - `power-lines-pnw.pmtiles`: Pacific Northwest transmission lines for the
-  3D Fire view's power context (built by `npm run build:power-tiles`).
+  independent, default-off Power Lines & Plants catalog layer (built by
+  `npm run build:power-tiles`).
   A one-time extract of the ARCHIVED federal HIFLD dataset via the public
   Esri Federal User Community copy (accessInformation "U.S. Government";
   Extract capability enabled; the item states it is archived with last
   data update 2024-09-30; some geometries carry OpenStreetMap provenance,
-  credited in the attribution). 6,941 features, 2,580,885 bytes, retrieved
-  2026-08-19 UTC. Issuer sentinel attributes are preserved verbatim
-  (VOLTAGE -999999, VOLT_CLASS 'NOT AVAILABLE'). The in-app qualification
+  credited in the attribution). 6,941 features, zooms 0-11, 3,816 tiles,
+  3,827,596 bytes, retrieved 2026-08-19 UTC. Issuer sentinel attributes are
+  preserved verbatim (VOLTAGE -999999, VOLT_CLASS 'NOT AVAILABLE'). The in-app qualification
   carries the mandatory caveat: not comprehensive or current, never for
-  siting or safety-critical decisions. Loaded only while the 3D Fire view
-  is active.
+  siting or safety-critical decisions. The layer can be used in flat and 3D
+  views, is never activated automatically by Fire 3D, and reports `zoom in to
+  load` below zoom 6. Its live power-plant companion comes from EIA and is not
+  stored in this archive.
 - `structures-central-oregon.pmtiles`: building footprints for the 3D
   Fire view's structures context (Overture Maps Foundation buildings
   theme, ODbL, release 2026-07-22.0; includes OpenStreetMap and other
@@ -160,6 +163,10 @@ state-curated set).
 
 These are public, non-sovereign reference data; they are not deployer
 slots.
+
+The retained `npm run build:fuels-tiles` command is an offline restore and
+research path for the retired LANDFIRE FBFM40 proof slice. Its output is not a
+shipped artifact or an active Fire 3D input.
 
 ---
 
