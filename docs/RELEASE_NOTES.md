@@ -8,13 +8,49 @@ through the normal Pages workflow. Repository release tags currently stop at
 `v0.6.23`; neither the August 13 nor August 18 refinement assigned a new tag
 or package version.
 
-Current source baseline, observed 2026-08-20: pull request 23 is merged at
-`b8141f00e28d337666222781078b745f99d7fc36`, but the public Pages application
-still reports build `aa759af3a7edb8625c06d32146633d1b1d3e66e5`. The latest
-deployment attempt for `main` was cancelled while provisioning Chromium, so
-merged source history does not yet prove that the August 19 Fire refinements
-are live. This note records the divergence; it does not assign a new release
-or deployment claim.
+Current source baseline, observed 2026-08-28: `main` is at
+`0edc0e7549de048ef1c9979119c2b22eae6141d6` (pull request 24 merged), and the
+public Pages application reports that same build after a successful
+deployment on 2026-08-28. The 2026-08-20 divergence recorded here earlier
+closed when the 2026-08-24 scheduled ENSO refresh deployed
+`a5c27c3b630349bfd93ee13c66e7cfe6305ce3c9` with its full browser suite. The
+hosted build nonce was still the local fallback `dev` at that observation;
+the change below makes the next hosted build attributable to its run.
+
+### 2026-08-28: the Fire view gets its perimeters back, and the embed corner unstacks
+
+[Pull request 27](https://github.com/atniclimate/dynamic-drought-module/pull/27)
+carries three bounded fixes from a desktop and mobile discovery pass over
+the live build, sequenced by an adversarial prep review.
+
+- The Fire view's current perimeters were unavailable on every boot, on
+  every device. The NIFC WFIGS query asked for every attribute and
+  full-precision geometry: measured 2026-08-28, 42.75 MB in 41.6 s for 243
+  perimeters against the layer's 15 s budget. The query now names the nine
+  attributes the application reads and asks the service to generalize each
+  outline for display (0.0005 degree, roughly 37 to 56 m across mapped
+  United States latitudes); the same request measured 1.90 MB in 6.1 s for
+  239 perimeters. Because generalization changes the drawn edge, the legend,
+  the perimeter popup, and the on-map key now say so, and say the outline is
+  not for evacuation, parcel, or tactical decisions. National scope and the
+  15 s budget are unchanged; viewport scoping remains roadmap task
+  DDM-P1-T06.
+- In embeds, the brand pill sat on the satellite control at every width
+  from the 200px floor to 1280px, the attribution button was under the brand
+  at 800 and 1280, the key strip covered the scale bar at 800x600, and the
+  loading pulse overlapped Share on phones. The 2026-08-19 desktop corner
+  rules are now scoped to non-embed shells, the embed dock lifts above
+  MapLibre's bottom-right stack, and the loading pulse leaves the top-right
+  controls alone. The preview badge keeps its top-right seat in embeds on
+  purpose. A spec hit-tests the satellite and attribution controls at five
+  widths.
+- Hosted builds now carry `DDM_BUILD_SHA` and a run-attributable
+  `DDM_BUILD_NONCE`, so the marker on `<html>` can prove which workflow run
+  produced the build instead of always reading `dev`.
+
+Verification receipts, the named-failure comparison against the
+idle-machine serial baseline, and the owner ratification of the
+generalization tolerance are recorded on the pull request.
 
 ### 2026-08-19: the smoke volume gets height, and an empty sky gets a sentence
 

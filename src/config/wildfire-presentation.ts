@@ -846,3 +846,50 @@ export function buildStructuresPlaceholderPaint(): NonNullable<
 
 export const STRUCTURES_QUALIFICATION =
   'Overture Maps Foundation building footprints (ODbL; includes OpenStreetMap and other open sources), release 2026-07-22.0, central Oregon pilot coverage only, drawn from zoom 13. Buildings extrude to the issuer\'s published height where one exists (72 percent of this bake); the dimmer tone marks a disclosed placeholder height (three meters per published floor, otherwise four meters), never a measured value. Footprints and heights are open-data representations, not parcel, occupancy, or condition records.';
+
+/**
+ * NIFC WFIGS query scope (FE-16, 2026-08-28).
+ *
+ * The national perimeters query used to ask for every attribute and
+ * full-precision geometry: 42.75 MB in 41.6 s for 243 perimeters, measured
+ * 2026-08-28, against the layer's 15 s budget, so the Fire view's primary
+ * evidence read `unavailable` on every boot. The attribute list below is
+ * exactly what the layer, its popup, the map key, and the conditions strip
+ * read, checked against the service schema (`FeatureServer/0?f=pjson`); a
+ * name the service does not know is an HTTP 400, so the list must stay
+ * schema-exact. `attr_DailyAcres` is not on the service and is not requested.
+ *
+ * The generalization asks the service to simplify each outline before it
+ * leaves the server (`maxAllowableOffset` in the degrees of EPSG:4326,
+ * `geometryPrecision` decimal places). 0.0005 degree is roughly 56 m of
+ * latitude and 37 to 50 m of longitude across mapped United States
+ * latitudes. Measured the same day with the field list: 1.83 MB in 4.5 s.
+ * That is a change to what the map shows, not only to transport, so the
+ * note below travels with the legend, the popup, and the map key. Viewport
+ * or region scoping stays with roadmap task DDM-P1-T06.
+ */
+export const NIFC_OUT_FIELDS = [
+  'attr_IncidentName',
+  'poly_IncidentName',
+  'attr_IncidentTypeCategory',
+  'attr_UniqueFireIdentifier',
+  'attr_IrwinID',
+  'attr_IncidentSize',
+  'poly_GISAcres',
+  'attr_FireDiscoveryDateTime',
+  'attr_POOState'
+] as const;
+
+/** Degrees of EPSG:4326; see the note above for the metric equivalent. */
+export const NIFC_MAX_ALLOWABLE_OFFSET_DEG = 0.0005;
+
+/** Coordinate decimal places requested from the service (about one meter). */
+export const NIFC_GEOMETRY_PRECISION = 5;
+
+/** The full statement, for the sidebar legend and the perimeter popup. */
+export const NIFC_GENERALIZATION_NOTE =
+  'Outlines are generalized by the NIFC service for display at a 0.0005 degree tolerance (roughly 37 to 56 m across mapped United States latitudes); the displayed edge is not the full-resolution source geometry.';
+
+/** The compact statement for the on-map key. */
+export const NIFC_KEY_GENERALIZATION_NOTE =
+  'Outlines generalized by the service at 0.0005 degree (up to about 56 m); not for tactical or evacuation decisions.';

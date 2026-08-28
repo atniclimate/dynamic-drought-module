@@ -4941,7 +4941,10 @@ a.impact-resource-link::after {
    absorbed or covered. The two circles share a vertical center.
    ---------------------------------------------------------------------------- */
 @media (min-width: 721px) {
-  .map-info-btn {
+  /* Scoped :not(.embed) (FE-18, 2026-08-28): embeds keep the pre-2026-08-19
+     seats (index.html, map-control-seat.ts, interface-responsive.spec.ts), so
+     none of this corner treatment may leak into an iframe. */
+  .app-shell:not(.embed) .map-info-btn {
     appearance: none;
     position: absolute;
     right: 10px;
@@ -4959,11 +4962,11 @@ a.impact-resource-link::after {
     border-radius: 50%;
     cursor: pointer;
   }
-  .map-info-btn:hover {
+  .app-shell:not(.embed) .map-info-btn:hover {
     background: rgba(27, 41, 66, 0.9);
     color: var(--fg-0);
   }
-  .map-info-btn[aria-expanded='true'] {
+  .app-shell:not(.embed) .map-info-btn[aria-expanded='true'] {
     color: var(--accent);
     box-shadow: 0 0 0 2px var(--accent-strong);
   }
@@ -4971,14 +4974,14 @@ a.impact-resource-link::after {
   /* MapLibre's corner steps left so the attribution circle sits beside the
      question mark instead of under it: 10px own margin + 34px clearance
      puts it just left of the 28px button. */
-  .maplibregl-ctrl-bottom-right {
+  .app-shell:not(.embed) .maplibregl-ctrl-bottom-right {
     margin-right: 34px;
   }
 
   /* The preview badge completes the row, left of the attribution. It stays
      pointer-events: none, so it can never intercept a click meant for
      either circle. */
-  .test-preview-badge {
+  .app-shell:not(.embed) .test-preview-badge {
     position: fixed;
     right: 78px;
     bottom: 12px;
@@ -4986,13 +4989,13 @@ a.impact-resource-link::after {
   }
   /* The compact attribution expands leftward across that seat when opened.
      Legal credits win the pixels: the badge yields while it is open. */
-  #map:has(.maplibregl-ctrl-attrib.maplibregl-compact-show)
+  .app-shell:not(.embed) #map:has(.maplibregl-ctrl-attrib.maplibregl-compact-show)
     ~ .map-overlay-controls
     .test-preview-badge {
     opacity: 0;
   }
 
-  .map-info-panel:not([hidden]) {
+  .app-shell:not(.embed) .map-info-panel:not([hidden]) {
     position: absolute;
     right: 10px;
     bottom: 44px;
@@ -5007,6 +5010,53 @@ a.impact-resource-link::after {
     border-radius: var(--radius-md);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
     color: var(--fg-1);
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   The embed corner (FE-18, 2026-08-28)
+
+   Embeds keep MapLibre's bottom-right stack (the satellite control above the
+   compact attribution circle) and the preview badge in the top-right overlay
+   stack, so the desktop corner rules above are scoped :not(.embed). The
+   shared bottom dock lifts above that native stack (29px control, 24px
+   attribution, their margins) so the brand pill and the key can never cover
+   the satellite control, the attribution button, or the bottom-left scale
+   controls. Measured on the live build 2026-08-28: the brand pill sat on the
+   satellite control at 200, 390, 400, 800, and 1280 pixel widths, the
+   attribution button was under the brand at 800 and 1280, and the key
+   covered the scale bar at 800x600.
+   ---------------------------------------------------------------------------- */
+.app-shell.embed .map-bottom-dock {
+  bottom: 92px;
+}
+
+/* The loading pulse leaves the top-right overlay stack (Share, Reset, the
+   full-site link-outs) to the controls: left-aligned and clamped to the
+   width that stack does not use. The non-embed phone shell already does
+   this through its sheet-detent rule; embeds carry no detent. */
+.app-shell.embed .loading-indicator {
+  left: 8px;
+  transform: none;
+  max-width: max(96px, calc(100% - 16px - 240px));
+}
+@media (min-width: 721px) {
+  .app-shell.embed .loading-indicator {
+    max-width: max(96px, calc(100% - 16px - 436px));
+  }
+}
+@media (max-width: 239px) {
+  /* At the 200px floor the overlay stack spans the width; the pulse drops
+     below it instead of sharing the row. */
+  .app-shell.embed .loading-indicator {
+    top: 204px;
+    max-width: calc(100% - 16px);
+  }
+  /* At the floor the 104px satellite control and the 130px scale bar cannot
+     share the width, and their rows met by two pixels (measured 2026-08-28).
+     The control steps up four pixels; the lifted dock still clears it. */
+  .app-shell.embed .maplibregl-ctrl-bottom-right .basemap-switcher-control {
+    margin-bottom: 14px;
   }
 }
 
@@ -5473,8 +5523,11 @@ a.impact-resource-link::after {
     right: 8px;
     bottom: 28px;
   }
+  /* Same lift as the embed-corner block (FE-18): below 720px the embed
+     still owns MapLibre's bottom-right stack, so the dock clears it here
+     too rather than the 42px that once cleared only the attribution. */
   .app-shell.embed .map-bottom-dock {
-    bottom: 42px;
+    bottom: 92px;
   }
   .time-bar {
     padding: 7px 9px 6px;
