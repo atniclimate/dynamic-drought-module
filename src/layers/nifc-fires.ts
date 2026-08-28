@@ -30,6 +30,18 @@
  *       `attr_IncidentSize`, `attr_FireDiscoveryDateTime`,
  *       `attr_POOState`).
  *
+ * Query scope (FE-16, 2026-08-28). The shipped national query with
+ * `outFields=*` and full-precision geometry measured 42.75 MB in 41.6 s for
+ * 243 perimeters against this layer's 15 s budget, so the layer aborted and
+ * read `unavailable` on every boot. The query now names the nine attributes
+ * the layer, popup, map key, and conditions strip read (NIFC_OUT_FIELDS,
+ * schema-checked; a wrong name is an HTTP 400) and asks the service for
+ * display generalization (`maxAllowableOffset` 0.0005 degree,
+ * `geometryPrecision` 5): 1.83 MB in 4.5 s on the same day. The
+ * generalization changes the drawn edge, so NIFC_GENERALIZATION_NOTE is
+ * carried by the legend, the popup, and the map key. Viewport or region
+ * scoping stays with roadmap task DDM-P1-T06.
+ *
  * Render. WFIGS perimeters are polygons. Wildfire and incident-complex
  * records use a restrained orange pulse, Prescribed fire uses a neutral
  * treatment, and other or unclassified records receive a neutral outline.
@@ -41,8 +53,12 @@ import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
 import {
+  NIFC_GENERALIZATION_NOTE,
+  NIFC_GEOMETRY_PRECISION,
   NIFC_INCIDENT_TYPE_PROPERTY,
   NIFC_INCIDENT_PRESENTATION,
+  NIFC_MAX_ALLOWABLE_OFFSET_DEG,
+  NIFC_OUT_FIELDS,
   WILDFIRE_PULSE_DURATION_MS,
   buildNifcFillPaint,
   buildNifcIncidentFilter,
@@ -210,17 +226,19 @@ function resolveBeforeId(map: maplibregl.Map): string | undefined {
 }
 
 /**
- * Build the GeoJSON query URL. We request all attribute fields so popups
- * have everything they need without a second round trip, pin output to
- * `EPSG:4326` so MapLibre receives lon/lat coordinates regardless of any
- * future server default change, and pass `where=1=1` so the server returns
- * every active perimeter.
+ * Build the GeoJSON query URL. `where=1=1` returns every active perimeter
+ * (national scope; viewport scoping is DDM-P1-T06), `outSR` pins EPSG:4326
+ * so MapLibre receives lon/lat regardless of a server default change, and
+ * the field list plus the generalization parameters keep the response
+ * inside the 15 s budget (see the module header and NIFC_OUT_FIELDS).
  */
 function buildQueryUrl(): string {
   const params = new URLSearchParams({
     where: '1=1',
-    outFields: '*',
+    outFields: NIFC_OUT_FIELDS.join(','),
     outSR: '4326',
+    geometryPrecision: String(NIFC_GEOMETRY_PRECISION),
+    maxAllowableOffset: String(NIFC_MAX_ALLOWABLE_OFFSET_DEG),
     f: 'geojson'
   });
   return `${URLS.nifcFires}/query?${params.toString()}`;
@@ -367,7 +385,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
             label: NIFC_INCIDENT_PRESENTATION.other.legendLabel
           }
         ],
-        'NIFC WFIGS current interagency mapped perimeters. Service cadence does not establish individual perimeter age.'
+        `NIFC WFIGS current interagency mapped perimeters. ${NIFC_GENERALIZATION_NOTE} Service cadence does not establish individual perimeter age. Not for evacuation, parcel, or tactical decisions; open NIFC for the source record.`
       )
   });
   if (truncated) {
@@ -412,8 +430,9 @@ export function deactivate(map: maplibregl.Map): void {
 /**
  * Resolve the most useful incident name from the WFIGS attribute schema.
  * `attr_IncidentName` is canonical, `poly_IncidentName` is the geometry
- * source's name (sometimes more specific), and `IncidentName` is the
- * legacy field name. Returns a neutral mapped-perimeter label if every candidate
+ * source's name (sometimes more specific), and `IncidentName` and
+ * `incidentName` are legacy field names that the scoped query no longer
+ * requests (kept for stub fixtures and older responses). Returns a neutral mapped-perimeter label if every candidate
  * is blank.
  */
 function pickIncidentName(props: GeoJsonProperties): string {
@@ -448,7 +467,7 @@ function formatDate(value: unknown): string {
 
 /**
  * Format a numeric acreage value. WFIGS exposes `attr_IncidentSize` and
- * `attr_DailyAcres` as floats; we round to whole acres for display since
+ * `poly_GISAcres` as floats; we round to whole acres for display since
  * sub-acre precision exceeds typical perimeter accuracy.
  */
 function formatAcres(value: unknown): string {
@@ -468,7 +487,7 @@ function buildNifcPopupHtml(props: GeoJsonProperties): string {
   const incidentName = pickIncidentName(p);
   const type = nifcIncidentTypeLabel(p.attr_IncidentTypeCategory);
   const acres = formatAcres(
-    p.attr_IncidentSize ?? p.attr_DailyAcres ?? p.poly_GISAcres
+    p.attr_IncidentSize ?? p.poly_GISAcres
   );
   const discovered = formatDate(p.attr_FireDiscoveryDateTime);
   const stateRaw = p.attr_POOState;
@@ -486,7 +505,8 @@ function buildNifcPopupHtml(props: GeoJsonProperties): string {
     ${discovered ? `<div class="popup-treaty-meta">Discovered: ${escapeHtml(discovered)}</div>` : ''}
     ${state ? `<div class="popup-treaty-meta">State: ${escapeHtml(String(state))}</div>` : ''}
     <div class="popup-description">Perimeter sourced from the National Interagency Fire Center (NIFC) Wildland Fire Interagency Geospatial Services (WFIGS) feed. The service is checked for updates approximately every five minutes during active operations; individual perimeter age can differ.</div>
-    <div class="popup-description">Strategic context only, not tactical fire operations or evacuation guidance.</div>
+    <div class="popup-description">${escapeHtml(NIFC_GENERALIZATION_NOTE)}</div>
+    <div class="popup-description">Strategic context only, not tactical fire operations, evacuation, or parcel decisions.</div>
     <div class="popup-links">
       <a href="https://data-nifc.opendata.arcgis.com/" target="_blank" rel="noopener">NIFC Open Data</a>
       <a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>

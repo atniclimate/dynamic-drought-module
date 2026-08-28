@@ -34,7 +34,8 @@ import {
 import { getDroughtSurfacePresentation } from '../config/layers';
 import {
   NIFC_INCIDENT_PRESENTATION,
-  USFS_WHP_PRESENTATION
+  USFS_WHP_PRESENTATION,
+  NIFC_KEY_GENERALIZATION_NOTE
 } from '../config/wildfire-presentation';
 import { escapeHtml } from '../util/escape';
 import {
@@ -553,7 +554,10 @@ export function buildFireKey(
             swatchItem(
               NIFC_INCIDENT_PRESENTATION.other.lineColor,
               NIFC_INCIDENT_PRESENTATION.other.legendLabel
-            )) +
+            ) +
+            '<span class="map-key-qualification" data-nifc-generalization>' +
+            escapeHtml(NIFC_KEY_GENERALIZATION_NOTE) +
+            '</span>') +
         '</span>'
       : '';
   const ariaParts: string[] = [];
@@ -568,7 +572,7 @@ export function buildFireKey(
   }
   if (includeNifcPerimeters) {
     ariaParts.push(
-      'National Interagency Fire Center (NIFC) current mapped Wildfire perimeters, Prescribed fire perimeters, and other or unclassified fire perimeters.'
+      'National Interagency Fire Center (NIFC) current mapped Wildfire perimeters, Prescribed fire perimeters, and other or unclassified fire perimeters. Outlines are generalized by the service for display.'
     );
   } else if (nifcLoading) {
     ariaParts.push(
