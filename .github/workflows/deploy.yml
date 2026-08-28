@@ -42,6 +42,13 @@ jobs:
     # undeployed). 75 keeps honest room without masking a genuine hang
     # for long.
     timeout-minutes: 75
+    # Build identity (FE-22, 2026-08-28): the app stamps these two values on
+    # <html> (vite.config.ts defines) so a browser run can prove WHICH build
+    # it is exercising. Job-level because the gate builds dist and the
+    # Playwright webServer builds it again; both must carry the same nonce.
+    env:
+      DDM_BUILD_SHA: ${{ github.sha }}
+      DDM_BUILD_NONCE: ${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
