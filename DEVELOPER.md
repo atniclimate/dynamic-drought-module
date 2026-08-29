@@ -290,8 +290,10 @@ judgment is the pure `resolveLiveExpectation` in
 `scripts/lib/live-receipts.mjs` (unit-tested in
 `tests/live-receipts.test.mjs`), reads the event, the head of `main`, that
 commit's committer date, and the last hundred `deploy.yml` runs for `main`
-(read head first, then the runs, so a push between the two calls can only
-add runs the snapshot has not seen), and returns one of three verdicts:
+merged with a second query filtered to the head itself (so no amount of
+unrelated activity can evict that head's own runs from the window). The head
+is read BEFORE the runs, so a push between the two calls can only add runs
+the snapshot has not seen. It returns one of three verdicts:
 
 - `verify`: run the same live proof. For a post-deploy event the expected
   commit and nonce are the deploy run's own; for a scheduled or dispatched
