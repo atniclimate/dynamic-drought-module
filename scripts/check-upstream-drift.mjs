@@ -443,6 +443,156 @@ export function extractUrls(source) {
   return out;
 }
 
+/**
+ * ArcGIS field-schema probes (slice B, 2026-08-28). The runtime read
+ * `attr_DailyAcres` from the WFIGS perimeters for months; the service never
+ * had it. For each module that sends `outFields`, the list is read FROM THE
+ * MODULE SOURCE (never hand-copied; an imported constant is followed to its
+ * module), the layer's `?f=pjson` is fetched, and a requested field that is
+ * absent by exact name fails the probe at the runtime tier. `layer` is the
+ * path the module appends to the URLS base before `/query` ('' when the base
+ * already names the layer). `constName` selects one list when a module
+ * sends several. The BIA fields sent by src/state/display-snapshot.ts and
+ * src/ui/search-controller.ts are a subset of the bia-reservations list.
+ */
+export const ARCGIS_FIELD_PROBES = Object.freeze([
+  { key: 'nifcFires', file: 'src/layers/nifc-fires.ts', layer: '', constName: 'NIFC_OUT_FIELDS' },
+  { key: 'censusAiannhMapServer', file: 'src/layers/aiannh.ts', layer: '/47' },
+  { key: 'biaLarFeatureServer', file: 'src/layers/bia-reservations.ts', layer: '' },
+  // RANGE_LAYER_INDEX in drought.ts: monthly 1, seasonal 4.
+  { key: 'cpcDroughtOutlookVectorMapServer', file: 'src/layers/drought.ts', layer: '/1' },
+  { key: 'cpcDroughtOutlookVectorMapServer', file: 'src/layers/drought.ts', layer: '/4' },
+  { key: 'nwsHeatRisk', file: 'src/layers/heatrisk.ts', layer: '' },
+  { key: 'noaaHmsSmokeFeatureServer', file: 'src/layers/hms-smoke.ts', layer: '' },
+  { key: 'nwsWwaMapServer', file: 'src/layers/nws-alerts.ts', layer: '' },
+  { key: 'eiaPowerPlantsFeatureLayer', file: 'src/layers/power-3d.ts', layer: '', constName: 'PLANTS_OUT_FIELDS' },
+  // DAY1_LAYER_ID in spc-fire-weather.ts.
+  { key: 'spcFireWeatherOutlookMapServer', file: 'src/layers/spc-fire-weather.ts', layer: '/1' },
+  { key: 'usdmFeatureServer', file: 'src/layers/usdm.ts', layer: '', constName: 'CURRENT_OUT_FIELDS' },
+  { key: 'usdmArchiveFeatureServer', file: 'src/layers/usdm.ts', layer: '', constName: 'ARCHIVE_OUT_FIELDS' },
+  { key: 'bcDroughtLevelsFeatureServer', file: 'src/layers/bc-drought.ts', layer: '' },
+]);
+
+const OUT_FIELDS_RE = /outFields:\s*(?:'([^']*)'|"([^"]*)"|([A-Za-z_][A-Za-z0-9_]*)(?:\.join\(\s*','\s*\))?)/g;
+
+/** Resolve `const NAME = [...]` or `const NAME = '...'` in a module source
+ * to a field list, or null when the module does not declare it. */
+export function resolveFieldConstant(source, name) {
+  const arr = new RegExp(`(?:export\\s+)?const\\s+${name}\\s*(?::[^=]+)?=\\s*\\[([^\\]]*)\\]`).exec(source);
+  if (arr) return [...arr[1].matchAll(/'([^']+)'|"([^"]+)"/g)].map((m) => m[1] ?? m[2]);
+  const str = new RegExp(`(?:export\\s+)?const\\s+${name}\\s*(?::[^=]+)?=\\s*(?:'([^']*)'|"([^"]*)")`).exec(source);
+  if (str) return (str[1] ?? str[2]).split(',').map((s) => s.trim()).filter(Boolean);
+  return null;
+}
+
+function importSpecifierFor(source, name) {
+  const re = /import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g;
+  for (const m of source.matchAll(re)) {
+    const names = m[1].split(',').map((s) => s.trim().split(/\s+as\s+/).pop());
+    if (names.includes(name)) return m[2];
+  }
+  return null;
+}
+
+/** Every `outFields:` the module sends: a literal list, a local constant
+ * (resolved), or an imported constant (`fields: null`, `importedFrom` set
+ * for the caller to resolve). `outFields: '*'` is not a schema claim. */
+export function extractOutFields(source) {
+  const out = [];
+  for (const m of source.matchAll(OUT_FIELDS_RE)) {
+    const line = source.slice(0, m.index).split('\n').length;
+    let fields;
+    let via = 'literal';
+    let importedFrom = null;
+    if (m[1] !== undefined || m[2] !== undefined) {
+      fields = (m[1] ?? m[2]).split(',').map((s) => s.trim()).filter(Boolean);
+    } else {
+      via = m[3];
+      fields = resolveFieldConstant(source, via);
+      if (fields === null) importedFrom = importSpecifierFor(source, via);
+    }
+    if (fields !== null && (fields.length === 0 || fields.includes('*'))) continue;
+    if (fields === null && importedFrom === null) continue;
+    out.push({ line, fields, via, importedFrom });
+  }
+  return out;
+}
+
+export function missingFields(outFields, pjson) {
+  const names = new Set((pjson?.fields ?? []).map((f) => f.name));
+  const lower = new Set([...names].map((n) => n.toLowerCase()));
+  const missing = outFields.filter((f) => !names.has(f));
+  const caseOnly = missing.filter((f) => lower.has(f.toLowerCase()));
+  return { missing, caseOnly };
+}
+
+/** Judge a `?f=pjson` body against the fields the runtime requests. */
+export function checkFieldSchema(expected, bodyText) {
+  let json;
+  try {
+    json = JSON.parse(bodyText);
+  } catch {
+    return { miss: 'schema body is not JSON', note: '' };
+  }
+  if (json && json.error) {
+    return { miss: `ArcGIS error ${json.error.code ?? '?'} ${json.error.message ?? ''}`.trim(), note: '' };
+  }
+  if (!json || !Array.isArray(json.fields)) return { miss: 'schema body has no fields array', note: '' };
+  const { missing, caseOnly } = missingFields(expected, json);
+  if (missing.length > 0) {
+    const near = caseOnly.length ? ` (case-only: ${caseOnly.join(', ')})` : '';
+    return { miss: `missing fields: ${missing.join(', ')}${near}`, note: '' };
+  }
+  return { miss: null, note: `${expected.length}/${expected.length} requested fields present` };
+}
+
+async function fieldListsForProbe(probe, root) {
+  const file = join(root, probe.file);
+  const source = await readFile(file, 'utf8');
+  const found = extractOutFields(source).filter((f) => !probe.constName || f.via === probe.constName);
+  const lists = [];
+  for (const entry of found) {
+    if (entry.fields !== null) {
+      lists.push(entry.fields);
+      continue;
+    }
+    const target = resolve(dirname(file), entry.importedFrom);
+    const candidates = [`${target}.ts`, join(target, 'index.ts')];
+    let resolved = null;
+    for (const candidate of candidates) {
+      if (!existsSync(candidate)) continue;
+      resolved = resolveFieldConstant(await readFile(candidate, 'utf8'), entry.via);
+      if (resolved) break;
+    }
+    if (resolved) lists.push(resolved);
+  }
+  return lists;
+}
+
+/** Build one probe entry per ARCGIS_FIELD_PROBES row from the extracted
+ * URLS entries. A row whose key or field list cannot be resolved throws:
+ * an unresolvable probe is a disarmed probe, never a silent skip. */
+export async function buildFieldProbeEntries(urlEntries, root = join(__dirname, '..')) {
+  const byKey = new Map(urlEntries.map((e) => [e.key, e]));
+  const entries = [];
+  for (const probe of ARCGIS_FIELD_PROBES) {
+    const base = byKey.get(probe.key);
+    if (!base) throw new Error(`field probe ${probe.key} is not an extracted urls.ts entry; the probe is disarmed`);
+    const lists = await fieldListsForProbe(probe, root);
+    if (lists.length === 0) {
+      throw new Error(`field probe ${probe.key}: no outFields list resolved from ${probe.file}${probe.constName ? ` via ${probe.constName}` : ''}`);
+    }
+    const fieldsExpected = [...new Set(lists.flat())];
+    entries.push({
+      key: `fields:${probe.key}${probe.layer}`,
+      url: `${base.url}${probe.layer}?f=pjson`,
+      tier: DRIFT_TIERS.RUNTIME,
+      fieldsExpected,
+    });
+  }
+  return entries;
+}
+
 function probeUrl(entry) {
   let url = entry.url;
   for (const [token, value] of TEMPLATE_SUBSTITUTIONS) {
@@ -474,6 +624,7 @@ async function check(entry) {
     const corsInvalid = Boolean(entry.corsRequired) && !corsCompatible;
     let tripwireMiss = null;
     let warning = null;
+    let fieldNote = '';
     const tripwire = CONTENT_TRIPWIRES.get(entry.key);
     if (tripwire && resp.status < 400) {
       const body = await resp.text();
@@ -483,6 +634,10 @@ async function check(entry) {
       } else if (result && typeof result.warning === 'string') {
         warning = result.warning;
       }
+    } else if (entry.fieldsExpected && resp.status < 400) {
+      const result = checkFieldSchema(entry.fieldsExpected, await resp.text());
+      tripwireMiss = result.miss;
+      fieldNote = result.note;
     }
     const ok = resp.status < 400 && !corsInvalid && tripwireMiss === null;
     const detail =
@@ -491,6 +646,7 @@ async function check(entry) {
         ? ` (required '*' or '${BROWSER_ORIGIN}' on this path)`
         : '') +
       (tripwireMiss !== null ? `; TRIPWIRE: ${tripwireMiss}` : '') +
+      (fieldNote ? `; ${fieldNote}` : '') +
       (warning !== null ? `; WARNING: ${warning}` : '');
     return { key: entry.key, url, tier, ok, warning, detail };
   } catch (err) {
@@ -715,6 +871,9 @@ async function main() {
       console.error('No https URLs extracted from urls.ts; the extraction regex has drifted.');
       process.exit(1);
     }
+    // Field-schema rows for every ArcGIS outFields list the runtime sends;
+    // an unresolvable row throws (a disarmed probe must fail loudly).
+    entries.push(...(await buildFieldProbeEntries(entries)));
   }
   entries.push(...LANDSCAPE_PROBES);
 
