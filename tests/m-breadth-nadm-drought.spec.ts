@@ -234,7 +234,14 @@ test.describe('North American Drought Monitor continental context', () => {
     await expect(layerCheckbox(page, 'nadm-drought')).not.toBeChecked();
 
     await layerCheckbox(page, 'nadm-drought').click();
-    await expect(layerPill(page, 'nadm-drought')).toHaveText('live');
+    // The manual retry re-runs fetchSharedJsonWithBudget with its own
+    // 15_000ms ceiling (src/layers/nadm-drought.ts activate()), above the
+    // global 10_000ms expect timeout (playwright.config.ts); a slow runner
+    // can still be mid-fetch when the default budget samples. Give this
+    // one assertion room above the runtime's own budget instead.
+    await expect(layerPill(page, 'nadm-drought')).toHaveText('live', {
+      timeout: 20_000
+    });
     expect(requests).toBe(2);
   });
 

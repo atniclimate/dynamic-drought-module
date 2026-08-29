@@ -1027,6 +1027,15 @@ test('an embed without the flag never activates and never gains it', async ({
   test('switching clusters exits the scene and hides the control without dropping the preference', async ({
     page
   }) => {
+    // Unlike its siblings above (120_000-180_000), this test declared no
+    // explicit budget while doing two full cluster swaps on the software
+    // renderer: enter the scene, exit it (a click that itself can outrun
+    // the default 60_000 while the main thread is blocked tearing the
+    // scene down), then re-enter and rebuild it. Measured report,
+    // 2026-08-29: flaky in 12 of 21 CI runs, always green on retry 1,
+    // `locator.click: Test timeout of 60000ms exceeded` on the drought
+    // cluster button. Match the budget its build-twice workload calls for.
+    test.setTimeout(150_000);
     await stubWildfireFeeds(page);
     await gotoApp(page, '?cluster=wildfire&fire3d=true');
     await expect

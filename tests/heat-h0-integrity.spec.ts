@@ -334,6 +334,17 @@ test('the NWS expiry timer removes a product before the next network refresh', a
 }) => {
   await stubBasemap(page);
   let requestCount = 0;
+  // scheduleExpiryPrune (src/layers/nws-alerts.ts) schedules its setTimeout
+  // from `nextExpiry - Date.now()` the moment this fetch response is
+  // parsed, near the start of boot. A 1s deadline left almost no margin
+  // for the boot settle, viewport resize, and tab click below, so the
+  // product could already be pruned before the "still present" read on
+  // line ~367 below, an intrinsically sensitive near-immediate race
+  // (Codex review, 2026-08-29, on the 56dd46a deploy's retry-only green).
+  // Widen it well clear of that work; REFRESH_INTERVAL_MS is 5 minutes, so
+  // 8s stays far short of triggering the periodic re-fetch this test
+  // deliberately excludes (requestCount stays 1).
+  const EXPIRY_OFFSET_MS = 8_000;
   await page.route(
     (url) => url.pathname.endsWith(WWA_PATH),
     (route) => {
@@ -342,7 +353,7 @@ test('the NWS expiry timer removes a product before the next network refresh', a
         status: 200,
         contentType: 'application/geo+json',
         body: collection([
-          rectangleFeature('Heat Advisory', Date.now() + 1_000)
+          rectangleFeature('Heat Advisory', Date.now() + EXPIRY_OFFSET_MS)
         ])
       });
     }
@@ -355,7 +366,14 @@ test('the NWS expiry timer removes a product before the next network refresh', a
   const sheet = page.locator('#sheet-alerts-body');
   await expect(sheet).toContainText('Heat Advisory');
 
-  await expect(layerPill(page, 'nws-alerts')).toContainText('no features');
+  // The local timer, not a re-fetch, removes it. scheduleExpiryPrune's own
+  // ceiling is EXPIRY_OFFSET_MS + 25ms (its scheduling buffer); this read's
+  // 13_000ms is a bounded budget roughly 5s above that 8_025ms ceiling,
+  // for event-loop jitter and the pill's own DOM update, rather than the
+  // global expect timeout.
+  await expect(layerPill(page, 'nws-alerts')).toContainText('no features', {
+    timeout: EXPIRY_OFFSET_MS + 5_000
+  });
   await expect(sheet).toContainText(
     'No active heat or fire-weather alerts in the current map view.'
   );
