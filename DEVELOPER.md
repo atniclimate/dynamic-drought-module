@@ -212,6 +212,14 @@ from the control capture; the daily `source-health` workflow runs it on
 hand it needs the expected commit and run id and defaults to the public
 site.
 
+The Worker-health row of `check:drift` now compares the live `/healthz`
+revision to the `WORKER_REVISION` constant read from
+`workers/proxy/src/index.ts`, not a hand-pinned string, so drift is
+source-vs-live rather than live-vs-live. Between a reviewed source revision
+bump and the owner's publish, the daily `upstream-monitor` run opens exactly
+one `upstream-drift` issue naming the mismatch, which is the design working
+as intended, and it closes automatically on the first run after the publish.
+
 Run the cross-cutting gate after application, configuration, build, generated
 data, or broadly shared documentation changes:
 

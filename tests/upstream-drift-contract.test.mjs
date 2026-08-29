@@ -16,6 +16,7 @@ import {
   extractOutFields,
   extractUrls,
   missingFields,
+  readWorkerRevision,
   soilDriftInputState,
   sourceTierForKey,
 } from '../scripts/check-upstream-drift.mjs';
@@ -49,6 +50,62 @@ test('extracts single- and double-quoted endpoints with explicit tiers', () => {
 
 test('defaults new source keys to runtime protection', () => {
   assert.equal(sourceTierForKey('newlyAddedEndpoint'), DRIFT_TIERS.RUNTIME);
+});
+
+test('readWorkerRevision returns the exact WORKER_REVISION constant in the Worker source', async () => {
+  const source = await readFile(
+    new URL('../workers/proxy/src/index.ts', import.meta.url),
+    'utf8',
+  );
+  const revision = readWorkerRevision(source);
+  // Confirm the returned value is really present as a WORKER_REVISION
+  // assignment in source, not merely the first string the regex touched.
+  assert.match(
+    source,
+    new RegExp(`const\\s+WORKER_REVISION\\s*=\\s*["']${revision}["']`),
+  );
+});
+
+test('readWorkerRevision returns a date-prefixed string', async () => {
+  const source = await readFile(
+    new URL('../workers/proxy/src/index.ts', import.meta.url),
+    'utf8',
+  );
+  const revision = readWorkerRevision(source);
+  assert.match(
+    revision,
+    /^\d{4}-\d{2}-\d{2}-/,
+    `expected a YYYY-MM-DD-prefixed revision, got ${JSON.stringify(revision)}`,
+  );
+});
+
+test('readWorkerRevision throws when the constant is removed from source', () => {
+  const withoutConstant = `
+    const USER_AGENT = "DDM-Proxy/0.1.0 (+https://example.test)";
+    const UPSTREAM_TIMEOUT_MS = 12_000;
+  `;
+  assert.throws(
+    () => readWorkerRevision(withoutConstant),
+    /WORKER_REVISION constant not found/,
+  );
+});
+
+test('readWorkerRevision throws on an empty source file', () => {
+  assert.throws(
+    () => readWorkerRevision(''),
+    /WORKER_REVISION constant not found/,
+  );
+});
+
+test('readWorkerRevision throws on an ambiguous, repeated constant', () => {
+  const doubled = `
+    const WORKER_REVISION = "2026-01-01-a";
+    const WORKER_REVISION = "2026-01-02-b";
+  `;
+  assert.throws(
+    () => readWorkerRevision(doubled),
+    /matched 2 times/,
+  );
 });
 
 test('recognizes only complete, bound soil drift inputs', () => {
