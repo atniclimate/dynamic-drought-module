@@ -51,20 +51,27 @@ boundary path stays proven by the daily source-health probe, which drives
 Chromium outside this suite.
 
 Every per-spec route on either service moved onto that mechanism, and the
-route pairs that merely repeated the new default were deleted. Nineteen
+route pairs that merely repeated the new default were deleted. Twenty
 specs changed; the boundary-popup, search, and studio cases now assert
 against the fixture rather than against whatever the agency returned that
 minute.
 
-Two checks keep it true. `tests/boundary-stubs.spec.ts` boots the bare Brief
-door, the wildfire cluster, the console, the brief embed, and the phone
-viewport, compares every request the page made to either host against the
-requests the stub actually answered, and fails on one that escaped; where the
-catalog exists it also asserts both boundary pills reach `live` from the
-fixture. `tests/boundary-boot-inventory.test.mjs` runs in the gate beside the
-other `node:test` files (`npm run test:boundary-boots`) and fails when a spec
-navigates outside `gotoApp` without a recorded reason and its own stub, when a
-spec registers a boundary route outside the shared helper, or when a service
+Two checks keep it true, and each covers a different half of the claim.
+`tests/boundary-stubs.spec.ts` proves the `gotoApp` shells by observation: it
+boots the bare Brief door, the wildfire cluster, the console, the wildfire
+cluster inside an embed, the brief embed, and the phone viewport, compares
+every request the page made to either host against the requests the stub
+actually answered, and fails on one that escaped; where the catalog mounts it
+also asserts both boundary pills reach `live` from the fixture. It does not
+observe the boots that navigate themselves, which answer from their own
+handlers and never enter the stub's log.
+`tests/boundary-boot-inventory.test.mjs` covers those by inspection and guards
+the seams: it runs in the gate beside the other `node:test` files
+(`npm run test:boundary-boots`) and fails when a module under `tests/`, specs
+and shared helpers alike, navigates outside `gotoApp` without a recorded
+reason and its own stub, when a module registers a boundary route outside the
+shared helper or unroutes one (which strands the claim and sends the next
+request live), when a spec passes the live escape hatch, or when a service
 path drifts so the route globs stop matching.
 
 What this does NOT do: Playwright trace and screenshot retention in CI stays

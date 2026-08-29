@@ -150,16 +150,29 @@ a request reach the agency, and nothing in this suite uses it. The live
 boundary path is proven instead by the daily source-health probe
 (`scripts/source-health.mjs`), which drives Chromium outside this suite.
 
-Two checks keep that true. `tests/boundary-stubs.spec.ts` boots the default,
-wildfire, console, embed, and phone shells, compares every request the page
-made to either host against the requests the stub actually answered, and
-fails on one that escaped; it also asserts both boundary pills reach `live`
-from the fixture. `tests/boundary-boot-inventory.test.mjs` runs in the gate
-with the other `node:test` files (`npm run test:boundary-boots`) and fails
-when a spec navigates outside `gotoApp` without a recorded reason and its own
-stub, when a spec registers a boundary route outside the shared helper (a raw
-`page.route` would be shadowed by `gotoApp`), or when a service path drifts
-so the route globs stop matching.
+Two checks keep that true, and they cover different halves of the claim.
+
+`tests/boundary-stubs.spec.ts` proves the `gotoApp` shells DYNAMICALLY. It
+boots the bare Brief door, the wildfire cluster, the console, the wildfire
+cluster inside an embed, the brief embed, and the phone viewport; for each it
+compares every request the page made to either host against the requests the
+stub actually answered, and fails on one that escaped. Where the catalog
+mounts it also asserts both boundary pills reach `live`, which can only come
+from the fixture body. It does not observe the boots that navigate
+themselves: those answer from their own `routeAllTribalFixtures` handlers, so
+their requests never enter the suite-wide stub's log.
+
+`tests/boundary-boot-inventory.test.mjs` covers those STATICALLY, and guards
+the seams. It runs in the gate with the other `node:test` files
+(`npm run test:boundary-boots`) and fails when a module under `tests/` (specs
+and shared helpers alike) navigates outside `gotoApp` without a recorded
+reason and its own stub, when a module registers a boundary route outside the
+shared helper (a raw `page.route` would be shadowed by `gotoApp`) or unroutes
+one (which strands the spec's claim and sends the next request live), when a
+spec passes `{ boundaries: 'live' }`, or when a service path drifts so the
+route globs stop matching. The recorded raw-boot counts are brittle on
+purpose: an unrelated new `.goto(` or `.setContent(` fails the gate, which is
+the moment to ask whether it needs the stub installed by hand.
 
 Trace and screenshot retention in CI nevertheless **remains off**. Turning it
 on is an owner decision recorded in the pull request that flips it

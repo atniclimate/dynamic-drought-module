@@ -4,9 +4,19 @@ import { gotoApp, layerPill, waitForLayerSettled } from './helpers';
 import { BOUNDARY_HOSTS, boundaryStubLog, isBoundaryRequestUrl } from './tribal-fixtures';
 
 /**
- * DDM-P1-T08 acceptance, part one: no ordinary boot in this suite issues a
- * request to the Census AIANNH or BIA AIAN-LAR services, and the route that
- * prevents it covers every boot shell the suite drives.
+ * DDM-P1-T08 acceptance, part one: no boot this suite drives through
+ * `gotoApp` issues a request to the Census AIANNH or BIA AIAN-LAR services.
+ *
+ * SCOPE, stated plainly. This file proves the shells `gotoApp` drives, by
+ * observation. It does NOT observe the handful of boots that navigate
+ * themselves (a Pages subpath mount, an iframe host page, the island-aborted
+ * pre-mount window, a framed studio document, three embed boots that assert
+ * zero island requests): those answer from their own
+ * `routeAllTribalFixtures` handlers, so their requests never enter the
+ * suite-wide stub's log and cannot be checked here.
+ * `tests/boundary-boot-inventory.test.mjs` covers them statically, by
+ * requiring each to be recorded AND to install a stub of its own. The two
+ * files together are the coverage claim; neither is it alone.
  *
  * The proof is a comparison, not a hope. `page.on('request')` records every
  * request the page issued to either host, and `boundaryStubLog` records every
@@ -17,13 +27,15 @@ import { BOUNDARY_HOSTS, boundaryStubLog, isBoundaryRequestUrl } from './tribal-
  * asked for nothing at all is also a failure, because a stub that is never
  * exercised proves nothing.
  *
- * The five shells are the distinct boot paths the suite uses: the bare Brief
- * door, a hazard-cluster boot, the console, the brief embed (which never
- * mounts the catalog island, so it has no status pills to read), and the
- * phone viewport. Where the catalog exists, the two boundary pills must reach
- * `live`, which can only happen from the fixture body: a request that escaped
- * to a live agency would be answered by that agency, and a request that was
- * neither stubbed nor answered would settle `unavailable`.
+ * The shells are the distinct `gotoApp` boot paths: the bare Brief door, a
+ * hazard-cluster boot, the console, the wildfire cluster inside an embed
+ * (which routes to the console door and so does mount the catalog), the brief
+ * embed (which never mounts the catalog island, so it has no status pills to
+ * read), and the phone viewport. Where the catalog exists, the two boundary
+ * pills must reach `live`, which can only happen from the fixture body: a
+ * request that escaped to a live agency would be answered by that agency, and
+ * a request that was neither stubbed nor answered would settle
+ * `unavailable`.
  *
  * Nothing here asserts against live geometry, and nothing here can retain it:
  * the synthetic bodies are hand-authored rectangles with obviously synthetic
@@ -44,21 +56,37 @@ function watchBoundaryRequests(page: Page): string[] {
 /**
  * Every boundary request this page made was answered by the suite-wide stub,
  * and the boot really did make some.
+ *
+ * The comparison POLLS. `page.on('request')` fires when the request is
+ * issued, before the route handler runs and appends to the log, so a
+ * debounced viewport refresh that is in flight at assertion time would sit in
+ * `seen` and not yet in the log, and a straight comparison would report it as
+ * an escape with a very alarming message. Polling lets the log catch up; a
+ * request that genuinely left the browser never appears in it at all, so the
+ * poll times out and still names the URL.
  */
-function expectNothingEscaped(page: Page, seen: readonly string[]): void {
-  const answered = new Set(boundaryStubLog(page));
+async function expectNothingEscaped(page: Page, seen: readonly string[]): Promise<void> {
   expect(
     seen.length,
     'this shell asked neither boundary service, so the stub proved nothing'
   ).toBeGreaterThan(0);
-  const escaped = seen.filter((url) => !answered.has(url));
-  expect(
-    escaped,
-    'these requests were not answered by the suite-wide stub and reached a live sovereign-geography service'
-  ).toEqual([]);
+  await expect
+    .poll(
+      () => {
+        const answered = new Set(boundaryStubLog(page));
+        return seen.filter((url) => !answered.has(url));
+      },
+      {
+        message:
+          'these requests were not answered by the suite-wide stub and reached a live sovereign-geography service',
+        timeout: 15_000
+      }
+    )
+    .toEqual([]);
+  const answered = boundaryStubLog(page);
   for (const host of BOUNDARY_HOSTS) {
     expect(
-      [...answered].some((url) => url.includes(host)),
+      answered.some((url) => url.includes(host)),
       `the stub answered nothing for ${host}`
     ).toBe(true);
   }
@@ -81,7 +109,10 @@ async function waitForBothServices(page: Page): Promise<void> {
 const CATALOG_SHELLS = [
   { name: 'the bare Brief door', query: '' },
   { name: 'the wildfire cluster', query: '?cluster=wildfire' },
-  { name: 'the console', query: '?view=console' }
+  { name: 'the console', query: '?view=console' },
+  // An embed carrying cluster= routes to the console door (the two-doors
+  // rule), so unlike the brief embed below it does mount the catalog.
+  { name: 'the wildfire cluster in an embed', query: '?embed=true&cluster=wildfire' }
 ] as const;
 
 test.describe('every suite boot answers the boundary queries from synthetic fixtures', () => {
@@ -96,7 +127,7 @@ test.describe('every suite boot answers the boundary queries from synthetic fixt
         await waitForLayerSettled(page, key);
         await expect(layerPill(page, key)).toHaveText('live');
       }
-      expectNothingEscaped(page, seen);
+      await expectNothingEscaped(page, seen);
     });
   }
 
@@ -111,7 +142,7 @@ test.describe('every suite boot answers the boundary queries from synthetic fixt
     await expect(page.locator('#app')).toHaveClass(/\bembed\b/);
     await expect(page.locator('input[data-layer-key]')).toHaveCount(0);
     await waitForBothServices(page);
-    expectNothingEscaped(page, seen);
+    await expectNothingEscaped(page, seen);
   });
 });
 
@@ -128,7 +159,7 @@ test.describe('the phone shell answers the boundary queries from synthetic fixtu
       await waitForLayerSettled(page, key);
       await expect(layerPill(page, key)).toHaveText('live');
     }
-    expectNothingEscaped(page, seen);
+    await expectNothingEscaped(page, seen);
   });
 });
 
@@ -148,6 +179,6 @@ test.describe('the documented escape hatch stays explicit', () => {
     await expect(layerPill(page, 'bia-reservations')).toHaveText(
       'no features returned for this view (AIAN-LAR does not cover every Tribal Nation)'
     );
-    expectNothingEscaped(page, seen);
+    await expectNothingEscaped(page, seen);
   });
 });

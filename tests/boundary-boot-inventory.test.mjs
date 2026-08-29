@@ -8,13 +8,20 @@ import { join } from 'node:path';
  * DDM-P1-T08 acceptance, part two: a future spec cannot boot the application
  * against the live Census AIANNH or BIA AIAN-LAR services by accident.
  *
- * `tests/boundary-stubs.spec.ts` proves the stub holds for the boot shells the
- * suite drives TODAY. This file is the static counterpart: it walks every
- * browser spec and fails when a navigation bypasses `gotoApp` without a
- * recorded reason and without installing the suite-wide boundary stub itself,
- * and when a spec registers a boundary route outside the shared helper (which
- * would be shadowed by `gotoApp`, since Playwright matches route handlers in
- * reverse registration order).
+ * `tests/boundary-stubs.spec.ts` proves the stub holds DYNAMICALLY for the
+ * boot shells `gotoApp` drives. This file is the STATIC counterpart, and it
+ * is what covers the rest: it walks every browser module under `tests/`
+ * (specs and shared helpers alike) and fails when a navigation bypasses
+ * `gotoApp` without a recorded reason and without installing the suite-wide
+ * boundary stub itself, when a module registers or removes a boundary route
+ * outside the shared helper, and when a spec reaches for the live escape
+ * hatch. Between the two, every boot path the suite uses is covered: the
+ * `gotoApp` shells by observation, the recorded raw boots by inspection.
+ *
+ * The recorded site COUNTS in `DIRECT_BOOT_REASONS` are brittle on purpose.
+ * Adding an unrelated `.setContent(` or `.goto(` to one of these files fails
+ * this test, which is the moment to ask whether the new site needs the
+ * boundary stub installed by hand. Update the count in the same commit.
  *
  * It registers no Playwright tests: it runs under `node --test` beside the
  * other `node:test` files in the gate.
@@ -36,16 +43,28 @@ const BOUNDARY_MARKER =
   /AIANNH_ROUTE|BIA_ROUTE|tigerweb\.geo\.census\.gov|biamaps\.geoplatform\.gov|AIANNHA\/MapServer|BIA_AIAN_National_LAR/;
 
 /** Anything that installs or claims a boundary route for the page. */
-const INSTALLS_BOUNDARY_STUB = /routeAllTribalFixtures\(|routeBoundary\(|routeGeojson\(|installBoundaryStubs\(/;
+const INSTALLS_BOUNDARY_STUB =
+  /routeAllTribalFixtures\(|routeBoundary\(|routeGeojson\(|installBoundaryStubs\(/;
 
 /**
- * Every browser spec that navigates without `gotoApp`, with the reason and
+ * The one module allowed to call `page.route` on a boundary pattern: it is
+ * where the shared helper and the suite-wide stub are defined.
+ */
+const BOUNDARY_ROUTE_HOME = 'tests/tribal-fixtures.ts';
+
+/**
+ * Every browser module that navigates without `gotoApp`, with the reason and
  * the number of such sites. A new raw boot fails this test until it is
  * recorded here, which is the moment to ask whether it needs the boundary
- * stub installed by hand (it does: see `routeAllTribalFixtures` in each file
- * below).
+ * stub installed by hand (it does: every file below calls
+ * `routeAllTribalFixtures` or `routeBoundary` for exactly that reason).
  */
 const DIRECT_BOOT_REASONS = {
+  'tests/helpers.ts': {
+    sites: 1,
+    reason:
+      'this is gotoApp itself, the one navigation the whole suite is funnelled through, and it installs the suite-wide stub immediately before it'
+  },
   'tests/deployment-subpath.spec.ts': {
     sites: 1,
     reason:
@@ -77,31 +96,40 @@ const DIRECT_BOOT_REASONS = {
   }
 };
 
-async function browserSpecs() {
-  const names = (await readdir(TESTS_DIR)).filter((name) => name.endsWith('.spec.ts'));
+/** Every TypeScript module under tests/, specs and shared helpers alike. */
+async function testModules() {
+  const names = (await readdir(TESTS_DIR)).filter((name) => name.endsWith('.ts'));
   names.sort();
   const files = [];
   for (const name of names) {
     files.push({
       key: `tests/${name}`,
+      isSpec: name.endsWith('.spec.ts'),
       source: await readFile(join(TESTS_DIR, name), 'utf8')
     });
   }
   return files;
 }
 
-/** Count matches, ignoring line comments so prose about `page.goto(` is inert. */
-function countOutsideComments(source, pattern) {
-  const code = source
+/** Strip line comments so prose about `page.goto(` is inert. */
+function code(source) {
+  return source
     .split(/\r?\n/)
     .map((line) => line.replace(/^\s*(?:\/\/|\*|\/\*).*$/, ''))
     .join('\n');
-  return [...code.matchAll(pattern)].length;
 }
 
-test('every browser spec boots through gotoApp, or records why it does not', async () => {
-  const files = await browserSpecs();
-  assert.ok(files.length >= 100, `expected the browser suite, found ${files.length} specs`);
+function countOutsideComments(source, pattern) {
+  return [...code(source).matchAll(pattern)].length;
+}
+
+test('every browser module boots through gotoApp, or records why it does not', async () => {
+  const files = await testModules();
+  assert.ok(files.length >= 100, `expected the browser suite, found ${files.length} modules`);
+  assert.ok(
+    files.some((file) => file.key === 'tests/helpers.ts'),
+    'the shared helpers module must be in scope'
+  );
 
   const unrecorded = [];
   const miscounted = [];
@@ -126,7 +154,7 @@ test('every browser spec boots through gotoApp, or records why it does not', asy
   }
 
   assert.deepEqual(unrecorded, [], 'unrecorded boots that bypass the suite-wide boundary stub');
-  assert.deepEqual(miscounted, [], 'recorded raw-boot counts that no longer match the specs');
+  assert.deepEqual(miscounted, [], 'recorded raw-boot counts that no longer match the modules');
   assert.deepEqual(unstubbed, [], 'raw boots that could reach a live sovereign-geography service');
 
   for (const [key, entry] of Object.entries(DIRECT_BOOT_REASONS)) {
@@ -138,20 +166,45 @@ test('every browser spec boots through gotoApp, or records why it does not', asy
   }
 });
 
-test('no browser spec registers a boundary route outside the shared helper', async () => {
-  const files = await browserSpecs();
+test('no browser module registers or removes a boundary route outside the shared helper', async () => {
+  const files = await testModules();
   const offenders = [];
   for (const { key, source } of files) {
-    for (const match of source.matchAll(/\.route\(\s*([^,\n]*)/g)) {
-      if (BOUNDARY_MARKER.test(match[1] ?? '')) {
-        offenders.push(`${key}: page.route(${(match[1] ?? '').trim()}, ...)`);
-      }
+    if (key === BOUNDARY_ROUTE_HOME) continue;
+    for (const match of code(source).matchAll(/\.(route|unroute)\(\s*([^,)\n]*)/g)) {
+      const [, method, argument] = match;
+      if (!BOUNDARY_MARKER.test(argument ?? '')) continue;
+      offenders.push(`${key}: page.${method}(${(argument ?? '').trim()}...)`);
     }
   }
   assert.deepEqual(
     offenders,
     [],
-    'boundary routes must go through routeBoundary (a raw page.route is shadowed by gotoApp)'
+    // A raw page.route on a boundary pattern is shadowed by gotoApp, which
+    // registers later. A page.unroute is worse: the spec's claim on that
+    // service is recorded for the life of the page and is never cleared, so
+    // the suite-wide stub keeps falling back to a handler that no longer
+    // exists, and the request goes live.
+    'boundary routes must go through routeBoundary, and must never be unrouted'
+  );
+});
+
+test('no spec reaches for the live boundary escape hatch', async () => {
+  const files = await testModules();
+  const offenders = [];
+  for (const { key, source } of files) {
+    if (/boundaries:\s*['"]live['"]/.test(code(source))) {
+      offenders.push(key);
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    // `{ boundaries: 'live' }` is documented so a future maintainer knows the
+    // seam exists, not so it can ride into CI. The live boundary path is the
+    // daily source-health probe's job (scripts/source-health.mjs), which
+    // drives Chromium outside this suite.
+    'the live escape hatch must not be used by the browser suite'
   );
 });
 
