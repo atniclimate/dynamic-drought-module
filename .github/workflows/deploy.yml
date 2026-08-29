@@ -7,8 +7,9 @@
 # request), so a push to main cannot bypass shared-interface checks. Owner
 # policy 2026-08-28: the merge commit is a commit Validate never saw, so it
 # earns the whole proof, fanned out rather than serial (47 minutes on one
-# runner before this shape). The post-deploy live verification lands with
-# DDM-P0-T04.
+# runner before this shape). The verify-live job below is the post-deploy
+# proof (DDM-P0-T04 and DDM-P0-T08, 2026-08-28): it runs only after a
+# successful deploy and proves the live site serves this commit.
 
 name: Build and deploy DDM to GitHub Pages
 
@@ -115,6 +116,8 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
     steps:
       # The Pages backend intermittently fails the status poll with an
       # upstream "Deployment failed, try again later" even though the build
@@ -136,3 +139,149 @@ jobs:
         id: deployment_retry
         if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+
+  # DDM-P0-T04 and DDM-P0-T08: prove the live build is the accepted commit.
+  # Runs only after a successful deploy (a cancelled or superseded deploy
+  # never reaches it, so it cannot mistake a cancellation for a release),
+  # waits for Pages propagation (scripts/verify-live.mjs polls the
+  # referenced assets for the SHA up to 5 minutes), then boots root, each
+  # cluster, and the wildfire embed at two widths and reads the build stamp
+  # and every layer pill. A failure opens or updates ONE issue labeled
+  # deploy-divergence (marker comment; repeated failures append, never
+  # duplicate) and the next verified deploy closes it. The receipt carries
+  # URLs, status codes, bytes, milliseconds, and status words only, never a
+  # body or a screenshot (hard rule 1; src/layers/aiannh.ts).
+  verify-live:
+    name: Verify the live build
+    needs: [deploy]
+    if: needs.deploy.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Provision Chromium
+        uses: ./.github/actions/playwright-chromium
+
+      - name: Verify the live build
+        id: verify
+        timeout-minutes: 12
+        run: |
+          set +e
+          node scripts/verify-live.mjs \
+            --base "${{ needs.deploy.outputs.page_url }}" \
+            --expect-sha "${{ github.sha }}" \
+            --expect-nonce "${{ github.run_id }}" \
+            --out live-receipt.json \
+            --summary "$GITHUB_STEP_SUMMARY" 2>&1 | tee verify-output.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Keep the receipt
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: live-receipt
+          path: |
+            live-receipt.json
+            verify-output.txt
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Open or update the divergence issue
+        if: steps.verify.outputs.exit_code != '0'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            let report = '';
+            try { report = fs.readFileSync('verify-output.txt', 'utf8'); } catch {}
+            // Keep the issue body well under the API limit.
+            const MAX = 20000;
+            if (report.length > MAX) report = report.slice(-MAX);
+            const label = 'deploy-divergence';
+            const marker = '<!-- ddm-verify-live -->';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              marker,
+              '## Live build verification failed after deploy',
+              '',
+              `The Pages deploy for \`${context.sha}\` (run ${context.runId}) completed, but the post-deploy verification did not prove the live build.`,
+              'Either the live site still serves a previous build (propagation or a superseded deploy), a shipped asset or PMTiles range is not served, or a boot did not reach terminal layer states.',
+              '',
+              `Verification run: ${runUrl}`,
+              '',
+              '```',
+              report.trim() || '(no output captured)',
+              '```',
+              '',
+              '_This issue closes automatically when a later deploy verifies green._'
+            ].join('\n');
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label
+            });
+            if (existing.data.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: 'Live build diverges from main after deploy',
+                labels: [label],
+                body
+              });
+            }
+
+      - name: Close the divergence issue on a verified deploy
+        if: steps.verify.outputs.exit_code == '0'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const label = 'deploy-divergence';
+            const open = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label
+            });
+            for (const issue of open.data) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `The deploy of \`${context.sha}\` (run ${context.runId}) verified green on the live site. Closing.`
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed'
+              });
+            }
+
+      - name: Fail the run when the live build was not proved
+        if: steps.verify.outputs.exit_code != '0'
+        run: |
+          echo "::error::The live build was not proved to be ${{ github.sha }}; see the job summary and the deploy-divergence issue."
+          exit 1
