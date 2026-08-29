@@ -14,6 +14,24 @@
 # `timeout-minutes`, so each path is bounded as a whole with coreutils
 # `timeout` (600 s, the same ten-minute envelope the inline steps had) and
 # fails fast with its own log.
+#
+# Restore and save are separate steps, and only a non-pull-request run saves.
+# A cache entry written from a pull request is scoped to that pull request's
+# ref: no other pull request and not main can ever restore it, while every
+# pull request can already read main's entry. Saving from pull requests
+# therefore buys nothing and costs twice, spending the repository's 10 GB
+# quota on write-only entries and evicting main's entry (least recently used)
+# once the quota fills, which would make main itself miss and re-download
+# Chromium. Pull requests still restore from main's entry, which is the only
+# path that ever mattered.
+#
+# One deliberate behavior change comes with the split. `actions/cache` saves
+# in a post step that runs only when the job succeeded, so a shard whose
+# tests failed never persisted a browser directory it had just downloaded.
+# The inline save below runs as soon as the install returns, so a failing
+# suite no longer forces the next run to download Chromium again. The
+# browser directory is complete and valid the moment `playwright install`
+# exits zero; whether the suite that follows passes says nothing about it.
 name: Playwright Chromium
 description: Restore or install Playwright's Chromium with its OS dependencies.
 outputs:
@@ -28,9 +46,9 @@ runs:
       shell: bash
       run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
 
-    - name: Cache the Playwright browser directory
+    - name: Restore the Playwright browser directory
       id: playwright-cache
-      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
       with:
         path: ~/.cache/ms-playwright
         key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
@@ -39,6 +57,14 @@ runs:
       if: steps.playwright-cache.outputs.cache-hit != 'true'
       shell: bash
       run: timeout 600 npx playwright install --with-deps chromium
+
+    # Only a run whose entry other runs can read: see the header note.
+    - name: Save the Playwright browser directory (miss, outside a pull request)
+      if: steps.playwright-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
+      uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
 
     - name: Verify Chromium and install its OS dependencies (cache hit)
       if: steps.playwright-cache.outputs.cache-hit == 'true'
