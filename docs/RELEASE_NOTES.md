@@ -4,12 +4,13 @@
 
 `v0.6.25` is the package version and, since 2026-08-28, the release tag: the
 annotated tag `v0.6.25` points at `4d55845a9e245c48fd16f9da403e659393044568`
-(pull request 29 merged), the commit the public Pages application serves and
-the rollback point for the 2026-08-19 and 2026-08-28 work. `v0.6.24` was
-never assigned and stays skipped. The August 18 application runtime was
-merged as `eed7967dea2e9f34214794ca158eb65eebc30113` and successfully deployed
-through the normal Pages workflow; the August 13 and August 18 refinements
-assigned no tag of their own.
+(pull request 29), the last commit that changed product behavior. Every
+commit since is verification and continuous-integration infrastructure, not
+a new release; see the current source baseline below for what is live
+today. `v0.6.24` was never assigned. The August 18 application runtime
+merged as `eed7967dea2e9f34214794ca158eb65eebc30113` and deployed through
+the normal Pages workflow; the August 13 and August 18 refinements assigned
+no tag of their own.
 
 Owner decisions recorded 2026-08-28: continuous-integration runs keep no
 Playwright traces or screenshots until every CI boot stubs the Census AIANNH
@@ -17,257 +18,99 @@ and BIA AIAN-LAR sources (roadmap task DDM-P1-T08); the thirteen merged
 branches were deleted and `feature/maplibre-v5` stays until DDM-P0-T03.
 
 Current source baseline, observed 2026-08-29: `main` is at
-`1d82b59ccc9d963669c3d544441ac44007e1cebf` (pull request 31 merged 07:05
-UTC), deploy run 33240003166 published it, and verification run 33240334529
-proved that build live. The earlier 2026-08-28 baseline was
-`c7a5574449e833939c7a0d59a9b056a648ea9852` (pull request 28 merged) with
-nonce `33228785543`. The 2026-08-20 divergence recorded
-here earlier closed when the 2026-08-24 scheduled ENSO refresh deployed
+`56dd46a882a587a96e0840b5c81681c9da5f8583`. Pull requests 31 to 34 merged
+2026-08-29 and were each deployed and verified live: PR 31 (`1d82b59`)
+deploy 33240003166 / verify 33240334529; PR 32 (`214c26e`) deploy
+33246342317 / verify 33246642822 / hand-dispatch 33246718167; PR 33
+(`8ffebba`) deploy 33246816424 / verify 33247208523; PR 34 (`56dd46a`)
+deploy 33247634954 / verify 33247959936. The earlier 2026-08-28 baseline
+was `c7a5574449e833939c7a0d59a9b056a648ea9852` (pull request 28) with nonce
+`33228785543`. The 2026-08-20 divergence recorded here earlier closed when
+the 2026-08-24 scheduled ENSO refresh deployed
 `a5c27c3b630349bfd93ee13c66e7cfe6305ce3c9` with its full browser suite. The
 hosted build nonce was the local fallback `dev` until pull request 27 made
 each hosted build attributable to its run.
 
 ### 2026-08-29: every suite boot answers the sovereign boundary queries from synthetic fixtures
 
-Roadmap task DDM-P1-T08 asks for three things. This pull request delivers the
-first two and deliberately leaves the third to the owner.
-
-The shared browser-suite boot helper (`gotoApp` in `tests/helpers.ts`) now
-installs a route pair on every boot it drives, answering the Census AIANNH
-(`tigerweb.geo.census.gov`) and BIA AIAN-LAR (`biamaps.geoplatform.gov`)
-queries with the hand-authored synthetic rectangles in
-`tests/tribal-fixtures.ts`. It is on locally and in continuous integration
-alike, so a local green and a CI green mean the same thing. A spec that needs
-a different response, an empty collection, an abort, a truncated body, an
-ArcGIS error, or a geography-keyed answer, claims the service through
-`routeBoundary`; the suite-wide stub then defers to that claim through
-`route.fallback()`, whether the claim was registered before or after
-`gotoApp`. That removes the ordering trap: Playwright matches route handlers
-in reverse registration order, so a spec route registered before `gotoApp`
-would otherwise have been shadowed. `gotoApp(page, query, { boundaries:
-'empty' })` serves the honest live-zero collection, and `{ boundaries: 'live'
-}` is the documented escape hatch that nothing in the suite uses. The live
-boundary path stays proven by the daily source-health probe, which drives
-Chromium outside this suite.
-
-Every per-spec route on either service moved onto that mechanism, and the
-route pairs that merely repeated the new default were deleted. Twenty
-specs changed; the boundary-popup, search, and studio cases now assert
-against the fixture rather than against whatever the agency returned that
-minute.
-
-Two checks keep it true, and each covers a different half of the claim.
-`tests/boundary-stubs.spec.ts` proves the `gotoApp` shells by observation: it
-boots the bare Brief door, the wildfire cluster, the console, the wildfire
-cluster inside an embed, the brief embed, and the phone viewport, compares
-every request the page made to either host against the requests the stub
-actually answered, and fails on one that escaped; where the catalog mounts it
-also asserts both boundary pills reach `live` from the fixture. It does not
-observe the boots that navigate themselves, which answer from their own
-handlers and never enter the stub's log.
-`tests/boundary-boot-inventory.test.mjs` covers those by inspection and guards
-the seams: it runs in the gate beside the other `node:test` files
-(`npm run test:boundary-boots`) and fails when a module under `tests/`, specs
-and shared helpers alike, navigates outside `gotoApp` without a recorded
-reason and its own stub, when a module registers a boundary route outside the
-shared helper or unroutes one (which strands the claim and sends the next
-request live), when a spec passes the live escape hatch, or when a service
-path drifts so the route globs stop matching.
-
-What this does NOT do: Playwright trace and screenshot retention in CI stays
-off. Turning it on is an owner decision recorded in the pull request that
-flips it (the task's external authorization), so the exact proposed diff for
-`playwright.config.ts` and `.github/workflows/browser-suite.yml` is written
-out in this pull request instead of applied. A local run with `--trace on`
-against a deliberately failed boot confirmed the premise: the retained trace
-carried no response body from either service.
+Roadmap task DDM-P1-T08 asks for three things; pull request 34 (`56dd46a`)
+delivers the first two and leaves the trace/screenshot flip to the owner.
+Twenty specs moved onto the shared `gotoApp` boundary stub
+(`tests/tribal-fixtures.ts`) and their duplicate per-spec routes were
+deleted; `tests/boundary-stubs.spec.ts` and
+`tests/boundary-boot-inventory.test.mjs` (`npm run test:boundary-boots`,
+part of the gate) guard it, with the mechanism documented in DEVELOPER.md.
+Trace and screenshot retention stays off pending the owner decision that
+is DDM-P1-T08's remaining output; a local `--trace on` run against a
+deliberately failed boot confirmed the retained trace carried no response
+body from either service.
 
 ### 2026-08-29: continuous-integration hardening from the slice A audit
 
-- The shared Playwright browser action splits `actions/cache` into a restore
-  step and a save step, and only a run outside a pull request saves. A cache
-  entry written from a pull request is readable only by that pull request's
-  ref, so saving from one spends the repository's 10 GB quota on an entry no
-  other run can restore and can evict the `main` entry every run does read.
-- The three specs that stubbed `console.warn` to silence a by-design degrade
-  path now capture it with `captureWarnings()` and assert the exact warnings:
-  a split envelope query whose failed half warns once while its cancelled
-  sibling adds nothing (asserted after the cancellation is observed), one
-  failed framing count, and all nine invalid or transfer-truncated ArcGIS
-  bodies across NIFC, HMS, and SPC.
-- The upstream monitor and the snapshot refresh find their own issue by the
-  marker comment they already write, paginating the label listing and skipping
-  pull requests, so a labeled pull request is never commented on or closed and
-  a second labeled issue cannot shadow the real one.
+Pull request 33 (`8ffebba`) fixed three findings from the platform-truth
+audit: the Playwright browser cache now saves only from a run outside a
+pull request, so it can no longer evict the shared `main` cache entry it
+also depends on; three specs that silenced a by-design `console.warn`
+degrade path now capture and assert the exact warning text; and the
+upstream monitor and snapshot refresh now find their own open issue by
+marker comment across every label page, so a labeled pull request is never
+commented on and a second issue can never shadow the real one.
 
 ### 2026-08-29: main and live are compared on a schedule
 
-Roadmap task DDM-P0-T04 asks for detection of "when main and the deployed
-Pages build remain different after a grace period." The post-deploy proof
-recorded below did not meet that goal on its own: it fires on a successful
-deploy and asks only whether that build reached the content delivery
-network. A deploy that FAILS or is CANCELLED, which is the likelier way
-`main` and live come apart (a red browser shard, the `pages` concurrency
-group superseding a run, the freshness gate refusing an obsolete rerun),
-raises no successful deploy event at all, so nothing ran, no issue opened,
-and the live site quietly kept serving an older commit for as long as
-nobody looked.
-
+Pull request 32 (`214c26e`) closes a gap in DDM-P0-T04: the post-deploy
+proof only fires after a successful deploy, so a failed or cancelled
+deploy left `main` and live silently diverged with no receipt.
 `verify-live.yml` now also runs daily at 14:15 UTC and on
-`workflow_dispatch`, and asks the stated question directly: `main` is at
-`X`, is `X` live? A resolver
-(`scripts/resolve-live-expectation.mjs`, deciding through the pure
-`resolveLiveExpectation` in `scripts/lib/live-receipts.mjs`) reads the
-event, the head of `main`, that commit's committer date, and the last
-thirty deploy runs for `main`, and returns one of three verdicts. `verify`
-runs the same live proof, expecting the head of `main` and the latest
-successful deploy run of that head. `in-flight` records that a deploy is
-queued or running, or that the head is inside the 30 minute grace period
-with no successful deploy yet, and ends green without touching issues,
-because a release under way is not a divergence. `undeployed` names the
-latest deploy run for that commit and its conclusion, appends to or opens
-the one `deploy-divergence` issue (the same marker comment as the
-post-deploy path, so there is ever one issue), and fails the run. Every
-branch of that decision is covered offline in
-`tests/live-receipts.test.mjs`, which `npm run gate` runs.
+`workflow_dispatch`, comparing `main` against live directly (verdict logic
+in DEVELOPER.md), covered by `tests/live-receipts.test.mjs` in
+`npm run gate`. A rode-along fix stopped Playwright's test collection from
+importing the `node --test` suites into every browser worker;
+`playwright test --list` still reports 830 tests in 106 files. The
+schedule's first real receipt was a hand-dispatched run (33246718167, for
+`214c26e`), taken the same day the workflow merged.
 
-One unrelated fix rode along, found while reading how the suite collects
-tests: Playwright's default `testMatch` was importing the `node --test`
-suites (`tests/*.test.mjs`) on every collection and every worker, where they
-register no Playwright test but do execute, so a module-scope throw in one
-would have failed a browser shard as a collection error instead of failing
-its own runner; the `chromium` project now ignores them, and
-`playwright test --list` still reports the same 830 tests in 106 files.
+### 2026-08-29: the live proof survives a newer push
 
-What this still does not prove: that Pages served a particular build to a
-particular reader at a particular moment, and nothing at all about the
-hours between two daily compares. It proves what the site answers when it
-is asked, once a day and whenever the owner asks. A `schedule` or
-`workflow_dispatch` trigger also only exists once the workflow file is on
-`main`, so the first evidence this cadence works is a hand-dispatched run
-after merge.
-
-### 2026-08-28: the live proof survives a newer push
-
-This pull request closes the known gap the entry below records. The
-post-deploy verification moves out of `deploy.yml` into its own workflow,
-`verify-live.yml`, triggered by the deploy workflow's completion and run
-only when that deploy succeeded. It checks out the commit the deploy
-built, expects that commit and that run id in the live build stamp, and
-holds its own concurrency group at the job (a workflow-level group is
-taken before the job's success condition is read, so a failed deploy would
-still have cancelled the running proof): a newer push to `main` no longer
-cancels an in-flight verification, so a newer run that fails before its
-own deploy leaves the older commit live WITH a receipt. Only a newer
-verification,
-which exists only because a newer deploy succeeded and brings its own
-receipt, supersedes a running one. The divergence issue names the deploy
-run it failed to prove and the verification run that tried. Residual gap:
-a deploy run cancelled during or just after `deploy-pages` reads as
-cancelled whether or not Pages published it, so it gets no receipt; a
-scheduled compare of the live stamp against the last successful deploy
-would close that. This
-workflow cannot be exercised on the pull request (a `workflow_run` trigger
-fires only from `main`); its first receipt is the deploy of this merge.
+Pull request 31 (`1d82b59`) moved post-deploy verification into its own
+`verify-live.yml` workflow with its own concurrency group, so a newer push
+to `main` no longer cancels an in-flight verification for the build still
+live. The residual gap this left, a deploy cancelled during publish
+getting no receipt either way, closed two pull requests later when pull
+request 32 added the scheduled compare. First receipt: deploy 33240003166,
+verify 33240334529.
 
 ### 2026-08-28: the deploy proves the live build, and the sources get a daily receipt
 
-This pull request follows
-[pull request 28](https://github.com/atniclimate/dynamic-drought-module/pull/28),
-which cached the Playwright browser, pinned every workflow Action to a
-commit, fanned the 830-spec browser suite across seven runners (Validate
-13 minutes instead of 48), and made every shard name what failed or
-passed only on retry. It delivers the post-deploy proof and the daily
-source receipts that roadmap tasks DDM-P0-T04, T08, and the proposed T12
-ask for, with the limits of each proof stated below.
-
-- After every successful Pages deploy, a `verify-live` job runs
-  `scripts/verify-live.mjs` against the deployed URL: it waits for the
-  expected commit to appear in the referenced assets, checks that every
-  script and stylesheet resolves from the repository seat, asks each
-  shipped PMTiles archive for a byte range and expects `206`, and boots
-  root, the wildfire, heat, and ENSO clusters, and the wildfire embed at
-  1280 and 390 pixels wide, asserting the build stamp, no page errors,
-  terminal layer states that hold through a stability window, and the
-  embed corner. The deploy job first confirms its commit is still the
-  head of `main`, so a rerun of an old failed run cannot publish a
-  superseded build. A failure opens one `deploy-divergence` issue (a
-  propagation timeout is worded as inconclusive); the next deploy that
-  verifies green while its commit is still the head of `main` closes it.
-  The receipt is the job summary and a thirty-day artifact and carries no
-  response body or screenshot. Known gap: a newer push cancels an
-  in-flight verification, and if that newer run fails before its own
-  deploy the older commit stays live unverified.
-- A daily `source-health` workflow builds and serves the application,
-  boots it once as a control and once per catalog layer at the default
-  camera, and records the requests the runtime itself issues: status,
-  bytes, seconds, record count, cache headers, failed requests, and the
-  layer's state after a stability window (raster layers report `ready`
-  before a tile has loaded). Basemap tiles are stubbed, the ambient
-  requests every boot makes are captured once and replayed, and every
-  upstream request carries a named User-Agent. A breach (unavailable,
-  stuck, an HTTP or network error, a partial or empty answer from a source
-  that is always complete here) opens one issue per catalog row and closes
-  on recovery; a slow, large, or partial answer elsewhere is a warning in
-  the summary. Nothing is committed. What it proves is narrower than every
-  runtime query: zoom-gated layers, selection-driven queries, and the
-  satellite tiles are reported as not measured, and one observation per
-  day can be a warm-cache path. On the day the WFIGS geometry grew it
-  would have shown the perimeter layer `unavailable` with a 42 MB response
-  against its 15 s budget.
-- The upstream drift monitor now fetches each ArcGIS layer's schema and
-  fails when a field the runtime names in `outFields` is absent by exact
-  name (the runtime read `attr_DailyAcres` for months; the service never
-  had it). Nineteen layer paths are covered, read from the module source
-  (literal lists, local and imported constants, ternary branches, and the
-  static names of a template); every requested field was present on
-  2026-08-28. A test inventories every `outFields` sender under `src/`
-  and fails on one with neither a probe row nor a recorded reason. Not
-  extracted: lists passed as positional function arguments (the CPC 6-10
-  and 8-14 day point query `cat,prob`, and the USDM, NIFC, and watershed
-  lists in `src/impact/sources.ts` and `src/state/watershed-geometry.ts`,
-  which today are subsets or copies of probed lists), and the watershed
-  HUC code field, a template token reported as unchecked.
-- The Playwright browser provisioning moved into a composite action shared
-  by the browser suite and both new jobs.
-- `docs/ROADMAP.yaml` proposes `DDM-P0-T12` (scheduled source-health
-  receipts) for owner ratification; the baseline paragraph above is
-  corrected to pull request 28.
+Pull request 29 (`4d55845`, tagged `v0.6.25`) followed pull request 28's
+sharded seven-runner Playwright split (Validate 13 minutes instead of 48)
+to deliver the post-deploy and daily receipts roadmap tasks DDM-P0-T04,
+T08, and the proposed T12 ask for (mechanism in DEVELOPER.md).
+`verify-live.mjs` now runs after every successful deploy; a daily
+`source-health` workflow records the runtime's own upstream requests per
+catalog layer, opening one issue per breaching row (on the day WFIGS
+geometry grew it would have flagged the perimeter layer `unavailable` at
+42 MB against its 15 s budget); and the upstream drift monitor now fails
+on a missing ArcGIS `outFields` field across 19 covered layer paths, the
+kind of check that would have caught `attr_DailyAcres` going unserved for
+months. `docs/ROADMAP.yaml` proposed `DDM-P0-T12` for owner ratification.
 
 ### 2026-08-28: the Fire view gets its perimeters back, and the embed corner unstacks
 
-[Pull request 27](https://github.com/atniclimate/dynamic-drought-module/pull/27)
-carries three bounded fixes from a desktop and mobile discovery pass over
-the live build, sequenced by an adversarial prep review.
-
-- The Fire view's current perimeters were unavailable on every boot, on
-  every device. The NIFC WFIGS query asked for every attribute and
-  full-precision geometry: measured 2026-08-28, 42.75 MB in 41.6 s for 243
-  perimeters against the layer's 15 s budget. The query now names the nine
-  attributes the application reads and asks the service to generalize each
-  outline for display (0.0005 degree, roughly 37 to 56 m across mapped
-  United States latitudes); the same request measured 1.90 MB in 6.1 s for
-  239 perimeters. Because generalization changes the drawn edge, the legend,
-  the perimeter popup, and the on-map key now say so, and say the outline is
-  not for evacuation, parcel, or tactical decisions. National scope and the
-  15 s budget are unchanged; viewport scoping remains roadmap task
-  DDM-P1-T06.
-- In embeds, the brand pill sat on the satellite control at every width
-  from the 200px floor to 1280px, the attribution button was under the brand
-  at 800 and 1280, the key strip covered the scale bar at 800x600, and the
-  loading pulse overlapped Share on phones. The 2026-08-19 desktop corner
-  rules are now scoped to non-embed shells, the embed dock lifts above
-  MapLibre's bottom-right stack, and the loading pulse leaves the top-right
-  controls alone. The preview badge keeps its top-right seat in embeds on
-  purpose. A spec hit-tests the satellite and attribution controls at five
-  widths.
-- Hosted builds now carry `DDM_BUILD_SHA` and a run-attributable
-  `DDM_BUILD_NONCE`, so the marker on `<html>` can prove which workflow run
-  produced the build instead of always reading `dev`.
-
-Verification receipts, the named-failure comparison against the
-idle-machine serial baseline, and the owner ratification of the
-generalization tolerance are recorded on the pull request.
+Pull request 27 (`ce13436`) fixed three issues found in a desktop and
+mobile discovery pass. The NIFC WFIGS current-perimeter query was
+requesting every attribute at full-precision geometry, 42.75 MB in 41.6 s
+for 243 perimeters against a 15 s budget; naming the nine attributes the
+application reads and asking the service to generalize the outline (about
+37 to 56 m across mapped US latitudes) cut that to 1.90 MB in 6.1 s for 239
+perimeters, and the legend, popup, and on-map key now say the outline is
+generalized and not for evacuation, parcel, or tactical decisions. In
+embeds, the brand pill, attribution button, key strip, and loading pulse
+each overlapped a MapLibre control at one or more widths from 200px to
+1280px; embed-specific CSS scoping fixed all four, hit-tested at five
+widths. Hosted builds began carrying `DDM_BUILD_SHA` and a
+run-attributable `DDM_BUILD_NONCE`, the foundation the later T04/T08 build
+checks rely on.
 
 ### 2026-08-19: the smoke volume gets height, and an empty sky gets a sentence
 
