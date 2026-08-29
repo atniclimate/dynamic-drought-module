@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, relative } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   ARCGIS_FIELD_PROBES,
   DRIFT_TIERS,
+  OUT_FIELDS_SENDERS_COVERED_ELSEWHERE,
   buildFieldProbeEntries,
   checkFieldSchema,
   classifyDriftResults,
@@ -159,6 +163,10 @@ test('extractOutFields reads literal lists, joined arrays, named string constant
       ? 'US_L4CODE,US_L4NAME,US_L3CODE,US_L3NAME'
       : 'US_L3CODE,US_L3NAME';
     const w = new URLSearchParams({ where, outFields, f: 'geojson' });
+    const outFields =
+      layer === 7
+        ? 'A,B'
+        : 'C';
   `;
   const found = extractOutFields(source);
   assert.deepEqual(found.map((f) => f.fields), [
@@ -169,10 +177,15 @@ test('extractOutFields reads literal lists, joined arrays, named string constant
     ['name', 'areasqkm', 'states'],
     ['US_L4CODE', 'US_L4NAME', 'US_L3CODE', 'US_L3NAME'],
     ['US_L3CODE', 'US_L3NAME'],
+    ['A', 'B'],
+    ['C'],
   ]);
   assert.deepEqual(found.map((f) => f.via), [
-    'literal', 'NIFC_OUT_FIELDS', 'PLANTS_OUT_FIELDS', 'LOCAL_FIELDS', 'template', 'ternary:isLevel4', 'ternary:!isLevel4',
+    'literal', 'NIFC_OUT_FIELDS', 'PLANTS_OUT_FIELDS', 'LOCAL_FIELDS', 'template', 'ternary:isLevel4', 'ternary:!(isLevel4)', 'ternary:layer === 7', 'ternary:!(layer === 7)',
   ]);
+  assert.deepEqual(found[7].fields, ['A', 'B']);
+  assert.deepEqual(found[8].fields, ['C']);
+  assert.equal(extractOutFields('interface Q { outFields: string }\nfunction f(outFields: string) {}').length, 0);
   assert.equal(found[1].importedFrom, '../config/wildfire-presentation');
   assert.equal(found[0].importedFrom, null);
   assert.deepEqual(found[4].dynamic, ['codeField']);
@@ -229,4 +242,45 @@ test('every ArcGIS field probe names a runtime URLS key, an existing module, and
   assert.deepEqual(wbd.fieldsExpected, ['name', 'areasqkm', 'states']);
   assert.deepEqual(wbd.fieldsDynamic, ['codeField']);
   assert.deepEqual(nifc.fieldsDynamic, []);
+});
+
+test('extractOutFields keeps an unresolvable identifier as unresolved instead of dropping it', () => {
+  const found = extractOutFields("const q = new URLSearchParams({ outFields: MYSTERY_FIELDS, f: 'json' });");
+  assert.equal(found.length, 1);
+  assert.equal(found[0].unresolved, true);
+  assert.equal(found[0].fields, null);
+  assert.equal(found[0].via, 'MYSTERY_FIELDS');
+});
+
+test('buildFieldProbeEntries throws on an unresolvable list instead of skipping it', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ddm-drift-'));
+  const first = ARCGIS_FIELD_PROBES[0];
+  await mkdir(join(root, first.file, '..'), { recursive: true });
+  await writeFile(join(root, first.file), "const p = new URLSearchParams({ outFields: MYSTERY_FIELDS });\n");
+  const urlEntries = ARCGIS_FIELD_PROBES.map((p) => ({ key: p.key, url: `https://example.test/${p.key}`, tier: DRIFT_TIERS.RUNTIME }));
+  await assert.rejects(() => buildFieldProbeEntries(urlEntries, root), /neither a local constant nor an import/);
+  await rm(root, { recursive: true, force: true });
+});
+
+test('every src file that sends outFields is probed or explicitly accounted for', async () => {
+  const root = new URL('../', import.meta.url);
+  const probed = new Set(ARCGIS_FIELD_PROBES.map((p) => p.file));
+  const accounted = new Set([...probed, ...Object.keys(OUT_FIELDS_SENDERS_COVERED_ELSEWHERE)]);
+  const senders = [];
+  async function walk(dir) {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) await walk(path);
+      else if (/\.(ts|tsx)$/.test(entry.name) && /\boutFields\b/.test(await readFile(path, 'utf8'))) {
+        senders.push(relative(fileURLToPath(root), path).replaceAll('\\', '/'));
+      }
+    }
+  }
+  await walk(fileURLToPath(new URL('src/', root)));
+  assert.ok(senders.length >= 15, `expected the runtime's outFields senders, found ${senders.length}`);
+  const missing = senders.filter((file) => !accounted.has(file));
+  assert.deepEqual(missing, [], 'outFields senders with neither a probe row nor a recorded reason');
+  for (const file of Object.keys(OUT_FIELDS_SENDERS_COVERED_ELSEWHERE)) {
+    assert.ok(senders.includes(file), `${file} is listed as covered elsewhere but no longer sends outFields`);
+  }
 });

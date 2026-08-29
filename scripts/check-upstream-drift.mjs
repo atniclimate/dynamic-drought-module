@@ -490,11 +490,30 @@ export const ARCGIS_FIELD_PROBES = Object.freeze([
 
 // `outFields: <expr>` (object key) or `outFields = <expr>` (a local const
 // later passed as shorthand). The expression is a string literal, a template
-// literal, an identifier (optionally `.join(',')`), or a ternary of two
-// string literals; a shorthand `outFields,` property is the assignment's
-// consumer and is not matched on its own.
+// literal, a ternary of two string literals whose condition is an
+// identifier or a comparison (`isLevel4`, `layer === 7`), or an identifier
+// (optionally `.join(',')`); a shorthand `outFields,` property is the
+// assignment's consumer and is not matched on its own, and a list passed
+// as a positional function argument is not seen at all (see
+// OUT_FIELDS_SENDERS_COVERED_ELSEWHERE).
+/**
+ * Every source file that mentions `outFields` must be in ARCGIS_FIELD_PROBES
+ * or here, with the reason it needs no row of its own; the drift contract
+ * test inventories `src/` and fails on a sender that is in neither, so a new
+ * ArcGIS query cannot arrive unprotected in silence.
+ */
+export const OUT_FIELDS_SENDERS_COVERED_ELSEWHERE = Object.freeze({
+  'src/config/urls.ts': 'documentation comments only; no query is built here',
+  'src/state/display-snapshot.ts': 'extracted list (BIA LARID) is a subset of the biaLarFeatureServer row today; not probed on its own',
+  'src/ui/search-controller.ts': 'extracted list is the same five BIA fields as the biaLarFeatureServer row today; not probed on its own',
+  'src/state/watershed-geometry.ts':
+    'NOT extracted (the template is a positional argument to geometryParams); byte-identical to the place-catalog template today',
+  'src/impact/sources.ts':
+    'NOT extracted (positional arguments to esriPointQuery and esriEnvelopeQuery): USDM DM and the NIFC identity fields are subsets of their rows today; the CPC 6-10 and 8-14 day point query (cat,prob) has no row',
+});
+
 const OUT_FIELDS_RE =
-  /\boutFields\s*[:=]\s*(?:'([^']*)'|"([^"]*)"|`([^`]*)`|([A-Za-z_][A-Za-z0-9_.]*)\s*\?\s*'([^']*)'\s*:\s*'([^']*)'|([A-Za-z_][A-Za-z0-9_]*)(?:\.join\(\s*','\s*\))?)/g;
+  /\boutFields\s*[:=]\s*(?:'([^']*)'|"([^"]*)"|`([^`]*)`|([A-Za-z_][A-Za-z0-9_.\s=!<>()]*?)\s*\?\s*'([^']*)'\s*:\s*'([^']*)'|([A-Za-z_][A-Za-z0-9_]*)(?:\.join\(\s*','\s*\))?)/g;
 
 const splitFields = (text) => text.split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -533,18 +552,23 @@ export function extractOutFields(source) {
       const dynamic = [...m[3].matchAll(/\$\{([^}]*)\}/g)].map((t) => t[1].trim());
       entries.push({ fields: splitFields(m[3].replace(/\$\{[^}]*\}/g, '')), via: 'template', importedFrom: null, dynamic });
     } else if (m[4] !== undefined) {
-      entries.push({ fields: splitFields(m[5]), via: `ternary:${m[4]}`, importedFrom: null, dynamic: [] });
-      entries.push({ fields: splitFields(m[6]), via: `ternary:!${m[4]}`, importedFrom: null, dynamic: [] });
+      const condition = m[4].replace(/\s+/g, ' ').trim();
+      entries.push({ fields: splitFields(m[5]), via: `ternary:${condition}`, importedFrom: null, dynamic: [] });
+      entries.push({ fields: splitFields(m[6]), via: `ternary:!(${condition})`, importedFrom: null, dynamic: [] });
     } else {
       const via = m[7];
+      // `outFields: string` is a TypeScript type annotation (an interface
+      // member or a parameter), not a list the module sends.
+      if (via === 'string') continue;
       const fields = resolveFieldConstant(source, via);
       const importedFrom = fields === null ? importSpecifierFor(source, via) : null;
-      entries.push({ fields, via, importedFrom, dynamic: [] });
+      // An identifier that is neither a local constant nor an import is
+      // kept as unresolved so a probe over it fails instead of skipping.
+      entries.push({ fields, via, importedFrom, dynamic: [], unresolved: fields === null && importedFrom === null });
     }
     for (const entry of entries) {
       if (entry.fields !== null && (entry.fields.length === 0 || entry.fields.includes('*'))) continue;
-      if (entry.fields === null && entry.importedFrom === null) continue;
-      out.push({ line, ...entry });
+      out.push({ line, unresolved: false, ...entry });
     }
   }
   return out;
@@ -585,6 +609,9 @@ async function fieldListsForProbe(probe, root) {
   const lists = [];
   const dynamic = new Set();
   for (const entry of found) {
+    if (entry.unresolved) {
+      throw new Error(`field probe ${probe.key}${probe.layer}: outFields at ${probe.file}:${entry.line} names ${entry.via}, which is neither a local constant nor an import`);
+    }
     if (entry.fields !== null) {
       if (probe.pick && !probe.pick(entry.fields)) continue;
       lists.push(entry.fields);
@@ -599,7 +626,10 @@ async function fieldListsForProbe(probe, root) {
       resolved = resolveFieldConstant(await readFile(candidate, 'utf8'), entry.via);
       if (resolved) break;
     }
-    if (resolved && (!probe.pick || probe.pick(resolved))) lists.push(resolved);
+    if (!resolved) {
+      throw new Error(`field probe ${probe.key}${probe.layer}: ${entry.via} imported from ${entry.importedFrom} at ${probe.file}:${entry.line} did not resolve to a field list`);
+    }
+    if (!probe.pick || probe.pick(resolved)) lists.push(resolved);
   }
   return { lists, dynamic: [...dynamic] };
 }
