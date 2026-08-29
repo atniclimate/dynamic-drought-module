@@ -1,21 +1,35 @@
 # The sharded browser suite, shared by Validate (pull requests) and the Pages
 # deploy (push to main) so the two can never prove different things.
 #
-# Shape (DDM-P0-T02, 2026-08-28): one serial run of the 830-spec suite took
-# 47 minutes on the 2-core runner, 98 percent of the job. Each page is its
-# own software-GL MapLibre context, so the lever is more runners, never more
-# workers per runner. The general `chromium` project fans out with
-# `--shard=i/n` (Playwright slices the file-ordered test list into
-# contiguous equal-count chunks); the 3D Fire specs, their own Playwright
-# project with their own per-test budgets, fan out the same way on their
-# own runners. Every shard builds and serves its own dist/, so no shard
-# reads another's state.
+# Shape (DDM-P0-T02, 2026-08-28; reshaped 2026-08-29 for the measured flake
+# cluster, see below). Public-repo standard runners are 4 vCPU / 16 GB (the
+# upgrade from 2-core completed Feb 2024, github.blog "Double the power for
+# open source"); the one-worker-per-runner ceiling below was measured on a
+# developer laptop and has never been re-tested on this hardware. The
+# `workers` and `retries` inputs above let a branch dispatch of Validate
+# sample that without touching production behavior (see tests/README.md for
+# the adoption rule). Until that experiment reports back the lever stays
+# more runners, never more workers per runner: each page is its own
+# software-GL MapLibre context.
 #
-# Counts, from the 2026-08-28 idle serial baseline (31.2 min locally, 47 on
-# the runner, so about 1.5x): general project 16.4 min over 798 tests, max
-# slice 5.3 min at 4 shards; 3D project 13.7 min over 32 tests, max slice
-# 5.5 min at 3 shards. Each shard then lands near 11 minutes on the runner
-# with build and provisioning. Re-fit these when the suite grows.
+# Three Playwright projects fan out with `--shard=i/n` (Playwright slices
+# each project's file-ordered test list into contiguous equal-count chunks),
+# one worker per runner: `chromium` (general), `chromium-interaction` (the
+# measured flake cluster; see INTERACTION_SPECS in playwright.config.ts), and
+# `chromium-3d` (the Fire 3D specs, their own per-test budgets). Every shard
+# builds and serves its own dist/, so no shard reads another's state.
+#
+# Counts, measured with `npx playwright test --list --project=<p>
+# --shard=i/n` on 56dd46a (2026-08-29): chromium 763 tests over 4 shards
+# (191/191/191/190), chromium-interaction 42 tests over 2 shards (21/21),
+# chromium-3d 32 tests over 2 shards (16/16). 3D moved from 3 shards to 2:
+# the prior split ran 1.5 / 6.4 / 6.7 minutes per shard (one near-empty
+# Node-level slice, two scene-build-bound slices), so dropping to 2 is
+# time-neutral and pays for the interaction project's two runners, net one
+# more shard job than before (8 total), still well inside the 20-job
+# concurrency cap on a free public repo. Wall-clock timing for this new
+# composition is this PR's own Validate run; re-fit these when the suite
+# grows.
 
 name: Browser suite
 
@@ -30,6 +44,29 @@ on:
         description: The run-attributable nonce the build marker must carry.
         required: true
         type: string
+      # Experiment inputs (R3, 2026-08-29). No new workflow: a workers=2 trial
+      # or a retries=0 sample runs by dispatching Validate on a branch
+      # (validate.yml plumbs matching workflow_dispatch inputs through to
+      # this call), never through deploy.yml. Both default to production
+      # behavior, so an ordinary Validate or deploy call is unaffected.
+      workers:
+        description: >-
+          Playwright --workers value for every shard's runner. The
+          one-worker-per-runner ceiling in playwright.config.ts was measured
+          on a developer laptop and has never been re-tested on the public
+          runner's 4 vCPU / 16 GB. Default '1' matches today's behavior.
+        required: false
+        type: string
+        default: '1'
+      retries:
+        description: >-
+          Playwright --retries override for every shard. Empty (the default)
+          leaves retries to playwright.config.ts's own isCI setting; set it
+          to sample a retry-zero run's true flake rate without editing the
+          config.
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -59,9 +96,10 @@ jobs:
           - { project: chromium, shard: 2, total: 4 }
           - { project: chromium, shard: 3, total: 4 }
           - { project: chromium, shard: 4, total: 4 }
-          - { project: chromium-3d, shard: 1, total: 3 }
-          - { project: chromium-3d, shard: 2, total: 3 }
-          - { project: chromium-3d, shard: 3, total: 3 }
+          - { project: chromium-interaction, shard: 1, total: 2 }
+          - { project: chromium-interaction, shard: 2, total: 2 }
+          - { project: chromium-3d, shard: 1, total: 2 }
+          - { project: chromium-3d, shard: 2, total: 2 }
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -86,11 +124,23 @@ jobs:
       # ceiling). Reporters come from the config: a named line per test,
       # GitHub annotations on failure, an HTML report, and a JSON report
       # for the summary below. The step budget covers the measured shard
-      # (about 11 minutes) plus two CI retries of the slowest 3D tests.
+      # (about 11 minutes) plus one CI retry (playwright.config.ts, dropped
+      # from two on 2026-08-29: nothing ever passed on retry 2) of the
+      # slowest 3D tests.
       - name: Run the browser shard
         id: suite
         timeout-minutes: 26
-        run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=1
+        env:
+          # Routed through env, like RETRIES_ARG below, rather than
+          # interpolated directly into `run:`, so neither input's value is
+          # spliced into the shell command line.
+          WORKERS: ${{ inputs.workers }}
+          # Non-empty only when the `retries` experiment input (above) was
+          # set; a plain call (Validate's pull_request path, or deploy.yml)
+          # leaves this empty and playwright.config.ts's own isCI retries
+          # setting governs, unchanged.
+          RETRIES_ARG: ${{ inputs.retries != '' && format('--retries={0}', inputs.retries) || '' }}
+        run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=$WORKERS $RETRIES_ARG
 
       # DDM-P0-T06: name what happened. The job summary lists passed, failed,
       # flaky (passed only on retry), and skipped counts and the file:line of
@@ -103,6 +153,30 @@ jobs:
         env:
           PLAYWRIGHT_PROJECT: ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
         run: node scripts/summarize-playwright-shard.mjs test-results/report.json >> "$GITHUB_STEP_SUMMARY"
+
+      # Measurement channel (R1/R3, 2026-08-29): upload the raw JSON report
+      # unconditionally, every shard, not only on failure or flake, so a real
+      # duration profile exists to decide shard composition and worker counts
+      # (there was none before this). It carries per-test title, file:line,
+      # status, duration, and retry index, plus per-result stdout/stderr text
+      # and an attachments list that today is always empty (traces and
+      # screenshots are off in CI) -- no response bodies. (PR 39,
+      # ci/t08-retention-flip-2026-08-29, proposes turning traces on for
+      # retry 1 without screenshots; if that lands, this list gains a trace
+      # reference for retried tests, still no response bodies, under that
+      # PR's own guarantees.) This upload's cleanliness rests on the same
+      # guarantee as DDM-P1-T08: every suite boot answers the sovereign
+      # boundary queries from synthetic fixtures (PR 34), so no live
+      # geometry ever reaches a test's stdout or the report JSON. Short
+      # retention: this is a measurement artifact, not a diagnostic one.
+      - name: Keep the JSON report for measurement
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-json-${{ matrix.project }}-${{ matrix.shard }}-of-${{ matrix.total }}
+          path: test-results/report.json
+          retention-days: 3
+          if-no-files-found: ignore
 
       # Keep the HTML report (error text, ARIA error context, stdout and
       # stderr, timings) when the shard failed or passed only on retry, so a

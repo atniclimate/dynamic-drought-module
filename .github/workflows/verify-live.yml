@@ -100,7 +100,7 @@ on:
     workflows: ["Build and deploy DDM to GitHub Pages"]
     types: [completed]
   schedule:
-    # 14:15 UTC daily, after the 13:00 upstream monitor and the 13:30
+    # 14:15 UTC daily, after the 13:07 upstream monitor and the 13:41
     # source-health probe, so the three receipts do not contend for
     # runners. Daily rather than hourly: the compare only has something
     # new to say when a deploy failed or was cancelled, the deploy failure

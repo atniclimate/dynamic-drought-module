@@ -50,6 +50,26 @@ const isCI = !!process.env['CI'];
 // Locally `npm test` and `npm run test:serial` still run both projects.
 const FIRE3D_SPECS = ['**/fire3d-mode.spec.ts', '**/view-contracts.spec.ts'];
 
+// The interaction cluster (R1/R3, 2026-08-29): these four files carry about
+// 35 of the 53 named flake events tallied in the per-test table (section 3)
+// of the 2026-08-29 CI flake report, across 21 CI runs (01:38-10:30 UTC) --
+// a livelock in a click-retry loop, a sub-120ms CSS-transition read, an
+// unwaited restore race, and the shards that happened to sit beside them.
+// (The report's own "33" figure is a different slice: the chromium 3/4
+// shard's event count, not a per-file total -- do not conflate the two.)
+// They hold 42 tests today (`npx playwright test --list
+// --project=chromium-interaction`, measured on 56dd46a). Moving them to
+// their own project gives them a stable identity (a named project does not
+// move when tests are added, unlike a shard boundary) and isolates a red or
+// flaky run to its own ~2-shard project instead of dragging the whole
+// general project.
+const INTERACTION_SPECS = [
+  '**/popup-viewport.spec.ts',
+  '**/studio-restore.spec.ts',
+  '**/s4-minimap.spec.ts',
+  '**/s4-shell.spec.ts'
+];
+
 // MapLibre GL needs a WebGL2 context. Headless Chromium has no GPU, so force
 // ANGLE over SwiftShader (a pure-software GL implementation) and allow it
 // explicitly (recent Chromium gates the SwiftShader WebGL fallback behind
@@ -83,8 +103,14 @@ export default defineConfig({
 
   // Retries in CI absorb the occasional cold-map or slow-tile flake on the
   // software renderer; local runs never retry, so a real regression is not
-  // masked behind a green retry.
-  retries: isCI ? 2 : 0,
+  // masked behind a green retry. Measured, not assumed (2026-08-29): across
+  // 196 shard executions since 2026-08-29 01:38 UTC, every flaky pass came on
+  // retry 1 and nothing ever passed on retry 2, so the third attempt bought no
+  // green-ness while costing roughly 6 minutes on a red shard. One retry keeps
+  // the same flake tolerance for less wall clock. browser-suite.yml's
+  // `retries` workflow_call input can override this per dispatch for a
+  // retry-zero sample.
+  retries: isCI ? 1 : 0,
 
   // A guard against a missing `test.only` sneaking into CI.
   forbidOnly: isCI,
@@ -168,16 +194,25 @@ export default defineConfig({
 
   projects: [
     {
-      // Everything except the 3D Fire specs. CI shards this project across
-      // a runner matrix with `--shard=i/n` (contiguous equal-count slices of
-      // the file-ordered test list), one worker per runner.
+      // Everything except the 3D Fire specs and the interaction cluster. CI
+      // shards this project across a runner matrix with `--shard=i/n`
+      // (contiguous equal-count slices of the file-ordered test list), one
+      // worker per runner.
       name: 'chromium',
       // `**/*.test.mjs` are the node:test suites (`node --test`, run by the
       // gate); Playwright's default testMatch otherwise IMPORTS them on every
       // collection and every worker, where they register zero Playwright
       // tests but do execute, so a module-scope throw in one would red a
       // shard as a collection error rather than fail its own runner.
-      testIgnore: [...FIRE3D_SPECS, '**/*.test.mjs'],
+      testIgnore: [...FIRE3D_SPECS, ...INTERACTION_SPECS, '**/*.test.mjs'],
+      use: CHROMIUM_USE
+    },
+    {
+      // The interaction cluster, sharded onto its own runners in CI. See
+      // INTERACTION_SPECS above for why these four files are grouped.
+      name: 'chromium-interaction',
+      testMatch: INTERACTION_SPECS,
+      testIgnore: ['**/*.test.mjs'],
       use: CHROMIUM_USE
     },
     {
