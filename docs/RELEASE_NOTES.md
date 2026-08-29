@@ -31,6 +31,16 @@ the 2026-08-24 scheduled ENSO refresh deployed
 hosted build nonce was the local fallback `dev` until pull request 27 made
 each hosted build attributable to its run.
 
+### 2026-08-29: Dependabot proposes Action SHA updates
+
+Roadmap task DDM-P0-T07 required that automated dependency updates can
+propose later SHA changes for review; `.github/dependabot.yml` now does
+that for the `github-actions` ecosystem, weekly, covering both
+`.github/workflows` and the `.github/actions/playwright-chromium` composite
+action. The npm ecosystem stays out of this file because application
+dependency upgrades change the shipped bundle and remain a separate owner
+decision.
+
 ### 2026-08-29: CI retains a pixel-free trace on the first retry
 
 Owner decision, recorded 2026-08-29 at 03:41 PDT: the DDM-P1-T08 flip is
@@ -94,6 +104,7 @@ runs, which is the precondition for turning any pixels back on; a licensing
 review of the other public agency geometry and raster tile bodies a trace may
 carry; and `retain-on-failure`, which would record the original failing
 attempt rather than the retry.
+
 
 ### 2026-08-29: every suite boot answers the sovereign boundary queries from synthetic fixtures
 

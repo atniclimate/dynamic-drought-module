@@ -143,6 +143,11 @@ provenance, pinned source versions when appropriate, expected feature or byte
 bands, and semantic canaries. Generated artifacts should be changed through
 their authoritative builder, never by hand.
 
+Workflow files pin every third-party GitHub Action to a full commit SHA the
+same way; `.github/dependabot.yml` proposes SHA updates for those pins
+weekly, and each proposal is reviewed like any other pull request, with
+Validate running on it before merge.
+
 Common builders include:
 
 ```powershell
