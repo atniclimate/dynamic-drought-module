@@ -249,8 +249,15 @@ jobs:
               n=1
               while [ "$n" -lt "$attempt" ]; do
                 # </dev/null so gh cannot swallow the herestring this loop
-                # is reading from and eat the remaining candidates.
-                conclusion=$(gh api "repos/$REPO/actions/runs/$id/attempts/$n" --jq '.conclusion // ""' </dev/null)
+                # is reading from and eat the remaining candidates. `|| true`
+                # and one retry because `set -e` would otherwise turn a
+                # single API hiccup into a red compare: the answer this call
+                # is looking for is "success", and an empty answer already
+                # means "not proved to have published".
+                conclusion=$(gh api "repos/$REPO/actions/runs/$id/attempts/$n" --jq '.conclusion // ""' </dev/null 2>/dev/null || true)
+                if [ -z "$conclusion" ]; then
+                  conclusion=$(gh api "repos/$REPO/actions/runs/$id/attempts/$n" --jq '.conclusion // ""' </dev/null 2>/dev/null || true)
+                fi
                 if [ "$conclusion" = "success" ]; then
                   ok=true
                   break
@@ -336,6 +343,7 @@ jobs:
       # Re-point the working tree at that commit so the PMTiles range
       # checks read the archive list the verified build shipped.
       - name: Align the checkout with the resolved commit
+        id: align
         if: ${{ steps.expect.outputs.verdict == 'verify' }}
         run: |
           set -euo pipefail
@@ -362,13 +370,26 @@ jobs:
         if: ${{ steps.expect.outputs.verdict == 'verify' }}
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          url=$(gh api "repos/${{ github.repository }}/pages" --jq .html_url 2>/dev/null || true)
-          if [ -z "$url" ]; then
-            echo "::error::The Pages configuration for ${{ github.repository }} could not be read, so the URL under proof is unknown. Refusing to fall back to the hard-coded public seat: proving a site this workflow was not told to check would be a false receipt."
+          url=$(gh api "repos/$REPO/pages" --jq '.html_url // ""' 2>/dev/null || true)
+          # `null` as a literal string is the shape an absent html_url takes
+          # once it has been through jq and a shell variable. Catching it
+          # here, rather than letting it reach --base and fail argument
+          # parsing three steps later, keeps the reason at the point that
+          # knows it: the site under proof is unknown.
+          if [ -z "$url" ] || [ "$url" = "null" ]; then
+            echo "::error::The Pages configuration for $REPO gave no html_url, so the URL under proof is unknown. Refusing to fall back to the hard-coded public seat: proving a site this workflow was not told to check would be a false receipt."
             exit 1
           fi
+          case "$url" in
+            https://*) ;;
+            *)
+              echo "::error::The Pages configuration for $REPO returned '$url', which is not an https URL."
+              exit 1
+              ;;
+          esac
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Verifying $DEPLOY_SHA (deploy runs $DEPLOY_RUN_NONCES) at $url"
 
@@ -381,11 +402,16 @@ jobs:
         id: light
         if: ${{ steps.expect.outputs.verdict == 'verify' && github.event_name == 'schedule' }}
         timeout-minutes: 10
+        # Through `env:` and quoted, not interpolated into the command line:
+        # the resolve step above makes the same promise about API text, and
+        # a URL from the Pages API is API text like any other.
+        env:
+          BASE_URL: ${{ steps.pages.outputs.url }}
         run: |
           set +e
           node scripts/verify-live.mjs \
             --light \
-            --base "${{ steps.pages.outputs.url }}" \
+            --base "$BASE_URL" \
             --expect-sha "$DEPLOY_SHA" \
             --expect-nonce "$DEPLOY_RUN_NONCES" \
             --out live-receipt.json \
@@ -398,12 +424,27 @@ jobs:
       # when the light checks found something. That is why the browser
       # install is here rather than above: a green scheduled day never pays
       # for it.
+      #
+      # `!cancelled()` rather than the implicit success(): a light step
+      # KILLED by its own timeout concludes `failure`, which under the
+      # implicit rule would skip every step below and file an issue with no
+      # deep proof behind it. The gate is therefore "the light half did not
+      # come back clean", which covers exit 1 and a light step that never
+      # got to write an exit code at all. The prerequisites the deep proof
+      # genuinely needs are named explicitly instead, so a failed align or
+      # an unresolved Pages URL still skips it: removing the implicit
+      # success() removes the whole chain, not just the part that was wrong.
       - name: Install dependencies
-        if: ${{ steps.expect.outputs.verdict == 'verify' && (github.event_name != 'schedule' || steps.light.outputs.exit_code != '0') }}
+        id: deps
+        if: >-
+          ${{ !cancelled() && steps.expect.outputs.verdict == 'verify'
+              && steps.align.outcome == 'success' && steps.pages.outcome == 'success'
+              && (github.event_name != 'schedule' || steps.light.outputs.exit_code != '0') }}
         run: npm ci
 
       - name: Provision Chromium
-        if: ${{ steps.expect.outputs.verdict == 'verify' && (github.event_name != 'schedule' || steps.light.outputs.exit_code != '0') }}
+        id: chromium
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
         uses: ./.github/actions/playwright-chromium
 
       # Best effort only. The newest kept receipt from an earlier green run
@@ -415,7 +456,7 @@ jobs:
       # that the comparison was skipped rather than claiming it passed.
       - name: Fetch the previous live receipt
         id: previous
-        if: ${{ steps.expect.outputs.verdict == 'verify' && (github.event_name != 'schedule' || steps.light.outputs.exit_code != '0') }}
+        if: ${{ !cancelled() && steps.chromium.outcome == 'success' }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -440,15 +481,18 @@ jobs:
       # run even when this step times out.
       - name: Verify the live build (deep)
         id: deep
-        if: ${{ steps.expect.outputs.verdict == 'verify' && (github.event_name != 'schedule' || steps.light.outputs.exit_code != '0') }}
+        if: ${{ !cancelled() && steps.chromium.outcome == 'success' }}
         timeout-minutes: 16
+        env:
+          BASE_URL: ${{ steps.pages.outputs.url }}
+          PREVIOUS_RECEIPT: ${{ steps.previous.outputs.path }}
         run: |
           set +e
           node scripts/verify-live.mjs \
-            --base "${{ steps.pages.outputs.url }}" \
+            --base "$BASE_URL" \
             --expect-sha "$DEPLOY_SHA" \
             --expect-nonce "$DEPLOY_RUN_NONCES" \
-            --previous "${{ steps.previous.outputs.path }}" \
+            --previous "$PREVIOUS_RECEIPT" \
             --out live-receipt.json \
             --summary "$GITHUB_STEP_SUMMARY" 2>&1 | tee -a verify-output.txt
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
