@@ -301,6 +301,12 @@ test.describe('DEF-3 finding 1: half sheet plus footer occlusion (390x844, touch
         }
       )
       .toBe(true);
+    // This wait is a budget, not a proof: nothing on the page signals
+    // that settle()'s 220 ms easeTo has actually finished without adding
+    // a src/ hook (onSheetDetentSettle in mobile-sheet.ts ~188 fires its
+    // listeners bundle-internally and is not reachable from a test), so
+    // 900 ms only gives the camera a head start. The retry loop below,
+    // not this wait, is what actually makes the test reliable.
     const settleBudgetMs = 900;
     const sinceDetent = Date.now() - detentSetAt;
     if (sinceDetent < settleBudgetMs) {
@@ -308,14 +314,15 @@ test.describe('DEF-3 finding 1: half sheet plus footer occlusion (390x844, touch
     }
 
     // Open the coordinated popup at the center of the UNOBSCURED strip.
-    // Re-measured on every attempt below, never frozen: a stale cx/cy
-    // taken once before the sheet and map finished settling is the
-    // FE-23 livelock's root cause (a click that misses the fixture
-    // polygon hits empty ground, and the coordinator's next click always
-    // replaces or closes the current response, so a miss compounds).
-    let sheetTop = await sidebar.evaluate((el) => el.getBoundingClientRect().top);
+    // #sidebar is `position: fixed` under a sheet detent (app.css ~3011),
+    // so this snapshot and the map's live rect below resolve to the same
+    // cx/cy on every retry; re-measuring the map box in targetPoint() is
+    // a safety, not the fix. What actually ends the FE-23 livelock is
+    // below: skip the click once a card is already open (re-clicking is
+    // what killed it) and give the build a 6 s budget that comfortably
+    // outlasts the camera's trailing easeTo.
+    const sheetTop = await sidebar.evaluate((el) => el.getBoundingClientRect().top);
     async function targetPoint(): Promise<{ cx: number; cy: number }> {
-      sheetTop = await sidebar.evaluate((el) => el.getBoundingClientRect().top);
       const liveMapBox = await page.locator('#map').boundingBox();
       expect(liveMapBox, 'the map lost its bounding box').not.toBeNull();
       return {
