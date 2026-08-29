@@ -51,6 +51,14 @@ simple = { limit = 600, period = 60 }
 # wants to override the User-Agent string, add a `UA_OVERRIDE` here and read
 # it in `src/index.ts` from `env`.
 
+# DDM-D07 (2026-08-29): Workers Logs stay off. The account default would
+# record every invocation URL, here the full `?url=<encoded upstream>` query
+# string, which is telemetry nobody opted into (stewardship rule 3). Declared
+# in reviewed source so the dashboard default cannot govern the deployed
+# script; no Logpush job targets it either.
+[observability]
+enabled = false
+
 # [[routes]]
 # pattern = "proxy.example.org/*"
 # zone_name = "example.org"
