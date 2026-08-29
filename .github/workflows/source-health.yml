@@ -6,10 +6,13 @@
 # in 41.6 s against a 15 s budget, CI stayed green because the suite stubs
 # every feed, and every user saw an honest but wrong "unavailable" for an
 # unknown period). This workflow builds the application, serves it, boots
-# it once per catalog layer, and records the requests the RUNTIME issues:
-# status, bytes, seconds, record count, and the layer's terminal state.
-# Basemap tiles are answered with a blank tile; every other request goes
-# where the runtime sends it, with a named User-Agent, once a day.
+# it once as a control and once per catalog layer at the default camera
+# (22 boots), and records the requests the RUNTIME issues: status, bytes,
+# seconds, record count, cache headers, failed requests, and the layer's
+# state after a stability window. Basemap tiles are answered with a blank
+# tile, the ambient requests every boot makes are fetched once and replayed
+# to the other boots, and every other request goes where the runtime sends
+# it, with a named User-Agent, once a day.
 #
 # Receipts are a job summary and a short-retention artifact, never a
 # commit (a commit to main triggers a deploy). A breach opens or updates
@@ -44,7 +47,7 @@ jobs:
   probe:
     name: Probe the runtime's sources
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
     # The build stamp names this run so the receipt is attributable
     # (tests/helpers.ts explains the stamp).
     env:
@@ -82,16 +85,17 @@ jobs:
           cat preview.log
           exit 1
 
+      # 22 boots (control plus 21 catalog rows) at up to about a minute each
+      # on a slow day; the receipt is written after every row, so a timeout
+      # still leaves the finished rows for the issue step.
       - name: Probe every catalog layer
         id: probe
-        timeout-minutes: 25
+        timeout-minutes: 30
         env:
           LAYERS: ${{ github.event.inputs.layers }}
         run: |
           set +e
-          extra=""
-          if [ -n "$LAYERS" ]; then extra="--layers $LAYERS"; fi
-          node scripts/source-health.mjs --base http://127.0.0.1:4173/ --out source-health-receipt.json --summary "$GITHUB_STEP_SUMMARY" $extra 2>&1 | tee probe-output.txt
+          node scripts/source-health.mjs --base http://127.0.0.1:4173/ --out source-health-receipt.json --summary "$GITHUB_STEP_SUMMARY" ${LAYERS:+--layers "$LAYERS"} 2>&1 | tee probe-output.txt
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
           exit 0
 
@@ -130,6 +134,7 @@ jobs:
             });
             const byKey = new Map();
             for (const issue of open) {
+              if (issue.pull_request) continue;
               const m = /<!-- ddm-source-health:([a-z0-9-]+) -->/.exec(issue.body ?? '');
               if (m) byKey.set(m[1], issue);
             }
