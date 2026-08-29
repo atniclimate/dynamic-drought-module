@@ -114,17 +114,44 @@ export default defineConfig({
     baseURL: BASE_URL,
     // Locally, traces and screenshots are captured only when something goes
     // wrong, so the tree stays clean on a green run (they land in gitignored
-    // `test-results/`). In CI both are OFF: the ordinary boot fetches live
-    // AIANNH and BIA boundary geometry, which the runtime holds in memory and
-    // never writes to disk (the project's hard rule 1; see the
-    // NON-REDISTRIBUTION GUARD in src/layers/aiannh.ts and the cache note in
-    // src/layers/bia-reservations.ts). A trace records response bodies and a
-    // screenshot renders the polygons, and CI retains failure diagnostics as
-    // artifacts on a public repository. The retained report keeps the error
-    // text, the ARIA error context, stdout and stderr, and timings, none of
-    // which carry geometry. The explicit evidence captures in
-    // fire3d-mode.spec.ts are gated on CI for the same reason.
-    trace: isCI ? 'off' : 'on-first-retry',
+    // `test-results/`). CI is DELIBERATELY NOT the same (2026-08-29,
+    // DDM-P1-T08, owner ratified and then narrowed by adversarial review):
+    // CI keeps a PIXEL-FREE trace and NO screenshots.
+    //
+    // Both were off in CI until today because the ordinary boot fetched live
+    // AIANNH and BIA boundary geometry, which a trace records as a response
+    // body and a screenshot renders as pixels, and every artifact on this
+    // PUBLIC repository is downloadable by any GitHub user (the project's
+    // hard rule 1; see the NON-REDISTRIBUTION GUARD in src/layers/aiannh.ts
+    // and the cache note in src/layers/bia-reservations.ts). Since T08 every
+    // boot answers those two queries from synthetic fixtures
+    // (installBoundaryStubs, called by gotoApp in tests/helpers.ts, routed on
+    // the CONTEXT so a popup inherits them), so the response-body objection
+    // is answered and tests/boundary-stubs.spec.ts and
+    // tests/boundary-boot-inventory.test.mjs keep it answered.
+    //
+    // The PIXEL objection is not answered, so pixels stay out. The basemap is
+    // live OpenStreetMap raster (src/map/style.ts), and a rendered frame of
+    // synthetic rectangles labelled as Tribal geography can be mistaken for
+    // real boundaries once it is detached from its test. So in CI:
+    // `screenshots: false` drops the trace's own timeline frames, `screenshot`
+    // stays `off`, and `video` is off everywhere. `sources: false` keeps the
+    // spec source text out of a public zip. What remains is what diagnoses a
+    // flake: request and response records, DOM snapshots, console, and
+    // timings. A synthetic basemap would be the precondition for turning
+    // pixels back on; that is deferred, not assumed.
+    //
+    // `on-first-retry` records retry 1, not the original failing attempt 0.
+    // Accepted for now because every flaky pass observed on this suite came
+    // on retry 1, so the retry trace still carries the timing of the flaky
+    // path; `retain-on-failure` is the upgrade if retry traces prove thin.
+    //
+    // The explicit evidence captures in fire3d-mode.spec.ts stay gated on CI:
+    // they are a deliberate local scene capture for the owner's visual
+    // review, not failure diagnosis, and nothing retains them.
+    trace: isCI
+      ? { mode: 'on-first-retry', screenshots: false, snapshots: true, sources: false }
+      : 'on-first-retry',
     screenshot: isCI ? 'off' : 'only-on-failure',
     video: 'off'
   },

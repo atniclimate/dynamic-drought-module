@@ -107,15 +107,46 @@ jobs:
       # Keep the HTML report (error text, ARIA error context, stdout and
       # stderr, timings) when the shard failed or passed only on retry, so a
       # red or flaky shard is diagnosable without rerunning it blind; a clean
-      # shard uploads nothing. Traces and screenshots are off in CI
-      # (playwright.config.ts): the ordinary boot fetches live AIANNH and BIA
-      # boundary geometry that the runtime never writes to disk, and a
-      # retained artifact on a public repository would. Short retention.
+      # shard uploads nothing.
+      #
+      # Since 2026-08-29 (DDM-P1-T08, owner ratified) the report ALSO embeds
+      # the first-retry trace zips, because the HTML reporter copies every
+      # attachment into `playwright-report/data/`. Those traces are PIXEL-FREE
+      # by configuration (playwright.config.ts: `screenshots: false` inside
+      # the CI trace object, `screenshot: off`, `video: off`, `sources:
+      # false`), so no rendered map frame and no spec source text leaves this
+      # job. Their response bodies are safe because every boot answers the
+      # Census AIANNH and BIA AIAN-LAR queries from synthetic fixtures
+      # (installBoundaryStubs, called by gotoApp in tests/helpers.ts, routed
+      # on the browser CONTEXT so a popup inherits it), and
+      # tests/boundary-stubs.spec.ts plus
+      # tests/boundary-boot-inventory.test.mjs enforce that. Artifacts on this
+      # PUBLIC repository are downloadable by any GitHub user, so retention
+      # drops from seven days to three: same-day diagnosis, not a record.
+      # Retention shortens exposure; it is not what makes the content safe.
       - name: Keep the failure or flaky report
         if: ${{ !cancelled() && (steps.suite.outcome != 'success' || steps.summary.outputs.flaky != '0') }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report-${{ matrix.project }}-${{ matrix.shard }}-of-${{ matrix.total }}
           path: playwright-report/
-          retention-days: 7
+          retention-days: 3
+          if-no-files-found: ignore
+
+      # The raw `test-results/` tree beside the report: the pixel-free
+      # first-retry trace zips at a predictable path, plus the JSON report the
+      # summary step read. A SEPARATE artifact rather than a second `path:` on
+      # the step above, so each artifact's name still describes its content:
+      # the report is the readable one you open with
+      # `npx playwright show-report`, this is the raw one you feed to
+      # `npx playwright show-trace` or grep over, which is how the T08
+      # acceptance check reads a retained trace. Same three-day retention and
+      # the same guarantee as the report, for the same reason.
+      - name: Keep the failure or flaky traces
+        if: ${{ !cancelled() && (steps.suite.outcome != 'success' || steps.summary.outputs.flaky != '0') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-traces-${{ matrix.project }}-${{ matrix.shard }}-of-${{ matrix.total }}
+          path: test-results/
+          retention-days: 3
           if-no-files-found: ignore

@@ -696,6 +696,51 @@ export const URLS = Object.freeze({
   biaTribalLeadersDirectory:
     'https://services1.arcgis.com/UxqqIfhng71wUT9x/arcgis/rest/services/TribalLeadership_Directory/FeatureServer/0',
 
+  // ---------- Washington Ecology Treaty-ceded areas (candidate, unwired) ----------
+  // Layer 10 of the Washington State Department of Ecology ECY FeatureServer,
+  // published as `TribalLands`: Treaty-ceded areas in Washington State, plus
+  // the Camp Stevens cessions that reach into Oregon and Idaho, from Treaties
+  // dated 1854 to 1892. Polygon geometry; attributes include TRIBAL_NM,
+  // TREATY_NM, TREATY_DT, LAND_TYPE, and OLD_RES_NM.
+  //
+  // STEWARDSHIP, and the reason this entry is the most sensitive candidate in
+  // this file. These are Treaty-cession REPRESENTATIONS drawn by a state
+  // agency, not jurisdictional truth and not a Tribal Nation's own account of
+  // its Treaty. The publisher says so itself: Ecology "makes no warranty for
+  // the accuracy of this material", calls the layer "draft information and a
+  // work in progress" to be "used only as a generalized visual guide to 150
+  // year old treaties of limited content", records that some Treaty
+  // descriptions "were found to be inadequate, inaccurate and in some cases
+  // misleading", and notes the boundaries were digitized from stream lines,
+  // watershed units, ridgelines, and orthophotos rather than surveyed. Any
+  // surfacing must carry that caveat verbatim in substance, must not blend
+  // these polygons with reservation or trust-land representations, and must
+  // not present them as current Tribal reservation extent (Ecology points at
+  // the Department of Natural Resources Major Public Lands layer for that).
+  // Wiring this layer is a stewardship decision for the sovereign
+  // authorities concerned, not a technical one: no polygon from it may be
+  // committed to this repository or written into a test artifact (the
+  // project's hard rule 1; see the NON-REDISTRIBUTION GUARD in
+  // src/layers/aiannh.ts).
+  //
+  // TERMS: Washington State Department of Ecology holds the copyright line;
+  // the layer carries no explicit open-data license string, so treat it as
+  // attribution-required and unresolved until a wiring decision asks the
+  // agency directly.
+  // Verified 2026-08-29: HTTP 200, application/json; charset=utf-8;
+  // Access-Control-Allow-Origin: * (genuine wildcard, checked with the
+  // production origin; direct fetch, no proxy). Feature Layer, polygon,
+  // maxRecordCount 2000, capabilities Query,Extract,Sync.
+  // PROBE ONLY, NO RUNTIME CALLER. Nothing in src/ imports this key. Its one
+  // consumer is scripts/check-upstream-drift.mjs, a Node liveness probe that
+  // runs under .github/workflows/upstream-monitor.yml with no browser and no
+  // Playwright, and it is listed in that script's CANDIDATE_SOURCE_KEYS so a
+  // vanished upstream warns instead of failing a build. No suite boot can
+  // reach it, which is why the DDM-P1-T08 trace review found nothing to stub
+  // here; this docblock exists so the next contributor who wires it trips
+  // over the stewardship review before shipping rather than after.
+  // Anti-scrape note: the ECY FeatureServer /10 query path, not an Ecology
+  // HTML map viewer.
   waEcologyCededLands:
     'https://services.arcgis.com/6lCKYNJLvwTXqrmp/arcgis/rest/services/ECY/FeatureServer/10',
 

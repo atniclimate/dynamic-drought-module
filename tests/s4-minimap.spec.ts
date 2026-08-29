@@ -37,98 +37,6 @@ const NADM_FIXTURE = {
   ],
 };
 
-const NADM_LAND_FIXTURE = {
-  type: 'FeatureCollection',
-  features: [
-    {
-      type: 'Feature',
-      properties: { FIPS_CNTRY: 'US' },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [
-          [
-            [-180, 10],
-            [-40, 10],
-            [-40, 85],
-            [-180, 85],
-            [-180, 10],
-          ],
-        ],
-      },
-    },
-    {
-      type: 'Feature',
-      properties: { FIPS_CNTRY: 'US' },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [
-          [
-            [172, 52],
-            [174, 52],
-            [174, 54],
-            [172, 54],
-            [172, 52],
-          ],
-        ],
-      },
-    },
-    {
-      type: 'Feature',
-      properties: { FIPS_CNTRY: 'CA' },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [
-          [
-            [-142, 41],
-            [-51, 41],
-            [-51, 85],
-            [-142, 85],
-            [-142, 41],
-          ],
-        ],
-      },
-    },
-    {
-      type: 'Feature',
-      properties: { FIPS_CNTRY: 'MX' },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [
-          [
-            [-120, 14],
-            [-85, 14],
-            [-85, 34],
-            [-120, 34],
-            [-120, 14],
-          ],
-        ],
-      },
-    },
-  ],
-};
-
-const NADM_ANALYSIS_EXCLUSION_FIXTURE = {
-  type: 'FeatureCollection',
-  features: [
-    {
-      type: 'Feature',
-      properties: { PRUID: '62' },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [
-          [
-            [-100, 68],
-            [-90, 68],
-            [-90, 75],
-            [-100, 75],
-            [-100, 68],
-          ],
-        ],
-      },
-    },
-  ],
-};
-
 const WILDFIRE_GEOMETRY_KEYS = new Map(
   FRAMING_KEYS.map((key) => [
     buildMinimapWildfireQueryBody(key).get('geometry'),
@@ -196,22 +104,12 @@ test.describe('S4b minimap', () => {
         body: JSON.stringify(NADM_FIXTURE),
       }),
     );
-    await page.route('**/na/base/northamerica.geojson', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/geo+json',
-        body: JSON.stringify(NADM_LAND_FIXTURE),
-      }),
-    );
-    await page.route(
-      '**/Digital_boundary_files/MapServer/0/query?**',
-      (route) =>
-        route.fulfill({
-          status: 200,
-          contentType: 'application/geo+json',
-          body: JSON.stringify(NADM_ANALYSIS_EXCLUSION_FIXTURE),
-        }),
-    );
+    // The North America country base and the Nunavut analysis mask are no
+    // longer routed here. Since 2026-08-29 `gotoApp` installs both on the
+    // browser context for EVERY boot, from the same fixture bodies this file
+    // used to define (they moved to tests/minimap-fixtures.ts). The
+    // assertions below still read off exactly those shapes; what changed is
+    // that the rest of the suite stopped fetching them live.
   });
 
   test('renders the nine framings plus ALL, with the ALL radio checked at boot', async ({

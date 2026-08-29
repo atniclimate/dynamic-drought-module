@@ -12,24 +12,36 @@
  * the repository or a test artifact. See the NON-REDISTRIBUTION GUARD in
  * `src/layers/aiannh.ts` and the cache note in `src/layers/bia-reservations.ts`.
  *
- * ROUTE OWNERSHIP (DDM-P1-T08). Playwright matches route handlers in REVERSE
- * registration order, so the last handler registered wins. `gotoApp`
- * (tests/helpers.ts) installs the suite-wide stub immediately before it
- * navigates, which is after every `beforeEach` and setup helper a spec runs,
- * so a naive stub would shadow the deliberate abort, empty, partial, and
- * error routes the outage specs depend on. The stub therefore CLAIMS-AWARE:
- * any spec handler registered through `routeBoundary` (and so through
- * `routeGeojson` and `routeAllTribalFixtures`) marks its service as
- * spec-owned on that page, and the suite-wide handler answers such a request
- * with `route.fallback()`, which hands it back to the earlier, spec-owned
- * handler. A service the spec did not claim is answered from the fixture, so
- * a spec that stubs only one of the two services can never reach the other
- * agency by accident. The registration ORDER of a spec's own route no longer
- * matters: before or after `gotoApp`, the spec's handler is the one that
- * answers.
+ * ROUTE OWNERSHIP (DDM-P1-T08, revised 2026-08-29 for the retention flip).
+ * The suite-wide stub is registered on the browser CONTEXT, not on the Page.
+ * That buys two things at once.
+ *
+ * First, COVERAGE. A `page.route` handler governs one Page. A popup, a
+ * `window.open`, a `target="_blank"`, or an explicit `context.newPage()`
+ * produces a Page the boot never routed, and a request from it would reach
+ * the agency. A `context.route` handler governs every Page in the context,
+ * including ones created after it was installed. Nothing in this suite opens
+ * a second Page today and `tests/boundary-boot-inventory.test.mjs` fails the
+ * gate on the first one that does, but the routing no longer depends on that
+ * inventory being exhaustive.
+ *
+ * Second, ORDERING, for free. Playwright checks Page routes BEFORE context
+ * routes, so a spec's own handler always wins over the suite-wide stub
+ * whatever order the two were registered in. That replaces the claim-and-
+ * fallback bookkeeping this module used to carry: `routeBoundary` no longer
+ * needs to record ownership for the stub to defer, because Playwright's own
+ * precedence rule already defers.
+ *
+ * The context handler is therefore FAIL-CLOSED: it fulfills from the fixture
+ * unconditionally. It never calls `route.fallback()`, because a fallback from
+ * the last context handler goes to the network. The one way to reach a live
+ * agency is `installBoundaryStubs(page, 'live')`, and that throws when `CI` is
+ * set, so no expression of the escape hatch in any spec, alias, wrapper, or
+ * variable can put a live sovereign-geometry body into a CI artifact. The
+ * check is at runtime, not in a source scan.
  */
 
-import type { Page, Route } from '@playwright/test';
+import type { BrowserContext, Page, Route } from '@playwright/test';
 
 /** Route patterns for the two live Tribal-geography services. */
 export const AIANNH_ROUTE = '**/tigerweb.geo.census.gov/**/MapServer/47/query*';
@@ -69,8 +81,13 @@ const SERVICE_BY_PATTERN = new Map<string, BoundaryService>([
  *   deterministic, obviously synthetic area to name.
  * - `empty`: an empty FeatureCollection, the honest live-zero case.
  * - `live`: no stub at all, the documented escape hatch. The request leaves
- *   the browser and reaches the agency. Nothing in this suite uses it; the
- *   live boundary path is proven by the daily source-health probe
+ *   the browser and reaches the agency. REFUSED WITH A THROW WHEN `CI` IS
+ *   SET, so it can never reach a retained public artifact. Its one caller is
+ *   the fire3d evidence capture, a local-only visual proof that the real
+ *   boundary cartography still draws correctly for the owner's review; that
+ *   spec is skipped under `CI` and writes to the gitignored
+ *   `fire3d-evidence/`. Routine liveness of the two services is proven
+ *   separately by the daily source-health probe
  *   (`scripts/source-health.mjs`), which drives Chromium outside this suite.
  */
 export type BoundaryStubMode = 'fixture' | 'empty' | 'live';
@@ -176,38 +193,36 @@ export function arcgisErrorBody(): unknown {
 // Route ownership and the suite-wide stub
 // ---------------------------------------------------------------------------
 
-/** Services a SPEC has claimed with its own handler, per page. */
-const specClaims = new WeakMap<Page, Set<BoundaryService>>();
-
 interface StubState {
   mode: BoundaryStubMode;
-  /** Every request URL the suite-wide stub answered on this page. */
+  /** Every request URL the suite-wide stub answered in this context. */
   readonly fulfilled: string[];
 }
 
-const stubStates = new WeakMap<Page, StubState>();
+const stubStates = new WeakMap<BrowserContext, StubState>();
 
 /**
- * Register a spec-owned handler for one boundary service and record the claim
- * so the suite-wide stub defers to it. Every spec route on either service goes
- * through here (directly, or through `routeGeojson`); a raw `page.route` on
- * one of these patterns would be shadowed by `gotoApp`, and
- * `tests/boundary-boot-inventory.test.mjs` fails the gate on one.
+ * Register a spec-owned handler for one boundary service.
+ *
+ * Every spec route on either service goes through here (directly, or through
+ * `routeGeojson`), for two reasons that survive the move to context routing:
+ * the pattern is validated, so a typo that would silently match nothing is an
+ * immediate throw rather than a live request; and
+ * `tests/boundary-boot-inventory.test.mjs` fails the gate on a raw
+ * `page.route` against either pattern, which keeps every boundary route in
+ * this one reviewed place. The handler is installed on the PAGE, which
+ * Playwright checks before the context-level suite stub, so it wins.
  */
 export async function routeBoundary(
   page: Page,
   pattern: string,
   handler: (route: Route) => unknown
 ): Promise<void> {
-  const service = SERVICE_BY_PATTERN.get(pattern);
-  if (!service) {
+  if (!SERVICE_BY_PATTERN.has(pattern)) {
     throw new Error(
       `routeBoundary needs AIANNH_ROUTE or BIA_ROUTE, received ${JSON.stringify(pattern)}`
     );
   }
-  const claims = specClaims.get(page) ?? new Set<BoundaryService>();
-  claims.add(service);
-  specClaims.set(page, claims);
   await page.route(pattern, handler);
 }
 
@@ -256,29 +271,50 @@ function fixtureFor(service: BoundaryService, mode: BoundaryStubMode): FixtureCo
 }
 
 /**
- * Install the suite-wide boundary stub on a page. Idempotent: a second call
- * only updates the mode, so a spec that boots twice keeps one handler pair
- * and one fulfilled-request log.
+ * Install the suite-wide boundary stub on this page's browser CONTEXT.
+ * Idempotent per context: a second call only updates the mode, so a spec that
+ * boots twice keeps one handler pair and one fulfilled-request log, and a
+ * second Page in the same context is covered by the handlers already there.
  *
  * ALWAYS ON, locally and in CI (DDM-P1-T08). The alternative, stubbing only
  * under `CI`, would make a local green and a CI green mean different things,
  * which is exactly the class of divergence the build-identity stamp exists to
  * prevent. One code path, one meaning.
+ *
+ * `live` is refused outright when `CI` is set. That is the runtime half of
+ * the escape-hatch ban: `tests/boundary-boot-inventory.test.mjs` greps the
+ * source for the literal option, which an alias or a computed value could
+ * slip past, but nothing can slip past this throw. The local exception it
+ * protects is the fire3d evidence capture, which renders real boundary
+ * cartography for the owner's visual review and is skipped under `CI`.
  */
 export async function installBoundaryStubs(
   page: Page,
   mode: BoundaryStubMode = 'fixture'
 ): Promise<void> {
-  const existing = stubStates.get(page);
+  if (mode === 'live' && process.env['CI']) {
+    throw new Error(
+      "boundaries: 'live' is refused under CI: a live AIANNH or BIA response body " +
+        'must never reach a retained CI artifact on this public repository ' +
+        '(hard rule 1; see the NON-REDISTRIBUTION GUARD in src/layers/aiannh.ts)'
+    );
+  }
+  const context = page.context();
+  const existing = stubStates.get(context);
   if (existing) {
     existing.mode = mode;
     return;
   }
   const state: StubState = { mode, fulfilled: [] };
-  stubStates.set(page, state);
+  stubStates.set(context, state);
   for (const service of BOUNDARY_SERVICES) {
-    await page.route(BOUNDARY_PATTERNS[service], async (route) => {
-      if (state.mode === 'live' || specClaims.get(page)?.has(service)) {
+    await context.route(BOUNDARY_PATTERNS[service], async (route) => {
+      // FAIL-CLOSED. The only path that reaches the agency is the explicit
+      // `live` mode, which cannot be selected under CI. Every other request
+      // is answered here, including one from a Page this suite never routed:
+      // a context handler is the last handler, so falling back would put the
+      // request on the wire.
+      if (state.mode === 'live') {
         await route.fallback();
         return;
       }
@@ -302,16 +338,11 @@ export async function installBoundaryStubs(
 }
 
 /**
- * Every boundary request the suite-wide stub answered on this page. The proof
- * spec (`tests/boundary-stubs.spec.ts`) compares it against the page's own
- * request stream, so a URL that the glob patterns miss reads as an escape
- * rather than passing unnoticed.
+ * Every boundary request the suite-wide stub answered in this page's context.
+ * The proof spec (`tests/boundary-stubs.spec.ts`) compares it against the
+ * page's own request stream, so a URL that the glob patterns miss reads as an
+ * escape rather than passing unnoticed.
  */
 export function boundaryStubLog(page: Page): readonly string[] {
-  return stubStates.get(page)?.fulfilled ?? [];
-}
-
-/** The services this page's spec claimed with handlers of its own. */
-export function claimedBoundaryServices(page: Page): readonly BoundaryService[] {
-  return [...(specClaims.get(page) ?? [])];
+  return stubStates.get(page.context())?.fulfilled ?? [];
 }

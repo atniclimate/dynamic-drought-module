@@ -235,6 +235,12 @@ navigate itself calls `routeAllTribalFixtures` first and records why in
 `tests/boundary-boot-inventory.test.mjs`, which the gate runs
 (`npm run test:boundary-boots`). See `tests/README.md`.
 
+Since 2026-08-29 a failed or flaky CI shard retains a **pixel-free** Playwright
+trace (no screenshots, no video, no spec sources) and its HTML report for three
+days as world-readable public artifacts, which is safe only because every boot
+answers the sovereign boundary queries from synthetic fixtures; `tests/README.md`
+lists what such a trace may and may not carry before you add anything to it.
+
 Always report the exact commands and results. Do not hide a failure by piping a
 command through another process, increasing a timeout without diagnosis, or
 rerunning until a flaky result happens to pass. Keep Playwright traces and

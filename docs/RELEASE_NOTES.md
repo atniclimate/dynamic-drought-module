@@ -31,6 +31,59 @@ the 2026-08-24 scheduled ENSO refresh deployed
 hosted build nonce was the local fallback `dev` until pull request 27 made
 each hosted build attributable to its run.
 
+### 2026-08-29: CI retains a pixel-free trace on the first retry
+
+Owner decision, recorded 2026-08-29 at 03:41 PDT: the DDM-P1-T08 flip is
+ratified. That is the external authorization the roadmap task requires, and
+it supersedes the 2026-08-28 decision recorded above that continuous
+integration keeps no Playwright traces or screenshots until every CI boot
+stubs the Census AIANNH and BIA AIAN-LAR sources. Those boots are stubbed
+now, so the condition attached to the earlier decision is met.
+
+An adversarial review the same morning found the ratified diff safe in its
+response bodies but not in its pixels, and the shipped change is narrower
+than the one ratified. Traces are on; screenshots are not. In continuous
+integration `trace` is the object form `{ mode: 'on-first-retry',
+screenshots: false, snapshots: true, sources: false }`, `screenshot` stays
+`off`, and `video` stays `off`. A retained trace therefore carries request
+and response records, document snapshots, console output, and timings, and
+carries no rendered map frame and no spec source text. Locally nothing
+changed: traces keep their frames and screenshots stay on failure, in
+gitignored directories.
+
+A shard that fails or passes only on retry now uploads two artifacts, its
+HTML report and the raw `test-results/` tree, each for three days instead of
+the report's previous seven. This repository is public and its artifacts are
+downloadable by any GitHub user, so the shortened retention limits exposure
+without being what makes the content safe. What makes it safe is that every
+boot answers the two sovereign boundary queries from synthetic rectangles.
+
+Three conditions were closed to get there. The suite-wide boundary stub moved
+from the page to the browser context and became fail-closed, so a page this
+suite never opened inherits it and an unrecognized request is answered rather
+than forwarded, and the live mode now throws whenever `CI` is set. The
+always-mounted minimap's two continental analysis inputs, NCEI's North
+America country base and a Statistics Canada province boundary, were fetched
+live on nearly every boot and are now answered from the same rectangles
+`tests/s4-minimap.spec.ts` already used. `waEcologyCededLands` in
+`src/config/urls.ts`, a Washington State Department of Ecology
+Treaty-ceded-areas layer with no runtime caller, gained the provenance and
+stewardship docblock every other entry in that file carries, including the
+publisher's own statement that the layer is a generalized visual guide rather
+than an accurate boundary.
+
+One waiver is deliberate. The fire3d evidence captures, which the owner reads
+to judge whether real Tribal-geography cartography draws honestly in the 3D
+scene, ask for live boundaries again, and only when the run is local and
+nothing is retained. The synthetic fixtures had silently replaced the
+cartography those captures exist to show.
+
+Deferred, and named as deferred: a synthetic basemap for artifact-bearing
+runs, which is the precondition for turning any pixels back on; a licensing
+review of the other public agency geometry and raster tile bodies a trace may
+carry; and `retain-on-failure`, which would record the original failing
+attempt rather than the retry.
+
 ### 2026-08-29: every suite boot answers the sovereign boundary queries from synthetic fixtures
 
 Roadmap task DDM-P1-T08 asks for three things; pull request 34 (`56dd46a`)

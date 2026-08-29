@@ -618,6 +618,25 @@ const TOGGLE = '.shell-fire3d-btn';
 // disk at all.
 const CAPTURE_EVIDENCE = !process.env['CI'];
 
+// THE ONE PLACE THE SUITE ASKS FOR LIVE BOUNDARIES, and only when it is
+// about to photograph them.
+//
+// DDM-P1-T08 made every boot answer the AIANNH and BIA queries from
+// synthetic rectangles. That silently changed what these captures were FOR:
+// the owner reviews them to judge whether real Tribal-geography cartography
+// draws honestly in the 3D scene, and a picture of two invented rectangles
+// cannot answer that question. Source-health request receipts prove the
+// services respond; they say nothing about how the boundaries look.
+//
+// So the three evidence-bearing boots ask for `live` exactly when
+// `CAPTURE_EVIDENCE` is true, which is exactly when the run is local and
+// nothing is retained. Under CI this is `fixture` like every other boot, the
+// capture blocks are skipped, and `installBoundaryStubs` would throw on
+// `live` anyway (tests/tribal-fixtures.ts), so the option cannot reach a
+// public artifact by any route. tests/boundary-boot-inventory.test.mjs
+// records this file as the single allowance and requires the CI guard.
+const EVIDENCE_BOUNDARIES = CAPTURE_EVIDENCE ? ('live' as const) : ('fixture' as const);
+
 test.describe('W3/W4 browser truth', () => {
   test('the desktop toggle activates the 3D scene with the volume legend, then exits cleanly', async ({
     page
@@ -657,7 +676,7 @@ test.describe('W3/W4 browser truth', () => {
       }
     });
 
-    await gotoApp(page, '?cluster=wildfire');
+    await gotoApp(page, '?cluster=wildfire', { boundaries: EVIDENCE_BOUNDARIES });
     await waitForLayerSettled(page, 'hms-smoke');
 
     const toggle = page.locator(TOGGLE);
@@ -763,7 +782,9 @@ test.describe('W3/W4 browser truth', () => {
     page
   }) => {
     await stubWildfireFeeds(page);
-    await gotoApp(page, '?cluster=wildfire&fire3d=true');
+    await gotoApp(page, '?cluster=wildfire&fire3d=true', {
+      boundaries: EVIDENCE_BOUNDARIES
+    });
 
     await expect
       .poll(() => fire3dStamp(page), { timeout: 30_000 })
@@ -815,7 +836,9 @@ test.describe('W3/W4 browser truth', () => {
     page
   }) => {
     await stubWildfireFeeds(page);
-    await gotoApp(page, '?cluster=wildfire&fire3d=true&embed=true');
+    await gotoApp(page, '?cluster=wildfire&fire3d=true&embed=true', {
+      boundaries: EVIDENCE_BOUNDARIES
+    });
 
     await expect
       .poll(() => fire3dStamp(page), { timeout: 30_000 })

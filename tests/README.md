@@ -94,13 +94,25 @@ near eleven minutes on the 2-core runner; re-fit them when the suite grows.
 Every shard writes a job summary (passed, failed, flaky, skipped, and the
 `file:line` of each failed or flaky test) from its JSON report through
 `scripts/summarize-playwright-shard.mjs`. A shard that fails, or passes only
-on retry, also uploads its HTML report (error text, ARIA error context,
-stdout and stderr, timings) as a seven-day artifact named for the shard; a
-clean shard uploads nothing. Traces and screenshots are off in CI, and stay
-off for now; the reason has changed, and the section below records what
-changed and what the decision still is. The explicit evidence captures in
-`fire3d-mode.spec.ts` (`fire3d-evidence/`, gitignored) are skipped under
-`CI`. Locally, traces, screenshots, and the evidence captures stay on, in
+on retry, uploads two three-day artifacts named for the shard: its HTML
+report (`playwright-report-*`) and the raw `test-results/` tree
+(`playwright-traces-*`). A clean shard uploads nothing.
+
+Since 2026-08-29 those artifacts carry **Playwright traces**, which they
+never did before. The owner ratified the change; an adversarial review then
+narrowed it, and the narrowed shape is what shipped. In CI the trace is
+captured `on-first-retry` as an explicit object with `screenshots: false` and
+`sources: false`, `screenshot` stays `off`, and `video` stays `off`. So a
+retained trace holds request and response records, DOM snapshots, console
+output, and timings, and **no rendered pixels and no spec source text**.
+Retention is three days on both artifacts. Retention shortens exposure; it is
+not what makes the content safe. Artifacts on this repository are
+world-readable: the repository is public, and any GitHub user can list and
+download every retained artifact, so the content has to be safe on its own.
+
+The explicit evidence captures in `fire3d-mode.spec.ts` (`fire3d-evidence/`,
+gitignored) are still skipped under `CI`. Locally, traces keep their frames,
+screenshots stay `only-on-failure`, and the evidence captures run, all into
 gitignored directories.
 
 When `DDM_BUILD_SHA` or `DDM_BUILD_NONCE` is set in the environment (CI sets
@@ -142,15 +154,44 @@ the hand-authored rectangles with obviously synthetic names in
 a test artifact (the project's hard rule 1; see the NON-REDISTRIBUTION GUARD
 in `src/layers/aiannh.ts`). A spec that needs a different response (an empty
 collection, an abort, a truncated body, an ArcGIS error, a geography-keyed
-answer) claims the service through `routeBoundary`, and the suite-wide stub
-defers to that claim whether it was registered before or after `gotoApp`.
+answer) registers its own handler through `routeBoundary`, which wins because
+Playwright checks Page routes before context routes.
 `gotoApp(page, query, { boundaries: 'empty' })` serves the honest live-zero
-collection; `{ boundaries: 'live' }` is the documented escape hatch that lets
-a request reach the agency, and nothing in this suite uses it. The live
-boundary path is proven instead by the daily source-health probe
+collection.
+
+The stub is registered on the browser **context**, not on the page, and it is
+**fail-closed**. Context routing means a Page this suite never opened, a
+popup or a `context.newPage()`, inherits it; fail-closed means the handler
+fulfills from the fixture rather than falling back, because a fallback from
+the last context handler puts the request on the wire. `{ boundaries: 'live' }`
+is the one path to a real agency response, and `installBoundaryStubs`
+**throws when `CI` is set**, so no alias, wrapper, or computed option can put
+a live sovereign-geometry body into a public artifact. That runtime refusal,
+not a source scan, is the enforcement.
+
+The live mode has exactly one caller, and it is a deliberate waiver.
+`tests/fire3d-mode.spec.ts` writes the owner's visual-review captures to the
+gitignored `fire3d-evidence/`; the owner reads them to judge whether real
+Tribal-geography cartography draws honestly in the 3D scene, and a picture of
+two invented rectangles cannot answer that. Its three evidence-bearing boots
+therefore ask for `live` exactly when `CAPTURE_EVIDENCE` is true, which is
+exactly when the run is local and nothing is retained. Under `CI` those boots
+use the fixture like every other boot. Routine liveness of the two services
+is proven separately by the daily source-health probe
 (`scripts/source-health.mjs`), which drives Chromium outside this suite.
 
-Two checks keep that true, and they cover different halves of the claim.
+The always-mounted minimap is stubbed the same way and for a related reason.
+`retainMinimapDrought` fetches NCEI's North America country base and a
+Statistics Canada province boundary on every non-brief-embed boot, and until
+2026-08-29 both went live on nearly every boot. Neither is sovereign
+geometry, both are open-licensed analysis masks the application never
+renders, but "no live external geometry reaches a retained trace" should be
+true in fact rather than true only for the two hosts anyone thought to check.
+`tests/minimap-fixtures.ts` now serves both from the rectangles
+`tests/s4-minimap.spec.ts` already used, on the context, for every boot. They
+were stubbed rather than waived.
+
+Checks keep that true, and they cover different halves of the claim.
 
 `tests/boundary-stubs.spec.ts` proves the `gotoApp` shells DYNAMICALLY. It
 boots the bare Brief door, the wildfire cluster, the console, the wildfire
@@ -164,21 +205,61 @@ their requests never enter the suite-wide stub's log.
 
 `tests/boundary-boot-inventory.test.mjs` covers those STATICALLY, and guards
 the seams. It runs in the gate with the other `node:test` files
-(`npm run test:boundary-boots`) and fails when a module under `tests/` (specs
-and shared helpers alike) navigates outside `gotoApp` without a recorded
-reason and its own stub, when a module registers a boundary route outside the
-shared helper (a raw `page.route` would be shadowed by `gotoApp`) or unroutes
-one (which strands the spec's claim and sends the next request live), when a
-spec passes `{ boundaries: 'live' }`, or when a service path drifts so the
-route globs stop matching. The recorded raw-boot counts are brittle on
-purpose: an unrelated new `.goto(` or `.setContent(` fails the gate, which is
-the moment to ask whether it needs the stub installed by hand.
+(`npm run test:boundary-boots`) and walks every module under `tests/` at any
+depth (`.ts`, `.tsx`, `.mjs`, `.js`; Playwright's `testDir` is recursive, so
+a top-level-only scan would let a nested spec escape). It fails when a module
+navigates outside `gotoApp` without a recorded reason and its own stub, when
+a module opens a second Page or awaits a popup without a recorded reason,
+when a module registers or unroutes a boundary or minimap route outside its
+shared helper, when the live mode appears outside the one recorded fire3d
+allowance or that allowance loses its `CI` guard, when `gotoApp` stops
+installing either stub before it navigates, when either stub stops routing
+the context, when a service path drifts so the route globs stop matching, or
+when either deployer-owned slot (`public/data/tribal-lands.geojson`,
+`public/data/treaty-areas.geojson`) stops holding zero features. Those two
+are same-origin, so no route stub stands between them and a trace; an empty
+committed file is what makes a same-origin trace safe. The recorded raw-boot
+counts are brittle on purpose: an unrelated new `.goto(` or `.setContent(`
+fails the gate, which is the moment to ask whether it needs the stub
+installed by hand.
 
-Trace and screenshot retention in CI nevertheless **remains off**. Turning it
-on is an owner decision recorded in the pull request that flips it
-(DDM-P1-T08 external authorization). The proposed diff is written out in the
-pull request that landed the fixtures, so the flip is a one-commit change
-whenever the owner ratifies it.
+Be clear about what that file is. A source scan cannot see a navigation
+driven from inside `page.evaluate` or an option assembled at runtime. It is a
+tripwire that makes an unusual thing visible in review. The guarantee is the
+context-level fail-closed routing and the runtime refusal of the live mode
+under `CI`, neither of which depends on the scan being exhaustive.
+
+### Accepted exposures in a retained trace
+
+The claim is not "a retained trace contains nothing". It is this list, and it
+should be read before anything is added to what CI keeps.
+
+**Cannot appear.** Sovereign geometry of any kind: Census AIANNH, BIA
+AIAN-LAR, and the deployer-owned Tribal and Treaty slots. The first two are
+answered from synthetic rectangles on every boot; the last two are asserted
+empty by the gate. No rendered pixels, from any source, because trace frames,
+screenshots, and video are all off in CI. No spec source text (`sources:
+false`).
+
+**May appear, and is accepted.** Response bodies from the other public
+agency sources a boot touches: NIFC and WFIGS fire perimeters, drought
+polygons (NADM, USDM, CDM), NOAA weather alerts, HMS smoke, EPA ecoregions,
+watersheds, station telemetry. OpenStreetMap raster tile bodies from the live
+basemap. Request and response headers, cookies, request URLs with their
+coordinates and place names, DOM snapshots including any Tribal Nation name
+from the committed `public/data/tribal-roster.json`, and console output.
+Nothing there is sovereign geometry, and nothing there is undisclosed by a
+`git clone` of this public repository, but a licensing and redistribution
+review of the agency and raster content has **not** been done and is open
+work.
+
+**Deferred, deliberately.** A synthetic or blank basemap for artifact-bearing
+runs, which is the precondition for turning pixels back on: it is what would
+stop a screenshot from embedding live place labels, and what would stop a
+frame of synthetic rectangles from reading as real Tribal boundaries once it
+is detached from its test. Until that exists, screenshots stay off in CI.
+Also deferred: `retain-on-failure` in place of `on-first-retry`, which would
+capture the original failing attempt rather than the retry.
 
 ## Headless WebGL
 

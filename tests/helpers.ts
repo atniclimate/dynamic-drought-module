@@ -8,8 +8,9 @@
  * the mismatch surfaces as a failing spec rather than silent drift.
  */
 
-import { expect, type Page, type Locator } from '@playwright/test';
+import { expect, type BrowserContext, type Page, type Locator } from '@playwright/test';
 import { stubRecentSatellite } from './satellite-fixture';
+import { installMinimapAnalysisStubs } from './minimap-fixtures';
 import { installBoundaryStubs, type BoundaryStubMode } from './tribal-fixtures';
 
 const nadmStubbedPages = new WeakSet<Page>();
@@ -38,6 +39,34 @@ async function stubDefaultNadm(page: Page): Promise<void> {
       body: JSON.stringify(TEST_NADM_SNAPSHOT)
     })
   );
+}
+
+const coveredContexts = new WeakSet<BrowserContext>();
+
+/**
+ * Carry the PAGE-level stubs onto any Page this context opens later.
+ *
+ * The two stubs that matter most for a retained artifact, the sovereign
+ * boundaries and the minimap's continental analysis inputs, are registered on
+ * the CONTEXT, so a popup or a `context.newPage()` inherits them with no help
+ * from here. The satellite and NADM stubs are still page-level, and a Page
+ * this helper never navigated would reach those services live. Nothing in
+ * this suite opens a second Page today (`tests/boundary-boot-inventory.test.mjs`
+ * fails the gate on the first `newPage(` or popup wait that is not recorded),
+ * so this hook is defense in depth for the day one appears: it closes the
+ * page-level half of the same hole context routing already closed.
+ */
+function coverFuturePages(page: Page): void {
+  const context = page.context();
+  if (coveredContexts.has(context)) return;
+  coveredContexts.add(context);
+  context.on('page', (opened) => {
+    // A popup can close before the route lands; a rejected stub must not fail
+    // the test that opened it, because the guarantee that matters is already
+    // held by the context-level routes above.
+    void stubRecentSatellite(opened).catch(() => undefined);
+    void stubDefaultNadm(opened).catch(() => undefined);
+  });
 }
 
 /**
@@ -197,6 +226,14 @@ export async function gotoApp(
   // meaning. The live boundary path stays proven by the daily source-health
   // probe, which drives Chromium outside this suite.
   await installBoundaryStubs(page, options.boundaries ?? 'fixture');
+  // The always-mounted minimap fetches NCEI's North America country base and
+  // a Statistics Canada province boundary on every non-brief-embed boot.
+  // Neither is sovereign geometry, but both were LIVE external geometry
+  // fetches until 2026-08-29, and a retained trace would have embedded their
+  // bodies. See tests/minimap-fixtures.ts for why they are stubbed rather
+  // than waived.
+  await installMinimapAnalysisStubs(page);
+  coverFuturePages(page);
   if (!/[?&](?:layers|cluster)=/.test(query)) {
     await stubDefaultNadm(page);
   }
