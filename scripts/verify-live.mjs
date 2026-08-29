@@ -414,7 +414,14 @@ async function boot(browser, name, contextOptions, query, { corner = false } = {
         }
       }
       const pending = pills.filter((p) => !settled.has(p.key));
-      if (pending.length === 0 || elapsed >= args.ceilingMs) {
+      // "Every pill I can see is terminal" is not enough now that the
+      // expected set is enforced: the registry activates layers
+      // concurrently, so a slower one may not have rendered a status class
+      // yet, and exiting here would read it as never activated. Wait for
+      // the whole expected set as well, bounded by the same ceiling so a
+      // layer that truly never arrives still fails rather than hanging.
+      const awaited = expectedKeys.filter((key) => !settled.has(key));
+      if ((pending.length === 0 && awaited.length === 0) || elapsed >= args.ceilingMs) {
         for (const p of pending) settled.set(p.key, { key: p.key, status: p.status, settleMs: elapsed });
         break;
       }
