@@ -1,9 +1,13 @@
 /**
  * Pure evaluators for the live verification (DDM-P0-T04, DDM-P0-T08).
  *
- * No network, no browser, no file I/O: the driver (scripts/verify-live.mjs)
- * gathers facts and these functions decide, so every verdict is unit-tested
- * offline (tests/live-receipts.test.mjs). Receipts carry URLs, HTTP status,
+ * No network, no browser, no file I/O: the drivers (scripts/verify-live.mjs
+ * and scripts/resolve-live-expectation.mjs) gather facts and these functions
+ * decide, so every verdict is unit-tested offline
+ * (tests/live-receipts.test.mjs). Two kinds of decision live here: the
+ * per-check evaluators the live proof records, and resolveLiveExpectation,
+ * which decides what the live site should be serving and whether that can be
+ * checked at all. Receipts carry URLs, HTTP status,
  * byte counts, milliseconds, and status words only; never a response body
  * or a screenshot, because an ordinary boot fetches live AIANNH and BIA
  * geometry that the runtime keeps in memory (hard rule 1; see the
@@ -151,4 +155,247 @@ export function renderSummary(receipt) {
     }
   }
   return lines.join('\n') + '\n';
+}
+
+/* ------------------------------------------------------------------ *
+ * What to expect from the live site, and whether to expect it at all.
+ * ------------------------------------------------------------------ */
+
+/**
+ * How long main's head may go without a successful deploy before the
+ * difference between main and the live build counts as a divergence
+ * rather than a release in progress. A green push to main takes about 15
+ * minutes through the gate, the sharded browser suite, and deploy-pages;
+ * 30 minutes leaves room for a slow runner and for Pages propagation
+ * without letting a red or cancelled deploy sit unreported for a day.
+ */
+export const LIVE_COMPARE_GRACE_MS = 30 * 60 * 1000;
+
+/** A deploy run that has not finished cannot be judged yet. */
+function isFinished(run) {
+  const status = String(run?.status ?? '');
+  if (status) return status === 'completed';
+  return Boolean(run?.conclusion);
+}
+
+/**
+ * Did this run ever put a build on Pages?
+ *
+ * `gh run list` reports ONE row per run carrying the LATEST attempt's
+ * conclusion, so a run that deployed on attempt 1 and was then re-run into
+ * a failure reads as `failure` even though Pages is still correctly serving
+ * what attempt 1 published. The caller asks the attempts API about exactly
+ * those runs and passes `anyAttemptSucceeded`; the run id is the build
+ * nonce either way, because vite.config.ts stamps `github.run_id`, which is
+ * stable across attempts.
+ */
+function isPublished(run) {
+  return run?.conclusion === 'success' || run?.anyAttemptSucceeded === true;
+}
+
+const parsedMs = (value) => {
+  const ms = Date.parse(String(value ?? ''));
+  return Number.isFinite(ms) ? ms : null;
+};
+
+/** Newest first by updatedAt, then createdAt, then run id. */
+function orderKey(run) {
+  const at = [run?.updatedAt, run?.createdAt]
+    .map((value) => Date.parse(String(value ?? '')))
+    .find((ms) => Number.isFinite(ms));
+  return { at: at ?? 0, id: Number(run?.databaseId) || 0 };
+}
+
+function newest(runs) {
+  let best = null;
+  let bestKey = null;
+  for (const run of runs) {
+    const key = orderKey(run);
+    if (!best || key.at > bestKey.at || (key.at === bestKey.at && key.id > bestKey.id)) {
+      best = run;
+      bestKey = key;
+    }
+  }
+  return best;
+}
+
+/**
+ * The FIRST deploy run of a set, by creation. Used to floor the grace
+ * period: the question is when this commit first entered a release, not
+ * when someone last retried it.
+ */
+function oldest(runs) {
+  let best = null;
+  let bestAt = null;
+  for (const run of runs) {
+    const at = parsedMs(run?.createdAt) ?? parsedMs(run?.updatedAt);
+    if (at === null) continue;
+    if (bestAt === null || at < bestAt) {
+      best = run;
+      bestAt = at;
+    }
+  }
+  return best;
+}
+
+function toMs(value, label) {
+  const ms = typeof value === 'number' ? value : Date.parse(String(value ?? ''));
+  if (!Number.isFinite(ms)) throw new Error(`${label} is not a parseable timestamp`);
+  return ms;
+}
+
+const asMinutes = (ms) => Math.max(0, Math.round(ms / 60_000));
+
+/**
+ * Decide what the live site should be serving, and whether that can be
+ * checked right now (DDM-P0-T04).
+ *
+ * The post-deploy proof answers only "did the build this successful
+ * deploy produced reach the CDN". The likelier divergence is a deploy
+ * that never succeeded: a red browser shard, the `pages` concurrency
+ * group cancelling a superseded run, or the freshness gate refusing an
+ * obsolete rerun. No workflow_run success fires for any of those, so
+ * nothing is verified, no issue opens, and the live site quietly keeps
+ * serving an older commit. A scheduled compare asks the opposite
+ * question: main's head is X, is X actually live?
+ *
+ * Pure: every fact is passed in (`input`), nothing is fetched or written.
+ *
+ * @param {object} input
+ * @param {string} input.eventName `workflow_run`, `schedule`, or `workflow_dispatch`.
+ * @param {?{id: (string|number), headSha: string, conclusion: ?string}} input.workflowRun
+ *   The deploy run that raised a `workflow_run` event, else null.
+ * @param {string} input.headSha Current head commit of main.
+ * @param {(string|number)} input.headCommittedAt Committer date of that commit.
+ * @param {Array<{databaseId: (string|number), headSha: string, conclusion: ?string,
+ *   status: ?string, createdAt: ?string, updatedAt: ?string,
+ *   anyAttemptSucceeded: ?boolean}>} input.deployRuns
+ *   Recent deploy.yml runs for main, newest first or in any order.
+ *   `conclusion` is the LATEST attempt's, so the caller sets
+ *   `anyAttemptSucceeded` for a run whose earlier attempt published.
+ * @param {(string|number)} input.now
+ * @param {number} [input.graceMs] Defaults to LIVE_COMPARE_GRACE_MS.
+ * @returns {{verdict: ('verify'|'in-flight'|'undeployed'), sha: string, nonce: string, reason: string}}
+ *   `verify`: run the live proof against `sha`, expecting build nonce `nonce`.
+ *   `in-flight`: a release is under way (or still inside the grace period);
+ *   record the reason and stop, green, without touching issues.
+ *   `undeployed`: main's head has no successful deploy and the grace period
+ *   has passed; file the divergence and fail.
+ */
+export function resolveLiveExpectation(input) {
+  const eventName = String(input?.eventName ?? '');
+  if (!eventName) throw new Error('eventName is required');
+
+  if (eventName === 'workflow_run') {
+    const run = input?.workflowRun ?? null;
+    if (!run || run.conclusion !== 'success' || !run.headSha || !run.id) {
+      throw new Error(
+        'a workflow_run event must carry a successful deploy run with a head sha and an id; the job condition should have skipped this run',
+      );
+    }
+    return {
+      verdict: 'verify',
+      sha: String(run.headSha),
+      nonce: String(run.id),
+      reason: `post-deploy proof: deploy run ${run.id} published ${run.headSha}`,
+    };
+  }
+  if (eventName !== 'schedule' && eventName !== 'workflow_dispatch') {
+    throw new Error(`unsupported event ${eventName}`);
+  }
+
+  const headSha = String(input?.headSha ?? '');
+  if (!headSha) throw new Error('headSha is required for a scheduled or dispatched compare');
+  const graceMs = Number.isFinite(input?.graceMs) ? Number(input.graceMs) : LIVE_COMPARE_GRACE_MS;
+  const nowMs = toMs(input?.now, 'now');
+  const headMs = toMs(input?.headCommittedAt, 'headCommittedAt');
+  const runs = Array.isArray(input?.deployRuns) ? input.deployRuns : [];
+  const forHead = runs.filter((run) => String(run?.headSha ?? '') === headSha);
+
+  // A deploy that ever published main's head wins even when a later rerun
+  // is still running or has since failed: that build is what the CDN is
+  // serving.
+  const published = newest(forHead.filter(isPublished));
+  if (published) {
+    return {
+      verdict: 'verify',
+      sha: headSha,
+      nonce: String(published.databaseId),
+      reason: `${eventName} compare: main head ${headSha} was published by deploy run ${published.databaseId}`,
+    };
+  }
+
+  // An unfinished run is only a release under way for as long as the grace
+  // period. A deploy stuck in `queued`, `waiting` (an environment
+  // protection rule), or `requested` would otherwise keep this compare
+  // green forever, which is the silence DDM-P0-T04 exists to end. Measured
+  // from the RUN's creation, not the commit's: the run is the thing that
+  // is stuck.
+  const running = newest(forHead.filter((run) => !isFinished(run)));
+  if (running) {
+    const startedMs = parsedMs(running.createdAt);
+    // An unreadable createdAt must not mean "started just now, wait
+    // forever". An unfinished run whose start cannot be read is treated as
+    // past the grace period: this workflow exists to end silence, so an
+    // unusable timestamp resolves toward speaking, not toward waiting.
+    if (startedMs === null) {
+      return {
+        verdict: 'undeployed',
+        sha: headSha,
+        nonce: '',
+        reason: `main is ahead of the live build: no successful deploy of ${headSha}; deploy run ${running.databaseId} is ${running.status || 'unfinished'} and its start time (${running.createdAt ?? 'absent'}) could not be read, so its age cannot be bounded`,
+      };
+    }
+    const stuckMs = nowMs - startedMs;
+    if (stuckMs < graceMs) {
+      return {
+        verdict: 'in-flight',
+        sha: headSha,
+        nonce: '',
+        reason: `deploy run ${running.databaseId} for main head ${headSha} is ${running.status || 'not finished'}; there is nothing to compare yet`,
+      };
+    }
+    return {
+      verdict: 'undeployed',
+      sha: headSha,
+      nonce: '',
+      reason: `main is ahead of the live build: no successful deploy of ${headSha}; deploy run ${running.databaseId} has been ${running.status || 'unfinished'} for ${asMinutes(stuckMs)} minutes, past the ${asMinutes(graceMs)} minute grace period`,
+    };
+  }
+
+  // Grace runs from the commit date, which a rebase or a backdated
+  // committer date controls, so floor it by this head's FIRST deploy run:
+  // a commit dated last year whose only deploy started two minutes ago is
+  // two minutes into its release, not a year overdue. The oldest run, not
+  // the newest: flooring by the newest would let every retry reset the
+  // clock, so a head retried more often than the grace period would keep
+  // this compare green for as long as someone kept pressing re-run.
+  let ageMs = nowMs - headMs;
+  const firstAttemptMs = parsedMs(oldest(forHead)?.createdAt);
+  if (firstAttemptMs !== null) ageMs = Math.min(ageMs, nowMs - firstAttemptMs);
+  if (ageMs < graceMs) {
+    return {
+      verdict: 'in-flight',
+      sha: headSha,
+      nonce: '',
+      reason: `main head ${headSha} is ${asMinutes(ageMs)} minutes old, inside the ${asMinutes(graceMs)} minute grace period, and has no successful deploy yet`,
+    };
+  }
+
+  const lastForHead = newest(forHead);
+  const lastOverall = newest(runs);
+  let tail;
+  if (lastForHead) {
+    tail = `latest deploy run ${lastForHead.databaseId} concluded ${lastForHead.conclusion || 'nothing'}`;
+  } else if (lastOverall) {
+    tail = `no deploy run for that commit was found; the newest deploy run ${lastOverall.databaseId} built ${lastOverall.headSha}`;
+  } else {
+    tail = 'no deploy run for main was found at all';
+  }
+  return {
+    verdict: 'undeployed',
+    sha: headSha,
+    nonce: '',
+    reason: `main is ahead of the live build: no successful deploy of ${headSha}, head for ${asMinutes(ageMs)} minutes; ${tail}`,
+  };
 }

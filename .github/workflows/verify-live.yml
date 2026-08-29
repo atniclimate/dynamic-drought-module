@@ -1,35 +1,67 @@
-# Post-deploy proof of the live Pages build (DDM-P0-T04 and DDM-P0-T08).
+# Proof that the live Pages build is the commit main says it should be
+# (DDM-P0-T04 and DDM-P0-T08).
 #
-# Runs when the Pages deploy workflow (deploy.yml) completes, and only when
-# that run succeeded: a cancelled, superseded, or failed deploy never
-# reaches this workflow, so it cannot mistake a cancellation for a
-# release. It checks out the commit that run deployed, waits for Pages
-# propagation (scripts/verify-live.mjs polls the referenced assets for the
-# SHA up to 5 minutes), then boots root, each cluster, and the wildfire
-# embed at two widths and reads the build stamp and every layer pill. A
-# failure opens or updates ONE issue labeled deploy-divergence (marker
-# comment; repeated failures append, never duplicate) and the next
-# verified deploy closes it. The receipt carries URLs, status codes,
-# bytes, milliseconds, and status words only, never a body or a
-# screenshot (hard rule 1; src/layers/aiannh.ts).
+# Two questions, one proof. After a successful deploy (workflow_run) it
+# asks "did the build this deploy produced reach the CDN". Once a day and
+# on demand (schedule, workflow_dispatch) it asks the question
+# DDM-P0-T04 actually states: "main's head is X; is X live?" That second
+# question is the one a broken release fails. A deploy that FAILS or is
+# CANCELLED (a red browser shard, the `pages` concurrency group
+# superseding a run, the freshness gate refusing an obsolete rerun) raises
+# no successful workflow_run at all, so before the scheduled compare
+# nothing was verified, no issue opened, and live silently stayed on an
+# older commit.
 #
-# Why a separate workflow (2026-08-28 follow-up): as a job inside
-# deploy.yml this proof sat in the deploy's `pages` concurrency group, so
-# a newer push cancelled an in-flight verification; if that newer run
-# then failed before its own deploy, the older commit stayed live with no
-# receipt. Here the verification has its own job-level group: only a
-# newer verification (which exists only because a newer deploy succeeded,
-# and brings its own receipt) can supersede a running one. A newer push
-# that fails before deploying cancels nothing.
+# scripts/resolve-live-expectation.mjs (judgment in
+# scripts/lib/live-receipts.mjs, unit-tested in
+# tests/live-receipts.test.mjs) turns the event, main's head, and the
+# recent deploy runs into one of three verdicts:
 #
-# The expected commit and nonce come from the deploy run, not from this
-# run: `workflow_run.head_sha` is the commit the deploy built and
-# `workflow_run.id` is the nonce vite.config.ts stamped on <html>. The
-# checkout is that same commit so the PMTiles range checks read the list
-# of archives that build shipped. Residual gap: a deploy run cancelled
-# during or just after deploy-pages reads as cancelled whether or not
-# Pages published it, so it gets no receipt here; a scheduled compare of
-# the live stamp against the last successful deploy would close that.
+#   verify      Prove <sha> with build nonce <deploy run id>. For a
+#               workflow_run that is the deploy's own commit and run id;
+#               for a scheduled compare it is main's head and the latest
+#               successful deploy run of that head.
+#   in-flight   A deploy of main's head is queued or running and started
+#               less than 30 minutes ago, or the head is younger than that
+#               same grace period and has no successful deploy yet. Record
+#               it, end green, touch no issues: a release under way is not
+#               a divergence.
+#   undeployed  Main's head is past the grace period with no successful
+#               deploy, including a deploy parked in `queued` or `waiting`
+#               for longer than that. File it and fail.
+#
+# A run counts as having published the head if ANY attempt succeeded: `gh
+# run list` reports the LATEST attempt's conclusion, so a run that deployed
+# and was then re-run into a failure would otherwise read as never having
+# deployed while Pages still serves what it published.
+#
+# A verify runs scripts/verify-live.mjs against the deployed URL: it waits
+# for Pages propagation (polling the referenced assets for the SHA up to 5
+# minutes), then boots root, each cluster, and the wildfire embed at two
+# widths and reads the build stamp and every layer pill. The checkout is
+# the commit under proof so the PMTiles range checks read the list of
+# archives that build shipped.
+#
+# Either failure path (a verification that did not prove the build, or an
+# undeployed head) opens or appends to ONE issue labeled deploy-divergence,
+# found by the same marker comment, so repeated failures never duplicate;
+# a green verification closes it while the deployed commit is still the
+# head of main. The receipt carries URLs, status codes, bytes,
+# milliseconds, and status words only, never a body or a screenshot (hard
+# rule 1; src/layers/aiannh.ts).
+#
+# Why a separate workflow (2026-08-28): as a job inside deploy.yml this
+# proof sat in the deploy's `pages` concurrency group, so a newer push
+# cancelled an in-flight verification; if that newer run then failed
+# before its own deploy, the older commit stayed live with no receipt.
+# Here the verification has its own job-level group. A workflow-level
+# group would be taken when the run is created, before the job's `if` is
+# read, so a failed or cancelled deploy would still spawn a run that
+# cancels the in-flight verification and then skips itself.
+#
+# Still not proved here: that Pages served a particular build to a
+# particular reader at a particular moment, and nothing between two daily
+# compares. This workflow proves what the site answers when it is asked.
 
 name: Verify the live build
 
@@ -37,46 +69,78 @@ on:
   workflow_run:
     workflows: ["Build and deploy DDM to GitHub Pages"]
     types: [completed]
+  schedule:
+    # 14:15 UTC daily, after the 13:00 upstream monitor and the 13:30
+    # source-health probe, so the three receipts do not contend for
+    # runners. Daily rather than hourly: the compare only has something
+    # new to say when a deploy failed or was cancelled, the deploy failure
+    # itself already emails the owner, and a red deploy is worth a durable
+    # issue within a day, not within an hour. The owner can tune the cron
+    # or dispatch a compare by hand at any time.
+    - cron: '15 14 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   verify:
-    name: Verify the live build
+    name: Compare main against the live build
     # A workflow_run fires on every conclusion; only a successful deploy of
-    # main is a release to prove.
+    # main is a release to prove that way. Schedule and dispatch always
+    # run: their whole purpose is the deploy that never succeeded.
     if: >-
-      github.event.workflow_run.conclusion == 'success'
-      && github.event.workflow_run.head_branch == 'main'
-    # One verification at a time; a newer one supersedes an older one. The
-    # group is held at the JOB, not the workflow: a workflow-level group is
-    # taken when the run is created, before the `if` above is evaluated, so
-    # a failed or cancelled deploy would still spawn a run that cancels the
-    # in-flight verification and then skips itself, which is the exact gap
-    # this workflow closes. Only a job that runs enters a job-level group,
-    # and the key below keeps any non-success event out of it regardless.
-    # This group is deliberately NOT the deploy's `pages` group.
+      github.event_name != 'workflow_run'
+      || (github.event.workflow_run.conclusion == 'success'
+          && github.event.workflow_run.head_branch == 'main')
+    # One compare at a time. The group is held at the JOB, not the
+    # workflow: a workflow-level group is taken when the run is created,
+    # before the `if` above is evaluated, so a failed or cancelled deploy
+    # would still spawn a run that cancels the in-flight verification and
+    # then skips itself, which is the exact gap this workflow closes. Only
+    # a job that runs enters a job-level group, and the key below keeps any
+    # non-success workflow_run out of it regardless. This group is
+    # deliberately NOT the deploy's `pages` group.
+    #
+    # cancel-in-progress only for workflow_run: a post-deploy proof is
+    # newer truth than whatever is running, so it supersedes it (and brings
+    # its own receipt). A scheduled or dispatched compare instead QUEUES
+    # behind an in-flight post-deploy proof: cancelling that proof would
+    # destroy the receipt for a real release in order to re-ask a question
+    # the running job is already answering.
+    #
+    # The key mirrors BOTH terms of the job `if` above, conclusion and
+    # head_branch: a workflow_dispatch of deploy.yml from a branch that
+    # concludes success would otherwise take verify-live-main, cancel a
+    # running proof of a real release, and then skip itself.
     concurrency:
-      group: verify-live-${{ github.event.workflow_run.conclusion == 'success' && 'main' || github.run_id }}
-      cancel-in-progress: true
+      group: verify-live-${{ (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')) && 'main' || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'workflow_run' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
       contents: read
       issues: write
       pages: read
-    env:
-      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
-      DEPLOY_RUN_ID: ${{ github.event.workflow_run.id }}
-      DEPLOY_RUN_URL: ${{ github.event.workflow_run.html_url }}
+      # `gh run list --workflow=deploy.yml` reads GET
+      # /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs, which
+      # the fine-grained permission reference lists under the Actions
+      # repository permission at read. Unlisted scopes are `none` once any
+      # scope is named, so the scheduled compare cannot see the deploy runs
+      # without this line.
+      actions: read
     steps:
-      # The deployed commit, not the default branch head this event was
-      # raised against (they differ exactly when a newer push has landed).
-      - name: Checkout the deployed commit
+      # The commit the event points at: the deployed commit for a
+      # workflow_run (not the default branch head the event was raised
+      # against, which differ exactly when a newer push has landed), and
+      # the branch head at run creation otherwise. The resolve step below
+      # decides the commit actually under proof, and the align step moves
+      # the working tree if a scheduled run started late enough for main to
+      # have moved.
+      - name: Checkout the commit this event points at
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -84,10 +148,136 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      # No npm install yet: the resolver imports only the standard library,
+      # and an in-flight verdict should cost seconds, not a browser
+      # provision. The workflow_run fields arrive through env rather than
+      # being interpolated into the script body, and the deploy runs and
+      # branch head arrive as JSON that jq assembles, so no API text is
+      # ever pasted into a shell command.
+      - name: Resolve what the live build should be
+        id: expect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # A post-deploy proof already knows its commit and nonce from the
+          # event, so it asks the API for nothing: an Actions or branches
+          # outage must not turn a real release's receipt into a red run.
+          # A scheduled compare needs both, and an outage there fails this
+          # step loudly rather than reading an empty run list as "main was
+          # never deployed" and filing a divergence that is not one.
+          runs='[]'
+          branch='{"commit":{"sha":"","commit":{"committer":{"date":""}}}}'
+          if [ "$EVENT_NAME" != "workflow_run" ]; then
+            # 100 rather than 30: a long-lived head with many dispatches
+            # could otherwise push its own successful deploy out of the
+            # window and read as never deployed.
+            runs=$(gh run list --workflow=deploy.yml --branch main \
+              --json attempt,databaseId,headSha,conclusion,status,createdAt,updatedAt --limit 100)
+            branch=$(gh api "repos/$REPO/branches/main")
+            head=$(printf '%s' "$branch" | jq -r .commit.sha)
+            # gh run list reports ONE row per run carrying the LATEST
+            # attempt's conclusion, so a run that deployed on attempt 1 and
+            # was then re-run into a failure reads as `failure` while Pages
+            # still serves what attempt 1 published. Ask the attempts API
+            # about exactly those runs (this head, not currently success,
+            # more than one attempt), which is normally zero calls.
+            attempts='{}'
+            candidates=$(printf '%s' "$runs" | jq -r --arg head "$head" \
+              '.[] | select(.headSha == $head and .conclusion != "success" and ((.attempt // 1) > 1))
+                   | "\(.databaseId) \(.attempt)"')
+            while read -r id attempt; do
+              if [ -z "$id" ]; then
+                continue
+              fi
+              ok=false
+              n=1
+              while [ "$n" -lt "$attempt" ]; do
+                # </dev/null so gh cannot swallow the herestring this loop
+                # is reading from and eat the remaining candidates.
+                conclusion=$(gh api "repos/$REPO/actions/runs/$id/attempts/$n" --jq '.conclusion // ""' </dev/null)
+                if [ "$conclusion" = "success" ]; then
+                  ok=true
+                  break
+                fi
+                n=$((n + 1))
+              done
+              echo "run $id attempt count $attempt, an earlier attempt succeeded: $ok"
+              attempts=$(printf '%s' "$attempts" | jq --arg id "$id" --argjson ok "$ok" '. + {($id): $ok}')
+            done <<< "$candidates"
+            runs=$(printf '%s' "$runs" | jq --argjson attempts "$attempts" \
+              '[.[] | . + {anyAttemptSucceeded:
+                 (.conclusion == "success" or ($attempts[(.databaseId | tostring)] // false))}]')
+          fi
+          jq -n \
+            --arg eventName "$EVENT_NAME" \
+            --arg wrId "$WORKFLOW_RUN_ID" \
+            --arg wrSha "$WORKFLOW_RUN_SHA" \
+            --arg wrConclusion "$WORKFLOW_RUN_CONCLUSION" \
+            --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson graceMinutes 30 \
+            --argjson runs "$runs" \
+            --argjson branch "$branch" \
+            '{
+               eventName: $eventName,
+               workflowRun: (if $wrId == "" then null
+                             else { id: $wrId, headSha: $wrSha, conclusion: $wrConclusion } end),
+               headSha: $branch.commit.sha,
+               headCommittedAt: $branch.commit.commit.committer.date,
+               deployRuns: $runs,
+               now: $now,
+               graceMs: ($graceMinutes * 60000)
+             }' \
+            | node scripts/resolve-live-expectation.mjs --summary "$GITHUB_STEP_SUMMARY"
+
+      # Carry the resolved expectation into the environment the remaining
+      # steps and the github-script bodies read. Indirected through env so
+      # no resolver text reaches a shell command line.
+      - name: Name the build under proof
+        id: named
+        if: ${{ steps.expect.outputs.verdict != 'in-flight' }}
+        env:
+          RESOLVED_SHA: ${{ steps.expect.outputs.sha }}
+          RESOLVED_NONCE: ${{ steps.expect.outputs.nonce }}
+          RESOLVED_REASON: ${{ steps.expect.outputs.reason }}
+          RUN_URL_PREFIX: ${{ github.server_url }}/${{ github.repository }}/actions/runs
+        run: |
+          set -euo pipefail
+          {
+            echo "DEPLOY_SHA=$RESOLVED_SHA"
+            echo "DEPLOY_RUN_ID=$RESOLVED_NONCE"
+            echo "DEPLOY_RUN_URL=$RUN_URL_PREFIX/$RESOLVED_NONCE"
+            echo "EXPECT_REASON=$RESOLVED_REASON"
+          } >> "$GITHUB_ENV"
+
+      # A scheduled run can start minutes after it was created, so
+      # github.sha can already be behind the commit the resolver chose.
+      # Re-point the working tree at that commit so the PMTiles range
+      # checks read the archive list the verified build shipped.
+      - name: Align the checkout with the resolved commit
+        if: ${{ steps.expect.outputs.verdict == 'verify' }}
+        run: |
+          set -euo pipefail
+          have=$(git rev-parse HEAD)
+          if [ "$have" = "$DEPLOY_SHA" ]; then
+            echo "Working tree is already $DEPLOY_SHA"
+            exit 0
+          fi
+          git fetch --depth=1 origin "$DEPLOY_SHA"
+          git checkout --detach FETCH_HEAD
+          echo "Re-checked out $DEPLOY_SHA (was $have) for the PMTiles list."
+
       - name: Install dependencies
+        if: ${{ steps.expect.outputs.verdict == 'verify' }}
         run: npm ci
 
       - name: Provision Chromium
+        if: ${{ steps.expect.outputs.verdict == 'verify' }}
         uses: ./.github/actions/playwright-chromium
 
       # The site URL comes from the Pages configuration (the same source
@@ -95,6 +285,7 @@ jobs:
       # than an empty --base.
       - name: Resolve the Pages URL
         id: pages
+        if: ${{ steps.expect.outputs.verdict == 'verify' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -111,6 +302,7 @@ jobs:
       # run even when this step times out.
       - name: Verify the live build
         id: verify
+        if: ${{ steps.expect.outputs.verdict == 'verify' }}
         timeout-minutes: 16
         run: |
           set +e
@@ -123,8 +315,16 @@ jobs:
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
           exit 0
 
+      # `!cancelled()` replaces the implicit success(), so these steps run
+      # even when an earlier one failed. That is deliberate for a verifier
+      # that timed out or crashed (outcome `failure`, no receipt): a
+      # deployed build must never go without a durable alert. It is WRONG
+      # when the verifier never ran at all, because the align step, npm ci,
+      # or the Chromium action failed: `exit_code` is then empty, `!= '0'`
+      # is true, and the run would file a divergence for a live build it
+      # never looked at. `outcome != 'skipped'` is the difference.
       - name: Keep the receipt
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.expect.outputs.verdict == 'verify' && steps.verify.outcome != 'skipped' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: live-receipt
@@ -137,9 +337,14 @@ jobs:
       # Freshness before recovery: closing the divergence issue is a claim
       # that main and live agree, so it is made only while the deployed
       # commit is still the head of main.
+      # Every step below reads DEPLOY_SHA, DEPLOY_RUN_ID, DEPLOY_RUN_URL, or
+      # EXPECT_REASON, which the `named` step wrote to $GITHUB_ENV. Because
+      # `!cancelled()` replaces the implicit success(), each must also
+      # require that step to have succeeded, or it would speak about a build
+      # it cannot name.
       - name: Confirm the deployed commit is still the head of main
         id: fresh
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'verify' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -153,7 +358,7 @@ jobs:
       # without a durable alert. A failure that is only the propagation
       # poll is worded as inconclusive rather than a proved divergence.
       - name: Open or update the divergence issue
-        if: ${{ !cancelled() && steps.verify.outputs.exit_code != '0' }}
+        if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'verify' && steps.verify.outcome != 'skipped' && steps.verify.outputs.exit_code != '0' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
@@ -174,10 +379,10 @@ jobs:
             const failed = receipt?.failed ?? [];
             const inconclusive = receipt?.inconclusive === true;
             const heading = receipt === null
-              ? 'Live build verification did not complete after deploy'
+              ? 'Live build verification did not complete'
               : inconclusive
-                ? 'Live build verification inconclusive after deploy (propagation timeout)'
-                : 'Live build verification failed after deploy';
+                ? 'Live build verification inconclusive (propagation timeout)'
+                : 'Live build verification failed';
             const explanation = receipt === null
               ? 'The verifier produced no receipt (it timed out or crashed), so the live build is unproved, not proved wrong.'
               : inconclusive
@@ -187,7 +392,8 @@ jobs:
               marker,
               `## ${heading}`,
               '',
-              `The Pages deploy for \`${deploySha}\` ([run ${deployRunId}](${deployRunUrl})) completed, but the post-deploy verification did not prove the live build.`,
+              `The Pages deploy for \`${deploySha}\` ([run ${deployRunId}](${deployRunUrl})) completed, but the verification did not prove the live build.`,
+              `Expectation: ${process.env.EXPECT_REASON}`,
               explanation,
               '',
               failed.length ? `Failed checks: ${failed.map((f) => '`' + f + '`').join(', ')}` : 'Failed checks: (no receipt)',
@@ -219,14 +425,67 @@ jobs:
               await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                title: 'Live build diverges from main after deploy',
+                title: 'Live build diverges from main',
                 labels: [label],
                 body
               });
             }
 
-      - name: Close the divergence issue on a verified deploy
-        if: ${{ !cancelled() && steps.verify.outputs.exit_code == '0' && steps.fresh.outputs.current == 'true' }}
+      # The same marker and the same label as the step above, so a
+      # divergence found by the scheduled compare and one found after a
+      # deploy are ever one issue. Nothing was verified in this branch:
+      # there is no successful deploy of main's head to verify.
+      - name: Open or update the divergence issue for an undeployed head
+        if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'undeployed' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const label = 'deploy-divergence';
+            const marker = '<!-- ddm-verify-live -->';
+            const headSha = process.env.DEPLOY_SHA;
+            const reason = process.env.EXPECT_REASON;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const deployRuns = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/workflows/deploy.yml`;
+            const body = [
+              marker,
+              '## main is ahead of the live build',
+              '',
+              reason,
+              '',
+              `No successful Pages deploy of \`${headSha}\` exists, so the live site is still serving an earlier commit and nothing was verified against it. A deploy that fails or is cancelled raises no post-deploy proof, which is why this compare runs on a schedule.`,
+              '',
+              `Deploy runs: ${deployRuns}`,
+              `Compare run: ${runUrl}`,
+              '',
+              '_This issue closes automatically when a later deploy verifies green while its commit is the head of main._'
+            ].join('\n');
+            const open = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+              per_page: 100
+            });
+            const existing = open.find((issue) => !issue.pull_request && (issue.body ?? '').includes(marker));
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: 'Live build diverges from main',
+                labels: [label],
+                body
+              });
+            }
+
+      - name: Close the divergence issue on a verified build
+        if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'verify' && steps.verify.outputs.exit_code == '0' && steps.fresh.outputs.current == 'true' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
@@ -259,7 +518,13 @@ jobs:
             }
 
       - name: Fail the run when the live build was not proved
-        if: ${{ !cancelled() && steps.verify.outputs.exit_code != '0' }}
+        if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'verify' && steps.verify.outcome != 'skipped' && steps.verify.outputs.exit_code != '0' }}
         run: |
           echo "::error::The live build was not proved to be $DEPLOY_SHA (deploy run $DEPLOY_RUN_ID); see the job summary and the deploy-divergence issue."
+          exit 1
+
+      - name: Fail the run when main has no successful deploy
+        if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'undeployed' }}
+        run: |
+          echo "::error::$EXPECT_REASON See the job summary and the deploy-divergence issue."
           exit 1
