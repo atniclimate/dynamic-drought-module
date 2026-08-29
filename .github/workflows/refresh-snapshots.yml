@@ -107,9 +107,10 @@ jobs:
                 description: 'Scheduled committed-snapshot refresh failed'
               });
             }
+            const marker = '<!-- ddm-snapshot-refresh -->';
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const body = [
-              '<!-- ddm-snapshot-refresh -->',
+              marker,
               '## Scheduled ENSO snapshot refresh failed',
               '',
               'The weekly rebuild of `public/data/enso-indices.json` did not complete.',
@@ -121,19 +122,24 @@ jobs:
               '_This issue auto-closes on the next successful refresh. Likely cause: a CPC',
               'ascii index-table drift in `scripts/build-enso-snapshot.mjs`, or a suspended workflow._'
             ].join('\n');
-            const open = await github.rest.issues.listForRepo({
+            // Find this workflow's own issue by its marker, not by position.
+            // `listForRepo` returns pull requests too (a labeled pull request
+            // would otherwise be commented on) and it pages, so an unpaginated
+            // `data[0]` is whichever issue happened to sort first on page one.
+            const open = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner, repo: context.repo.repo,
-              state: 'open', labels: label
+              state: 'open', labels: label, per_page: 100
             });
-            if (open.data.length === 0) {
+            const existing = open.find((issue) => !issue.pull_request && (issue.body ?? '').includes(marker));
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: existing.number, body
+              });
+            } else {
               await github.rest.issues.create({
                 owner: context.repo.owner, repo: context.repo.repo,
                 title: 'ENSO snapshot refresh failed', labels: [label], body
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner, repo: context.repo.repo,
-                issue_number: open.data[0].number, body
               });
             }
 
@@ -144,11 +150,16 @@ jobs:
         with:
           script: |
             const label = 'snapshot-refresh-failed';
-            const open = await github.rest.issues.listForRepo({
+            const marker = '<!-- ddm-snapshot-refresh -->';
+            // Close every open issue this workflow raised, and nothing else:
+            // a labeled pull request or a hand-filed issue under the same
+            // label is not this workflow's to close.
+            const open = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner, repo: context.repo.repo,
-              state: 'open', labels: label
+              state: 'open', labels: label, per_page: 100
             });
-            for (const issue of open.data) {
+            for (const issue of open) {
+              if (issue.pull_request || !(issue.body ?? '').includes(marker)) continue;
               await github.rest.issues.createComment({
                 owner: context.repo.owner, repo: context.repo.repo,
                 issue_number: issue.number,
