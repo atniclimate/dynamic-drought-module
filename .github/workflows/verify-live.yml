@@ -25,13 +25,17 @@
 #               can say which bytes it serves, so the proof accepts any
 #               member and the receipt records the one that matched.
 #   in-flight   A deploy of main's head is queued or running and started
-#               less than 30 minutes ago, or the head is younger than that
-#               same grace period and has no successful deploy yet. Record
-#               it, end green, touch no issues: a release under way is not
-#               a divergence.
-#   undeployed  Main's head is past the grace period with no successful
-#               deploy, including a deploy parked in `queued` or `waiting`
-#               for longer than that. File it and fail.
+#               less than 60 minutes ago (the deploy's own envelope: a 15
+#               minute gate plus a 40 minute browser shard budget), or the
+#               head is younger than the 30 minute grace period and has no
+#               successful deploy yet. Record it, end green, touch no
+#               issues: a release under way is not a divergence.
+#   undeployed  Main's head is past the 30 minute grace period with no
+#               successful deploy, or a deploy is parked in `queued` or
+#               `waiting` past the 60 minute in-flight bound. File it and
+#               fail. Two envelopes, because "how long may a commit go
+#               undeployed" and "how long may one deploy run take" are
+#               different questions.
 #
 # A run counts as having published the head if ANY attempt succeeded: `gh
 # run list` reports the LATEST attempt's conclusion, so a run that deployed
@@ -123,7 +127,12 @@ jobs:
       group: verify-live-${{ (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')) && 'main' || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'workflow_run' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # 35, not 25: a cache-miss Chromium provision takes up to 10 minutes
+    # (.github/workflows/browser-suite.yml documents that budget), the
+    # verifier step's own budget is 16, and the freshness refetch and the
+    # issue steps come after both. At 25 the job could be cancelled before
+    # it filed anything, which is the silence this workflow exists to end.
+    timeout-minutes: 35
     permissions:
       contents: read
       issues: write
@@ -251,6 +260,7 @@ jobs:
             --arg wrConclusion "$WORKFLOW_RUN_CONCLUSION" \
             --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --argjson graceMinutes 30 \
+            --argjson stuckMinutes 60 \
             --argjson runs "$runs" \
             --argjson branch "$branch" \
             '{
@@ -261,7 +271,8 @@ jobs:
                headCommittedAt: $branch.commit.commit.committer.date,
                deployRuns: $runs,
                now: $now,
-               graceMs: ($graceMinutes * 60000)
+               graceMs: ($graceMinutes * 60000),
+               stuckMs: ($stuckMinutes * 60000)
              }' \
             | node scripts/resolve-live-expectation.mjs --summary "$GITHUB_STEP_SUMMARY"
 

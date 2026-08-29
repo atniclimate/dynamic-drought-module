@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   EXPECTED_BOOT_LAYERS,
   LIVE_COMPARE_GRACE_MS,
+  LIVE_INFLIGHT_STUCK_MS,
   TERMINAL_STATUSES,
   evaluateAssets,
   evaluateEmbedCorner,
@@ -444,7 +445,7 @@ test('a queued or running deploy of main head is in-flight, not a divergence', (
   assert.match(running.reason, /is in_progress/);
 });
 
-test('a deploy stuck unfinished past the grace period stops reading as in-flight', () => {
+test('a deploy stuck unfinished past the in-flight bound stops reading as in-flight', () => {
   const stuck = resolveLiveExpectation(scheduled({
     deployRuns: [run({
       databaseId: 902,
@@ -455,15 +456,33 @@ test('a deploy stuck unfinished past the grace period stops reading as in-flight
     })],
   }));
   assert.equal(stuck.verdict, 'undeployed');
-  assert.match(stuck.reason, /deploy run 902 has been queued for 75 minutes, past the 30 minute grace period/);
+  assert.match(stuck.reason, /deploy run 902 has been queued for 75 minutes, past the 60 minute in-flight bound/);
   const waiting = resolveLiveExpectation(scheduled({
-    deployRuns: [run({ databaseId: 903, conclusion: null, status: 'waiting', createdAt: minutesBefore(45), updatedAt: minutesBefore(45) })],
+    deployRuns: [run({ databaseId: 903, conclusion: null, status: 'waiting', createdAt: minutesBefore(90), updatedAt: minutesBefore(90) })],
   }));
   assert.equal(waiting.verdict, 'undeployed', 'an environment protection hold is still a live build that never arrived');
   const fresh = resolveLiveExpectation(scheduled({
     deployRuns: [run({ databaseId: 904, conclusion: null, status: 'queued', createdAt: minutesBefore(4), updatedAt: minutesBefore(4) })],
   }));
   assert.equal(fresh.verdict, 'in-flight');
+});
+
+// The deploy's own envelope is longer than the head's grace: a 15 minute
+// gate plus a 40 minute browser shard budget. A run 45 minutes in is late,
+// not stuck, and answering both questions with 30 minutes accused it.
+test('the head grace and the in-flight bound are separate envelopes', () => {
+  assert.equal(LIVE_COMPARE_GRACE_MS, 30 * 60 * 1000);
+  assert.equal(LIVE_INFLIGHT_STUCK_MS, 60 * 60 * 1000);
+  const late = resolveLiveExpectation(scheduled({
+    deployRuns: [run({ databaseId: 910, conclusion: null, status: 'in_progress', createdAt: minutesBefore(45), updatedAt: minutesBefore(45) })],
+  }));
+  assert.equal(late.verdict, 'in-flight', 'still inside the deploy budget the browser suite documents');
+  const tightened = resolveLiveExpectation(scheduled({
+    stuckMs: 20 * 60_000,
+    deployRuns: [run({ databaseId: 911, conclusion: null, status: 'in_progress', createdAt: minutesBefore(45), updatedAt: minutesBefore(45) })],
+  }));
+  assert.equal(tightened.verdict, 'undeployed', 'the bound is an input, not a constant the caller cannot reach');
+  assert.match(tightened.reason, /past the 20 minute in-flight bound/);
 });
 
 test('an unfinished deploy whose start time cannot be read is not waited on forever', () => {

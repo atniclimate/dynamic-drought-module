@@ -309,6 +309,22 @@ export function renderSummary(receipt) {
  */
 export const LIVE_COMPARE_GRACE_MS = 30 * 60 * 1000;
 
+/**
+ * How long a deploy run of main's head may sit unfinished before "a release
+ * is under way" becomes "a release is stuck".
+ *
+ * A different question from the head grace above, and it was a defect to
+ * answer both with 30 minutes. The head grace asks how long a commit may go
+ * with no successful deploy; the deploy's OWN envelope is longer than that,
+ * because .github/workflows/browser-suite.yml gives each shard 40 minutes
+ * and deploy.yml adds a 15 minute gate job before it. A run inside its own
+ * documented budget must not be reported as stuck, so this bound is 60
+ * minutes from the run's creation: past a deploy that is running late, short
+ * of letting a run parked in `queued` or `waiting` keep the compare green
+ * for a day.
+ */
+export const LIVE_INFLIGHT_STUCK_MS = 60 * 60 * 1000;
+
 /** A deploy run that has not finished cannot be judged yet. */
 function isFinished(run) {
   const status = String(run?.status ?? '');
@@ -452,7 +468,11 @@ const asMinutes = (ms) => Math.max(0, Math.round(ms / 60_000));
  *   `conclusion` is the LATEST attempt's, so the caller sets
  *   `anyAttemptSucceeded` for a run whose earlier attempt published.
  * @param {(string|number)} input.now
- * @param {number} [input.graceMs] Defaults to LIVE_COMPARE_GRACE_MS.
+ * @param {number} [input.graceMs] How long the HEAD may go with no
+ *   successful deploy. Defaults to LIVE_COMPARE_GRACE_MS.
+ * @param {number} [input.stuckMs] How long a DEPLOY RUN may sit unfinished
+ *   before it is stuck rather than in flight. Defaults to
+ *   LIVE_INFLIGHT_STUCK_MS.
  * @returns {{verdict: ('verify'|'in-flight'|'undeployed'), sha: string, nonce: string,
  *   nonces: string[], warnings: string[], reason: string}}
  *   `verify`: run the live proof against `sha`, accepting any build nonce in
@@ -490,6 +510,7 @@ export function resolveLiveExpectation(input) {
   const headSha = String(input?.headSha ?? '');
   if (!headSha) throw new Error('headSha is required for a scheduled or dispatched compare');
   const graceMs = Number.isFinite(input?.graceMs) ? Number(input.graceMs) : LIVE_COMPARE_GRACE_MS;
+  const stuckMs = Number.isFinite(input?.stuckMs) ? Number(input.stuckMs) : LIVE_INFLIGHT_STUCK_MS;
   const nowMs = toMs(input?.now, 'now');
   const headMs = toMs(input?.headCommittedAt, 'headCommittedAt');
   const runs = Array.isArray(input?.deployRuns) ? input.deployRuns : [];
@@ -518,12 +539,12 @@ export function resolveLiveExpectation(input) {
     };
   }
 
-  // An unfinished run is only a release under way for as long as the grace
-  // period. A deploy stuck in `queued`, `waiting` (an environment
-  // protection rule), or `requested` would otherwise keep this compare
-  // green forever, which is the silence DDM-P0-T04 exists to end. Measured
-  // from the RUN's creation, not the commit's: the run is the thing that
-  // is stuck.
+  // An unfinished run is only a release under way for as long as the
+  // in-flight bound, which is the DEPLOY's envelope and not the head's
+  // grace. A deploy stuck in `queued`, `waiting` (an environment protection
+  // rule), or `requested` would otherwise keep this compare green forever,
+  // which is the silence DDM-P0-T04 exists to end. Measured from the RUN's
+  // creation, not the commit's: the run is the thing that is stuck.
   const running = newest(forHead.filter((run) => !isFinished(run)));
   if (running) {
     const startedMs = createdMs(running);
@@ -544,7 +565,7 @@ export function resolveLiveExpectation(input) {
     const started = ageSince(nowMs, startedMs, `deploy run ${running.databaseId} start time`);
     const warnings = started.warning ? [started.warning] : [];
     const note = started.warning ? ` (warning: ${started.warning})` : '';
-    if (started.ms < graceMs) {
+    if (started.ms < stuckMs) {
       return {
         verdict: 'in-flight',
         sha: headSha,
@@ -560,7 +581,7 @@ export function resolveLiveExpectation(input) {
       nonce: '',
       nonces: [],
       warnings,
-      reason: `main is ahead of the live build: no successful deploy of ${headSha}; deploy run ${running.databaseId} has been ${running.status || 'unfinished'} for ${asMinutes(started.ms)} minutes, past the ${asMinutes(graceMs)} minute grace period${note}`,
+      reason: `main is ahead of the live build: no successful deploy of ${headSha}; deploy run ${running.databaseId} has been ${running.status || 'unfinished'} for ${asMinutes(started.ms)} minutes, past the ${asMinutes(stuckMs)} minute in-flight bound${note}`,
     };
   }
 
