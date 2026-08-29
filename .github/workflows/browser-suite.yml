@@ -131,12 +131,16 @@ jobs:
         id: suite
         timeout-minutes: 26
         env:
+          # Routed through env, like RETRIES_ARG below, rather than
+          # interpolated directly into `run:`, so neither input's value is
+          # spliced into the shell command line.
+          WORKERS: ${{ inputs.workers }}
           # Non-empty only when the `retries` experiment input (above) was
           # set; a plain call (Validate's pull_request path, or deploy.yml)
           # leaves this empty and playwright.config.ts's own isCI retries
           # setting governs, unchanged.
           RETRIES_ARG: ${{ inputs.retries != '' && format('--retries={0}', inputs.retries) || '' }}
-        run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=${{ inputs.workers }} $RETRIES_ARG
+        run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=$WORKERS $RETRIES_ARG
 
       # DDM-P0-T06: name what happened. The job summary lists passed, failed,
       # flaky (passed only on retry), and skipped counts and the file:line of
@@ -155,11 +159,15 @@ jobs:
       # duration profile exists to decide shard composition and worker counts
       # (there was none before this). It carries per-test title, file:line,
       # status, duration, and retry index, plus per-result stdout/stderr text
-      # and an attachments list that is always empty (traces and screenshots
-      # are off in CI) -- no response bodies. This upload's cleanliness rests
-      # on the same guarantee as DDM-P1-T08: every suite boot answers the
-      # sovereign boundary queries from synthetic fixtures (PR 34), so no
-      # live geometry ever reaches a test's stdout or the report JSON. Short
+      # and an attachments list that today is always empty (traces and
+      # screenshots are off in CI) -- no response bodies. (PR 39,
+      # ci/t08-retention-flip-2026-08-29, proposes turning traces on for
+      # retry 1 without screenshots; if that lands, this list gains a trace
+      # reference for retried tests, still no response bodies, under that
+      # PR's own guarantees.) This upload's cleanliness rests on the same
+      # guarantee as DDM-P1-T08: every suite boot answers the sovereign
+      # boundary queries from synthetic fixtures (PR 34), so no live
+      # geometry ever reaches a test's stdout or the report JSON. Short
       # retention: this is a measurement artifact, not a diagnostic one.
       - name: Keep the JSON report for measurement
         if: ${{ !cancelled() }}

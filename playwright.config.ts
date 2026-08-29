@@ -50,16 +50,19 @@ const isCI = !!process.env['CI'];
 // Locally `npm test` and `npm run test:serial` still run both projects.
 const FIRE3D_SPECS = ['**/fire3d-mode.spec.ts', '**/view-contracts.spec.ts'];
 
-// The interaction cluster (R1/R3, 2026-08-29): these four files carried 33
-// of the 36 named flake events measured across 21 CI runs (2026-08-29
-// 01:38-10:30 UTC) -- a livelock in a click-retry loop, a sub-120ms
-// CSS-transition read, an unwaited restore race, and the shards that
-// happened to sit beside them. They hold 42 tests today (`npx playwright
-// test --list --project=chromium-interaction`, measured on 56dd46a).
-// Moving them to their own project gives them a stable identity (a named
-// project does not move when tests are added, unlike a shard boundary) and
-// isolates a red or flaky run to its own ~2-shard project instead of
-// dragging the whole general project.
+// The interaction cluster (R1/R3, 2026-08-29): these four files carry about
+// 35 of the 53 named flake events tallied in the per-test table (section 3)
+// of the 2026-08-29 CI flake report, across 21 CI runs (01:38-10:30 UTC) --
+// a livelock in a click-retry loop, a sub-120ms CSS-transition read, an
+// unwaited restore race, and the shards that happened to sit beside them.
+// (The report's own "33" figure is a different slice: the chromium 3/4
+// shard's event count, not a per-file total -- do not conflate the two.)
+// They hold 42 tests today (`npx playwright test --list
+// --project=chromium-interaction`, measured on 56dd46a). Moving them to
+// their own project gives them a stable identity (a named project does not
+// move when tests are added, unlike a shard boundary) and isolates a red or
+// flaky run to its own ~2-shard project instead of dragging the whole
+// general project.
 const INTERACTION_SPECS = [
   '**/popup-viewport.spec.ts',
   '**/studio-restore.spec.ts',
