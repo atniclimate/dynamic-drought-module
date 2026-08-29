@@ -276,6 +276,55 @@ Typecheck Worker changes from its directory. Publishing the Worker is a
 separate external operation and should include pre-deploy and post-deploy
 revision, route-rejection, body-hash, CORS, deadline, and rate-limit checks.
 
+`verify:worker` is the instrument for those edge checks. It is read-only
+against the public Worker and writes a receipt:
+
+```powershell
+npm run verify:worker -- --expect-revision <revision>
+npm run verify:worker -- --expect-revision <revision> --out worker-receipt.json --summary summary.md
+```
+
+It proves, by probing rather than by reading source, that the deployed edge
+enforces the reviewed policy: the health endpoint names the expected
+revision with the reviewed Cross-Origin Resource Sharing advertisement and
+no caching; every allow-listed route family relays, not a sample of three,
+which is all the daily upstream monitor covers; HEAD and OPTIONS answer only
+for an allow-listed target; an unknown path, an off-route path of an allowed
+host, a host that was never allow-listed, and a host the reviewed revision
+removed are all refused; a POST is refused by the method gate; the request
+bounds hold; and the relay hands back upstream bytes unchanged on one
+static, cache-busted endpoint.
+
+Two design points are load-bearing. Each row asserts the HTTP status AND the
+Worker's own JSON error code, because a 403 that arrives from somewhere
+further along is not the same answer as a 403 the route policy produced, and
+a receipt that read only the status would score that as a pass. And byte
+transparency is proved across the whole table before publishing, on
+synthetic bytes in `tests/worker-proxy-policy.spec.ts`; live it is one
+static endpoint with a fresh cache-busting query on both legs, because a
+direct-versus-relay hash false-fails on a dynamic upstream or on a response
+held in the Worker's 60-second edge cache.
+
+Exit 0 when every row passed, 1 when any failed, 2 on a usage error. The
+receipt holds statuses, header values, byte counts, digests, and
+milliseconds; never a response body. `--expect-revision` is required, so the
+receipt always asserts a named revision rather than whatever the edge
+happens to be serving; `--expect-healthz-methods` names the method set the
+health endpoint advertises, which is a narrower question than the relay's.
+The health endpoint takes no body and offers no HEAD, so it names
+`GET, OPTIONS` on its document, its preflight, and the `Allow` header of its
+405, while the relay routes keep `GET, HEAD, OPTIONS`.
+The judgment is the pure evaluators in `scripts/lib/worker-receipts.mjs`,
+unit-tested in `tests/worker-receipts.test.mjs` against both the answers the
+edge gives today and the answers the reviewed candidate must give, so the
+receipt is known to fail before a publish and pass after one.
+
+Running it against an edge older than reviewed source is expected to fail,
+and that failing receipt is the drift evidence. It is a hand-run command
+here: it is meant for the owner's pre-publish and post-publish steps in the
+Worker convergence plan, and later for the daily monitor. No workflow runs
+it, and the receipt is not committed.
+
 ## GitHub Pages and release evidence
 
 The Pages workflow builds the static application from `main`. The build embeds
