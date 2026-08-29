@@ -29,6 +29,7 @@ import {
   zoomToFitLongitudeSpan
 } from '../src/config/regions';
 import { buildBoundaryContext, geometryBbox } from '../src/impact/context';
+import { captureWarnings } from './map-harness';
 
 type FetchNifcClaims =
   typeof import('../src/impact/sources').fetchNifcClaims;
@@ -491,7 +492,6 @@ test.describe('consumer behavior on a crossing selection (N2-A)', () => {
     }
 
     const originalFetch = globalThis.fetch;
-    const originalWarn = console.warn;
     let requestIndex = 0;
     let noteHeadersReturned: (() => void) | null = null;
     const headersReturned = new Promise<void>((resolve) => {
@@ -514,8 +514,8 @@ test.describe('consumer behavior on a crossing selection (N2-A)', () => {
       );
     };
 
+    const warnings = captureWarnings();
     try {
-      console.warn = () => undefined;
       const context = buildBoundaryContext(
         'state',
         { NAME: 'Alaska' },
@@ -529,6 +529,11 @@ test.describe('consumer behavior on a crossing selection (N2-A)', () => {
         );
         expect(result.ok).toBe(false);
       });
+      // The failure is reported once, by the query that owns the envelope,
+      // and the cancelled sibling stays silent (an abort is not a fault).
+      expect(warnings.messages).toEqual([
+        expect.stringMatching(/^\[impact\] NIFC query failed\./)
+      ]);
       await expect(
         Promise.race([
           bodyCancelled.then(() => true),
@@ -538,8 +543,8 @@ test.describe('consumer behavior on a crossing selection (N2-A)', () => {
         ])
       ).resolves.toBe(true);
     } finally {
+      warnings.restore();
       globalThis.fetch = originalFetch;
-      console.warn = originalWarn;
       finishStalledBody?.();
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));

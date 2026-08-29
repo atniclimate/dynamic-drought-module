@@ -121,12 +121,17 @@ are unit-tested by `tests/live-receipts.test.mjs` and
 `node:test` files and register no Playwright tests.
 
 The Node-level specs that deliberately drive a degrade path (a corrupt
-archive, three tile errors in the rolling window, a dead fetch) capture the
-runtime's `console.warn` through `captureWarnings()` in
-`tests/map-harness.ts` and assert the exact list of warnings, so the honest
-reason is part of the contract and its stack trace stays out of the shard
-log; the captured text is kept as a `console.warn` annotation on the test
-result, so a failure still carries the evidence.
+archive, three tile errors in the rolling window, a dead fetch, a sibling
+request cancelled after its headers arrived, one failed framing count, an
+invalid or transfer-truncated ArcGIS body) capture the runtime's
+`console.warn` through `captureWarnings()` in `tests/map-harness.ts` and
+assert the exact list of warnings, so the honest reason is part of the
+contract and its stack trace stays out of the shard log; the captured text
+is kept as a `console.warn` annotation on the test result, so a failure
+still carries the evidence. That helper is the only way a spec may quiet a
+warning: a hand-rolled `console.warn = () => undefined` silences the reason
+instead of asserting it, and a warning the runtime stops issuing would then
+pass unnoticed.
 
 ## Headless WebGL
 
