@@ -39,7 +39,10 @@ source-health receipts for the runtime's own queries, Worker revision
 convergence, failure artifacts, and immutable workflow action references. It
 also proves or declines globe projection and a separately named global
 low-zoom NASA GIBS context layer, then publishes and verifies the accepted
-Pages build under separate release authorization.
+Pages build under separate release authorization. Closing MapLibre and
+imagery release evidence now waits on Worker revision convergence, retained
+browser diagnostics, and scheduled source-health receipts, as well as the
+projection and imagery decisions.
 
 ### P1: Network lifecycle and failure honesty
 

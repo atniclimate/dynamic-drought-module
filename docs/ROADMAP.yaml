@@ -324,6 +324,7 @@ phases:
           - "Pre-deploy route, method, redirect, timeout, cache, and byte-transparency evidence."
           - "Post-deploy health, negative-path, CORS, and body hash evidence."
           - "An atomically updated expected revision in monitoring."
+          - "A deployment-identity receipt (Cloudflare version id, bundle digest, /healthz revision) and a two-phase publish/verify/rollback record."
         acceptance:
           - "GET, HEAD, and OPTIONS work only for allowlisted routes."
           - "POST and off-route relay probes are rejected."
@@ -406,7 +407,7 @@ phases:
           - "Accepted and declined conditional work is recorded without implying unshipped capability."
           - "The deployed build, source commit, public documentation, and rollback point agree."
           - "The canonical YAML parses and its reference graph resolves without duplicate IDs or cycles."
-        dependencies: ["DDM-P0-T08", "DDM-P0-T09", "DDM-P0-T10"]
+        dependencies: ["DDM-P0-T05", "DDM-P0-T06", "DDM-P0-T08", "DDM-P0-T09", "DDM-P0-T10", "DDM-P0-T12"]
         external_authorization: "Explicit merge, tag, and deployment authorization required."
       - id: "DDM-P0-T12"
         name: "Record scheduled source-health receipts for each catalog layer's default-camera queries"
@@ -533,7 +534,7 @@ phases:
         outputs:
           - "A suite-wide route in the shared boot helper that answers the Census AIANNH and BIA AIAN-LAR requests with synthetic, clearly non-sovereign fixture polygons, replacing the per-spec routes that exist today."
           - "The boundary-popup, search, and studio specs asserting against the fixture, with the live boundary path left to the daily source-health probe."
-          - "Trace on first retry and screenshot on failure enabled in CI with short retention, once no ordinary CI boot fetches live boundary geometry."
+          - "Traces without screenshots retained on retry with short retention; screenshots stay off pending a content review; a synthetic basemap for artifact-bearing runs is a later output."
         acceptance:
           - "No CI boot issues a request to the AIANNH or BIA services; a test proves the route covers every boot path the suite uses."
           - "A retained trace from a deliberately failed run contains no response body from either service."
