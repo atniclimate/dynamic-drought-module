@@ -219,6 +219,25 @@ function newest(runs) {
   return best;
 }
 
+/**
+ * The FIRST deploy run of a set, by creation. Used to floor the grace
+ * period: the question is when this commit first entered a release, not
+ * when someone last retried it.
+ */
+function oldest(runs) {
+  let best = null;
+  let bestAt = null;
+  for (const run of runs) {
+    const at = parsedMs(run?.createdAt) ?? parsedMs(run?.updatedAt);
+    if (at === null) continue;
+    if (bestAt === null || at < bestAt) {
+      best = run;
+      bestAt = at;
+    }
+  }
+  return best;
+}
+
 function toMs(value, label) {
   const ms = typeof value === 'number' ? value : Date.parse(String(value ?? ''));
   if (!Number.isFinite(ms)) throw new Error(`${label} is not a parseable timestamp`);
@@ -315,7 +334,19 @@ export function resolveLiveExpectation(input) {
   const running = newest(forHead.filter((run) => !isFinished(run)));
   if (running) {
     const startedMs = parsedMs(running.createdAt);
-    const stuckMs = startedMs === null ? 0 : nowMs - startedMs;
+    // An unreadable createdAt must not mean "started just now, wait
+    // forever". An unfinished run whose start cannot be read is treated as
+    // past the grace period: this workflow exists to end silence, so an
+    // unusable timestamp resolves toward speaking, not toward waiting.
+    if (startedMs === null) {
+      return {
+        verdict: 'undeployed',
+        sha: headSha,
+        nonce: '',
+        reason: `main is ahead of the live build: no successful deploy of ${headSha}; deploy run ${running.databaseId} is ${running.status || 'unfinished'} and its start time (${running.createdAt ?? 'absent'}) could not be read, so its age cannot be bounded`,
+      };
+    }
+    const stuckMs = nowMs - startedMs;
     if (stuckMs < graceMs) {
       return {
         verdict: 'in-flight',
@@ -333,11 +364,14 @@ export function resolveLiveExpectation(input) {
   }
 
   // Grace runs from the commit date, which a rebase or a backdated
-  // committer date controls, so floor it by the newest deploy run for this
-  // head: a commit dated last year whose deploy started two minutes ago is
-  // two minutes into its release, not a year overdue.
+  // committer date controls, so floor it by this head's FIRST deploy run:
+  // a commit dated last year whose only deploy started two minutes ago is
+  // two minutes into its release, not a year overdue. The oldest run, not
+  // the newest: flooring by the newest would let every retry reset the
+  // clock, so a head retried more often than the grace period would keep
+  // this compare green for as long as someone kept pressing re-run.
   let ageMs = nowMs - headMs;
-  const firstAttemptMs = parsedMs(newest(forHead)?.createdAt);
+  const firstAttemptMs = parsedMs(oldest(forHead)?.createdAt);
   if (firstAttemptMs !== null) ageMs = Math.min(ageMs, nowMs - firstAttemptMs);
   if (ageMs < graceMs) {
     return {

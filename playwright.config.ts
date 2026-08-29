@@ -135,7 +135,12 @@ export default defineConfig({
       // a runner matrix with `--shard=i/n` (contiguous equal-count slices of
       // the file-ordered test list), one worker per runner.
       name: 'chromium',
-      testIgnore: FIRE3D_SPECS,
+      // `**/*.test.mjs` are the node:test suites (`node --test`, run by the
+      // gate); Playwright's default testMatch otherwise IMPORTS them on every
+      // collection and every worker, where they register zero Playwright
+      // tests but do execute, so a module-scope throw in one would red a
+      // shard as a collection error rather than fail its own runner.
+      testIgnore: [...FIRE3D_SPECS, '**/*.test.mjs'],
       use: CHROMIUM_USE
     },
     {

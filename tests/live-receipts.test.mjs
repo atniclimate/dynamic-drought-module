@@ -263,6 +263,14 @@ test('a deploy stuck unfinished past the grace period stops reading as in-flight
   assert.equal(fresh.verdict, 'in-flight');
 });
 
+test('an unfinished deploy whose start time cannot be read is not waited on forever', () => {
+  const out = resolveLiveExpectation(scheduled({
+    deployRuns: [run({ databaseId: 905, conclusion: null, status: 'queued', createdAt: 'not a date', updatedAt: null })],
+  }));
+  assert.equal(out.verdict, 'undeployed');
+  assert.match(out.reason, /deploy run 905 is queued and its start time \(not a date\) could not be read/);
+});
+
 test('a backdated head commit cannot skip the grace period its deploy is still inside', () => {
   const out = resolveLiveExpectation(scheduled({
     headCommittedAt: '2019-01-01T00:00:00Z',
@@ -274,8 +282,22 @@ test('a backdated head commit cannot skip the grace period its deploy is still i
       updatedAt: minutesBefore(2),
     })],
   }));
-  assert.equal(out.verdict, 'in-flight', 'age is floored by the newest deploy run for that head');
+  assert.equal(out.verdict, 'in-flight', 'age is floored by this head\'s first deploy run');
   assert.match(out.reason, /is 3 minutes old, inside the 30 minute grace period/);
+});
+
+// Flooring by the NEWEST run would report 3 minutes here and stay green
+// for as long as someone kept pressing re-run.
+test('retrying a deploy does not reset the grace period the head has already spent', () => {
+  const out = resolveLiveExpectation(scheduled({
+    headCommittedAt: '2019-01-01T00:00:00Z',
+    deployRuns: [
+      run({ databaseId: 700, conclusion: 'failure', status: 'completed', createdAt: minutesBefore(200), updatedAt: minutesBefore(190) }),
+      run({ databaseId: 701, conclusion: 'failure', status: 'completed', createdAt: minutesBefore(3), updatedAt: minutesBefore(2) }),
+    ],
+  }));
+  assert.equal(out.verdict, 'undeployed', 'the head first entered a release 200 minutes ago');
+  assert.match(out.reason, /head for 200 minutes; latest deploy run 701 concluded failure/);
 });
 
 test('a commit younger than the grace period with no successful deploy is in-flight', () => {

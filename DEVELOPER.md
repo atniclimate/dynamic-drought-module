@@ -304,6 +304,11 @@ and returns one of three verdicts:
   comment, so a scheduled finding and a post-deploy finding are never two
   issues), and fails.
 
+The `node --test` suites live in `tests/` beside the Playwright specs but are
+excluded from the `chromium` project (`testIgnore: '**/*.test.mjs'`), because
+Playwright's default `testMatch` would otherwise import and execute them on
+every collection and every worker while registering no Playwright test.
+
 A deploy run counts as having published the head if ANY of its attempts
 succeeded, not only the latest: a run that deployed and was then re-run into
 a failure reads as `failure` in the run list while Pages still correctly

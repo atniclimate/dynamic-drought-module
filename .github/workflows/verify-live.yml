@@ -198,7 +198,9 @@ jobs:
               ok=false
               n=1
               while [ "$n" -lt "$attempt" ]; do
-                conclusion=$(gh api "repos/$REPO/actions/runs/$id/attempts/$n" --jq '.conclusion // ""')
+                # </dev/null so gh cannot swallow the herestring this loop
+                # is reading from and eat the remaining candidates.
+                conclusion=$(gh api "repos/$REPO/actions/runs/$id/attempts/$n" --jq '.conclusion // ""' </dev/null)
                 if [ "$conclusion" = "success" ]; then
                   ok=true
                   break
@@ -237,6 +239,7 @@ jobs:
       # steps and the github-script bodies read. Indirected through env so
       # no resolver text reaches a shell command line.
       - name: Name the build under proof
+        id: named
         if: ${{ steps.expect.outputs.verdict != 'in-flight' }}
         env:
           RESOLVED_SHA: ${{ steps.expect.outputs.sha }}
@@ -334,9 +337,14 @@ jobs:
       # Freshness before recovery: closing the divergence issue is a claim
       # that main and live agree, so it is made only while the deployed
       # commit is still the head of main.
+      # Every step below reads DEPLOY_SHA, DEPLOY_RUN_ID, DEPLOY_RUN_URL, or
+      # EXPECT_REASON, which the `named` step wrote to $GITHUB_ENV. Because
+      # `!cancelled()` replaces the implicit success(), each must also
+      # require that step to have succeeded, or it would speak about a build
+      # it cannot name.
       - name: Confirm the deployed commit is still the head of main
         id: fresh
-        if: ${{ !cancelled() && steps.expect.outputs.verdict == 'verify' }}
+        if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'verify' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -350,7 +358,7 @@ jobs:
       # without a durable alert. A failure that is only the propagation
       # poll is worded as inconclusive rather than a proved divergence.
       - name: Open or update the divergence issue
-        if: ${{ !cancelled() && steps.expect.outputs.verdict == 'verify' && steps.verify.outcome != 'skipped' && steps.verify.outputs.exit_code != '0' }}
+        if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'verify' && steps.verify.outcome != 'skipped' && steps.verify.outputs.exit_code != '0' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
@@ -428,7 +436,7 @@ jobs:
       # deploy are ever one issue. Nothing was verified in this branch:
       # there is no successful deploy of main's head to verify.
       - name: Open or update the divergence issue for an undeployed head
-        if: ${{ !cancelled() && steps.expect.outputs.verdict == 'undeployed' }}
+        if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'undeployed' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
@@ -477,7 +485,7 @@ jobs:
             }
 
       - name: Close the divergence issue on a verified build
-        if: ${{ !cancelled() && steps.expect.outputs.verdict == 'verify' && steps.verify.outputs.exit_code == '0' && steps.fresh.outputs.current == 'true' }}
+        if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'verify' && steps.verify.outputs.exit_code == '0' && steps.fresh.outputs.current == 'true' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
@@ -510,13 +518,13 @@ jobs:
             }
 
       - name: Fail the run when the live build was not proved
-        if: ${{ !cancelled() && steps.expect.outputs.verdict == 'verify' && steps.verify.outcome != 'skipped' && steps.verify.outputs.exit_code != '0' }}
+        if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'verify' && steps.verify.outcome != 'skipped' && steps.verify.outputs.exit_code != '0' }}
         run: |
           echo "::error::The live build was not proved to be $DEPLOY_SHA (deploy run $DEPLOY_RUN_ID); see the job summary and the deploy-divergence issue."
           exit 1
 
       - name: Fail the run when main has no successful deploy
-        if: ${{ !cancelled() && steps.expect.outputs.verdict == 'undeployed' }}
+        if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'undeployed' }}
         run: |
           echo "::error::$EXPECT_REASON See the job summary and the deploy-divergence issue."
           exit 1

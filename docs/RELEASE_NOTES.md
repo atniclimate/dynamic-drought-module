@@ -58,6 +58,14 @@ post-deploy path, so there is ever one issue), and fails the run. Every
 branch of that decision is covered offline in
 `tests/live-receipts.test.mjs`, which `npm run gate` runs.
 
+One unrelated fix rode along, found while reading how the suite collects
+tests: Playwright's default `testMatch` was importing the `node --test`
+suites (`tests/*.test.mjs`) on every collection and every worker, where they
+register no Playwright test but do execute, so a module-scope throw in one
+would have failed a browser shard as a collection error instead of failing
+its own runner; the `chromium` project now ignores them, and
+`playwright test --list` still reports the same 830 tests in 106 files.
+
 What this still does not prove: that Pages served a particular build to a
 particular reader at a particular moment, and nothing at all about the
 hours between two daily compares. It proves what the site answers when it
