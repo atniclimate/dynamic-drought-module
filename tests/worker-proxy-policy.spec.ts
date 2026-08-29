@@ -11,6 +11,12 @@ import worker, {
   prepareResponseForEdgeCache,
   restoreResponseFromEdgeCache
 } from '../workers/proxy/src/index';
+// Shared with scripts/check-upstream-drift.mjs (DDM-P0-T05 slice 1) so this
+// spec's expected /healthz revision and the daily drift monitor's expected
+// revision read the SAME constant from the SAME file instead of each
+// carrying an independent hand-copied literal that could desync from
+// source, or from each other, on the next WORKER_REVISION bump.
+import { readCurrentWorkerRevision } from '../scripts/lib/worker-revision.mjs';
 
 const WORKER_ORIGIN = 'https://worker.example';
 
@@ -51,7 +57,7 @@ async function fetchWorker(
   return worker.fetch(request, {}, ctx as WorkerContext);
 }
 
-test('the Worker health response identifies the reviewed revision', async () => {
+test('the Worker health response identifies the current source revision', async () => {
   const response = await worker.fetch(
     new Request(`${WORKER_ORIGIN}/healthz`),
     {},
@@ -67,7 +73,7 @@ test('the Worker health response identifies the reviewed revision', async () => 
   await expect(response.json()).resolves.toMatchObject({
     status: 'ok',
     worker: 'ddm-proxy',
-    revision: '2026-08-29-options-policy-v4'
+    revision: readCurrentWorkerRevision()
   });
 });
 

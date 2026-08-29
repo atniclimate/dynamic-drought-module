@@ -31,6 +31,10 @@ the 2026-08-24 scheduled ENSO refresh deployed
 hosted build nonce was the local fallback `dev` until pull request 27 made
 each hosted build attributable to its run.
 
+### 2026-08-29: the upstream drift monitor compares live to reviewed source
+
+check:drift now derives the expected Worker revision from workers/proxy/src/index.ts instead of a hand-pinned string, so a published Worker that lags reviewed source fails the daily monitor until the owner publishes.
+
 ### 2026-08-29: Dependabot proposes Action SHA updates
 
 Roadmap task DDM-P0-T07 required that automated dependency updates can

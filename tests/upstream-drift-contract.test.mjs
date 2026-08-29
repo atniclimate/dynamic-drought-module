@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import {
   ARCGIS_FIELD_PROBES,
   DRIFT_TIERS,
+  EXPECTED_WORKER_REVISION,
   OUT_FIELDS_SENDERS_COVERED_ELSEWHERE,
   buildFieldProbeEntries,
   checkFieldSchema,
@@ -106,6 +107,21 @@ test('readWorkerRevision throws on an ambiguous, repeated constant', () => {
     () => readWorkerRevision(doubled),
     /matched 2 times/,
   );
+});
+
+test('EXPECTED_WORKER_REVISION is truly wired to readWorkerRevision(), not a hardcoded literal', async () => {
+  // Reverting the EXPECTED_WORKER_REVISION assignment in
+  // check-upstream-drift.mjs back to a hand-pinned string literal would
+  // leave every readWorkerRevision() test above green while silently
+  // reintroducing the exact live-vs-live tautology this slice removes.
+  // Assert the constant equals a fresh, independent extraction from the
+  // Worker source read directly from disk here, so that regression fails
+  // loudly instead of passing unnoticed.
+  const source = await readFile(
+    new URL('../workers/proxy/src/index.ts', import.meta.url),
+    'utf8',
+  );
+  assert.equal(EXPECTED_WORKER_REVISION, readWorkerRevision(source));
 });
 
 test('recognizes only complete, bound soil drift inputs', () => {

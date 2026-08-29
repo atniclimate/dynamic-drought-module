@@ -33,14 +33,15 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+import { readCurrentWorkerRevision, readWorkerRevision } from './lib/worker-revision.mjs';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const URLS_PATH = join(__dirname, '..', 'src', 'config', 'urls.ts');
-const WORKER_SOURCE_PATH = join(__dirname, '..', 'workers', 'proxy', 'src', 'index.ts');
 
 const TIMEOUT_MS = 15_000;
 const CONCURRENCY = 5;
@@ -95,32 +96,13 @@ export function sourceTierForKey(key) {
 /** The production origin; sent on every probe so CORS posture is observable. */
 const BROWSER_ORIGIN = 'https://atniclimate.github.io';
 
-/** Extracts the `WORKER_REVISION` string constant from Worker source text.
- * THROWS (does not warn, does not fall back) when the constant is missing or
- * matched more than once, so a renamed or removed constant fails loudly
- * instead of silently disarming the tripwire below, matching this file's
- * existing disarmed-tripwire discipline (see the per-key check near the end
- * of `main`). Exported so the contract test can probe it with fixture text
- * without touching the filesystem. */
-export function readWorkerRevision(sourceText) {
-  const matches = [...sourceText.matchAll(/^\s*const\s+WORKER_REVISION\s*=\s*["']([^"']+)["']\s*;/gm)];
-  if (matches.length === 0) {
-    throw new Error(
-      'WORKER_REVISION constant not found in workers/proxy/src/index.ts; ' +
-        'the Worker source has drifted and the drift monitor cannot derive ' +
-        'an expected revision. This tripwire is disarmed until the constant ' +
-        'is restored.'
-    );
-  }
-  if (matches.length > 1) {
-    throw new Error(
-      `WORKER_REVISION matched ${matches.length} times in ` +
-        'workers/proxy/src/index.ts; the pattern must resolve to exactly one ' +
-        'value or the expected revision is ambiguous.'
-    );
-  }
-  return matches[0][1];
-}
+// `readWorkerRevision` is defined in ./lib/worker-revision.mjs and shared
+// with tests/worker-proxy-policy.spec.ts, so the daily monitor's expected
+// revision and the policy spec's expected revision cannot independently
+// desync from each other or from workers/proxy/src/index.ts. Re-exported
+// here so tests/upstream-drift-contract.test.mjs keeps importing it from
+// this module.
+export { readWorkerRevision };
 
 // The expected Worker revision is now DERIVED FROM REVIEWED SOURCE, not
 // hand-pinned to whatever the live edge last answered. The former pin
@@ -131,8 +113,10 @@ export function readWorkerRevision(sourceText) {
 // left this monitor comparing live to live forever, the exact gap
 // DDM-P0-T05 slice 1 closes. Reading the constant here means drift is now
 // source-vs-live: a published revision that lags reviewed source fails this
-// tripwire daily until the owner publishes (see DEVELOPER.md).
-const EXPECTED_WORKER_REVISION = readWorkerRevision(readFileSync(WORKER_SOURCE_PATH, 'utf8'));
+// tripwire daily until the owner publishes (see DEVELOPER.md). Exported so
+// a contract test can assert it is truly wired to readWorkerRevision() and
+// not a hardcoded literal that would silently desync from source again.
+export const EXPECTED_WORKER_REVISION = readCurrentWorkerRevision();
 
 /** S1 landscape vintage rows. Pinned disappearance is a failure. A newer
  * served vintage is a warning and review trigger, never a build failure. */
