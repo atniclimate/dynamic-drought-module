@@ -42,12 +42,28 @@
 # and was then re-run into a failure would otherwise read as never having
 # deployed while Pages still serves what it published.
 #
-# A verify runs scripts/verify-live.mjs against the deployed URL: it waits
-# for Pages propagation (polling the referenced assets for the SHA up to 5
-# minutes), then boots root, each cluster, and the wildfire embed at two
-# widths and reads the build stamp and every layer pill. The checkout is
-# the commit under proof so the PMTiles range checks read the list of
-# archives that build shipped.
+# A verify runs scripts/verify-live.mjs against the deployed URL in one of
+# two depths. The LIGHT half waits for Pages propagation (polling the
+# referenced assets for the SHA up to 5 minutes), reads the build sha and
+# nonce out of the shipped script, checks every referenced asset answers
+# 200, and range-checks each PMTiles archive against the size of the same
+# file in the checkout. It needs no browser and no node_modules. The DEEP
+# half adds six boots: root, each cluster, and the wildfire embed at two
+# widths, reading the build stamp and the expected layer pills in each.
+# The checkout is the commit under proof either way, so the PMTiles checks
+# read the archives that build shipped and can compare their sizes.
+#
+# Which half runs: a post-deploy proof and a dispatch always run the deep
+# half, because a release and a deliberate ask both deserve the full
+# answer. The daily scheduled compare runs the light half only, and
+# escalates to the deep half when the light half fails. What that gives up
+# is the daily detection of a browser-visible degradation with no deploy
+# behind it, such as a layer that starts failing to reach a terminal state
+# against unchanged bytes. That is acceptable because source-health.yml
+# already boots the application against every catalog source daily and
+# opens its own issues, and because the bytes themselves are still checked
+# here every day; what is no longer checked daily is one particular way of
+# reading them.
 #
 # Either failure path (a verification that did not prove the build, or an
 # undeployed head) opens or appends to ONE issue labeled deploy-divergence,
@@ -319,14 +335,6 @@ jobs:
           git checkout --detach FETCH_HEAD
           echo "Re-checked out $DEPLOY_SHA (was $have) for the PMTiles list."
 
-      - name: Install dependencies
-        if: ${{ steps.expect.outputs.verdict == 'verify' }}
-        run: npm ci
-
-      - name: Provision Chromium
-        if: ${{ steps.expect.outputs.verdict == 'verify' }}
-        uses: ./.github/actions/playwright-chromium
-
       # The site URL comes from the Pages configuration (the same source
       # configure-pages reads); the public seat is the fallback rather
       # than an empty --base.
@@ -342,7 +350,41 @@ jobs:
             echo "Pages configuration unavailable; using the public seat $url"
           fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "Verifying $DEPLOY_SHA (deploy run $DEPLOY_RUN_ID) at $url"
+          echo "Verifying $DEPLOY_SHA (deploy runs $DEPLOY_RUN_NONCES) at $url"
+
+      # The light half: propagation, seat, the build stamp read out of the
+      # shipped script, and the PMTiles range and identity checks. No
+      # browser, no node_modules, about a minute. This is the whole
+      # scheduled compare when it passes; when it fails, the deep proof
+      # below runs and speaks instead.
+      - name: Check the live build (light)
+        id: light
+        if: ${{ steps.expect.outputs.verdict == 'verify' && github.event_name == 'schedule' }}
+        timeout-minutes: 10
+        run: |
+          set +e
+          node scripts/verify-live.mjs \
+            --light \
+            --base "${{ steps.pages.outputs.url }}" \
+            --expect-sha "$DEPLOY_SHA" \
+            --expect-nonce "$DEPLOY_RUN_NONCES" \
+            --out live-receipt.json \
+            --summary "$GITHUB_STEP_SUMMARY" 2>&1 | tee verify-output.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      # Everything below is the deep proof: six boots in a real browser.
+      # It runs after a deploy and on dispatch, and on a scheduled day only
+      # when the light checks found something. That is why the browser
+      # install is here rather than above: a green scheduled day never pays
+      # for it.
+      - name: Install dependencies
+        if: ${{ steps.expect.outputs.verdict == 'verify' && (github.event_name != 'schedule' || steps.light.outputs.exit_code != '0') }}
+        run: npm ci
+
+      - name: Provision Chromium
+        if: ${{ steps.expect.outputs.verdict == 'verify' && (github.event_name != 'schedule' || steps.light.outputs.exit_code != '0') }}
+        uses: ./.github/actions/playwright-chromium
 
       # Best effort only. The newest kept receipt from an earlier green run
       # of this workflow lets the verifier tell "this layer has been
@@ -353,7 +395,7 @@ jobs:
       # that the comparison was skipped rather than claiming it passed.
       - name: Fetch the previous live receipt
         id: previous
-        if: ${{ steps.expect.outputs.verdict == 'verify' }}
+        if: ${{ steps.expect.outputs.verdict == 'verify' && (github.event_name != 'schedule' || steps.light.outputs.exit_code != '0') }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -376,9 +418,9 @@ jobs:
       # Budget: up to 5 minutes of propagation polling, five range reads,
       # and six boots of up to about a minute each; the issue steps below
       # run even when this step times out.
-      - name: Verify the live build
-        id: verify
-        if: ${{ steps.expect.outputs.verdict == 'verify' }}
+      - name: Verify the live build (deep)
+        id: deep
+        if: ${{ steps.expect.outputs.verdict == 'verify' && (github.event_name != 'schedule' || steps.light.outputs.exit_code != '0') }}
         timeout-minutes: 16
         run: |
           set +e
@@ -388,9 +430,34 @@ jobs:
             --expect-nonce "$DEPLOY_RUN_NONCES" \
             --previous "${{ steps.previous.outputs.path }}" \
             --out live-receipt.json \
-            --summary "$GITHUB_STEP_SUMMARY" 2>&1 | tee verify-output.txt
+            --summary "$GITHUB_STEP_SUMMARY" 2>&1 | tee -a verify-output.txt
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
           exit 0
+
+      # One verdict for the steps below, whichever half produced it. The
+      # deep proof wins when it ran, because it ran either as the only
+      # check or because the light one had already failed. An empty
+      # exit_code (the step was killed by its own timeout before it could
+      # write one) stays empty and reads as a failure downstream, which is
+      # the existing contract: a deployed build never goes unreported.
+      - name: Name the verification outcome
+        id: verify
+        if: ${{ !cancelled() && steps.expect.outputs.verdict == 'verify' && (steps.light.outcome != 'skipped' || steps.deep.outcome != 'skipped') }}
+        env:
+          LIGHT_EXIT: ${{ steps.light.outputs.exit_code }}
+          DEEP_EXIT: ${{ steps.deep.outputs.exit_code }}
+          DEEP_OUTCOME: ${{ steps.deep.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "$DEEP_OUTCOME" != "skipped" ]; then
+            echo "exit_code=$DEEP_EXIT" >> "$GITHUB_OUTPUT"
+            echo "mode=deep" >> "$GITHUB_OUTPUT"
+            echo "Deep proof exit code: ${DEEP_EXIT:-(none, the step did not finish)}"
+          else
+            echo "exit_code=$LIGHT_EXIT" >> "$GITHUB_OUTPUT"
+            echo "mode=light" >> "$GITHUB_OUTPUT"
+            echo "Light check exit code: ${LIGHT_EXIT:-(none, the step did not finish)}"
+          fi
 
       # `!cancelled()` replaces the implicit success(), so these steps run
       # even when an earlier one failed. That is deliberate for a verifier

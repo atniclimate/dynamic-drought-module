@@ -335,6 +335,24 @@ Every issue mutation, not only the close, refetches `main` immediately before
 writing. A run whose commit is no longer the head files nothing, records
 "superseded" in the job summary, and ends green.
 
+A `verify` runs at one of two depths. The light half (`--light`) waits for
+propagation, reads the build sha and nonce out of the shipped script, checks
+every referenced asset answers 200, and range-checks each PMTiles archive
+against the size of that file in the checked-out commit. It needs no browser
+and no `node_modules`. The deep half adds the six boots. A post-deploy proof
+and a `workflow_dispatch` always run deep; the daily scheduled compare runs
+light and escalates to deep only when the light half fails, so a green day
+never pays for an npm install and a Chromium provision.
+
+What the daily light run gives up: browser-visible degradation with no
+deploy behind it, such as a layer that stops reaching a terminal state
+against unchanged bytes. That is acceptable because the daily
+`source-health` workflow already boots the application against every catalog
+source and opens its own issues, and because the served bytes themselves are
+still checked every day here. What is no longer checked daily is one
+particular way of reading them, and any mismatch in the cheap checks brings
+the deep proof back the same run.
+
 The `node --test` suites live in `tests/` beside the Playwright specs but are
 excluded from the `chromium` project (`testIgnore: '**/*.test.mjs'`), because
 Playwright's default `testMatch` would otherwise import and execute them on

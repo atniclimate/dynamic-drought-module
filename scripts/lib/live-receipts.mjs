@@ -30,6 +30,10 @@ const DEFAULTS = Object.freeze({
   // is absent the driver records that the ready-to-unavailable regression
   // check was skipped rather than pretending it passed.
   previous: null,
+  // Light mode: the propagation, seat, build-stamp, and PMTiles checks
+  // only, with no browser at all. Cheap enough to run daily; see the
+  // header of .github/workflows/verify-live.yml for what it gives up.
+  light: false,
   // Pages propagation wait: the CDN can serve the previous build briefly
   // after deploy-pages returns, so the driver polls the referenced assets
   // for the expected SHA up to this long, at this interval.
@@ -49,6 +53,7 @@ const FLAGS = new Map([
   ['--out', ['out', 'string']],
   ['--summary', ['summary', 'string']],
   ['--previous', ['previous', 'string']],
+  ['--light', ['light', 'flag']],
   ['--settle-ms', ['settleMs', 'int']],
   ['--interval-ms', ['intervalMs', 'int']],
   ['--ceiling-ms', ['ceilingMs', 'int']],
@@ -77,9 +82,13 @@ export function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const spec = FLAGS.get(argv[i]);
     if (!spec) throw new Error(`unknown argument ${argv[i]}`);
+    const [key, kind] = spec;
+    if (kind === 'flag') {
+      out[key] = true;
+      continue;
+    }
     const raw = argv[i + 1];
     if (raw === undefined) throw new Error(`${argv[i]} needs a value`);
-    const [key, kind] = spec;
     if (kind === 'int') {
       const n = Number.parseInt(raw, 10);
       if (!Number.isFinite(n) || n < 0 || String(n) !== raw.trim()) {
@@ -112,6 +121,25 @@ export function evaluateStamp(stamp, expect) {
     matchedNonce = String(stamp.nonce);
   }
   return { ok: reasons.length === 0, reasons, matchedNonce };
+}
+
+/**
+ * The build stamp as a shipped script carries it.
+ *
+ * src/main.ts assigns `document.documentElement.dataset.ddmBuildSha` and
+ * `.ddmBuildNonce` from vite's compile-time defines, so the values are
+ * literals in the built chunk and can be read without a browser. That is
+ * what makes the light scheduled check possible: propagation, seat, stamp,
+ * and ranges over plain HTTP. When minification changes shape enough that
+ * neither value can be read, the caller fails and the deep browser proof
+ * takes over rather than the check passing on an absence.
+ */
+export function extractStamp(text) {
+  const read = (property) => {
+    const pattern = new RegExp(String.raw`ddmBuild${property}\s*[=:]\s*["'\`]([^"'\`]{1,80})["'\`]`);
+    return pattern.exec(String(text ?? ''))?.[1] ?? null;
+  };
+  return { sha: read('Sha'), nonce: read('Nonce') };
 }
 
 export function evaluateAssets(rows) {
@@ -268,7 +296,8 @@ export function renderSummary(receipt) {
   lines.push('');
   const matched = [...new Set((receipt.checks ?? []).map((c) => c.matchedNonce).filter(Boolean))];
   lines.push(
-    `Base \`${receipt.base}\`; expected sha \`${receipt.expectSha || '(none)'}\`, ` +
+    `Mode \`${receipt.mode ?? 'deep'}\`. ` +
+      `Base \`${receipt.base}\`; expected sha \`${receipt.expectSha || '(none)'}\`, ` +
       `nonce \`${receipt.expectNonce || '(non-dev)'}\`; propagation ${receipt.propagationMs ?? 'n/a'} ms.` +
       (matched.length ? ` Live nonce observed: \`${matched.join('`, `')}\`.` : ''),
   );

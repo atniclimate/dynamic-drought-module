@@ -38,8 +38,15 @@
  * browser is Playwright's Chromium with the software-GL flags the suite
  * uses (playwright.config.ts).
  *
+ * --light runs 1, 2, and 3 plus the build stamp read straight out of the
+ * shipped script, and skips the six boots. It needs no browser and no
+ * node_modules, which is what makes a daily scheduled compare cheap; the
+ * deep proof runs after a deploy, on dispatch, and on any scheduled light
+ * mismatch. What the daily light run gives up is in the header of
+ * .github/workflows/verify-live.yml.
+ *
  * Usage: node scripts/verify-live.mjs --expect-sha <sha> --expect-nonce <run id[,run id...]>
- *   [--base <url>] [--out <json>] [--summary <markdown file to append>]
+ *   [--light] [--base <url>] [--out <json>] [--summary <markdown file to append>]
  *   [--previous <earlier receipt json>]
  *   [--settle-ms n] [--interval-ms n] [--ceiling-ms n]
  * Exit 0 when every check passed, 1 when any failed, 2 on a usage error.
@@ -47,8 +54,6 @@
 import { appendFile, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-import { chromium, devices } from '@playwright/test';
 
 import {
   EXPECTED_BOOT_LAYERS,
@@ -58,10 +63,15 @@ import {
   evaluateLayers,
   evaluateRange,
   evaluateStamp,
+  extractStamp,
   parseArgs,
   receiptOk,
   renderSummary,
 } from './lib/live-receipts.mjs';
+
+// Playwright is imported inside checkBoots, not here: --light runs with no
+// browser and no node_modules at all, so a scheduled compare costs an
+// HTTP conversation rather than an npm install and a Chromium provision.
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DATA = join(__dirname, '..', 'public', 'data');
@@ -88,6 +98,7 @@ try {
 
 const receipt = {
   base: args.base,
+  mode: args.light ? 'light' : 'deep',
   expectSha: args.expectSha,
   expectNonce: args.expectNonce,
   expectNonces: args.expectNonces,
@@ -95,6 +106,7 @@ const receipt = {
   propagationMs: null,
   checks: [],
   assets: [],
+  assetStamp: null,
   ranges: [],
   cache: {},
   boots: [],
@@ -202,6 +214,7 @@ function assetUrls(html, base) {
 async function pagesSnapshot() {
   const rows = [];
   let found = !args.expectSha;
+  const stamp = { sha: null, nonce: null };
   const res = await get(args.base);
   const html = await res.text();
   receipt.cache.index = { url: args.base, ...cacheHeaders(res) };
@@ -211,13 +224,19 @@ async function pagesSnapshot() {
       const body = await r.text();
       rows.push({ url, status: r.status, bytes: Buffer.byteLength(body, 'utf8') });
       if (args.expectSha && body.includes(args.expectSha)) found = true;
+      // The same two literals the boots read from <html>, taken straight
+      // from the shipped script so the light check can name the live nonce
+      // without a browser.
+      const carried = extractStamp(body);
+      stamp.sha = stamp.sha ?? carried.sha;
+      stamp.nonce = stamp.nonce ?? carried.nonce;
       if (!receipt.cache.entry) receipt.cache.entry = { url, ...cacheHeaders(r) };
     } else {
       const r = await get(url, { method: 'HEAD' });
       rows.push({ url, status: r.status, bytes: Number(r.headers.get('content-length') ?? 0) });
     }
   }
-  return { rows, found };
+  return { rows, found, stamp };
 }
 
 async function checkPropagationAndSeat() {
@@ -227,8 +246,9 @@ async function checkPropagationAndSeat() {
   let seat = { ok: false, reasons: ['no snapshot taken'] };
   for (;;) {
     try {
-      const { rows, found } = await pagesSnapshot();
+      const { rows, found, stamp } = await pagesSnapshot();
       receipt.assets = rows;
+      receipt.assetStamp = stamp;
       propagation = found
         ? []
         : [`no referenced script contains ${args.expectSha} (index.html etag ${receipt.cache.index.etag ?? 'absent'})`];
@@ -245,6 +265,22 @@ async function checkPropagationAndSeat() {
   receipt.propagationMs = Date.now() - t0;
   record('propagation:sha-in-assets', { ok: propagation.length === 0, reasons: propagation });
   record('seat:assets-200', seat);
+}
+
+/**
+ * The build stamp read from the shipped script rather than from a booted
+ * page. Only in light mode: the six boots read the same two values from
+ * <html> and prove more, so recording this in deep mode would add a second
+ * verdict about the same fact whose only distinct failure mode is the
+ * regex. Here it is the whole nonce evidence, so a stamp that cannot be
+ * read fails and the workflow escalates to the deep proof.
+ */
+function checkAssetStamp() {
+  const verdict = evaluateStamp(receipt.assetStamp, { sha: args.expectSha, nonces: args.expectNonces });
+  verdict.reasons = verdict.reasons.map((r) =>
+    r.replace('missing data-ddm-build-', 'no referenced script assigns data-ddm-build-'),
+  );
+  record('stamp:assets', verdict);
 }
 
 async function checkRanges() {
@@ -438,6 +474,7 @@ async function boot(browser, name, contextOptions, query, { corner = false } = {
 }
 
 async function checkBoots() {
+  const { chromium, devices } = await import('@playwright/test');
   const browser = await chromium.launch({ headless: true, args: CHROMIUM_ARGS });
   const desktop = { viewport: { width: 1440, height: 900 } };
   const phone = { ...devices['iPhone 14'], viewport: { width: 390, height: 844 } };
@@ -457,8 +494,12 @@ let previousStatuses = null;
 
 await checkPropagationAndSeat();
 await checkRanges();
-previousStatuses = await loadPreviousStatuses();
-await checkBoots();
+if (args.light) {
+  checkAssetStamp();
+} else {
+  previousStatuses = await loadPreviousStatuses();
+  await checkBoots();
+}
 
 receipt.failed = receipt.checks.filter((c) => !c.ok).map((c) => c.name);
 // A failure that is ONLY the propagation poll is inconclusive (the CDN may

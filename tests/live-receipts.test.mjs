@@ -13,6 +13,7 @@ import {
   evaluateRange,
   evaluateStamp,
   expectedNonces,
+  extractStamp,
   parseArgs,
   receiptOk,
   renderSummary,
@@ -39,6 +40,10 @@ test('parseArgs applies the live defaults and reads every flag', () => {
   assert.equal(a.settleMs, 1000);
   assert.equal(a.ceilingMs, 2000);
   assert.equal(a.intervalMs, 100);
+  assert.equal(d.light, false);
+  const light = parseArgs(['--light', '--expect-sha', 'abc']);
+  assert.equal(light.light, true, '--light takes no value and does not eat the next flag');
+  assert.equal(light.expectSha, 'abc');
   assert.throws(() => parseArgs(['--base', 'ftp://x']), /http/);
   assert.throws(() => parseArgs(['--bogus']), /unknown/i);
   assert.throws(() => parseArgs(['--settle-ms', 'soon']), /integer/);
@@ -69,6 +74,17 @@ test('evaluateStamp accepts any member of the published-nonce set and records th
   assert.deepEqual(expectedNonces({ nonce: ' 100 , 200 ,' }), ['100', '200']);
   assert.deepEqual(expectedNonces({}), []);
   assert.equal(evaluateStamp({ sha: 'abc', nonce: '200' }, { sha: 'abc', nonce: '100,200' }).ok, true);
+});
+
+test('extractStamp reads the build sha and nonce out of a shipped script', () => {
+  const minified = 'x.dataset.ddmBuildSha="4a78af",x.dataset.ddmBuildNonce="33246718167";';
+  assert.deepEqual(extractStamp(minified), { sha: '4a78af', nonce: '33246718167' });
+  const spaced = "document.documentElement.dataset.ddmBuildSha = 'abc';\ndocument.documentElement.dataset.ddmBuildNonce = 'dev';";
+  assert.deepEqual(extractStamp(spaced), { sha: 'abc', nonce: 'dev' });
+  assert.deepEqual(extractStamp('nothing here'), { sha: null, nonce: null });
+  // A stamp that cannot be read is null, not an empty string that would
+  // slide past evaluateStamp as a value.
+  assert.equal(evaluateStamp(extractStamp('nothing here'), { sha: 'abc', nonces: ['1'] }).ok, false);
 });
 
 test('evaluateAssets fails on any non-200 relative asset and on an empty list', () => {
