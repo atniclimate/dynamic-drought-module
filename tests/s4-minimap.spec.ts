@@ -477,10 +477,14 @@ test.describe('S4b minimap', () => {
       page.locator('.shell-minimap-map .shell-minimap-tooltip'),
     ).toHaveCount(0);
     await expect(pacific).toHaveCSS('stroke', 'rgb(6, 182, 212)');
-    const filter = await pacific.evaluate(
-      (element) => getComputedStyle(element).filter,
-    );
-    expect(filter).not.toBe('none');
+    // `.shell-minimap-mainland` transitions `filter 0.12s ease`
+    // (src/styles/app.css:6147); a one-shot getComputedStyle read right
+    // after hover() can still catch the pre-transition `none` on the first
+    // frame (measured report, 2026-08-29: 9 flaky events, zero hard
+    // failures). toHaveCSS retries against the settled value instead.
+    await expect(pacific).toHaveCSS('filter', /drop-shadow/, {
+      timeout: 1_000,
+    });
     await pacific.focus();
     await expect(pacific).toHaveAttribute(
       'aria-label',
