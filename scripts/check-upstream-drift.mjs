@@ -452,10 +452,25 @@ export function extractUrls(source) {
  * absent by exact name fails the probe at the runtime tier. `layer` is the
  * path the module appends to the URLS base before `/query` ('' when the base
  * already names the layer). `constName` selects one list when a module
- * sends several. The BIA fields sent by src/state/display-snapshot.ts and
- * src/ui/search-controller.ts are a subset of the bia-reservations list.
+ * sends several; `pick` selects the branch of a ternary that belongs to a
+ * layer. Subsets already covered by a row: the BIA fields sent by
+ * src/state/display-snapshot.ts, src/ui/search-controller.ts, and
+ * src/ui/island/place-studio.tsx; the USDM `DM` and NIFC identity fields in
+ * src/impact/sources.ts; the WBD template in src/state/watershed-geometry.ts
+ * (same as place-catalog's). NOT covered: the CPC 6-10 and 8-14 day point
+ * query in src/impact/sources.ts passes `cat,prob` as a function argument
+ * the extractor does not see, and the WBD HUC code field is a template
+ * token reported as unchecked.
  */
 export const ARCGIS_FIELD_PROBES = Object.freeze([
+  { key: 'nifcRawsFeatureServer', file: 'src/config/station-registry.ts', layer: '' },
+  { key: 'noaaMergedGeoColorImageServer', file: 'src/map/satellite.ts', layer: '' },
+  // place-studio.tsx: Level IV is layer 7 (four fields), Level III is layer 11.
+  { key: 'epaEcoregionsMapServer', file: 'src/ui/island/place-studio.tsx', layer: '/7', pick: (fields) => fields.includes('US_L4CODE') },
+  { key: 'epaEcoregionsMapServer', file: 'src/ui/island/place-studio.tsx', layer: '/11', pick: (fields) => fields.includes('US_L3CODE') && !fields.includes('US_L4CODE') },
+  // place-catalog.ts watershedQueryUrl: layers 1 (huc2) and 2 (huc4).
+  { key: 'wbdMapServer', file: 'src/config/place-catalog.ts', layer: '/1' },
+  { key: 'wbdMapServer', file: 'src/config/place-catalog.ts', layer: '/2' },
   { key: 'nifcFires', file: 'src/layers/nifc-fires.ts', layer: '', constName: 'NIFC_OUT_FIELDS' },
   { key: 'censusAiannhMapServer', file: 'src/layers/aiannh.ts', layer: '/47' },
   { key: 'biaLarFeatureServer', file: 'src/layers/bia-reservations.ts', layer: '' },
@@ -473,7 +488,15 @@ export const ARCGIS_FIELD_PROBES = Object.freeze([
   { key: 'bcDroughtLevelsFeatureServer', file: 'src/layers/bc-drought.ts', layer: '' },
 ]);
 
-const OUT_FIELDS_RE = /outFields:\s*(?:'([^']*)'|"([^"]*)"|([A-Za-z_][A-Za-z0-9_]*)(?:\.join\(\s*','\s*\))?)/g;
+// `outFields: <expr>` (object key) or `outFields = <expr>` (a local const
+// later passed as shorthand). The expression is a string literal, a template
+// literal, an identifier (optionally `.join(',')`), or a ternary of two
+// string literals; a shorthand `outFields,` property is the assignment's
+// consumer and is not matched on its own.
+const OUT_FIELDS_RE =
+  /\boutFields\s*[:=]\s*(?:'([^']*)'|"([^"]*)"|`([^`]*)`|([A-Za-z_][A-Za-z0-9_.]*)\s*\?\s*'([^']*)'\s*:\s*'([^']*)'|([A-Za-z_][A-Za-z0-9_]*)(?:\.join\(\s*','\s*\))?)/g;
+
+const splitFields = (text) => text.split(',').map((s) => s.trim()).filter(Boolean);
 
 /** Resolve `const NAME = [...]` or `const NAME = '...'` in a module source
  * to a field list, or null when the module does not declare it. */
@@ -494,26 +517,35 @@ function importSpecifierFor(source, name) {
   return null;
 }
 
-/** Every `outFields:` the module sends: a literal list, a local constant
+/** Every `outFields` list the module sends: a literal list, a template
+ * literal (static names, with `${...}` tokens named in `dynamic` and left
+ * unchecked), a ternary (one entry per branch), a local constant
  * (resolved), or an imported constant (`fields: null`, `importedFrom` set
  * for the caller to resolve). `outFields: '*'` is not a schema claim. */
 export function extractOutFields(source) {
   const out = [];
   for (const m of source.matchAll(OUT_FIELDS_RE)) {
     const line = source.slice(0, m.index).split('\n').length;
-    let fields;
-    let via = 'literal';
-    let importedFrom = null;
+    const entries = [];
     if (m[1] !== undefined || m[2] !== undefined) {
-      fields = (m[1] ?? m[2]).split(',').map((s) => s.trim()).filter(Boolean);
+      entries.push({ fields: splitFields(m[1] ?? m[2]), via: 'literal', importedFrom: null, dynamic: [] });
+    } else if (m[3] !== undefined) {
+      const dynamic = [...m[3].matchAll(/\$\{([^}]*)\}/g)].map((t) => t[1].trim());
+      entries.push({ fields: splitFields(m[3].replace(/\$\{[^}]*\}/g, '')), via: 'template', importedFrom: null, dynamic });
+    } else if (m[4] !== undefined) {
+      entries.push({ fields: splitFields(m[5]), via: `ternary:${m[4]}`, importedFrom: null, dynamic: [] });
+      entries.push({ fields: splitFields(m[6]), via: `ternary:!${m[4]}`, importedFrom: null, dynamic: [] });
     } else {
-      via = m[3];
-      fields = resolveFieldConstant(source, via);
-      if (fields === null) importedFrom = importSpecifierFor(source, via);
+      const via = m[7];
+      const fields = resolveFieldConstant(source, via);
+      const importedFrom = fields === null ? importSpecifierFor(source, via) : null;
+      entries.push({ fields, via, importedFrom, dynamic: [] });
     }
-    if (fields !== null && (fields.length === 0 || fields.includes('*'))) continue;
-    if (fields === null && importedFrom === null) continue;
-    out.push({ line, fields, via, importedFrom });
+    for (const entry of entries) {
+      if (entry.fields !== null && (entry.fields.length === 0 || entry.fields.includes('*'))) continue;
+      if (entry.fields === null && entry.importedFrom === null) continue;
+      out.push({ line, ...entry });
+    }
   }
   return out;
 }
@@ -551,9 +583,12 @@ async function fieldListsForProbe(probe, root) {
   const source = await readFile(file, 'utf8');
   const found = extractOutFields(source).filter((f) => !probe.constName || f.via === probe.constName);
   const lists = [];
+  const dynamic = new Set();
   for (const entry of found) {
     if (entry.fields !== null) {
+      if (probe.pick && !probe.pick(entry.fields)) continue;
       lists.push(entry.fields);
+      for (const token of entry.dynamic) dynamic.add(token);
       continue;
     }
     const target = resolve(dirname(file), entry.importedFrom);
@@ -564,9 +599,9 @@ async function fieldListsForProbe(probe, root) {
       resolved = resolveFieldConstant(await readFile(candidate, 'utf8'), entry.via);
       if (resolved) break;
     }
-    if (resolved) lists.push(resolved);
+    if (resolved && (!probe.pick || probe.pick(resolved))) lists.push(resolved);
   }
-  return lists;
+  return { lists, dynamic: [...dynamic] };
 }
 
 /** Build one probe entry per ARCGIS_FIELD_PROBES row from the extracted
@@ -578,9 +613,9 @@ export async function buildFieldProbeEntries(urlEntries, root = join(__dirname, 
   for (const probe of ARCGIS_FIELD_PROBES) {
     const base = byKey.get(probe.key);
     if (!base) throw new Error(`field probe ${probe.key} is not an extracted urls.ts entry; the probe is disarmed`);
-    const lists = await fieldListsForProbe(probe, root);
+    const { lists, dynamic } = await fieldListsForProbe(probe, root);
     if (lists.length === 0) {
-      throw new Error(`field probe ${probe.key}: no outFields list resolved from ${probe.file}${probe.constName ? ` via ${probe.constName}` : ''}`);
+      throw new Error(`field probe ${probe.key}${probe.layer}: no outFields list resolved from ${probe.file}${probe.constName ? ` via ${probe.constName}` : ''}`);
     }
     const fieldsExpected = [...new Set(lists.flat())];
     entries.push({
@@ -588,6 +623,7 @@ export async function buildFieldProbeEntries(urlEntries, root = join(__dirname, 
       url: `${base.url}${probe.layer}?f=pjson`,
       tier: DRIFT_TIERS.RUNTIME,
       fieldsExpected,
+      fieldsDynamic: dynamic,
     });
   }
   return entries;
@@ -638,6 +674,9 @@ async function check(entry) {
       const result = checkFieldSchema(entry.fieldsExpected, await resp.text());
       tripwireMiss = result.miss;
       fieldNote = result.note;
+      if (fieldNote && entry.fieldsDynamic?.length) {
+        fieldNote += `; template token${entry.fieldsDynamic.length === 1 ? '' : 's'} ${entry.fieldsDynamic.map((t) => '${' + t + '}').join(', ')} not checked`;
+      }
     }
     const ok = resp.status < 400 && !corsInvalid && tripwireMiss === null;
     const detail =

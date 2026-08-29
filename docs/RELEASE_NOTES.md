@@ -47,8 +47,12 @@ passed only on retry. It closes the source-truth half of roadmap phase P0.
 - The upstream drift monitor now fetches each ArcGIS layer's schema and
   fails when a field the runtime names in `outFields` is absent by exact
   name (the runtime read `attr_DailyAcres` for months; the service never
-  had it). Thirteen layer paths are covered; every requested field was
-  present on 2026-08-28.
+  had it). Nineteen layer paths are covered, read from the module source
+  (literal lists, local and imported constants, ternary branches, and the
+  static names of a template); every requested field was present on
+  2026-08-28. Not covered: the CPC 6-10 and 8-14 day point query passes
+  `cat,prob` as a function argument the extractor does not see, and the
+  watershed HUC code field is a template token reported as unchecked.
 - The Playwright browser provisioning moved into a composite action shared
   by the browser suite and both new jobs.
 - `docs/ROADMAP.yaml` proposes `DDM-P0-T12` (scheduled source-health

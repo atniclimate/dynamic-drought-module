@@ -154,6 +154,11 @@ test('extractOutFields reads literal lists, joined arrays, named string constant
     const s = new URLSearchParams({ outFields: PLANTS_OUT_FIELDS });
     const t = new URLSearchParams({ outFields: LOCAL_FIELDS.join(',') });
     const u = new URLSearchParams({ outFields: '*' });
+    const v = new URLSearchParams({ outFields: \`\${codeField},name,areasqkm,states\` });
+    const outFields = isLevel4
+      ? 'US_L4CODE,US_L4NAME,US_L3CODE,US_L3NAME'
+      : 'US_L3CODE,US_L3NAME';
+    const w = new URLSearchParams({ where, outFields, f: 'geojson' });
   `;
   const found = extractOutFields(source);
   assert.deepEqual(found.map((f) => f.fields), [
@@ -161,10 +166,17 @@ test('extractOutFields reads literal lists, joined arrays, named string constant
     null,
     ['Plant_Name', 'Total_MW'],
     ['DM', 'MapDate'],
+    ['name', 'areasqkm', 'states'],
+    ['US_L4CODE', 'US_L4NAME', 'US_L3CODE', 'US_L3NAME'],
+    ['US_L3CODE', 'US_L3NAME'],
   ]);
-  assert.deepEqual(found.map((f) => f.via), ['literal', 'NIFC_OUT_FIELDS', 'PLANTS_OUT_FIELDS', 'LOCAL_FIELDS']);
+  assert.deepEqual(found.map((f) => f.via), [
+    'literal', 'NIFC_OUT_FIELDS', 'PLANTS_OUT_FIELDS', 'LOCAL_FIELDS', 'template', 'ternary:isLevel4', 'ternary:!isLevel4',
+  ]);
   assert.equal(found[1].importedFrom, '../config/wildfire-presentation');
   assert.equal(found[0].importedFrom, null);
+  assert.deepEqual(found[4].dynamic, ['codeField']);
+  assert.deepEqual(found[0].dynamic, []);
 });
 
 test('missingFields matches names exactly and reports case-only near misses separately', () => {
@@ -208,4 +220,13 @@ test('every ArcGIS field probe names a runtime URLS key, an existing module, and
   assert.ok(nifc.fieldsExpected.includes('attr_IncidentSize'));
   assert.ok(!nifc.fieldsExpected.includes('attr_DailyAcres'));
   assert.equal(new Set(entries.map((e) => e.key)).size, entries.length);
+  const level4 = entries.find((e) => e.key === 'fields:epaEcoregionsMapServer/7');
+  const level3 = entries.find((e) => e.key === 'fields:epaEcoregionsMapServer/11');
+  assert.ok(level4.fieldsExpected.includes('US_L4CODE'));
+  assert.deepEqual(level3.fieldsExpected, ['US_L3CODE', 'US_L3NAME']);
+  assert.deepEqual(level4.fieldsExpected, ['US_L4CODE', 'US_L4NAME', 'US_L3CODE', 'US_L3NAME']);
+  const wbd = entries.find((e) => e.key === 'fields:wbdMapServer/1');
+  assert.deepEqual(wbd.fieldsExpected, ['name', 'areasqkm', 'states']);
+  assert.deepEqual(wbd.fieldsDynamic, ['codeField']);
+  assert.deepEqual(nifc.fieldsDynamic, []);
 });
