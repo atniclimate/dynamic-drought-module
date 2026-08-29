@@ -11,8 +11,9 @@
 # hit runs `playwright install chromium`, which is a no-op when the restored
 # executable is present and a bounded re-download when the entry is
 # partial, then reinstalls only the libraries. Composite steps cannot carry
-# `timeout-minutes`, so each install is bounded with coreutils `timeout`
-# (600 s) and fails fast with its own log.
+# `timeout-minutes`, so each path is bounded as a whole with coreutils
+# `timeout` (600 s, the same ten-minute envelope the inline steps had) and
+# fails fast with its own log.
 name: Playwright Chromium
 description: Restore or install Playwright's Chromium with its OS dependencies.
 outputs:
@@ -42,6 +43,4 @@ runs:
     - name: Verify Chromium and install its OS dependencies (cache hit)
       if: steps.playwright-cache.outputs.cache-hit == 'true'
       shell: bash
-      run: |
-        timeout 600 npx playwright install chromium
-        timeout 600 npx playwright install-deps chromium
+      run: timeout 600 bash -c 'npx playwright install chromium && npx playwright install-deps chromium'

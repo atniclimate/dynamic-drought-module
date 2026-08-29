@@ -17,9 +17,10 @@
  *      clusters, and the wildfire embed at 1280x800 and 390x844 carry the
  *      expected data-ddm-build-sha and data-ddm-build-nonce, raise no page
  *      errors, and every active layer pill reaches a terminal status
- *      inside --ceiling-ms (an upstream `unavailable` is recorded as a
- *      warning: the runtime enforces each layer's own budget and reports
- *      the terminal state; this check proves the state arrives). The embed
+ *      inside --ceiling-ms and still terminal after a stability window
+ *      (an upstream `unavailable` is recorded as a warning: the runtime
+ *      enforces each layer's own budget and reports the terminal state;
+ *      this check proves the state arrives and holds). The embed
  *      boots also prove the satellite and attribution controls are the top
  *      hit at their own centers and that no map-information button shows.
  *
@@ -39,7 +40,7 @@ import { appendFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { chromium, devices } from 'playwright';
+import { chromium, devices } from '@playwright/test';
 
 import {
   TERMINAL_STATUSES,
@@ -58,6 +59,9 @@ const PUBLIC_DATA = join(__dirname, '..', 'public', 'data');
 const FETCH_TIMEOUT_MS = 30_000;
 const BOOT_TIMEOUT_MS = 60_000;
 const RANGE_BYTES = 16_384;
+// After every pill is terminal, how long to wait before re-reading them for
+// the final state (a tile watcher can downgrade a raster layer's `ready`).
+const STABILITY_MS = 4_000;
 const CHROMIUM_ARGS = [
   '--use-gl=angle',
   '--use-angle=swiftshader',
@@ -124,38 +128,60 @@ function assetUrls(html, base) {
   return [...urls];
 }
 
+/**
+ * One Pages snapshot: index.html and every asset it references. A
+ * JavaScript asset is downloaded (only script can carry the compile-time
+ * stamp) and measured in UTF-8 bytes; every other asset is HEAD-checked.
+ * The snapshot is retried as a whole until the SHA is present AND every
+ * asset answers 200, or the grace period ends, so a stylesheet that is
+ * still propagating cannot fail a good deploy early.
+ */
+async function pagesSnapshot() {
+  const rows = [];
+  let found = !args.expectSha;
+  const res = await get(args.base);
+  const html = await res.text();
+  receipt.cache.index = { url: args.base, ...cacheHeaders(res) };
+  for (const url of assetUrls(html, args.base)) {
+    if (url.endsWith('.js')) {
+      const r = await get(url);
+      const body = await r.text();
+      rows.push({ url, status: r.status, bytes: Buffer.byteLength(body, 'utf8') });
+      if (args.expectSha && body.includes(args.expectSha)) found = true;
+      if (!receipt.cache.entry) receipt.cache.entry = { url, ...cacheHeaders(r) };
+    } else {
+      const r = await get(url, { method: 'HEAD' });
+      rows.push({ url, status: r.status, bytes: Number(r.headers.get('content-length') ?? 0) });
+    }
+  }
+  return { rows, found };
+}
+
 async function checkPropagationAndSeat() {
   const t0 = Date.now();
   const deadline = t0 + args.settleMs;
-  let reasons = [];
+  let propagation = [];
+  let seat = { ok: false, reasons: ['no snapshot taken'] };
   for (;;) {
-    const rows = [];
-    let found = !args.expectSha;
     try {
-      const res = await get(args.base);
-      const html = await res.text();
-      receipt.cache.index = { url: args.base, ...cacheHeaders(res) };
-      for (const url of assetUrls(html, args.base)) {
-        const r = await get(url);
-        const body = await r.text();
-        rows.push({ url, status: r.status, bytes: body.length });
-        if (args.expectSha && body.includes(args.expectSha)) found = true;
-        if (url.endsWith('.js') && !receipt.cache.entry) receipt.cache.entry = { url, ...cacheHeaders(r) };
-      }
+      const { rows, found } = await pagesSnapshot();
       receipt.assets = rows;
-      reasons = found
+      propagation = found
         ? []
-        : [`no referenced asset contains ${args.expectSha} (index.html etag ${receipt.cache.index.etag ?? 'absent'})`];
+        : [`no referenced script contains ${args.expectSha} (index.html etag ${receipt.cache.index.etag ?? 'absent'})`];
+      seat = evaluateAssets(rows);
     } catch (error) {
-      reasons = [`fetch failed: ${String(error.message ?? error).slice(0, 160)}`];
+      propagation = [`fetch failed: ${String(error.message ?? error).slice(0, 160)}`];
+      seat = { ok: false, reasons: ['snapshot failed'] };
     }
-    if (reasons.length === 0 || Date.now() + args.intervalMs > deadline) break;
-    console.log(`waiting for propagation (${Math.round((Date.now() - t0) / 1000)} s): ${reasons[0]}`);
+    const settled = propagation.length === 0 && seat.ok;
+    if (settled || Date.now() + args.intervalMs > deadline) break;
+    console.log(`waiting for propagation (${Math.round((Date.now() - t0) / 1000)} s): ${[...propagation, ...seat.reasons].join('; ')}`);
     await new Promise((resolve) => setTimeout(resolve, args.intervalMs));
   }
   receipt.propagationMs = Date.now() - t0;
-  record('propagation:sha-in-assets', { ok: reasons.length === 0, reasons });
-  record('seat:assets-200', evaluateAssets(receipt.assets));
+  record('propagation:sha-in-assets', { ok: propagation.length === 0, reasons: propagation });
+  record('seat:assets-200', seat);
 }
 
 async function checkRanges() {
@@ -270,8 +296,25 @@ async function boot(browser, name, contextOptions, query, { corner = false } = {
       }
       await page.waitForTimeout(500);
     }
+    // Stability window: raster layers report `ready` before a tile has
+    // loaded and let a watcher downgrade them afterwards, so re-read every
+    // pill after a pause and judge the FINAL state; the first terminal
+    // observation keeps its settle time.
+    await page.waitForTimeout(STABILITY_MS);
+    const finalPills = new Map((await page.evaluate(pillsProbe)).map((p) => [p.key, p.status]));
+    const moved = [];
+    for (const entry of settled.values()) {
+      const final = finalPills.get(entry.key) ?? entry.status;
+      if (final !== entry.status) {
+        moved.push(`${entry.key} moved from ${entry.status} to ${final} during the ${STABILITY_MS} ms stability window`);
+        entry.firstStatus = entry.status;
+        entry.status = final;
+      }
+    }
     row.layers = [...settled.values()];
-    record(`layers:${name}`, evaluateLayers(row.layers, args.ceilingMs));
+    const layersVerdict = evaluateLayers(row.layers, args.ceilingMs);
+    layersVerdict.warnings = [...layersVerdict.warnings, ...moved];
+    record(`layers:${name}`, layersVerdict);
 
     if (corner) {
       await page.waitForTimeout(3000);
@@ -309,6 +352,11 @@ await checkPropagationAndSeat();
 await checkRanges();
 await checkBoots();
 
+receipt.failed = receipt.checks.filter((c) => !c.ok).map((c) => c.name);
+// A failure that is ONLY the propagation poll is inconclusive (the CDN may
+// still be catching up), not a proved divergence; the workflow words the
+// issue accordingly.
+receipt.inconclusive = receipt.failed.length > 0 && receipt.failed.every((n) => n.startsWith('propagation:'));
 await writeFile(args.out, JSON.stringify(receipt, null, 2));
 const summary = renderSummary(receipt);
 if (args.summary) await appendFile(args.summary, summary);
