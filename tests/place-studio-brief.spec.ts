@@ -7,6 +7,13 @@ import { caveatFor } from '../src/impact/context';
 import { makeClaim } from '../src/impact/evidence';
 import type { BoundarySelectionContext } from '../src/impact/types';
 import { gotoApp, search } from './helpers';
+import {
+  AIANNH_ROUTE,
+  BIA_ROUTE,
+  emptyCollectionBody,
+  routeBoundary,
+  routeGeojson
+} from './tribal-fixtures';
 
 const PLACE_ROOT = '#place-studio-root';
 const EMPTY_COLLECTION = JSON.stringify({
@@ -110,8 +117,49 @@ async function stubBriefingSources(page: Page): Promise<void> {
   );
 }
 
+/**
+ * The land-area representation id and the formal name it crosswalks to are
+ * BOTH synthetic. The candidate is a fabricated rectangle in the Pacific
+ * Northwest, so putting a real Tribal Nation's name on it would render, in a
+ * retained screenshot or trace, a real Nation over an invented boundary in a
+ * place it has no relationship to. Stubbing the bundled roster and crosswalk
+ * beside the land-area response keeps the representation-id to formal-name
+ * path under test with nothing real anywhere in it.
+ */
+const FIXTURE_LAR_NAME = 'Synthetic Brief Fixture Reservation';
+const FIXTURE_NATION_NAME = 'Synthetic Brief Fixture Nation';
+
 async function stubTribalCandidates(page: Page, withCandidate: boolean): Promise<void> {
-  await page.route('**/BIA_AIAN_National_LAR/FeatureServer/0/query?*', (route) =>
+  await page.route('**/data/tribal-roster.json', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        areas: [
+          {
+            larName: FIXTURE_LAR_NAME,
+            displayName: FIXTURE_NATION_NAME,
+            provenance: 'bia-authoritative'
+          }
+        ]
+      })
+    })
+  );
+  await page.route('**/data/tribal-larname-crosswalk.json', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        meta: {
+          rosterSource: 'Synthetic fixture roster',
+          landAreaSource: 'Synthetic fixture land areas'
+        },
+        matched: [{ tribe: FIXTURE_NATION_NAME, larName: FIXTURE_LAR_NAME }],
+        rosterNoLar: []
+      })
+    })
+  );
+  await routeBoundary(page, BIA_ROUTE, (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/geo+json',
@@ -123,7 +171,7 @@ async function stubTribalCandidates(page: Page, withCandidate: boolean): Promise
                 type: 'Feature',
                 properties: {
                   LARID: 1,
-                  LARNAME: 'Acoma',
+                  LARNAME: FIXTURE_LAR_NAME,
                   CLASSIFICATION: 'Reservation'
                 },
                 geometry: rectangle(-120, 45, -114, 49)
@@ -133,9 +181,7 @@ async function stubTribalCandidates(page: Page, withCandidate: boolean): Promise
         : EMPTY_COLLECTION
     })
   );
-  await page.route('**/AIANNHA/MapServer/47/query?*', (route) =>
-    route.fulfill({ contentType: 'application/geo+json', body: EMPTY_COLLECTION })
-  );
+  await routeGeojson(page, AIANNH_ROUTE, emptyCollectionBody());
 }
 
 async function stubEcoregionCandidates(page: Page, withCandidates: boolean): Promise<void> {
@@ -283,7 +329,7 @@ test.describe('PS-BRIEF PLACE studio rendering', () => {
     await expect(overlapColumn).toContainText('Partial Ecoregion');
     const tribalRow = overlapColumn.locator('[data-overlap-kind="tribe"]');
     await expect(tribalRow).toHaveCount(1);
-    await expect(tribalRow).toContainText('Pueblo of Acoma, New Mexico');
+    await expect(tribalRow).toContainText(FIXTURE_NATION_NAME);
     await expect(tribalRow.locator('.place-overlap-tribal-caveat')).toHaveText(
       caveatFor('bia-reservation')
     );

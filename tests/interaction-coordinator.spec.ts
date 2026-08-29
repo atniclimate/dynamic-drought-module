@@ -1,13 +1,13 @@
 import { test, expect, type Page } from '@playwright/test';
 import { gotoApp, waitForLayerSettled } from './helpers';
-import { routeAllTribalFixtures } from './tribal-fixtures';
 
 /**
  * The InteractionCoordinator click-collision contract (D-0.7.0-058
  * ruling 5; the S1 precedence table in src/config/interaction-ranks.ts).
  *
  * Every case drives the two live Tribal-geography layers against the
- * synthetic route fixtures (tests/tribal-fixtures.ts): both fixture
+ * synthetic route fixtures that gotoApp installs on every boot
+ * (tests/tribal-fixtures.ts): both fixture
  * polygons span the viewport center, so a center click is a REAL
  * multi-layer collision. Before the coordinator, that click stacked one
  * popup per layer and the shared place selection was last-writer-wins
@@ -78,7 +78,6 @@ async function clickCenterUntilPrimary(
 
 /** Boot with both live Tribal layers settled over the collision fixtures. */
 async function bootCollision(page: Page): Promise<void> {
-  await routeAllTribalFixtures(page);
   // The layers= order deliberately activates aiannh FIRST: under the old
   // per-layer handlers, registration order followed activation order, so
   // a rank-blind implementation would answer with the first-registered
@@ -200,7 +199,6 @@ test.describe('InteractionCoordinator: one click, one response', () => {
     // adoption seam makes the station win the click as the table's top
     // point-event. Discovery upstreams are aborted so the curated seed
     // markers render deterministically offline (the honest catch path).
-    await routeAllTribalFixtures(page);
     await page.route('**/ddm-proxy.atniclimate.workers.dev/**', (route) => route.abort('failed'));
     await page.route('**/waterservices.usgs.gov/**', (route) => route.abort('failed'));
     await gotoApp(page, '?view=console&layers=aiannh,bia-reservations,telemetry');
@@ -222,7 +220,6 @@ test.describe('InteractionCoordinator: one click, one response', () => {
   test('a broad surface never blankets a boundary: SPC ranks as a condition surface', async ({
     page
   }) => {
-    await routeAllTribalFixtures(page);
     // A synthetic Day 1 polygon covering the whole fixture area.
     await page.route('**/SPC_firewx/MapServer/**', (route) =>
       route.fulfill({
@@ -278,7 +275,6 @@ test.describe('InteractionCoordinator: one click, one response', () => {
   test('the selected place is promoted: a search-selected state wins an in-place click', async ({
     page
   }) => {
-    await routeAllTribalFixtures(page);
     // Pin the camera to Washington so the search's fitBounds(Washington) is
     // a near-identity move: a bare URL boots to a wide framing, and the fit
     // then animates across it, which is the camera race that let an earlier
@@ -346,7 +342,6 @@ test.describe('InteractionCoordinator: one click, one response', () => {
   });
 
   test('entering a studio dismisses the open response', async ({ page }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page, '?view=brief&layers=aiannh,bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
     // S4: in desktop Brief the place-bearing response rehosts at the

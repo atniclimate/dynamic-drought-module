@@ -1,6 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
 import { gotoApp, waitForLayerSettled } from './helpers';
-import { routeAllTribalFixtures } from './tribal-fixtures';
 import {
   MIN_COMPACT_BODY_REGION_HEIGHT_PX,
   MIN_USABLE_REGION_HEIGHT_PX,
@@ -135,7 +134,6 @@ test.describe('DEF-3: the coordinated popup is contained and its tail reachable 
   test('the box stays inside the viewport, the body scrolls, and both source links are reachable', async ({
     page
   }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page, '?view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
@@ -250,7 +248,6 @@ test.describe('DEF-3 finding 1: half sheet plus footer occlusion (390x844, touch
   test('the card stays inside the unobscured map strip above the sheet and touch scrolls the body', async ({
     page
   }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page, '?layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
@@ -388,7 +385,6 @@ test.describe('DEF-3 finding 1: a small embed iframe and both size floors', () =
   test('the card follows an embed viewport down through the width and height floors', async ({
     page
   }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page, '?embed=true&view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
@@ -523,7 +519,6 @@ test.describe('DEF-3 r2 finding 1: compact tier, empty-region recovery, sub-chro
   test('the tiered contract holds through compact, empty, recovery, and sub-chrome regions', async ({
     page
   }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page, '?embed=true&view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
@@ -733,7 +728,6 @@ test.describe('r2 finding 2: a visual viewport diverging from the layout viewpor
   test('the clamp follows an offset visual-viewport band, not the layout viewport', async ({
     page
   }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page, '?embed=true&view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 

@@ -96,14 +96,12 @@ Every shard writes a job summary (passed, failed, flaky, skipped, and the
 `scripts/summarize-playwright-shard.mjs`. A shard that fails, or passes only
 on retry, also uploads its HTML report (error text, ARIA error context,
 stdout and stderr, timings) as a seven-day artifact named for the shard; a
-clean shard uploads nothing. Traces and screenshots are off in CI: the
-ordinary boot fetches live AIANNH and BIA boundary geometry that the runtime
-holds in memory and never writes to disk (the project's hard rule 1; see the
-NON-REDISTRIBUTION GUARD in `src/layers/aiannh.ts`), and a trace records
-response bodies while a screenshot renders the polygons. The explicit
-evidence captures in `fire3d-mode.spec.ts` (`fire3d-evidence/`, gitignored)
-are skipped under `CI` for the same reason. Locally, traces, screenshots,
-and the evidence captures stay on, in gitignored directories.
+clean shard uploads nothing. Traces and screenshots are off in CI, and stay
+off for now; the reason has changed, and the section below records what
+changed and what the decision still is. The explicit evidence captures in
+`fire3d-mode.spec.ts` (`fire3d-evidence/`, gitignored) are skipped under
+`CI`. Locally, traces, screenshots, and the evidence captures stay on, in
+gitignored directories.
 
 When `DDM_BUILD_SHA` or `DDM_BUILD_NONCE` is set in the environment (CI sets
 both), `gotoApp` asserts the `<html>` build stamp on every boot it drives,
@@ -132,6 +130,55 @@ still carries the evidence. That helper is the only way a spec may quiet a
 warning: a hand-rolled `console.warn = () => undefined` silences the reason
 instead of asserting it, and a warning the runtime stops issuing would then
 pass unnoticed.
+
+## The sovereign boundary sources, and why CI still keeps nothing
+
+Since 2026-08-29 (roadmap task DDM-P1-T08) **every boot this suite drives
+answers the Census AIANNH and BIA AIAN-LAR queries from synthetic fixtures**.
+`gotoApp` installs the route pair before it navigates, locally and in CI
+alike, so a local green and a CI green mean the same thing; the bodies are
+the hand-authored rectangles with obviously synthetic names in
+`tests/tribal-fixtures.ts`, and no real sovereign-boundary polygon can enter
+a test artifact (the project's hard rule 1; see the NON-REDISTRIBUTION GUARD
+in `src/layers/aiannh.ts`). A spec that needs a different response (an empty
+collection, an abort, a truncated body, an ArcGIS error, a geography-keyed
+answer) claims the service through `routeBoundary`, and the suite-wide stub
+defers to that claim whether it was registered before or after `gotoApp`.
+`gotoApp(page, query, { boundaries: 'empty' })` serves the honest live-zero
+collection; `{ boundaries: 'live' }` is the documented escape hatch that lets
+a request reach the agency, and nothing in this suite uses it. The live
+boundary path is proven instead by the daily source-health probe
+(`scripts/source-health.mjs`), which drives Chromium outside this suite.
+
+Two checks keep that true, and they cover different halves of the claim.
+
+`tests/boundary-stubs.spec.ts` proves the `gotoApp` shells DYNAMICALLY. It
+boots the bare Brief door, the wildfire cluster, the console, the wildfire
+cluster inside an embed, the brief embed, and the phone viewport; for each it
+compares every request the page made to either host against the requests the
+stub actually answered, and fails on one that escaped. Where the catalog
+mounts it also asserts both boundary pills reach `live`, which can only come
+from the fixture body. It does not observe the boots that navigate
+themselves: those answer from their own `routeAllTribalFixtures` handlers, so
+their requests never enter the suite-wide stub's log.
+
+`tests/boundary-boot-inventory.test.mjs` covers those STATICALLY, and guards
+the seams. It runs in the gate with the other `node:test` files
+(`npm run test:boundary-boots`) and fails when a module under `tests/` (specs
+and shared helpers alike) navigates outside `gotoApp` without a recorded
+reason and its own stub, when a module registers a boundary route outside the
+shared helper (a raw `page.route` would be shadowed by `gotoApp`) or unroutes
+one (which strands the spec's claim and sends the next request live), when a
+spec passes `{ boundaries: 'live' }`, or when a service path drifts so the
+route globs stop matching. The recorded raw-boot counts are brittle on
+purpose: an unrelated new `.goto(` or `.setContent(` fails the gate, which is
+the moment to ask whether it needs the stub installed by hand.
+
+Trace and screenshot retention in CI nevertheless **remains off**. Turning it
+on is an owner decision recorded in the pull request that flips it
+(DDM-P1-T08 external authorization). The proposed diff is written out in the
+pull request that landed the fixtures, so the flip is a one-commit change
+whenever the owner ratifies it.
 
 ## Headless WebGL
 

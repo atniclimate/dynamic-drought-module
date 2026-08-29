@@ -13,6 +13,7 @@ import {
 import {
   AIANNH_ROUTE,
   BIA_ROUTE,
+  routeBoundary,
   syntheticAiannhBody,
   syntheticBiaBody
 } from './tribal-fixtures';
@@ -39,7 +40,7 @@ test.describe('URL as state', () => {
     const releases: Array<() => void> = [];
     const hold = async (pattern: string, body: unknown): Promise<void> => {
       const gate = new Promise<void>((resolve) => releases.push(resolve));
-      await page.route(pattern, async (route) => {
+      await routeBoundary(page, pattern, async (route) => {
         await gate;
         await route.fulfill({
           contentType: 'application/geo+json',

@@ -7,6 +7,12 @@ import {
   showStudioBoundary
 } from '../src/state/studio-boundary';
 import { gotoApp } from './helpers';
+import {
+  AIANNH_ROUTE,
+  BIA_ROUTE,
+  emptyCollectionBody,
+  routeGeojson
+} from './tribal-fixtures';
 
 const PLACE_ROOT = '#place-studio-root';
 const EMPTY_COLLECTION = JSON.stringify({
@@ -53,9 +59,11 @@ async function stubBriefingAndOverlapSources(page: Page): Promise<void> {
       body: EMPTY_COLLECTION
     })
   );
-  await page.route('**/BIA_AIAN_National_LAR/FeatureServer/0/query?*', (route) =>
-    route.fulfill({ contentType: 'application/geo+json', body: EMPTY_COLLECTION })
-  );
+  // Both sovereign-boundary services answer the honest live-zero collection
+  // so the overlap under test is the watershed one; the claim is recorded so
+  // gotoApp's suite-wide fixture stub defers (tests/tribal-fixtures.ts).
+  await routeGeojson(page, BIA_ROUTE, emptyCollectionBody());
+  await routeGeojson(page, AIANNH_ROUTE, emptyCollectionBody());
   await page.route(
     '**/USEPA_Ecoregions_Level_III_and_IV/MapServer/*/query?*',
     (route) =>

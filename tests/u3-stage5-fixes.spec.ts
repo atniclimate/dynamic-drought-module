@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import type maplibregl from 'maplibre-gl';
 
 import { gotoApp } from './helpers';
+import { BIA_ROUTE, routeBoundary } from './tribal-fixtures';
 import {
   showLocatedBoundary,
   clearLocatedBoundary,
@@ -198,7 +199,7 @@ test.describe('U3 stage-5: honest search failure states (major 5)', () => {
 
   test('a failed live BIA locate surfaces a toast, never a silent no-op', async ({ page }) => {
     // The bundled roster loads normally; only the live AIAN-LAR locate dies.
-    await page.route('**/BIA_AIAN_National_LAR/**', (route) => route.abort());
+    await routeBoundary(page, BIA_ROUTE, (route) => route.abort());
 
     await gotoApp(page, '?view=console');
     await page.locator(CONSOLE_SEARCH).fill('yakama');
@@ -309,7 +310,7 @@ test.describe('U3 stage-5 round 2: LARNAME abort on supersede and close', () => 
   test('a non-Tribal supersede aborts the in-flight LARNAME request', async ({ page }) => {
     let larAborted = false;
     // Hold the LAR query open; a client-side abort is the only way it ends.
-    await page.route('**/BIA_AIAN_National_LAR/**', () => {
+    await routeBoundary(page, BIA_ROUTE, () => {
       /* pend forever */
     });
     page.on('requestfailed', (req) => {
@@ -338,7 +339,7 @@ test.describe('U3 stage-5 round 2: LARNAME abort on supersede and close', () => 
 
   test('closing the briefing panel aborts the in-flight LARNAME request', async ({ page }) => {
     let larAborted = false;
-    await page.route('**/BIA_AIAN_National_LAR/**', () => {
+    await routeBoundary(page, BIA_ROUTE, () => {
       /* pend forever */
     });
     page.on('requestfailed', (req) => {

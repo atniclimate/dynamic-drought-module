@@ -85,7 +85,14 @@ test.describe('U4c: state boundaries as chrome keep the click surface', () => {
   test('a state click still opens the impact briefing after the chrome restyle', async ({
     page
   }) => {
-    await gotoApp(page, '?view=console');
+    // The two live Tribal-geography layers answer the honest live-zero
+    // collection here. They are default-on and rank ABOVE state boundaries in
+    // the interaction coordinator, so a fixture polygon over the map center
+    // would answer the click and this case would stop testing the state
+    // click surface at all. Before the suite-wide stub existed this case
+    // depended on the live services happening to return nothing at the
+    // default Washington camera center, which was luck, not a contract.
+    await gotoApp(page, '?view=console', { boundaries: 'empty' });
 
     // States is default-on since U4c; the bundled GeoJSON settles fast.
     await waitForLayerSettled(page, 'states');

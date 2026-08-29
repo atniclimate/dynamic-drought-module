@@ -226,6 +226,15 @@ readiness changes require the serial suite. A narrow documentation-only change
 normally needs documentation checks, YAML validation when applicable, the
 public-tree gate, and a clean Git diff rather than the full browser suite.
 
+When you write a browser spec, boot through `gotoApp`. It answers the Census
+AIANNH and BIA AIAN-LAR queries from the synthetic fixtures in
+`tests/tribal-fixtures.ts` on every boot, so no ordinary run reaches a live
+sovereign-geography service. A spec that needs a different boundary response
+registers it with `routeBoundary`, never a raw `page.route`; a spec that must
+navigate itself calls `routeAllTribalFixtures` first and records why in
+`tests/boundary-boot-inventory.test.mjs`, which the gate runs
+(`npm run test:boundary-boots`). See `tests/README.md`.
+
 Always report the exact commands and results. Do not hide a failure by piping a
 command through another process, increasing a timeout without diagnosis, or
 rerunning until a flaky result happens to pass. Keep Playwright traces and

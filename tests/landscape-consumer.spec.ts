@@ -13,6 +13,12 @@ import {
 } from '../src/impact/landscape-resolution';
 import type { BoundarySelectionContext } from '../src/impact/types';
 import { gotoApp } from './helpers';
+import {
+  AIANNH_ROUTE,
+  BIA_ROUTE,
+  emptyCollectionBody,
+  routeGeojson
+} from './tribal-fixtures';
 
 const ARTIFACT = JSON.parse(
   readFileSync(
@@ -200,18 +206,12 @@ async function stubBriefingSources(page: Page): Promise<void> {
   await page.route('**/proxy?*', (route) =>
     route.fulfill({ contentType: 'application/json', body: '[]' })
   );
-  await page.route('**/BIA_AIAN_National_LAR/FeatureServer/0/query?*', (route) =>
-    route.fulfill({
-      contentType: 'application/geo+json',
-      body: EMPTY_COLLECTION
-    })
-  );
-  await page.route('**/AIANNHA/MapServer/47/query?*', (route) =>
-    route.fulfill({
-      contentType: 'application/geo+json',
-      body: EMPTY_COLLECTION
-    })
-  );
+  // The two sovereign-boundary services answer the honest live-zero
+  // collection, so the briefing under test names no Tribal land area. These
+  // go through routeGeojson so the claim is recorded and gotoApp's
+  // suite-wide fixture stub defers to them (tests/tribal-fixtures.ts).
+  await routeGeojson(page, BIA_ROUTE, emptyCollectionBody());
+  await routeGeojson(page, AIANNH_ROUTE, emptyCollectionBody());
   await page.route('**/wbd/MapServer/*/query?*', (route) =>
     route.fulfill({
       contentType: 'application/geo+json',

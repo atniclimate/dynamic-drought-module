@@ -10,8 +10,8 @@ import {
 import {
   AIANNH_ROUTE,
   BIA_ROUTE,
+  routeBoundary,
   routeGeojson,
-  routeAllTribalFixtures,
   syntheticAiannhBody,
   syntheticBiaBody,
   emptyCollectionBody,
@@ -23,7 +23,11 @@ import {
  * (D-0.7.0-033; design Unit G). Every case runs against synthetic
  * route-intercepted fixtures (tests/tribal-fixtures.ts): no real polygon
  * ever enters the repository, and no case depends on a live agency being
- * up. Covered here: boot success, the honest live-zero state, network
+ * up. Since DDM-P1-T08 the HAPPY fixture is the suite-wide default that
+ * `gotoApp` installs on every boot, so a case that wants the happy bodies
+ * declares nothing; a case that wants an empty, aborted, malformed, or
+ * geography-keyed response claims the service with `routeBoundary` and the
+ * suite-wide stub defers to it. Covered here: boot success, the honest live-zero state, network
  * failure (the deterministic abort stands in for the 15-second budget
  * timeout: both reject into the same layer catch branch, and a literally
  * hung route would cost 15+ suite seconds without covering a different
@@ -150,7 +154,6 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
   test('boot success: the default boot settles the two default-on live layers', async ({
     page
   }) => {
-    await routeAllTribalFixtures(page);
     // The remaining live default (USDM) is aborted deterministically: this
     // case is about the Tribal layers and must not ingest a real agency
     // polygon or depend on an upstream being up.
@@ -175,7 +178,7 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
   });
 
   test('a network failure reads unavailable and never enters the share URL', async ({ page }) => {
-    await page.route(AIANNH_ROUTE, (route) => route.abort('failed'));
+    await routeBoundary(page, AIANNH_ROUTE, (route) => route.abort('failed'));
     await routeGeojson(page, BIA_ROUTE, syntheticBiaBody());
     await gotoApp(page, '?view=console&layers=aiannh,bia-reservations');
     await waitForLayerSettled(page, 'aiannh');
@@ -252,7 +255,7 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
     // assertion then proves the refreshed response was APPLIED (the exact
     // live-zero pill), not merely that a request started; a broken setData
     // path cannot stay green.
-    await page.route(AIANNH_ROUTE, async (route) => {
+    await routeBoundary(page, AIANNH_ROUTE, async (route) => {
       const url = new URL(route.request().url());
       const xmin = Number((url.searchParams.get('geometry') ?? '0').split(',')[0]);
       const body = xmin < -130 ? emptyCollectionBody() : syntheticAiannhBody();
@@ -281,7 +284,7 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
     // Geography-keyed: the Washington envelope succeeds; the Alaska
     // envelope fails at the network layer, so the REFRESH (not the initial
     // activation) is the failing operation.
-    await page.route(AIANNH_ROUTE, async (route) => {
+    await routeBoundary(page, AIANNH_ROUTE, async (route) => {
       const url = new URL(route.request().url());
       const xmin = Number((url.searchParams.get('geometry') ?? '0').split(',')[0]);
       if (xmin < -130) {
@@ -313,7 +316,7 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
     page
   }) => {
     let failRefresh = false;
-    await page.route(AIANNH_ROUTE, async (route) => {
+    await routeBoundary(page, AIANNH_ROUTE, async (route) => {
       if (failRefresh) {
         await route.abort('failed');
         return;
@@ -348,7 +351,7 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
     page
   }) => {
     let failRefresh = false;
-    await page.route(BIA_ROUTE, async (route) => {
+    await routeBoundary(page, BIA_ROUTE, async (route) => {
       if (failRefresh) {
         await route.abort('failed');
         return;
@@ -382,7 +385,6 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
   });
 
   test('a deep link reloads to the same live layer set, settled live', async ({ page }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page, '?view=console&layers=aiannh,bia-reservations');
     await waitForLayerSettled(page, 'aiannh');
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -397,7 +399,6 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
   test('an embed reload keeps the embed contract with both live layers settled live', async ({
     page
   }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page, '?embed=true&layers=aiannh,bia-reservations');
     await expect(page.locator('#app')).toHaveClass(/\bembed\b/);
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -425,7 +426,6 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
   test('the double-draw: AIANNH and AIAN-LAR render simultaneously as separate live sources', async ({
     page
   }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page, '?view=console&layers=aiannh,bia-reservations');
     await waitForLayerSettled(page, 'aiannh');
     await waitForLayerSettled(page, 'bia-reservations');
@@ -442,7 +442,6 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
   test('legacy ?layers=tribal still lands on the deployer slot, not the live layer', async ({
     page
   }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page, '?view=console&layers=tribal');
     await expect(layerCheckbox(page, 'tribal')).toBeChecked();
     await expect(layerCheckbox(page, 'aiannh')).not.toBeChecked();
