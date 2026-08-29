@@ -35,7 +35,23 @@ async function expectPolicyError(
   await expect(response.json()).resolves.toMatchObject({ error: code });
 }
 
-test('the Worker health response identifies the route-hardening revision', async () => {
+type WorkerContext = Parameters<typeof worker.fetch>[2];
+
+/**
+ * Drive the Worker's default export the way the runtime would. The Worker is
+ * imported and called in this Node process; nothing here starts miniflare or
+ * `wrangler dev`, so the dispatch logic, route policy, and header contract are
+ * covered but the platform bindings around them are not (see the note below
+ * the last test).
+ */
+async function fetchWorker(
+  request: Request,
+  ctx: Partial<WorkerContext> = {}
+): Promise<Response> {
+  return worker.fetch(request, {}, ctx as WorkerContext);
+}
+
+test('the Worker health response identifies the reviewed revision', async () => {
   const response = await worker.fetch(
     new Request(`${WORKER_ORIGIN}/healthz`),
     {},
@@ -47,7 +63,7 @@ test('the Worker health response identifies the route-hardening revision', async
   await expect(response.json()).resolves.toMatchObject({
     status: 'ok',
     worker: 'ddm-proxy',
-    revision: '2026-08-09-route-hardening-v3'
+    revision: '2026-08-29-options-policy-v4'
   });
 });
 
@@ -137,29 +153,218 @@ test('the proxy requires exactly one URL and rejects unsafe URL components', asy
 });
 
 test('only GET, HEAD, and OPTIONS are exposed through CORS', async () => {
-  const post = await worker.fetch(
+  const post = await fetchWorker(
     proxyRequest(['https://api.weather.gov/points/38.5,-97.5'], {
       method: 'POST',
       body: 'unused'
-    }),
-    {},
-    {} as Parameters<typeof worker.fetch>[2]
+    })
   );
   expect(post.status).toBe(405);
+  expect(post.headers.get('Allow')).toBe('GET, HEAD, OPTIONS');
+  expect(post.headers.get('Access-Control-Allow-Origin')).toBe('*');
   await expect(post.json()).resolves.toMatchObject({
     error: 'method_not_allowed'
   });
 
-  const options = await worker.fetch(
-    new Request(`${WORKER_ORIGIN}/proxy`, { method: 'OPTIONS' }),
-    {},
-    {} as Parameters<typeof worker.fetch>[2]
+  const options = await fetchWorker(
+    proxyRequest(['https://api.weather.gov/points/38.5,-97.5'], {
+      method: 'OPTIONS'
+    })
   );
   expect(options.status).toBe(204);
   expect(options.headers.get('Access-Control-Allow-Methods')).toBe(
     'GET, HEAD, OPTIONS'
   );
   expect(options.headers.get('Access-Control-Allow-Headers')).toBe('Accept');
+  expect(options.headers.get('Access-Control-Allow-Origin')).toBe('*');
+  expect(options.headers.get('Access-Control-Max-Age')).toBe('86400');
+});
+
+test('every mutating method is refused with the allowed set named', async () => {
+  for (const method of ['PUT', 'DELETE', 'PATCH']) {
+    const response = await fetchWorker(
+      proxyRequest(['https://api.weather.gov/points/38.5,-97.5'], { method })
+    );
+    expect(response.status, method).toBe(405);
+    expect(response.headers.get('Allow'), method).toBe('GET, HEAD, OPTIONS');
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'method_not_allowed'
+    });
+  }
+});
+
+test('a preflight is refused for an off-route path on an allowed host', async () => {
+  const response = await fetchWorker(
+    proxyRequest(['https://www.usbr.gov/robots.txt'], { method: 'OPTIONS' })
+  );
+  expect(response.status).toBe(403);
+  // The browser must be able to READ the refusal, so the CORS headers stay on
+  // it; what it must not receive is a 204 that says the route is usable.
+  expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+  expect(response.headers.get('Access-Control-Max-Age')).toBeNull();
+  expect(response.headers.get('Cache-Control')).toBe('no-store');
+  await expect(response.json()).resolves.toMatchObject({
+    error: 'route_not_allowed'
+  });
+});
+
+test('a preflight is refused for a host that is not on the allow-list', async () => {
+  for (const target of [
+    'https://example.com/anything',
+    'https://biamaps.geoplatform.gov/server/rest/services/example',
+    'https://www.cpc.ncep.noaa.gov/products/example'
+  ]) {
+    const response = await fetchWorker(
+      proxyRequest([target], { method: 'OPTIONS' })
+    );
+    expect(response.status, target).toBe(403);
+    expect(response.headers.get('Access-Control-Allow-Origin'), target).toBe(
+      '*'
+    );
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'route_not_allowed'
+    });
+  }
+});
+
+test('a preflight with a missing or malformed target is refused, not answered 204', async () => {
+  const cases: readonly [Request, number, string][] = [
+    [new Request(`${WORKER_ORIGIN}/proxy`, { method: 'OPTIONS' }), 400, 'missing_url'],
+    [proxyRequest([''], { method: 'OPTIONS' }), 400, 'invalid_url_count'],
+    [
+      proxyRequest(
+        [
+          'https://api.weather.gov/points/38.5,-97.5',
+          'https://api.weather.gov/alerts/active'
+        ],
+        { method: 'OPTIONS' }
+      ),
+      400,
+      'invalid_url_count'
+    ],
+    [
+      proxyRequest(['http://api.weather.gov/points/38.5,-97.5'], {
+        method: 'OPTIONS'
+      }),
+      400,
+      'unsupported_scheme'
+    ],
+    [proxyRequest(['not-a-url'], { method: 'OPTIONS' }), 400, 'invalid_url']
+  ];
+
+  for (const [request, status, code] of cases) {
+    const response = await fetchWorker(request);
+    expect(response.status, code).toBe(status);
+    expect(response.headers.get('Access-Control-Allow-Origin'), code).toBe('*');
+    await expect(response.json()).resolves.toMatchObject({ error: code });
+  }
+});
+
+test('a preflight for an unknown path is a 404, matching what a GET would return', async () => {
+  for (const method of ['OPTIONS', 'GET']) {
+    const response = await fetchWorker(
+      new Request(`${WORKER_ORIGIN}/nope`, { method })
+    );
+    expect(response.status, method).toBe(404);
+    expect(response.headers.get('Access-Control-Allow-Origin'), method).toBe(
+      '*'
+    );
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'not_found'
+    });
+  }
+});
+
+test('the health endpoint answers its own preflight and refuses HEAD', async () => {
+  const options = await fetchWorker(
+    new Request(`${WORKER_ORIGIN}/healthz`, { method: 'OPTIONS' })
+  );
+  expect(options.status).toBe(204);
+  expect(options.headers.get('Access-Control-Allow-Methods')).toBe(
+    'GET, OPTIONS'
+  );
+  expect(options.headers.get('Access-Control-Max-Age')).toBe('86400');
+
+  const head = await fetchWorker(
+    new Request(`${WORKER_ORIGIN}/healthz`, { method: 'HEAD' })
+  );
+  expect(head.status).toBe(405);
+  expect(head.headers.get('Allow')).toBe('GET, OPTIONS');
+});
+
+test('HEAD is refused on a route the allow-list does not carry', async () => {
+  const response = await fetchWorker(
+    proxyRequest(['https://www.usbr.gov/robots.txt'], { method: 'HEAD' })
+  );
+  expect(response.status).toBe(403);
+  expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+});
+
+test('HEAD on an allowed route matches GET without returning a body', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalCaches = Object.getOwnPropertyDescriptor(globalThis, 'caches');
+  const bytes = new Uint8Array([137, 80, 78, 71, 0, 255, 10]);
+  const background: Promise<unknown>[] = [];
+  const upstreamMethods: string[] = [];
+
+  Object.defineProperty(globalThis, 'caches', {
+    configurable: true,
+    value: {
+      default: { match: async () => undefined, put: async () => undefined }
+    }
+  });
+  globalThis.fetch = (async (request: Request) => {
+    upstreamMethods.push(request.method.toUpperCase());
+    return new Response(bytes, {
+      status: 200,
+      headers: {
+        'Cache-Control': 'public, max-age=3600',
+        'Content-Type': 'image/png'
+      }
+    });
+  }) as typeof fetch;
+
+  const target =
+    'https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer/exportImage?f=image';
+  const ctx = {
+    waitUntil(promise: Promise<unknown>) {
+      background.push(promise);
+    }
+  };
+
+  try {
+    const get = await fetchWorker(proxyRequest([target]), ctx);
+    const head = await fetchWorker(
+      proxyRequest([target], { method: 'HEAD' }),
+      ctx
+    );
+
+    expect(upstreamMethods).toEqual(['GET', 'HEAD']);
+    expect(head.status).toBe(get.status);
+    expect(head.status).toBe(200);
+    expect(head.headers.get('Content-Type')).toBe(
+      get.headers.get('Content-Type')
+    );
+    expect(head.headers.get('Cache-Control')).toBe(
+      get.headers.get('Cache-Control')
+    );
+    expect(head.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(head.headers.get('Access-Control-Allow-Methods')).toBe(
+      'GET, HEAD, OPTIONS'
+    );
+    expect(head.body).toBeNull();
+    expect(
+      Array.from(new Uint8Array(await get.arrayBuffer()))
+    ).toEqual(Array.from(bytes));
+    await expect(Promise.all(background)).resolves.toBeDefined();
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalCaches) {
+      Object.defineProperty(globalThis, 'caches', originalCaches);
+    } else {
+      Reflect.deleteProperty(globalThis, 'caches');
+    }
+  }
 });
 
 test('the upstream request forwards only normalized Accept and the fixed User-Agent', () => {
@@ -461,3 +666,23 @@ test('the edge cache refuses non-200, Vary star, and private responses', () => {
     expect(permitsEdgeCaching(response)).toBe(false);
   }
 });
+
+/**
+ * Scope of this file, stated so a green run is not read as more than it is.
+ *
+ * COVERED. The Worker module is imported and its default `fetch` is called in
+ * this Node process, so dispatch order, the route and method policy, preflight
+ * validation, CORS and `Allow` headers, redirect re-validation, the upstream
+ * deadline, header minimization, byte transparency, and the edge-cache
+ * decisions are all exercised against the real implementation. Upstream fetches
+ * and `caches.default` are replaced with local fakes, which is what makes the
+ * byte-transparency assertions deterministic.
+ *
+ * NOT COVERED. Nothing here starts miniflare, `wrangler dev`, or the deployed
+ * edge, so the platform layer is untested by this file: the `RATE_LIMITER`
+ * binding and its fail-open path, the real `caches.default` storage and its
+ * time-to-live, Cloudflare's own header handling, and whether the published
+ * Worker is these bytes at all. That last question is a live probe, not a unit
+ * test; the Worker's `WORKER_REVISION` is a claim by the source, not evidence
+ * about what is running.
+ */

@@ -27,6 +27,17 @@
  *     time-to-live are served without mixing media-type variants.
  *   - Health check at `GET /healthz` returns a small JSON document with no
  *     allow-list enforcement, for uptime monitoring.
+ *   - Preflight is route-validated, not blanket. An `OPTIONS` request is
+ *     resolved against the same route policy the real request would meet: a
+ *     preflight for an allow-listed `/proxy` target answers 204 with the
+ *     allowed methods, allowed headers, and a 86400 second `Max-Age`; an
+ *     unknown path answers 404; an off-route or malformed target answers the
+ *     same 403 or 400 JSON error a GET would receive, with the CORS headers
+ *     attached so a browser can read the rejection instead of seeing an opaque
+ *     network failure. `OPTIONS /healthz` answers 204 because `GET /healthz`
+ *     is itself an allowed Worker route. A blanket 204 for every path, which
+ *     an earlier revision returned, made preflight the one method that skipped
+ *     the allow-list.
  *   - Abuse throttle (critical-review #4). An allow-listed CORS shim with no
  *     throttle is an open relay FOR the allow-listed hosts: anyone can drive
  *     arbitrary traffic through the deployer's Cloudflare account, at the
@@ -88,7 +99,7 @@ export function isAllowedRoute(upstreamUrl: URL): boolean {
 
 const USER_AGENT =
   "DDM-Proxy/0.1.0 (+https://github.com/atniclimate/dynamic-drought-module)";
-const WORKER_REVISION = "2026-08-09-route-hardening-v3";
+const WORKER_REVISION = "2026-08-29-options-policy-v4";
 
 const UPSTREAM_TIMEOUT_MS = 12_000;
 const EDGE_CACHE_MAX_AGE_SECONDS = 60;
@@ -114,9 +125,17 @@ interface Env {
   RATE_LIMITER?: RateLimit;
 }
 
+// The methods the relay endpoint exposes. Used both as the advertised CORS
+// value and as the RFC 9110 `Allow` header on a 405, so a caller that is
+// refused learns what the endpoint would accept from the same response.
+const PROXY_ALLOWED_METHODS = "GET, HEAD, OPTIONS";
+// `/healthz` is a read of the Worker itself and never takes a body, so it
+// answers GET and its preflight only. HEAD is deliberately not offered.
+const HEALTH_ALLOWED_METHODS = "GET, OPTIONS";
+
 const CORS_HEADERS: Readonly<Record<string, string>> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+  "Access-Control-Allow-Methods": PROXY_ALLOWED_METHODS,
   "Access-Control-Allow-Headers": "Accept"
 };
 
@@ -151,11 +170,19 @@ function jsonError(
   );
 }
 
-function preflightResponse(): Response {
+/**
+ * A successful preflight. Only reached once the request's path and, for
+ * `/proxy`, its upstream target have passed the same route policy the real
+ * request will meet, so a 204 here is a statement that the route is allowed.
+ */
+function preflightResponse(
+  allowedMethods: string = PROXY_ALLOWED_METHODS
+): Response {
   return new Response(null, {
     status: 204,
     headers: {
       ...CORS_HEADERS,
+      "Access-Control-Allow-Methods": allowedMethods,
       "Access-Control-Max-Age": "86400"
     }
   });
@@ -528,20 +555,20 @@ export default {
     ctx: ExecutionContext
   ): Promise<Response> {
     const url = new URL(request.url);
-
-    // Preflight: handle Cross-Origin Resource Sharing (CORS) OPTIONS requests
-    // for any path. The browser may probe before issuing the real request.
-    if (request.method === "OPTIONS") {
-      return preflightResponse();
-    }
+    const method = request.method.toUpperCase();
 
     // Health endpoint: no allow-list check, no upstream fetch, no caching.
+    // Its preflight is answered because `GET /healthz` is an allowed route.
     if (url.pathname === "/healthz") {
-      if (request.method !== "GET") {
+      if (method === "OPTIONS") {
+        return preflightResponse(HEALTH_ALLOWED_METHODS);
+      }
+      if (method !== "GET") {
         return jsonError(
           405,
           "method_not_allowed",
-          "The /healthz endpoint accepts GET only."
+          "The /healthz endpoint accepts GET only.",
+          { Allow: HEALTH_ALLOWED_METHODS }
         );
       }
       return healthResponse();
@@ -555,14 +582,29 @@ export default {
       );
     }
 
+    // Preflight for the relay endpoint, validated against the route policy
+    // rather than answered blindly. A browser preflight carries the same `url`
+    // parameter the real request will carry, so an allow-listed target still
+    // gets its 204 and nothing the client legitimately does breaks; an
+    // off-route, off-host, or malformed target gets exactly the rejection the
+    // GET would get, CORS headers included so the browser can read it. Without
+    // this check OPTIONS would be the one method that answers for any path,
+    // which is not "works only for allowlisted routes".
+    if (method === "OPTIONS") {
+      const preflightTarget = parseAndValidateUpstream(request);
+      return preflightTarget instanceof Response
+        ? preflightTarget
+        : preflightResponse();
+    }
+
     // The current DDM routes are reads. Reject every mutating method to keep
     // this shim incapable of submitting state changes to an allowed agency.
-    const method = request.method.toUpperCase();
     if (method !== "GET" && method !== "HEAD") {
       return jsonError(
         405,
         "method_not_allowed",
-        "The /proxy endpoint accepts GET, HEAD, and OPTIONS."
+        "The /proxy endpoint accepts GET, HEAD, and OPTIONS.",
+        { Allow: PROXY_ALLOWED_METHODS }
       );
     }
 

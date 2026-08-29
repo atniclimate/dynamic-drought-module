@@ -248,6 +248,15 @@ request headers, response checks, byte limits, and deadline. It must not become
 a general proxy, transform upstream bodies, collect analytics, or hold product
 state.
 
+Preflight is route-validated rather than blanket: an `OPTIONS` request meets
+the same route policy the real request would, so an allow-listed target gets a
+204 while an unknown path, an off-route target, or a malformed `url` gets the
+same 404, 403, or 400 a GET would get, with the Cross-Origin Resource Sharing
+headers still attached so a browser can read the refusal. Revision
+`2026-08-29-options-policy-v4` is the reviewed candidate in this repository, not
+what is published; the live Worker keeps serving its own revision until the
+deployer runs the separate two-phase publish.
+
 Typecheck Worker changes from its directory. Publishing the Worker is a
 separate external operation and should include pre-deploy and post-deploy
 revision, route-rejection, body-hash, CORS, deadline, and rate-limit checks.
