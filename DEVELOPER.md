@@ -250,12 +250,16 @@ state.
 
 Preflight is route-validated rather than blanket: an `OPTIONS` request meets
 the same route policy the real request would, so an allow-listed target gets a
-204 while an unknown path, an off-route target, or a malformed `url` gets the
-same 404, 403, or 400 a GET would get, with the Cross-Origin Resource Sharing
-headers still attached so a browser can read the refusal. Revision
-`2026-08-29-options-policy-v4` is the reviewed candidate in this repository, not
-what is published; the live Worker keeps serving its own revision until the
-deployer runs the separate two-phase publish.
+204 while an unknown path, an off-route target, an over-length `url`, or a
+malformed one gets the same 404, 403, 414, or 400 a GET would get. Those
+refusals keep their Cross-Origin Resource Sharing headers for non-browser
+callers and for debugging, not for page script: a browser whose preflight is
+refused raises a generic network error and never exposes the status or the
+body. `/healthz` answers GET and its own preflight, advertising `GET, OPTIONS`
+on every response including its 405. Revision `2026-08-29-options-policy-v4` is
+the reviewed candidate in this repository, not what is published; the live
+Worker keeps serving its own revision until the deployer runs the separate
+two-phase publish.
 
 Typecheck Worker changes from its directory. Publishing the Worker is a
 separate external operation and should include pre-deploy and post-deploy

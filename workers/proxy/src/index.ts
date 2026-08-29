@@ -26,18 +26,24 @@
  *     upstream URL plus normalized Accept, so repeated reads within the
  *     time-to-live are served without mixing media-type variants.
  *   - Health check at `GET /healthz` returns a small JSON document with no
- *     allow-list enforcement, for uptime monitoring.
+ *     allow-list enforcement, for uptime monitoring. It answers GET and its
+ *     own preflight only, and every `/healthz` response advertises that same
+ *     `GET, OPTIONS` set.
  *   - Preflight is route-validated, not blanket. An `OPTIONS` request is
  *     resolved against the same route policy the real request would meet: a
  *     preflight for an allow-listed `/proxy` target answers 204 with the
  *     allowed methods, allowed headers, and a 86400 second `Max-Age`; an
- *     unknown path answers 404; an off-route or malformed target answers the
- *     same 403 or 400 JSON error a GET would receive, with the CORS headers
- *     attached so a browser can read the rejection instead of seeing an opaque
- *     network failure. `OPTIONS /healthz` answers 204 because `GET /healthz`
- *     is itself an allowed Worker route. A blanket 204 for every path, which
- *     an earlier revision returned, made preflight the one method that skipped
- *     the allow-list.
+ *     unknown path answers 404; an off-route, over-length, or malformed target
+ *     answers the same 403, 414, or 400 JSON error a GET would receive. Those
+ *     refusals keep the CORS headers, but that is for non-browser callers and
+ *     for debugging only: a browser whose preflight is refused reports a
+ *     generic network error to page script and never exposes the status or the
+ *     body. A blanket 204 for every path, which an earlier revision returned,
+ *     made preflight the one method that skipped the allow-list.
+ *   - Preflight is deliberately exempt from the rate limit below. It performs
+ *     no upstream fetch, so it costs one URL parse and one table lookup, and
+ *     throttling it would refuse the real request that follows rather than the
+ *     traffic the limit exists to cap.
  *   - Abuse throttle (critical-review #4). An allow-listed CORS shim with no
  *     throttle is an open relay FOR the allow-listed hosts: anyone can drive
  *     arbitrary traffic through the deployer's Cloudflare account, at the
@@ -130,8 +136,14 @@ interface Env {
 // refused learns what the endpoint would accept from the same response.
 const PROXY_ALLOWED_METHODS = "GET, HEAD, OPTIONS";
 // `/healthz` is a read of the Worker itself and never takes a body, so it
-// answers GET and its preflight only. HEAD is deliberately not offered.
+// answers GET and its preflight only. HEAD is deliberately not offered, and
+// every `/healthz` response advertises this set rather than the relay's, so
+// the endpoint never claims a method it will refuse.
 const HEALTH_ALLOWED_METHODS = "GET, OPTIONS";
+
+const HEALTH_CORS_HEADERS: Readonly<Record<string, string>> = {
+  "Access-Control-Allow-Methods": HEALTH_ALLOWED_METHODS
+};
 
 const CORS_HEADERS: Readonly<Record<string, string>> = {
   "Access-Control-Allow-Origin": "*",
@@ -200,7 +212,8 @@ function healthResponse(): Response {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
-      ...CORS_HEADERS
+      ...CORS_HEADERS,
+      ...HEALTH_CORS_HEADERS
     }
   });
 }
@@ -568,7 +581,7 @@ export default {
           405,
           "method_not_allowed",
           "The /healthz endpoint accepts GET only.",
-          { Allow: HEALTH_ALLOWED_METHODS }
+          { Allow: HEALTH_ALLOWED_METHODS, ...HEALTH_CORS_HEADERS }
         );
       }
       return healthResponse();
@@ -586,10 +599,13 @@ export default {
     // rather than answered blindly. A browser preflight carries the same `url`
     // parameter the real request will carry, so an allow-listed target still
     // gets its 204 and nothing the client legitimately does breaks; an
-    // off-route, off-host, or malformed target gets exactly the rejection the
-    // GET would get, CORS headers included so the browser can read it. Without
-    // this check OPTIONS would be the one method that answers for any path,
-    // which is not "works only for allowlisted routes".
+    // off-route, off-host, over-length, or malformed target gets exactly the
+    // rejection the GET would get. The refusal keeps its CORS headers for
+    // non-browser callers and for debugging, NOT for page script: a browser
+    // whose preflight fails raises a generic network error and never exposes
+    // the status or the body. Without this check OPTIONS would be the one
+    // method that answers for any path, which is not "works only for
+    // allowlisted routes". No upstream fetch happens on any preflight path.
     if (method === "OPTIONS") {
       const preflightTarget = parseAndValidateUpstream(request);
       return preflightTarget instanceof Response

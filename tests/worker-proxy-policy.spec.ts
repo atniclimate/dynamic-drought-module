@@ -60,6 +60,10 @@ test('the Worker health response identifies the reviewed revision', async () => 
   expect(response.status).toBe(200);
   expect(response.headers.get('Cache-Control')).toBe('no-store');
   expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+  // /healthz advertises only what it will serve, never the relay's method set.
+  expect(response.headers.get('Access-Control-Allow-Methods')).toBe(
+    'GET, OPTIONS'
+  );
   await expect(response.json()).resolves.toMatchObject({
     status: 'ok',
     worker: 'ddm-proxy',
@@ -198,8 +202,9 @@ test('a preflight is refused for an off-route path on an allowed host', async ()
     proxyRequest(['https://www.usbr.gov/robots.txt'], { method: 'OPTIONS' })
   );
   expect(response.status).toBe(403);
-  // The browser must be able to READ the refusal, so the CORS headers stay on
-  // it; what it must not receive is a 204 that says the route is usable.
+  // The CORS headers stay on the refusal for non-browser callers and for
+  // debugging; a browser whose preflight fails only ever sees a generic
+  // network error. What must not come back is a 204 saying the route is usable.
   expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
   expect(response.headers.get('Access-Control-Max-Age')).toBeNull();
   expect(response.headers.get('Cache-Control')).toBe('no-store');
@@ -290,6 +295,104 @@ test('the health endpoint answers its own preflight and refuses HEAD', async () 
   );
   expect(head.status).toBe(405);
   expect(head.headers.get('Allow')).toBe('GET, OPTIONS');
+  // The 405 must not advertise the relay's methods while refusing one of them.
+  expect(head.headers.get('Access-Control-Allow-Methods')).toBe('GET, OPTIONS');
+});
+
+test('no preflight shape reaches an upstream fetch', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalCaches = Object.getOwnPropertyDescriptor(globalThis, 'caches');
+  let upstreamCalls = 0;
+
+  Object.defineProperty(globalThis, 'caches', {
+    configurable: true,
+    value: {
+      default: { match: async () => undefined, put: async () => undefined }
+    }
+  });
+  globalThis.fetch = (async () => {
+    upstreamCalls += 1;
+    return new Response('must not be reached', { status: 200 });
+  }) as typeof fetch;
+
+  // Every OPTIONS shape the policy can meet, with the verdict each must give.
+  // The load-bearing claim is the counter at the end: a preflight decides on
+  // the route table alone and never spends an upstream request, allow-listed
+  // target included, so it can be neither a relay nor an amplifier.
+  const shapes: readonly [string, Request, number, string | null][] = [
+    [
+      'allow-listed target',
+      proxyRequest(['https://api.weather.gov/points/38.5,-97.5'], {
+        method: 'OPTIONS'
+      }),
+      204,
+      null
+    ],
+    [
+      'off-route path on an allowed host',
+      proxyRequest(['https://www.usbr.gov/robots.txt'], { method: 'OPTIONS' }),
+      403,
+      'route_not_allowed'
+    ],
+    [
+      'host that is not on the allow-list',
+      proxyRequest(['https://example.com/anything'], { method: 'OPTIONS' }),
+      403,
+      'route_not_allowed'
+    ],
+    [
+      'missing url',
+      new Request(`${WORKER_ORIGIN}/proxy`, { method: 'OPTIONS' }),
+      400,
+      'missing_url'
+    ],
+    [
+      'malformed url',
+      proxyRequest(['not-a-url'], { method: 'OPTIONS' }),
+      400,
+      'invalid_url'
+    ],
+    [
+      'over-length url',
+      proxyRequest(
+        [`https://api.weather.gov/points/38.5,-97.5?pad=${'x'.repeat(2100)}`],
+        { method: 'OPTIONS' }
+      ),
+      414,
+      'url_too_long'
+    ],
+    [
+      'unknown path',
+      new Request(`${WORKER_ORIGIN}/nope`, { method: 'OPTIONS' }),
+      404,
+      'not_found'
+    ],
+    [
+      'health endpoint',
+      new Request(`${WORKER_ORIGIN}/healthz`, { method: 'OPTIONS' }),
+      204,
+      null
+    ]
+  ];
+
+  try {
+    for (const [label, request, status, code] of shapes) {
+      const response = await fetchWorker(request);
+      expect(response.status, label).toBe(status);
+      if (code === null) continue;
+      await expect(response.json(), label).resolves.toMatchObject({
+        error: code
+      });
+    }
+    expect(upstreamCalls).toBe(0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalCaches) {
+      Object.defineProperty(globalThis, 'caches', originalCaches);
+    } else {
+      Reflect.deleteProperty(globalThis, 'caches');
+    }
+  }
 });
 
 test('HEAD is refused on a route the allow-list does not carry', async () => {
