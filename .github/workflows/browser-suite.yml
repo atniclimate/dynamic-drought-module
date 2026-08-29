@@ -76,39 +76,11 @@ jobs:
         run: npm ci
 
       # DDM-P0-T01: browser provisioning is deterministic and cached. The
-      # browser directory is keyed on the runner OS and architecture and the
-      # exact @playwright/test version (which fixes the Chromium revision),
-      # so a Playwright bump misses once and rebuilds; every other run
-      # restores in seconds instead of downloading Chromium (about 21 s on a
-      # good day, and the step where the 2026-08-19 deploy stalled for its
-      # whole budget). OS libraries are outside the cache: a miss installs
-      # them with the browser; a hit runs `playwright install chromium`,
-      # which is a no-op when the restored executable is present and a
-      # bounded re-download when the entry is partial, then reinstalls only
-      # the libraries. Each step is time-bounded so a stalled download fails
-      # fast with its own log.
-      - name: Resolve the Playwright version
-        id: playwright
-        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-
-      - name: Cache the Playwright browser directory
-        id: playwright-cache
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
-
-      - name: Install Chromium for browser verification (cache miss)
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        timeout-minutes: 10
-        run: npx playwright install --with-deps chromium
-
-      - name: Verify Chromium and install its OS dependencies (cache hit)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        timeout-minutes: 10
-        run: |
-          npx playwright install chromium
-          npx playwright install-deps chromium
+      # composite action documents the cache key and the miss and hit paths;
+      # the deploy's live verification and the source-health probe use the
+      # same action so every browser job provisions one way.
+      - name: Provision Chromium
+        uses: ./.github/actions/playwright-chromium
 
       # One worker per runner (see playwright.config.ts on the software-GL
       # ceiling). Reporters come from the config: a named line per test,
