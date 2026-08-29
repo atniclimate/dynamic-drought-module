@@ -66,6 +66,10 @@ test('evaluateLayerHealth turns statuses and responses into verdicts', () => {
   assert.equal(evaluateLayerHealth(zoom, opts).verdict, 'skipped');
   const local = { key: 'states', status: 'ready', settleMs: 300, responses: [] };
   assert.equal(evaluateLayerHealth(local, opts).verdict, 'skipped');
+  assert.match(evaluateLayerHealth(local, opts).reasons[0], /bundled or cached/);
+  const ambientOnly = { key: 'nadm-drought', status: 'ready', settleMs: 2_000, responses: [], shared: 3 };
+  assert.equal(evaluateLayerHealth(ambientOnly, opts).verdict, 'skipped');
+  assert.match(evaluateLayerHealth(ambientOnly, opts).reasons[0], /ambient-boot row/);
   assert.ok(EXPECTS_RECORDS.has('nadm-drought'));
   assert.ok(EXPECTS_RECORDS.has('aiannh'));
   assert.ok(EXPECTS_RECORDS.has('bia-reservations'));

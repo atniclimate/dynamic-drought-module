@@ -105,7 +105,14 @@ export function evaluateLayerHealth(row, opts) {
     return { verdict: 'skipped', reasons: ['zoom in to load at the default region; no source query issued'] };
   }
   if (row.responses.length === 0 && row.status === 'ready') {
-    return { verdict: 'skipped', reasons: ['bundled or cached; no upstream request'] };
+    return {
+      verdict: 'skipped',
+      reasons: [
+        row.shared
+          ? 'every request it made is in the ambient boot set; measured on the ambient-boot row'
+          : 'bundled or cached; no upstream request',
+      ],
+    };
   }
   const reasons = [];
   if (!row.status || row.status === 'loading') {
