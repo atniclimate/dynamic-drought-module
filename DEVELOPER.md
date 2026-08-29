@@ -193,14 +193,19 @@ npm run check:source-health -- --base http://127.0.0.1:4173/ --layers nifc-fires
 npm run verify:live -- --expect-sha <sha> --expect-nonce <run id>
 ```
 
-`check:drift` probes every upstream and, for each ArcGIS layer the runtime
-queries, fetches the layer schema and fails on a field missing from the
-`outFields` list the module sends. `check:source-health` boots a served
-build (start `npm run preview` first) once per catalog layer and records the
-requests the runtime issues, with basemap tiles stubbed; the daily
-`source-health` workflow runs it on `main`. `verify:live` is the post-deploy
-proof the Pages workflow runs; by hand it needs the expected commit and run
-id and defaults to the public site.
+`check:drift` probes every upstream and, for each ArcGIS layer path in
+`ARCGIS_FIELD_PROBES` (nineteen today), fetches the layer schema and fails
+on a field missing from the `outFields` list read from the module source;
+lists passed as positional function arguments are not extracted and are
+recorded with their reason in `OUT_FIELDS_SENDERS_COVERED_ELSEWHERE`, which
+a test keeps in step with `src/`. `check:source-health` boots a served
+build (start `npm run preview` first) once as a control and once per
+catalog layer at the default camera and records the requests the runtime
+issues, with basemap tiles stubbed and the ambient boot requests replayed
+from the control capture; the daily `source-health` workflow runs it on
+`main`. `verify:live` is the post-deploy proof the Pages workflow runs; by
+hand it needs the expected commit and run id and defaults to the public
+site.
 
 Run the cross-cutting gate after application, configuration, build, generated
 data, or broadly shared documentation changes:
@@ -258,11 +263,13 @@ Before calling a release current, verify:
 
 The `verify-live` job in `deploy.yml` checks the first six of these after
 every successful deploy with `scripts/verify-live.mjs` and keeps its receipt
-as the `live-receipt` artifact; a failure opens one `deploy-divergence` issue
-that the next verified deploy closes. The daily `source-health` workflow
-records the runtime's own upstream requests (status, bytes, seconds, record
-count) and opens one issue per source that breaches its budget; neither job
-writes a response body, trace, or screenshot.
+as the `live-receipt` artifact; the deploy job first confirms its commit is
+still the head of `main`, and a failure opens one `deploy-divergence` issue
+that the next deploy verifying green while still the head of `main` closes.
+The daily `source-health` workflow records the runtime's own upstream
+requests at the default camera (status, bytes, seconds, record count, cache
+headers, failed requests) and opens one issue per catalog row that breaches
+its budget; neither job writes a response body, trace, or screenshot.
 
 GitHub Pages is already a range-capable CDN. Benchmark field performance before
 moving hosting. Cloudflare Pages is not a direct replacement while an artifact
