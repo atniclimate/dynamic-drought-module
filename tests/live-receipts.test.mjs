@@ -9,6 +9,7 @@ import {
   evaluateLayers,
   evaluateRange,
   evaluateStamp,
+  expectedNonces,
   parseArgs,
   receiptOk,
   renderSummary,
@@ -29,6 +30,8 @@ test('parseArgs applies the live defaults and reads every flag', () => {
   assert.equal(a.base, 'http://127.0.0.1:4174/');
   assert.equal(a.expectSha, 'abc');
   assert.equal(a.expectNonce, '42');
+  assert.deepEqual(a.expectNonces, ['42']);
+  assert.deepEqual(parseArgs(['--expect-nonce', '42,43']).expectNonces, ['42', '43']);
   assert.equal(a.summary, 's.md');
   assert.equal(a.settleMs, 1000);
   assert.equal(a.ceilingMs, 2000);
@@ -45,6 +48,24 @@ test('evaluateStamp requires the expected SHA, a non-dev nonce, and the expected
   assert.match(evaluateStamp({ sha: 'abc', nonce: '7' }, { sha: 'abc', nonce: '8' }).reasons[0], /nonce/);
   assert.match(evaluateStamp({}, { sha: 'abc' }).reasons[0], /missing/);
   assert.equal(evaluateStamp({ sha: 'abc-dirty', nonce: '7' }, { sha: 'abc' }).ok, false);
+});
+
+test('evaluateStamp accepts any member of the published-nonce set and records the match', () => {
+  const expect = { sha: 'abc', nonces: ['100', '200'] };
+  const first = evaluateStamp({ sha: 'abc', nonce: '100' }, expect);
+  assert.equal(first.ok, true);
+  assert.equal(first.matchedNonce, '100');
+  const second = evaluateStamp({ sha: 'abc', nonce: '200' }, expect);
+  assert.equal(second.ok, true);
+  assert.equal(second.matchedNonce, '200');
+  const other = evaluateStamp({ sha: 'abc', nonce: '300' }, expect);
+  assert.equal(other.ok, false);
+  assert.equal(other.matchedNonce, null);
+  assert.match(other.reasons[0], /nonce 300 is none of the deploy runs .*100, 200/);
+  // The workflow hands the set over as one comma-separated flag value.
+  assert.deepEqual(expectedNonces({ nonce: ' 100 , 200 ,' }), ['100', '200']);
+  assert.deepEqual(expectedNonces({}), []);
+  assert.equal(evaluateStamp({ sha: 'abc', nonce: '200' }, { sha: 'abc', nonce: '100,200' }).ok, true);
 });
 
 test('evaluateAssets fails on any non-200 relative asset and on an empty list', () => {
@@ -174,7 +195,7 @@ test('a dispatched compare behaves like the scheduled one and names its event', 
   assert.match(out.reason, /^workflow_dispatch compare:/);
 });
 
-test('when the same commit deployed successfully twice, the latest successful run is the nonce', () => {
+test('when the same commit deployed successfully twice, both runs are accepted and the newest is named', () => {
   const out = resolveLiveExpectation(scheduled({
     deployRuns: [
       run({ databaseId: 100, createdAt: minutesBefore(80), updatedAt: minutesBefore(70) }),
@@ -183,6 +204,58 @@ test('when the same commit deployed successfully twice, the latest successful ru
   }));
   assert.equal(out.verdict, 'verify');
   assert.equal(out.nonce, '200');
+  assert.deepEqual(out.nonces, ['100', '200'], 'creation order, oldest first');
+  assert.match(out.reason, /accepting any of 100, 200/);
+});
+
+// The wrong-nonce defect the 2026-08-29 adversarial review found: R1
+// published, R2 published later and is what Pages serves, then someone
+// re-ran R1 and that rerun failed. Ranking by updatedAt made the stale R1
+// the newest candidate, so the proof demanded R1's nonce and failed the
+// correct live build. Both are now accepted and the site decides.
+test('a failed rerun of an older publisher cannot outrank the run that published last', () => {
+  const out = resolveLiveExpectation(scheduled({
+    deployRuns: [
+      run({
+        databaseId: 1001,
+        createdAt: minutesBefore(180),
+        updatedAt: minutesBefore(2),
+        attempt: 2,
+        conclusion: 'failure',
+        status: 'completed',
+        anyAttemptSucceeded: true,
+      }),
+      run({ databaseId: 1002, createdAt: minutesBefore(90), updatedAt: minutesBefore(85) }),
+    ],
+  }));
+  assert.equal(out.verdict, 'verify');
+  assert.deepEqual(out.nonces, ['1001', '1002']);
+  assert.equal(out.nonce, '1002', 'the run created last is the one the prose names');
+  const live = evaluateStamp({ sha: HEAD, nonce: '1002' }, { sha: out.sha, nonces: out.nonces });
+  assert.equal(live.ok, true, "R2's nonce is accepted");
+  assert.equal(live.matchedNonce, '1002');
+  assert.equal(evaluateStamp({ sha: HEAD, nonce: '1001' }, { sha: out.sha, nonces: out.nonces }).ok, true);
+  assert.equal(evaluateStamp({ sha: HEAD, nonce: '999' }, { sha: out.sha, nonces: out.nonces }).ok, false);
+});
+
+test('a future-dated head does not stay in-flight forever', () => {
+  const hours = (n) => new Date(Date.parse(NOW) + n * 3_600_000).toISOString();
+  // No deploy run at all: the only clock is unusable, so the age reads as
+  // zero and the compare says so instead of trusting the future date.
+  const alone = resolveLiveExpectation(scheduled({ headCommittedAt: hours(48), deployRuns: [] }));
+  assert.equal(alone.verdict, 'in-flight');
+  assert.match(alone.warnings[0], /committer date .* is 2880 minutes in the future/);
+  assert.match(alone.reason, /is 0 minutes old/);
+  // With a deploy run for the head, the run clock is the whole answer: a
+  // head whose only deploy failed three hours ago is a divergence no
+  // matter what its committer date claims.
+  const withRun = resolveLiveExpectation(scheduled({
+    headCommittedAt: hours(48),
+    deployRuns: [run({ databaseId: 808, conclusion: 'failure', createdAt: minutesBefore(180), updatedAt: minutesBefore(175) })],
+  }));
+  assert.equal(withRun.verdict, 'undeployed');
+  assert.match(withRun.reason, /head for 180 minutes/);
+  assert.match(withRun.reason, /warning: the committer date/);
 });
 
 // A real rerun keeps the run id and only bumps `attempt`, and gh run list

@@ -49,6 +49,24 @@ const FLAGS = new Map([
   ['--ceiling-ms', ['ceilingMs', 'int']],
 ]);
 
+/**
+ * The accepted build nonces as a list.
+ *
+ * More than one run id can legitimately be live for one commit: a run that
+ * published, a later run of the same commit that published again, and a
+ * rerun of the first that has since failed all name the same bytes on Pages
+ * only by coincidence of ordering, and only the site itself can say which
+ * one it is serving. The resolver therefore hands over EVERY run that
+ * published the head and this check accepts any member, recording which one
+ * matched rather than guessing beforehand.
+ */
+export function expectedNonces(expect) {
+  const raw = Array.isArray(expect?.nonces)
+    ? expect.nonces
+    : String(expect?.nonces ?? expect?.nonce ?? '').split(',');
+  return raw.map((value) => String(value ?? '').trim()).filter((value) => value.length > 0);
+}
+
 export function parseArgs(argv) {
   const out = { ...DEFAULTS };
   for (let i = 0; i < argv.length; i += 1) {
@@ -70,17 +88,25 @@ export function parseArgs(argv) {
   }
   if (!/^https?:\/\//.test(out.base)) throw new Error('--base must be an http(s) URL');
   if (!out.base.endsWith('/')) out.base += '/';
+  // `--expect-nonce` takes one run id or a comma-separated set of them.
+  out.expectNonces = expectedNonces({ nonce: out.expectNonce });
   return out;
 }
 
 export function evaluateStamp(stamp, expect) {
   const reasons = [];
+  const nonces = expectedNonces(expect);
+  let matchedNonce = null;
   if (!stamp || !stamp.sha) reasons.push('missing data-ddm-build-sha');
   else if (expect.sha && stamp.sha !== expect.sha) reasons.push(`sha ${stamp.sha} differs from expected ${expect.sha}`);
   if (!stamp || !stamp.nonce) reasons.push('missing data-ddm-build-nonce');
   else if (stamp.nonce === 'dev') reasons.push('nonce is the local fallback dev');
-  else if (expect.nonce && stamp.nonce !== expect.nonce) reasons.push(`nonce ${stamp.nonce} differs from expected ${expect.nonce}`);
-  return { ok: reasons.length === 0, reasons };
+  else if (nonces.length > 0 && !nonces.includes(String(stamp.nonce))) {
+    reasons.push(`nonce ${stamp.nonce} is none of the deploy runs that published this commit (${nonces.join(', ')})`);
+  } else if (nonces.length > 0) {
+    matchedNonce = String(stamp.nonce);
+  }
+  return { ok: reasons.length === 0, reasons, matchedNonce };
 }
 
 export function evaluateAssets(rows) {
@@ -130,9 +156,11 @@ export function renderSummary(receipt) {
   const lines = [];
   lines.push(`## Live verification: ${receiptOk(receipt) ? 'pass' : 'FAIL'}`);
   lines.push('');
+  const matched = [...new Set((receipt.checks ?? []).map((c) => c.matchedNonce).filter(Boolean))];
   lines.push(
     `Base \`${receipt.base}\`; expected sha \`${receipt.expectSha || '(none)'}\`, ` +
-      `nonce \`${receipt.expectNonce || '(non-dev)'}\`; propagation ${receipt.propagationMs ?? 'n/a'} ms.`,
+      `nonce \`${receipt.expectNonce || '(non-dev)'}\`; propagation ${receipt.propagationMs ?? 'n/a'} ms.` +
+      (matched.length ? ` Live nonce observed: \`${matched.join('`, `')}\`.` : ''),
   );
   lines.push('');
   lines.push('| Check | Verdict | Detail |');
@@ -198,12 +226,23 @@ const parsedMs = (value) => {
   return Number.isFinite(ms) ? ms : null;
 };
 
-/** Newest first by updatedAt, then createdAt, then run id. */
+/**
+ * When a deploy run was CREATED, in milliseconds, or null when its
+ * timestamp cannot be read.
+ *
+ * createdAt is the only ordering key these functions use. `updatedAt`
+ * moves whenever a run is re-run, so ordering by it lets an older run whose
+ * rerun just failed outrank the newer run that actually published the head
+ * (the wrong-nonce selection the 2026-08-29 review found). Creation order is
+ * fixed once and describes the sequence releases were attempted in.
+ */
+export function createdMs(run) {
+  return parsedMs(run?.createdAt);
+}
+
+/** Newest first by createdAt, then run id. */
 function orderKey(run) {
-  const at = [run?.updatedAt, run?.createdAt]
-    .map((value) => Date.parse(String(value ?? '')))
-    .find((ms) => Number.isFinite(ms));
-  return { at: at ?? 0, id: Number(run?.databaseId) || 0 };
+  return { at: createdMs(run) ?? 0, id: Number(run?.databaseId) || 0 };
 }
 
 function newest(runs) {
@@ -222,13 +261,14 @@ function newest(runs) {
 /**
  * The FIRST deploy run of a set, by creation. Used to floor the grace
  * period: the question is when this commit first entered a release, not
- * when someone last retried it.
+ * when someone last retried it. A run whose createdAt cannot be read has no
+ * place in a creation ordering and is skipped.
  */
 function oldest(runs) {
   let best = null;
   let bestAt = null;
   for (const run of runs) {
-    const at = parsedMs(run?.createdAt) ?? parsedMs(run?.updatedAt);
+    const at = createdMs(run);
     if (at === null) continue;
     if (bestAt === null || at < bestAt) {
       best = run;
@@ -236,6 +276,34 @@ function oldest(runs) {
     }
   }
   return best;
+}
+
+/** Every run of a set in creation order, oldest first, run id breaking ties. */
+function byCreation(runs) {
+  return [...runs].sort((a, b) => {
+    const ka = orderKey(a);
+    const kb = orderKey(b);
+    return ka.at - kb.at || ka.id - kb.id;
+  });
+}
+
+/**
+ * An elapsed span that refuses to be negative.
+ *
+ * A committer date or a run createdAt can sit in the future (a skewed
+ * clock, a rebase, a hand-written date). A negative age is smaller than any
+ * grace period, so left alone it reads as "just started" at every
+ * evaluation and the compare stays green until real time catches up. Zero
+ * plus a warning says the timestamp is unusable instead of silently
+ * trusting it.
+ */
+function ageSince(nowMs, thenMs, label) {
+  const raw = nowMs - thenMs;
+  if (raw >= 0) return { ms: raw, warning: null };
+  return {
+    ms: 0,
+    warning: `${label} is ${asMinutes(-raw)} minutes in the future; its age was read as zero`,
+  };
 }
 
 function toMs(value, label) {
@@ -275,8 +343,11 @@ const asMinutes = (ms) => Math.max(0, Math.round(ms / 60_000));
  *   `anyAttemptSucceeded` for a run whose earlier attempt published.
  * @param {(string|number)} input.now
  * @param {number} [input.graceMs] Defaults to LIVE_COMPARE_GRACE_MS.
- * @returns {{verdict: ('verify'|'in-flight'|'undeployed'), sha: string, nonce: string, reason: string}}
- *   `verify`: run the live proof against `sha`, expecting build nonce `nonce`.
+ * @returns {{verdict: ('verify'|'in-flight'|'undeployed'), sha: string, nonce: string,
+ *   nonces: string[], warnings: string[], reason: string}}
+ *   `verify`: run the live proof against `sha`, accepting any build nonce in
+ *   `nonces` (creation order, oldest first); `nonce` is the newest of them,
+ *   the one the prose names.
  *   `in-flight`: a release is under way (or still inside the grace period);
  *   record the reason and stop, green, without touching issues.
  *   `undeployed`: main's head has no successful deploy and the grace period
@@ -297,6 +368,8 @@ export function resolveLiveExpectation(input) {
       verdict: 'verify',
       sha: String(run.headSha),
       nonce: String(run.id),
+      nonces: [String(run.id)],
+      warnings: [],
       reason: `post-deploy proof: deploy run ${run.id} published ${run.headSha}`,
     };
   }
@@ -312,16 +385,26 @@ export function resolveLiveExpectation(input) {
   const runs = Array.isArray(input?.deployRuns) ? input.deployRuns : [];
   const forHead = runs.filter((run) => String(run?.headSha ?? '') === headSha);
 
-  // A deploy that ever published main's head wins even when a later rerun
-  // is still running or has since failed: that build is what the CDN is
-  // serving.
-  const published = newest(forHead.filter(isPublished));
-  if (published) {
+  // Every deploy that ever published main's head is an acceptable answer,
+  // even when a later rerun is still running or has since failed: any of
+  // those builds is bytes the CDN could legitimately be serving, and only
+  // the site itself can say which. Selecting ONE run here is what let an
+  // older run whose rerun had just failed outrank the newer run that
+  // actually published (the 2026-08-29 review's wrong-nonce defect), so the
+  // whole set travels to the verifier in creation order and the receipt
+  // records the member that matched.
+  const publishedRuns = byCreation(forHead.filter(isPublished));
+  if (publishedRuns.length > 0) {
+    const nonces = publishedRuns.map((run) => String(run.databaseId));
+    const primary = nonces[nonces.length - 1];
+    const tail = nonces.length > 1 ? ` (accepting any of ${nonces.join(', ')})` : '';
     return {
       verdict: 'verify',
       sha: headSha,
-      nonce: String(published.databaseId),
-      reason: `${eventName} compare: main head ${headSha} was published by deploy run ${published.databaseId}`,
+      nonce: primary,
+      nonces,
+      warnings: [],
+      reason: `${eventName} compare: main head ${headSha} was published by deploy run ${primary}${tail}`,
     };
   }
 
@@ -333,7 +416,7 @@ export function resolveLiveExpectation(input) {
   // is stuck.
   const running = newest(forHead.filter((run) => !isFinished(run)));
   if (running) {
-    const startedMs = parsedMs(running.createdAt);
+    const startedMs = createdMs(running);
     // An unreadable createdAt must not mean "started just now, wait
     // forever". An unfinished run whose start cannot be read is treated as
     // past the grace period: this workflow exists to end silence, so an
@@ -343,23 +426,31 @@ export function resolveLiveExpectation(input) {
         verdict: 'undeployed',
         sha: headSha,
         nonce: '',
+        nonces: [],
+        warnings: [],
         reason: `main is ahead of the live build: no successful deploy of ${headSha}; deploy run ${running.databaseId} is ${running.status || 'unfinished'} and its start time (${running.createdAt ?? 'absent'}) could not be read, so its age cannot be bounded`,
       };
     }
-    const stuckMs = nowMs - startedMs;
-    if (stuckMs < graceMs) {
+    const started = ageSince(nowMs, startedMs, `deploy run ${running.databaseId} start time`);
+    const warnings = started.warning ? [started.warning] : [];
+    const note = started.warning ? ` (warning: ${started.warning})` : '';
+    if (started.ms < graceMs) {
       return {
         verdict: 'in-flight',
         sha: headSha,
         nonce: '',
-        reason: `deploy run ${running.databaseId} for main head ${headSha} is ${running.status || 'not finished'}; there is nothing to compare yet`,
+        nonces: [],
+        warnings,
+        reason: `deploy run ${running.databaseId} for main head ${headSha} is ${running.status || 'not finished'}; there is nothing to compare yet${note}`,
       };
     }
     return {
       verdict: 'undeployed',
       sha: headSha,
       nonce: '',
-      reason: `main is ahead of the live build: no successful deploy of ${headSha}; deploy run ${running.databaseId} has been ${running.status || 'unfinished'} for ${asMinutes(stuckMs)} minutes, past the ${asMinutes(graceMs)} minute grace period`,
+      nonces: [],
+      warnings,
+      reason: `main is ahead of the live build: no successful deploy of ${headSha}; deploy run ${running.databaseId} has been ${running.status || 'unfinished'} for ${asMinutes(started.ms)} minutes, past the ${asMinutes(graceMs)} minute grace period${note}`,
     };
   }
 
@@ -370,15 +461,28 @@ export function resolveLiveExpectation(input) {
   // the newest: flooring by the newest would let every retry reset the
   // clock, so a head retried more often than the grace period would keep
   // this compare green for as long as someone kept pressing re-run.
-  let ageMs = nowMs - headMs;
-  const firstAttemptMs = parsedMs(oldest(forHead)?.createdAt);
-  if (firstAttemptMs !== null) ageMs = Math.min(ageMs, nowMs - firstAttemptMs);
+  const warnings = [];
+  const head = ageSince(nowMs, headMs, `the committer date of ${headSha}`);
+  if (head.warning) warnings.push(head.warning);
+  const firstAttemptMs = createdMs(oldest(forHead));
+  let ageMs = head.ms;
+  if (firstAttemptMs !== null) {
+    const firstAttempt = ageSince(nowMs, firstAttemptMs, "this head's first deploy run start time");
+    if (firstAttempt.warning) warnings.push(firstAttempt.warning);
+    // A future committer date carries no information, so it must not floor
+    // the age at zero and keep a long-failed head green: when the commit
+    // clock is unusable the run clock is the whole answer.
+    ageMs = head.warning ? firstAttempt.ms : Math.min(head.ms, firstAttempt.ms);
+  }
+  const note = warnings.length ? ` (warning: ${warnings.join('; ')})` : '';
   if (ageMs < graceMs) {
     return {
       verdict: 'in-flight',
       sha: headSha,
       nonce: '',
-      reason: `main head ${headSha} is ${asMinutes(ageMs)} minutes old, inside the ${asMinutes(graceMs)} minute grace period, and has no successful deploy yet`,
+      nonces: [],
+      warnings,
+      reason: `main head ${headSha} is ${asMinutes(ageMs)} minutes old, inside the ${asMinutes(graceMs)} minute grace period, and has no successful deploy yet${note}`,
     };
   }
 
@@ -396,6 +500,8 @@ export function resolveLiveExpectation(input) {
     verdict: 'undeployed',
     sha: headSha,
     nonce: '',
-    reason: `main is ahead of the live build: no successful deploy of ${headSha}, head for ${asMinutes(ageMs)} minutes; ${tail}`,
+    nonces: [],
+    warnings,
+    reason: `main is ahead of the live build: no successful deploy of ${headSha}, head for ${asMinutes(ageMs)} minutes; ${tail}${note}`,
   };
 }

@@ -31,7 +31,7 @@
  * browser is Playwright's Chromium with the software-GL flags the suite
  * uses (playwright.config.ts).
  *
- * Usage: node scripts/verify-live.mjs --expect-sha <sha> --expect-nonce <run id>
+ * Usage: node scripts/verify-live.mjs --expect-sha <sha> --expect-nonce <run id[,run id...]>
  *   [--base <url>] [--out <json>] [--summary <markdown file to append>]
  *   [--settle-ms n] [--interval-ms n] [--ceiling-ms n]
  * Exit 0 when every check passed, 1 when any failed, 2 on a usage error.
@@ -81,6 +81,7 @@ const receipt = {
   base: args.base,
   expectSha: args.expectSha,
   expectNonce: args.expectNonce,
+  expectNonces: args.expectNonces,
   startedAt: new Date().toISOString(),
   propagationMs: null,
   checks: [],
@@ -91,7 +92,13 @@ const receipt = {
 };
 
 function record(name, verdict) {
-  receipt.checks.push({ name, ok: verdict.ok, reasons: verdict.reasons, warnings: verdict.warnings ?? [] });
+  receipt.checks.push({
+    name,
+    ok: verdict.ok,
+    reasons: verdict.reasons,
+    warnings: verdict.warnings ?? [],
+    ...(verdict.matchedNonce ? { matchedNonce: verdict.matchedNonce } : {}),
+  });
   const detail = verdict.reasons.length ? `: ${verdict.reasons.join('; ')}` : '';
   console.log(`${verdict.ok ? 'pass' : 'FAIL'} ${name}${detail}`);
 }
@@ -264,7 +271,7 @@ async function boot(browser, name, contextOptions, query, { corner = false } = {
     }));
     row.sha = stamp.sha ?? null;
     row.nonce = stamp.nonce ?? null;
-    record(`stamp:${name}`, evaluateStamp(stamp, { sha: args.expectSha, nonce: args.expectNonce }));
+    record(`stamp:${name}`, evaluateStamp(stamp, { sha: args.expectSha, nonces: args.expectNonces }));
 
     // A warm boot reaches the region select in a few hundred milliseconds,
     // before the registry has activated the first layer, so wait (bounded)

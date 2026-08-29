@@ -17,10 +17,13 @@
 # tests/live-receipts.test.mjs) turns the event, main's head, and the
 # recent deploy runs into one of three verdicts:
 #
-#   verify      Prove <sha> with build nonce <deploy run id>. For a
-#               workflow_run that is the deploy's own commit and run id;
-#               for a scheduled compare it is main's head and the latest
-#               successful deploy run of that head.
+#   verify      Prove <sha> against a SET of accepted build nonces. For a
+#               workflow_run that set is the deploy's own run id; for a
+#               scheduled compare it is every deploy run that published
+#               main's head, in creation order. More than one run can have
+#               legitimately published the same commit, and only the site
+#               can say which bytes it serves, so the proof accepts any
+#               member and the receipt records the one that matched.
 #   in-flight   A deploy of main's head is queued or running and started
 #               less than 30 minutes ago, or the head is younger than that
 #               same grace period and has no successful deploy yet. Record
@@ -244,13 +247,19 @@ jobs:
         env:
           RESOLVED_SHA: ${{ steps.expect.outputs.sha }}
           RESOLVED_NONCE: ${{ steps.expect.outputs.nonce }}
+          RESOLVED_NONCES: ${{ steps.expect.outputs.nonces }}
           RESOLVED_REASON: ${{ steps.expect.outputs.reason }}
           RUN_URL_PREFIX: ${{ github.server_url }}/${{ github.repository }}/actions/runs
         run: |
           set -euo pipefail
+          # DEPLOY_RUN_ID is the run the prose names; DEPLOY_RUN_NONCES is
+          # the whole accepted set (every run that published this commit, in
+          # creation order). The proof accepts any member and records which
+          # one the site is actually serving.
           {
             echo "DEPLOY_SHA=$RESOLVED_SHA"
             echo "DEPLOY_RUN_ID=$RESOLVED_NONCE"
+            echo "DEPLOY_RUN_NONCES=${RESOLVED_NONCES:-$RESOLVED_NONCE}"
             echo "DEPLOY_RUN_URL=$RUN_URL_PREFIX/$RESOLVED_NONCE"
             echo "EXPECT_REASON=$RESOLVED_REASON"
           } >> "$GITHUB_ENV"
@@ -309,7 +318,7 @@ jobs:
           node scripts/verify-live.mjs \
             --base "${{ steps.pages.outputs.url }}" \
             --expect-sha "$DEPLOY_SHA" \
-            --expect-nonce "$DEPLOY_RUN_ID" \
+            --expect-nonce "$DEPLOY_RUN_NONCES" \
             --out live-receipt.json \
             --summary "$GITHUB_STEP_SUMMARY" 2>&1 | tee verify-output.txt
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
