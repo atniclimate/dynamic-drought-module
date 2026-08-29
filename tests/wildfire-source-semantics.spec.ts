@@ -60,7 +60,7 @@ import {
   buildWhpKey,
   resolveMapKeyFamily
 } from '../src/ui/map-key';
-import { captureWarnings } from './map-harness';
+import { captureWarnings, type CapturedWarnings } from './map-harness';
 
 const VALID_POLYGON_COLLECTION = {
   type: 'FeatureCollection',
@@ -1012,9 +1012,11 @@ test('NIFC, HMS, and SPC map invalid responses to unavailable and truncation to 
       reason: null
     }
   ] as const;
-  const warnings = captureWarnings();
+  // Captured inside the try below, so the patch cannot outlive a throw.
+  let warnings: CapturedWarnings | undefined;
 
   try {
+    warnings = captureWarnings();
     Object.defineProperty(globalThis, 'document', {
       configurable: true,
       value: { getElementById: () => null }
@@ -1060,7 +1062,7 @@ test('NIFC, HMS, and SPC map invalid responses to unavailable and truncation to 
     }
   } finally {
     globalThis.fetch = originalFetch;
-    warnings.restore();
+    warnings?.restore();
     for (const module of modules) {
       module.deactivate(fakeMapHarness().map);
       registry.deactivate(module.key);

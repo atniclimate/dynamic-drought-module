@@ -529,11 +529,6 @@ test.describe('consumer behavior on a crossing selection (N2-A)', () => {
         );
         expect(result.ok).toBe(false);
       });
-      // The failure is reported once, by the query that owns the envelope,
-      // and the cancelled sibling stays silent (an abort is not a fault).
-      expect(warnings.messages).toEqual([
-        expect.stringMatching(/^\[impact\] NIFC query failed\./)
-      ]);
       await expect(
         Promise.race([
           bodyCancelled.then(() => true),
@@ -542,6 +537,12 @@ test.describe('consumer behavior on a crossing selection (N2-A)', () => {
           })
         ])
       ).resolves.toBe(true);
+      // Asserted after the cancellation is observed, so it proves both
+      // halves: the failed query reported once, and the sibling whose body
+      // was dropped stayed silent (an abort is not a fault to report).
+      expect(warnings.messages).toEqual([
+        expect.stringMatching(/^\[impact\] NIFC query failed\./)
+      ]);
     } finally {
       warnings.restore();
       globalThis.fetch = originalFetch;

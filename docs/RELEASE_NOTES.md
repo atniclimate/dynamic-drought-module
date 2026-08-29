@@ -36,8 +36,10 @@ each hosted build attributable to its run.
   other run can restore and can evict the `main` entry every run does read.
 - The three specs that stubbed `console.warn` to silence a by-design degrade
   path now capture it with `captureWarnings()` and assert the exact warnings:
-  a cancelled sibling request, one failed framing count, and all nine invalid
-  or transfer-truncated ArcGIS bodies across NIFC, HMS, and SPC.
+  a split envelope query whose failed half warns once while its cancelled
+  sibling adds nothing (asserted after the cancellation is observed), one
+  failed framing count, and all nine invalid or transfer-truncated ArcGIS
+  bodies across NIFC, HMS, and SPC.
 - The upstream monitor and the snapshot refresh find their own issue by the
   marker comment they already write, paginating the label listing and skipping
   pull requests, so a labeled pull request is never commented on or closed and
