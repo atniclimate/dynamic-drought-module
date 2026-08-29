@@ -101,8 +101,13 @@ report (`playwright-report-*`) and the raw `test-results/` tree
 Since 2026-08-29 those artifacts carry **Playwright traces**, which they
 never did before. The owner ratified the change; an adversarial review then
 narrowed it, and the narrowed shape is what shipped. In CI the trace is
-captured `on-first-retry` as an explicit object with `screenshots: false` and
-`sources: false`, `screenshot` stays `off`, and `video` stays `off`. So a
+captured `on-first-retry` as an explicit object with `screenshots: false`,
+`sources: false`, and `attachments: false`; `screenshot` stays `off` and
+`video` stays `off`. `attachments` is the one of those that defaults to ON: a
+spec that grabs `page.screenshot()` for its own pixel analysis
+(`m-breadth-heatrisk-days.spec.ts` does) would otherwise hand that image to
+the trace. The gate records every `page.screenshot()` site and bans
+`toHaveScreenshot()` and `attach()` outright. So a
 retained trace holds request and response records, DOM snapshots, console
 output, and timings, and **no rendered pixels and no spec source text**.
 Retention is three days on both artifacts. Retention shortens exposure; it is
@@ -189,7 +194,10 @@ renders, but "no live external geometry reaches a retained trace" should be
 true in fact rather than true only for the two hosts anyone thought to check.
 `tests/minimap-fixtures.ts` now serves both from the rectangles
 `tests/s4-minimap.spec.ts` already used, on the context, for every boot. They
-were stubbed rather than waived.
+were stubbed rather than waived. That includes the six modules that boot
+themselves: each installs the minimap stub by hand beside its
+`routeAllTribalFixtures` call, and the gate checks the two requirements
+separately so one cannot stand in for the other.
 
 Checks keep that true, and they cover different halves of the claim.
 
@@ -197,7 +205,10 @@ Checks keep that true, and they cover different halves of the claim.
 boots the bare Brief door, the wildfire cluster, the console, the wildfire
 cluster inside an embed, the brief embed, and the phone viewport; for each it
 compares every request the page made to either host against the requests the
-stub actually answered, and fails on one that escaped. Where the catalog
+stub actually answered, and fails on one that escaped. Read the claim
+precisely: the application still ISSUES these requests and the trace records
+their URLs. What the stub guarantees is that **no request leaves the browser**
+and no agency ever sends a body. Where the catalog
 mounts it also asserts both boundary pills reach `live`, which can only come
 from the fixture body. It does not observe the boots that navigate
 themselves: those answer from their own `routeAllTribalFixtures` handlers, so
@@ -213,8 +224,12 @@ a module opens a second Page or awaits a popup without a recorded reason,
 when a module registers or unroutes a boundary or minimap route outside its
 shared helper, when the live mode appears outside the one recorded fire3d
 allowance or that allowance loses its `CI` guard, when `gotoApp` stops
-installing either stub before it navigates, when either stub stops routing
-the context, when a service path drifts so the route globs stop matching, or
+installing either stub before it navigates, when a raw boot installs the
+boundary stub but not the minimap one, when either stub stops routing the
+context, when any module calls `page.unroute` or `page.unrouteAll` outside two
+recorded literal-pattern sites, when a module uses `toHaveScreenshot()` or
+`attach()`, when an unrecorded `page.screenshot()` site appears, when the CI
+trace object loses any of its four pixel and source switches, when a service path drifts so the route globs stop matching, or
 when either deployer-owned slot (`public/data/tribal-lands.geojson`,
 `public/data/treaty-areas.geojson`) stops holding zero features. Those two
 are same-origin, so no route stub stands between them and a trace; an empty
@@ -245,7 +260,20 @@ false`).
 agency sources a boot touches: NIFC and WFIGS fire perimeters, drought
 polygons (NADM, USDM, CDM), NOAA weather alerts, HMS smoke, EPA ecoregions,
 watersheds, station telemetry. OpenStreetMap raster tile bodies from the live
-basemap. Request and response headers, cookies, request URLs with their
+basemap.
+
+One of those is not hypothetical, and it is worth naming with its evidence.
+`gotoApp` stubs `NADM-current.geojson` only when the query carries neither
+`layers=` nor `cluster=`, so a boot that names either fetches it live, and the
+minimap fetches it live on the same boots. Inspecting the first real CI trace
+artifacts (Validate run 33250251205) found a **2.5 MB live NADM body from
+`ncei.noaa.gov`** stored in `playwright-traces-chromium-3-of-4`. That is
+public-domain NOAA drought data, not sovereign geometry, so it breaks no hard
+rule and it sits inside the accepted list above. It does mean the sentence
+"no live external geometry reaches a retained trace" is **not** true today,
+only "no live SOVEREIGN geometry" is. Making the NADM stub context-level the
+way the boundary and minimap stubs are would close it, and is deliberately
+left as follow-up rather than folded into the retention change. Request and response headers, cookies, request URLs with their
 coordinates and place names, DOM snapshots including any Tribal Nation name
 from the committed `public/data/tribal-roster.json`, and console output.
 Nothing there is sovereign geometry, and nothing there is undisclosed by a

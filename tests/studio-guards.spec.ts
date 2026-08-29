@@ -3,6 +3,7 @@ import type { FeatureCollection } from 'geojson';
 
 import { gotoApp, search } from './helpers';
 import { routeAllTribalFixtures } from './tribal-fixtures';
+import { installMinimapAnalysisStubs } from './minimap-fixtures';
 
 const PREVIEW_URL = 'http://localhost:4173/';
 const PLACE_ROOT = '#place-studio-root';
@@ -56,6 +57,7 @@ async function framedApp(page: Page, studio: 'place' | 'layers'): Promise<Frame>
   // A raw boot inside a synthesized host document, so the suite-wide
   // boundary stub is installed by hand; page-level routes cover the frame.
   await routeAllTribalFixtures(page);
+  await installMinimapAnalysisStubs(page);
   await page.setContent(
     `<iframe title="Framed DDM" src="${PREVIEW_URL}?view=brief&layers=places&studio=${studio}"></iframe>`
   );

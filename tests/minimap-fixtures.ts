@@ -23,6 +23,13 @@
  * true in fact rather than true only for the two hosts anyone thought to
  * check.
  *
+ * COVERAGE, stated exactly. `gotoApp` installs this on every boot it drives,
+ * and each of the six modules that boot themselves (recorded in
+ * `tests/boundary-boot-inventory.test.mjs`) installs it by hand beside its
+ * `routeAllTribalFixtures` call. The inventory checks the two requirements
+ * SEPARATELY, so a raw boot cannot satisfy the boundary rule and quietly skip
+ * this one, which is exactly what all six did until 2026-08-29.
+ *
  * The bodies are the hand-authored rectangles `tests/s4-minimap.spec.ts` has
  * always used for its own assertions; they moved here so one set of fixtures
  * serves the whole suite instead of one spec. `data-drought-class`,

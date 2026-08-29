@@ -44,8 +44,11 @@ An adversarial review the same morning found the ratified diff safe in its
 response bodies but not in its pixels, and the shipped change is narrower
 than the one ratified. Traces are on; screenshots are not. In continuous
 integration `trace` is the object form `{ mode: 'on-first-retry',
-screenshots: false, snapshots: true, sources: false }`, `screenshot` stays
-`off`, and `video` stays `off`. A retained trace therefore carries request
+screenshots: false, snapshots: true, sources: false, attachments: false }`,
+`screenshot` stays `off`, and `video` stays `off`. `attachments` defaults to
+true, and a spec that reads pixels back with `page.screenshot()` for its own
+assertions would otherwise hand that image to the trace, so it is switched off
+by configuration rather than left safe by convention. A retained trace therefore carries request
 and response records, document snapshots, console output, and timings, and
 carries no rendered map frame and no spec source text. Locally nothing
 changed: traces keep their frames and screenshots stay on failure, in
@@ -77,6 +80,14 @@ to judge whether real Tribal-geography cartography draws honestly in the 3D
 scene, ask for live boundaries again, and only when the run is local and
 nothing is retained. The synthetic fixtures had silently replaced the
 cartography those captures exist to show.
+
+Inspecting the first real trace artifacts also showed that the sentence "no
+live external geometry reaches a retained trace" is not yet true in full: a
+boot naming `layers=` or `cluster=` still fetches `NADM-current.geojson` live,
+and one 2.5 MB public-domain NOAA drought body was retained. That is not
+sovereign geometry and breaks no hard rule, but it is recorded in
+`tests/README.md` with its evidence, and closing it is follow-up work rather
+than part of this change.
 
 Deferred, and named as deferred: a synthetic basemap for artifact-bearing
 runs, which is the precondition for turning any pixels back on; a licensing

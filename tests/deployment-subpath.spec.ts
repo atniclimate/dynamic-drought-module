@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { ROLE_GROUPS } from './helpers';
 import { stubRecentSatellite } from './satellite-fixture';
 import { routeAllTribalFixtures } from './tribal-fixtures';
+import { installMinimapAnalysisStubs } from './minimap-fixtures';
 
 test('the production artifact boots from the GitHub Pages subpath', async ({
   page,
@@ -55,6 +56,7 @@ test('the production artifact boots from the GitHub Pages subpath', async ({
   // the stub is unconditional so a later edit to that query cannot quietly
   // reach an agency.
   await routeAllTribalFixtures(page);
+  await installMinimapAnalysisStubs(page);
   await page.goto(
     '/dynamic-drought-module/?view=console&layers=states',
     { waitUntil: 'domcontentloaded' },

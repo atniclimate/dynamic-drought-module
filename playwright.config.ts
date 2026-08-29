@@ -136,8 +136,12 @@ export default defineConfig({
     // real boundaries once it is detached from its test. So in CI:
     // `screenshots: false` drops the trace's own timeline frames, `screenshot`
     // stays `off`, and `video` is off everywhere. `sources: false` keeps the
-    // spec source text out of a public zip. What remains is what diagnoses a
-    // flake: request and response records, DOM snapshots, console, and
+    // spec source text out of a public zip. `attachments: false` is the one
+    // that is not belt and braces: it defaults to TRUE, and a spec that calls
+    // `page.screenshot()` for its own pixel analysis (m-breadth-heatrisk-days
+    // does) would otherwise hand that image to the trace as an attachment. Off
+    // by configuration beats off by convention. What remains is what diagnoses
+    // a flake: request and response records, DOM snapshots, console, and
     // timings. A synthetic basemap would be the precondition for turning
     // pixels back on; that is deferred, not assumed.
     //
@@ -150,7 +154,13 @@ export default defineConfig({
     // they are a deliberate local scene capture for the owner's visual
     // review, not failure diagnosis, and nothing retains them.
     trace: isCI
-      ? { mode: 'on-first-retry', screenshots: false, snapshots: true, sources: false }
+      ? {
+          mode: 'on-first-retry',
+          screenshots: false,
+          snapshots: true,
+          sources: false,
+          attachments: false
+        }
       : 'on-first-retry',
     screenshot: isCI ? 'off' : 'only-on-failure',
     video: 'off'

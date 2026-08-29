@@ -15,6 +15,7 @@ import {
   syntheticAiannhBody,
   syntheticBiaBody
 } from './tribal-fixtures';
+import { installMinimapAnalysisStubs } from './minimap-fixtures';
 
 /**
  * The Tribal Nations umbrella UI (Unit F, D-0.7.0-033): the featured group
@@ -366,6 +367,7 @@ test.describe('partial-outage visibility (the final-pass finding 2)', () => {
       if (/island-[^/]*\.js/.test(req.url())) islandRequests.push(req.url());
     });
     await oneAgencyDown(page);
+    await installMinimapAnalysisStubs(page);
     // select= opens the briefing (the boot-time explicit opener since
     // S2, D-0.7.0-041); select= keeps the brief door, so the embed still
     // never mounts the island.
@@ -430,6 +432,7 @@ test.describe('the Brief-door Tribal Nations action', () => {
     page
   }) => {
     await routeAllTribalFixtures(page);
+    await installMinimapAnalysisStubs(page);
     await stubRecentSatellite(page);
     // An embed boot hosts the action on the impact panel only (the
     // sidebar is collapsed); expanding exits embed mode and the Brief
@@ -481,6 +484,7 @@ test.describe('the Brief-door action at 400px (mobile and embed)', () => {
     page
   }) => {
     await routeAllTribalFixtures(page);
+    await installMinimapAnalysisStubs(page);
     await stubRecentSatellite(page);
     const islandRequests: string[] = [];
     page.on('request', (req) => {

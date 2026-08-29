@@ -76,6 +76,30 @@ const INSTALLS_BOUNDARY_STUB =
   /routeAllTribalFixtures\(|routeBoundary\(|routeGeojson\(|installBoundaryStubs\(/;
 
 /**
+ * The minimap's continental analysis stub. A module that boots outside
+ * `gotoApp` misses it exactly as it misses the boundary stub, and until
+ * 2026-08-29 all six recorded raw boots did: their pages fetched
+ * `ncei.noaa.gov` and `geo.statcan.gc.ca` live. Checked SEPARATELY from
+ * INSTALLS_BOUNDARY_STUB rather than folded into it, because an OR would let
+ * a module satisfy the boundary requirement by installing only the minimap
+ * stub.
+ */
+const INSTALLS_MINIMAP_STUB = /installMinimapAnalysisStubs\(/;
+
+/**
+ * Pixel capture. `toHaveScreenshot` is visual-regression comparison and
+ * `attach` hands an arbitrary buffer to the reporter and the trace; neither
+ * is used here, and the first use of either should be a decision, because CI
+ * retains traces and reports on a public repository. `page.screenshot()` is
+ * different: it has legitimate in-test uses, so it is recorded per file
+ * below rather than banned.
+ */
+const PIXEL_CAPTURE = /toHaveScreenshot\s*\(|\.attach\s*\(/g;
+
+/** Removing a route. Banned outright; see the assertion message. */
+const UNROUTE = /\.unroute(?:All)?\s*\(/g;
+
+/**
  * The live boundary mode, in any spelling a module is likely to reach for:
  * the option literal `boundaries: 'live'`, and a named constant or typed
  * variable whose line mentions a boundary and the literal. Matching the LINE
@@ -159,6 +183,46 @@ const DIRECT_BOOT_REASONS = {
  */
 const SECOND_PAGE_REASONS = {};
 
+/**
+ * Modules allowed to call `page.screenshot()`, with the reason and the site
+ * count. Both entries write or read pixels WITHOUT handing them to the trace:
+ * the config sets `attachments: false` in CI, so a screenshot buffer a spec
+ * takes for its own use is not stored in a retained artifact. A new site here
+ * is the moment to check that is still true.
+ */
+const SCREENSHOT_REASONS = {
+  'tests/fire3d-mode.spec.ts': {
+    sites: 4,
+    reason:
+      'the owner visual-review evidence captures, written to the gitignored fire3d-evidence/ and skipped under CI'
+  },
+  'tests/m-breadth-heatrisk-days.spec.ts': {
+    sites: 1,
+    reason:
+      'reads the map canvas back as a buffer to assert rendered colour bands in the test itself, and never attaches it'
+  }
+};
+
+/**
+ * Modules allowed to remove a route, with the reason and the site count.
+ * Both entries below unroute a LITERAL, non-sensitive pattern and immediately
+ * replace it; neither touches a boundary or minimap route. The counts are
+ * brittle on purpose, and a RegExp or variable argument, an `unrouteAll()`,
+ * or a new site in any other file fails the check outright.
+ */
+const UNROUTE_REASONS = {
+  'tests/place-studio-brief.spec.ts': {
+    sites: 3,
+    reason:
+      'drops the same-origin us-states.geojson stub installed for the file so three cases can serve a narrower state collection instead'
+  },
+  'tests/satellite-fixture.ts': {
+    sites: 1,
+    reason:
+      'replaces its own satellite tile fixture with an aborting handler for the tile-failure path, in the module that owns that route'
+  }
+};
+
 const MODULE_EXTENSIONS = ['.ts', '.tsx', '.mjs', '.js'];
 
 /**
@@ -230,6 +294,9 @@ test('every browser module boots through gotoApp, or records why it does not', a
     }
     if (!INSTALLS_BOUNDARY_STUB.test(source)) {
       unstubbed.push(`${key}: boots outside gotoApp and installs no boundary stub of its own`);
+    }
+    if (!INSTALLS_MINIMAP_STUB.test(source)) {
+      unstubbed.push(`${key}: boots outside gotoApp and installs no minimap analysis stub of its own`);
     }
   }
 
@@ -397,6 +464,83 @@ test('the fixture route patterns still match the URLs the runtime builds', async
   assert.match(
     minimap,
     /NUNAVUT_ANALYSIS_ROUTE = '\*\*\/Digital_boundary_files\/MapServer\/0\/query\?\*\*'/
+  );
+});
+
+test('no browser module captures pixels into a retained artifact', async () => {
+  const files = await testModules();
+  const banned = [];
+  const unrecorded = [];
+  const miscounted = [];
+  for (const { key, source } of files) {
+    if (countOutsideComments(source, PIXEL_CAPTURE) > 0) {
+      banned.push(`${key}: uses toHaveScreenshot() or attach()`);
+    }
+    const sites = countOutsideComments(source, /\.screenshot\s*\(/g);
+    const recorded = SCREENSHOT_REASONS[key];
+    if (sites === 0) {
+      if (recorded) miscounted.push(`${key}: recorded ${recorded.sites} screenshot sites, found none`);
+      continue;
+    }
+    if (!recorded) {
+      unrecorded.push(`${key}: ${sites} page.screenshot() site(s) with no recorded reason`);
+      continue;
+    }
+    if (recorded.sites !== sites) {
+      miscounted.push(`${key}: recorded ${recorded.sites} screenshot sites, found ${sites}`);
+    }
+  }
+  assert.deepEqual(
+    banned,
+    [],
+    // A visual-regression baseline or an attached buffer is a rendered map
+    // frame, and CI retains traces and reports publicly. The config keeps
+    // pixels out (`screenshots: false`, `screenshot: 'off'`, `video: 'off'`,
+    // `attachments: false`); this keeps a spec from putting them back.
+    'toHaveScreenshot() and attach() would place rendered pixels in a retained public artifact'
+  );
+  assert.deepEqual(unrecorded, [], 'unrecorded page.screenshot() sites');
+  assert.deepEqual(miscounted, [], 'recorded screenshot-site counts that no longer match');
+});
+
+test('the CI trace object keeps every pixel and source channel off', async () => {
+  const config = await readFile(join(ROOT, 'playwright.config.ts'), 'utf8');
+  // Four separate switches, and `attachments` is the one that defaults to ON.
+  // Losing any of them silently re-arms pixel capture in a public artifact.
+  assert.match(config, /screenshots: false/, 'the CI trace must not record timeline frames');
+  assert.match(config, /sources: false/, 'the CI trace must not embed spec source text');
+  assert.match(config, /attachments: false/, 'the CI trace must not store attached buffers');
+  assert.match(config, /screenshot: isCI \? 'off' : 'only-on-failure'/);
+  assert.match(config, /video: 'off'/);
+});
+
+test('no browser module removes a route', async () => {
+  const files = await testModules();
+  const offenders = [];
+  for (const { key, source } of files) {
+    const sites = countOutsideComments(source, UNROUTE);
+    const recorded = UNROUTE_REASONS[key];
+    if (sites === 0) {
+      if (recorded) offenders.push(`${key}: recorded ${recorded.sites} unroute sites, found none`);
+      continue;
+    }
+    if (!recorded) {
+      offenders.push(`${key}: ${sites} unroute site(s) with no recorded reason`);
+      continue;
+    }
+    if (recorded.sites !== sites) {
+      offenders.push(`${key}: recorded ${recorded.sites} unroute sites, found ${sites}`);
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    // Banned WHOLESALE, argument shape included. The earlier route-home check
+    // reads the first argument and can only recognise a literal it knows, so
+    // a RegExp, a variable, a template string, or a bare `unrouteAll()` would
+    // walk straight past it and strip the page's stub mid-test. There is no
+    // legitimate use in this suite, so the honest rule is none at all.
+    'page.unroute and page.unrouteAll strip a stub mid-test and must be recorded in UNROUTE_REASONS'
   );
 });
 
