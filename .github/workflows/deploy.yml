@@ -1,9 +1,14 @@
 # Build the Dynamic Drought Module (DDM) with Vite and deploy the
 # resulting dist/ folder to GitHub Pages.
 #
-# Repository Settings > Pages must use GitHub Actions as its source. The build
-# job runs the deterministic gate and full serial browser suite before it can
-# upload an artifact, so a push to main cannot bypass shared-interface checks.
+# Repository Settings > Pages must use GitHub Actions as its source. The
+# deploy job waits on the deterministic gate AND the full sharded browser
+# suite (browser-suite.yml, the same matrix Validate runs on the pull
+# request), so a push to main cannot bypass shared-interface checks. Owner
+# policy 2026-08-28: the merge commit is a commit Validate never saw, so it
+# earns the whole proof, fanned out rather than serial (47 minutes on one
+# runner before this shape). The post-deploy live verification lands with
+# DDM-P0-T04.
 
 name: Build and deploy DDM to GitHub Pages
 
@@ -12,12 +17,15 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Required for the deploy-pages action to authenticate with the Pages
-# OIDC token issuer and write the deployment.
+# Least privilege by job (2026-08-28 supply-chain audit): the build job runs
+# the whole npm dependency tree and restores an Actions cache, so it must
+# not hold a token that can mint a Pages OIDC token; only the deploy job
+# gets `pages: write` and `id-token: write`, which deploy-pages needs to
+# authenticate with the Pages OIDC issuer and write the deployment. The
+# build job adds `pages: read` because configure-pages reads the site
+# through GET /repos/{owner}/{repo}/pages.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # Serialize deploys on a single "pages" group and cancel any superseded
 # in-progress run. GitHub Pages serves "latest commit wins", so when
@@ -34,27 +42,30 @@ concurrency:
 
 jobs:
   build:
-    name: Build and browser-verify
+    name: Gate and build
     runs-on: ubuntu-latest
-    # Mirrors validate.yml: the 3D context ranged-tile traffic grew the
-    # serial browser step past the old 45-minute budget (the bed62ee
-    # deploy run was killed at exactly 45 on 2026-08-19, leaving main
-    # undeployed). 75 keeps honest room without masking a genuine hang
-    # for long.
-    timeout-minutes: 75
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: read
     # Build identity (FE-22, 2026-08-28): the app stamps these two values on
     # <html> (vite.config.ts defines) so a browser run can prove WHICH build
-    # it is exercising. Job-level because the gate builds dist and the
-    # Playwright webServer builds it again; both must carry the same nonce.
+    # it is exercising. The artifact uploaded here is the build the gate
+    # produced; the browser shards rebuild with the same values as inputs
+    # and assert the stamp on every boot (tests/helpers.ts), so every proof
+    # in this run names the same nonce. The nonce is the run id alone: a
+    # "re-run failed jobs" keeps the run id, reruns only the red shards, and
+    # deploys the artifact this job already uploaded, so a run_attempt
+    # suffix would make the shard proof and the deployed stamp diverge.
     env:
       DDM_BUILD_SHA: ${{ github.sha }}
-      DDM_BUILD_NONCE: ${{ github.run_id }}-${{ github.run_attempt }}
+      DDM_BUILD_NONCE: ${{ github.run_id }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -74,29 +85,33 @@ jobs:
       - name: Run release gate
         run: npm run gate
 
-      - name: Install Chromium for browser verification
-        run: npx playwright install --with-deps chromium
-
-      - name: Run serial browser verification
-        run: npm run test:serial -- --reporter=dot
-
       - name: Verify build output
         run: |
           ls -la dist
           test -f dist/index.html
 
       - name: Configure Pages
-        uses: actions/configure-pages@v6
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v5
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: dist
 
+  browser:
+    name: Browser suite
+    uses: ./.github/workflows/browser-suite.yml
+    with:
+      build-sha: ${{ github.sha }}
+      build-nonce: ${{ github.run_id }}
+
   deploy:
     name: Deploy to GitHub Pages
-    needs: build
+    needs: [build, browser]
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
@@ -111,7 +126,7 @@ jobs:
       - name: Deploy
         id: deployment
         continue-on-error: true
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
 
       - name: Wait before retrying the transient Pages failure
         if: steps.deployment.outcome == 'failure'
@@ -120,4 +135,4 @@ jobs:
       - name: Deploy (retry after transient failure)
         id: deployment_retry
         if: steps.deployment.outcome == 'failure'
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

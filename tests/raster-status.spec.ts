@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 import { pointHasHeatRiskCoverage } from '../src/layers/heatrisk-coverage';
 import { watchRasterTiles } from '../src/util/raster-status';
+import { captureWarnings, type CapturedWarnings } from './map-harness';
 
 type Handler = (event: Record<string, unknown>) => void;
 
@@ -65,7 +66,42 @@ class FakeMap {
   }
 }
 
+// The watcher's degrade paths warn their honest reason (the third error in
+// the rolling window, an expired deadline, a cycle with known holes). These
+// tests drive every one of them on purpose, so capture the warnings instead
+// of printing their stacks into the shard log (DDM-P0-T06). Each test names
+// the exact warnings it expects through `expectWarnings`; the default is
+// none, and `afterEach` compares the whole list, so a warning that goes
+// missing, doubles, or reads differently fails the test that owns it.
+const UNAVAILABLE_AFTER_REPEATED_FAILURES = (sourceId: string, error: string): string =>
+  `[${sourceId}] repeated tile-load failures; reporting unavailable. Error: ${error}`;
+const UNAVAILABLE_AT_DEADLINE = (sourceId: string): string =>
+  `[${sourceId}] no selected-frame tile succeeded before the load deadline; reporting unavailable.`;
+const PARTIAL_WITH_KNOWN_HOLES = (sourceId: string): string =>
+  `[${sourceId}] selected-frame tile requests completed with known holes; reporting live (partial).`;
+
+let warnings: CapturedWarnings;
+let expectedWarnings: readonly string[] = [];
+
+function expectWarnings(list: readonly string[]): void {
+  expectedWarnings = list;
+}
+
+test.beforeEach(() => {
+  expectedWarnings = [];
+  warnings = captureWarnings();
+});
+
+test.afterEach(() => {
+  warnings.restore();
+  expect(warnings.messages).toEqual(expectedWarnings);
+});
+
 test('the raster watcher keeps its existing heal-only success behavior by default', () => {
+  // The threshold warns exactly once, at the third error, with the error.
+  expectWarnings([
+    UNAVAILABLE_AFTER_REPEATED_FAILURES('shared-raster', 'synthetic tile failure')
+  ]);
   const map = new FakeMap();
   const reports: string[] = [];
   watchRasterTiles(
@@ -122,6 +158,7 @@ test('the HeatRisk opt-in reports its first successful tile once', () => {
 });
 
 test('the HeatRisk opt-in fails when its positive-success deadline expires', async () => {
+  expectWarnings([UNAVAILABLE_AT_DEADLINE('heatrisk-frame')]);
   const map = new FakeMap();
   const reports: string[] = [];
   watchRasterTiles(
@@ -144,6 +181,7 @@ test('the HeatRisk opt-in fails when its positive-success deadline expires', asy
 });
 
 test('the HeatRisk opt-in reports a mixed-success request cycle as partial', () => {
+  expectWarnings([PARTIAL_WITH_KNOWN_HOLES('heatrisk-frame')]);
   const map = new FakeMap();
   const reports: string[] = [];
   watchRasterTiles(
@@ -214,6 +252,7 @@ test('completeness reports ready when the target source settles without map idle
 });
 
 test('completeness reports partial when the target source settles with known holes', () => {
+  expectWarnings([PARTIAL_WITH_KNOWN_HOLES('selected-frame')]);
   const map = new FakeMap();
   const reports: string[] = [];
   watchRasterTiles(
@@ -249,6 +288,7 @@ test('completeness reports partial when the target source settles with known hol
 });
 
 test('completeness waits through three early errors and reports mixed success as partial', () => {
+  expectWarnings([PARTIAL_WITH_KNOWN_HOLES('selected-frame')]);
   const map = new FakeMap();
   const reports: string[] = [];
   watchRasterTiles(
@@ -287,6 +327,9 @@ test('completeness waits through three early errors and reports mixed success as
 });
 
 test('completeness still reports total failure after three early errors', () => {
+  // Completeness accounting reports once at idle; the legacy three-error
+  // shortcut stays silent when a deadline is configured.
+  expectWarnings([UNAVAILABLE_AT_DEADLINE('selected-frame')]);
   const map = new FakeMap();
   const reports: string[] = [];
   watchRasterTiles(
@@ -336,6 +379,7 @@ test('the HeatRisk completeness opt-in treats an empty idle cycle as complete', 
 });
 
 test('a completeness consumer can require positive tile evidence at idle', () => {
+  expectWarnings([UNAVAILABLE_AT_DEADLINE('completeness-consumer')]);
   const map = new FakeMap();
   const reports: string[] = [];
   watchRasterTiles(
@@ -355,6 +399,7 @@ test('a completeness consumer can require positive tile evidence at idle', () =>
 });
 
 test('the HeatRisk completeness opt-in retains its no-evidence deadline', async () => {
+  expectWarnings([UNAVAILABLE_AT_DEADLINE('heatrisk-frame')]);
   const map = new FakeMap();
   const reports: string[] = [];
   watchRasterTiles(

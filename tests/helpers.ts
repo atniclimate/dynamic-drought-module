@@ -174,6 +174,7 @@ export async function gotoApp(page: Page, query = ''): Promise<void> {
   }
   await page.goto(query, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#preset-chips .preset-chip')).toHaveCount(PRESET_LABELS.length);
+  await assertBuildIdentity(page);
   await expect(page.locator('#region-select option')).not.toHaveCount(0);
   const isEmbed = /[?&]embed=(true|1)\b/.test(query);
   const isConsole =
@@ -185,6 +186,35 @@ export async function gotoApp(page: Page, query = ''): Promise<void> {
   if (!briefEmbed) {
     await expect(page.locator('#layer-toggles .layer-group')).toHaveCount(ROLE_GROUPS.length);
   }
+}
+
+/**
+ * Prove the boot under test is the build this run made (FE-22, DDM-P0-T08).
+ *
+ * CI sets DDM_BUILD_SHA and DDM_BUILD_NONCE on the job; vite.config.ts bakes
+ * them into the bundle and src/main.ts stamps them on <html>. When either
+ * variable is set in the runner's environment, every boot this helper drives
+ * must carry the same values, or the shard proved the wrong build (a stale
+ * dist, another lane's preview, a rebuild without the variables under a
+ * running preview: the 2026-08-28 qualification run caught exactly that,
+ * `<sha>-dirty` against `<sha>`). It runs after the preset chips are
+ * present, so a boot that never ran reads as a boot failure, not as a
+ * wrong build; a missing stamp after a successful boot is named as such.
+ * Locally, with neither set, the stamp is whatever the dev build chose and
+ * nothing is asserted.
+ */
+async function assertBuildIdentity(page: Page): Promise<void> {
+  const expectedSha = process.env['DDM_BUILD_SHA'];
+  const expectedNonce = process.env['DDM_BUILD_NONCE'];
+  if (!expectedSha && !expectedNonce) return;
+  const stamp = await page.evaluate(() => ({
+    sha: document.documentElement.dataset['ddmBuildSha'],
+    nonce: document.documentElement.dataset['ddmBuildNonce']
+  }));
+  expect(stamp.sha, 'the booted page carries no data-ddm-build-sha stamp').toBeDefined();
+  expect(stamp.nonce, 'the booted page carries no data-ddm-build-nonce stamp').toBeDefined();
+  if (expectedSha) expect(stamp.sha, 'data-ddm-build-sha').toBe(expectedSha);
+  if (expectedNonce) expect(stamp.nonce, 'data-ddm-build-nonce').toBe(expectedNonce);
 }
 
 /** Read `window.location.search` as a URLSearchParams-friendly string. */

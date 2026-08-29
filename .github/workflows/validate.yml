@@ -1,6 +1,11 @@
 # Deterministic pull-request validation. This workflow validates Worker source
 # but never deploys the optional Worker; that remains an explicitly authorized
 # manual operation from workers/proxy/.
+#
+# Shape (DDM-P0-T02, 2026-08-28): the deterministic gate and the browser
+# suite are separate jobs so the suite can fan out across the shared runner
+# matrix in browser-suite.yml (the same matrix the Pages deploy runs).
+# `validate` is the single required status: it fails if any job fails.
 
 name: Validate DDM
 
@@ -16,28 +21,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
-    name: Gate, Worker typecheck, and browser suite
+  gate:
+    name: Gate and Worker typecheck
     runs-on: ubuntu-latest
-    # 45 was fitted to the pre-3D suite; the fire3d context layers'
-    # ranged-tile traffic grew the serial browser step (20.9 minutes on a
-    # fast local machine, 2026-08-18), and the first W-CTX validate run
-    # spent its whole budget and was killed mid-suite. 75 keeps honest
-    # room without masking a genuine hang for long.
-    timeout-minutes: 75
+    timeout-minutes: 15
     # Build identity (FE-22, 2026-08-28): the app stamps these two values on
     # <html> (vite.config.ts defines) so a browser run can prove WHICH build
-    # it is exercising. Job-level because the gate builds dist and the
-    # Playwright webServer builds it again; both must carry the same nonce.
+    # it is exercising. The browser shards receive the same values as inputs.
+    # The nonce is the run id alone: a "re-run failed jobs" keeps the run id
+    # and reruns only the red shards, so their proof still names the build
+    # the surviving jobs made (a run_attempt suffix would diverge there).
     env:
       DDM_BUILD_SHA: ${{ github.sha }}
-      DDM_BUILD_NONCE: ${{ github.run_id }}-${{ github.run_attempt }}
+      DDM_BUILD_NONCE: ${{ github.run_id }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -60,8 +62,25 @@ jobs:
       - name: Typecheck Worker without deploying
         run: npm --prefix workers/proxy run typecheck
 
-      - name: Install Chromium for browser verification
-        run: npx playwright install --with-deps chromium
+  browser:
+    name: Browser suite
+    uses: ./.github/workflows/browser-suite.yml
+    with:
+      build-sha: ${{ github.sha }}
+      build-nonce: ${{ github.run_id }}
 
-      - name: Run serial browser verification
-        run: npm run test:serial -- --reporter=dot
+  # `!cancelled()` rather than `always()`: a run superseded by
+  # `cancel-in-progress` must read as cancelled, not as a red Validate.
+  validate:
+    name: Validate
+    needs: [gate, browser]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every job to have passed
+        run: |
+          echo "gate: ${{ needs.gate.result }}"
+          echo "browser: ${{ needs.browser.result }}"
+          test "${{ needs.gate.result }}" = "success"
+          test "${{ needs.browser.result }}" = "success"

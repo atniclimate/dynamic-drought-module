@@ -11,6 +11,7 @@
  * production-observable stamps and chrome).
  */
 
+import { test } from '@playwright/test';
 import type maplibregl from 'maplibre-gl';
 
 export interface RecordedCall {
@@ -304,6 +305,60 @@ export function installFakeBrowser(
         Object.defineProperty(globalThis, 'document', documentDescriptor);
       } else {
         Reflect.deleteProperty(globalThis, 'document');
+      }
+    }
+  };
+}
+
+export interface CapturedWarnings {
+  /** Every `console.warn` call since capture began, one joined string each. */
+  readonly messages: string[];
+  /**
+   * Put the real `console.warn` back and record what was captured as a
+   * `console.warn` annotation on the current test, so a test that fails
+   * before its warning assertion still carries the evidence in the report.
+   * Call from `finally` or `afterEach`.
+   */
+  restore(): void;
+}
+
+/**
+ * Capture `console.warn` for the duration of a by-design failure path.
+ *
+ * The runtime's honest degrade paths (a corrupt archive, three tile errors
+ * in the rolling window, a dead fetch) each warn their reason with the
+ * error attached, and Node prints that error's full stack. In a Node-level
+ * test that deliberately drives those paths, the stack is noise that buries
+ * the reporter's own lines (DDM-P0-T06). Capturing it lets the test assert
+ * the warning was issued, which is part of the contract, instead of
+ * printing it; the annotation written on restore keeps the sanitized text
+ * (message and error name, no stack) with the test result either way.
+ */
+export function captureWarnings(): CapturedWarnings {
+  const original = console.warn;
+  const messages: string[] = [];
+  console.warn = (...args: unknown[]): void => {
+    // `console.warn(reason, err)` with no error passes `undefined`; drop it
+    // rather than record a literal "undefined" token.
+    messages.push(
+      args
+        .filter((arg) => arg !== undefined && arg !== null)
+        .map((arg) => (arg instanceof Error ? `${arg.name}: ${arg.message}` : String(arg)))
+        .join(' ')
+    );
+  };
+  return {
+    messages,
+    restore: () => {
+      console.warn = original;
+      if (messages.length === 0) return;
+      try {
+        test.info().annotations.push({
+          type: 'console.warn',
+          description: messages.join('\n')
+        });
+      } catch {
+        // Outside a test (no test.info()), the messages stay in memory only.
       }
     }
   };

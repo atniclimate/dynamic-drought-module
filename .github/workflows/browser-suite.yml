@@ -1,0 +1,149 @@
+# The sharded browser suite, shared by Validate (pull requests) and the Pages
+# deploy (push to main) so the two can never prove different things.
+#
+# Shape (DDM-P0-T02, 2026-08-28): one serial run of the 830-spec suite took
+# 47 minutes on the 2-core runner, 98 percent of the job. Each page is its
+# own software-GL MapLibre context, so the lever is more runners, never more
+# workers per runner. The general `chromium` project fans out with
+# `--shard=i/n` (Playwright slices the file-ordered test list into
+# contiguous equal-count chunks); the 3D Fire specs, their own Playwright
+# project with their own per-test budgets, fan out the same way on their
+# own runners. Every shard builds and serves its own dist/, so no shard
+# reads another's state.
+#
+# Counts, from the 2026-08-28 idle serial baseline (31.2 min locally, 47 on
+# the runner, so about 1.5x): general project 16.4 min over 798 tests, max
+# slice 5.3 min at 4 shards; 3D project 13.7 min over 32 tests, max slice
+# 5.5 min at 3 shards. Each shard then lands near 11 minutes on the runner
+# with build and provisioning. Re-fit these when the suite grows.
+
+name: Browser suite
+
+on:
+  workflow_call:
+    inputs:
+      build-sha:
+        description: The commit the build marker must carry.
+        required: true
+        type: string
+      build-nonce:
+        description: The run-attributable nonce the build marker must carry.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  shard:
+    name: ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
+    runs-on: ubuntu-latest
+    # The job budget covers a cache-miss browser install (10), the suite
+    # step's retry envelope (26), and the summary and upload steps, so a
+    # slow red shard still gets its report kept instead of being cancelled
+    # without one.
+    timeout-minutes: 40
+    # Build identity (FE-22, 2026-08-28): the app stamps these two values on
+    # <html> (vite.config.ts defines) and tests/helpers.ts gotoApp asserts
+    # them on every boot it drives when they are set, so a shard proves it
+    # exercised the build this run made. The Playwright webServer builds
+    # dist inside this job, so the values must reach it here.
+    env:
+      DDM_BUILD_SHA: ${{ inputs.build-sha }}
+      DDM_BUILD_NONCE: ${{ inputs.build-nonce }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { project: chromium, shard: 1, total: 4 }
+          - { project: chromium, shard: 2, total: 4 }
+          - { project: chromium, shard: 3, total: 4 }
+          - { project: chromium, shard: 4, total: 4 }
+          - { project: chromium-3d, shard: 1, total: 3 }
+          - { project: chromium-3d, shard: 2, total: 3 }
+          - { project: chromium-3d, shard: 3, total: 3 }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install application dependencies
+        run: npm ci
+
+      # DDM-P0-T01: browser provisioning is deterministic and cached. The
+      # browser directory is keyed on the runner OS and architecture and the
+      # exact @playwright/test version (which fixes the Chromium revision),
+      # so a Playwright bump misses once and rebuilds; every other run
+      # restores in seconds instead of downloading Chromium (about 21 s on a
+      # good day, and the step where the 2026-08-19 deploy stalled for its
+      # whole budget). OS libraries are outside the cache: a miss installs
+      # them with the browser; a hit runs `playwright install chromium`,
+      # which is a no-op when the restored executable is present and a
+      # bounded re-download when the entry is partial, then reinstalls only
+      # the libraries. Each step is time-bounded so a stalled download fails
+      # fast with its own log.
+      - name: Resolve the Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the Playwright browser directory
+        id: playwright-cache
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Chromium for browser verification (cache miss)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 10
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify Chromium and install its OS dependencies (cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        timeout-minutes: 10
+        run: |
+          npx playwright install chromium
+          npx playwright install-deps chromium
+
+      # One worker per runner (see playwright.config.ts on the software-GL
+      # ceiling). Reporters come from the config: a named line per test,
+      # GitHub annotations on failure, an HTML report, and a JSON report
+      # for the summary below. The step budget covers the measured shard
+      # (about 11 minutes) plus two CI retries of the slowest 3D tests.
+      - name: Run the browser shard
+        id: suite
+        timeout-minutes: 26
+        run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=1
+
+      # DDM-P0-T06: name what happened. The job summary lists passed, failed,
+      # flaky (passed only on retry), and skipped counts and the file:line of
+      # every failed or flaky test, so the named-failure discipline (baseline
+      # set versus after set) reads off the Actions page. The `flaky` output
+      # gates the upload below.
+      - name: Summarize the shard
+        id: summary
+        if: ${{ !cancelled() }}
+        env:
+          PLAYWRIGHT_PROJECT: ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
+        run: node scripts/summarize-playwright-shard.mjs test-results/report.json >> "$GITHUB_STEP_SUMMARY"
+
+      # Keep the HTML report (error text, ARIA error context, stdout and
+      # stderr, timings) when the shard failed or passed only on retry, so a
+      # red or flaky shard is diagnosable without rerunning it blind; a clean
+      # shard uploads nothing. Traces and screenshots are off in CI
+      # (playwright.config.ts): the ordinary boot fetches live AIANNH and BIA
+      # boundary geometry that the runtime never writes to disk, and a
+      # retained artifact on a public repository would. Short retention.
+      - name: Keep the failure or flaky report
+        if: ${{ !cancelled() && (steps.suite.outcome != 'success' || steps.summary.outputs.flaky != '0') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-${{ matrix.project }}-${{ matrix.shard }}-of-${{ matrix.total }}
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore

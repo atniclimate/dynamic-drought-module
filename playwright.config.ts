@@ -40,6 +40,33 @@ const BASE_URL = `${PREVIEW_ORIGIN}${BASE_PATH}`;
 
 const isCI = !!process.env['CI'];
 
+// The 3D Fire specs build terrain, a sky, a smoke volume, and context tiles
+// on the software renderer, and carry their own 120 to 180 second budgets
+// (`test.setTimeout` in fire3d-mode.spec.ts, `timeout_ms` rows in
+// view-contracts.yaml). They live in their own project so CI can give them
+// their own runners (DDM-P0-T02: the moving flake set of 2026-08-28 was
+// timing on these specs, not product behavior) instead of inflating the
+// global budget, and so a general shard never waits behind a scene build.
+// Locally `npm test` and `npm run test:serial` still run both projects.
+const FIRE3D_SPECS = ['**/fire3d-mode.spec.ts', '**/view-contracts.spec.ts'];
+
+// MapLibre GL needs a WebGL2 context. Headless Chromium has no GPU, so force
+// ANGLE over SwiftShader (a pure-software GL implementation) and allow it
+// explicitly (recent Chromium gates the SwiftShader WebGL fallback behind
+// this flag). Without these the map never fires `load` and the sidebar never
+// builds, failing every spec at boot.
+const CHROMIUM_USE = {
+  browserName: 'chromium' as const,
+  launchOptions: {
+    args: [
+      '--use-gl=angle',
+      '--use-angle=swiftshader',
+      '--enable-unsafe-swiftshader',
+      '--ignore-gpu-blocklist'
+    ]
+  }
+};
+
 export default defineConfig({
   testDir: './tests',
 
@@ -48,9 +75,9 @@ export default defineConfig({
   // its own MapLibre GL context on ANGLE-over-SwiftShader (pure-software GL),
   // which is CPU and memory heavy, and too many concurrent contexts exhaust
   // the software renderer so a map never fires `load` and its sidebar never
-  // builds. Two is the reliable ceiling on both a 2-core CI runner and a
-  // developer laptop; the suite is small enough that the wall-clock cost is
-  // a handful of seconds.
+  // builds. Two is the reliable ceiling on a developer laptop (the idle serial
+  // baseline is about 31 minutes, 2026-08-28); CI passes `--workers=1` per
+  // runner and fans out across runners instead (browser-suite.yml).
   fullyParallel: true,
   workers: 2,
 
@@ -72,39 +99,51 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 10_000 },
 
+  // CI adds GitHub annotations and a JSON report the workflow reads for its
+  // per-shard summary (passed, failed, flaky, and the names of each).
   reporter: isCI
-    ? [['github'], ['list'], ['html', { open: 'never' }]]
+    ? [
+        ['github'],
+        ['list'],
+        ['html', { open: 'never' }],
+        ['json', { outputFile: 'test-results/report.json' }]
+      ]
     : [['list'], ['html', { open: 'never' }]],
 
   use: {
     baseURL: BASE_URL,
-    // Traces and screenshots are captured only when something goes wrong, so
-    // the tree stays clean on a green run (the artifacts land in gitignored
-    // `test-results/`).
-    trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
+    // Locally, traces and screenshots are captured only when something goes
+    // wrong, so the tree stays clean on a green run (they land in gitignored
+    // `test-results/`). In CI both are OFF: the ordinary boot fetches live
+    // AIANNH and BIA boundary geometry, which the runtime holds in memory and
+    // never writes to disk (the project's hard rule 1; see the
+    // NON-REDISTRIBUTION GUARD in src/layers/aiannh.ts and the cache note in
+    // src/layers/bia-reservations.ts). A trace records response bodies and a
+    // screenshot renders the polygons, and CI retains failure diagnostics as
+    // artifacts on a public repository. The retained report keeps the error
+    // text, the ARIA error context, stdout and stderr, and timings, none of
+    // which carry geometry. The explicit evidence captures in
+    // fire3d-mode.spec.ts are gated on CI for the same reason.
+    trace: isCI ? 'off' : 'on-first-retry',
+    screenshot: isCI ? 'off' : 'only-on-failure',
     video: 'off'
   },
 
   projects: [
     {
+      // Everything except the 3D Fire specs. CI shards this project across
+      // a runner matrix with `--shard=i/n` (contiguous equal-count slices of
+      // the file-ordered test list), one worker per runner.
       name: 'chromium',
-      use: {
-        browserName: 'chromium',
-        // MapLibre GL needs a WebGL2 context. Headless Chromium has no GPU, so
-        // force ANGLE over SwiftShader (a pure-software GL implementation) and
-        // allow it explicitly (recent Chromium gates the SwiftShader WebGL
-        // fallback behind this flag). Without these the map never fires `load`
-        // and the sidebar never builds, failing every spec at boot.
-        launchOptions: {
-          args: [
-            '--use-gl=angle',
-            '--use-angle=swiftshader',
-            '--enable-unsafe-swiftshader',
-            '--ignore-gpu-blocklist'
-          ]
-        }
-      }
+      testIgnore: FIRE3D_SPECS,
+      use: CHROMIUM_USE
+    },
+    {
+      // The 3D Fire specs alone, sharded onto their own runners in CI. The
+      // per-test budgets above the 60 s default are declared in the specs.
+      name: 'chromium-3d',
+      testMatch: FIRE3D_SPECS,
+      use: CHROMIUM_USE
     }
   ],
 
