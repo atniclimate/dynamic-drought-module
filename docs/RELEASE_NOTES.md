@@ -27,6 +27,54 @@ here earlier closed when the 2026-08-24 scheduled ENSO refresh deployed
 hosted build nonce was the local fallback `dev` until pull request 27 made
 each hosted build attributable to its run.
 
+### 2026-08-29: every suite boot answers the sovereign boundary queries from synthetic fixtures
+
+Roadmap task DDM-P1-T08 asks for three things. This pull request delivers the
+first two and deliberately leaves the third to the owner.
+
+The shared browser-suite boot helper (`gotoApp` in `tests/helpers.ts`) now
+installs a route pair on every boot it drives, answering the Census AIANNH
+(`tigerweb.geo.census.gov`) and BIA AIAN-LAR (`biamaps.geoplatform.gov`)
+queries with the hand-authored synthetic rectangles in
+`tests/tribal-fixtures.ts`. It is on locally and in continuous integration
+alike, so a local green and a CI green mean the same thing. A spec that needs
+a different response, an empty collection, an abort, a truncated body, an
+ArcGIS error, or a geography-keyed answer, claims the service through
+`routeBoundary`; the suite-wide stub then defers to that claim through
+`route.fallback()`, whether the claim was registered before or after
+`gotoApp`. That removes the ordering trap: Playwright matches route handlers
+in reverse registration order, so a spec route registered before `gotoApp`
+would otherwise have been shadowed. `gotoApp(page, query, { boundaries:
+'empty' })` serves the honest live-zero collection, and `{ boundaries: 'live'
+}` is the documented escape hatch that nothing in the suite uses. The live
+boundary path stays proven by the daily source-health probe, which drives
+Chromium outside this suite.
+
+Every per-spec route on either service moved onto that mechanism, and the
+route pairs that merely repeated the new default were deleted. Nineteen
+specs changed; the boundary-popup, search, and studio cases now assert
+against the fixture rather than against whatever the agency returned that
+minute.
+
+Two checks keep it true. `tests/boundary-stubs.spec.ts` boots the bare Brief
+door, the wildfire cluster, the console, the brief embed, and the phone
+viewport, compares every request the page made to either host against the
+requests the stub actually answered, and fails on one that escaped; where the
+catalog exists it also asserts both boundary pills reach `live` from the
+fixture. `tests/boundary-boot-inventory.test.mjs` runs in the gate beside the
+other `node:test` files (`npm run test:boundary-boots`) and fails when a spec
+navigates outside `gotoApp` without a recorded reason and its own stub, when a
+spec registers a boundary route outside the shared helper, or when a service
+path drifts so the route globs stop matching.
+
+What this does NOT do: Playwright trace and screenshot retention in CI stays
+off. Turning it on is an owner decision recorded in the pull request that
+flips it (the task's external authorization), so the exact proposed diff for
+`playwright.config.ts` and `.github/workflows/browser-suite.yml` is written
+out in this pull request instead of applied. A local run with `--trace on`
+against a deliberately failed boot confirmed the premise: the retained trace
+carried no response body from either service.
+
 ### 2026-08-29: continuous-integration hardening from the slice A audit
 
 - The shared Playwright browser action splits `actions/cache` into a restore
