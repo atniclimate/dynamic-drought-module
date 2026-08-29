@@ -1,0 +1,29 @@
+# Automated dependency updates for the github-actions ecosystem only.
+# DDM-P0-T07 acceptance: "Automated dependency updates can propose later SHA
+# changes for review." Every third-party Action in .github/workflows/*.yml
+# and the composite action below is pinned to a full commit SHA with a
+# trailing "# vX.Y.Z" comment; Dependabot supports that pin style and keeps
+# the version comment in sync when it opens an update.
+#
+# The npm ecosystem is deliberately not configured here. Application
+# dependency upgrades change the shipped bundle and stay a separate owner
+# decision, not something this file should propose on a schedule.
+#
+# Two directories are listed because Dependabot's github-actions scan for a
+# directory only covers that directory's own .github/workflows and a
+# root-level action.yml/action.yaml; it does not recurse into a nested
+# .github/actions/*/action.yml on its own. The composite action lives at
+# .github/actions/playwright-chromium/action.yml, so it needs its own entry
+# for Dependabot to see the actions/cache/restore and actions/cache/save
+# pins it uses.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directories:
+      - "/"
+      - "/.github/actions/playwright-chromium"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"
