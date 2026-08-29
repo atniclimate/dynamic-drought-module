@@ -83,8 +83,14 @@ export default defineConfig({
 
   // Retries in CI absorb the occasional cold-map or slow-tile flake on the
   // software renderer; local runs never retry, so a real regression is not
-  // masked behind a green retry.
-  retries: isCI ? 2 : 0,
+  // masked behind a green retry. Measured, not assumed (2026-08-29): across
+  // 196 shard executions since 2026-08-29 01:38 UTC, every flaky pass came on
+  // retry 1 and nothing ever passed on retry 2, so the third attempt bought no
+  // green-ness while costing roughly 6 minutes on a red shard. One retry keeps
+  // the same flake tolerance for less wall clock. browser-suite.yml's
+  // `retries` workflow_call input can override this per dispatch for a
+  // retry-zero sample.
+  retries: isCI ? 1 : 0,
 
   // A guard against a missing `test.only` sneaking into CI.
   forbidOnly: isCI,
