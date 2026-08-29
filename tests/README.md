@@ -65,7 +65,8 @@ regression would actually break.
 
 Pull requests run the deterministic root gate and Worker typecheck (without
 deploying the optional Worker) beside the browser suite; the Pages workflow
-runs the root gate, then the same browser suite, before it deploys. Run
+runs the root gate and build beside the same browser suite, and deploys only
+when both have passed. Run
 focused affected specs during development and `npm run test:serial` when a
 change affects shared navigation, map lifecycle, state, or release readiness.
 
@@ -73,10 +74,12 @@ change affects shared navigation, map lifecycle, state, or release readiness.
 
 `playwright.config.ts` defines two projects. `chromium` holds every spec but
 two; `chromium-3d` holds `fire3d-mode.spec.ts` and `view-contracts.spec.ts`,
-whose scenes build terrain, a sky, a smoke volume, and context tiles on the
-software renderer and carry their own 120 to 180 second budgets. Locally,
-`npm test` and `npm run test:serial` run both projects, so coverage is the
-same in either seat.
+the two files whose 3D cases build terrain, a sky, a smoke volume, and
+context tiles on the software renderer and carry their own 120 to 180 second
+budgets (the Node-level cases in `fire3d-mode` and the three non-3D contract
+rows ride along; the split is by file, and both projects use the same
+browser settings). Locally, `npm test` and `npm run test:serial` run both
+projects, so coverage is the same in either seat.
 
 In CI (`.github/workflows/browser-suite.yml`, called by both Validate and the
 Pages deploy) each project is sliced with `--shard=i/n` onto its own runners,
@@ -88,14 +91,28 @@ The shard counts were fitted to the 2026-08-28 idle serial baseline (general
 16.4 minutes over 798 tests, 3D 13.7 minutes over 32) so every shard lands
 near eleven minutes on the 2-core runner; re-fit them when the suite grows.
 
-A shard that fails, or passes only on retry, uploads its `test-results/`
-(traces on first retry, screenshots on failure) and HTML report as a
-seven-day artifact named for the shard; a clean shard uploads nothing. The
-Node-level specs that deliberately drive a degrade path (a corrupt archive,
-three tile errors in the rolling window, a dead fetch) capture the runtime's
-`console.warn` through `captureWarnings()` in `tests/map-harness.ts` and
-assert the exact warning, so the honest reason is part of the contract and
-its stack trace stays out of the shard log.
+Every shard writes a job summary (passed, failed, flaky, skipped, and the
+`file:line` of each failed or flaky test) from its JSON report through
+`scripts/summarize-playwright-shard.mjs`. A shard that fails, or passes only
+on retry, also uploads its HTML report (error text, ARIA error context,
+stdout and stderr, timings) as a seven-day artifact named for the shard; a
+clean shard uploads nothing. Traces and screenshots are off in CI: the
+ordinary boot fetches live AIANNH and BIA boundary geometry that the runtime
+holds in memory and never writes to disk (AGENTS.md rule 1), and a trace
+records response bodies while a screenshot renders the polygons. Locally
+both stay on for failures, in the gitignored `test-results/`.
+
+When `DDM_BUILD_SHA` or `DDM_BUILD_NONCE` is set in the environment (CI sets
+both), `gotoApp` asserts the `<html>` build stamp on every boot it drives,
+so each shard proves it exercised the build this run made.
+
+The Node-level specs that deliberately drive a degrade path (a corrupt
+archive, three tile errors in the rolling window, a dead fetch) capture the
+runtime's `console.warn` through `captureWarnings()` in
+`tests/map-harness.ts` and assert the exact list of warnings, so the honest
+reason is part of the contract and its stack trace stays out of the shard
+log; the captured text is kept as a `console.warn` annotation on the test
+result, so a failure still carries the evidence.
 
 ## Headless WebGL
 
