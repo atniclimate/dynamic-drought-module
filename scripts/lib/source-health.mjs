@@ -134,6 +134,36 @@ export function evaluateLayerHealth(row, opts) {
   return { verdict: reasons.length ? 'warn' : 'ok', reasons };
 }
 
+/** Above this many responses a layer is a tile fan-out (HeatRisk, WHP,
+ * SST, the NIDIS grids): the summary collapses them per host so the table
+ * stays readable; the JSON receipt keeps every response. */
+export const COLLAPSE_ABOVE = 6;
+
+export function describeResponses(responses) {
+  if (responses.length === 0) return '(none)';
+  if (responses.length <= COLLAPSE_ABOVE) {
+    return responses
+      .map((x) => `${x.status} ${mb(x.bytes)} ${seconds(x.ms)}${x.count === null ? '' : ` ${x.count} rec`} \`${x.url}\``)
+      .join('<br>');
+  }
+  const byHost = new Map();
+  for (const x of responses) {
+    const host = new URL(x.url).hostname;
+    const group = byHost.get(host) ?? { count: 0, bytes: 0, slowestMs: 0, statuses: new Map() };
+    group.count += 1;
+    group.bytes += x.bytes;
+    group.slowestMs = Math.max(group.slowestMs, x.ms);
+    group.statuses.set(x.status, (group.statuses.get(x.status) ?? 0) + 1);
+    byHost.set(host, group);
+  }
+  return [...byHost.entries()]
+    .map(([host, g]) => {
+      const statuses = [...g.statuses.entries()].map(([s, n]) => `${s} x${n}`).join(', ');
+      return `${g.count} responses from \`${host}\`: ${statuses}; ${mb(g.bytes)} total; slowest ${seconds(g.slowestMs)}`;
+    })
+    .join('<br>');
+}
+
 export function renderHealthSummary(rows, meta) {
   const lines = [];
   const breaches = rows.filter((r) => r.verdict === 'breach').length;
@@ -147,9 +177,7 @@ export function renderHealthSummary(rows, meta) {
   lines.push('| Layer | Status | Settled | Verdict | Requests (status, bytes, seconds, records) |');
   lines.push('| --- | --- | --- | --- | --- |');
   for (const r of rows) {
-    const reqs = r.responses
-      .map((x) => `${x.status} ${mb(x.bytes)} ${seconds(x.ms)}${x.count === null ? '' : ` ${x.count} rec`} \`${x.url}\``)
-      .join('<br>') || '(none)';
+    const reqs = describeResponses(r.responses);
     const detail = r.reasons.length ? ` (${r.reasons.join('; ')})` : '';
     lines.push(`| ${r.key} | ${r.status ?? '(none)'} | ${seconds(r.settleMs)} | ${r.verdict}${detail} | ${reqs} |`);
   }

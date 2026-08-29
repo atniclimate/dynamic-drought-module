@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  COLLAPSE_ABOVE,
   EXPECTS_RECORDS,
   STUBBED_HOSTS,
   classifyUrl,
   countRecords,
+  describeResponses,
   evaluateLayerHealth,
   parseHealthArgs,
   renderHealthSummary,
@@ -92,6 +94,18 @@ test('renderHealthSummary and renderIssueBody carry the receipt without bodies',
   assert.match(body, /- unavailable at 15\.1 s/);
   assert.match(body, /https:\/\/github\.test\/run\/1/);
   assert.match(body, /\| 200 \| 1,900,000 \| 4\.4 \| 239 \|/);
+});
+
+test('describeResponses lists a few responses and collapses a tile fan-out per host', () => {
+  const few = [{ url: 'https://x/a', status: 200, bytes: 1000, ms: 100, count: null }];
+  assert.match(describeResponses(few), /200 0\.00 MB 0\.1 s `https:\/\/x\/a`/);
+  assert.equal(describeResponses([]), '(none)');
+  const many = Array.from({ length: COLLAPSE_ABOVE + 4 }, (_, i) => ({
+    url: `https://tiles.example.test/z/${i}.png`, status: i === 3 ? 404 : 200, bytes: 10_000, ms: 100 * i, count: null,
+  }));
+  const text = describeResponses(many);
+  assert.match(text, /10 responses from `tiles\.example\.test`: 200 x9, 404 x1; 0\.10 MB total; slowest 0\.9 s/);
+  assert.equal(text.includes('/z/3.png'), false);
 });
 
 test('parseHealthArgs defaults to the preview origin and a named User-Agent', () => {
