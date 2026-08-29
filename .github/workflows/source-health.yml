@@ -24,8 +24,11 @@ name: Source health
 
 on:
   schedule:
-    # Daily at 13:30 UTC, after the 13:00 upstream liveness monitor.
-    - cron: '30 13 * * *'
+    # Daily at 13:41 UTC, after the 13:07 upstream liveness monitor. Not on
+    # the half hour: GitHub's docs name the start of every hour as the
+    # highest scheduled-workflow load, where a queued run can be delayed or
+    # dropped (2026-08-29); an odd minute avoids that slot.
+    - cron: '41 13 * * *'
   workflow_dispatch:
     inputs:
       layers:
