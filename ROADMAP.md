@@ -34,7 +34,8 @@ Historical release details and their verification receipts are in
 Make source, CI evidence, GitHub Pages, and the optional Cloudflare Worker
 agree before treating new capability as released. This phase addresses
 deterministic Playwright provisioning, repeatable browser failures, the
-MapLibre 5 cost decision, source-to-live drift detection, Worker revision
+MapLibre 5 cost decision, source-to-live drift detection, scheduled
+source-health receipts for the runtime's own queries, Worker revision
 convergence, failure artifacts, and immutable workflow action references. It
 also proves or declines globe projection and a separately named global
 low-zoom NASA GIBS context layer, then publishes and verifies the accepted

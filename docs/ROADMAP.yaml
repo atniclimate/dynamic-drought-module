@@ -1,6 +1,6 @@
 schema_version: 1
 roadmap_id: "ddm-forward-roadmap"
-updated_on: "2026-08-20"
+updated_on: "2026-08-28"
 product:
   name: "Dynamic Drought Module"
   short_name: "DDM"
@@ -408,6 +408,22 @@ phases:
           - "The canonical YAML parses and its reference graph resolves without duplicate IDs or cycles."
         dependencies: ["DDM-P0-T08", "DDM-P0-T09", "DDM-P0-T10"]
         external_authorization: "Explicit merge, tag, and deployment authorization required."
+      - id: "DDM-P0-T12"
+        name: "Record scheduled source-health receipts for every runtime query"
+        components: ["verification", "release_delivery"]
+        goal: "Catch a live source that no longer fits its layer budget on the day it changes, with the query the runtime actually sends, instead of learning it from an honest but wrong unavailable state."
+        outputs:
+          - "A scheduled workflow that builds and serves the application, boots it once per catalog layer, and records the runtime's own upstream requests: status, bytes, seconds, record count, and terminal layer state."
+          - "A job summary and a short-retention artifact for every run; no committed receipts."
+          - "One issue per breaching source, updated while the breach persists and closed on recovery."
+          - "A field-schema check in the drift monitor for every ArcGIS outFields list the runtime sends."
+        acceptance:
+          - "One scheduled run's receipt is visible in the Actions summary with every probed source inside budget or an issue opened for each breach."
+          - "The probe reuses the runtime's requests; no query string is hand-copied into the monitor."
+          - "Basemap tile hosts are not contacted by the probe, and every upstream request carries a named User-Agent."
+          - "A missing ArcGIS field named in a runtime outFields list fails the drift monitor at the runtime tier."
+        dependencies: ["DDM-P0-T04"]
+        external_authorization: "Issue creation behavior and probe cadence require owner review."
 
   - id: "DDM-P1"
     name: "Network lifecycle and failure honesty"
