@@ -12,17 +12,24 @@
  *      references resolves 200 relative to the base (the subpath contract:
  *      the repository seat mounts the artifact beneath its name);
  *   3. range: each PMTiles archive shipped from public/data answers a
- *      16 KiB byte-range request with 206 and a Content-Range from byte 0;
+ *      16 KiB byte-range request with 206 and a Content-Range from byte 0
+ *      whose TOTAL equals the size of that file in the checked-out commit,
+ *      so a stale or truncated archive at the same stable path cannot pass
+ *      a self-consistent range answer off as the shipped one;
  *   4. boots: root (default drought cluster), the wildfire, heat, and enso
  *      clusters, and the wildfire embed at 1280x800 and 390x844 carry the
- *      expected data-ddm-build-sha and data-ddm-build-nonce, raise no page
- *      errors, and every active layer pill reaches a terminal status
- *      inside --ceiling-ms and still terminal after a stability window
- *      (an upstream `unavailable` is recorded as a warning: the runtime
- *      enforces each layer's own budget and reports the terminal state;
- *      this check proves the state arrives and holds). The embed
- *      boots also prove the satellite and attribution controls are the top
- *      hit at their own centers and that no map-information button shows.
+ *      expected data-ddm-build-sha and a data-ddm-build-nonce from the
+ *      accepted set, raise no page errors, and show a status pill for
+ *      EVERY layer that boot's URL activates (EXPECTED_BOOT_LAYERS in
+ *      ./lib/live-receipts.mjs), each reaching a terminal status inside
+ *      --ceiling-ms, still terminal after a stability window, and still
+ *      present at the end. An upstream `unavailable` is a warning, because
+ *      the runtime enforces each layer's own budget and reports the
+ *      terminal state honestly; it is a failure when EVERY active layer is
+ *      unavailable, or when a layer that was `ready` in --previous (a
+ *      receipt for the same base) is unavailable now. The embed boots also
+ *      prove the satellite and attribution controls are the top hit at
+ *      their own centers and that no map-information button shows.
  *
  * Receipts hold URLs, HTTP status, bytes, milliseconds, and status words.
  * No screenshot, trace, or response body is written (hard rule 1: an
@@ -31,28 +38,40 @@
  * browser is Playwright's Chromium with the software-GL flags the suite
  * uses (playwright.config.ts).
  *
- * Usage: node scripts/verify-live.mjs --expect-sha <sha> --expect-nonce <run id>
- *   [--base <url>] [--out <json>] [--summary <markdown file to append>]
+ * --light runs 1, 2, and 3 plus the build stamp read straight out of the
+ * shipped script, and skips the six boots. It needs no browser and no
+ * node_modules, which is what makes a daily scheduled compare cheap; the
+ * deep proof runs after a deploy, on dispatch, and on any scheduled light
+ * mismatch. What the daily light run gives up is in the header of
+ * .github/workflows/verify-live.yml.
+ *
+ * Usage: node scripts/verify-live.mjs --expect-sha <sha> --expect-nonce <run id[,run id...]>
+ *   [--light] [--base <url>] [--out <json>] [--summary <markdown file to append>]
+ *   [--previous <earlier receipt json>]
  *   [--settle-ms n] [--interval-ms n] [--ceiling-ms n]
  * Exit 0 when every check passed, 1 when any failed, 2 on a usage error.
  */
-import { appendFile, readdir, writeFile } from 'node:fs/promises';
+import { appendFile, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { chromium, devices } from '@playwright/test';
-
 import {
+  EXPECTED_BOOT_LAYERS,
   TERMINAL_STATUSES,
   evaluateAssets,
   evaluateEmbedCorner,
   evaluateLayers,
   evaluateRange,
   evaluateStamp,
+  extractStamp,
   parseArgs,
   receiptOk,
   renderSummary,
 } from './lib/live-receipts.mjs';
+
+// Playwright is imported inside checkBoots, not here: --light runs with no
+// browser and no node_modules at all, so a scheduled compare costs an
+// HTTP conversation rather than an npm install and a Chromium provision.
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DATA = join(__dirname, '..', 'public', 'data');
@@ -79,21 +98,77 @@ try {
 
 const receipt = {
   base: args.base,
+  mode: args.light ? 'light' : 'deep',
   expectSha: args.expectSha,
   expectNonce: args.expectNonce,
+  expectNonces: args.expectNonces,
   startedAt: new Date().toISOString(),
   propagationMs: null,
   checks: [],
   assets: [],
+  assetStamp: null,
   ranges: [],
   cache: {},
   boots: [],
 };
 
 function record(name, verdict) {
-  receipt.checks.push({ name, ok: verdict.ok, reasons: verdict.reasons, warnings: verdict.warnings ?? [] });
+  receipt.checks.push({
+    name,
+    ok: verdict.ok,
+    reasons: verdict.reasons,
+    warnings: verdict.warnings ?? [],
+    ...(verdict.matchedNonce ? { matchedNonce: verdict.matchedNonce } : {}),
+  });
   const detail = verdict.reasons.length ? `: ${verdict.reasons.join('; ')}` : '';
   console.log(`${verdict.ok ? 'pass' : 'FAIL'} ${name}${detail}`);
+}
+
+/**
+ * The layer statuses an earlier receipt recorded, per boot, when one was
+ * supplied AND it describes the same site. A receipt from another base
+ * says nothing about this one, and no receipt at all means the
+ * ready-to-unavailable comparison cannot be made: both are recorded as a
+ * check with a warning rather than passing silently.
+ */
+async function loadPreviousStatuses() {
+  if (!args.previous) {
+    record('layers:previous-receipt', {
+      ok: true,
+      reasons: [],
+      warnings: ['no previous receipt was supplied, so the ready-to-unavailable comparison was skipped'],
+    });
+    return null;
+  }
+  let previous;
+  try {
+    previous = JSON.parse(await readFile(args.previous, 'utf8'));
+  } catch (error) {
+    record('layers:previous-receipt', {
+      ok: true,
+      reasons: [],
+      warnings: [`previous receipt ${args.previous} could not be read (${String(error.message ?? error).slice(0, 120)}), so the ready-to-unavailable comparison was skipped`],
+    });
+    return null;
+  }
+  if (previous?.base !== args.base) {
+    record('layers:previous-receipt', {
+      ok: true,
+      reasons: [],
+      warnings: [`previous receipt describes ${previous?.base ?? 'no base'}, not ${args.base}, so the ready-to-unavailable comparison was skipped`],
+    });
+    return null;
+  }
+  const byBoot = new Map();
+  for (const boot of previous.boots ?? []) {
+    byBoot.set(boot.name, Object.fromEntries((boot.layers ?? []).map((l) => [l.key, l.status])));
+  }
+  record('layers:previous-receipt', {
+    ok: true,
+    reasons: [],
+    warnings: [`comparing layer health against the receipt started ${previous.startedAt ?? 'at an unrecorded time'} for the same base`],
+  });
+  return byBoot;
 }
 
 async function get(url, init = {}) {
@@ -139,6 +214,7 @@ function assetUrls(html, base) {
 async function pagesSnapshot() {
   const rows = [];
   let found = !args.expectSha;
+  const stamp = { sha: null, nonce: null };
   const res = await get(args.base);
   const html = await res.text();
   receipt.cache.index = { url: args.base, ...cacheHeaders(res) };
@@ -148,13 +224,19 @@ async function pagesSnapshot() {
       const body = await r.text();
       rows.push({ url, status: r.status, bytes: Buffer.byteLength(body, 'utf8') });
       if (args.expectSha && body.includes(args.expectSha)) found = true;
+      // The same two literals the boots read from <html>, taken straight
+      // from the shipped script so the light check can name the live nonce
+      // without a browser.
+      const carried = extractStamp(body);
+      stamp.sha = stamp.sha ?? carried.sha;
+      stamp.nonce = stamp.nonce ?? carried.nonce;
       if (!receipt.cache.entry) receipt.cache.entry = { url, ...cacheHeaders(r) };
     } else {
       const r = await get(url, { method: 'HEAD' });
       rows.push({ url, status: r.status, bytes: Number(r.headers.get('content-length') ?? 0) });
     }
   }
-  return { rows, found };
+  return { rows, found, stamp };
 }
 
 async function checkPropagationAndSeat() {
@@ -164,8 +246,9 @@ async function checkPropagationAndSeat() {
   let seat = { ok: false, reasons: ['no snapshot taken'] };
   for (;;) {
     try {
-      const { rows, found } = await pagesSnapshot();
+      const { rows, found, stamp } = await pagesSnapshot();
       receipt.assets = rows;
+      receipt.assetStamp = stamp;
       propagation = found
         ? []
         : [`no referenced script contains ${args.expectSha} (index.html etag ${receipt.cache.index.etag ?? 'absent'})`];
@@ -184,10 +267,35 @@ async function checkPropagationAndSeat() {
   record('seat:assets-200', seat);
 }
 
+/**
+ * The build stamp read from the shipped script rather than from a booted
+ * page. Only in light mode: the six boots read the same two values from
+ * <html> and prove more, so recording this in deep mode would add a second
+ * verdict about the same fact whose only distinct failure mode is the
+ * regex. Here it is the whole nonce evidence, so a stamp that cannot be
+ * read fails and the workflow escalates to the deep proof.
+ */
+function checkAssetStamp() {
+  const verdict = evaluateStamp(receipt.assetStamp, { sha: args.expectSha, nonces: args.expectNonces });
+  verdict.reasons = verdict.reasons.map((r) =>
+    r.replace('missing data-ddm-build-', 'no referenced script assigns data-ddm-build-'),
+  );
+  record('stamp:assets', verdict);
+}
+
 async function checkRanges() {
   const names = (await readdir(PUBLIC_DATA)).filter((n) => n.endsWith('.pmtiles')).sort();
   for (const name of names) {
     const url = new URL(`data/${name}`, args.base).href;
+    // The checkout is the commit under proof (the workflow re-points it
+    // before this runs), so the file beside this script is the archive that
+    // build shipped and its size identifies what the site must serve.
+    let localBytes = null;
+    try {
+      localBytes = (await stat(join(PUBLIC_DATA, name))).size;
+    } catch (error) {
+      console.log(`could not size ${name} in the checkout: ${String(error.message ?? error).slice(0, 120)}`);
+    }
     let row;
     try {
       const res = await get(url, { headers: { Range: `bytes=0-${RANGE_BYTES - 1}` } });
@@ -199,9 +307,10 @@ async function checkRanges() {
         contentRange: res.headers.get('content-range'),
         acceptRanges: res.headers.get('accept-ranges'),
         bytes: buf.length,
+        localBytes,
       };
     } catch (error) {
-      row = { name, url, status: 0, contentRange: null, acceptRanges: null, bytes: 0, error: String(error.message ?? error).slice(0, 160) };
+      row = { name, url, status: 0, contentRange: null, acceptRanges: null, bytes: 0, localBytes, error: String(error.message ?? error).slice(0, 160) };
     }
     receipt.ranges.push(row);
     record(`range:${name}`, evaluateRange(row));
@@ -240,7 +349,22 @@ const pillsProbe = () =>
     }))
     .filter((p) => p.status !== null);
 
+/**
+ * The expected layer keys for a boot. A boot with no row in the table is a
+ * programming error, and the check that would silently pass with no
+ * expectation is exactly the vacuous pass this table exists to prevent, so
+ * it throws rather than defaulting to "expect nothing".
+ */
+function expectedLayerKeys(name) {
+  const keys = EXPECTED_BOOT_LAYERS[name];
+  if (!keys) throw new Error(`no expected layer set is declared for boot ${name}`);
+  return keys;
+}
+
 async function boot(browser, name, contextOptions, query, { corner = false } = {}) {
+  // Resolved before the browser context opens, so a boot with no declared
+  // expectation crashes the driver instead of proving nothing quietly.
+  const expectedKeys = expectedLayerKeys(name);
   const url = new URL(query, args.base).href;
   const context = await browser.newContext(contextOptions);
   const page = await context.newPage();
@@ -264,7 +388,7 @@ async function boot(browser, name, contextOptions, query, { corner = false } = {
     }));
     row.sha = stamp.sha ?? null;
     row.nonce = stamp.nonce ?? null;
-    record(`stamp:${name}`, evaluateStamp(stamp, { sha: args.expectSha, nonce: args.expectNonce }));
+    record(`stamp:${name}`, evaluateStamp(stamp, { sha: args.expectSha, nonces: args.expectNonces }));
 
     // A warm boot reaches the region select in a few hundred milliseconds,
     // before the registry has activated the first layer, so wait (bounded)
@@ -290,7 +414,14 @@ async function boot(browser, name, contextOptions, query, { corner = false } = {
         }
       }
       const pending = pills.filter((p) => !settled.has(p.key));
-      if (pending.length === 0 || elapsed >= args.ceilingMs) {
+      // "Every pill I can see is terminal" is not enough now that the
+      // expected set is enforced: the registry activates layers
+      // concurrently, so a slower one may not have rendered a status class
+      // yet, and exiting here would read it as never activated. Wait for
+      // the whole expected set as well, bounded by the same ceiling so a
+      // layer that truly never arrives still fails rather than hanging.
+      const awaited = expectedKeys.filter((key) => !settled.has(key));
+      if ((pending.length === 0 && awaited.length === 0) || elapsed >= args.ceilingMs) {
         for (const p of pending) settled.set(p.key, { key: p.key, status: p.status, settleMs: elapsed });
         break;
       }
@@ -299,20 +430,37 @@ async function boot(browser, name, contextOptions, query, { corner = false } = {
     // Stability window: raster layers report `ready` before a tile has
     // loaded and let a watcher downgrade them afterwards, so re-read every
     // pill after a pause and judge the FINAL state; the first terminal
-    // observation keeps its settle time.
+    // observation keeps its settle time. A pill that is GONE from the final
+    // read is not "still what it was": the old null-coalescing fallback
+    // silently kept its earlier value, so an unmounted layer read as
+    // healthy. It is recorded as disappeared and fails below.
     await page.waitForTimeout(STABILITY_MS);
     const finalPills = new Map((await page.evaluate(pillsProbe)).map((p) => [p.key, p.status]));
     const moved = [];
     for (const entry of settled.values()) {
-      const final = finalPills.get(entry.key) ?? entry.status;
+      if (!finalPills.has(entry.key)) {
+        entry.disappeared = true;
+        continue;
+      }
+      const final = finalPills.get(entry.key);
       if (final !== entry.status) {
         moved.push(`${entry.key} moved from ${entry.status} to ${final} during the ${STABILITY_MS} ms stability window`);
         entry.firstStatus = entry.status;
         entry.status = final;
       }
     }
+    // A pill that only appeared after the settle loop broke still belongs
+    // to this boot: record it with the elapsed time so a late-arriving
+    // layer is judged rather than missed.
+    const lateMs = Date.now() - tLayers;
+    for (const [key, status] of finalPills) {
+      if (!settled.has(key)) settled.set(key, { key, status, settleMs: lateMs, lateAppearance: true });
+    }
     row.layers = [...settled.values()];
-    const layersVerdict = evaluateLayers(row.layers, args.ceilingMs);
+    const layersVerdict = evaluateLayers(row.layers, args.ceilingMs, {
+      expectedKeys,
+      previousStatuses: previousStatuses?.get(name) ?? null,
+    });
     layersVerdict.warnings = [...layersVerdict.warnings, ...moved];
     record(`layers:${name}`, layersVerdict);
 
@@ -333,6 +481,7 @@ async function boot(browser, name, contextOptions, query, { corner = false } = {
 }
 
 async function checkBoots() {
+  const { chromium, devices } = await import('@playwright/test');
   const browser = await chromium.launch({ headless: true, args: CHROMIUM_ARGS });
   const desktop = { viewport: { width: 1440, height: 900 } };
   const phone = { ...devices['iPhone 14'], viewport: { width: 390, height: 844 } };
@@ -348,9 +497,16 @@ async function checkBoots() {
   }
 }
 
+let previousStatuses = null;
+
 await checkPropagationAndSeat();
 await checkRanges();
-await checkBoots();
+if (args.light) {
+  checkAssetStamp();
+} else {
+  previousStatuses = await loadPreviousStatuses();
+  await checkBoots();
+}
 
 receipt.failed = receipt.checks.filter((c) => !c.ok).map((c) => c.name);
 // A failure that is ONLY the propagation poll is inconclusive (the CDN may

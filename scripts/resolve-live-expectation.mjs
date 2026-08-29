@@ -22,8 +22,13 @@
  *     "graceMs": 1800000
  *   }
  *
- * Output lines: `verdict=`, `sha=`, `nonce=`, `reason=`. Every value is a
- * single line, so it is also safe to copy into `$GITHUB_ENV`.
+ * Output lines: `verdict=`, `sha=`, `nonce=`, `nonces=`, `warnings=`,
+ * `reason=`. Every value is a single line, so it is also safe to copy into
+ * `$GITHUB_ENV`. `nonces` is the comma-separated set of deploy runs that
+ * published the commit, in creation order; the live proof accepts any
+ * member, because more than one run can legitimately have put these bytes on
+ * Pages and only the site can say which one it is serving. `nonce` is the
+ * newest of them, the one the prose names.
  *
  * Usage: node scripts/resolve-live-expectation.mjs [--input <file>]
  *   [--output <path>] [--summary <path>]
@@ -93,9 +98,18 @@ try {
 const verdict = oneLine(expectation.verdict);
 const sha = oneLine(expectation.sha);
 const nonce = oneLine(expectation.nonce);
+const nonces = oneLine((expectation.nonces ?? []).join(','));
+const warnings = oneLine((expectation.warnings ?? []).join('; '));
 const reason = oneLine(expectation.reason);
 
-const lines = [`verdict=${verdict}`, `sha=${sha}`, `nonce=${nonce}`, `reason=${reason}`];
+const lines = [
+  `verdict=${verdict}`,
+  `sha=${sha}`,
+  `nonce=${nonce}`,
+  `nonces=${nonces}`,
+  `warnings=${warnings}`,
+  `reason=${reason}`,
+];
 if (options.output) appendFileSync(options.output, `${lines.join('\n')}\n`);
 console.log(lines.join('\n'));
 
@@ -105,8 +119,10 @@ if (options.summary) {
     'in-flight': 'release in flight, nothing to compare yet',
     undeployed: 'main is ahead of the live build',
   }[verdict] ?? verdict;
+  const accepted = nonces ? `\n\nAccepted build nonces: \`${nonces.split(',').join('`, `')}\`.` : '';
+  const noted = warnings ? `\n\nWarnings: ${warnings}` : '';
   appendFileSync(
     options.summary,
-    `## Live compare: ${headline}\n\nVerdict \`${verdict}\`. ${reason}\n\n`,
+    `## Live compare: ${headline}\n\nVerdict \`${verdict}\`. ${reason}${accepted}${noted}\n\n`,
   );
 }

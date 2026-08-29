@@ -1,14 +1,19 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
+  EXPECTED_BOOT_LAYERS,
   LIVE_COMPARE_GRACE_MS,
+  LIVE_INFLIGHT_STUCK_MS,
   TERMINAL_STATUSES,
   evaluateAssets,
   evaluateEmbedCorner,
   evaluateLayers,
   evaluateRange,
   evaluateStamp,
+  expectedNonces,
+  extractStamp,
   parseArgs,
   receiptOk,
   renderSummary,
@@ -29,10 +34,16 @@ test('parseArgs applies the live defaults and reads every flag', () => {
   assert.equal(a.base, 'http://127.0.0.1:4174/');
   assert.equal(a.expectSha, 'abc');
   assert.equal(a.expectNonce, '42');
+  assert.deepEqual(a.expectNonces, ['42']);
+  assert.deepEqual(parseArgs(['--expect-nonce', '42,43']).expectNonces, ['42', '43']);
   assert.equal(a.summary, 's.md');
   assert.equal(a.settleMs, 1000);
   assert.equal(a.ceilingMs, 2000);
   assert.equal(a.intervalMs, 100);
+  assert.equal(d.light, false);
+  const light = parseArgs(['--light', '--expect-sha', 'abc']);
+  assert.equal(light.light, true, '--light takes no value and does not eat the next flag');
+  assert.equal(light.expectSha, 'abc');
   assert.throws(() => parseArgs(['--base', 'ftp://x']), /http/);
   assert.throws(() => parseArgs(['--bogus']), /unknown/i);
   assert.throws(() => parseArgs(['--settle-ms', 'soon']), /integer/);
@@ -47,6 +58,35 @@ test('evaluateStamp requires the expected SHA, a non-dev nonce, and the expected
   assert.equal(evaluateStamp({ sha: 'abc-dirty', nonce: '7' }, { sha: 'abc' }).ok, false);
 });
 
+test('evaluateStamp accepts any member of the published-nonce set and records the match', () => {
+  const expect = { sha: 'abc', nonces: ['100', '200'] };
+  const first = evaluateStamp({ sha: 'abc', nonce: '100' }, expect);
+  assert.equal(first.ok, true);
+  assert.equal(first.matchedNonce, '100');
+  const second = evaluateStamp({ sha: 'abc', nonce: '200' }, expect);
+  assert.equal(second.ok, true);
+  assert.equal(second.matchedNonce, '200');
+  const other = evaluateStamp({ sha: 'abc', nonce: '300' }, expect);
+  assert.equal(other.ok, false);
+  assert.equal(other.matchedNonce, null);
+  assert.match(other.reasons[0], /nonce 300 is none of the deploy runs .*100, 200/);
+  // The workflow hands the set over as one comma-separated flag value.
+  assert.deepEqual(expectedNonces({ nonce: ' 100 , 200 ,' }), ['100', '200']);
+  assert.deepEqual(expectedNonces({}), []);
+  assert.equal(evaluateStamp({ sha: 'abc', nonce: '200' }, { sha: 'abc', nonce: '100,200' }).ok, true);
+});
+
+test('extractStamp reads the build sha and nonce out of a shipped script', () => {
+  const minified = 'x.dataset.ddmBuildSha="4a78af",x.dataset.ddmBuildNonce="33246718167";';
+  assert.deepEqual(extractStamp(minified), { sha: '4a78af', nonce: '33246718167' });
+  const spaced = "document.documentElement.dataset.ddmBuildSha = 'abc';\ndocument.documentElement.dataset.ddmBuildNonce = 'dev';";
+  assert.deepEqual(extractStamp(spaced), { sha: 'abc', nonce: 'dev' });
+  assert.deepEqual(extractStamp('nothing here'), { sha: null, nonce: null });
+  // A stamp that cannot be read is null, not an empty string that would
+  // slide past evaluateStamp as a value.
+  assert.equal(evaluateStamp(extractStamp('nothing here'), { sha: 'abc', nonces: ['1'] }).ok, false);
+});
+
 test('evaluateAssets fails on any non-200 relative asset and on an empty list', () => {
   assert.equal(evaluateAssets([{ url: 'x/a.js', status: 200 }]).ok, true);
   const r = evaluateAssets([{ url: 'x/a.js', status: 200 }, { url: 'x/b.css', status: 404 }]);
@@ -56,10 +96,26 @@ test('evaluateAssets fails on any non-200 relative asset and on an empty list', 
 });
 
 test('evaluateRange requires 206 with a Content-Range from byte 0 and a body of the promised size', () => {
-  assert.equal(evaluateRange({ name: 'a.pmtiles', status: 206, contentRange: 'bytes 0-16383/35252210', bytes: 16384 }).ok, true);
-  assert.equal(evaluateRange({ name: 'a.pmtiles', status: 200, contentRange: null, bytes: 35252210 }).ok, false);
-  assert.equal(evaluateRange({ name: 'a.pmtiles', status: 206, contentRange: 'bytes 100-16483/35252210', bytes: 16384 }).ok, false);
-  assert.equal(evaluateRange({ name: 'a.pmtiles', status: 206, contentRange: 'bytes 0-16383/35252210', bytes: 10 }).ok, false);
+  const row = { name: 'a.pmtiles', status: 206, contentRange: 'bytes 0-16383/35252210', bytes: 16384, localBytes: 35252210 };
+  assert.equal(evaluateRange(row).ok, true);
+  assert.equal(evaluateRange({ ...row, status: 200, contentRange: null, bytes: 35252210 }).ok, false);
+  assert.equal(evaluateRange({ ...row, contentRange: 'bytes 100-16483/35252210' }).ok, false);
+  assert.equal(evaluateRange({ ...row, bytes: 10 }).ok, false);
+});
+
+test('evaluateRange fails when the served archive is not the size of the checked-out one', () => {
+  const stale = evaluateRange({
+    name: 'hillshade-dem-pnw.pmtiles',
+    status: 206,
+    contentRange: 'bytes 0-16383/29000000',
+    bytes: 16384,
+    localBytes: 35252210,
+  });
+  assert.equal(stale.ok, false, 'a self-consistent range answer is not proof of identity');
+  assert.match(stale.reasons[0], /served archive is 29000000 bytes, the checked-out hillshade-dem-pnw\.pmtiles is 35252210/);
+  const unknown = evaluateRange({ name: 'a.pmtiles', status: 206, contentRange: 'bytes 0-16383/35252210', bytes: 16384, localBytes: null });
+  assert.equal(unknown.ok, false, 'an unknown local size cannot silently pass as identity');
+  assert.match(unknown.reasons[0], /checked-out size of a\.pmtiles is unknown/);
 });
 
 test('evaluateLayers passes terminal states inside the ceiling, warns on unavailable, fails on stuck or late', () => {
@@ -67,7 +123,10 @@ test('evaluateLayers passes terminal states inside the ceiling, warns on unavail
   const ok = evaluateLayers([{ key: 'states', status: 'ready', settleMs: 900 }], 45_000);
   assert.equal(ok.ok, true);
   assert.deepEqual(ok.warnings, []);
-  const warn = evaluateLayers([{ key: 'nifc-fires', status: 'error', settleMs: 15_200 }], 45_000);
+  const warn = evaluateLayers(
+    [{ key: 'states', status: 'ready', settleMs: 900 }, { key: 'nifc-fires', status: 'error', settleMs: 15_200 }],
+    45_000,
+  );
   assert.equal(warn.ok, true);
   assert.match(warn.warnings[0], /nifc-fires unavailable/);
   const stuck = evaluateLayers([{ key: 'aiannh', status: 'loading', settleMs: 45_000 }], 45_000);
@@ -77,6 +136,115 @@ test('evaluateLayers passes terminal states inside the ceiling, warns on unavail
   assert.equal(late.ok, false);
   const none = evaluateLayers([], 45_000);
   assert.equal(none.ok, false);
+  assert.match(none.reasons[0], /no layer pill carried a status/);
+});
+
+test('evaluateLayers fails on a missing expected pill, a vanished pill, and a total blackout', () => {
+  const rows = [
+    { key: 'states', status: 'ready', settleMs: 900 },
+    { key: 'aiannh', status: 'ready', settleMs: 1200 },
+  ];
+  assert.equal(evaluateLayers(rows, 45_000, { expectedKeys: ['states', 'aiannh'] }).ok, true);
+  const missing = evaluateLayers(rows, 45_000, { expectedKeys: ['states', 'aiannh', 'hillshade'] });
+  assert.equal(missing.ok, false, 'a layer that never carried a status is a failure, not an absence');
+  assert.match(missing.reasons[0], /expected layer hillshade never carried a status/);
+  const extra = evaluateLayers(rows, 45_000, { expectedKeys: ['states'] });
+  assert.equal(extra.ok, true, 'an unexpected active layer is a warning, not a failure');
+  assert.match(extra.warnings[0], /aiannh was active but is not in this boot's expected set/);
+  const gone = evaluateLayers(
+    [{ key: 'states', status: 'ready', settleMs: 900 }, { key: 'aiannh', status: 'ready', settleMs: 1200, disappeared: true }],
+    45_000,
+    { expectedKeys: ['states', 'aiannh'] },
+  );
+  assert.equal(gone.ok, false, 'a pill observed and then unmounted must not keep its earlier value');
+  assert.match(gone.reasons[0], /aiannh was ready and then vanished/);
+  const blackout = evaluateLayers(
+    [{ key: 'states', status: 'error', settleMs: 900 }, { key: 'aiannh', status: 'error', settleMs: 1200 }],
+    45_000,
+    { expectedKeys: ['states', 'aiannh'] },
+  );
+  assert.equal(blackout.ok, false, 'every layer unavailable is this boot, not two upstream outages');
+  assert.match(blackout.reasons[0], /every active layer is unavailable \(2 of 2\)/);
+});
+
+test('evaluateLayers fails a ready layer that is unavailable now, and only when a previous receipt exists', () => {
+  const rows = [
+    { key: 'states', status: 'ready', settleMs: 900 },
+    { key: 'nifc-fires', status: 'error', settleMs: 15_200 },
+  ];
+  const options = { expectedKeys: ['states', 'nifc-fires'] };
+  assert.equal(evaluateLayers(rows, 45_000, options).ok, true, 'no previous receipt, no comparison');
+  const regressed = evaluateLayers(rows, 45_000, {
+    ...options,
+    previousStatuses: { states: 'ready', 'nifc-fires': 'ready' },
+  });
+  assert.equal(regressed.ok, false);
+  assert.match(regressed.reasons[0], /nifc-fires was ready in the previous receipt .* unavailable now/);
+  const alreadyDown = evaluateLayers(rows, 45_000, {
+    ...options,
+    previousStatuses: { states: 'ready', 'nifc-fires': 'error' },
+  });
+  assert.equal(alreadyDown.ok, true, 'an upstream that was already down stays a warning');
+});
+
+// The table in live-receipts.mjs is a copy of runtime behavior, so it is
+// re-derived here from the two config files that own that behavior. A
+// recipe or defaultOn change that the table does not follow fails here
+// instead of letting the live proof pass with a layer missing.
+test('EXPECTED_BOOT_LAYERS still matches src/config/layers.ts and src/config/clusters.ts', () => {
+  const root = new URL('..', import.meta.url);
+  const layersSrc = readFileSync(new URL('src/config/layers.ts', root), 'utf8');
+  const clustersSrc = readFileSync(new URL('src/config/clusters.ts', root), 'utf8');
+
+  const defs = new Map();
+  const block = layersSrc.slice(layersSrc.indexOf('export const LAYER_DEFS'));
+  for (const line of block.slice(0, block.indexOf('\n];')).split('\n')) {
+    const key = /\{ key: '([^']+)'/.exec(line)?.[1];
+    if (!key) continue;
+    defs.set(key, {
+      role: /role: '([^']+)'/.exec(line)?.[1] ?? null,
+      defaultOn: /defaultOn: true/.test(line),
+      coActivateWith: [...(/coActivateWith: \[([^\]]*)\]/.exec(line)?.[1] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1]),
+    });
+  }
+  assert.ok(defs.size > 10, 'the layer definitions could not be parsed');
+
+  const clusterBody = clustersSrc.slice(clustersSrc.indexOf('export const HAZARD_CLUSTERS'));
+  const clusterObject = clusterBody.slice(0, clusterBody.indexOf('\n};'));
+  const marks = [...clusterObject.matchAll(/\n {2}(\w+): \{/g)];
+  const currentRecipe = new Map();
+  for (const [i, mark] of marks.entries()) {
+    const chunk = clusterObject.slice(mark.index, marks[i + 1]?.index ?? clusterObject.length);
+    const list = /current: \[([^\]]*)\]/.exec(chunk)?.[1] ?? '';
+    currentRecipe.set(mark[1], [...list.matchAll(/'([^']+)'/g)].map((m) => m[1]));
+  }
+  assert.deepEqual([...currentRecipe.keys()], ['drought', 'wildfire', 'heat', 'enso']);
+
+  // composeClusterIntent: every default-on key that is not a surface, then
+  // the cluster's recipe with coActivateWith partners expanded.
+  const persistent = [...defs].filter(([, d]) => d.defaultOn && d.role !== 'surface').map(([key]) => key);
+  const compose = (cluster) => {
+    const out = [...persistent];
+    for (const key of currentRecipe.get(cluster)) {
+      if (!out.includes(key)) out.push(key);
+      for (const partner of defs.get(key)?.coActivateWith ?? []) if (!out.includes(partner)) out.push(partner);
+    }
+    return out.sort();
+  };
+  // A bare URL is the default-on set exactly (src/state/url.ts).
+  const defaultOn = [...defs].filter(([, d]) => d.defaultOn).map(([key]) => key).sort();
+
+  const sorted = (keys) => [...keys].sort();
+  assert.deepEqual(sorted(EXPECTED_BOOT_LAYERS.root), defaultOn);
+  assert.deepEqual(sorted(EXPECTED_BOOT_LAYERS.root), compose('drought'), 'drought composes back to the default-on set');
+  assert.deepEqual(sorted(EXPECTED_BOOT_LAYERS.wildfire), compose('wildfire'));
+  assert.deepEqual(sorted(EXPECTED_BOOT_LAYERS.heat), compose('heat'));
+  assert.deepEqual(sorted(EXPECTED_BOOT_LAYERS.enso), compose('enso'));
+  assert.deepEqual(sorted(EXPECTED_BOOT_LAYERS['embed-1280']), compose('wildfire'));
+  assert.deepEqual(sorted(EXPECTED_BOOT_LAYERS['embed-390']), compose('wildfire'));
+  for (const [boot, keys] of Object.entries(EXPECTED_BOOT_LAYERS)) {
+    for (const key of keys) assert.ok(defs.has(key), `${boot} expects unknown layer ${key}`);
+  }
 });
 
 test('evaluateEmbedCorner requires the satellite and attribution hits and no map-information button', () => {
@@ -174,7 +342,7 @@ test('a dispatched compare behaves like the scheduled one and names its event', 
   assert.match(out.reason, /^workflow_dispatch compare:/);
 });
 
-test('when the same commit deployed successfully twice, the latest successful run is the nonce', () => {
+test('when the same commit deployed successfully twice, both runs are accepted and the newest is named', () => {
   const out = resolveLiveExpectation(scheduled({
     deployRuns: [
       run({ databaseId: 100, createdAt: minutesBefore(80), updatedAt: minutesBefore(70) }),
@@ -183,6 +351,93 @@ test('when the same commit deployed successfully twice, the latest successful ru
   }));
   assert.equal(out.verdict, 'verify');
   assert.equal(out.nonce, '200');
+  assert.deepEqual(out.nonces, ['100', '200'], 'creation order, oldest first');
+  assert.match(out.reason, /accepting any of 100, 200/);
+});
+
+// The wrong-nonce defect the 2026-08-29 adversarial review found: R1
+// published, R2 published later and is what Pages serves, then someone
+// re-ran R1 and that rerun failed. Ranking by updatedAt made the stale R1
+// the newest candidate, so the proof demanded R1's nonce and failed the
+// correct live build. Both are now accepted and the site decides.
+test('a failed rerun of an older publisher cannot outrank the run that published last', () => {
+  const out = resolveLiveExpectation(scheduled({
+    deployRuns: [
+      run({
+        databaseId: 1001,
+        createdAt: minutesBefore(180),
+        updatedAt: minutesBefore(2),
+        attempt: 2,
+        conclusion: 'failure',
+        status: 'completed',
+        anyAttemptSucceeded: true,
+      }),
+      run({ databaseId: 1002, createdAt: minutesBefore(90), updatedAt: minutesBefore(85) }),
+    ],
+  }));
+  assert.equal(out.verdict, 'verify');
+  assert.deepEqual(out.nonces, ['1001', '1002']);
+  assert.equal(out.nonce, '1002', 'the run created last is the one the prose names');
+  const live = evaluateStamp({ sha: HEAD, nonce: '1002' }, { sha: out.sha, nonces: out.nonces });
+  assert.equal(live.ok, true, "R2's nonce is accepted");
+  assert.equal(live.matchedNonce, '1002');
+  assert.equal(evaluateStamp({ sha: HEAD, nonce: '1001' }, { sha: out.sha, nonces: out.nonces }).ok, true);
+  assert.equal(evaluateStamp({ sha: HEAD, nonce: '999' }, { sha: out.sha, nonces: out.nonces }).ok, false);
+});
+
+// A run that is still `in_progress` may already have finished its
+// deploy-pages step, so the site can be serving its nonce while the run
+// list still calls it unfinished. Leaving it out of the set turned the
+// site's honest answer into a failure.
+test('an unfinished newer run for the same commit is an accepted nonce', () => {
+  const out = resolveLiveExpectation(scheduled({
+    deployRuns: [
+      run({ databaseId: 2001, createdAt: minutesBefore(120), updatedAt: minutesBefore(110) }),
+      run({
+        databaseId: 2002,
+        conclusion: null,
+        status: 'in_progress',
+        anyAttemptSucceeded: false,
+        createdAt: minutesBefore(8),
+        updatedAt: minutesBefore(8),
+      }),
+    ],
+  }));
+  assert.equal(out.verdict, 'verify');
+  assert.deepEqual(out.nonces, ['2001', '2002']);
+  assert.equal(out.nonce, '2001', 'the prose names a run that is known to have published');
+  assert.match(out.reason, /deploy run 2002 for the same commit has not concluded/);
+  const expect = { sha: out.sha, nonces: out.nonces };
+  assert.equal(evaluateStamp({ sha: HEAD, nonce: '2002' }, expect).ok, true, 'the site may already serve it');
+  assert.equal(evaluateStamp({ sha: HEAD, nonce: '2001' }, expect).ok, true);
+  assert.equal(evaluateStamp({ sha: HEAD, nonce: '2003' }, expect).ok, false);
+  // An unfinished run with NO published run behind it is still in-flight:
+  // accepting its nonce there would expect a build that cannot be live.
+  const alone = resolveLiveExpectation(scheduled({
+    deployRuns: [run({ databaseId: 2002, conclusion: null, status: 'in_progress', anyAttemptSucceeded: false, createdAt: minutesBefore(8), updatedAt: minutesBefore(8) })],
+  }));
+  assert.equal(alone.verdict, 'in-flight');
+  assert.deepEqual(alone.nonces, []);
+});
+
+test('a future-dated head does not stay in-flight forever', () => {
+  const hours = (n) => new Date(Date.parse(NOW) + n * 3_600_000).toISOString();
+  // No deploy run at all: the only clock is unusable, so the age reads as
+  // zero and the compare says so instead of trusting the future date.
+  const alone = resolveLiveExpectation(scheduled({ headCommittedAt: hours(48), deployRuns: [] }));
+  assert.equal(alone.verdict, 'in-flight');
+  assert.match(alone.warnings[0], /committer date .* is 2880 minutes in the future/);
+  assert.match(alone.reason, /is 0 minutes old/);
+  // With a deploy run for the head, the run clock is the whole answer: a
+  // head whose only deploy failed three hours ago is a divergence no
+  // matter what its committer date claims.
+  const withRun = resolveLiveExpectation(scheduled({
+    headCommittedAt: hours(48),
+    deployRuns: [run({ databaseId: 808, conclusion: 'failure', createdAt: minutesBefore(180), updatedAt: minutesBefore(175) })],
+  }));
+  assert.equal(withRun.verdict, 'undeployed');
+  assert.match(withRun.reason, /head for 180 minutes/);
+  assert.match(withRun.reason, /warning: the committer date/);
 });
 
 // A real rerun keeps the run id and only bumps `attempt`, and gh run list
@@ -241,7 +496,7 @@ test('a queued or running deploy of main head is in-flight, not a divergence', (
   assert.match(running.reason, /is in_progress/);
 });
 
-test('a deploy stuck unfinished past the grace period stops reading as in-flight', () => {
+test('a deploy stuck unfinished past the in-flight bound stops reading as in-flight', () => {
   const stuck = resolveLiveExpectation(scheduled({
     deployRuns: [run({
       databaseId: 902,
@@ -252,15 +507,33 @@ test('a deploy stuck unfinished past the grace period stops reading as in-flight
     })],
   }));
   assert.equal(stuck.verdict, 'undeployed');
-  assert.match(stuck.reason, /deploy run 902 has been queued for 75 minutes, past the 30 minute grace period/);
+  assert.match(stuck.reason, /deploy run 902 has been queued for 75 minutes, past the 60 minute in-flight bound/);
   const waiting = resolveLiveExpectation(scheduled({
-    deployRuns: [run({ databaseId: 903, conclusion: null, status: 'waiting', createdAt: minutesBefore(45), updatedAt: minutesBefore(45) })],
+    deployRuns: [run({ databaseId: 903, conclusion: null, status: 'waiting', createdAt: minutesBefore(90), updatedAt: minutesBefore(90) })],
   }));
   assert.equal(waiting.verdict, 'undeployed', 'an environment protection hold is still a live build that never arrived');
   const fresh = resolveLiveExpectation(scheduled({
     deployRuns: [run({ databaseId: 904, conclusion: null, status: 'queued', createdAt: minutesBefore(4), updatedAt: minutesBefore(4) })],
   }));
   assert.equal(fresh.verdict, 'in-flight');
+});
+
+// The deploy's own envelope is longer than the head's grace: a 15 minute
+// gate plus a 40 minute browser shard budget. A run 45 minutes in is late,
+// not stuck, and answering both questions with 30 minutes accused it.
+test('the head grace and the in-flight bound are separate envelopes', () => {
+  assert.equal(LIVE_COMPARE_GRACE_MS, 30 * 60 * 1000);
+  assert.equal(LIVE_INFLIGHT_STUCK_MS, 60 * 60 * 1000);
+  const late = resolveLiveExpectation(scheduled({
+    deployRuns: [run({ databaseId: 910, conclusion: null, status: 'in_progress', createdAt: minutesBefore(45), updatedAt: minutesBefore(45) })],
+  }));
+  assert.equal(late.verdict, 'in-flight', 'still inside the deploy budget the browser suite documents');
+  const tightened = resolveLiveExpectation(scheduled({
+    stuckMs: 20 * 60_000,
+    deployRuns: [run({ databaseId: 911, conclusion: null, status: 'in_progress', createdAt: minutesBefore(45), updatedAt: minutesBefore(45) })],
+  }));
+  assert.equal(tightened.verdict, 'undeployed', 'the bound is an input, not a constant the caller cannot reach');
+  assert.match(tightened.reason, /past the 20 minute in-flight bound/);
 });
 
 test('an unfinished deploy whose start time cannot be read is not waited on forever', () => {

@@ -289,29 +289,71 @@ from the other direction. `scripts/resolve-live-expectation.mjs`, whose
 judgment is the pure `resolveLiveExpectation` in
 `scripts/lib/live-receipts.mjs` (unit-tested in
 `tests/live-receipts.test.mjs`), reads the event, the head of `main`, that
-commit's committer date, and the last thirty `deploy.yml` runs for `main`,
-and returns one of three verdicts:
+commit's committer date, and the last hundred `deploy.yml` runs for `main`
+merged with a second query filtered to the head itself (so no amount of
+unrelated activity can evict that head's own runs from the window). The head
+is read BEFORE the runs, so a push between the two calls can only add runs
+the snapshot has not seen. It returns one of three verdicts:
 
 - `verify`: run the same live proof. For a post-deploy event the expected
   commit and nonce are the deploy run's own; for a scheduled or dispatched
-  compare they are the head of `main` and the latest successful deploy run
-  of that head.
-- `in-flight`: a deploy of the head is queued or running and was created
-  less than 30 minutes ago, or the head is younger than that same grace
-  period and has no successful deploy yet. The run records the reason and
-  ends green without verifying and without touching issues, because a
-  release under way is not a divergence. The grace period covers a normal
-  green push (gate, sharded browser suite, and `deploy-pages` take about 15
-  minutes) with room for a slow runner. It also bounds the wait: a deploy
-  parked in `queued` or `waiting` past the grace period escalates rather
-  than keeping the compare green forever, and the head's age is floored by
-  its newest deploy run's start so a backdated committer date cannot skip
-  the grace.
-- `undeployed`: the head is past the grace period with no successful deploy.
-  The run names the latest deploy run for that commit and its conclusion,
-  appends to or opens the same single `deploy-divergence` issue (same marker
-  comment, so a scheduled finding and a post-deploy finding are never two
-  issues), and fails.
+  compare the commit is the head of `main` and the expectation is the SET of
+  every deploy run that published it, in creation order. More than one run
+  can legitimately have published a commit and only the site can say which
+  bytes it serves, so the proof accepts any member and the receipt records
+  the one that matched.
+- `in-flight`: a deploy of the head is queued or running inside the
+  in-flight bound, or the head is younger than the grace period and has no
+  successful deploy yet. The run records the reason and ends green without
+  verifying and without touching issues, because a release under way is not
+  a divergence.
+- `undeployed`: the head is past the grace period with no successful deploy,
+  or its deploy run is past the in-flight bound. The run names the latest
+  deploy run for that commit and its conclusion, appends to or opens the same
+  single `deploy-divergence` issue (same marker comment, so a scheduled
+  finding and a post-deploy finding are never two issues), and fails.
+
+Two envelopes, because "how long may a commit go undeployed" and "how long
+may one deploy run take" are different questions:
+
+- head grace, 30 minutes from the commit (`LIVE_COMPARE_GRACE_MS`): a normal
+  green push takes about 15 minutes through the gate, the sharded browser
+  suite, and `deploy-pages`, and this leaves room for a slow runner. The
+  head's age is floored by its OLDEST deploy run's start, so a backdated
+  committer date cannot skip the grace and a retry cannot reset a clock the
+  head has already spent.
+- in-flight bound, 60 minutes from the deploy run's creation
+  (`LIVE_INFLIGHT_STUCK_MS`): the deploy's own envelope is longer than the
+  head grace, since `browser-suite.yml` budgets 40 minutes per shard and
+  `deploy.yml` adds a 15 minute gate before it. A run 45 minutes in is late,
+  not stuck. Past the bound, a deploy parked in `queued` or `waiting`
+  escalates rather than keeping the compare green forever.
+
+Both are inputs the workflow passes, not constants buried in the library, and
+`verify-live.yml` gives the job 35 minutes so a cache-miss Chromium provision
+(up to 10), the 16 minute verifier, and the issue steps all fit inside it.
+
+Every issue mutation, not only the close, refetches `main` immediately before
+writing. A run whose commit is no longer the head files nothing, records
+"superseded" in the job summary, and ends green.
+
+A `verify` runs at one of two depths. The light half (`--light`) waits for
+propagation, reads the build sha and nonce out of the shipped script, checks
+every referenced asset answers 200, and range-checks each PMTiles archive
+against the size of that file in the checked-out commit. It needs no browser
+and no `node_modules`. The deep half adds the six boots. A post-deploy proof
+and a `workflow_dispatch` always run deep; the daily scheduled compare runs
+light and escalates to deep only when the light half fails, so a green day
+never pays for an npm install and a Chromium provision.
+
+What the daily light run gives up: browser-visible degradation with no
+deploy behind it, such as a layer that stops reaching a terminal state
+against unchanged bytes. That is acceptable because the daily
+`source-health` workflow already boots the application against every catalog
+source and opens its own issues, and because the served bytes themselves are
+still checked every day here. What is no longer checked daily is one
+particular way of reading them, and any mismatch in the cheap checks brings
+the deep proof back the same run.
 
 The `node --test` suites live in `tests/` beside the Playwright specs but are
 excluded from the `chromium` project (`testIgnore: '**/*.test.mjs'`), because
