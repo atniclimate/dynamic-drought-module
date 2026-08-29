@@ -15,14 +15,18 @@
  *      16 KiB byte-range request with 206 and a Content-Range from byte 0;
  *   4. boots: root (default drought cluster), the wildfire, heat, and enso
  *      clusters, and the wildfire embed at 1280x800 and 390x844 carry the
- *      expected data-ddm-build-sha and data-ddm-build-nonce, raise no page
- *      errors, and every active layer pill reaches a terminal status
- *      inside --ceiling-ms and still terminal after a stability window
- *      (an upstream `unavailable` is recorded as a warning: the runtime
- *      enforces each layer's own budget and reports the terminal state;
- *      this check proves the state arrives and holds). The embed
- *      boots also prove the satellite and attribution controls are the top
- *      hit at their own centers and that no map-information button shows.
+ *      expected data-ddm-build-sha and a data-ddm-build-nonce from the
+ *      accepted set, raise no page errors, and show a status pill for
+ *      EVERY layer that boot's URL activates (EXPECTED_BOOT_LAYERS in
+ *      ./lib/live-receipts.mjs), each reaching a terminal status inside
+ *      --ceiling-ms, still terminal after a stability window, and still
+ *      present at the end. An upstream `unavailable` is a warning, because
+ *      the runtime enforces each layer's own budget and reports the
+ *      terminal state honestly; it is a failure when EVERY active layer is
+ *      unavailable, or when a layer that was `ready` in --previous (a
+ *      receipt for the same base) is unavailable now. The embed boots also
+ *      prove the satellite and attribution controls are the top hit at
+ *      their own centers and that no map-information button shows.
  *
  * Receipts hold URLs, HTTP status, bytes, milliseconds, and status words.
  * No screenshot, trace, or response body is written (hard rule 1: an
@@ -33,16 +37,18 @@
  *
  * Usage: node scripts/verify-live.mjs --expect-sha <sha> --expect-nonce <run id[,run id...]>
  *   [--base <url>] [--out <json>] [--summary <markdown file to append>]
+ *   [--previous <earlier receipt json>]
  *   [--settle-ms n] [--interval-ms n] [--ceiling-ms n]
  * Exit 0 when every check passed, 1 when any failed, 2 on a usage error.
  */
-import { appendFile, readdir, writeFile } from 'node:fs/promises';
+import { appendFile, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { chromium, devices } from '@playwright/test';
 
 import {
+  EXPECTED_BOOT_LAYERS,
   TERMINAL_STATUSES,
   evaluateAssets,
   evaluateEmbedCorner,
@@ -101,6 +107,53 @@ function record(name, verdict) {
   });
   const detail = verdict.reasons.length ? `: ${verdict.reasons.join('; ')}` : '';
   console.log(`${verdict.ok ? 'pass' : 'FAIL'} ${name}${detail}`);
+}
+
+/**
+ * The layer statuses an earlier receipt recorded, per boot, when one was
+ * supplied AND it describes the same site. A receipt from another base
+ * says nothing about this one, and no receipt at all means the
+ * ready-to-unavailable comparison cannot be made: both are recorded as a
+ * check with a warning rather than passing silently.
+ */
+async function loadPreviousStatuses() {
+  if (!args.previous) {
+    record('layers:previous-receipt', {
+      ok: true,
+      reasons: [],
+      warnings: ['no previous receipt was supplied, so the ready-to-unavailable comparison was skipped'],
+    });
+    return null;
+  }
+  let previous;
+  try {
+    previous = JSON.parse(await readFile(args.previous, 'utf8'));
+  } catch (error) {
+    record('layers:previous-receipt', {
+      ok: true,
+      reasons: [],
+      warnings: [`previous receipt ${args.previous} could not be read (${String(error.message ?? error).slice(0, 120)}), so the ready-to-unavailable comparison was skipped`],
+    });
+    return null;
+  }
+  if (previous?.base !== args.base) {
+    record('layers:previous-receipt', {
+      ok: true,
+      reasons: [],
+      warnings: [`previous receipt describes ${previous?.base ?? 'no base'}, not ${args.base}, so the ready-to-unavailable comparison was skipped`],
+    });
+    return null;
+  }
+  const byBoot = new Map();
+  for (const boot of previous.boots ?? []) {
+    byBoot.set(boot.name, Object.fromEntries((boot.layers ?? []).map((l) => [l.key, l.status])));
+  }
+  record('layers:previous-receipt', {
+    ok: true,
+    reasons: [],
+    warnings: [`comparing layer health against the receipt started ${previous.startedAt ?? 'at an unrecorded time'} for the same base`],
+  });
+  return byBoot;
 }
 
 async function get(url, init = {}) {
@@ -247,7 +300,22 @@ const pillsProbe = () =>
     }))
     .filter((p) => p.status !== null);
 
+/**
+ * The expected layer keys for a boot. A boot with no row in the table is a
+ * programming error, and the check that would silently pass with no
+ * expectation is exactly the vacuous pass this table exists to prevent, so
+ * it throws rather than defaulting to "expect nothing".
+ */
+function expectedLayerKeys(name) {
+  const keys = EXPECTED_BOOT_LAYERS[name];
+  if (!keys) throw new Error(`no expected layer set is declared for boot ${name}`);
+  return keys;
+}
+
 async function boot(browser, name, contextOptions, query, { corner = false } = {}) {
+  // Resolved before the browser context opens, so a boot with no declared
+  // expectation crashes the driver instead of proving nothing quietly.
+  const expectedKeys = expectedLayerKeys(name);
   const url = new URL(query, args.base).href;
   const context = await browser.newContext(contextOptions);
   const page = await context.newPage();
@@ -306,20 +374,37 @@ async function boot(browser, name, contextOptions, query, { corner = false } = {
     // Stability window: raster layers report `ready` before a tile has
     // loaded and let a watcher downgrade them afterwards, so re-read every
     // pill after a pause and judge the FINAL state; the first terminal
-    // observation keeps its settle time.
+    // observation keeps its settle time. A pill that is GONE from the final
+    // read is not "still what it was": the old null-coalescing fallback
+    // silently kept its earlier value, so an unmounted layer read as
+    // healthy. It is recorded as disappeared and fails below.
     await page.waitForTimeout(STABILITY_MS);
     const finalPills = new Map((await page.evaluate(pillsProbe)).map((p) => [p.key, p.status]));
     const moved = [];
     for (const entry of settled.values()) {
-      const final = finalPills.get(entry.key) ?? entry.status;
+      if (!finalPills.has(entry.key)) {
+        entry.disappeared = true;
+        continue;
+      }
+      const final = finalPills.get(entry.key);
       if (final !== entry.status) {
         moved.push(`${entry.key} moved from ${entry.status} to ${final} during the ${STABILITY_MS} ms stability window`);
         entry.firstStatus = entry.status;
         entry.status = final;
       }
     }
+    // A pill that only appeared after the settle loop broke still belongs
+    // to this boot: record it with the elapsed time so a late-arriving
+    // layer is judged rather than missed.
+    const lateMs = Date.now() - tLayers;
+    for (const [key, status] of finalPills) {
+      if (!settled.has(key)) settled.set(key, { key, status, settleMs: lateMs, lateAppearance: true });
+    }
     row.layers = [...settled.values()];
-    const layersVerdict = evaluateLayers(row.layers, args.ceilingMs);
+    const layersVerdict = evaluateLayers(row.layers, args.ceilingMs, {
+      expectedKeys,
+      previousStatuses: previousStatuses?.get(name) ?? null,
+    });
     layersVerdict.warnings = [...layersVerdict.warnings, ...moved];
     record(`layers:${name}`, layersVerdict);
 
@@ -355,8 +440,11 @@ async function checkBoots() {
   }
 }
 
+let previousStatuses = null;
+
 await checkPropagationAndSeat();
 await checkRanges();
+previousStatuses = await loadPreviousStatuses();
 await checkBoots();
 
 receipt.failed = receipt.checks.filter((c) => !c.ok).map((c) => c.name);

@@ -333,6 +333,35 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Verifying $DEPLOY_SHA (deploy run $DEPLOY_RUN_ID) at $url"
 
+      # Best effort only. The newest kept receipt from an earlier green run
+      # of this workflow lets the verifier tell "this layer has been
+      # unavailable for a while" from "this layer was ready last time and is
+      # unavailable now", which is the difference between an upstream outage
+      # and a caught regression. When there is none (retention expired, an
+      # Actions hiccup, the first run after a change) the receipt records
+      # that the comparison was skipped rather than claiming it passed.
+      - name: Fetch the previous live receipt
+        id: previous
+        if: ${{ steps.expect.outputs.verdict == 'verify' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          mkdir -p previous
+          id=$(gh run list --workflow=verify-live.yml --status success --limit 5 \
+                 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+          if [ -n "${id:-}" ]; then
+            gh run download "$id" -n live-receipt -D previous >/dev/null 2>&1 || true
+          fi
+          if [ -f previous/live-receipt.json ]; then
+            echo "path=previous/live-receipt.json" >> "$GITHUB_OUTPUT"
+            echo "Comparing layer health against the receipt kept by run ${id:-unknown}."
+          else
+            echo "path=" >> "$GITHUB_OUTPUT"
+            echo "No earlier live receipt is available; the comparison will be recorded as skipped."
+          fi
+
       # Budget: up to 5 minutes of propagation polling, five range reads,
       # and six boots of up to about a minute each; the issue steps below
       # run even when this step times out.
@@ -346,6 +375,7 @@ jobs:
             --base "${{ steps.pages.outputs.url }}" \
             --expect-sha "$DEPLOY_SHA" \
             --expect-nonce "$DEPLOY_RUN_NONCES" \
+            --previous "${{ steps.previous.outputs.path }}" \
             --out live-receipt.json \
             --summary "$GITHUB_STEP_SUMMARY" 2>&1 | tee verify-output.txt
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"

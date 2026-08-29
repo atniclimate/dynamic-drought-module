@@ -26,6 +26,10 @@ const DEFAULTS = Object.freeze({
   expectNonce: '',
   out: 'live-receipt.json',
   summary: null,
+  // An earlier receipt to compare layer health against. Optional: when it
+  // is absent the driver records that the ready-to-unavailable regression
+  // check was skipped rather than pretending it passed.
+  previous: null,
   // Pages propagation wait: the CDN can serve the previous build briefly
   // after deploy-pages returns, so the driver polls the referenced assets
   // for the expected SHA up to this long, at this interval.
@@ -44,6 +48,7 @@ const FLAGS = new Map([
   ['--expect-nonce', ['expectNonce', 'string']],
   ['--out', ['out', 'string']],
   ['--summary', ['summary', 'string']],
+  ['--previous', ['previous', 'string']],
   ['--settle-ms', ['settleMs', 'int']],
   ['--interval-ms', ['intervalMs', 'int']],
   ['--ceiling-ms', ['ceilingMs', 'int']],
@@ -124,17 +129,104 @@ export function evaluateRange(row) {
   return { ok: reasons.length === 0, reasons };
 }
 
-export function evaluateLayers(rows, ceilingMs) {
+/**
+ * The layer keys each live boot must show a status pill for.
+ *
+ * Derived from the runtime, not invented here. `src/config/layers.ts`
+ * marks five layers `defaultOn`: hillshade, nadm-drought, aiannh,
+ * bia-reservations, and states. `src/state/url.ts` turns a URL into a boot
+ * set three ways: an explicit `?layers=` list wins; otherwise a
+ * `?cluster=` other than the default composes
+ * `composeClusterIntent(cluster, horizon)` from
+ * `src/state/cluster-service.ts`, which is every default-on key whose role
+ * is NOT `surface` (hillshade, aiannh, bia-reservations, states: the
+ * persistent reference set that survives a cluster switch) plus that
+ * cluster's recipe for the horizon, `coActivateWith` partners expanded;
+ * and a bare URL is the default-on set exactly. No boot below passes
+ * `?layers=`, and none passes `?horizon=`, so every cluster boot composes
+ * at the `current` horizon: wildfire is nifc-fires plus hms-smoke, heat is
+ * heatrisk plus nws-alerts, enso is sst-anomaly, and drought (the bare
+ * root boot) is nadm-drought, which composes back to exactly the
+ * default-on set.
+ *
+ * tests/live-receipts.test.mjs re-derives this table from those two config
+ * files on every run, so a recipe or defaultOn change that this table does
+ * not follow fails the unit suite rather than quietly letting the live
+ * proof pass with a layer missing.
+ */
+const PERSISTENT_REFERENCE = ['hillshade', 'aiannh', 'bia-reservations', 'states'];
+const WILDFIRE_BOOT = [...PERSISTENT_REFERENCE, 'nifc-fires', 'hms-smoke'];
+export const EXPECTED_BOOT_LAYERS = Object.freeze({
+  root: [...PERSISTENT_REFERENCE, 'nadm-drought'],
+  wildfire: WILDFIRE_BOOT,
+  heat: [...PERSISTENT_REFERENCE, 'heatrisk', 'nws-alerts'],
+  enso: [...PERSISTENT_REFERENCE, 'sst-anomaly'],
+  // Both embed boots carry `?embed=true&cluster=wildfire`; embed changes
+  // the chrome, not the composed layer set.
+  'embed-1280': WILDFIRE_BOOT,
+  'embed-390': WILDFIRE_BOOT,
+});
+
+/**
+ * Judge one boot's layer pills.
+ *
+ * `options.expectedKeys` is that boot's row of EXPECTED_BOOT_LAYERS: a
+ * layer that never carries a status is a failure, not an absence, because
+ * the previous shape of this check only asked whether the pills it happened
+ * to observe were terminal and so could pass with a layer missing
+ * altogether. `options.previousStatuses` is the same boot's key-to-status
+ * map from an earlier receipt against the SAME base; when it is absent the
+ * caller records that the comparison was skipped.
+ *
+ * `error` stays a warning on its own, because an upstream outage is not a
+ * build failure and the runtime is reporting it honestly. It stops being
+ * only a warning when every active layer is `error` (nothing upstream is
+ * that unlucky; that shape is the boot's own network or the build) or when
+ * a layer that was `ready` last time is `error` now against the same site.
+ */
+export function evaluateLayers(rows, ceilingMs, options = {}) {
   const reasons = [];
   const warnings = [];
-  if (rows.length === 0) reasons.push('no layer pills were active');
+  const expected = [...(options.expectedKeys ?? [])];
+  const seen = new Set(rows.map((r) => r.key));
+  if (rows.length === 0) reasons.push('no layer pill carried a status');
+  for (const key of expected) {
+    if (!seen.has(key)) reasons.push(`expected layer ${key} never carried a status`);
+  }
+  for (const key of seen) {
+    if (expected.length > 0 && !expected.includes(key)) {
+      warnings.push(`${key} was active but is not in this boot's expected set`);
+    }
+  }
+  let terminal = 0;
+  let unavailable = 0;
   for (const r of rows) {
-    if (!r.status || !TERMINAL_STATUSES.has(r.status)) {
+    if (r.disappeared) {
+      reasons.push(`${r.key} was ${r.status ?? 'without status'} and then vanished from the catalog`);
+    } else if (!r.status || !TERMINAL_STATUSES.has(r.status)) {
       reasons.push(`${r.key} still ${r.status ?? 'without status'} after ${r.settleMs} ms`);
     } else if (r.settleMs > ceilingMs) {
+      terminal += 1;
       reasons.push(`${r.key} reached ${r.status} at ${r.settleMs} ms, over the ${ceilingMs} ms ceiling`);
     } else if (r.status === 'error') {
+      terminal += 1;
+      unavailable += 1;
       warnings.push(`${r.key} unavailable at ${r.settleMs} ms (upstream, not the build)`);
+    } else {
+      terminal += 1;
+    }
+  }
+  if (terminal > 0 && unavailable === terminal) {
+    reasons.push(
+      `every active layer is unavailable (${unavailable} of ${terminal}); that is this boot's own network or build, not ${unavailable} simultaneous upstream outages`,
+    );
+  }
+  const previous = options.previousStatuses ?? null;
+  if (previous) {
+    for (const r of rows) {
+      if (r.status === 'error' && previous[r.key] === 'ready') {
+        reasons.push(`${r.key} was ready in the previous receipt for this base and is unavailable now`);
+      }
     }
   }
   return { ok: reasons.length === 0, reasons, warnings };

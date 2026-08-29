@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
+  EXPECTED_BOOT_LAYERS,
   LIVE_COMPARE_GRACE_MS,
   TERMINAL_STATUSES,
   evaluateAssets,
@@ -88,7 +90,10 @@ test('evaluateLayers passes terminal states inside the ceiling, warns on unavail
   const ok = evaluateLayers([{ key: 'states', status: 'ready', settleMs: 900 }], 45_000);
   assert.equal(ok.ok, true);
   assert.deepEqual(ok.warnings, []);
-  const warn = evaluateLayers([{ key: 'nifc-fires', status: 'error', settleMs: 15_200 }], 45_000);
+  const warn = evaluateLayers(
+    [{ key: 'states', status: 'ready', settleMs: 900 }, { key: 'nifc-fires', status: 'error', settleMs: 15_200 }],
+    45_000,
+  );
   assert.equal(warn.ok, true);
   assert.match(warn.warnings[0], /nifc-fires unavailable/);
   const stuck = evaluateLayers([{ key: 'aiannh', status: 'loading', settleMs: 45_000 }], 45_000);
@@ -98,6 +103,115 @@ test('evaluateLayers passes terminal states inside the ceiling, warns on unavail
   assert.equal(late.ok, false);
   const none = evaluateLayers([], 45_000);
   assert.equal(none.ok, false);
+  assert.match(none.reasons[0], /no layer pill carried a status/);
+});
+
+test('evaluateLayers fails on a missing expected pill, a vanished pill, and a total blackout', () => {
+  const rows = [
+    { key: 'states', status: 'ready', settleMs: 900 },
+    { key: 'aiannh', status: 'ready', settleMs: 1200 },
+  ];
+  assert.equal(evaluateLayers(rows, 45_000, { expectedKeys: ['states', 'aiannh'] }).ok, true);
+  const missing = evaluateLayers(rows, 45_000, { expectedKeys: ['states', 'aiannh', 'hillshade'] });
+  assert.equal(missing.ok, false, 'a layer that never carried a status is a failure, not an absence');
+  assert.match(missing.reasons[0], /expected layer hillshade never carried a status/);
+  const extra = evaluateLayers(rows, 45_000, { expectedKeys: ['states'] });
+  assert.equal(extra.ok, true, 'an unexpected active layer is a warning, not a failure');
+  assert.match(extra.warnings[0], /aiannh was active but is not in this boot's expected set/);
+  const gone = evaluateLayers(
+    [{ key: 'states', status: 'ready', settleMs: 900 }, { key: 'aiannh', status: 'ready', settleMs: 1200, disappeared: true }],
+    45_000,
+    { expectedKeys: ['states', 'aiannh'] },
+  );
+  assert.equal(gone.ok, false, 'a pill observed and then unmounted must not keep its earlier value');
+  assert.match(gone.reasons[0], /aiannh was ready and then vanished/);
+  const blackout = evaluateLayers(
+    [{ key: 'states', status: 'error', settleMs: 900 }, { key: 'aiannh', status: 'error', settleMs: 1200 }],
+    45_000,
+    { expectedKeys: ['states', 'aiannh'] },
+  );
+  assert.equal(blackout.ok, false, 'every layer unavailable is this boot, not two upstream outages');
+  assert.match(blackout.reasons[0], /every active layer is unavailable \(2 of 2\)/);
+});
+
+test('evaluateLayers fails a ready layer that is unavailable now, and only when a previous receipt exists', () => {
+  const rows = [
+    { key: 'states', status: 'ready', settleMs: 900 },
+    { key: 'nifc-fires', status: 'error', settleMs: 15_200 },
+  ];
+  const options = { expectedKeys: ['states', 'nifc-fires'] };
+  assert.equal(evaluateLayers(rows, 45_000, options).ok, true, 'no previous receipt, no comparison');
+  const regressed = evaluateLayers(rows, 45_000, {
+    ...options,
+    previousStatuses: { states: 'ready', 'nifc-fires': 'ready' },
+  });
+  assert.equal(regressed.ok, false);
+  assert.match(regressed.reasons[0], /nifc-fires was ready in the previous receipt .* unavailable now/);
+  const alreadyDown = evaluateLayers(rows, 45_000, {
+    ...options,
+    previousStatuses: { states: 'ready', 'nifc-fires': 'error' },
+  });
+  assert.equal(alreadyDown.ok, true, 'an upstream that was already down stays a warning');
+});
+
+// The table in live-receipts.mjs is a copy of runtime behavior, so it is
+// re-derived here from the two config files that own that behavior. A
+// recipe or defaultOn change that the table does not follow fails here
+// instead of letting the live proof pass with a layer missing.
+test('EXPECTED_BOOT_LAYERS still matches src/config/layers.ts and src/config/clusters.ts', () => {
+  const root = new URL('..', import.meta.url);
+  const layersSrc = readFileSync(new URL('src/config/layers.ts', root), 'utf8');
+  const clustersSrc = readFileSync(new URL('src/config/clusters.ts', root), 'utf8');
+
+  const defs = new Map();
+  const block = layersSrc.slice(layersSrc.indexOf('export const LAYER_DEFS'));
+  for (const line of block.slice(0, block.indexOf('\n];')).split('\n')) {
+    const key = /\{ key: '([^']+)'/.exec(line)?.[1];
+    if (!key) continue;
+    defs.set(key, {
+      role: /role: '([^']+)'/.exec(line)?.[1] ?? null,
+      defaultOn: /defaultOn: true/.test(line),
+      coActivateWith: [...(/coActivateWith: \[([^\]]*)\]/.exec(line)?.[1] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1]),
+    });
+  }
+  assert.ok(defs.size > 10, 'the layer definitions could not be parsed');
+
+  const clusterBody = clustersSrc.slice(clustersSrc.indexOf('export const HAZARD_CLUSTERS'));
+  const clusterObject = clusterBody.slice(0, clusterBody.indexOf('\n};'));
+  const marks = [...clusterObject.matchAll(/\n {2}(\w+): \{/g)];
+  const currentRecipe = new Map();
+  for (const [i, mark] of marks.entries()) {
+    const chunk = clusterObject.slice(mark.index, marks[i + 1]?.index ?? clusterObject.length);
+    const list = /current: \[([^\]]*)\]/.exec(chunk)?.[1] ?? '';
+    currentRecipe.set(mark[1], [...list.matchAll(/'([^']+)'/g)].map((m) => m[1]));
+  }
+  assert.deepEqual([...currentRecipe.keys()], ['drought', 'wildfire', 'heat', 'enso']);
+
+  // composeClusterIntent: every default-on key that is not a surface, then
+  // the cluster's recipe with coActivateWith partners expanded.
+  const persistent = [...defs].filter(([, d]) => d.defaultOn && d.role !== 'surface').map(([key]) => key);
+  const compose = (cluster) => {
+    const out = [...persistent];
+    for (const key of currentRecipe.get(cluster)) {
+      if (!out.includes(key)) out.push(key);
+      for (const partner of defs.get(key)?.coActivateWith ?? []) if (!out.includes(partner)) out.push(partner);
+    }
+    return out.sort();
+  };
+  // A bare URL is the default-on set exactly (src/state/url.ts).
+  const defaultOn = [...defs].filter(([, d]) => d.defaultOn).map(([key]) => key).sort();
+
+  const sorted = (keys) => [...keys].sort();
+  assert.deepEqual(sorted(EXPECTED_BOOT_LAYERS.root), defaultOn);
+  assert.deepEqual(sorted(EXPECTED_BOOT_LAYERS.root), compose('drought'), 'drought composes back to the default-on set');
+  assert.deepEqual(sorted(EXPECTED_BOOT_LAYERS.wildfire), compose('wildfire'));
+  assert.deepEqual(sorted(EXPECTED_BOOT_LAYERS.heat), compose('heat'));
+  assert.deepEqual(sorted(EXPECTED_BOOT_LAYERS.enso), compose('enso'));
+  assert.deepEqual(sorted(EXPECTED_BOOT_LAYERS['embed-1280']), compose('wildfire'));
+  assert.deepEqual(sorted(EXPECTED_BOOT_LAYERS['embed-390']), compose('wildfire'));
+  for (const [boot, keys] of Object.entries(EXPECTED_BOOT_LAYERS)) {
+    for (const key of keys) assert.ok(defs.has(key), `${boot} expects unknown layer ${key}`);
+  }
 });
 
 test('evaluateEmbedCorner requires the satellite and attribution hits and no map-information button', () => {
