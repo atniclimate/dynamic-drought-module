@@ -40,6 +40,33 @@ const BASE_URL = `${PREVIEW_ORIGIN}${BASE_PATH}`;
 
 const isCI = !!process.env['CI'];
 
+// The 3D Fire specs build terrain, a sky, a smoke volume, and context tiles
+// on the software renderer, and carry their own 120 to 180 second budgets
+// (`test.setTimeout` in fire3d-mode.spec.ts, `timeout_ms` rows in
+// view-contracts.yaml). They live in their own project so CI can give them
+// their own runners (DDM-P0-T02: the moving flake set of 2026-08-28 was
+// timing on these specs, not product behavior) instead of inflating the
+// global budget, and so a general shard never waits behind a scene build.
+// Locally `npm test` and `npm run test:serial` still run both projects.
+const FIRE3D_SPECS = ['**/fire3d-mode.spec.ts', '**/view-contracts.spec.ts'];
+
+// MapLibre GL needs a WebGL2 context. Headless Chromium has no GPU, so force
+// ANGLE over SwiftShader (a pure-software GL implementation) and allow it
+// explicitly (recent Chromium gates the SwiftShader WebGL fallback behind
+// this flag). Without these the map never fires `load` and the sidebar never
+// builds, failing every spec at boot.
+const CHROMIUM_USE = {
+  browserName: 'chromium' as const,
+  launchOptions: {
+    args: [
+      '--use-gl=angle',
+      '--use-angle=swiftshader',
+      '--enable-unsafe-swiftshader',
+      '--ignore-gpu-blocklist'
+    ]
+  }
+};
+
 export default defineConfig({
   testDir: './tests',
 
@@ -88,23 +115,19 @@ export default defineConfig({
 
   projects: [
     {
+      // Everything except the 3D Fire specs. CI shards this project across
+      // a runner matrix with `--shard=i/n` (contiguous equal-count slices of
+      // the file-ordered test list), one worker per runner.
       name: 'chromium',
-      use: {
-        browserName: 'chromium',
-        // MapLibre GL needs a WebGL2 context. Headless Chromium has no GPU, so
-        // force ANGLE over SwiftShader (a pure-software GL implementation) and
-        // allow it explicitly (recent Chromium gates the SwiftShader WebGL
-        // fallback behind this flag). Without these the map never fires `load`
-        // and the sidebar never builds, failing every spec at boot.
-        launchOptions: {
-          args: [
-            '--use-gl=angle',
-            '--use-angle=swiftshader',
-            '--enable-unsafe-swiftshader',
-            '--ignore-gpu-blocklist'
-          ]
-        }
-      }
+      testIgnore: FIRE3D_SPECS,
+      use: CHROMIUM_USE
+    },
+    {
+      // The 3D Fire specs alone, sharded onto their own runners in CI. The
+      // per-test budgets above the 60 s default are declared in the specs.
+      name: 'chromium-3d',
+      testMatch: FIRE3D_SPECS,
+      use: CHROMIUM_USE
     }
   ],
 
