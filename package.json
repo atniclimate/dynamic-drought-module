@@ -17,6 +17,7 @@
     "test:serial": "playwright test --workers=1",
     "test:drift-contract": "node --test tests/upstream-drift-contract.test.mjs",
     "test:minimap-geometry": "node --test tests/minimap-geometry-artifact.test.mjs",
+    "test:live-receipts": "node --test tests/live-receipts.test.mjs",
     "test:report": "playwright show-report",
     "scan:emdash": "node scripts/scan-emdash.mjs",
     "check:links": "node scripts/check-links.mjs",
@@ -29,7 +30,7 @@
     "check:activation": "node scripts/check-activation-budget.mjs",
     "check:landscape-schema": "node scripts/validate-landscape-artifact.mjs scripts/landscape/tests/fixtures/corrected/snapshot_terrain_l3.json && node scripts/validate-landscape-artifact.mjs public/data/landscape-signature-pnw.json",
     "build:coverage-matrix": "node scripts/generate-coverage-matrix.mjs",
-    "gate": "npm run build && npm run scan:emdash && npm run check:public-tree && npm run check:resources && npm run check:bundle && npm run check:activation && npm run check:places && npm run check:coverage && npm run check:vocabulary && npm run check:landscape-schema && npm run check:enso && npm run test:drift-contract && npm run test:minimap-geometry",
+    "gate": "npm run build && npm run scan:emdash && npm run check:public-tree && npm run check:resources && npm run check:bundle && npm run check:activation && npm run check:places && npm run check:coverage && npm run check:vocabulary && npm run check:landscape-schema && npm run check:enso && npm run test:drift-contract && npm run test:live-receipts && npm run test:minimap-geometry",
     "build:enso": "node scripts/build-enso-snapshot.mjs",
     "check:enso": "node scripts/validate-enso-snapshot.mjs public/data/enso-indices.json",
     "build:cdm": "node scripts/build-cdm-snapshot.mjs",
@@ -45,7 +46,8 @@
     "build:minimap-whp": "node scripts/build-minimap-whp.mjs",
     "build:states": "node scripts/build-states.mjs",
     "build:tribal-roster": "node scripts/build-tribal-roster.mjs",
-    "check:drift": "node scripts/check-upstream-drift.mjs"
+    "check:drift": "node scripts/check-upstream-drift.mjs",
+    "verify:live": "node scripts/verify-live.mjs"
   },
   "dependencies": {
     "@preact/signals": "^2.9.3",
