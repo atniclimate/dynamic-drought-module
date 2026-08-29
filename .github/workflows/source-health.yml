@@ -1,0 +1,161 @@
+# Scheduled source-health probe (DDM-P0-T12).
+#
+# The upstream liveness monitor proves an endpoint answers; it cannot say
+# whether the query the application actually sends still fits the layer's
+# budget (FE-16, 2026-08-28: the NIFC perimeter query had grown to 42.75 MB
+# in 41.6 s against a 15 s budget, CI stayed green because the suite stubs
+# every feed, and every user saw an honest but wrong "unavailable" for an
+# unknown period). This workflow builds the application, serves it, boots
+# it once as a control and once per catalog layer at the default camera
+# (22 boots), and records the requests the RUNTIME issues: status, bytes,
+# seconds, record count, cache headers, failed requests, and the layer's
+# state after a stability window. Basemap tiles are answered with a blank
+# tile, the ambient requests every boot makes are fetched once and replayed
+# to the other boots, and every other request goes where the runtime sends
+# it, with a named User-Agent, once a day.
+#
+# Receipts are a job summary and a short-retention artifact, never a
+# commit (a commit to main triggers a deploy). A breach opens or updates
+# one issue per source and closes it when the source recovers. The
+# application stays static; nothing here runs in the deployed site, and
+# the receipt carries no response body (hard rule 1; src/layers/aiannh.ts).
+
+name: Source health
+
+on:
+  schedule:
+    # Daily at 13:30 UTC, after the 13:00 upstream liveness monitor.
+    - cron: '30 13 * * *'
+  workflow_dispatch:
+    inputs:
+      layers:
+        description: Comma-separated layer keys to probe (default all).
+        required: false
+        type: string
+
+# Least privilege: read the tree, and write issues to raise a breach.
+permissions:
+  contents: read
+  issues: write
+
+# One probe at a time; never cancel an in-progress probe.
+concurrency:
+  group: source-health
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Probe the runtime's sources
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    # The build stamp names this run so the receipt is attributable
+    # (tests/helpers.ts explains the stamp).
+    env:
+      DDM_BUILD_SHA: ${{ github.sha }}
+      DDM_BUILD_NONCE: ${{ github.run_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Provision Chromium
+        uses: ./.github/actions/playwright-chromium
+
+      - name: Build the application
+        timeout-minutes: 10
+        run: npm run build
+
+      - name: Serve the build
+        timeout-minutes: 2
+        run: |
+          nohup npx vite preview --host 127.0.0.1 --port 4173 --strictPort > preview.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null http://127.0.0.1:4173/; then exit 0; fi
+            sleep 1
+          done
+          echo "preview did not answer"
+          cat preview.log
+          exit 1
+
+      # 22 boots (control plus 21 catalog rows) at up to about a minute each
+      # on a slow day; the receipt is written after every row, so a timeout
+      # still leaves the finished rows for the issue step.
+      - name: Probe every catalog layer
+        id: probe
+        timeout-minutes: 30
+        env:
+          LAYERS: ${{ github.event.inputs.layers }}
+        run: |
+          set +e
+          node scripts/source-health.mjs --base http://127.0.0.1:4173/ --out source-health-receipt.json --summary "$GITHUB_STEP_SUMMARY" ${LAYERS:+--layers "$LAYERS"} 2>&1 | tee probe-output.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Keep the receipt
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: source-health-receipt
+          path: |
+            source-health-receipt.json
+            probe-output.txt
+          retention-days: 30
+          if-no-files-found: ignore
+
+      # One issue per source, keyed by a marker comment in the body: a
+      # breach opens the issue or appends to it, a recovery closes it, and
+      # a skipped layer (bundled, or zoom-gated at the default region)
+      # leaves any open issue alone because nothing was measured.
+      - name: Open, update, or close one issue per source
+        if: ${{ !cancelled() && hashFiles('source-health-receipt.json') != '' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const { pathToFileURL } = require('url');
+            const { renderIssueBody } = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/scripts/lib/source-health.mjs`).href);
+            const receipt = JSON.parse(fs.readFileSync('source-health-receipt.json', 'utf8'));
+            const label = 'source-health';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const open = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+              per_page: 100
+            });
+            const byKey = new Map();
+            for (const issue of open) {
+              if (issue.pull_request) continue;
+              const m = /<!-- ddm-source-health:([a-z0-9-]+) -->/.exec(issue.body ?? '');
+              if (m) byKey.set(m[1], issue);
+            }
+            for (const row of receipt.rows) {
+              const existing = byKey.get(row.key);
+              if (row.verdict === 'breach') {
+                const body = renderIssueBody(row, runUrl);
+                if (existing) {
+                  await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: existing.number, body });
+                } else {
+                  await github.rest.issues.create({ owner: context.repo.owner, repo: context.repo.repo, title: `Source health breach: ${row.key}`, labels: [label], body });
+                }
+              } else if (existing && row.verdict !== 'skipped') {
+                await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: existing.number, body: `The ${row.key} source answered inside budget on ${runUrl}. Closing.` });
+                await github.rest.issues.update({ owner: context.repo.owner, repo: context.repo.repo, issue_number: existing.number, state: 'closed' });
+              }
+            }
+
+      # Surface the breach on the Actions tab after the issues are filed.
+      - name: Fail the run when a source breached its budget
+        if: steps.probe.outputs.exit_code != '0'
+        run: |
+          echo "::error::At least one source breached its budget; see the job summary and the source-health issues."
+          exit 1

@@ -109,6 +109,16 @@ When `DDM_BUILD_SHA` or `DDM_BUILD_NONCE` is set in the environment (CI sets
 both), `gotoApp` asserts the `<html>` build stamp on every boot it drives,
 so each shard proves it exercised the build this run made.
 
+Browser provisioning (the Playwright browser cache and its miss and hit
+paths) is a composite action, `.github/actions/playwright-chromium`, shared
+with the deploy's post-deploy verification (`scripts/verify-live.mjs`) and
+the daily source-health probe (`scripts/source-health.mjs`). Those two
+scripts drive Chromium directly, outside this suite, and import it from
+`@playwright/test` (the declared dependency). Their pure evaluators
+are unit-tested by `tests/live-receipts.test.mjs` and
+`tests/source-health.test.mjs`, which run in the gate with the other
+`node:test` files and register no Playwright tests.
+
 The Node-level specs that deliberately drive a degrade path (a corrupt
 archive, three tile errors in the rolling window, a dead fetch) capture the
 runtime's `console.warn` through `captureWarnings()` in

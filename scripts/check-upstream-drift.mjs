@@ -443,6 +443,222 @@ export function extractUrls(source) {
   return out;
 }
 
+/**
+ * ArcGIS field-schema probes (slice B, 2026-08-28). The runtime read
+ * `attr_DailyAcres` from the WFIGS perimeters for months; the service never
+ * had it. For each module that sends `outFields`, the list is read FROM THE
+ * MODULE SOURCE (never hand-copied; an imported constant is followed to its
+ * module), the layer's `?f=pjson` is fetched, and a requested field that is
+ * absent by exact name fails the probe at the runtime tier. `layer` is the
+ * path the module appends to the URLS base before `/query` ('' when the base
+ * already names the layer). `constName` selects one list when a module
+ * sends several; `pick` selects the branch of a ternary that belongs to a
+ * layer. Subsets already covered by a row: the BIA fields sent by
+ * src/state/display-snapshot.ts, src/ui/search-controller.ts, and
+ * src/ui/island/place-studio.tsx; the USDM `DM` and NIFC identity fields in
+ * src/impact/sources.ts; the WBD template in src/state/watershed-geometry.ts
+ * (same as place-catalog's). NOT covered: the CPC 6-10 and 8-14 day point
+ * query in src/impact/sources.ts passes `cat,prob` as a function argument
+ * the extractor does not see, and the WBD HUC code field is a template
+ * token reported as unchecked.
+ */
+export const ARCGIS_FIELD_PROBES = Object.freeze([
+  { key: 'nifcRawsFeatureServer', file: 'src/config/station-registry.ts', layer: '' },
+  { key: 'noaaMergedGeoColorImageServer', file: 'src/map/satellite.ts', layer: '' },
+  // place-studio.tsx: Level IV is layer 7 (four fields), Level III is layer 11.
+  { key: 'epaEcoregionsMapServer', file: 'src/ui/island/place-studio.tsx', layer: '/7', pick: (fields) => fields.includes('US_L4CODE') },
+  { key: 'epaEcoregionsMapServer', file: 'src/ui/island/place-studio.tsx', layer: '/11', pick: (fields) => fields.includes('US_L3CODE') && !fields.includes('US_L4CODE') },
+  // place-catalog.ts watershedQueryUrl: layers 1 (huc2) and 2 (huc4).
+  { key: 'wbdMapServer', file: 'src/config/place-catalog.ts', layer: '/1' },
+  { key: 'wbdMapServer', file: 'src/config/place-catalog.ts', layer: '/2' },
+  { key: 'nifcFires', file: 'src/layers/nifc-fires.ts', layer: '', constName: 'NIFC_OUT_FIELDS' },
+  { key: 'censusAiannhMapServer', file: 'src/layers/aiannh.ts', layer: '/47' },
+  { key: 'biaLarFeatureServer', file: 'src/layers/bia-reservations.ts', layer: '' },
+  // RANGE_LAYER_INDEX in drought.ts: monthly 1, seasonal 4.
+  { key: 'cpcDroughtOutlookVectorMapServer', file: 'src/layers/drought.ts', layer: '/1' },
+  { key: 'cpcDroughtOutlookVectorMapServer', file: 'src/layers/drought.ts', layer: '/4' },
+  { key: 'nwsHeatRisk', file: 'src/layers/heatrisk.ts', layer: '' },
+  { key: 'noaaHmsSmokeFeatureServer', file: 'src/layers/hms-smoke.ts', layer: '' },
+  { key: 'nwsWwaMapServer', file: 'src/layers/nws-alerts.ts', layer: '' },
+  { key: 'eiaPowerPlantsFeatureLayer', file: 'src/layers/power-3d.ts', layer: '', constName: 'PLANTS_OUT_FIELDS' },
+  // DAY1_LAYER_ID in spc-fire-weather.ts.
+  { key: 'spcFireWeatherOutlookMapServer', file: 'src/layers/spc-fire-weather.ts', layer: '/1' },
+  { key: 'usdmFeatureServer', file: 'src/layers/usdm.ts', layer: '', constName: 'CURRENT_OUT_FIELDS' },
+  { key: 'usdmArchiveFeatureServer', file: 'src/layers/usdm.ts', layer: '', constName: 'ARCHIVE_OUT_FIELDS' },
+  { key: 'bcDroughtLevelsFeatureServer', file: 'src/layers/bc-drought.ts', layer: '' },
+]);
+
+// `outFields: <expr>` (object key) or `outFields = <expr>` (a local const
+// later passed as shorthand). The expression is a string literal, a template
+// literal, a ternary of two string literals whose condition is an
+// identifier or a comparison (`isLevel4`, `layer === 7`), or an identifier
+// (optionally `.join(',')`); a shorthand `outFields,` property is the
+// assignment's consumer and is not matched on its own, and a list passed
+// as a positional function argument is not seen at all (see
+// OUT_FIELDS_SENDERS_COVERED_ELSEWHERE).
+/**
+ * Every source file that mentions `outFields` must be in ARCGIS_FIELD_PROBES
+ * or here, with the reason it needs no row of its own; the drift contract
+ * test inventories `src/` and fails on a sender that is in neither, so a new
+ * ArcGIS query cannot arrive unprotected in silence.
+ */
+export const OUT_FIELDS_SENDERS_COVERED_ELSEWHERE = Object.freeze({
+  'src/config/urls.ts': 'documentation comments only; no query is built here',
+  'src/state/display-snapshot.ts': 'extracted list (BIA LARID) is a subset of the biaLarFeatureServer row today; not probed on its own',
+  'src/ui/search-controller.ts': 'extracted list is the same five BIA fields as the biaLarFeatureServer row today; not probed on its own',
+  'src/state/watershed-geometry.ts':
+    'NOT extracted (the template is a positional argument to geometryParams); byte-identical to the place-catalog template today',
+  'src/impact/sources.ts':
+    'NOT extracted (positional arguments to esriPointQuery and esriEnvelopeQuery): USDM DM and the NIFC identity fields are subsets of their rows today; the CPC 6-10 and 8-14 day point query (cat,prob) has no row',
+});
+
+const OUT_FIELDS_RE =
+  /\boutFields\s*[:=]\s*(?:'([^']*)'|"([^"]*)"|`([^`]*)`|([A-Za-z_][A-Za-z0-9_.\s=!<>()]*?)\s*\?\s*'([^']*)'\s*:\s*'([^']*)'|([A-Za-z_][A-Za-z0-9_]*)(?:\.join\(\s*','\s*\))?)/g;
+
+const splitFields = (text) => text.split(',').map((s) => s.trim()).filter(Boolean);
+
+/** Resolve `const NAME = [...]` or `const NAME = '...'` in a module source
+ * to a field list, or null when the module does not declare it. */
+export function resolveFieldConstant(source, name) {
+  const arr = new RegExp(`(?:export\\s+)?const\\s+${name}\\s*(?::[^=]+)?=\\s*\\[([^\\]]*)\\]`).exec(source);
+  if (arr) return [...arr[1].matchAll(/'([^']+)'|"([^"]+)"/g)].map((m) => m[1] ?? m[2]);
+  const str = new RegExp(`(?:export\\s+)?const\\s+${name}\\s*(?::[^=]+)?=\\s*(?:'([^']*)'|"([^"]*)")`).exec(source);
+  if (str) return (str[1] ?? str[2]).split(',').map((s) => s.trim()).filter(Boolean);
+  return null;
+}
+
+function importSpecifierFor(source, name) {
+  const re = /import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g;
+  for (const m of source.matchAll(re)) {
+    const names = m[1].split(',').map((s) => s.trim().split(/\s+as\s+/).pop());
+    if (names.includes(name)) return m[2];
+  }
+  return null;
+}
+
+/** Every `outFields` list the module sends: a literal list, a template
+ * literal (static names, with `${...}` tokens named in `dynamic` and left
+ * unchecked), a ternary (one entry per branch), a local constant
+ * (resolved), or an imported constant (`fields: null`, `importedFrom` set
+ * for the caller to resolve). `outFields: '*'` is not a schema claim. */
+export function extractOutFields(source) {
+  const out = [];
+  for (const m of source.matchAll(OUT_FIELDS_RE)) {
+    const line = source.slice(0, m.index).split('\n').length;
+    const entries = [];
+    if (m[1] !== undefined || m[2] !== undefined) {
+      entries.push({ fields: splitFields(m[1] ?? m[2]), via: 'literal', importedFrom: null, dynamic: [] });
+    } else if (m[3] !== undefined) {
+      const dynamic = [...m[3].matchAll(/\$\{([^}]*)\}/g)].map((t) => t[1].trim());
+      entries.push({ fields: splitFields(m[3].replace(/\$\{[^}]*\}/g, '')), via: 'template', importedFrom: null, dynamic });
+    } else if (m[4] !== undefined) {
+      const condition = m[4].replace(/\s+/g, ' ').trim();
+      entries.push({ fields: splitFields(m[5]), via: `ternary:${condition}`, importedFrom: null, dynamic: [] });
+      entries.push({ fields: splitFields(m[6]), via: `ternary:!(${condition})`, importedFrom: null, dynamic: [] });
+    } else {
+      const via = m[7];
+      // `outFields: string` is a TypeScript type annotation (an interface
+      // member or a parameter), not a list the module sends.
+      if (via === 'string') continue;
+      const fields = resolveFieldConstant(source, via);
+      const importedFrom = fields === null ? importSpecifierFor(source, via) : null;
+      // An identifier that is neither a local constant nor an import is
+      // kept as unresolved so a probe over it fails instead of skipping.
+      entries.push({ fields, via, importedFrom, dynamic: [], unresolved: fields === null && importedFrom === null });
+    }
+    for (const entry of entries) {
+      if (entry.fields !== null && (entry.fields.length === 0 || entry.fields.includes('*'))) continue;
+      out.push({ line, unresolved: false, ...entry });
+    }
+  }
+  return out;
+}
+
+export function missingFields(outFields, pjson) {
+  const names = new Set((pjson?.fields ?? []).map((f) => f.name));
+  const lower = new Set([...names].map((n) => n.toLowerCase()));
+  const missing = outFields.filter((f) => !names.has(f));
+  const caseOnly = missing.filter((f) => lower.has(f.toLowerCase()));
+  return { missing, caseOnly };
+}
+
+/** Judge a `?f=pjson` body against the fields the runtime requests. */
+export function checkFieldSchema(expected, bodyText) {
+  let json;
+  try {
+    json = JSON.parse(bodyText);
+  } catch {
+    return { miss: 'schema body is not JSON', note: '' };
+  }
+  if (json && json.error) {
+    return { miss: `ArcGIS error ${json.error.code ?? '?'} ${json.error.message ?? ''}`.trim(), note: '' };
+  }
+  if (!json || !Array.isArray(json.fields)) return { miss: 'schema body has no fields array', note: '' };
+  const { missing, caseOnly } = missingFields(expected, json);
+  if (missing.length > 0) {
+    const near = caseOnly.length ? ` (case-only: ${caseOnly.join(', ')})` : '';
+    return { miss: `missing fields: ${missing.join(', ')}${near}`, note: '' };
+  }
+  return { miss: null, note: `${expected.length}/${expected.length} requested fields present` };
+}
+
+async function fieldListsForProbe(probe, root) {
+  const file = join(root, probe.file);
+  const source = await readFile(file, 'utf8');
+  const found = extractOutFields(source).filter((f) => !probe.constName || f.via === probe.constName);
+  const lists = [];
+  const dynamic = new Set();
+  for (const entry of found) {
+    if (entry.unresolved) {
+      throw new Error(`field probe ${probe.key}${probe.layer}: outFields at ${probe.file}:${entry.line} names ${entry.via}, which is neither a local constant nor an import`);
+    }
+    if (entry.fields !== null) {
+      if (probe.pick && !probe.pick(entry.fields)) continue;
+      lists.push(entry.fields);
+      for (const token of entry.dynamic) dynamic.add(token);
+      continue;
+    }
+    const target = resolve(dirname(file), entry.importedFrom);
+    const candidates = [`${target}.ts`, join(target, 'index.ts')];
+    let resolved = null;
+    for (const candidate of candidates) {
+      if (!existsSync(candidate)) continue;
+      resolved = resolveFieldConstant(await readFile(candidate, 'utf8'), entry.via);
+      if (resolved) break;
+    }
+    if (!resolved) {
+      throw new Error(`field probe ${probe.key}${probe.layer}: ${entry.via} imported from ${entry.importedFrom} at ${probe.file}:${entry.line} did not resolve to a field list`);
+    }
+    if (!probe.pick || probe.pick(resolved)) lists.push(resolved);
+  }
+  return { lists, dynamic: [...dynamic] };
+}
+
+/** Build one probe entry per ARCGIS_FIELD_PROBES row from the extracted
+ * URLS entries. A row whose key or field list cannot be resolved throws:
+ * an unresolvable probe is a disarmed probe, never a silent skip. */
+export async function buildFieldProbeEntries(urlEntries, root = join(__dirname, '..')) {
+  const byKey = new Map(urlEntries.map((e) => [e.key, e]));
+  const entries = [];
+  for (const probe of ARCGIS_FIELD_PROBES) {
+    const base = byKey.get(probe.key);
+    if (!base) throw new Error(`field probe ${probe.key} is not an extracted urls.ts entry; the probe is disarmed`);
+    const { lists, dynamic } = await fieldListsForProbe(probe, root);
+    if (lists.length === 0) {
+      throw new Error(`field probe ${probe.key}${probe.layer}: no outFields list resolved from ${probe.file}${probe.constName ? ` via ${probe.constName}` : ''}`);
+    }
+    const fieldsExpected = [...new Set(lists.flat())];
+    entries.push({
+      key: `fields:${probe.key}${probe.layer}`,
+      url: `${base.url}${probe.layer}?f=pjson`,
+      tier: DRIFT_TIERS.RUNTIME,
+      fieldsExpected,
+      fieldsDynamic: dynamic,
+    });
+  }
+  return entries;
+}
+
 function probeUrl(entry) {
   let url = entry.url;
   for (const [token, value] of TEMPLATE_SUBSTITUTIONS) {
@@ -474,6 +690,7 @@ async function check(entry) {
     const corsInvalid = Boolean(entry.corsRequired) && !corsCompatible;
     let tripwireMiss = null;
     let warning = null;
+    let fieldNote = '';
     const tripwire = CONTENT_TRIPWIRES.get(entry.key);
     if (tripwire && resp.status < 400) {
       const body = await resp.text();
@@ -483,6 +700,13 @@ async function check(entry) {
       } else if (result && typeof result.warning === 'string') {
         warning = result.warning;
       }
+    } else if (entry.fieldsExpected && resp.status < 400) {
+      const result = checkFieldSchema(entry.fieldsExpected, await resp.text());
+      tripwireMiss = result.miss;
+      fieldNote = result.note;
+      if (fieldNote && entry.fieldsDynamic?.length) {
+        fieldNote += `; template token${entry.fieldsDynamic.length === 1 ? '' : 's'} ${entry.fieldsDynamic.map((t) => '${' + t + '}').join(', ')} not checked`;
+      }
     }
     const ok = resp.status < 400 && !corsInvalid && tripwireMiss === null;
     const detail =
@@ -491,6 +715,7 @@ async function check(entry) {
         ? ` (required '*' or '${BROWSER_ORIGIN}' on this path)`
         : '') +
       (tripwireMiss !== null ? `; TRIPWIRE: ${tripwireMiss}` : '') +
+      (fieldNote ? `; ${fieldNote}` : '') +
       (warning !== null ? `; WARNING: ${warning}` : '');
     return { key: entry.key, url, tier, ok, warning, detail };
   } catch (err) {
@@ -715,6 +940,9 @@ async function main() {
       console.error('No https URLs extracted from urls.ts; the extraction regex has drifted.');
       process.exit(1);
     }
+    // Field-schema rows for every ArcGIS outFields list the runtime sends;
+    // an unresolvable row throws (a disarmed probe must fail loudly).
+    entries.push(...(await buildFieldProbeEntries(entries)));
   }
   entries.push(...LANDSCAPE_PROBES);
 

@@ -1,6 +1,6 @@
 schema_version: 1
 roadmap_id: "ddm-forward-roadmap"
-updated_on: "2026-08-20"
+updated_on: "2026-08-28"
 product:
   name: "Dynamic Drought Module"
   short_name: "DDM"
@@ -408,6 +408,22 @@ phases:
           - "The canonical YAML parses and its reference graph resolves without duplicate IDs or cycles."
         dependencies: ["DDM-P0-T08", "DDM-P0-T09", "DDM-P0-T10"]
         external_authorization: "Explicit merge, tag, and deployment authorization required."
+      - id: "DDM-P0-T12"
+        name: "Record scheduled source-health receipts for each catalog layer's default-camera queries"
+        components: ["verification", "release_delivery"]
+        goal: "Catch a live source that no longer fits its layer budget on the day it changes, with the query the runtime actually sends, instead of learning it from an honest but wrong unavailable state."
+        outputs:
+          - "A scheduled workflow that builds and serves the application, boots it once as a control and once per catalog layer at the default camera, and records the runtime's own upstream requests: status, bytes, seconds, record count, cache headers, failed requests, and the layer state after a stability window."
+          - "A job summary and a short-retention artifact for every run that names what was measured and what was not; no committed receipts."
+          - "One issue per breaching catalog row, updated while the breach persists and closed on recovery."
+          - "A field-schema check in the drift monitor for every ArcGIS outFields list the extractor can read from source, with the unextracted senders recorded by reason and inventoried by a test."
+        acceptance:
+          - "One scheduled run's receipt is visible in the Actions summary with every measured row inside budget or an issue opened for each breach, and the unmeasured rows named."
+          - "The probe reuses the runtime's requests; no query string is hand-copied into the monitor."
+          - "Basemap tiles are not fetched by the probe, ambient boot requests are fetched once per run, and every upstream request carries a named User-Agent."
+          - "A missing ArcGIS field named in an extracted runtime outFields list fails the drift monitor at the runtime tier, and a new outFields sender without a probe row or a recorded reason fails the drift contract test."
+        dependencies: ["DDM-P0-T04"]
+        external_authorization: "Issue creation behavior and probe cadence require owner review."
 
   - id: "DDM-P1"
     name: "Network lifecycle and failure honesty"

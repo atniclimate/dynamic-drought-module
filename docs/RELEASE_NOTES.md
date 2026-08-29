@@ -8,14 +8,78 @@ through the normal Pages workflow. Repository release tags currently stop at
 `v0.6.23`; neither the August 13 nor August 18 refinement assigned a new tag
 or package version.
 
-Current source baseline, observed 2026-08-28: `main` is at
-`0edc0e7549de048ef1c9979119c2b22eae6141d6` (pull request 24 merged), and the
-public Pages application reports that same build after a successful
-deployment on 2026-08-28. The 2026-08-20 divergence recorded here earlier
-closed when the 2026-08-24 scheduled ENSO refresh deployed
+Current source baseline, observed 2026-08-28 (evening Pacific): `main` is at
+`c7a5574449e833939c7a0d59a9b056a648ea9852` (pull request 28 merged), and the
+public Pages application reports that same build with nonce `33228785543`
+after deploy run 33228785543 completed. The 2026-08-20 divergence recorded
+here earlier closed when the 2026-08-24 scheduled ENSO refresh deployed
 `a5c27c3b630349bfd93ee13c66e7cfe6305ce3c9` with its full browser suite. The
-hosted build nonce was still the local fallback `dev` at that observation;
-the change below makes the next hosted build attributable to its run.
+hosted build nonce was the local fallback `dev` until pull request 27 made
+each hosted build attributable to its run.
+
+### 2026-08-28: the deploy proves the live build, and the sources get a daily receipt
+
+This pull request follows
+[pull request 28](https://github.com/atniclimate/dynamic-drought-module/pull/28),
+which cached the Playwright browser, pinned every workflow Action to a
+commit, fanned the 830-spec browser suite across seven runners (Validate
+13 minutes instead of 48), and made every shard name what failed or
+passed only on retry. It delivers the post-deploy proof and the daily
+source receipts that roadmap tasks DDM-P0-T04, T08, and the proposed T12
+ask for, with the limits of each proof stated below.
+
+- After every successful Pages deploy, a `verify-live` job runs
+  `scripts/verify-live.mjs` against the deployed URL: it waits for the
+  expected commit to appear in the referenced assets, checks that every
+  script and stylesheet resolves from the repository seat, asks each
+  shipped PMTiles archive for a byte range and expects `206`, and boots
+  root, the wildfire, heat, and ENSO clusters, and the wildfire embed at
+  1280 and 390 pixels wide, asserting the build stamp, no page errors,
+  terminal layer states that hold through a stability window, and the
+  embed corner. The deploy job first confirms its commit is still the
+  head of `main`, so a rerun of an old failed run cannot publish a
+  superseded build. A failure opens one `deploy-divergence` issue (a
+  propagation timeout is worded as inconclusive); the next deploy that
+  verifies green while its commit is still the head of `main` closes it.
+  The receipt is the job summary and a thirty-day artifact and carries no
+  response body or screenshot. Known gap: a newer push cancels an
+  in-flight verification, and if that newer run fails before its own
+  deploy the older commit stays live unverified.
+- A daily `source-health` workflow builds and serves the application,
+  boots it once as a control and once per catalog layer at the default
+  camera, and records the requests the runtime itself issues: status,
+  bytes, seconds, record count, cache headers, failed requests, and the
+  layer's state after a stability window (raster layers report `ready`
+  before a tile has loaded). Basemap tiles are stubbed, the ambient
+  requests every boot makes are captured once and replayed, and every
+  upstream request carries a named User-Agent. A breach (unavailable,
+  stuck, an HTTP or network error, a partial or empty answer from a source
+  that is always complete here) opens one issue per catalog row and closes
+  on recovery; a slow, large, or partial answer elsewhere is a warning in
+  the summary. Nothing is committed. What it proves is narrower than every
+  runtime query: zoom-gated layers, selection-driven queries, and the
+  satellite tiles are reported as not measured, and one observation per
+  day can be a warm-cache path. On the day the WFIGS geometry grew it
+  would have shown the perimeter layer `unavailable` with a 42 MB response
+  against its 15 s budget.
+- The upstream drift monitor now fetches each ArcGIS layer's schema and
+  fails when a field the runtime names in `outFields` is absent by exact
+  name (the runtime read `attr_DailyAcres` for months; the service never
+  had it). Nineteen layer paths are covered, read from the module source
+  (literal lists, local and imported constants, ternary branches, and the
+  static names of a template); every requested field was present on
+  2026-08-28. A test inventories every `outFields` sender under `src/`
+  and fails on one with neither a probe row nor a recorded reason. Not
+  extracted: lists passed as positional function arguments (the CPC 6-10
+  and 8-14 day point query `cat,prob`, and the USDM, NIFC, and watershed
+  lists in `src/impact/sources.ts` and `src/state/watershed-geometry.ts`,
+  which today are subsets or copies of probed lists), and the watershed
+  HUC code field, a template token reported as unchecked.
+- The Playwright browser provisioning moved into a composite action shared
+  by the browser suite and both new jobs.
+- `docs/ROADMAP.yaml` proposes `DDM-P0-T12` (scheduled source-health
+  receipts) for owner ratification; the baseline paragraph above is
+  corrected to pull request 28.
 
 ### 2026-08-28: the Fire view gets its perimeters back, and the embed corner unstacks
 
