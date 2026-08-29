@@ -264,28 +264,81 @@ test.describe('DEF-3 finding 1: half sheet plus footer occlusion (390x844, touch
 
     const sidebar = page.locator('#sidebar');
     const viewportHeight = await page.evaluate(() => window.innerHeight);
+    const detentSetAt = Date.now();
     // The detent attribute changes synchronously, while the sheet height
-    // transitions for 250 ms. Wait for the rendered geometry so a loaded
-    // runner cannot sample the old (closed) edge and click below the
-    // synthetic boundary for every retry.
+    // transitions for 250 ms, and mobile-sheet.ts's settle() (map.resize()
+    // then a 220 ms easeTo) does not even fire until its own ~320 ms
+    // fallback timer runs after that. Wait for the sheet to reach its
+    // half-detent height, then hold still across two reads 250 ms apart,
+    // then wait out the trailing settle window: on a loaded CI runner
+    // (FE-23) the camera can still be easing under an already-still sheet
+    // edge, and cx/cy measured too early land on the pre-settle strip.
     await expect
       .poll(async () => sidebar.evaluate((el) => el.getBoundingClientRect().height), {
         message: 'the sheet never reached its half-detent height',
         timeout: 3_000
       })
       .toBeCloseTo(viewportHeight * SHEET_DETENT_SIZE.halfFraction, 0);
-    const sheetTop = await sidebar.evaluate((el) => el.getBoundingClientRect().top);
-    const mapBox = await page.locator('#map').boundingBox();
-    expect(mapBox).not.toBeNull();
+    let lastSheetRect: { top: number; height: number } | null = null;
+    await expect
+      .poll(
+        async () => {
+          const rect = await sidebar.evaluate((el) => {
+            const r = el.getBoundingClientRect();
+            return { top: r.top, height: r.height };
+          });
+          const stable =
+            lastSheetRect !== null &&
+            Math.abs(rect.top - lastSheetRect.top) < 0.5 &&
+            Math.abs(rect.height - lastSheetRect.height) < 0.5;
+          lastSheetRect = rect;
+          return stable;
+        },
+        {
+          message: 'the sheet rect never held still across two reads 250 ms apart',
+          timeout: 5_000,
+          intervals: [250]
+        }
+      )
+      .toBe(true);
+    const settleBudgetMs = 900;
+    const sinceDetent = Date.now() - detentSetAt;
+    if (sinceDetent < settleBudgetMs) {
+      await page.waitForTimeout(settleBudgetMs - sinceDetent);
+    }
 
     // Open the coordinated popup at the center of the UNOBSCURED strip.
-    const cx = mapBox!.x + mapBox!.width / 2;
-    const cy = (Math.max(mapBox!.y, 0) + Math.min(sheetTop, mapBox!.y + mapBox!.height)) / 2;
+    // Re-measured on every attempt below, never frozen: a stale cx/cy
+    // taken once before the sheet and map finished settling is the
+    // FE-23 livelock's root cause (a click that misses the fixture
+    // polygon hits empty ground, and the coordinator's next click always
+    // replaces or closes the current response, so a miss compounds).
+    let sheetTop = await sidebar.evaluate((el) => el.getBoundingClientRect().top);
+    async function targetPoint(): Promise<{ cx: number; cy: number }> {
+      sheetTop = await sidebar.evaluate((el) => el.getBoundingClientRect().top);
+      const liveMapBox = await page.locator('#map').boundingBox();
+      expect(liveMapBox, 'the map lost its bounding box').not.toBeNull();
+      return {
+        cx: liveMapBox!.x + liveMapBox!.width / 2,
+        cy:
+          (Math.max(liveMapBox!.y, 0) + Math.min(sheetTop, liveMapBox!.y + liveMapBox!.height)) /
+          2
+      };
+    }
+
     const popup = page.locator('.maplibregl-popup');
     const content = popup.locator('.maplibregl-popup-content');
     await expect(async () => {
-      await page.mouse.click(cx, cy);
-      await expect(content).toBeVisible({ timeout: 1500 });
+      // Skip the click when the PREVIOUS attempt's card is already up: a
+      // click always lands on either the fixture polygon (rebuilding the
+      // response) or empty ground (closing it), so re-clicking a
+      // genuinely open card is exactly what kills it before this poll can
+      // observe it, turning a slow build into an unwinnable retry loop.
+      if (!(await content.isVisible().catch(() => false))) {
+        const { cx, cy } = await targetPoint();
+        await page.mouse.click(cx, cy);
+      }
+      await expect(content).toBeVisible({ timeout: 6_000 });
     }).toPass({ timeout: 20_000 });
 
     // THE FINDING-1 CONTRACT: the card ends above the sheet (with the
