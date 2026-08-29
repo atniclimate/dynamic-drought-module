@@ -178,6 +178,26 @@ function isFinished(run) {
   return Boolean(run?.conclusion);
 }
 
+/**
+ * Did this run ever put a build on Pages?
+ *
+ * `gh run list` reports ONE row per run carrying the LATEST attempt's
+ * conclusion, so a run that deployed on attempt 1 and was then re-run into
+ * a failure reads as `failure` even though Pages is still correctly serving
+ * what attempt 1 published. The caller asks the attempts API about exactly
+ * those runs and passes `anyAttemptSucceeded`; the run id is the build
+ * nonce either way, because vite.config.ts stamps `github.run_id`, which is
+ * stable across attempts.
+ */
+function isPublished(run) {
+  return run?.conclusion === 'success' || run?.anyAttemptSucceeded === true;
+}
+
+const parsedMs = (value) => {
+  const ms = Date.parse(String(value ?? ''));
+  return Number.isFinite(ms) ? ms : null;
+};
+
 /** Newest first by updatedAt, then createdAt, then run id. */
 function orderKey(run) {
   const at = [run?.updatedAt, run?.createdAt]
@@ -229,8 +249,11 @@ const asMinutes = (ms) => Math.max(0, Math.round(ms / 60_000));
  * @param {string} input.headSha Current head commit of main.
  * @param {(string|number)} input.headCommittedAt Committer date of that commit.
  * @param {Array<{databaseId: (string|number), headSha: string, conclusion: ?string,
- *   status: ?string, createdAt: ?string, updatedAt: ?string}>} input.deployRuns
+ *   status: ?string, createdAt: ?string, updatedAt: ?string,
+ *   anyAttemptSucceeded: ?boolean}>} input.deployRuns
  *   Recent deploy.yml runs for main, newest first or in any order.
+ *   `conclusion` is the LATEST attempt's, so the caller sets
+ *   `anyAttemptSucceeded` for a run whose earlier attempt published.
  * @param {(string|number)} input.now
  * @param {number} [input.graceMs] Defaults to LIVE_COMPARE_GRACE_MS.
  * @returns {{verdict: ('verify'|'in-flight'|'undeployed'), sha: string, nonce: string, reason: string}}
@@ -270,9 +293,10 @@ export function resolveLiveExpectation(input) {
   const runs = Array.isArray(input?.deployRuns) ? input.deployRuns : [];
   const forHead = runs.filter((run) => String(run?.headSha ?? '') === headSha);
 
-  // A successful deploy of main's head wins even when a later rerun is
-  // still running: that build is what the CDN is serving.
-  const published = newest(forHead.filter((run) => run?.conclusion === 'success'));
+  // A deploy that ever published main's head wins even when a later rerun
+  // is still running or has since failed: that build is what the CDN is
+  // serving.
+  const published = newest(forHead.filter(isPublished));
   if (published) {
     return {
       verdict: 'verify',
@@ -282,17 +306,39 @@ export function resolveLiveExpectation(input) {
     };
   }
 
+  // An unfinished run is only a release under way for as long as the grace
+  // period. A deploy stuck in `queued`, `waiting` (an environment
+  // protection rule), or `requested` would otherwise keep this compare
+  // green forever, which is the silence DDM-P0-T04 exists to end. Measured
+  // from the RUN's creation, not the commit's: the run is the thing that
+  // is stuck.
   const running = newest(forHead.filter((run) => !isFinished(run)));
   if (running) {
+    const startedMs = parsedMs(running.createdAt);
+    const stuckMs = startedMs === null ? 0 : nowMs - startedMs;
+    if (stuckMs < graceMs) {
+      return {
+        verdict: 'in-flight',
+        sha: headSha,
+        nonce: '',
+        reason: `deploy run ${running.databaseId} for main head ${headSha} is ${running.status || 'not finished'}; there is nothing to compare yet`,
+      };
+    }
     return {
-      verdict: 'in-flight',
+      verdict: 'undeployed',
       sha: headSha,
       nonce: '',
-      reason: `deploy run ${running.databaseId} for main head ${headSha} is ${running.status || 'not finished'}; there is nothing to compare yet`,
+      reason: `main is ahead of the live build: no successful deploy of ${headSha}; deploy run ${running.databaseId} has been ${running.status || 'unfinished'} for ${asMinutes(stuckMs)} minutes, past the ${asMinutes(graceMs)} minute grace period`,
     };
   }
 
-  const ageMs = nowMs - headMs;
+  // Grace runs from the commit date, which a rebase or a backdated
+  // committer date controls, so floor it by the newest deploy run for this
+  // head: a commit dated last year whose deploy started two minutes ago is
+  // two minutes into its release, not a year overdue.
+  let ageMs = nowMs - headMs;
+  const firstAttemptMs = parsedMs(newest(forHead)?.createdAt);
+  if (firstAttemptMs !== null) ageMs = Math.min(ageMs, nowMs - firstAttemptMs);
   if (ageMs < graceMs) {
     return {
       verdict: 'in-flight',

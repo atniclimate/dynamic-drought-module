@@ -287,22 +287,36 @@ and returns one of three verdicts:
   commit and nonce are the deploy run's own; for a scheduled or dispatched
   compare they are the head of `main` and the latest successful deploy run
   of that head.
-- `in-flight`: a deploy of the head is queued or running, or the head is
-  younger than the 30 minute grace period and has no successful deploy yet.
-  The run records the reason and ends green without verifying and without
-  touching issues, because a release under way is not a divergence. The
-  grace period covers a normal green push (gate, sharded browser suite, and
-  `deploy-pages` take about 15 minutes) with room for a slow runner.
+- `in-flight`: a deploy of the head is queued or running and was created
+  less than 30 minutes ago, or the head is younger than that same grace
+  period and has no successful deploy yet. The run records the reason and
+  ends green without verifying and without touching issues, because a
+  release under way is not a divergence. The grace period covers a normal
+  green push (gate, sharded browser suite, and `deploy-pages` take about 15
+  minutes) with room for a slow runner. It also bounds the wait: a deploy
+  parked in `queued` or `waiting` past the grace period escalates rather
+  than keeping the compare green forever, and the head's age is floored by
+  its newest deploy run's start so a backdated committer date cannot skip
+  the grace.
 - `undeployed`: the head is past the grace period with no successful deploy.
   The run names the latest deploy run for that commit and its conclusion,
   appends to or opens the same single `deploy-divergence` issue (same marker
   comment, so a scheduled finding and a post-deploy finding are never two
   issues), and fails.
 
+A deploy run counts as having published the head if ANY of its attempts
+succeeded, not only the latest: a run that deployed and was then re-run into
+a failure reads as `failure` in the run list while Pages still correctly
+serves what the earlier attempt published, so the compare asks the attempts
+API about exactly those runs. The run id is the build nonce either way,
+because the stamp carries the run id, which is stable across attempts.
+
 A scheduled compare queues behind an in-flight post-deploy proof rather than
-cancelling it; only a newer post-deploy proof supersedes a running one. What
-the compare still does not prove: that Pages served a particular build to a
-particular reader at a particular moment, or anything about the hours
+cancelling it; only a newer post-deploy proof supersedes a running one, and
+when it does, that day's scheduled `undeployed` finding (if there was one)
+is dropped rather than filed, with the next scheduled run re-evaluating.
+What the compare still does not prove: that Pages served a particular build
+to a particular reader at a particular moment, or anything about the hours
 between two daily runs. It proves what the site answers when it is asked.
 
 The daily `source-health` workflow records the runtime's own upstream

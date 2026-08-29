@@ -16,10 +16,12 @@ Playwright traces or screenshots until every CI boot stubs the Census AIANNH
 and BIA AIAN-LAR sources (roadmap task DDM-P1-T08); the thirteen merged
 branches were deleted and `feature/maplibre-v5` stays until DDM-P0-T03.
 
-Current source baseline, observed 2026-08-28 (evening Pacific): `main` is at
-`c7a5574449e833939c7a0d59a9b056a648ea9852` (pull request 28 merged), and the
-public Pages application reports that same build with nonce `33228785543`
-after deploy run 33228785543 completed. The 2026-08-20 divergence recorded
+Current source baseline, observed 2026-08-29: `main` is at
+`1d82b59ccc9d963669c3d544441ac44007e1cebf` (pull request 31 merged 07:05
+UTC), deploy run 33240003166 published it, and verification run 33240334529
+proved that build live. The earlier 2026-08-28 baseline was
+`c7a5574449e833939c7a0d59a9b056a648ea9852` (pull request 28 merged) with
+nonce `33228785543`. The 2026-08-20 divergence recorded
 here earlier closed when the 2026-08-24 scheduled ENSO refresh deployed
 `a5c27c3b630349bfd93ee13c66e7cfe6305ce3c9` with its full browser suite. The
 hosted build nonce was the local fallback `dev` until pull request 27 made

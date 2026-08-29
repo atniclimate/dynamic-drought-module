@@ -21,12 +21,19 @@
 #               workflow_run that is the deploy's own commit and run id;
 #               for a scheduled compare it is main's head and the latest
 #               successful deploy run of that head.
-#   in-flight   A deploy of main's head is queued or running, or the head
-#               is younger than the 30 minute grace period and has no
-#               successful deploy yet. Record it, end green, touch no
-#               issues: a release under way is not a divergence.
+#   in-flight   A deploy of main's head is queued or running and started
+#               less than 30 minutes ago, or the head is younger than that
+#               same grace period and has no successful deploy yet. Record
+#               it, end green, touch no issues: a release under way is not
+#               a divergence.
 #   undeployed  Main's head is past the grace period with no successful
-#               deploy. File it and fail.
+#               deploy, including a deploy parked in `queued` or `waiting`
+#               for longer than that. File it and fail.
+#
+# A run counts as having published the head if ANY attempt succeeded: `gh
+# run list` reports the LATEST attempt's conclusion, so a run that deployed
+# and was then re-run into a failure would otherwise read as never having
+# deployed while Pages still serves what it published.
 #
 # A verify runs scripts/verify-live.mjs against the deployed URL: it waits
 # for Pages propagation (polling the referenced assets for the SHA up to 5
@@ -101,8 +108,13 @@ jobs:
     # behind an in-flight post-deploy proof: cancelling that proof would
     # destroy the receipt for a real release in order to re-ask a question
     # the running job is already answering.
+    #
+    # The key mirrors BOTH terms of the job `if` above, conclusion and
+    # head_branch: a workflow_dispatch of deploy.yml from a branch that
+    # concludes success would otherwise take verify-live-main, cancel a
+    # running proof of a real release, and then skip itself.
     concurrency:
-      group: verify-live-${{ (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && 'main' || github.run_id }}
+      group: verify-live-${{ (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')) && 'main' || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'workflow_run' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -162,9 +174,43 @@ jobs:
           runs='[]'
           branch='{"commit":{"sha":"","commit":{"committer":{"date":""}}}}'
           if [ "$EVENT_NAME" != "workflow_run" ]; then
+            # 100 rather than 30: a long-lived head with many dispatches
+            # could otherwise push its own successful deploy out of the
+            # window and read as never deployed.
             runs=$(gh run list --workflow=deploy.yml --branch main \
-              --json databaseId,headSha,conclusion,status,createdAt,updatedAt --limit 30)
+              --json attempt,databaseId,headSha,conclusion,status,createdAt,updatedAt --limit 100)
             branch=$(gh api "repos/$REPO/branches/main")
+            head=$(printf '%s' "$branch" | jq -r .commit.sha)
+            # gh run list reports ONE row per run carrying the LATEST
+            # attempt's conclusion, so a run that deployed on attempt 1 and
+            # was then re-run into a failure reads as `failure` while Pages
+            # still serves what attempt 1 published. Ask the attempts API
+            # about exactly those runs (this head, not currently success,
+            # more than one attempt), which is normally zero calls.
+            attempts='{}'
+            candidates=$(printf '%s' "$runs" | jq -r --arg head "$head" \
+              '.[] | select(.headSha == $head and .conclusion != "success" and ((.attempt // 1) > 1))
+                   | "\(.databaseId) \(.attempt)"')
+            while read -r id attempt; do
+              if [ -z "$id" ]; then
+                continue
+              fi
+              ok=false
+              n=1
+              while [ "$n" -lt "$attempt" ]; do
+                conclusion=$(gh api "repos/$REPO/actions/runs/$id/attempts/$n" --jq '.conclusion // ""')
+                if [ "$conclusion" = "success" ]; then
+                  ok=true
+                  break
+                fi
+                n=$((n + 1))
+              done
+              echo "run $id attempt count $attempt, an earlier attempt succeeded: $ok"
+              attempts=$(printf '%s' "$attempts" | jq --arg id "$id" --argjson ok "$ok" '. + {($id): $ok}')
+            done <<< "$candidates"
+            runs=$(printf '%s' "$runs" | jq --argjson attempts "$attempts" \
+              '[.[] | . + {anyAttemptSucceeded:
+                 (.conclusion == "success" or ($attempts[(.databaseId | tostring)] // false))}]')
           fi
           jq -n \
             --arg eventName "$EVENT_NAME" \
@@ -266,8 +312,16 @@ jobs:
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
           exit 0
 
+      # `!cancelled()` replaces the implicit success(), so these steps run
+      # even when an earlier one failed. That is deliberate for a verifier
+      # that timed out or crashed (outcome `failure`, no receipt): a
+      # deployed build must never go without a durable alert. It is WRONG
+      # when the verifier never ran at all, because the align step, npm ci,
+      # or the Chromium action failed: `exit_code` is then empty, `!= '0'`
+      # is true, and the run would file a divergence for a live build it
+      # never looked at. `outcome != 'skipped'` is the difference.
       - name: Keep the receipt
-        if: ${{ !cancelled() && steps.expect.outputs.verdict == 'verify' }}
+        if: ${{ !cancelled() && steps.expect.outputs.verdict == 'verify' && steps.verify.outcome != 'skipped' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: live-receipt
@@ -296,7 +350,7 @@ jobs:
       # without a durable alert. A failure that is only the propagation
       # poll is worded as inconclusive rather than a proved divergence.
       - name: Open or update the divergence issue
-        if: ${{ !cancelled() && steps.expect.outputs.verdict == 'verify' && steps.verify.outputs.exit_code != '0' }}
+        if: ${{ !cancelled() && steps.expect.outputs.verdict == 'verify' && steps.verify.outcome != 'skipped' && steps.verify.outputs.exit_code != '0' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
@@ -456,7 +510,7 @@ jobs:
             }
 
       - name: Fail the run when the live build was not proved
-        if: ${{ !cancelled() && steps.expect.outputs.verdict == 'verify' && steps.verify.outputs.exit_code != '0' }}
+        if: ${{ !cancelled() && steps.expect.outputs.verdict == 'verify' && steps.verify.outcome != 'skipped' && steps.verify.outputs.exit_code != '0' }}
         run: |
           echo "::error::The live build was not proved to be $DEPLOY_SHA (deploy run $DEPLOY_RUN_ID); see the job summary and the deploy-divergence issue."
           exit 1

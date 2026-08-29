@@ -185,29 +185,97 @@ test('when the same commit deployed successfully twice, the latest successful ru
   assert.equal(out.nonce, '200');
 });
 
-test('a successful deploy still wins while a later rerun of the same commit is in progress', () => {
+// A real rerun keeps the run id and only bumps `attempt`, and gh run list
+// then reports the LATEST attempt's conclusion for that one row.
+test('a rerun that failed does not hide the attempt that published the same commit', () => {
   const out = resolveLiveExpectation(scheduled({
-    deployRuns: [
-      run({ databaseId: 100 }),
-      run({ databaseId: 300, conclusion: null, status: 'in_progress', createdAt: minutesBefore(5), updatedAt: minutesBefore(5) }),
-    ],
+    deployRuns: [run({
+      databaseId: 100,
+      attempt: 2,
+      conclusion: 'failure',
+      status: 'completed',
+      anyAttemptSucceeded: true,
+      updatedAt: minutesBefore(10),
+    })],
+  }));
+  assert.equal(out.verdict, 'verify', 'Pages is still serving what attempt 1 published');
+  assert.equal(out.nonce, '100', 'the run id is the build nonce across every attempt');
+});
+
+test('a rerun still running does not hide the attempt that published the same commit', () => {
+  const out = resolveLiveExpectation(scheduled({
+    deployRuns: [run({
+      databaseId: 100,
+      attempt: 2,
+      conclusion: null,
+      status: 'in_progress',
+      anyAttemptSucceeded: true,
+      createdAt: minutesBefore(5),
+      updatedAt: minutesBefore(5),
+    })],
   }));
   assert.equal(out.verdict, 'verify');
   assert.equal(out.nonce, '100');
 });
 
+test('a rerun with no successful attempt is not treated as published', () => {
+  const out = resolveLiveExpectation(scheduled({
+    deployRuns: [run({ databaseId: 100, attempt: 3, conclusion: 'failure', anyAttemptSucceeded: false })],
+  }));
+  assert.equal(out.verdict, 'undeployed');
+  assert.match(out.reason, /latest deploy run 100 concluded failure/);
+});
+
 test('a queued or running deploy of main head is in-flight, not a divergence', () => {
+  const started = { createdAt: minutesBefore(6), updatedAt: minutesBefore(6) };
   const queued = resolveLiveExpectation(scheduled({
-    deployRuns: [run({ databaseId: 900, conclusion: null, status: 'queued' })],
+    deployRuns: [run({ databaseId: 900, conclusion: null, status: 'queued', ...started })],
   }));
   assert.equal(queued.verdict, 'in-flight');
   assert.equal(queued.nonce, '');
   assert.match(queued.reason, /deploy run 900 .* is queued/);
   const running = resolveLiveExpectation(scheduled({
-    deployRuns: [run({ databaseId: 901, conclusion: null, status: 'in_progress' })],
+    deployRuns: [run({ databaseId: 901, conclusion: null, status: 'in_progress', ...started })],
   }));
   assert.equal(running.verdict, 'in-flight');
   assert.match(running.reason, /is in_progress/);
+});
+
+test('a deploy stuck unfinished past the grace period stops reading as in-flight', () => {
+  const stuck = resolveLiveExpectation(scheduled({
+    deployRuns: [run({
+      databaseId: 902,
+      conclusion: null,
+      status: 'queued',
+      createdAt: minutesBefore(75),
+      updatedAt: minutesBefore(75),
+    })],
+  }));
+  assert.equal(stuck.verdict, 'undeployed');
+  assert.match(stuck.reason, /deploy run 902 has been queued for 75 minutes, past the 30 minute grace period/);
+  const waiting = resolveLiveExpectation(scheduled({
+    deployRuns: [run({ databaseId: 903, conclusion: null, status: 'waiting', createdAt: minutesBefore(45), updatedAt: minutesBefore(45) })],
+  }));
+  assert.equal(waiting.verdict, 'undeployed', 'an environment protection hold is still a live build that never arrived');
+  const fresh = resolveLiveExpectation(scheduled({
+    deployRuns: [run({ databaseId: 904, conclusion: null, status: 'queued', createdAt: minutesBefore(4), updatedAt: minutesBefore(4) })],
+  }));
+  assert.equal(fresh.verdict, 'in-flight');
+});
+
+test('a backdated head commit cannot skip the grace period its deploy is still inside', () => {
+  const out = resolveLiveExpectation(scheduled({
+    headCommittedAt: '2019-01-01T00:00:00Z',
+    deployRuns: [run({
+      databaseId: 700,
+      conclusion: 'failure',
+      status: 'completed',
+      createdAt: minutesBefore(3),
+      updatedAt: minutesBefore(2),
+    })],
+  }));
+  assert.equal(out.verdict, 'in-flight', 'age is floored by the newest deploy run for that head');
+  assert.match(out.reason, /is 3 minutes old, inside the 30 minute grace period/);
 });
 
 test('a commit younger than the grace period with no successful deploy is in-flight', () => {
