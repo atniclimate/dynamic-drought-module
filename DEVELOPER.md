@@ -261,11 +261,16 @@ Before calling a release current, verify:
 - the Worker revision matches reviewed source when a Worker change is part of
   the release.
 
-The `verify-live` job in `deploy.yml` checks the first six of these after
-every successful deploy with `scripts/verify-live.mjs` and keeps its receipt
-as the `live-receipt` artifact; the deploy job first confirms its commit is
-still the head of `main`, and a failure opens one `deploy-divergence` issue
-that the next deploy verifying green while still the head of `main` closes.
+The `verify-live.yml` workflow checks the first six of these after every
+successful deploy with `scripts/verify-live.mjs` and keeps its receipt as
+the `live-receipt` artifact. It runs on the deploy workflow's completion,
+checks out the commit that run deployed, and expects that commit and that
+run id in the stamp; it has its own concurrency group, so a newer push to
+`main` cannot cancel the receipt for the build still live (only a newer
+successful deploy, which brings its own receipt, supersedes a running
+verification). The deploy job first confirms its commit is still the head
+of `main`, and a failure opens one `deploy-divergence` issue that the next
+deploy verifying green while still the head of `main` closes.
 The daily `source-health` workflow records the runtime's own upstream
 requests at the default camera (status, bytes, seconds, record count, cache
 headers, failed requests) and opens one issue per catalog row that breaches
