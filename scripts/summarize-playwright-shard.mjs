@@ -8,7 +8,9 @@
  * $GITHUB_STEP_SUMMARY): passed, failed, flaky (passed only on retry), and
  * skipped counts, then the file:line and title of every failed or flaky test
  * so the named-failure discipline (baseline set versus after set) reads off
- * the Actions page. Writes `flaky=<n>` and `failed=<n>` to $GITHUB_OUTPUT
+ * the Actions page. The heading carries PLAYWRIGHT_PROJECT (the workflow
+ * sets it to the project and shard) so the concatenated run summary
+ * attributes each list to its shard. Writes `flaky=<n>` to $GITHUB_OUTPUT
  * when that file is set, so the workflow can keep the report for a shard
  * that passed only on retry. Exits 0 in every case: the test step already
  * decided the result; this step only names it. A missing or unreadable
@@ -49,7 +51,6 @@ try {
   const reason = error instanceof Error ? error.message : String(error);
   console.log(`### Browser shard\n\nNo readable JSON report at \`${reportPath}\`: ${reason}\n`);
   writeOutput('flaky', '0');
-  writeOutput('failed', '0');
   process.exit(0);
 }
 
@@ -88,4 +89,3 @@ lines.push('');
 console.log(lines.join('\n'));
 
 writeOutput('flaky', String(flaky.length));
-writeOutput('failed', String(failed.length));

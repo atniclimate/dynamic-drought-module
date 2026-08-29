@@ -338,8 +338,11 @@ export function captureWarnings(): CapturedWarnings {
   const original = console.warn;
   const messages: string[] = [];
   console.warn = (...args: unknown[]): void => {
+    // `console.warn(reason, err)` with no error passes `undefined`; drop it
+    // rather than record a literal "undefined" token.
     messages.push(
       args
+        .filter((arg) => arg !== undefined && arg !== null)
         .map((arg) => (arg instanceof Error ? `${arg.name}: ${arg.message}` : String(arg)))
         .join(' ')
     );

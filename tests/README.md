@@ -98,9 +98,12 @@ on retry, also uploads its HTML report (error text, ARIA error context,
 stdout and stderr, timings) as a seven-day artifact named for the shard; a
 clean shard uploads nothing. Traces and screenshots are off in CI: the
 ordinary boot fetches live AIANNH and BIA boundary geometry that the runtime
-holds in memory and never writes to disk (AGENTS.md rule 1), and a trace
-records response bodies while a screenshot renders the polygons. Locally
-both stay on for failures, in the gitignored `test-results/`.
+holds in memory and never writes to disk (the project's hard rule 1; see the
+NON-REDISTRIBUTION GUARD in `src/layers/aiannh.ts`), and a trace records
+response bodies while a screenshot renders the polygons. The explicit
+evidence captures in `fire3d-mode.spec.ts` (`fire3d-evidence/`, gitignored)
+are skipped under `CI` for the same reason. Locally, traces, screenshots,
+and the evidence captures stay on, in gitignored directories.
 
 When `DDM_BUILD_SHA` or `DDM_BUILD_NONCE` is set in the environment (CI sets
 both), `gotoApp` asserts the `<html>` build stamp on every boot it drives,

@@ -611,6 +611,13 @@ function fire3dContextStamp(page: Page): Promise<string | undefined> {
 
 const TOGGLE = '.shell-fire3d-btn';
 
+// The evidence captures below render the live scene, including the
+// default-on AIANNH and BIA boundaries, to fire3d-evidence/ (gitignored)
+// for the owner's local review. They stay local: CI keeps no screenshots
+// (playwright.config.ts), and a runner must not write that geometry to
+// disk at all.
+const CAPTURE_EVIDENCE = !process.env['CI'];
+
 test.describe('W3/W4 browser truth', () => {
   test('the desktop toggle activates the 3D scene with the volume legend, then exits cleanly', async ({
     page
@@ -719,12 +726,14 @@ test.describe('W3/W4 browser truth', () => {
     // networkidle nondeterministic), then capture the pitched-scene
     // evidence.
     await page.waitForTimeout(4_000);
-    await page.screenshot({
-      path: 'fire3d-evidence/fire3d-active-desktop.png'
-    });
-    await page
-      .locator('#shell-panel')
-      .screenshot({ path: 'fire3d-evidence/fire3d-control-coverage-note.png' });
+    if (CAPTURE_EVIDENCE) {
+      await page.screenshot({
+        path: 'fire3d-evidence/fire3d-active-desktop.png'
+      });
+      await page
+        .locator('#shell-panel')
+        .screenshot({ path: 'fire3d-evidence/fire3d-control-coverage-note.png' });
+    }
     console.log(
       `[fire3d-budget] terrain archive transport: ${demBytes} bytes over ${demRequests} requests`
     );
@@ -791,9 +800,11 @@ test.describe('W3/W4 browser truth', () => {
       .poll(() => fire3dStamp(page), { timeout: 30_000 })
       .toBe('active');
     await page.waitForTimeout(4_000);
-    await page.screenshot({
-      path: 'fire3d-evidence/fire3d-reduced-motion.png'
-    });
+    if (CAPTURE_EVIDENCE) {
+      await page.screenshot({
+        path: 'fire3d-evidence/fire3d-reduced-motion.png'
+      });
+    }
 
     await page.locator(TOGGLE).click();
     await expect.poll(() => fire3dStamp(page)).toBe('inactive');
@@ -833,9 +844,11 @@ test.describe('W3/W4 browser truth', () => {
     await expect
       .poll(() => embedNote.textContent())
       .not.toContain('HIFLD transmission lines');
-    await page.screenshot({
-      path: 'fire3d-evidence/fire3d-embed-disclosure.png'
-    });
+    if (CAPTURE_EVIDENCE) {
+      await page.screenshot({
+        path: 'fire3d-evidence/fire3d-embed-disclosure.png'
+      });
+    }
   });
 
   test('an empty smoke read says so in the 3D control instead of looking broken', async ({

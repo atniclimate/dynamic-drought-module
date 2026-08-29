@@ -38,10 +38,11 @@ jobs:
   shard:
     name: ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
     runs-on: ubuntu-latest
-    # The job budget covers the suite step's retry envelope below plus the
-    # summary and upload steps, so a slow red shard still gets its report
-    # kept instead of being cancelled without one.
-    timeout-minutes: 32
+    # The job budget covers a cache-miss browser install (10), the suite
+    # step's retry envelope (26), and the summary and upload steps, so a
+    # slow red shard still gets its report kept instead of being cancelled
+    # without one.
+    timeout-minutes: 40
     # Build identity (FE-22, 2026-08-28): the app stamps these two values on
     # <html> (vite.config.ts defines) and tests/helpers.ts gotoApp asserts
     # them on every boot it drives when they are set, so a shard proves it
@@ -127,6 +128,8 @@ jobs:
       - name: Summarize the shard
         id: summary
         if: ${{ !cancelled() }}
+        env:
+          PLAYWRIGHT_PROJECT: ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
         run: node scripts/summarize-playwright-shard.mjs test-results/report.json >> "$GITHUB_STEP_SUMMARY"
 
       # Keep the HTML report (error text, ARIA error context, stdout and

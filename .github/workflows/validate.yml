@@ -28,9 +28,12 @@ jobs:
     # Build identity (FE-22, 2026-08-28): the app stamps these two values on
     # <html> (vite.config.ts defines) so a browser run can prove WHICH build
     # it is exercising. The browser shards receive the same values as inputs.
+    # The nonce is the run id alone: a "re-run failed jobs" keeps the run id
+    # and reruns only the red shards, so their proof still names the build
+    # the surviving jobs made (a run_attempt suffix would diverge there).
     env:
       DDM_BUILD_SHA: ${{ github.sha }}
-      DDM_BUILD_NONCE: ${{ github.run_id }}-${{ github.run_attempt }}
+      DDM_BUILD_NONCE: ${{ github.run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -64,12 +67,14 @@ jobs:
     uses: ./.github/workflows/browser-suite.yml
     with:
       build-sha: ${{ github.sha }}
-      build-nonce: ${{ github.run_id }}-${{ github.run_attempt }}
+      build-nonce: ${{ github.run_id }}
 
+  # `!cancelled()` rather than `always()`: a run superseded by
+  # `cancel-in-progress` must read as cancelled, not as a red Validate.
   validate:
     name: Validate
     needs: [gate, browser]
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

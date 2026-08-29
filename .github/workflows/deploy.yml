@@ -51,11 +51,15 @@ jobs:
     # Build identity (FE-22, 2026-08-28): the app stamps these two values on
     # <html> (vite.config.ts defines) so a browser run can prove WHICH build
     # it is exercising. The artifact uploaded here is the build the gate
-    # produced; the browser shards rebuild with the same values as inputs,
-    # so every proof in this run names the same nonce.
+    # produced; the browser shards rebuild with the same values as inputs
+    # and assert the stamp on every boot (tests/helpers.ts), so every proof
+    # in this run names the same nonce. The nonce is the run id alone: a
+    # "re-run failed jobs" keeps the run id, reruns only the red shards, and
+    # deploys the artifact this job already uploaded, so a run_attempt
+    # suffix would make the shard proof and the deployed stamp diverge.
     env:
       DDM_BUILD_SHA: ${{ github.sha }}
-      DDM_BUILD_NONCE: ${{ github.run_id }}-${{ github.run_attempt }}
+      DDM_BUILD_NONCE: ${{ github.run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -99,7 +103,7 @@ jobs:
     uses: ./.github/workflows/browser-suite.yml
     with:
       build-sha: ${{ github.sha }}
-      build-nonce: ${{ github.run_id }}-${{ github.run_attempt }}
+      build-nonce: ${{ github.run_id }}
 
   deploy:
     name: Deploy to GitHub Pages

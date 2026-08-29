@@ -116,12 +116,14 @@ export default defineConfig({
     // wrong, so the tree stays clean on a green run (they land in gitignored
     // `test-results/`). In CI both are OFF: the ordinary boot fetches live
     // AIANNH and BIA boundary geometry, which the runtime holds in memory and
-    // never writes to disk (src/layers/aiannh.ts, bia-reservations.ts;
-    // AGENTS.md rule 1). A trace records response bodies and a screenshot
-    // renders the polygons, and CI retains failure diagnostics as artifacts
-    // on a public repository. The retained report keeps the error text, the
-    // ARIA error context, stdout and stderr, and timings, none of which
-    // carry geometry.
+    // never writes to disk (the project's hard rule 1; see the
+    // NON-REDISTRIBUTION GUARD in src/layers/aiannh.ts and the cache note in
+    // src/layers/bia-reservations.ts). A trace records response bodies and a
+    // screenshot renders the polygons, and CI retains failure diagnostics as
+    // artifacts on a public repository. The retained report keeps the error
+    // text, the ARIA error context, stdout and stderr, and timings, none of
+    // which carry geometry. The explicit evidence captures in
+    // fire3d-mode.spec.ts are gated on CI for the same reason.
     trace: isCI ? 'off' : 'on-first-retry',
     screenshot: isCI ? 'off' : 'only-on-failure',
     video: 'off'

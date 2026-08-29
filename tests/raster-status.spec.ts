@@ -98,6 +98,10 @@ test.afterEach(() => {
 });
 
 test('the raster watcher keeps its existing heal-only success behavior by default', () => {
+  // The threshold warns exactly once, at the third error, with the error.
+  expectWarnings([
+    UNAVAILABLE_AFTER_REPEATED_FAILURES('shared-raster', 'synthetic tile failure')
+  ]);
   const map = new FakeMap();
   const reports: string[] = [];
   watchRasterTiles(
@@ -120,10 +124,6 @@ test('the raster watcher keeps its existing heal-only success behavior by defaul
     });
   }
   expect(reports).toEqual(['error']);
-  // The threshold warns exactly once, at the third error, with the error.
-  expectWarnings([
-    UNAVAILABLE_AFTER_REPEATED_FAILURES('shared-raster', 'synthetic tile failure')
-  ]);
 
   map.fire('sourcedata', {
     sourceId: 'shared-raster',
@@ -327,6 +327,9 @@ test('completeness waits through three early errors and reports mixed success as
 });
 
 test('completeness still reports total failure after three early errors', () => {
+  // Completeness accounting reports once at idle; the legacy three-error
+  // shortcut stays silent when a deadline is configured.
+  expectWarnings([UNAVAILABLE_AT_DEADLINE('selected-frame')]);
   const map = new FakeMap();
   const reports: string[] = [];
   watchRasterTiles(
@@ -355,9 +358,6 @@ test('completeness still reports total failure after three early errors', () => 
   map.fire('idle', {});
 
   expect(reports).toEqual(['error']);
-  // Completeness accounting reports once at idle; the legacy three-error
-  // shortcut stays silent when a deadline is configured.
-  expectWarnings([UNAVAILABLE_AT_DEADLINE('selected-frame')]);
 });
 
 test('the HeatRisk completeness opt-in treats an empty idle cycle as complete', () => {
