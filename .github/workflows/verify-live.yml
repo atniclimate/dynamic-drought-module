@@ -80,10 +80,14 @@
 # proof sat in the deploy's `pages` concurrency group, so a newer push
 # cancelled an in-flight verification; if that newer run then failed
 # before its own deploy, the older commit stayed live with no receipt.
-# Here the verification has its own job-level group. A workflow-level
-# group would be taken when the run is created, before the job's `if` is
-# read, so a failed or cancelled deploy would still spawn a run that
-# cancels the in-flight verification and then skips itself.
+# Here the verification has its own group, held at the job. GitHub
+# documents no ordering between taking a workflow-level concurrency group
+# and evaluating a job's `if`, so a workflow-level group would raise a
+# question the documentation does not answer: whether a run for a failed
+# or cancelled deploy could cancel an in-flight verification and then skip
+# itself. A job-level group avoids the question rather than betting on an
+# answer, and the group key mirrors both terms of the job `if` so a
+# non-success workflow_run lands in a per-run group either way.
 #
 # Still not proved here: that Pages served a particular build to a
 # particular reader at a particular moment, and nothing between two daily
@@ -120,13 +124,15 @@ jobs:
       || (github.event.workflow_run.conclusion == 'success'
           && github.event.workflow_run.head_branch == 'main')
     # One compare at a time. The group is held at the JOB, not the
-    # workflow: a workflow-level group is taken when the run is created,
-    # before the `if` above is evaluated, so a failed or cancelled deploy
-    # would still spawn a run that cancels the in-flight verification and
-    # then skips itself, which is the exact gap this workflow closes. Only
-    # a job that runs enters a job-level group, and the key below keeps any
-    # non-success workflow_run out of it regardless. This group is
-    # deliberately NOT the deploy's `pages` group.
+    # workflow. GitHub's concurrency documentation says nothing about when
+    # a workflow-level group is taken relative to a job's `if`, so putting
+    # the group at the workflow would make the safety of this workflow
+    # depend on undocumented ordering: whether a run raised by a failed or
+    # cancelled deploy could take verify-live-main, cancel a running
+    # verification, and only then skip itself. At the job the question does
+    # not arise, because only a job that runs enters a job-level group, and
+    # the key below keeps any non-success workflow_run out of it regardless.
+    # This group is deliberately NOT the deploy's `pages` group.
     #
     # cancel-in-progress only for workflow_run: a post-deploy proof is
     # newer truth than whatever is running, so it supersedes it (and brings
@@ -215,9 +221,16 @@ jobs:
             head=$(printf '%s' "$branch" | jq -r .commit.sha)
             # 100 rather than 30: a long-lived head with many dispatches
             # could otherwise push its own successful deploy out of the
-            # window and read as never deployed.
-            runs=$(gh run list --workflow=deploy.yml --branch main \
-              --json attempt,databaseId,headSha,conclusion,status,createdAt,updatedAt --limit 100)
+            # window and read as never deployed. The window still stays,
+            # because it is what names the newest deploy of ANOTHER commit
+            # when the head has no deploy at all; a second query filtered
+            # to the head with `--commit` guarantees that head's own runs
+            # are in the snapshot no matter how much else has happened.
+            fields=attempt,databaseId,headSha,conclusion,status,createdAt,updatedAt
+            runs=$(gh run list --workflow=deploy.yml --branch main --json "$fields" --limit 100)
+            headRuns=$(gh run list --workflow=deploy.yml --branch main --commit "$head" --json "$fields" --limit 100)
+            runs=$(jq -n --argjson window "$runs" --argjson head "$headRuns" \
+              '($window + $head) | group_by(.databaseId) | map(.[-1])')
             # gh run list reports ONE row per run carrying the LATEST
             # attempt's conclusion, so a run that deployed on attempt 1 and
             # was then re-run into a failure reads as `failure` while Pages
@@ -336,18 +349,25 @@ jobs:
           echo "Re-checked out $DEPLOY_SHA (was $have) for the PMTiles list."
 
       # The site URL comes from the Pages configuration (the same source
-      # configure-pages reads); the public seat is the fallback rather
-      # than an empty --base.
+      # configure-pages reads). There is deliberately NO fallback to the
+      # hard-coded public seat. The fallback looked harmless because the
+      # seat is where this repository publishes today, but it made the
+      # workflow able to verify a site it had not been told to check: a
+      # renamed repository, a custom domain, or a Pages configuration that
+      # had been changed would all have been proved green at the old
+      # address. A wrong site passing is worse than a red resolve step, so
+      # an unreadable Pages configuration fails here and says why.
       - name: Resolve the Pages URL
         id: pages
         if: ${{ steps.expect.outputs.verdict == 'verify' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           url=$(gh api "repos/${{ github.repository }}/pages" --jq .html_url 2>/dev/null || true)
           if [ -z "$url" ]; then
-            url="https://atniclimate.github.io/dynamic-drought-module/"
-            echo "Pages configuration unavailable; using the public seat $url"
+            echo "::error::The Pages configuration for ${{ github.repository }} could not be read, so the URL under proof is unknown. Refusing to fall back to the hard-coded public seat: proving a site this workflow was not told to check would be a false receipt."
+            exit 1
           fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Verifying $DEPLOY_SHA (deploy runs $DEPLOY_RUN_NONCES) at $url"
