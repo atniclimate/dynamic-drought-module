@@ -104,6 +104,26 @@ jobs:
           PLAYWRIGHT_PROJECT: ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
         run: node scripts/summarize-playwright-shard.mjs test-results/report.json >> "$GITHUB_STEP_SUMMARY"
 
+      # Measurement channel (R1/R3, 2026-08-29): upload the raw JSON report
+      # unconditionally, every shard, not only on failure or flake, so a real
+      # duration profile exists to decide shard composition and worker counts
+      # (there was none before this). It carries per-test title, file:line,
+      # status, duration, and retry index, plus per-result stdout/stderr text
+      # and an attachments list that is always empty (traces and screenshots
+      # are off in CI) -- no response bodies. This upload's cleanliness rests
+      # on the same guarantee as DDM-P1-T08: every suite boot answers the
+      # sovereign boundary queries from synthetic fixtures (PR 34), so no
+      # live geometry ever reaches a test's stdout or the report JSON. Short
+      # retention: this is a measurement artifact, not a diagnostic one.
+      - name: Keep the JSON report for measurement
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-json-${{ matrix.project }}-${{ matrix.shard }}-of-${{ matrix.total }}
+          path: test-results/report.json
+          retention-days: 3
+          if-no-files-found: ignore
+
       # Keep the HTML report (error text, ARIA error context, stdout and
       # stderr, timings) when the shard failed or passed only on retry, so a
       # red or flaky shard is diagnosable without rerunning it blind; a clean
