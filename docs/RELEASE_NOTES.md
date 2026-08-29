@@ -35,9 +35,10 @@ each hosted build attributable to its run.
 
 Roadmap task DDM-P1-T08 asks for three things; pull request 34 (`56dd46a`)
 delivers the first two and leaves the trace/screenshot flip to the owner.
-Twenty specs moved onto the shared `gotoApp` boundary stub
-(`tests/tribal-fixtures.ts`) and their duplicate per-spec routes were
-deleted; `tests/boundary-stubs.spec.ts` and
+Twenty specs moved onto the shared boot helper (`gotoApp` in
+`tests/helpers.ts`), which now answers every boot from the synthetic
+fixture bodies in `tests/tribal-fixtures.ts`; their duplicate per-spec
+routes were deleted. `tests/boundary-stubs.spec.ts` and
 `tests/boundary-boot-inventory.test.mjs` (`npm run test:boundary-boots`,
 part of the gate) guard it, with the mechanism documented in DEVELOPER.md.
 Trace and screenshot retention stays off pending the owner decision that
@@ -67,8 +68,11 @@ in DEVELOPER.md), covered by `tests/live-receipts.test.mjs` in
 `npm run gate`. A rode-along fix stopped Playwright's test collection from
 importing the `node --test` suites into every browser worker;
 `playwright test --list` still reports 830 tests in 106 files. The
-schedule's first real receipt was a hand-dispatched run (33246718167, for
-`214c26e`), taken the same day the workflow merged.
+hand-dispatched run (33246718167, for `214c26e`) proved the shared code
+path and the `verify` verdict the same day the workflow merged; no
+`schedule`-event run of `verify-live.yml` has fired yet, so the first
+scheduled receipt is still owed. What the compare still does not prove:
+anything about the hours between two daily compares.
 
 ### 2026-08-29: the live proof survives a newer push
 
@@ -76,7 +80,7 @@ Pull request 31 (`1d82b59`) moved post-deploy verification into its own
 `verify-live.yml` workflow with its own concurrency group, so a newer push
 to `main` no longer cancels an in-flight verification for the build still
 live. The residual gap this left, a deploy cancelled during publish
-getting no receipt either way, closed two pull requests later when pull
+getting no receipt either way, closed one pull request later when pull
 request 32 added the scheduled compare. First receipt: deploy 33240003166,
 verify 33240334529.
 
@@ -90,10 +94,18 @@ T08, and the proposed T12 ask for (mechanism in DEVELOPER.md).
 `source-health` workflow records the runtime's own upstream requests per
 catalog layer, opening one issue per breaching row (on the day WFIGS
 geometry grew it would have flagged the perimeter layer `unavailable` at
-42 MB against its 15 s budget); and the upstream drift monitor now fails
-on a missing ArcGIS `outFields` field across 19 covered layer paths, the
-kind of check that would have caught `attr_DailyAcres` going unserved for
-months. `docs/ROADMAP.yaml` proposed `DDM-P0-T12` for owner ratification.
+42 MB against its 15 s budget). Zoom-gated layers, selection-driven
+queries, and satellite tiles are reported as not measured, and one
+observation per day can be a warm-cache path. The upstream drift monitor
+now fails on a missing ArcGIS `outFields` field across 19 covered layer
+paths, the kind of check that would have caught `attr_DailyAcres` going
+unserved for months, and every requested field was present on 2026-08-28;
+not extracted, and recorded by reason instead: lists passed as positional
+arguments, including the CPC 6-10 and 8-14 day point query `cat,prob` and
+the USDM, NIFC, and watershed lists in `src/impact/sources.ts` and
+`src/state/watershed-geometry.ts`, plus the watershed HUC code field, a
+template token. `docs/ROADMAP.yaml` proposed `DDM-P0-T12` for owner
+ratification.
 
 ### 2026-08-28: the Fire view gets its perimeters back, and the embed corner unstacks
 
