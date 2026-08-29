@@ -380,6 +380,14 @@ requests at the default camera (status, bytes, seconds, record count, cache
 headers, failed requests) and opens one issue per catalog row that breaches
 its budget; neither job writes a response body, trace, or screenshot.
 
+**Status truth.** Calling a roadmap task "Complete" requires a
+clause-by-clause receipt: the exact commit SHA, the event type (unit,
+dispatch, schedule, live, or owner-observed), the run id, and the retry
+result for every acceptance line, not one aggregate claim. A hand-dispatched
+workflow run proves the code path executes; it is not a schedule receipt. A
+retry pass does not satisfy an acceptance line that requires passing without
+depending on retries.
+
 GitHub Pages is already a range-capable CDN. Benchmark field performance before
 moving hosting. Cloudflare Pages is not a direct replacement while an artifact
 exceeds its per-file limit; moving large archives to R2 would introduce a new
