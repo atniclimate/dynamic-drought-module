@@ -79,10 +79,26 @@ test('evaluateAssets fails on any non-200 relative asset and on an empty list', 
 });
 
 test('evaluateRange requires 206 with a Content-Range from byte 0 and a body of the promised size', () => {
-  assert.equal(evaluateRange({ name: 'a.pmtiles', status: 206, contentRange: 'bytes 0-16383/35252210', bytes: 16384 }).ok, true);
-  assert.equal(evaluateRange({ name: 'a.pmtiles', status: 200, contentRange: null, bytes: 35252210 }).ok, false);
-  assert.equal(evaluateRange({ name: 'a.pmtiles', status: 206, contentRange: 'bytes 100-16483/35252210', bytes: 16384 }).ok, false);
-  assert.equal(evaluateRange({ name: 'a.pmtiles', status: 206, contentRange: 'bytes 0-16383/35252210', bytes: 10 }).ok, false);
+  const row = { name: 'a.pmtiles', status: 206, contentRange: 'bytes 0-16383/35252210', bytes: 16384, localBytes: 35252210 };
+  assert.equal(evaluateRange(row).ok, true);
+  assert.equal(evaluateRange({ ...row, status: 200, contentRange: null, bytes: 35252210 }).ok, false);
+  assert.equal(evaluateRange({ ...row, contentRange: 'bytes 100-16483/35252210' }).ok, false);
+  assert.equal(evaluateRange({ ...row, bytes: 10 }).ok, false);
+});
+
+test('evaluateRange fails when the served archive is not the size of the checked-out one', () => {
+  const stale = evaluateRange({
+    name: 'hillshade-dem-pnw.pmtiles',
+    status: 206,
+    contentRange: 'bytes 0-16383/29000000',
+    bytes: 16384,
+    localBytes: 35252210,
+  });
+  assert.equal(stale.ok, false, 'a self-consistent range answer is not proof of identity');
+  assert.match(stale.reasons[0], /served archive is 29000000 bytes, the checked-out hillshade-dem-pnw\.pmtiles is 35252210/);
+  const unknown = evaluateRange({ name: 'a.pmtiles', status: 206, contentRange: 'bytes 0-16383/35252210', bytes: 16384, localBytes: null });
+  assert.equal(unknown.ok, false, 'an unknown local size cannot silently pass as identity');
+  assert.match(unknown.reasons[0], /checked-out size of a\.pmtiles is unknown/);
 });
 
 test('evaluateLayers passes terminal states inside the ceiling, warns on unavailable, fails on stuck or late', () => {

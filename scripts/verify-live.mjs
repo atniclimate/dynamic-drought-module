@@ -12,7 +12,10 @@
  *      references resolves 200 relative to the base (the subpath contract:
  *      the repository seat mounts the artifact beneath its name);
  *   3. range: each PMTiles archive shipped from public/data answers a
- *      16 KiB byte-range request with 206 and a Content-Range from byte 0;
+ *      16 KiB byte-range request with 206 and a Content-Range from byte 0
+ *      whose TOTAL equals the size of that file in the checked-out commit,
+ *      so a stale or truncated archive at the same stable path cannot pass
+ *      a self-consistent range answer off as the shipped one;
  *   4. boots: root (default drought cluster), the wildfire, heat, and enso
  *      clusters, and the wildfire embed at 1280x800 and 390x844 carry the
  *      expected data-ddm-build-sha and a data-ddm-build-nonce from the
@@ -41,7 +44,7 @@
  *   [--settle-ms n] [--interval-ms n] [--ceiling-ms n]
  * Exit 0 when every check passed, 1 when any failed, 2 on a usage error.
  */
-import { appendFile, readdir, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -248,6 +251,15 @@ async function checkRanges() {
   const names = (await readdir(PUBLIC_DATA)).filter((n) => n.endsWith('.pmtiles')).sort();
   for (const name of names) {
     const url = new URL(`data/${name}`, args.base).href;
+    // The checkout is the commit under proof (the workflow re-points it
+    // before this runs), so the file beside this script is the archive that
+    // build shipped and its size identifies what the site must serve.
+    let localBytes = null;
+    try {
+      localBytes = (await stat(join(PUBLIC_DATA, name))).size;
+    } catch (error) {
+      console.log(`could not size ${name} in the checkout: ${String(error.message ?? error).slice(0, 120)}`);
+    }
     let row;
     try {
       const res = await get(url, { headers: { Range: `bytes=0-${RANGE_BYTES - 1}` } });
@@ -259,9 +271,10 @@ async function checkRanges() {
         contentRange: res.headers.get('content-range'),
         acceptRanges: res.headers.get('accept-ranges'),
         bytes: buf.length,
+        localBytes,
       };
     } catch (error) {
-      row = { name, url, status: 0, contentRange: null, acceptRanges: null, bytes: 0, error: String(error.message ?? error).slice(0, 160) };
+      row = { name, url, status: 0, contentRange: null, acceptRanges: null, bytes: 0, localBytes, error: String(error.message ?? error).slice(0, 160) };
     }
     receipt.ranges.push(row);
     record(`range:${name}`, evaluateRange(row));

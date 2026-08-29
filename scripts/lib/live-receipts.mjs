@@ -120,12 +120,30 @@ export function evaluateAssets(rows) {
   return { ok: reasons.length === 0, reasons };
 }
 
+/**
+ * One PMTiles archive's byte-range answer.
+ *
+ * The 206, the Content-Range, and the body length only prove the protocol:
+ * a stale or coherently truncated archive at the same stable path answers
+ * all three self-consistently. `row.localBytes` is the size of the same file
+ * in the checkout of the commit under proof, and the TOTAL the
+ * Content-Range names must equal it, so the archive the site serves is the
+ * archive that build shipped and not last month's.
+ */
 export function evaluateRange(row) {
   const reasons = [];
   if (row.status !== 206) reasons.push(`status ${row.status}`);
-  const m = row.contentRange ? /^bytes 0-(\d+)\/\d+$/.exec(row.contentRange) : null;
+  const m = row.contentRange ? /^bytes 0-(\d+)\/(\d+)$/.exec(row.contentRange) : null;
   if (!m) reasons.push(`content-range ${row.contentRange ?? 'absent'}`);
   else if (row.bytes !== Number(m[1]) + 1) reasons.push(`body ${row.bytes} bytes, range promised ${Number(m[1]) + 1}`);
+  if (m && Number.isFinite(row.localBytes)) {
+    const served = Number(m[2]);
+    if (served !== row.localBytes) {
+      reasons.push(`served archive is ${served} bytes, the checked-out ${row.name} is ${row.localBytes}`);
+    }
+  } else if (!Number.isFinite(row.localBytes)) {
+    reasons.push(`the checked-out size of ${row.name} is unknown, so the served archive cannot be identified`);
+  }
   return { ok: reasons.length === 0, reasons };
 }
 
