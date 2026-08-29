@@ -111,8 +111,9 @@ so each shard proves it exercised the build this run made.
 
 Browser provisioning (the Playwright browser cache and its miss and hit
 paths) is a composite action, `.github/actions/playwright-chromium`, shared
-with the deploy's post-deploy verification (`scripts/verify-live.mjs`) and
-the daily source-health probe (`scripts/source-health.mjs`). Those two
+with the post-deploy verification workflow (`verify-live.yml`, which runs
+`scripts/verify-live.mjs`) and the daily source-health probe
+(`scripts/source-health.mjs`). Those two
 scripts drive Chromium directly, outside this suite, and import it from
 `@playwright/test` (the declared dependency). Their pure evaluators
 are unit-tested by `tests/live-receipts.test.mjs` and

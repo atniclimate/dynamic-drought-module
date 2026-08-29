@@ -1,5 +1,5 @@
 # Deterministic, cached Chromium provisioning for Playwright (DDM-P0-T01).
-# Shared by the browser suite, the deploy's live verification, and the
+# Shared by the browser suite, the post-deploy live verification, and the
 # scheduled source-health probe so every browser job provisions one way.
 #
 # The browser directory is keyed on the runner OS and architecture and the

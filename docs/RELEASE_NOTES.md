@@ -25,6 +25,29 @@ here earlier closed when the 2026-08-24 scheduled ENSO refresh deployed
 hosted build nonce was the local fallback `dev` until pull request 27 made
 each hosted build attributable to its run.
 
+### 2026-08-28: the live proof survives a newer push
+
+This pull request closes the known gap the entry below records. The
+post-deploy verification moves out of `deploy.yml` into its own workflow,
+`verify-live.yml`, triggered by the deploy workflow's completion and run
+only when that deploy succeeded. It checks out the commit the deploy
+built, expects that commit and that run id in the live build stamp, and
+holds its own concurrency group at the job (a workflow-level group is
+taken before the job's success condition is read, so a failed deploy would
+still have cancelled the running proof): a newer push to `main` no longer
+cancels an in-flight verification, so a newer run that fails before its
+own deploy leaves the older commit live WITH a receipt. Only a newer
+verification,
+which exists only because a newer deploy succeeded and brings its own
+receipt, supersedes a running one. The divergence issue names the deploy
+run it failed to prove and the verification run that tried. Residual gap:
+a deploy run cancelled during or just after `deploy-pages` reads as
+cancelled whether or not Pages published it, so it gets no receipt; a
+scheduled compare of the live stamp against the last successful deploy
+would close that. This
+workflow cannot be exercised on the pull request (a `workflow_run` trigger
+fires only from `main`); its first receipt is the deploy of this merge.
+
 ### 2026-08-28: the deploy proves the live build, and the sources get a daily receipt
 
 This pull request follows
