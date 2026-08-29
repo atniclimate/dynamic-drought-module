@@ -33,15 +33,14 @@ export const EXPECTED_PREFLIGHT_MAX_AGE = '86400';
 
 /**
  * What `/healthz` advertises is a SEPARATE question from what `/proxy`
- * does: the health endpoint is a read of the Worker itself and may offer a
- * narrower method set than the relay. The candidate answers its own
- * preflight with `GET, OPTIONS` while the health document carries the
- * relay's advertisement, and that split is still settling, so the health
- * expectation is an input (`--expect-healthz-methods`) rather than a
- * constant. The `Allow` header on `HEAD /healthz` is recorded but not
- * asserted for the same reason.
+ * does: the health endpoint is a read of the Worker itself, takes no body,
+ * and offers no HEAD, so it names a narrower method set. The reviewed
+ * candidate answers `GET, OPTIONS` consistently on the health document, its
+ * preflight, and the `Allow` header of its 405. That set is a policy choice
+ * rather than a fact about the relay, so it is an input
+ * (`--expect-healthz-methods`) and every health-scoped row reads it.
  */
-export const DEFAULT_HEALTHZ_ALLOW_METHODS = EXPECTED_ALLOW_METHODS;
+export const DEFAULT_HEALTHZ_ALLOW_METHODS = 'GET, OPTIONS';
 
 /** The Worker's own upstream-failure codes. A probe marked
  * `upstreamTolerant` records these as warnings: an agency outage is not a
@@ -143,6 +142,11 @@ const NWS_ALERTS = 'https://api.weather.gov/alerts/active?point=38.5,-97.5';
 /** An allowed HOST with a path that is not an allowed route. This is the
  * probe that caught the live general relay: it answered 200 with 50 bytes. */
 const OFF_ROUTE_ALLOWED_HOST = 'https://www.usbr.gov/robots.txt';
+/** The two halves of the credential-shaped bounds probe, kept apart so no
+ * `name:password@host` literal appears in tracked source. Neither value is
+ * a credential anywhere. */
+const CREDENTIAL_PROBE_PARTS = ['ddm-probe', 'no-such-secret'];
+
 /** A host that was never on any allow-list. */
 const FOREIGN_HOST = 'https://example.com/';
 /** A host the reviewed revision REMOVED. A relay here is the old policy. */
@@ -209,12 +213,30 @@ export const PROBES = Object.freeze([
     // A HEAD response carries no body, so no probe on this method can read
     // the Worker's error code. Every HEAD row asserts the status and the
     // headers only, and the same refusal is asserted by code on a GET. The
-    // `Allow` header this row returns is recorded, not asserted: what the
-    // health endpoint offers is narrower than the relay and still settling.
+    // headers are still worth asserting: this 405 names the health method
+    // set both in its CORS advertisement and in RFC 9110's `Allow`.
     name: 'HEAD /healthz is refused',
     method: 'HEAD',
     path: '/healthz',
-    expect: { status: 405, cors: WORKER_CORS },
+    healthScope: true,
+    expect: {
+      status: 405,
+      cors: WORKER_CORS,
+      allow: { value: DEFAULT_HEALTHZ_ALLOW_METHODS, required: true },
+    },
+  },
+  {
+    id: 'options-healthz',
+    row: 6,
+    name: 'OPTIONS preflight for the health endpoint',
+    method: 'OPTIONS',
+    path: '/healthz',
+    healthScope: true,
+    expect: {
+      status: 204,
+      error: null,
+      cors: { ...WORKER_CORS, maxAge: EXPECTED_PREFLIGHT_MAX_AGE },
+    },
   },
   relay('relay-awdb-data', 'GET relay: AWDB data', AWDB_DATA),
   relay('relay-awdb-stations', 'GET relay: AWDB stations', AWDB_STATIONS),
@@ -271,6 +293,29 @@ export const PROBES = Object.freeze([
     path: '/proxy',
     upstream: OFF_ROUTE_ALLOWED_HOST,
     expect: { status: 403, error: 'route_not_allowed', cors: WORKER_CORS },
+  },
+  {
+    id: 'options-url-too-long',
+    row: 6,
+    // The preflight runs the same target validation the real request will,
+    // so every bound answers on OPTIONS too. Two of them are probed here
+    // because a preflight that skips validation is exactly the gap slice 0
+    // closes, and an over-length or unparseable target is the cheapest way
+    // to see whether it ran at all.
+    name: 'OPTIONS preflight with a 2049-character url',
+    method: 'OPTIONS',
+    path: '/proxy',
+    upstream: `${AGRIMET_SITES}?pad=${'a'.repeat(2049 - AGRIMET_SITES.length - 5)}`,
+    expect: { status: 414, error: 'url_too_long', cors: WORKER_CORS },
+  },
+  {
+    id: 'options-malformed-url',
+    row: 6,
+    name: 'OPTIONS preflight with an unparseable url',
+    method: 'OPTIONS',
+    path: '/proxy',
+    upstream: 'not a url',
+    expect: { status: 400, error: 'invalid_url', cors: WORKER_CORS },
   },
   {
     id: 'options-unknown-path',
@@ -377,7 +422,12 @@ export const PROBES = Object.freeze([
     name: 'bounds: credentials in the upstream url',
     method: 'GET',
     path: '/proxy',
-    upstream: AGRIMET_SITES.replace('https://', 'https://user:secret@'),
+    // Assembled rather than written out, and redacted in the receipt: a
+    // literal `name:password@host` in tracked source or in a pasted receipt
+    // is secret-scanner bait, and nothing about this probe needs a value
+    // that reads like a real credential.
+    upstream: AGRIMET_SITES.replace('https://', `https://${CREDENTIAL_PROBE_PARTS.join(':')}@`),
+    redactUrl: true,
     expect: { status: 400, error: 'credentials_not_allowed', cors: WORKER_CORS },
   },
   {
@@ -393,6 +443,19 @@ export const PROBES = Object.freeze([
   },
 ]);
 
+/**
+ * The expectation for one probe, with the health endpoint's advertised
+ * method set substituted into every health-scoped row. Pure, so the caller
+ * can name a different set (`--expect-healthz-methods`) without the table
+ * carrying two copies of itself.
+ */
+export function probeExpectation(probe, healthzMethods = DEFAULT_HEALTHZ_ALLOW_METHODS) {
+  if (!probe?.healthScope) return probe?.expect;
+  const expect = { ...probe.expect, cors: { ...probe.expect.cors, allowMethods: healthzMethods } };
+  if (expect.allow) expect.allow = { ...expect.allow, value: healthzMethods };
+  return expect;
+}
+
 /** The public request URL for one probe. Pure: the driver does the fetch. */
 export function probeUrl(base, probe) {
   const root = base.endsWith('/') ? base.slice(0, -1) : base;
@@ -401,6 +464,20 @@ export function probeUrl(base, probe) {
     return `${root}${probe.path}?url=${encodeURIComponent(probe.upstream)}`;
   }
   return `${root}${probe.path}`;
+}
+
+/**
+ * The request URL as the receipt records it. Identical to probeUrl except
+ * for the credential-shaped bounds probe, whose userinfo is masked so a
+ * pasted receipt carries no `name:password@host` string.
+ */
+export function receiptProbeUrl(base, probe) {
+  const url = probeUrl(base, probe);
+  if (!probe?.redactUrl) return url;
+  const userinfo = `${CREDENTIAL_PROBE_PARTS.join(':')}@`;
+  return url
+    .replaceAll(encodeURIComponent(userinfo), encodeURIComponent('***:***@'))
+    .replaceAll(userinfo, '***:***@');
 }
 
 /* ------------------------------------------------------------------ *
@@ -438,20 +515,33 @@ function corsReasons(headers, expected) {
  * @param {{expectRevision: string, expectMethods: ?string}} expect
  */
 export function evaluateHealthz(row, { expectRevision, expectMethods = DEFAULT_HEALTHZ_ALLOW_METHODS }) {
-  const reasons = [];
-  if (row?.networkError) return { ok: false, reasons: [`request failed: ${row.networkError}`], warnings: [] };
-  if (row?.status !== 200) reasons.push(`status ${row?.status ?? 'none'}, expected 200`);
-  const revision = row?.revision ?? null;
-  if (!revision) reasons.push('the health document carried no revision field');
-  else if (revision !== expectRevision) {
-    reasons.push(`revision "${revision}", expected "${expectRevision}"`);
+  if (row?.networkError) {
+    const dead = { ok: false, reasons: [`request failed: ${row.networkError}`], warnings: [] };
+    return { ...dead, identity: dead, cors: dead };
   }
-  reasons.push(...corsReasons(row?.headers, { ...WORKER_CORS, allowMethods: expectMethods }));
+  // Two questions, reported as the plan's two rows: WHICH build is running
+  // (row 1) and WHAT it advertises (row 2). A converged revision string with
+  // the wrong CORS policy is a different failure from a stale build, and
+  // reading them off one line hides that.
+  const identity = [];
+  if (row?.status !== 200) identity.push(`status ${row?.status ?? 'none'}, expected 200`);
+  const revision = row?.revision ?? null;
+  if (!revision) identity.push('the health document carried no revision field');
+  else if (revision !== expectRevision) {
+    identity.push(`revision "${revision}", expected "${expectRevision}"`);
+  }
   const cacheControl = row?.headers?.cacheControl ?? null;
   if (cacheControl !== 'no-store') {
-    reasons.push(`Cache-Control ${cacheControl === null ? 'absent' : `"${cacheControl}"`}, expected "no-store"`);
+    identity.push(`Cache-Control ${cacheControl === null ? 'absent' : `"${cacheControl}"`}, expected "no-store"`);
   }
-  return { ok: reasons.length === 0, reasons, warnings: [] };
+  const cors = corsReasons(row?.headers, { ...WORKER_CORS, allowMethods: expectMethods });
+  return {
+    ok: identity.length === 0 && cors.length === 0,
+    reasons: [...identity, ...cors],
+    warnings: [],
+    identity: { ok: identity.length === 0, reasons: identity, warnings: [] },
+    cors: { ok: cors.length === 0, reasons: cors, warnings: [] },
+  };
 }
 
 function statusMatches(expected, status) {
@@ -547,17 +637,28 @@ export function evaluateProbe(row, expectation) {
 export function evaluateTransparency({ direct, proxied } = {}) {
   const reasons = [];
   const warnings = [];
-  if (direct?.networkError) reasons.push(`direct leg failed: ${direct.networkError}`);
-  if (proxied?.networkError) reasons.push(`relayed leg failed: ${proxied.networkError}`);
-  if (reasons.length > 0) return { ok: false, reasons, warnings };
-
-  if (direct?.status !== 200) {
-    reasons.push(`direct leg answered ${direct?.status ?? 'nothing'}; the comparison is inconclusive, not a transparency failure`);
+  // Inconclusive is not the same as breached, and the receipt must not exit
+  // 1 over an agency having a bad minute. A leg that never answered, an
+  // upstream that did not serve 200, and a relay that hit an upstream-class
+  // failure all leave the question unanswered and are recorded as warnings,
+  // the same grace the relay rows get. Two 200 legs whose bytes disagree is
+  // the failure this row exists to catch, and it still fails.
+  if (direct?.networkError) {
+    warnings.push(`direct leg failed (${direct.networkError}); the comparison is inconclusive, not a transparency failure`);
+  } else if (direct?.status !== 200) {
+    warnings.push(`direct leg answered ${direct?.status ?? 'nothing'}; the comparison is inconclusive, not a transparency failure`);
   }
-  if (proxied?.status !== 200) {
+  if (proxied?.networkError) {
+    warnings.push(`relayed leg failed (${proxied.networkError}); inconclusive`);
+  } else if (UPSTREAM_STATUSES.has(proxied?.status) || UPSTREAM_CODES.has(proxied?.error ?? null)) {
+    warnings.push(`relayed leg answered ${proxied.status}${proxied.error ? ` ${proxied.error}` : ''}; inconclusive`);
+  } else if (proxied?.status !== 200) {
+    // A refusal on an allow-listed route is a policy answer, not weather.
     reasons.push(`relayed leg answered ${proxied?.status ?? 'nothing'}, expected 200`);
   }
-  if (reasons.length === 0) {
+  const comparable =
+    reasons.length === 0 && warnings.length === 0 && direct?.status === 200 && proxied?.status === 200;
+  if (comparable) {
     if (direct.bytes !== proxied.bytes) {
       reasons.push(`relayed ${proxied.bytes} bytes, upstream ${direct.bytes} bytes`);
     }

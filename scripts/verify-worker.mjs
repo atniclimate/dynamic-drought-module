@@ -44,7 +44,7 @@
  * src/layers/aiannh.ts).
  *
  * Usage: node scripts/verify-worker.mjs --expect-revision <revision>
- *   [--base <url>] [--expect-healthz-methods "GET, HEAD, OPTIONS"]
+ *   [--base <url>] [--expect-healthz-methods "GET, OPTIONS"]
  *   [--out <json>] [--summary <markdown file to append>] [--timeout-ms n]
  * Exit 0 when every check passed, 1 when any failed, 2 on a usage error.
  */
@@ -59,7 +59,9 @@ import {
   evaluateProbe,
   evaluateTransparency,
   parseArgs,
+  probeExpectation,
   probeUrl,
+  receiptProbeUrl,
   receiptOk,
   renderSummary,
 } from './lib/worker-receipts.mjs';
@@ -69,7 +71,7 @@ try {
   args = parseArgs(process.argv.slice(2));
 } catch (error) {
   console.error(String(error.message ?? error));
-  console.error('usage: node scripts/verify-worker.mjs --expect-revision <revision> [--base <url>] [--expect-healthz-methods "GET, HEAD, OPTIONS"] [--out <json>] [--summary <md>] [--timeout-ms n]');
+  console.error('usage: node scripts/verify-worker.mjs --expect-revision <revision> [--base <url>] [--expect-healthz-methods "GET, OPTIONS"] [--out <json>] [--summary <md>] [--timeout-ms n]');
   process.exit(2);
 }
 
@@ -191,19 +193,21 @@ async function runProbeTable() {
       hash: probe.hash === true,
       wantRevision: probe.health === true,
     });
-    receipt.probes.push({ id: probe.id, row: probe.row, ...row });
+    receipt.probes.push({ id: probe.id, row: probe.row, ...row, url: receiptProbeUrl(args.base, probe) });
     if (probe.health === true) {
       receipt.observedRevision = row.revision ?? null;
-      record(
-        probe,
-        row,
-        evaluateHealthz(row, {
-          expectRevision: args.expectRevision,
-          expectMethods: args.expectHealthzMethods,
-        }),
-      );
+      const verdict = evaluateHealthz(row, {
+        expectRevision: args.expectRevision,
+        expectMethods: args.expectHealthzMethods,
+      });
+      // The plan reads the health endpoint as two rows: which build is
+      // running, and what it advertises. Recording them separately keeps a
+      // converged revision with a wrong CORS policy from hiding inside a
+      // stale-build line.
+      record(probe, row, verdict.identity);
+      record({ ...probe, id: 'healthz-cors', row: 2, name: '/healthz CORS advertisement' }, row, verdict.cors);
     } else {
-      record(probe, row, evaluateProbe(row, probe.expect));
+      record(probe, row, evaluateProbe(row, probeExpectation(probe, args.expectHealthzMethods)));
     }
   }
   const relays = receipt.probes.filter((p) => p.row === 4 && Number.isFinite(p.elapsedMs));

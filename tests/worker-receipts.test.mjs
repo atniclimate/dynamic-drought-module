@@ -11,6 +11,7 @@ import {
   evaluateProbe,
   evaluateTransparency,
   parseArgs,
+  probeExpectation,
   probeUrl,
   receiptOk,
   renderSummary,
@@ -27,6 +28,8 @@ const CANDIDATE_REVISION = '2026-08-29-options-policy-v4';
  */
 const LIVE_CORS = { allowOrigin: '*', allowMethods: 'GET, POST, OPTIONS', allowHeaders: 'Content-Type' };
 const CANDIDATE_CORS = { allowOrigin: '*', allowMethods: 'GET, HEAD, OPTIONS', allowHeaders: 'Accept' };
+/** The candidate's health endpoint names its own, narrower method set. */
+const CANDIDATE_HEALTH_CORS = { ...CANDIDATE_CORS, allowMethods: DEFAULT_HEALTHZ_ALLOW_METHODS };
 
 const row = (fields) => ({
   status: 0,
@@ -49,8 +52,11 @@ test('parseArgs applies the Worker defaults and reads every flag', () => {
   assert.equal(d.expectRevision, CANDIDATE_REVISION);
   assert.equal(d.out, 'worker-receipt.json');
   assert.equal(d.summary, null);
+  // The health endpoint offers no HEAD, so its set is narrower than the
+  // relay's and the two constants must not be the same string.
   assert.equal(d.expectHealthzMethods, DEFAULT_HEALTHZ_ALLOW_METHODS);
-  assert.equal(d.expectHealthzMethods, EXPECTED_ALLOW_METHODS);
+  assert.equal(d.expectHealthzMethods, 'GET, OPTIONS');
+  assert.notEqual(DEFAULT_HEALTHZ_ALLOW_METHODS, EXPECTED_ALLOW_METHODS);
   // Longer than the Worker's own 12 second upstream deadline, so an honest
   // 504 is observed rather than aborted by the client measuring it.
   assert.equal(d.timeoutMs, 20_000);
@@ -105,7 +111,7 @@ const healthzLive = row({
 const healthzCandidate = row({
   status: 200,
   revision: CANDIDATE_REVISION,
-  headers: { ...CANDIDATE_CORS, cacheControl: 'no-store' },
+  headers: { ...CANDIDATE_HEALTH_CORS, cacheControl: 'no-store' },
 });
 
 test('evaluateHealthz passes the candidate answer and fails the live one on revision and CORS', () => {
@@ -127,20 +133,20 @@ test('evaluateHealthz passes the candidate answer and fails the live one on revi
 
 test('evaluateHealthz fails a missing revision, a non-200, a cached health document, and a dead endpoint', () => {
   assert.match(
-    evaluateHealthz(row({ status: 200, revision: null, headers: { ...CANDIDATE_CORS, cacheControl: 'no-store' } }), {
+    evaluateHealthz(row({ status: 200, revision: null, headers: { ...CANDIDATE_HEALTH_CORS, cacheControl: 'no-store' } }), {
       expectRevision: CANDIDATE_REVISION,
     }).reasons[0],
     /no revision field/,
   );
   assert.match(
-    evaluateHealthz(row({ status: 503, revision: CANDIDATE_REVISION, headers: { ...CANDIDATE_CORS, cacheControl: 'no-store' } }), {
+    evaluateHealthz(row({ status: 503, revision: CANDIDATE_REVISION, headers: { ...CANDIDATE_HEALTH_CORS, cacheControl: 'no-store' } }), {
       expectRevision: CANDIDATE_REVISION,
     }).reasons[0],
     /status 503/,
   );
   assert.ok(
     evaluateHealthz(
-      row({ status: 200, revision: CANDIDATE_REVISION, headers: { ...CANDIDATE_CORS, cacheControl: 'public, max-age=60' } }),
+      row({ status: 200, revision: CANDIDATE_REVISION, headers: { ...CANDIDATE_HEALTH_CORS, cacheControl: 'public, max-age=60' } }),
       { expectRevision: CANDIDATE_REVISION },
     ).reasons.some((r) => r.includes('Cache-Control')),
   );
@@ -150,18 +156,35 @@ test('evaluateHealthz fails a missing revision, a non-200, a cached health docum
 });
 
 test('evaluateHealthz takes the advertised method set as an input, not a constant', () => {
-  const narrow = row({
+  // A health endpoint that advertised the relay's set would fail the
+  // default, and passes only when the caller says that is the policy.
+  const wide = row({
     status: 200,
     revision: CANDIDATE_REVISION,
-    headers: { ...CANDIDATE_CORS, allowMethods: 'GET, OPTIONS', cacheControl: 'no-store' },
+    headers: { ...CANDIDATE_CORS, cacheControl: 'no-store' },
   });
-  const againstDefault = evaluateHealthz(narrow, { expectRevision: CANDIDATE_REVISION });
+  const againstDefault = evaluateHealthz(wide, { expectRevision: CANDIDATE_REVISION });
   assert.equal(againstDefault.ok, false);
-  assert.ok(againstDefault.reasons.some((r) => r.includes('Access-Control-Allow-Methods "GET, OPTIONS"')));
+  assert.ok(againstDefault.reasons.some((r) => r.includes('Access-Control-Allow-Methods "GET, HEAD, OPTIONS"')));
   assert.equal(
-    evaluateHealthz(narrow, { expectRevision: CANDIDATE_REVISION, expectMethods: 'GET, OPTIONS' }).ok,
+    evaluateHealthz(wide, { expectRevision: CANDIDATE_REVISION, expectMethods: EXPECTED_ALLOW_METHODS }).ok,
     true,
   );
+});
+
+test('probeExpectation substitutes the health method set into health-scoped rows only', () => {
+  const head = probeById('healthz-head');
+  const preflight = probeById('options-healthz');
+  const relay = probeById('relay-nws-point');
+  assert.equal(probeExpectation(head).cors.allowMethods, DEFAULT_HEALTHZ_ALLOW_METHODS);
+  assert.equal(probeExpectation(head).allow.value, DEFAULT_HEALTHZ_ALLOW_METHODS);
+  assert.equal(probeExpectation(preflight).cors.allowMethods, DEFAULT_HEALTHZ_ALLOW_METHODS);
+  assert.equal(probeExpectation(preflight).cors.maxAge, '86400');
+  assert.equal(probeExpectation(head, 'GET').cors.allowMethods, 'GET');
+  assert.equal(probeExpectation(head, 'GET').allow.value, 'GET');
+  // A relay row is untouched: the health set has nothing to say about it.
+  assert.equal(probeExpectation(relay, 'GET').cors.allowMethods, EXPECTED_ALLOW_METHODS);
+  assert.equal(probeExpectation(relay, 'GET'), relay.expect);
 });
 
 /* ------------------------------------------------------------------ *
@@ -306,7 +329,7 @@ test('the probe table covers every allow-listed route family and every negative 
   // paths, NWRFC, USDM DSCI, the WHP tile, and all four NWS shapes.
   assert.equal(PROBES.filter((p) => p.row === 4).length, 11);
   for (const id of [
-    'healthz', 'healthz-head', 'head-allowed', 'head-off-route',
+    'healthz', 'healthz-head', 'options-healthz', 'head-allowed', 'head-off-route',
     'options-allowed', 'options-off-route', 'options-unknown-path',
     'post-allowed-route', 'off-route-allowed-host', 'foreign-host',
     'removed-host', 'unknown-path', 'bounds-missing-url',
@@ -354,19 +377,38 @@ test('evaluateTransparency passes byte-identical legs and fails a changed body',
 });
 
 test('evaluateTransparency calls a non-200 direct leg inconclusive and warns when an edge copy answered', () => {
+  // An agency having a bad minute leaves the question unanswered. It is
+  // recorded, not failed: a receipt that exits 1 on upstream weather would
+  // be retried until it went green, which is the habit this repository
+  // refuses.
   const inconclusive = evaluateTransparency({
     direct: row({ status: 503 }),
     proxied: row({ status: 200, bytes: 1, sha256: HASH }),
   });
-  assert.equal(inconclusive.ok, false);
-  assert.match(inconclusive.reasons[0], /inconclusive/);
+  assert.equal(inconclusive.ok, true);
+  assert.match(inconclusive.warnings[0], /inconclusive/);
 
+  const relayOutage = evaluateTransparency({
+    direct: row({ status: 200, bytes: 1, sha256: HASH }),
+    proxied: row({ status: 504, error: 'upstream_timeout' }),
+  });
+  assert.equal(relayOutage.ok, true);
+  assert.match(relayOutage.warnings[0], /inconclusive/);
+
+  // A refusal on an allow-listed route is a policy answer, not weather.
   const refused = evaluateTransparency({
     direct: row({ status: 200, bytes: 1, sha256: HASH }),
     proxied: row({ status: 403 }),
   });
   assert.equal(refused.ok, false);
   assert.ok(refused.reasons.some((r) => r.includes('relayed leg answered 403')));
+
+  // Two 200 legs that disagree is the failure this row exists to catch.
+  const breach = evaluateTransparency({
+    direct: row({ status: 200, bytes: 10, sha256: HASH }),
+    proxied: row({ status: 200, bytes: 10, sha256: 'a'.repeat(64) }),
+  });
+  assert.equal(breach.ok, false);
 
   const cached = evaluateTransparency({
     direct: row({ status: 200, bytes: 1, sha256: HASH }),
@@ -376,8 +418,8 @@ test('evaluateTransparency calls a non-200 direct leg inconclusive and warns whe
   assert.ok(cached.warnings.some((w) => w.includes('Age 54')));
 
   const dead = evaluateTransparency({ direct: row({ networkError: 'fetch failed' }), proxied: row({ status: 200 }) });
-  assert.equal(dead.ok, false);
-  assert.match(dead.reasons[0], /direct leg failed/);
+  assert.equal(dead.ok, true);
+  assert.match(dead.warnings[0], /direct leg failed/);
 
   assert.ok(TRANSPARENCY_UPSTREAM.startsWith('https://'), 'the transparency endpoint must be a static https read');
 });
@@ -393,6 +435,7 @@ test('evaluateTransparency calls a non-200 direct leg inconclusive and warns whe
 const LIVE_ANSWERS = new Map([
   ['healthz', { status: 200, revision: LIVE_REVISION, headers: { cacheControl: 'no-store' } }],
   ['healthz-head', { status: 405 }],
+  ['options-healthz', { status: 204, headers: { maxAge: '86400' } }],
   ['relay-awdb-data', { status: 200 }],
   ['relay-awdb-stations', { status: 200 }],
   ['relay-agrimet-sites', { status: 200 }],
@@ -408,6 +451,8 @@ const LIVE_ANSWERS = new Map([
   ['head-off-route', { status: 520 }],
   ['options-allowed', { status: 204, headers: { maxAge: '86400' } }],
   ['options-off-route', { status: 204, headers: { maxAge: '86400' } }],
+  ['options-url-too-long', { status: 204, headers: { maxAge: '86400' } }],
+  ['options-malformed-url', { status: 204, headers: { maxAge: '86400' } }],
   ['options-unknown-path', { status: 204, headers: { maxAge: '86400' } }],
   ['post-allowed-route', { status: 403 }],
   ['off-route-allowed-host', { status: 200, bytes: 50 }],
@@ -430,8 +475,23 @@ const LIVE_ANSWERS = new Map([
  * outage does not fail the receipt.
  */
 const CANDIDATE_ANSWERS = new Map([
-  ['healthz', { status: 200, revision: CANDIDATE_REVISION, headers: { cacheControl: 'no-store' } }],
-  ['healthz-head', { status: 405, headers: { cacheControl: 'no-store' } }],
+  ['healthz', {
+    status: 200,
+    revision: CANDIDATE_REVISION,
+    headers: { allowMethods: DEFAULT_HEALTHZ_ALLOW_METHODS, cacheControl: 'no-store' },
+  }],
+  ['healthz-head', {
+    status: 405,
+    headers: {
+      allowMethods: DEFAULT_HEALTHZ_ALLOW_METHODS,
+      allow: DEFAULT_HEALTHZ_ALLOW_METHODS,
+      cacheControl: 'no-store',
+    },
+  }],
+  ['options-healthz', {
+    status: 204,
+    headers: { allowMethods: DEFAULT_HEALTHZ_ALLOW_METHODS, maxAge: '86400' },
+  }],
   ['relay-awdb-data', { status: 200 }],
   ['relay-awdb-stations', { status: 200 }],
   ['relay-agrimet-sites', { status: 200 }],
@@ -447,6 +507,8 @@ const CANDIDATE_ANSWERS = new Map([
   ['head-off-route', { status: 403 }],
   ['options-allowed', { status: 204, headers: { maxAge: '86400' } }],
   ['options-off-route', { status: 403, error: 'route_not_allowed' }],
+  ['options-url-too-long', { status: 414, error: 'url_too_long' }],
+  ['options-malformed-url', { status: 400, error: 'invalid_url' }],
   ['options-unknown-path', { status: 404, error: 'not_found' }],
   ['post-allowed-route', { status: 405, error: 'method_not_allowed', headers: { allow: EXPECTED_ALLOW_METHODS } }],
   ['off-route-allowed-host', { status: 403, error: 'route_not_allowed' }],
@@ -468,21 +530,27 @@ function buildReceipt(answers, cors, expectRevision) {
     const answer = answers.get(probe.id);
     assert.ok(answer, `no fixture answer for ${probe.id}`);
     const observed = row({ ...answer, headers: { ...cors, ...answer.headers } });
-    const verdict = probe.health
-      ? evaluateHealthz(observed, { expectRevision })
-      : evaluateProbe(observed, probe.expect);
-    if (probe.health) observedRevision = observed.revision ?? null;
-    checks.push({
-      id: probe.id,
-      row: probe.row,
-      name: probe.name,
-      method: probe.method,
-      status: observed.status,
-      error: observed.error,
-      ok: verdict.ok,
-      reasons: verdict.reasons,
-      warnings: verdict.warnings,
-    });
+    const push = (id, rowNumber, name, verdict) =>
+      checks.push({
+        id,
+        row: rowNumber,
+        name,
+        method: probe.method,
+        status: observed.status,
+        error: observed.error,
+        ok: verdict.ok,
+        reasons: verdict.reasons,
+        warnings: verdict.warnings,
+      });
+    if (probe.health) {
+      observedRevision = observed.revision ?? null;
+      // The driver splits the health probe into the plan's two rows.
+      const verdict = evaluateHealthz(observed, { expectRevision });
+      push(probe.id, probe.row, probe.name, verdict.identity);
+      push('healthz-cors', 2, '/healthz CORS advertisement', verdict.cors);
+    } else {
+      push(probe.id, probe.row, probe.name, evaluateProbe(observed, probeExpectation(probe)));
+    }
   }
   const transparency = {
     direct: row({ status: 200, bytes: 139_288, sha256: HASH }),
@@ -516,11 +584,21 @@ test('the receipt FAILS against the edge running today, on the rows the plan nam
   assert.equal(receiptOk(receipt), false);
   const failed = new Set(receipt.checks.filter((c) => !c.ok).map((c) => c.id));
   for (const id of [
-    'healthz', 'options-allowed', 'options-off-route', 'options-unknown-path',
+    'healthz', 'healthz-cors', 'healthz-head', 'options-healthz',
+    'options-allowed', 'options-off-route', 'options-url-too-long',
+    'options-malformed-url', 'options-unknown-path',
     'post-allowed-route', 'off-route-allowed-host', 'foreign-host', 'removed-host',
   ]) {
     assert.ok(failed.has(id), `${id} must fail against the live edge`);
   }
+  // Row 1 fails on the revision, row 2 on the advertisement, row 3 on the
+  // advertisement and the missing Allow.
+  const healthz = receipt.checks.find((c) => c.id === 'healthz');
+  assert.ok(healthz.reasons.some((r) => r.includes(LIVE_REVISION)));
+  const healthzCors = receipt.checks.find((c) => c.id === 'healthz-cors');
+  assert.ok(healthzCors.reasons.some((r) => r.includes('GET, POST, OPTIONS') && r.includes('GET, OPTIONS')));
+  const healthzHead = receipt.checks.find((c) => c.id === 'healthz-head');
+  assert.ok(healthzHead.reasons.some((r) => r.includes('Allow absent')));
   // Byte transparency is the one thing live already gets right.
   assert.ok(!failed.has('body-transparency'));
   assert.equal(failed.size, receipt.checks.length - 1);
@@ -529,9 +607,14 @@ test('the receipt FAILS against the edge running today, on the rows the plan nam
 test('naming the live revision leaves the policy failures standing', () => {
   const receipt = buildReceipt(LIVE_ANSWERS, LIVE_CORS, LIVE_REVISION);
   assert.equal(receiptOk(receipt), false);
+  // Row 1 is the only row the revision string can settle, and naming the
+  // live one settles it. Row 2 does not move: the advertisement is wrong
+  // whichever build the caller expected.
   const healthz = receipt.checks.find((c) => c.id === 'healthz');
-  assert.equal(healthz.ok, false);
-  assert.ok(!healthz.reasons.some((r) => r.includes('revision')));
+  assert.equal(healthz.ok, true);
+  const healthzCors = receipt.checks.find((c) => c.id === 'healthz-cors');
+  assert.equal(healthzCors.ok, false);
+  assert.ok(!healthzCors.reasons.some((r) => r.includes('revision')));
   // Every row that fails on route, method, or preflight policy fails for a
   // reason that has nothing to do with the revision string.
   for (const id of ['options-off-route', 'post-allowed-route', 'off-route-allowed-host', 'removed-host']) {
@@ -544,6 +627,11 @@ test('the receipt PASSES against the reviewed candidate', () => {
   const failing = receipt.checks.filter((c) => !c.ok);
   assert.deepEqual(failing.map((c) => `${c.id}: ${c.reasons.join('; ')}`), []);
   assert.equal(receiptOk(receipt), true);
+  // The three health rows specifically, since they are the ones whose
+  // method set differs from the relay's.
+  for (const id of ['healthz', 'healthz-cors', 'healthz-head', 'options-healthz']) {
+    assert.equal(receipt.checks.find((c) => c.id === id).ok, true, `${id} must pass against the candidate`);
+  }
   // The unavailable upstream is still visible in the receipt.
   assert.ok(receipt.checks.find((c) => c.id === 'relay-nwrfc-ws').warnings.some((w) => w.includes('upstream unavailable')));
 });
@@ -555,12 +643,14 @@ test('receiptOk refuses an empty receipt, and renderSummary shows every row plus
   assert.ok(live.includes(LIVE_REVISION) && live.includes(CANDIDATE_REVISION));
   assert.match(live, /\| 8 \| GET an off-route path of an allowed host \| GET \| 200 \|/);
   assert.match(live, /Allow absent/);
-  assert.match(live, /expected health methods `GET, HEAD, OPTIONS`/);
+  assert.match(live, /expected health methods `GET, OPTIONS`/);
   assert.match(live, /Body transparency \(row 12\)/);
   assert.match(live, /Slowest relay 12661 ms/);
-  // One table row per check, plus the heading, the preamble, and the two
-  // trailing notes.
-  assert.equal(live.split('\n').filter((l) => l.startsWith('| ')).length, PROBES.length + 1 + 2);
+  // Plan row 2 is its own line, not folded into row 1.
+  assert.match(live, /\| 2 \| \/healthz CORS advertisement \|/);
+  // One table row per check (the health probe contributes two), plus the
+  // heading, the transparency row, and the two column-header lines.
+  assert.equal(live.split('\n').filter((l) => l.startsWith('| ')).length, PROBES.length + 1 + 1 + 2);
 
   const pass = renderSummary(buildReceipt(CANDIDATE_ANSWERS, CANDIDATE_CORS, CANDIDATE_REVISION));
   assert.match(pass, /## Worker edge receipt: pass/);

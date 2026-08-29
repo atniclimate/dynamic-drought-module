@@ -286,7 +286,10 @@ receipt holds statuses, header values, byte counts, digests, and
 milliseconds; never a response body. `--expect-revision` is required, so the
 receipt always asserts a named revision rather than whatever the edge
 happens to be serving; `--expect-healthz-methods` names the method set the
-health endpoint may advertise, which is a narrower question than the relay's.
+health endpoint advertises, which is a narrower question than the relay's.
+The health endpoint takes no body and offers no HEAD, so it names
+`GET, OPTIONS` on its document, its preflight, and the `Allow` header of its
+405, while the relay routes keep `GET, HEAD, OPTIONS`.
 The judgment is the pure evaluators in `scripts/lib/worker-receipts.mjs`,
 unit-tested in `tests/worker-receipts.test.mjs` against both the answers the
 edge gives today and the answers the reviewed candidate must give, so the
