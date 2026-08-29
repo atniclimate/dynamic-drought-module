@@ -116,17 +116,23 @@ jobs:
               '',
               '_This issue auto-closes when no runtime or build-source failures remain. Review the tiered report before deciding whether a deployed fix or a build-pipeline repair is required._'
             ].join('\n');
-            const existing = await github.rest.issues.listForRepo({
+            // Find this workflow's own issue by its marker, not by position.
+            // `listForRepo` returns pull requests too (a labeled pull request
+            // would otherwise be commented on) and it pages, so an unpaginated
+            // `data[0]` is whichever issue happened to sort first on page one.
+            const open = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
-              labels: label
+              labels: label,
+              per_page: 100
             });
-            if (existing.data.length > 0) {
+            const existing = open.find((issue) => !issue.pull_request && (issue.body ?? '').includes(marker));
+            if (existing) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: existing.data[0].number,
+                issue_number: existing.number,
                 body
               });
             } else {
@@ -145,13 +151,19 @@ jobs:
         with:
           script: |
             const label = 'upstream-drift';
-            const open = await github.rest.issues.listForRepo({
+            const marker = '<!-- ddm-upstream-monitor -->';
+            // Close every open issue this workflow raised, and nothing else:
+            // a labeled pull request or a hand-filed issue under the same
+            // label is not this monitor's to close.
+            const open = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
-              labels: label
+              labels: label,
+              per_page: 100
             });
-            for (const issue of open.data) {
+            for (const issue of open) {
+              if (issue.pull_request || !(issue.body ?? '').includes(marker)) continue;
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,

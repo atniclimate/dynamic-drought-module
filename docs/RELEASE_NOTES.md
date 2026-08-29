@@ -27,6 +27,24 @@ here earlier closed when the 2026-08-24 scheduled ENSO refresh deployed
 hosted build nonce was the local fallback `dev` until pull request 27 made
 each hosted build attributable to its run.
 
+### 2026-08-29: continuous-integration hardening from the slice A audit
+
+- The shared Playwright browser action splits `actions/cache` into a restore
+  step and a save step, and only a run outside a pull request saves. A cache
+  entry written from a pull request is readable only by that pull request's
+  ref, so saving from one spends the repository's 10 GB quota on an entry no
+  other run can restore and can evict the `main` entry every run does read.
+- The three specs that stubbed `console.warn` to silence a by-design degrade
+  path now capture it with `captureWarnings()` and assert the exact warnings:
+  a split envelope query whose failed half warns once while its cancelled
+  sibling adds nothing (asserted after the cancellation is observed), one
+  failed framing count, and all nine invalid or transfer-truncated ArcGIS
+  bodies across NIFC, HMS, and SPC.
+- The upstream monitor and the snapshot refresh find their own issue by the
+  marker comment they already write, paginating the label listing and skipping
+  pull requests, so a labeled pull request is never commented on or closed and
+  a second labeled issue cannot shadow the real one.
+
 ### 2026-08-29: main and live are compared on a schedule
 
 Roadmap task DDM-P0-T04 asks for detection of "when main and the deployed

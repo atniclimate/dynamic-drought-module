@@ -60,6 +60,7 @@ import {
   buildWhpKey,
   resolveMapKeyFamily
 } from '../src/ui/map-key';
+import { captureWarnings, type CapturedWarnings } from './map-harness';
 
 const VALID_POLYGON_COLLECTION = {
   type: 'FeatureCollection',
@@ -951,58 +952,79 @@ test('ArcGIS polygon parser rejects malformed and error-shaped HTTP 200 bodies',
 
 test('NIFC, HMS, and SPC map invalid responses to unavailable and truncation to live partial', async () => {
   const originalFetch = globalThis.fetch;
-  const originalWarn = console.warn;
   const documentDescriptor = Object.getOwnPropertyDescriptor(
     globalThis,
     'document'
   );
+  // `label` is the source name each module hands the shared ArcGIS parser,
+  // so it is the name that reaches the log when the parse rejects a body.
   const modules = [
     {
       key: 'nifc-fires',
       activate: activateNifc,
-      deactivate: deactivateNifc
+      deactivate: deactivateNifc,
+      label: 'NIFC WFIGS',
+      failure: '[nifc-fires] WFIGS perimeters fetch failed.',
+      truncation:
+        '[nifc-fires] WFIGS response reached the ArcGIS transfer limit; rendering available perimeters as live (partial).'
     },
     {
       key: 'hms-smoke',
       activate: activateHms,
-      deactivate: deactivateHms
+      deactivate: deactivateHms,
+      label: 'NOAA HMS smoke',
+      failure: '[hms-smoke] HMS smoke fetch failed.',
+      truncation:
+        '[hms-smoke] HMS response reached the ArcGIS transfer limit; rendering available plumes as live (partial).'
     },
     {
       key: 'spc-fire-weather',
       activate: activateSpc,
-      deactivate: deactivateSpc
+      deactivate: deactivateSpc,
+      label: 'NOAA SPC fire-weather outlook',
+      failure: '[spc-fire-weather] outlook fetch failed.',
+      truncation:
+        '[spc-fire-weather] outlook response reached the ArcGIS transfer limit; rendering available categories as live (partial).'
     }
   ] as const;
+  // `reason` is the parser's own message, minus the source label it prefixes;
+  // `null` means the body parsed and only the transfer-limit flag was raised.
   const responses = [
     {
       name: 'malformed FeatureCollection',
       body: { type: 'FeatureCollection', features: [{}] },
       status: 'error',
-      renders: false
+      renders: false,
+      reason: 'response contained an invalid polygon feature.'
     },
     {
       name: 'ArcGIS error body',
       body: { error: { code: 400, message: 'bad query' } },
       status: 'error',
-      renders: false
+      renders: false,
+      reason: 'ArcGIS error 400: bad query'
     },
     {
       name: 'transfer-truncated FeatureCollection',
       body: { ...VALID_POLYGON_COLLECTION, exceededTransferLimit: true },
       status: 'degraded',
-      renders: true
+      renders: true,
+      reason: null
     }
   ] as const;
+  // Captured inside the try below, so the patch cannot outlive a throw.
+  let warnings: CapturedWarnings | undefined;
 
   try {
+    warnings = captureWarnings();
     Object.defineProperty(globalThis, 'document', {
       configurable: true,
       value: { getElementById: () => null }
     });
-    console.warn = () => undefined;
 
     for (const module of modules) {
       for (const response of responses) {
+        const warnedBefore = warnings.messages.length;
         globalThis.fetch = async () =>
           new Response(JSON.stringify(response.body), {
             status: 200,
@@ -1024,6 +1046,15 @@ test('NIFC, HMS, and SPC map invalid responses to unavailable and truncation to 
           harness.layers.size > 0,
           `${module.key}: ${response.name}`
         ).toBe(response.renders);
+        // Each of the nine cases says why exactly once, naming the source.
+        expect(
+          warnings.messages.slice(warnedBefore),
+          `${module.key}: ${response.name}`
+        ).toEqual([
+          response.reason === null
+            ? module.truncation
+            : `${module.failure} Error: ${module.label} ${response.reason}`
+        ]);
 
         module.deactivate(harness.map);
         registry.deactivate(module.key);
@@ -1031,7 +1062,7 @@ test('NIFC, HMS, and SPC map invalid responses to unavailable and truncation to 
     }
   } finally {
     globalThis.fetch = originalFetch;
-    console.warn = originalWarn;
+    warnings?.restore();
     for (const module of modules) {
       module.deactivate(fakeMapHarness().map);
       registry.deactivate(module.key);

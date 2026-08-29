@@ -13,6 +13,7 @@ import {
 } from '../src/state/minimap-wildfire';
 import type { MinimapWhpFramingSummary } from '../src/config/minimap-whp';
 import type { MinimapWildfireSnapshot } from '../src/state/minimap-wildfire';
+import { captureWarnings, type CapturedWarnings } from './map-harness';
 
 function whp(
   highOrVeryHighPercent: number,
@@ -307,9 +308,9 @@ test.describe.serial('retained minimap wildfire runtime', () => {
 
   test('isolates one malformed ArcGIS response to its framing', async () => {
     const originalFetch = globalThis.fetch;
-    const originalWarn = console.warn;
     let callIndex = 0;
-    console.warn = () => undefined;
+    // Captured inside the try below, so the patch cannot outlive a throw.
+    let warnings: CapturedWarnings | undefined;
     globalThis.fetch = async () => {
       const index = callIndex++;
       const value =
@@ -324,6 +325,9 @@ test.describe.serial('retained minimap wildfire runtime', () => {
 
     const release = retainMinimapWildfire(() => undefined);
     try {
+      // The load only warns after its fetches settle, so capturing here is
+      // still ahead of every warning the retain above set in motion.
+      warnings = captureWarnings();
       await waitFor(
         () => !['idle', 'loading'].includes(getMinimapWildfireSnapshot().status),
       );
@@ -336,10 +340,17 @@ test.describe.serial('retained minimap wildfire runtime', () => {
         mappedWildfirePerimeterCount: null,
       });
       expect(current.summaries['arid-west']?.condition).not.toBe('unavailable');
+      // One framing failed, so the load warns once and names that count;
+      // the eight healthy queries add nothing to the log.
+      expect(warnings.messages).toEqual([
+        expect.stringMatching(
+          /^\[minimap-wildfire\] 1 framing count query failed\./,
+        ),
+      ]);
     } finally {
+      warnings?.restore();
       release();
       globalThis.fetch = originalFetch;
-      console.warn = originalWarn;
     }
   });
 
