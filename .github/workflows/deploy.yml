@@ -17,12 +17,15 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Required for the deploy-pages action to authenticate with the Pages
-# OIDC token issuer and write the deployment.
+# Least privilege by job (2026-08-28 supply-chain audit): the build job runs
+# the whole npm dependency tree and restores an Actions cache, so it must
+# not hold a token that can mint a Pages OIDC token; only the deploy job
+# gets `pages: write` and `id-token: write`, which deploy-pages needs to
+# authenticate with the Pages OIDC issuer and write the deployment. The
+# build job adds `pages: read` because configure-pages reads the site
+# through GET /repos/{owner}/{repo}/pages.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # Serialize deploys on a single "pages" group and cancel any superseded
 # in-progress run. GitHub Pages serves "latest commit wins", so when
@@ -42,6 +45,9 @@ jobs:
     name: Gate and build
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: read
     # Build identity (FE-22, 2026-08-28): the app stamps these two values on
     # <html> (vite.config.ts defines) so a browser run can prove WHICH build
     # it is exercising. The artifact uploaded here is the build the gate
@@ -99,6 +105,9 @@ jobs:
     name: Deploy to GitHub Pages
     needs: [build, browser]
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
