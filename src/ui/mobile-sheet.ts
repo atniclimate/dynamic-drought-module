@@ -799,6 +799,26 @@ export function initMobileSheet(
   atHandBodyEl = document.getElementById('sheet-at-hand-body');
   if (!appEl || !sidebarEl || !grabberEl) return;
 
+  // The height transition's real end. The fallback timer alone can read a
+  // frame-frozen rect: when a long task (a multi-megabyte GeoJSON parse,
+  // the minimap analysis) stalls the renderer across the 250 ms ease, the
+  // timer fires after the stall while the animation clock still sits
+  // mid-ease, so the measured inset is a fraction of the detent and the
+  // camera stays padded short until some later settle. `transitionend`
+  // re-measures at the rendered end state; the timer stays for reduced
+  // motion (no transition, no event) and for a lost event. Guarded to the
+  // sheet's own `height` transition: `visibility` ends here too on close,
+  // and descendants' transitions bubble.
+  sidebarEl.addEventListener('transitionend', (event) => {
+    if (event.target !== sidebarEl || event.propertyName !== 'height') return;
+    if (detent === null) return;
+    if (settleTimer !== null) {
+      window.clearTimeout(settleTimer);
+      settleTimer = null;
+    }
+    settle();
+  });
+
   // Publish the shared detent sizes to the stylesheet (the one lookup:
   // this table is also what the drag-snap math reads, and the camera
   // padding path measures the live rect, so no surface can drift).
