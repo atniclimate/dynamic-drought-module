@@ -91,6 +91,17 @@ The shard counts were fitted to the 2026-08-28 idle serial baseline (general
 16.4 minutes over 798 tests, 3D 13.7 minutes over 32) so every shard lands
 near eleven minutes on the 2-core runner; re-fit them when the suite grows.
 
+`browser-suite.yml` also takes `workers` and `retries` experiment inputs
+(mirrored as `workflow_dispatch` inputs on `validate.yml`), both defaulted to
+today's behavior, so a worker-count or retry-count trial runs by dispatching
+Validate on a branch and never through `deploy.yml`. The decision rule for
+adopting `workers=2` is **flake rate first, wall clock second**: doubling
+workers doubles concurrent software-GL MapLibre contexts per runner, which is
+exactly the pressure the flakiest specs are sensitive to, so a wall-clock win
+bought with a new flake is a loss. Take at least 5 runs per setting on one
+unchanged SHA before comparing, and adopt a change only when the repeated
+runs show no new flake names and no rise in the existing rate.
+
 Every shard writes a job summary (passed, failed, flaky, skipped, and the
 `file:line` of each failed or flaky test) from its JSON report through
 `scripts/summarize-playwright-shard.mjs`. A shard that fails, or passes only

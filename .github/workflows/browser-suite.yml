@@ -30,6 +30,29 @@ on:
         description: The run-attributable nonce the build marker must carry.
         required: true
         type: string
+      # Experiment inputs (R3, 2026-08-29). No new workflow: a workers=2 trial
+      # or a retries=0 sample runs by dispatching Validate on a branch
+      # (validate.yml plumbs matching workflow_dispatch inputs through to
+      # this call), never through deploy.yml. Both default to production
+      # behavior, so an ordinary Validate or deploy call is unaffected.
+      workers:
+        description: >-
+          Playwright --workers value for every shard's runner. The
+          one-worker-per-runner ceiling in playwright.config.ts was measured
+          on a developer laptop and has never been re-tested on the public
+          runner's 4 vCPU / 16 GB. Default '1' matches today's behavior.
+        required: false
+        type: string
+        default: '1'
+      retries:
+        description: >-
+          Playwright --retries override for every shard. Empty (the default)
+          leaves retries to playwright.config.ts's own isCI setting; set it
+          to sample a retry-zero run's true flake rate without editing the
+          config.
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -90,7 +113,13 @@ jobs:
       - name: Run the browser shard
         id: suite
         timeout-minutes: 26
-        run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=1
+        env:
+          # Non-empty only when the `retries` experiment input (above) was
+          # set; a plain call (Validate's pull_request path, or deploy.yml)
+          # leaves this empty and playwright.config.ts's own isCI retries
+          # setting governs, unchanged.
+          RETRIES_ARG: ${{ inputs.retries != '' && format('--retries={0}', inputs.retries) || '' }}
+        run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=${{ inputs.workers }} $RETRIES_ARG
 
       # DDM-P0-T06: name what happened. The job summary lists passed, failed,
       # flaky (passed only on retry), and skipped counts and the file:line of

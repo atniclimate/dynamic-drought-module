@@ -12,6 +12,26 @@ name: Validate DDM
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      # Mirrors browser-suite.yml's workflow_call experiment inputs, defaults
+      # identical, so a workers=2 trial or a retries=0 sample runs by
+      # dispatching Validate on a branch (R3, 2026-08-29), never through
+      # deploy.yml. A pull_request-triggered run leaves both unset and the
+      # `browser` job below falls back to the same defaults.
+      workers:
+        description: >-
+          Playwright --workers value for every shard's runner. Default '1'
+          matches production behavior.
+        required: false
+        type: string
+        default: '1'
+      retries:
+        description: >-
+          Playwright --retries override for every shard. Empty (the default)
+          leaves retries to playwright.config.ts's own isCI setting.
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -68,6 +88,11 @@ jobs:
     with:
       build-sha: ${{ github.sha }}
       build-nonce: ${{ github.run_id }}
+      # `inputs` is empty on the pull_request trigger (no workflow_dispatch
+      # in that event), so the `|| default` keeps a PR run identical to
+      # today's behavior; a dispatched run can override either value.
+      workers: ${{ inputs.workers || '1' }}
+      retries: ${{ inputs.retries || '' }}
 
   # `!cancelled()` rather than `always()`: a run superseded by
   # `cancel-in-progress` must read as cancelled, not as a red Validate.
