@@ -1,0 +1,317 @@
+#!/usr/bin/env node
+/**
+ * Post-deploy verification of the live Pages build (DDM-P0-T04, DDM-P0-T08).
+ *
+ * Proves, against the site at --base (default: the public Pages seat):
+ *
+ *   1. propagation: an entry asset index.html references contains the
+ *      expected build SHA, polled up to --settle-ms because the Pages CDN
+ *      can serve the previous build for a short while after deploy-pages
+ *      returns;
+ *   2. seat: every script, modulepreload, and stylesheet index.html
+ *      references resolves 200 relative to the base (the subpath contract:
+ *      the repository seat mounts the artifact beneath its name);
+ *   3. range: each PMTiles archive shipped from public/data answers a
+ *      16 KiB byte-range request with 206 and a Content-Range from byte 0;
+ *   4. boots: root (default drought cluster), the wildfire, heat, and enso
+ *      clusters, and the wildfire embed at 1280x800 and 390x844 carry the
+ *      expected data-ddm-build-sha and data-ddm-build-nonce, raise no page
+ *      errors, and every active layer pill reaches a terminal status
+ *      inside --ceiling-ms (an upstream `unavailable` is recorded as a
+ *      warning: the runtime enforces each layer's own budget and reports
+ *      the terminal state; this check proves the state arrives). The embed
+ *      boots also prove the satellite and attribution controls are the top
+ *      hit at their own centers and that no map-information button shows.
+ *
+ * Receipts hold URLs, HTTP status, bytes, milliseconds, and status words.
+ * No screenshot, trace, or response body is written (hard rule 1: an
+ * ordinary boot fetches live AIANNH and BIA geometry that the runtime keeps
+ * in memory; see src/layers/aiannh.ts). Read-only against the site. The
+ * browser is Playwright's Chromium with the software-GL flags the suite
+ * uses (playwright.config.ts).
+ *
+ * Usage: node scripts/verify-live.mjs --expect-sha <sha> --expect-nonce <run id>
+ *   [--base <url>] [--out <json>] [--summary <markdown file to append>]
+ *   [--settle-ms n] [--interval-ms n] [--ceiling-ms n]
+ * Exit 0 when every check passed, 1 when any failed, 2 on a usage error.
+ */
+import { appendFile, readdir, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { chromium, devices } from 'playwright';
+
+import {
+  TERMINAL_STATUSES,
+  evaluateAssets,
+  evaluateEmbedCorner,
+  evaluateLayers,
+  evaluateRange,
+  evaluateStamp,
+  parseArgs,
+  receiptOk,
+  renderSummary,
+} from './lib/live-receipts.mjs';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PUBLIC_DATA = join(__dirname, '..', 'public', 'data');
+const FETCH_TIMEOUT_MS = 30_000;
+const BOOT_TIMEOUT_MS = 60_000;
+const RANGE_BYTES = 16_384;
+const CHROMIUM_ARGS = [
+  '--use-gl=angle',
+  '--use-angle=swiftshader',
+  '--enable-unsafe-swiftshader',
+  '--ignore-gpu-blocklist',
+];
+
+let args;
+try {
+  args = parseArgs(process.argv.slice(2));
+} catch (error) {
+  console.error(String(error.message ?? error));
+  process.exit(2);
+}
+
+const receipt = {
+  base: args.base,
+  expectSha: args.expectSha,
+  expectNonce: args.expectNonce,
+  startedAt: new Date().toISOString(),
+  propagationMs: null,
+  checks: [],
+  assets: [],
+  ranges: [],
+  cache: {},
+  boots: [],
+};
+
+function record(name, verdict) {
+  receipt.checks.push({ name, ok: verdict.ok, reasons: verdict.reasons, warnings: verdict.warnings ?? [] });
+  const detail = verdict.reasons.length ? `: ${verdict.reasons.join('; ')}` : '';
+  console.log(`${verdict.ok ? 'pass' : 'FAIL'} ${name}${detail}`);
+}
+
+async function get(url, init = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { cache: 'no-store', redirect: 'follow', signal: controller.signal, ...init });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function cacheHeaders(res) {
+  return {
+    status: res.status,
+    cacheControl: res.headers.get('cache-control'),
+    etag: res.headers.get('etag'),
+    age: res.headers.get('age'),
+    lastModified: res.headers.get('last-modified'),
+  };
+}
+
+/** Relative asset URLs index.html references: module scripts, modulepreloads, stylesheets. */
+function assetUrls(html, base) {
+  const urls = new Set();
+  const re = /<(?:script[^>]*\ssrc|link[^>]*\shref)="([^"]+)"/g;
+  for (const m of html.matchAll(re)) {
+    const href = m[1];
+    if (/^(https?:)?\/\//.test(href) || href.startsWith('data:')) continue;
+    urls.add(new URL(href, base).href);
+  }
+  return [...urls];
+}
+
+async function checkPropagationAndSeat() {
+  const t0 = Date.now();
+  const deadline = t0 + args.settleMs;
+  let reasons = [];
+  for (;;) {
+    const rows = [];
+    let found = !args.expectSha;
+    try {
+      const res = await get(args.base);
+      const html = await res.text();
+      receipt.cache.index = { url: args.base, ...cacheHeaders(res) };
+      for (const url of assetUrls(html, args.base)) {
+        const r = await get(url);
+        const body = await r.text();
+        rows.push({ url, status: r.status, bytes: body.length });
+        if (args.expectSha && body.includes(args.expectSha)) found = true;
+        if (url.endsWith('.js') && !receipt.cache.entry) receipt.cache.entry = { url, ...cacheHeaders(r) };
+      }
+      receipt.assets = rows;
+      reasons = found
+        ? []
+        : [`no referenced asset contains ${args.expectSha} (index.html etag ${receipt.cache.index.etag ?? 'absent'})`];
+    } catch (error) {
+      reasons = [`fetch failed: ${String(error.message ?? error).slice(0, 160)}`];
+    }
+    if (reasons.length === 0 || Date.now() + args.intervalMs > deadline) break;
+    console.log(`waiting for propagation (${Math.round((Date.now() - t0) / 1000)} s): ${reasons[0]}`);
+    await new Promise((resolve) => setTimeout(resolve, args.intervalMs));
+  }
+  receipt.propagationMs = Date.now() - t0;
+  record('propagation:sha-in-assets', { ok: reasons.length === 0, reasons });
+  record('seat:assets-200', evaluateAssets(receipt.assets));
+}
+
+async function checkRanges() {
+  const names = (await readdir(PUBLIC_DATA)).filter((n) => n.endsWith('.pmtiles')).sort();
+  for (const name of names) {
+    const url = new URL(`data/${name}`, args.base).href;
+    let row;
+    try {
+      const res = await get(url, { headers: { Range: `bytes=0-${RANGE_BYTES - 1}` } });
+      const buf = new Uint8Array(await res.arrayBuffer());
+      row = {
+        name,
+        url,
+        status: res.status,
+        contentRange: res.headers.get('content-range'),
+        acceptRanges: res.headers.get('accept-ranges'),
+        bytes: buf.length,
+      };
+    } catch (error) {
+      row = { name, url, status: 0, contentRange: null, acceptRanges: null, bytes: 0, error: String(error.message ?? error).slice(0, 160) };
+    }
+    receipt.ranges.push(row);
+    record(`range:${name}`, evaluateRange(row));
+  }
+}
+
+// Runs inside the page: which control is the top hit at the center of the
+// satellite and attribution buttons, and whether the desktop information
+// button leaked into the embed (the embed corner contract, FE-18).
+const cornerProbe = () => {
+  const hit = (selector) => {
+    const el = document.querySelector(selector);
+    if (!el) return null;
+    const b = el.getBoundingClientRect();
+    const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+    if (!top) return null;
+    if (top.closest('.basemap-switcher-control')) return 'satellite';
+    if (top.closest('.maplibregl-ctrl-attrib')) return 'attribution';
+    return (top.className || top.tagName).toString().slice(0, 40);
+  };
+  const info = document.querySelector('.map-info-btn');
+  return {
+    satHit: hit('.maplibregl-ctrl-bottom-right .basemap-switcher-btn'),
+    attribHit: hit('.maplibregl-ctrl-attrib-button'),
+    infoBtnVisible: !!info && getComputedStyle(info).display !== 'none',
+  };
+};
+
+// Runs inside the page: every catalog pill that carries a status class
+// (an off layer renders the span with no status).
+const pillsProbe = () =>
+  [...document.querySelectorAll('[data-layer-status]')]
+    .map((el) => ({
+      key: el.getAttribute('data-layer-status'),
+      status: [...el.classList].find((c) => c !== 'layer-toggle-status') ?? null,
+    }))
+    .filter((p) => p.status !== null);
+
+async function boot(browser, name, contextOptions, query, { corner = false } = {}) {
+  const url = new URL(query, args.base).href;
+  const context = await browser.newContext(contextOptions);
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e).slice(0, 160)));
+  const t0 = Date.now();
+  const row = { name, url, bootMs: null, sha: null, nonce: null, errors, layers: [] };
+  let booted = false;
+  try {
+    await page.goto(url, { waitUntil: 'load', timeout: BOOT_TIMEOUT_MS });
+    await page.waitForFunction(
+      () => (document.querySelector('#region-select')?.options.length ?? 0) > 0,
+      null,
+      { timeout: BOOT_TIMEOUT_MS },
+    );
+    booted = true;
+    row.bootMs = Date.now() - t0;
+    const stamp = await page.evaluate(() => ({
+      sha: document.documentElement.dataset.ddmBuildSha,
+      nonce: document.documentElement.dataset.ddmBuildNonce,
+    }));
+    row.sha = stamp.sha ?? null;
+    row.nonce = stamp.nonce ?? null;
+    record(`stamp:${name}`, evaluateStamp(stamp, { sha: args.expectSha, nonce: args.expectNonce }));
+
+    // A warm boot reaches the region select in a few hundred milliseconds,
+    // before the registry has activated the first layer, so wait (bounded)
+    // for the catalog to carry at least one status pill before reading
+    // them; a boot that never activates anything then fails honestly below.
+    const settled = new Map();
+    const tLayers = Date.now();
+    await page
+      .waitForFunction(
+        () => [...document.querySelectorAll('[data-layer-status]')].some((el) => el.classList.length > 1),
+        null,
+        { timeout: Math.min(args.ceilingMs, 15_000) },
+      )
+      .catch(() => {});
+    // Wait until every active pill is terminal or the ceiling passes; a pill
+    // keeps the settle time of its first terminal observation.
+    for (;;) {
+      const pills = await page.evaluate(pillsProbe);
+      const elapsed = Date.now() - tLayers;
+      for (const p of pills) {
+        if (TERMINAL_STATUSES.has(p.status) && !settled.has(p.key)) {
+          settled.set(p.key, { key: p.key, status: p.status, settleMs: elapsed });
+        }
+      }
+      const pending = pills.filter((p) => !settled.has(p.key));
+      if (pending.length === 0 || elapsed >= args.ceilingMs) {
+        for (const p of pending) settled.set(p.key, { key: p.key, status: p.status, settleMs: elapsed });
+        break;
+      }
+      await page.waitForTimeout(500);
+    }
+    row.layers = [...settled.values()];
+    record(`layers:${name}`, evaluateLayers(row.layers, args.ceilingMs));
+
+    if (corner) {
+      await page.waitForTimeout(3000);
+      const c = await page.evaluate(cornerProbe);
+      row.corner = c;
+      record(`embed-corner:${name}`, evaluateEmbedCorner(c));
+    }
+  } catch (error) {
+    const message = String(error.message ?? error).slice(0, 160);
+    record(booted ? `probe:${name}` : `boot:${name}`, { ok: false, reasons: [message] });
+  } finally {
+    await context.close();
+  }
+  record(`page-errors:${name}`, { ok: errors.length === 0, reasons: errors });
+  receipt.boots.push(row);
+}
+
+async function checkBoots() {
+  const browser = await chromium.launch({ headless: true, args: CHROMIUM_ARGS });
+  const desktop = { viewport: { width: 1440, height: 900 } };
+  const phone = { ...devices['iPhone 14'], viewport: { width: 390, height: 844 } };
+  try {
+    await boot(browser, 'root', desktop, '');
+    await boot(browser, 'wildfire', desktop, '?cluster=wildfire&view=console');
+    await boot(browser, 'heat', desktop, '?cluster=heat');
+    await boot(browser, 'enso', desktop, '?cluster=enso');
+    await boot(browser, 'embed-1280', { viewport: { width: 1280, height: 800 } }, '?embed=true&cluster=wildfire', { corner: true });
+    await boot(browser, 'embed-390', phone, '?embed=true&cluster=wildfire', { corner: true });
+  } finally {
+    await browser.close();
+  }
+}
+
+await checkPropagationAndSeat();
+await checkRanges();
+await checkBoots();
+
+await writeFile(args.out, JSON.stringify(receipt, null, 2));
+const summary = renderSummary(receipt);
+if (args.summary) await appendFile(args.summary, summary);
+console.log(`\n${summary}`);
+console.log(`receipt written to ${args.out}`);
+process.exit(receiptOk(receipt) ? 0 : 1);
