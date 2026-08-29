@@ -339,7 +339,7 @@ test('the NWS expiry timer removes a product before the next network refresh', a
   // parsed, near the start of boot. A 1s deadline left almost no margin
   // for the boot settle, viewport resize, and tab click below, so the
   // product could already be pruned before the "still present" read on
-  // line ~356 below, an intrinsically sensitive near-immediate race
+  // line ~367 below, an intrinsically sensitive near-immediate race
   // (Codex review, 2026-08-29, on the 56dd46a deploy's retry-only green).
   // Widen it well clear of that work; REFRESH_INTERVAL_MS is 5 minutes, so
   // 8s stays far short of triggering the periodic re-fetch this test
@@ -366,9 +366,11 @@ test('the NWS expiry timer removes a product before the next network refresh', a
   const sheet = page.locator('#sheet-alerts-body');
   await expect(sheet).toContainText('Heat Advisory');
 
-  // The local timer, not a re-fetch, removes it: give this read the
-  // runtime's own ceiling (the expiry offset above plus the scheduler's
-  // own +25ms) rather than the global expect timeout.
+  // The local timer, not a re-fetch, removes it. scheduleExpiryPrune's own
+  // ceiling is EXPIRY_OFFSET_MS + 25ms (its scheduling buffer); this read's
+  // 13_000ms is a bounded budget roughly 5s above that 8_025ms ceiling,
+  // for event-loop jitter and the pill's own DOM update, rather than the
+  // global expect timeout.
   await expect(layerPill(page, 'nws-alerts')).toContainText('no features', {
     timeout: EXPIRY_OFFSET_MS + 5_000
   });

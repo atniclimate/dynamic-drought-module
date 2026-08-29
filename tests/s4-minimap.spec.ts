@@ -483,7 +483,7 @@ test.describe('S4b minimap', () => {
     // frame (measured report, 2026-08-29: 9 flaky events, zero hard
     // failures). toHaveCSS retries against the settled value instead.
     await expect(pacific).toHaveCSS('filter', /drop-shadow/, {
-      timeout: 1_000,
+      timeout: 5_000,
     });
     await pacific.focus();
     await expect(pacific).toHaveAttribute(

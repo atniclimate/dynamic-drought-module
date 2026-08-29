@@ -184,8 +184,13 @@ for (const selected of [false, true] as const) {
         // appearance with the same generous budget already used for other
         // deferred-briefing restores (tests/s2-url-migration.spec.ts:427,
         // tests/umbrella.spec.ts:375/500) instead of a one-shot check
-        // (measured report, 2026-08-29: 3/3 hard failures here, always
-        // "element(s) not found", never a hidden panel).
+        // (measured report, 2026-08-29: 11 events here, 8 retry-green and
+        // 3 that failed all three attempts, always "element(s) not found",
+        // never a hidden panel). The wider in-attempt budget addresses the
+        // eight retry-green events; the three that failed every attempt
+        // may be a product restore-ordering bug rather than a test race,
+        // which the flake report left open and this change does not
+        // settle.
         const panel = page.locator('#impact-panel');
         await expect(panel).toBeVisible({ timeout: 15_000 });
         await expect(panel.locator('.impact-panel-title')).toHaveText('Oregon');
@@ -264,7 +269,11 @@ test('an immediate browser Back still delivers the promised briefing (wave A fin
   // Same race as the parameterized restore above (:180): the return
   // action's promise chase is the only gate on the briefing's creation, so
   // give its appearance the same generous, retrying budget rather than one
-  // shot at the default expect timeout.
+  // shot at the default expect timeout. The measured report's own count
+  // for this test is 1 flaky event (a 60s click timeout, not this exact
+  // read); the fuller 11-event record above (8 retry-green, 3 that failed
+  // every attempt and may be a product restore-ordering bug the flake
+  // report left open) belongs to studio-restore:124, not this test.
   const panel = page.locator('#impact-panel');
   await expect(panel).toBeVisible({ timeout: 15_000 });
   await expect(panel.locator('.impact-panel-title')).toHaveText('Oregon');
