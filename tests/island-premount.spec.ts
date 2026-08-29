@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { urlLayers } from './helpers';
 import { stubRecentSatellite } from './satellite-fixture';
 import { routeAllTribalFixtures } from './tribal-fixtures';
+import { installMinimapAnalysisStubs } from './minimap-fixtures';
 
 /**
  * Pre-mount door regression (ADR 0002 condition 6).
@@ -131,6 +132,7 @@ async function gotoWithoutIsland(page: Page, query: string): Promise<void> {
   // A raw boot (the island chunk is aborted, so gotoApp's catalog signal
   // cannot be used); the suite-wide boundary stub is installed by hand.
   await routeAllTribalFixtures(page);
+  await installMinimapAnalysisStubs(page);
   await page.route(/island-[^/]*\.js$/, (route) => route.abort());
   await page.goto(query, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#region-select option')).not.toHaveCount(0);
