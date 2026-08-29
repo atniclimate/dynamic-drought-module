@@ -10,6 +10,7 @@
 
 import { expect, type Page, type Locator } from '@playwright/test';
 import { stubRecentSatellite } from './satellite-fixture';
+import { installBoundaryStubs, type BoundaryStubMode } from './tribal-fixtures';
 
 const nadmStubbedPages = new WeakSet<Page>();
 
@@ -165,10 +166,37 @@ export function stationValues(page: Page, id: string): Locator {
  * The brief-embed detection mirrors `deriveViewMode` (src/state/
  * view-mode.ts): embed plus nothing that routes to the console.
  */
-export async function gotoApp(page: Page, query = ''): Promise<void> {
+export interface GotoAppOptions {
+  /**
+   * How this boot answers the Census AIANNH and BIA AIAN-LAR queries.
+   * Defaults to `fixture`, the synthetic bodies in `tests/tribal-fixtures.ts`.
+   * `empty` serves the honest live-zero collection. `live` is the documented
+   * escape hatch: it installs no stub and the request reaches the agency.
+   * A spec that needs an abort, a partial, a delayed, or a geography-keyed
+   * response registers its own handler with `routeBoundary` instead; the
+   * suite-wide stub defers to any service a spec has claimed, whether the
+   * claim was made before or after this call.
+   */
+  readonly boundaries?: BoundaryStubMode;
+}
+
+export async function gotoApp(
+  page: Page,
+  query = '',
+  options: GotoAppOptions = {}
+): Promise<void> {
   // Routine deterministic browser tests stub the recent-satellite service so
   // the full suite neither depends on nor floods the public endpoint.
   await stubRecentSatellite(page);
+  // DDM-P1-T08: EVERY boot answers the two sovereign-boundary queries from
+  // synthetic fixtures, locally and in CI alike. Stubbing only under `CI`
+  // would make a local green and a CI green mean different things, and the
+  // whole point of the stub is that a retained CI artifact can never carry
+  // live Tribal or reservation geometry (hard rule 1; see the
+  // NON-REDISTRIBUTION GUARD in `src/layers/aiannh.ts`). One code path, one
+  // meaning. The live boundary path stays proven by the daily source-health
+  // probe, which drives Chromium outside this suite.
+  await installBoundaryStubs(page, options.boundaries ?? 'fixture');
   if (!/[?&](?:layers|cluster)=/.test(query)) {
     await stubDefaultNadm(page);
   }

@@ -6,6 +6,7 @@ import {
   AIANNH_ROUTE,
   BIA_ROUTE,
   emptyCollectionBody,
+  routeBoundary,
   routeGeojson,
   syntheticAiannhBody
 } from './tribal-fixtures';
@@ -86,9 +87,10 @@ test.describe('LAYERS studio behavior', () => {
   test('the Tribal Nations command selects two members and Sources reports expansion', async ({
     page
   }) => {
-    await routeGeojson(page, AIANNH_ROUTE, emptyCollectionBody());
-    await routeGeojson(page, BIA_ROUTE, emptyCollectionBody());
-    await gotoApp(page, '?layers=&view=brief&studio=layers');
+    // The boundary pair answers the honest live-zero collection here: this
+    // case is about the umbrella command and the Sources line, not about
+    // boundary geometry.
+    await gotoApp(page, '?layers=&view=brief&studio=layers', { boundaries: 'empty' });
     const studio = page.locator(STUDIO);
     const placeGroup = studio.getByRole('group', { name: 'Place · boundaries & rivers' });
 
@@ -162,11 +164,11 @@ test.describe('LAYERS studio behavior', () => {
       })
     );
     const partialAiannh = {
-      ...(syntheticAiannhBody() as Record<string, unknown>),
+      ...syntheticAiannhBody(),
       exceededTransferLimit: true
     };
     await routeGeojson(page, AIANNH_ROUTE, partialAiannh);
-    await page.route(BIA_ROUTE, (route) =>
+    await routeBoundary(page, BIA_ROUTE, (route) =>
       route.fulfill({
         status: 503,
         contentType: 'application/json',

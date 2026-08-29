@@ -9,10 +9,9 @@ import {
 import {
   AIANNH_ROUTE,
   BIA_ROUTE,
-  routeAllTribalFixtures,
+  routeBoundary,
   syntheticAiannhBody,
-  syntheticBiaBody,
-  routeGeojson
+  syntheticBiaBody
 } from './tribal-fixtures';
 
 /**
@@ -27,9 +26,9 @@ import {
  * boot, and the LARNAME locate behind the one search.
  *
  * The mechanism: an init script wraps `window.fetch` and records each
- * request's `RequestInit.cache` by URL BEFORE the app boots. Route
- * interception still serves the synthetic fixtures, so no live agency is
- * touched and no real polygon enters a test artifact.
+ * request's `RequestInit.cache` by URL BEFORE the app boots. gotoApp's
+ * suite-wide route interception still serves the synthetic fixtures, so no
+ * live agency is touched and no real polygon enters a test artifact.
  */
 
 const USDM_ROUTE = '**/USDM_current/FeatureServer/0/query*';
@@ -77,7 +76,6 @@ test.describe('R1: sovereign-geography fetches are no-store', () => {
     page
   }) => {
     await captureFetchCacheModes(page);
-    await routeAllTribalFixtures(page);
     await page.route(USDM_ROUTE, (route) => route.abort('failed'));
     await gotoApp(page, '?view=console&layers=aiannh,bia-reservations');
 
@@ -97,10 +95,9 @@ test.describe('R1: sovereign-geography fetches are no-store', () => {
 
   test('the LARNAME locate fetch is no-store', async ({ page }) => {
     await captureFetchCacheModes(page);
-    await routeAllTribalFixtures(page);
     await page.route(USDM_ROUTE, (route) => route.abort('failed'));
-    // The locate issues a fresh LARNAME query; serve it the synthetic body.
-    await routeGeojson(page, BIA_ROUTE, syntheticBiaBody());
+    // The locate issues a fresh LARNAME query; the suite-wide stub serves
+    // it the same synthetic body as the boot query.
     await gotoApp(page, '?view=console');
 
     await page.locator('#catalog-search [data-ddm-search]').fill('yakama');
@@ -148,11 +145,10 @@ test.describe('R2: truncated responses are degraded and never cached as complete
     test(`${key}: exceededTransferLimit reports live (partial) and re-fetches on re-toggle`, async ({
       page
     }) => {
-      await routeAllTribalFixtures(page);
       await page.route(USDM_ROUTE, (r) => r.abort('failed'));
 
       let requestCount = 0;
-      await page.route(route, (r) => {
+      await routeBoundary(page, route, (r) => {
         requestCount += 1;
         return r.fulfill({
           contentType: 'application/geo+json',

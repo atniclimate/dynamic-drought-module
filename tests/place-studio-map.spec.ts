@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { gotoApp, search, waitForLayerSettled } from './helpers';
-import { routeAllTribalFixtures } from './tribal-fixtures';
 
 const PLACE_ROOT = '#place-studio-root';
 const EMPTY_COLLECTION = JSON.stringify({ type: 'FeatureCollection', features: [] });
@@ -55,7 +54,6 @@ async function stubWildfireRecipe(page: Page): Promise<void> {
 
 test.describe('PS-MAP clean-selection display', () => {
   test.beforeEach(async ({ page }) => {
-    await routeAllTribalFixtures(page);
     await stubLocalMapLayers(page);
     await stubWildfireRecipe(page);
   });

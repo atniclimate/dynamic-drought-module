@@ -7,6 +7,13 @@ import { caveatFor } from '../src/impact/context';
 import { makeClaim } from '../src/impact/evidence';
 import type { BoundarySelectionContext } from '../src/impact/types';
 import { gotoApp, search } from './helpers';
+import {
+  AIANNH_ROUTE,
+  BIA_ROUTE,
+  emptyCollectionBody,
+  routeBoundary,
+  routeGeojson
+} from './tribal-fixtures';
 
 const PLACE_ROOT = '#place-studio-root';
 const EMPTY_COLLECTION = JSON.stringify({
@@ -111,7 +118,7 @@ async function stubBriefingSources(page: Page): Promise<void> {
 }
 
 async function stubTribalCandidates(page: Page, withCandidate: boolean): Promise<void> {
-  await page.route('**/BIA_AIAN_National_LAR/FeatureServer/0/query?*', (route) =>
+  await routeBoundary(page, BIA_ROUTE, (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/geo+json',
@@ -133,9 +140,7 @@ async function stubTribalCandidates(page: Page, withCandidate: boolean): Promise
         : EMPTY_COLLECTION
     })
   );
-  await page.route('**/AIANNHA/MapServer/47/query?*', (route) =>
-    route.fulfill({ contentType: 'application/geo+json', body: EMPTY_COLLECTION })
-  );
+  await routeGeojson(page, AIANNH_ROUTE, emptyCollectionBody());
 }
 
 async function stubEcoregionCandidates(page: Page, withCandidates: boolean): Promise<void> {

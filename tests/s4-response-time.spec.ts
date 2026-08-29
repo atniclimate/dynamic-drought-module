@@ -1,6 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
 import { gotoApp, waitForLayerSettled } from './helpers';
-import { routeAllTribalFixtures } from './tribal-fixtures';
 
 /**
  * S4c: the panel-foot response (the coordinator's swappable sink) and
@@ -47,7 +46,6 @@ test.describe('S4c panel-foot response', () => {
   test('a place-bearing click lands at the panel foot, frozen head over scrolling body, no popup', async ({
     page
   }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page);
     // The sink registers with the island; the fixture layers must paint.
     await expect(page.locator('.shell-cluster-btn')).toHaveCount(4);

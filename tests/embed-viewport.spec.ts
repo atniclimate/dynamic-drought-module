@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { gotoApp } from './helpers';
 import { stubRecentSatellite } from './satellite-fixture';
+import { routeAllTribalFixtures } from './tribal-fixtures';
 
 const TRANSPARENT_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
@@ -120,6 +121,10 @@ test.describe('Embed at 200x600 (minimum-width iframe floor)', () => {
     page
   }) => {
     await stubRecentSatellite(page);
+    // A raw boot: the app comes up inside an iframe on a host page, so
+    // gotoApp never runs and the suite-wide boundary stub has to be
+    // installed here. Page-level routes cover every frame of the page.
+    await routeAllTribalFixtures(page);
     await page.route('**/embed-width-floor-host.html', async (route) => {
       await route.fulfill({
         contentType: 'text/html',

@@ -11,6 +11,7 @@ import {
   AIANNH_ROUTE,
   BIA_ROUTE,
   routeAllTribalFixtures,
+  routeBoundary,
   syntheticAiannhBody,
   syntheticBiaBody
 } from './tribal-fixtures';
@@ -40,7 +41,6 @@ test.describe('the Tribal Nations umbrella (console catalog)', () => {
   test('structure: the four role groups hold, the umbrella is a card inside Place, members stay mounted', async ({
     page
   }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page, '?view=console');
 
     // The umbrella is NOT a fifth role group; the four-group contract holds.
@@ -78,7 +78,6 @@ test.describe('the Tribal Nations umbrella (console catalog)', () => {
   test('the details disclosure reveals the member rows with correct aria wiring, keyboard included', async ({
     page
   }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page, '?view=console');
 
     const toggle = page.locator(DETAILS_TOGGLE);
@@ -102,7 +101,6 @@ test.describe('the Tribal Nations umbrella (console catalog)', () => {
   test('the command button activates the present-day pair from all-off, never the deployer slots', async ({
     page
   }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page, '?view=console&layers=');
 
     await expect(page.locator(COUNT)).toHaveText('0 of 2 selected');
@@ -131,7 +129,6 @@ test.describe('the Tribal Nations umbrella (console catalog)', () => {
   test('a partial selection is completed, not reset (the second-click semantics)', async ({
     page
   }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page, '?view=console&layers=aiannh');
 
     await expect(page.locator(COUNT)).toHaveText('1 of 2 selected');
@@ -149,7 +146,7 @@ test.describe('the Tribal Nations umbrella (console catalog)', () => {
     // not only in the URL.
     let liveRequests = 0;
     const counted = async (pattern: string, body: unknown): Promise<void> => {
-      await page.route(pattern, (route) => {
+      await routeBoundary(page, pattern, (route) => {
         liveRequests += 1;
         void route.fulfill({
           contentType: 'application/geo+json',
@@ -203,7 +200,6 @@ test.describe('the Tribal Nations umbrella (console catalog)', () => {
   test('keyboard: the CTA and disclosure are native tab stops; collapsed children are skipped', async ({
     page
   }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page, '?view=console&layers=');
 
     // Native keyboard activation of the CTA does the real work.
@@ -235,7 +231,6 @@ test.describe('the Tribal Nations umbrella (console catalog)', () => {
   });
 
   test('provenance stays controlled by Sources, in both disclosure orders', async ({ page }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page, '?view=console');
 
     const place = page
@@ -271,7 +266,7 @@ test.describe('URL intent durability (the final-pass finding 1 pair)', () => {
     const releases: Array<() => void> = [];
     const hold = async (pattern: string, body: unknown): Promise<void> => {
       const gate = new Promise<void>((resolve) => releases.push(resolve));
-      await page.route(pattern, async (route) => {
+      await routeBoundary(page, pattern, async (route) => {
         await gate;
         await route.fulfill({
           contentType: 'application/geo+json',
@@ -340,10 +335,10 @@ test.describe('partial-outage visibility (the final-pass finding 2)', () => {
 
   async function oneAgencyDown(page: import('@playwright/test').Page): Promise<void> {
     await routeGeojsonPair(page);
-    await page.route(BIA_ROUTE, (route) => route.abort('failed'));
+    await routeBoundary(page, BIA_ROUTE, (route) => route.abort('failed'));
   }
   async function routeGeojsonPair(page: import('@playwright/test').Page): Promise<void> {
-    await page.route(AIANNH_ROUTE, (route) =>
+    await routeBoundary(page, AIANNH_ROUTE, (route) =>
       route.fulfill({
         contentType: 'application/geo+json',
         body: JSON.stringify(syntheticAiannhBody())
@@ -389,13 +384,13 @@ test.describe('partial-outage visibility on mobile (390x844)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
   test('the at-hand health line names the outage', async ({ page }) => {
-    await page.route(AIANNH_ROUTE, (route) =>
+    await routeBoundary(page, AIANNH_ROUTE, (route) =>
       route.fulfill({
         contentType: 'application/geo+json',
         body: JSON.stringify(syntheticAiannhBody())
       })
     );
-    await page.route(BIA_ROUTE, (route) => route.abort('failed'));
+    await routeBoundary(page, BIA_ROUTE, (route) => route.abort('failed'));
     await gotoApp(page, '?view=console');
 
     await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
@@ -409,7 +404,6 @@ test.describe('partial-outage visibility on mobile (390x844)', () => {
 
 test.describe('the Brief-door Tribal Nations action', () => {
   test('a bare desktop boot (the Brief door) shows the compact action', async ({ page }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page);
     const action = page.locator('#tribal-nations-brief-action');
     await expect(action).toBeVisible();
@@ -417,7 +411,6 @@ test.describe('the Brief-door Tribal Nations action', () => {
   });
 
   test('activating from the Brief action reaches the map on desktop too', async ({ page }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page, '?view=brief&layers=');
     const action = page.locator('#tribal-nations-brief-action');
     await expect(action).toBeVisible();
@@ -458,7 +451,6 @@ test.describe('the Brief-door action at 400px (mobile and embed)', () => {
   test('non-embed mobile Brief: the at-hand mirror is the reachable, operable instance', async ({
     page
   }) => {
-    await routeAllTribalFixtures(page);
     await gotoApp(page, '?view=console&layers=');
 
     // The Place door opens the at-hand summary at the half detent (the

@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { gotoApp, search, urlLayers } from './helpers';
 import { stubRecentSatellite } from './satellite-fixture';
+import { routeAllTribalFixtures } from './tribal-fixtures';
 
 /**
  * U1 the two doors (D-ARCH-002), REWRITTEN for S2 (D-0.7.0-041): the
@@ -157,7 +158,9 @@ test.describe('U1 the two doors (view mode)', () => {
       })
     );
     // Raw goto: gotoApp's catalog-independent signal would also work, but
-    // the point here is exactly that no catalog exists to wait for.
+    // the point here is exactly that no catalog exists to wait for. The
+    // suite-wide boundary stub is installed by hand for the same reason.
+    await routeAllTribalFixtures(page);
     await page.goto('?embed=true', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#app')).toHaveClass(/\bembed\b/);
     await expect(page.locator('#app')).toHaveClass(/\bview-brief\b/);

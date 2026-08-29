@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { ROLE_GROUPS } from './helpers';
 import { stubRecentSatellite } from './satellite-fixture';
+import { routeAllTribalFixtures } from './tribal-fixtures';
 
 test('the production artifact boots from the GitHub Pages subpath', async ({
   page,
@@ -49,6 +50,11 @@ test('the production artifact boots from the GitHub Pages subpath', async ({
   });
 
   await stubRecentSatellite(page);
+  // A raw boot at the Pages mount point, so the suite-wide boundary stub is
+  // installed by hand. `layers=states` leaves both boundary layers off, but
+  // the stub is unconditional so a later edit to that query cannot quietly
+  // reach an agency.
+  await routeAllTribalFixtures(page);
   await page.goto(
     '/dynamic-drought-module/?view=console&layers=states',
     { waitUntil: 'domcontentloaded' },

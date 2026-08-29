@@ -1,12 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
 import { gotoApp, waitForLayerSettled } from './helpers';
-import {
-  AIANNH_ROUTE,
-  BIA_ROUTE,
-  routeGeojson,
-  syntheticAiannhBody,
-  syntheticBiaBody
-} from './tribal-fixtures';
 
 /**
  * Unit D acceptance (the umbrella build; design finding 5): the provenance
@@ -85,11 +78,6 @@ async function clickMapForPopup(page: Page): Promise<void> {
   }).toPass({ timeout: 20_000 });
 }
 
-async function routeAllFixtures(page: Page): Promise<void> {
-  await routeGeojson(page, AIANNH_ROUTE, syntheticAiannhBody());
-  await routeGeojson(page, BIA_ROUTE, syntheticBiaBody());
-}
-
 async function assertClauses(
   page: Page,
   locatorSelector: string,
@@ -105,7 +93,6 @@ test.describe('Unit D: user-visible provenance', () => {
   test('the AIANNH popup carries every required provenance clause (desktop console)', async ({
     page
   }) => {
-    await routeAllFixtures(page);
     await gotoApp(page, '?view=console&layers=aiannh');
     await waitForLayerSettled(page, 'aiannh');
 
@@ -114,7 +101,6 @@ test.describe('Unit D: user-visible provenance', () => {
   });
 
   test('the AIAN-LAR popup carries every required clause, in embed mode', async ({ page }) => {
-    await routeAllFixtures(page);
     // Embed is a constrained surface the design calls out: the popup is
     // the provenance carrier there (the sidebar stays collapsed by design).
     await gotoApp(page, '?embed=true&view=console&layers=bia-reservations');
@@ -127,7 +113,6 @@ test.describe('Unit D: user-visible provenance', () => {
   test('the reference group discloses the group-level provenance note (desktop)', async ({
     page
   }) => {
-    await routeAllFixtures(page);
     await gotoApp(page, '?view=console');
 
     const place = page
@@ -150,7 +135,6 @@ test.describe('Unit D: provenance survives the mobile shell (390x844)', () => {
   test('the AIANNH popup opens from a mobile map tap with the full clause set', async ({
     page
   }) => {
-    await routeAllFixtures(page);
     await gotoApp(page, '?view=console&layers=aiannh');
     await waitForLayerSettled(page, 'aiannh');
 
@@ -162,7 +146,6 @@ test.describe('Unit D: provenance survives the mobile shell (390x844)', () => {
   });
 
   test('the group note is reachable through the sheet Layers door', async ({ page }) => {
-    await routeAllFixtures(page);
     // Boot straight into the console door: a bare mobile boot opens the
     // Brief report at the full detent, which is not the surface under test.
     await gotoApp(page, '?view=console');
