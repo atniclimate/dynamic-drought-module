@@ -385,6 +385,41 @@ test('a failed rerun of an older publisher cannot outrank the run that published
   assert.equal(evaluateStamp({ sha: HEAD, nonce: '999' }, { sha: out.sha, nonces: out.nonces }).ok, false);
 });
 
+// A run that is still `in_progress` may already have finished its
+// deploy-pages step, so the site can be serving its nonce while the run
+// list still calls it unfinished. Leaving it out of the set turned the
+// site's honest answer into a failure.
+test('an unfinished newer run for the same commit is an accepted nonce', () => {
+  const out = resolveLiveExpectation(scheduled({
+    deployRuns: [
+      run({ databaseId: 2001, createdAt: minutesBefore(120), updatedAt: minutesBefore(110) }),
+      run({
+        databaseId: 2002,
+        conclusion: null,
+        status: 'in_progress',
+        anyAttemptSucceeded: false,
+        createdAt: minutesBefore(8),
+        updatedAt: minutesBefore(8),
+      }),
+    ],
+  }));
+  assert.equal(out.verdict, 'verify');
+  assert.deepEqual(out.nonces, ['2001', '2002']);
+  assert.equal(out.nonce, '2001', 'the prose names a run that is known to have published');
+  assert.match(out.reason, /deploy run 2002 for the same commit has not concluded/);
+  const expect = { sha: out.sha, nonces: out.nonces };
+  assert.equal(evaluateStamp({ sha: HEAD, nonce: '2002' }, expect).ok, true, 'the site may already serve it');
+  assert.equal(evaluateStamp({ sha: HEAD, nonce: '2001' }, expect).ok, true);
+  assert.equal(evaluateStamp({ sha: HEAD, nonce: '2003' }, expect).ok, false);
+  // An unfinished run with NO published run behind it is still in-flight:
+  // accepting its nonce there would expect a build that cannot be live.
+  const alone = resolveLiveExpectation(scheduled({
+    deployRuns: [run({ databaseId: 2002, conclusion: null, status: 'in_progress', anyAttemptSucceeded: false, createdAt: minutesBefore(8), updatedAt: minutesBefore(8) })],
+  }));
+  assert.equal(alone.verdict, 'in-flight');
+  assert.deepEqual(alone.nonces, []);
+});
+
 test('a future-dated head does not stay in-flight forever', () => {
   const hours = (n) => new Date(Date.parse(NOW) + n * 3_600_000).toISOString();
   // No deploy run at all: the only clock is unusable, so the age reads as

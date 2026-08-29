@@ -555,16 +555,28 @@ export function resolveLiveExpectation(input) {
   // records the member that matched.
   const publishedRuns = byCreation(forHead.filter(isPublished));
   if (publishedRuns.length > 0) {
-    const nonces = publishedRuns.map((run) => String(run.databaseId));
-    const primary = nonces[nonces.length - 1];
+    // A NEWER run for the same commit that has not concluded yet may
+    // already have completed its deploy-pages step, in which case the site
+    // is serving that run's nonce while the run list still calls it
+    // unfinished. Excluding it made the site's honest answer a failure, so
+    // an unfinished run for this head joins the accepted set. It cannot
+    // cause a false pass in the other direction: the stamp only carries
+    // that nonce if that run really did publish it.
+    const stillRunning = forHead.filter((run) => !isFinished(run) && !isPublished(run));
+    const accepted = byCreation([...publishedRuns, ...stillRunning]);
+    const nonces = accepted.map((run) => String(run.databaseId));
+    const primary = String(publishedRuns[publishedRuns.length - 1].databaseId);
     const tail = nonces.length > 1 ? ` (accepting any of ${nonces.join(', ')})` : '';
+    const running = stillRunning.length
+      ? `; deploy run ${stillRunning.map((run) => run.databaseId).join(', ')} for the same commit has not concluded and may already have replaced it`
+      : '';
     return {
       verdict: 'verify',
       sha: headSha,
       nonce: primary,
       nonces,
       warnings: [],
-      reason: `${eventName} compare: main head ${headSha} was published by deploy run ${primary}${tail}`,
+      reason: `${eventName} compare: main head ${headSha} was published by deploy run ${primary}${tail}${running}`,
     };
   }
 
