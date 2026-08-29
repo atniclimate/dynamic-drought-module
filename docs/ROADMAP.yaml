@@ -526,6 +526,20 @@ phases:
         dependencies: ["DDM-P0"]
         github_issues: [13]
         external_authorization: "Source-version adoption requires owner review of changed landscape meaning."
+      - id: "DDM-P1-T08"
+        name: "Stub the sovereign boundary sources in every CI boot, then retain traces on retry"
+        components: ["verification", "release_delivery"]
+        goal: "Make a flaky or failed browser shard diagnosable from a Playwright trace without a public artifact ever carrying live Tribal or reservation geometry."
+        outputs:
+          - "A suite-wide route in the shared boot helper that answers the Census AIANNH and BIA AIAN-LAR requests with synthetic, clearly non-sovereign fixture polygons, replacing the per-spec routes that exist today."
+          - "The boundary-popup, search, and studio specs asserting against the fixture, with the live boundary path left to the daily source-health probe."
+          - "Trace on first retry and screenshot on failure enabled in CI with short retention, once no ordinary CI boot fetches live boundary geometry."
+        acceptance:
+          - "No CI boot issues a request to the AIANNH or BIA services; a test proves the route covers every boot path the suite uses."
+          - "A retained trace from a deliberately failed run contains no response body from either service."
+          - "The moving flake set (FE-23) is diagnosable from a retained trace instead of a local reproduction."
+        dependencies: ["DDM-P0-T06"]
+        external_authorization: "Turning trace or screenshot retention on in CI is an owner decision recorded in the pull request that flips it."
 
   - id: "DDM-P2"
     name: "Responsive and cross-view interaction coherence"

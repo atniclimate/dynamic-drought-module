@@ -47,7 +47,9 @@ Keep weak-network behavior bounded and visible. Work covers full response-body
 deadlines, activation cancellation, durable unavailable states, optional
 sidebar chunk isolation, internal layer-key typing, and Fire data-query scope.
 It also reviews the landscape-signature pipeline's LANDFIRE and Annual NLCD
-source pins without silently changing its byte-stable contract.
+source pins without silently changing its byte-stable contract, and it stubs
+the sovereign boundary sources in every CI boot so browser traces can be
+retained on retry without a public artifact ever carrying live geometry.
 
 ### P2: Responsive and cross-view interaction coherence
 
