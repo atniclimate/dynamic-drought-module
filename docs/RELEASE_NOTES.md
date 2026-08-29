@@ -2,11 +2,19 @@
 
 ## v0.6.25
 
-`v0.6.25` remains the package version. The August 18 application runtime was
+`v0.6.25` is the package version and, since 2026-08-28, the release tag: the
+annotated tag `v0.6.25` points at `4d55845a9e245c48fd16f9da403e659393044568`
+(pull request 29 merged), the commit the public Pages application serves and
+the rollback point for the 2026-08-19 and 2026-08-28 work. `v0.6.24` was
+never assigned and stays skipped. The August 18 application runtime was
 merged as `eed7967dea2e9f34214794ca158eb65eebc30113` and successfully deployed
-through the normal Pages workflow. Repository release tags currently stop at
-`v0.6.23`; neither the August 13 nor August 18 refinement assigned a new tag
-or package version.
+through the normal Pages workflow; the August 13 and August 18 refinements
+assigned no tag of their own.
+
+Owner decisions recorded 2026-08-28: continuous-integration runs keep no
+Playwright traces or screenshots until every CI boot stubs the Census AIANNH
+and BIA AIAN-LAR sources (roadmap task DDM-P1-T08); the thirteen merged
+branches were deleted and `feature/maplibre-v5` stays until DDM-P0-T03.
 
 Current source baseline, observed 2026-08-28 (evening Pacific): `main` is at
 `c7a5574449e833939c7a0d59a9b056a648ea9852` (pull request 28 merged), and the
