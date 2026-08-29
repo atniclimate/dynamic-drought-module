@@ -211,14 +211,23 @@ export async function routeBoundary(
   await page.route(pattern, handler);
 }
 
-/** Fulfill a boundary route pattern with a GeoJSON body. */
+/**
+ * Fulfill a route pattern with a GeoJSON body. A boundary pattern goes
+ * through `routeBoundary` so the claim is recorded; any other pattern (the
+ * quick-view sources in `hazard-rail.spec.ts`, for instance) is an ordinary
+ * route with nothing to claim.
+ */
 export async function routeGeojson(page: Page, pattern: string, body: unknown): Promise<void> {
-  await routeBoundary(page, pattern, (route) =>
+  const fulfill = (route: Route): unknown =>
     route.fulfill({
       contentType: 'application/geo+json',
       body: JSON.stringify(body)
-    })
-  );
+    });
+  if (SERVICE_BY_PATTERN.has(pattern)) {
+    await routeBoundary(page, pattern, fulfill);
+    return;
+  }
+  await page.route(pattern, fulfill);
 }
 
 /**
