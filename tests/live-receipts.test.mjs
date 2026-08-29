@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  LIVE_COMPARE_GRACE_MS,
   TERMINAL_STATUSES,
   evaluateAssets,
   evaluateEmbedCorner,
@@ -11,6 +12,7 @@ import {
   parseArgs,
   receiptOk,
   renderSummary,
+  resolveLiveExpectation,
 } from '../scripts/lib/live-receipts.mjs';
 
 test('parseArgs applies the live defaults and reads every flag', () => {
@@ -101,4 +103,161 @@ test('renderSummary names every check with its verdict and carries the layer row
   receipt.checks[1].ok = true;
   assert.equal(receiptOk(receipt), true);
   assert.match(renderSummary(receipt), /^## Live verification: pass/);
+});
+
+/* resolveLiveExpectation: what should be live, and can that be checked now. */
+
+const HEAD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const OLDER = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+const NOW = '2026-08-29T14:15:00Z';
+const minutesBefore = (n) => new Date(Date.parse(NOW) - n * 60_000).toISOString();
+
+const scheduled = (overrides = {}) => ({
+  eventName: 'schedule',
+  workflowRun: null,
+  headSha: HEAD,
+  headCommittedAt: minutesBefore(90),
+  deployRuns: [],
+  now: NOW,
+  ...overrides,
+});
+
+const run = (overrides) => ({
+  databaseId: 1,
+  headSha: HEAD,
+  conclusion: 'success',
+  status: 'completed',
+  createdAt: minutesBefore(80),
+  updatedAt: minutesBefore(70),
+  ...overrides,
+});
+
+test('the grace period is 30 minutes', () => {
+  assert.equal(LIVE_COMPARE_GRACE_MS, 30 * 60 * 1000);
+});
+
+test('a successful workflow_run verifies the commit and run id that deploy built', () => {
+  const out = resolveLiveExpectation({
+    eventName: 'workflow_run',
+    workflowRun: { id: 33240334529, headSha: HEAD, conclusion: 'success' },
+    headSha: OLDER,
+    headCommittedAt: minutesBefore(1),
+    deployRuns: [],
+    now: NOW,
+  });
+  assert.equal(out.verdict, 'verify');
+  assert.equal(out.sha, HEAD, 'the deploy run head sha wins over the current head of main');
+  assert.equal(out.nonce, '33240334529');
+  assert.match(out.reason, /post-deploy proof: deploy run 33240334529/);
+});
+
+test('a workflow_run that did not succeed is a caller error, not a verdict', () => {
+  assert.throws(
+    () => resolveLiveExpectation({ eventName: 'workflow_run', workflowRun: { id: 5, headSha: HEAD, conclusion: 'cancelled' }, now: NOW }),
+    /job condition should have skipped/,
+  );
+  assert.throws(() => resolveLiveExpectation({ eventName: 'workflow_run', workflowRun: null, now: NOW }), /workflow_run/);
+});
+
+test('a scheduled compare verifies main head against its successful deploy run', () => {
+  const out = resolveLiveExpectation(scheduled({ deployRuns: [run({ databaseId: 4242 })] }));
+  assert.equal(out.verdict, 'verify');
+  assert.equal(out.sha, HEAD);
+  assert.equal(out.nonce, '4242');
+  assert.match(out.reason, /schedule compare: main head aaaa.* was published by deploy run 4242/);
+});
+
+test('a dispatched compare behaves like the scheduled one and names its event', () => {
+  const out = resolveLiveExpectation(scheduled({ eventName: 'workflow_dispatch', deployRuns: [run({ databaseId: 7 })] }));
+  assert.equal(out.verdict, 'verify');
+  assert.equal(out.nonce, '7');
+  assert.match(out.reason, /^workflow_dispatch compare:/);
+});
+
+test('when the same commit deployed successfully twice, the latest successful run is the nonce', () => {
+  const out = resolveLiveExpectation(scheduled({
+    deployRuns: [
+      run({ databaseId: 100, createdAt: minutesBefore(80), updatedAt: minutesBefore(70) }),
+      run({ databaseId: 200, createdAt: minutesBefore(50), updatedAt: minutesBefore(40) }),
+    ],
+  }));
+  assert.equal(out.verdict, 'verify');
+  assert.equal(out.nonce, '200');
+});
+
+test('a successful deploy still wins while a later rerun of the same commit is in progress', () => {
+  const out = resolveLiveExpectation(scheduled({
+    deployRuns: [
+      run({ databaseId: 100 }),
+      run({ databaseId: 300, conclusion: null, status: 'in_progress', createdAt: minutesBefore(5), updatedAt: minutesBefore(5) }),
+    ],
+  }));
+  assert.equal(out.verdict, 'verify');
+  assert.equal(out.nonce, '100');
+});
+
+test('a queued or running deploy of main head is in-flight, not a divergence', () => {
+  const queued = resolveLiveExpectation(scheduled({
+    deployRuns: [run({ databaseId: 900, conclusion: null, status: 'queued' })],
+  }));
+  assert.equal(queued.verdict, 'in-flight');
+  assert.equal(queued.nonce, '');
+  assert.match(queued.reason, /deploy run 900 .* is queued/);
+  const running = resolveLiveExpectation(scheduled({
+    deployRuns: [run({ databaseId: 901, conclusion: null, status: 'in_progress' })],
+  }));
+  assert.equal(running.verdict, 'in-flight');
+  assert.match(running.reason, /is in_progress/);
+});
+
+test('a commit younger than the grace period with no successful deploy is in-flight', () => {
+  const out = resolveLiveExpectation(scheduled({ headCommittedAt: minutesBefore(12), deployRuns: [] }));
+  assert.equal(out.verdict, 'in-flight');
+  assert.match(out.reason, /12 minutes old, inside the 30 minute grace period/);
+  const custom = resolveLiveExpectation(scheduled({ headCommittedAt: minutesBefore(12), graceMs: 5 * 60_000 }));
+  assert.equal(custom.verdict, 'undeployed', 'a shorter grace period ends sooner');
+});
+
+test('a failed deploy of main head past the grace period is an undeployed divergence', () => {
+  const out = resolveLiveExpectation(scheduled({
+    deployRuns: [run({ databaseId: 555, conclusion: 'failure' })],
+  }));
+  assert.equal(out.verdict, 'undeployed');
+  assert.equal(out.sha, HEAD);
+  assert.equal(out.nonce, '');
+  assert.match(out.reason, /main is ahead of the live build: no successful deploy of aaaa/);
+  assert.match(out.reason, /latest deploy run 555 concluded failure/);
+});
+
+test('a cancelled deploy of main head reads as undeployed and names the cancellation', () => {
+  const out = resolveLiveExpectation(scheduled({
+    deployRuns: [
+      run({ databaseId: 556, conclusion: 'cancelled', updatedAt: minutesBefore(60) }),
+      run({ databaseId: 557, conclusion: 'cancelled', updatedAt: minutesBefore(35) }),
+    ],
+  }));
+  assert.equal(out.verdict, 'undeployed');
+  assert.match(out.reason, /latest deploy run 557 concluded cancelled/);
+});
+
+test('a successful deploy of an older commit only is still a divergence for main head', () => {
+  const out = resolveLiveExpectation(scheduled({
+    deployRuns: [run({ databaseId: 42, headSha: OLDER })],
+  }));
+  assert.equal(out.verdict, 'undeployed');
+  assert.match(out.reason, /no deploy run for that commit was found; the newest deploy run 42 built bbbb/);
+});
+
+test('no deploy runs at all past the grace period is a divergence that says so', () => {
+  const out = resolveLiveExpectation(scheduled({ deployRuns: [] }));
+  assert.equal(out.verdict, 'undeployed');
+  assert.match(out.reason, /no deploy run for main was found at all/);
+});
+
+test('resolveLiveExpectation rejects inputs it cannot judge', () => {
+  assert.throws(() => resolveLiveExpectation({}), /eventName is required/);
+  assert.throws(() => resolveLiveExpectation({ eventName: 'push' }), /unsupported event push/);
+  assert.throws(() => resolveLiveExpectation(scheduled({ headSha: '' })), /headSha is required/);
+  assert.throws(() => resolveLiveExpectation(scheduled({ now: 'soon' })), /now is not a parseable timestamp/);
+  assert.throws(() => resolveLiveExpectation(scheduled({ headCommittedAt: null })), /headCommittedAt is not a parseable/);
 });

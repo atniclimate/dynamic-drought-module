@@ -7,10 +7,13 @@
 # request), so a push to main cannot bypass shared-interface checks. Owner
 # policy 2026-08-28: the merge commit is a commit Validate never saw, so it
 # earns the whole proof, fanned out rather than serial (47 minutes on one
-# runner before this shape). The post-deploy proof (DDM-P0-T04 and
+# runner before this shape). The proof of the live build (DDM-P0-T04 and
 # DDM-P0-T08) lives in verify-live.yml: it runs on this workflow's
 # completion, only when the run succeeded, in its own concurrency group,
-# so a newer push here cannot cancel the receipt for the build still live.
+# so a newer push here cannot cancel the receipt for the build still live,
+# and again on a daily schedule and on demand, which is the path that
+# catches a deploy here that failed or was cancelled and therefore raised
+# no completion event to prove.
 
 name: Build and deploy DDM to GitHub Pages
 
@@ -160,3 +163,6 @@ jobs:
   # workflow's completion, success only, own concurrency group), so a
   # newer push to main cannot cancel the receipt for the build still
   # live. It expects this run's commit and run id in the live stamp.
+  # A run of this workflow that fails or is cancelled raises no such
+  # proof; the daily scheduled compare in the same workflow is what
+  # notices that main is then ahead of the live build.

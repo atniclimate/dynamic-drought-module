@@ -271,6 +271,40 @@ successful deploy, which brings its own receipt, supersedes a running
 verification). The deploy job first confirms its commit is still the head
 of `main`, and a failure opens one `deploy-divergence` issue that the next
 deploy verifying green while still the head of `main` closes.
+
+That post-deploy proof only ever fires for a deploy that succeeded, so a
+deploy that fails or is cancelled leaves `main` ahead of the live build with
+nothing said about it. The same workflow therefore also runs daily at 14:15
+UTC and on `workflow_dispatch`, and compares `main` against the live build
+from the other direction. `scripts/resolve-live-expectation.mjs`, whose
+judgment is the pure `resolveLiveExpectation` in
+`scripts/lib/live-receipts.mjs` (unit-tested in
+`tests/live-receipts.test.mjs`), reads the event, the head of `main`, that
+commit's committer date, and the last thirty `deploy.yml` runs for `main`,
+and returns one of three verdicts:
+
+- `verify`: run the same live proof. For a post-deploy event the expected
+  commit and nonce are the deploy run's own; for a scheduled or dispatched
+  compare they are the head of `main` and the latest successful deploy run
+  of that head.
+- `in-flight`: a deploy of the head is queued or running, or the head is
+  younger than the 30 minute grace period and has no successful deploy yet.
+  The run records the reason and ends green without verifying and without
+  touching issues, because a release under way is not a divergence. The
+  grace period covers a normal green push (gate, sharded browser suite, and
+  `deploy-pages` take about 15 minutes) with room for a slow runner.
+- `undeployed`: the head is past the grace period with no successful deploy.
+  The run names the latest deploy run for that commit and its conclusion,
+  appends to or opens the same single `deploy-divergence` issue (same marker
+  comment, so a scheduled finding and a post-deploy finding are never two
+  issues), and fails.
+
+A scheduled compare queues behind an in-flight post-deploy proof rather than
+cancelling it; only a newer post-deploy proof supersedes a running one. What
+the compare still does not prove: that Pages served a particular build to a
+particular reader at a particular moment, or anything about the hours
+between two daily runs. It proves what the site answers when it is asked.
+
 The daily `source-health` workflow records the runtime's own upstream
 requests at the default camera (status, bytes, seconds, record count, cache
 headers, failed requests) and opens one issue per catalog row that breaches

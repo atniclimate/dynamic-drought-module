@@ -25,6 +25,45 @@ here earlier closed when the 2026-08-24 scheduled ENSO refresh deployed
 hosted build nonce was the local fallback `dev` until pull request 27 made
 each hosted build attributable to its run.
 
+### 2026-08-29: main and live are compared on a schedule
+
+Roadmap task DDM-P0-T04 asks for detection of "when main and the deployed
+Pages build remain different after a grace period." The post-deploy proof
+recorded below did not meet that goal on its own: it fires on a successful
+deploy and asks only whether that build reached the content delivery
+network. A deploy that FAILS or is CANCELLED, which is the likelier way
+`main` and live come apart (a red browser shard, the `pages` concurrency
+group superseding a run, the freshness gate refusing an obsolete rerun),
+raises no successful deploy event at all, so nothing ran, no issue opened,
+and the live site quietly kept serving an older commit for as long as
+nobody looked.
+
+`verify-live.yml` now also runs daily at 14:15 UTC and on
+`workflow_dispatch`, and asks the stated question directly: `main` is at
+`X`, is `X` live? A resolver
+(`scripts/resolve-live-expectation.mjs`, deciding through the pure
+`resolveLiveExpectation` in `scripts/lib/live-receipts.mjs`) reads the
+event, the head of `main`, that commit's committer date, and the last
+thirty deploy runs for `main`, and returns one of three verdicts. `verify`
+runs the same live proof, expecting the head of `main` and the latest
+successful deploy run of that head. `in-flight` records that a deploy is
+queued or running, or that the head is inside the 30 minute grace period
+with no successful deploy yet, and ends green without touching issues,
+because a release under way is not a divergence. `undeployed` names the
+latest deploy run for that commit and its conclusion, appends to or opens
+the one `deploy-divergence` issue (the same marker comment as the
+post-deploy path, so there is ever one issue), and fails the run. Every
+branch of that decision is covered offline in
+`tests/live-receipts.test.mjs`, which `npm run gate` runs.
+
+What this still does not prove: that Pages served a particular build to a
+particular reader at a particular moment, and nothing at all about the
+hours between two daily compares. It proves what the site answers when it
+is asked, once a day and whenever the owner asks. A `schedule` or
+`workflow_dispatch` trigger also only exists once the workflow file is on
+`main`, so the first evidence this cadence works is a hand-dispatched run
+after merge.
+
 ### 2026-08-28: the live proof survives a newer push
 
 This pull request closes the known gap the entry below records. The
