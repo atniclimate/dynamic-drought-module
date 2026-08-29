@@ -11,6 +11,7 @@
  * production-observable stamps and chrome).
  */
 
+import { test } from '@playwright/test';
 import type maplibregl from 'maplibre-gl';
 
 export interface RecordedCall {
@@ -312,7 +313,12 @@ export function installFakeBrowser(
 export interface CapturedWarnings {
   /** Every `console.warn` call since capture began, one joined string each. */
   readonly messages: string[];
-  /** Put the real `console.warn` back. Call from `finally` or `afterEach`. */
+  /**
+   * Put the real `console.warn` back and record what was captured as a
+   * `console.warn` annotation on the current test, so a test that fails
+   * before its warning assertion still carries the evidence in the report.
+   * Call from `finally` or `afterEach`.
+   */
   restore(): void;
 }
 
@@ -325,7 +331,8 @@ export interface CapturedWarnings {
  * test that deliberately drives those paths, the stack is noise that buries
  * the reporter's own lines (DDM-P0-T06). Capturing it lets the test assert
  * the warning was issued, which is part of the contract, instead of
- * printing it.
+ * printing it; the annotation written on restore keeps the sanitized text
+ * (message and error name, no stack) with the test result either way.
  */
 export function captureWarnings(): CapturedWarnings {
   const original = console.warn;
@@ -341,6 +348,15 @@ export function captureWarnings(): CapturedWarnings {
     messages,
     restore: () => {
       console.warn = original;
+      if (messages.length === 0) return;
+      try {
+        test.info().annotations.push({
+          type: 'console.warn',
+          description: messages.join('\n')
+        });
+      } catch {
+        // Outside a test (no test.info()), the messages stay in memory only.
+      }
     }
   };
 }
