@@ -7,6 +7,7 @@ import {
   waitForLayerSettled,
   PILL
 } from './helpers';
+import { SHEET_DETENT_SIZE } from '../src/ui/mobile-sheet';
 
 /**
  * U2: the mobile bottom sheet (ratified detent model D-0.7.0-017).
@@ -434,5 +435,69 @@ test.describe('U2 embed stays sheetless; expand reveals the sheet at peek (400x6
     await expect(app).not.toHaveClass(/\bembed\b/);
     await expect(app).toHaveAttribute('data-sheet-detent', 'peek');
     await expect(page.locator('#sheet-grabber')).toBeVisible();
+  });
+});
+
+test.describe('U2 the sheet settle survives a main-thread stall (390x844)', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('a long task across the height ease still pads the camera for the rendered half sheet', async ({
+    page
+  }) => {
+    // The camera's bottom padding is not in the DOM, but the BIA layer
+    // refetches by viewport envelope after every camera move, so the
+    // southern edge of its query envelope is a production-observable
+    // reading of how far the map is padded: a taller obstruction pushes
+    // the visible envelope north. Boot with the layer on; every CI boot
+    // answers its requests from the synthetic fixture.
+    const souths: number[] = [];
+    page.on('request', (req) => {
+      const url = req.url();
+      if (!url.includes('biamaps.geoplatform.gov')) return;
+      const m = /geometry=([^&]+)/.exec(url);
+      if (!m) return;
+      const parts = decodeURIComponent(m[1]).split(',').map(Number);
+      if (parts.length === 4 && parts.every((n) => Number.isFinite(n))) souths.push(parts[1]);
+    });
+    await gotoApp(page, '?layers=bia-reservations');
+    await waitForLayerSettled(page, 'bia-reservations');
+    const app = page.locator('#app');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
+    await expect.poll(() => souths.length).toBeGreaterThan(0);
+    const closedSouth = souths[souths.length - 1];
+
+    // Open the LAYERS door, then stall the main thread across the sheet's
+    // 250 ms height ease. The settle fallback timer fires after the stall
+    // while the animation clock still sits mid-ease, so a one-shot rect
+    // read there sees a few pixels of sheet; only a re-measure at the
+    // rendered end state (`transitionend`) pads the camera for the real
+    // half sheet. A live multi-megabyte GeoJSON parse or the minimap
+    // analysis stalls a CI runner the same way (FE-23, the
+    // popup-viewport:248 signature of 2026-08-29: inset 223 of 388).
+    await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
+    await page.evaluate((ms) => {
+      const t = performance.now();
+      while (performance.now() - t < ms) {
+        // spin: a synthetic long task
+      }
+    }, 600);
+    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    const viewportHeight = await page.evaluate(() => window.innerHeight);
+    await expect
+      .poll(async () => page.locator('#sidebar').evaluate((el) => el.getBoundingClientRect().height))
+      .toBeCloseTo(viewportHeight * SHEET_DETENT_SIZE.halfFraction, 0);
+
+    // The half sheet covers 388 of the 844 px; at the default camera the
+    // padded envelope's southern edge moves north of the closed-sheet
+    // reading by about 3.75 degrees. A stale mid-ease measurement moves it
+    // by a fraction of that: 2.1 for the 223 px CI signature, 0.2 for an
+    // 18 px first frame. Poll the LATEST envelope: a stale settle may
+    // refetch first and the corrected one must follow.
+    await expect
+      .poll(() => (souths.length ? closedSouth - souths[souths.length - 1] : 0), {
+        message: 'the BIA envelope never reflected a camera padded for the full half sheet',
+        timeout: 10_000
+      })
+      .toBeGreaterThan(3);
   });
 });
