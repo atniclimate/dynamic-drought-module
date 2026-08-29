@@ -72,24 +72,42 @@ change affects shared navigation, map lifecycle, state, or release readiness.
 
 ## How CI runs the suite
 
-`playwright.config.ts` defines two projects. `chromium` holds every spec but
-two; `chromium-3d` holds `fire3d-mode.spec.ts` and `view-contracts.spec.ts`,
-the two files whose 3D cases build terrain, a sky, a smoke volume, and
-context tiles on the software renderer and carry their own 120 to 180 second
-budgets (the Node-level cases in `fire3d-mode` and the three non-3D contract
-rows ride along; the split is by file, and both projects use the same
-browser settings). Locally, `npm test` and `npm run test:serial` run both
-projects, so coverage is the same in either seat.
+`playwright.config.ts` defines three projects. `chromium` holds the general
+suite; `chromium-interaction` holds `popup-viewport.spec.ts`,
+`studio-restore.spec.ts`, `s4-minimap.spec.ts`, and `s4-shell.spec.ts` (see
+`INTERACTION_SPECS` in the config), the measured flake cluster from the
+2026-08-29 CI flake report: a livelock in a click-retry loop, a sub-120ms
+CSS-transition read, and an unwaited restore race, isolated to their own
+runners so a red or flaky run there is diagnosable and cheap to rerun without
+dragging the general project; `chromium-3d` holds `fire3d-mode.spec.ts` and
+`view-contracts.spec.ts`, the two files whose 3D cases build terrain, a sky, a
+smoke volume, and context tiles on the software renderer and carry their own
+120 to 180 second budgets (the Node-level cases in `fire3d-mode` and the
+three non-3D contract rows ride along; the split is by file, and all three
+projects use the same browser settings). Locally, `npm test` and `npm run
+test:serial` run all three projects, so coverage is the same in either seat.
 
 In CI (`.github/workflows/browser-suite.yml`, called by both Validate and the
 Pages deploy) each project is sliced with `--shard=i/n` onto its own runners,
-one worker each: four shards for `chromium`, three for `chromium-3d`. Each
-runner builds and serves its own `dist/`, so no shard reads another's state.
-Each page is its own software-GL MapLibre context, so more runners is the
-lever; more workers per runner is not (see the `workers` note in the config).
-The shard counts were fitted to the 2026-08-28 idle serial baseline (general
-16.4 minutes over 798 tests, 3D 13.7 minutes over 32) so every shard lands
-near eleven minutes on the 2-core runner; re-fit them when the suite grows.
+one worker each: four shards for `chromium`, two for `chromium-interaction`,
+two for `chromium-3d`. Each runner builds and serves its own `dist/`, so no
+shard reads another's state. Each page is its own software-GL MapLibre
+context, so more runners is the lever; more workers per runner is not (see
+the `workers` note in the config, and the `workers`/`retries` experiment
+inputs below for how to measure that on CI hardware rather than assume it).
+Public-repo standard runners are 4 vCPU / 16 GB, not the 2-core machine an
+older comment here assumed; that assumption was measured on a developer
+laptop and has never been re-tested on CI.
+
+Counts, measured with `npx playwright test --list --project=<p>
+--shard=i/n` on 56dd46a (2026-08-29): `chromium` 763 tests over 4 shards
+(191/191/191/190), `chromium-interaction` 42 tests over 2 shards (21/21),
+`chromium-3d` 32 tests over 2 shards (16/16). `chromium-3d` moved from 3
+shards to 2 (the prior split ran 1.5/6.4/6.7 minutes per shard, so dropping
+one is time-neutral) to pay for `chromium-interaction`'s two runners without
+raising the total shard count more than by one. Wall-clock timing for this
+composition is this change's own Validate run; re-fit these when the suite
+grows.
 
 `browser-suite.yml` also takes `workers` and `retries` experiment inputs
 (mirrored as `workflow_dispatch` inputs on `validate.yml`), both defaulted to
