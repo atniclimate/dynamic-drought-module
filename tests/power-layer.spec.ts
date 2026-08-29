@@ -21,6 +21,7 @@ import {
 } from '../src/ui/power-popups';
 import {
   PMTILES_V3_HEADER_PREFIX,
+  captureWarnings,
   fakeMapHarness,
   installFakeBrowser
 } from './map-harness';
@@ -228,11 +229,16 @@ test('a dead archive leaves the live plants, reports partial, and says so', asyn
   const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
   const restoreFetch = stubPlantsOnlyFetch();
   const harness = fakeMapHarness({ zoom: POWER_MIN_ZOOM + 2 });
+  const warnings = captureWarnings();
 
   try {
     await activate(harness.map);
 
     expect(registry.getStatus(POWER_LAYER_KEY)).toBe('degraded');
+    // The dead half warned once; the live half raised nothing.
+    expect(warnings.messages).toEqual([
+      expect.stringMatching(/^\[power-3d\] the transmission-line archive is unreachable or invalid\./)
+    ]);
     const state = getPowerContextState();
     expect(state).toMatchObject({ linesOn: false, plantsOn: true });
     expect(harness.layerSpecs.has('power-plants')).toBe(true);
@@ -246,6 +252,7 @@ test('a dead archive leaves the live plants, reports partial, and says so', asyn
 
     deactivate(harness.map);
   } finally {
+    warnings.restore();
     restoreFetch();
     browser.restore();
   }
@@ -255,6 +262,7 @@ test('both sources dead is unavailable, not an empty success', async () => {
   const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
   const restoreFetch = stubDeadFetch();
   const harness = fakeMapHarness({ zoom: POWER_MIN_ZOOM + 2 });
+  const warnings = captureWarnings();
 
   try {
     await activate(harness.map);
@@ -263,9 +271,15 @@ test('both sources dead is unavailable, not an empty success', async () => {
     expect(getPowerContextState()).toBeNull();
     expect(harness.sources.has('power-lines')).toBe(false);
     expect(harness.sources.has('power-plants')).toBe(false);
+    // Each dead source warned once, and nothing else did.
+    expect(warnings.messages).toEqual([
+      expect.stringMatching(/^\[power-3d\] the transmission-line archive is unreachable or invalid\./),
+      expect.stringMatching(/^\[power-3d\] the EIA power-plant fetch failed\./)
+    ]);
 
     deactivate(harness.map);
   } finally {
+    warnings.restore();
     restoreFetch();
     browser.restore();
   }

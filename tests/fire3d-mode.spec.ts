@@ -33,6 +33,7 @@ import { registry } from '../src/state/registry';
 import { parseFire3dParam, syncFire3dParam } from '../src/state/url';
 import {
   PMTILES_V3_HEADER_PREFIX,
+  captureWarnings,
   fakeMapHarness,
   installFakeBrowser
 } from './map-harness';
@@ -395,6 +396,7 @@ test('a corrupt archive fails the probe before any map mutation and drops fire3d
   const restoreFetch = stubCorruptFetch();
   const harness = fakeMapHarness({ pitch: 0, bearing: 0 });
   const { map } = harness;
+  const warnings = captureWarnings();
 
   try {
     seedFire3DPreference(true);
@@ -402,6 +404,10 @@ test('a corrupt archive fails the probe before any map mutation and drops fire3d
     await expect.poll(() => getFire3DStatus().state).toBe('unavailable');
 
     expect(getFire3DStatus().reason).toMatch(/terrain archive/i);
+    // The failure is warned once, naming the probe, with the archive error.
+    expect(warnings.messages).toEqual([
+      expect.stringMatching(/^\[fire3d\] terrain archive probe failed\. .*not a PMTiles v3 archive/)
+    ]);
     // Nothing was mutated: the probe failed before setup began.
     expect(harness.getTerrain()).toBeNull();
     expect(harness.sources.size).toBe(0);
@@ -413,6 +419,7 @@ test('a corrupt archive fails the probe before any map mutation and drops fire3d
     expect(browser.search()).not.toContain('fire3d');
     expect(browser.search()).toContain('cluster=wildfire');
   } finally {
+    warnings.restore();
     setFire3DActive(map, false);
     restoreFetch();
     browser.restore();
@@ -471,6 +478,7 @@ test('a corrupt hazard archive degrades only the drape; the scene stays active',
   const restoreFetch = stubDrapeCorruptFetch();
   const harness = fakeMapHarness({ pitch: 0, bearing: 0 });
   const { map } = harness;
+  const warnings = captureWarnings();
 
   try {
     setFire3DActive(map, true);
@@ -483,7 +491,12 @@ test('a corrupt hazard archive degrades only the drape; the scene stays active',
     expect(harness.sources.has('whp-2023')).toBe(false);
     expect(harness.layerSpecs.has('whp-2023')).toBe(false);
     expect(harness.layerSpecs.has('structures-3d')).toBe(true);
+    // Only the drape warned; the scene itself raised nothing.
+    expect(warnings.messages).toEqual([
+      expect.stringMatching(/^\[whp-3d\] the hazard drape archive is unreachable or invalid\./)
+    ]);
   } finally {
+    warnings.restore();
     setFire3DActive(map, false);
     setFire3DPreference(false);
     restoreFetch();
@@ -506,6 +519,7 @@ test('a corrupt structures archive degrades only the buildings; the rest stays',
   }) as typeof fetch;
   const harness = fakeMapHarness({ pitch: 0, bearing: 0 });
   const { map } = harness;
+  const warnings = captureWarnings();
 
   try {
     setFire3DActive(map, true);
@@ -515,7 +529,12 @@ test('a corrupt structures archive degrades only the buildings; the rest stays',
     expect(harness.sources.has('structures-3d')).toBe(false);
     expect(harness.layerSpecs.has('structures-3d')).toBe(false);
     expect(harness.layerSpecs.has('structures-3d-est')).toBe(false);
+    // Only the structures context warned; the scene itself raised nothing.
+    expect(warnings.messages).toEqual([
+      expect.stringMatching(/^\[structures-3d\] the structures archive is unreachable or invalid\./)
+    ]);
   } finally {
+    warnings.restore();
     setFire3DActive(map, false);
     setFire3DPreference(false);
     globalThis.fetch = originalFetch;
@@ -528,6 +547,7 @@ test('post-probe terrain tile failures roll the scene back transactionally', asy
   const restoreFetch = stubPmtilesFetch();
   const harness = fakeMapHarness({ pitch: 12, bearing: -20 });
   const { map } = harness;
+  const warnings = captureWarnings();
 
   try {
     seedFire3DPreference(true);
@@ -552,7 +572,16 @@ test('post-probe terrain tile failures roll the scene back transactionally', asy
     expect(harness.camera).toEqual({ pitch: 12, bearing: -20 });
     expect(getFire3DPreference()).toBe(false);
     expect(harness.listenerCount('error')).toBe(0);
+    // The watcher warned once at the third error, then the scene warned
+    // its own rollback reason: exactly two, in that order.
+    expect(warnings.messages).toEqual([
+      expect.stringMatching(
+        /^\[fire3d-terrain-dem\] repeated tile-load failures; reporting unavailable\. Error: synthetic tile failure 2$/
+      ),
+      expect.stringMatching(/^\[fire3d\] Terrain tiles failed to load\./)
+    ]);
   } finally {
+    warnings.restore();
     setFire3DActive(map, false);
     setFire3DPreference(false);
     restoreFetch();

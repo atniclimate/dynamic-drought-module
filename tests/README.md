@@ -63,11 +63,39 @@ judgment call rather than a red CI run. The telemetry spec here asserts only
 the honest-status contract (terminal, not a specific number), which is what a
 regression would actually break.
 
-Pull requests run the deterministic root gate, Worker typecheck, and serial
-browser suite without deploying the optional Worker. The Pages workflow runs
-the root gate and serial browser suite before uploading its artifact. Run
+Pull requests run the deterministic root gate and Worker typecheck (without
+deploying the optional Worker) beside the browser suite; the Pages workflow
+runs the root gate, then the same browser suite, before it deploys. Run
 focused affected specs during development and `npm run test:serial` when a
 change affects shared navigation, map lifecycle, state, or release readiness.
+
+## How CI runs the suite
+
+`playwright.config.ts` defines two projects. `chromium` holds every spec but
+two; `chromium-3d` holds `fire3d-mode.spec.ts` and `view-contracts.spec.ts`,
+whose scenes build terrain, a sky, a smoke volume, and context tiles on the
+software renderer and carry their own 120 to 180 second budgets. Locally,
+`npm test` and `npm run test:serial` run both projects, so coverage is the
+same in either seat.
+
+In CI (`.github/workflows/browser-suite.yml`, called by both Validate and the
+Pages deploy) each project is sliced with `--shard=i/n` onto its own runners,
+one worker each: four shards for `chromium`, three for `chromium-3d`. Each
+runner builds and serves its own `dist/`, so no shard reads another's state.
+Each page is its own software-GL MapLibre context, so more runners is the
+lever; more workers per runner is not (see the `workers` note in the config).
+The shard counts were fitted to the 2026-08-28 idle serial baseline (general
+16.4 minutes over 798 tests, 3D 13.7 minutes over 32) so every shard lands
+near eleven minutes on the 2-core runner; re-fit them when the suite grows.
+
+A shard that fails, or passes only on retry, uploads its `test-results/`
+(traces on first retry, screenshots on failure) and HTML report as a
+seven-day artifact named for the shard; a clean shard uploads nothing. The
+Node-level specs that deliberately drive a degrade path (a corrupt archive,
+three tile errors in the rolling window, a dead fetch) capture the runtime's
+`console.warn` through `captureWarnings()` in `tests/map-harness.ts` and
+assert the exact warning, so the honest reason is part of the contract and
+its stack trace stays out of the shard log.
 
 ## Headless WebGL
 

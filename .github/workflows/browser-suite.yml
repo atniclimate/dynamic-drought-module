@@ -103,6 +103,25 @@ jobs:
         run: npx playwright install-deps chromium
 
       # One worker per runner (see playwright.config.ts on the software-GL
-      # ceiling). Reporters come from the config.
+      # ceiling). Reporters come from the config: a named line per test,
+      # GitHub annotations on failure, and an HTML report for the artifact.
       - name: Run the browser shard
+        id: suite
         run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=1
+
+      # DDM-P0-T06: keep what a failure or a retry left behind (a trace on
+      # the first retry, a screenshot on failure, the HTML report) so a red
+      # or flaky shard is diagnosable without rerunning it blind. Uploads
+      # only when the shard failed or a retry wrote a trace; a clean green
+      # shard leaves nothing. Short retention; the app collects no user
+      # data, so the artifacts hold none.
+      - name: Keep failure and retry diagnostics
+        if: ${{ !cancelled() && (steps.suite.outcome != 'success' || hashFiles('test-results/**/*.zip', 'test-results/**/*.png') != '') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-${{ matrix.project }}-${{ matrix.shard }}-of-${{ matrix.total }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore

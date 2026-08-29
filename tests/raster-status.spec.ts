@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 import { pointHasHeatRiskCoverage } from '../src/layers/heatrisk-coverage';
 import { watchRasterTiles } from '../src/util/raster-status';
+import { captureWarnings, type CapturedWarnings } from './map-harness';
 
 type Handler = (event: Record<string, unknown>) => void;
 
@@ -65,6 +66,27 @@ class FakeMap {
   }
 }
 
+// The watcher's degrade paths warn their honest reason (the third error in
+// the rolling window, an expired deadline, a cycle with known holes). These
+// tests drive every one of them on purpose, so capture the warnings instead
+// of printing their stacks into the shard log (DDM-P0-T06), and fail any
+// test whose watcher warned something this file does not document.
+const DOCUMENTED_WATCHER_WARNINGS =
+  /^\[[a-z-]+\] (repeated tile-load failures; reporting unavailable\.|no selected-frame tile succeeded before the load deadline; reporting unavailable\.|selected-frame tile requests completed with known holes; reporting live \(partial\)\.)/;
+
+let warnings: CapturedWarnings;
+
+test.beforeEach(() => {
+  warnings = captureWarnings();
+});
+
+test.afterEach(() => {
+  warnings.restore();
+  for (const message of warnings.messages) {
+    expect(message).toMatch(DOCUMENTED_WATCHER_WARNINGS);
+  }
+});
+
 test('the raster watcher keeps its existing heal-only success behavior by default', () => {
   const map = new FakeMap();
   const reports: string[] = [];
@@ -88,6 +110,10 @@ test('the raster watcher keeps its existing heal-only success behavior by defaul
     });
   }
   expect(reports).toEqual(['error']);
+  // The threshold warns exactly once, at the third error, with the error.
+  expect(warnings.messages).toEqual([
+    '[shared-raster] repeated tile-load failures; reporting unavailable. Error: synthetic tile failure'
+  ]);
 
   map.fire('sourcedata', {
     sourceId: 'shared-raster',
@@ -315,6 +341,11 @@ test('completeness still reports total failure after three early errors', () => 
   map.fire('idle', {});
 
   expect(reports).toEqual(['error']);
+  // Completeness accounting reports once at idle; the legacy three-error
+  // shortcut stays silent when a deadline is configured.
+  expect(warnings.messages).toEqual([
+    '[selected-frame] no selected-frame tile succeeded before the load deadline; reporting unavailable.'
+  ]);
 });
 
 test('the HeatRisk completeness opt-in treats an empty idle cycle as complete', () => {
