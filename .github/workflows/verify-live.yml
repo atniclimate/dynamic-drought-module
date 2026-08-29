@@ -153,9 +153,19 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          runs=$(gh run list --workflow=deploy.yml --branch main \
-            --json databaseId,headSha,conclusion,status,createdAt,updatedAt --limit 30)
-          branch=$(gh api "repos/$REPO/branches/main")
+          # A post-deploy proof already knows its commit and nonce from the
+          # event, so it asks the API for nothing: an Actions or branches
+          # outage must not turn a real release's receipt into a red run.
+          # A scheduled compare needs both, and an outage there fails this
+          # step loudly rather than reading an empty run list as "main was
+          # never deployed" and filing a divergence that is not one.
+          runs='[]'
+          branch='{"commit":{"sha":"","commit":{"committer":{"date":""}}}}'
+          if [ "$EVENT_NAME" != "workflow_run" ]; then
+            runs=$(gh run list --workflow=deploy.yml --branch main \
+              --json databaseId,headSha,conclusion,status,createdAt,updatedAt --limit 30)
+            branch=$(gh api "repos/$REPO/branches/main")
+          fi
           jq -n \
             --arg eventName "$EVENT_NAME" \
             --arg wrId "$WORKFLOW_RUN_ID" \
