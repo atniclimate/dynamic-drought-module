@@ -4,7 +4,7 @@ updated_on: "2026-08-28"
 product:
   name: "Dynamic Drought Module"
   short_name: "DDM"
-  package_version: "0.6.25"
+  package_version: "0.6.26"
   repository: "https://github.com/atniclimate/dynamic-drought-module"
   live_site: "https://atniclimate.github.io/dynamic-drought-module/"
 
@@ -1077,6 +1077,10 @@ decision_gates:
   - id: "DDM-D01"
     question: "Is the globe benefit worth the measured MapLibre 5 baseline and terrain cost?"
     needed_by: ["DDM-P0-T03", "DDM-P0-T09", "DDM-P0-T10"]
+    decision:
+      date: "2026-08-29"
+      answer: "Accepted in principle. Three-dimensional terrain is a product requirement for desktop and tablet; the fire module and future volumetric smoke depend on it. Mobile 3D waits on the tablet contract (DDM-P2-T01, gate DDM-D02). The isolated upgrade is its own later session, gated by npm run gate and npm run test:serial; DDM-P0-T09 and DDM-P0-T10 stay open behind it."
+      cost: "Measured on feature/maplibre-v5 at e82190e (2026-08-19): main chunk 209.99 kB to 273.01 kB gzip (about 63 KiB more); 3D terrain transfer 2.28 MB to 6.39 MB. To be re-measured against post-wave main before the upgrade session."
   - id: "DDM-D02"
     question: "Should tablet portrait use compact desktop, the phone shell, or a bounded hybrid?"
     needed_by: ["DDM-P2-T01"]
@@ -1095,6 +1099,9 @@ decision_gates:
   - id: "DDM-D07"
     question: "Does the no-telemetry rule require explicitly disabling provider invocation logs containing full URLs?"
     needed_by: ["DDM-P0-T05"]
+    decision:
+      date: "2026-08-29"
+      answer: "Yes. workers/proxy/wrangler.toml declares observability enabled = false in reviewed source (pull request 51, f0a9092), so the dashboard default cannot govern the deployed script. Before-state: the script's observability setting was undeclared and no Logpush job targeted it. Receipt: zero Workers Logs events for ddm-proxy across the publish window and 68 probe requests."
   - id: "DDM-D08"
     question: "Which event, region, artifact budget, and mobile fallback should govern smoke-altitude research?"
     needed_by: ["DDM-P5"]

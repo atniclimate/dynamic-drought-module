@@ -43,7 +43,7 @@ self-hosting and data population.
 
 ## Current development baseline
 
-The source package remains `0.6.25`. It includes the interface, Fire 3D,
+The source package is `0.6.26`. It includes the interface, Fire 3D,
 Wildfire Hazard Potential, structures, power, and smoke-volume refinements
 described below. A merged commit is not by itself proof that the public site is
 running it; the exact source-to-live divergence observed on 2026-08-20 is
