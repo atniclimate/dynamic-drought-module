@@ -275,10 +275,13 @@ refusals keep their Cross-Origin Resource Sharing headers for non-browser
 callers and for debugging, not for page script: a browser whose preflight is
 refused raises a generic network error and never exposes the status or the
 body. `/healthz` answers GET and its own preflight, advertising `GET, OPTIONS`
-on every response including its 405. Revision `2026-08-29-options-policy-v4` is
-the reviewed candidate in this repository, not what is published; the live
-Worker keeps serving its own revision until the deployer runs the separate
-two-phase publish.
+on every response including its 405. Revision `2026-08-29-options-policy-v4`
+is the published revision (2026-08-29, Cloudflare version
+`10af1660-5b74-4520-80a1-32c80108fc48`); the daily upstream monitor derives
+the expected revision from this source file through
+`scripts/lib/worker-revision.mjs`, so a published Worker older than reviewed
+source fails that monitor by design until the deployer runs the two-phase
+publish again.
 
 Typecheck Worker changes from its directory. Publishing the Worker is a
 separate external operation and should include pre-deploy and post-deploy

@@ -1,9 +1,48 @@
 # Release notes
 
+## v0.6.26
+
+`v0.6.26` is the package version and, since 2026-08-29, the release tag. One
+product change: the mobile sheet now re-measures its camera padding when its
+height transition actually ends (pull request 50), so a renderer stalled by a
+long task can no longer leave the map padded short and the region framed too
+low. Everything else in this release is verification and delivery
+infrastructure, landed as one reviewed wave on 2026-08-29 (pull requests 35
+through 45, 50, 51, and 41, merged in the order 40, 38, 35, 39, 36, 37, 45,
+50, 42, 43, 51, 41).
+
+### 2026-08-29: the Worker publish and the wave
+
+The optional Cloudflare Worker now serves revision
+`2026-08-29-options-policy-v4` (Cloudflare version
+`10af1660-5b74-4520-80a1-32c80108fc48`, published 23:15 UTC from `f0a9092`).
+It relays only the exact routes the application reads, route-validates
+preflight, refuses POST, and advertises `GET, OPTIONS` on `/healthz`;
+`npm run verify:worker` passes 34 of 34 rows against the public hostname, and
+the daily upstream monitor now derives the expected revision from source
+instead of a hand-pinned string. Workers Logs are declared off in reviewed
+source (DDM-D07).
+
+Continuous integration retains a pixel-free Playwright trace on a shard's
+first retry for three days; screenshots stay off. The Census AIANNH and BIA
+AIAN-LAR boundary queries are answered from synthetic fixtures in every CI
+boot, and, as federal public cartographic products published under federal
+open-data policy, those layers may appear in a retained artifact when a spec
+opts into them; Tribally-held boundary data never enters the repository, a
+build, an artifact, a trace, or a Worker cache.
+
+The live-proof oracle gained a nonce set, freshness and expected-layer
+checks, and a light scheduled mode; the browser suite runs eight shards over
+three Playwright projects with one retry and an unconditional per-shard
+report; Dependabot proposes Action SHA updates. DDM-D01 is answered: the
+MapLibre 5 prerequisite is accepted in principle for desktop and tablet, with
+mobile 3D deferred to DDM-P2-T01 and the upgrade itself in a later gated
+session.
+
 ## v0.6.25
 
-`v0.6.25` is the package version and, since 2026-08-28, the release tag: the
-annotated tag `v0.6.25` points at `4d55845a9e245c48fd16f9da403e659393044568`
+`v0.6.25` was the package version and release tag from 2026-08-28 until
+`v0.6.26` on 2026-08-29: the annotated tag `v0.6.25` points at `4d55845a9e245c48fd16f9da403e659393044568`
 (pull request 29), the last commit that changed product behavior. Every
 commit since is verification and continuous-integration infrastructure, not
 a new release; see the current source baseline below for what is live
