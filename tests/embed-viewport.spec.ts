@@ -211,22 +211,23 @@ test.describe('Embed at 200x600 (minimum-width iframe floor)', () => {
       expect(box.height, `${name} does not fill the iframe height`).toBeGreaterThanOrEqual(599);
     }
 
-    // The compact attribution is a critical disclosure at this width. Its
-    // toggle must pass real hit-testing, and its source links must remain in
-    // the disclosure DOM. MapLibre auto-minimizes the expanded state whenever
-    // the map moves, so the transient expansion class is not a stable signal.
-    const attribution = embedded.locator('.maplibregl-ctrl-attrib');
-    const attributionToggle = embedded.locator('.maplibregl-ctrl-attrib-button');
-    await expect(attribution).toHaveClass(/maplibregl-compact/);
-    await expect(attributionToggle).toBeVisible();
-    await attributionToggle.click({ trial: true });
-    expect(await attribution.locator('a').count()).toBeGreaterThan(0);
+    // The credits disclosure is critical at this width (owner direction
+    // 2026-08-31: the question-mark panel carries the license credits; the
+    // attribution control is gone). Its button must pass real hit-testing,
+    // and the credits links must land in the panel DOM.
+    const infoButton = embedded.locator('#map-info-btn');
+    await expect(infoButton).toBeVisible();
+    await infoButton.click();
+    expect(
+      await embedded.locator('#map-info-attribution a').count()
+    ).toBeGreaterThan(0);
+    await page.keyboard.press('Escape');
 
     for (const selector of [
       '#sidebar-expand',
       '.map-overlay-controls',
       '.embed-brand',
-      '.maplibregl-ctrl-attrib'
+      '#map-info-btn'
     ]) {
       const containment = await embedded.locator(selector).evaluate((element) => {
         const control = element.getBoundingClientRect();

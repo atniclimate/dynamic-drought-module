@@ -206,6 +206,13 @@ test.describe('mobile map-information disclosure (390x844)', () => {
     await expect(panel).toBeVisible();
     await expect(sourceList).toContainText('North American Drought Monitor');
 
+    // The license credits (owner direction 2026-08-31): the panel is the
+    // only credits surface, so the live per-source attribution strings,
+    // links included, must render here.
+    const creditsLine = page.locator('#map-info-attribution');
+    await expect(creditsLine).toContainText('OpenStreetMap');
+    expect(await creditsLine.locator('a').count()).toBeGreaterThan(0);
+
     // W2-D8: the panel opens with what it uniquely adds (the active view
     // and the basemap state), never a verbatim restatement of the on-map
     // key aria text that sits directly beneath it.
@@ -413,10 +420,13 @@ test.describe('map information reaches the desktop and stays out of embeds', () 
     await expect(button).toHaveAttribute('aria-expanded', 'false');
   });
 
-  test('a 400x600 embed keeps the information disclosure hidden', async ({ page }) => {
+  test('a 400x600 embed seats the information disclosure as its credits surface', async ({ page }) => {
+    // Owner direction 2026-08-31 (superseding the embed-hidden contract):
+    // with MapLibre's attribution control removed, the question-mark panel
+    // is the iframe's reachable credits surface, closed until asked for.
     await page.setViewportSize({ width: 400, height: 600 });
     await gotoApp(page, '?embed=true');
-    await expect(page.locator('#map-info-btn')).toBeHidden();
+    await expect(page.locator('#map-info-btn')).toBeVisible();
     await expect(page.locator('#map-info-panel')).toBeHidden();
   });
 });

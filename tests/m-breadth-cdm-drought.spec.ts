@@ -226,13 +226,12 @@ test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
     await expect(page.locator('#map-key')).toBeHidden();
     const legendLicense = legend.getByRole('link', { name: LICENSE_TITLE });
     await expect(legendLicense).toHaveAttribute('href', LICENSE_URL);
-    const attribution = page.locator('.maplibregl-ctrl-attrib');
-    await expect(attribution).not.toHaveClass(/maplibregl-compact-show/);
-    await attribution.locator('.maplibregl-ctrl-attrib-button').click();
-    const attributionLicense = attribution.getByRole('link', {
-      name: LICENSE_TITLE
-    });
+    await page.locator('#map-info-btn').click();
+    const attributionLicense = page
+      .locator('#map-info-attribution')
+      .getByRole('link', { name: LICENSE_TITLE });
     await expect(attributionLicense).toHaveAttribute('href', LICENSE_URL);
+    await page.keyboard.press('Escape');
     expect(upstreamRequests).toEqual([]);
 
     await page.emulateMedia({ media: 'print' });

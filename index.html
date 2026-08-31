@@ -335,10 +335,11 @@
            (owner direction, 2026-08-19): the round button asks "what am I
            looking at?", which is exactly what the panel answers (active
            view, every active source with its status, basemap and its
-           observation window). It is a distinct control from MapLibre's
-           compact attribution circle beside it, which carries the license
-           credits and must stay reachable. -->
-      <button id="map-info-btn" class="map-info-btn" type="button" aria-label="Map information" title="Map information: active view, sources, and basemap" aria-controls="map-info-panel" aria-expanded="false">
+           observation window). Since 2026-08-31 (owner direction) it also
+           carries the license credits: MapLibre's compact attribution
+           circle is gone, and the live per-source attribution strings
+           render in this panel's credits line instead. -->
+      <button id="map-info-btn" class="map-info-btn" type="button" aria-label="Map information" title="Map information: active view, sources, credits, and basemap" aria-controls="map-info-panel" aria-expanded="false">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.4a2.7 2.7 0 1 1 3.4 2.6c-.55.18-.9.7-.9 1.28v.62"/><path d="M12 17.2h.01"/></svg>
       </button>
 
@@ -353,6 +354,8 @@
             <summary>Tribal geography source note</summary>
             <p id="map-info-tribal-note"></p>
           </details>
+          <h3>Credits</h3>
+          <p id="map-info-attribution" class="map-info-attribution"></p>
         </div>
       </section>
 

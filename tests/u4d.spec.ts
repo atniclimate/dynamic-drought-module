@@ -210,9 +210,13 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     page
   }) => {
     await gotoApp(page, '?view=console&basemap=satellite');
-    const attrib = page.locator('.maplibregl-ctrl-attrib');
-    await expect(attrib).toContainText('NOAA NESDIS GOES GeoColor');
-    await expect(attrib).toContainText('OpenStreetMap');
+    // Owner direction 2026-08-31: the credits render in the map-information
+    // panel; the attribution control is gone.
+    await page.locator('#map-info-btn').click();
+    const credits = page.locator('#map-info-attribution');
+    await expect(credits).toContainText('NOAA NESDIS GOES GeoColor');
+    await expect(credits).toContainText('OpenStreetMap');
+    await page.keyboard.press('Escape');
   });
 
   test('dead selected-frame tiles revert the mode honestly', async ({
@@ -227,7 +231,9 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     await expect(btn).toHaveAttribute('aria-pressed', 'false', { timeout: 30_000 });
     await expect.poll(async () => search(page)).toContain('basemap=default');
     await expect(page.locator(IMAGERY_CHIP)).toBeHidden();
-    // The default basemap is back on screen (its attribution returns).
-    await expect(page.locator('.maplibregl-ctrl-attrib')).toContainText('OpenStreetMap');
+    // The default basemap is back on screen (its credit returns).
+    await page.locator('#map-info-btn').click();
+    await expect(page.locator('#map-info-attribution')).toContainText('OpenStreetMap');
+    await page.keyboard.press('Escape');
   });
 });

@@ -76,27 +76,12 @@ export function createMap(containerId: string): maplibregl.Map {
     attributionControl: false
   });
 
-  // Keep attribution behind MapLibre's standard disclosure button at every
-  // viewport size. The sources remain reachable without a persistent text box
-  // covering the map.
-  map.addControl(new maplibregl.AttributionControl({ compact: true }));
-  // MapLibre initially expands a newly added compact control. Start it closed
-  // so credits are one disclosure tap away without covering the map on load.
-  // Source metadata can populate the control after it is added, so close it
-  // after the first style or source update that makes it compact.
-  const closeInitialAttribution = (): void => {
-    const attribution = map
-      .getContainer()
-      .querySelector<HTMLElement>('.maplibregl-ctrl-attrib');
-    if (!attribution?.classList.contains('maplibregl-compact')) return;
-    attribution.classList.remove('maplibregl-compact-show');
-    attribution.removeAttribute('open');
-    map.off('styledata', closeInitialAttribution);
-    map.off('sourcedata', closeInitialAttribution);
-  };
-  map.on('styledata', closeInitialAttribution);
-  map.on('sourcedata', closeInitialAttribution);
-  closeInitialAttribution();
+  // The license credits (owner direction, 2026-08-31, superseding the
+  // 2026-08-19 two-circle corner): no MapLibre attribution control in any
+  // shell. Every source still declares its attribution string at addSource
+  // time, and the map-information disclosure (the round question-mark
+  // button, src/ui/map-information.ts) renders those live strings as its
+  // credits line, one tap away at every viewport size, embeds included.
   map.addControl(
     new maplibregl.ScaleControl({
       unit: 'imperial',

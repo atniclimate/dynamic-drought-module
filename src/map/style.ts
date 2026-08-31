@@ -39,7 +39,8 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
         tiles: [URLS.basemapOSM],
         tileSize: 256,
         // The linked form per the OSM attribution guidance (U4f); the
-        // AttributionControl renders HTML.
+        // map-information panel's credits line renders these strings as
+        // HTML (owner direction, 2026-08-31).
         attribution:
           '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         minzoom: 0,

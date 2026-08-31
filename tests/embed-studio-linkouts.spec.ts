@@ -46,7 +46,7 @@ test.describe('Embed studio link-outs at 400x600', () => {
     expect(overlaps(shareBox!, expandBox!)).toBe(false);
     expect(overlaps(resetBox!, expandBox!)).toBe(false);
 
-    for (const selector of ['.maplibregl-ctrl-attrib', '#embed-date-stamp']) {
+    for (const selector of ['.map-info-btn', '#embed-date-stamp']) {
       const chrome = page.locator(selector);
       if (await chrome.isVisible()) {
         const chromeBox = await chrome.boundingBox();

@@ -43,25 +43,25 @@ test.describe('U4 stage-5: bottom-chrome collisions stay fixed', () => {
     await stubRecentSatellite(page);
   });
 
-  test('the 400x600 embed gets the compact attribution control', async ({ page }) => {
+  test('the 400x600 embed seats the credits disclosure closed', async ({ page }) => {
     await page.setViewportSize({ width: 400, height: 600 });
     await gotoApp(page, '?embed=true&view=console');
-    // The disclosure starts compact and closed, freeing the bottom bar the
-    // legend chip and ATNI badge sit on while keeping credits one tap away.
-    const attribution = page.locator('.maplibregl-ctrl-attrib');
-    await expect(attribution).toHaveClass(/maplibregl-compact/);
-    await expect(attribution).not.toHaveClass(/maplibregl-compact-show/);
+    // The disclosure starts closed, freeing the bottom bar the legend chip
+    // and ATNI badge sit on while keeping credits one tap away (owner
+    // direction 2026-08-31: the question-mark panel carries the credits).
+    await expect(page.locator('#map-info-btn')).toBeVisible();
+    await expect(page.locator('#map-info-panel')).toBeHidden();
   });
 
-  test('the embed attribution toggle is clickable, never under the brand badge', async ({
+  test('the embed credits button is clickable, never under the brand badge', async ({
     page
   }) => {
-    // The live 0.6.9 pass: the ATNI badge intercepted the toggle's pointer
-    // events at 400x600, locking the data-source disclosure. A trial click
-    // exercises real hit-testing; it fails on interception.
+    // The live 0.6.9 pass: the ATNI badge intercepted the disclosure's
+    // pointer events at 400x600, locking the data-source disclosure. A
+    // trial click exercises real hit-testing; it fails on interception.
     await page.setViewportSize({ width: 400, height: 600 });
     await gotoApp(page, '?embed=true&view=console');
-    const toggle = page.locator('.maplibregl-ctrl-attrib-button');
+    const toggle = page.locator('#map-info-btn');
     await expect(toggle).toBeVisible();
     await toggle.click({ trial: true });
 
@@ -70,11 +70,11 @@ test.describe('U4 stage-5: bottom-chrome collisions stay fixed', () => {
     if (!toggleBox || !badgeBox) throw new Error('toggle or badge has no box');
     expect(
       intersects(toggleBox, badgeBox),
-      'the brand badge overlaps the attribution toggle'
+      'the brand badge overlaps the credits button'
     ).toBe(false);
   });
 
-  test('at 1024 with satellite on, attribution clears the joined scales and no status card covers the map', async ({
+  test('at 1024 with satellite on, the credits button clears the joined scales and no status card covers the map', async ({
     page
   }) => {
     await page.setViewportSize({ width: 1024, height: 768 });
@@ -85,11 +85,11 @@ test.describe('U4 stage-5: bottom-chrome collisions stay fixed', () => {
     );
     await page.evaluate(() => document.fonts.ready);
 
-    const attrib = await box(page, '.maplibregl-ctrl-attrib');
+    const credits = await box(page, '.map-info-btn');
     const scales = await boxes(page, '.maplibregl-ctrl-scale');
     expect(scales).toHaveLength(2);
     for (const scale of scales) {
-      expect(intersects(attrib, scale), 'attribution overlaps a scale control').toBe(false);
+      expect(intersects(credits, scale), 'the credits button overlaps a scale control').toBe(false);
     }
     const orderedScales = [...scales].sort((a, b) => a.y - b.y);
     const scaleGap = orderedScales[1]!.y -
@@ -113,15 +113,12 @@ test.describe('U4 stage-5: bottom-chrome collisions stay fixed', () => {
     await expect(chip).toHaveAttribute('data-status', 'live');
     await page.evaluate(() => document.fonts.ready);
 
-    const attribution = page.locator('.maplibregl-ctrl-attrib');
-    await expect(attribution).toHaveClass(/maplibregl-compact/);
-    await expect(attribution).not.toHaveClass(/maplibregl-compact-show/);
-    const attrib = await box(page, '.maplibregl-ctrl-attrib');
+    const creditsButton = await box(page, '.map-info-btn');
     const switcher = await box(
       page,
       '.maplibregl-ctrl-group:has(.basemap-switcher-btn)'
     );
-    expect(intersects(attrib, switcher), 'compact attribution overlaps SAT').toBe(false);
+    expect(intersects(creditsButton, switcher), 'the credits button overlaps SAT').toBe(false);
     await expect(chip).not.toBeInViewport();
 
     await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
