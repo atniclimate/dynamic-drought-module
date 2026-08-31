@@ -552,25 +552,29 @@ test.describe('the 2026-08-19 map chrome seats', () => {
     expect(satellite.top).toBeGreaterThanOrEqual(reset.bottom - 1);
     expect(Math.abs(satellite.right - reset.right)).toBeLessThanOrEqual(2);
 
-    // The corner, right to left: the question mark, the compact
-    // attribution, the preview badge. None of them overlap.
+    // The corner holds the question mark alone (owner direction
+    // 2026-08-31: the attribution circle is gone and its credits render
+    // inside the question-mark panel); the preview badge sits bottom
+    // center. No overlap.
     const info = await rect(page.locator('.map-info-btn'));
-    const attribution = await rect(page.locator('.maplibregl-ctrl-attrib'));
     const badge = await rect(page.locator('.test-preview-badge'));
     await expect(page.locator('.map-info-btn')).toBeVisible();
-    expect(attribution.right).toBeLessThanOrEqual(info.left);
-    expect(badge.right).toBeLessThanOrEqual(attribution.left);
+    const viewport = page.viewportSize();
+    if (!viewport) throw new Error('viewport size is unavailable');
+    const badgeCenter = (badge.left + badge.right) / 2;
+    expect(Math.abs(badgeCenter - viewport.width / 2)).toBeLessThanOrEqual(2);
+    expect(badge.right).toBeLessThanOrEqual(info.left);
     expect(intersects(badge, info)).toBe(false);
-    expect(intersects(badge, attribution)).toBe(false);
     expect(info.bottom).toBeLessThanOrEqual(800);
 
     // The license disclosure is still one click away and still says who
     // owns the base map. Burying it to make room for app chrome would be a
     // license problem, not a layout preference.
-    await page.locator('.maplibregl-ctrl-attrib-button').click();
-    await expect(page.locator('.maplibregl-ctrl-attrib-inner')).toContainText(
+    await page.locator('#map-info-btn').click();
+    await expect(page.locator('#map-info-attribution')).toContainText(
       'OpenStreetMap'
     );
+    await page.keyboard.press('Escape');
   });
 
   test('a phone keeps the dock key seat and the thumb-zone satellite control', async ({
@@ -670,22 +674,20 @@ for (const width of [400, 200]) {
     await expect(page.locator('#map-key [data-nifc-perimeter-key]')).toBeVisible();
 
     await expect(page.locator('#ground-vintage')).toHaveCount(0);
-    const attribution = page.locator('.maplibregl-ctrl-attrib');
-    const attributionToggle = page.locator('.maplibregl-ctrl-attrib-button');
-    await expect(attribution).toHaveClass(/maplibregl-compact/);
-    await expect(attributionToggle).toBeVisible();
-    await attributionToggle.click({ trial: true });
+    const infoButton = page.locator('#map-info-btn');
+    await expect(infoButton).toBeVisible();
+    await infoButton.click({ trial: true });
 
     const overlayBox = await rect(page.locator('.map-overlay-controls'));
     const dockBox = await rect(page.locator('#map-bottom-dock'));
     expect(intersects(overlayBox, dockBox), 'top controls overlap the bottom dock').toBe(false);
 
-    const attributionBox = await rect(attributionToggle);
+    const infoBox = await rect(infoButton);
     for (const selector of ['#map-key', '.embed-brand']) {
       const itemBox = await rect(page.locator(selector));
       expect(
-        intersects(attributionBox, itemBox),
-        `attribution toggle overlaps ${selector}`
+        intersects(infoBox, itemBox),
+        `credits button overlaps ${selector}`
       ).toBe(false);
       expect(itemBox.left, `${selector} crosses the left edge`).toBeGreaterThanOrEqual(0);
       expect(itemBox.right, `${selector} crosses the right edge`).toBeLessThanOrEqual(width);

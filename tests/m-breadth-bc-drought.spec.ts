@@ -200,9 +200,11 @@ test.describe('U7 British Columbia basin drought display', () => {
       'No update means not measured right now'
     );
     await expect(page.locator('#map-key')).toBeHidden();
-    await expect(page.locator('.maplibregl-ctrl-attrib')).toContainText(
+    await page.locator('#map-info-btn').click();
+    await expect(page.locator('#map-info-attribution')).toContainText(
       'Province of British Columbia'
     );
+    await page.keyboard.press('Escape');
 
     expect(bcRequests).toHaveLength(1);
     const query = new URL(bcRequests[0]!);

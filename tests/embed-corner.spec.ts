@@ -68,9 +68,10 @@ for (const [width, height] of SIZES) {
     const app = page.locator('#app');
     await expect(app).toHaveClass(/\bembed\b/);
 
-    // The desktop corner treatment must not leak: no information button,
+    // The embed seats the credits disclosure (owner direction 2026-08-31:
+    // the question-mark panel carries the license credits in every shell),
     // and the preview badge rides the top-right overlay stack.
-    await expect(page.locator('.map-info-btn')).toBeHidden();
+    await expect(page.locator('.map-info-btn')).toBeVisible();
     const badge = page.locator('.test-preview-badge');
     await expect(badge).toBeVisible();
     const overlay = await rect(page.locator('.map-overlay-controls'));
@@ -80,17 +81,17 @@ for (const [width, height] of SIZES) {
 
     // The two controls a person must reach, hit-tested at their centers.
     const satellite = page.locator('.maplibregl-ctrl-bottom-right .basemap-switcher-btn');
-    const attribution = page.locator('.maplibregl-ctrl-attrib-button');
+    const credits = page.locator('#map-info-btn');
     await expect(satellite).toBeVisible();
-    await expect(attribution).toBeVisible();
+    await expect(credits).toBeVisible();
     expect(await hitAt(page, satellite, '.basemap-switcher-control'), 'the satellite control is covered').toBe(true);
-    expect(await hitAt(page, attribution, '.maplibregl-ctrl-attrib'), 'the attribution button is covered').toBe(true);
+    expect(await hitAt(page, credits, '.map-info-btn'), 'the credits button is covered').toBe(true);
 
     // Everything that shares the bottom edge stays apart.
     const named: Array<[string, Rect]> = [];
     for (const [name, selector] of [
       ['satellite', '.maplibregl-ctrl-bottom-right .basemap-switcher-control'],
-      ['attribution', '.maplibregl-ctrl-attrib'],
+      ['credits', '.map-info-btn'],
       ['brand', '.embed-brand'],
       ['key', '#map-key'],
       ['scale', '.maplibregl-ctrl-scale']
@@ -112,9 +113,9 @@ for (const [width, height] of SIZES) {
       expect(box.bottom, `${name} crosses the bottom edge`).toBeLessThanOrEqual(height + 0.5);
     }
 
-    // The attribution disclosure still opens and still names the base map.
-    await attribution.click();
-    await expect(page.locator('.maplibregl-ctrl-attrib-inner')).toContainText('OpenStreetMap');
+    // The credits disclosure still opens and still names the base map.
+    await credits.click();
+    await expect(page.locator('#map-info-attribution')).toContainText('OpenStreetMap');
   });
 
   test(`the ${width}x${height} embed loading pulse leaves Share and Reset alone`, async ({

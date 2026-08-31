@@ -1,6 +1,7 @@
 import { LAYER_DEFS } from '../config/layers';
 import { TRIBAL_NATIONS_PROVENANCE_NOTE } from '../config/provenance';
 import { getBasemapMode, onBasemapChange } from '../state/basemap-store';
+import { getMap } from '../state/map-store';
 import { registry } from '../state/registry';
 import { resolveStatusPillText } from './island/pill-text';
 import { onSheetDetentSettle } from './mobile-sheet';
@@ -38,6 +39,7 @@ export function initMapInformation(): void {
   const sources = document.getElementById('map-info-sources');
   const tribal = document.getElementById('map-info-tribal') as HTMLDetailsElement | null;
   const tribalNote = document.getElementById('map-info-tribal-note');
+  const attribution = document.getElementById('map-info-attribution');
   const mapKey = document.getElementById('map-key');
   const bottomDock = document.getElementById('map-bottom-dock');
 
@@ -49,7 +51,8 @@ export function initMapInformation(): void {
     !current ||
     !sources ||
     !tribal ||
-    !tribalNote
+    !tribalNote ||
+    !attribution
   ) {
     return;
   }
@@ -112,6 +115,27 @@ export function initMapInformation(): void {
     tribalNote.textContent = hasTribalReference
       ? TRIBAL_NATIONS_PROVENANCE_NOTE
       : '';
+
+    // The license credits (owner direction, 2026-08-31): the exact
+    // per-source attribution strings MapLibre's removed control would have
+    // shown, read live from the style so a source added by a lazy layer
+    // chunk credits itself the moment it exists. The strings are
+    // first-party HTML declared at addSource time (they carry the license
+    // links, e.g. the OpenStreetMap contributors link), which is why this
+    // is innerHTML and every string stays issuer-verbatim. A source whose
+    // layers were toggled off may keep its credit until removal; an extra
+    // credit is honest, a missing one is not.
+    const style = getMap()?.getStyle();
+    const credits: string[] = [];
+    if (style) {
+      for (const source of Object.values(style.sources)) {
+        const text = (source as { attribution?: unknown }).attribution;
+        if (typeof text === 'string' && text.trim() !== '' && !credits.includes(text)) {
+          credits.push(text);
+        }
+      }
+    }
+    attribution.innerHTML = credits.join(' | ');
   };
 
   const setOpen = (next: boolean, returnFocus = true): void => {

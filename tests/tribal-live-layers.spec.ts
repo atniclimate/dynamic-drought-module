@@ -432,11 +432,15 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
     await expect(layerPill(page, 'aiannh')).toHaveText('live');
     await expect(layerPill(page, 'bia-reservations')).toHaveText('live');
     // Production-visible proof of two DISTINCT concurrent sources: each
-    // live source contributes its own attribution string to the map's
-    // attribution control (set at addSource time), never a blended one.
-    const attribution = page.locator('.maplibregl-ctrl-attrib');
-    await expect(attribution).toContainText('US Census AIANNH');
-    await expect(attribution).toContainText('BIA AIAN-LAR');
+    // live source contributes its own attribution string at addSource
+    // time, and the map-information credits line renders both, never a
+    // blended one (owner direction 2026-08-31: the credits live in the
+    // question-mark panel; the attribution control is gone).
+    await page.locator('#map-info-btn').click();
+    const credits = page.locator('#map-info-attribution');
+    await expect(credits).toContainText('US Census AIANNH');
+    await expect(credits).toContainText('BIA AIAN-LAR');
+    await page.keyboard.press('Escape');
   });
 
   test('legacy ?layers=tribal still lands on the deployer slot, not the live layer', async ({
