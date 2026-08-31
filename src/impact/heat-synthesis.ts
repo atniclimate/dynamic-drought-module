@@ -6,13 +6,12 @@ import type {
   PointHeatMetricSeries
 } from './types';
 
-function unitLabel(unitCode: string): string {
-  const unit = unitCode.split(':').at(-1);
-  if (unit === 'degC') return '°C';
-  if (unit === 'degF') return '°F';
-  if (unit === 'percent') return '%';
-  return unit ?? unitCode;
-}
+import {
+  formatDistanceKm,
+  formatPointHeatInterval,
+  formatPointHeatTimestamp,
+  formatPointHeatValue
+} from './point-heat-format';
 
 function firstValue(
   metrics: readonly PointHeatMetricSeries[],
@@ -21,7 +20,7 @@ function firstValue(
   const metric = metrics.find((candidate) => candidate.key === key);
   const value = metric?.values[0];
   return value
-    ? `${metric.label} ${value.value} ${unitLabel(value.unitCode)} (${value.unitCode})`
+    ? `${metric.label} ${formatPointHeatValue(value.value, value.unitCode)}`
     : null;
 }
 
@@ -44,33 +43,34 @@ function pointHeatRead(pointHeat: PointHeatBriefing): HeatSourceRead | null {
     const distance =
       observation.distanceKm === undefined
         ? ''
-        : `, ${observation.distanceKm.toFixed(1)} km from the selected point`;
+        : `, ${formatDistanceKm(observation.distanceKm)} from the selected point`;
     const timestamp = observation.timestamp
-      ? ` at ${observation.timestamp}`
+      ? ` at ${formatPointHeatTimestamp(observation.timestamp)}`
       : '';
     parts.push(
       `Nearby observation from ${station}${distance}: ${values.join(', ')}${timestamp}.`
     );
   }
   if (pointHeat.grid.status === 'ready') {
-    const preferred =
-      firstValue(pointHeat.grid.metrics, 'heatIndex') ??
-      firstValue(pointHeat.grid.metrics, 'apparentTemperature') ??
-      firstValue(pointHeat.grid.metrics, 'maxTemperature') ??
-      firstValue(pointHeat.grid.metrics, 'temperature');
-    const series = pointHeat.grid.metrics.find((metric) => {
-      const first = metric.values[0];
-      return (
-        first &&
-        `${metric.label} ${first.value} ${unitLabel(first.unitCode)} (${first.unitCode})` ===
-          preferred
-      );
-    });
-    const validTime = series?.values[0]?.validTime;
-    if (preferred) {
+    const preferredKeys = [
+      'heatIndex',
+      'apparentTemperature',
+      'maxTemperature',
+      'temperature'
+    ] as const;
+    const series = preferredKeys
+      .map((key) =>
+        pointHeat.grid.metrics.find(
+          (metric) => metric.key === key && metric.values[0]
+        )
+      )
+      .find((metric) => metric !== undefined);
+    const first = series?.values[0];
+    if (series && first) {
+      const interval = formatPointHeatInterval(first.startTime, first.endTime);
       parts.push(
-        `Earliest populated current or future NWS grid read: ${preferred}` +
-          `${validTime ? `, valid ${validTime}` : ''}.`
+        `Earliest populated current or future NWS grid read: ${series.label} ` +
+          `${formatPointHeatValue(first.value, first.unitCode)}, valid ${interval}.`
       );
     } else {
       parts.push('NWS grid heat guidance is available.');

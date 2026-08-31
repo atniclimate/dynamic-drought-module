@@ -27,6 +27,12 @@
 import { createBriefingSkeleton } from '../impact/briefing';
 import { hydrateBriefing } from '../impact/hydrate';
 import {
+  formatDistanceKm,
+  formatPointHeatInterval,
+  formatPointHeatTimestamp,
+  formatPointHeatValue
+} from '../impact/point-heat-format';
+import {
   resolveLandscapeSelection
 } from '../impact/landscape-resolution';
 import type { LandscapeEcoregionKey } from '../impact/landscape-resolution';
@@ -191,20 +197,10 @@ function renderHorizon(horizon: Horizon): string {
   `;
 }
 
-function readableUnit(unitCode: string): string {
-  const unit = unitCode.split(':').at(-1) ?? unitCode;
-  const labels: Readonly<Record<string, string>> = {
-    degC: '°C',
-    degF: '°F',
-    percent: '%'
-  };
-  return labels[unit] ?? unit;
-}
-
 function renderMetricValue(metric: PointHeatMetricSeries): string {
   const value = metric.values[0];
   if (!value) return '';
-  return `${value.value} ${escapeHtml(readableUnit(value.unitCode))} <small class="point-heat-unit">(${escapeHtml(value.unitCode)})</small>`;
+  return `<span title="Issuer value ${escapeHtml(String(value.value))} ${escapeHtml(value.unitCode)}">${escapeHtml(formatPointHeatValue(value.value, value.unitCode))}</span>`;
 }
 
 function renderObservation(pointHeat: PointHeatBriefing): string {
@@ -226,9 +222,9 @@ function renderObservation(pointHeat: PointHeatBriefing): string {
   const distance =
     observation.distanceKm === undefined
       ? ''
-      : `<span>${observation.distanceKm.toFixed(1)} km from the selected point</span>`;
+      : `<span>${escapeHtml(formatDistanceKm(observation.distanceKm))} from the selected point</span>`;
   const timestamp = observation.timestamp
-    ? `<time datetime="${escapeHtml(observation.timestamp)}">${escapeHtml(observation.timestamp)}</time>`
+    ? `<time datetime="${escapeHtml(observation.timestamp)}">${escapeHtml(formatPointHeatTimestamp(observation.timestamp))}</time>`
     : '';
   return `
     <p class="point-heat-station">${station}</p>
@@ -251,7 +247,7 @@ function renderGridMetric(
   const shown = metric.values.slice(0, 8);
   return `
     <details class="point-heat-series"${open ? ' open' : ''}>
-      <summary>${escapeHtml(metric.label)} <span>${escapeHtml(SOURCE_PILL_TEXT.ready)}</span></summary>
+      <summary>${escapeHtml(metric.label)}</summary>
       <table>
         <thead><tr><th scope="col">Issuer value</th><th scope="col">Valid interval</th></tr></thead>
         <tbody>
@@ -259,8 +255,8 @@ function renderGridMetric(
             .map(
               (value) => `
                 <tr>
-                  <td>${value.value} ${escapeHtml(readableUnit(value.unitCode))}<small class="point-heat-unit"> (${escapeHtml(value.unitCode)})</small></td>
-                  <td><code>${escapeHtml(value.validTime)}</code></td>
+                  <td title="Issuer value ${escapeHtml(String(value.value))} ${escapeHtml(value.unitCode)}">${escapeHtml(formatPointHeatValue(value.value, value.unitCode))}</td>
+                  <td><time datetime="${escapeHtml(value.startTime)}" title="${escapeHtml(value.validTime)}">${escapeHtml(formatPointHeatInterval(value.startTime, value.endTime))}</time></td>
                 </tr>
               `
             )

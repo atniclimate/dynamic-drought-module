@@ -12,6 +12,12 @@ import {
   createNwsRequestSession
 } from '../src/impact/nws-point';
 import { fetchPointHeat, parseNwsValidTime } from '../src/impact/point-heat';
+import {
+  formatDistanceKm,
+  formatPointHeatInterval,
+  formatPointHeatTimestamp,
+  formatPointHeatValue
+} from '../src/impact/point-heat-format';
 import { briefingSourcePolicy } from '../src/impact/source-policy';
 import { fetchNwsForecastClaims } from '../src/impact/sources';
 import type {
@@ -559,7 +565,7 @@ test.describe('H2 critical-first surfaces', () => {
     await gotoApp(page, '?select=state:WA');
 
     await expect(page.locator('.sheet-at-hand-headline')).toContainText(
-      'Heat at the selected point: Near Station reports temperature 32 °C, heat index 35 °C'
+      'Heat at the selected point: Near Station reports temperature 90 °F (32 °C), heat index 95 °F (35 °C)'
     );
     await page.locator('#sheet-report-door').click();
     const pointHeat = page.locator(
@@ -569,9 +575,15 @@ test.describe('H2 critical-first surfaces', () => {
     await expect(pointHeat.locator('.point-heat-station')).toContainText(
       'Near Station'
     );
-    await expect(
-      pointHeat.locator('.point-heat-series[open] code').first()
-    ).toHaveText('2026-07-30T12:00:00+00:00/PT3H');
+    const openInterval = pointHeat
+      .locator('.point-heat-series[open] time')
+      .first();
+    await expect(openInterval).toHaveAttribute(
+      'title',
+      '2026-07-30T12:00:00+00:00/PT3H'
+    );
+    await expect(openInterval).toContainText('Jul 30');
+    await expect(pointHeat).not.toContainText('wmoUnit');
     await expect(
       page.locator('#sheet-report .impact-capability-unavailable')
     ).toHaveCount(0);
@@ -735,5 +747,56 @@ test.describe('H2 critical-first surfaces', () => {
     );
     await page.waitForTimeout(100);
     expect(requestCount).toBe(6);
+  });
+});
+
+test.describe('point-heat human formatting (pure)', () => {
+  const LA = { timeZone: 'America/Los_Angeles' };
+
+  test('temperatures lead Fahrenheit with whole-degree Celsius secondary', () => {
+    expect(formatPointHeatValue(22.77777777777778, 'wmoUnit:degC')).toBe(
+      '73 °F (23 °C)'
+    );
+    expect(formatPointHeatValue(35, 'wmoUnit:degC')).toBe('95 °F (35 °C)');
+    expect(formatPointHeatValue(89.6, 'wmoUnit:degF')).toBe('90 °F (32 °C)');
+  });
+
+  test('percents round to whole numbers and unknown units keep one decimal', () => {
+    expect(formatPointHeatValue(25.965300790594, 'wmoUnit:percent')).toBe('26%');
+    expect(formatPointHeatValue(12.3456, 'wmoUnit:km_h-1')).toBe(
+      '12.3 km_h-1'
+    );
+  });
+
+  test('distance reads miles first with the issuer kilometres retained', () => {
+    expect(formatDistanceKm(4.9)).toBe('3.0 mi (4.9 km)');
+  });
+
+  test('timestamps render as local calendar time with a zone name', () => {
+    expect(
+      formatPointHeatTimestamp('2026-08-31T20:57:00+00:00', LA)
+    ).toBe('Aug 31, 1:57 PM PDT');
+    expect(formatPointHeatTimestamp('not-a-date')).toBe('not-a-date');
+  });
+
+  test('intervals compress to one dated range with a single zone name', () => {
+    expect(
+      formatPointHeatInterval(
+        '2026-08-31T21:00:00+00:00',
+        '2026-08-31T23:00:00.000Z',
+        LA
+      )
+    ).toBe('Aug 31, 2:00 PM to 4:00 PM PDT');
+    expect(
+      formatPointHeatInterval(
+        '2026-08-31T23:00:00+00:00',
+        '2026-09-01T09:00:00.000Z',
+        LA
+      )
+    ).toBe('Aug 31, 4:00 PM to Sep 1, 2:00 AM PDT');
+    expect(
+      formatPointHeatInterval('2026-08-31T21:00:00+00:00', undefined, LA)
+    ).toBe('from Aug 31, 2:00 PM PDT');
+    expect(formatPointHeatInterval('garbage', undefined)).toBe('garbage');
   });
 });
