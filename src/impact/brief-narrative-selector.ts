@@ -1,12 +1,10 @@
 import type { ImpactBriefing } from './types';
 
-function unitLabel(unitCode: string): string {
-  const unit = unitCode.split(':').at(-1);
-  if (unit === 'degC') return '°C';
-  if (unit === 'degF') return '°F';
-  if (unit === 'percent') return '%';
-  return unit ?? unitCode;
-}
+import {
+  formatPointHeatInterval,
+  formatPointHeatTimestamp,
+  formatPointHeatValue
+} from './point-heat-format';
 
 /**
  * Select the critical-first at-hand line used by the mobile sheet and Place
@@ -26,10 +24,10 @@ export function selectBriefNarrativeLine(
     )?.values[0];
     const values = [
       temperature
-        ? `temperature ${temperature.value} ${unitLabel(temperature.unitCode)}`
+        ? `temperature ${formatPointHeatValue(temperature.value, temperature.unitCode)}`
         : null,
       heatIndex
-        ? `heat index ${heatIndex.value} ${unitLabel(heatIndex.unitCode)}`
+        ? `heat index ${formatPointHeatValue(heatIndex.value, heatIndex.unitCode)}`
         : null
     ].filter((value): value is string => value !== null);
     if (values.length > 0) {
@@ -37,7 +35,7 @@ export function selectBriefNarrativeLine(
         observation.stationName ??
         observation.stationId ??
         'the nearest NWS station';
-      return `Heat at the selected point: ${station} reports ${values.join(', ')}${observation.timestamp ? ` at ${observation.timestamp}` : ''}.`;
+      return `Heat at the selected point: ${station} reports ${values.join(', ')}${observation.timestamp ? ` at ${formatPointHeatTimestamp(observation.timestamp)}` : ''}.`;
     }
   }
 
@@ -55,7 +53,7 @@ export function selectBriefNarrativeLine(
       briefing.pointHeat.grid.metrics[0];
     const value = metric?.values[0];
     if (metric && value) {
-      return `Heat at the selected point: NWS grid ${metric.label.toLowerCase()} ${value.value} ${unitLabel(value.unitCode)}, valid ${value.validTime}.`;
+      return `Heat at the selected point: NWS grid ${metric.label.toLowerCase()} ${formatPointHeatValue(value.value, value.unitCode)}, valid ${formatPointHeatInterval(value.startTime, value.endTime)}.`;
     }
   }
 

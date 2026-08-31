@@ -4108,10 +4108,6 @@ button.telemetry-item {
   color: var(--fg-0);
   text-align: right;
 }
-.point-heat-unit {
-  color: var(--fg-3);
-  font-size: 8.5px;
-}
 .point-heat-series {
   border-top: 1px dashed var(--line);
 }
@@ -4123,9 +4119,6 @@ button.telemetry-item {
   cursor: pointer;
   font-size: 10.5px;
   color: var(--fg-1);
-}
-.point-heat-series summary span {
-  color: var(--good);
 }
 .point-heat-series table {
   width: 100%;
