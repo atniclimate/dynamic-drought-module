@@ -99,15 +99,22 @@ on:
   workflow_run:
     workflows: ["Build and deploy DDM to GitHub Pages"]
     types: [completed]
-  schedule:
-    # 14:15 UTC daily, after the 13:07 upstream monitor and the 13:41
-    # source-health probe, so the three receipts do not contend for
-    # runners. Daily rather than hourly: the compare only has something
-    # new to say when a deploy failed or was cancelled, the deploy failure
-    # itself already emails the owner, and a red deploy is worth a durable
-    # issue within a day, not within an hour. The owner can tune the cron
-    # or dispatch a compare by hand at any time.
-    - cron: '15 14 * * *'
+  # SNOOZED through 2026-09-11 (owner direction, 2026-08-31): the DAILY
+  # compare is off during the active development window. The post-deploy
+  # workflow_run proof below is UNTOUCHED and still verifies every deploy;
+  # workflow_dispatch stays live for hand checks. RESTORE by uncommenting
+  # the block below after 2026-09-11, before the Convention. No green
+  # no-op replaces the schedule: a run that checks nothing must not exist
+  # as a receipt.
+  # schedule:
+  #   # 14:15 UTC daily, after the 13:07 upstream monitor and the 13:41
+  #   # source-health probe, so the three receipts do not contend for
+  #   # runners. Daily rather than hourly: the compare only has something
+  #   # new to say when a deploy failed or was cancelled, the deploy failure
+  #   # itself already emails the owner, and a red deploy is worth a durable
+  #   # issue within a day, not within an hour. The owner can tune the cron
+  #   # or dispatch a compare by hand at any time.
+  #   - cron: '15 14 * * *'
   workflow_dispatch:
 
 permissions:

@@ -18,13 +18,19 @@
 name: Upstream liveness monitor
 
 on:
-  schedule:
-    # Daily at 13:07 UTC (early morning Pacific), before the workday. Not on
-    # the hour: GitHub's docs name the start of every hour as the highest
-    # scheduled-workflow load, where a queued run can be delayed or dropped
-    # (2026-08-29); an odd minute avoids that slot. Runs before source-health
-    # (13:41 UTC) so a runtime/build drift alert lands first.
-    - cron: '7 13 * * *'
+  # SNOOZED through 2026-09-11 (owner direction, 2026-08-31): scheduled
+  # probes are off during the active development window because their
+  # alerts were disrupting flow; workflow_dispatch stays live for hand
+  # checks. RESTORE by uncommenting the block below after 2026-09-11,
+  # before the Convention. No green no-op replaces the schedule: a run
+  # that checks nothing must not exist as a receipt.
+  # schedule:
+  #   # Daily at 13:07 UTC (early morning Pacific), before the workday. Not on
+  #   # the hour: GitHub's docs name the start of every hour as the highest
+  #   # scheduled-workflow load, where a queued run can be delayed or dropped
+  #   # (2026-08-29); an odd minute avoids that slot. Runs before source-health
+  #   # (13:41 UTC) so a runtime/build drift alert lands first.
+  #   - cron: '7 13 * * *'
   workflow_dispatch:
 
 # Least privilege: read the tree, and write issues to raise the drift alert.
