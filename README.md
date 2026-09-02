@@ -436,7 +436,7 @@ maintainer-run artifact builders (`scripts/build-states.mjs`,
 ## Browser support
 
 Any evergreen browser (Chrome, Edge, Firefox, Safari 15.5 or newer).
-MapLibre GL JavaScript requires WebGL 1.
+MapLibre GL JavaScript uses WebGL 2 when the browser offers it and falls back to WebGL 1.
 
 ## Attribution and licensing
 
