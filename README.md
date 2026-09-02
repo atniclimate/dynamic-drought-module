@@ -46,9 +46,10 @@ self-hosting and data population.
 The source package is `0.6.26`. It includes the interface, Fire 3D,
 Wildfire Hazard Potential, structures, power, and smoke-volume refinements
 described below. A merged commit is not by itself proof that the public site is
-running it; the exact source-to-live divergence observed on 2026-08-20 is
-recorded in [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md). The next phased
-work is summarized in [`ROADMAP.md`](ROADMAP.md).
+running it; every deploy is followed by an automated live check of the build
+marker. Release history and its verification receipts are in
+[`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md). The next phased work is
+summarized in [`ROADMAP.md`](ROADMAP.md).
 
 ---
 
@@ -148,6 +149,7 @@ current URL.
 | `basemap` | `default` explicitly turns recent satellite imagery off; the legacy `satellite` token remains valid | recent satellite imagery, encoded by absence |
 | `studio` | `layers` or `place` | none |
 | `fire3d` | exact token `true`; entry requires a desktop viewport and the committed Wildfire cluster, while an active scene may remain through a custom layer stack as long as a Fire event layer remains | `false`, encoded by absence |
+| `spi` | Gridded Drought Index accumulation window in days: `30`, `60`, `180`, or `365`; applies when the `gridded-index` layer is on | `90` day window, encoded by absence |
 
 Temporal display parameters also round-trip (`week` for the USDM archive,
 `dmode`, `sst`, `outlook`, and `heatday`). The authoritative grammar is

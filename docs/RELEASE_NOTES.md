@@ -1,5 +1,47 @@
 # Release notes
 
+## Unreleased (after v0.6.26)
+
+Merged to `main` after the `v0.6.26` tag. No new package version or tag has
+been assigned to this work.
+
+### 2026-08-31: heat readings in plain language (pull request 53, `5e0a889`)
+
+The impact briefing rendered National Weather Service point-heat payloads
+exactly as the issuer sent them, so a grid temperature could read
+`22.77777777777778` next to an untouched ISO 8601 interval, and a "live" pill
+repeated on every metric row. Heat values now read US-customary-led with the
+metric value secondary, percents whole, distances miles-first, and timestamps
+and intervals in local calendar time; one state pill covers a grid section
+instead of one per row. The raw issuer value, its unit code, and the untouched
+ISO 8601 interval stay reachable in `title` and `datetime` attributes, and
+input the formatter cannot parse is echoed back unchanged rather than turned
+into an invented reading. The formatting is a new pure module,
+`src/impact/point-heat-format.ts`, shared by the impact panel, the brief
+narrative selector, and the heat synthesis.
+
+### 2026-08-31: credits move into the map-information panel (pull request 54, `d5aaac1`)
+
+The persistent attribution strip and MapLibre's compact attribution control are
+gone from every shell. The round question-mark disclosure is now the single
+credits surface: a Credits line in the map-information panel renders the live
+per-source attribution strings, license links included, read from the map
+style, so a source added by a lazy layer chunk credits itself as soon as it
+exists. Embeds seat that question-mark button in the corner the attribution
+control used to occupy, at every size, so an iframe still has a reachable
+OpenStreetMap credit. The satellite control steps above the new seat, and the
+pre-1.0 preview badge moves to bottom center on desktop.
+
+### 2026-09-01: scheduled probes paused through 2026-09-11 (pull request 55, `2e98493`)
+
+The `schedule` triggers on `upstream-monitor.yml`, `source-health.yml`, and
+`verify-live.yml` are commented out in place through an active development
+window ending 2026-09-11, so they can be restored by uncommenting.
+`workflow_dispatch` stays live on all three for hand checks, and
+`verify-live.yml` keeps its post-deploy `workflow_run` proof, so every merge to
+`main` still earns its live receipt. Nothing was replaced with a green no-op: a
+run that checks nothing must not exist as a receipt.
+
 ## v0.6.26
 
 `v0.6.26` is the package version and, since 2026-08-29, the release tag. One
@@ -56,7 +98,7 @@ Playwright traces or screenshots until every CI boot stubs the Census AIANNH
 and BIA AIAN-LAR sources (roadmap task DDM-P1-T08); the thirteen merged
 branches were deleted and `feature/maplibre-v5` stays until DDM-P0-T03.
 
-Current source baseline, observed 2026-08-29: `main` is at
+Source baseline as observed on 2026-08-29: `main` is at
 `56dd46a882a587a96e0840b5c81681c9da5f8583`. Pull requests 31 to 34 merged
 2026-08-29 and were each deployed and verified live: PR 31 (`1d82b59`)
 deploy 33240003166 / verify 33240334529; PR 32 (`214c26e`) deploy
