@@ -68,3 +68,6 @@ workers/proxy/.wrangler/
 /docs/handoffs/
 /docs/prompts/
 **/MODULE_TRACKING.yaml
+
+# Preserved untracked evidence, never committed
+/fire3d-evidence/
