@@ -286,10 +286,10 @@ export function buildNifcAreaPerimeterClaim(
   } this area: ${categories}.`;
 }
 
-const NORMALIZED_NIFC_TYPE = [
+const NORMALIZED_NIFC_TYPE: maplibregl.ExpressionSpecification = [
   'upcase',
   ['to-string', ['coalesce', ['get', NIFC_INCIDENT_TYPE_PROPERTY], '']]
-] as unknown as maplibregl.ExpressionSpecification;
+];
 
 /** MapLibre filter used by the corresponding NIFC presentation layer. */
 export function buildNifcIncidentFilter(
@@ -408,10 +408,10 @@ export function resolveHmsDensityPresentation(
   return HMS_DENSITY_PRESENTATION[resolveHmsDensityClass(value)];
 }
 
-const NORMALIZED_HMS_DENSITY = [
+const NORMALIZED_HMS_DENSITY: maplibregl.ExpressionSpecification = [
   'upcase',
   ['to-string', ['coalesce', ['get', 'Density'], '']]
-] as unknown as maplibregl.ExpressionSpecification;
+];
 
 /** Exact paint installed by the HMS layer. Unknown never falls through to Light. */
 export function buildHmsSmokeFillPaint(): NonNullable<
@@ -688,15 +688,24 @@ export const POWER_LINE_WIDTHS: readonly (readonly [string, number])[] = [
 export function buildPowerLinePaint(): NonNullable<
   maplibregl.LineLayerSpecification['paint']
 > {
+  // The Style Spec types `match` as ['match', input, label, output, ...rest,
+  // default], so its first label/output pair occupies fixed tuple slots that a
+  // non-tuple spread cannot fill. Splitting the flattened pair list into its
+  // head and tail keeps the emitted array identical while letting tsc check it.
+  const [firstClass, firstWidth, ...restWidths] = POWER_LINE_WIDTHS.flatMap(
+    ([voltClass, width]) => [voltClass, width]
+  );
   return {
     'line-color': POWER_LINE_COLOR,
     'line-opacity': POWER_LINE_OPACITY,
     'line-width': [
       'match',
       ['get', 'VOLT_CLASS'],
-      ...POWER_LINE_WIDTHS.flatMap(([voltClass, width]) => [voltClass, width]),
+      firstClass,
+      firstWidth,
+      ...restWidths,
       0.6
-    ] as unknown as maplibregl.DataDrivenPropertyValueSpecification<number>
+    ]
   };
 }
 
@@ -755,7 +764,7 @@ export function buildPowerPlantClusterPaint(): NonNullable<
       ['get', 'point_count'],
       base,
       ...steps.flatMap(([threshold, radius]) => [threshold, radius])
-    ] as unknown as maplibregl.DataDrivenPropertyValueSpecification<number>
+    ]
   };
 }
 
@@ -822,7 +831,7 @@ export function buildStructuresMeasuredPaint(): NonNullable<
 > {
   return {
     'fill-extrusion-color': STRUCTURES_PRESENTATION.measuredColor,
-    'fill-extrusion-height': ['get', 'h'] as unknown as maplibregl.DataDrivenPropertyValueSpecification<number>,
+    'fill-extrusion-height': ['get', 'h'],
     'fill-extrusion-base': 0,
     'fill-extrusion-opacity': STRUCTURES_PRESENTATION.opacity
   };
@@ -838,7 +847,7 @@ export function buildStructuresPlaceholderPaint(): NonNullable<
       ['has', 'f'],
       ['*', ['get', 'f'], STRUCTURES_PRESENTATION.metersPerFloor],
       STRUCTURES_PRESENTATION.placeholderMeters
-    ] as unknown as maplibregl.DataDrivenPropertyValueSpecification<number>,
+    ],
     'fill-extrusion-base': 0,
     'fill-extrusion-opacity': STRUCTURES_PRESENTATION.opacity
   };

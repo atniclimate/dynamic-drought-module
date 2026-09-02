@@ -320,10 +320,12 @@ function bottomOverlayBeforeId(map: maplibregl.Map): string | undefined {
  * which both Level III and Level IV features carry.
  */
 function buildFillColorExpression(): maplibregl.ExpressionSpecification {
-  const matchPairs: (string | string[])[] = [];
-  for (const [name, color] of Object.entries(ECOREGION_COLORS)) {
-    matchPairs.push(name, color);
-  }
+  // The Style Spec types `match` as ['match', input, label, output, ...rest,
+  // default], so its first label/output pair occupies fixed tuple slots that a
+  // non-tuple spread cannot fill. Splitting the flattened palette into its head
+  // pair and tail keeps the emitted array identical while letting tsc check it.
+  const [firstName, firstColor, ...matchPairs] =
+    Object.entries(ECOREGION_COLORS).flat();
   const keyExpr: maplibregl.ExpressionSpecification = [
     'coalesce',
     ['get', 'US_L3NAME'],
@@ -331,9 +333,14 @@ function buildFillColorExpression(): maplibregl.ExpressionSpecification {
     ['get', 'name'],
     ''
   ];
-  // The `match` operator's variadic [label, output, ..., default] form is
-  // awkward to type without a cast; the runtime shape matches the Style Spec.
-  return ['match', keyExpr, ...matchPairs, ECOREGION_DEFAULT_COLOR] as unknown as maplibregl.ExpressionSpecification;
+  return [
+    'match',
+    keyExpr,
+    firstName,
+    firstColor,
+    ...matchPairs,
+    ECOREGION_DEFAULT_COLOR
+  ];
 }
 
 // ---------------------------------------------------------------------------

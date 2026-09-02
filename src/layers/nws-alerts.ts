@@ -299,16 +299,20 @@ function featureCollection(
 }
 
 function colorExpression(): maplibregl.ExpressionSpecification {
-  const matchArgs: (string | string[])[] = [];
-  for (const [event, color] of Object.entries(NWS_ALERT_COLORS)) {
-    matchArgs.push(event, color);
-  }
+  // The Style Spec types `match` as ['match', input, label, output, ...rest,
+  // default], so its first label/output pair occupies fixed tuple slots that a
+  // non-tuple spread cannot fill. Splitting the flattened palette into its head
+  // pair and tail keeps the emitted array identical while letting tsc check it.
+  const [firstEvent, firstColor, ...matchArgs] =
+    Object.entries(NWS_ALERT_COLORS).flat();
   return [
     'match',
     ['get', 'prod_type'],
+    firstEvent,
+    firstColor,
     ...matchArgs,
     NWS_ALERT_DEFAULT_COLOR
-  ] as unknown as maplibregl.ExpressionSpecification;
+  ];
 }
 
 function ensureMapLayers(

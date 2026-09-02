@@ -149,17 +149,23 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   const beforeId = resolveBeforeId(map);
 
-  // Color by category via a `match` expression on the integer `dn` field.
-  const matchArgs: (number | string)[] = [];
-  for (const c of SPC_FIREWX_CATEGORIES) {
-    matchArgs.push(c.dn, c.color);
-  }
-  const colorExpression = [
+  // Color by category via a `match` expression on the integer `dn` field. The
+  // Style Spec types `match` as ['match', input, label, output, ...rest,
+  // default], so its first label/output pair occupies fixed tuple slots that a
+  // non-tuple spread cannot fill. Splitting the flattened category list into its
+  // head pair and tail keeps the emitted array identical while letting tsc
+  // check it.
+  const [firstDn, firstColor, ...matchArgs] = SPC_FIREWX_CATEGORIES.flatMap(
+    (c) => [c.dn, c.color]
+  );
+  const colorExpression: maplibregl.ExpressionSpecification = [
     'match',
     ['get', 'dn'],
+    firstDn,
+    firstColor,
     ...matchArgs,
     SPC_FIREWX_DEFAULT_COLOR
-  ] as unknown as maplibregl.ExpressionSpecification;
+  ];
 
   map.addLayer(
     {
