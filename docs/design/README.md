@@ -16,7 +16,7 @@ than silently treating either one as a veto.
 | --- | --- |
 | [`README.md`](README.md) | This index and the durable product-design doctrine. |
 | [`../../ROADMAP.md`](../../ROADMAP.md) | Public phase synopsis and route to the canonical task definitions. |
-| [`../ROADMAP.yaml`](../ROADMAP.yaml) | Canonical planned scope, dependencies, decision gates, component tags, non-goals, and acceptance evidence. Asana owns mutable execution status. |
+| [`../ROADMAP.yaml`](../ROADMAP.yaml) | Canonical product plan: phases and tasks with stable ids, decision gates, component tags, and one acceptance sentence per open task. Execution status lives outside the repository. |
 | [`mobile-map-chrome.md`](mobile-map-chrome.md) | Current presentation contract for the map-first phone chrome implemented by pull request 7. |
 | [`fire3d-context.md`](fire3d-context.md) | Honesty framing for the desktop 3D Fire context view: the no-fire-behavior-modeling line, the "not a digital twin" naming decision, and the in-interface non-prediction disclosure. |
 | [`ddm_interface-edits_1.json`](ddm_interface-edits_1.json) and [`ddm_interface-edits_2.json`](ddm_interface-edits_2.json) | Immutable owner-annotation captures that informed pull request 6. They preserve the input as received; they are not an active plan, literal pixel specification, or current completion checklist. |
@@ -31,6 +31,83 @@ Merged product changes and observed deployment facts belong in
 [`../RELEASE_NOTES.md`](../RELEASE_NOTES.md). The roadmap defines planned
 scope, Asana carries execution state, and runtime plus tests define implemented
 behavior. Do not duplicate those roles in this design index.
+
+## Current direction, recorded 2026-09-01
+
+By owner direction the briefing is named the Impact Briefing, and it is being
+extended from its drought-only framing to synthesize Drought, Fire, Heat, and
+ENSO. The eventual host for the module is a local full-service server; GitHub
+Pages remains the static host for now. Per-action continuous integration
+receipts are no longer the development posture: work converges on one
+integration branch and lands as one pull request.
+
+## Standing interface invariants and decisions
+
+Lifted 2026-09-01 from the closed 2026-08-10 interface-integration ledger,
+which is now archived. These are the constraints and decisions from that
+migration that the shipped runtime still enforces, kept here because nothing
+else tracked records them. Where a runtime file owns the constraint it is named,
+and each named path was confirmed to exist on 2026-09-01.
+
+### Invariants
+
+- No sovereign-jurisdiction geometry is added or redistributed.
+- Tribal and Treaty representation caveats remain intact, and those outlines
+  stay above the condition surfaces (`src/map/layer-order.ts`).
+- One MapLibre map and one exclusive condition surface remain authoritative
+  (`src/state/layer-controller.ts`).
+- URL-as-state, Back, reload, legacy links, `?embed=true`, and iframe operation
+  remain valid (`src/state/url.ts`).
+- `loading`, `live`, `live (partial)`, `unavailable`, `no data`, and
+  `zoom in to load` remain six distinct states (`src/state/layer-controller.ts`).
+- Non-trivial network work is cancellable and time-bounded, and a late response
+  cannot revive torn-down state.
+- A failed current WFIGS framing query never falls through to static Wildfire
+  Hazard Potential (`src/state/minimap-wildfire.ts`).
+- Ocean click targets are schematic ENSO navigation, not claims about ocean
+  boundaries (`src/config/oceans.ts`).
+- No hotspot feed, incident point feed, fire score, synthetic incident, or new
+  selected-fire engine is added.
+- Repository-authored text contains no U+2014 em dash.
+
+### Decisions
+
+- **DDM-UI-002.** `basemap=satellite` means recent NOAA imagery. Wildfire,
+  hazard-fire, and fire-risk request it only on an explicit user action, never
+  during boot or URL restoration (`src/map/satellite.ts`,
+  `src/state/basemap-store.ts`).
+- **DDM-UI-003.** The shell, cluster service, URL sync, and region command are
+  reused through named adapters rather than reimplemented per surface
+  (`src/ui/island/shell.tsx`, `src/state/cluster-service.ts`).
+- **DDM-UI-004.** Drought receives a backed NADM mean-severity and
+  outline-share summary. Wildfire receives a strict current-WFIGS-first
+  summary, with static WHP thresholds used only after a successful zero count.
+  Heat, ENSO land framings, and custom views stay explicitly neutral
+  (`src/state/minimap-drought.ts`, `src/state/minimap-wildfire.ts`).
+- **DDM-UI-006.** Prescribed fire is split from wildfire within the existing
+  WFIGS perimeter source (`src/layers/nifc-fires.ts`).
+- **DDM-UI-007.** HMS smoke density renders through one cool hue and opacity;
+  unknown remains explicitly unclassified (`src/layers/hms-smoke.ts`).
+- **DDM-UI-008.** Pinned Natural Earth 1:50m physical land and lakes supply
+  presentation linework while ATNI-authored subregions stay the click geometry.
+  No state or province boundaries are added (`src/config/minimap-geometry.ts`,
+  `src/config/framing-shapes.ts`).
+- **DDM-UI-009.** Pacific, Arctic, and Atlantic are separate accessible
+  controls, and each click commits ENSO plus its ocean camera and URL state in
+  one transaction (`src/config/oceans.ts`).
+- **DDM-UI-010.** A red Wildfire minimap state means at least one current
+  mapped WFIGS wildfire or incident-complex perimeter, not an incident total.
+  Static WHP orange and yellow states are United States-only potential context
+  and never imply current fire (`src/state/minimap-wildfire.ts`,
+  `src/config/minimap-whp.ts`).
+- **DDM-UI-011.** HeatRisk sequence DOM, focus, and delegated click targets
+  survive redundant raster-status events while an identify read is pending or
+  cached (`src/ui/heatrisk-sequence.ts`, `src/util/raster-status.ts`).
+
+Two decisions from that ledger were not carried forward because the runtime no
+longer matches them: DDM-UI-001 governed EOX 2016 historical imagery, which the
+runtime no longer loads, and DDM-UI-005 deferred a 3D entry point that has
+since shipped as the governed Fire 3D context view.
 
 ## Convergence doctrine
 

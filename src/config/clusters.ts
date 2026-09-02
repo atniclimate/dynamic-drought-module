@@ -48,13 +48,41 @@ export const TEMPORAL_HORIZON_KEYS: readonly TemporalHorizonKey[] = [
   'season-ahead'
 ];
 
-/** Display labels. The durable `weeks-ahead` key predates the seven-day read. */
+/**
+ * Prose CADENCE labels: what span the horizon key names in a sentence.
+ * The durable `weeks-ahead` key predates the seven-day read. These are
+ * NOT the chip labels; see TEMPORAL_HORIZON_CHIP_LABELS below and the
+ * note there about why the two tables still differ.
+ */
 export const TEMPORAL_HORIZON_LABELS: Readonly<
   Record<TemporalHorizonKey, string>
 > = {
   current: 'current',
   'weeks-ahead': 'next seven days',
   'season-ahead': 'season ahead'
+};
+
+/**
+ * The VISIBLE horizon labels: the shell's chip text and the panel-foot
+ * response line, which must read identically because they describe the
+ * same committed register. One table, two consumers (src/ui/island/shell.tsx
+ * and src/ui/island/panel-response.tsx), replacing the two verbatim copies
+ * those modules each carried.
+ *
+ * It stays SEPARATE from TEMPORAL_HORIZON_LABELS above on purpose: the
+ * chip says "Weeks ahead" while the cadence table says "next seven days",
+ * and collapsing them either changes the owner-visible chip or overwrites
+ * a cadence claim that is itself an open question (the drought product
+ * behind "weeks-ahead" is MONTHLY). Which string wins is an owner ruling,
+ * not a refactor; until it is made, both readings stay visible here rather
+ * than one being silently deleted.
+ */
+export const TEMPORAL_HORIZON_CHIP_LABELS: Readonly<
+  Record<TemporalHorizonKey, string>
+> = {
+  current: 'Current',
+  'weeks-ahead': 'Weeks ahead',
+  'season-ahead': 'Season ahead'
 };
 
 export interface HazardClusterDef {

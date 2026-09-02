@@ -88,6 +88,34 @@ test('syncFire3dParam round-trips through the URL and preserves neighbors', () =
   }
 });
 
+/**
+ * The clear-sky spec is a HAND-COPY of MapLibre's own internal "no sky"
+ * fallback, and `Map.setSky` requires a full specification, so it cannot
+ * be replaced by passing undefined. A hand-copy of another project's
+ * internals is exactly the kind of thing that rots silently across a
+ * major upgrade, and the two existing assertions compare the harness call
+ * against this same constant, so they can never notice.
+ *
+ * This case pins the literal. Re-verified against maplibre-gl 5.24.0 on
+ * 2026-08-19 and found unchanged from the 4.7 values (harvested from the
+ * retired feature/maplibre-v5 branch on 2026-09-02). To re-verify after
+ * an upgrade, search the distributed bundle for the object literal
+ * containing "sky-color":"transparent"; that is the fallback the library
+ * constructs a Sky with when a style declares none.
+ */
+test('the clear-sky specification still matches the library it was copied from', () => {
+  expect(FIRE3D_SKY_CLEAR_SPECIFICATION).toEqual({
+    'sky-color': 'transparent',
+    'horizon-color': 'transparent',
+    'fog-color': 'transparent',
+    'fog-ground-blend': 1,
+    'atmosphere-blend': 0
+  });
+  // The scene's OWN sky is a separate, deliberately styled spec; the two
+  // must never collapse into one another.
+  expect(FIRE3D_SKY_SPECIFICATION).not.toEqual(FIRE3D_SKY_CLEAR_SPECIFICATION);
+});
+
 // ---------------------------------------------------------------------------
 // Node: the activation gate (entry vs stay-alive, the IC refinement)
 // ---------------------------------------------------------------------------
@@ -835,6 +863,18 @@ test.describe('W3/W4 browser truth', () => {
   test('embed stays chrome-inert while a URL-named fire3d still drives the map effect', async ({
     page
   }) => {
+    // Unlike every other heavy case in this block (120_000-180_000), this one
+    // declared no budget and inherited the global 60_000 while doing the most
+    // expensive boot in the file: an evidence-bearing boot (EVIDENCE_BOUNDARIES
+    // is `live` locally, so it pays real agency latency), a full 3D activation,
+    // then four expect.poll chains with 30_000 ceilings of their own. That is
+    // the exact shape playwright.config.ts warns about: the budget has to sit
+    // above boot plus the chain, or a correctly-behaving app fails on a slow
+    // upstream day. Measured 2026-09-01 on this laptop: 1.1 minutes, red
+    // locally against 60_000, green in CI only because retries absorb it
+    // (Validate 33452141530, 33444784737). Match the other evidence-bearing
+    // case above rather than the cheaper siblings.
+    test.setTimeout(180_000);
     await stubWildfireFeeds(page);
     await gotoApp(page, '?cluster=wildfire&fire3d=true&embed=true', {
       boundaries: EVIDENCE_BOUNDARIES
@@ -991,7 +1031,13 @@ test('an embed without the flag never activates and never gains it', async ({
   }) => {
     // The drape's tile fan-out on the software renderer pushes this
     // multi-toggle walk past the default budget; give it explicit room.
-    test.setTimeout(120_000);
+    // 120_000 was not enough room. Measured 2026-09-01 on this laptop: the
+    // walk builds terrain, adds `places`, tears the smoke volume down, then
+    // unchecks the last fire layer, and the budget expired around the
+    // `hms-smoke` uncheck below (the call log shows the click completing)
+    // at 2.1 minutes, red locally and green in CI on retry. Nothing here is
+    // slower than the scene-building siblings, so carry their ceiling.
+    test.setTimeout(180_000);
     await stubWildfireFeeds(page);
     await gotoApp(page, '?cluster=wildfire&view=console&fire3d=true');
 

@@ -23,6 +23,7 @@
  * (not applicable is not a failure).
  */
 
+import type { RegionKey } from '../config/regions';
 import { URLS } from '../config/urls';
 import { fetchBufferedWithBudget } from '../util/fetch';
 import { makeClaim, todayIso } from './evidence';
@@ -46,8 +47,12 @@ const FCST_PERIOD = 'APR-SEP';
  * the state fallback; every entry was confirmed present in the live file
  * on 2026-07-01. BONO3 (Columbia at Bonneville) is the basin-integrating
  * outlet used for state-level fallbacks.
+ *
+ * Keyed by `RegionKey` (partial: only the regions inside the NWRFC domain
+ * appear) so a region rename fails at compile time instead of silently
+ * dropping this lookup to the state fallback (IB-18).
  */
-const REGION_POINTS: Readonly<Record<string, string>> = {
+const REGION_POINTS: Readonly<Partial<Record<RegionKey, string>>> = {
   central_oregon: 'MODO3',
   south_puget_sound: 'CONW1',
   cascades: 'CONW1',

@@ -278,11 +278,30 @@ export function evaluateLayers(rows, ceilingMs, options = {}) {
   return { ok: reasons.length === 0, reasons, warnings };
 }
 
+/**
+ * The embed corner contract as of PR 54 (`da2efab`, 2026-08-31, owner
+ * direction): MapLibre's compact attribution control was removed and the
+ * map-information question-mark button became the embed's credits surface.
+ * The license obligation is therefore discharged by that button, so the
+ * proof is the inverse of what it was before:
+ *
+ *   - the satellite switcher is still the top hit at its own center;
+ *   - the map-information button IS present in the embed and IS the top hit
+ *     at its own center, so the credits are reachable in one interaction;
+ *   - the removed attribution control has not come back.
+ *
+ * `infoHit` is absent from receipts written before this contract; treat a
+ * missing hit as "not proved reachable" rather than silently passing.
+ */
 export function evaluateEmbedCorner(row) {
   const reasons = [];
   if (row.satHit !== 'satellite') reasons.push(`satellite control hit ${row.satHit ?? 'nothing'}`);
-  if (row.attribHit !== 'attribution') reasons.push(`attribution control hit ${row.attribHit ?? 'nothing'}`);
-  if (row.infoBtnVisible === true) reasons.push('map-information button visible in embed');
+  if (row.infoBtnVisible !== true) {
+    reasons.push('map-information button missing from the embed (no reachable credits surface)');
+  } else if (row.infoHit !== 'map-information') {
+    reasons.push(`map-information button is covered: its own center hit ${row.infoHit ?? 'nothing'}`);
+  }
+  if (row.attribHit === 'attribution') reasons.push('the removed attribution control is rendered again');
   return { ok: reasons.length === 0, reasons };
 }
 

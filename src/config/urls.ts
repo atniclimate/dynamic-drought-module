@@ -141,6 +141,27 @@ export const URLS = Object.freeze({
   // fetch; no Worker proxy needed (host is not on the allow-list and does
   // not need to be).
   usgsIV: 'https://waterservices.usgs.gov/nwis/iv/',
+  // STREAMFLOW PERCENTILES, recorded as verified NOT wired (2026-09-01).
+  // Nothing here is fetched today; this note exists so the next plan does not
+  // reach for a decommissioned service.
+  //   - USGS WaterWatch is decommissioned. `waterwatch.usgs.gov/index.php
+  //     ?id=romap3` now 301-redirects to
+  //     `waterdata.usgs.gov/blog/wdfn-stats-delivery/`, which states that
+  //     WaterWatch and Water Quality Watch were expected to be decommissioned
+  //     by the end of 2025. The app never used it (it reads Instantaneous
+  //     Values above directly), so nothing is broken; any older plan or note
+  //     naming WaterWatch percentiles is stale.
+  //   - The live percentile path is the NWIS Statistics Service, on the same
+  //     `waterservices.usgs.gov` host this entry already trusts:
+  //     `.../nwis/stat/?format=rdb&sites=<siteCode>&statReportType=daily
+  //     &statTypeCd=p10,p25,p50,p75,p90&parameterCd=00060`. Verified HTTP 200,
+  //     Content-Type text/plain (RDB, not JSON: a tab-delimited body with
+  //     `#` comment lines and a two-row header, so it needs its own parser),
+  //     Access-Control-Allow-Origin: * (genuine wildcard). Day-of-year
+  //     statistics, so a reading's percentile is a comparison against that
+  //     calendar day's record, not against the year.
+  //   - The newer OGC API at `api.waterdata.usgs.gov/ogcapi/v0/collections`
+  //     is also wildcard-CORS and returns JSON; verified HTTP 200.
 
   // ---------- NRCS AWDB REST (SNOTEL / SCAN station data) ----------
   // Natural Resources Conservation Service Air-Water Database REST service.
@@ -803,10 +824,27 @@ export const URLS = Object.freeze({
   // authoritative legend lives on drought.gov.
   // Verified 2026-05-30 (live in-page fetch from the app origin): HTTP 200,
   // Content-Type image/png, Access-Control-Allow-Origin: * for the SPI 30, 60,
-  // 90, 180, and 365 day windows. The Standardized Precipitation
-  // Evapotranspiration Index (SPEI) and Evaporative Demand Drought Index (EDDI)
-  // are not published under this `ce-ACIS_NRCC_NN-` prefix (404), so only SPI
-  // windows are wired; resolving the SPEI and EDDI slugs is a future refinement.
+  // 90, 180, and 365 day windows.
+  //
+  // SPEI and EDDI (corrected twice on 2026-09-01). The earlier note guessed
+  // the slugs `spei` and `eddi` under the ACIS prefix and, when those 404ed,
+  // concluded the products were absent. Both conclusions were wrong: the ACIS
+  // slugs are `speih` and `eddih`. Verified live (HTTP 200, image/png,
+  // Access-Control-Allow-Origin: *, same bbox and zoom range as the SPI
+  // products, info.json date 2026-08-29):
+  //   `ce-ACIS_NRCC_NN-speih-90d`   Standardized Precipitation
+  //                                 Evapotranspiration Index, 90 day
+  //   `ce-ACIS_NRCC_NN-eddih-90d`   Evaporative Demand Drought Index, 90 day
+  // drought.gov states that all its index products share the 1991-2020
+  // reference period, distribution fittings, and PET method, so these are
+  // directly comparable with the wired SPI windows. EDDI is ALSO published
+  // under its own NOAA prefix, `noaa-eddi-conus-<window>` (7d through 12mn),
+  // with tilezmax 7 rather than 6. Every product exposes `<slug>/info.json`
+  // carrying its valid date and true tilezmax; since 2026-09-02 the gridded
+  // layer reads it on activation and on window change and shows the valid
+  // date in its legend (spi-365d was 62 days old on 2026-09-01, unnoticed
+  // before that). Only SPI windows are wired today; see
+  // planning/2026-09-01-deep-dive reports 10, 12, and 14.
   nidisGriddedTileRoot:
     'https://storage.googleapis.com/noaa-nidis-drought-gov-data/current-conditions/tile/v1',
   // TEMPORAL CAVEAT (0.5.0b sweep, 2026-07-08): these tiles are a single

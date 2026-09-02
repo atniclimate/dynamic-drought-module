@@ -99,8 +99,16 @@ let pacificHintShown = false;
 /** Available dates (ascending YYYY-MM-DD), enumerated from DescribeDomains. */
 let dates: string[] = [];
 let dateIndex = 0;
-/** Dated frames currently mounted on the map (bounded to two). */
+/** Dated frames currently mounted on the map (bounded to three: the
+ * displayed frame, the one it faded from, and at most one lookahead). */
 let mountedFrames: string[] = [];
+/** The dated frame the module last mounted AS THE DISPLAYED frame; null
+ * while only the boot-time `default` (latest) layer is up. Tracked
+ * separately from `mountedFrames` because a lookahead frame is mounted at
+ * opacity 0 and must never be mistaken for the frame on screen. */
+let displayedFrame: string | null = null;
+/** The frame mounted purely as lookahead (opacity 0), or null. */
+let prefetchedFrame: string | null = null;
 let playing = false;
 let buffering = false;
 /** Supersede counter (invariant 5). */
@@ -294,10 +302,14 @@ async function showFrame(map: maplibregl.Map, index: number): Promise<void> {
 
   const clamped = Math.min(dates.length - 1, Math.max(0, index));
   const date = dates[clamped]!;
-  const previous = mountedFrames[mountedFrames.length - 1] ?? null;
+  const previous = displayedFrame;
   if (previous === date && dateIndex === clamped) return;
 
+  // Already mounted when this frame was the lookahead: mountFrame no-ops
+  // on the source and the buffer wait below resolves immediately.
   mountFrame(map, date, 0);
+  displayedFrame = date;
+  if (prefetchedFrame === date) prefetchedFrame = null;
 
   buffering = true;
   reportStatus('loading');
@@ -331,8 +343,30 @@ async function showFrame(map: maplibregl.Map, index: number): Promise<void> {
   if (signal.aborted || myEpoch !== stepEpoch) return;
 
   if (map.getLayer(LAYER_ID)) map.setLayoutProperty(LAYER_ID, 'visibility', 'none');
-  while (mountedFrames.length > 2) {
-    unmountFrame(map, mountedFrames[0]!);
+
+  // Look ONE frame ahead at opacity 0 so the next step (and every Play
+  // beat) starts warm instead of buffering from cold for up to
+  // BUFFER_TIMEOUT_MS. Polite about the network budget: prefetchAllowed()
+  // is false on Save-Data and 2g, and a paused rail sitting on the newest
+  // stop looks ahead to nothing (only the wrapping loop needs frame 0).
+  // Cancellation: the guard above already returned for an aborted or
+  // superseded step, and nothing awaits between it and here.
+  const aheadIndex =
+    clamped < dates.length - 1 ? clamped + 1 : playing ? 0 : -1;
+  if (aheadIndex >= 0 && prefetchAllowed()) {
+    const ahead = dates[aheadIndex]!;
+    if (ahead !== date && !mountedFrames.includes(ahead)) {
+      mountFrame(map, ahead, 0);
+      prefetchedFrame = ahead;
+    }
+  }
+
+  while (mountedFrames.length > 3) {
+    const oldest = mountedFrames[0]!;
+    // Never unmount what is painted; the bound is already satisfied.
+    if (oldest === displayedFrame) break;
+    if (oldest === prefetchedFrame) prefetchedFrame = null;
+    unmountFrame(map, oldest);
   }
 }
 
@@ -371,6 +405,26 @@ function togglePlay(map: maplibregl.Map): void {
 // ---------------------------------------------------------------------------
 // Time bar
 // ---------------------------------------------------------------------------
+
+/**
+ * The honest fallback bar for a surface that IS painted but has no
+ * enumerated dates: the provider's `default` frame is the latest one it
+ * publishes, and we cannot say which day that is. A dated raster with no
+ * stated date breaks the date-honesty rule, so the bar states the absence
+ * itself rather than staying down (which read as "no dated product is
+ * displayed" while a real field was on the map).
+ */
+function installStampOnlyTimeBar(): void {
+  setTimeBar(LAYER_KEY, {
+    ariaLabel: 'Sea surface temperature anomaly date',
+    stamp: {
+      headline: 'Latest available frame · date unavailable from the provider',
+      detail:
+        'GHRSST MUR daily SST anomaly · the provider did not answer its time axis this session, so the frame date cannot be stated and stepping stays off',
+      register: 'observed'
+    }
+  });
+}
 
 function installTimeBar(map: maplibregl.Map): void {
   if (dates.length === 0) return;
@@ -540,10 +594,16 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     // The surface stays useful without a time axis; say so and stop here.
     console.warn('[sst-anomaly] TIME enumeration failed; Play/step disabled this session.', err);
     dates = [];
+    installStampOnlyTimeBar();
     return;
   }
 
-  if (dates.length === 0) return;
+  // An empty enumeration is the same user-visible situation as a failed one:
+  // the provider's latest frame is painted with no date to state.
+  if (dates.length === 0) {
+    installStampOnlyTimeBar();
+    return;
+  }
   dateIndex = dates.length - 1;
 
   // URL restore: land PAUSED on the shared frame (never auto-play).
@@ -562,7 +622,9 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   // Politely pre-warm the previous frame so the first step back is instant.
   if (prefetchAllowed() && dates.length >= 2) {
-    mountFrame(map, dates[dates.length - 2]!, 0);
+    const warm = dates[dates.length - 2]!;
+    mountFrame(map, warm, 0);
+    prefetchedFrame = warm;
   }
 }
 
@@ -584,6 +646,8 @@ export function deactivate(map: maplibregl.Map): void {
   for (const date of [...mountedFrames]) {
     unmountFrame(map, date);
   }
+  displayedFrame = null;
+  prefetchedFrame = null;
   for (const id of [NINO_LABEL_ID, NINO_LINE_ID, LAYER_ID]) {
     if (map.getLayer(id)) map.removeLayer(id);
   }

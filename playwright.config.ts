@@ -63,6 +63,13 @@ const FIRE3D_SPECS = ['**/fire3d-mode.spec.ts', '**/view-contracts.spec.ts'];
 // move when tests are added, unlike a shard boundary) and isolates a red or
 // flaky run to its own ~2-shard project instead of dragging the whole
 // general project.
+//
+// Read the above as the history that produced this grouping, not as a claim
+// about today. Since the isolation shipped these four files have not behaved
+// like a flake cluster: 19 of 19 passed serially on the first attempt locally
+// on 2026-09-01, and in Validate 33452141530 and 33444784737 their two shards
+// were the fastest and greenest in the matrix. The isolation may simply have
+// worked. The grouping stays until something measured says otherwise.
 const INTERACTION_SPECS = [
   '**/popup-viewport.spec.ts',
   '**/studio-restore.spec.ts',
@@ -95,9 +102,18 @@ export default defineConfig({
   // its own MapLibre GL context on ANGLE-over-SwiftShader (pure-software GL),
   // which is CPU and memory heavy, and too many concurrent contexts exhaust
   // the software renderer so a map never fires `load` and its sidebar never
-  // builds. Two is the reliable ceiling on a developer laptop (the idle serial
-  // baseline is about 31 minutes, 2026-08-28); CI passes `--workers=1` per
-  // runner and fans out across runners instead (browser-suite.yml).
+  // builds. Two is the reliable ceiling on a developer laptop; CI passes
+  // `--workers=1` per runner and fans out across runners instead
+  // (browser-suite.yml).
+  //
+  // The serial baseline recorded here was "about 31 minutes, 2026-08-28".
+  // That is stale and low. Re-measured 2026-09-01 on `d5aaac1`: about 3.8 s
+  // per browser test in `chromium`, about 4.1 s in `chromium-interaction`,
+  // and 11.1 minutes for `fire3d-mode.spec.ts` alone, over 852 tests in 107
+  // files, which puts `npm run test:serial` at roughly 50 to 55 minutes.
+  // Treat it as the integration branch's final pass, not a routine loop; the
+  // cheaper tiers are `npm run verify:quick`, `verify:smoke`, and
+  // `verify:fire` (tests/README.md).
   fullyParallel: true,
   workers: 2,
 
@@ -220,6 +236,7 @@ export default defineConfig({
       // per-test budgets above the 60 s default are declared in the specs.
       name: 'chromium-3d',
       testMatch: FIRE3D_SPECS,
+      testIgnore: ['**/*.test.mjs'],
       use: CHROMIUM_USE
     }
   ],
@@ -230,6 +247,30 @@ export default defineConfig({
     // another worktree's server or a stale `dist/` artifact.
     command: 'npm run build && npm run preview -- --host 127.0.0.1 --strictPort',
     url: BASE_URL,
+    // KEEP THIS `false`. Reusing an existing listener is exactly the failure
+    // the 127.0.0.1 pin above was added to prevent: another lane's `dist/`
+    // verified in place of this tree's.
+    //
+    // The cost is a recurring local papercut, and Playwright's own message
+    // for it names the port but not the cause, so it is written out here for
+    // whoever greps for it:
+    //
+    //   Error: http://127.0.0.1:4173 is already used, make sure that nothing
+    //   is running on the port/url or set reuseExistingServer:true in
+    //   config.webServer.
+    //
+    // That means a previous run was killed part way (Ctrl+C, a tool call
+    // timing out, a terminated shard) and orphaned its `vite preview` child,
+    // observed 2026-09-01 with PID 30372 still LISTENING on 127.0.0.1:4173
+    // after a SIGTERM'd fire3d run. The fix is to stop the orphan, never to
+    // flip this flag; tests/README.md, "When port 4173 is still held", has
+    // the PowerShell and Git Bash commands.
+    //
+    // Not detected here on purpose: Playwright's own port probe throws
+    // inside its webServer plugin before `command` runs and before any hook
+    // this config owns, and a config module has no safe synchronous way to
+    // probe a socket, so a friendlier message would need a new async seam
+    // for no new information.
     reuseExistingServer: false,
     // The build (tsc plus vite) plus preview startup can take a while on a cold
     // CI runner; give it room.

@@ -1,5 +1,92 @@
 # Release notes
 
+## Unreleased (after v0.6.26)
+
+Merged to `main` after the `v0.6.26` tag. No new package version or tag has
+been assigned to this work.
+
+### 2026-08-31: heat readings in plain language (pull request 53, `5e0a889`)
+
+The impact briefing rendered National Weather Service point-heat payloads
+exactly as the issuer sent them, so a grid temperature could read
+`22.77777777777778` next to an untouched ISO 8601 interval, and a "live" pill
+repeated on every metric row. Heat values now read US-customary-led with the
+metric value secondary, percents whole, distances miles-first, and timestamps
+and intervals in local calendar time; one state pill covers a grid section
+instead of one per row. The raw issuer value, its unit code, and the untouched
+ISO 8601 interval stay reachable in `title` and `datetime` attributes, and
+input the formatter cannot parse is echoed back unchanged rather than turned
+into an invented reading. The formatting is a new pure module,
+`src/impact/point-heat-format.ts`, shared by the impact panel, the brief
+narrative selector, and the heat synthesis.
+
+### 2026-08-31: credits move into the map-information panel (pull request 54, `d5aaac1`)
+
+The persistent attribution strip and MapLibre's compact attribution control are
+gone from every shell. The round question-mark disclosure is now the single
+credits surface: a Credits line in the map-information panel renders the live
+per-source attribution strings, license links included, read from the map
+style, so a source added by a lazy layer chunk credits itself as soon as it
+exists. Embeds seat that question-mark button in the corner the attribution
+control used to occupy, at every size, so an iframe still has a reachable
+OpenStreetMap credit. The satellite control steps above the new seat, and the
+pre-1.0 preview badge moves to bottom center on desktop.
+
+### 2026-09-01: scheduled probes paused through 2026-09-11 (pull request 55, `2e98493`)
+
+The `schedule` triggers on `upstream-monitor.yml`, `source-health.yml`, and
+`verify-live.yml` are commented out in place through an active development
+window ending 2026-09-11, so they can be restored by uncommenting.
+`workflow_dispatch` stays live on all three for hand checks, and
+`verify-live.yml` keeps its post-deploy `workflow_run` proof, so every merge to
+`main` still earns its live receipt. Nothing was replaced with a green no-op: a
+run that checks nothing must not exist as a receipt.
+
+### 2026-09-02: the September integration wave (pull request 57, merge commit from `integration/2026-09`)
+
+The 2026-09-01 deep dive (eleven read-only audits, four science passes, a
+dependency review) was fixed on one integration branch, verified locally on
+the ladder, and landed as one merge commit that keeps the wave's own commits.
+
+Science and honesty. The El Nino Southern Oscillation headline now follows
+the NOAA Climate Prediction Center's onset and advisory rules with verbatim
+citations: conditions lead, the five-season episode rule is secondary, and an
+emerging state exists, so the app can no longer read "neutral" while the
+Center has an El Nino Advisory in force (it did, against the 13 August 2026
+discussion). A `check:enso` gate cross-checks the Center's status page when it
+is reachable. "Impact Briefing" replaces "Drought Impact Briefing" wherever the
+briefing is named. Issuer dates are carried and shown: the U.S. Drought
+Monitor map date, the Climate Prediction Center issued and valid span, and the
+drought.gov `info.json` valid date in the gridded-index legend. A NOAA HTTP 200
+error envelope now reads `unavailable`, not `no data`. The Drought Severity
+and Coverage Index trend band and the nearest-station ceiling are labeled DDM
+conventions; a DDM-authored heat-coupling sentence is removed and three
+briefing sentences are relabeled as derived pending citation.
+
+Time and horizons. Time-bar fallbacks, sea-surface-temperature frame
+prefetch, one horizon chip label table, an `spi=` URL parameter, and a
+humanized British Columbia stamp.
+
+Architecture. Bounded caches and fetches, a catalog index, fire-control
+strings in the six honest states, a nearest-station ceiling, `maxPitch` 85,
+and a lazily loaded hydrate path that keeps the point-heat briefing closure
+under its activation budget.
+
+Interface. Design tokens for z-index and motion, the missing spinner
+keyframe, `--fg-3` contrast, tablet panel and dock geometry with a first
+721 to 1024 pixel band, 44 pixel minimap doors, minimap work gated off phones,
+an ENSO map-key family, and a pointer hit box.
+
+Delivery. `verify-live` proves the pull request 54 contract (issue 56 was a
+false positive), a bounded stamp poll with a severity split, `gh` retries,
+upstream-monitor build-tier tolerance, docs `paths-ignore`, the browser suite
+advisory on pushes to `main` with one marker issue, and a weekly Monday
+suite. The verification ladder is documented (`verify:quick`, `verify:smoke`,
+`test:serial`). The roadmap is slimmed to a product plan with the canonical
+plan in `docs/ROADMAP.yaml` (phases DDM-P7 to DDM-P15). The README states
+MapLibre's WebGL 2 first, WebGL 1 fallback behavior. Node.js moves to the 24
+line, pinned exactly in `.nvmrc`, which every workflow already reads.
+
 ## v0.6.26
 
 `v0.6.26` is the package version and, since 2026-08-29, the release tag. One
@@ -56,7 +143,7 @@ Playwright traces or screenshots until every CI boot stubs the Census AIANNH
 and BIA AIAN-LAR sources (roadmap task DDM-P1-T08); the thirteen merged
 branches were deleted and `feature/maplibre-v5` stays until DDM-P0-T03.
 
-Current source baseline, observed 2026-08-29: `main` is at
+Source baseline as observed on 2026-08-29: `main` is at
 `56dd46a882a587a96e0840b5c81681c9da5f8583`. Pull requests 31 to 34 merged
 2026-08-29 and were each deployed and verified live: PR 31 (`1d82b59`)
 deploy 33240003166 / verify 33240334529; PR 32 (`214c26e`) deploy

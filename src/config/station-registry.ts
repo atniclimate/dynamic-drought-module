@@ -16,6 +16,7 @@ import type {
 import { fetchBufferedWithBudget, fetchWithBudget } from '../util/fetch';
 import { quantizeBbox } from '../util/bbox';
 import { isObject } from '../util/guards';
+import { ExpiringLruCache } from '../util/bounded-cache';
 
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -312,7 +313,12 @@ export function mergeTelemetryStations(
     const i = entries.length;
     entries.push(entry);
     indexHandles(i, entry.handles);
-    const [lng, lat] = entry.station.coords;
+    // `TelemetryStation.coords` is [latitude, longitude] (see
+    // src/config/telemetry.ts and `distanceMeters` below). FIRE-19: these
+    // names were reversed here and in `findMergeTarget`. Both sites were
+    // reversed identically, so the produced and consumed cell keys agreed and
+    // no behavior changes with the rename; only the reader is no longer misled.
+    const [lat, lng] = entry.station.coords;
     const cell = proximityCellKey(lat, lng);
     const bucket = grid.get(cell);
     if (bucket) bucket.push(i);
@@ -354,8 +360,25 @@ export function freshnessForNetwork(
 }
 
 // Session caches keyed by quantized viewport (#3); see DISCOVERY_BBOX_QUANT.
-const USGS_DISCOVERY_CACHE = new Map<string, readonly StationDiscoveryRecord[]>();
-const RAWS_DISCOVERY_CACHE = new Map<string, readonly StationDiscoveryRecord[]>();
+//
+// Bounded rather than plain Maps (ARCH-06). Each entry is a list of station
+// metadata records for one quantized viewport, so entries are far smaller than
+// the hydrography geometry cache and a wider pan history is cheap to keep:
+// thirty-two quantized viewports. The time-to-live is shorter than the
+// geometry cache's because station discovery decides which gauges exist for a
+// viewport, and a gauge that comes online or goes offline mid-session should
+// not stay hidden for hours.
+const DISCOVERY_CACHE_MAX_ENTRIES = 32;
+const DISCOVERY_CACHE_TTL_MS = 15 * MINUTE_MS;
+
+const USGS_DISCOVERY_CACHE = new ExpiringLruCache<
+  string,
+  readonly StationDiscoveryRecord[]
+>(DISCOVERY_CACHE_MAX_ENTRIES);
+const RAWS_DISCOVERY_CACHE = new ExpiringLruCache<
+  string,
+  readonly StationDiscoveryRecord[]
+>(DISCOVERY_CACHE_MAX_ENTRIES);
 
 /** Quantized cache key for a viewport bbox (mirrors hydrography's HYDRO_CACHE). */
 function discoveryCacheKey(bounds: ViewportBounds): string {
@@ -385,7 +408,7 @@ async function discoverUsgsStationsCached(
   const cached = USGS_DISCOVERY_CACHE.get(key);
   if (cached) return cached;
   const records = await discoverUsgsStations(queryBounds, signal);
-  USGS_DISCOVERY_CACHE.set(key, records);
+  USGS_DISCOVERY_CACHE.set(key, records, DISCOVERY_CACHE_TTL_MS);
   return records;
 }
 
@@ -398,7 +421,7 @@ async function discoverRawsStationsCached(
   const cached = RAWS_DISCOVERY_CACHE.get(key);
   if (cached) return cached;
   const records = await discoverRawsStations(bounds, signal);
-  RAWS_DISCOVERY_CACHE.set(key, records);
+  RAWS_DISCOVERY_CACHE.set(key, records, DISCOVERY_CACHE_TTL_MS);
   return records;
 }
 
@@ -613,7 +636,8 @@ function findMergeTarget(
   // Only entries in the record's 3x3 cell neighborhood can be within the merge
   // radius (see PROXIMITY_GRID_CELL_DEG), so the grid bounds the scan. The
   // lowest passing index is returned, matching the old findIndex-first result.
-  const [lng, lat] = record.station.coords;
+  // [latitude, longitude], matching `pushEntry`'s cell key (FIRE-19).
+  const [lat, lng] = record.station.coords;
   const baseLatCell = Math.floor(lat / PROXIMITY_GRID_CELL_DEG);
   const baseLngCell = Math.floor(lng / PROXIMITY_GRID_CELL_DEG);
   let proxMatch = -1;

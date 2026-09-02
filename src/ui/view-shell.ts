@@ -326,7 +326,7 @@ function buildBriefHead(map: maplibregl.Map): void {
   if (!head) return;
 
   head.innerHTML = `
-    <p class="brief-head-lede">Select a Tribal land area, reservation, state, or watershed to read local drought conditions.</p>
+    <p class="brief-head-lede" id="brief-head-lede"></p>
     <p class="brief-place-context" id="brief-place-context" aria-live="polite" hidden>
       <span>Selected place</span>
       <strong id="brief-place-name"></strong>
@@ -353,12 +353,50 @@ function buildBriefHead(map: maplibregl.Map): void {
   mountBriefSearch(map);
 }
 
+/**
+ * The selected hazard cluster's user-facing title ("Drought", "Wildfire",
+ * "Extreme Heat", "ENSO"). One accessor so every briefing surface names the
+ * same screen (UI-14f).
+ */
+function selectedHazardTitle(): string {
+  return HAZARD_CLUSTERS[getCommittedSnapshot().selectedHazard].title;
+}
+
+/**
+ * Keep every hazard-named briefing surface in step with the selected cluster
+ * (UI-14f). Before this, the Brief head's accessible name followed the hazard
+ * while the visible lede, the full-report door, and the mobile at-hand
+ * landmark stayed hardcoded to drought on all four screens.
+ *
+ * The wording deliberately names the BRIEFING, not its contents: the panel
+ * synthesizes several hazards behind one door, and the per-hazard depth
+ * differs, so "read local conditions" stays neutral rather than promising a
+ * hazard-specific read the sources may not support.
+ */
 function syncBriefingTitle(): void {
   const head = document.getElementById('brief-head');
   if (!head) return;
-  const selectedHazard = getCommittedSnapshot().selectedHazard;
-  const label = `${HAZARD_CLUSTERS[selectedHazard].title} briefing`;
+  const title = selectedHazardTitle();
+  const label = `${title} briefing`;
   head.setAttribute('aria-label', label);
+
+  const lede = document.getElementById('brief-head-lede');
+  if (lede) {
+    lede.textContent =
+      'Select a Tribal land area, reservation, state, or watershed to read ' +
+      `local conditions in the ${label}.`;
+  }
+
+  const reportLink = document.getElementById('brief-full-report-link');
+  if (reportLink) reportLink.textContent = `Open the full ${label}`;
+
+  document
+    .getElementById('sheet-at-hand')
+    ?.setAttribute('aria-label', `At-hand ${title} answer`);
+
+  // The selected-place read names the briefing too, so it has to follow the
+  // same switch rather than waiting for the next selection change.
+  syncBriefSelection(getPlaceSelection());
 }
 
 /**
@@ -403,7 +441,7 @@ function syncBriefSelection(selection: PlaceSelection | null): void {
   if (name) name.textContent = selection.label;
   if (context) context.hidden = false;
   if (selectionRead) {
-    selectionRead.textContent = `The map and drought briefing are focused on ${selection.label}.`;
+    selectionRead.textContent = `The map and ${selectedHazardTitle()} briefing are focused on ${selection.label}.`;
   }
   if (selectionSummary) selectionSummary.hidden = false;
 }

@@ -153,7 +153,7 @@ test.describe('computeOverlapRows', () => {
     expect(result.hasSuppressedSlivers).toBe(true);
   });
 
-  test('omits empty, zero-area, self-touching, null, and non-areal candidates', () => {
+  test('rejects malformed candidates and omits null and non-areal ones', () => {
     const selected = rectangle(0, 0, 10, 10);
     const empty: Polygon = { type: 'Polygon', coordinates: [] };
     const zeroArea: Polygon = {
@@ -173,15 +173,42 @@ test.describe('computeOverlapRows', () => {
       ]]
     };
 
+    // IB-10: a malformed candidate is NAMED as unusable, while a null or
+    // non-areal candidate stays silently omitted. Before this fix both
+    // collapsed into the same silent omission, so a broken geometry looked
+    // exactly like a point.
+    const emptyCandidate = feature('empty', empty);
+    const zeroCandidate = feature('zero', zeroArea);
+    const selfTouchingCandidate = feature('self-touching', selfTouching);
     const result = computeOverlapRows(selected, collection(
-      feature('empty', empty),
-      feature('zero', zeroArea),
-      feature('self-touching', selfTouching),
+      emptyCandidate,
+      zeroCandidate,
+      selfTouchingCandidate,
       feature('null', null),
       feature('point', { type: 'Point', coordinates: [2, 2] })
     ));
 
-    expect(result).toEqual({ rows: [], hasSuppressedSlivers: false });
+    expect(result).toEqual({
+      rows: [],
+      hasSuppressedSlivers: false,
+      rejections: [
+        {
+          source: 'candidate',
+          reason: 'invalid-polygon-component',
+          candidate: emptyCandidate
+        },
+        {
+          source: 'candidate',
+          reason: 'invalid-polygon-component',
+          candidate: zeroCandidate
+        },
+        {
+          source: 'candidate',
+          reason: 'invalid-polygon-component',
+          candidate: selfTouchingCandidate
+        }
+      ]
+    });
   });
 
   test('returns no rows for empty, zero-area, or self-touching selections', () => {
@@ -204,21 +231,28 @@ test.describe('computeOverlapRows', () => {
       ]]
     };
 
-    expect(computeOverlapRows(empty, collection(candidate))).toEqual({
+    // Each of these is a malformed selection, so each is REPORTED rather than
+    // silently dropped (IB-10): a wholly unusable geometry must not be
+    // indistinguishable from a non-areal one. Place Studio turns a selection
+    // rejection into `selectionUnavailable`, an honest empty state.
+    const selectionRejected = {
       rows: [],
-      hasSuppressedSlivers: false
-    });
-    expect(computeOverlapRows(zeroArea, collection(candidate))).toEqual({
-      rows: [],
-      hasSuppressedSlivers: false
-    });
-    expect(computeOverlapRows(selfTouching, collection(candidate))).toEqual({
-      rows: [],
-      hasSuppressedSlivers: false
-    });
+      hasSuppressedSlivers: false,
+      rejections: [{
+        source: 'selection',
+        reason: 'invalid-polygon-component'
+      }]
+    };
+    expect(computeOverlapRows(empty, collection(candidate))).toEqual(selectionRejected);
+    expect(computeOverlapRows(zeroArea, collection(candidate))).toEqual(selectionRejected);
+    expect(computeOverlapRows(selfTouching, collection(candidate))).toEqual(selectionRejected);
   });
 
-  test('preserves omission behavior for wholly degenerate MultiPolygons', () => {
+  test('reports a rejection for wholly degenerate MultiPolygons', () => {
+    // IB-10: a candidate whose EVERY component is malformed used to return
+    // `omitted`, which produced no rejection row and read exactly like a
+    // non-areal candidate. It is now rejected the same way a mixed-validity
+    // one is, so the reader is told the geometry could not be used.
     const whollyDegenerate: MultiPolygon = {
       type: 'MultiPolygon',
       coordinates: invalidPolygonComponents.map(({ coordinates }) => coordinates)
@@ -227,14 +261,24 @@ test.describe('computeOverlapRows', () => {
 
     expect(computeOverlapRows(whollyDegenerate, collection(validCandidate))).toEqual({
       rows: [],
-      hasSuppressedSlivers: false
+      hasSuppressedSlivers: false,
+      rejections: [{
+        source: 'selection',
+        reason: 'invalid-polygon-component'
+      }]
     });
+    const degenerateCandidate = feature('degenerate', whollyDegenerate);
     expect(computeOverlapRows(
       rectangle(0, 0, 10, 10),
-      collection(feature('degenerate', whollyDegenerate))
+      collection(degenerateCandidate)
     )).toEqual({
       rows: [],
-      hasSuppressedSlivers: false
+      hasSuppressedSlivers: false,
+      rejections: [{
+        source: 'candidate',
+        reason: 'invalid-polygon-component',
+        candidate: degenerateCandidate
+      }]
     });
   });
 

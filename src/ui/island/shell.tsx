@@ -41,7 +41,12 @@ import { signal } from '@preact/signals';
 import type { ReadonlySignal } from '@preact/signals';
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 
-import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS, TEMPORAL_HORIZON_KEYS } from '../../config/clusters';
+import {
+  HAZARD_CLUSTERS,
+  HAZARD_CLUSTER_KEYS,
+  TEMPORAL_HORIZON_CHIP_LABELS,
+  TEMPORAL_HORIZON_KEYS
+} from '../../config/clusters';
 import type { HazardClusterKey, TemporalHorizonKey } from '../../config/clusters';
 import type { FramingSelection } from '../../config/framings';
 import { getLayerDef } from '../../config/layers';
@@ -59,12 +64,6 @@ import { Fire3DControl } from './fire3d-control';
 import { Minimap } from './minimap';
 import { TimeCompact } from './time-popover';
 import { wireShellPopover } from './popover-discipline';
-
-const HORIZON_LABELS: Readonly<Record<TemporalHorizonKey, string>> = {
-  current: 'Current',
-  'weeks-ahead': 'Weeks ahead',
-  'season-ahead': 'Season ahead'
-};
 
 const DESKTOP_SHELL_QUERY = '(min-width: 721px)';
 
@@ -425,7 +424,7 @@ function Shell({ map, snap, framing, specTick }: ShellProps) {
                   if (disabledReason === null) chooseHorizon(key);
                 }}
               >
-                {HORIZON_LABELS[key]}
+                {TEMPORAL_HORIZON_CHIP_LABELS[key]}
               </button>
             );
           })}

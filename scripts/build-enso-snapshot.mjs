@@ -19,16 +19,43 @@
  *
  * Re-run with: `npm run build:enso`. Commit the regenerated file.
  *
- * Thresholds: El Nino at index >= +0.5 and La Nina at index <= -0.5, each
- * sustained over five consecutive overlapping three-month seasons; between is
- * neutral. The same phase calculation is retained for the RONI headline and
- * the ONI comparison.
+ * THREE CPC RULES, THREE SEPARATE ANSWERS (2026-09-02, report 13
+ * ENSOSCI-01). CPC publishes more than one rule and they answer different
+ * questions; collapsing them into one `phase` made the app print "ENSO is
+ * currently neutral" while NOAA held a standing El Nino Advisory.
+ *
+ *   conditions  CPC's ONSET rule, one season: the newest three-month average
+ *               past +/- 0.5 C. "NOAA's Climate Prediction Center ...
+ *               declares the onset of an El Nino episode when the 3-month
+ *               average sea-surface temperature departure exceeds 0.5 C in
+ *               the east-central equatorial Pacific" (CPC ENSO FAQ). This is
+ *               the present-tense answer and it leads the app's headline.
+ *   episode     CPC's HISTORICAL classification, five consecutive
+ *               overlapping seasons past the same threshold: "For historical
+ *               purposes, periods of below and above normal SSTs are colored
+ *               ... when the threshold is met for a minimum of five (5)
+ *               consecutive overlapping seasons" (CPC RONI page). Emitted as
+ *               `state.episode` and retained under the legacy key `phase`.
+ *   direction   the trailing-three-season trajectory (+/- 0.2 C band), which
+ *               is arithmetic on the series, not a CPC product.
+ *   emerging    derived: conditions are present but the episode criterion is
+ *               not yet met. Not a fourth vocabulary word.
+ *
+ * The app cannot read CPC's own status: the ENSO Diagnostic Discussion is
+ * HTML and scraping it is barred by the same doctrine that removed the
+ * probabilistic plume. The snapshot therefore computes `conditions` from the
+ * index it already has and LINKS the Discussion as the authority.
+ *
+ * RONI is CPC's primary standard ("RONI is now the primary standard for
+ * official advisories and classifications of ENSO events", CPC RONI
+ * information circular, May 2026), so RONI drives the headline and ONI
+ * carries the same blocks for historical continuity.
  */
 
 import { writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { rejectEnsoSnapshot } from './lib/enso-snapshot-contract.mjs';
+import { rejectEnsoSnapshot, CPC_RULE_URLS } from './lib/enso-snapshot-contract.mjs';
 
 const ONI_URL = 'https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt';
 const RONI_URL = 'https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt';
@@ -37,10 +64,13 @@ const NINO34_URL =
 const SOI_URL = 'https://www.cpc.ncep.noaa.gov/data/indices/soi';
 
 // Named fallback only: NOAA Physical Sciences Laboratory nina34.data
-// (https://psl.noaa.gov/data/correlation/nina34.data) uses NOAA Extended
-// Reconstructed SST version 6 and a differing climatology basis. It is not
-// drop-in interchangeable with the adopted CPC detrended series and is
-// deliberately not wired as an automatic failover.
+// (https://psl.noaa.gov/data/correlation/nina34.data) uses a differing
+// climatology basis. It is not drop-in interchangeable with the adopted CPC
+// detrended series and is deliberately not wired as an automatic failover.
+// (Corrected 2026-09-02, report 13 ENSOSCI-12: the old comment also gave the
+// Extended Reconstructed SST version as a reason. CPC is on ERSSTv6 now too,
+// so that half of the reason has evaporated; the climatology-basis half
+// stands and is the whole reason.)
 
 // REMOVED 2026-07-21 (D-0.8.0-011 finding 3, built as T-P0-1): the CPC
 // probabilistic-outlook plume was scraped from an HTML table here, which
@@ -51,6 +81,13 @@ const RECENT_SEASONS = 36;
 const RECENT_MONTHS = 36;
 const THRESHOLD = 0.5;
 const RUN_LENGTH = 5;
+// The trailing-three-season change that counts as a trajectory rather than
+// noise. Not a CPC number: it is this application's own band, chosen so a
+// season-over-season wobble inside the preliminary revision window does not
+// flip the word. Stated here so it is auditable, and never presented to a
+// reader as an issuer rule.
+const DIRECTION_BAND = 0.2;
+const DIRECTION_SPAN = 3;
 const SOI_MISSING = -999.9;
 const SEASON_NAMES = [
   'DJF',
@@ -172,7 +209,12 @@ function markPreliminary(records) {
   }));
 }
 
-function currentPhase(values) {
+/**
+ * CPC's HISTORICAL episode classification: five consecutive overlapping
+ * seasons past the threshold. This is the rule the table on CPC's RONI page
+ * colours, and it is never the answer to "what is ENSO doing now".
+ */
+function episodeClassification(values) {
   const tail = values.slice(-RUN_LENGTH);
   if (tail.length === RUN_LENGTH) {
     if (tail.every((value) => value.anom >= THRESHOLD)) return 'el-nino';
@@ -181,13 +223,68 @@ function currentPhase(values) {
   return 'neutral';
 }
 
+/** CPC's ONSET rule: the newest three-month average against +/- 0.5 C. */
+function currentConditions(latest) {
+  if (latest.anom >= THRESHOLD) return 'el-nino';
+  if (latest.anom <= -THRESHOLD) return 'la-nina';
+  return 'neutral';
+}
+
+function thresholdSide(latest) {
+  if (latest.anom >= THRESHOLD) return 'above';
+  if (latest.anom <= -THRESHOLD) return 'below';
+  return 'within';
+}
+
+/**
+ * Trajectory across the trailing three seasons. Arithmetic on the series,
+ * reported as a tendency word and never as a projection: the newest seasons
+ * are inside CPC's two-month revision window, so `steady` is the honest
+ * answer whenever the change is inside the band.
+ */
+function seasonDirection(values) {
+  if (values.length < DIRECTION_SPAN) return 'steady';
+  const change =
+    values[values.length - 1].anom - values[values.length - DIRECTION_SPAN].anom;
+  if (change >= DIRECTION_BAND) return 'strengthening';
+  if (change <= -DIRECTION_BAND) return 'weakening';
+  return 'steady';
+}
+
+/**
+ * The three-state block plus the rule pages that define it. `emerging` is a
+ * derived label, not a fourth state: conditions have crossed the threshold
+ * while the five-season episode criterion has not been met.
+ */
+function indexState(values, latest) {
+  const conditions = currentConditions(latest);
+  const episode = episodeClassification(values);
+  return {
+    conditions,
+    episode,
+    direction: seasonDirection(values),
+    emerging: conditions !== 'neutral' && episode === 'neutral',
+    threshold: THRESHOLD,
+    conditionsRule: CPC_RULE_URLS.onset,
+    episodeRule: CPC_RULE_URLS.episode
+  };
+}
+
 async function fetchSeasonIndex(url, expectedHeader, label) {
   const fetched = await fetchText(url);
   const all = markPreliminary(parseSeasonIndex(fetched.text, expectedHeader, label));
+  const newest = all[all.length - 1];
   return {
     published: fetched.published,
-    phase: currentPhase(all),
-    latest: all[all.length - 1],
+    state: indexState(all, newest),
+    // The legacy `phase` key is retained as an alias of `state.episode` so
+    // an older consumer keeps loading; new copy reads `state`.
+    phase: episodeClassification(all),
+    latest: {
+      ...newest,
+      exceedsThreshold: thresholdSide(newest) !== 'within',
+      thresholdSide: thresholdSide(newest)
+    },
     values: all.slice(-RECENT_SEASONS)
   };
 }
@@ -355,6 +452,84 @@ function withPublished(published) {
   return published ? { published } : {};
 }
 
+/**
+ * Where CPC states the official status. The app links this, never parses it
+ * (ENSOSCI-01: the Diagnostic Discussion is HTML; scraping it is barred).
+ */
+const CPC_AUTHORITY = {
+  product: 'NOAA CPC ENSO Diagnostic Discussion (official ENSO status)',
+  url: CPC_RULE_URLS.discussion,
+  cadence: 'monthly, second Thursday',
+  definitionsUrl: CPC_RULE_URLS.statusDefinitions
+};
+
+/**
+ * The verbatim issuer definitions this snapshot is built under, so the
+ * artifact states its own rules instead of pointing at a column of numbers.
+ * Transcribed from the CPC pages listed, VERIFIED live 2026-09-02
+ * (report 13, samples/13-cpc-*). Quoted text is upstream wording; do not
+ * paraphrase it here.
+ */
+const SOURCE_QUOTES = [
+  {
+    text:
+      "NOAA's Climate Prediction Center, which is part of the National Weather Service, " +
+      'declares the onset of an El Nino episode when the 3-month average sea-surface ' +
+      'temperature departure exceeds 0.5 C in the east-central equatorial Pacific ' +
+      '[between 5 N-5 S and 170 W-120 W].',
+    source: 'NOAA CPC ENSO FAQ (onset rule, one season)',
+    url: CPC_RULE_URLS.onset
+  },
+  {
+    text:
+      'For historical purposes, periods of below and above normal SSTs are colored in blue ' +
+      'and red when the threshold is met for a minimum of five (5) consecutive overlapping ' +
+      'seasons.',
+    source: 'NOAA CPC Cold and Warm Episodes by Season, RONI (episode rule, five seasons)',
+    url: CPC_RULE_URLS.episode
+  },
+  {
+    text:
+      'El Nino or La Nina Advisory: Issued when El Nino or La Nina conditions are observed ' +
+      'and expected to continue.',
+    source: 'NOAA CPC ENSO status definitions',
+    url: CPC_RULE_URLS.statusDefinitions
+  },
+  {
+    text:
+      'Because of the high frequency filter applied to the ERSSTv6 data (Huang et al., 2025, ' +
+      "Part 1 and Part 2, J. Climate), RONI values may change up to two months after the initial " +
+      "'real time' value is posted. Therefore, the most recent RONI values should be considered " +
+      'an estimate.',
+    source: 'NOAA CPC RONI page (revision window)',
+    url: CPC_RULE_URLS.episode
+  }
+];
+
+const RONI_METHOD = {
+  index:
+    '3 month running mean of ERSST.v6 SST anomalies in the Nino 3.4 region (5 N-5 S, 120-170 W) ' +
+    'with average tropical mean (20 N-20 S) SST anomalies subtracted; the difference is then ' +
+    'adjusted so the variance equals the original Nino 3.4 index',
+  basePeriod: '1991-2020',
+  sstVersion: 'ERSSTv6',
+  revisionWindowMonths: 2,
+  updateCadence: 'by the 5th of each month',
+  methodUrl: CPC_RULE_URLS.episode
+};
+
+const ONI_METHOD = {
+  index:
+    '3 month running mean of ERSST SST anomalies in the Nino 3.4 region (5 N-5 S, 120-170 W), ' +
+    'without the tropical-mean subtraction RONI applies',
+  basePeriod: 'centered 30-year base periods, advanced every five years (ClimAdjust)',
+  sstVersion: 'ERSSTv6',
+  revisionWindowMonths: 2,
+  updateCadence: 'by the 5th of each month',
+  methodUrl:
+    'https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_change.shtml'
+};
+
 async function main() {
   // Sequential fetches keep the four-request refresh bounded and polite.
   const roni = await fetchSeasonIndex(RONI_URL, 'SEAS YR ANOM', 'RONI');
@@ -364,13 +539,17 @@ async function main() {
 
   const snapshot = {
     retrieved: new Date().toISOString().slice(0, 10),
+    sourceQuotes: SOURCE_QUOTES,
     roni: {
       source: 'NOAA CPC Relative Oceanic Nino Index (RONI)',
       sourceUrl: RONI_URL,
       attribution: 'NOAA Climate Prediction Center (CPC), public domain U.S. Government work',
       description:
-        'CPC operational ENSO monitoring index. The Oceanic Nino Index with the tropical-mean sea surface temperature trend removed; the application uses its sustained-threshold phase as the observed-state headline.',
+        'CPC primary operational ENSO index. The Oceanic Nino Index with the tropical-mean sea surface temperature trend removed; the application leads with its current-conditions state (CPC onset rule) and reports the five-season episode classification beside it.',
       ...withPublished(roni.published),
+      state: roni.state,
+      authority: CPC_AUTHORITY,
+      method: RONI_METHOD,
       phase: roni.phase,
       latest: roni.latest,
       values: roni.values
@@ -382,6 +561,9 @@ async function main() {
       description:
         'Three-month running mean of the Nino 3.4 sea surface temperature anomaly, retained as the long historical-continuity comparison behind the operational RONI headline.',
       ...withPublished(oni.published),
+      state: oni.state,
+      authority: CPC_AUTHORITY,
+      method: ONI_METHOD,
       phase: oni.phase,
       latest: oni.latest,
       values: oni.values
@@ -428,7 +610,9 @@ async function main() {
 
   console.log(
     `Wrote ${OUT_PATH}: ` +
-      `RONI phase=${roni.phase} latest=${roni.latest.seas} ${roni.latest.year} ${roni.latest.anom} preliminary=${roni.latest.preliminary}; ` +
+      `RONI conditions=${roni.state.conditions} episode=${roni.state.episode} ` +
+      `direction=${roni.state.direction} emerging=${roni.state.emerging}; ` +
+      `RONI latest=${roni.latest.seas} ${roni.latest.year} ${roni.latest.anom} preliminary=${roni.latest.preliminary}; ` +
       `ONI comparison latest=${oni.latest.seas} ${oni.latest.year} ${oni.latest.anom} preliminary=${oni.latest.preliminary}; ` +
       `Nino 3.4 latest=${nino34.latest.year}-${String(nino34.latest.month).padStart(2, '0')} ${nino34.latest.anom}; ` +
       `standardized SOI latest=${soi.latest.year}-${String(soi.latest.month).padStart(2, '0')} ${soi.latest.value}; ` +

@@ -14,6 +14,12 @@
 # opens a GitHub issue when a runtime or build source persistently fails. Only a
 # runtime row implies possible deployed impact; a build row threatens a future
 # artifact refresh. The issue auto-closes on the next run with no blocking rows.
+#
+# What reds the run (CI-04, 2026-09-01): only a RUNTIME row. Build-tier and
+# candidate rows open or update the issue and the run ends green. Before this,
+# a build-tier `landscapeWhpDoi` timeout alone reddened 20 of the last 30 runs
+# for a condition the workflow's own issue body describes as not proving
+# deployed breakage, which made the loudest workflow the least actionable one.
 
 name: Upstream liveness monitor
 
@@ -92,6 +98,29 @@ jobs:
             code=${PIPESTATUS[0]}
           fi
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          # CI-04 (2026-09-01): tier the failure, so the colour of the RUN
+          # matches what the failure actually proves. `check:drift` exits 1
+          # for any blocking row, runtime or build alike, and 20 of the last
+          # 30 runs went red on a build-tier `landscapeWhpDoi` timeout on its
+          # own. A build row threatens a future artifact refresh and, as the
+          # issue body below says in as many words, does not prove deployed
+          # breakage. That belongs in an issue, not in a red branch. Only a
+          # runtime row, which can affect deployed embeds, reds the run.
+          #
+          # Counted off the probe's own rendered rows
+          # (scripts/check-upstream-drift.mjs prints
+          # `FAIL  [runtime  ]  <key>  <detail>` and a `Runtime failures`
+          # summary line), so the shared script needs no change.
+          runtime_failures=$(grep -cE '^FAIL  \[runtime' drift-output.txt)
+          # A probe that never reached its own table tiered nothing. Treat
+          # that as a runtime failure: a broken monitor must be loud, not
+          # quietly green.
+          if [ "$code" != "0" ] && ! grep -q 'probed endpoints answered\.' drift-output.txt; then
+            runtime_failures=1
+            echo "::warning::The drift probe exited $code without producing its tiered table; treating that as a runtime failure."
+          fi
+          echo "runtime_failures=${runtime_failures:-0}" >> "$GITHUB_OUTPUT"
+          echo "Blocking exit code $code; runtime-tier failures: ${runtime_failures:-0}"
           exit 0
 
       - name: Open or update the drift alert issue
@@ -114,9 +143,10 @@ jobs:
               '',
               'The scheduled upstream monitor found one or more blocking runtime or build-source failures',
               '(network error, timeout, HTTP status >= 400, or a failed source contract) on two consecutive probes.',
-              'Rows marked `runtime` may affect deployed embeds. Rows marked `build` threaten a future',
-              'artifact refresh but do not prove deployed breakage. Unwired `candidate` failures are warnings',
-              'and do not make the run red.',
+              'Rows marked `runtime` may affect deployed embeds and are the only rows that make this',
+              'workflow run red. Rows marked `build` threaten a future artifact refresh but do not prove',
+              'deployed breakage, so they open this issue and leave the run green. Unwired `candidate`',
+              'failures are warnings only.',
               '',
               `Monitor run: ${runUrl}`,
               '',
@@ -188,10 +218,29 @@ jobs:
               });
             }
 
-      # Surface blocking runtime or build drift on the Actions tab after the
-      # issue is filed. Candidate-only warnings leave the run green.
-      - name: Fail the run when blocking drift persists
-        if: steps.drift.outputs.exit_code != '0'
+      # Surface RUNTIME drift on the Actions tab after the issue is filed.
+      # Candidate warnings never reddened the run; since CI-04 (2026-09-01)
+      # build-tier rows do not either. A build row threatens a future
+      # artifact refresh and does not prove deployed breakage, so the issue
+      # above is the whole alert and this run ends green. Only a runtime
+      # row, which can affect deployed embeds, fails here.
+      - name: Fail the run when blocking runtime drift persists
+        if: steps.drift.outputs.exit_code != '0' && steps.drift.outputs.runtime_failures != '0'
         run: |
-          echo "::error::Blocking runtime or build-source drift persisted across two probes; see the opened issue."
+          echo "::error::Runtime-tier upstream drift persisted across two probes; see the opened issue."
           exit 1
+
+      - name: Record build-tier drift without failing the run
+        if: steps.drift.outputs.exit_code != '0' && steps.drift.outputs.runtime_failures == '0'
+        run: |
+          {
+            echo "## Build-source drift only; the run ends green"
+            echo
+            echo "One or more \`build\`-tier probes failed on two consecutive"
+            echo "attempts. A build row threatens a future artifact refresh and does"
+            echo "not prove deployed breakage, so the drift issue carries the detail"
+            echo "and this run is not red. It will close itself on the next clean"
+            echo "probe."
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::Build-source drift persisted across two probes; see the opened issue. No runtime-tier failure, so the run ends green."

@@ -50,7 +50,7 @@ export interface KeySpec {
   readonly itemsHtml: string;
 }
 
-export type MapKeyFamily = 'drought' | 'heat' | 'fire' | 'other';
+export type MapKeyFamily = 'drought' | 'heat' | 'fire' | 'enso' | 'other';
 
 interface HeatRiskFrame {
   readonly day: number;
@@ -226,8 +226,11 @@ export function resolveMapKeyFamily(
     return 'drought';
   }
   // The SST anomaly surface outranks the NIFC event fallback like every
-  // other condition surface; its key carries no hazard family styling.
-  if (active.has('sst-anomaly')) return 'other';
+  // other condition surface. UI-14(b): it now resolves to its own 'enso'
+  // family instead of falling into 'other', so the ENSO screen's key is a
+  // named peer of drought, fire, and heat for CSS hooks, disclosure
+  // behavior, and tests. Naming the family adds no styling by itself.
+  if (active.has('sst-anomaly')) return 'enso';
   if (active.has('nifc-fires')) return 'fire';
   return 'other';
 }
@@ -650,8 +653,80 @@ function loadingKeySpec(key: string): KeySpec {
   };
 }
 
+/**
+ * Coverage qualification for the default-on `hillshade` layer (FIRE-09).
+ *
+ * Terrain Shading ships `defaultOn: true` (src/config/layers.ts) over a
+ * Pacific Northwest-only raster-dem archive, so in the United States,
+ * Alaska, Hawaii, and British Columbia framings it reports `live` and draws
+ * nothing. The 3D mode discloses its own bake (`FIRE3D_COVERAGE_NOTE`); the
+ * flat hillshade that is on for every user at every viewport did not.
+ *
+ * THE VISIBLE FORM IS DELIBERATELY SHORT AND WIDTH-GATED. Both are measured,
+ * not hypothetical (2026-09-01):
+ *
+ *   - A sentence-long span pushed the phone Fire card past the 224px
+ *     `--mobile-map-key-collapsed-height` at 390x844, so `#map-key-expand`
+ *     stopped being hidden and every phone key gained a standing collapse
+ *     control (`tests/interface-responsive.spec.ts:303` and `:371` red).
+ *   - Shortening it to these three words did NOT fix that. Under the phone
+ *     clamp `.map-key-content` is `flex-direction: column`, so ANY new child
+ *     costs a whole row plus the 9px gap (about 23px), and the Fire key,
+ *     alone among the four, has less headroom than that: it is the only key
+ *     with two stacked sections plus their qualifications.
+ *
+ * So the visible entry renders above the clamp only. The full sentence rides
+ * the key's accessible name on EVERY surface (a `title` carries it for
+ * pointer users), which costs no layout, so a phone user on assistive
+ * technology still hears the qualification. Making it visible on a phone
+ * needs `--mobile-map-key-collapsed-height` to grow, which is an
+ * owner-visible presentation decision and a stylesheet this module does not
+ * own. FIRE-09's other half, the `hillshade` catalog row in
+ * `src/config/layers.ts`, has no such constraint and is the better
+ * phone-visible home for the disclosure.
+ */
+const HILLSHADE_COVERAGE_LABEL = 'Terrain: Pacific Northwest only';
+
+/**
+ * The terrain sentence of `FIRE3D_COVERAGE_NOTE` verbatim. That constant is
+ * not imported whole because its second sentence describes the 3D view's
+ * bundled structure bake (the central Oregon pilot area), which says nothing
+ * about the flat hillshade and would broaden the claim made here.
+ */
+const HILLSHADE_COVERAGE_NOTE =
+  'Terrain relief covers the Pacific Northwest data bake; outside it the ground renders flat.';
+
+/**
+ * Append the terrain coverage entry when Terrain Shading is on. It rides an
+ * existing key rather than earning one: the hillshade is reference relief,
+ * not a condition surface, so it must never materialize a key strip on a map
+ * that has otherwise earned none.
+ */
+function withTerrainCoverage(
+  spec: KeySpec | null,
+  active: ReadonlySet<string>
+): KeySpec | null {
+  if (spec === null || !active.has('hillshade')) return spec;
+  const clamped = window.matchMedia(MOBILE_MAP_KEY_QUERY).matches;
+  return {
+    ...spec,
+    ariaLabel: `${spec.ariaLabel} ${HILLSHADE_COVERAGE_NOTE}`,
+    itemsHtml: clamped
+      ? spec.itemsHtml
+      : spec.itemsHtml +
+        '<span class="map-key-qualification" data-hillshade-coverage title="' +
+        `${escapeHtml(HILLSHADE_COVERAGE_NOTE)}">` +
+        `${escapeHtml(HILLSHADE_COVERAGE_LABEL)}</span>`
+  };
+}
+
 /** The key the active layer set earns, or null to hide the strip. */
 function activeKey(): KeySpec | null {
+  return withTerrainCoverage(hazardKey(), registry.getActiveKeys());
+}
+
+/** The condition-surface key, before shared reference qualifications. */
+function hazardKey(): KeySpec | null {
   const { active, loading, eligible } = keyEligibility();
   let spec: KeySpec | null = null;
   if (eligible.has('heatrisk')) {
@@ -811,7 +886,14 @@ export function initMapKey(): void {
   overflowObserver?.observe(content);
   const mutationObserver = new MutationObserver(scheduleOverflow);
   mutationObserver.observe(content, { childList: true, subtree: true });
-  widthQuery.addEventListener('change', scheduleOverflow);
+  // The terrain coverage entry is width-gated (see withTerrainCoverage), so
+  // crossing the breakpoint has to RE-RENDER the strip, not only re-measure
+  // it. `update` diffs against the last rendered html, so this is cheap.
+  const onWidthChange = (): void => {
+    update();
+    scheduleOverflow();
+  };
+  widthQuery.addEventListener('change', onWidthChange);
   window.addEventListener('resize', scheduleOverflow);
   void document.fonts?.ready.then(scheduleOverflow);
   expandButton.addEventListener('click', () => setExpanded(!expanded));
@@ -819,7 +901,7 @@ export function initMapKey(): void {
   disposeMapKeyOverflow = () => {
     overflowObserver?.disconnect();
     mutationObserver.disconnect();
-    widthQuery.removeEventListener('change', scheduleOverflow);
+    widthQuery.removeEventListener('change', onWidthChange);
     window.removeEventListener('resize', scheduleOverflow);
     if (overflowFrame !== null) window.cancelAnimationFrame(overflowFrame);
     overflowFrame = null;

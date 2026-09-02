@@ -28,8 +28,10 @@
  *      terminal state honestly; it is a failure when EVERY active layer is
  *      unavailable, or when a layer that was `ready` in --previous (a
  *      receipt for the same base) is unavailable now. The embed boots also
- *      prove the satellite and attribution controls are the top hit at
- *      their own centers and that no map-information button shows.
+ *      prove the satellite switcher is the top hit at its own center and
+ *      that the map-information button, which since PR 54 (2026-08-31) is
+ *      the embed's credits surface, is present and is the top hit at its
+ *      own center, with the removed attribution control absent.
  *
  * Receipts hold URLs, HTTP status, bytes, milliseconds, and status words.
  * No screenshot, trace, or response body is written (hard rule 1: an
@@ -318,8 +320,13 @@ async function checkRanges() {
 }
 
 // Runs inside the page: which control is the top hit at the center of the
-// satellite and attribution buttons, and whether the desktop information
-// button leaked into the embed (the embed corner contract, FE-18).
+// satellite switcher and of the map-information button (the embed corner
+// contract, FE-18). Since PR 54 (da2efab, 2026-08-31, owner direction) the
+// MapLibre attribution control is gone and the map-information button is
+// the embed's credits surface, so the button must be present and reachable
+// rather than absent; `attribHit` stays only to catch the removed control
+// coming back. `hit` returns null when the selector matches nothing, which
+// is how an absent control reads.
 const cornerProbe = () => {
   const hit = (selector) => {
     const el = document.querySelector(selector);
@@ -328,6 +335,7 @@ const cornerProbe = () => {
     const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
     if (!top) return null;
     if (top.closest('.basemap-switcher-control')) return 'satellite';
+    if (top.closest('.map-info-btn')) return 'map-information';
     if (top.closest('.maplibregl-ctrl-attrib')) return 'attribution';
     return (top.className || top.tagName).toString().slice(0, 40);
   };
@@ -335,6 +343,7 @@ const cornerProbe = () => {
   return {
     satHit: hit('.maplibregl-ctrl-bottom-right .basemap-switcher-btn'),
     attribHit: hit('.maplibregl-ctrl-attrib-button'),
+    infoHit: hit('.map-info-btn'),
     infoBtnVisible: !!info && getComputedStyle(info).display !== 'none',
   };
 };
@@ -513,6 +522,19 @@ receipt.failed = receipt.checks.filter((c) => !c.ok).map((c) => c.name);
 // still be catching up), not a proved divergence; the workflow words the
 // issue accordingly.
 receipt.inconclusive = receipt.failed.length > 0 && receipt.failed.every((n) => n.startsWith('propagation:'));
+// A DIVERGENCE is a stamp, propagation, or seat finding: the live site
+// serving bytes other than the ones this deploy published, or referencing an
+// asset it does not serve at all. Everything else (a layer that did not
+// settle, an embed corner, a page error, a PMTiles range) is a product
+// finding worth an issue and worth reading, but it is not evidence that the
+// deploy failed, so the workflow must not red the branch for it.
+//
+// `seat:` is in this set deliberately: an index.html that names an asset the
+// site answers with anything but 200 is a broken publish, not a product
+// regression, and both it and `propagation:` have the verifier's own settle
+// window plus the workflow's 10-minute pre-poll to clear a transient edge.
+const DIVERGENCE_PREFIXES = ['stamp:', 'propagation:', 'seat:'];
+receipt.diverged = receipt.failed.some((n) => DIVERGENCE_PREFIXES.some((p) => n.startsWith(p)));
 await writeFile(args.out, JSON.stringify(receipt, null, 2));
 const summary = renderSummary(receipt);
 if (args.summary) await appendFile(args.summary, summary);

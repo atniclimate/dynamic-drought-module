@@ -39,10 +39,16 @@ export interface LayerModule {
  * own chunk fetched on first activation rather than shipped in the initial
  * bundle. This honors the lazy-loaded-layers invariant at
  * the CODE level, not just the data level: before this, activation was lazy but
- * all fifteen modules were eagerly imported into the main chunk. The default-on
- * layers load at boot as before; the rest arrive on first toggle.
- * `loadLayerModule` caches the resolved module so `deactivate` and `bindPopups`
- * reach the same instance a later toggle uses.
+ * every layer module in the catalog was eagerly imported into the main chunk
+ * (fifteen of them when this note was written; the catalog holds twenty-three
+ * today). The default-on layers load at boot as before; the rest arrive on
+ * first toggle. `loadLayerModule` caches the resolved module so `deactivate`
+ * and `bindPopups` reach the same instance a later toggle uses.
+ *
+ * Scope of that guarantee (ARCH-03): it covers `src/layers/**` modules, not
+ * every table a layer reads. `src/config/wildfire-presentation.ts` and the
+ * telemetry network adapters still reach the entry chunk through
+ * `src/ui/map-key.ts` and `src/ui/sidebar.ts`, which are imported eagerly.
  */
 export interface LayerDef {
   readonly key: string;
@@ -179,7 +185,15 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   // Default-on since E1 (D-0.7.0-043 part 3): terrain shading joins the
   // calm default composition so the E1 paint tuning accounts for it from
   // the start; it renders inside the bottom stack, below every data layer.
-  { key: 'hillshade', name: 'Terrain Shading', source: 'USGS 3DEP · PMTiles', role: 'reference', defaultOn: true, load: () => import('../layers/hillshade') },
+  // FIRE-09: the archive is the Pacific Northwest bake (bbox
+  // [-125, 41.5, -110.5, 49.5]; scripts/build-whp-tiles.mjs, and
+  // src/config/urls.ts on the hillshade entry), but the layer is default-on at
+  // every viewport, so a user in Alaska, Hawaii, or the Southeast saw a
+  // `live` pill over an empty basemap with nothing saying why. The coverage
+  // qualification rides the source line, mirroring FIRE3D_COVERAGE_NOTE
+  // ("Terrain relief covers the Pacific Northwest data bake; outside it the
+  // ground renders flat."), which the 3D control has always shown.
+  { key: 'hillshade', name: 'Terrain Shading', source: 'USGS 3DEP · PMTiles · Pacific Northwest bake only', role: 'reference', defaultOn: true, load: () => import('../layers/hillshade') },
   { key: 'drought', name: 'Drought Outlook (CPC)', source: 'NOAA CPC · Monthly & Seasonal', role: 'surface', defaultOn: false, load: () => import('../layers/drought') },
   { key: 'gridded-index', name: 'Gridded Drought Index (SPI)', source: 'NOAA NIDIS · raster tiles', role: 'surface', defaultOn: false, load: () => import('../layers/gridded-index') },
   // noDataLabel on the live agency layers below (usdm, wildfire pair, NWS
@@ -275,11 +289,25 @@ export const DEFAULT_ON_KEYS: ReadonlySet<string> = new Set(
 );
 
 /**
+ * Key-to-definition index, built once beside `DEFAULT_ON_KEYS`. `getLayerDef`
+ * runs on every status change, on every controller entry point, and once per
+ * key inside `resolveExclusiveSurface`, so the previous linear `find` sat on
+ * the boot path (ARCH-15). Behavior is identical: the catalog is a frozen
+ * module-level table. The entries are reversed before the Map is built so a
+ * duplicate key would resolve to the FIRST definition, exactly as `find` did;
+ * no test asserts key uniqueness, so the old behavior is preserved rather than
+ * assumed away.
+ */
+const LAYER_DEFS_BY_KEY: ReadonlyMap<string, LayerDef> = new Map(
+  LAYER_DEFS.map((def) => [def.key, def] as const).reverse()
+);
+
+/**
  * Look up a layer definition by key. Returns null when the key is unknown
  * (typically a stale URL parameter); callers ignore such keys silently.
  */
 export function getLayerDef(key: string): LayerDef | null {
-  return LAYER_DEFS.find((def) => def.key === key) ?? null;
+  return LAYER_DEFS_BY_KEY.get(key) ?? null;
 }
 
 /**

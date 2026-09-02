@@ -6,7 +6,7 @@
   "description": "Embeddable static web map with North American drought context, recent satellite imagery, and detailed United States hazard and telemetry views, deepest in the Pacific Northwest.",
   "license": "PolyForm-Strict-1.0.0",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "dev": "vite",
@@ -33,7 +33,11 @@
     "check:activation": "node scripts/check-activation-budget.mjs",
     "check:landscape-schema": "node scripts/validate-landscape-artifact.mjs scripts/landscape/tests/fixtures/corrected/snapshot_terrain_l3.json && node scripts/validate-landscape-artifact.mjs public/data/landscape-signature-pnw.json",
     "build:coverage-matrix": "node scripts/generate-coverage-matrix.mjs",
-    "gate": "npm run build && npm run scan:emdash && npm run check:public-tree && npm run check:resources && npm run check:bundle && npm run check:activation && npm run check:places && npm run check:coverage && npm run check:vocabulary && npm run check:landscape-schema && npm run check:enso && npm run test:drift-contract && npm run test:live-receipts && npm run test:worker-receipts && npm run test:source-health && npm run test:boundary-boots && npm run test:minimap-geometry",
+    "check:all": "npm run scan:emdash && npm run check:public-tree && npm run check:resources && npm run check:places && npm run check:coverage && npm run check:vocabulary && npm run check:landscape-schema && npm run check:enso && npm run test:drift-contract && npm run test:live-receipts && npm run test:worker-receipts && npm run test:source-health && npm run test:boundary-boots && npm run test:minimap-geometry",
+    "gate": "npm run build && npm run check:bundle && npm run check:activation && npm run check:all",
+    "gate:nobuild": "npm run typecheck && npm run check:all",
+    "verify:quick": "npm run typecheck && npm run scan:emdash && npm run check:vocabulary && npm run check:coverage",
+    "verify:smoke": "npm run gate && playwright test --workers=1 --reporter=list tests/boot.spec.ts tests/ux1-surfaces.spec.ts tests/url-state.spec.ts tests/cluster-controller-integration.spec.ts tests/temporal-axis.spec.ts tests/impact-panel-a11y.spec.ts tests/legend.spec.ts tests/conditions-strip.spec.ts tests/mobile-sheet.spec.ts tests/embed-viewport.spec.ts tests/interface-responsive.spec.ts tests/s4-minimap.spec.ts",
     "build:enso": "node scripts/build-enso-snapshot.mjs",
     "check:enso": "node scripts/validate-enso-snapshot.mjs public/data/enso-indices.json",
     "build:cdm": "node scripts/build-cdm-snapshot.mjs",
@@ -63,7 +67,7 @@
   "devDependencies": {
     "@playwright/test": "1.61.1",
     "@types/geojson": "^7946.0.14",
-    "@types/node": "^22.20.1",
+    "@types/node": "^24.13.3",
     "ajv": "^8.20.0",
     "fflate": "0.8.3",
     "geojson-vt": "^4.0.3",

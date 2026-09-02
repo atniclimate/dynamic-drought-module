@@ -1,17 +1,64 @@
 {
-  "retrieved": "2026-08-31",
+  "retrieved": "2026-09-02",
+  "sourceQuotes": [
+    {
+      "text": "NOAA's Climate Prediction Center, which is part of the National Weather Service, declares the onset of an El Nino episode when the 3-month average sea-surface temperature departure exceeds 0.5 C in the east-central equatorial Pacific [between 5 N-5 S and 170 W-120 W].",
+      "source": "NOAA CPC ENSO FAQ (onset rule, one season)",
+      "url": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ensofaq.shtml"
+    },
+    {
+      "text": "For historical purposes, periods of below and above normal SSTs are colored in blue and red when the threshold is met for a minimum of five (5) consecutive overlapping seasons.",
+      "source": "NOAA CPC Cold and Warm Episodes by Season, RONI (episode rule, five seasons)",
+      "url": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/"
+    },
+    {
+      "text": "El Nino or La Nina Advisory: Issued when El Nino or La Nina conditions are observed and expected to continue.",
+      "source": "NOAA CPC ENSO status definitions",
+      "url": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_advisory/enso-alert-readme.shtml"
+    },
+    {
+      "text": "Because of the high frequency filter applied to the ERSSTv6 data (Huang et al., 2025, Part 1 and Part 2, J. Climate), RONI values may change up to two months after the initial 'real time' value is posted. Therefore, the most recent RONI values should be considered an estimate.",
+      "source": "NOAA CPC RONI page (revision window)",
+      "url": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/"
+    }
+  ],
   "roni": {
     "source": "NOAA CPC Relative Oceanic Nino Index (RONI)",
     "sourceUrl": "https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt",
     "attribution": "NOAA Climate Prediction Center (CPC), public domain U.S. Government work",
-    "description": "CPC operational ENSO monitoring index. The Oceanic Nino Index with the tropical-mean sea surface temperature trend removed; the application uses its sustained-threshold phase as the observed-state headline.",
+    "description": "CPC primary operational ENSO index. The Oceanic Nino Index with the tropical-mean sea surface temperature trend removed; the application leads with its current-conditions state (CPC onset rule) and reports the five-season episode classification beside it.",
     "published": "2026-08-03",
+    "state": {
+      "conditions": "el-nino",
+      "episode": "neutral",
+      "direction": "strengthening",
+      "emerging": true,
+      "threshold": 0.5,
+      "conditionsRule": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ensofaq.shtml",
+      "episodeRule": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/"
+    },
+    "authority": {
+      "product": "NOAA CPC ENSO Diagnostic Discussion (official ENSO status)",
+      "url": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_advisory/ensodisc.shtml",
+      "cadence": "monthly, second Thursday",
+      "definitionsUrl": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_advisory/enso-alert-readme.shtml"
+    },
+    "method": {
+      "index": "3 month running mean of ERSST.v6 SST anomalies in the Nino 3.4 region (5 N-5 S, 120-170 W) with average tropical mean (20 N-20 S) SST anomalies subtracted; the difference is then adjusted so the variance equals the original Nino 3.4 index",
+      "basePeriod": "1991-2020",
+      "sstVersion": "ERSSTv6",
+      "revisionWindowMonths": 2,
+      "updateCadence": "by the 5th of each month",
+      "methodUrl": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/"
+    },
     "phase": "neutral",
     "latest": {
       "seas": "MJJ",
       "year": 2026,
       "anom": 0.98,
-      "preliminary": true
+      "preliminary": true,
+      "exceedsThreshold": true,
+      "thresholdSide": "above"
     },
     "values": [
       {
@@ -238,12 +285,37 @@
     "attribution": "NOAA Climate Prediction Center (CPC), public domain U.S. Government work",
     "description": "Three-month running mean of the Nino 3.4 sea surface temperature anomaly, retained as the long historical-continuity comparison behind the operational RONI headline.",
     "published": "2026-08-05",
+    "state": {
+      "conditions": "el-nino",
+      "episode": "neutral",
+      "direction": "strengthening",
+      "emerging": true,
+      "threshold": 0.5,
+      "conditionsRule": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ensofaq.shtml",
+      "episodeRule": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/"
+    },
+    "authority": {
+      "product": "NOAA CPC ENSO Diagnostic Discussion (official ENSO status)",
+      "url": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_advisory/ensodisc.shtml",
+      "cadence": "monthly, second Thursday",
+      "definitionsUrl": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_advisory/enso-alert-readme.shtml"
+    },
+    "method": {
+      "index": "3 month running mean of ERSST SST anomalies in the Nino 3.4 region (5 N-5 S, 120-170 W), without the tropical-mean subtraction RONI applies",
+      "basePeriod": "centered 30-year base periods, advanced every five years (ClimAdjust)",
+      "sstVersion": "ERSSTv6",
+      "revisionWindowMonths": 2,
+      "updateCadence": "by the 5th of each month",
+      "methodUrl": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_change.shtml"
+    },
     "phase": "neutral",
     "latest": {
       "seas": "MJJ",
       "year": 2026,
       "anom": 1.39,
-      "preliminary": true
+      "preliminary": true,
+      "exceedsThreshold": true,
+      "thresholdSide": "above"
     },
     "values": [
       {

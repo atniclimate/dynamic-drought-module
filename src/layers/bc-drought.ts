@@ -148,11 +148,33 @@ function showBcLegend(date: string | null): void {
   });
 }
 
+/**
+ * Human date for the time-bar stamp: "Jul 23, 2026". Same
+ * `toLocaleDateString` pattern (and the same UTC pin) as usdm.ts's
+ * weekLabel, so no time-bar owner prints a raw ISO string at the reader.
+ * The machine-readable ISO stays where it is verifiable: the legend note,
+ * the popup's source line, and the sidebar source line. Falls back to the
+ * ISO if the provider's date does not parse.
+ */
+function humanSourceDate(iso: string): string {
+  const ms = Date.parse(`${iso}T00:00:00Z`);
+  if (Number.isNaN(ms)) return iso;
+  return new Date(ms).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC'
+  });
+}
+
 function showBcTimeBar(date: string | null): void {
   setTimeBar(CONTROLLER_KEY, {
     ariaLabel: 'British Columbia basin drought levels source date',
     stamp: {
-      headline: date === null ? 'Source date unavailable' : `Source date ${date}`,
+      headline:
+        date === null
+          ? 'Source date unavailable'
+          : `Source date ${humanSourceDate(date)}`,
       detail:
         'Province of British Columbia · weekly in the core drought season · No update means not measured right now',
       register: 'observed'

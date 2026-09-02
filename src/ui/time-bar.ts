@@ -315,7 +315,7 @@ function render(): void {
     const atStart = spec.rail.index <= 0;
     const atEnd = spec.rail.index >= spec.rail.count - 1;
     parts.push(
-      `<button type="button" class="time-bar-step" data-step="-1" aria-label="Previous date" ${atStart ? 'disabled' : ''}>` +
+      `<button type="button" class="time-bar-step" data-step="-1" aria-label="Previous date" title="Previous date" ${atStart ? 'disabled' : ''}>` +
         '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>' +
         '</button>'
     );
@@ -325,7 +325,7 @@ function render(): void {
         `aria-label="${escapeHtml(spec.ariaLabel)} date" />`
     );
     parts.push(
-      `<button type="button" class="time-bar-step" data-step="1" aria-label="Next date" ${atEnd ? 'disabled' : ''}>` +
+      `<button type="button" class="time-bar-step" data-step="1" aria-label="Next date" title="Next date" ${atEnd ? 'disabled' : ''}>` +
         '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>' +
         '</button>'
     );
@@ -380,7 +380,24 @@ function render(): void {
   // note above; the handlers below read `currentSpec` at event time, so
   // the freshly installed spec still drives them).
   const html = parts.join('');
-  if (html === lastRenderedHtml) return;
+  if (html === lastRenderedHtml) {
+    // The rail is the one STATEFUL node the memo preserves: a native range
+    // input carries whatever value the user dragged or arrowed to, which is
+    // not necessarily the stop the owning surface actually rendered. When a
+    // step FAILS the owner re-installs an UNCHANGED spec (usdm.ts showWeek's
+    // error path), so the built markup matches and no swap happens, and
+    // nothing would return the thumb to the week that is on the map.
+    // Reconcile the live control to the spec here instead of swapping.
+    const railSpec = spec.rail;
+    if (railSpec) {
+      const railInput = el.querySelector<HTMLInputElement>('.time-bar-rail');
+      if (railInput && railInput.value !== String(railSpec.index)) {
+        railInput.value = String(railSpec.index);
+        railInput.setAttribute('aria-valuetext', railSpec.valueText(railSpec.index));
+      }
+    }
+    return;
+  }
   el.innerHTML = html;
   lastRenderedHtml = html;
 

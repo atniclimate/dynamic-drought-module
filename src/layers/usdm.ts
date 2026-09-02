@@ -645,6 +645,12 @@ async function showWeek(map: maplibregl.Map, index: number): Promise<void> {
     if (signal.aborted || myEpoch !== stepEpoch) return;
     console.warn(`[usdm] week ${key} fetch failed.`, err);
     reportStatus('error');
+    // The rail thumb already moved (the user's drag or arrow key), but
+    // `weekIndex` and the stamp still describe the week ON THE MAP. Re-install
+    // the unchanged spec so the bar snaps the thumb back to the rendered stop
+    // instead of pointing at a week that never loaded (the mode-chip
+    // equivalent is drought.ts's rollBackToRenderedRange).
+    installTimeBar(map);
     return;
   }
   if (signal.aborted || myEpoch !== stepEpoch) return;

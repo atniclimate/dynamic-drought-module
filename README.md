@@ -46,9 +46,10 @@ self-hosting and data population.
 The source package is `0.6.26`. It includes the interface, Fire 3D,
 Wildfire Hazard Potential, structures, power, and smoke-volume refinements
 described below. A merged commit is not by itself proof that the public site is
-running it; the exact source-to-live divergence observed on 2026-08-20 is
-recorded in [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md). The next phased
-work is summarized in [`ROADMAP.md`](ROADMAP.md).
+running it; every deploy is followed by an automated live check of the build
+marker. Release history and its verification receipts are in
+[`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md). The next phased work is
+summarized in [`ROADMAP.md`](ROADMAP.md).
 
 ---
 
@@ -102,8 +103,9 @@ never an unqualified `live`.
 
 ## Quick start
 
-Use Node.js 22.12 or newer from a supported release line. The repository
-`.nvmrc` selects the pinned Node.js 22 runtime used by validation workflows.
+Use Node.js 24 from the Active LTS line. The repository `.nvmrc` pins the
+exact runtime (24.20.0) that every validation workflow uses; match it locally
+with `nvm use` or `fnm use`.
 
 ```powershell
 npm ci
@@ -148,6 +150,7 @@ current URL.
 | `basemap` | `default` explicitly turns recent satellite imagery off; the legacy `satellite` token remains valid | recent satellite imagery, encoded by absence |
 | `studio` | `layers` or `place` | none |
 | `fire3d` | exact token `true`; entry requires a desktop viewport and the committed Wildfire cluster, while an active scene may remain through a custom layer stack as long as a Fire event layer remains | `false`, encoded by absence |
+| `spi` | Gridded Drought Index accumulation window in days: `30`, `60`, `180`, or `365`; applies when the `gridded-index` layer is on | `90` day window, encoded by absence |
 
 Temporal display parameters also round-trip (`week` for the USDM archive,
 `dmode`, `sst`, `outlook`, and `heatday`). The authoritative grammar is
@@ -434,7 +437,7 @@ maintainer-run artifact builders (`scripts/build-states.mjs`,
 ## Browser support
 
 Any evergreen browser (Chrome, Edge, Firefox, Safari 15.5 or newer).
-MapLibre GL JavaScript requires WebGL 1.
+MapLibre GL JavaScript uses WebGL 2 when the browser offers it and falls back to WebGL 1.
 
 ## Attribution and licensing
 

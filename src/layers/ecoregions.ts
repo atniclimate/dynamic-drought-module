@@ -65,7 +65,15 @@ const LEVEL_NOTE: Record<EcoregionLevel, string> = {
     'EPA Omernik Level IV ecoregions (finer subdivisions, colored by parent Level III); 2012 delineation, simplified for display.'
 };
 
-type EcoregionStatus = 'loading' | 'ready' | 'no-data' | 'error';
+/**
+ * The states this layer can actually reach. `'no-data'` was declared here but
+ * never written (ARCH-16): the PMTiles archive either resolves and renders
+ * (`'ready'`) or fails to resolve (`'error'`), and nothing inspects a tile for
+ * emptiness. Declaring a state the module cannot produce misreads as coverage
+ * the layer does not have, so it is gone; restore it only alongside a real
+ * empty-viewport check.
+ */
+type EcoregionStatus = 'loading' | 'ready' | 'error';
 
 // ---------------------------------------------------------------------------
 // Module state

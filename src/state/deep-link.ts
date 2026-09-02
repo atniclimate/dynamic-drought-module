@@ -136,7 +136,7 @@ export async function applyDeepLink(
 }
 
 /**
- * Open the drought impact briefing for a state by its two-letter USPS code.
+ * Open the impact briefing for a state by its two-letter USPS code.
  * Shared by the `select` deep link and the sidebar region-briefing trigger
  * (critical-review #9, the keyboard-reachable path to the briefing). Fetches
  * the bundled state boundary, optionally frames it, and opens the panel with
@@ -187,7 +187,7 @@ export async function openStateBriefing(
     });
   } catch (err) {
     console.warn('[briefing] state boundaries fetch failed.', err);
-    showToast('The drought impact briefing could not load the state boundaries.');
+    showToast('The impact briefing could not load the state boundaries.');
     return;
   }
 

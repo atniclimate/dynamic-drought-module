@@ -98,7 +98,7 @@
           <div id="brief-secondary-actions"></div>
           <div class="brief-selection-summary" id="brief-selection-summary" hidden>
             <p id="brief-selection-read"></p>
-            <button type="button" class="brief-full-report-link" id="brief-full-report-link">Open full drought impact brief</button>
+            <button type="button" class="brief-full-report-link" id="brief-full-report-link">Open the full briefing</button>
           </div>
         </section>
 
@@ -109,7 +109,7 @@
              renderAtHand() on every briefing push; the search and the report
              door are STABLE DOM (a Preact search mounted inside an innerHTML
              rebuild would be wiped), wired once in src/ui/mobile-sheet.ts. -->
-        <section class="panel sheet-at-hand" id="sheet-at-hand" aria-label="At-hand drought answer">
+        <section class="panel sheet-at-hand" id="sheet-at-hand" aria-label="At-hand briefing answer">
           <div id="sheet-at-hand-body"></div>
           <!-- The one search (U3): the same shared component the console
                catalog and the Brief head mount, replacing the U2 stopgap
