@@ -11,7 +11,7 @@ set of public upstream services.
 
 ## Prerequisites and local setup
 
-- Node.js 22.12 or newer
+- Node.js 24 (Active LTS); `.nvmrc` pins the exact patch, 24.20.0
 - npm, using the committed `package-lock.json`
 - A browser supported by Playwright for browser testing
 - Python only for the offline landscape and Overture structures pipelines

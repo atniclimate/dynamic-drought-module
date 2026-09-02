@@ -6,7 +6,7 @@
   "description": "Embeddable static web map with North American drought context, recent satellite imagery, and detailed United States hazard and telemetry views, deepest in the Pacific Northwest.",
   "license": "PolyForm-Strict-1.0.0",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "dev": "vite",
@@ -67,7 +67,7 @@
   "devDependencies": {
     "@playwright/test": "1.61.1",
     "@types/geojson": "^7946.0.14",
-    "@types/node": "^22.20.1",
+    "@types/node": "^24.13.3",
     "ajv": "^8.20.0",
     "fflate": "0.8.3",
     "geojson-vt": "^4.0.3",

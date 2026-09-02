@@ -103,8 +103,9 @@ never an unqualified `live`.
 
 ## Quick start
 
-Use Node.js 22.12 or newer from a supported release line. The repository
-`.nvmrc` selects the pinned Node.js 22 runtime used by validation workflows.
+Use Node.js 24 from the Active LTS line. The repository `.nvmrc` pins the
+exact runtime (24.20.0) that every validation workflow uses; match it locally
+with `nvm use` or `fnm use`.
 
 ```powershell
 npm ci
