@@ -513,8 +513,11 @@ decision_gates:
     needed_by: ["DDM-P0-T03", "DDM-P0-T09", "DDM-P0-T10", "DDM-P9-T04", "DDM-P15-T02"]
     context: "MapLibre GL JS 6.6.0 is current (published 2026-08-24); 5.24.0 is the last 5.x and receives no fixes; the installed version is 4.7.1. The 4 to 5 move is a pin bump plus test-budget tuning, because every documented 5.0.0 breaking change has zero occurrences in this codebase. The 4 to 6 move is a migration: ESM-only imports at 69 sites, a newly required worker-URL call, WebGL2 required, style-spec v25 against nine expression casts, and an overscale default that changes query results at 18 call sites. Source: 15 DEP-01."
     decision:
-      date: "2026-08-29"
-      answer: "Accepted in principle for a version 5 or later renderer. Three-dimensional terrain is a product requirement for desktop and tablet, and the fire module and any later volumetric smoke depend on it. Mobile and tablet 3D wait on the tablet contract (DDM-P10-T01, gate DDM-D02). The version 6 option was not on the table when this was answered, so the three-way choice is open."
+      date: "2026-09-02"
+      answer: "Migrate directly to MapLibre GL JS 6.6.0 and skip version 5 (owner ruling DR-009, an override of the step-through recommendation, because an intermediate version creates debt). Known scope: rewrite the default imports at 69 sites, configure the worker URL, update the queryRenderedFeatures interaction sites (13 real call sites counted 2026-09-02; the earlier figure of 18 came from report 15), verify the WebGL2 path. Browser floor: Safari 15.5, pinned as a build target in vite.config.ts so the README promise stays true. Three-dimensional terrain remains a product requirement for desktop and tablet; mobile and tablet 3D wait on the tablet contract (DDM-P10-T01, gate DDM-D02)."
+      superseded_answer:
+        date: "2026-08-29"
+        answer: "Accepted in principle for a version 5 or later renderer; the version 6 option was not on the table."
       cost: "Measured on feature/maplibre-v5 at e82190e (2026-08-19): main chunk 209.99 kB to 273.01 kB gzip, about 63 KiB more; 3D terrain transfer 2.28 MB to 6.39 MB. To be re-measured against the current tree before the upgrade lands."
       posture: "That cost figure is a local measurement recorded here, not a per-action continuous integration artifact. Since 2026-09 the work converges on one integration branch and lands as one pull request."
   - id: "DDM-D02"
