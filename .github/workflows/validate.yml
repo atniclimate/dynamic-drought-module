@@ -11,6 +11,22 @@ name: Validate DDM
 
 on:
   pull_request:
+    # A pull request that touches only documentation outside the build has
+    # nothing for the gate or the eight-shard suite to check, so it runs
+    # neither. Same list, and the same reasoning, as deploy.yml: NOT
+    # '**/*.md', because the three README files under public/ are copied
+    # into dist/ by Vite and so are part of the shipped tree.
+    #
+    # Caveat for D-5 (branch protection): `main` has no ruleset today. If
+    # `Validate` is ever made a REQUIRED status check, a pull request
+    # skipped by this filter reports no status at all, and a required check
+    # that never reports blocks the merge. Pair any such ruleset with a
+    # skip-shaped stand-in, or drop this filter, before turning it on.
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'planning/**'
+      - '.github/ISSUE_TEMPLATE/**'
   workflow_dispatch:
     inputs:
       # Mirrors browser-suite.yml's workflow_call experiment inputs, defaults

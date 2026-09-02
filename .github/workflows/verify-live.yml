@@ -53,17 +53,25 @@
 # The checkout is the commit under proof either way, so the PMTiles checks
 # read the archives that build shipped and can compare their sizes.
 #
-# Which half runs: a post-deploy proof and a dispatch always run the deep
-# half, because a release and a deliberate ask both deserve the full
-# answer. The daily scheduled compare runs the light half only, and
-# escalates to the deep half when the light half fails. What that gives up
-# is the daily detection of a browser-visible degradation with no deploy
-# behind it, such as a layer that starts failing to reach a terminal state
-# against unchanged bytes. That is acceptable because source-health.yml
-# already boots the application against every catalog source daily and
-# opens its own issues, and because the bytes themselves are still checked
-# here every day; what is no longer checked daily is one particular way of
-# reading them.
+# Which half runs (CI-06, 2026-09-01): the deep half, unless a dispatch
+# explicitly asks for `mode: light`. A light run escalates to the deep half
+# when the light checks fail. The split used to be keyed on the schedule,
+# which PR 55 removed, so it was describing a branch that could not be
+# taken; it is now an input, which is a shape that survives the snooze.
+# What a light run gives up is the browser-visible degradation with no
+# deploy behind it, such as a layer that starts failing to reach a terminal
+# state against unchanged bytes. Acceptable for a hand check, because
+# source-health.yml boots the application against every catalog source and
+# opens its own issues.
+#
+# What reds this run (CI-01, 2026-09-01): ONLY the bytes. The live stamp is
+# polled for up to 5 minutes before any verdict, and after that only a
+# `stamp:`, `propagation:`, or `seat:` finding, or a poll that never saw the
+# deployed sha, fails the run. A product finding (a layer, an embed corner,
+# a page error, a PMTiles range) opens or updates the same single issue and
+# the run ends GREEN. A stale assertion in the proof used to red main on
+# every deploy while the live build was correct; a product regression is
+# worth an issue, and is not evidence that the deploy failed.
 #
 # Either failure path (a verification that did not prove the build, or an
 # undeployed head) opens or appends to ONE issue labeled deploy-divergence,
@@ -116,6 +124,22 @@ on:
   #   # or dispatch a compare by hand at any time.
   #   - cron: '15 14 * * *'
   workflow_dispatch:
+    inputs:
+      mode:
+        # CI-06 (2026-09-01): the light/deep split used to be keyed on
+        # `github.event_name == 'schedule'`. PR 55 snoozed the schedule, so
+        # that branch became unreachable and every run paid the full deep
+        # cost while the file still described a cheap daily half. The split
+        # is worth keeping, so it moves here: a hand-run `light` compare is
+        # the byte-level proof (propagation, seat, stamp, PMTiles ranges)
+        # with no browser and no npm install, about a minute. Everything
+        # else, including every post-deploy proof, runs `deep`. When the
+        # schedule is restored after 2026-09-11 its runs are `deep` too
+        # unless this input is reinstated in the cron path deliberately.
+        description: 'How much of the live build to prove: deep (six browser boots) or light (bytes only).'
+        type: choice
+        default: deep
+        options: [deep, light]
 
 permissions:
   contents: read
@@ -156,12 +180,18 @@ jobs:
       group: verify-live-${{ (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')) && 'main' || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'workflow_run' }}
     runs-on: ubuntu-latest
-    # 35, not 25: a cache-miss Chromium provision takes up to 10 minutes
-    # (.github/workflows/browser-suite.yml documents that budget), the
-    # verifier step's own budget is 16, and the freshness refetch and the
-    # issue steps come after both. At 25 the job could be cancelled before
-    # it filed anything, which is the silence this workflow exists to end.
-    timeout-minutes: 35
+    # 45, not 50 and not the original 35: a cache-miss Chromium provision
+    # takes up to 10 minutes (.github/workflows/browser-suite.yml documents
+    # that budget), the verifier step's own budget is 16, the bounded
+    # propagation poll costs up to 7 more in the one case where the CDN
+    # really is slow, and the freshness refetch and the issue steps come
+    # after all of them. The 50 was bought by the poll's old 600-second
+    # deadline; report 18 section 6 cut that to 300 (cap 7 minutes), so the
+    # ceiling comes back down with it. Too low and the job could be
+    # cancelled before it filed anything, which is the silence this workflow
+    # exists to end. The poll is paid only when the bytes have not landed
+    # yet; the normal run still finishes in one to three minutes.
+    timeout-minutes: 45
     permissions:
       contents: read
       issues: write
@@ -212,9 +242,41 @@ jobs:
           # A post-deploy proof already knows its commit and nonce from the
           # event, so it asks the API for nothing: an Actions or branches
           # outage must not turn a real release's receipt into a red run.
-          # A scheduled compare needs both, and an outage there fails this
-          # step loudly rather than reading an empty run list as "main was
-          # never deployed" and filing a divergence that is not one.
+          # A scheduled or dispatched compare needs both, and an outage
+          # there must ALSO not read an empty run list as "main was never
+          # deployed" and file a divergence that is not one.
+          #
+          # CI-03 (2026-09-01): each read is tried three times with a
+          # widening pause, because a single `HTTP 502: Server Error` from
+          # GitHub's own API used to red this run in twenty seconds (run
+          # 33540126899). If all three attempts fail the step does NOT fail:
+          # it emits the `in-flight` verdict, which every step below already
+          # treats as "record it, end green, touch no issues". A GitHub API
+          # outage is not evidence about this repository's live build, so it
+          # must be silence, not a red branch. Note the existing asymmetry
+          # this repairs: the inner attempt walk-back below was already
+          # retried and tolerant, while the two calls that decide the whole
+          # verdict were neither.
+          gh_retry() {
+            local out rc n=1
+            while [ "$n" -le 3 ]; do
+              # `if`, not `&&`: under `set -e` a failing `&&` list in the loop
+              # body would end the step, which is the very thing being fixed.
+              if out=$("$@" 2>/dev/null); then
+                printf '%s' "$out"
+                return 0
+              else
+                rc=$?
+              fi
+              echo "::warning::GitHub API read failed (attempt $n of 3, exit $rc): $*" >&2
+              if [ "$n" -lt 3 ]; then
+                sleep $(( n * 10 ))
+              fi
+              n=$((n + 1))
+            done
+            return 1
+          }
+          api_down=false
           runs='[]'
           branch='{"commit":{"sha":"","commit":{"committer":{"date":""}}}}'
           if [ "$EVENT_NAME" != "workflow_run" ]; then
@@ -224,8 +286,9 @@ jobs:
             # seen yet (harmless, the next compare sees them), while asking
             # for the runs first lets a push produce a head that no run in
             # the snapshot names and read as never deployed.
-            branch=$(gh api "repos/$REPO/branches/main")
-            head=$(printf '%s' "$branch" | jq -r .commit.sha)
+            branch=$(gh_retry gh api "repos/$REPO/branches/main") \
+              || { api_down=true; branch='{"commit":{"sha":"","commit":{"committer":{"date":""}}}}'; }
+            head=$(printf '%s' "$branch" | jq -r '.commit.sha // ""')
             # 100 rather than 30: a long-lived head with many dispatches
             # could otherwise push its own successful deploy out of the
             # window and read as never deployed. The window still stays,
@@ -234,8 +297,36 @@ jobs:
             # to the head with `--commit` guarantees that head's own runs
             # are in the snapshot no matter how much else has happened.
             fields=attempt,databaseId,headSha,conclusion,status,createdAt,updatedAt
-            runs=$(gh run list --workflow=deploy.yml --branch main --json "$fields" --limit 100)
-            headRuns=$(gh run list --workflow=deploy.yml --branch main --commit "$head" --json "$fields" --limit 100)
+            headRuns='[]'
+            if [ "$api_down" = false ]; then
+              runs=$(gh_retry gh run list --workflow=deploy.yml --branch main --json "$fields" --limit 100) || api_down=true
+              headRuns=$(gh_retry gh run list --workflow=deploy.yml --branch main --commit "$head" --json "$fields" --limit 100) || api_down=true
+            fi
+            # CI-03: three attempts each, and still nothing. Say so and end
+            # green as `in-flight`. Every step below already treats that
+            # verdict as "record it, touch no issues", so an API outage
+            # leaves the repository exactly as it found it.
+            if [ "$api_down" = true ]; then
+              {
+                echo "verdict=in-flight"
+                echo "sha="
+                echo "nonce="
+                echo "nonces="
+                echo "warnings=the GitHub API did not answer after three attempts"
+                echo "reason=The GitHub API did not answer after three attempts, so this run has no facts to judge main against. Nothing was compared and no issue was touched."
+              } >> "$GITHUB_OUTPUT"
+              {
+                echo "## Live compare: skipped, the GitHub API did not answer"
+                echo
+                echo "Three attempts at the branches and deploy-run reads all failed."
+                echo "A GitHub API outage is not evidence about this repository's live"
+                echo "build, so this run records \`in-flight\`, opens nothing, closes"
+                echo "nothing, and ends green. The next compare re-asks."
+                echo
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "::notice::GitHub API unavailable after three attempts; recorded in-flight and ended green."
+              exit 0
+            fi
             runs=$(jq -n --argjson window "$runs" --argjson head "$headRuns" \
               '($window + $head) | group_by(.databaseId) | map(.[-1])')
             # gh run list reports ONE row per run carrying the LATEST
@@ -400,14 +491,71 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Verifying $DEPLOY_SHA (deploy runs $DEPLOY_RUN_NONCES) at $url"
 
+      # Bounded propagation poll, ahead of any verdict (CI-01/5a, 2026-09-01).
+      # Pages fronts a CDN; a fresh deploy has been observed live in 1813 ms
+      # (run 33453720184) but the edge is entitled to be slower than that.
+      # Poll the live bytes for the deployed sha for up to 5 minutes BEFORE
+      # anything below is allowed to call the build diverged, so a slow edge
+      # can never be reported as a divergence.
+      #
+      # 300 s, not the 600 s this step shipped with (report 18 section 6,
+      # 2026-09-02): 600 was generous against the observed behavior and it
+      # bought its worst case by raising the job ceiling to 50 minutes. The
+      # only measurement on record is 1813 ms (run 33453720184), and the
+      # verifier below adds its own 5-minute settle window on top of this
+      # loop, so a slow edge still gets about ten minutes before anything
+      # calls it a divergence. If 300 s proves tight twice, raise it here
+      # with the two run ids in this comment.
+      #
+      # This is a cheap curl loop, not a second copy of the proof: it only
+      # answers "do the bytes the site serves carry this commit yet". The
+      # verifier below still runs and still writes the receipt. Its answer
+      # is what decides the SEVERITY: propagated bytes plus a failing
+      # product check is a finding worth an issue and a green run.
+      - name: Poll the live stamp before judging
+        id: poll
+        if: ${{ steps.expect.outputs.verdict == 'verify' && steps.pages.outcome == 'success' }}
+        # The cap the review asked for: 7, so a hung curl cannot outlive the
+        # 300-second deadline plus one 60-second asset read by much.
+        timeout-minutes: 7
+        env:
+          BASE_URL: ${{ steps.pages.outputs.url }}
+        run: |
+          set -uo pipefail
+          deadline=$(( $(date +%s) + 300 ))
+          attempt=0
+          while :; do
+            attempt=$((attempt + 1))
+            index=$(curl -sf --max-time 30 "$BASE_URL" || true)
+            if printf '%s' "$index" | grep -qF "$DEPLOY_SHA"; then
+              echo "propagated=true" >> "$GITHUB_OUTPUT"
+              echo "The live index carries $DEPLOY_SHA after $attempt read(s)."
+              exit 0
+            fi
+            # The stamp normally rides in the entry script, not index.html.
+            asset=$(printf '%s' "$index" | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' | head -1 || true)
+            if [ -n "$asset" ] \
+              && curl -sf --max-time 60 "${BASE_URL%/}/$asset" | grep -qF "$DEPLOY_SHA"; then
+              echo "propagated=true" >> "$GITHUB_OUTPUT"
+              echo "The live entry asset $asset carries $DEPLOY_SHA after $attempt read(s)."
+              exit 0
+            fi
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              break
+            fi
+            sleep 30
+          done
+          echo "propagated=false" >> "$GITHUB_OUTPUT"
+          echo "::warning::The live build did not carry $DEPLOY_SHA within 5 minutes; the verifier below decides what that means."
+
       # The light half: propagation, seat, the build stamp read out of the
       # shipped script, and the PMTiles range and identity checks. No
-      # browser, no node_modules, about a minute. This is the whole
-      # scheduled compare when it passes; when it fails, the deep proof
-      # below runs and speaks instead.
+      # browser, no node_modules, about a minute. It runs only for a
+      # dispatch that asked for `mode: light`; when it fails, the deep
+      # proof below runs and speaks instead.
       - name: Check the live build (light)
         id: light
-        if: ${{ steps.expect.outputs.verdict == 'verify' && github.event_name == 'schedule' }}
+        if: ${{ steps.expect.outputs.verdict == 'verify' && github.event.inputs.mode == 'light' }}
         timeout-minutes: 10
         # Through `env:` and quoted, not interpolated into the command line:
         # the resolve step above makes the same promise about API text, and
@@ -426,11 +574,11 @@ jobs:
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
           exit 0
 
-      # Everything below is the deep proof: six boots in a real browser.
-      # It runs after a deploy and on dispatch, and on a scheduled day only
-      # when the light checks found something. That is why the browser
-      # install is here rather than above: a green scheduled day never pays
-      # for it.
+      # Everything below is the deep proof: six boots in a real browser. It
+      # runs after every deploy and on any dispatch that did not ask for
+      # `mode: light`, and on a light dispatch only when the light checks
+      # found something. That is why the browser install is here rather
+      # than above: a green light run never pays for it.
       #
       # `!cancelled()` rather than the implicit success(): a light step
       # KILLED by its own timeout concludes `failure`, which under the
@@ -446,7 +594,7 @@ jobs:
         if: >-
           ${{ !cancelled() && steps.expect.outputs.verdict == 'verify'
               && steps.align.outcome == 'success' && steps.pages.outcome == 'success'
-              && (github.event_name != 'schedule' || steps.light.outputs.exit_code != '0') }}
+              && (github.event.inputs.mode != 'light' || steps.light.outputs.exit_code != '0') }}
         run: npm ci
 
       - name: Provision Chromium
@@ -529,6 +677,19 @@ jobs:
             echo "mode=light" >> "$GITHUB_OUTPUT"
             echo "Light check exit code: ${LIGHT_EXIT:-(none, the step did not finish)}"
           fi
+          # The severity, read straight off the receipt the verifier wrote:
+          # `diverged` is true only when a `stamp:`, `propagation:`, or
+          # `seat:` check failed, which is the live site serving bytes other
+          # than the ones this deploy published, or referencing an asset it
+          # does not serve. Everything else in `failed` is a product
+          # finding. No receipt (the verifier crashed or was killed) leaves
+          # this empty, and the poll step above is then the only evidence
+          # about the bytes, which is exactly how the fail step reads it.
+          diverged=$(jq -r 'if .diverged == true then "true" else "false" end' live-receipt.json 2>/dev/null || true)
+          echo "diverged=${diverged:-}" >> "$GITHUB_OUTPUT"
+          echo "Divergence (stamp or propagation) in the receipt: ${diverged:-(no receipt)}"
+          failed=$(jq -r '(.failed // []) | join(", ")' live-receipt.json 2>/dev/null || true)
+          echo "Failed checks: ${failed:-(no receipt)}"
 
       # `!cancelled()` replaces the implicit success(), so these steps run
       # even when an earlier one failed. That is deliberate for a verifier
@@ -600,6 +761,8 @@ jobs:
       - name: Open or update the divergence issue
         if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'verify' && steps.verify.outcome != 'skipped' && steps.verify.outputs.exit_code != '0' && steps.fresh.outputs.current != 'false' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          POLL_PROPAGATED: ${{ steps.poll.outputs.propagated }}
         with:
           script: |
             const fs = require('fs');
@@ -618,16 +781,25 @@ jobs:
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const failed = receipt?.failed ?? [];
             const inconclusive = receipt?.inconclusive === true;
+            // The bytes are proved when the bounded poll saw the deployed sha
+            // live AND no stamp/propagation check failed. That case is a
+            // PRODUCT finding: worth this issue, not worth a red branch, and
+            // the run itself ends green (the severity split in this workflow).
+            const bytesProved = process.env.POLL_PROPAGATED === 'true' && receipt?.diverged !== true;
             const heading = receipt === null
               ? 'Live build verification did not complete'
               : inconclusive
                 ? 'Live build verification inconclusive (propagation timeout)'
-                : 'Live build verification failed';
+                : bytesProved
+                  ? 'Live build is the right bytes; a product check failed'
+                  : 'Live build verification failed';
             const explanation = receipt === null
               ? 'The verifier produced no receipt (it timed out or crashed), so the live build is unproved, not proved wrong.'
               : inconclusive
                 ? 'The referenced scripts did not contain the deployed commit within the grace period. The Pages CDN may still be propagating, or a newer deploy superseded this one; the live build is unproved, not proved wrong.'
-                : 'Either the live site still serves a previous build, a shipped asset or PMTiles range is not served, or a boot did not reach and hold terminal layer states.';
+                : bytesProved
+                  ? 'The live site serves this commit, so the deploy is proved. A product check failed against those correct bytes: a shipped asset or PMTiles range, a boot that did not reach and hold terminal layer states, a page error, or the embed corner contract. The verification run itself ends green, because the deploy is not the thing that is wrong.'
+                  : 'Either the live site still serves a previous build, a shipped asset or PMTiles range is not served, or a boot did not reach and hold terminal layer states.';
             const body = [
               marker,
               `## ${heading}`,
@@ -782,11 +954,50 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::notice::Superseded: main moved from $DEPLOY_SHA to $FRESH_HEAD; no divergence issue filed."
 
-      - name: Fail the run when the live build was not proved
-        if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'verify' && steps.verify.outcome != 'skipped' && steps.verify.outputs.exit_code != '0' && steps.fresh.outputs.current != 'false' }}
+      # The severity split (CI-01/5a, 2026-09-01). Only the BYTES red this
+      # run: a `stamp:`, `propagation:`, or `seat:` finding in the receipt,
+      # or a 5-minute poll that never saw the deployed sha on the site.
+      # A product finding has already opened or updated the single
+      # deploy-divergence issue above; making it red as well turns every
+      # product regression, and every assertion in the proof that has
+      # drifted from the runtime, into a broken branch. That is exactly
+      # what happened to d5aaac1 on 2026-09-01: the live build was correct
+      # and main went red on a stale embed-corner assertion.
+      - name: Fail the run only when the live bytes diverge
+        if: >-
+          ${{ !cancelled() && steps.named.outcome == 'success'
+              && steps.expect.outputs.verdict == 'verify'
+              && steps.verify.outcome != 'skipped'
+              && steps.verify.outputs.exit_code != '0'
+              && steps.fresh.outputs.current != 'false'
+              && (steps.poll.outputs.propagated != 'true' || steps.verify.outputs.diverged == 'true') }}
         run: |
           echo "::error::The live build was not proved to be $DEPLOY_SHA (deploy run $DEPLOY_RUN_ID); see the job summary and the deploy-divergence issue."
           exit 1
+
+      # The other half of the split: the deploy is proved, something else is
+      # not. Say so in the summary, warn, and end green. The issue carries
+      # the detail and closes itself on the next green proof.
+      - name: Record a product finding without failing the run
+        if: >-
+          ${{ !cancelled() && steps.named.outcome == 'success'
+              && steps.expect.outputs.verdict == 'verify'
+              && steps.verify.outcome != 'skipped'
+              && steps.verify.outputs.exit_code != '0'
+              && steps.fresh.outputs.current != 'false'
+              && steps.poll.outputs.propagated == 'true'
+              && steps.verify.outputs.diverged != 'true' }}
+        run: |
+          {
+            echo "## Live build is the right bytes; a product check failed"
+            echo
+            echo "The live site serves \`$DEPLOY_SHA\` (deploy run $DEPLOY_RUN_ID),"
+            echo "so the deploy itself is proved. One or more product checks failed"
+            echo "and the single deploy-divergence issue carries the detail. This run"
+            echo "ends green because the deploy is not the thing that is wrong."
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::Live bytes correct; a product check failed. See the deploy-divergence issue."
 
       - name: Fail the run when main has no successful deploy
         if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'undeployed' && steps.fresh.outputs.current != 'false' }}

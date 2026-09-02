@@ -21,7 +21,8 @@
 #
 # Counts, measured with `npx playwright test --list --project=<p>
 # --shard=i/n` on 56dd46a (2026-08-29): chromium 763 tests over 4 shards
-# (191/191/191/190), chromium-interaction 42 tests over 2 shards (21/21),
+# (191/191/191/190; 778 tests in 101 files as of 2026-09-01, so about
+# 195 per shard), chromium-interaction 42 tests over 2 shards (21/21),
 # chromium-3d 32 tests over 2 shards (16/16). 3D moved from 3 shards to 2:
 # the prior split ran 1.5 / 6.4 / 6.7 minutes per shard (one near-empty
 # Node-level slice, two scene-build-bound slices), so dropping to 2 is
@@ -31,9 +32,49 @@
 # composition is this PR's own Validate run; re-fit these when the suite
 # grows.
 
+# The CI gap this file closes (report 18 section 6, 2026-09-02). With the
+# suite ADVISORY on a push to main (deploy.yml) and every daily cron snoozed
+# through 2026-09-11, a regression that verify-live.yml's checks do not cover
+# could land on main and produce no durable notification at all: no issue, no
+# email, no red badge. It would sit until the next landing pull request, which
+# under one landing per window is weeks, not a day. Two answers, both here:
+#
+#   1. A shard that fails writes a small marker artifact (see "Record the
+#      failed shard" below). The CALLER aggregates those markers into ONE
+#      marker-matched issue, closed by the next green run, exactly the
+#      mechanism verify-live.yml already uses for the live proof. The routing
+#      job lives in deploy.yml rather than here because a reusable workflow's
+#      permissions "can only be maintained or reduced, not elevated" by the
+#      caller: declaring a job that requests `issues: write` in THIS file
+#      would make validate.yml's call fail outright ("Error calling workflow
+#      ... the nested job is requesting 'issues: write', but is only allowed
+#      'issues: none'"), and Validate is the one binding gate.
+#   2. A weekly scheduled run of this workflow against main (below), so a
+#      regression cannot outlive a window even when nothing lands.
+#
+# No concurrency group is introduced here. The callers hold their own
+# (deploy.yml's `pages`, validate.yml's `validate-<ref>`); a group at this
+# workflow would apply to those calls too and could cancel a required
+# Validate run, which is the opposite of the intent.
+
 name: Browser suite
 
 on:
+  # The ONLY schedule added on 2026-09-02. Every other cron in this
+  # repository (verify-live daily, source-health, upstream-monitor) stays
+  # snoozed through 2026-09-11 and is an owner decision, not this file's.
+  # Weekly, not daily: the point is that a regression cannot outlive a
+  # development window, not that it is caught within an hour.
+  #
+  # Monday 15:13 UTC. A scheduled run has no caller, so `inputs` is empty and
+  # every use of it below falls back: the checkout takes the default branch
+  # (main), the build stamp comes from github.sha and github.run_id, workers
+  # stays 1, retries stays the config's, and `advisory` is false, so a red
+  # shard reds this run. A failed scheduled run on the default branch emails
+  # the owner and shows on the Actions page, which is the durable
+  # notification the advisory push path gets from its issue instead.
+  schedule:
+    - cron: '13 15 * * 1'
   workflow_call:
     inputs:
       build-sha:
@@ -67,6 +108,23 @@ on:
         required: false
         type: string
         default: ''
+      # CI-02/CI-11 (2026-09-01, owner direction D-2). Advisory means the
+      # shards still RUN, still summarize, and still keep their reports and
+      # traces, but a red shard does not fail the calling job. deploy.yml
+      # passes true: the merge commit's tree already passed this same
+      # sharded suite on the pull request and locally before the landing, so
+      # a shard flake on the merge must not hold a proven build out of
+      # Pages. It must also not fail the deploy RUN, because verify-live.yml
+      # only proves a deploy whose run concluded success, and losing the
+      # live proof to a flake is the opposite of the intent. Validate does
+      # NOT pass it: on the pull request this suite is the required gate.
+      advisory:
+        description: >-
+          When true, a failing shard annotates and uploads its report but
+          does not fail the job. Default false: the shard result is binding.
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -85,9 +143,13 @@ jobs:
     # them on every boot it drives when they are set, so a shard proves it
     # exercised the build this run made. The Playwright webServer builds
     # dist inside this job, so the values must reach it here.
+    #
+    # The fallbacks are for the weekly scheduled run, which has no caller and
+    # so no inputs: there github.sha is main's head and github.run_id is this
+    # run, which is the same promise the callers make.
     env:
-      DDM_BUILD_SHA: ${{ inputs.build-sha }}
-      DDM_BUILD_NONCE: ${{ inputs.build-nonce }}
+      DDM_BUILD_SHA: ${{ inputs.build-sha || github.sha }}
+      DDM_BUILD_NONCE: ${{ inputs.build-nonce || github.run_id }}
     strategy:
       fail-fast: false
       matrix:
@@ -130,11 +192,26 @@ jobs:
       - name: Run the browser shard
         id: suite
         timeout-minutes: 26
+        # Advisory calls (deploy.yml) keep `outcome` truthful, which is what
+        # the report and trace uploads below are gated on, while the step's
+        # conclusion, and so the job's, stays success.
+        #
+        # `== true` rather than the bare input: on the weekly scheduled run
+        # there is no caller, so `inputs.advisory` is null and a bare
+        # interpolation would hand this key an empty string. The comparison
+        # always yields a boolean, and it is identical for both callers.
+        continue-on-error: ${{ inputs.advisory == true }}
         env:
           # Routed through env, like RETRIES_ARG below, rather than
           # interpolated directly into `run:`, so neither input's value is
-          # spliced into the shell command line.
-          WORKERS: ${{ inputs.workers }}
+          # spliced into the shell command line. The `|| '1'` is the
+          # scheduled run's fallback: an empty WORKERS would make
+          # `--workers=` an invalid argument rather than a default.
+          WORKERS: ${{ inputs.workers || '1' }}
+          # Empty on the weekly scheduled run too: GitHub casts both null and
+          # the empty string to 0 when the operand types differ, so the
+          # `!= ''` test is false when there is no caller and no input.
+          #
           # Non-empty only when the `retries` experiment input (above) was
           # set; a plain call (Validate's pull_request path, or deploy.yml)
           # leaves this empty and playwright.config.ts's own isCI retries
@@ -153,6 +230,63 @@ jobs:
         env:
           PLAYWRIGHT_PROJECT: ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
         run: node scripts/summarize-playwright-shard.mjs test-results/report.json >> "$GITHUB_STEP_SUMMARY"
+
+      # An advisory shard that failed is still worth saying out loud: the
+      # summary above names the tests, and this puts one line on the run so
+      # a reader does not have to open a green job to learn a shard was red.
+      - name: Say that an advisory shard failed
+        if: ${{ !cancelled() && inputs.advisory && steps.suite.outcome != 'success' }}
+        run: |
+          echo "::warning::Advisory shard ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }} failed. The run is not red: this tree passed the same suite on its pull request. See the job summary and the kept report."
+
+      # The durable half of the answer to report 18 section 6. A failed shard
+      # writes one small text marker; the caller's routing job (deploy.yml,
+      # "Route the browser suite result to one issue") counts the markers in
+      # this run and opens, updates, or closes ONE marker-matched issue.
+      #
+      # On the weekly scheduled run there is no caller, so nothing reads the
+      # marker yet: that run's notification is its own red conclusion. The
+      # marker is still written there so the routing becomes one job the day
+      # validate.yml's `browser` job grants `issues: write` and the routing
+      # can move into this file and serve both paths.
+      #
+      # Why an artifact and not a job output: this job is a matrix, and
+      # outputs from matrix legs overwrite each other, so a passing leg that
+      # finishes last would erase a failing leg's signal. Why not the jobs
+      # API: a step under `continue-on-error` reports a success conclusion,
+      # so the API cannot distinguish an advisory failure from a pass.
+      #
+      # Only on a push to main and on the weekly schedule. A pull request's
+      # red shard already fails Validate and needs no repository issue, and a
+      # hand dispatch of deploy.yml is somebody watching the run.
+      #
+      # The marker carries the project, the shard, the run and the commit.
+      # No test names, no page text, no geometry: the shard's own report
+      # artifacts above are where diagnosis lives, under their own retention
+      # and their own sovereignty guarantee.
+      - name: Record the failed shard for the run's issue routing
+        if: >-
+          ${{ !cancelled() && steps.suite.outcome != 'success'
+          && (github.event_name == 'schedule'
+          || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+        env:
+          SHARD_LABEL: ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
+        run: |
+          set -euo pipefail
+          mkdir -p shard-failure
+          printf '%s\n' "$SHARD_LABEL" > shard-failure/shard.txt
+
+      - name: Keep the failed-shard marker
+        if: >-
+          ${{ !cancelled() && steps.suite.outcome != 'success'
+          && (github.event_name == 'schedule'
+          || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-suite-failure-${{ matrix.project }}-${{ matrix.shard }}-of-${{ matrix.total }}
+          path: shard-failure/shard.txt
+          retention-days: 1
+          if-no-files-found: ignore
 
       # Measurement channel (R1/R3, 2026-08-29): upload the raw JSON report
       # unconditionally, every shard, not only on failure or flake, so a real
