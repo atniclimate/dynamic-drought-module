@@ -889,11 +889,12 @@ test('map-key family precedence matches the rendered key for mixed active sets',
   );
   expect(resolveMapKeyFamily(new Set(['nifc-fires']))).toBe('fire');
   // The SST anomaly surface outranks the NIFC event fallback like every
-  // other condition surface, and carries no hazard family (W2-D1).
+  // other condition surface. Since UI-14(b) it carries its own 'enso'
+  // family (src/ui/map-key.ts resolveMapKeyFamily) rather than 'other'.
   expect(resolveMapKeyFamily(new Set(['sst-anomaly', 'nifc-fires']))).toBe(
-    'other'
+    'enso'
   );
-  expect(resolveMapKeyFamily(new Set(['sst-anomaly']))).toBe('other');
+  expect(resolveMapKeyFamily(new Set(['sst-anomaly']))).toBe('enso');
 });
 
 test('static WHP key carries five classes and its source qualification', () => {

@@ -207,18 +207,24 @@ test.describe('North American Drought Monitor continental context', () => {
     page
   }) => {
     await routeBasemap(page);
+    // Two consumers share the 'nadm-current' fetch key (the layer and the
+    // drought minimap, src/state/minimap-drought.ts) and each invalidates it
+    // on a malformed payload. Which one fetches first, and whether the other
+    // joins the in-flight promise or refetches after the invalidation, is a
+    // boot-timing race, so the malformed body must hold until the user's
+    // retry rather than for "the first request" only.
     let requests = 0;
+    let malformed = true;
     await page.route(NADM_URL, (route) => {
       requests++;
-      const body =
-        requests === 1
-          ? fixture([
-              {
-                ...feature('d2'),
-                geometry: { type: 'Polygon', coordinates: [[[-120, 50]]] }
-              }
-            ])
-          : fixture([feature('d2')]);
+      const body = malformed
+        ? fixture([
+            {
+              ...feature('d2'),
+              geometry: { type: 'Polygon', coordinates: [[[-120, 50]]] }
+            }
+          ])
+        : fixture([feature('d2')]);
       return route.fulfill({
         status: 200,
         contentType: 'application/geo+json',
@@ -232,7 +238,10 @@ test.describe('North American Drought Monitor continental context', () => {
     );
     await expect(layerPill(page, 'nadm-drought')).toHaveText('unavailable');
     await expect(layerCheckbox(page, 'nadm-drought')).not.toBeChecked();
+    const requestsBeforeRetry = requests;
+    expect(requestsBeforeRetry).toBeGreaterThanOrEqual(1);
 
+    malformed = false;
     await layerCheckbox(page, 'nadm-drought').click();
     // The manual retry re-runs fetchSharedJsonWithBudget with its own
     // 15_000ms ceiling (src/layers/nadm-drought.ts activate()), above the
@@ -242,7 +251,9 @@ test.describe('North American Drought Monitor continental context', () => {
     await expect(layerPill(page, 'nadm-drought')).toHaveText('live', {
       timeout: 20_000
     });
-    expect(requests).toBe(2);
+    // The retry issued at least one new request after the click; an exact
+    // count is not stable while two consumers share the key.
+    expect(requests).toBeGreaterThan(requestsBeforeRetry);
   });
 
   test('fetch failure is unavailable and cannot serialize as a clean month', async ({

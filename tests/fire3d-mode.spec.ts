@@ -88,6 +88,34 @@ test('syncFire3dParam round-trips through the URL and preserves neighbors', () =
   }
 });
 
+/**
+ * The clear-sky spec is a HAND-COPY of MapLibre's own internal "no sky"
+ * fallback, and `Map.setSky` requires a full specification, so it cannot
+ * be replaced by passing undefined. A hand-copy of another project's
+ * internals is exactly the kind of thing that rots silently across a
+ * major upgrade, and the two existing assertions compare the harness call
+ * against this same constant, so they can never notice.
+ *
+ * This case pins the literal. Re-verified against maplibre-gl 5.24.0 on
+ * 2026-08-19 and found unchanged from the 4.7 values (harvested from the
+ * retired feature/maplibre-v5 branch on 2026-09-02). To re-verify after
+ * an upgrade, search the distributed bundle for the object literal
+ * containing "sky-color":"transparent"; that is the fallback the library
+ * constructs a Sky with when a style declares none.
+ */
+test('the clear-sky specification still matches the library it was copied from', () => {
+  expect(FIRE3D_SKY_CLEAR_SPECIFICATION).toEqual({
+    'sky-color': 'transparent',
+    'horizon-color': 'transparent',
+    'fog-color': 'transparent',
+    'fog-ground-blend': 1,
+    'atmosphere-blend': 0
+  });
+  // The scene's OWN sky is a separate, deliberately styled spec; the two
+  // must never collapse into one another.
+  expect(FIRE3D_SKY_SPECIFICATION).not.toEqual(FIRE3D_SKY_CLEAR_SPECIFICATION);
+});
+
 // ---------------------------------------------------------------------------
 // Node: the activation gate (entry vs stay-alive, the IC refinement)
 // ---------------------------------------------------------------------------
