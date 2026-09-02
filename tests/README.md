@@ -22,6 +22,120 @@ that its relative entry assets and application boot work there.
 Every run owns that preview process. If another process is already listening
 on port 4173, the suite fails instead of reusing an unattributed build.
 
+## The local verification ladder
+
+Three commands a person types, cheapest first. Every duration below was measured
+on 2026-09-01 on the developer laptop (Windows 11, 13th Gen i5-1340P, 32 GB,
+Chromium on ANGLE over SwiftShader, `--workers=1`), except where it says
+inferred. Re-measure these when the suite grows; a stale number here is worse
+than no number.
+
+| Script | What it runs | Duration |
+| --- | --- | --- |
+| `npm run verify:quick` | `typecheck`, `scan:emdash`, `check:vocabulary`, `check:coverage` | about 5 s |
+| `npm run verify:smoke` | `gate` plus the twelve smoke specs, `--workers=1` | about 5 to 6 min |
+| `npm run test:serial` | all 852 tests, all three projects, one worker | about 50 to 55 min (inferred) |
+
+`verify:quick` is the save-and-think loop. No build, no network, no browser.
+`check:vocabulary` and `check:coverage` are the two that catch a config-table
+edit drifting from its documentation, which is the most common silent break
+here, and `scan:emdash` enforces hard rule 9 before it reaches a diff.
+
+`verify:smoke` is the before-you-hand-it-over loop. Its twelve specs are
+`boot`, `ux1-surfaces`, `url-state`, `cluster-controller-integration`,
+`temporal-axis`, `impact-panel-a11y`, `legend`, `conditions-strip`,
+`mobile-sheet`, `embed-viewport`, `interface-responsive`, and `s4-minimap`:
+about 105 tests covering map lifecycle, role-group order and surface
+exclusivity, URL-as-state, cluster switching, the time controls, the briefing
+modal, the unified legend, the honest off states, the phone sheet, the embed
+viewports, the 720 px boundary, and the minimap framings. One build, one
+preview.
+
+`test:serial` is the integration branch's final pass before a push to main, not
+a routine loop.
+
+When fire or 3D changed, run those two specs directly before you push. They are
+excluded from `verify:smoke` because together they are longer than the rest of
+the smoke set combined (about 20 min inferred; `fire3d-mode` alone measured
+11.1 min):
+
+```
+npx playwright test --workers=1 tests/fire3d-mode.spec.ts tests/view-contracts.spec.ts
+```
+
+Two underlying checks sit beneath the three commands. `npm run gate` is the
+deterministic backbone, 17 steps in about 40 s, and it is what CI runs.
+`npm run gate:nobuild` is the same backbone minus the three steps that need a
+build: it typechecks (`tsc --noEmit` emits nothing and needs no `dist/`) and
+runs the fourteen steps that read only source and `public/`, skipping `vite
+build`, `check:bundle`, and `check:activation`, the only two steps that read
+`dist/`. Measured at about 19 s. Use it when nothing you changed can move the
+bundle; use `gate` before you hand work over.
+
+Neither step list is written twice. `npm run check:all` holds the fourteen
+shared steps; `gate` is `build && check:bundle && check:activation &&
+check:all` and `gate:nobuild` is `typecheck && check:all`, so the two doors
+cannot drift apart.
+
+`npm run check:links` exists but is wired into no gate and no workflow. It is
+not part of any tier above, and it may reach the network. Treat a green
+`check:links` as an unratified extra, not as coverage.
+
+### What a local full run does that CI does not
+
+State this plainly, because the commands above are where a developer meets
+it. `npm run test:serial` (and any local run of `fire3d-mode.spec.ts`):
+
+- **fetches live Census AIANNH and BIA AIAN-LAR geometry** on three boots,
+  because `CAPTURE_EVIDENCE` in `tests/fire3d-mode.spec.ts` is
+  `!process.env['CI']`, so the waiver described below is opt-out under `CI`
+  and therefore opt-in by default locally, and
+- **rewrites about 5 MB of PNGs into `fire3d-evidence/`** (gitignored):
+  `fire3d-active-desktop.png`, `fire3d-embed-disclosure.png`,
+  `fire3d-reduced-motion.png`, `fire3d-control-coverage-note.png`.
+
+So a routine local loop cannot run offline, pays live agency latency on three
+of the slowest boots in the suite, and overwrites the owner's review images
+whether or not anyone asked for a capture. Whether that default should invert
+to an explicit `DDM_CAPTURE_EVIDENCE=1` opt-in is an **open owner decision**;
+it changes the default of a waiver the owner ratified, and
+`tests/boundary-boot-inventory.test.mjs` asserts the guard's shape, so nothing
+here should be changed ahead of that call. Under `CI` none of it happens: the
+boots use the fixtures and the capture blocks are skipped.
+
+### When port 4173 is still held
+
+`reuseExistingServer: false` means the suite refuses a pre-existing listener
+rather than testing an unattributed build. The cost is that a run killed part
+way (Ctrl+C, a tool call timing out, a terminated shard) can orphan its
+`vite preview` child, and the **next** run then dies at startup with
+Playwright's own message, which names the port but not the cause:
+
+```
+Error: http://127.0.0.1:4173 is already used, make sure that nothing is
+running on the port/url or set reuseExistingServer:true in config.webServer.
+```
+
+Do not set `reuseExistingServer: true`. Find the orphan and stop it.
+
+```powershell
+# PowerShell 7
+Get-NetTCPConnection -LocalPort 4173 -State Listen |
+  Select-Object -ExpandProperty OwningProcess |
+  ForEach-Object { Get-Process -Id $_ }        # confirm it is node.exe
+Get-NetTCPConnection -LocalPort 4173 -State Listen |
+  ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
+```
+
+```bash
+# Git Bash equivalent
+netstat -ano | grep -E 'LISTENING' | grep ':4173'   # last column is the PID
+taskkill //PID <pid> //F
+```
+
+A killed run can also leave a `chrome-headless-shell.exe` behind; it holds no
+port and exits on its own, so stop it only if it is burning CPU.
+
 ## What it asserts, and what it deliberately does not
 
 Two doctrines shape the coverage.
@@ -66,20 +180,29 @@ regression would actually break.
 Pull requests run the deterministic root gate and Worker typecheck (without
 deploying the optional Worker) beside the browser suite; the Pages workflow
 runs the root gate and build beside the same browser suite, and deploys only
-when both have passed. Run
-focused affected specs during development and `npm run test:serial` when a
-change affects shared navigation, map lifecycle, state, or release readiness.
+when both have passed. Run focused affected specs during development and
+`npm run test:serial` when a change affects shared navigation, map lifecycle,
+state, or release readiness. The verification ladder above wraps that advice
+into four named scripts.
 
 ## How CI runs the suite
 
 `playwright.config.ts` defines three projects. `chromium` holds the general
 suite; `chromium-interaction` holds `popup-viewport.spec.ts`,
 `studio-restore.spec.ts`, `s4-minimap.spec.ts`, and `s4-shell.spec.ts` (see
-`INTERACTION_SPECS` in the config), the measured flake cluster from the
-2026-08-29 CI flake report: a livelock in a click-retry loop, a sub-120ms
+`INTERACTION_SPECS` in the config), the flake cluster **as measured in the
+2026-08-29 CI flake report**: a livelock in a click-retry loop, a sub-120ms
 CSS-transition read, and an unwaited restore race, isolated to their own
 runners so a red or flaky run there is diagnosable and cheap to rerun without
-dragging the general project; `chromium-3d` holds `fire3d-mode.spec.ts` and
+dragging the general project. Read that grouping as history, not as a live
+condition: since the isolation shipped, these four files have not behaved like
+a flake cluster. On 2026-09-01, 19 of 19 of their tests passed serially on the
+first attempt locally with no retries, and in Validate runs 33452141530 and
+33444784737 their two shards were the fastest and greenest in the matrix
+(1m33s and 2m00s, then 1m48s and 2m29s). The isolation may simply have worked.
+The grouping stays until something is measured that says otherwise, but nobody
+should read it as a standing claim that these specs flake today. `chromium-3d`
+holds `fire3d-mode.spec.ts` and
 `view-contracts.spec.ts`, the two files whose 3D cases build terrain, a sky, a
 smoke volume, and context tiles on the software renderer and carry their own
 120 to 180 second budgets (the Node-level cases in `fire3d-mode` and the
@@ -99,15 +222,29 @@ Public-repo standard runners are 4 vCPU / 16 GB, not the 2-core machine an
 older comment here assumed; that assumption was measured on a developer
 laptop and has never been re-tested on CI.
 
-Counts, measured with `npx playwright test --list --project=<p>
---shard=i/n` on 56dd46a (2026-08-29): `chromium` 763 tests over 4 shards
-(191/191/191/190), `chromium-interaction` 42 tests over 2 shards (21/21),
-`chromium-3d` 32 tests over 2 shards (16/16). `chromium-3d` moved from 3
-shards to 2 (the prior split ran 1.5/6.4/6.7 minutes per shard, so dropping
-one is time-neutral) to pay for `chromium-interaction`'s two runners without
-raising the total shard count more than by one. Wall-clock timing for this
-composition is this change's own Validate run; re-fit these when the suite
-grows.
+Counts, re-measured with `npx playwright test --list --project=<p>` on
+`d5aaac1` (2026-09-01): `chromium` **778** tests in 101 files over 4 shards,
+`chromium-interaction` **42** tests in 4 files over 2 shards, `chromium-3d`
+**32** tests in 2 files over 2 shards. Suite total **852 tests in 107 spec
+files**. The earlier figure recorded here and in
+`.github/workflows/browser-suite.yml`, 763 for `chromium` on 56dd46a
+(2026-08-29), is 15 low; the other two projects have not moved. Of the 852,
+about 292 (34 percent) open no browser page at all: 25 spec files are pure
+`fakeMapHarness` suites, plus the first ten cases of `fire3d-mode.spec.ts`.
+Re-fit these when the suite grows.
+
+`chromium-3d` moved from 3 shards to 2 to pay for `chromium-interaction`'s two
+runners without raising the total shard count more than by one. **That reshard
+was not time-neutral, and the note here previously said it was.** Measured
+across Validate runs 33452141530 and 33444784737: the 2-way split runs 4m49s
+against 10m31s, and 4m43s against 12m26s. `chromium-3d 2/2` is now the
+critical path of the whole browser suite, at roughly double the next slowest
+shard and five to eight times the cheapest. The split is by file order over 32
+tests whose first 10 run in milliseconds, so shard 1 is nearly free by
+construction. Splitting `chromium-3d` three ways again, or moving
+`view-contracts.spec.ts` into its own project so the split is by cost rather
+than by file order, would rebalance it. Not done here: it is a CI-shape change
+and CI is being demoted to a confirmation lane.
 
 `browser-suite.yml` also takes `workers` and `retries` experiment inputs
 (mirrored as `workflow_dispatch` inputs on `validate.yml`), both defaulted to
@@ -210,7 +347,12 @@ Tribal-geography cartography draws honestly in the 3D scene, and a picture of
 two invented rectangles cannot answer that. Its three evidence-bearing boots
 therefore ask for `live` exactly when `CAPTURE_EVIDENCE` is true, which is
 exactly when the run is local and nothing is retained. Under `CI` those boots
-use the fixture like every other boot. Routine liveness of the two services
+use the fixture like every other boot. Note the shape of that switch:
+`CAPTURE_EVIDENCE = !process.env['CI']`, so the waiver is opt-**out** under
+CI and therefore opt-**in by default on every local run**, including a
+`test:serial` nobody ran for the pictures. See "What a local full run does
+that CI does not" above; whether to invert that default is an open owner
+decision. Routine liveness of the two services
 is proven separately by the daily source-health probe
 (`scripts/source-health.mjs`), which drives Chromium outside this suite.
 

@@ -835,6 +835,18 @@ test.describe('W3/W4 browser truth', () => {
   test('embed stays chrome-inert while a URL-named fire3d still drives the map effect', async ({
     page
   }) => {
+    // Unlike every other heavy case in this block (120_000-180_000), this one
+    // declared no budget and inherited the global 60_000 while doing the most
+    // expensive boot in the file: an evidence-bearing boot (EVIDENCE_BOUNDARIES
+    // is `live` locally, so it pays real agency latency), a full 3D activation,
+    // then four expect.poll chains with 30_000 ceilings of their own. That is
+    // the exact shape playwright.config.ts warns about: the budget has to sit
+    // above boot plus the chain, or a correctly-behaving app fails on a slow
+    // upstream day. Measured 2026-09-01 on this laptop: 1.1 minutes, red
+    // locally against 60_000, green in CI only because retries absorb it
+    // (Validate 33452141530, 33444784737). Match the other evidence-bearing
+    // case above rather than the cheaper siblings.
+    test.setTimeout(180_000);
     await stubWildfireFeeds(page);
     await gotoApp(page, '?cluster=wildfire&fire3d=true&embed=true', {
       boundaries: EVIDENCE_BOUNDARIES
@@ -991,7 +1003,13 @@ test('an embed without the flag never activates and never gains it', async ({
   }) => {
     // The drape's tile fan-out on the software renderer pushes this
     // multi-toggle walk past the default budget; give it explicit room.
-    test.setTimeout(120_000);
+    // 120_000 was not enough room. Measured 2026-09-01 on this laptop: the
+    // walk builds terrain, adds `places`, tears the smoke volume down, then
+    // unchecks the last fire layer, and the budget expired around the
+    // `hms-smoke` uncheck below (the call log shows the click completing)
+    // at 2.1 minutes, red locally and green in CI on retry. Nothing here is
+    // slower than the scene-building siblings, so carry their ceiling.
+    test.setTimeout(180_000);
     await stubWildfireFeeds(page);
     await gotoApp(page, '?cluster=wildfire&view=console&fire3d=true');
 

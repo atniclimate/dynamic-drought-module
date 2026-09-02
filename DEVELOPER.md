@@ -230,9 +230,49 @@ npm run gate
 Run a targeted Playwright file before the full serial suite:
 
 ```powershell
-npx playwright test tests/s4-shell.spec.ts --workers=1
+npx playwright test tests/boot.spec.ts --workers=1
 npm run test:serial
 ```
+
+The verification ladder is three commands a person types (measured durations on
+the owner's machine):
+
+```powershell
+npm run verify:quick    # typecheck, em-dash scan, vocabulary, coverage: about 5 s
+npm run verify:smoke    # gate plus twelve smoke specs, serial: about 6 min
+npm run test:serial     # the whole suite, one worker: 50 to 55 min
+```
+
+Two underlying checks sit beneath them, run directly when you want just the
+deterministic backbone:
+
+```powershell
+npm run gate            # build, bundle and activation budgets, then check:all: about 40 s
+npm run gate:nobuild    # typecheck plus check:all, the steps that need no dist/: about 20 s
+```
+
+`check:all` is the shared step list both gates run, so the list exists once.
+`gate` adds `build`, `check:bundle` and `check:activation`, the only steps that
+read `dist/`; `gate:nobuild` swaps `build` for `tsc --noEmit` and is what a
+worker on a shared tree runs.
+
+Run the fire and 3D specs directly when fire or 3D changed (about 20 min):
+
+```powershell
+npx playwright test --workers=1 tests/fire3d-mode.spec.ts tests/view-contracts.spec.ts
+```
+
+Only one Playwright run at a time: the preview server pins port 4173. If a
+killed run leaves the port held, Playwright refuses to start; find and stop
+the orphan with:
+
+```powershell
+Get-NetTCPConnection -LocalPort 4173 -State Listen | Select-Object OwningProcess
+Stop-Process -Id <pid> -Force
+```
+
+`npm run check:links` is documented here but is not part of `gate` or any
+workflow; run it by hand when documentation links change.
 
 Shared navigation, map lifecycle, state, responsive behavior, and release
 readiness changes require the serial suite. A narrow documentation-only change
@@ -367,9 +407,32 @@ deploy verifying green while still the head of `main` closes.
 
 That post-deploy proof only ever fires for a deploy that succeeded, so a
 deploy that fails or is cancelled leaves `main` ahead of the live build with
-nothing said about it. The same workflow therefore also runs daily at 14:15
-UTC and on `workflow_dispatch`, and compares `main` against the live build
-from the other direction. `scripts/resolve-live-expectation.mjs`, whose
+nothing said about it. The same workflow therefore also compares `main`
+against the live build from the other direction.
+
+SNOOZE (PR 55, 2026-09-01): the daily 14:15 UTC schedule that ran that
+compare is commented out, together with the `source-health` and
+`upstream-monitor` crons, because their alerts were disrupting the active
+development window. The restore date, 2026-09-11, is an owner decision, not
+an automatic event: nothing reinstates these schedules on its own. The
+post-deploy `workflow_run` proof is untouched and still verifies every
+successful deploy, and `workflow_dispatch` stays live for hand checks. The
+weekly `refresh-snapshots` cron was never snoozed. Until the restore, a
+deploy that fails or is cancelled goes unnoticed by CI; GitHub still emails
+the owner about the red run.
+
+Integration-branch workflow (September 2026 window): product work lands on
+one long-lived branch, `integration/2026-09`, which is pushed to origin with
+NO pull request open, because `validate.yml` is `on: pull_request` and a
+branch without one runs zero CI on every push (a draft pull request still
+triggers the event, so a draft is not the escape hatch). Verification is
+local-first: `npm run typecheck` per edit, the narrowest Playwright spec plus
+`npm run gate` per session, and `npm run test:serial` before landing. When
+the owner says go, rebase on `origin/main`, re-run the gate, and open ONE
+pull request; `Validate` is the only check that must be green, and `deploy`
+and `verify-live` are consequences of the merge rather than gates on it.
+
+`scripts/resolve-live-expectation.mjs`, whose
 judgment is the pure `resolveLiveExpectation` in
 `scripts/lib/live-receipts.mjs` (unit-tested in
 `tests/live-receipts.test.mjs`), reads the event, the head of `main`, that
@@ -414,8 +477,9 @@ may one deploy run take" are different questions:
   escalates rather than keeping the compare green forever.
 
 Both are inputs the workflow passes, not constants buried in the library, and
-`verify-live.yml` gives the job 35 minutes so a cache-miss Chromium provision
-(up to 10), the 16 minute verifier, and the issue steps all fit inside it.
+`verify-live.yml` gives the job 50 minutes so a cache-miss Chromium provision
+(up to 10), the bounded propagation poll (up to 12), the 16 minute verifier,
+and the issue steps all fit inside it.
 
 Every issue mutation, not only the close, refetches `main` immediately before
 writing. A run whose commit is no longer the head files nothing, records
@@ -425,19 +489,27 @@ A `verify` runs at one of two depths. The light half (`--light`) waits for
 propagation, reads the build sha and nonce out of the shipped script, checks
 every referenced asset answers 200, and range-checks each PMTiles archive
 against the size of that file in the checked-out commit. It needs no browser
-and no `node_modules`. The deep half adds the six boots. A post-deploy proof
-and a `workflow_dispatch` always run deep; the daily scheduled compare runs
-light and escalates to deep only when the light half fails, so a green day
-never pays for an npm install and a Chromium provision.
+and no `node_modules`. The deep half adds the six boots. Which half runs was
+keyed on the schedule until 2026-09-01; snoozing the cron made that branch
+unreachable, so it is now the `mode` dispatch input. Everything runs deep
+except a `workflow_dispatch` that asks for `mode: light`, and a light run
+escalates to deep when its cheap checks fail.
 
-What the daily light run gives up: browser-visible degradation with no
-deploy behind it, such as a layer that stops reaching a terminal state
-against unchanged bytes. That is acceptable because the daily
-`source-health` workflow already boots the application against every catalog
-source and opens its own issues, and because the served bytes themselves are
-still checked every day here. What is no longer checked daily is one
-particular way of reading them, and any mismatch in the cheap checks brings
-the deep proof back the same run.
+What a light run gives up: browser-visible degradation with no deploy behind
+it, such as a layer that stops reaching a terminal state against unchanged
+bytes. That is acceptable for a hand check because `source-health` boots the
+application against every catalog source and opens its own issues.
+
+Only the BYTES make a verification red. Before any verdict, the workflow
+polls the live site for the deployed sha for up to 10 minutes, so a slow CDN
+edge cannot be reported as a divergence. After that, the run fails only for
+a `stamp:`, `propagation:`, or `seat:` finding, or a poll that never saw the
+sha. A product finding (a layer, an embed corner, a page error, a range)
+opens or updates the one `deploy-divergence` issue and the run ends green,
+because a product regression is not evidence that the deploy failed. Before
+2026-09-01 any finding reddened `main`, and a single assertion in the proof
+that had drifted from the runtime (the embed credits surface, PR 54) would
+have done so on every deploy from then on.
 
 The `node --test` suites live in `tests/` beside the Playwright specs but are
 excluded from the `chromium` project (`testIgnore: '**/*.test.mjs'`), because
@@ -457,7 +529,9 @@ when it does, that day's scheduled `undeployed` finding (if there was one)
 is dropped rather than filed, with the next scheduled run re-evaluating.
 What the compare still does not prove: that Pages served a particular build
 to a particular reader at a particular moment, or anything about the hours
-between two daily runs. It proves what the site answers when it is asked.
+between two runs of it. It proves what the site answers when it is asked,
+and while the schedule is snoozed it is only asked after a deploy or by
+hand.
 
 The daily `source-health` workflow records the runtime's own upstream
 requests at the default camera (status, bytes, seconds, record count, cache
