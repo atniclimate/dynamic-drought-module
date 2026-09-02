@@ -46,6 +46,7 @@ import type { Feature, FeatureCollection, LineString } from 'geojson';
 
 import { URLS } from '../config/urls';
 import { quantizeBbox } from '../util/bbox';
+import { ExpiringLruCache } from '../util/bounded-cache';
 import { fetchWithBudget, sleepUnlessAborted } from '../util/fetch';
 import { registry } from '../state/registry';
 
@@ -105,12 +106,33 @@ const MAINSTEM_NAMES: ReadonlySet<string> = new Set([
 type HydroStatus = 'loading' | 'ready' | 'zoom-in' | 'error';
 
 /**
+ * Maximum number of quantized viewports retained by `HYDRO_CACHE`.
+ *
+ * Each entry is a whole viewport's worth of river and canal geometry, so
+ * entries are large; sixteen is a 4x4 grid of quantized viewport
+ * positions, which covers realistic back-and-forth panning inside one
+ * session while capping the geometry a long field session can retain.
+ * (ARCH-06: this cache was previously unbounded.)
+ */
+const HYDRO_CACHE_MAX_ENTRIES = 16;
+
+/**
+ * Lifetime of a cached viewport, milliseconds. OpenStreetMap waterway
+ * geometry changes slowly, so a long time-to-live is honest; thirty
+ * minutes still bounds how stale a multi-hour session can get.
+ */
+const HYDRO_CACHE_TTL_MS = 30 * 60 * 1000;
+
+/**
  * Quantized-bbox cache of GeoJSON FeatureCollections keyed by the
  * Leaflet-shaped `[s, w, n, e]` bounding box joined by commas. Module-
  * level so it survives `deactivate` and `activate` cycles within a
- * single page load.
+ * single page load; bounded in size and per-entry lifetime so it cannot
+ * grow without limit across a long session.
  */
-const HYDRO_CACHE = new Map<string, FeatureCollection<LineString>>();
+const HYDRO_CACHE = new ExpiringLruCache<string, FeatureCollection<LineString>>(
+  HYDRO_CACHE_MAX_ENTRIES
+);
 
 // ---------------------------------------------------------------------------
 // Module-level cancellation state
@@ -355,7 +377,7 @@ export async function fetchOSMWaterways(
     type: 'FeatureCollection',
     features
   };
-  HYDRO_CACHE.set(cacheKey, collection);
+  HYDRO_CACHE.set(cacheKey, collection, HYDRO_CACHE_TTL_MS);
   return collection;
 }
 
@@ -419,7 +441,10 @@ async function runFetchForCurrentViewport(map: maplibregl.Map): Promise<void> {
   // without more state, so empty maps to 'ready'. The mirror-failure
   // path above logged a warning; this branch handles only the
   // cache-hit-with-zero-features case.
-  if (collection.features.length === 0 && !HYDRO_CACHE.has(cacheKeyForBounds(map.getBounds()))) {
+  if (
+    collection.features.length === 0 &&
+    HYDRO_CACHE.get(cacheKeyForBounds(map.getBounds())) === undefined
+  ) {
     setStatus('error');
     return;
   }

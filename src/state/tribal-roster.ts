@@ -12,6 +12,9 @@
  * D-0.7.0-026). Consumers must not soften this gate.
  */
 
+import { fetchJsonWithBudget } from '../util/fetch';
+import { isObject } from '../util/guards';
+
 /** One land-area row of the shipped roster artifact. */
 export interface TribalRosterArea {
   readonly larName: string;
@@ -32,6 +35,15 @@ export const TRUSTED_PROVENANCE: ReadonlySet<string> = new Set([
 
 const ROSTER_URL = import.meta.env.BASE_URL + 'data/tribal-roster.json';
 
+/**
+ * Deadline for the roster load, milliseconds. The artifact is same-origin and
+ * about 52 kB, so ten seconds is generous even on a rural connection, while
+ * still honoring invariant 7 (non-trivial network work must be cancellable and
+ * time-bounded). Previously this was a bare `fetch` with no signal and no
+ * timeout (ARCH-05).
+ */
+const ROSTER_TIMEOUT_MS = 10_000;
+
 let rosterCache: readonly TribalRosterArea[] | null = null;
 let rosterInFlight: Promise<readonly TribalRosterArea[]> | null = null;
 
@@ -45,10 +57,14 @@ export function loadTribalRoster(): Promise<readonly TribalRosterArea[]> {
   if (rosterInFlight) return rosterInFlight;
   rosterInFlight = (async () => {
     try {
-      const res = await fetch(ROSTER_URL);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as { areas?: TribalRosterArea[] };
-      rosterCache = json.areas ?? [];
+      const json = await fetchJsonWithBudget(
+        ROSTER_URL,
+        null,
+        null,
+        ROSTER_TIMEOUT_MS
+      );
+      const areas = isObject(json) ? json['areas'] : undefined;
+      rosterCache = Array.isArray(areas) ? (areas as readonly TribalRosterArea[]) : [];
       return rosterCache;
     } catch (err) {
       console.warn('[tribal-roster] roster load failed.', err);
@@ -64,6 +80,15 @@ export function loadTribalRoster(): Promise<readonly TribalRosterArea[]> {
  * The formal Tribal Nation name for a BIA land area, or null when the roster
  * has no TRUSTED row for it (the safe residue: never a guessed name). Pure
  * over the supplied rows so the gate is unit-testable without a fetch.
+ *
+ * Currently no caller invokes this (ARCH-12). The one live application of the
+ * gate open-codes the same rule at `src/ui/search-controller.ts:105`, which
+ * imports `TRUSTED_PROVENANCE` directly; `src/config/place-catalog.ts` takes
+ * formal names from the crosswalk artifact instead and does not consult
+ * provenance at all. Kept, not deleted, because it is the single readable
+ * statement of D-0.7.0-026: the next consumer should call this rather than
+ * re-derive the rule. Adopting it in `search-controller.ts` is a change in
+ * that file's owner's hands.
  */
 export function trustedNameFor(
   larName: string,

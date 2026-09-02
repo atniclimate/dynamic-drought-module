@@ -10,13 +10,14 @@
  *
  * The button mirrors the PREFERENCE (the user's durable ask, aria-pressed
  * flips with the click); the status line underneath tells the honest truth
- * about the scene (checking, active with or without the smoke volume,
- * unavailable with the reason), and since 2026-08-19 a fourth line
- * appears when the smoke volume is on and the issuer returned no plumes,
- * so an empty sky reads as an answer instead of a broken feature. The
- * coverage note renders whenever the control does: the terrain bake is
- * Pacific Northwest only and the control must never imply national
- * relief.
+ * about the scene in the project's six-state vocabulary (AGENTS.md
+ * invariant 6): loading, live with the smoke volume, live (partial) for
+ * relief without it, unavailable with the reason. Since 2026-08-19 a
+ * fourth line appears when the smoke volume is on and the issuer returned
+ * no plumes, so an empty sky reads as an answer instead of a broken
+ * feature. The coverage note renders whenever the control does: the
+ * terrain bake is Pacific Northwest only and the control must never imply
+ * national relief.
  *
  * Chunk discipline: only TYPES are imported from the fire3d orchestrator
  * (erased at build), so this island never pulls the 3D chunk statically;
@@ -43,15 +44,34 @@ import { registry } from '../../state/registry';
 /** The catalog key whose emptiness the 3D control reports. */
 const HMS_SMOKE_LAYER_KEY = 'hms-smoke';
 
+/**
+ * The status line speaks the six honest layer states (AGENTS.md invariant
+ * 6, the same vocabulary `STATUS_PILL_TEXT` renders on every catalog
+ * pill): loading, live, live (partial), unavailable, no data, zoom in to
+ * load. Before 2026-09-02 it invented a parallel one ("Checking terrain
+ * availability...", "Active: ..."), so a person reading the sidebar met
+ * two vocabularies for one idea (FIRE-14).
+ *
+ * The mapping is the meaning, not a rename: `checking` is a load in
+ * flight, and the smoke-volume degrade is the canonical PARTIAL case (the
+ * scene is live; one of its two elements is not), which is exactly what
+ * `live (partial)` says everywhere else. Sentence capitalization is kept
+ * because this is a sentence in a paragraph, not a lowercase pill chip.
+ *
+ * The machine-readable `data-fire3d-status` attribute keeps the
+ * `Fire3DStatus` union's own values (specs pin them); only the human
+ * strings move. `inactive` renders no line at all: the scene is off and
+ * claims nothing.
+ */
 function statusLine(status: Fire3DStatus | null): string {
   if (status === null) return '';
   switch (status.state) {
     case 'checking':
-      return 'Checking terrain availability...';
+      return 'Loading terrain availability...';
     case 'active':
       return status.smokeVolume
-        ? 'Active: terrain relief with the smoke volume.'
-        : 'Active: terrain relief; smoke stays in the flat veil.';
+        ? 'Live: terrain relief with the smoke volume.'
+        : 'Live (partial): terrain relief; smoke stays in the flat veil.';
     case 'unavailable':
       return `Unavailable. ${status.reason ?? ''}`.trim();
     default:
@@ -68,8 +88,10 @@ function statusLine(status: Fire3DStatus | null): string {
  * from a daytime satellite analysis product. The catalog pill said so, in
  * the sidebar, in small type, several sections away from the 3D control a
  * person was looking at. So the scene said "Active: terrain relief with
- * the smoke volume" while there was no smoke to have volume, and the
- * absence read as a broken feature instead of an answer.
+ * the smoke volume" (that day's wording; the line reads "Live: terrain
+ * relief with the smoke volume" since FIRE-14) while there was no smoke
+ * to have volume, and the absence read as a broken feature instead of an
+ * answer.
  *
  * This line puts the answer where the question is. It is derived from the
  * layer's own registry status rather than from a second source of truth,

@@ -26,7 +26,15 @@ const listeners = new Set<CheckedListener>();
  * handler, so both writers converge on one source of truth.
  */
 export function setChecked(key: string, checked: boolean): void {
+  const previous = checkedByKey.get(key);
   checkedByKey.set(key, checked);
+  // ARCH-10: every listener is wired (through the sidebar) to a `pushUrl`,
+  // which rebuilds two URLSearchParams and calls history.replaceState. Boot
+  // alone re-emitted an unchanged value roughly ten times. An emit whose value
+  // did not move has no subscriber-visible effect, so skip it. A key's FIRST
+  // write still emits even when it is `false`, because `checkedSnapshot` gains
+  // an entry that was not there before.
+  if (previous === checked) return;
   for (const fn of [...listeners]) fn(key, checked);
 }
 

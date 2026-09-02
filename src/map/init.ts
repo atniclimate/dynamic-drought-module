@@ -35,6 +35,17 @@ const DEFAULT_MIN_ZOOM = MAP_MIN_ZOOM;
 const DEFAULT_MAX_ZOOM = 14;
 
 /**
+ * Camera pitch ceiling, degrees (FIRE-12). MapLibre's default ceiling is 60,
+ * which is exactly `FIRE3D_PITCH_DEGREES` (src/config/fire3d-presentation.ts),
+ * so the 3D scene used to open pinned at the maximum and a user could not tilt
+ * further to read relief. 85 is MapLibre's own upper bound. This raises only
+ * the ceiling: the flat map still opens at pitch 0, the 3D mode still eases to
+ * its own ruled 60, and leaving 3D still restores the pitch the user had
+ * before. Nothing in `src/` or `tests/` reads a 60-degree ceiling.
+ */
+const DEFAULT_MAX_PITCH = 85;
+
+/**
  * Maximum width in CSS pixels of each scale control. The paired imperial and
  * metric bars keep both common measurement systems visible at once.
  */
@@ -70,6 +81,7 @@ export function createMap(containerId: string): maplibregl.Map {
     zoom: DEFAULT_ZOOM,
     minZoom: DEFAULT_MIN_ZOOM,
     maxZoom: DEFAULT_MAX_ZOOM,
+    maxPitch: DEFAULT_MAX_PITCH,
     // The explicit control below is the single attribution surface; without
     // this flag the constructor adds its own default control and the two
     // stack as duplicate bars in the corner.
