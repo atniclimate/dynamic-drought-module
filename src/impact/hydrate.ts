@@ -30,14 +30,17 @@ import {
   fetchUsdmClaims,
   type SourceResult
 } from './sources';
-import { fetchEnsoClaims } from './enso';
 import { makeClaim } from './evidence';
 import { fillHorizon } from './heat-horizon';
 import { synthesizeHeatSources } from './heat-synthesis';
 import { createNwsRequestSession } from './nws-point';
 import { sourceMayRun } from './source-policy';
 import { fetchWaterSupplyClaims } from './water-supply';
-import type { ImpactBriefing, SourcedClaim } from './types';
+import type {
+  BoundarySelectionContext,
+  ImpactBriefing,
+  SourcedClaim
+} from './types';
 
 /** Re-render hook; the panel passes `refreshOpenBriefing` bound to its token. */
 export type UpdateHook = () => void;
@@ -60,6 +63,37 @@ const CPC_SEASONAL_OUTLOOK: SourcedClaim = makeClaim({
   // vocab-allow: honesty disclaimer, denies being a forecast
   uncertainty: { kind: 'categorical', text: 'a seasonal tendency category (persists, develops, improves, removed), not a forecast of outcomes' }
 });
+
+/**
+ * Load the ENSO reader on demand.
+ *
+ * The long-range horizon gates the ENSO read on its own capability cell, so
+ * outside the validated regional impact synthesis `fetchEnsoClaims` is never
+ * called; a static import downloaded the whole ENSO module (its guards, its
+ * chart builder and its cited prose) on every briefing regardless. The import
+ * runs inside the horizon's existing await, after the panel is open and while
+ * the other horizons fetch, so it costs no visible latency, and the minimap's
+ * phase-label consumer already reaches this module the same way.
+ *
+ * A failed module load is reported exactly as a failed snapshot read, because
+ * that is what it is from the panel's side: no ENSO claims, `ok: false`, and
+ * the same note the module itself returns. It never rejects, so it can never
+ * take down the horizon it shares with the water-supply read.
+ */
+async function loadEnsoClaims(
+  context: BoundarySelectionContext,
+  signal: AbortSignal
+): Promise<SourceResult> {
+  try {
+    const { fetchEnsoClaims } = await import('./enso');
+    if (signal.aborted) return { claims: [], ok: false };
+    return await fetchEnsoClaims(context, signal);
+  } catch (err) {
+    if (signal.aborted) return { claims: [], ok: false };
+    console.warn('[impact] ENSO snapshot read failed.', err);
+    return { claims: [], ok: false, note: 'The ENSO index snapshot was unavailable.' };
+  }
+}
 
 /**
  * Hydrate every horizon of `briefing`. Returns when all horizons have settled
@@ -235,17 +269,77 @@ export async function hydrateBriefing(
 
   const longRange = (async (): Promise<void> => {
     if (!sourcePolicy.droughtImpact.enabled) return;
+    // Each long-range source is gated by its own declared capability cell
+    // (IB-06 / ENSO-09): all three were declared in BRIEFING_SOURCE_KEYS but
+    // only the horizon as a whole was gated, so the cells were never enforced.
+    const runEnso = sourceMayRun(sourcePolicy, 'enso');
+    const runWaterSupply = sourceMayRun(sourcePolicy, 'waterSupply');
+    const runCpcSeasonal = sourceMayRun(sourcePolicy, 'cpcSeasonal');
+    if (!runEnso && !runWaterSupply && !runCpcSeasonal) {
+      horizons.longRange.status = 'unavailable';
+      horizons.longRange.claims = [];
+      horizons.longRange.note = sourcePolicy.sources.enso.note;
+      onUpdate();
+      return;
+    }
+
     // The ENSO phase tilt leads, then the NWRFC water-supply pairing
     // (observed runoff to date plus the seasonal volume forecast; the
     // projection partner to the snowpack observations), then the cited CPC
     // Seasonal Drought Outlook.
-    const [enso, waterSupply] = await Promise.all([
-      fetchEnsoClaims(context, signal),
-      fetchWaterSupplyClaims(context, signal)
+    //
+    // The two fetches settle INDEPENDENTLY: the ENSO read is a bundled
+    // snapshot that returns almost at once, while the proxied NWRFC round
+    // trip carries a 20 second budget, and a single Promise.all made the
+    // whole horizon wait on the slower one. Ordering is preserved by keying
+    // the settled results, not by arrival.
+    const settled = new Map<'enso' | 'waterSupply', SourceResult>();
+    const order: ReadonlyArray<'enso' | 'waterSupply'> = ['enso', 'waterSupply'];
+    let pending = (runEnso ? 1 : 0) + (runWaterSupply ? 1 : 0);
+
+    const publishLongRange = (): void => {
+      if (signal.aborted) return;
+      const results = order
+        .map((key) => settled.get(key))
+        .filter((result): result is SourceResult => result !== undefined);
+      fillHorizon(
+        horizons.longRange,
+        results,
+        runCpcSeasonal ? [CPC_SEASONAL_OUTLOOK] : []
+      );
+      if (pending > 0) {
+        // A source is still in flight, so the horizon has NOT settled: what is
+        // already in hand reads live (partial), and an empty horizon keeps its
+        // loading state rather than announcing an absence that may yet fill.
+        horizons.longRange.status =
+          horizons.longRange.claims.length > 0 ? 'partial' : 'loading';
+      }
+      onUpdate();
+    };
+
+    const settle = (
+      key: 'enso' | 'waterSupply',
+      result: SourceResult
+    ): void => {
+      if (signal.aborted) return;
+      settled.set(key, result);
+      pending = Math.max(0, pending - 1);
+      publishLongRange();
+    };
+
+    await Promise.all([
+      runEnso
+        ? loadEnsoClaims(context, signal).then((result) => settle('enso', result))
+        : Promise.resolve(),
+      runWaterSupply
+        ? fetchWaterSupplyClaims(context, signal).then((result) =>
+            settle('waterSupply', result)
+          )
+        : Promise.resolve()
     ]);
     if (signal.aborted) return;
-    fillHorizon(horizons.longRange, [enso, waterSupply], [CPC_SEASONAL_OUTLOOK]);
-    onUpdate();
+    // Both sources are gated off but the fixed seasonal claim may still run.
+    if (pending === 0 && settled.size === 0) publishLongRange();
   })();
 
   const current = (async (): Promise<void> => {

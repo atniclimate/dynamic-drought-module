@@ -402,7 +402,11 @@ function prepareGeometry(
       : (referenceLongitude * (polygons.length - 1) + polygon.referenceLongitude) / polygons.length;
   }
 
-  if (invalidPolygonCount > 0 && polygons.length > 0) {
+  // A malformed component is always reported, including the case where EVERY
+  // component failed (IB-10). Gating this on `polygons.length > 0` made a
+  // wholly malformed candidate indistinguishable from a non-areal one: it
+  // fell through to `omitted` and left no rejection row.
+  if (invalidPolygonCount > 0) {
     return { status: 'rejected', reason: 'invalid-polygon-component' };
   }
   if (polygons.length === 0 || area <= AREA_EPSILON || referenceLongitude === undefined) {

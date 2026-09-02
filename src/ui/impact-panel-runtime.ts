@@ -3,7 +3,7 @@
  *
  * The headline kernel-integration feature. A click on a boundary (ecoregion,
  * Tribal Lands feature, Treaty area, or Bureau of Indian Affairs reservation)
- * opens a lightweight identity popup with a "Drought impact briefing" button;
+ * opens a lightweight identity popup with an "Impact briefing" button;
  * the button opens this slide-in panel, which composes the land identity, the
  * drought impacts across three temporal horizons (wildfire and extreme heat
  * foregrounded), and the public resources routed in stewardship order.
@@ -186,10 +186,15 @@ function renderHorizon(horizon: Horizon): string {
     inner = `<p class="impact-horizon-note">${escapeHtml(note)}</p>`;
   }
 
+  // The section is named by its own visible heading text rather than by a
+  // duplicate aria-label (IB-17). The id wraps the title only, so the
+  // accessible name stays exactly the horizon title and the subtitle keeps
+  // its supporting role.
+  const titleId = `impact-horizon-title-${horizon.key}`;
   return `
-    <section class="impact-horizon" aria-label="${escapeHtml(horizon.title)}">
+    <section class="impact-horizon" aria-labelledby="${titleId}">
       <div class="impact-horizon-head">
-        <h3 class="impact-horizon-title">${escapeHtml(horizon.title)} <span class="impact-horizon-sub">${escapeHtml(horizon.subtitle)}</span></h3>
+        <h3 class="impact-horizon-title"><span id="${titleId}">${escapeHtml(horizon.title)}</span> <span class="impact-horizon-sub">${escapeHtml(horizon.subtitle)}</span></h3>
         <span class="impact-horizon-pill impact-horizon-pill-${horizon.status}">${escapeHtml(HORIZON_PILL_TEXT[horizon.status])}</span>
       </div>
       <div class="impact-horizon-claims">${inner}</div>
@@ -296,13 +301,20 @@ function renderGrid(pointHeat: PointHeatBriefing): string {
 }
 
 function renderHeatSynthesis(synthesis: HeatSynthesis): string {
+  // Every horizon claim carries "Source: <link>" from claim-render; the
+  // section that most explicitly compares issuers carries the same path
+  // (IB-12). The https guard mirrors renderClaim.
   const reads =
     synthesis.reads.length > 0
       ? `<ul>${synthesis.reads
-          .map(
-            (read) =>
-              `<li><strong>${escapeHtml(read.label)}</strong><p>${escapeHtml(read.text)}</p></li>`
-          )
+          .map((read) => {
+            const label =
+              typeof read.sourceUrl === 'string' &&
+              read.sourceUrl.startsWith('https://')
+                ? `<a href="${escapeHtml(read.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(read.label)}</a>`
+                : escapeHtml(read.label);
+            return `<li><strong>${label}</strong><p>${escapeHtml(read.text)}</p></li>`;
+          })
           .join('')}</ul>`
       : '';
   const note = synthesis.note

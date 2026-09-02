@@ -7,6 +7,11 @@
  * presentations on one host, detent, dismiss, ARIA, and focus contract.
  */
 
+import {
+  BRIEFING_SOURCE_KEYS,
+  type BriefingSourceKey,
+  type SourceCapabilityCell
+} from '../config/source-capability';
 import type {
   BoundarySelectionContext,
   Horizon,
@@ -49,7 +54,7 @@ export interface ImpactPanelShell {
 }
 
 const UNAVAILABLE_NOTE =
-  'The drought impact briefing is unavailable because its application module could not load.';
+  'The impact briefing is unavailable because its application module could not load.';
 
 const RUNTIME_LOADERS: readonly RuntimeLoader[] = [
   () => import('./impact-panel-runtime-primary'),
@@ -107,7 +112,7 @@ export function ensureImpactPanelShell(): ImpactPanelShell {
   panel.innerHTML = `
     <header class="impact-panel-header">
       <div class="impact-panel-heading">
-        <p class="impact-panel-kicker">Drought impact briefing</p>
+        <p class="impact-panel-kicker">Impact briefing</p>
         <h2 id="impact-panel-title" class="impact-panel-title"></h2>
         <p class="impact-panel-kind"></p>
       </div>
@@ -138,10 +143,15 @@ export function ensureImpactPanelShell(): ImpactPanelShell {
   panel
     .querySelector<HTMLButtonElement>('.impact-panel-close')
     ?.addEventListener('click', requestPanelDismiss);
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && shell && !shell.panel.hidden) {
-      requestPanelDismiss();
-    }
+  // Escape is scoped to the panel (IB-16). A document-level listener stayed
+  // armed for the whole session and dismissed the briefing from anywhere, so
+  // an Escape aimed at another open overlay (the map-information panel keeps
+  // its own document listener) closed this one too. The panel traps focus
+  // while it is modal, so a keydown from inside it still reaches this handler
+  // by bubbling.
+  panel.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || panel.hidden) return;
+    requestPanelDismiss();
   });
   panel.addEventListener('keydown', (event) => {
     if (event.key !== 'Tab' || panel.hidden) return;
@@ -297,7 +307,7 @@ function beginPendingOpen(token: number): void {
   pending.delayId = window.setTimeout(() => {
     if (pendingOpen !== pending) return;
     pending.delayId = null;
-    pending.loadingToken = showLoading('Loading drought impact briefing...');
+    pending.loadingToken = showLoading('Loading impact briefing...');
   }, 120);
   pendingOpen = pending;
 }
@@ -345,6 +355,23 @@ function unavailableHorizon(
   };
 }
 
+/**
+ * Every declared briefing source, all unavailable for the one reason the
+ * module could not load. Built from `BRIEFING_SOURCE_KEYS` rather than
+ * enumerated by hand (IB-20) so a newly declared source cannot silently miss
+ * the module-failure presentation.
+ */
+function unavailableSourceCells(): Record<
+  BriefingSourceKey,
+  SourceCapabilityCell
+> {
+  const cells = {} as Record<BriefingSourceKey, SourceCapabilityCell>;
+  for (const key of BRIEFING_SOURCE_KEYS) {
+    cells[key] = { state: 'unavailable', note: UNAVAILABLE_NOTE };
+  }
+  return cells;
+}
+
 function unavailableBriefing(
   context: BoundarySelectionContext
 ): ImpactBriefing {
@@ -358,19 +385,7 @@ function unavailableBriefing(
         note: UNAVAILABLE_NOTE
       },
       droughtImpact: { enabled: false, note: UNAVAILABLE_NOTE },
-      sources: {
-        pointHeat: { state: 'unavailable', note: UNAVAILABLE_NOTE },
-        nwsForecast: { state: 'unavailable', note: UNAVAILABLE_NOTE },
-        nwsAlerts: { state: 'unavailable', note: UNAVAILABLE_NOTE },
-        heatRisk: { state: 'unavailable', note: UNAVAILABLE_NOTE },
-        usdm: { state: 'unavailable', note: UNAVAILABLE_NOTE },
-        dsci: { state: 'unavailable', note: UNAVAILABLE_NOTE },
-        nifc: { state: 'unavailable', note: UNAVAILABLE_NOTE },
-        cpcExtended: { state: 'unavailable', note: UNAVAILABLE_NOTE },
-        enso: { state: 'unavailable', note: UNAVAILABLE_NOTE },
-        waterSupply: { state: 'unavailable', note: UNAVAILABLE_NOTE },
-        cpcSeasonal: { state: 'unavailable', note: UNAVAILABLE_NOTE }
-      }
+      sources: unavailableSourceCells()
     },
     landTitle: context.title,
     landKind: 'Boundary briefing',

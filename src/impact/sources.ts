@@ -11,7 +11,10 @@
  * stated as probabilities or tendencies. A fetch that fails returns `ok:false`
  * so the horizon can say so honestly rather than inventing a value. A fetch
  * that succeeds but finds nothing (no active alerts, no fires) returns
- * `ok:true` with an informative observation. JSON fetches keep the briefing's
+ * `ok:true` with an informative observation. An ArcGIS host that answers
+ * HTTP 200 with an error envelope is neither: `featuresOf` throws, so the
+ * fetcher reports `unavailable` rather than reading an outage as an absence
+ * of drought or fire. JSON fetches keep the briefing's
  * master abort signal and per-call timeout active through body consumption,
  * so a hung host never blocks the panel (invariant 5).
  *
@@ -118,18 +121,111 @@ async function fetchJson(
   return fetchJsonWithBudget(url, { headers }, signal, timeoutMs);
 }
 
-/** The `features` array of a GeoJSON-shaped payload, or `[]` when absent. */
+/**
+ * An upstream ArcGIS service that answered HTTP 200 with an error envelope
+ * instead of data (FSPEC-01). `mapservices.weather.noaa.gov` does this when
+ * one of its backends is out: HTTP 200, `text/plain`, body
+ * `{"status":"error","messages":["Could not access any server machines. ..."]}`.
+ * Thrown by `featuresOf` so every consumer that goes through the shared helper
+ * lands in its own catch and reports `unavailable`, instead of reading the
+ * envelope as an empty result and asserting `no data` (an outage must never
+ * become a positive finding of absence).
+ */
+class EsriServiceError extends Error {
+  /** The service's own message text, verbatim; logged with the failure. */
+  readonly serviceMessage: string;
+
+  constructor(serviceMessage: string) {
+    super(`upstream service error: ${serviceMessage}`);
+    this.name = 'EsriServiceError';
+    this.serviceMessage = serviceMessage;
+  }
+}
+
+/**
+ * The service's own error text when a payload is an ArcGIS error envelope,
+ * else null. Two shapes are published: the load-balancer envelope
+ * (`status: 'error'` plus a `messages` array) and the ArcGIS REST envelope
+ * (an `error` object with a `message`). Neither can occur on a real
+ * FeatureCollection, so a match is unambiguous.
+ */
+function esriErrorMessage(json: unknown): string | null {
+  if (!isObject(json)) return null;
+  const unnamed = 'the service reported an error without a message';
+  if (json.status === 'error' && Array.isArray(json.messages)) {
+    const parts = json.messages
+      .filter((m): m is string => typeof m === 'string')
+      .map((m) => m.trim())
+      .filter((m) => m.length > 0);
+    return parts.length > 0 ? parts.join(' ') : unnamed;
+  }
+  if (isObject(json.error)) {
+    const message = typeof json.error.message === 'string' ? json.error.message.trim() : '';
+    return message.length > 0 ? message : unnamed;
+  }
+  return null;
+}
+
+/**
+ * The `features` array of a GeoJSON-shaped payload, or `[]` when absent.
+ * Throws `EsriServiceError` on an HTTP 200 error envelope (see above); no
+ * retry is attempted, so the existing per-call budget still bounds the work.
+ */
 function featuresOf(json: unknown): unknown[] {
+  const serviceMessage = esriErrorMessage(json);
+  if (serviceMessage !== null) throw new EsriServiceError(serviceMessage);
   return isObject(json) && Array.isArray(json.features) ? json.features : [];
+}
+
+/**
+ * The honest note for a failed source fetch: a service that answered with an
+ * error envelope is `unavailable` and said so, which is a different fact from
+ * a service that never answered. `service` is the subject of the sentence,
+ * for example "The U.S. Drought Monitor".
+ */
+function upstreamNote(err: unknown, service: string): string {
+  return err instanceof EsriServiceError
+    ? `${service} is unavailable: it answered with an error rather than data.`
+    : `${service} did not respond.`;
+}
+
+/** An epoch-millisecond upstream Date field, or null when absent or unusable. */
+function epochField(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return value;
+}
+
+/** The UTC calendar day of an instant, ISO 8601, for a claim's `dates`. */
+function isoDayUtc(time: number): string {
+  return new Date(time).toISOString().slice(0, 10);
+}
+
+/**
+ * "Aug 25, 2026" for prose. Upstream Date fields on these services are UTC
+ * midnights, so the day is read in UTC; a local read would show the previous
+ * day for every viewer west of Greenwich.
+ */
+function humanDayUtc(time: number): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC'
+  }).format(new Date(time));
+}
+
+/** "Aug 25", for the start of a span whose end carries the shared year. */
+function humanDayUtcNoYear(time: number): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC'
+  }).format(new Date(time));
 }
 
 // ---------------------------------------------------------------------------
 // Current: issuer-published HeatRisk class at the selected frame and point
 // ---------------------------------------------------------------------------
-
-function heatRiskIsoDay(time: number): string {
-  return new Date(time).toISOString().slice(0, 10);
-}
 
 function heatRiskMoment(time: number): string {
   return new Intl.DateTimeFormat('en-US', {
@@ -178,7 +274,7 @@ export async function fetchHeatRiskClaims(
       sourceUrl,
       evidence: 'classified',
       dates: {
-        valid: heatRiskIsoDay(identified.frame.validTime),
+        valid: isoDayUtc(identified.frame.validTime),
         retrieved: todayIso()
       },
       support: {
@@ -206,7 +302,8 @@ export async function fetchHeatRiskClaims(
         heatRead: {
           key: 'heatRisk',
           label: 'NWS HeatRisk selected frame',
-          text
+          text,
+          sourceUrl
         }
       };
     }
@@ -226,7 +323,8 @@ export async function fetchHeatRiskClaims(
       heatRead: {
         key: 'heatRisk',
         label: 'NWS HeatRisk selected frame',
-        text
+        text,
+        sourceUrl
       }
     };
   } catch (err) {
@@ -245,30 +343,30 @@ export async function fetchHeatRiskClaims(
 // ---------------------------------------------------------------------------
 
 /**
+ * The whole published field list of `USDM_current` layer 0 (VERIFIED live
+ * 2026-09-02, DWH-05): the category AND the issuer's own dates. `ValidStart`
+ * and `ValidEnd` are requested with `MapDate` because they are the window the
+ * map speaks for; the claim states the map date, and the window is available
+ * to the same parse without a second round trip.
+ */
+const USDM_OUT_FIELDS = 'DM,MapDate,ValidStart,ValidEnd';
+
+/**
  * Query the United States Drought Monitor FeatureServer for the polygons that
  * contain the clicked point and translate the worst (highest) category present
- * into observation claims: the drought state, then the wildfire implication,
- * then the extreme-heat implication. If no polygon contains the point, the
- * location is better than D0 this week, which is itself a plain observation.
+ * into claims: the analyzed drought state, then the derived wildfire
+ * implication. (The former extreme-heat companion was removed by ruling
+ * D-0.8.0-047 and is not rebuilt here.) If no polygon contains the point, the
+ * location is better than D0 on that map, which is itself a plain reading.
  */
 export async function fetchUsdmClaims(
   context: BoundarySelectionContext,
   signal: AbortSignal
 ): Promise<SourceResult> {
   const { lng, lat } = context.lngLat;
-  const url = `${URLS.usdmFeatureServer}/query?${esriPointQuery(lng, lat, 'DM').toString()}`;
+  const url = `${URLS.usdmFeatureServer}/query?${esriPointQuery(lng, lat, USDM_OUT_FIELDS).toString()}`;
   const source = 'U.S. Drought Monitor (NDMC / NOAA / USDA)';
   const sourceUrl = 'https://droughtmonitor.unl.edu/';
-  // The USDM is an expert-analyzed weekly product: evidence 'analyzed'. The
-  // point query returns only the DM category (no map date), so the date shown
-  // is the retrieval date; the prose already frames the read as "this week's".
-  const usdmShared = {
-    source,
-    sourceUrl,
-    evidence: 'analyzed',
-    dates: { retrieved: todayIso() },
-    support: { reporting: 'the USDM polygon at the clicked point' }
-  } as const;
 
   try {
     const json: unknown = await fetchJson(url, GEOJSON_ACCEPT, signal);
@@ -276,18 +374,41 @@ export async function fetchUsdmClaims(
 
     const features = featuresOf(json);
     let worst = -1;
+    let mapDate: number | null = null;
     for (const f of features) {
       if (!isObject(f) || !isObject(f.properties)) continue;
       const dm = Number(f.properties.DM);
       if (Number.isInteger(dm) && dm > worst) worst = dm;
+      mapDate ??= epochField(f.properties.MapDate);
     }
+    // The USDM is an expert-analyzed weekly product: evidence 'analyzed'. The
+    // map date is the issuer's own, so the claim is dated by the map it reads
+    // and not by the moment DDM fetched it (DWH-05); a payload that carries no
+    // MapDate falls back to the retrieval date and to the weekly framing.
+    const usdmShared = {
+      source,
+      sourceUrl,
+      evidence: 'analyzed' as const,
+      dates:
+        mapDate === null
+          ? { retrieved: todayIso() }
+          : { valid: isoDayUtc(mapDate), retrieved: todayIso() },
+      support: { reporting: 'the USDM polygon at the clicked point' }
+    };
+    // "this week's map" is only true until Thursday's release: NDMC publishes
+    // on Thursday using data through the previous Tuesday morning, so the map
+    // date is named whenever the service returns it.
+    const asOfMap =
+      mapDate === null
+        ? "this week's U.S. Drought Monitor"
+        : `the U.S. Drought Monitor map dated ${humanDayUtc(mapDate)}`;
 
     if (worst < 0) {
       return {
         ok: true,
         claims: [
           makeClaim({
-            text: 'No drought category is mapped at this location in this week\'s U.S. Drought Monitor (conditions are better than D0, Abnormally Dry).',
+            text: `No drought category is mapped at this location in ${asOfMap} (conditions are better than D0, Abnormally Dry).`,
             ...usdmShared
           })
         ]
@@ -300,7 +421,7 @@ export async function fetchUsdmClaims(
         ok: true,
         claims: [
           makeClaim({
-            text: `This location is in a mapped U.S. Drought Monitor category (DM ${worst}) this week.`,
+            text: `This location is in a mapped drought category (DM ${worst}) in ${asOfMap}.`,
             ...usdmShared
           })
         ]
@@ -311,7 +432,7 @@ export async function fetchUsdmClaims(
       ok: true,
       claims: [
         makeClaim({
-          text: `This location is in ${impact.code} ${impact.label} as of this week's U.S. Drought Monitor. ${impact.summary}`,
+          text: `This location is in ${impact.code} ${impact.label} as of ${asOfMap}. ${impact.summary}`,
           ...usdmShared
         }),
         // The wildfire companion translates the analyzed category through the
@@ -331,7 +452,7 @@ export async function fetchUsdmClaims(
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
     console.warn('[impact] USDM point query failed.', err);
-    return { claims: [], ok: false, note: 'The U.S. Drought Monitor did not respond.' };
+    return { claims: [], ok: false, note: upstreamNote(err, 'The U.S. Drought Monitor') };
   }
 }
 
@@ -342,6 +463,9 @@ export async function fetchUsdmClaims(
 function fmtUsdmDate(d: Date): string {
   return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
 }
+
+/** One week in milliseconds; the DSCI series is weekly. */
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** A calendar day, free of any timezone interpretation. */
 interface CalendarDay {
@@ -371,8 +495,13 @@ function calendarDayOf(s: string): CalendarDay | null {
   return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
 }
 
+/**
+ * "Aug 25, 2026" from a calendar day. The instant is built from the calendar
+ * triple and read back in UTC, so the round trip cannot shift the day; the
+ * prose therefore always names the same day as the claim's ISO `valid` date.
+ */
 function calendarToProse(c: CalendarDay): string {
-  return `${c.m}/${c.d}/${c.y}`;
+  return humanDayUtc(Date.UTC(c.y, c.m - 1, c.d));
 }
 
 function calendarToIso(c: CalendarDay): string {
@@ -386,6 +515,13 @@ function calendarToIso(c: CalendarDay): string {
  * statewide measure (not point-specific), so the claim is framed as statewide
  * context. The chart is solid throughout (all observation) with the current
  * value dotted and labeled.
+ *
+ * Trend wording: the NDMC publishes the DSCI definition, range and formula but
+ * NO trend threshold, and calls the index experimental with "best practices
+ * ... still evolving". The plus or minus 15 point band that turns the measured
+ * change into a word is therefore DDM's own convention, and the rendered
+ * sentence says so rather than letting the reader take it for the issuer's
+ * (DWH-03). The change itself is measured and is stated in points.
  */
 export async function fetchDsciTrendClaims(
   context: BoundarySelectionContext,
@@ -423,7 +559,10 @@ export async function fetchDsciTrendClaims(
       ? upstream
       : `${URLS.workerProxy}/proxy?url=${encodeURIComponent(upstream)}`;
   const source = 'USDM Data Services (NDMC)';
-  const sourceUrl = 'https://droughtmonitor.unl.edu/DmData/DataDownload.aspx';
+  // The NDMC's own DSCI page: it defines the index, its 0 to 500 range and its
+  // formula, and it is where a reader can confirm that no trend threshold is
+  // published (the band in the claim text is DDM's, and says so).
+  const sourceUrl = 'https://droughtmonitor.unl.edu/About/AbouttheData/DSCI.aspx';
 
   try {
     const json: unknown = await fetchJson(url, { Accept: 'application/json' }, signal);
@@ -450,9 +589,16 @@ export async function fetchDsciTrendClaims(
 
     points.sort((a, b) => a.t - b.t);
     const lastPoint = points[points.length - 1]!;
-    // Trend direction over the last ~12 weeks.
-    const prior = points[Math.max(0, points.length - 12)]!.v;
-    const delta = lastPoint.v - prior;
+    // Trend direction over the last 12 weeks, measured on the DATES the series
+    // carries. Stepping back 12 array positions assumed an unbroken weekly
+    // series and silently shortened the comparison when a week was missing
+    // (DWH-03); the comparison point is now the most recent map at or before
+    // 12 weeks back, and the series may be shorter than that, in which case
+    // the oldest map answers and the rendered span says so.
+    const twelveWeeksBack = lastPoint.t - 12 * WEEK_MS;
+    const priorPoint =
+      [...points].reverse().find((p) => p.t <= twelveWeeksBack) ?? points[0]!;
+    const delta = lastPoint.v - priorPoint.v;
     const trendWord = Math.abs(delta) < 15 ? 'about steady' : delta > 0 ? 'rising' : 'easing';
     // The latest map date, read once as a calendar value: the prose and the
     // claim's `dates.valid` MUST agree (they are the same day, shown twice).
@@ -461,6 +607,18 @@ export async function fetchDsciTrendClaims(
       return { claims: [], ok: false, note: 'The USDM Data Services drought-severity series was unavailable.' };
     }
     const asOf = calendarToProse(lastCal);
+    // The comparison map's own date, read the same textual way, so the span
+    // the sentence claims is the span the data actually covers.
+    const priorCal = calendarDayOf(rawByT.get(priorPoint.t) ?? '');
+    const spanWeeks = Math.max(1, Math.round((lastPoint.t - priorPoint.t) / WEEK_MS));
+    const rounded = Math.round(delta);
+    const changePhrase =
+      rounded === 0
+        ? 'unchanged'
+        : `${rounded > 0 ? 'up' : 'down'} ${Math.abs(rounded)} points`;
+    const sincePhrase = priorCal
+      ? `over the ${spanWeeks} ${spanWeeks === 1 ? 'week' : 'weeks'} since the ${calendarToProse(priorCal)} map`
+      : `over the ${spanWeeks} ${spanWeeks === 1 ? 'week' : 'weeks'} before it`;
 
     const chartSvg = trendLineSvg(points, {
       title: `${stateName} drought severity (DSCI, 0 to 500) over the past year`,
@@ -475,7 +633,12 @@ export async function fetchDsciTrendClaims(
       ok: true,
       claims: [
         makeClaim({
-          text: `As of the ${asOf} map, statewide drought severity for ${stateName} (Drought Severity and Coverage Index, 0 to 500) is ${Math.round(lastPoint.v)} and has been ${trendWord} over recent weeks.`,
+          text:
+            `As of the ${asOf} map, statewide drought severity for ${stateName} ` +
+            `(Drought Severity and Coverage Index, 0 to 500) is ${Math.round(lastPoint.v)}, ` +
+            `${changePhrase} ${sincePhrase}, which DDM reads as ${trendWord}. ` +
+            'The plus or minus 15 point band behind that word is a DDM convention: ' +
+            'the NDMC publishes no DSCI trend threshold and calls the index itself experimental.',
           source,
           sourceUrl,
           evidence: 'analyzed',
@@ -572,7 +735,11 @@ export async function fetchNifcClaims(
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
     console.warn('[impact] NIFC query failed.', err);
-    return { claims: [], ok: false, note: 'The NIFC current-perimeters service did not respond.' };
+    return {
+      claims: [],
+      ok: false,
+      note: upstreamNote(err, 'The NIFC current-perimeters service')
+    };
   }
 }
 
@@ -663,8 +830,12 @@ export async function fetchNwsAlertClaims(
     if (heat.length > 0) {
       claims.push(
         makeClaim({
+          // The former tail, "and drought-dried soils amplify it", asserted a
+          // drought-to-heat coupling: the class of claim ruling D-0.8.0-047
+          // removed from the USDM category ladder. It is removed here too
+          // (DWH-07); do not reintroduce a DDM-inferred drought-to-heat link.
           // vocab-allow: reports the NWS alert products in effect, upstream data
-          text: `An extreme-heat alert is in effect here: ${heat.join(', ')}. Heat raises drinking-water demand and human-health stress, and drought-dried soils amplify it.`,
+          text: `An extreme-heat alert is in effect here: ${heat.join(', ')}. Heat raises drinking-water demand and human-health stress.`,
           ...alertShared
         })
       );
@@ -685,7 +856,8 @@ export async function fetchNwsAlertClaims(
         key: 'nwsAlerts',
         // vocab-allow: names the upstream NWS active heat alerts product
         label: 'NWS active heat alerts',
-        text: heatText
+        text: heatText,
+        sourceUrl
       }
     };
   } catch (err) {
@@ -703,7 +875,21 @@ export async function fetchNwsAlertClaims(
 interface OutlookValue {
   readonly cat: string;
   readonly prob: number;
+  /** `fcst_date`: when CPC issued the outlook, epoch ms; null when absent. */
+  readonly issued: number | null;
+  /** `start_date`: first day of the valid window, epoch ms. */
+  readonly validFrom: number | null;
+  /** `end_date`: last day of the valid window, epoch ms (inclusive). */
+  readonly validTo: number | null;
 }
+
+/**
+ * The fields the extended-range outlook layers publish that the briefing can
+ * state honestly: the tercile category and its probability, plus the issuance
+ * and the valid window the service already sends with them (FSPEC-03). All
+ * three date fields are epoch-millisecond UTC Date fields.
+ */
+const CPC_OUT_FIELDS = 'cat,prob,fcst_date,start_date,end_date';
 
 /** Query one CPC outlook layer (0 = temperature, 1 = precipitation) at a point. */
 async function fetchCpcLayer(
@@ -713,14 +899,43 @@ async function fetchCpcLayer(
   lat: number,
   signal: AbortSignal
 ): Promise<OutlookValue | null> {
-  const url = `${base}/${layer}/query?${esriPointQuery(lng, lat, 'cat,prob').toString()}`;
+  const url = `${base}/${layer}/query?${esriPointQuery(lng, lat, CPC_OUT_FIELDS).toString()}`;
   const json: unknown = await fetchJson(url, GEOJSON_ACCEPT, signal);
   const f = featuresOf(json)[0] ?? null;
   if (!isObject(f) || !isObject(f.properties)) return null;
   const cat = f.properties.cat;
   const prob = f.properties.prob;
   if (typeof cat !== 'string') return null;
-  return { cat, prob: typeof prob === 'number' ? prob : NaN };
+  return {
+    cat,
+    prob: typeof prob === 'number' ? prob : NaN,
+    issued: epochField(f.properties.fcst_date),
+    validFrom: epochField(f.properties.start_date),
+    validTo: epochField(f.properties.end_date)
+  };
+}
+
+/**
+ * "Issued Sep 1, 2026; valid Sep 7 to Sep 11, 2026." from whichever of the
+ * three date fields the service returned, and the empty string when it
+ * returned none. An outlook must never state a window it was not given, so
+ * each half is omitted independently rather than inferred from the other.
+ */
+function outlookValiditySentence(v: OutlookValue | null): string {
+  if (!v) return '';
+  const parts: string[] = [];
+  if (v.issued !== null) parts.push(`Issued ${humanDayUtc(v.issued)}`);
+  if (v.validFrom !== null && v.validTo !== null) {
+    const sameYear =
+      new Date(v.validFrom).getUTCFullYear() === new Date(v.validTo).getUTCFullYear();
+    const from = sameYear ? humanDayUtcNoYear(v.validFrom) : humanDayUtc(v.validFrom);
+    parts.push(`valid ${from} to ${humanDayUtc(v.validTo)}`);
+  } else if (v.validFrom !== null) {
+    parts.push(`valid from ${humanDayUtc(v.validFrom)}`);
+  } else if (v.validTo !== null) {
+    parts.push(`valid through ${humanDayUtc(v.validTo)}`);
+  }
+  return parts.length > 0 ? ` ${parts.join('; ')}.` : '';
 }
 
 /** Render a category and probability into a lean phrase for one variable. */
@@ -747,8 +962,9 @@ function outlookInterpretation(temp: OutlookValue | null, precip: OutlookValue |
  * Query the CPC 6-10 day and 8-14 day temperature and precipitation outlooks at
  * the point and surface each window's probability tilt as an outlook claim. The
  * lean is stated as a probability, never a deterministic value (the honest
- * outlook rule). A window whose fetches fail is skipped; the result is ok when
- * at least one window resolved.
+ * outlook rule), and each claim carries the issuance and the valid window the
+ * service publishes alongside the category. A window whose fetches fail is
+ * skipped; the result is ok when at least one window resolved.
  */
 export async function fetchCpcOutlookClaims(
   context: BoundarySelectionContext,
@@ -767,6 +983,15 @@ export async function fetchCpcOutlookClaims(
   // never depends on the display copy (a wording change must not reorder).
   const settled: Array<{ readonly ordinal: number; readonly claim: SourcedClaim }> = [];
   let anyFailed = false;
+  // The first error-envelope answer seen across both windows, kept so a host
+  // that answered with an error is not reported as one that never answered
+  // (FSPEC-01). The per-variable catches below swallow the rejection to keep
+  // the sibling variable, so the envelope has to be recorded on the way past.
+  let serviceError: EsriServiceError | null = null;
+  const keepServiceError = (err: unknown): null => {
+    if (err instanceof EsriServiceError && serviceError === null) serviceError = err;
+    return null;
+  };
   await Promise.all(
     windows.map(async ({ label, base }, ordinal) => {
       try {
@@ -774,8 +999,8 @@ export async function fetchCpcOutlookClaims(
         // HTTP failure does not discard the other; a window still emits the
         // variable that succeeded (graceful degradation, honest-feedback rule).
         const [temp, precip] = await Promise.all([
-          fetchCpcLayer(base, 0, lng, lat, signal).catch(() => null),
-          fetchCpcLayer(base, 1, lng, lat, signal).catch(() => null)
+          fetchCpcLayer(base, 0, lng, lat, signal).catch(keepServiceError),
+          fetchCpcLayer(base, 1, lng, lat, signal).catch(keepServiceError)
         ]);
         if (signal.aborted) return;
         const parts = [leanPhrase(temp, 'temperature'), leanPhrase(precip, 'precipitation')].filter(
@@ -787,6 +1012,14 @@ export async function fetchCpcOutlookClaims(
         }
         if (!temp || !precip) anyFailed = true;
         const interp = outlookInterpretation(temp, precip);
+        // The two variables are layers of ONE issuance, so they carry the same
+        // fcst_date, start_date and end_date; whichever answered speaks for the
+        // window. An outlook claim with no forecast period is the one kind that
+        // must never lack one (DWH-06), so the dates are stated in the sentence
+        // and the issuance also dates the claim.
+        const dated = temp ?? precip;
+        const validity = outlookValiditySentence(dated);
+        const issued = dated?.issued ?? null;
         // Foreground the temperature tercile bar (the heat-relevant variable).
         const chartSvg = temp
           ? cpcOutlookBarsSvg({ variable: 'temperature', cat: temp.cat, prob: temp.prob, window: label })
@@ -794,11 +1027,14 @@ export async function fetchCpcOutlookClaims(
         settled.push({
           ordinal,
           claim: makeClaim({
-            text: `CPC ${label} outlook: ${parts.join(', ')}.${interp ? ' ' + interp : ''}`,
+            text: `CPC ${label} outlook: ${parts.join(', ')}.${interp ? ' ' + interp : ''}${validity}`,
             source,
             sourceUrl,
             evidence: 'outlook',
-            dates: { retrieved: todayIso() },
+            dates:
+              issued === null
+                ? { retrieved: todayIso() }
+                : { issued: isoDayUtc(issued), retrieved: todayIso() },
             uncertainty: { kind: 'categorical', text: 'stated as tercile odds (above, near, or below normal), not a deterministic value' },
             ...(chartSvg ? { chartSvg } : {})
           })
@@ -815,7 +1051,11 @@ export async function fetchCpcOutlookClaims(
   // promise settled first, by the declared window ordinal (never by text).
   const claims = settled.sort((a, b) => a.ordinal - b.ordinal).map((s) => s.claim);
   if (claims.length === 0) {
-    return { claims: [], ok: false, note: 'The CPC extended-range outlooks did not respond.' };
+    return {
+      claims: [],
+      ok: false,
+      note: upstreamNote(serviceError, 'The CPC extended-range outlooks')
+    };
   }
   return { claims, ok: true, ...(anyFailed ? { note: 'One CPC outlook window did not respond.' } : {}) };
 }
@@ -889,7 +1129,8 @@ export async function fetchNwsForecastClaims(
         // vocab-allow: names the upstream NWS point forecast product
         label: 'NWS point forecast',
         // vocab-allow: renders the upstream NWS point forecast product
-        text: `${name}: ${short || 'forecast available'}, near ${tempStr}.`
+        text: `${name}: ${short || 'forecast available'}, near ${tempStr}.`,
+        sourceUrl
       }
     };
   } catch (err) {

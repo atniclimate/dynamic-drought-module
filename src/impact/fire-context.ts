@@ -4,7 +4,8 @@
  * Clicking a current mapped NIFC fire perimeter composes existing reads for the
  * clicked location into a short "Fire in context" block appended to the
  * perimeter popup: the US Drought Monitor (USDM) class beneath the point, and
- * the nearest telemetry stations from the station registry.
+ * the nearest telemetry stations from the station registry inside a fixed
+ * radius.
  *
  * This unit COMPOSES only what is already on the map and in the registry. It
  * deliberately does NOT compute a conditions-based fire potential (drought plus
@@ -14,13 +15,17 @@
  * Every branch is honest. When the USDM surface is off, the block says to turn
  * it on rather than inventing a class. When no D0 to D4 polygon covers the
  * point, the block reports that absence without inferring drought-free
- * conditions because this client has no analyzed-area mask.
+ * conditions because this client has no analyzed-area mask. When no curated
+ * station sits inside the station-list ceiling, the block says so rather than
+ * ranking the whole registry and calling a gauge in another region
+ * "nearest".
  */
 import maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 import { USDM_CATEGORIES } from '../config/palette';
 import { STATIC_TELEMETRY_STATION_REGISTRY, distanceMeters } from '../config/station-registry';
 import { escapeHtml } from '../util/escape';
+import { formatDistanceKm } from './point-heat-format';
 
 /** The USDM frame-slot fill ids (0.5.0b scrubber; mirrors
  * src/ui/conditions-strip.ts). Only the visible slot matches a rendered
@@ -32,6 +37,27 @@ const WHP_LAYER = 'usfs-whp';
 
 /** How many nearest stations to name. */
 const NEAREST_STATION_COUNT = 3;
+
+/**
+ * The distance ceiling for the nearest-station list.
+ *
+ * STATIC_TELEMETRY_STATION_REGISTRY is the curated Pacific Northwest set
+ * (src/config/telemetry.ts), while the perimeter layer this block annotates
+ * queries NATIONALLY (src/layers/nifc-fires.ts, `where=1=1`). Ranking with no
+ * ceiling therefore handed a fire in Texas three Pacific Northwest gauges under
+ * the heading "Nearest monitoring stations" (FIRE-17): a true statement about
+ * the registry and a false one about the fire.
+ *
+ * Nothing in the registry or the layer implies a radius, so 50 miles (80 km) is
+ * a DDM convention: roughly the distance within which a gauge is still
+ * plausibly sampling the same weather as the perimeter. Past it the block
+ * reports the absence instead of naming a station that explains nothing about
+ * this fire.
+ */
+const NEAREST_STATION_MAX_MILES = 50;
+const METERS_PER_MILE = 1609.344;
+const NEAREST_STATION_MAX_METERS = NEAREST_STATION_MAX_MILES * METERS_PER_MILE;
+const NEAREST_STATION_MAX_KM = Math.round(NEAREST_STATION_MAX_METERS / 1000);
 
 /**
  * Build the "Fire in context" HTML block for a clicked perimeter. `point` is
@@ -100,22 +126,40 @@ function fuelsRow(map: maplibregl.Map): string {
       );
 }
 
-/** The nearest curated telemetry stations to the clicked point. */
+/**
+ * The nearest curated telemetry stations to the clicked point, inside
+ * NEAREST_STATION_MAX_MILES and never beyond it.
+ *
+ * Distances read US customary first with the metric secondary (owner
+ * decision 2026-08-31, PR 53), through the same formatter the point-heat
+ * read uses so the two surfaces cannot drift; the raw metres the ranking
+ * actually compared stay one hover away in the title.
+ */
 function nearestStationsBlock(lngLat: maplibregl.LngLat): string {
   const here: readonly [number, number] = [lngLat.lat, lngLat.lng];
   const ranked = STATIC_TELEMETRY_STATION_REGISTRY.map((entry) => ({
     name: entry.station.name,
     meters: distanceMeters(here, entry.station.coords)
   }))
+    .filter((s) => s.meters <= NEAREST_STATION_MAX_METERS)
     .sort((a, b) => a.meters - b.meters)
     .slice(0, NEAREST_STATION_COUNT);
 
   if (ranked.length === 0) {
-    return contextRow('Nearest stations', 'No telemetry stations available.');
+    return contextRow(
+      'Nearest monitoring stations',
+      `No station in the curated Pacific Northwest station registry is within ` +
+        `${NEAREST_STATION_MAX_MILES} miles (${NEAREST_STATION_MAX_KM} km) of ` +
+        `this perimeter. Other networks may operate nearer; this reports the ` +
+        `registry, not the field.`
+    );
   }
 
   const items = ranked
-    .map((s) => `<li>${escapeHtml(s.name)} <span class="fire-context-distance">${escapeHtml(formatDistance(s.meters))}</span></li>`)
+    .map(
+      (s) =>
+        `<li>${escapeHtml(s.name)} <span class="fire-context-distance" title="${escapeHtml(`${Math.round(s.meters)} m from the clicked point`)}">${escapeHtml(formatDistanceKm(s.meters / 1000))}</span></li>`
+    )
     .join('');
   return `
     <div class="fire-context-block">
@@ -140,9 +184,3 @@ function readDm(props: GeoJsonProperties): number | null {
   return Number.isInteger(n) ? n : null;
 }
 
-/** A compact "12 km" / "800 m" distance for the nearest-station list. */
-function formatDistance(meters: number): string {
-  if (meters < 1000) return `${Math.round(meters)} m`;
-  const km = meters / 1000;
-  return `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
-}

@@ -505,7 +505,7 @@ test('an invalid NWS active-products body is unavailable, never an all-clear', a
   );
 
   const current = page.locator(
-    '.impact-horizon[aria-label="Current conditions"]'
+    '.impact-horizon[aria-labelledby="impact-horizon-title-current"]'
   );
   await expect(current.locator('.impact-horizon-note')).toContainText(
     'The NWS alerts service did not respond.'

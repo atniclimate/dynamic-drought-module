@@ -309,7 +309,7 @@ const FEATURE_BUDGETS = [
   },
   {
     key: 'point-heat-briefing',
-    label: 'Point heat briefing with bounded NWS discovery, nearby observation, grid time series, point forecast, and alerts (24.1 kB measured first-activation closure, including the shared impact hydrator; six-request ceiling; completed responses use the bounded client cache and the Worker retains its 60-second edge cache)',
+    label: 'Point heat briefing with bounded NWS discovery, nearby observation, grid time series, point forecast, and alerts (21.2 kB measured first-activation closure on 2026-09-02, including the shared impact hydrator; the ENSO module loads lazily inside the long-range horizon; six-request ceiling; completed responses use the bounded client cache and the Worker retains its 60-second edge cache)',
     rootModules: ['src/impact/point-heat.ts'],
     activationJsGzipKb: 25.0,
     networkBytes: 3_000_000,

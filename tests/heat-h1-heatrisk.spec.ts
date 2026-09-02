@@ -561,10 +561,10 @@ test.describe('review regressions for HeatRisk honesty and lifecycle', () => {
     );
 
     const current = page.locator(
-      '.impact-horizon[aria-label="Current conditions"]'
+      '.impact-horizon[aria-labelledby="impact-horizon-title-current"]'
     );
     const nearTerm = page.locator(
-      '.impact-horizon[aria-label="Near-term outlook"]'
+      '.impact-horizon[aria-labelledby="impact-horizon-title-nearTerm"]'
     );
     await expect(nearTerm).toContainText(
       'HeatRisk (Experimental) value 2, Moderate'

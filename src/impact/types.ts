@@ -295,6 +295,13 @@ export interface HeatSourceRead {
   readonly key: HeatSourceReadKey;
   readonly label: string;
   readonly text: string;
+  /**
+   * The issuer resource this read came from. "Heat sources together" is the
+   * section that most explicitly compares issuers, so it carries the same
+   * provenance path as a horizon claim (IB-12); optional because a read may
+   * have no single addressable product page.
+   */
+  readonly sourceUrl?: string;
 }
 
 /**

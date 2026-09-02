@@ -485,7 +485,7 @@ function buildRegionSelect(
     );
   });
 
-  // The keyboard-reachable drought impact briefing trigger (critical-review
+  // The keyboard-reachable impact briefing trigger (critical-review
   // #9). It sits after the radiogroup as an ordinary tabbable button (not part
   // of the roving-tabindex group), so a keyboard user reaches it with one Tab.
   // It opens the selected region's anchored state briefing, the same panel a
@@ -548,8 +548,8 @@ function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): v
     return;
   }
   btn.hidden = false;
-  btn.textContent = `Drought impact briefing: ${anchor.label}`;
-  btn.setAttribute('aria-label', `Open the drought impact briefing for ${anchor.label}`);
+  btn.textContent = `Impact briefing: ${anchor.label}`;
+  btn.setAttribute('aria-label', `Open the impact briefing for ${anchor.label}`);
 }
 
 // ---------------------------------------------------------------------------

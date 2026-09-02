@@ -80,7 +80,8 @@ function pointHeatRead(pointHeat: PointHeatBriefing): HeatSourceRead | null {
   return {
     key: 'pointHeat',
     label: 'NWS point observation and grid guidance',
-    text: parts.join(' ')
+    text: parts.join(' '),
+    ...(observation.stationUrl ? { sourceUrl: observation.stationUrl } : {})
   };
 }
 

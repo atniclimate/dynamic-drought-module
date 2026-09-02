@@ -23,14 +23,19 @@ import { gotoApp, waitForLayerSettled } from './helpers';
  */
 
 /** Required clauses for the AIANNH popup (publisher, vintage, live-fetch +
- * session-cache honesty, non-bundling, jurisdiction caveat). */
+ * session-cache honesty, non-bundling, jurisdiction caveat, and the
+ * absence-is-not-absence sentence: no federal dataset maps every Tribal
+ * Nation, so a boundary missing from this layer says nothing about a Nation
+ * or its rights). */
 const AIANNH_POPUP_CLAUSES = [
   'US Census Bureau',
   'vintage January 1, 2025',
   'requested live from the Census TIGERweb service',
   "this browser session's memory",
   'not bundled by this module',
-  'not a definitive depiction of Tribal jurisdiction'
+  'not a definitive depiction of Tribal jurisdiction',
+  'No federal dataset maps every Tribal Nation',
+  'absence from this layer is not absence of a Nation or of its rights'
 ] as const;
 
 /** Required clauses for the AIAN-LAR popup. Definition publication, live
@@ -46,7 +51,9 @@ const BIA_POPUP_CLAUSES = [
   'requested live from the BIA service',
   "this browser session's memory",
   'not bundled by this module',
-  'matters of sovereign authority'
+  'matters of sovereign authority',
+  'No federal dataset maps every Tribal Nation',
+  'absence from this layer is not absence of a Nation or of its rights'
 ] as const;
 
 /** Required clauses for the group-level disclosure: both source dates, the
