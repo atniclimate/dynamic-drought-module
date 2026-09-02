@@ -42,6 +42,51 @@ window ending 2026-09-11, so they can be restored by uncommenting.
 `main` still earns its live receipt. Nothing was replaced with a green no-op: a
 run that checks nothing must not exist as a receipt.
 
+### 2026-09-02: the September integration wave (pull request 57, merge commit from `integration/2026-09`)
+
+The 2026-09-01 deep dive (eleven read-only audits, four science passes, a
+dependency review) was fixed on one integration branch, verified locally on
+the ladder, and landed as one merge commit that keeps the wave's own commits.
+
+Science and honesty. The El Nino Southern Oscillation headline now follows
+the NOAA Climate Prediction Center's onset and advisory rules with verbatim
+citations: conditions lead, the five-season episode rule is secondary, and an
+emerging state exists, so the app can no longer read "neutral" while the
+Center has an El Nino Advisory in force (it did, against the 13 August 2026
+discussion). A `check:enso` gate cross-checks the Center's status page when it
+is reachable. "Impact Briefing" replaces "Drought Impact Briefing" wherever the
+briefing is named. Issuer dates are carried and shown: the U.S. Drought
+Monitor map date, the Climate Prediction Center issued and valid span, and the
+drought.gov `info.json` valid date in the gridded-index legend. A NOAA HTTP 200
+error envelope now reads `unavailable`, not `no data`. The Drought Severity
+and Coverage Index trend band and the nearest-station ceiling are labeled DDM
+conventions; a DDM-authored heat-coupling sentence is removed and three
+briefing sentences are relabeled as derived pending citation.
+
+Time and horizons. Time-bar fallbacks, sea-surface-temperature frame
+prefetch, one horizon chip label table, an `spi=` URL parameter, and a
+humanized British Columbia stamp.
+
+Architecture. Bounded caches and fetches, a catalog index, fire-control
+strings in the six honest states, a nearest-station ceiling, `maxPitch` 85,
+and a lazily loaded hydrate path that keeps the point-heat briefing closure
+under its activation budget.
+
+Interface. Design tokens for z-index and motion, the missing spinner
+keyframe, `--fg-3` contrast, tablet panel and dock geometry with a first
+721 to 1024 pixel band, 44 pixel minimap doors, minimap work gated off phones,
+an ENSO map-key family, and a pointer hit box.
+
+Delivery. `verify-live` proves the pull request 54 contract (issue 56 was a
+false positive), a bounded stamp poll with a severity split, `gh` retries,
+upstream-monitor build-tier tolerance, docs `paths-ignore`, the browser suite
+advisory on pushes to `main` with one marker issue, and a weekly Monday
+suite. The verification ladder is documented (`verify:quick`, `verify:smoke`,
+`test:serial`). The roadmap is slimmed to a product plan with the canonical
+plan in `docs/ROADMAP.yaml` (phases DDM-P7 to DDM-P15). The README states
+MapLibre's WebGL 2 first, WebGL 1 fallback behavior. Node.js moves to the 24
+line, pinned exactly in `.nvmrc`, which every workflow already reads.
+
 ## v0.6.26
 
 `v0.6.26` is the package version and, since 2026-08-29, the release tag. One
