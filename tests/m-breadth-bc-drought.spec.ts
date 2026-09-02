@@ -194,7 +194,7 @@ test.describe('U7 British Columbia basin drought display', () => {
     await expect(legend).not.toContainText('U.S. Drought Monitor');
 
     await expect(page.locator('#time-bar')).toContainText(
-      'Source date 2026-07-23'
+      'Source date Jul 23, 2026'
     );
     await expect(page.locator('#time-bar')).toContainText(
       'No update means not measured right now'
@@ -374,7 +374,7 @@ test.describe('U7 British Columbia basin drought display', () => {
     await expect(page.locator('#app')).toBeVisible();
     await expect(panel).toBeHidden();
     await expect(page.locator('#time-bar')).toContainText(
-      'Source date 2026-07-23'
+      'Source date Jul 23, 2026'
     );
     await expect(
       page.locator('#legend-panel [data-legend="usdm"]')

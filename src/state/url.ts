@@ -44,6 +44,8 @@ import type { TemporalHorizonKey } from '../config/clusters';
  *            playback state is deliberately never serialized)
  *   heatday  one-based HeatRisk frame position; the layer resolves that
  *            position only against the service's advertised granule list
+ *   spi      gridded-index accumulation window in days (30/60/180/365);
+ *            the default 90-day window is absence
  *
  * plus the region-shell trio (S2, the additive URL migration;
  * D-0.7.0-039/041/042/044/053; the precedence rules are exercised by
@@ -136,6 +138,56 @@ export function syncHeatRiskDayParam(day: number | null): void {
     params.set('heatday', String(day));
   } else {
     params.delete('heatday');
+  }
+  const query = params.toString();
+  const url = window.location.pathname + (query === '' ? '' : `?${query}`);
+  window.history.replaceState(window.history.state, '', url);
+}
+
+/**
+ * The Standardized Precipitation Index accumulation windows the gridded
+ * index surface publishes, in DAYS, mirroring the verified product table in
+ * src/layers/gridded-index.ts. Declared here rather than imported because
+ * this module reads only config, never layer code. The 90-day window is the
+ * surface's default and is therefore ABSENCE in the URL, so an untouched
+ * link stays clean (the same rule the temporal parameters follow).
+ */
+export const SPI_WINDOW_DAYS: readonly number[] = [30, 60, 90, 180, 365];
+export const DEFAULT_SPI_WINDOW_DAYS = 90;
+
+/**
+ * Parse the additive gridded-index accumulation window (`spi=`), the value
+ * in days. An unknown window, a non-numeric token, the default window, or a
+ * duplicated parameter all read as absence (the heatday malformed-input
+ * discipline: ambiguity is rejected, never resolved by position).
+ */
+export function parseSpiWindowParam(
+  params = new URLSearchParams(window.location.search)
+): number | null {
+  const values = params.getAll('spi');
+  if (values.length !== 1) return null;
+  const raw = values[0] ?? '';
+  if (!/^[1-9][0-9]*$/.test(raw)) return null;
+  const days = Number(raw);
+  if (!SPI_WINDOW_DAYS.includes(days)) return null;
+  return days === DEFAULT_SPI_WINDOW_DAYS ? null : days;
+}
+
+/**
+ * Replace only the gridded-index window parameter while preserving every
+ * other current URL field, including `embed=true` (the syncHeatRiskDayParam
+ * idiom). The default window is absence.
+ */
+export function syncSpiWindowParam(days: number | null): void {
+  const params = new URLSearchParams(window.location.search);
+  if (
+    days !== null &&
+    SPI_WINDOW_DAYS.includes(days) &&
+    days !== DEFAULT_SPI_WINDOW_DAYS
+  ) {
+    params.set('spi', String(days));
+  } else {
+    params.delete('spi');
   }
   const query = params.toString();
   const url = window.location.pathname + (query === '' ? '' : `?${query}`);
@@ -382,6 +434,12 @@ export function syncUrl(state: UrlSyncState): void {
   // through syncFire3dParam); read it fresh here so ordinary state writes
   // preserve an active mode instead of erasing it.
   const fire3d = parseFire3dParam(new URLSearchParams(window.location.search));
+  // The gridded index owns its additive accumulation window the same way;
+  // read it fresh so an ordinary state write cannot silently return a
+  // shared link to the default 90-day window.
+  const spiWindow = parseSpiWindowParam(
+    new URLSearchParams(window.location.search)
+  );
   const params = new URLSearchParams();
 
   if (state.region) {
@@ -442,6 +500,9 @@ export function syncUrl(state: UrlSyncState): void {
   }
   if (fire3d) {
     params.set('fire3d', 'true');
+  }
+  if (spiWindow !== null) {
+    params.set('spi', String(spiWindow));
   }
   if (state.basemap === 'default') {
     params.set('basemap', state.basemap);

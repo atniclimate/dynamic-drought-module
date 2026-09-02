@@ -41,7 +41,10 @@ import { signal } from '@preact/signals';
 import type { ReadonlySignal } from '@preact/signals';
 import { useEffect, useRef } from 'preact/hooks';
 
-import { CLUSTER_DISPLAY_NAMES } from '../../config/clusters';
+import {
+  CLUSTER_DISPLAY_NAMES,
+  TEMPORAL_HORIZON_CHIP_LABELS
+} from '../../config/clusters';
 import {
   dismissResponse,
   setResponseSink
@@ -52,12 +55,6 @@ import {
   onCommittedSnapshotChange
 } from '../../state/cluster-service';
 import type { CommittedShellSnapshot } from '../../state/cluster-service';
-
-const HORIZON_LINE: Readonly<Record<string, string>> = {
-  current: 'Current',
-  'weeks-ahead': 'Weeks ahead',
-  'season-ahead': 'Season ahead'
-};
 
 /** Whether the panel foot is a usable response surface right now. The
  * foot is a BRIEF-shell surface (the S4 launch pad): console keeps the
@@ -80,7 +77,9 @@ function clusterLine(snap: CommittedShellSnapshot): string {
     snap.cluster === 'custom'
       ? 'Custom layer set'
       : `${CLUSTER_DISPLAY_NAMES[snap.cluster]} view`;
-  return `${view} · ${HORIZON_LINE[snap.horizon] ?? snap.horizon}`;
+  // One table for the visible horizon wording (src/config/clusters.ts), so
+  // this line and the shell's chips can never drift apart.
+  return `${view} · ${TEMPORAL_HORIZON_CHIP_LABELS[snap.horizon]}`;
 }
 
 interface PanelResponseProps {

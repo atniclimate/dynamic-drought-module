@@ -33,6 +33,31 @@ export interface TimeCompactProps {
   readonly specTick: ReadonlySignal<number>;
 }
 
+/**
+ * The step chevron, drawn exactly as the bar draws it
+ * (src/ui/time-bar.ts's rail row): same viewBox, size, stroke, and points.
+ * The two renderings of one TimeBarSpec must not look like different
+ * controls, so this glyph and the bar's are kept identical by eye and by
+ * comment; the text `<` / `>` they replaced were the visible divergence.
+ */
+function StepChevron({ direction }: { direction: 'prev' | 'next' }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points={direction === 'prev' ? '15 18 9 12 15 6' : '9 18 15 12 9 6'} />
+    </svg>
+  );
+}
+
 function DetailControls({ spec }: { spec: TimeBarSpec }) {
   const rail = spec.rail;
   return (
@@ -47,13 +72,14 @@ function DetailControls({ spec }: { spec: TimeBarSpec }) {
             type="button"
             class="time-bar-step"
             aria-label="Previous date"
+            title="Previous date"
             disabled={rail.index <= 0}
             onClick={() => {
               const r = getTimeBarSpec()?.rail;
               if (r && r.index > 0) r.onStep(r.index - 1);
             }}
           >
-            {'<'}
+            <StepChevron direction="prev" />
           </button>
           <input
             type="range"
@@ -64,6 +90,20 @@ function DetailControls({ spec }: { spec: TimeBarSpec }) {
             value={rail.index}
             aria-label="Date"
             aria-valuetext={rail.valueText(rail.index)}
+            // `input` fires per notch while dragging. Stepping per notch
+            // would spam fetches, so the fetch-triggering step still waits
+            // for `change` (release or arrow key) exactly as the bar does;
+            // only the announced value keeps up, so a screen-reader user
+            // dragging the rail hears real product dates rather than a
+            // value frozen at the stop they started from.
+            onInput={(event) => {
+              const el = event.currentTarget as HTMLInputElement;
+              const v = Number(el.value);
+              const r = getTimeBarSpec()?.rail;
+              if (r && Number.isInteger(v)) {
+                el.setAttribute('aria-valuetext', r.valueText(v));
+              }
+            }}
             onChange={(event) => {
               const v = Number((event.currentTarget as HTMLInputElement).value);
               const r = getTimeBarSpec()?.rail;
@@ -74,13 +114,14 @@ function DetailControls({ spec }: { spec: TimeBarSpec }) {
             type="button"
             class="time-bar-step"
             aria-label="Next date"
+            title="Next date"
             disabled={rail.index >= rail.count - 1}
             onClick={() => {
               const r = getTimeBarSpec()?.rail;
               if (r && r.index < r.count - 1) r.onStep(r.index + 1);
             }}
           >
-            {'>'}
+            <StepChevron direction="next" />
           </button>
         </div>
       )}
