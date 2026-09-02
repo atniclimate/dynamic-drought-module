@@ -66,7 +66,7 @@ runs:
     # Only main writes an entry every other ref can read: see the header note.
     - name: Save the Playwright browser directory (miss, on main)
       if: steps.playwright-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
-      uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/ms-playwright
         key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
