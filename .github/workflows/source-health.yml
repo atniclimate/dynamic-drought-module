@@ -23,12 +23,17 @@
 name: Source health
 
 on:
-  schedule:
-    # Daily at 13:41 UTC, after the 13:07 upstream liveness monitor. Not on
-    # the half hour: GitHub's docs name the start of every hour as the
-    # highest scheduled-workflow load, where a queued run can be delayed or
-    # dropped (2026-08-29); an odd minute avoids that slot.
-    - cron: '41 13 * * *'
+  # SNOOZED through 2026-09-11 (owner direction, 2026-08-31): scheduled
+  # probes are off during the active development window; workflow_dispatch
+  # stays live for hand checks. RESTORE by uncommenting the block below
+  # after 2026-09-11, before the Convention. No green no-op replaces the
+  # schedule: a run that checks nothing must not exist as a receipt.
+  # schedule:
+  #   # Daily at 13:41 UTC, after the 13:07 upstream liveness monitor. Not on
+  #   # the half hour: GitHub's docs name the start of every hour as the
+  #   # highest scheduled-workflow load, where a queued run can be delayed or
+  #   # dropped (2026-08-29); an odd minute avoids that slot.
+  #   - cron: '41 13 * * *'
   workflow_dispatch:
     inputs:
       layers:
