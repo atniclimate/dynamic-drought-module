@@ -294,10 +294,18 @@ test.describe('S4b minimap', () => {
     );
     expect(nadmRequests).toBe(1);
 
+    // EF-3: the metric note renders for EVERY metric context, not wildfire
+    // only. On Heat and ENSO it states the honest absence of a framing
+    // metric (DDM-UI-004) instead of leaving the flat fills unexplained,
+    // so the former `toHaveCount(0)` is now the neutral sentence.
     await page.locator('.shell-cluster-btn[data-cluster="heat"]').click();
-    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
+    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveText(
+      'No verified Extreme Heat framing metric applied.',
+    );
     await page.locator('.shell-cluster-btn[data-cluster="enso"]').click();
-    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
+    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveText(
+      'No verified ENSO framing metric applied.',
+    );
   });
 
   test('the annotated granular drought URL keeps the selected drought metric and regional fills', async ({
@@ -315,7 +323,12 @@ test.describe('S4b minimap', () => {
     const pacific = minimap.locator('[data-framing="pacific-coast"]');
     await expect(pacific).toHaveAttribute('data-drought-class', 'D2');
     await expect(pacific).toHaveCSS('fill', 'rgb(255, 170, 0)');
-    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
+    // EF-3: Drought's live NADM encoding used to be explained only in the
+    // scale slot's accessible name; the visible note now carries it in every
+    // status (loading, unavailable, live all name the source).
+    await expect(minimap.locator('.shell-minimap-metric-note')).toContainText(
+      'North American Drought Monitor',
+    );
   });
 
   test('uses the legible Hawaii inset proportions from the desktop rail', async ({

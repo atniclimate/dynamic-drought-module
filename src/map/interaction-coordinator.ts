@@ -251,6 +251,26 @@ function handleClick(map: maplibregl.Map, e: maplibregl.MapMouseEvent): void {
 }
 
 /**
+ * Pointer-sized click tolerance (EF-7). A bare-point
+ * `queryRenderedFeatures` demands sub-pixel accuracy, which makes a thin
+ * hydrography line, a small island, or a narrow boundary sliver effectively
+ * unclickable, and a finger lands further from what it aims at than a mouse
+ * does. The click therefore queries a small box around the point, mirroring
+ * the hover inspector (src/ui/hover-inspector.ts, BOX = 3). Arbitration is
+ * untouched: candidates are still ranked by the precedence table and then
+ * rendered order, so a direct hit still wins and everything else stays
+ * reachable through the one response's other-features disclosure.
+ */
+const CLICK_BOX_FINE_PX = 6;
+const CLICK_BOX_COARSE_PX = 12;
+
+function clickBoxRadius(): number {
+  return window.matchMedia?.('(pointer: coarse)').matches === true
+    ? CLICK_BOX_COARSE_PX
+    : CLICK_BOX_FINE_PX;
+}
+
+/**
  * Collect and rank the candidates under the click point: one query over
  * every present registered layer, the first rendered feature per
  * registration, ranked by the precedence table with the selected-place
@@ -263,7 +283,12 @@ function collectHits(map: maplibregl.Map, point: maplibregl.Point): Hit[] {
   const present = [...specByLayerId.keys()].filter((id) => map.getLayer(id));
   if (present.length === 0) return [];
 
-  const features = map.queryRenderedFeatures(point, { layers: present });
+  const radius = clickBoxRadius();
+  const box: [maplibregl.PointLike, maplibregl.PointLike] = [
+    [point.x - radius, point.y - radius],
+    [point.x + radius, point.y + radius]
+  ];
+  const features = map.queryRenderedFeatures(box, { layers: present });
   const hits: Hit[] = [];
   const taken = new Set<ClickTargetSpec>();
 

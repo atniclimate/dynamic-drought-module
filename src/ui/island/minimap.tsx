@@ -91,6 +91,7 @@ import type {
   MinimapWildfireSnapshot,
   MinimapWildfireSummary,
 } from '../../state/minimap-wildfire';
+import type { EnsoPhaseLabel } from '../../impact/enso';
 import { prefersReducedMotion } from '../../util/motion';
 
 /** The kit's ratified equirectangular drawing plane. The final 8 units
@@ -220,6 +221,33 @@ const NEUTRAL_METRIC_NOTES: Readonly<
   enso: 'No verified ENSO framing metric applied.',
   custom: 'No verified custom-display framing metric applied.'
 };
+
+/**
+ * The minimap only exists at the desktop shell breakpoint: below 721px
+ * `#shell-panel` is `display: none` (src/styles/app.css, the max-width 720px
+ * block) and the sheet, footer nav, and hazard rail carry mobile. EF-2: gate
+ * the live NADM and NIFC retains on the same query so a phone does not pay
+ * a monthly polygon fetch, a browser-side area sample, and a five-minute
+ * perimeter poll for a control it never renders. Crossing the breakpoint
+ * (rotation, a resized window) starts or stops the work.
+ */
+const DESKTOP_MINIMAP_QUERY = '(min-width: 721px)';
+
+function useDesktopMinimap(): boolean {
+  const [matches, setMatches] = useState(
+    () => window.matchMedia(DESKTOP_MINIMAP_QUERY).matches,
+  );
+  useEffect(() => {
+    const query = window.matchMedia(DESKTOP_MINIMAP_QUERY);
+    const sync = (): void => setMatches(query.matches);
+    // Re-read once on mount: the viewport can change between the lazy
+    // island chunk's first render and this effect.
+    sync();
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
+  return matches;
+}
 
 const DROUGHT_LABELS: Readonly<Record<string, string>> = Object.fromEntries(
   NADM_CATEGORIES.map((category) => [category.code, category.label]),
@@ -376,6 +404,44 @@ function wildfireMetricNote(snapshot: MinimapWildfireSnapshot): string {
   );
 }
 
+function droughtMetricNote(snapshot: MinimapDroughtSnapshot): string {
+  if (snapshot.status === 'loading' || snapshot.status === 'idle') {
+    return (
+      'Loading the North American Drought Monitor monthly consensus for the ' +
+      'nine authored framings.'
+    );
+  }
+  if (snapshot.status === 'unavailable' || snapshot.month === null) {
+    return (
+      'North American Drought Monitor framing summary unavailable, so the ' +
+      'neutral fills are unknown rather than an absence of drought.'
+    );
+  }
+  return (
+    `North American Drought Monitor monthly consensus, ${monthLabel(snapshot.month)}. ` +
+    'Fill is an approximate area-weighted mean category index over assessed land, and outline width is the D1 through D4 share. ' +
+    'This navigation overview is inferred from NADM polygons, not an NADM-issued regional category; hatching marks partial coverage.'
+  );
+}
+
+/**
+ * The visible metric note for whichever metric context is showing (EF-3).
+ * It used to render on Wildfire alone, so Drought's live NADM encoding was
+ * explained only to a screen reader and Heat, ENSO, and custom displays said
+ * nothing at all about their flat fills. Neutral contexts keep the neutral
+ * sentence verbatim: naming the absence of a framing metric is the honest
+ * statement (design record DDM-UI-004), not a defect to paper over.
+ */
+function metricNote(
+  context: MinimapMetricContext,
+  drought: MinimapDroughtSnapshot,
+  wildfire: MinimapWildfireSnapshot,
+): string {
+  if (context === 'drought') return droughtMetricNote(drought);
+  if (context === 'wildfire') return wildfireMetricNote(wildfire);
+  return NEUTRAL_METRIC_NOTES[context];
+}
+
 function metricFill(
   droughtSummary: FramingDroughtSummary | undefined,
   wildfireSummary: MinimapWildfireSummary | undefined,
@@ -498,17 +564,45 @@ export function Minimap({
   const [wildfire, setWildfire] = useState<MinimapWildfireSnapshot>(
     getMinimapWildfireSnapshot,
   );
+  const [ensoPhase, setEnsoPhase] = useState<EnsoPhaseLabel | null>(null);
+  const desktopMinimap = useDesktopMinimap();
   const roving = focused === undefined ? active : focused;
 
   useEffect(() => {
-    if (!showDroughtMetric) return;
+    if (!showDroughtMetric || !desktopMinimap) return;
     return retainMinimapDrought(setDrought);
-  }, [showDroughtMetric]);
+  }, [showDroughtMetric, desktopMinimap]);
 
   useEffect(() => {
-    if (!showWildfireMetric) return;
+    if (!showWildfireMetric || !desktopMinimap) return;
     return retainMinimapWildfire(setWildfire);
-  }, [showWildfireMetric]);
+  }, [showWildfireMetric, desktopMinimap]);
+
+  // EF-6: name the current ENSO phase in the scale slot instead of the bare
+  // "Navigation only". Label only, from the SAME bundled snapshot and the
+  // SAME operational-RONI phase the briefing reads, through one lazy import
+  // so the ENSO screen does not pull the impact cluster into the shell
+  // chunk. It adds no framing metric: the fills stay neutral, and the
+  // accessible name still says so. An unavailable read leaves the existing
+  // label untouched rather than asserting a phase.
+  useEffect(() => {
+    if (metricContext !== 'enso' || !desktopMinimap) return;
+    const controller = new AbortController();
+    let live = true;
+    void (async () => {
+      try {
+        const { readEnsoPhaseLabel } = await import('../../impact/enso');
+        const label = await readEnsoPhaseLabel(controller.signal);
+        if (live) setEnsoPhase(label);
+      } catch {
+        // A failed chunk or read keeps the neutral navigation label.
+      }
+    })();
+    return () => {
+      live = false;
+      controller.abort();
+    };
+  }, [metricContext, desktopMinimap]);
 
   useEffect(
     () =>
@@ -581,6 +675,24 @@ export function Minimap({
     activeDef?.coverageNote !== undefined
       ? userFacingCoverageClause(activeDef.coverageNote)
       : '';
+  // EF-6: the ENSO scale slot names the current operational RONI CONDITIONS
+  // (the CPC onset rule on the newest season) and the season they are read
+  // from, never the historical five-season episode classification, which
+  // lags an event by months. It replaces a label, not a metric: the framings
+  // stay neutral (DDM-UI-004), and the accessible name keeps saying so
+  // before it names the basin-wide state.
+  const ensoScaleText =
+    metricContext === 'enso' && ensoPhase !== null
+      ? `RONI ${ensoPhase.conditionsName}${ensoPhase.emerging ? ' emerging' : ''} · ${ensoPhase.season} ${ensoPhase.year}`
+      : null;
+  const ensoScaleAccessibleText =
+    metricContext === 'enso' && ensoPhase !== null
+      ? `${NEUTRAL_METRIC_NOTES.enso} The operational Relative Oceanic Nino Index reads ${ensoPhase.conditionsName} conditions for the ${ensoPhase.season} ${ensoPhase.year} season` +
+        (ensoPhase.emerging
+          ? `, with the historical five-season episode classification still reading ${ensoPhase.phaseName}`
+          : '') +
+        '. It is a basin-wide index label rather than a condition in any framing.'
+      : null;
   const scaleText = showDroughtMetric
     ? drought.status === 'live' && drought.month !== null
       ? `NADM · ${monthLabel(drought.month)}`
@@ -593,7 +705,7 @@ export function Minimap({
         : wildfire.status === 'unavailable'
           ? 'Wildfire unavailable'
           : 'NIFC / WHP 2023'
-      : 'Navigation only';
+      : ensoScaleText ?? 'Navigation only';
   const scaleAccessibleText = showDroughtMetric
     ? drought.status === 'live' && drought.month !== null
       ? `North American Drought Monitor monthly consensus, ${monthLabel(drought.month)}. Fill is an approximate area-weighted mean category index; outline width is the D1 through D4 share.`
@@ -604,7 +716,7 @@ export function Minimap({
         : wildfire.status === 'unavailable'
           ? 'Current mapped NIFC wildfire perimeter summary unavailable. Static WHP is not substituted.'
           : 'Current mapped NIFC wildfire perimeters with static United States Forest Service Wildfire Hazard Potential 2023 fallback.'
-      : NEUTRAL_METRIC_NOTES[metricContext];
+      : ensoScaleAccessibleText ?? NEUTRAL_METRIC_NOTES[metricContext];
   const activePartialNote =
     activeDrought?.coverage === 'live-partial'
       ? ` The Nunavut analysis-mask proxy excludes approximately ${activeDrought.notAnalyzedPercent}% of this framing's land.`
@@ -1034,16 +1146,14 @@ export function Minimap({
           Ocean view: {OCEANS[activeOcean].label}. {OCEANS[activeOcean].provenance}
         </p>
       ) : null}
-      {showDroughtMetric ? null : showWildfireMetric ? (
-        <p
-          class="shell-minimap-metric-note"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          {wildfireMetricNote(wildfire)}
-        </p>
-      ) : null}
+      <p
+        class="shell-minimap-metric-note"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {metricNote(metricContext, drought, wildfire)}
+      </p>
     </div>
   );
 }

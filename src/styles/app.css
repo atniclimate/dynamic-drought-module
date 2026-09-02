@@ -56,7 +56,15 @@
   --fg-0: #f1f5f9;
   --fg-1: #cbd5e1;
   --fg-2: #94a3b8;
-  --fg-3: #64748b;
+  /* Raised from #64748b on 2026-09-01 (UI-04). The token is the color of
+     38 rules, every one of them 9-11px, and at #64748b it measured
+     3.93:1 on --bg-0 down to 3.06:1 on --bg-3, under the 4.5:1 WCAG
+     1.4.3 floor for normal text at every size this app uses it at.
+     #7d8ba1 measures 5.42 / 5.17 / 4.76 / 4.21 on --bg-0/1/2/3. The
+     first three pass; --bg-3 is only ever a hover background
+     (.preset-chip, .telemetry-item, .hazard-rail-btn, #share-btn) and
+     still misses AA at 4.21 -- see the report note on #8592a6 (4.62). */
+  --fg-3: #7d8ba1;
 
   --accent: #06b6d4;
   --accent-strong: #0891b2;
@@ -118,6 +126,62 @@
   /* The one map-control family width (E2, D-0.7.0-058 ruling 2): Share
      view, Reset, and the Satellite switcher all render at this width. */
   --map-ctrl-w: 104px;
+  /* Impact-panel geometry (UI-02). The panel's width and the bottom
+     dock's inset were two independent literals (440px and 452px) that
+     could not be kept in step; they now read one token plus one gap.
+     440px is the desktop width and is unchanged at 1025px and wider;
+     the tablet band narrows the token in place (see the
+     721-1024px block beside .impact-panel). --dock-min-w is the floor
+     the dock keeps no matter how wide the panel is, so its box can
+     never solve to zero width and clip its whole contents away. */
+  --impact-panel-w: 440px;
+  --impact-panel-gap: 12px;
+  --dock-min-w: 180px;
+
+  /* Stacking order (UI-12). Every z-index in this file below was a bare
+     literal spread across five orders of magnitude, so the ORDER was
+     only legible by grepping. These seven names are that order written
+     down; the numbers are unchanged to the digit, and the sub-levels
+     inside a band are expressed as offsets so their relationships show
+     up at the use site (the sheet's raised map controls are
+     `--z-map-control + 40`, not a fresh 1040). Nothing computes a
+     z-index in JavaScript, so these are the whole stack.
+     Deliberately NOT tokenized, because they are local stacking inside
+     one component rather than app-level order: the minimap SVG's 0-3,
+     the sheet search results' 1, .sidebar-key-host's 20, and
+     .fire3d-embed-note's 30. */
+  --z-map-chrome: 600;    /* +10 bottom dock, +40 the sheet's on-map key */
+  --z-map-readout: 900;   /* hover inspector, the sheet's map-info panel */
+  --z-map-control: 1000;  /* overlay controls and the loading pulse;
+                             +1 sidebar expand, +10 the sheet's MapLibre
+                             corner, +20 the map-information family,
+                             +30 the sheet's hazard rail and basemap
+                             switcher, +40 the sheet's raised controls */
+  --z-popup: 1200;        /* an open MapLibre popup */
+  --z-sheet: 1350;        /* the mobile sheet; +50 footer, impact panel */
+  --z-toast: 1500;        /* the copy toast */
+  --z-route: 4000;        /* full-viewport studios */
+
+  /* Motion (UI-06). DECLARED ONLY: no rule reads these yet, so this
+     block changes nothing on screen. It exists so the migration of the
+     32 literal transition and animation declarations (ten distinct CSS
+     durations, four easings, plus five JavaScript timings that do not
+     match the CSS they pair with) can happen one rule at a time against
+     a fixed vocabulary instead of inventing values again.
+     Durations scale with the distance a surface travels: micro is state
+     on a control that does not move, fast is a small box appearing,
+     base is a panel or sheet crossing a screen edge, slow is a
+     full-viewport route. Easings are directional: an entering surface
+     decelerates, an exiting surface accelerates away, and a two-way
+     transform uses the standard curve. Anything that loops is a pulse
+     and stays symmetric. */
+  --dur-micro: 120ms;
+  --dur-fast: 180ms;
+  --dur-base: 240ms;
+  --dur-slow: 320ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-enter: cubic-bezier(0, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.3, 0, 1, 1);
 }
 
 * {
@@ -153,12 +217,6 @@ strong, b {
   font-weight: var(--fw-strong);
 }
 
-/* Tabular-numerals utility: apply to numeric readouts for column alignment.
-   Lexend supports OpenType 'tnum' so we don't need a separate mono face. */
-.tnum {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum' 1, 'lnum' 1;
-}
 
 a {
   color: var(--accent);
@@ -343,7 +401,7 @@ a:hover {
      exist in the MapLibre build; it left the button stranded mid-edge.) */
   top: 12px;
   left: 12px;
-  z-index: 1001;
+  z-index: calc(var(--z-map-control) + 1);
   background: var(--bg-1);
   border-color: var(--line-strong);
   display: none;
@@ -752,7 +810,7 @@ button.conditions-metric:hover {
   border-color: var(--accent);
 }
 
-/* The keyboard-reachable drought impact briefing trigger (#9): a full-width
+/* The keyboard-reachable impact briefing trigger (#9): a full-width
    secondary action below the region grid, shown only for a region anchored to
    a single briefable boundary. */
 .region-briefing-btn {
@@ -1737,9 +1795,12 @@ button.conditions-metric:hover {
   border-top: 1px solid var(--line);
   /* Anchors size to their text (U-UX-FIX-1, DG-080-REVIEW finding 2
      hardening): a stretched full-width anchor ran under the map's
-     attribution control, which can legitimately overlay the card's
-     right edge on a short viewport, so the dead right half of the strip
-     was not hit-testable. The visible link text IS the hit area. */
+     attribution control, so the dead right half of the strip was not
+     hit-testable. That control was removed on 2026-08-31 (PR 54), but
+     the rule stays: other persistent map chrome (the scale bar, the (?)
+     disclosure, the embed linkouts) can still legitimately overlay a
+     card's right edge on a short viewport. The visible link text IS the
+     hit area. */
   align-items: flex-start;
 }
 .popup-links a {
@@ -1974,7 +2035,7 @@ button.conditions-metric:hover {
   left: 12px;
   right: 12px;
   bottom: 34px;
-  z-index: 610;
+  z-index: calc(var(--z-map-chrome) + 10);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1994,9 +2055,22 @@ button.conditions-metric:hover {
 .map-dock-foot > * { pointer-events: auto; }
 
 @media (min-width: 721px) {
-  /* Panel-inset awareness: 440px panel + 12px breathing room. */
+  /* Panel-inset awareness: the panel's own width plus one gap, read
+     from the shared token so the two can never drift (UI-02). The
+     min() is a floor, not a second opinion: percentages here resolve
+     against #map-container, which is only `100vw - var(--sidebar-w)`
+     wide, so between 721px and about 985px the literal inset used to
+     exceed the container and the dock solved to ZERO width, silently
+     clipping the on-map key, the notices row, the embed date stamp,
+     the brand chip, and the telemetry cap chip out of the layout for
+     that whole band. The floor keeps --dock-min-w of dock alive.
+     Above ~985px the first term always wins, so 1280px and wider are
+     byte-identical to the old 452px. */
   body:has(.impact-panel.open) .map-bottom-dock {
-    right: 452px;
+    right: min(
+      calc(var(--impact-panel-w) + var(--impact-panel-gap)),
+      calc(100% - var(--impact-panel-gap) - var(--dock-min-w))
+    );
   }
 }
 
@@ -2013,7 +2087,7 @@ button.conditions-metric:hover {
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 900;
+  z-index: var(--z-map-readout);
   max-width: min(82%, 520px);
   display: flex;
   flex-wrap: wrap;
@@ -2058,7 +2132,7 @@ button.conditions-metric:hover {
   position: absolute;
   top: 12px;
   right: 12px;
-  z-index: 1000;
+  z-index: var(--z-map-control);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -2158,7 +2232,7 @@ button.conditions-metric:hover {
 #layers-studio-root {
   position: fixed;
   inset: 0;
-  z-index: 4000;
+  z-index: var(--z-route);
 }
 
 .layers-studio {
@@ -2364,7 +2438,7 @@ button.conditions-metric:hover {
 #place-studio-root {
   position: fixed;
   inset: 0;
-  z-index: 4000;
+  z-index: var(--z-route);
 }
 
 .place-studio-header > :last-child {
@@ -2769,17 +2843,21 @@ button.conditions-metric:hover {
   .sheet-at-hand-actions { margin-top: 4px; }
 }
 
-/* (The static attribution overlay was removed in the 0.3.0 design pass: it
-   was the third statement of the same credits on one screen and collided
-   with the scale bar. The live MapLibre attribution control carries the
-   OpenStreetMap and per-layer credits dynamically.) */
+/* (Two removals, in order. The static attribution overlay went in the
+   0.3.0 design pass: it was the third statement of the same credits on
+   one screen and collided with the scale bar, leaving MapLibre's live
+   attribution control to carry the OpenStreetMap and per-layer credits.
+   That control went too on 2026-08-31 (PR 54, owner direction): the
+   license credits now render inside the map-information panel, the (?)
+   disclosure, from src/ui/map-information.ts. No map corner states
+   credits any more.) */
 
 .copy-toast {
   position: absolute;
   top: 12px;
   left: 50%;
   transform: translateX(-50%) translateY(-8px);
-  z-index: 1500;
+  z-index: var(--z-toast);
   background: rgba(8, 145, 178, 0.95);
   color: #ffffff;
   border: 1px solid var(--accent);
@@ -2807,7 +2885,7 @@ button.conditions-metric:hover {
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1000;
+  z-index: var(--z-map-control);
   display: inline-flex;
   align-items: center;
   gap: 9px;
@@ -2967,7 +3045,7 @@ button.conditions-metric:hover {
     width: auto;
     max-height: none;
     height: var(--sheet-height, 132px);
-    z-index: 1350;
+    z-index: var(--z-sheet);
     border-right: none;
     border-bottom: none;
     border-top: 1px solid var(--line-strong);
@@ -3055,18 +3133,6 @@ button.conditions-metric:hover {
   #app[data-sheet-detent='half'].view-console #panel-quick-views,
   #app[data-sheet-detent='half'].view-console #sheet-all-layers { display: block; }
 
-  /* U3e (D-0.7.0-009): the region grid is now a plain "jump to" list, so
-     the interim console-half compaction (the 3-column cram + shrunk fonts)
-     is retired. The list would still be taller than the no-scroll half
-     detent with full-word names, so it is bounded and scrolls within its
-     own box (the sheet-search precedent). That keeps the quick views and
-     the one catalog door above the fold on common phones without shrinking
-     type; arrow-key focus auto-scrolls the bounded list into view. */
-  #app[data-sheet-detent='half'].view-console #region-buttons {
-    max-height: 20vh;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
 
   /* Full, Brief: the standalone report; the map has receded. Until a
      report is actually hosted and open, the at-hand block holds the
@@ -3137,7 +3203,7 @@ button.conditions-metric:hover {
       var(--mobile-map-control-size) +
       var(--mobile-map-control-gap)
     );
-    z-index: 1030;
+    z-index: calc(var(--z-map-control) + 30);
   }
 
   /* --------------------------------------------------------------------------
@@ -3155,7 +3221,7 @@ button.conditions-metric:hover {
     bottom: 0;
     height: var(--mobile-footer-h, 56px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    z-index: 1400;
+    z-index: calc(var(--z-sheet) + 50);
     border-top: 1px solid var(--line-strong);
     background: var(--bg-1);
   }
@@ -3190,13 +3256,13 @@ button.conditions-metric:hover {
     );
     width: auto;
     max-width: none;
-    z-index: 640;
+    z-index: calc(var(--z-map-chrome) + 40);
   }
   #app[data-sheet-detent] .map-overlay-controls {
     top: calc(env(safe-area-inset-top, 0px) + var(--mobile-map-edge));
     right: calc(env(safe-area-inset-right, 0px) + var(--mobile-map-edge));
     gap: var(--mobile-map-control-gap);
-    z-index: 1040;
+    z-index: calc(var(--z-map-control) + 40);
   }
   #app[data-sheet-detent] .map-overlay-controls > #share-btn { order: 1; }
   #app[data-sheet-detent] .map-overlay-controls > #reset-btn { order: 2; }
@@ -3279,7 +3345,7 @@ button.conditions-metric:hover {
       var(--mobile-map-control-size) +
       var(--mobile-map-control-gap)
     );
-    z-index: 1010;
+    z-index: calc(var(--z-map-control) + 10);
   }
   #app[data-sheet-detent='closed'] .basemap-switcher-control,
   #app[data-sheet-detent='peek'] .basemap-switcher-control {
@@ -3292,7 +3358,7 @@ button.conditions-metric:hover {
     );
     margin: 0 !important;
     border-radius: var(--mobile-map-control-radius);
-    z-index: 1030;
+    z-index: calc(var(--z-map-control) + 30);
   }
   #app[data-sheet-detent='half'] .basemap-switcher-control,
   #app[data-sheet-detent='full'] .basemap-switcher-control {
@@ -3730,9 +3796,9 @@ button.telemetry-item {
   top: 0;
   right: 0;
   bottom: 0;
-  width: 440px;
+  width: var(--impact-panel-w);
   max-width: 92vw;
-  z-index: 1400;
+  z-index: calc(var(--z-sheet) + 50);
   display: flex;
   flex-direction: column;
   background: var(--bg-1);
@@ -3751,6 +3817,28 @@ button.telemetry-item {
 }
 .impact-panel.open {
   transform: translateX(0);
+}
+
+/* The tablet band (UI-02 collision B, 02-impact-briefing EF-9 / IB-15).
+   Between 721px and 1024px the desktop shell is in force, so the 340px
+   sidebar is on screen and the panel is a fixed slab against the right
+   edge. At a literal 440px its left edge lands at `100vw - 440`, which
+   clears the sidebar only from 780px up: at 768px it covered the
+   sidebar's right edge by 12px and at 721px by 59px, taking the
+   sidebar's scrollbar and the right end of every control row with it.
+   Capping the token at the room actually left keeps a full gap at every
+   width in the band (369px of panel at 721px, 416px at 768px, the full
+   440px from 792px up), so the cap is inert at 1025px and wider and
+   desktop geometry is untouched. The sidebar is a real column only when
+   the shell is neither collapsed nor embedded; in those two shells the
+   map is full-bleed and the panel keeps its 440px. */
+@media (min-width: 721px) and (max-width: 1024px) {
+  body:has(#app.app-shell:not(.sidebar-collapsed):not(.embed)) {
+    --impact-panel-w: min(
+      440px,
+      calc(100vw - var(--sidebar-w) - var(--impact-panel-gap))
+    );
+  }
 }
 
 .impact-panel-header {
@@ -4176,6 +4264,18 @@ button.telemetry-item {
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   flex-shrink: 0;
+}
+/* The rotation the ring above asks for. It was referenced but never
+   declared, so the spinner rendered as a motionless quarter-arc; the
+   reduced-motion block already retires it (see the
+   prefers-reduced-motion block below, `.impact-spinner { animation:
+   none }`), which leaves the static ring as the no-motion fallback.
+   No other keyframe in this file rotates, so none could be reused:
+   skeleton-shimmer-sweep translates, telemetry-marker-in and
+   wave-pulse vary opacity, shell-minimap-loading varies
+   fill-opacity. */
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 .impact-horizon-note {
   margin: 6px 0 0;
@@ -4902,7 +5002,7 @@ a.impact-resource-link::after {
     position: absolute;
     right: 10px;
     bottom: 8px;
-    z-index: 1020;
+    z-index: calc(var(--z-map-control) + 20);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -4932,13 +5032,13 @@ a.impact-resource-link::after {
     left: 50%;
     transform: translateX(-50%);
     bottom: 12px;
-    z-index: 1020;
+    z-index: calc(var(--z-map-control) + 20);
   }
   .app-shell:not(.embed) .map-info-panel:not([hidden]) {
     position: absolute;
     right: 10px;
     bottom: 44px;
-    z-index: 1020;
+    z-index: calc(var(--z-map-control) + 20);
     display: block;
     width: min(360px, calc(100% - 24px));
     max-height: min(60vh, 520px);
@@ -5017,7 +5117,7 @@ a.impact-resource-link::after {
   position: absolute;
   right: 6px;
   bottom: 6px;
-  z-index: 1020;
+  z-index: calc(var(--z-map-control) + 20);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5042,7 +5142,7 @@ a.impact-resource-link::after {
   position: absolute;
   right: 6px;
   bottom: 38px;
-  z-index: 1020;
+  z-index: calc(var(--z-map-control) + 20);
   display: block;
   width: min(360px, calc(100% - 16px));
   max-height: min(72vh, 520px);
@@ -5071,7 +5171,7 @@ a.impact-resource-link::after {
       var(--sheet-height, 0px) +
       var(--mobile-map-edge)
     );
-    z-index: 1040;
+    z-index: calc(var(--z-map-control) + 40);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -5100,7 +5200,7 @@ a.impact-resource-link::after {
       var(--mobile-map-edge)
     );
     left: calc(env(safe-area-inset-left, 0px) + var(--mobile-map-edge));
-    z-index: 900;
+    z-index: var(--z-map-readout);
     display: block;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -6066,6 +6166,32 @@ a.impact-resource-link::after {
     box-shadow 0.12s ease;
 }
 
+/* EF-5 (11-minimap-and-popups MM-08, planning/qa/feature-errors.yaml
+   FE-19): the painted ocean zone is pointer-events:none, so the whole
+   affordance is this button, and it measured 70x24 -- 24px on the short
+   axis, well under the 44px pointer floor the phone chrome already
+   holds itself to. Growing the button would move the label, so the HIT
+   AREA grows instead: a transparent band that is part of the button's
+   own box, so a press anywhere in it activates the button and not one
+   pixel of the label moves. .shell-minimap-canvas clips overflow, so
+   the band is anchored per door to stay inside the canvas. */
+.shell-minimap-ocean-door::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 44px;
+  transform: translateY(-50%);
+}
+/* The arctic door sits 1.5% from the canvas top, so a band centred on
+   it would lose its upper half to the canvas clip and land back under
+   44px. Anchor this one to the door's top edge and grow downward. */
+.shell-minimap-ocean-door-arctic::before {
+  top: 0;
+  transform: none;
+}
+
 .shell-minimap-ocean-door:hover,
 .shell-minimap-ocean-door:focus-visible,
 .shell-minimap-ocean-door[aria-pressed='true'] {
@@ -6636,16 +6762,21 @@ a.impact-resource-link::after {
      - The desktop Brief column hides the full #time-bar in favor of the
        shell compact WHEN row (console and mobile keep the full rail).
    Height bands (desktop Brief, the launch-pad view):
-     - >= 700px: full shell (inline minimap). The design's no-scroll
-       acceptance for this band is NOT yet met: the settled pre-S4
-       Brief inventory (conditions strip, brief head, refine panel,
-       legend) measures ~1206px against the band's ~601px region
-       (rendered spike, 2026-07-24), so honest scroll governs until the
-       panel-inventory subtraction ruling lands. The spike spec
-       (tests/s4-layout-spike.spec.ts) asserts the fit GENUINELY and
-       carries the deficit as an expected failure.
+     - >= 700px: full shell (inline minimap). Honest scroll is the
+       SHIPPED contract for this band, not a stopgap: the maintainer
+       ruled on 2026-07-27 that the design's no-scroll acceptance is
+       DROPPED, not deferred. The settled pre-S4 Brief inventory
+       (conditions strip, brief head, refine panel, legend) measures
+       ~1206px against the band's ~601px region (rendered spike,
+       2026-07-24), leaving a ~121px budget against ~564px of surfaces
+       other ratified contracts pin visible; closing the gap meant
+       demoting five of six of those surfaces, so it was not bought.
+       The spike spec (tests/s4-layout-spike.spec.ts) records the
+       numbers and the ruling in its header; its two former
+       test.fail() acceptance tests are RETIRED, and what remains
+       asserts the honest-scroll contract and passes genuinely.
      - 600-699px: the inline minimap collapses to its popover door
-       (same unmet acceptance, same honest scroll).
+       (same ruling, same honest scroll).
      - < 600px: honest scroll (never clipped content).
    Below 720px wide: the shell panel and panel-foot response do not
    exist; the sheet, footer nav, and hazard rail carry mobile.
@@ -6733,11 +6864,13 @@ a.impact-resource-link::after {
      keeps the card (at minimum its close corner; the canonical tier
      table in popup-viewport.ts states which, per region size) in
      reachable pixels, so the persistent map chrome (the Share/Reset/
-     basemap family at 1000-1001, the attribution control, the embed
-     linkouts) must not cover the very controls that contract points at.
-     Kept below the mobile sheet (1350) and footer (1400), whose rects
-     the clamp SUBTRACTS instead of riding over. */
-  z-index: 1200;
+     basemap family at 1000-1001, the (?) map-information disclosure
+     that replaced the attribution control on 2026-08-31 in PR 54, the
+     scale bar, the embed linkouts) must not cover the very controls
+     that contract points at. Kept below the mobile sheet (1350) and
+     footer (1400), whose rects the clamp SUBTRACTS instead of riding
+     over. */
+  z-index: var(--z-popup);
 }
 .maplibregl-popup-content {
   /* Whole-card scrollers (telemetry markers): a wheel or swipe that
