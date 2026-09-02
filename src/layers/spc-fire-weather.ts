@@ -32,6 +32,7 @@ import {
   SPC_FIREWX_CATEGORIES,
   SPC_FIREWX_DEFAULT_COLOR
 } from '../config/palette';
+import { matchExpression } from '../config/style-expressions';
 import { parseArcGisPolygonFeatureCollection } from '../config/wildfire-presentation';
 import { buildSpcFireWeatherPopupHtml } from '../ui/popups';
 import { fetchJsonWithBudget } from '../util/fetch';
@@ -149,23 +150,18 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   const beforeId = resolveBeforeId(map);
 
-  // Color by category via a `match` expression on the integer `dn` field. The
-  // Style Spec types `match` as ['match', input, label, output, ...rest,
-  // default], so its first label/output pair occupies fixed tuple slots that a
-  // non-tuple spread cannot fill. Splitting the flattened category list into its
-  // head pair and tail keeps the emitted array identical while letting tsc
-  // check it.
-  const [firstDn, firstColor, ...matchArgs] = SPC_FIREWX_CATEGORIES.flatMap(
-    (c) => [c.dn, c.color]
-  );
-  const colorExpression: maplibregl.ExpressionSpecification = [
-    'match',
+  // Color by category via a `match` expression on the integer `dn` field.
+  // `matchExpression` does the head-pair/tail split the Style Spec tuple type
+  // requires. For every non-empty palette, and so for SPC_FIREWX_CATEGORIES as
+  // shipped, the emitted array is the same one the older cast-and-spread form
+  // produced; for an empty palette the two disagree and both are invalid, so
+  // the helper throws instead of emitting either.
+  const colorExpression = matchExpression(
     ['get', 'dn'],
-    firstDn,
-    firstColor,
-    ...matchArgs,
-    SPC_FIREWX_DEFAULT_COLOR
-  ];
+    SPC_FIREWX_CATEGORIES.map((c) => [c.dn, c.color] as const),
+    SPC_FIREWX_DEFAULT_COLOR,
+    'SPC_FIREWX_CATEGORIES'
+  );
 
   map.addLayer(
     {

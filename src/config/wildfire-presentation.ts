@@ -1,6 +1,8 @@
 import type maplibregl from 'maplibre-gl';
 import type { FeatureCollection } from 'geojson';
 
+import { matchExpression } from './style-expressions';
+
 export interface ArcGisPolygonFeatureCollection {
   readonly collection: FeatureCollection;
   readonly truncated: boolean;
@@ -688,24 +690,20 @@ export const POWER_LINE_WIDTHS: readonly (readonly [string, number])[] = [
 export function buildPowerLinePaint(): NonNullable<
   maplibregl.LineLayerSpecification['paint']
 > {
-  // The Style Spec types `match` as ['match', input, label, output, ...rest,
-  // default], so its first label/output pair occupies fixed tuple slots that a
-  // non-tuple spread cannot fill. Splitting the flattened pair list into its
-  // head and tail keeps the emitted array identical while letting tsc check it.
-  const [firstClass, firstWidth, ...restWidths] = POWER_LINE_WIDTHS.flatMap(
-    ([voltClass, width]) => [voltClass, width]
-  );
+  // `matchExpression` does the head-pair/tail split the Style Spec tuple type
+  // requires. For every non-empty palette, and so for POWER_LINE_WIDTHS as
+  // shipped, the emitted array is the same one the older cast-and-spread form
+  // produced; for an empty palette the two disagree and both are invalid, so
+  // the helper throws instead of emitting either.
   return {
     'line-color': POWER_LINE_COLOR,
     'line-opacity': POWER_LINE_OPACITY,
-    'line-width': [
-      'match',
+    'line-width': matchExpression(
       ['get', 'VOLT_CLASS'],
-      firstClass,
-      firstWidth,
-      ...restWidths,
-      0.6
-    ]
+      POWER_LINE_WIDTHS,
+      0.6,
+      'POWER_LINE_WIDTHS'
+    )
   };
 }
 

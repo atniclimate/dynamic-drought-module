@@ -91,19 +91,28 @@ test('syncFire3dParam round-trips through the URL and preserves neighbors', () =
 /**
  * The clear-sky spec is a HAND-COPY of MapLibre's own internal "no sky"
  * fallback, and `Map.setSky` requires a full specification, so it cannot
- * be replaced by passing undefined. A hand-copy of another project's
- * internals is exactly the kind of thing that rots silently across a
- * major upgrade, and the two existing assertions compare the harness call
- * against this same constant, so they can never notice.
+ * be replaced by passing undefined.
  *
- * This case pins the literal. Re-verified against maplibre-gl 5.24.0 on
- * 2026-08-19 and found unchanged from the 4.7 values (harvested from the
- * retired feature/maplibre-v5 branch on 2026-09-02). To re-verify after
- * an upgrade, search the distributed bundle for the object literal
- * containing "sky-color":"transparent"; that is the fallback the library
- * constructs a Sky with when a style declares none.
+ * What this case proves and what it does not. It pins the APPLICATION
+ * literal against an accidental edit: the two other assertions in this file
+ * compare the harness call against this same constant, so a typo here would
+ * otherwise change both sides at once and go unnoticed. It compares the
+ * constant only with the values written below. It does NOT observe the
+ * installed maplibre-gl, so it cannot detect the library changing its own
+ * internal fallback; a hand-copy of another project's internals is exactly
+ * the kind of thing that rots silently across a major upgrade, and this test
+ * would stay green through that rot.
+ *
+ * Closing that gap is the version-bump checklist's job, not this test's. The
+ * MapLibre bump checklist MUST re-verify these values by inspecting the
+ * distributed bundle for the object literal containing
+ * "sky-color":"transparent" (the fallback the library constructs a Sky with
+ * when a style declares none) and MUST record the result in the bump commit.
+ * Last such inspection: maplibre-gl 5.24.0 on 2026-08-19, unchanged from the
+ * 4.7 values (harvested from the retired feature/maplibre-v5 branch on
+ * 2026-09-02).
  */
-test('the clear-sky specification still matches the library it was copied from', () => {
+test('the clear-sky specification literal is pinned', () => {
   expect(FIRE3D_SKY_CLEAR_SPECIFICATION).toEqual({
     'sky-color': 'transparent',
     'horizon-color': 'transparent',

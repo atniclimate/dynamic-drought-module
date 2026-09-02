@@ -25,6 +25,7 @@ import type maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 
 import { ECOREGION_COLORS, ECOREGION_DEFAULT_COLOR } from '../config/palette';
+import { matchExpression } from '../config/style-expressions';
 import { URLS } from '../config/urls';
 import { firstLayerIdAbove, BOTTOM_STACK_IDS } from '../map/layer-order';
 import { buildEcoregionPopupHtml } from '../ui/popups';
@@ -320,12 +321,6 @@ function bottomOverlayBeforeId(map: maplibregl.Map): string | undefined {
  * which both Level III and Level IV features carry.
  */
 function buildFillColorExpression(): maplibregl.ExpressionSpecification {
-  // The Style Spec types `match` as ['match', input, label, output, ...rest,
-  // default], so its first label/output pair occupies fixed tuple slots that a
-  // non-tuple spread cannot fill. Splitting the flattened palette into its head
-  // pair and tail keeps the emitted array identical while letting tsc check it.
-  const [firstName, firstColor, ...matchPairs] =
-    Object.entries(ECOREGION_COLORS).flat();
   const keyExpr: maplibregl.ExpressionSpecification = [
     'coalesce',
     ['get', 'US_L3NAME'],
@@ -333,14 +328,17 @@ function buildFillColorExpression(): maplibregl.ExpressionSpecification {
     ['get', 'name'],
     ''
   ];
-  return [
-    'match',
+  // `matchExpression` does the head-pair/tail split the Style Spec tuple type
+  // requires. For every non-empty palette, and so for ECOREGION_COLORS as
+  // shipped, the emitted array is the same one the older cast-and-spread form
+  // produced; for an empty palette the two disagree and both are invalid, so
+  // the helper throws instead of emitting either.
+  return matchExpression(
     keyExpr,
-    firstName,
-    firstColor,
-    ...matchPairs,
-    ECOREGION_DEFAULT_COLOR
-  ];
+    Object.entries(ECOREGION_COLORS),
+    ECOREGION_DEFAULT_COLOR,
+    'ECOREGION_COLORS'
+  );
 }
 
 // ---------------------------------------------------------------------------
