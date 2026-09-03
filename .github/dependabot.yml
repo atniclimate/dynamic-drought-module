@@ -1,27 +1,47 @@
-# Automated dependency updates for the github-actions ecosystem only.
+# Automated dependency updates: the github-actions ecosystem everywhere an
+# Action pin lives, plus the Worker's own npm manifest (DR-005 a,
+# 2026-09-02 decision register).
+#
 # DDM-P0-T07 acceptance: "Automated dependency updates can propose later SHA
 # changes for review." Every third-party Action in .github/workflows/*.yml
 # and the composite action below is pinned to a full commit SHA with a
 # trailing "# vX.Y.Z" comment; Dependabot supports that pin style and keeps
 # the version comment in sync when it opens an update.
 #
-# The npm ecosystem is deliberately not configured here. Application
+# The root npm ecosystem is deliberately not configured here. Application
 # dependency upgrades change the shipped bundle and stay a separate owner
 # decision, not something this file should propose on a schedule.
 #
-# Two directories are listed because Dependabot's github-actions scan for a
-# directory only covers that directory's own .github/workflows and a
+# Two directories are listed for github-actions because Dependabot's scan
+# for a directory only covers that directory's own .github/workflows and a
 # root-level action.yml/action.yaml; it does not recurse into a nested
 # .github/actions/*/action.yml on its own. The composite action lives at
 # .github/actions/playwright-chromium/action.yml, so it needs its own entry
 # for Dependabot to see the actions/cache/restore and actions/cache/save
 # pins it uses.
+#
+# workers/proxy carries its own package.json and package-lock.json (the
+# Cloudflare Worker's deploy toolchain: wrangler, typescript, workers-types),
+# a separate deployed surface the root npm ecosystem's exclusion above never
+# reasoned about and the root `npm audit` never sees. Unlike the root
+# manifest, these are devDependencies that never enter a shipped bundle, so
+# watching them on the same schedule as the Actions pins carries the root
+# exclusion's rationale forward rather than contradicting it. Validate's
+# gate job (.github/workflows/validate.yml) now also runs `npm audit`
+# against this same lockfile on every pull request.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
     directories:
       - "/"
       - "/.github/actions/playwright-chromium"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"
+  - package-ecosystem: "npm"
+    directory: "/workers/proxy"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
