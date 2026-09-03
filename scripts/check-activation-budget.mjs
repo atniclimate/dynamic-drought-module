@@ -349,9 +349,9 @@ const FEATURE_BUDGETS = [
   },
   {
     key: 'north-american-drought-monitor',
-    label: 'rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 7.8 kB; North American Drought Monitor continental context (measured 616,132 bytes and one direct request on 2026-07-27)',
+    label: 'rebalanced again 2026-09-03 with the shared NADM verdict (DR-052 follow-up): src/util/nadm-collection.ts replaced the layer\'s local validator and is its own 0.4 kB chunk in this closure because the minimap shares it, so the closure measured 8.2 kB; budget 8.5 kB, the measurement plus the same headroom; rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 7.8 kB; North American Drought Monitor continental context (measured 616,132 bytes and one direct request on 2026-07-27)',
     rootModules: ['src/layers/nadm-drought.ts'],
-    activationJsGzipKb: 8.1,
+    activationJsGzipKb: 8.5,
     networkBytes: 650_000,
     requestCount: 1,
     dataAssets: [],

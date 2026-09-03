@@ -317,7 +317,9 @@ test.describe('U3 stage-5 round 2: LARNAME abort on supersede and close', () => 
       if (req.url().includes('BIA_AIAN_National_LAR')) larAborted = true;
     });
 
-    await gotoApp(page, '?view=console');
+    // The BIA route above holds its response open on purpose, so the boot
+    // cannot settle: opt out of the boot-idle wait.
+    await gotoApp(page, '?view=console', { bootIdle: false });
     await page.locator(CONSOLE_SEARCH).fill('yakama');
     const larRequest = page.waitForRequest((req) => req.url().includes('BIA_AIAN_National_LAR'));
     await page
@@ -350,7 +352,9 @@ test.describe('U3 stage-5 round 2: LARNAME abort on supersede and close', () => 
     // direct open; the SEARCH path is summary-first under D-0.7.0-070 and
     // no longer opens the panel), so the panel's close control exists
     // while the locate is in flight.
-    await gotoApp(page, '?view=console&select=state:WA');
+    // The BIA route above holds its response open on purpose, so the boot
+    // cannot settle: opt out of the boot-idle wait.
+    await gotoApp(page, '?view=console&select=state:WA', { bootIdle: false });
     const closeBtn = page.locator('.impact-panel-close');
     await expect(closeBtn).toBeVisible({ timeout: 15_000 });
 

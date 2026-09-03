@@ -240,6 +240,12 @@ test.describe('North American Drought Monitor continental context', () => {
     await expect(layerCheckbox(page, 'nadm-drought')).not.toBeChecked();
     const requestsBeforeRetry = requests;
     expect(requestsBeforeRetry).toBeGreaterThanOrEqual(1);
+    // The dedupe bound (DR-052 follow-up): two consumers share the key, so
+    // the worst honest case is one fetch each (the second arriving after the
+    // first evicted the malformed entry). A third request would mean the
+    // eviction is cascading, which is the storm the shared key exists to
+    // prevent. The valid-payload case above pins exactly one.
+    expect(requestsBeforeRetry).toBeLessThanOrEqual(2);
 
     malformed = false;
     await layerCheckbox(page, 'nadm-drought').click();
@@ -252,8 +258,10 @@ test.describe('North American Drought Monitor continental context', () => {
       timeout: 20_000
     });
     // The retry issued at least one new request after the click; an exact
-    // count is not stable while two consumers share the key.
+    // count is not stable while two consumers share the key, but the same
+    // bound holds: at most one fetch per consumer.
     expect(requests).toBeGreaterThan(requestsBeforeRetry);
+    expect(requests - requestsBeforeRetry).toBeLessThanOrEqual(2);
   });
 
   test('fetch failure is unavailable and cannot serialize as a clean month', async ({

@@ -320,7 +320,9 @@ test.describe('U-HEATRISK-DAYS multi-day read', () => {
       }
     });
 
-    await gotoApp(page, '?layers=heatrisk&view=console');
+    // The first raster is held until releaseFirst fires, so the boot cannot
+    // settle: opt out of the boot-idle wait.
+    await gotoApp(page, '?layers=heatrisk&view=console', { bootIdle: false });
     await expect
       .poll(() => exportedTimes.includes(TIMES[0]), { timeout: 15_000 })
       .toBe(true);

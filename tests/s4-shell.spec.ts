@@ -568,10 +568,13 @@ test.describe('S4 r3: an initial-load horizon supersession stays owned (DG-080 r
       }
     );
 
-    // The clean drought composition at the monthly outlook register.
+    // The clean drought composition at the monthly outlook register. The
+    // routes above hold the initial outlook request open on purpose, so the
+    // boot cannot settle: opt out of the boot-idle wait.
     await gotoApp(
       page,
-      '?view=brief&layers=hillshade,aiannh,bia-reservations,states,drought&outlook=monthly'
+      '?view=brief&layers=hillshade,aiannh,bia-reservations,states,drought&outlook=monthly',
+      { bootIdle: false }
     );
     const weeks = page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]');
     const season = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
@@ -700,7 +703,11 @@ test.describe('S4 r4: off intent during activation reaches the abort path (DG-08
       }
     );
 
-    await gotoApp(page, '?view=brief&layers=hillshade,states,drought');
+    // The route above holds Drought's initial request open on purpose, so
+    // the boot cannot settle: opt out of the boot-idle wait.
+    await gotoApp(page, '?view=brief&layers=hillshade,states,drought', {
+      bootIdle: false
+    });
     const drought = layerCheckbox(page, 'drought');
     await expect(drought).toBeChecked();
     // The request is genuinely in flight and genuinely held.

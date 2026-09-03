@@ -27,6 +27,7 @@ import {
   fetchSharedJsonWithBudget,
   invalidateSharedJsonRequest
 } from '../util/fetch';
+import { validateNadmCollection } from '../util/nadm-collection';
 
 const LAYER_KEY = 'nadm-drought';
 const SOURCE_ID = 'nadm-drought-areas';
@@ -64,78 +65,19 @@ const COLOR_EXPRESSION: maplibregl.ExpressionSpecification = [
   'rgba(0,0,0,0)'
 ];
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function normalizeYearMonth(value: unknown): string {
-  const raw = String(value ?? '').trim();
-  if (!/^\d{4}(0[1-9]|1[0-2])$/.test(raw)) {
-    throw new Error(`NADM YEAR_MONTH is invalid: ${String(value)}.`);
-  }
-  return `${raw.slice(0, 4)}-${raw.slice(4)}`;
-}
-
-// Keep this lightweight validation local so activating the map layer does not
-// pull the minimap's richer geometry helpers into its first-load chunk.
-function hasPolygonCoordinates(geometry: Record<string, unknown>): boolean {
-  const isPosition = (value: unknown): boolean =>
-    Array.isArray(value) &&
-    value.length >= 2 &&
-    typeof value[0] === 'number' &&
-    Number.isFinite(value[0]) &&
-    typeof value[1] === 'number' &&
-    Number.isFinite(value[1]);
-  const isRing = (value: unknown): boolean =>
-    Array.isArray(value) && value.length >= 4 && value.every(isPosition);
-  const isPolygon = (value: unknown): boolean =>
-    Array.isArray(value) && value.length > 0 && value.every(isRing);
-  const coordinates = geometry['coordinates'];
-  return geometry['type'] === 'Polygon'
-    ? isPolygon(coordinates)
-    : geometry['type'] === 'MultiPolygon' &&
-        Array.isArray(coordinates) &&
-        coordinates.length > 0 &&
-        coordinates.every(isPolygon);
-}
-
-function validateSnapshot(value: unknown): NadmSnapshot | null {
-  if (
-    !isRecord(value) ||
-    value['type'] !== 'FeatureCollection' ||
-    !Array.isArray(value['features'])
-  ) {
-    throw new Error('NADM response is not a FeatureCollection.');
-  }
-  if (value['features'].length === 0) return null;
-
-  let month: string | null = null;
-  for (const feature of value['features']) {
-    if (
-      !isRecord(feature) ||
-      feature['type'] !== 'Feature' ||
-      !isRecord(feature['properties']) ||
-      !isRecord(feature['geometry']) ||
-      !hasPolygonCoordinates(feature['geometry'])
-    ) {
-      throw new Error('NADM response contains a malformed polygon feature.');
-    }
-    const category = String(feature['properties']['DROUGHTCAT']).toLowerCase();
-    if (!CLASS_CODES.includes(category as ClassCode)) {
-      throw new Error(
-        `NADM DROUGHTCAT is invalid: ${String(feature['properties']['DROUGHTCAT'])}.`
-      );
-    }
-    const featureMonth = normalizeYearMonth(feature['properties']['YEAR_MONTH']);
-    if (month !== null && featureMonth !== month) {
-      throw new Error('NADM response mixes consensus months.');
-    }
-    month = featureMonth;
-  }
-
-  if (month === null) throw new Error('NADM response has no consensus month.');
+/**
+ * The layer's reading of the shared payload: the one structural verdict in
+ * `src/util/nadm-collection.ts` (also the minimap's, so the two consumers
+ * of the `'nadm-current'` transport can never disagree about what to evict),
+ * with `empty` reported as `null`, the layer's honest `no-data` state.
+ * Exported for the pure agreement spec (`tests/nadm-shared-payload.spec.ts`).
+ * Throws on a malformed payload; the caller evicts the shared entry then.
+ */
+export function validateNadmSnapshot(value: unknown): NadmSnapshot | null {
+  const verdict = validateNadmCollection(value);
+  if (verdict.kind === 'empty') return null;
   return {
-    month,
+    month: verdict.month,
     collection: value as unknown as GeoJSON.FeatureCollection
   };
 }
@@ -232,7 +174,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   let snapshot: NadmSnapshot | null;
   try {
-    snapshot = validateSnapshot(
+    snapshot = validateNadmSnapshot(
       await fetchSharedJsonWithBudget(
         'nadm-current',
         URLS.nadmCurrentGeojson,

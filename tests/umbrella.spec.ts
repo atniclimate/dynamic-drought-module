@@ -305,7 +305,9 @@ test.describe('URL intent durability (the final-pass finding 1 pair)', () => {
     page
   }) => {
     const release = await holdAllTribal(page);
-    await gotoApp(page, '?view=console');
+    // holdAllTribal keeps the default boundary layers loading on purpose, so
+    // the boot cannot settle: opt out of the boot-idle wait.
+    await gotoApp(page, '?view=console', { bootIdle: false });
 
     // Places is bundled (no live dependency) and not an umbrella member,
     // so its row is actionable without the details disclosure. The held

@@ -182,6 +182,44 @@ reads in plain language, and the doctrine id rides a `title` attribute on
 the lineage line, machine-readable and one hover away. Claims gained an
 optional `lineageRef` for that purpose.
 
+### 2026-09-03: the DR-052 verification follow-ups (merge commit from `verify/dr-052-followups`)
+
+Four things the 2026-09-02 test-suite ruling asked for, none of them a
+product change.
+
+A `verify:pure` lane. The twelve spec files that never ask for a page now
+run under a second Playwright config with no web server, so they answer in
+about two seconds instead of waiting behind the build and preview the main
+config starts for every run. Nothing is proven only there: the same files
+still run inside `test:serial`. A Node inventory test under `check:all`
+keeps the list honest, failing on any listed file that requests a browser
+fixture or calls a boot helper.
+
+A boot-idle seam. The page now stamps `<html data-ddm-boot>`: `booting`
+from the first line of boot, `idle` once the map has loaded, every layer
+the URL asked for has left `loading`, and no shared JSON transport is in
+flight. The same transition resolves `window.__ddm.ready`. It is derived
+from registry and transport state, never from a timer, so it cannot flip
+early and turn a visible failure into a silent one, and it flips once: a
+toggle or a region jump after boot reopens the same activation window and
+the seam says nothing about it. The shared-fetch cache gained a
+pending-transport counter for the purpose, because a fulfilled entry stays
+cached for the page lifetime and "the map is empty" could never have meant
+"nothing is pending". The browser test helper waits for the seam after its
+existing assertions, so every spec's own assertions now run against a
+settled boot; a spec that deliberately holds a boot open opts out.
+
+One NADM verdict for two consumers. The map layer and the drought minimap
+share one transport for the North American Drought Monitor consensus and
+each could evict it when it rejected the payload; they validated
+separately and disagreed at the edges, so an empty month the layer kept as
+`no data` was thrown away by the minimap and fetched again, and a failed
+sibling fetch on the minimap's side evicted a payload the layer had
+accepted. Both now read the payload through `src/util/nadm-collection.ts`,
+the minimap evicts only when that verdict fails, and a pure spec pins the
+agreement case by case. The malformed-payload browser contract gained the
+dedupe bound the shared key promises: at most one fetch per consumer.
+
 ## v0.6.26
 
 `v0.6.26` is the package version and, since 2026-08-29, the release tag. One
