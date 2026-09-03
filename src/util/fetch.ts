@@ -173,6 +173,40 @@ interface SharedJsonRequest {
 const sharedJsonRequests = new Map<string, SharedJsonRequest>();
 
 /**
+ * How many shared transports are in flight right now (DR-052 follow-up, the
+ * boot-idle seam). A fulfilled entry stays in `sharedJsonRequests` for the
+ * page lifetime by design, so "the map is empty" can never mean "nothing is
+ * pending" after the first success; this counter can. It rises when a
+ * transport is created and falls when its promise settles either way,
+ * including an abort from `invalidateSharedJsonRequest`, and never counts a
+ * cached fulfilled entry.
+ */
+let pendingSharedTransports = 0;
+const sharedTransportListeners = new Set<() => void>();
+
+function settleSharedTransport(): void {
+  pendingSharedTransports = Math.max(0, pendingSharedTransports - 1);
+  for (const listener of sharedTransportListeners) listener();
+}
+
+/** The number of shared JSON transports still in flight. */
+export function pendingSharedTransportCount(): number {
+  return pendingSharedTransports;
+}
+
+/**
+ * Subscribe to shared-transport settlements. Fires once per settlement (a
+ * success, a failure, or an abort); read `pendingSharedTransportCount()`
+ * inside the listener. Returns an unsubscribe function.
+ */
+export function onSharedTransportSettled(listener: () => void): () => void {
+  sharedTransportListeners.add(listener);
+  return () => {
+    sharedTransportListeners.delete(listener);
+  };
+}
+
+/**
  * Drop a shared artifact after a consumer rejects its payload shape. A
  * fulfilled transport is otherwise retained for the page lifetime, so schema
  * validation failures must explicitly make the next activation fetch again.
@@ -208,6 +242,7 @@ export function fetchSharedJsonWithBudget(
       controller,
       consumers: 0,
     };
+    pendingSharedTransports += 1;
     next.promise = fetchJsonWithBudget(
       url,
       opts,
@@ -216,6 +251,7 @@ export function fetchSharedJsonWithBudget(
     ).then(
       (value) => {
         next.controller = null;
+        settleSharedTransport();
         return value;
       },
       (error: unknown) => {
@@ -223,6 +259,7 @@ export function fetchSharedJsonWithBudget(
           sharedJsonRequests.delete(key);
         }
         next.controller = null;
+        settleSharedTransport();
         throw error;
       },
     );

@@ -208,6 +208,16 @@ export interface GotoAppOptions {
    * claim was made before or after this call.
    */
   readonly boundaries?: BoundaryStubMode;
+  /**
+   * Wait for the boot-idle seam (`<html data-ddm-boot="idle">`, DR-052
+   * follow-up): the map has loaded, every layer the URL asked for has left
+   * `loading`, and no shared transport is in flight. Defaults to true, so
+   * every assertion after `gotoApp` runs against a settled boot rather than
+   * against the preset chips. A spec that deliberately HOLDS a boot open (a
+   * routed request that never answers, a layer it wants to observe mid-load)
+   * passes false and owns its own waits.
+   */
+  readonly bootIdle?: boolean;
 }
 
 export async function gotoApp(
@@ -251,6 +261,15 @@ export async function gotoApp(
   const briefEmbed = isEmbed && !isConsole;
   if (!briefEmbed) {
     await expect(page.locator('#layer-toggles .layer-group')).toHaveCount(ROLE_GROUPS.length);
+  }
+  // The boot-idle seam (DR-052 follow-up; src/state/boot-idle.ts). The
+  // assertions above prove the chrome exists; this one proves the boot has
+  // SETTLED: map loaded, every URL-named layer out of `loading`, no shared
+  // transport in flight. It moves the moment a spec's own assertions run,
+  // and changes none of them. Derived from registry and transport state,
+  // never from elapsed time, so it cannot flip early and hide a failure.
+  if (options.bootIdle !== false) {
+    await expect(page.locator('html')).toHaveAttribute('data-ddm-boot', 'idle');
   }
 }
 

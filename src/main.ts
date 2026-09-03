@@ -14,6 +14,11 @@ import { buildSidebar } from './ui/sidebar';
 import { initHoverInspector } from './ui/hover-inspector';
 import { isGpuInitializationError, webGl2Capability } from './map/gl-capability';
 import {
+  armBootIdle,
+  markBooting,
+  settleBootIdleWithoutMap
+} from './state/boot-idle';
+import {
   hideRendererNotice,
   showRendererNotice
 } from './ui/renderer-notice';
@@ -211,6 +216,10 @@ async function boot(): Promise<void> {
   // build (the nonce distinguishes two servers on the same commit).
   document.documentElement.dataset.ddmBuildSha = __DDM_BUILD_SHA__;
   document.documentElement.dataset.ddmBuildNonce = __DDM_BUILD_NONCE__;
+  // The third stamp: `data-ddm-boot` reads `booting` from here and `idle`
+  // once the map has loaded, every URL-named layer has left `loading`, and
+  // no shared transport is in flight (src/state/boot-idle.ts, DR-052).
+  markBooting();
 
   // DR-025a / DR-035a: MapLibre 6 requires WebGL 2 and has no WebGL 1
   // fallback, so ask first. Without a context the constructor would build a
@@ -224,6 +233,8 @@ async function boot(): Promise<void> {
     );
     showRendererNotice('no-webgl2');
     bootMapFreeChrome();
+    // Nothing else will load: the boot is idle now, honestly.
+    settleBootIdleWithoutMap();
     return;
   }
 
@@ -262,6 +273,7 @@ async function boot(): Promise<void> {
     gpuInitializationFailed = true;
     showRendererNotice('no-webgl2');
     bootMapFreeChrome();
+    settleBootIdleWithoutMap();
   });
 
   const loadedInBound = await waitForMapLoad(map, MAP_LOAD_BOUND_MS);
@@ -396,8 +408,15 @@ function wireMapDependentChrome(map: maplibregl.Map): void {
   // Applied after the sidebar so the deep link's fitBounds supersedes the
   // region framing; async, so a slow bundled-data fetch never blocks boot.
   // A studio route holds the command until its one-step return to the map.
+  // The boot-idle seam arms after the chrome is wired and the deep link (if
+  // any) has settled, so the pending set it watches is complete before its
+  // first evaluation. A studio route HOLDS its deep link until the one-step
+  // return to the map; that is a later, user-driven activation, not part of
+  // the boot, so the seam treats the held link as settled.
+  let deepLink: Promise<void> = Promise.resolve();
   if (startStudioAwareDeepLink) startStudioAwareDeepLink();
-  else void applyDeepLink(map, select);
+  else deepLink = applyDeepLink(map, select);
+  armBootIdle(deepLink);
 }
 
 if (document.readyState === 'loading') {

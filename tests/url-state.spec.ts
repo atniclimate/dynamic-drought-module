@@ -51,7 +51,10 @@ test.describe('URL as state', () => {
     await hold(AIANNH_ROUTE, syntheticAiannhBody());
     await hold(BIA_ROUTE, syntheticBiaBody());
 
-    await gotoApp(page);
+    // This case holds the boot open by design (two default layers cannot
+    // settle until the releases below fire), so it opts out of the boot-idle
+    // wait in gotoApp and owns its own waits.
+    await gotoApp(page, '', { bootIdle: false });
 
     const isFullDefaultSet = async (): Promise<boolean> => {
       const layers = await urlLayers(page);

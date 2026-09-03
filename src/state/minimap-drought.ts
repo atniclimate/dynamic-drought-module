@@ -50,10 +50,12 @@ import {
 import {
   nadmPolygonsFromGeometry,
   NADM_DROUGHT_CODES,
-  normalizeNadmDroughtCode,
-  normalizeNadmMonth,
   type NadmDroughtCode,
 } from '../util/nadm';
+// The structural verdict shared with the map layer (DR-052 follow-up): the
+// two consumers of the 'nadm-current' transport read the payload through
+// one function, so neither can evict what the other accepted.
+import { validateNadmCollection } from '../util/nadm-collection';
 
 const FETCH_TIMEOUT_MS = 15_000;
 const MAINLAND_SAMPLE_STEP_DEGREES = 0.5;
@@ -267,40 +269,23 @@ function prepareNadm(
   landValue: unknown,
   analysisExclusionValue: unknown,
 ): PreparedNadm {
-  if (!isRecord(value) || value['type'] !== 'FeatureCollection') {
-    throw new Error('NADM response is not a FeatureCollection.');
-  }
-  const features = value['features'];
-  if (!Array.isArray(features) || features.length === 0) {
+  // The shared structural verdict (one reading for both consumers). An
+  // empty collection is well-formed and is the issuer's answer, not a
+  // malformed payload; the minimap has no summary to draw from it, so it
+  // throws here for `derive`'s callers, and `load` below screens that case
+  // out BEFORE this point so the shared entry is never evicted for it.
+  const verdict = validateNadmCollection(value);
+  if (verdict.kind === 'empty') {
     throw new Error('NADM response has no classified features.');
   }
-
-  let month: string | null = null;
+  const { month } = verdict;
   const polygonsByCode = new Map<NadmDroughtCode, PreparedPolygon[]>();
-  for (const feature of features) {
-    if (
-      !isRecord(feature) ||
-      !isRecord(feature['properties']) ||
-      !isRecord(feature['geometry'])
-    ) {
-      throw new Error('NADM response contains a malformed feature.');
-    }
-    const code = normalizeNadmDroughtCode(feature['properties']['DROUGHTCAT']);
-    const featureMonth = normalizeNadmMonth(feature['properties']['YEAR_MONTH']);
-    if (code === null || featureMonth === null) {
-      throw new Error('NADM feature has an invalid class or consensus month.');
-    }
-    if (month !== null && month !== featureMonth) {
-      throw new Error('NADM response mixes consensus months.');
-    }
-    month = featureMonth;
-
-    const polygons = nadmPolygonsFromGeometry(feature['geometry']);
+  for (const { geometry, code } of verdict.features) {
+    const polygons = nadmPolygonsFromGeometry(geometry);
     const bucket = polygonsByCode.get(code) ?? [];
     bucket.push(...polygons.map(preparePolygon));
     polygonsByCode.set(code, bucket);
   }
-  if (month === null) throw new Error('NADM response has no consensus month.');
 
   const categories = new Map<NadmDroughtCode, PreparedCategory>();
   for (const code of NADM_DROUGHT_CODES) {
@@ -574,13 +559,32 @@ async function load(): Promise<void> {
       ),
     ]);
     if (signal.aborted) return;
+
+    // Eviction rule for the shared 'nadm-current' entry (DR-052 follow-up):
+    // evict ONLY when the shared payload itself fails the structural
+    // verdict the map layer also applies. A failed sibling fetch says
+    // nothing about that payload (and a failed shared transport evicts
+    // itself in fetch.ts), and an empty collection is the issuer's honest
+    // answer, which the layer keeps as `no-data`; throwing the entry away
+    // for either used to make the other consumer fetch again.
+    let empty = false;
+    try {
+      empty = validateNadmCollection(value).kind === 'empty';
+    } catch (error) {
+      invalidateSharedJsonRequest('nadm-current');
+      throw error;
+    }
+    if (empty) {
+      console.warn('[minimap-drought] the consensus returned no classified polygons.');
+      publish({ status: 'unavailable', month: null, summaries: EMPTY_SUMMARIES });
+      return;
+    }
     publish(
       deriveMinimapDroughtSnapshot(value, landValue, analysisExclusionValue),
     );
   } catch (error) {
     if (signal.aborted) return;
     controller?.abort();
-    invalidateSharedJsonRequest('nadm-current');
     console.warn('[minimap-drought] continental summary load failed.', error);
     publish({ status: 'unavailable', month: null, summaries: EMPTY_SUMMARIES });
   } finally {

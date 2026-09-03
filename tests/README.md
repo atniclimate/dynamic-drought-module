@@ -33,10 +33,19 @@ than no number.
 | Script | What it runs | Duration |
 | --- | --- | --- |
 | `npm run verify:quick` | `typecheck`, `scan:emdash`, `check:vocabulary`, `check:coverage` | about 5 s |
+| `npm run verify:pure` | the twelve browser-free spec files under `playwright.pure.config.ts`, no build, no server | seconds |
 | `npm run verify:smoke` | `gate` plus the twelve smoke specs, `--workers=1` | about 5 to 6 min |
-| `npm run test:serial` | all 852 tests, all three projects, one worker | about 50 to 55 min (inferred) |
+| `npm run test:serial` | all tests, all three projects, one worker | 31.1 min measured 2026-09-03 with the boot-idle seam (894 tests; 23.9 min before the seam, which makes every boot wait for real idle) |
 
 `verify:quick` is the save-and-think loop. No build, no network, no browser.
+
+`verify:pure` (DR-052 b) is the same loop for the pure logic under `src/`: the
+spec files that never ask for a page run against the source directly, in
+seconds, because the pure config has no `webServer` and so no build and no
+preview to wait behind. They also run inside `test:serial` under the main
+config, so nothing is proven only here. Membership is enforced by
+`tests/pure-lane-inventory.test.mjs` under `check:all`: a listed file that
+grows a browser case fails the inventory, and leaves the list.
 `check:vocabulary` and `check:coverage` are the two that catch a config-table
 edit drifting from its documentation, which is the most common silent break
 here, and `scan:emdash` enforces hard rule 9 before it reaches a diff.

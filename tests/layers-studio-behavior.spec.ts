@@ -176,9 +176,12 @@ test.describe('LAYERS studio behavior', () => {
       })
     );
 
+    // Holds a layer in `loading` on purpose (the places route above waits),
+    // so the boot cannot settle: opt out of the boot-idle wait.
     await gotoApp(
       page,
-      '?layers=places,states,aiannh,bia-reservations,tribal,telemetry&view=brief&studio=layers'
+      '?layers=places,states,aiannh,bia-reservations,tribal,telemetry&view=brief&studio=layers',
+      { bootIdle: false }
     );
     const studio = page.locator(STUDIO);
     await studio.getByRole('button', { name: 'Layer details' }).click();

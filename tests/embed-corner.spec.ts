@@ -131,7 +131,9 @@ for (const [width, height] of SIZES) {
         await route.fallback();
       }
     );
-    await gotoApp(page, '?embed=true&cluster=wildfire');
+    // This case observes the boot's loading pulse itself, so it must not
+    // wait for the boot to settle: opt out of the boot-idle wait.
+    await gotoApp(page, '?embed=true&cluster=wildfire', { bootIdle: false });
 
     const loading = page.locator('.loading-indicator');
     await expect(loading).toBeVisible();
