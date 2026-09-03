@@ -137,8 +137,11 @@ state-curated set).
   (`.venv/Scripts/python.exe scripts/extract-overture-buildings.py
   --bbox minLon,minLat,maxLon,maxLat --out scripts/.cache/overture-buildings-central-oregon.json`;
   it writes a `.meta.json` provenance sidecar the bake requires, and the
-  Overture release bucket keeps only ~60 days of releases, so re-pin
-  `--release` to the newest monthly id after 2026-09-21). Changing
+  Overture release bucket keeps only ~60 days of releases, so `--release`
+  needs periodic re-pinning (`DEFAULT_RELEASE` moved from 2026-07-22.0 to
+  2026-08-19.0 on 2026-09-03, ahead of the earlier pin's 2026-09-21 bucket
+  expiry, DR-011 a; check the script's current default before relying on
+  it). Changing
   regions is a DELIBERATE edit set, not just a new bbox; the bake
   hard-fails on a sidecar bbox that disagrees with its constants, and
   the in-app disclosures are cross-gated against the bake. Update, all
