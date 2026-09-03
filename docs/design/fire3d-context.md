@@ -1,10 +1,11 @@
 # The 3D Fire context view: honesty framing
 
-Durable design doctrine for the desktop 3D Fire mode and the context
-layers presented with it: terrain, Wildfire Hazard Potential, smoke, and a
-bounded structures pilot. Power infrastructure remains an independent catalog
-layer. This note records naming and disclosure decisions and their evidence;
-the runtime and its tests remain the functional truth.
+Durable design doctrine for the desktop 3D Fire mode and the surfaces
+presented with it: terrain, Wildfire Hazard Potential, smoke, a bounded
+structures pilot, and the mapped wildfire perimeter's own ribbon. Power
+infrastructure remains an independent catalog layer. This note records naming
+and disclosure decisions and their evidence; the runtime and its tests remain
+the functional truth.
 
 ## Show context; never model behavior
 
@@ -62,6 +63,35 @@ active in an embed, the orchestrator therefore prints the disclosure, the
 coverage note, and each active context layer's vintage line directly on
 the map surface (`#fire3d-embed-note`, non-interactive, never
 dismissible).
+
+## The perimeter ribbon is not a context layer
+
+DR-064 (owner rendering specification, 2026-09-02) raises the mapped
+wildfire perimeter into a low vertical ribbon in the tilted scene: opaque
+where it meets the terrain, fading out above it on a logarithmic curve so
+the opacity drops fastest at the top, pulsing along the edge on the same
+clock and in the same color as the flat outline. The reason is legibility,
+not new information: in a pitched frame a flat outline reads as a line drawn
+on a map rather than as a fire line on the land.
+
+It shares the context layers' lazy-chunk and non-fatal posture
+(`src/layers/nifc-perimeter-ribbon.ts`, reached by dynamic import after
+terrain succeeds; a scene without it still shows the perimeter exactly as
+the flat map does), but it is deliberately outside the context-layer
+contract below and outside the `data-ddm-fire3d-context` stamp, because it
+adds no issuer and no second source. It is one existing layer's own geometry
+re-presented, derived from the same GeoJSON the flat layer already holds,
+with no request of its own, and it never writes that layer's status.
+
+Its honesty burden is therefore about the DRAWING, and it is carried in its
+own legend section: the vertical extent is a DDM presentation convention
+held at a constant on-screen height across zooms, never flame height, fire
+intensity, or any measured quantity, and MapLibre extrudes polygons rather
+than lines, so the band is centered on the published edge and the ribbon
+neither enlarges nor shrinks the mapped perimeter. Only the pulsing wildfire
+class is raised; prescribed and unclassified records keep the deliberately
+neutral flat treatment the perimeter layer gives them, because a ribbon of
+light around a prescribed burn would say something the layer does not.
 
 ## Context-layer contract
 

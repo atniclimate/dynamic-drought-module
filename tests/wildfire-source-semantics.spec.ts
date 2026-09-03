@@ -326,7 +326,17 @@ test('NIFC pulse updates only WF/CX paint and deactivation cancels stale frames'
   try {
     await activateNifc(harness.map);
 
-    expect(WILDFIRE_PULSE_PAINT_TARGETS).toEqual([
+    // The two FLAT targets, pinned. The list also carries the DR-064
+    // ribbon's six fade slabs so the 3D scene pulses in phase with this
+    // outline; those layers exist only while the 3D Fire mode is active, so
+    // on this flat map the controller skips them (the paint assertions
+    // below see exactly two writes per frame). tests/fire3d-mode.spec.ts
+    // owns their side of the contract.
+    expect(
+      WILDFIRE_PULSE_PAINT_TARGETS.filter(
+        (target) => !target.layerId.startsWith('nifc-perimeter-ribbon')
+      )
+    ).toEqual([
       { layerId: 'nifc-fires-fill', paintProperty: 'fill-color' },
       { layerId: 'nifc-fires-outline', paintProperty: 'line-color' }
     ]);

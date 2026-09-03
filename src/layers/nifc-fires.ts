@@ -84,10 +84,28 @@ const PRESCRIBED_FILL_LAYER_ID = 'nifc-prescribed-fill';
 const PRESCRIBED_OUTLINE_LAYER_ID = 'nifc-prescribed-outline';
 const OTHER_OUTLINE_LAYER_ID = 'nifc-other-outline';
 
-/** The only MapLibre paint properties animated by the wildfire pulse. */
+/**
+ * The only MapLibre paint properties animated by the wildfire pulse.
+ *
+ * The last six are the DR-064 perimeter ribbon's fade slabs, which exist
+ * only while the desktop 3D Fire mode is active (mirrored literals from
+ * src/layers/nifc-perimeter-ribbon.ts, kept in step by the fire3d spec).
+ * Listing them here rather than wiring a second animation owner is what
+ * keeps the ribbon in PHASE with the flat outline: one clock, one color,
+ * one reduced-motion rule. The controller skips a target whose layer is not
+ * in the style, so on a flat map these six are simply absent, and the two
+ * 2D targets guarantee the controller always finds work while the layer is
+ * on.
+ */
 export const WILDFIRE_PULSE_PAINT_TARGETS = [
   { layerId: FILL_LAYER_ID, paintProperty: 'fill-color' },
-  { layerId: OUTLINE_LAYER_ID, paintProperty: 'line-color' }
+  { layerId: OUTLINE_LAYER_ID, paintProperty: 'line-color' },
+  { layerId: 'nifc-perimeter-ribbon-0', paintProperty: 'fill-extrusion-color' },
+  { layerId: 'nifc-perimeter-ribbon-1', paintProperty: 'fill-extrusion-color' },
+  { layerId: 'nifc-perimeter-ribbon-2', paintProperty: 'fill-extrusion-color' },
+  { layerId: 'nifc-perimeter-ribbon-3', paintProperty: 'fill-extrusion-color' },
+  { layerId: 'nifc-perimeter-ribbon-4', paintProperty: 'fill-extrusion-color' },
+  { layerId: 'nifc-perimeter-ribbon-5', paintProperty: 'fill-extrusion-color' }
 ] as const;
 
 /** About 17 paint updates per second, while requestAnimationFrame owns timing. */
