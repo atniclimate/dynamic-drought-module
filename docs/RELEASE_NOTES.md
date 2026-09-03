@@ -5,6 +5,23 @@
 Merged to `main` after the `v0.6.26` tag. No new package version or tag has
 been assigned to this work.
 
+### 2026-09-03: the Wildfire Hazard Potential ramp is recorded, not yet drawn (DR-063)
+
+The owner's black-to-white fuel-risk ramp is written down as a labeled DDM
+presentation convention in `src/config/wildfire-presentation.ts`, and the map
+is unchanged: Wildfire Hazard Potential still draws the issuer's published
+class colors in both the flat catalog layer and the 3D drape. Both surfaces
+receive Portable Network Graphics tiles that the United States Forest
+Service's own server has already colored, MapLibre 6.6.0 exposes no
+`raster-color` and no other raster paint property that can restate a
+classification, and the layer sends no rendering rule, so nothing in the
+current client or request can repaint those pixels. Pointing the key at the
+ramp alone would have reproduced the defect the 2026-08-19 legend correction
+fixed, a key describing a different image than the one beside it, so the key
+and the legend keep the issuer's swatches and the recorded ramp stays inert
+until the pixels can follow it. The issuer's class breaks, class labels, and
+attribution do not move in either case.
+
 ### 2026-08-31: heat readings in plain language (pull request 53, `5e0a889`)
 
 The impact briefing rendered National Weather Service point-heat payloads

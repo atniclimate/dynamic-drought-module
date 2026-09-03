@@ -603,6 +603,100 @@ export const USFS_WHP_PRESENTATION = {
 } as const;
 
 /**
+ * DR-063: the Wildfire Hazard Potential black-to-white ramp, recorded as a
+ * DDM PRESENTATION CONVENTION and NOT YET DRAWN.
+ *
+ * The owner's design decision (decision register DR-063, option a, decided
+ * 2026-09-02): "a black-to-white ramp with calibrated transparency that
+ * composes with both the terrain layer and the perimeter symbology. The
+ * class breaks, class labels and the legend's issuer attribution stay the
+ * issuer's; only the presentation ramp changes, and it is labeled a DDM
+ * presentation convention because the 2026-08-19 research chose the
+ * issuer-published palette." The owner's prose fixes the direction with no
+ * ambiguity: black is the LOWEST fuel risk, white the HIGHEST, so white
+ * fuel risk separates at a glance from the warm red and orange perimeter
+ * symbology, and the surface stays translucent enough that ridgelines,
+ * valleys, and hydrography keep reading through it.
+ *
+ * WHY THIS TABLE IS DATA AND NOT PAINT (verified 2026-09-03). Both WHP
+ * surfaces are issuer-RENDERED rasters: the flat `usfs-whp` catalog layer
+ * pulls Portable Network Graphics tiles from the GeoPlatform ImageServer's
+ * `exportImage` operation, which bakes the class colors server-side in its
+ * own raster function, and the 3D drape reads a Protomaps PMTiles archive
+ * of those same server-rendered bytes. Recoloring them needs one of two
+ * things, and this repository has neither today:
+ *
+ *   1. A client-side raster recolor. MapLibre 6.6.0 (style specification
+ *      26.4.1) exposes exactly nine raster paint properties:
+ *      `raster-opacity`, `raster-hue-rotate`, `raster-brightness-min`,
+ *      `raster-brightness-max`, `raster-saturation`, `raster-contrast`,
+ *      `resampling`, `raster-resampling`, and `raster-fade-duration`.
+ *      There is no `raster-color`, and the string does not appear anywhere
+ *      in the shipped library. The nine that do exist compose to an affine
+ *      map on red, green, and blue, so the only grey they can produce is
+ *      the luminance of the issuer color; the issuer's luminances run
+ *      Very High 0.28, Water 0.38, Very Low 0.50, High 0.67,
+ *      Non-burnable 0.88, Low 0.89, Moderate 0.96, which is not the hazard
+ *      order in either direction. A filter cannot express this ramp.
+ *   2. A rendering rule on the request. The layer sends `bbox`, `bboxSR`,
+ *      `imageSR`, `size`, `format`, `transparent`, and `f` and no
+ *      `renderingRule`; adding one changes the upstream request and the
+ *      Worker route policy, so it is an owner decision rather than a
+ *      presentation change.
+ *
+ * UNTIL THE PIXELS CHANGE, THE KEY KEEPS THE ISSUER SWATCHES. Pointing the
+ * key and the legend at this ramp on its own would reproduce the exact
+ * defect the table above was corrected for on 2026-08-19: a key describing
+ * a different image than the one beside it. `USFS_WHP_PRESENTATION` stays
+ * the rendering truth for both the map key and the 3D drape legend, and
+ * this table is inert, in the same way `FBFM40_PRESENTATION` below is
+ * retired from the scene but kept for its cross-check.
+ *
+ * THE NON-HAZARD CLASSES ARE DELIBERATELY OFF THE RAMP, and this is the
+ * one place the owner's prose leaves two readings. Reading one puts all
+ * seven issuer classes on the grey ramp; reading two puts only the five
+ * hazard classes on it. Reading one is rejected because once every grey on
+ * this surface means a fuel-risk level, the issuer's light grey
+ * Non-burnable would read as near-highest hazard, contradicting the
+ * issuer's own statement that it is not a hazard rating. Reading two is
+ * what the prose supports ("black, lowest fuel risk, to white, highest
+ * fuel risk"), so the two non-hazard classes carry no grey at all: they
+ * draw nothing, which also serves the owner's ask that hydrography read
+ * through, since the basemap already draws water. That sub-choice, drawn
+ * as nothing versus drawn as some off-ramp treatment, is flagged for the
+ * owner rather than settled here.
+ *
+ * The five labels and their order are the issuer's, unchanged and
+ * unmovable; only the color and the alpha are DDM's.
+ */
+export const WHP_DDM_RAMP_CONVENTION = {
+  /** Not the issuer's colors. Never present this ramp as USFS's. */
+  ddmConvention:
+    'DDM presentation convention: the colors and alpha below are DDM\'s, the class breaks and class labels are the United States Forest Service\'s and do not move.',
+  /** Recorded, not wired. See the module comment above. */
+  applied: false,
+  /**
+   * Black to white across the issuer's five hazard classes, even in
+   * lightness (CIE L* approximately 4, 26, 49, 75, 100) so the steps read
+   * as equal increments rather than crowding at one end, with alpha
+   * climbing so the low end stays quiet against terrain and the high end
+   * is the prominent one.
+   */
+  hazardClasses: [
+    { label: 'Very Low', color: '#0d0d0d', alpha: 0.3 },
+    { label: 'Low', color: '#3d3d3d', alpha: 0.38 },
+    { label: 'Moderate', color: '#757575', alpha: 0.46 },
+    { label: 'High', color: '#b8b8b8', alpha: 0.56 },
+    { label: 'Very High', color: '#ffffff', alpha: 0.68 }
+  ],
+  /** Off the ramp: no grey value, because no fuel-risk level applies. */
+  nonHazardClasses: [
+    { label: 'Non-burnable', color: null, alpha: 0 },
+    { label: 'Water', color: null, alpha: 0 }
+  ]
+} as const;
+
+/**
  * LANDFIRE 2024 (LF2024) Scott and Burgan 40 Fire Behavior Fuel Models
  * (FBFM40) drape for the desktop 3D Fire mode (the fuels context layer).
  *

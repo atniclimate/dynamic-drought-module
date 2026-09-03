@@ -21,6 +21,7 @@ import {
   HMS_VOLUME_QUALIFICATION,
   NIFC_INCIDENT_PRESENTATION,
   USFS_WHP_PRESENTATION,
+  WHP_DDM_RAMP_CONVENTION,
   WILDFIRE_PULSE_COLORS,
   WILDFIRE_PULSE_DURATION_MS,
   WILDFIRE_STATIC_COLOR,
@@ -663,6 +664,72 @@ test('the WHP drape key mirrors the issuer legend exactly, including its two non
   // The drape stays translucent context under perimeters and smoke.
   expect(DRAPE_OPACITY).toBeGreaterThan(0);
   expect(DRAPE_OPACITY).toBeLessThanOrEqual(0.6);
+});
+
+/**
+ * DR-063's ramp is recorded, not rendered, and this test pins BOTH halves
+ * of that. The dangerous half-state is a key showing a black-to-white ramp
+ * over a raster the issuer still paints green through red, which is the
+ * 2026-08-19 defect the test above exists to prevent.
+ */
+test('the DR-063 ramp is a labeled DDM convention, black to white, and not yet wired to the key', () => {
+  const ramp = WHP_DDM_RAMP_CONVENTION;
+
+  // Labeled a DDM convention, and honest that it is not the issuer's.
+  expect(ramp.ddmConvention).toContain('DDM presentation convention');
+  expect(ramp.applied).toBe(false);
+
+  // The issuer's class labels and their order do not move: the ramp
+  // restates presentation only, over the five hazard classes.
+  expect(ramp.hazardClasses.map((c) => c.label)).toEqual(
+    USFS_WHP_PRESENTATION.categories.slice(0, 5).map((c) => c.label)
+  );
+  expect(ramp.nonHazardClasses.map((c) => c.label)).toEqual(
+    USFS_WHP_PRESENTATION.categories.slice(5).map((c) => c.label)
+  );
+
+  // Black is the lowest fuel risk and white the highest: every step up the
+  // issuer's hazard scale is a step lighter, and neutral grey throughout so
+  // the surface never competes with the warm perimeter colors.
+  const luminance = (hex: string): number => {
+    const n = parseInt(hex.slice(1), 16);
+    const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    expect(r).toBe(g);
+    expect(g).toBe(b);
+    return r;
+  };
+  const steps = ramp.hazardClasses.map((c) => luminance(c.color));
+  expect(steps[0]).toBeLessThan(32);
+  expect(steps[steps.length - 1]).toBe(255);
+  for (let i = 1; i < steps.length; i++) {
+    expect(steps[i]).toBeGreaterThan(steps[i - 1]);
+    expect(ramp.hazardClasses[i].alpha).toBeGreaterThan(
+      ramp.hazardClasses[i - 1].alpha
+    );
+  }
+  // Calibrated transparency: terrain, ridgelines and hydrography keep
+  // reading through, so no class is close to opaque.
+  for (const c of ramp.hazardClasses) {
+    expect(c.alpha).toBeGreaterThan(0);
+    expect(c.alpha).toBeLessThanOrEqual(0.7);
+  }
+  // The two non-hazard classes take no grey: a grey would read as a
+  // fuel-risk level the issuer never assigned.
+  for (const c of ramp.nonHazardClasses) {
+    expect(c.color).toBeNull();
+    expect(c.alpha).toBe(0);
+  }
+
+  // NOT WIRED. The key and the 3D drape legend both still mirror the
+  // issuer's rendered pixels, so the ramp cannot leak into either surface
+  // while the rasters arrive pre-colored.
+  const keyContract = buildWhpKey().itemsHtml;
+  for (const category of USFS_WHP_PRESENTATION.categories) {
+    expect(keyContract).toContain(category.color);
+  }
+  for (const c of ramp.hazardClasses) {
+    expect(keyContract).not.toContain(c.color);
+  }
 });
 
 test('the power context maps issuer voltage classes to width only, with the archive caveat pinned', () => {

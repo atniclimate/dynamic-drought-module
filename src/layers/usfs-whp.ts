@@ -67,6 +67,15 @@
  * is encoded server-side in the `WHP_CLS_2023_8bit` raster function, so
  * we do not recolor on the client; we only choose the layer opacity.
  *
+ * The owner's DR-063 black-to-white presentation ramp is recorded but NOT
+ * drawn here, and the reason is the sentence above: the pixels arrive
+ * already colored. MapLibre 6.6.0 has no `raster-color` (re-verified
+ * 2026-09-03), and this template sends no `renderingRule`, so neither the
+ * client nor the request can restate the classes. `WHP_DDM_RAMP_CONVENTION`
+ * in src/config/wildfire-presentation.ts carries the ramp, the evidence,
+ * and the two routes that could carry it later. Do not point the map key
+ * at that ramp while this layer still paints the issuer's colors.
+ *
  * The legend lives in `USFS_WHP_PRESENTATION`
  * (src/config/wildfire-presentation.ts), and it was CORRECTED on
  * 2026-08-19. This comment previously named a five-entry ColorBrewer ramp

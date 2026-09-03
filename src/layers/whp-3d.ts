@@ -8,7 +8,11 @@
  * fuel-model classification, not a hazard scale, so recoloring its 44
  * classes into a risk ramp would have fabricated a claim its issuer never
  * made. (MapLibre also has no client-side raster recolor, so it was not
- * even mechanically available.) USFS Wildfire Hazard Potential IS a
+ * even mechanically available. RE-VERIFIED 2026-09-03 on MapLibre 6.6.0:
+ * still none; see WHP_DDM_RAMP_CONVENTION in
+ * src/config/wildfire-presentation.ts for the nine raster paint
+ * properties that do exist and why they cannot express a class ramp.)
+ * USFS Wildfire Hazard Potential IS a
  * published hazard scale, and its issuer palette already runs green
  * through yellow and orange to red. The answer was a different issuer,
  * not a repainted one.

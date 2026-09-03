@@ -169,6 +169,17 @@ fetches and verifies the issuer legend, applies nearest-neighbor resampling,
 and refuses a palette disagreement so boundaries cannot acquire colors the
 issuer never assigned.
 
+The hazard drape still draws the issuer's colors, and the owner's
+black-to-white presentation ramp is recorded rather than rendered. Both WHP
+surfaces receive pixels that the issuing server has already colored, and
+MapLibre 6.6.0 exposes no client-side raster recolor, so the ramp cannot be
+applied without changing either the renderer or the request. The ramp, the
+evidence, and the two routes that could carry it are recorded beside the
+issuer table in `src/config/wildfire-presentation.ts`. Until the pixels
+themselves change, the map key and this drape's legend keep the issuer's
+swatches, because a key that shows a ramp the raster does not draw is the
+defect the 2026-08-19 legend correction exists to prevent.
+
 The live flat layer wins whenever both versions are eligible. Drawing the
 snapshot drape and live surface together would double one issuer's opacity,
 repeat its legend, and expose the snapshot boundary as a false visual seam.
