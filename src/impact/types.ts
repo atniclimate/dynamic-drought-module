@@ -113,6 +113,12 @@ export interface SourcedClaim {
   /** For derived reads: the inputs the derivation stands on, in order. */
   readonly lineage?: readonly string[];
   /**
+   * The machine-readable identity behind a plain-language lineage (DR-058 a):
+   * the internal doctrine or model id, rendered as a `title` attribute on the
+   * lineage line so it stays reachable without appearing in the sentence.
+   */
+  readonly lineageRef?: string;
+  /**
    * Optional inline SVG chart (from `src/ui/charts.ts`) rendered beneath the
    * claim text. Trusted, self-generated markup; never user-supplied.
    */

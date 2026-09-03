@@ -35,9 +35,16 @@ export function renderClaim(claim: SourcedClaim): string {
   const uncertainty = claim.uncertainty
     ? `<p class="impact-claim-uncertainty">Uncertainty: ${escapeHtml(claim.uncertainty.kind === 'not-quantified' ? `not quantified (${claim.uncertainty.text})` : claim.uncertainty.text)}</p>`
     : '';
+  // The lineage reads in plain language; the internal doctrine or model id
+  // behind it rides a title attribute (DR-058 a), machine-readable and one
+  // hover away, never inside the public sentence.
+  const lineageRef =
+    typeof claim.lineageRef === 'string' && claim.lineageRef.length > 0
+      ? ` title="${escapeHtml(claim.lineageRef)}"`
+      : '';
   const lineage =
     claim.lineage && claim.lineage.length > 0
-      ? `<p class="impact-claim-lineage">Derived from: ${claim.lineage.map((l) => escapeHtml(l)).join('; ')}</p>`
+      ? `<p class="impact-claim-lineage"${lineageRef}>Derived from: ${claim.lineage.map((l) => escapeHtml(l)).join('; ')}</p>`
       : '';
   return `
     <div class="impact-claim ${pres.cssClass}">

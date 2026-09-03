@@ -162,6 +162,26 @@ inspection is recorded where the contract asks for it. The terrain transport
 on the 3D view was re-measured after the split and is the same 6,394,061 bytes
 over 36 ranged requests recorded on gate DDM-D01.
 
+### 2026-09-03: two briefing sentences made true (merge commit from `briefing/dr-024-058-wording`)
+
+The Impact Briefing's fire-perimeter sentence said "N current mapped NIFC fire
+perimeters intersect this area" while the query behind it covered a bounding
+box around the selection, capped at 50 records. A box is wider than a
+boundary, so a positive count over the box was not a count over the place,
+and a full page was silently a floor. The sentence now names what was
+queried, "the bounding box around this selection", and when the service
+returns its 50-record maximum it says the count is a lower bound (DR-024 b;
+the polygon-exact query stays backed up on origin at `905671d`). When every
+perimeter is one category the sentence carries one count instead of
+repeating it, and mixed categories still keep wildfire, Prescribed fire, and
+unclassified records distinct (DR-058 a). No area figure is claimed.
+
+The USDM wildfire read's lineage line no longer quotes internal vocabulary
+("the ddm-drought-impact-modeling causal-chain reads") in public text. It
+reads in plain language, and the doctrine id rides a `title` attribute on
+the lineage line, machine-readable and one hover away. Claims gained an
+optional `lineageRef` for that purpose.
+
 ## v0.6.26
 
 `v0.6.26` is the package version and, since 2026-08-29, the release tag. One

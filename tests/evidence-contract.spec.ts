@@ -123,6 +123,26 @@ test.describe('claim rendering honesty', () => {
     );
     expect(html).toContain('impact-claim-lineage');
     expect(html).toContain('Derived from: input one; input two');
+    // No reference given: no title attribute is invented.
+    expect(html).not.toContain('<p class="impact-claim-lineage" title=');
+  });
+
+  test('a lineage reference rides the title attribute, never the sentence (DR-058 a)', () => {
+    const html = renderClaim(
+      makeClaim({
+        text: 't',
+        source: 's',
+        evidence: 'derived',
+        dates: { retrieved: '2026-09-03' },
+        lineage: ['a plain-language input'],
+        lineageRef: 'ddm-drought-impact-modeling'
+      })
+    );
+    expect(html).toContain(
+      '<p class="impact-claim-lineage" title="ddm-drought-impact-modeling">Derived from: a plain-language input</p>'
+    );
+    // The id appears exactly once, as the attribute, and not in the text.
+    expect(html.split('ddm-drought-impact-modeling')).toHaveLength(2);
   });
 });
 
