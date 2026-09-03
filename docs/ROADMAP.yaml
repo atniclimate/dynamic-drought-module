@@ -88,10 +88,8 @@ phases:
         status: done
         closed: "Repeatable browser contract failures: cluster, Fire 3D reload, satellite fallback, and minimap failures corrected; the residual moving flake set is tracked separately."
       - id: "DDM-P0-T03"
-        title: "Decide and reconcile the renderer version prerequisite"
-        source: "15 DEP-01"
-        acceptance: "The decision names one of 4.7.1, 5.24.0, or 6.6.0, cites the measured bundle and terrain-transfer cost of the chosen move, and the adopted version passes the gate and the serial suite before it lands."
-        decision_gate: "DDM-D01"
+        status: done
+        closed: "Renderer version decided and reconciled: MapLibre GL JS 6.6.0 by owner ruling DR-009 on gate DDM-D01, whose measured bundle and terrain-transfer cost is cited there; the adopted version passed the gate and the serial suite (869) on its branch, landed as 993f5ca, and is proven live by deploy 33725341105 and verify-live 33726016220."
       - id: "DDM-P0-T04"
         status: done
         closed: "Source-to-production divergence detection: the build-identity check separates a cancelled deploy from a release and closes its own alert on recovery."
