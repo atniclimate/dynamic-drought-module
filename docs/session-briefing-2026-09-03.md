@@ -4,6 +4,50 @@ Prepared 2026-09-02 by a read-only review pass over `integration/2026-09` at
 `eb6c4f3`. Every claim below carries a receipt: a `path:line`, a commit, or a
 command and its output. Inferences are labeled.
 
+## Status, 2026-09-02 23:00 PDT
+
+This briefing was written before the landing day. What changed since, so that
+the sections below read as the history they are:
+
+- **Tasks 1 and 2 are done.** `integration/2026-09` landed on `main` as PR 57
+  (merge commit `3613335`), live at `deb4a61` with verify-live green; the four
+  hooks are installed. Section 4's branch table and the working-tree note about
+  `DDM-D01` are history (the gate edit was committed).
+- **Every decision Task 3 waited on is settled.** The owner ruled the
+  2026-09-03 decision packet on 2026-09-02 at 22:38 PDT: DR-035 a, DR-008 a,
+  DR-025 a (with an expansion: 3D terrain is map-level across all four hazard
+  views, volumetric smoke is the fire-view default, and the capability probe
+  gates terrain at the map level), DR-024 b, DR-051 a, DR-052 b, DR-014 a,
+  DR-015 a; all twenty-one Part 2 defaults; DR-061 deferred (no cron jobs before
+  the Convention; normalization is updated manually at major landings); and the
+  browser floor amended on DR-009 to Safari 15.5 plus Chrome 100 and later on
+  Android, with a BrowserStack open-source-grant real-device check per release.
+  The record is `planning/decisions/2026-09-02-decision-register.yaml`
+  (66 entries, 46 decided, 20 pending).
+- **Task 3, the MapLibre 6.6.0 migration, is the next engineering task.** Step 1
+  of section 6.6 is done on `maplibre-6/step-1-style-spec-casts` at `f8bd2da`
+  (cut from `main` at `deb4a61`, pushed, no pull request). Steps 2 to 8 follow,
+  amended below with the rulings.
+- **Verification approach, from the DR-052 owner guidance.** Use an Opus 5 agent
+  swarm with task-specific skills: the 69 import rewrites, the 13 query sites, and
+  the `setWorkerUrl` wiring are each a bounded task with its own gate. The
+  sequence is typecheck clean, build clean, `verify:pure` (new fast lane),
+  `verify:quick`, then the full `test:serial` including `chromium-3d`; each step
+  gates the next, and a failure stops the sequence and reports. `chromium-3d`
+  stays in the routine loop. Under DR-051 a, make the fire3d evidence capture
+  opt-in (`DDM_CAPTURE_EVIDENCE=1`) and assert build identity locally before the
+  repeated migration runs, so the runs are offline-safe and prove the build they
+  booted.
+- **User research is filed.** Five observation files sit in
+  `planning/user-research/` (ignored) and were triaged against the parked
+  decisions: no default flipped; the register gained DR-065 (layer and place
+  studio stability before the Convention) and DR-066 (wellness and crisis support
+  resources beside hazard information).
+- **Stale figures in this document.** The perimeter-evidence branch is 182
+  behind `main`, not 163; the Node pin is now 24.20.0 on the 24 line (DR-007 b),
+  with the local machine on 24.14.1; the `queryRenderedFeatures` count is 13
+  (section 6.2), not 18.
+
 ## 0. Blockers
 
 **No hard blocker.** The one candidate was checked and cleared:
@@ -119,8 +163,9 @@ DR-003a. Sources are drafted and uninstalled at
 
 DR-009 override. Full work breakdown in section 6.
 
-- Decision dependencies: DR-009 (settled). **Needs DR-035, DR-008, DR-025**
-  answered first (see section 3).
+- Decision dependencies: DR-009 (settled). DR-035 a, DR-008 a and DR-025 a
+  were settled 2026-09-02 22:38 PDT (see the status section above); nothing
+  blocks this task.
 - Ladder tier: `npm run gate` after each numbered step; `npm run verify:smoke`
   (about 6 min) at step 8; `npm run test:serial` including the `chromium-3d`
   project before the landing, because terrain, hillshade, and the PMTiles
@@ -141,9 +186,9 @@ not migrated onto it.
 | Task 3 | DR-008 | Entry chunk is 43.47 kB gzip against a 45 kB line (`00-SESSION-LOG.md` 04:00; `scripts/check-bundle-size.mjs:32` `DEFAULT_BUDGET_KB = 45`). The vendor chunk is exempt (`check-bundle-size.mjs:74-75`), so v6's extra vendor weight is safe, but a boot-time error path is eager app code and lands against 1.53 kB of headroom. |
 | Task 3 | DR-025 | Decides whether the v6 3D re-verification must cover a tablet band and a capability probe, or only desktop. DR-036's "tablet is touch-first" already pushes toward option a. |
 
-Secondary, not blocking: DR-007 (Node pin; local runs Node 24.14.1 against
-`.nvmrc` 22.23.2, DEP-04) makes any "it built here" claim in task 3 weaker than
-it looks.
+Secondary, not blocking: DR-007 was ruled b on 2026-09-02 (`.nvmrc` 24.20.0,
+the 24 line); the local machine still runs 24.14.1, which makes any "it built
+here" claim in task 3 weaker than it looks until the local install matches.
 
 ## 4. Branch state
 
@@ -194,7 +239,7 @@ Flagged, not resolved.
 | DR-001b | None. Changes ROADMAP.md's "lands as one pull request" posture into repeated merges. | DR-045, DR-047, DR-049 become pre-merge gates. | Strengthens DR-002a and DR-053. Weakens DR-004b: an Asana cadence keyed to one landing no longer fits. |
 | DR-002a | None; already implemented in `28f56dc`. | Cron restoration lands 2026-09-11. | Strengthens DR-005. |
 | DR-003a | None; the hooks are drafted and uninstalled. | `settings.local.json` is an ignored file, which is DR-055's subject. | Strengthens DR-054. |
-| DR-009 | `package.json:63` pins `"maplibre-gl": "^4.7.0"`. `feature/maplibre-v5` (`13ca2da`) becomes a dead branch: do not land it. | Adds `build.target` to `vite.config.ts` (absent today), a `setWorkerUrl` call, and a `GPUInitializationError` path. | Strengthens DR-035a (the error handler stops being optional) and DR-025a (a real capability check replaces a width heuristic). Raises the rebase cost of DR-024 (`feature/nifc-perimeter-evidence`, `905671d`, 163 behind main). |
+| DR-009 | `package.json:63` pins `"maplibre-gl": "^4.7.0"`. `feature/maplibre-v5` (`13ca2da`) becomes a dead branch: do not land it. | Adds `build.target` to `vite.config.ts` (absent today), a `setWorkerUrl` call, and a `GPUInitializationError` path. | Strengthens DR-035a (the error handler stops being optional) and DR-025a (a real capability check replaces a width heuristic). Raises the rebase cost of DR-024 (`feature/nifc-perimeter-evidence`, `905671d`, 182 behind main). |
 | DR-012b | **None; strongly congruent.** The briefing is already horizon-led: `src/impact/briefing.ts:37-41` `HORIZON_SPECS`, `src/impact/types.ts:394-396` `{ current, nearTerm, longRange }`. | **New.** `SourcedClaim` (`src/impact/types.ts:90-119`) has no hazard field, and `types.ts:137-138` records that hazard ordering is convention inside a flat `claims` array. Four hazard rows require a hazard discriminant. | Strengthens DR-014 (a non-covering source becomes a per-cell state) and DR-015. |
 | DR-016a | **Direct conflict.** `src/config/clusters.ts:84` sets the visible chip to `'Weeks ahead'`, and `clusters.ts:61` sets the cadence label to `'next seven days'`. The comment at `clusters.ts:72-79` parks exactly this as "an owner ruling, not a refactor". DR-016 makes the ruling. | **New.** `HorizonProduct` does not exist in `src/` (grep: 0 hits); it is a proposal at `12-forecast-data-spec.md:787`. DR-016 cannot execute until the type is introduced. | Strengthens DR-017a, DR-020a, DR-021a. Blast radius of the label change: 5 lines across `src/config/clusters.ts`, `src/ui/island/shell.tsx`, `tests/s4-shell.spec.ts`. |
 | DR-019a | None. | The owner addition ("scout additional issuer products") inserts a research step ahead of DR-022 and DR-033. | Strengthens DR-014. |
@@ -337,8 +382,10 @@ verification step with a possible finding, not a config line.
 1. **Prep on 4.7.1, no version change.** Replace the nine style-spec
    `as unknown as` casts with typed builders. Verify: `npm run verify:quick`.
    Rationale: after this, any new type error under v6 is a real spec change.
-2. **Pin the floor, on 4.7.1.** Add `build.target` to `vite.config.ts`; correct
-   `README.md:438-439`. Verify: `npm run gate`, and read the emitted bundle for
+2. **Pin the floor, on 4.7.1.** Add `build.target` to `vite.config.ts` covering
+   both ruled floors (Safari 15.5 / iOS 15.5 and Chrome 100 and later on Android,
+   DR-009 as amended 2026-09-02); correct `README.md:438-439` to state both
+   floors and WebGL 2. Verify: `npm run gate`, and read the emitted bundle for
    lowering failures. A finding here changes DR-009's floor, so it comes before
    the bump.
 3. **Bump.** `package.json:63` to `6.6.0`; `npm ci`. Add the renderer-version
@@ -347,11 +394,20 @@ verification step with a possible finding, not a config line.
 4. **Rewrite the 69 imports.** Mechanical and scriptable; 61 type-only, 8 value.
 5. **Wire `setWorkerUrl`** in `src/map/init.ts` beside `addProtocol`; confirm the
    emitted worker asset in `dist/assets/`.
-6. **Add the `GPUInitializationError` branch** to boot, under whatever DR-035
-   rules.
+6. **Add the `GPUInitializationError` branch** to boot, per DR-035 a: after a
+   bounded wait the chrome boots without the map and shows an honest
+   not-yet-rendering state; a WebGL probe and a map error handler are added
+   once. The same probe is DR-025 a's capability check (WebGL2 context creation,
+   `webglcontextlost` handling with a fallback to 2D, never a frozen viewport),
+   and it gates 3D terrain at the map level, not only the fire scene. The boot
+   error path is eager app code, so DR-008 a (map key, telemetry adapters and URL
+   catalog made lazy) lands beside it to keep the entry chunk under 45 kB.
 7. **Set `zoomLevelsToOverscale: undefined`** at construction; land the migration
    without a query-behavior change; file the new default as a separate item.
-8. **Re-verify.** `npm run verify:smoke`, then `test:serial` with `chromium-3d`.
+8. **Re-verify**, in the DR-052 sequence: typecheck, build, `verify:pure`,
+   `verify:quick`, `npm run verify:smoke`, then `test:serial` with `chromium-3d`.
+   Re-measure DEM bytes and request count on the same 3D view before and after
+   the bump, and re-verify the clear-sky literal in the distributed bundle.
    Cascading-breakage risk by area, highest first: 3D terrain and the WHP drape
    (the resampling change is intended and will move pixels); hillshade
    (`src/layers/hillshade.ts` is a value importer with a local-then-fallback
