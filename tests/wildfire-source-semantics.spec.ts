@@ -431,18 +431,31 @@ test('reduced motion keeps wildfire paint static and schedules no pulse', async 
   }
 });
 
-test('selected-area NIFC copy keeps Wildfire, Prescribed fire, and other counts distinct', () => {
+test('selected-area NIFC copy names the bounding box, keeps categories distinct, and reports a full page as a floor', () => {
+  // DR-024 b: the query covers a bounding box wider than the boundary, so
+  // the sentence names the box and never "this area".
   expect(buildNifcAreaPerimeterClaim([])).toBe(
-    'No current mapped NIFC fire perimeters intersect this area.'
+    'No current mapped NIFC fire perimeters intersect the bounding box around this selection.'
   );
+  // DR-058 a: one category, one count, no restatement.
   expect(buildNifcAreaPerimeterClaim(['RX'])).toBe(
-    '1 current mapped NIFC fire perimeter intersects this area: 1 Prescribed fire perimeter.'
+    '1 current mapped NIFC Prescribed fire perimeter intersects the bounding box around this selection.'
+  );
+  expect(buildNifcAreaPerimeterClaim(['WF', 'WF', 'CX'])).toBe(
+    '3 current mapped NIFC wildfire perimeters intersect the bounding box around this selection.'
   );
   const mixed = buildNifcAreaPerimeterClaim(['WF', 'CX', 'RX', 'unknown']);
-  expect(mixed).toContain('2 wildfire perimeters');
-  expect(mixed).toContain('1 Prescribed fire perimeter');
-  expect(mixed).toContain('1 other or unclassified fire perimeter');
+  expect(mixed).toBe(
+    '4 current mapped NIFC fire perimeters intersect the bounding box around this selection: 2 wildfire, 1 Prescribed fire and 1 other or unclassified fire.'
+  );
   expect(mixed).not.toMatch(/4 active wildfires?/i);
+  expect(mixed).not.toContain('this area');
+  // A page returned at the record cap is a lower bound, and says so.
+  const floor = buildNifcAreaPerimeterClaim(Array(50).fill('WF'), { truncated: true });
+  expect(floor).toBe(
+    '50 current mapped NIFC wildfire perimeters intersect the bounding box around this selection. The service returned its 50-record maximum, so this count is a lower bound.'
+  );
+  expect(buildNifcAreaPerimeterClaim(['WF'], { truncated: false })).not.toContain('lower bound');
 });
 
 test('HMS uses one cool veil and an explicit unclassified fallback', () => {

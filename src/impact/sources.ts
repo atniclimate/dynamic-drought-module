@@ -25,7 +25,10 @@
 
 import { URLS } from '../config/urls';
 import { HEATRISK_CATEGORIES } from '../config/palette';
-import { buildNifcAreaPerimeterClaim } from '../config/wildfire-presentation';
+import {
+  NIFC_AREA_QUERY_RECORD_CAP,
+  buildNifcAreaPerimeterClaim
+} from '../config/wildfire-presentation';
 import {
   loadServiceEnvelopePieces,
   mergeByStableIdentifier
@@ -444,7 +447,14 @@ export async function fetchUsdmClaims(
           text: `Wildfire: ${impact.wildfire} Drought raises the odds and the potential intensity of wildfire by drying and curing fuels; it does not by itself start fires.`,
           ...usdmShared,
           evidence: 'derived',
-          lineage: ['USDM category at the clicked point', 'documented USDM impact profiles and the ddm-drought-impact-modeling causal-chain reads'],
+          // Plain language in the sentence, the doctrine id in the title
+          // attribute (DR-058 a): "ddm-drought-impact-modeling causal-chain
+          // reads" was internal vocabulary inside a public claim.
+          lineage: [
+            'USDM category at the clicked point',
+            'the documented USDM impact profile for that category, read through the DDM drought-impact model'
+          ],
+          lineageRef: 'ddm-drought-impact-modeling',
           uncertainty: { kind: 'typical', text: 'an elevated-risk tendency at this category, not a certainty' }
         })
       ]
@@ -665,6 +675,13 @@ export async function fetchDsciTrendClaims(
  * bounding box (or a small box around the click when no geometry bbox is
  * available). Wildfire, Prescribed fire, and unclassified records stay
  * distinct; zero mapped perimeters is also a plain observation.
+ *
+ * The sentence names the bounding box, not "this area" (DR-024 b): the box
+ * is wider than the boundary, so a positive count is a count over the box,
+ * and a page returned at the record cap is reported as a lower bound. The
+ * polygon-exact query that would make the count a count over the place is
+ * backed up on origin at feature/nifc-perimeter-evidence (905671d) and was
+ * set aside by that ruling.
  */
 export async function fetchNifcClaims(
   context: BoundarySelectionContext,
@@ -699,7 +716,7 @@ export async function fetchNifcClaims(
         const query = esriEnvelopeQuery(
           envelope,
           'attr_UniqueFireIdentifier,attr_IncidentName,attr_IncidentTypeCategory',
-          50
+          NIFC_AREA_QUERY_RECORD_CAP
         );
         return fetchJson(
           `${URLS.nifcFires}/query?${query.toString()}`,
@@ -710,20 +727,25 @@ export async function fetchNifcClaims(
     );
     if (signal.aborted) return { claims: [], ok: false };
 
+    const pages = payloads.map(featuresOf);
     const features = mergeByStableIdentifier(
-      payloads.map(featuresOf),
+      pages,
       (feature) => {
         if (!isObject(feature) || !isObject(feature.properties)) return null;
         const id = feature.properties.attr_UniqueFireIdentifier;
         return typeof id === 'string' || typeof id === 'number' ? id : null;
       }
     );
+    // A page that came back full may have been cut at the cap; the sentence
+    // then reports the count as a lower bound rather than a total.
+    const truncated = pages.some((page) => page.length >= NIFC_AREA_QUERY_RECORD_CAP);
     const text = buildNifcAreaPerimeterClaim(
       features.map((feature) =>
         isObject(feature) && isObject(feature.properties)
           ? feature.properties.attr_IncidentTypeCategory
           : undefined
-      )
+      ),
+      { truncated }
     );
     // Mapped incident perimeters and their count: directly observed.
     return {

@@ -251,11 +251,32 @@ export function nifcIncidentTypeLabel(value: unknown): string {
   }
 }
 
-/** Source-honest selected-area sentence for the category values returned by
- * the current-perimeters service. Prescribed fire and unclassified records
- * remain explicit instead of being folded into a wildfire count. */
+/** The record cap the briefing's perimeter query sends to the service. A
+ * page that comes back full means the count is a floor, and the sentence
+ * says so. Shared with `src/impact/sources.ts`, which sends it. */
+export const NIFC_AREA_QUERY_RECORD_CAP = 50;
+
+/** What the perimeter query actually covered: a bounding box around the
+ * selection, not its boundary. Named in the sentence (DR-024 b) because a
+ * box is strictly wider than the boundary, so a positive count over the box
+ * is not a count over the place. */
+const NIFC_AREA_QUERY_EXTENT = 'the bounding box around this selection';
+
+/** Source-honest sentence for the category values returned by the
+ * current-perimeters service (DR-024 b, DR-058 a).
+ *
+ * The count is over the query's bounding box and the sentence names that
+ * extent rather than calling it "this area"; the box is wider than the
+ * boundary, so a perimeter in a box corner can be counted without touching
+ * the place, and the sentence must not claim more than the query proved.
+ * When every record is one category the sentence carries one count (the
+ * old form repeated it: "3 ... perimeters intersect this area: 3 wildfire
+ * perimeters"); when categories mix, Prescribed fire and unclassified
+ * records stay explicit instead of being folded into a wildfire count. A
+ * page that came back at the record cap reads as a lower bound. */
 export function buildNifcAreaPerimeterClaim(
-  incidentTypes: readonly unknown[]
+  incidentTypes: readonly unknown[],
+  options: { readonly truncated?: boolean } = {}
 ): string {
   const counts: Record<NifcIncidentClass, number> = {
     wildfire: 0,
@@ -268,24 +289,30 @@ export function buildNifcAreaPerimeterClaim(
 
   const total = incidentTypes.length;
   if (total === 0) {
-    return 'No current mapped NIFC fire perimeters intersect this area.';
+    return `No current mapped NIFC fire perimeters intersect ${NIFC_AREA_QUERY_EXTENT}.`;
   }
 
-  const parts: string[] = [];
-  const addPart = (count: number, label: string): void => {
-    if (count === 0) return;
-    parts.push(`${count} ${label} ${count === 1 ? 'perimeter' : 'perimeters'}`);
+  const floor = options.truncated
+    ? ` The service returned its ${NIFC_AREA_QUERY_RECORD_CAP}-record maximum, so this count is a lower bound.`
+    : '';
+  const verb = total === 1 ? 'perimeter intersects' : 'perimeters intersect';
+
+  const categoryLabel: Record<NifcIncidentClass, string> = {
+    wildfire: 'wildfire',
+    prescribed: 'Prescribed fire',
+    other: 'other or unclassified fire'
   };
-  addPart(counts.wildfire, 'wildfire');
-  addPart(counts.prescribed, 'Prescribed fire');
-  addPart(counts.other, 'other or unclassified fire');
-  const categories =
-    parts.length === 1
-      ? parts[0]
-      : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
-  return `${total} current mapped NIFC fire ${
-    total === 1 ? 'perimeter intersects' : 'perimeters intersect'
-  } this area: ${categories}.`;
+  const present = (Object.keys(counts) as NifcIncidentClass[]).filter(
+    (key) => counts[key] > 0
+  );
+  if (present.length === 1) {
+    const only = present[0] as NifcIncidentClass;
+    return `${total} current mapped NIFC ${categoryLabel[only]} ${verb} ${NIFC_AREA_QUERY_EXTENT}.${floor}`;
+  }
+
+  const parts = present.map((key) => `${counts[key]} ${categoryLabel[key]}`);
+  const categories = `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
+  return `${total} current mapped NIFC fire ${verb} ${NIFC_AREA_QUERY_EXTENT}: ${categories}.${floor}`;
 }
 
 const NORMALIZED_NIFC_TYPE: maplibregl.ExpressionSpecification = [
