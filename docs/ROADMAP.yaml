@@ -1,6 +1,6 @@
 schema_version: 2
 roadmap_id: "ddm-forward-roadmap"
-updated_on: "2026-09-02"
+updated_on: "2026-09-03"
 
 # Every open task takes this unless it carries its own `verification`.
 default_verification: "verify:smoke"
@@ -315,7 +315,7 @@ phases:
         title: "Make the fire claim polygon-exact and add incident coverage"
         source: "03 FIRE-05, FIRE-08; 10 SCI-04; 12 FSPEC-10"
         effort: M
-        needs_decision: "DR-024 (rebase the perimeter-evidence branch or fix the wording in place; 03 D2); DR-023 (WFIGS incident points beside perimeters; 10 D-SCI-E)"
+        needs_decision: "DR-023 (WFIGS incident points beside perimeters; 10 D-SCI-E)"
         acceptance: "The briefing's fire sentence describes exactly the geometry it queried, and if incident points are adopted they are labeled as incidents without a mapped perimeter."
       - id: "DDM-P9-T04"
         title: "State the coverage of terrain shading and keep the hazard drape legible"
@@ -337,7 +337,6 @@ phases:
         title: "Decide and build the tablet band"
         source: "06 UI-01, UI-02, UI-03"
         effort: L
-        needs_decision: "DR-036 (does tablet get its own band, or stay a small desktop; 06 D2)"
         acceptance: "At 721, 768, 820, 900, and 1024 pixels in both orientations no control overlaps another, the dock keeps a usable width, and every interactive target meets the coarse-pointer minimum."
       - id: "DDM-P10-T02"
         title: "Land the token layers the design had none of"
@@ -460,7 +459,6 @@ phases:
         title: "Record the local full-service server end state and the seams it needs"
         source: "01 ARCH-08; 15 DEP-05"
         effort: L
-        needs_decision: "DR-006 (one origin serving the app and the relay, or a separate local port; 01 D5)"
         acceptance: "The hosting plan states that GitHub Pages is the current static host and names the seams a local server would replace, and no hosting change is made without range, cache, privacy, cost, and rollback evidence."
         decision_gate: "DDM-D10"
         verification: "verify:quick"
@@ -526,6 +524,9 @@ decision_gates:
     question: "Should tablet get its own layout band, or stay a small desktop?"
     register: "DR-036"
     needed_by: ["DDM-P10-T01"]
+    decision:
+      date: "2026-09-02"
+      answer: "Tablet gets a real third layout band, not a small desktop (owner ruling DR-036 a): 721 to 1024 px, a fluid sidebar width, and a 44 px touch floor. Tablet is touch-first: phone stays the simplest layout, tablet is more capable but still touch-native, and desktop keeps full pointer controls."
   - id: "DDM-D03"
     question: "Should Fire 3D remain controllable after custom demotion or exit automatically?"
     register: "DR-025"
@@ -545,6 +546,9 @@ decision_gates:
     register: "DR-034"
     needed_by: ["DDM-P4-T05"]
     context: "No machine-readable ENSO probability feed exists from CPC or IRI as of 2026-09-01 (12 FSPEC-11, 13 ENSOSCI-06), so this gate decides whether the product goes without one or derives one."
+    decision:
+      date: "2026-09-02"
+      answer: "Issuer-published only (owner ruling DR-034 a): DDM adopts no reviewed derived or transcribed method, so the plume tombstone stands until a machine-readable issuer feed exists. The committed ENSO snapshot instead gains the Multivariate ENSO Index v2 and the Pacific Decadal Oscillation. Accepted as one of the twenty-one Part 2 defaults, 2026-09-02."
   - id: "DDM-D07"
     question: "Does the no-telemetry rule require explicitly disabling provider invocation logs containing full URLs?"
     needed_by: ["DDM-P0-T05"]
@@ -563,6 +567,9 @@ decision_gates:
     register: "DR-006"
     needed_by: ["DDM-P15-T01"]
     context: "GitHub Pages is the current static host by owner direction; a local full-service server is the eventual host. Any interim hosting experiment must prove range, CORS, cache, privacy, rollback, cost, and portability first."
+    decision:
+      date: "2026-09-02"
+      answer: "The end state is one origin serving both the static app and the upstream relay, so workerProxy becomes a same-origin path and the CORS shim disappears; record that end state in the roadmap now with GitHub Pages named as the interim host (owner ruling DR-006 a, accepted as one of the twenty-one Part 2 defaults). DR-006 does not decide whether production source maps stay public in the meantime; that half of this gate's question is still open."
   - id: "DDM-D11"
     question: "Which current ENSO question, audience, and evidence hierarchy should the first index-first product answer?"
     register: "DR-032"
