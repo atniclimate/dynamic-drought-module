@@ -158,8 +158,10 @@ phases:
       - {id: "DDM-P2-T01", status: superseded, superseded_by: "DDM-P10-T01"}
       - id: "DDM-P2-T02"
         title: "Resolve Fire 3D custom-state escape"
+        status: done
         acceptance: "An active Fire 3D scene always has a direct off control or an automatic-exit rule, and the selected rule is reflected in the URL and browser contracts."
         decision_gate: "DDM-D03"
+        closed: "2026-09-02: gate DDM-D03 decided; the shipped rule (cluster change exits and strips the parameter, custom demotion keeps the scene with the toggle as the off control) is under contract in tests/fire3d-mode.spec.ts and tests/view-contracts.yaml."
       - id: "DDM-P2-T03"
         title: "Give ENSO a shareable Pacific camera contract"
         acceptance: "Fire-to-ENSO, share, reload, reset, phone, and desktop cases all open on visible Pacific evidence under one explicit basemap policy."
@@ -378,10 +380,12 @@ phases:
     tasks:
       - id: "DDM-P12-T01"
         title: "Lead the ENSO headline with advisory semantics"
+        status: done
         source: "05 ENSO-01, ENSO-03; 13 ENSOSCI-01, ENSOSCI-04"
         effort: M
         needs_decision: "DR-029 (the three-state ENSO model; 05 D-ENSO-1, D-ENSO-2); DR-032 (a persistent state panel on the ENSO screen; 05 D-ENSO-3)"
         acceptance: "The app's stated ENSO condition matches the issuer's current advisory status for the same date, and any episode classification is labeled as the historical classification."
+        closed: "2026-09-02: shipped in 46f98f4 (PR 57): the headline states current conditions by CPC onset and advisory rules with citations, the episode classification is secondary and labeled, and the snapshot validator enforces the contract. The DR-032 state panel was never part of this acceptance; it stays parked in the register."
       - id: "DDM-P12-T02"
         title: "Give the ENSO horizons distinct source-backed meanings"
         source: "05 ENSO-04; 13 ENSOSCI-05; 12 FSPEC-11"
@@ -528,6 +532,10 @@ decision_gates:
     question: "Should Fire 3D remain controllable after custom demotion or exit automatically?"
     register: "DR-025"
     needed_by: ["DDM-P2-T02"]
+    decision:
+      date: "2026-09-02"
+      answer: "Both, by rule: leaving the wildfire cluster exits the scene automatically and strips fire3d from the URL (DR-025 a); an honest custom demotion inside the Wildfire screen keeps the scene alive while a fire event layer remains, with the toggle as the direct off control; removing every fire event layer, toggling the preference off, or a narrow viewport also exits. DR-025 was widened to carry this answer rather than splitting the gate. The DR-025 expansion also rules that 3D terrain is map-level across all hazard views and that the fire3d parameter governs volumetric smoke, not terrain."
+      posture: "The exit rule is the current activation gate in src/map/fire3d.ts and is under contract in tests/fire3d-mode.spec.ts (switching clusters exits the scene) and tests/view-contracts.yaml (leaving-3d-clears-the-scene-and-the-parameter)."
   - id: "DDM-D04"
     question: "Which Pacific camera and basemap policy should the ENSO quick view establish?"
     needed_by: ["DDM-P2-T03"]
