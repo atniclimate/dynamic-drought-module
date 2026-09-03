@@ -98,6 +98,17 @@ export const EVENT_OVERLAY_IDS: readonly string[] = [
   'hms-smoke-outline',
   'nifc-fires-fill',
   'nifc-fires-outline',
+  // The DR-064 perimeter ribbon's fade slabs, bottom first, directly above
+  // the flat wildfire outline they stand on. Present only while the 3D Fire
+  // mode is active and the perimeter layer is live; mirrored literals from
+  // src/layers/nifc-perimeter-ribbon.ts, which derives them from
+  // PERIMETER_RIBBON_SLAB_COUNT and whose spec pins the two lists together.
+  'nifc-perimeter-ribbon-0',
+  'nifc-perimeter-ribbon-1',
+  'nifc-perimeter-ribbon-2',
+  'nifc-perimeter-ribbon-3',
+  'nifc-perimeter-ribbon-4',
+  'nifc-perimeter-ribbon-5',
   'nifc-prescribed-fill',
   'nifc-prescribed-outline',
   'nifc-other-outline',

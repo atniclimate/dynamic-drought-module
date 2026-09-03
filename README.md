@@ -294,7 +294,14 @@ On desktop widths, the Fire view offers a 3D toggle: terrain relief from
 the bundled Pacific Northwest USGS 3DEP archive under a pitched camera,
 with the NOAA HMS smoke plumes re-presented as a stylized volume (vertical
 extent encodes the issuer's density class, never measured plume height)
-and issuer-published landscape context draped over the relief. The first
+and issuer-published landscape context draped over the relief. When the
+NIFC perimeter layer is live, each mapped wildfire perimeter also stands up
+as a low ribbon along its own edge, opaque where it meets the terrain and
+fading out above it, pulsing in step with the flat outline. That vertical
+extent is a presentation convention held at a constant on-screen height,
+not flame height or fire intensity, and the band is centered on the
+published edge so the ribbon neither enlarges nor shrinks the mapped
+perimeter. The first
 context layer is USFS Wildfire Hazard Potential 2023, baked to a bundled
 archive with the issuer's categorical colors and nearest-neighbor sampling so
 class boundaries never acquire invented colors. It is a long-term hazard

@@ -21,14 +21,19 @@
  *   3. Post-probe tile failures (watchRasterTiles): same rollback ladder.
  *   4. Volumetric smoke failure: NON-fatal partial degrade; terrain stays,
  *      the flat smoke veil stays visible.
- *   5. Context-layer failure (fire3d-context.ts, the issuer-published
+ *   5. Perimeter ribbon failure (DR-064): NON-fatal partial degrade; the
+ *      flat perimeter stays exactly as the 2D map draws it.
+ *   6. Context-layer failure (fire3d-context.ts, the issuer-published
  *      landscape context): NON-fatal per layer; each missing context layer
  *      degrades alone and the scene keeps everything else.
  *
  * Meaning constraints carried through: perimeters remain mapped incident
  * representations draped over relief (render-to-texture), the reduced-motion
  * static #ff4c00 perimeter contract is untouched, and the camera treatment
- * claims nothing about fire behavior.
+ * claims nothing about fire behavior. The DR-064 ribbon raises the same
+ * published edge into the third dimension without moving it, without
+ * fetching anything the flat layer does not, and without touching the
+ * perimeter layer's status.
  */
 
 import type * as maplibregl from 'maplibre-gl';
@@ -73,6 +78,9 @@ export const FIRE3D_EVENT_LAYER_KEYS: readonly string[] = [
   'hms-smoke'
 ];
 
+/** The perimeter layer the DR-064 ribbon re-presents (mirrored literal). */
+const PERIMETER_LAYER_KEY = 'nifc-fires';
+
 export interface Fire3DStatus {
   readonly state: 'inactive' | 'checking' | 'active' | 'unavailable';
   /** Honest user-facing reason; non-null only for 'unavailable'. */
@@ -80,6 +88,10 @@ export interface Fire3DStatus {
   /** True while the volumetric smoke read is in place beside the terrain;
    * false while active with the flat veil only (partial degrade). */
   readonly smokeVolume: boolean;
+  /** True while the DR-064 perimeter ribbon stands in the scene; false when
+   * the perimeter layer is off, still loading, or holds no wildfire-class
+   * record, in which case the flat perimeter reads on its own. */
+  readonly perimeterRibbon: boolean;
   /** The context layers actually in the scene (issuer-published landscape
    * context; empty while inactive or when every context layer degraded). */
   readonly contextLayers: readonly string[];
@@ -147,6 +159,7 @@ let status: Fire3DStatus = {
   state: 'inactive',
   reason: null,
   smokeVolume: false,
+  perimeterRibbon: false,
   contextLayers: []
 };
 const statusListeners = new Set<() => void>();
@@ -162,6 +175,9 @@ let savedCamera: { readonly pitch: number; readonly bearing: number } | null =
 let tileWatch: RasterTileWatch | null = null;
 let smokeVolumeOn = false;
 let smokeModule: typeof import('../layers/hms-smoke-volume') | null = null;
+let ribbonOn = false;
+let ribbonModule: typeof import('../layers/nifc-perimeter-ribbon') | null =
+  null;
 let contextModule: typeof import('./fire3d-context') | null = null;
 let contextKeys: readonly string[] = [];
 /** Truthful per-layer embed disclosure lines, composed at activation from
@@ -228,6 +244,7 @@ function publishStatus(
     state,
     reason,
     smokeVolume: state === 'active' && smokeVolumeOn,
+    perimeterRibbon: state === 'active' && ribbonOn,
     contextLayers: state === 'active' ? contextKeys : []
   };
   // Production-observable truth stamp (the dev-only __ddmMap handle is
@@ -239,8 +256,10 @@ function publishStatus(
     root.dataset.ddmFire3d = state;
     if (state === 'active') {
       root.dataset.ddmFire3dSmoke = smokeVolumeOn ? 'volume' : 'flat';
+      root.dataset.ddmFire3dRibbon = ribbonOn ? 'on' : 'off';
     } else {
       delete root.dataset.ddmFire3dSmoke;
+      delete root.dataset.ddmFire3dRibbon;
     }
     if (state === 'active' && contextKeys.length > 0) {
       root.dataset.ddmFire3dContext = contextKeys.join(' ');
@@ -318,6 +337,10 @@ function rollbackScene(map: maplibregl.Map): void {
   if (contextModule) contextModule.deactivateContextLayers(map);
   contextKeys = [];
   contextEmbedLines = [];
+  // The ribbon owns its own derived source, so its teardown cannot strand
+  // the flat perimeter layer's; the guard is defensive only.
+  if (ribbonModule) ribbonModule.deactivatePerimeterRibbon(map);
+  ribbonOn = false;
   if (smokeVolumeOn && smokeModule) {
     smokeModule.deactivateSmokeVolume(map);
     if (!registry.getActiveKeys().has('hms-smoke')) {
@@ -439,6 +462,33 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
     }
   }
 
+  // DR-064: the perimeter ribbon rides its own lazy chunk beside the smoke
+  // volume and is non-fatal by contract. It re-presents geometry the flat
+  // layer already holds, so a scene without it is the scene as it was.
+  try {
+    ribbonModule =
+      ribbonModule ?? (await import('../layers/nifc-perimeter-ribbon'));
+  } catch (err) {
+    ribbonModule = null;
+    console.warn(
+      '[fire3d] the perimeter ribbon chunk failed to load; the flat perimeter stays.',
+      err
+    );
+  }
+  if (myGeneration !== generation || !active) return;
+  if (ribbonModule) {
+    try {
+      ribbonOn = await ribbonModule.activatePerimeterRibbon(map, signal);
+    } catch (err) {
+      ribbonOn = false;
+      console.warn(
+        '[fire3d] the perimeter ribbon failed to activate; the flat perimeter stays.',
+        err
+      );
+    }
+  }
+  if (myGeneration !== generation || !active) return;
+
   // W-CTX: the issuer-published context layers ride their own lazy chunk
   // and are non-fatal by contract; each missing layer degrades alone.
   try {
@@ -530,6 +580,49 @@ function reconcileSmokeVolume(map: maplibregl.Map): void {
 }
 
 /**
+ * Keep the DR-064 ribbon consistent with the perimeter layer's own
+ * lifecycle while the mode is active.
+ *
+ * Two seams drive this, because the layer's presence and its DATA arrive at
+ * different moments: the registry's `change` event (the person turned the
+ * perimeter layer on or off) and its `status-change` event (the WFIGS
+ * response landed, so the source the ribbon derives from finally exists).
+ * A scene entered before the perimeters resolve therefore gains its ribbon
+ * when they do, instead of staying flat until the next toggle.
+ *
+ * Nothing here writes a layer status or a preference: the ribbon follows
+ * the perimeter layer and never the other way round.
+ */
+function reconcilePerimeterRibbon(map: maplibregl.Map): void {
+  if (!active || !ribbonModule) return;
+  const ribbon = ribbonModule;
+  const perimetersOn = registry.getActiveKeys().has(PERIMETER_LAYER_KEY);
+  if (ribbonOn && !perimetersOn) {
+    ribbon.deactivatePerimeterRibbon(map);
+    ribbonOn = false;
+    publishStatus('active', null);
+    return;
+  }
+  if (ribbonOn || !perimetersOn) return;
+  const myGeneration = generation;
+  void ribbon
+    .activatePerimeterRibbon(map)
+    .then((on) => {
+      // A teardown or a newer activation while the read was in flight owns
+      // the scene now; leave its state alone.
+      if (myGeneration !== generation || !active || !on) return;
+      ribbonOn = true;
+      publishStatus('active', null);
+    })
+    .catch((err: unknown) => {
+      console.warn(
+        '[fire3d] the perimeter ribbon failed to re-activate; the flat perimeter stays.',
+        err
+      );
+    });
+}
+
+/**
  * Wire the mode to its governing stores and evaluate once (the boot seed
  * path: a `fire3d=true` deep link is already seeded by the sidebar before
  * this lazy chunk loads). Idempotent.
@@ -553,6 +646,7 @@ export function initFire3DController(map: maplibregl.Map): void {
         void activateScene(map);
       } else {
         reconcileSmokeVolume(map);
+        reconcilePerimeterRibbon(map);
       }
     } else if (active || activation !== null) {
       setFire3DActive(map, false);
@@ -575,6 +669,11 @@ export function initFire3DController(map: maplibregl.Map): void {
   onFire3DPreferenceChange(evaluate);
   onCommittedSnapshotChange(evaluate);
   registry.on('change', evaluate);
+  // The perimeter layer's DATA lands after its registry membership does, so
+  // the ribbon needs the status seam as well as the change seam (DR-064).
+  registry.on('status-change', (key) => {
+    if (key === PERIMETER_LAYER_KEY) reconcilePerimeterRibbon(map);
+  });
   if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
     window.matchMedia(FIRE3D_MIN_WIDTH_QUERY).addEventListener('change', evaluate);
     // The height floor is watched beside the width query so a rotation into

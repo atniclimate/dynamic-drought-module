@@ -7,14 +7,21 @@ import {
   FIRE3D_PITCH_DEGREES,
   FIRE3D_SKY_CLEAR_SPECIFICATION,
   FIRE3D_SKY_SPECIFICATION,
-  FIRE3D_TERRAIN_EXAGGERATION
+  FIRE3D_TERRAIN_EXAGGERATION,
+  PERIMETER_RIBBON_QUALIFICATION,
+  PERIMETER_RIBBON_SLAB_COUNT,
+  perimeterRibbonSlabOpacity
 } from '../src/config/fire3d-presentation';
 import {
   DRAPE_OPACITY,
   HMS_VOLUME_QUALIFICATION,
   STRUCTURES_QUALIFICATION,
-  USFS_WHP_PRESENTATION
+  USFS_WHP_PRESENTATION,
+  WILDFIRE_STATIC_COLOR
 } from '../src/config/wildfire-presentation';
+import { WILDFIRE_PULSE_PAINT_TARGETS } from '../src/layers/nifc-fires';
+import { PERIMETER_RIBBON_LAYER_IDS } from '../src/layers/nifc-perimeter-ribbon';
+import { EVENT_OVERLAY_IDS } from '../src/map/layer-order';
 import {
   getFire3DStatus,
   setFire3DActive,
@@ -38,7 +45,12 @@ import {
   installFakeBrowser
 } from './map-harness';
 import { gotoApp, layerCheckbox, search, waitForLayerSettled } from './helpers';
-import { PLANTS_STUB_FC, stubWildfireFeeds } from './wildfire-fixtures';
+import {
+  NIFC_STUB,
+  PLANTS_STUB_FC,
+  PNW_POLYGON,
+  stubWildfireFeeds
+} from './wildfire-fixtures';
 
 /**
  * W3/W4 desktop 3D Fire mode.
@@ -399,6 +411,201 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
   }
 });
 
+// ---------------------------------------------------------------------------
+// Node: the DR-064 perimeter ribbon
+// ---------------------------------------------------------------------------
+
+/**
+ * What the flat perimeter layer leaves on the map: its own GeoJSON source,
+ * carrying two mapped wildfire records and one prescribed burn. The ribbon
+ * raises only the pulsing wildfire class, so the prescribed record is the
+ * control case.
+ */
+const RIBBON_PERIMETER_COLLECTION = {
+  type: 'FeatureCollection',
+  features: [
+    ...NIFC_STUB.features,
+    {
+      type: 'Feature',
+      properties: {
+        attr_IncidentTypeCategory: 'RX',
+        poly_IncidentName: 'Synthetic Burn'
+      },
+      geometry: PNW_POLYGON(-118.9, 45.1)
+    }
+  ]
+};
+
+/**
+ * The three files that name the ribbon's slab layers must agree.
+ *
+ * The ids are derived once (from PERIMETER_RIBBON_SLAB_COUNT) and mirrored
+ * twice, because the ruled stacking chain and the pulse's paint targets
+ * both live in modules that must not import the 3D chunk. Mirrors rot; this
+ * is the case that stops a slab-count change from leaving one behind.
+ */
+test('the ribbon slab ids agree across the three modules that name them', () => {
+  expect(PERIMETER_RIBBON_LAYER_IDS).toHaveLength(PERIMETER_RIBBON_SLAB_COUNT);
+
+  // The pulse animates every slab, in phase with the flat outline.
+  const ribbonTargets = WILDFIRE_PULSE_PAINT_TARGETS.filter((target) =>
+    target.layerId.startsWith('nifc-perimeter-ribbon')
+  );
+  expect(ribbonTargets.map((target) => target.layerId)).toEqual([
+    ...PERIMETER_RIBBON_LAYER_IDS
+  ]);
+  expect(
+    ribbonTargets.every(
+      (target) => target.paintProperty === 'fill-extrusion-color'
+    )
+  ).toBe(true);
+
+  // Ruled seat: the slabs are event overlays, in order, directly above the
+  // flat wildfire outline they stand on.
+  const seats = PERIMETER_RIBBON_LAYER_IDS.map((id) =>
+    EVENT_OVERLAY_IDS.indexOf(id)
+  );
+  expect(seats.every((seat) => seat >= 0)).toBe(true);
+  expect(seats).toEqual([...seats].sort((a, b) => a - b));
+  expect(seats[0]).toBe(EVENT_OVERLAY_IDS.indexOf('nifc-fires-outline') + 1);
+});
+
+/**
+ * The fade ladder itself (DR-064: opaque at the ground, transparent at the
+ * top, dropping quickly near the top rather than linearly).
+ */
+test('the ribbon fade is opaque at the ground and accelerates toward the top', () => {
+  const ladder = Array.from(
+    { length: PERIMETER_RIBBON_SLAB_COUNT },
+    (_unused, index) => perimeterRibbonSlabOpacity(index)
+  );
+  expect(ladder[0]).toBeGreaterThan(0.9);
+  expect(ladder.at(-1)).toBeLessThan(0.2);
+  for (let i = 1; i < ladder.length; i += 1) {
+    expect(ladder[i]!).toBeLessThan(ladder[i - 1]!);
+  }
+  // Logarithmic, not linear: each step down is larger than the one below it.
+  for (let i = 2; i < ladder.length; i += 1) {
+    expect(ladder[i - 1]! - ladder[i]!).toBeGreaterThan(
+      ladder[i - 2]! - ladder[i - 1]!
+    );
+  }
+});
+
+test('the perimeter ribbon stands on the live perimeters and leaves with the scene', async () => {
+  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+  const restoreFetch = stubPmtilesFetch();
+  const harness = fakeMapHarness();
+  const { map } = harness;
+
+  // The flat perimeter layer is already live, exactly as it leaves the map:
+  // one GeoJSON source plus its own fill and outline.
+  map.addSource('nifc-fires', {
+    type: 'geojson',
+    data: RIBBON_PERIMETER_COLLECTION
+  } as never);
+  map.addLayer({
+    id: 'nifc-fires-fill',
+    type: 'fill',
+    source: 'nifc-fires'
+  } as never);
+  map.addLayer({
+    id: 'nifc-fires-outline',
+    type: 'line',
+    source: 'nifc-fires'
+  } as never);
+  registry.activate('nifc-fires');
+  registry.setStatus('nifc-fires', 'ready');
+
+  try {
+    setFire3DActive(map, true);
+    await expect.poll(() => getFire3DStatus().state).toBe('active');
+    expect(getFire3DStatus().perimeterRibbon).toBe(true);
+
+    // Every slab stands on the ribbon's OWN derived source, so the flat
+    // layer's source is never held open by this module.
+    PERIMETER_RIBBON_LAYER_IDS.forEach((id, index) => {
+      expect(harness.layerSpecs.get(id)).toMatchObject({
+        type: 'fill-extrusion',
+        source: 'nifc-perimeter-ribbon',
+        paint: {
+          'fill-extrusion-color': WILDFIRE_STATIC_COLOR,
+          'fill-extrusion-opacity': perimeterRibbonSlabOpacity(index),
+          // The fade is the opacity ladder alone; MapLibre's own vertical
+          // gradient would darken the foot, which must stay brightest.
+          'fill-extrusion-vertical-gradient': false
+        }
+      });
+    });
+    // The bottom slab sits ON the terrain: base zero, nearly opaque.
+    expect(
+      harness.layerSpecs.get(PERIMETER_RIBBON_LAYER_IDS[0]!)?.paint?.[
+        'fill-extrusion-base'
+      ]
+    ).toBe(0);
+
+    // The ribbon derives from the same collection the flat layer holds and
+    // fetches nothing: two wildfire records raised, the prescribed burn
+    // left with its deliberately neutral flat treatment.
+    const ribbonSource = harness.sources.get('nifc-perimeter-ribbon') as {
+      data?: { features?: unknown[] };
+    };
+    expect(ribbonSource?.data?.features).toHaveLength(2);
+
+    // Ruled order: the slabs sit directly above the flat wildfire outline.
+    expect(harness.layerOrder.indexOf(PERIMETER_RIBBON_LAYER_IDS[0]!)).toBe(
+      harness.layerOrder.indexOf('nifc-fires-outline') + 1
+    );
+
+    // The ribbon never writes the perimeter layer's status, and never
+    // touches the flat layer's own layers.
+    expect(registry.getStatus('nifc-fires')).toBe('ready');
+
+    setFire3DActive(map, false);
+    expect(getFire3DStatus().state).toBe('inactive');
+    expect(getFire3DStatus().perimeterRibbon).toBe(false);
+    for (const id of PERIMETER_RIBBON_LAYER_IDS) {
+      expect(harness.layerSpecs.has(id)).toBe(false);
+    }
+    expect(harness.sources.has('nifc-perimeter-ribbon')).toBe(false);
+    expect(harness.refusedSourceRemovals).toEqual([]);
+    // The flat perimeter is exactly as it was before the scene existed.
+    expect(harness.layerSpecs.has('nifc-fires-fill')).toBe(true);
+    expect(harness.layerSpecs.has('nifc-fires-outline')).toBe(true);
+    expect(harness.sources.has('nifc-fires')).toBe(true);
+    expect(registry.getStatus('nifc-fires')).toBe('ready');
+  } finally {
+    setFire3DActive(map, false);
+    registry.deactivate('nifc-fires');
+    restoreFetch();
+    browser.restore();
+  }
+});
+
+test('a scene with no live perimeters keeps terrain and simply has no ribbon', async () => {
+  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+  const restoreFetch = stubPmtilesFetch();
+  const harness = fakeMapHarness();
+  const { map } = harness;
+
+  try {
+    setFire3DActive(map, true);
+    await expect.poll(() => getFire3DStatus().state).toBe('active');
+    // Partial degrade, never a blocked scene: terrain is up, the ribbon is
+    // absent because there is no perimeter source to derive it from.
+    expect(getFire3DStatus().perimeterRibbon).toBe(false);
+    expect(harness.getTerrain()).not.toBeNull();
+    for (const id of PERIMETER_RIBBON_LAYER_IDS) {
+      expect(harness.layerSpecs.has(id)).toBe(false);
+    }
+    expect(harness.sources.has('nifc-perimeter-ribbon')).toBe(false);
+  } finally {
+    setFire3DActive(map, false);
+    restoreFetch();
+    browser.restore();
+  }
+});
+
 test('reduced motion jumps the camera instead of easing, both directions', async () => {
   const browser = installFakeBrowser({ desktop: true, reducedMotion: true });
   const restoreFetch = stubPmtilesFetch();
@@ -649,6 +856,12 @@ function fire3dContextStamp(page: Page): Promise<string | undefined> {
   );
 }
 
+function fire3dRibbonStamp(page: Page): Promise<string | undefined> {
+  return page.evaluate(
+    () => document.documentElement.dataset['ddmFire3dRibbon']
+  );
+}
+
 const TOGGLE = '.shell-fire3d-btn';
 
 // The evidence captures below render the live scene, including the
@@ -834,6 +1047,60 @@ test.describe('W3/W4 browser truth', () => {
     await expect(powerLegend).toHaveCount(0);
     await expect(structuresLegend).toHaveCount(0);
     expect(await fire3dContextStamp(page)).toBeUndefined();
+  });
+
+  test('the perimeter ribbon follows the perimeter layer, not the other way round', async ({
+    page
+  }) => {
+    // A terrain build plus the perimeter fetch on the software renderer.
+    test.setTimeout(180_000);
+    await stubWildfireFeeds(page);
+    await gotoApp(page, '?cluster=wildfire&fire3d=true');
+
+    await expect
+      .poll(() => fire3dStamp(page), { timeout: 30_000 })
+      .toBe('active');
+    await waitForLayerSettled(page, 'nifc-fires');
+    // The perimeter data lands after the scene does, so the ribbon arrives
+    // on the layer's status seam rather than on a toggle.
+    await expect
+      .poll(() => fire3dRibbonStamp(page), { timeout: 30_000 })
+      .toBe('on');
+
+    const ribbonLegend = page.locator(
+      '.legend-section[data-legend="nifc-perimeter-ribbon"]'
+    );
+    await expect(ribbonLegend).toHaveCount(1);
+    await expect
+      .poll(() => ribbonLegend.textContent())
+      .toContain(PERIMETER_RIBBON_QUALIFICATION);
+
+    // Leaving the scene takes the ribbon and its legend with it, and the
+    // flat perimeter carries on alone.
+    await page.locator(TOGGLE).click();
+    await expect.poll(() => fire3dStamp(page)).toBe('inactive');
+    expect(await fire3dRibbonStamp(page)).toBeUndefined();
+    await expect(ribbonLegend).toHaveCount(0);
+    await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();
+
+    // Re-entering rebuilds it from the perimeters already on the map.
+    await page.locator(TOGGLE).click();
+    await expect
+      .poll(() => fire3dStamp(page), { timeout: 30_000 })
+      .toBe('active');
+    await expect
+      .poll(() => fire3dRibbonStamp(page), { timeout: 30_000 })
+      .toBe('on');
+
+    // Turning the perimeter layer off takes the ribbon with it while the
+    // scene stays up: the ribbon is a re-presentation of that layer and has
+    // no life of its own. (The layer change demotes the committed cluster to
+    // custom, which hides the 3D control while a fire event layer keeps the
+    // scene alive, so this is the last gesture of the case.)
+    await layerCheckbox(page, 'nifc-fires').uncheck();
+    await expect.poll(() => fire3dRibbonStamp(page)).toBe('off');
+    await expect(ribbonLegend).toHaveCount(0);
+    expect(await fire3dStamp(page)).toBe('active');
   });
 
   test('a shared fire3d link boots active and ordinary URL writes preserve the flag', async ({

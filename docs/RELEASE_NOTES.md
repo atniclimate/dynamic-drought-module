@@ -230,6 +230,29 @@ re-extracted, so `STRUCTURES_QUALIFICATION` and the shipped
 `structures-central-oregon.pmtiles` still correctly name release
 `2026-07-22.0`; only the default a future extract would use changes.
 
+### 2026-09-03: the mapped fire perimeter stands up in the 3D scene (DR-064)
+
+In the tilted 3D Fire scene a mapped wildfire perimeter read as a line drawn
+on a map rather than as a fire line on the land. It now rises into a low
+vertical ribbon: opaque where it meets the terrain, fading out above it on a
+logarithmic curve so the opacity drops fastest at the top, and pulsing along
+the edge on the same clock and in the same color as the flat outline, which
+stays visible at its foot as the exact published edge. Prescribed and
+unclassified records keep their deliberately neutral flat treatment, because
+the ribbon is the pulsing wildfire class made three-dimensional and nothing
+more.
+
+Every number in it is a DDM presentation convention, stated in a new legend
+section: the vertical extent is held at a constant on-screen height across
+zooms and is not flame height, fire intensity, or any measured quantity, and
+the band is centered on the published edge so the ribbon neither enlarges nor
+shrinks the mapped perimeter. The ribbon derives its geometry from the same
+GeoJSON the flat layer already holds and issues no request of its own, so a
+scene with it transfers exactly what a scene without it does. It appears only
+while the 3D scene is active and the perimeter layer is live, it leaves when
+either does, and it never writes the perimeter layer's status or changes a
+sentence in the Impact Briefing.
+
 ## v0.6.26
 
 `v0.6.26` is the package version and, since 2026-08-29, the release tag. One
