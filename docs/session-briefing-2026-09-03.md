@@ -4,6 +4,39 @@ Prepared 2026-09-02 by a read-only review pass over `integration/2026-09` at
 `eb6c4f3`. Every claim below carries a receipt: a `path:line`, a commit, or a
 command and its output. Inferences are labeled.
 
+## Status, 2026-09-03 00:20 PDT
+
+Task 3 is done and live. What the 23:00 status below still describes as the
+next engineering task has landed:
+
+- **MapLibre GL JS 6.6.0 is on `main` and proven live.** The branch
+  `maplibre-6/step-1-style-spec-casts` (cut from `main` at `deb4a61`; commits
+  `f8bd2da`, `e11bd83`, `e5b7d38`, `db16277`) landed as merge commit `993f5ca`
+  on the owner's go at 23:51, after the docs branch landed as `4cfc3a9`.
+  Verified on the branch before landing: typecheck and gate clean, `verify:smoke`
+  86 green, `tests/fire3d-mode.spec.ts` 21 green on `chromium-3d`, and the full
+  `test:serial` 869 passed in 25.4 minutes. Deploy run 33725341105 and
+  verify-live run 33726016220 both succeeded on `993f5ca`, so 6.6.0 is what
+  visitors run. The measured cost is recorded on gate `DDM-D01` in
+  `docs/ROADMAP.yaml`, and `DDM-P0-T03` is closed against it.
+- **What the landing carried.** Every step of section 6.6 (the 70 namespace
+  imports, `setWorkerUrl` from a `?worker&url` import, `zoomLevelsToOverscale`
+  pinned to `undefined` so the 13 query sites keep their v5 behavior, both
+  browser floors as the Vite `build.target`, a renderer-version check in
+  `check:all`), plus DR-035 a (a WebGL 2 probe before construction, an 8 s load
+  bound, one tokenized notice), DR-025 a (height floor and `webglcontextlost`
+  through the failure ladder), DR-008 a (lazy map key and telemetry adapters;
+  entry 43.4 to 33.6 kB gzip), and DR-051 a (opt-in evidence capture).
+- **Open v6 follow-ups, for one branch from `main`.** The 3D toggle in
+  `src/ui/island/fire3d-control.tsx` still gates on the width query alone and
+  must read the height floor and the probe result (DR-025 a); the URL catalog
+  split (DR-008 a's third module) is not done; the module comment near
+  `src/config/layers.ts:51` still says the map key is eager; `TELEMETRY_STATIONS`
+  in `src/ui/sidebar.ts` is still eager; the DEM transfer can be re-measured now
+  that categorical drape resampling is available on 6.6.0.
+- **Everything below this line is history.** Section 6's work breakdown is
+  recorded as executed; the branch table in the 23:00 status is stale.
+
 ## Status, 2026-09-02 23:00 PDT
 
 This briefing was written before the landing day. What changed since, so that

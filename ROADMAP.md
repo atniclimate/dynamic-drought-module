@@ -38,8 +38,9 @@ and appears in the release notes under Unreleased.
 
 ## Carried-forward phases
 
-- **P0, release convergence and platform truth.** Mostly closed; what remains
-  is the renderer version, then globe projection and global low-zoom imagery.
+- **P0, release convergence and platform truth.** Mostly closed; the renderer
+  version is decided and live (MapLibre GL JS 6.6.0), and what remains is globe
+  projection and global low-zoom imagery.
 - **P1, network lifecycle and failure honesty.** Response bodies under full
   deadlines, a complete cancellation seam, one activation-failure path, core
   controls that survive an optional chunk failure, typed internal layer keys.
@@ -86,8 +87,8 @@ and appears in the release notes under Unreleased.
 ## Decisions and acceptance
 
 Owner decisions are explicit gates, not hidden implementation assumptions. The
-open ones cover the MapLibre version and its cost, the tablet band, Fire 3D
-exit behavior, the ENSO camera, the order of the Fire evidence pilots, the ENSO
+MapLibre version and its cost are decided. The open ones cover the tablet
+band, Fire 3D exit behavior, the ENSO camera, the order of the Fire evidence pilots, the ENSO
 probability standard, the smoke pilot scope, the P6 outcome, the hosting path,
 and the first ENSO question. Each is written out in the `decision_gates`
 section of the canonical YAML with the tasks that wait on it.

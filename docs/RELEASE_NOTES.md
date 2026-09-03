@@ -87,6 +87,39 @@ plan in `docs/ROADMAP.yaml` (phases DDM-P7 to DDM-P15). The README states
 MapLibre's WebGL 2 first, WebGL 1 fallback behavior. Node.js moves to the 24
 line, pinned exactly in `.nvmrc`, which every workflow already reads.
 
+### 2026-09-02: MapLibre GL JS 6.6.0 (merge commit `993f5ca` from `maplibre-6/step-1-style-spec-casts`)
+
+The renderer moves from MapLibre GL JS 4.7.1 directly to 6.6.0, skipping the
+5 line by owner ruling (gate DDM-D01 in `docs/ROADMAP.yaml` records the
+decision and its measured cost). WebGL 2 is now required, which supersedes
+the WebGL 1 fallback sentence above; the supported phone and tablet floors,
+Safari 15.5 and Chrome 100 on Android, are pinned as the Vite build target
+and stated in the README. The style-spec escape casts became typed
+expressions, the 70 default imports became namespace imports, the render
+worker ships as one relative asset registered once at boot, and the
+`queryRenderedFeatures` overscale default is pinned to the 4.x behavior so
+that change can arrive separately and visibly. A `check:renderer` gate proves
+the pin, the lockfile, and the installed package agree.
+
+Four rulings ride with it. The interface boots whether or not the map does: a
+WebGL 2 probe runs before the map is constructed, and a GPU initialization
+error or a load that has not arrived within eight seconds shows one honest
+notice that clears if the map arrives later, with no layer left `loading`.
+The Fire 3D entry gate adds a height floor (landscape phones stay out, a DDM
+convention) and a lost WebGL context exits the scene to a 2D map through the
+existing failure ladder. The map key and the telemetry adapters load lazily,
+taking the entry chunk from 43.4 to 33.6 kB gzip, with four activation
+budgets rebalanced and the reason recorded. Fire 3D evidence capture and its
+live boundary fetch run only when opted into, so routine local runs stay
+offline-safe and assert the build stamp against the tree's own head.
+
+Verified before landing: gate clean, `verify:smoke` 86 green, the Fire 3D
+contract 21 green, and the serial suite 869 passed in 25.4 minutes. Deploy
+run 33725341105 and verify-live run 33726016220 succeeded on `993f5ca`. The
+docs merge `4cfc3a9` that preceded it decided gate DDM-D03, closed
+`DDM-P2-T02` and `DDM-P12-T01`, and recorded the 2026-09-02 decision session
+in `docs/session-briefing-2026-09-03.md`.
+
 ## v0.6.26
 
 `v0.6.26` is the package version and, since 2026-08-29, the release tag. One
