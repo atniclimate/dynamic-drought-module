@@ -327,6 +327,16 @@ Typecheck Worker changes from its directory. Publishing the Worker is a
 separate external operation and should include pre-deploy and post-deploy
 revision, route-rejection, body-hash, CORS, deadline, and rate-limit checks.
 
+`wrangler.toml` now also pins `compatibility_flags = ["no_nodejs_compat"]`
+(DR-010 a, 2026-09-02 decision register), a config-only change not yet
+published. Publishing it needs the owner's say. When it is published, the
+rollback handle is the version live before that publish: today that is
+revision `2026-08-29-options-policy-v4`, Cloudflare version
+`10af1660-5b74-4520-80a1-32c80108fc48` (the two paragraphs above), published
+2026-08-29 23:15 UTC from `f0a9092`. If a later, unrecorded publish happens
+before this flag ships, treat that later version as the rollback handle
+instead and update this paragraph at publish time.
+
 `verify:worker` is the instrument for those edge checks. It is read-only
 against the public Worker and writes a receipt:
 
