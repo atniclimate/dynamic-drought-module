@@ -110,6 +110,19 @@
 
   /* Layout */
   --sidebar-w: 340px;
+  /* Honest disablement (2026-09-03 launch ruling section 4). The one
+     visual vocabulary for a control that EXISTS but cannot act yet,
+     because the map it drives is not ready. The opacity matches the two
+     disablements already shipped (.time-bar-step:disabled and
+     .shell-horizon-btn[aria-disabled]) so the interface has one dimming,
+     not three; the note reuses the panel surface family. A control in
+     this state keeps its accessible name and its place in the tab order,
+     so nothing here may hide it. */
+  --ctl-pending-opacity: 0.45;
+  --ctl-pending-cursor: not-allowed;
+  --ctl-pending-bg: var(--bg-2);
+  --ctl-pending-fg: var(--fg-2);
+  --ctl-pending-border: var(--line);
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
@@ -6919,6 +6932,52 @@ a.impact-resource-link::after {
 /* one state later. Non-interactive: it is a statement, not a control,   */
 /* so it never intercepts a pointer meant for the map beneath it.        */
 /* --------------------------------------------------------------------- */
+/* --------------------------------------------------------------------- */
+/* The map-free sidebar's disabled state (2026-09-03 launch ruling       */
+/* section 4; DR-065; DDM-P14-T02; src/ui/sidebar.ts).                   */
+/*                                                                       */
+/* The generated controls are built at DOM ready, before the renderer is */
+/* probed, so between DOM ready and map ready they exist but cannot act. */
+/* This is the treatment that says so: the same dimming the two existing */
+/* disablements use, plus one line of plain text seated in the region    */
+/* panel, which travels with those controls through every surface that   */
+/* shows them. `aria-disabled` rather than `disabled` on the buttons, so */
+/* the control stays focusable and its reason stays reachable; the       */
+/* native select takes the property too because aria alone would not     */
+/* stop it changing a value nothing would honor. The whole treatment is  */
+/* removed, not rewritten, once the map is ready.                        */
+/* --------------------------------------------------------------------- */
+.preset-chip[aria-disabled='true'],
+.hazard-rail-btn[aria-disabled='true'],
+.region-briefing-btn[aria-disabled='true'],
+.region-select:disabled {
+  opacity: var(--ctl-pending-opacity);
+  cursor: var(--ctl-pending-cursor);
+}
+/* A disabled control must not answer a hover as though it would act. */
+.preset-chip[aria-disabled='true']:hover {
+  background: var(--bg-2);
+  border-color: var(--line);
+  color: var(--fg-1);
+}
+.region-select:disabled:hover {
+  background: var(--bg-2);
+  border-color: var(--line);
+}
+.sidebar-control-note {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  background: var(--ctl-pending-bg);
+  color: var(--ctl-pending-fg);
+  border: 1px solid var(--ctl-pending-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: var(--fw-body);
+  line-height: 1.45;
+  letter-spacing: var(--track-pill);
+}
+
 .renderer-notice {
   position: absolute;
   top: 50%;

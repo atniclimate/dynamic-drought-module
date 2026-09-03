@@ -10,7 +10,11 @@ import { parseSelectParam } from './state/url';
 import type { SelectParam } from './state/url';
 import { getStudioRoute, onStudioRouteChange } from './state/studio-route';
 import { onTypedPlaceChange } from './state/typed-place';
-import { buildSidebar } from './ui/sidebar';
+import {
+  buildSidebar,
+  buildSidebarShell,
+  setSidebarControlReason
+} from './ui/sidebar';
 import { initHoverInspector } from './ui/hover-inspector';
 import { isGpuInitializationError, webGl2Capability } from './map/gl-capability';
 import {
@@ -221,6 +225,16 @@ async function boot(): Promise<void> {
   // no shared transport is in flight (src/state/boot-idle.ts, DR-052).
   markBooting();
 
+  // The sidebar's generated controls build NOW, from the static registry
+  // tables, before the renderer is even probed (the 2026-09-03 launch
+  // ruling, section 4). They render disabled with a reason a person can
+  // read, and `buildSidebar` enables them when the map-dependent half is
+  // wired. This is the shared root of DR-065 modes 1 and 2, the
+  // no-WebGL-2 shell gap, and the DDM-P14-T02 boot watchdog: every path
+  // below, including the two that never get a map, now leaves a sidebar
+  // that states its condition instead of an empty one that looks broken.
+  buildSidebarShell();
+
   // DR-025a / DR-035a: MapLibre 6 requires WebGL 2 and has no WebGL 1
   // fallback, so ask first. Without a context the constructor would build a
   // map that can never paint and would only report it through an error
@@ -233,6 +247,9 @@ async function boot(): Promise<void> {
     );
     showRendererNotice('no-webgl2');
     bootMapFreeChrome();
+    // The second surface of the same statement (DDM-P14-T02): the controls
+    // exist, so they have to say why they cannot act.
+    setSidebarControlReason('no-map');
     // Nothing else will load: the boot is idle now, honestly.
     settleBootIdleWithoutMap();
     return;
@@ -273,6 +290,7 @@ async function boot(): Promise<void> {
     gpuInitializationFailed = true;
     showRendererNotice('no-webgl2');
     bootMapFreeChrome();
+    setSidebarControlReason('no-map');
     settleBootIdleWithoutMap();
   });
 
@@ -304,6 +322,16 @@ async function boot(): Promise<void> {
   // The style is not in hand, so adding a source or a layer would throw.
   // Wait on, passively and without a second bound: nothing is blocked on
   // this now, and the interface is already saying what it is showing.
+  //
+  // The watchdog's control surface (DDM-P14-T02, acceptance: a renderer
+  // that never starts produces a stated failure the user can read instead
+  // of a complete-looking inert interface). The map notice above states the
+  // map's condition; this states the controls' condition, beside them, and
+  // stands until a late `load` wires the map-dependent half and enables
+  // them. No second timer: DR-035a's one bound is the whole watchdog.
+  setSidebarControlReason(
+    gpuInitializationFailed ? 'no-map' : 'map-not-started'
+  );
   map.once('load', () => {
     wireMapDependentChrome(map);
   });

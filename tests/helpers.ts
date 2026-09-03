@@ -212,10 +212,19 @@ export interface GotoAppOptions {
    * Wait for the boot-idle seam (`<html data-ddm-boot="idle">`, DR-052
    * follow-up): the map has loaded, every layer the URL asked for has left
    * `loading`, and no shared transport is in flight. Defaults to true, so
-   * every assertion after `gotoApp` runs against a settled boot rather than
-   * against the preset chips. A spec that deliberately HOLDS a boot open (a
-   * routed request that never answers, a layer it wants to observe mid-load)
-   * passes false and owns its own waits.
+   * every assertion after `gotoApp` runs against a settled boot. A spec that
+   * deliberately HOLDS a boot open (a routed request that never answers, a
+   * layer it wants to observe mid-load) passes false and owns its own waits.
+   *
+   * What `false` means since the map-free sidebar (2026-09-03 launch ruling
+   * section 4): the caller still gets a MAP-READY page, because `gotoApp`
+   * waits unconditionally for `<html data-ddm-controls="ready">`, which
+   * `buildSidebar` stamps after it has built the controller and applied the
+   * synchronous URL state. It does not get a SETTLED page: layers may still
+   * be loading and shared transport may still be in flight, which is the
+   * point of opting out. Before this change the same two guarantees were
+   * carried by one signal, the preset chips, which now appear at DOM ready
+   * and prove neither.
    */
   readonly bootIdle?: boolean;
 }
@@ -249,9 +258,23 @@ export async function gotoApp(
     await stubDefaultNadm(page);
   }
   await page.goto(query, { waitUntil: 'domcontentloaded' });
+  // DOM READY, and no longer a proxy for a finished boot. The generated
+  // sidebar controls are built from the static registry tables before the
+  // renderer is probed (the 2026-09-03 launch ruling section 4), so the
+  // chips and the region options now appear on every boot path, including
+  // one that never gets a map. These two assertions still earn their place
+  // (a boot that never runs its entry chunk fails them), but the wait that
+  // used to mean "the map loaded and the sidebar built" is the
+  // `data-ddm-controls` assertion below.
   await expect(page.locator('#preset-chips .preset-chip')).toHaveCount(PRESET_LABELS.length);
   await assertBuildIdentity(page);
   await expect(page.locator('#region-select option')).not.toHaveCount(0);
+  // MAP READY: `buildSidebar` has created the layer controller, applied the
+  // synchronous URL state, and enabled the map-dependent controls, which is
+  // exactly what the preset-chip count used to prove. Asserted for every
+  // caller, `bootIdle: false` included, so a spec that deliberately holds a
+  // boot open still starts from a wired interface rather than a shell.
+  await expect(page.locator('html')).toHaveAttribute('data-ddm-controls', 'ready');
   const isEmbed = /[?&]embed=(true|1)\b/.test(query);
   const isConsole =
     /[?&]view=console\b/.test(query) ||

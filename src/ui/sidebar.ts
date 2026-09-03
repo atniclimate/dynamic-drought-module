@@ -213,6 +213,235 @@ export function mountSidebarIslandNow(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// The map-free shell and its honest disabled state
+// (2026-09-03 launch ruling section 4; DR-065; DDM-P14-T02)
+// ---------------------------------------------------------------------------
+
+/**
+ * The region observer the orchestrator hands to `buildSidebar`. Held here
+ * so the dropdown built at DOM ready can reach it once the map exists.
+ */
+let onRegionSelectRef: ((key: RegionKey) => void) | null = null;
+
+/** The shell builds once per page; its builders clear and refill their hosts. */
+let shellBuilt = false;
+
+/**
+ * False until `buildSidebar` has wired the map-dependent half. Every
+ * generated control reads it before acting, so a click landing in the
+ * window between DOM ready and map ready does nothing rather than half of
+ * something.
+ */
+let mapDependentControlsEnabled = false;
+
+/**
+ * What the interface says about a control it cannot honor yet. One reason
+ * at a time, in the words a person who is not a specialist reads, and each
+ * says only what was observed: none names a cause, promises a fix, or asks
+ * the user to do anything.
+ *
+ * `map-starting` is the ordinary boot window. `map-not-started` is the
+ * DR-035a bounded wait expiring (`MAP_LOAD_BOUND_MS`, `src/main.ts`): the
+ * map may still arrive, and the copy says so without claiming it will.
+ * `no-map` is boot deciding there will be no renderer at all.
+ *
+ * These are CONTROL affordances. They are not layer states: the six honest
+ * layer states (`loading`, `live`, `live (partial)`, `unavailable`,
+ * `no data`, `zoom in to load`) neither gain a seventh member here nor lend
+ * one of their words to this vocabulary.
+ */
+export type SidebarControlReason = 'map-starting' | 'map-not-started' | 'no-map';
+
+const CONTROL_REASON_TEXT: Readonly<Record<SidebarControlReason, string>> = {
+  'map-starting':
+    'The map is still starting. These controls turn on when it is ready.',
+  'map-not-started':
+    'The map has not started yet. These controls turn on if it does.',
+  'no-map':
+    'This browser cannot show the map, so these controls have nothing to change.'
+};
+
+/**
+ * The machine-readable half, on `<html data-ddm-controls>`, beside
+ * `data-ddm-boot`. Three words chosen so none of them is a layer state:
+ * `waiting` while the map may still arrive, `no-map` once boot has decided
+ * it will not, `ready` once the controls answer for what their names say.
+ */
+const CONTROL_PHASE: Readonly<Record<SidebarControlReason, string>> = {
+  'map-starting': 'waiting',
+  'map-not-started': 'waiting',
+  'no-map': 'no-map'
+};
+
+const CONTROL_NOTE_ID = 'sidebar-control-note';
+
+/**
+ * Every generated control the map has to be alive for. Read fresh on each
+ * call: the chips and the dropdown are rebuilt by the shell builders, and
+ * the hazard rail's markup is static in `index.html`.
+ *
+ * Deliberately NOT included: the share button (it copies a URL, which works
+ * without a renderer), the sidebar collapse and expand controls (chrome
+ * geometry), and the reset button, which lives in the map overlay rather
+ * than the sidebar and would carry a reason the embed cannot show.
+ */
+function mapDependentControls(): HTMLElement[] {
+  const found: HTMLElement[] = [];
+  const push = (el: Element | null): void => {
+    if (el instanceof HTMLElement) found.push(el);
+  };
+  push(document.getElementById('region-select'));
+  push(document.getElementById('region-briefing-btn'));
+  for (const chip of document.querySelectorAll('#preset-chips .preset-chip')) {
+    push(chip);
+  }
+  for (const btn of document.querySelectorAll('#hazard-rail button[data-preset]')) {
+    push(btn);
+  }
+  return found;
+}
+
+/**
+ * The visible half of the disabled state: one line seated in the region
+ * panel, which travels with those controls through every surface that
+ * shows them (desktop console, the Brief shell host, the sheet's half and
+ * full console detents). A polite live region rather than an alert: the
+ * wait is ordinary and must not talk over the boot announcements.
+ */
+function ensureControlNote(): HTMLElement | null {
+  const existing = document.getElementById(CONTROL_NOTE_ID);
+  if (existing) return existing;
+  const host = document.getElementById('panel-region');
+  if (!host) return null;
+  const note = document.createElement('p');
+  note.id = CONTROL_NOTE_ID;
+  note.className = 'sidebar-control-note';
+  note.setAttribute('role', 'status');
+  note.setAttribute('aria-live', 'polite');
+  host.appendChild(note);
+  return note;
+}
+
+/**
+ * Honest disablement, following the pattern this project already uses for
+ * the horizon chips: `aria-disabled` rather than the `disabled` property,
+ * so the control keeps its place in the tab order and a keyboard or
+ * screen-reader user can still reach it and its reason. Its accessible NAME
+ * is untouched, so a disabled control still says what it will do, and the
+ * reason arrives as its description.
+ *
+ * The one exception is the native `<select>`, which ignores `aria-disabled`
+ * and would otherwise let a person change a value nothing would honor. It
+ * takes the native property as well; its `aria-label` is unchanged.
+ */
+function applyDisabledAffordance(el: HTMLElement, describe: boolean): void {
+  el.setAttribute('aria-disabled', 'true');
+  if (describe) el.setAttribute('aria-describedby', CONTROL_NOTE_ID);
+  if (el instanceof HTMLSelectElement) el.disabled = true;
+}
+
+/**
+ * Say why the map-dependent controls cannot act, and keep saying it until
+ * they can. Called at DOM ready by the shell, and again by the boot
+ * watchdog when the bounded wait expires or boot decides there will be no
+ * renderer (DDM-P14-T02). A no-op once the controls are live: nothing may
+ * re-disable a working interface.
+ */
+export function setSidebarControlReason(reason: SidebarControlReason): void {
+  if (typeof document === 'undefined') return;
+  if (mapDependentControlsEnabled) return;
+  document.documentElement.dataset['ddmControls'] = CONTROL_PHASE[reason];
+  const note = ensureControlNote();
+  if (note) note.textContent = CONTROL_REASON_TEXT[reason];
+  for (const el of mapDependentControls()) {
+    applyDisabledAffordance(el, note !== null);
+  }
+}
+
+/**
+ * The map is wired: the controls now do what their names say. Removes the
+ * note rather than rewriting it, so nothing on screen keeps saying
+ * something that has stopped being true.
+ */
+function enableMapDependentControls(): void {
+  mapDependentControlsEnabled = true;
+  if (typeof document === 'undefined') return;
+  document.documentElement.dataset['ddmControls'] = 'ready';
+  for (const el of mapDependentControls()) {
+    el.removeAttribute('aria-disabled');
+    if (el.getAttribute('aria-describedby') === CONTROL_NOTE_ID) {
+      el.removeAttribute('aria-describedby');
+    }
+    if (el instanceof HTMLSelectElement) el.disabled = false;
+  }
+  document.getElementById(CONTROL_NOTE_ID)?.remove();
+}
+
+/**
+ * Build the sidebar's generated controls WITHOUT a map (the 2026-09-03
+ * launch ruling, section 4; the shared root of DR-065 modes 1 and 2, the
+ * no-WebGL-2 shell gap, and the DDM-P14 boot watchdog).
+ *
+ * Called from the first lines of `boot()`, before the WebGL 2 probe, so the
+ * dropdown and the chips exist on EVERY boot path, including the two that
+ * never get a map. Until the map is ready they are visibly and audibly
+ * disabled with a reason a non-specialist reads; `buildSidebar` enables
+ * them when the map-dependent wiring is live.
+ *
+ * State discipline: this function writes no application state. `STATE`, the
+ * timeline, the region and framing stores, and the checkbox bridge are all
+ * still seeded by `applyUrlStateSync` when the map arrives, and it applies
+ * every one of them again. What the shell reads from the URL it uses for
+ * presentation only, so a control a person can see never shows a region the
+ * link did not ask for and an iframe does not flash a populated sidebar it
+ * is about to hide.
+ */
+export function buildSidebarShell(): void {
+  if (shellBuilt) return;
+  shellBuilt = true;
+  if (typeof document === 'undefined') return;
+  ensureLiveRegion();
+
+  let boot: ParsedUrlParams | null = null;
+  try {
+    boot = parseUrlParams();
+  } catch (err) {
+    console.error('[sidebar] the shell could not read the URL:', err);
+  }
+
+  const app = document.getElementById('app');
+  if (app && boot) app.classList.toggle('embed', boot.embed);
+
+  buildRegionSelect();
+  buildPresetChips();
+  wireHazardRail();
+
+  if (boot) {
+    const select = document.getElementById('region-select');
+    if (select instanceof HTMLSelectElement) {
+      select.value =
+        boot.framing !== null
+          ? `framing:${boot.framing}`
+          : `region:${boot.region}`;
+    }
+  }
+
+  setSidebarControlReason('map-starting');
+}
+
+/**
+ * A region choice from the dropdown. Inert until the map is wired: the
+ * control is disabled in that window, and this guard is the second lock so
+ * a programmatic or assistive dispatch cannot slip through it either.
+ */
+function handleRegionChoice(key: RegionKey): void {
+  const map = mapRef;
+  if (!map || !mapDependentControlsEnabled) return;
+  selectRegion(map, key);
+  onRegionSelectRef?.(key);
+}
+
+// ---------------------------------------------------------------------------
 // Status announcements (pill DOM moved to the island)
 // ---------------------------------------------------------------------------
 
@@ -430,11 +659,13 @@ function syncRegionSelect(): void {
 }
 
 /** Build one dropdown that follows minimap choices while preserving every
- * established detailed `region=` camera as a second option group. */
-function buildRegionSelect(
-  map: maplibregl.Map,
-  onRegionSelect: (key: RegionKey) => void
-): void {
+ * established detailed `region=` camera as a second option group.
+ *
+ * Map-free (2026-09-03 launch ruling section 4): the options come from the
+ * static `REGIONS`, `FRAMINGS` and `FRAMING_KEYS` tables, and the handlers
+ * read the module-level `mapRef` when they fire rather than closing over a
+ * map that does not exist yet. */
+function buildRegionSelect(): void {
   const select = document.getElementById('region-select');
   if (!(select instanceof HTMLSelectElement)) return;
   select.replaceChildren();
@@ -464,9 +695,11 @@ function buildRegionSelect(
   select.append(overviewGroup, detailGroup);
 
   select.addEventListener('change', () => {
+    const map = mapRef;
+    if (!map || !mapDependentControlsEnabled) return;
     const [kind, rawKey] = select.value.split(':', 2);
     if (kind === 'region' && rawKey && rawKey in REGIONS) {
-      onRegionSelect(rawKey as RegionKey);
+      handleRegionChoice(rawKey as RegionKey);
       return;
     }
     if (kind !== 'framing') return;
@@ -501,6 +734,8 @@ function buildRegionSelect(
   briefingBtn.className = 'region-briefing-btn';
   briefingBtn.hidden = true;
   briefingBtn.addEventListener('click', () => {
+    const map = mapRef;
+    if (!map || !mapDependentControlsEnabled) return;
     // Front door (F3): a selected map place takes precedence, opening the same
     // briefing its boundary popup would. Otherwise fall back to the
     // region-anchored briefing. The anchor path resolves after an async
@@ -579,15 +814,21 @@ function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): v
  * layer-set and any explicit preferred basemap. The tooltip carries the
  * question the preset answers.
  */
-function applyViewPreset(map: maplibregl.Map, preset: ViewPreset): void {
-  if (!controllerRef) return;
+function applyViewPreset(preset: ViewPreset): void {
+  const map = mapRef;
+  if (!map || !controllerRef) return;
   controllerRef.applyPreset(preset);
   if (preset.preferredBasemap) {
     requestBasemapMode(map, preset.preferredBasemap);
   }
 }
 
-function buildPresetChips(map: maplibregl.Map): void {
+/**
+ * Map-free (2026-09-03 launch ruling section 4): the chips are generated
+ * from the static `VIEW_PRESETS` table at DOM ready and stay disabled with
+ * a stated reason until the map is wired.
+ */
+function buildPresetChips(): void {
   const container = document.getElementById('preset-chips');
   if (!container) return;
   container.innerHTML = '';
@@ -602,7 +843,8 @@ function buildPresetChips(map: maplibregl.Map): void {
     // preserving the at-most-one-surface invariant) now lives in the
     // controller; the chip is a thin trigger.
     btn.addEventListener('click', () => {
-      applyViewPreset(map, preset);
+      if (!mapDependentControlsEnabled) return;
+      applyViewPreset(preset);
       // Mobile shell (the mockup's rule 5): a quick view applies its
       // preset and closes the sheet so the map answers. Desktop is
       // untouched (the sheet is never active there).
@@ -628,7 +870,7 @@ function buildPresetChips(map: maplibregl.Map): void {
  * reads pressed while its surface layer is actually active, so the rail
  * never claims a hazard the map is not showing.
  */
-function wireHazardRail(map: maplibregl.Map): void {
+function wireHazardRail(): void {
   const rail = document.getElementById('hazard-rail');
   if (!rail) return;
   const buttons: Array<{ btn: HTMLButtonElement; surface: string }> = [];
@@ -643,7 +885,8 @@ function wireHazardRail(map: maplibregl.Map): void {
     const surface = preset.layers[0] ?? '';
     buttons.push({ btn, surface });
     btn.addEventListener('click', () => {
-      applyViewPreset(map, preset);
+      if (!mapDependentControlsEnabled) return;
+      applyViewPreset(preset);
       if (isSheetActive()) {
         const d = getSheetDetent();
         if (d === 'half' || d === 'full') setSheetDetent('closed');
@@ -1145,7 +1388,12 @@ export function buildSidebar(
   onRegionSelect: (key: RegionKey) => void
 ): void {
   mapRef = map;
-  ensureLiveRegion();
+  onRegionSelectRef = onRegionSelect;
+  // The shell (the dropdown, the chips, the hazard rail, the live region)
+  // normally built at DOM ready from `boot()`. Idempotent, and called here
+  // too so a host that reaches `buildSidebar` by another route still gets
+  // one complete sidebar rather than half of one.
+  buildSidebarShell();
 
   // U-UX-FIX-1 DEF-3/DEF-4 (triage 2026-07-24): clamp every MapLibre
   // popup card toward its reachable region (the visual viewport
@@ -1190,14 +1438,8 @@ export function buildSidebar(
   // invoke it.
   bindLayerToggleController(controllerRef);
 
-  const handleRegion = (key: RegionKey): void => {
-    selectRegion(map, key);
-    onRegionSelect(key);
-  };
-
-  buildRegionSelect(map, handleRegion);
-  buildPresetChips(map);
-  wireHazardRail(map);
+  // The dropdown, the chips and the hazard rail are already built (the
+  // shell above); what follows is the half that needs a live map.
   // The Water & Snow list is not built here (DR-008a): the reveal and the
   // first telemetry activation each build it on demand.
   wireTelemetryReveal(map);
@@ -1458,6 +1700,13 @@ export function buildSidebar(
       // success and failure paths alike.
       pushUrl();
     });
+
+  // The map-dependent half is wired and the URL state is applied, so the
+  // controls now do what their names say (2026-09-03 launch ruling section
+  // 4). Last, and synchronous: `<html data-ddm-controls="ready">` is the
+  // signal a verification suite waits on in place of the preset chips,
+  // which no longer prove a finished boot because they exist before one.
+  enableMapDependentControls();
 }
 
 // ---------------------------------------------------------------------------
