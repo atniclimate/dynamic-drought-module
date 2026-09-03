@@ -5,6 +5,10 @@
 Merged to `main` after the `v0.6.26` tag. No new package version or tag has
 been assigned to this work.
 
+- 2026-09-03: gate transcription. DDM-D02, DDM-D06, and DDM-D10 in
+  `docs/ROADMAP.yaml` now record the DR-036, DR-034, and DR-006 answers; the
+  `needs_decision` lines those answers had blocked are updated or removed.
+
 ### 2026-08-31: heat readings in plain language (pull request 53, `5e0a889`)
 
 The impact briefing rendered National Weather Service point-heat payloads
