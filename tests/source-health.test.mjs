@@ -34,11 +34,17 @@ test('classifyUrl separates the served app, stubbed basemap tiles, and upstream 
 });
 
 test('every stubbed host and tile glob names a host the runtime registry actually uses', async () => {
-  const urls = await readFile(new URL('../src/config/urls.ts', import.meta.url), 'utf8');
-  for (const host of STUBBED_HOSTS) assert.ok(urls.includes(host), `${host} is not in src/config/urls.ts`);
+  // The catalog plus its boot slice (DR-008a, 2026-09-03): the OpenStreetMap
+  // tile template lives in urls-boot.ts and is re-exported by urls.ts under
+  // its old key, so the literal host appears only in the boot file.
+  const urls =
+    (await readFile(new URL('../src/config/urls.ts', import.meta.url), 'utf8')) +
+    (await readFile(new URL('../src/config/urls-boot.ts', import.meta.url), 'utf8'));
+  const WHERE = 'src/config/urls.ts or src/config/urls-boot.ts';
+  for (const host of STUBBED_HOSTS) assert.ok(urls.includes(host), `${host} is not in ${WHERE}`);
   for (const glob of STUBBED_TILE_GLOBS) {
     const host = new URL(glob.replace(/\*+/g, 'x')).hostname;
-    assert.ok(urls.includes(host), `${host} is not in src/config/urls.ts`);
+    assert.ok(urls.includes(host), `${host} is not in ${WHERE}`);
   }
 });
 

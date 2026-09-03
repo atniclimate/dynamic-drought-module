@@ -142,6 +142,16 @@ const EAGER_FORBIDDEN = [
     }],
   },
   {
+    name: 'URL catalog',
+    pattern: /src\/config\/urls\.ts$/,
+    reason: 'DR-008 a (2026-09-03): the seventy-entry service catalog is read at boot by two modules for two values, which live in src/config/urls-boot.ts; the catalog itself belongs to the lazy layers, adapters, and briefing modules and must never ride the initial static set again.',
+  },
+  {
+    name: 'telemetry station catalog',
+    pattern: /src\/config\/telemetry\.ts$/,
+    reason: 'DR-008 a (2026-09-03): the featured-station table is read only to build the Water & Snow list, which sits behind a collapsed reveal and is built on first reveal or first telemetry activation, never at first paint.',
+  },
+  {
     name: 'landscape-artifact loader',
     pattern: /src\/impact\/landscape\.ts$/,
     reason: 'The T-M0-3 loader is lazy by contract (the import-graph assertion proves the loader stays out of the eager graph). Absent today; this guards it forward.',
@@ -279,9 +289,9 @@ const MAP_EXEMPT = [
 const FEATURE_BUDGETS = [
   {
     key: 'landscape-signature-artifact',
-    label: 'Landscape signature briefing consumer (T3-2 measured 3.33 kB gzip in its first-activation static closure and one 531,090-byte bundled artifact request on 2026-07-29; unsupported boundary kinds do not request the artifact)',
+    label: 'rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 6.2 kB; Landscape signature briefing consumer (T3-2 measured 3.33 kB gzip in its first-activation static closure and one 531,090-byte bundled artifact request on 2026-07-29; unsupported boundary kinds do not request the artifact)',
     rootModules: ['src/impact/landscape-consumer.ts'],
-    activationJsGzipKb: 4.0,
+    activationJsGzipKb: 6.7,
     networkBytes: 531_090,
     requestCount: 1,
     dataAssets: [{
@@ -300,36 +310,36 @@ const FEATURE_BUDGETS = [
   },
   {
     key: 'heatrisk-days',
-    label: 'HeatRisk multi-day selector (JS budget 5.0 kB; 4.2 kB covered the 4.1 kB shared HeatRisk closure measured after H2 integration; rebalanced 2026-09-02 with the MapLibre 6 landing: DR-008 a made the map key and the telemetry adapters lazy, which dropped the entry chunk from 43.4 to 33.6 kB gzip and moved the shared guards, legend-registry, style-expressions and wildfire-presentation chunks from the eager closure into first activation, so this closure measured 4.3 kB; the budget is the measurement plus headroom, and a user who activates the feature now transfers less in total; the H0 coverage qualification measured 3.5 kB across three chunks on 2026-07-28; network numbers measured 30,326 bytes / 18 requests at 1280x720 on 2026-07-27)',
+    label: 'rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 7.0 kB; HeatRisk multi-day selector (JS budget 5.0 kB; 4.2 kB covered the 4.1 kB shared HeatRisk closure measured after H2 integration; rebalanced 2026-09-02 with the MapLibre 6 landing: DR-008 a made the map key and the telemetry adapters lazy, which dropped the entry chunk from 43.4 to 33.6 kB gzip and moved the shared guards, legend-registry, style-expressions and wildfire-presentation chunks from the eager closure into first activation, so this closure measured 4.3 kB; the budget is the measurement plus headroom, and a user who activates the feature now transfers less in total; the H0 coverage qualification measured 3.5 kB across three chunks on 2026-07-28; network numbers measured 30,326 bytes / 18 requests at 1280x720 on 2026-07-27)',
     rootModules: ['src/layers/heatrisk.ts'],
-    activationJsGzipKb: 5.0,
+    activationJsGzipKb: 7.5,
     networkBytes: 30_326,
     requestCount: 18,
     dataAssets: [],
   },
   {
     key: 'point-heat-briefing',
-    label: 'Point heat briefing with bounded NWS discovery, nearby observation, grid time series, point forecast, and alerts (21.2 kB measured first-activation closure on 2026-09-02, including the shared impact hydrator; rebalanced 2026-09-02 with the MapLibre 6 landing: DR-008 a made the map key and the telemetry adapters lazy, which dropped the entry chunk from 43.4 to 33.6 kB gzip and moved the shared guards, legend-registry, style-expressions and wildfire-presentation chunks from the eager closure into first activation, so this closure measured 26.1 kB; the budget is the measurement plus headroom, and a user who activates the feature now transfers less in total; the ENSO module loads lazily inside the long-range horizon; six-request ceiling; completed responses use the bounded client cache and the Worker retains its 60-second edge cache)',
+    label: 'rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 28.8 kB; Point heat briefing with bounded NWS discovery, nearby observation, grid time series, point forecast, and alerts (21.2 kB measured first-activation closure on 2026-09-02, including the shared impact hydrator; rebalanced 2026-09-02 with the MapLibre 6 landing: DR-008 a made the map key and the telemetry adapters lazy, which dropped the entry chunk from 43.4 to 33.6 kB gzip and moved the shared guards, legend-registry, style-expressions and wildfire-presentation chunks from the eager closure into first activation, so this closure measured 26.1 kB; the budget is the measurement plus headroom, and a user who activates the feature now transfers less in total; the ENSO module loads lazily inside the long-range horizon; six-request ceiling; completed responses use the bounded client cache and the Worker retains its 60-second edge cache)',
     rootModules: ['src/impact/point-heat.ts'],
-    activationJsGzipKb: 27.0,
+    activationJsGzipKb: 29.7,
     networkBytes: 3_000_000,
     requestCount: 6,
     dataAssets: [],
   },
   {
     key: 'bc-basin-drought',
-    label: 'Province of British Columbia basin drought levels (measured 3,908,396 bytes and one request with the 0.01-degree generalized query on 2026-07-27)',
+    label: 'rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 7.9 kB; Province of British Columbia basin drought levels (measured 3,908,396 bytes and one request with the 0.01-degree generalized query on 2026-07-27)',
     rootModules: ['src/layers/bc-drought.ts'],
-    activationJsGzipKb: 5.2,
+    activationJsGzipKb: 8.2,
     networkBytes: 4_250_000,
     requestCount: 1,
     dataAssets: [],
   },
   {
     key: 'canadian-drought-monitor-snapshot',
-    label: 'Canadian Drought Monitor monthly committed snapshot (June 2026 artifact measured 960,818 bytes on 2026-07-28; S4 shared time-bar closure measured 5,591 gzip bytes on 2026-07-29)',
+    label: 'rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 8.3 kB; Canadian Drought Monitor monthly committed snapshot (June 2026 artifact measured 960,818 bytes on 2026-07-28; S4 shared time-bar closure measured 5,591 gzip bytes on 2026-07-29)',
     rootModules: ['src/layers/cdm-drought.ts'],
-    activationJsGzipKb: 5.7,
+    activationJsGzipKb: 8.6,
     networkBytes: 1_000_000,
     requestCount: 1,
     dataAssets: [{
@@ -339,18 +349,18 @@ const FEATURE_BUDGETS = [
   },
   {
     key: 'north-american-drought-monitor',
-    label: 'North American Drought Monitor continental context (measured 616,132 bytes and one direct request on 2026-07-27)',
+    label: 'rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 7.8 kB; North American Drought Monitor continental context (measured 616,132 bytes and one direct request on 2026-07-27)',
     rootModules: ['src/layers/nadm-drought.ts'],
-    activationJsGzipKb: 5.2,
+    activationJsGzipKb: 8.1,
     networkBytes: 650_000,
     requestCount: 1,
     dataAssets: [],
   },
   {
     key: 'fire3d-mode',
-    label: 'Desktop 3D Fire mode: terrain + camera + sky orchestrator, the volumetric smoke companion, and the issuer-published context chunk with the WHP 2023 hazard drape and the structures pilot (JS budget 14 kB; rebalanced 2026-09-02 with the MapLibre 6 landing: DR-008 a made the map key and the telemetry adapters lazy, which dropped the entry chunk from 43.4 to 33.6 kB gzip and moved the shared guards, legend-registry, style-expressions and wildfire-presentation chunks from the eager closure into first activation, so this closure measured 13.0 kB; the budget is the measurement plus headroom, and a user who activates the feature now transfers less in total; archive transport at 1280x720 measured 2,278,573 terrain bytes over 19 ranged requests; the hazard drape replaced the 25.7 MB FBFM40 fuels drape 2026-08-19 at roughly half the archive weight, and its transport is logged by the fire3d spec; the z13-14 structures archive measured 16,512 activation-time bytes over 2 ranged reads with tile reads only when zoomed into the pilot area; power infrastructure left this closure 2026-08-19 when it became its own catalog layer, below; the smoke and context roots are reached via dynamic import from the first root and are invisible to the static closure walk, so ALL roots are declared)',
+    label: 'rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 15.8 kB; Desktop 3D Fire mode: terrain + camera + sky orchestrator, the volumetric smoke companion, and the issuer-published context chunk with the WHP 2023 hazard drape and the structures pilot (JS budget 14 kB; rebalanced 2026-09-02 with the MapLibre 6 landing: DR-008 a made the map key and the telemetry adapters lazy, which dropped the entry chunk from 43.4 to 33.6 kB gzip and moved the shared guards, legend-registry, style-expressions and wildfire-presentation chunks from the eager closure into first activation, so this closure measured 13.0 kB; the budget is the measurement plus headroom, and a user who activates the feature now transfers less in total; archive transport at 1280x720 measured 2,278,573 terrain bytes over 19 ranged requests; the hazard drape replaced the 25.7 MB FBFM40 fuels drape 2026-08-19 at roughly half the archive weight, and its transport is logged by the fire3d spec; the z13-14 structures archive measured 16,512 activation-time bytes over 2 ranged reads with tile reads only when zoomed into the pilot area; power infrastructure left this closure 2026-08-19 when it became its own catalog layer, below; the smoke and context roots are reached via dynamic import from the first root and are invisible to the static closure walk, so ALL roots are declared)',
     rootModules: ['src/map/fire3d.ts', 'src/layers/hms-smoke-volume.ts', 'src/map/fire3d-context.ts'],
-    activationJsGzipKb: 14.0,
+    activationJsGzipKb: 16.5,
     networkBytes: 4_800_000,
     requestCount: 56,
     dataAssets: [{
@@ -369,9 +379,9 @@ const FEATURE_BUDGETS = [
   },
   {
     key: 'power-infrastructure',
-    label: 'JS budget 9.5 kB; rebalanced 2026-09-02 with the MapLibre 6 landing: DR-008 a made the map key and the telemetry adapters lazy, which dropped the entry chunk from 43.4 to 33.6 kB gzip and moved the shared guards, legend-registry, style-expressions and wildfire-presentation chunks from the eager closure into first activation, so this closure measured 8.9 kB; the budget is the measurement plus headroom, and a user who activates the feature now transfers less in total; Power lines and plants as a catalog layer (owner direction 2026-08-19; it left the 3D Fire closure above). Nothing is fetched below zoom 6, where the layer reports zoom in to load. Above the gate: the bundled z0-11 transmission archive over ranged requests, plus ONE bounded live EIA plants read probed at 174,970 raw bytes',
+    label: 'rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 11.6 kB; JS budget 9.5 kB; rebalanced 2026-09-02 with the MapLibre 6 landing: DR-008 a made the map key and the telemetry adapters lazy, which dropped the entry chunk from 43.4 to 33.6 kB gzip and moved the shared guards, legend-registry, style-expressions and wildfire-presentation chunks from the eager closure into first activation, so this closure measured 8.9 kB; the budget is the measurement plus headroom, and a user who activates the feature now transfers less in total; Power lines and plants as a catalog layer (owner direction 2026-08-19; it left the 3D Fire closure above). Nothing is fetched below zoom 6, where the layer reports zoom in to load. Above the gate: the bundled z0-11 transmission archive over ranged requests, plus ONE bounded live EIA plants read probed at 174,970 raw bytes',
     rootModules: ['src/layers/power-3d.ts'],
-    activationJsGzipKb: 9.5,
+    activationJsGzipKb: 12.2,
     networkBytes: 1_200_000,
     requestCount: 20,
     dataAssets: [{

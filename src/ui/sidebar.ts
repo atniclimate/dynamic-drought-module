@@ -69,7 +69,12 @@ import {
 } from '../config/regions';
 import type { RegionKey, Region } from '../config/regions';
 import { regionCapabilityLevel } from '../config/region-capability';
-import { TELEMETRY_STATIONS } from '../config/telemetry';
+// The featured-station table (`src/config/telemetry.ts`) is imported
+// dynamically inside `ensureTelemetryList` below, not here (DR-008a,
+// 2026-09-03). It feeds only the Water & Snow list, which sits behind a
+// collapsed reveal, so a boot pays for it on first reveal or first telemetry
+// activation, whichever comes first, and never at first paint. The
+// activation gate forbids the table from the initial static set.
 import { registry } from '../state/registry';
 import { createLayerController } from '../state/layer-controller';
 import type { LayerController, LayerControllerView } from '../state/layer-controller';
@@ -661,17 +666,45 @@ function wireHazardRail(map: maplibregl.Map): void {
 // ---------------------------------------------------------------------------
 
 /**
+ * The featured-station table and the list built from it, resolved once per
+ * page on first need (DR-008a). Two doors open it: the Water & Snow reveal
+ * (a person asked to see the list) and the first telemetry activation (the
+ * value hydration needs the slots the list carries). Whichever comes first
+ * pays the chunk; the other joins the same promise. A failed load clears
+ * the memo so the next door retries instead of remembering the failure.
+ */
+let telemetryListReady: Promise<readonly TelemetryStation[]> | null = null;
+function ensureTelemetryList(
+  map: maplibregl.Map
+): Promise<readonly TelemetryStation[]> {
+  telemetryListReady ??= import('../config/telemetry')
+    .then(({ TELEMETRY_STATIONS }) => {
+      buildTelemetryList(map, TELEMETRY_STATIONS);
+      return TELEMETRY_STATIONS;
+    })
+    .catch((err: unknown) => {
+      console.error('[sidebar] the featured-station table failed to load:', err);
+      telemetryListReady = null;
+      return [] as readonly TelemetryStation[];
+    });
+  return telemetryListReady;
+}
+
+/**
  * Build the telemetry list. Each entry is a `<button>` (per the
  * [next-polish] accessibility quick win) carrying a colored dot and
  * the station name + agency / type. Click handler ensures the
  * telemetry layer is on, then calls `flyToStation`.
  */
-function buildTelemetryList(map: maplibregl.Map): void {
+function buildTelemetryList(
+  map: maplibregl.Map,
+  stations: readonly TelemetryStation[]
+): void {
   const container = document.getElementById('telemetry-list');
   if (!container) return;
   container.innerHTML = '';
 
-  for (const station of TELEMETRY_STATIONS) {
+  for (const station of stations) {
     const item = document.createElement('button');
     item.type = 'button';
     item.className = 'telemetry-item';
@@ -714,7 +747,7 @@ function buildTelemetryList(map: maplibregl.Map): void {
  * sidebar-local presentation only; revealing the panel never activates or
  * deactivates the telemetry layer.
  */
-function wireTelemetryReveal(): void {
+function wireTelemetryReveal(map: maplibregl.Map): void {
   const btn = document.getElementById('telemetry-reveal');
   const body = document.getElementById('telemetry-body');
   if (!(btn instanceof HTMLButtonElement) || !body) return;
@@ -722,6 +755,9 @@ function wireTelemetryReveal(): void {
     const expanded = btn.getAttribute('aria-expanded') === 'true';
     btn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
     body.hidden = expanded;
+    // Opening the panel is the first of the two doors that build the list
+    // (DR-008a); the memo makes a second open free.
+    if (!expanded) void ensureTelemetryList(map);
   });
 }
 
@@ -821,40 +857,48 @@ function formatStationValue(value: StationValue): string {
  * unavailable" on fetch failure. A zero reading renders as 0; summer
  * snowpack is legitimately zero.
  */
-function hydrateStationValues(): void {
-  stationValuesController = new AbortController();
-  const signal = stationValuesController.signal;
+function hydrateStationValues(map: maplibregl.Map): void {
+  const controller = new AbortController();
+  stationValuesController = controller;
+  const signal = controller.signal;
 
-  for (const station of TELEMETRY_STATIONS) {
-    if (!station.awdbStation && !station.hydrometParams && !station.cwms && !station.usgsSite)
-      continue;
-    const slot = document.querySelector<HTMLElement>(
-      `[data-station-values="${cssAttrEscape(station.id)}"]`
-    );
-    if (!slot) continue;
+  // The slots live in the list, and the list arrives with the station table
+  // (DR-008a): the second of the two doors. An abort while the table is
+  // still loading (telemetry toggled off again) hydrates nothing.
+  void ensureTelemetryList(map).then((stations) => {
+    if (signal.aborted) return;
+    for (const station of stations) {
+      if (!station.awdbStation && !station.hydrometParams && !station.cwms && !station.usgsSite)
+        continue;
+      const slot = document.querySelector<HTMLElement>(
+        `[data-station-values="${cssAttrEscape(station.id)}"]`
+      );
+      if (!slot) continue;
 
-    slot.textContent = 'loading...';
-    // The skeleton-shimmer marks the network wait; each terminal branch below
-    // reassigns className without it, so the shimmer clears on its own.
-    slot.className = 'telemetry-values loading skeleton-shimmer';
+      slot.textContent = 'loading...';
+      // The skeleton-shimmer marks the network wait; each terminal branch
+      // below reassigns className without it, so the shimmer clears on its
+      // own.
+      slot.className = 'telemetry-values loading skeleton-shimmer';
 
-    void fetchPrimaryStationValue(station, signal)
-      .then((value) => {
-        if (signal.aborted || !slot.isConnected) return;
-        if (!value || value.value === null) {
+      void fetchPrimaryStationValue(station, signal)
+        .then((value) => {
+          if (signal.aborted || !slot.isConnected) return;
+          if (!value || value.value === null) {
+            slot.textContent = 'values unavailable';
+            slot.className = 'telemetry-values unavailable';
+            return;
+          }
+          slot.textContent = formatStationValue(value);
+          slot.className = `telemetry-values ${value.freshness}`;
+        })
+        .catch(() => {
+          if (signal.aborted || !slot.isConnected) return;
           slot.textContent = 'values unavailable';
           slot.className = 'telemetry-values unavailable';
-          return;
-        }
-        slot.textContent = formatStationValue(value);
-        slot.className = `telemetry-values ${value.freshness}`;
-      })
-      .catch(() => {
-        if (signal.aborted || !slot.isConnected) return;
-        slot.textContent = 'values unavailable';
-        slot.className = 'telemetry-values unavailable';
-      });
-  }
+        });
+    }
+  });
 }
 
 /**
@@ -864,10 +908,13 @@ function hydrateStationValues(): void {
  * stay rendered; the list is catalog metadata plus last-known readings,
  * not something to blank on toggle.
  */
-function onActiveChangeForStationValues(active: ReadonlySet<string>): void {
+function onActiveChangeForStationValues(
+  map: maplibregl.Map,
+  active: ReadonlySet<string>
+): void {
   if (active.has('telemetry') && !stationValuesHydrated) {
     stationValuesHydrated = true;
-    hydrateStationValues();
+    hydrateStationValues(map);
   } else if (!active.has('telemetry') && stationValuesController) {
     stationValuesController.abort();
     stationValuesController = null;
@@ -1151,8 +1198,9 @@ export function buildSidebar(
   buildRegionSelect(map, handleRegion);
   buildPresetChips(map);
   wireHazardRail(map);
-  buildTelemetryList(map);
-  wireTelemetryReveal();
+  // The Water & Snow list is not built here (DR-008a): the reveal and the
+  // first telemetry activation each build it on demand.
+  wireTelemetryReveal(map);
   wireTopLevelEvents(map);
 
   // Mount the view island (the catalog and the conditions strip) from its
@@ -1289,7 +1337,7 @@ export function buildSidebar(
   registry.on('change', (active) => {
     pushUrl();
     updateActiveCountPill(active);
-    onActiveChangeForStationValues(active);
+    onActiveChangeForStationValues(map, active);
   });
   registry.on('status-change', (key, status) => {
     announceLayerStatus(key, status);

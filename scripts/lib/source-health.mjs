@@ -24,7 +24,8 @@
 /** Basemap tile hosts the probe answers with a blank tile instead of
  * fetching: the map still loads, and a daily automated boot per layer never
  * taxes OpenStreetMap (tile policy) or OpenTopoMap. Every host here must
- * appear in src/config/urls.ts (the test pins that). */
+ * appear in src/config/urls.ts or its boot slice src/config/urls-boot.ts
+ * (the test pins that). */
 export const STUBBED_HOSTS = Object.freeze([
   'tile.openstreetmap.org',
   'a.tile.opentopomap.org',

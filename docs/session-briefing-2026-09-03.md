@@ -27,13 +27,15 @@ next engineering task has landed:
   bound, one tokenized notice), DR-025 a (height floor and `webglcontextlost`
   through the failure ladder), DR-008 a (lazy map key and telemetry adapters;
   entry 43.4 to 33.6 kB gzip), and DR-051 a (opt-in evidence capture).
-- **Open v6 follow-ups, for one branch from `main`.** The 3D toggle in
-  `src/ui/island/fire3d-control.tsx` still gates on the width query alone and
-  must read the height floor and the probe result (DR-025 a); the URL catalog
-  split (DR-008 a's third module) is not done; the module comment near
-  `src/config/layers.ts:51` still says the map key is eager; `TELEMETRY_STATIONS`
-  in `src/ui/sidebar.ts` is still eager; the DEM transfer can be re-measured now
-  that categorical drape resampling is available on 6.6.0.
+- **The v6 follow-ups, done on `v6-followups/2026-09-03`.** The 3D toggle in
+  `src/ui/island/fire3d-control.tsx` reads the height floor and the shared
+  probe result beside the width query (DR-025 a); the URL catalog split
+  (DR-008 a's third module) is done through `src/config/urls-boot.ts`; the
+  module comment in `src/config/layers.ts` is current; the featured-station
+  table loads with the Water & Snow list instead of eagerly; the DEM transfer
+  was re-measured and is unchanged (gate DDM-D01). The release notes carry
+  the entry. Categorical drape resampling (FIRE-02) is untouched: it is a
+  presentation change with its own decision, not a follow-up of the bump.
 - **Everything below this line is history.** Section 6's work breakdown is
   recorded as executed; the branch table in the 23:00 status is stale.
 

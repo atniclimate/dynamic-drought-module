@@ -12,7 +12,7 @@ import { getStudioRoute, onStudioRouteChange } from './state/studio-route';
 import { onTypedPlaceChange } from './state/typed-place';
 import { buildSidebar } from './ui/sidebar';
 import { initHoverInspector } from './ui/hover-inspector';
-import { isGpuInitializationError, probeWebGl2 } from './map/gl-capability';
+import { isGpuInitializationError, webGl2Capability } from './map/gl-capability';
 import {
   hideRendererNotice,
   showRendererNotice
@@ -217,7 +217,7 @@ async function boot(): Promise<void> {
   // map that can never paint and would only report it through an error
   // event, so the honest move is not to construct one at all: say what was
   // observed and boot the chrome that needs no renderer.
-  const capability = probeWebGl2();
+  const capability = webGl2Capability();
   if (!capability.webgl2) {
     console.warn(
       `[boot] no WebGL 2 context: ${capability.reason ?? 'unknown'}`

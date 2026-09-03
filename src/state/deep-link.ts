@@ -27,7 +27,9 @@ import type * as maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection } from 'geojson';
 import type { BoundarySelectionContext } from '../impact/types';
 
-import { URLS } from '../config/urls';
+// The boot slice of the URL catalog, not the catalog (DR-008a): this
+// resolver runs at boot and needs one bundled file.
+import { BOOT_URLS } from '../config/urls-boot';
 import { bboxCenter, bboxToContinuousBounds } from '../util/bbox';
 import { geometryBboxAcrossAntimeridian } from '../util/antimeridian';
 import { fetchWithBudget } from '../util/fetch';
@@ -171,7 +173,7 @@ export async function openStateBriefing(
   let feature: Feature | undefined;
   try {
     const response = await fetchWithBudget(
-      URLS.usStatesLocal,
+      BOOT_URLS.usStatesLocal,
       null,
       null,
       FETCH_TIMEOUT_MS

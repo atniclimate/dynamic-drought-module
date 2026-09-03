@@ -23,9 +23,12 @@
  */
 
 import { LANDSCAPE_SIGNATURE_LOCAL_URL } from './landscape-url';
-
-const BASE_URL =
-  import.meta.env?.BASE_URL ?? '/dynamic-drought-module/';
+// The two values the eager boot graph reads live in `urls-boot.ts` (DR-008a,
+// 2026-09-03) and are re-exported below under their historical keys, so this
+// catalog stays the one whole table for every lazy reader and every script
+// that scans it, while no module in the initial static set imports it. The
+// activation gate forbids this file from that set.
+import { BASE_URL, BOOT_URLS } from './urls-boot';
 
 export const URLS = Object.freeze({
   // ---------- Basemaps (raster tiles) ----------
@@ -48,7 +51,8 @@ export const URLS = Object.freeze({
   // Policy invariants: never append cache-busting query params to tile
   // URLs, and never add a Referrer-Policy that strips the Referer from
   // tile requests (the policy's web-traffic attribution branch).
-  basemapOSM: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  // The literal lives in `urls-boot.ts` (the base style reads it at boot).
+  basemapOSM: BOOT_URLS.basemapOSM,
 
   // NOAA NESDIS merged GOES East and West GeoColor, the opt-in recent
   // satellite basemap. This is the rolling, time-enabled 24-hour archive,
@@ -948,8 +952,9 @@ export const URLS = Object.freeze({
   // verified HTTP 200 on 2026-07-01). Public administrative reference data,
   // not sovereign-jurisdiction polygons, so bundling is consistent with the
   // no-redistribution hard rule. Provenance is recorded in the file's
-  // `metadata` foreign member.
-  usStatesLocal: BASE_URL + 'data/us-states.geojson',
+  // `metadata` foreign member. The value lives in `urls-boot.ts` (the
+  // deep-link resolver reads it at boot).
+  usStatesLocal: BOOT_URLS.usStatesLocal,
   // Municipal place labels (U4e; Natural Earth 1:10m populated places,
   // public domain, US subset; built by scripts/build-places.mjs with the
   // build-failing glyph gate). Names only plus points; naming policy rides

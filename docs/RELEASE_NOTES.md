@@ -120,6 +120,48 @@ docs merge `4cfc3a9` that preceded it decided gate DDM-D03, closed
 `DDM-P2-T02` and `DDM-P12-T01`, and recorded the 2026-09-02 decision session
 in `docs/session-briefing-2026-09-03.md`.
 
+### 2026-09-03: the MapLibre 6 follow-ups (merge commit from `v6-followups/2026-09-03`)
+
+The four loose ends the 6.6.0 landing left open, plus one stale premise found
+on the way.
+
+The 3D Fire control now agrees with the map. The map-side entry gate has
+asked three questions since DR-025 a (wide enough, tall enough, WebGL 2
+present), but the control in the shell island still showed itself on width
+alone, so a landscape phone was offered a button whose scene the gate would
+refuse. The control now reads the same height floor and the same probe result
+and withdraws on a landscape phone, restoring itself when the viewport turns
+tall again; a new browser contract pins that. The probe itself is measured
+once per page and shared by the boot path, the gate, and the control, where
+before each ran its own and allocated its own graphics context.
+
+The URL catalog leaves the entry chunk (the third module of DR-008 a). The
+seventy-entry service catalog was the single largest source in the entry
+chunk, read at boot by two modules for two values: the OpenStreetMap tile
+template and the bundled state boundaries. Those two now live in a small boot
+slice, `src/config/urls-boot.ts`, which the catalog re-exports under the old
+keys, so every lazy reader and every script that scans the catalog still sees
+one whole table. The featured-station table takes the same path: the Water &
+Snow list is built on the first reveal or the first station-layer activation,
+never at first paint. The entry chunk falls from 33.6 to 29.7 kB gzip and the
+eager app total from 49.9 to 45.8; the 2.7 kB catalog chunk now arrives with
+the first layer activation instead, in parallel with the default-on layers'
+own chunks, so total boot transfer is unchanged and the critical path is
+shorter. Eight activation budgets are rebalanced with that reason recorded,
+and the activation gate now forbids both catalogs from the initial static set
+so a new eager import fails the gate rather than quietly undoing the split.
+The link audit and the upstream-drift monitor read the boot slice beside the
+catalog, so the basemap probe did not disappear with the move.
+
+Two records corrected. The station-layer contract booted without the station
+layer, which left the default-on set in H4, and so had been passing against a
+list nothing hydrated; it now activates the layer, waits for the list, and
+waits for hydration to begin. The clear-sky specification hand-copy was
+re-inspected against the installed 6.6.0 bundle and is unchanged, and the
+inspection is recorded where the contract asks for it. The terrain transport
+on the 3D view was re-measured after the split and is the same 6,394,061 bytes
+over 36 ranged requests recorded on gate DDM-D01.
+
 ## v0.6.26
 
 `v0.6.26` is the package version and, since 2026-08-29, the release tag. One

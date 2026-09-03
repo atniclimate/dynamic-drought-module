@@ -79,6 +79,22 @@ export function probeWebGl2(
 }
 
 /**
+ * The device's answer, measured once per page and shared.
+ *
+ * The boot path, the 3D entry gate, and the 3D control each need the same
+ * boolean, and each used to run its own probe, which allocates a real GL
+ * context every time. The answer cannot change for a page (actual context
+ * LOSS is a separate, watched event, not a change of capability), so one
+ * measurement serves all readers. The injectable `probeWebGl2` above stays
+ * pure for the Node spec; this is the runtime door in front of it.
+ */
+let measured: WebGl2Capability | null = null;
+export function webGl2Capability(): WebGl2Capability {
+  measured ??= probeWebGl2();
+  return measured;
+}
+
+/**
  * True when `err` is MapLibre 6's `GPUInitializationError`.
  *
  * MapLibre fires this through the map's `error` event (it does not throw
