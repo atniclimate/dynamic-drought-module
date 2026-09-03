@@ -42,6 +42,20 @@ import { readCurrentWorkerRevision, readWorkerRevision } from './lib/worker-revi
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const URLS_PATH = join(__dirname, '..', 'src', 'config', 'urls.ts');
+/** The catalog's boot slice (DR-008a, 2026-09-03): the literals the eager
+ * boot graph reads (the OpenStreetMap tile template among them) live here and
+ * are re-exported by urls.ts under their old keys, so extraction must read
+ * both files or the basemap probe silently disappears. */
+const URLS_BOOT_PATH = join(__dirname, '..', 'src', 'config', 'urls-boot.ts');
+
+/** The catalog and its boot slice as one extraction source. */
+async function readUrlsSource() {
+  const [catalog, boot] = await Promise.all([
+    readFile(URLS_PATH, 'utf8'),
+    readFile(URLS_BOOT_PATH, 'utf8'),
+  ]);
+  return `${catalog}\n${boot}`;
+}
 
 const TIMEOUT_MS = 15_000;
 const CONCURRENCY = 5;
@@ -955,7 +969,7 @@ async function main() {
   const landscapeOnly = args[0] === '--landscape-only';
   let entries = [];
   if (!landscapeOnly) {
-    const source = await readFile(URLS_PATH, 'utf8');
+    const source = await readUrlsSource();
     entries = extractUrls(source);
     if (entries.length === 0) {
       console.error('No https URLs extracted from urls.ts; the extraction regex has drifted.');

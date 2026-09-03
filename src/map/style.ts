@@ -1,5 +1,8 @@
 import type * as maplibregl from 'maplibre-gl';
-import { URLS } from '../config/urls';
+// The boot slice of the URL catalog, not the catalog (DR-008a): the base
+// style needs one tile template, and importing `URLS` here would carry the
+// whole 70-entry table into the entry chunk for it.
+import { BOOT_URLS } from '../config/urls-boot';
 
 /**
  * Build the base MapLibre GL JavaScript style specification.
@@ -36,7 +39,7 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
       // needs to change; the layer modules and UI are terrain-agnostic.
       basemap: {
         type: 'raster',
-        tiles: [URLS.basemapOSM],
+        tiles: [BOOT_URLS.basemapOSM],
         tileSize: 256,
         // The linked form per the OSM attribution guidance (U4f); the
         // map-information panel's credits line renders these strings as

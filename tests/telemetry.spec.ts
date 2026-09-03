@@ -21,10 +21,31 @@ test.describe('telemetry status honesty', () => {
   test('no wired station row is stuck on loading; the link-only station stays empty', async ({
     page
   }) => {
-    await gotoApp(page);
+    // The station layer left the default-on set (H4), so name it: value
+    // hydration starts on the first telemetry activation, and since DR-008a
+    // the featured-station list itself is built on that activation (or on
+    // the Water & Snow reveal) rather than at boot. Before 2026-09-03 this
+    // spec booted without the layer and passed against an unhydrated list.
+    await gotoApp(page, '?layers=telemetry');
+    await expect
+      .poll(() => page.locator('.telemetry-item').count(), {
+        message: 'the featured-station list never arrived after activation'
+      })
+      .toBeGreaterThan(0);
+    // And that hydration has actually begun: at least one wired slot has
+    // left its empty initial state, so the "nothing loading" poll below
+    // cannot pass on a list that no fetcher ever touched.
+    await expect
+      .poll(
+        () =>
+          page.$$eval('.telemetry-values', (slots) =>
+            slots.some((s) => (s.textContent ?? '').trim().length > 0)
+          ),
+        { message: 'no station slot ever left its empty state after activation' }
+      )
+      .toBe(true);
 
-    // Telemetry is default-on, so value hydration starts at boot. Wait until
-    // no row is still loading. The longest fetch budget in play is the CWMS
+    // Wait until no row is still loading. The longest fetch budget in play is the CWMS
     // discovery path (src/util/cwms.ts): up to three sequential fetches at a
     // 12-second budget each (~36 seconds worst case), taken by the Bonneville
     // Dam station in production. Give the slowest fetcher room to resolve or

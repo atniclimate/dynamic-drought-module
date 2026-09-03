@@ -3,10 +3,17 @@
  * directly under the hazard cluster buttons.
  *
  * Visibility: only while the committed cluster is 'wildfire' AND the
- * viewport matches the desktop breakpoint. Embed mode hides the whole
- * shell panel (app.css: .app-shell.embed #shell-panel), so the control is
- * inert in embeds for free while a URL-named fire3d=true still drives the
- * map-side effect through the orchestrator.
+ * device can enter the scene at all, which since DR-025a is the same three
+ * questions the map-side gate in `src/map/fire3d.ts` asks: the viewport is
+ * at least the desktop breakpoint wide, at least `FIRE3D_MIN_HEIGHT_PX`
+ * tall (a landscape phone is wide enough and stays out), and the renderer
+ * probe found a WebGL 2 context. Before 2026-09-03 the control read the
+ * width alone, so a landscape phone was offered a button whose scene the
+ * gate would refuse; a control the map cannot honor is not offered. Embed
+ * mode hides the whole shell panel (app.css: .app-shell.embed
+ * #shell-panel), so the control is inert in embeds for free while a
+ * URL-named fire3d=true still drives the map-side effect through the
+ * orchestrator.
  *
  * The button mirrors the PREFERENCE (the user's durable ask, aria-pressed
  * flips with the click); the status line underneath tells the honest truth
@@ -29,11 +36,15 @@ import { useEffect, useState } from 'preact/hooks';
 
 import {
   FIRE3D_COVERAGE_NOTE,
+  FIRE3D_MIN_HEIGHT_QUERY,
   FIRE3D_MIN_WIDTH_QUERY,
   FIRE3D_NON_PREDICTION_NOTE
 } from '../../config/fire3d-presentation';
 import type { HazardClusterKey } from '../../config/clusters';
 import type { Fire3DStatus } from '../../map/fire3d';
+// The shared, once-per-page probe result (already in the entry chunk through
+// main.ts, so reading it here adds no eager weight and no second context).
+import { webGl2Capability } from '../../map/gl-capability';
 import {
   getFire3DPreference,
   onFire3DPreferenceChange,
@@ -109,8 +120,14 @@ export function Fire3DControl({
 }: {
   readonly cluster: HazardClusterKey | 'custom';
 }) {
-  const [desktop, setDesktop] = useState<boolean>(
-    () => window.matchMedia(FIRE3D_MIN_WIDTH_QUERY).matches
+  // The geometry half of the entry gate (DR-025a): wide enough AND tall
+  // enough, watched as two media queries so a phone rotating into landscape
+  // withdraws the control and rotating back restores it. The capability
+  // half is read once; it cannot change for a page.
+  const [geometryFits, setGeometryFits] = useState<boolean>(
+    () =>
+      window.matchMedia(FIRE3D_MIN_WIDTH_QUERY).matches &&
+      window.matchMedia(FIRE3D_MIN_HEIGHT_QUERY).matches
   );
   const [preference, setPreference] = useState<boolean>(getFire3DPreference);
   const [status, setStatus] = useState<Fire3DStatus | null>(null);
@@ -119,13 +136,16 @@ export function Fire3DControl({
   );
 
   useEffect(() => {
-    const query = window.matchMedia(FIRE3D_MIN_WIDTH_QUERY);
+    const width = window.matchMedia(FIRE3D_MIN_WIDTH_QUERY);
+    const height = window.matchMedia(FIRE3D_MIN_HEIGHT_QUERY);
     const onChange = (): void => {
-      setDesktop(query.matches);
+      setGeometryFits(width.matches && height.matches);
     };
-    query.addEventListener('change', onChange);
+    width.addEventListener('change', onChange);
+    height.addEventListener('change', onChange);
     return () => {
-      query.removeEventListener('change', onChange);
+      width.removeEventListener('change', onChange);
+      height.removeEventListener('change', onChange);
     };
   }, []);
 
@@ -149,7 +169,8 @@ export function Fire3DControl({
     []
   );
 
-  const visible = desktop && cluster === 'wildfire';
+  const visible =
+    geometryFits && webGl2Capability().webgl2 && cluster === 'wildfire';
 
   useEffect(() => {
     if (!visible) return;

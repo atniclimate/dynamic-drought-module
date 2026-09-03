@@ -108,9 +108,12 @@ test('syncFire3dParam round-trips through the URL and preserves neighbors', () =
  * distributed bundle for the object literal containing
  * "sky-color":"transparent" (the fallback the library constructs a Sky with
  * when a style declares none) and MUST record the result in the bump commit.
- * Last such inspection: maplibre-gl 5.24.0 on 2026-08-19, unchanged from the
- * 4.7 values (harvested from the retired feature/maplibre-v5 branch on
- * 2026-09-02).
+ * Last such inspection: maplibre-gl 6.6.0 on 2026-09-03, unchanged from the
+ * 4.7 values: `dist/maplibre-gl.mjs` still constructs the fallback Sky from
+ * the literal {"sky-color":"transparent","horizon-color":"transparent",
+ * "fog-color":"transparent","fog-ground-blend":1,"atmosphere-blend":0}.
+ * Before that, 5.24.0 on 2026-08-19 (harvested from the retired
+ * feature/maplibre-v5 branch on 2026-09-02), also unchanged.
  */
 test('the clear-sky specification literal is pinned', () => {
   expect(FIRE3D_SKY_CLEAR_SPECIFICATION).toEqual({
@@ -1013,6 +1016,30 @@ test('an embed without the flag never activates and never gains it', async ({
 
     expect(chunkRequests).toEqual([]);
     expect(await fire3dStamp(page)).toBeUndefined();
+  });
+
+  test('a landscape phone is offered no 3D control and never enters the scene', async ({
+    page
+  }) => {
+    await stubWildfireFeeds(page);
+    // 844 x 390 is the same phone rotated: wider than the desktop
+    // breakpoint, shorter than FIRE3D_MIN_HEIGHT_PX. The map-side gate
+    // refuses the scene on height (DR-025a); the control must agree and
+    // withdraw rather than offer a button whose scene cannot come. The
+    // width-only control was the last place the old rule survived.
+    await page.setViewportSize({ width: 844, height: 390 });
+    await gotoApp(page, '?cluster=wildfire&fire3d=true');
+    await page.waitForTimeout(3_000);
+
+    await expect(page.locator('#shell-fire3d')).toHaveCount(0);
+    // The ask itself is kept (the preference is the user's durable request
+    // and the gate, not the URL, decides); only the scene is refused.
+    expect(await fire3dStamp(page)).not.toBe('active');
+
+    // Rotating back to tall geometry restores the offer: the control
+    // watches both queries, not only the width.
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await expect(page.locator('#shell-fire3d')).toHaveCount(1);
   });
 
   test('a corrupt archive reads unavailable in the control and drops the flag', async ({

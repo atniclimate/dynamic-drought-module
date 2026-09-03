@@ -47,7 +47,7 @@ import {
   FIRE3D_TERRAIN_EXAGGERATION
 } from '../config/fire3d-presentation';
 import { resolveHillshadeArchiveUrl } from '../layers/hillshade';
-import { probeWebGl2, watchContextLoss } from './gl-capability';
+import { watchContextLoss, webGl2Capability } from './gl-capability';
 import {
   getCommittedSnapshot,
   onCommittedSnapshotChange
@@ -263,21 +263,20 @@ function desktopViewport(): boolean {
 }
 
 /**
- * The device's WebGL 2 answer, measured once per session (DR-025a).
- *
- * Cached because the probe allocates a real GL context and the gate is
- * re-evaluated on every preference, cluster, registry, and viewport change,
- * and because the answer cannot change for a page. Actual context LOSS is a
- * separate, watched event; it is not a change to this capability.
+ * The device's WebGL 2 answer (DR-025a), read from the one shared
+ * measurement in `gl-capability.ts` that the boot path and the 3D control
+ * also read, so the three can never disagree and no second GL context is
+ * allocated for the question. The gate is re-evaluated on every preference,
+ * cluster, registry, and viewport change; the answer cannot change for a
+ * page. Actual context LOSS is a separate, watched event; it is not a
+ * change to this capability.
  *
  * The same probe is the foundation for map-wide 3D terrain across all four
  * hazard views (the owner's DR-025 expansion). Nothing here builds that; it
  * is noted so the next reader adds the tier beside this, not a second probe.
  */
-let webgl2Capable: boolean | null = null;
 function hasWebGl2(): boolean {
-  webgl2Capable ??= probeWebGl2().webgl2;
-  return webgl2Capable;
+  return webGl2Capability().webgl2;
 }
 
 /** The gate's viewport-height input, omitted where there is no window. */

@@ -27,6 +27,9 @@ import { fileURLToPath } from 'node:url';
 
 const FILES = [
   'src/config/urls.ts',
+  // The boot slice of the catalog (DR-008a): the literals the eager graph
+  // reads moved here and must stay under the same live check.
+  'src/config/urls-boot.ts',
   'src/impact/resources.ts',
   'src/impact/sources.ts',
   'src/impact/hydrate.ts',

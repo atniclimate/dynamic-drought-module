@@ -46,9 +46,15 @@ export interface LayerModule {
  * and `bindPopups` reach the same instance a later toggle uses.
  *
  * Scope of that guarantee (ARCH-03): it covers `src/layers/**` modules, not
- * every table a layer reads. `src/config/wildfire-presentation.ts` and the
- * telemetry network adapters still reach the entry chunk through
- * `src/ui/map-key.ts` and `src/ui/sidebar.ts`, which are imported eagerly.
+ * every table a layer reads. Since DR-008a (2026-09-02 and 2026-09-03) the
+ * tables that used to ride the entry chunk beside this catalog no longer do:
+ * the map key and the telemetry network adapters load lazily, the featured
+ * station table arrives with the Water & Snow list, and the URL catalog is
+ * read at boot only through its two-value boot slice
+ * (`src/config/urls-boot.ts`). The activation gate
+ * (`scripts/check-activation-budget.mjs`) forbids the URL and station
+ * catalogs from the initial static set; the palette and the preset and
+ * cluster tables remain eager by design, because first paint reads them.
  */
 export interface LayerDef {
   readonly key: string;
