@@ -436,8 +436,12 @@ maintainer-run artifact builders (`scripts/build-states.mjs`,
 
 ## Browser support
 
-Any evergreen browser (Chrome, Edge, Firefox, Safari 15.5 or newer).
-MapLibre GL JavaScript uses WebGL 2 when the browser offers it and falls back to WebGL 1.
+Any evergreen desktop browser (Chrome, Edge, Firefox, Safari). The
+supported floors for phones and tablets are Safari 15.5 or newer on iPhone
+and iPad, and Chrome 100 or newer on Android; the production build is
+compiled to those targets. MapLibre GL JavaScript 6 requires WebGL 2, which
+both floors enable by default; a browser without WebGL 2 shows the sidebar
+and an honest not-rendering notice instead of a map.
 
 ## Attribution and licensing
 
