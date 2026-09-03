@@ -32,7 +32,7 @@
  * alongside the other layer modules.
  */
 
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
 
 import { adoptExternalResponse } from '../map/interaction-coordinator';
 import type { TelemetryFreshness, TelemetryStation } from '../types/station';

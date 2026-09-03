@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import { USDM_NONE_SWATCH } from '../src/config/palette';
 import { buildFireContextHtml } from '../src/impact/fire-context';

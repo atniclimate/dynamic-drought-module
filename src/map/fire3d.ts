@@ -31,12 +31,14 @@
  * claims nothing about fire behavior.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import type { HazardClusterKey } from '../config/clusters';
 import {
   FIRE3D_CAMERA_TRANSITION_MS,
   FIRE3D_COVERAGE_NOTE,
+  FIRE3D_MIN_HEIGHT_PX,
+  FIRE3D_MIN_HEIGHT_QUERY,
   FIRE3D_MIN_WIDTH_QUERY,
   FIRE3D_NON_PREDICTION_NOTE,
   FIRE3D_PITCH_DEGREES,
@@ -45,6 +47,7 @@ import {
   FIRE3D_TERRAIN_EXAGGERATION
 } from '../config/fire3d-presentation';
 import { resolveHillshadeArchiveUrl } from '../layers/hillshade';
+import { probeWebGl2, watchContextLoss } from './gl-capability';
 import {
   getCommittedSnapshot,
   onCommittedSnapshotChange
@@ -88,6 +91,19 @@ export interface Fire3DGateInput {
   readonly committedCluster: HazardClusterKey | 'custom';
   readonly activeLayerKeys: ReadonlySet<string>;
   readonly currentlyActive: boolean;
+  /**
+   * DR-025a: the renderer capability probe's answer
+   * (`probeWebGl2().webgl2`). Optional, and treated as capable when absent,
+   * so a caller that has not measured the device is not silently told the
+   * device failed. The runtime controller always supplies it.
+   */
+  readonly webgl2?: boolean;
+  /**
+   * Viewport height in CSS pixels. Optional, and treated as unconstrained
+   * when absent, for the same reason. The runtime controller supplies
+   * `window.innerHeight`.
+   */
+  readonly viewportHeight?: number;
 }
 
 /**
@@ -96,11 +112,24 @@ export interface Fire3DGateInput {
  * 'custom' (the user added a reference layer to the Fire view) keeps the
  * mode alive while a fire event layer remains in the active set, so one
  * extra layer never collapses the scene. Switching to another cluster,
- * removing every fire event layer, toggling the preference off, or a
- * narrow viewport always exits.
+ * removing every fire event layer, toggling the preference off, a narrow
+ * viewport, a short viewport, or a device without WebGL 2 always exits.
+ *
+ * DR-025a made the entry test capability plus geometry rather than width
+ * alone: a tablet in the 721 to 1024 px band is welcome, a landscape phone
+ * is not (see FIRE3D_MIN_HEIGHT_PX for why height is the separator), and a
+ * device that cannot give MapLibre a WebGL 2 context never enters a scene
+ * that would render as an inert frame.
  */
 export function shouldFire3DBeActive(input: Fire3DGateInput): boolean {
   if (!input.preference || !input.desktopViewport) return false;
+  if (input.webgl2 === false) return false;
+  if (
+    input.viewportHeight !== undefined &&
+    input.viewportHeight < FIRE3D_MIN_HEIGHT_PX
+  ) {
+    return false;
+  }
   if (input.committedCluster === 'wildfire') return true;
   if (!input.currentlyActive || input.committedCluster !== 'custom') {
     return false;
@@ -231,6 +260,32 @@ function desktopViewport(): boolean {
     typeof window.matchMedia === 'function' &&
     window.matchMedia(FIRE3D_MIN_WIDTH_QUERY).matches
   );
+}
+
+/**
+ * The device's WebGL 2 answer, measured once per session (DR-025a).
+ *
+ * Cached because the probe allocates a real GL context and the gate is
+ * re-evaluated on every preference, cluster, registry, and viewport change,
+ * and because the answer cannot change for a page. Actual context LOSS is a
+ * separate, watched event; it is not a change to this capability.
+ *
+ * The same probe is the foundation for map-wide 3D terrain across all four
+ * hazard views (the owner's DR-025 expansion). Nothing here builds that; it
+ * is noted so the next reader adds the tier beside this, not a second probe.
+ */
+let webgl2Capable: boolean | null = null;
+function hasWebGl2(): boolean {
+  webgl2Capable ??= probeWebGl2().webgl2;
+  return webgl2Capable;
+}
+
+/** The gate's viewport-height input, omitted where there is no window. */
+function viewportHeightInput(): { readonly viewportHeight?: number } {
+  if (typeof window !== 'undefined' && typeof window.innerHeight === 'number') {
+    return { viewportHeight: window.innerHeight };
+  }
+  return {};
 }
 
 // ---------------------------------------------------------------------------
@@ -490,7 +545,9 @@ export function initFire3DController(map: maplibregl.Map): void {
       desktopViewport: desktopViewport(),
       committedCluster: getCommittedSnapshot().cluster,
       activeLayerKeys: registry.getActiveKeys(),
-      currentlyActive: active || activation !== null
+      currentlyActive: active || activation !== null,
+      webgl2: hasWebGl2(),
+      ...viewportHeightInput()
     });
     if (should) {
       if (!active && activation === null) {
@@ -503,11 +560,29 @@ export function initFire3DController(map: maplibregl.Map): void {
     }
   };
 
+  // DR-025a: a lost GPU context freezes the tilted scene at whatever the
+  // last frame was, which is the one outcome this mode must never leave a
+  // user in. Exit down the existing failure ladder (rollback, preference
+  // demotion, toast, status 'unavailable') so the map falls back to the flat
+  // 2D view honestly rather than to a frozen viewport. No re-entry on
+  // restoration: the preference is demoted and the user re-enters
+  // deliberately, which is also what keeps a flapping context from cycling
+  // the camera.
+  watchContextLoss(map, () => {
+    if (!active && activation === null) return;
+    failScene(map, 'The graphics context was lost.');
+  });
+
   onFire3DPreferenceChange(evaluate);
   onCommittedSnapshotChange(evaluate);
   registry.on('change', evaluate);
   if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
     window.matchMedia(FIRE3D_MIN_WIDTH_QUERY).addEventListener('change', evaluate);
+    // The height floor is watched beside the width query so a rotation into
+    // landscape on a phone exits the scene, and a rotation back re-evaluates.
+    window
+      .matchMedia(FIRE3D_MIN_HEIGHT_QUERY)
+      .addEventListener('change', evaluate);
   }
   evaluate();
 }

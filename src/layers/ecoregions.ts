@@ -21,16 +21,18 @@
  * the overlay never implies precision the 2012 source does not carry).
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 
 import { ECOREGION_COLORS, ECOREGION_DEFAULT_COLOR } from '../config/palette';
+import { matchExpression } from '../config/style-expressions';
 import { URLS } from '../config/urls';
 import { firstLayerIdAbove, BOTTOM_STACK_IDS } from '../map/layer-order';
 import { buildEcoregionPopupHtml } from '../ui/popups';
 import { buildBoundaryContext } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import { escapeHtml } from '../util/escape';
+import { isObject } from '../util/guards';
 import { registry } from '../state/registry';
 import { showLegend, hideLegend, LEGEND_ORDER } from '../ui/legend-registry';
 
@@ -320,10 +322,6 @@ function bottomOverlayBeforeId(map: maplibregl.Map): string | undefined {
  * which both Level III and Level IV features carry.
  */
 function buildFillColorExpression(): maplibregl.ExpressionSpecification {
-  const matchPairs: (string | string[])[] = [];
-  for (const [name, color] of Object.entries(ECOREGION_COLORS)) {
-    matchPairs.push(name, color);
-  }
   const keyExpr: maplibregl.ExpressionSpecification = [
     'coalesce',
     ['get', 'US_L3NAME'],
@@ -331,9 +329,17 @@ function buildFillColorExpression(): maplibregl.ExpressionSpecification {
     ['get', 'name'],
     ''
   ];
-  // The `match` operator's variadic [label, output, ..., default] form is
-  // awkward to type without a cast; the runtime shape matches the Style Spec.
-  return ['match', keyExpr, ...matchPairs, ECOREGION_DEFAULT_COLOR] as unknown as maplibregl.ExpressionSpecification;
+  // `matchExpression` does the head-pair/tail split the Style Spec tuple type
+  // requires. For every non-empty palette, and so for ECOREGION_COLORS as
+  // shipped, the emitted array is the same one the older cast-and-spread form
+  // produced; for an empty palette the two disagree and both are invalid, so
+  // the helper throws instead of emitting either.
+  return matchExpression(
+    keyExpr,
+    Object.entries(ECOREGION_COLORS),
+    ECOREGION_DEFAULT_COLOR,
+    'ECOREGION_COLORS'
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -442,8 +448,19 @@ function updateLegendNote(): void {
  */
 let readyWatchers: {
   onData: (e: maplibregl.MapSourceDataEvent) => void;
-  onError: (e: { error?: Error; sourceId?: string }) => void;
+  onError: (e: maplibregl.ErrorEvent) => void;
 } | null = null;
+
+/**
+ * Read the source id off an error event. MapLibre reports source failures
+ * through `error` with the failing source's id attached by the style's
+ * evented-parent data, but the v6 `ErrorEvent` type declares only `error`,
+ * so the id is read through a guard instead of an assertion. A generic map
+ * error carries no id and is ignored, exactly as before.
+ */
+function errorSourceId(e: maplibregl.ErrorEvent): string | null {
+  return isObject(e) && typeof e.sourceId === 'string' ? e.sourceId : null;
+}
 
 function detachReadyWatchers(map: maplibregl.Map): void {
   if (!readyWatchers) return;
@@ -471,8 +488,8 @@ function markReadyWhenLoaded(map: maplibregl.Map): void {
       detachReadyWatchers(map);
     }
   };
-  const onError = (e: { error?: Error; sourceId?: string }): void => {
-    if (e.sourceId !== SOURCE_ID) return;
+  const onError = (e: maplibregl.ErrorEvent): void => {
+    if (errorSourceId(e) !== SOURCE_ID) return;
     console.warn('Ecoregion PMTiles source error.', e.error);
     setStatus('error');
     detachReadyWatchers(map);

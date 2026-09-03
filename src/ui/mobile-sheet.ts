@@ -48,7 +48,7 @@
  * open the full report, never a fabricated reading.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import type { ImpactBriefing } from '../impact/types';
 import { selectBriefNarrativeLine } from '../impact/brief-narrative-selector';

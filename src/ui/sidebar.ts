@@ -52,7 +52,7 @@
  * config tables in `src/config/`.
  */
 
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
 
 import {
   LAYER_DEFS,
@@ -88,14 +88,12 @@ import {
   renderStudioLoadFailure
 } from './view-shell';
 import { prefersReducedMotion } from '../util/motion';
-import {
-  fetchAwdbDailySeries,
-  toStationValue,
-  elementsForAwdbStationTriplet
-} from '../util/awdb';
-import { fetchCwmsLatest, cwmsStationValue } from '../util/cwms';
-import { fetchHydrometDaily, hydrometStationValue } from '../util/hydromet';
-import { fetchUsgsIV, usgsLatestStationValue } from '../util/usgs';
+// The four telemetry network adapters (NRCS AWDB, USACE CWMS, USBR
+// Hydromet, USGS Instantaneous Values) are imported dynamically inside
+// `fetchPrimaryStationValue` below, not here (DR-008a). They were about
+// 27.8 kB of source in the entry chunk for work that cannot happen before a
+// user reveals the telemetry list, and each station uses exactly one of the
+// four, so a boot now pays for none of them.
 import type { StationValue, TelemetryStation } from '../types/station';
 import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
@@ -759,22 +757,33 @@ async function fetchPrimaryStationValue(
   station: TelemetryStation,
   signal: AbortSignal
 ): Promise<StationValue | null> {
+  // Each branch loads only the adapter it uses (DR-008a). The import sits
+  // inside a function that already awaits a network round trip, so the
+  // chunk fetch overlaps work the caller was going to wait for anyway, and
+  // the eager import graph the activation gate walks is unchanged.
   if (station.awdbStation) {
+    const { elementsForAwdbStationTriplet, fetchAwdbDailySeries, toStationValue } =
+      await import('../util/awdb');
     const elements = elementsForAwdbStationTriplet(station.awdbStation);
     const series = await fetchAwdbDailySeries(station.awdbStation, elements, 7, signal);
     const primary = series.find((s) => s.element === elements[0]);
     return primary ? toStationValue(station.id, primary) : null;
   }
   if (station.hydrometParams && station.hydrometParams.length > 0) {
+    const { fetchHydrometDaily, hydrometStationValue } = await import(
+      '../util/hydromet'
+    );
     const series = await fetchHydrometDaily(station.hydrometParams, 7, signal);
     const primary = series[0];
     return primary ? hydrometStationValue(station.id, primary) : null;
   }
   if (station.cwms) {
+    const { cwmsStationValue, fetchCwmsLatest } = await import('../util/cwms');
     const latest = await fetchCwmsLatest(station.cwms, signal);
     return cwmsStationValue(station.id, station.cwms.label, latest);
   }
   if (station.usgsSite) {
+    const { fetchUsgsIV, usgsLatestStationValue } = await import('../util/usgs');
     const payload = await fetchUsgsIV(station.usgsSite, signal);
     return usgsLatestStationValue(station.id, payload);
   }

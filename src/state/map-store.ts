@@ -13,7 +13,7 @@
  * on demand. Null before boot completes.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 let mapRef: maplibregl.Map | null = null;
 

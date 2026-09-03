@@ -1,4 +1,4 @@
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 /**
  * Z-order discipline for the map's permanent stacking contract (the U4

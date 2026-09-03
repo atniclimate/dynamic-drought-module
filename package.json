@@ -17,6 +17,7 @@
     "test:serial": "playwright test --workers=1",
     "test:drift-contract": "node --test tests/upstream-drift-contract.test.mjs",
     "test:minimap-geometry": "node --test tests/minimap-geometry-artifact.test.mjs",
+    "test:style-expressions": "node --test tests/style-expressions.test.mjs",
     "test:live-receipts": "node --test tests/live-receipts.test.mjs",
     "test:worker-receipts": "node --test tests/worker-receipts.test.mjs",
     "test:source-health": "node --test tests/source-health.test.mjs",
@@ -31,9 +32,10 @@
     "check:coverage": "node scripts/generate-coverage-matrix.mjs --check",
     "check:vocabulary": "node scripts/check-surface-vocabulary.mjs",
     "check:activation": "node scripts/check-activation-budget.mjs",
+    "check:renderer": "node scripts/check-renderer-version.mjs",
     "check:landscape-schema": "node scripts/validate-landscape-artifact.mjs scripts/landscape/tests/fixtures/corrected/snapshot_terrain_l3.json && node scripts/validate-landscape-artifact.mjs public/data/landscape-signature-pnw.json",
     "build:coverage-matrix": "node scripts/generate-coverage-matrix.mjs",
-    "check:all": "npm run scan:emdash && npm run check:public-tree && npm run check:resources && npm run check:places && npm run check:coverage && npm run check:vocabulary && npm run check:landscape-schema && npm run check:enso && npm run test:drift-contract && npm run test:live-receipts && npm run test:worker-receipts && npm run test:source-health && npm run test:boundary-boots && npm run test:minimap-geometry",
+    "check:all": "npm run scan:emdash && npm run check:public-tree && npm run check:resources && npm run check:places && npm run check:coverage && npm run check:vocabulary && npm run check:landscape-schema && npm run check:enso && npm run test:drift-contract && npm run test:live-receipts && npm run test:worker-receipts && npm run test:source-health && npm run test:boundary-boots && npm run test:minimap-geometry && npm run test:style-expressions && npm run check:renderer",
     "gate": "npm run build && npm run check:bundle && npm run check:activation && npm run check:all",
     "gate:nobuild": "npm run typecheck && npm run check:all",
     "verify:quick": "npm run typecheck && npm run scan:emdash && npm run check:vocabulary && npm run check:coverage",
@@ -60,7 +62,7 @@
   },
   "dependencies": {
     "@preact/signals": "^2.9.3",
-    "maplibre-gl": "^4.7.0",
+    "maplibre-gl": "6.6.0",
     "pmtiles": "^4.4.1",
     "preact": "^10.29.7"
   },

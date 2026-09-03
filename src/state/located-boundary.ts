@@ -19,7 +19,7 @@
  * emphasis (place-emphasis.ts) uses, so a closed briefing leaves no highlight.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { Geometry } from 'geojson';
 
 import { RESERVATION_FILL_COLOR, RESERVATION_OUTLINE_COLOR } from '../config/palette';

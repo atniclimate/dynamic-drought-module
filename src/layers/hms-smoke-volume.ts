@@ -20,7 +20,7 @@
  * simply continues without a smoke volume; nothing here may block terrain.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import {
   HMS_DENSITY_PRESENTATION,

@@ -33,7 +33,7 @@
  * areas render nothing, matching CPC's own blank.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';

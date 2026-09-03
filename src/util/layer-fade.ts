@@ -22,7 +22,7 @@
  * the previous instant behavior.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import { prefersReducedMotion } from './motion';
 
@@ -32,20 +32,55 @@ import { sleepUnlessAborted } from './fetch';
 export const LAYER_FADE_MS = 200;
 
 /**
+ * A paint property name the map accepts, taken straight from the method
+ * signature so it tracks MapLibre's own union (v6 narrowed both
+ * `setPaintProperty` and `getPaintProperty` from `string` to
+ * `keyof AllPaintProperties`). Shared with src/util/frame-stepper.ts.
+ */
+export type PaintPropertyName = Parameters<maplibregl.Map['setPaintProperty']>[1];
+
+/**
+ * Narrow a paint property name that only exists as a string at compile
+ * time. The single narrowing point in the fade code: `FadeTarget.prop` in
+ * frame-stepper comes from layer modules as a plain string, and the
+ * `-transition` companion is built by concatenation. MapLibre validates the
+ * name at runtime and warns on an unknown one, so an incorrect name behaves
+ * exactly as it did before this migration. Prefer typing a parameter
+ * `PaintPropertyName` over calling this.
+ */
+export function asPaintPropertyName(name: string): PaintPropertyName {
+  return name as PaintPropertyName;
+}
+
+/** One fadeable opacity property and its transition companion. */
+interface OpacityProp {
+  readonly prop: PaintPropertyName;
+  readonly transition: PaintPropertyName;
+}
+
+/**
  * The opacity paint property per layer type. Only types the module suite
  * actually renders (fill, line, raster) plus the two likely next arrivals
- * (circle, symbol) are listed; an unlisted type simply does not fade.
+ * (circle, symbol) are listed; an unlisted type simply does not fade. Both
+ * the property and its `-transition` companion are spelled out so the
+ * compiler checks each against MapLibre's property union.
  */
-const OPACITY_PROPS: Readonly<Record<string, readonly string[]>> = {
-  fill: ['fill-opacity'],
-  line: ['line-opacity'],
-  raster: ['raster-opacity'],
-  circle: ['circle-opacity', 'circle-stroke-opacity'],
-  symbol: ['icon-opacity', 'text-opacity']
+const OPACITY_PROPS: Readonly<Record<string, readonly OpacityProp[]>> = {
+  fill: [{ prop: 'fill-opacity', transition: 'fill-opacity-transition' }],
+  line: [{ prop: 'line-opacity', transition: 'line-opacity-transition' }],
+  raster: [{ prop: 'raster-opacity', transition: 'raster-opacity-transition' }],
+  circle: [
+    { prop: 'circle-opacity', transition: 'circle-opacity-transition' },
+    { prop: 'circle-stroke-opacity', transition: 'circle-stroke-opacity-transition' }
+  ],
+  symbol: [
+    { prop: 'icon-opacity', transition: 'icon-opacity-transition' },
+    { prop: 'text-opacity', transition: 'text-opacity-transition' }
+  ]
 };
 
 /** The opacity props for a layer id, or an empty list if it is absent. */
-function opacityProps(map: maplibregl.Map, id: string): readonly string[] {
+function opacityProps(map: maplibregl.Map, id: string): readonly OpacityProp[] {
   const layer = map.getLayer(id);
   if (!layer) return [];
   return OPACITY_PROPS[layer.type] ?? [];
@@ -66,12 +101,12 @@ export function fadeInLayers(
 ): void {
   if (!ids || prefersReducedMotion()) return;
   for (const id of ids) {
-    for (const prop of opacityProps(map, id)) {
+    for (const { prop, transition } of opacityProps(map, id)) {
       const target: unknown = map.getPaintProperty(id, prop) ?? 1;
       if (typeof target !== 'number' || target <= 0) continue;
-      map.setPaintProperty(id, `${prop}-transition`, { duration: 0, delay: 0 });
+      map.setPaintProperty(id, transition, { duration: 0, delay: 0 });
       map.setPaintProperty(id, prop, 0);
-      map.setPaintProperty(id, `${prop}-transition`, {
+      map.setPaintProperty(id, transition, {
         duration: LAYER_FADE_MS,
         delay: 0
       });
@@ -94,10 +129,10 @@ export async function fadeOutLayers(
   if (!ids || prefersReducedMotion()) return;
   let faded = false;
   for (const id of ids) {
-    for (const prop of opacityProps(map, id)) {
+    for (const { prop, transition } of opacityProps(map, id)) {
       const current: unknown = map.getPaintProperty(id, prop) ?? 1;
       if (typeof current !== 'number' || current <= 0) continue;
-      map.setPaintProperty(id, `${prop}-transition`, {
+      map.setPaintProperty(id, transition, {
         duration: LAYER_FADE_MS,
         delay: 0
       });

@@ -91,19 +91,28 @@ test('syncFire3dParam round-trips through the URL and preserves neighbors', () =
 /**
  * The clear-sky spec is a HAND-COPY of MapLibre's own internal "no sky"
  * fallback, and `Map.setSky` requires a full specification, so it cannot
- * be replaced by passing undefined. A hand-copy of another project's
- * internals is exactly the kind of thing that rots silently across a
- * major upgrade, and the two existing assertions compare the harness call
- * against this same constant, so they can never notice.
+ * be replaced by passing undefined.
  *
- * This case pins the literal. Re-verified against maplibre-gl 5.24.0 on
- * 2026-08-19 and found unchanged from the 4.7 values (harvested from the
- * retired feature/maplibre-v5 branch on 2026-09-02). To re-verify after
- * an upgrade, search the distributed bundle for the object literal
- * containing "sky-color":"transparent"; that is the fallback the library
- * constructs a Sky with when a style declares none.
+ * What this case proves and what it does not. It pins the APPLICATION
+ * literal against an accidental edit: the two other assertions in this file
+ * compare the harness call against this same constant, so a typo here would
+ * otherwise change both sides at once and go unnoticed. It compares the
+ * constant only with the values written below. It does NOT observe the
+ * installed maplibre-gl, so it cannot detect the library changing its own
+ * internal fallback; a hand-copy of another project's internals is exactly
+ * the kind of thing that rots silently across a major upgrade, and this test
+ * would stay green through that rot.
+ *
+ * Closing that gap is the version-bump checklist's job, not this test's. The
+ * MapLibre bump checklist MUST re-verify these values by inspecting the
+ * distributed bundle for the object literal containing
+ * "sky-color":"transparent" (the fallback the library constructs a Sky with
+ * when a style declares none) and MUST record the result in the bump commit.
+ * Last such inspection: maplibre-gl 5.24.0 on 2026-08-19, unchanged from the
+ * 4.7 values (harvested from the retired feature/maplibre-v5 branch on
+ * 2026-09-02).
  */
-test('the clear-sky specification still matches the library it was copied from', () => {
+test('the clear-sky specification literal is pinned', () => {
   expect(FIRE3D_SKY_CLEAR_SPECIFICATION).toEqual({
     'sky-color': 'transparent',
     'horizon-color': 'transparent',
@@ -644,7 +653,22 @@ const TOGGLE = '.shell-fire3d-btn';
 // for the owner's local review. They stay local: CI keeps no screenshots
 // (playwright.config.ts), and a runner must not write that geometry to
 // disk at all.
-const CAPTURE_EVIDENCE = !process.env['CI'];
+//
+// OPT-IN, NOT OPT-OUT (DR-051 a, ruled 2026-09-02). This constant used to be
+// `!process.env['CI']`, which made every local run a capture run: three of the
+// slowest boots in the suite paid live agency latency, a routine loop could
+// not run offline, and four PNGs the owner reviews were overwritten by anyone
+// who typed `npm run test:serial`. A routine local run must be offline-safe
+// and idempotent, so capture now happens only when the developer asks for it
+// with `DDM_CAPTURE_EVIDENCE=1`; every other local run uses the fixtures
+// exactly as CI does. The flag is the deliberate capture pass and the gate
+// for the evidence categories that come next (terrain across views,
+// volumetric smoke, layer studio 3D layers).
+//
+// The `!process.env['CI']` half stays as a second lock, not as the switch: a
+// runner that somehow carried the flag still captures nothing.
+const CAPTURE_EVIDENCE =
+  process.env['DDM_CAPTURE_EVIDENCE'] === '1' && !process.env['CI'];
 
 // THE ONE PLACE THE SUITE ASKS FOR LIVE BOUNDARIES, and only when it is
 // about to photograph them.
@@ -657,12 +681,15 @@ const CAPTURE_EVIDENCE = !process.env['CI'];
 // services respond; they say nothing about how the boundaries look.
 //
 // So the three evidence-bearing boots ask for `live` exactly when
-// `CAPTURE_EVIDENCE` is true, which is exactly when the run is local and
-// nothing is retained. Under CI this is `fixture` like every other boot, the
-// capture blocks are skipped, and `installBoundaryStubs` would throw on
-// `live` anyway (tests/tribal-fixtures.ts), so the option cannot reach a
-// public artifact by any route. tests/boundary-boot-inventory.test.mjs
-// records this file as the single allowance and requires the CI guard.
+// `CAPTURE_EVIDENCE` is true, which since DR-051 a is exactly the deliberate
+// `DDM_CAPTURE_EVIDENCE=1` capture pass on a local machine, where nothing is
+// retained. The live mode exists only to serve those captures, so it is gated
+// on the same flag: an ordinary local run is `fixture` like every CI boot. In
+// CI this is `fixture`, the capture blocks are skipped, and
+// `installBoundaryStubs` would throw on `live` anyway
+// (tests/tribal-fixtures.ts), so the option cannot reach a public artifact by
+// any route. tests/boundary-boot-inventory.test.mjs records this file as the
+// single allowance and requires the CI guard.
 const EVIDENCE_BOUNDARIES = CAPTURE_EVIDENCE ? ('live' as const) : ('fixture' as const);
 
 test.describe('W3/W4 browser truth', () => {
@@ -866,7 +893,9 @@ test.describe('W3/W4 browser truth', () => {
     // Unlike every other heavy case in this block (120_000-180_000), this one
     // declared no budget and inherited the global 60_000 while doing the most
     // expensive boot in the file: an evidence-bearing boot (EVIDENCE_BOUNDARIES
-    // is `live` locally, so it pays real agency latency), a full 3D activation,
+    // is `live` during a `DDM_CAPTURE_EVIDENCE=1` capture pass, so it then pays
+    // real agency latency; the measurement below was taken that way, back when
+    // every local run was a capture run), a full 3D activation,
     // then four expect.poll chains with 30_000 ceilings of their own. That is
     // the exact shape playwright.config.ts warns about: the budget has to sit
     // above boot plus the chain, or a correctly-behaving app fails on a slow

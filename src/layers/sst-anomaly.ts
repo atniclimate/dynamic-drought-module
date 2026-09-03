@@ -43,7 +43,7 @@
  * deliberately reads qualitatively and does not assert one.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import { URLS } from '../config/urls';
 import {

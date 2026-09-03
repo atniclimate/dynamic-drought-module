@@ -23,7 +23,7 @@
  * `fetchJsonWithBudget`, late responses dropped.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
@@ -32,6 +32,7 @@ import {
   SPC_FIREWX_CATEGORIES,
   SPC_FIREWX_DEFAULT_COLOR
 } from '../config/palette';
+import { matchExpression } from '../config/style-expressions';
 import { parseArcGisPolygonFeatureCollection } from '../config/wildfire-presentation';
 import { buildSpcFireWeatherPopupHtml } from '../ui/popups';
 import { fetchJsonWithBudget } from '../util/fetch';
@@ -150,16 +151,17 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   const beforeId = resolveBeforeId(map);
 
   // Color by category via a `match` expression on the integer `dn` field.
-  const matchArgs: (number | string)[] = [];
-  for (const c of SPC_FIREWX_CATEGORIES) {
-    matchArgs.push(c.dn, c.color);
-  }
-  const colorExpression = [
-    'match',
+  // `matchExpression` does the head-pair/tail split the Style Spec tuple type
+  // requires. For every non-empty palette, and so for SPC_FIREWX_CATEGORIES as
+  // shipped, the emitted array is the same one the older cast-and-spread form
+  // produced; for an empty palette the two disagree and both are invalid, so
+  // the helper throws instead of emitting either.
+  const colorExpression = matchExpression(
     ['get', 'dn'],
-    ...matchArgs,
-    SPC_FIREWX_DEFAULT_COLOR
-  ] as unknown as maplibregl.ExpressionSpecification;
+    SPC_FIREWX_CATEGORIES.map((c) => [c.dn, c.color] as const),
+    SPC_FIREWX_DEFAULT_COLOR,
+    'SPC_FIREWX_CATEGORIES'
+  );
 
   map.addLayer(
     {

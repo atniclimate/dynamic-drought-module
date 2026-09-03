@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import { gotoApp } from './helpers';
 import { BIA_ROUTE, routeBoundary } from './tribal-fixtures';

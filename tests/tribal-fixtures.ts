@@ -84,9 +84,11 @@ const SERVICE_BY_PATTERN = new Map<string, BoundaryService>([
  *   the browser and reaches the agency. REFUSED WITH A THROW WHEN `CI` IS
  *   SET, so it can never reach a retained public artifact. Its one caller is
  *   the fire3d evidence capture, a local-only visual proof that the real
- *   boundary cartography still draws correctly for the owner's review; that
- *   spec is skipped under `CI` and writes to the gitignored
- *   `fire3d-evidence/`. Routine liveness of the two services is proven
+ *   boundary cartography still draws correctly for the owner's review; those
+ *   captures are skipped under `CI`, and locally they happen only under
+ *   `DDM_CAPTURE_EVIDENCE=1` (DR-051 a, 2026-09-02), writing to the
+ *   gitignored `fire3d-evidence/`. A routine local run therefore never asks
+ *   for this mode. Routine liveness of the two services is proven
  *   separately by the daily source-health probe
  *   (`scripts/source-health.mjs`), which drives Chromium outside this suite.
  */
@@ -286,7 +288,10 @@ function fixtureFor(service: BoundaryService, mode: BoundaryStubMode): FixtureCo
  * source for the literal option, which an alias or a computed value could
  * slip past, but nothing can slip past this throw. The local exception it
  * protects is the fire3d evidence capture, which renders real boundary
- * cartography for the owner's visual review and is skipped under `CI`.
+ * cartography for the owner's visual review, is skipped under `CI`, and since
+ * DR-051 a runs locally only under `DDM_CAPTURE_EVIDENCE=1`. The throw below
+ * is unchanged by that ruling: the flag narrows who asks, the throw is what
+ * makes an ask under `CI` impossible.
  */
 export async function installBoundaryStubs(
   page: Page,

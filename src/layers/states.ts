@@ -21,7 +21,7 @@
  * hardened usdm / nifc-fires / bia-reservations pattern.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';

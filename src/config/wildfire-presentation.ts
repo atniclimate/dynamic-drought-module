@@ -1,5 +1,7 @@
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { FeatureCollection } from 'geojson';
+
+import { matchExpression } from './style-expressions';
 
 export interface ArcGisPolygonFeatureCollection {
   readonly collection: FeatureCollection;
@@ -286,10 +288,10 @@ export function buildNifcAreaPerimeterClaim(
   } this area: ${categories}.`;
 }
 
-const NORMALIZED_NIFC_TYPE = [
+const NORMALIZED_NIFC_TYPE: maplibregl.ExpressionSpecification = [
   'upcase',
   ['to-string', ['coalesce', ['get', NIFC_INCIDENT_TYPE_PROPERTY], '']]
-] as unknown as maplibregl.ExpressionSpecification;
+];
 
 /** MapLibre filter used by the corresponding NIFC presentation layer. */
 export function buildNifcIncidentFilter(
@@ -408,10 +410,10 @@ export function resolveHmsDensityPresentation(
   return HMS_DENSITY_PRESENTATION[resolveHmsDensityClass(value)];
 }
 
-const NORMALIZED_HMS_DENSITY = [
+const NORMALIZED_HMS_DENSITY: maplibregl.ExpressionSpecification = [
   'upcase',
   ['to-string', ['coalesce', ['get', 'Density'], '']]
-] as unknown as maplibregl.ExpressionSpecification;
+];
 
 /** Exact paint installed by the HMS layer. Unknown never falls through to Light. */
 export function buildHmsSmokeFillPaint(): NonNullable<
@@ -688,15 +690,20 @@ export const POWER_LINE_WIDTHS: readonly (readonly [string, number])[] = [
 export function buildPowerLinePaint(): NonNullable<
   maplibregl.LineLayerSpecification['paint']
 > {
+  // `matchExpression` does the head-pair/tail split the Style Spec tuple type
+  // requires. For every non-empty palette, and so for POWER_LINE_WIDTHS as
+  // shipped, the emitted array is the same one the older cast-and-spread form
+  // produced; for an empty palette the two disagree and both are invalid, so
+  // the helper throws instead of emitting either.
   return {
     'line-color': POWER_LINE_COLOR,
     'line-opacity': POWER_LINE_OPACITY,
-    'line-width': [
-      'match',
+    'line-width': matchExpression(
       ['get', 'VOLT_CLASS'],
-      ...POWER_LINE_WIDTHS.flatMap(([voltClass, width]) => [voltClass, width]),
-      0.6
-    ] as unknown as maplibregl.DataDrivenPropertyValueSpecification<number>
+      POWER_LINE_WIDTHS,
+      0.6,
+      'POWER_LINE_WIDTHS'
+    )
   };
 }
 
@@ -755,7 +762,7 @@ export function buildPowerPlantClusterPaint(): NonNullable<
       ['get', 'point_count'],
       base,
       ...steps.flatMap(([threshold, radius]) => [threshold, radius])
-    ] as unknown as maplibregl.DataDrivenPropertyValueSpecification<number>
+    ]
   };
 }
 
@@ -822,7 +829,7 @@ export function buildStructuresMeasuredPaint(): NonNullable<
 > {
   return {
     'fill-extrusion-color': STRUCTURES_PRESENTATION.measuredColor,
-    'fill-extrusion-height': ['get', 'h'] as unknown as maplibregl.DataDrivenPropertyValueSpecification<number>,
+    'fill-extrusion-height': ['get', 'h'],
     'fill-extrusion-base': 0,
     'fill-extrusion-opacity': STRUCTURES_PRESENTATION.opacity
   };
@@ -838,7 +845,7 @@ export function buildStructuresPlaceholderPaint(): NonNullable<
       ['has', 'f'],
       ['*', ['get', 'f'], STRUCTURES_PRESENTATION.metersPerFloor],
       STRUCTURES_PRESENTATION.placeholderMeters
-    ] as unknown as maplibregl.DataDrivenPropertyValueSpecification<number>,
+    ],
     'fill-extrusion-base': 0,
     'fill-extrusion-opacity': STRUCTURES_PRESENTATION.opacity
   };

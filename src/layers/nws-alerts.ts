@@ -26,7 +26,7 @@
  * `fetchJsonWithBudget`, late responses dropped.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type {
   Feature,
   FeatureCollection,
@@ -39,6 +39,7 @@ import {
   NWS_ALERT_COLORS,
   NWS_ALERT_DEFAULT_COLOR
 } from '../config/palette';
+import { matchExpression } from '../config/style-expressions';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import { buildNwsAlertPopupHtml } from '../ui/popups';
 import { fetchJsonWithBudget } from '../util/fetch';
@@ -299,16 +300,17 @@ function featureCollection(
 }
 
 function colorExpression(): maplibregl.ExpressionSpecification {
-  const matchArgs: (string | string[])[] = [];
-  for (const [event, color] of Object.entries(NWS_ALERT_COLORS)) {
-    matchArgs.push(event, color);
-  }
-  return [
-    'match',
+  // `matchExpression` does the head-pair/tail split the Style Spec tuple type
+  // requires. For every non-empty palette, and so for NWS_ALERT_COLORS as
+  // shipped, the emitted array is the same one the older cast-and-spread form
+  // produced; for an empty palette the two disagree and both are invalid, so
+  // the helper throws instead of emitting either.
+  return matchExpression(
     ['get', 'prod_type'],
-    ...matchArgs,
-    NWS_ALERT_DEFAULT_COLOR
-  ] as unknown as maplibregl.ExpressionSpecification;
+    Object.entries(NWS_ALERT_COLORS),
+    NWS_ALERT_DEFAULT_COLOR,
+    'NWS_ALERT_COLORS'
+  );
 }
 
 function ensureMapLayers(

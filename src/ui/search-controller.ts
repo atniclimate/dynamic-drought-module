@@ -23,7 +23,7 @@
  */
 
 import { h, render } from 'preact';
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
 
 import { LAYER_DEFS } from '../config/layers';

@@ -23,7 +23,7 @@
  * partial degrade (the scene keeps everything else).
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import {
   STRUCTURES_PRESENTATION,

@@ -22,7 +22,7 @@
  * in the repo and the palette stays sourced from src/config/palette.ts.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import { DROUGHT_COLORS } from '../config/palette';
 

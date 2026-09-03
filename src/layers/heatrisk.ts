@@ -14,7 +14,7 @@
  * source therefore has nowhere to render.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import { pointHasHeatRiskCoverage } from './heatrisk-coverage';
 import { URLS } from '../config/urls';

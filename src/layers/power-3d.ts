@@ -43,7 +43,7 @@
  * and the 3D embed chip) describes only what is actually rendered.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { FeatureCollection } from 'geojson';
 
 import {

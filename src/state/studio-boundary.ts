@@ -20,7 +20,7 @@
  * derived claims.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 const SOURCE_ID = 'place-studio-boundary';
 const FILL_LAYER_ID = 'place-studio-boundary-fill';

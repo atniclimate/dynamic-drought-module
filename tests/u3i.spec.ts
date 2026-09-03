@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import { gotoApp, regionButton, regionSelect, layerCheckbox, layerPill } from './helpers';
 import { REGIONS, DEFAULT_REGION, type RegionKey } from '../src/config/regions';
