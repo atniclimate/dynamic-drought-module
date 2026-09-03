@@ -28,7 +28,7 @@
  * exactly.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import { useEffect, useRef } from 'preact/hooks';
 import type { ReadonlySignal } from '@preact/signals';
 

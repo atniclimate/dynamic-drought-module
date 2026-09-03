@@ -12,7 +12,7 @@
  */
 
 import { test } from '@playwright/test';
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 export interface RecordedCall {
   readonly method: string;

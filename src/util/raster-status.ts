@@ -27,7 +27,7 @@
  * until a real case shows up.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import { isObject } from './guards';
 
@@ -78,6 +78,17 @@ type RasterTileEvent = {
   readonly isSourceLoaded?: boolean;
   readonly tile?: unknown;
 };
+
+/**
+ * Read the source id off an error event. MapLibre attaches the failing
+ * source's id through the style's evented-parent data, but the v6
+ * `ErrorEvent` type declares only `error`, so the id is read through a
+ * guard rather than an assertion. A generic map error carries no id and is
+ * ignored, exactly as before.
+ */
+function errorSourceId(e: maplibregl.ErrorEvent): string | null {
+  return isObject(e) && typeof e.sourceId === 'string' ? e.sourceId : null;
+}
 
 function tileEventKey(event: RasterTileEvent): unknown | null {
   if (event.tile === undefined || event.tile === null) return null;
@@ -189,8 +200,8 @@ export function watchRasterTiles(
     requestCycleActive = false;
   };
 
-  const onError = (e: { error?: Error; sourceId?: string }): void => {
-    if (e.sourceId !== sourceId) return;
+  const onError = (e: maplibregl.ErrorEvent): void => {
+    if (errorSourceId(e) !== sourceId) return;
     // Completeness-aware consumers need the whole request cycle before they
     // can distinguish total failure from usable partial coverage. The
     // sourcedataloading set already records each failed request, so idle or

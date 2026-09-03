@@ -653,7 +653,22 @@ const TOGGLE = '.shell-fire3d-btn';
 // for the owner's local review. They stay local: CI keeps no screenshots
 // (playwright.config.ts), and a runner must not write that geometry to
 // disk at all.
-const CAPTURE_EVIDENCE = !process.env['CI'];
+//
+// OPT-IN, NOT OPT-OUT (DR-051 a, ruled 2026-09-02). This constant used to be
+// `!process.env['CI']`, which made every local run a capture run: three of the
+// slowest boots in the suite paid live agency latency, a routine loop could
+// not run offline, and four PNGs the owner reviews were overwritten by anyone
+// who typed `npm run test:serial`. A routine local run must be offline-safe
+// and idempotent, so capture now happens only when the developer asks for it
+// with `DDM_CAPTURE_EVIDENCE=1`; every other local run uses the fixtures
+// exactly as CI does. The flag is the deliberate capture pass and the gate
+// for the evidence categories that come next (terrain across views,
+// volumetric smoke, layer studio 3D layers).
+//
+// The `!process.env['CI']` half stays as a second lock, not as the switch: a
+// runner that somehow carried the flag still captures nothing.
+const CAPTURE_EVIDENCE =
+  process.env['DDM_CAPTURE_EVIDENCE'] === '1' && !process.env['CI'];
 
 // THE ONE PLACE THE SUITE ASKS FOR LIVE BOUNDARIES, and only when it is
 // about to photograph them.
@@ -666,12 +681,15 @@ const CAPTURE_EVIDENCE = !process.env['CI'];
 // services respond; they say nothing about how the boundaries look.
 //
 // So the three evidence-bearing boots ask for `live` exactly when
-// `CAPTURE_EVIDENCE` is true, which is exactly when the run is local and
-// nothing is retained. Under CI this is `fixture` like every other boot, the
-// capture blocks are skipped, and `installBoundaryStubs` would throw on
-// `live` anyway (tests/tribal-fixtures.ts), so the option cannot reach a
-// public artifact by any route. tests/boundary-boot-inventory.test.mjs
-// records this file as the single allowance and requires the CI guard.
+// `CAPTURE_EVIDENCE` is true, which since DR-051 a is exactly the deliberate
+// `DDM_CAPTURE_EVIDENCE=1` capture pass on a local machine, where nothing is
+// retained. The live mode exists only to serve those captures, so it is gated
+// on the same flag: an ordinary local run is `fixture` like every CI boot. In
+// CI this is `fixture`, the capture blocks are skipped, and
+// `installBoundaryStubs` would throw on `live` anyway
+// (tests/tribal-fixtures.ts), so the option cannot reach a public artifact by
+// any route. tests/boundary-boot-inventory.test.mjs records this file as the
+// single allowance and requires the CI guard.
 const EVIDENCE_BOUNDARIES = CAPTURE_EVIDENCE ? ('live' as const) : ('fixture' as const);
 
 test.describe('W3/W4 browser truth', () => {
@@ -875,7 +893,9 @@ test.describe('W3/W4 browser truth', () => {
     // Unlike every other heavy case in this block (120_000-180_000), this one
     // declared no budget and inherited the global 60_000 while doing the most
     // expensive boot in the file: an evidence-bearing boot (EVIDENCE_BOUNDARIES
-    // is `live` locally, so it pays real agency latency), a full 3D activation,
+    // is `live` during a `DDM_CAPTURE_EVIDENCE=1` capture pass, so it then pays
+    // real agency latency; the measurement below was taken that way, back when
+    // every local run was a capture run), a full 3D activation,
     // then four expect.poll chains with 30_000 ceilings of their own. That is
     // the exact shape playwright.config.ts warns about: the budget has to sit
     // above boot plus the chain, or a correctly-behaving app fails on a slow

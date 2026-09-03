@@ -6907,3 +6907,36 @@ a.impact-resource-link::after {
 .sidebar {
   position: relative;
 }
+
+/* --------------------------------------------------------------------- */
+/* The renderer notice (DR-035a, src/ui/renderer-notice.ts).             */
+/*                                                                       */
+/* One honest line, centered in the map area, shown when the map view is */
+/* not showing anything: either the bounded wait for `load` expired or   */
+/* the browser cannot give MapLibre the WebGL 2 context it needs. It     */
+/* borrows the loading indicator's family (same surface, border, and     */
+/* type tokens) because it answers the same question that pill answers,  */
+/* one state later. Non-interactive: it is a statement, not a control,   */
+/* so it never intercepts a pointer meant for the map beneath it.        */
+/* --------------------------------------------------------------------- */
+.renderer-notice {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: var(--z-map-readout);
+  max-width: min(320px, calc(100% - 32px));
+  margin: 0;
+  padding: 10px 16px;
+  text-align: center;
+  pointer-events: none;
+  background: var(--bg-1);
+  color: var(--fg-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: var(--fw-body);
+  line-height: 1.45;
+  letter-spacing: var(--track-pill);
+}

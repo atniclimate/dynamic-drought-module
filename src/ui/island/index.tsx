@@ -21,7 +21,7 @@
 
 import { render } from 'preact';
 import { signal } from '@preact/signals';
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import { LAYER_DEFS } from '../../config/layers';
 import type { LayerStatus } from '../../types/layer';

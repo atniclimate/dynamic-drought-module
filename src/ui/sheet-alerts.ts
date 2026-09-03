@@ -20,7 +20,7 @@
  * and embed sessions never download this chunk.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import { NWS_ALERT_COLORS, NWS_ALERT_DEFAULT_COLOR } from '../config/palette';
 import { registry } from '../state/registry';

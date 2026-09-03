@@ -23,7 +23,7 @@
  * (where it belongs) and the MapLibre paint expression trivial.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection, GeoJsonProperties, Geometry } from 'geojson';
 import { URLS } from '../config/urls';
 import { TREATY_COLOR_DEFAULT, pickTreatyColor } from '../config/palette';

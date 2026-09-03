@@ -29,7 +29,7 @@
  * Treaty, or sovereign-jurisdiction data is surfaced by this module.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import {
   getPlaceSelection,

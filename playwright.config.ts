@@ -192,9 +192,11 @@ export default defineConfig({
     // on retry 1, so the retry trace still carries the timing of the flaky
     // path; `retain-on-failure` is the upgrade if retry traces prove thin.
     //
-    // The explicit evidence captures in fire3d-mode.spec.ts stay gated on CI:
-    // they are a deliberate local scene capture for the owner's visual
-    // review, not failure diagnosis, and nothing retains them.
+    // The explicit evidence captures in fire3d-mode.spec.ts are a deliberate
+    // local scene capture for the owner's visual review, not failure
+    // diagnosis, and nothing retains them. Since DR-051 a (2026-09-02) they
+    // need `DDM_CAPTURE_EVIDENCE=1` as well as an unset CI, so a routine
+    // local run writes no pixels of its own at all.
     trace: isCI
       ? {
           mode: 'on-first-retry',

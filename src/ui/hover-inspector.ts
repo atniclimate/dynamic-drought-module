@@ -18,7 +18,7 @@
  * frame; each update is a few small box queries and is cheap.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 
 import { USDM_CATEGORIES } from '../config/palette';

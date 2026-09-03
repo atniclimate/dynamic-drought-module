@@ -35,7 +35,7 @@
  * user already chose to load.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import { fetchWithBudget } from '../util/fetch';

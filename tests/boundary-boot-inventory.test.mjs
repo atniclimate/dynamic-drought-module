@@ -146,6 +146,11 @@ const DIRECT_BOOT_REASONS = {
     reason:
       'this is gotoApp itself, the one navigation the whole suite is funnelled through, and it installs the suite-wide stub immediately before it'
   },
+  'tests/boot-without-map.spec.ts': {
+    sites: 1,
+    reason:
+      'boots with WebGL 2 removed (DR-035 a), where gotoApp cannot apply because it asserts the generated sidebar that only builds once a map exists; the spec installs the boundary and minimap stubs itself before navigating'
+  },
   'tests/deployment-subpath.spec.ts': {
     sites: 1,
     reason:

@@ -21,7 +21,7 @@
  * the overlay never implies precision the 2012 source does not carry).
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 
 import { ECOREGION_COLORS, ECOREGION_DEFAULT_COLOR } from '../config/palette';
@@ -32,6 +32,7 @@ import { buildEcoregionPopupHtml } from '../ui/popups';
 import { buildBoundaryContext } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import { escapeHtml } from '../util/escape';
+import { isObject } from '../util/guards';
 import { registry } from '../state/registry';
 import { showLegend, hideLegend, LEGEND_ORDER } from '../ui/legend-registry';
 
@@ -447,8 +448,19 @@ function updateLegendNote(): void {
  */
 let readyWatchers: {
   onData: (e: maplibregl.MapSourceDataEvent) => void;
-  onError: (e: { error?: Error; sourceId?: string }) => void;
+  onError: (e: maplibregl.ErrorEvent) => void;
 } | null = null;
+
+/**
+ * Read the source id off an error event. MapLibre reports source failures
+ * through `error` with the failing source's id attached by the style's
+ * evented-parent data, but the v6 `ErrorEvent` type declares only `error`,
+ * so the id is read through a guard instead of an assertion. A generic map
+ * error carries no id and is ignored, exactly as before.
+ */
+function errorSourceId(e: maplibregl.ErrorEvent): string | null {
+  return isObject(e) && typeof e.sourceId === 'string' ? e.sourceId : null;
+}
 
 function detachReadyWatchers(map: maplibregl.Map): void {
   if (!readyWatchers) return;
@@ -476,8 +488,8 @@ function markReadyWhenLoaded(map: maplibregl.Map): void {
       detachReadyWatchers(map);
     }
   };
-  const onError = (e: { error?: Error; sourceId?: string }): void => {
-    if (e.sourceId !== SOURCE_ID) return;
+  const onError = (e: maplibregl.ErrorEvent): void => {
+    if (errorSourceId(e) !== SOURCE_ID) return;
     console.warn('Ecoregion PMTiles source error.', e.error);
     setStatus('error');
     detachReadyWatchers(map);

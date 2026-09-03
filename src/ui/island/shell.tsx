@@ -35,7 +35,7 @@
  * later shell units).
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import { render } from 'preact';
 import { signal } from '@preact/signals';
 import type { ReadonlySignal } from '@preact/signals';

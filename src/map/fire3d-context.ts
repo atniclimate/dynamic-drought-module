@@ -25,7 +25,7 @@
  * names only its live half).
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import { activateWhpDrape, deactivateWhpDrape } from '../layers/whp-3d';
 import { getPowerContextState } from '../state/power-context';

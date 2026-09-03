@@ -55,7 +55,7 @@
  * logged, not silently treated as complete.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';

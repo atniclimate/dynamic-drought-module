@@ -1,7 +1,7 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './styles/app.css';
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import { createMap } from './map/init';
 import { initInteractionCoordinator } from './map/interaction-coordinator';
 import { setMap } from './state/map-store';
@@ -12,7 +12,11 @@ import { getStudioRoute, onStudioRouteChange } from './state/studio-route';
 import { onTypedPlaceChange } from './state/typed-place';
 import { buildSidebar } from './ui/sidebar';
 import { initHoverInspector } from './ui/hover-inspector';
-import { initMapKey } from './ui/map-key';
+import { isGpuInitializationError, probeWebGl2 } from './map/gl-capability';
+import {
+  hideRendererNotice,
+  showRendererNotice
+} from './ui/renderer-notice';
 import { initMapInformation } from './ui/map-information';
 import { initMobileSheet } from './ui/mobile-sheet';
 import { initViewShell } from './ui/view-shell';
@@ -126,6 +130,79 @@ function prepareStudioAwareDeepLink(
   };
 }
 
+/**
+ * How long boot waits for the map's `load` event before it stops holding the
+ * rest of the interface hostage to it (DR-035a).
+ *
+ * 8 s is this project's standing single-request budget (`CATALOG_TIMEOUT_MS`,
+ * `src/config/place-catalog.ts`, and the `src/util/*` fetch budgets), and a
+ * healthy boot finishes well inside it even on a slow connection, so a
+ * slow-but-working device does not flash the notice. The bound decides only
+ * when the interface starts saying what it is actually showing: a late `load`
+ * still completes the boot and clears the notice.
+ */
+const MAP_LOAD_BOUND_MS = 8_000;
+
+/**
+ * Resolve true when the map fires `load` within `boundMs`, false when the
+ * bound expires first. Never rejects: a boot must not fail on the question
+ * of whether it can boot.
+ */
+function waitForMapLoad(
+  map: maplibregl.Map,
+  boundMs: number
+): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    if (map.loaded()) {
+      resolve(true);
+      return;
+    }
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      resolve(false);
+    }, boundMs);
+    map.once('load', () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      resolve(true);
+    });
+  });
+}
+
+/**
+ * The on-map key rides a lazy chunk (DR-008a): it is an honesty surface, but
+ * nothing can read it before a surface has rendered, so it does not belong in
+ * the entry chunk. Called from an already-async boot path, so the dynamic
+ * import costs a microtask, not a round of blocking work.
+ */
+function loadMapKey(): void {
+  void import('./ui/map-key')
+    .then(({ initMapKey }) => {
+      initMapKey();
+    })
+    .catch((err: unknown) => {
+      console.error('[boot] the on-map key failed to load:', err);
+    });
+}
+
+/**
+ * The chrome that needs no renderer: the on-map key and the map-information
+ * disclosure, which is where the OpenStreetMap and per-source attribution
+ * lives. Booted on the degraded paths (DR-035a) so a map that never paints
+ * still leaves a reachable, honest interface rather than a complete-looking
+ * skeleton. Idempotent.
+ */
+let mapFreeChromeBooted = false;
+function bootMapFreeChrome(): void {
+  if (mapFreeChromeBooted) return;
+  mapFreeChromeBooted = true;
+  loadMapKey();
+  initMapInformation();
+}
+
 async function boot(): Promise<void> {
   // The build's source commit and per-run nonce, readable by any
   // browser run (T1-0 receipt integrity): a verification suite asserts
@@ -134,6 +211,21 @@ async function boot(): Promise<void> {
   // build (the nonce distinguishes two servers on the same commit).
   document.documentElement.dataset.ddmBuildSha = __DDM_BUILD_SHA__;
   document.documentElement.dataset.ddmBuildNonce = __DDM_BUILD_NONCE__;
+
+  // DR-025a / DR-035a: MapLibre 6 requires WebGL 2 and has no WebGL 1
+  // fallback, so ask first. Without a context the constructor would build a
+  // map that can never paint and would only report it through an error
+  // event, so the honest move is not to construct one at all: say what was
+  // observed and boot the chrome that needs no renderer.
+  const capability = probeWebGl2();
+  if (!capability.webgl2) {
+    console.warn(
+      `[boot] no WebGL 2 context: ${capability.reason ?? 'unknown'}`
+    );
+    showRendererNotice('no-webgl2');
+    bootMapFreeChrome();
+    return;
+  }
 
   const map = createMap('map');
   // Publish the map so the frozen UI-service facades (the impact panel) can
@@ -159,13 +251,59 @@ async function boot(): Promise<void> {
     };
   }
 
-  await new Promise<void>((resolve) => {
-    if (map.loaded()) {
-      resolve();
-      return;
-    }
-    map.once('load', () => resolve());
+  // MapLibre 6 reports a failed GPU context through the map's `error` event
+  // rather than a constructor throw (`Map._setupPainter` fires an ErrorEvent
+  // carrying a GPUInitializationError). Only that error means "this browser
+  // cannot render the map"; routine tile and source errors travel the same
+  // event and must not raise a renderer notice, so the classifier is narrow.
+  let gpuInitializationFailed = false;
+  map.on('error', (event) => {
+    if (!isGpuInitializationError(event.error)) return;
+    gpuInitializationFailed = true;
+    showRendererNotice('no-webgl2');
+    bootMapFreeChrome();
   });
+
+  const loadedInBound = await waitForMapLoad(map, MAP_LOAD_BOUND_MS);
+  if (loadedInBound) {
+    wireMapDependentChrome(map);
+    return;
+  }
+
+  // DR-035a: the bound expired. Say so, and stop blocking the chrome. A GPU
+  // initialization error already said something more specific about this
+  // browser, and the weaker statement must not overwrite it.
+  showRendererNotice(gpuInitializationFailed ? 'no-webgl2' : 'not-rendering');
+  bootMapFreeChrome();
+  map.once('load', () => {
+    hideRendererNotice();
+  });
+
+  if (map.isStyleLoaded() === true) {
+    // The style is in hand and only the painting is stalled (a hidden or
+    // occluded window throttles requestAnimationFrame to nothing, so `load`
+    // never fires even though everything loaded). Sources and layers can be
+    // added safely, so the full interface is wired now and the notice stands
+    // until a frame actually renders.
+    wireMapDependentChrome(map);
+    return;
+  }
+
+  // The style is not in hand, so adding a source or a layer would throw.
+  // Wait on, passively and without a second bound: nothing is blocked on
+  // this now, and the interface is already saying what it is showing.
+  map.once('load', () => {
+    wireMapDependentChrome(map);
+  });
+}
+
+/**
+ * Everything that genuinely needs a live map. Split out of `boot` so the
+ * chrome can come up without it (DR-035a) and so a late `load` can still
+ * complete the boot from either degraded path.
+ */
+function wireMapDependentChrome(map: maplibregl.Map): void {
+  hideRendererNotice();
 
   // Click targets register with the InteractionCoordinator on a layer's
   // FIRST activation (the layer-controller's bindPopups seam), not up
@@ -200,8 +338,9 @@ async function boot(): Promise<void> {
   initHoverInspector(map);
 
   // The on-map drought key (0.3.0 design pass): the opening view and the
-  // embed answer "what do the colors mean" without the sidebar legend.
-  initMapKey();
+  // embed answer "what do the colors mean" without the sidebar legend. Lazy
+  // under DR-008a; it renders a microtask later and nothing waits on it.
+  loadMapKey();
 
   // The mobile information disclosure mirrors the active key, governed layer
   // names, sources, and six-state registry without creating durable map state.

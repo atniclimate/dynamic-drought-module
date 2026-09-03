@@ -8,6 +8,7 @@
  * the mismatch surfaces as a failing spec rather than silent drift.
  */
 
+import { execSync } from 'node:child_process';
 import { expect, type BrowserContext, type Page, type Locator } from '@playwright/test';
 import { stubRecentSatellite } from './satellite-fixture';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
@@ -254,6 +255,47 @@ export async function gotoApp(
 }
 
 /**
+ * The sha `vite.config.ts` `buildSha()` would bake into a build made NOW:
+ * git HEAD, plus a `-dirty` suffix when the working tree differs. Mirrored
+ * here rather than imported because the config is bundler code and this is
+ * runner code; if the two ever disagree the assertion below fails loudly,
+ * which is the intended failure.
+ *
+ * Undefined when git cannot answer (no repository, no git on PATH). The
+ * caller then asserts nothing about the sha, exactly as a local run did
+ * before, because an unverifiable expectation is worse than none.
+ *
+ * Resolved ONCE per process. Playwright's `webServer` runs `npm run build`
+ * BEFORE any spec collects, so the tree state that produced the bundle is
+ * the tree state at process start, and the dirty marker is stable for the
+ * whole run. The one way to break that is to edit a tracked file WHILE the
+ * run is in flight (a second worker in a shared tree, say): the build would
+ * carry the older marker and this the newer. Caching cannot fix that, and
+ * the mismatch is honest, so it reports as a build-identity failure.
+ */
+let localBuildShaCache: { readonly value: string | undefined } | undefined;
+
+function localBuildSha(): string | undefined {
+  if (localBuildShaCache) return localBuildShaCache.value;
+  let value: string | undefined;
+  try {
+    const head = execSync('git rev-parse HEAD', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore']
+    }).trim();
+    const status = execSync('git status --porcelain --untracked-files=normal', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore']
+    }).trim();
+    value = status.length > 0 ? `${head}-dirty` : head;
+  } catch {
+    value = undefined;
+  }
+  localBuildShaCache = { value };
+  return value;
+}
+
+/**
  * Prove the boot under test is the build this run made (FE-22, DDM-P0-T08).
  *
  * CI sets DDM_BUILD_SHA and DDM_BUILD_NONCE on the job; vite.config.ts bakes
@@ -265,11 +307,17 @@ export async function gotoApp(
  * `<sha>-dirty` against `<sha>`). It runs after the preset chips are
  * present, so a boot that never ran reads as a boot failure, not as a
  * wrong build; a missing stamp after a successful boot is named as such.
- * Locally, with neither set, the stamp is whatever the dev build chose and
- * nothing is asserted.
+ *
+ * Locally, with neither set, the helper used to assert NOTHING, so a local
+ * run never proved it booted the build it had just made: the exact class of
+ * error the stamp exists to catch (a stale dist under a reused preview) was
+ * invisible in the loop where it is easiest to create. It now resolves the
+ * expected sha itself, the same way vite.config.ts `buildSha()` does, and
+ * asserts the page carries it. If git cannot answer, it keeps the old
+ * posture and asserts nothing.
  */
 async function assertBuildIdentity(page: Page): Promise<void> {
-  const expectedSha = process.env['DDM_BUILD_SHA'];
+  const expectedSha = process.env['DDM_BUILD_SHA'] ?? localBuildSha();
   const expectedNonce = process.env['DDM_BUILD_NONCE'];
   if (!expectedSha && !expectedNonce) return;
   const stamp = await page.evaluate(() => ({

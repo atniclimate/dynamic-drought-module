@@ -23,7 +23,7 @@
  * with hard rule 1.
  */
 
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
 
 import { URLS } from '../config/urls';
 import {
@@ -33,6 +33,7 @@ import {
 } from '../config/palette';
 import { firstLayerIdAbove, BOTTOM_STACK_IDS } from '../map/layer-order';
 import { probeArchiveHeader } from '../util/pmtiles-probe';
+import { isObject } from '../util/guards';
 import { registry } from '../state/registry';
 
 const LAYER_KEY = 'hillshade';
@@ -145,8 +146,13 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     // Async tile/source failures after a clean probe (a truncated file, a
     // CDN hiccup) downgrade the pill instead of staying a silent style
     // error; the layer stays for a manual retry via the toggle.
-    map.on('error', (e: { sourceId?: string }) => {
-      if (e?.sourceId !== SOURCE_ID) return;
+    map.on('error', (e: maplibregl.ErrorEvent) => {
+      // MapLibre attaches the failing source's id to the error event
+      // through the style's evented-parent data, but the v6 `ErrorEvent`
+      // type declares only `error`, so read it through a guard. A generic
+      // map error carries no id and is ignored, exactly as before.
+      const sourceId = isObject(e) && typeof e.sourceId === 'string' ? e.sourceId : null;
+      if (sourceId !== SOURCE_ID) return;
       if (!map.getLayer(LAYER_ID)) return;
       reportStatus('error');
     });

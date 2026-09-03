@@ -32,7 +32,7 @@
  * only toggles a render flag on whichever feature the selection flow supplies.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import { onPlaceSelectionChange } from './place-selection';
 

@@ -41,7 +41,7 @@
  * via the local `setStatus` helper below).
  */
 
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection, LineString } from 'geojson';
 
 import { URLS } from '../config/urls';

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import { readFileSync } from 'node:fs';
 
 import { pointHasHeatRiskCoverage } from '../src/layers/heatrisk-coverage';

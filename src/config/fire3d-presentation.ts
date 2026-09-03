@@ -1,4 +1,4 @@
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import { HILLSHADE_SHADOW } from './palette';
 
@@ -94,3 +94,24 @@ export const FIRE3D_NON_PREDICTION_NOTE =
 
 /** The desktop gate; mirrors the shell's DESKTOP_SHELL_QUERY breakpoint. */
 export const FIRE3D_MIN_WIDTH_QUERY = '(min-width: 721px)';
+
+/**
+ * Viewport-height floor for the tilted camera, in CSS pixels.
+ *
+ * DR-025a admits tablets (the 721 to 1024 px band of DR-036) and excludes
+ * landscape phones, which a width query alone cannot separate: a landscape
+ * phone is 721 px wide or wider and a tablet in portrait is not much taller.
+ * Height is what actually distinguishes them, and height is also what the
+ * scene needs, because a 60-degree camera spends most of its frame on the
+ * horizon and leaves a compressed strip of ground.
+ *
+ * 520 is a DDM CONVENTION, not a device constant. It sits above the tallest
+ * current landscape phone viewport (about 430 to 440 CSS px on the largest
+ * phones) and well below the shortest tablet landscape viewport (768 CSS px),
+ * so it separates the two classes with margin on both sides rather than
+ * tracking any one model. Raise it only with a measurement.
+ */
+export const FIRE3D_MIN_HEIGHT_PX = 520;
+
+/** The height floor as a media query, beside the width query above. */
+export const FIRE3D_MIN_HEIGHT_QUERY = `(min-height: ${FIRE3D_MIN_HEIGHT_PX}px)`;

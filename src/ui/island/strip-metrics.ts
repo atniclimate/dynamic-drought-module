@@ -14,7 +14,7 @@
  * `queryRenderedFeatures` (viewport-clipped) gives an in-view answer.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 
 import { registry } from '../../state/registry';

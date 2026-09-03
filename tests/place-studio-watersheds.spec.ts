@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { MultiPolygon, Polygon } from 'geojson';
 
 import {

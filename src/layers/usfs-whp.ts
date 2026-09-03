@@ -83,7 +83,7 @@
  * committed table, so the two cannot drift apart again unnoticed.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import { URLS } from '../config/urls';
 import { registry } from '../state/registry';

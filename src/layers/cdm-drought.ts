@@ -7,7 +7,7 @@
  * class from a missing or failed month; malformed provenance fails closed.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';

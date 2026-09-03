@@ -26,7 +26,7 @@
  * `fetchJsonWithBudget`, late responses dropped.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type {
   Feature,
   FeatureCollection,

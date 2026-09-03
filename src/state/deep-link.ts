@@ -23,7 +23,7 @@
  * so briefing envelope requests split at the antimeridian.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection } from 'geojson';
 import type { BoundarySelectionContext } from '../impact/types';
 

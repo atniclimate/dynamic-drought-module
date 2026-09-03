@@ -23,13 +23,26 @@
  * throws on it, naming the palette, at the point where the defect exists.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 /** Scalar accepted in a Style Spec expression slot. */
 type ExpressionInput = string | number | boolean;
 
-/** A `match` label: one scalar, or a list of scalars sharing one output. */
-export type MatchLabel = ExpressionInput | ExpressionInput[];
+/**
+ * Value accepted in a `match` input slot. MapLibre 6 types position 1 as
+ * `string | number | ExpressionSpecification`: a boolean input has no valid
+ * label form, so it is excluded here rather than cast away at the call site.
+ * Every palette in this repository passes a `['get', ...]` expression.
+ */
+export type MatchInput = string | number | maplibregl.ExpressionSpecification;
+
+/**
+ * A `match` label: one scalar, or a list of scalars sharing one output.
+ * MapLibre 6 types the label slots as `string | number | string[] |
+ * number[]`, so a boolean label (and a mixed list) is excluded here; no
+ * palette in this repository uses one.
+ */
+export type MatchLabel = string | number | string[] | number[];
 
 /** A `match` output: a scalar, or a nested expression. */
 export type MatchOutput = ExpressionInput | maplibregl.ExpressionSpecification;
@@ -40,7 +53,8 @@ export type MatchPair = readonly [MatchLabel, MatchOutput];
 /**
  * Build a Style Spec `match` expression from a palette of label/output pairs.
  *
- * @param input The expression (or scalar) whose value is matched.
+ * @param input The expression (or string/number scalar) whose value is
+ *   matched.
  * @param pairs Label/output pairs, in emission order. Must not be empty.
  * @param fallback The `default` output used when no label matches.
  * @param paletteName Name of the source constant, quoted in the empty-palette
@@ -49,7 +63,7 @@ export type MatchPair = readonly [MatchLabel, MatchOutput];
  *   palette with no cases.
  */
 export function matchExpression(
-  input: ExpressionInput | maplibregl.ExpressionSpecification,
+  input: MatchInput,
   pairs: readonly MatchPair[],
   fallback: MatchOutput,
   paletteName = 'the palette'

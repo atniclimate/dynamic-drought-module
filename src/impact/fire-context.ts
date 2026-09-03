@@ -20,7 +20,7 @@
  * ranking the whole registry and calling a gauge in another region
  * "nearest".
  */
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 import { USDM_CATEGORIES } from '../config/palette';
 import { STATIC_TELEMETRY_STATION_REGISTRY, distanceMeters } from '../config/station-registry';

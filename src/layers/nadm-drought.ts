@@ -8,7 +8,7 @@
  * the product and never infer an issuer from polygon location.
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 
 import { NADM_CATEGORIES } from '../config/palette';

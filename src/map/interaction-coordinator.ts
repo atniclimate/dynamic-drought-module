@@ -27,7 +27,7 @@
  * over a studio.
  */
 
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
 
 import { interactionRank } from '../config/interaction-ranks';
 import type { InteractionTargetKind } from '../config/interaction-ranks';

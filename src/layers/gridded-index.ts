@@ -42,7 +42,7 @@
  * Source: `URLS.nidisGriddedTileRoot` (verified 2026-05-30; see urls.ts).
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import { URLS } from '../config/urls';
 import { registry } from '../state/registry';
 import { escapeHtml } from '../util/escape';

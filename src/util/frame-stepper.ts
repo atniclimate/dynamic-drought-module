@@ -30,10 +30,11 @@
  * mirroring src/util/motion.ts and src/util/layer-fade.ts).
  */
 
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 
 import { prefersReducedMotion } from './motion';
 import { sleepUnlessAborted } from './fetch';
+import { asPaintPropertyName } from './layer-fade';
 
 /**
  * Crossfade duration between two dated frames. Inside the 150-250 ms range
@@ -196,11 +197,14 @@ function setWithTransition(
   durationMs: number
 ): void {
   if (!map.getLayer(t.layerId)) return;
-  map.setPaintProperty(t.layerId, `${t.prop}-transition`, {
+  // `prop` arrives from the calling layer module as a plain string, so both
+  // it and its `-transition` companion go through the shared narrowing
+  // helper in layer-fade.ts; MapLibre validates the names at runtime.
+  map.setPaintProperty(t.layerId, asPaintPropertyName(`${t.prop}-transition`), {
     duration: durationMs,
     delay: 0
   });
-  map.setPaintProperty(t.layerId, t.prop, value);
+  map.setPaintProperty(t.layerId, asPaintPropertyName(t.prop), value);
 }
 
 /**

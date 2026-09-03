@@ -81,27 +81,34 @@ cannot drift apart.
 not part of any tier above, and it may reach the network. Treat a green
 `check:links` as an unratified extra, not as coverage.
 
-### What a local full run does that CI does not
+### The evidence capture pass (`DDM_CAPTURE_EVIDENCE=1`)
 
-State this plainly, because the commands above are where a developer meets
-it. `npm run test:serial` (and any local run of `fire3d-mode.spec.ts`):
+A routine local run now does exactly what CI does: fixture boundaries, no
+pictures, offline-safe, idempotent. The owner's visual-review captures happen
+only when you ask for them:
 
-- **fetches live Census AIANNH and BIA AIAN-LAR geometry** on three boots,
-  because `CAPTURE_EVIDENCE` in `tests/fire3d-mode.spec.ts` is
-  `!process.env['CI']`, so the waiver described below is opt-out under `CI`
-  and therefore opt-in by default locally, and
+```powershell
+$env:DDM_CAPTURE_EVIDENCE = '1'; npx playwright test --workers=1 tests/fire3d-mode.spec.ts
+```
+
+That pass, and only that pass:
+
+- **fetches live Census AIANNH and BIA AIAN-LAR geometry** on three boots
+  (`EVIDENCE_BOUNDARIES` in `tests/fire3d-mode.spec.ts`; the live mode exists
+  to serve the captures, so it is gated on the same flag), and
 - **rewrites about 5 MB of PNGs into `fire3d-evidence/`** (gitignored):
   `fire3d-active-desktop.png`, `fire3d-embed-disclosure.png`,
   `fire3d-reduced-motion.png`, `fire3d-control-coverage-note.png`.
 
-So a routine local loop cannot run offline, pays live agency latency on three
-of the slowest boots in the suite, and overwrites the owner's review images
-whether or not anyone asked for a capture. Whether that default should invert
-to an explicit `DDM_CAPTURE_EVIDENCE=1` opt-in is an **open owner decision**;
-it changes the default of a waiver the owner ratified, and
-`tests/boundary-boot-inventory.test.mjs` asserts the guard's shape, so nothing
-here should be changed ahead of that call. Under `CI` none of it happens: the
-boots use the fixtures and the capture blocks are skipped.
+Until 2026-09-02 this was the default of every local run: `CAPTURE_EVIDENCE`
+was `!process.env['CI']`, so a routine loop could not run offline, paid live
+agency latency on three of the slowest boots in the suite, and overwrote the
+owner's review images whether or not anyone asked for a capture. **Decided
+(DR-051 a, 2026-09-02): the default is inverted.** The flag is the deliberate
+capture pass, and it is the gate for the evidence categories that come next
+(terrain across views, volumetric smoke, layer studio 3D layers). Under `CI`
+the flag changes nothing: the boots use the fixtures, the capture blocks are
+skipped, and `installBoundaryStubs` throws on `live` regardless.
 
 ### When port 4173 is still held
 
@@ -282,13 +289,19 @@ world-readable: the repository is public, and any GitHub user can list and
 download every retained artifact, so the content has to be safe on its own.
 
 The explicit evidence captures in `fire3d-mode.spec.ts` (`fire3d-evidence/`,
-gitignored) are still skipped under `CI`. Locally, traces keep their frames,
-screenshots stay `only-on-failure`, and the evidence captures run, all into
-gitignored directories.
+gitignored) are still skipped under `CI`, and since DR-051 a they are skipped
+locally too unless `DDM_CAPTURE_EVIDENCE=1` asks for them. Locally, traces
+keep their frames and screenshots stay `only-on-failure`, both into gitignored
+directories.
 
-When `DDM_BUILD_SHA` or `DDM_BUILD_NONCE` is set in the environment (CI sets
-both), `gotoApp` asserts the `<html>` build stamp on every boot it drives,
-so each shard proves it exercised the build this run made.
+`gotoApp` asserts the `<html>` build stamp on every boot it drives, so each
+run proves it exercised the build it just made. `DDM_BUILD_SHA` and
+`DDM_BUILD_NONCE` win when set (CI sets both). With neither set, the helper
+resolves the expected sha the way `vite.config.ts` `buildSha()` does, from
+git `HEAD` plus a `-dirty` marker, and asserts that; the `webServer` builds
+before any spec collects, so the marker is stable for the whole run unless a
+tracked file is edited mid-run. If git cannot answer, nothing is asserted
+about the sha, as before.
 
 Browser provisioning (the Playwright browser cache and its miss and hit
 paths) is a composite action, `.github/actions/playwright-chromium`, shared
@@ -345,14 +358,14 @@ The live mode has exactly one caller, and it is a deliberate waiver.
 gitignored `fire3d-evidence/`; the owner reads them to judge whether real
 Tribal-geography cartography draws honestly in the 3D scene, and a picture of
 two invented rectangles cannot answer that. Its three evidence-bearing boots
-therefore ask for `live` exactly when `CAPTURE_EVIDENCE` is true, which is
-exactly when the run is local and nothing is retained. Under `CI` those boots
-use the fixture like every other boot. Note the shape of that switch:
-`CAPTURE_EVIDENCE = !process.env['CI']`, so the waiver is opt-**out** under
-CI and therefore opt-**in by default on every local run**, including a
-`test:serial` nobody ran for the pictures. See "What a local full run does
-that CI does not" above; whether to invert that default is an open owner
-decision. Routine liveness of the two services
+therefore ask for `live` exactly when `CAPTURE_EVIDENCE` is true, which since
+DR-051 a (2026-09-02) means a local run that was started with
+`DDM_CAPTURE_EVIDENCE=1`, where nothing is retained. Every other local run,
+and every `CI` boot, uses the fixture like the rest of the suite; the switch
+is `process.env['DDM_CAPTURE_EVIDENCE'] === '1' && !process.env['CI']`, so
+the flag is the opt-in and the `CI` term is a second lock rather than the
+selector. See "The evidence capture pass" above. Routine liveness of the two
+services
 is proven separately by the daily source-health probe
 (`scripts/source-health.mjs`), which drives Chromium outside this suite.
 

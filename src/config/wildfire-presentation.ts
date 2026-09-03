@@ -1,4 +1,4 @@
-import type maplibregl from 'maplibre-gl';
+import type * as maplibregl from 'maplibre-gl';
 import type { FeatureCollection } from 'geojson';
 
 import { matchExpression } from './style-expressions';
