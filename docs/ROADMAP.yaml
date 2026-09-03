@@ -518,7 +518,7 @@ decision_gates:
       superseded_answer:
         date: "2026-08-29"
         answer: "Accepted in principle for a version 5 or later renderer; the version 6 option was not on the table."
-      cost: "Measured on feature/maplibre-v5 at e82190e (2026-08-19): main chunk 209.99 kB to 273.01 kB gzip, about 63 KiB more; 3D terrain transfer 2.28 MB to 6.39 MB. To be re-measured against the current tree before the upgrade lands."
+      cost: "Measured on maplibre-6/step-1-style-spec-casts at e5b7d38 (2026-09-02, 6.6.0): the maplibre vendor chunk is 251.7 kB gzip against 209.99 kB at 4.7.1 (about 42 kB more), the entry chunk fell from 43.4 to 33.6 kB gzip under DR-008 a, and the 3D terrain transport at 1280x720 is 6,394,061 bytes over 36 ranged requests against 2,278,573 over 19 at 4.7.1 (the same 6.39 MB the v5 branch measured on 2026-08-19). Serial suite 869 passed in 25.4 min on the branch."
       posture: "That cost figure is a local measurement recorded here, not a per-action continuous integration artifact. Since 2026-09 the work converges on one integration branch and lands as one pull request."
   - id: "DDM-D02"
     question: "Should tablet get its own layout band, or stay a small desktop?"
