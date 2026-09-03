@@ -18,9 +18,14 @@
 # never ship a stale hand-typed vintage.
 #
 # The release bucket enforces a 60-day retention lifecycle (verified live
-# 2026-08-18: the pinned 2026-07-22.0 objects expire 2026-09-21 and are the
-# only release present), so re-running this extract after that date
-# requires re-pinning --release to the newest monthly id.
+# 2026-08-18: the pinned 2026-07-22.0 objects expire 2026-09-21). 2026-09-03:
+# DEFAULT_RELEASE re-pinned to 2026-08-19.0, the newest release on the
+# Overture release calendar at re-pin time, ahead of that 2026-09-21 expiry
+# (DR-011 a). The committed central-Oregon bake was NOT re-extracted, so the
+# shipped STRUCTURES_QUALIFICATION and .meta.json still correctly name
+# 2026-07-22.0; only the default a future extract would use changes. Re-pin
+# again before the 2026-10-21.0 release supersedes 2026-08-19.0 in the
+# bucket.
 #
 # Usage (from the repo root):
 #   .venv/Scripts/python.exe scripts/extract-overture-buildings.py \
@@ -38,7 +43,7 @@ import time
 
 import duckdb
 
-DEFAULT_RELEASE = "2026-07-22.0"
+DEFAULT_RELEASE = "2026-08-19.0"
 # The committed default bake: the central_oregon region framing's bounds
 # (src/config/regions.ts), 189,769 buildings at extract time 2026-08-19 UTC.
 # A full-PNW bake was PROJECTED and rejected, never run: 9,160,813

@@ -220,6 +220,16 @@ the minimap evicts only when that verdict fails, and a pure spec pins the
 agreement case by case. The malformed-payload browser contract gained the
 dedupe bound the shared key promises: at most one fetch per consumer.
 
+### 2026-09-03: the Overture buildings extract re-pinned ahead of its bucket expiry
+
+`scripts/extract-overture-buildings.py`'s `DEFAULT_RELEASE` moves from
+`2026-07-22.0` to `2026-08-19.0`, the newest release on the Overture release
+calendar at re-pin time, ahead of the 2026-07-22.0 pin's 2026-09-21 bucket
+expiry (DR-011 a). The committed central-Oregon structures bake was not
+re-extracted, so `STRUCTURES_QUALIFICATION` and the shipped
+`structures-central-oregon.pmtiles` still correctly name release
+`2026-07-22.0`; only the default a future extract would use changes.
+
 ## v0.6.26
 
 `v0.6.26` is the package version and, since 2026-08-29, the release tag. One

@@ -98,6 +98,12 @@ jobs:
       - name: Typecheck Worker without deploying
         run: npm --prefix workers/proxy run typecheck
 
+      # DR-005 a: the Worker has its own package.json and lockfile, so the
+      # root gate's dependency posture never covers it. Same command shape
+      # as a plain `npm audit`; fails the gate on a reachable advisory.
+      - name: Audit Worker dependencies
+        run: npm --prefix workers/proxy audit
+
   browser:
     name: Browser suite
     uses: ./.github/workflows/browser-suite.yml

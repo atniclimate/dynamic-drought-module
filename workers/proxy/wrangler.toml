@@ -24,6 +24,17 @@ name = "ddm-proxy"
 main = "src/index.ts"
 compatibility_date = "2026-05-09"
 
+# DR-010 a (2026-09-02 decision register), pinned defensively even though
+# this compatibility_date predates the trigger. Cloudflare enables the
+# `nodejs_compat` and `nodejs_compat_v2` flags by default for compatibility
+# dates of 2026-08-04 or later; this Worker is a CORS shim that uses only
+# Web APIs (fetch, caches.default, ExecutionContext) and must not gain the
+# Node.js built-in surface by way of a routine date bump (hard rule 4). This
+# is a config-only change; it takes effect only on the next publish, which
+# needs the owner's say. See DEVELOPER.md's "Optional Worker" section for
+# the rollback handle to record at that publish.
+compatibility_flags = ["no_nodejs_compat"]
+
 # No KV, no D1, no Durable Objects, no R2. The Worker is stateless except for
 # the per-edge response cache exposed via `caches.default` and the platform
 # rate-limit counters below (managed by Cloudflare, not deployer state).
