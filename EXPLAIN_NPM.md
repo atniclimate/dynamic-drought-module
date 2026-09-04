@@ -2,7 +2,7 @@
 
 **Prompt:**
 
-Explain how this repo uses `npm` or other tools to launch an interactive website via GitHub Pages. Likely there is useful information in `DEVELOPER.md`, `.nvmrc` and `.github/`. Include information on what is `npm` and other tools for a developer unfamiliar with this approach. Save in `~/EXPLAIN_NPM.md`
+Explain how this repo uses `npm` or other tools to launch an interactive website via GitHub Pages. Likely there is useful information in `DEVELOPER.md`, `.nvmrc` and `.github/`. Include information on what is `npm` and other tools for a developer unfamiliar with this approach. Save in `EXPLAIN_NPM.md` in this directory.
 
 **Model Answer:**
 
