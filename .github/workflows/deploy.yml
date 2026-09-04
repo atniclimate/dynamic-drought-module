@@ -128,6 +128,18 @@ jobs:
           ls -la dist
           test -f dist/index.html
 
+      # DR-069 (2026-09-03): production builds publish no source maps while
+      # GitHub Pages is the host. The gate above has already read them (the
+      # activation gate proves each initial chunk's contents from that
+      # chunk's .map), so this deletes them from the folder the upload step
+      # below takes. It sits here, at the publication boundary, rather than
+      # inside `npm run gate`, because the ruling is about what is published
+      # and a local gate run should still leave a debuggable dist/. The
+      # build emits the maps without a `sourceMappingURL` comment
+      # (build.sourcemap 'hidden'), so nothing published points at one.
+      - name: Remove source maps before publishing
+        run: npm run strip:sourcemaps
+
       - name: Configure Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 

@@ -35,6 +35,12 @@ The production build is written to `dist/`. Vite uses relative asset paths so
 the same output works at a domain root, under the historical
 `/dynamic-drought-module/` subpath, and inside an iframe.
 
+Node 24 is the toolchain that builds the application and is not a browser
+floor; the two are different axes. The renderer version and the browser and
+graphics floor are stated once, in README's "Browser support" section, and
+`npm run check:renderer` proves that the pin, the lockfile, the installed tree,
+and the build target in `vite.config.ts` still agree with it.
+
 ## Product and planning authority
 
 Read these sources in order when they disagree:
@@ -188,6 +194,7 @@ Use the narrowest relevant check while developing. Useful commands include:
 ```powershell
 npm run typecheck
 npm run build
+npm run lint
 npm run check:links
 npm run scan:emdash
 npm run check:public-tree
@@ -255,6 +262,20 @@ npm run gate:nobuild    # typecheck plus check:all, the steps that need no dist/
 `gate` adds `build`, `check:bundle` and `check:activation`, the only steps that
 read `dist/`; `gate:nobuild` swaps `build` for `tsc --noEmit` and is what a
 worker on a shared tree runs.
+
+`npm run lint` is the one lint command, and `check:all` runs it, so both gates
+name it. It is Biome (`biome.jsonc`) over `src/**/*.ts` and `src/styles/app.css`:
+one tool for the TypeScript and the stylesheet, with no runtime dependencies and
+no install scripts. DR-007 decided that lint is added; it did not name the tool,
+and the four tools its question mentioned do not fit this tree. typescript-eslint
+declares `typescript >=4.8.4 <6.1.0` while this tree pins TypeScript 7, and
+ESLint cannot read TypeScript without it; a formatter would reflow a large share
+of `src/` on its first pass, which is churn rather than improvement. The
+configuration is a RATCHET: the recommended preset stays on, so every rule the
+tree already satisfies is held at zero, and the thirteen rules that fire today
+are switched off in `biome.jsonc` with their measured count and the reason
+beside each. Burning those down, and widening the command to `tests/`, is
+DDM-P15-T05.
 
 Run the fire and 3D specs directly when fire or 3D changed (about 20 min):
 
@@ -556,10 +577,116 @@ workflow run proves the code path executes; it is not a schedule receipt. A
 retry pass does not satisfy an acceptance line that requires passing without
 depending on retries.
 
-GitHub Pages is already a range-capable CDN. Benchmark field performance before
-moving hosting. Cloudflare Pages is not a direct replacement while an artifact
-exceeds its per-file limit; moving large archives to R2 would introduce a new
-service, state, cost, and governance decision.
+## Hosting: GitHub Pages now, one local origin later
+
+GitHub Pages is the current static host, by owner direction. The end state is
+ONE origin serving both the static application and the upstream relay, so
+`URLS.workerProxy` becomes a same-origin path and the Cross-Origin Resource
+Sharing shim disappears (owner ruling DR-006 a, 2026-09-02, recorded on gate
+DDM-D10 in `docs/ROADMAP.yaml`). Nothing here schedules that move. This section
+records the end state and names the seams it would replace, so the next hosting
+conversation starts from the shape the runtime actually has.
+
+The seams a local full-service server would replace:
+
+1. **The relay origin.** `URLS.workerProxy` names a second origin, and seven
+   runtime paths build `${workerProxy}/proxy?url=<encoded upstream>`:
+   `src/util/awdb.ts`, `src/util/hydromet.ts`, `src/impact/water-supply.ts`,
+   `src/impact/sources.ts`, `src/impact/nws-point.ts`, `src/layers/usfs-whp.ts`,
+   and `src/config/station-registry.ts`. One origin serving both the
+   application and the relay turns that into a same-origin path and retires the
+   shim. The empty-`workerProxy` branch those call sites already carry, which
+   gives a fork with no Worker an honest `unavailable` instead of a blind
+   fetch, is not a Pages artifact and stays.
+2. **Upstream allowlists keyed to the deployed origin.** Some upstreams decide
+   by `Origin`: the federal GeoPlatform Wildfire Hazard Potential ImageServer
+   echoes `Access-Control-Allow-Origin` for `https://atniclimate.github.io`
+   under `Vary: Origin`, and does so intermittently, which is why that layer is
+   proxied unconditionally rather than fetched directly
+   (`src/layers/usfs-whp.ts`). A hosting move changes the browser's origin and
+   re-opens every one of those judgments; a same-origin relay makes the
+   browser's origin irrelevant, because the fetch happens server-side where
+   Cross-Origin Resource Sharing does not apply.
+3. **Response headers this repository cannot set.** GitHub Pages serves its own
+   headers and takes no header configuration from this repository, so the
+   deployment carries no Content-Security-Policy, no frame-ancestors or
+   Cross-Origin-Resource-Policy statement for the `?embed=true` iframe
+   audience, and no per-asset cache policy: the hashed, immutable bundle and a
+   35 MB archive are treated alike. A server we run owns all three.
+4. **Large archives ride the code deploy.** The PMTiles archives are committed
+   under `public/data/` and republished with the site on every deploy:
+   hillshade 35,252,210 bytes, Wildfire Hazard Potential 13.6 MB, structures
+   7.9 MB, power lines 3.8 MB, ecoregions 2.5 MB. The host's limits already
+   shape the product. The z9 hillshade build is a reproducible artifact that is
+   deliberately not shipped, the full Pacific Northwest structures bake was
+   projected at 240 to 380 MB and rejected, and the retired fuel-model drape
+   was removed from the tree so it would stop riding every deploy. A host with
+   its own storage separates data publication from code publication.
+5. **A cross-origin fallback to somebody else's Pages copy.**
+   `URLS.hillshadePmtilesFallback` hard-codes the ATNI Pages copy of the
+   hillshade archive, used only after a deployer's bundled copy fails its
+   bounded header probe. A deployer running a full-service server serves its
+   own archive and the borrowed origin goes away.
+6. **Byte-range reads are an assumption about the host.** The pmtiles protocol
+   reads a header, a directory, and the visible tiles by HTTP range request.
+   Pages answers ranges and `scripts/verify-live.mjs` proves it after every
+   deploy; a replacement host has to prove the same before it can serve these
+   archives at all.
+7. **Publication is the only access control.** Everything in `dist/` is
+   world-readable and nothing in this repository can say otherwise. That is the
+   seam the source-map ruling below answers.
+
+No hosting change is made without evidence, gathered before the move and not
+after it:
+
+- **Range.** The candidate answers a `Range` request for a 35 MB archive with
+  `206`, a correct `Content-Range`, and `Accept-Ranges`, measured rather than
+  assumed. The terrain and drape layers are unusable without it.
+- **Cache.** Measured cache headers for the hashed bundle, for the archives,
+  and for `index.html`, with a stated revalidation story for an embedding page.
+- **Privacy.** Who can read request logs, how long they are kept, and what a
+  viewer's address reaches. The move may not add tracking, analytics, or
+  telemetry; that is a product invariant, not a hosting preference.
+- **Cost.** The standing monthly cost and the cost of the worst traffic month
+  the project would tolerate, archive egress included.
+- **Rollback.** A named way back to the previously served build that does not
+  depend on the new host being healthy, plus a post-deploy receipt equivalent
+  to `verify-live.yml`.
+- **Portability.** The copied-iframe deployment still works from a domain root
+  and from the historical `/dynamic-drought-module/` subpath.
+
+Two facts bound the options today. GitHub Pages is already a range-capable CDN,
+so a replacement has to at least match it, and field performance should be
+benchmarked before hosting moves. Cloudflare Pages is not a direct replacement
+while an artifact exceeds its per-file limit, and moving large archives to R2
+would introduce a new service, state, cost, and governance decision.
+
+**Production source maps.** Production builds publish no source maps while
+GitHub Pages is the host (owner ruling DR-069, 2026-09-03: the second clause of
+gate DDM-D10, which DR-006 does not answer). The repository being public is an
+argument about the source, not about the build: a source map hands a reader the
+exact built tree, including anything transient that never appears in a commit,
+and while Pages is the host nothing here controls who fetches one. Nothing in
+the product needs a published map, so the build's own output is the debugging
+surface until a server we run can serve maps to somebody in particular. Revisit
+when the local full-service server lands.
+
+The execution is not the obvious one, and the obvious one is wrong. The
+activation gate proves what is folded into each initial chunk by opening that
+chunk's `.map`, and treats a missing or evidence-empty map on a non-exempt
+initial chunk as a hard failure, so `build.sourcemap: false` would break
+`npm run gate`, and `npm run verify:quick` with it. The ruling is about what is
+published, not about what is generated. So `build.sourcemap` is `'hidden'`,
+which keeps writing every map the gate reads while dropping the
+`sourceMappingURL` comment from the emitted chunks, and
+`npm run strip:sourcemaps` (`scripts/strip-published-sourcemaps.mjs`) deletes
+the map files from `dist/` in the deploy workflow, after the gate has read them
+and before `upload-pages-artifact` takes the folder. Measured at 5be15f5: 85
+maps, 6,217,137 bytes, none of them published. The strip sits at the
+publication boundary rather than inside the gate because the ruling governs
+publication and a local gate run should still leave a debuggable `dist/`.
+`deploy.yml` is the only workflow that publishes to Pages; a second publisher
+would need the same step.
 
 ## Documentation changes
 

@@ -8,6 +8,37 @@ been assigned to this work.
 - 2026-09-03: gate transcription. DDM-D02, DDM-D06, and DDM-D10 in
   `docs/ROADMAP.yaml` now record the DR-036, DR-034, and DR-006 answers; the
   `needs_decision` lines those answers had blocked are updated or removed.
+- 2026-09-03: the hosting end state, and no published source maps.
+  `DEVELOPER.md` records that GitHub Pages is the current static host, names
+  the seven seams a local full-service server would replace (the relay origin,
+  upstream allowlists keyed to the deployed origin, response headers this
+  repository cannot set, archives that ride the code deploy, the cross-origin
+  hillshade fallback, byte-range reads, and publication as the only access
+  control), and states the range, cache, privacy, cost, rollback, and
+  portability evidence a hosting change must carry first (DR-006, gate
+  DDM-D10). Production builds no longer publish source maps (DR-069): the build
+  still emits them, because the activation gate proves each initial chunk's
+  contents from them, and now emits them without a `sourceMappingURL` comment,
+  while `npm run strip:sourcemaps` removes the files from the tree the Pages
+  upload publishes. Measured: 85 maps, 6,217,137 bytes, previously public.
+- 2026-09-03: one statement of the renderer version and the browser floor.
+  README's "Browser support" section is the single place the project names
+  MapLibre GL JavaScript 6.6.0 and the Safari 15.5, iOS 15.5, and Chrome 100
+  floors; `vite.config.ts` and `DEVELOPER.md` point at it, and
+  `npm run check:renderer` now fails when the pinned renderer or the build
+  target disagrees with that section, so the pointers are proved rather than
+  asserted. `.nvmrc` stays what it is, the Node toolchain, and is not a browser
+  floor.
+- 2026-09-03: one lint command. `npm run lint` runs Biome over the TypeScript
+  in `src/` and over `src/styles/app.css`, and `check:all` runs it, so both
+  gates name it. DR-007 decided that lint is added and did not name the tool;
+  Biome is one tool for both surfaces, with no runtime dependencies and no
+  install scripts, where typescript-eslint declares `typescript >=4.8.4 <6.1.0`
+  against this tree's TypeScript 7 and a formatter would reflow a large share
+  of `src/`. The configuration is a ratchet rather than a cleanup: the
+  recommended preset holds every rule the tree already satisfies at zero, and
+  the thirteen rules that fire today (463 diagnostics, counted in `biome.jsonc`
+  beside each) are switched off for DDM-P15-T05 to burn down.
 
 ### 2026-08-31: heat readings in plain language (pull request 53, `5e0a889`)
 

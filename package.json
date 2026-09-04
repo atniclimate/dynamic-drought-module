@@ -25,6 +25,7 @@
     "test:pure-lane": "node --test tests/pure-lane-inventory.test.mjs",
     "test:report": "playwright show-report",
     "scan:emdash": "node scripts/scan-emdash.mjs",
+    "lint": "biome lint",
     "check:links": "node scripts/check-links.mjs",
     "check:resources": "node scripts/check-resource-catalog.mjs",
     "check:public-tree": "node scripts/check-public-tree.mjs",
@@ -34,9 +35,10 @@
     "check:vocabulary": "node scripts/check-surface-vocabulary.mjs",
     "check:activation": "node scripts/check-activation-budget.mjs",
     "check:renderer": "node scripts/check-renderer-version.mjs",
+    "strip:sourcemaps": "node scripts/strip-published-sourcemaps.mjs",
     "check:landscape-schema": "node scripts/validate-landscape-artifact.mjs scripts/landscape/tests/fixtures/corrected/snapshot_terrain_l3.json && node scripts/validate-landscape-artifact.mjs public/data/landscape-signature-pnw.json",
     "build:coverage-matrix": "node scripts/generate-coverage-matrix.mjs",
-    "check:all": "npm run scan:emdash && npm run check:public-tree && npm run check:resources && npm run check:places && npm run check:coverage && npm run check:vocabulary && npm run check:landscape-schema && npm run check:enso && npm run test:drift-contract && npm run test:live-receipts && npm run test:worker-receipts && npm run test:source-health && npm run test:boundary-boots && npm run test:minimap-geometry && npm run test:style-expressions && npm run test:pure-lane && npm run check:renderer",
+    "check:all": "npm run scan:emdash && npm run lint && npm run check:public-tree && npm run check:resources && npm run check:places && npm run check:coverage && npm run check:vocabulary && npm run check:landscape-schema && npm run check:enso && npm run test:drift-contract && npm run test:live-receipts && npm run test:worker-receipts && npm run test:source-health && npm run test:boundary-boots && npm run test:minimap-geometry && npm run test:style-expressions && npm run test:pure-lane && npm run check:renderer",
     "gate": "npm run build && npm run check:bundle && npm run check:activation && npm run check:all",
     "gate:nobuild": "npm run typecheck && npm run check:all",
     "verify:quick": "npm run typecheck && npm run scan:emdash && npm run check:vocabulary && npm run check:coverage",
@@ -69,6 +71,7 @@
     "preact": "^10.29.7"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.12",
     "@playwright/test": "1.61.1",
     "@types/geojson": "^7946.0.14",
     "@types/node": "^24.13.3",

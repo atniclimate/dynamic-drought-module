@@ -482,6 +482,13 @@ phases:
         needs_decision: "DR-007 (Node pin and lint tooling; 15 DEP-07)"
         acceptance: "One lint command runs over the TypeScript and the stylesheet and passes on the current tree, and the gate names it."
         verification: "verify:quick"
+      - id: "DDM-P15-T05"
+        title: "Burn down the lint rules the command switched off, and widen it to the specs"
+        source: "DDM-P15-T04 measurement, 2026-09-03; 15 DEP-06, DEP-08"
+        effort: M
+        context: "Adding the command measured 463 diagnostics over 178 files at 5be15f5 (8 errors, 202 warnings, 253 infos) across thirteen rules, each switched off in biome.jsonc with its count and reason. The large groups are 220 bracketed literal keys, 89 non-null assertions (report 15's grep estimated 2), 65 CSS !important declarations, 28 string concatenations, and 25 descending-specificity selectors. The six duplicate-property findings are the deliberate vh-then-dvh fallback pairs and must stay. Including tests/**/*.ts was measured at 712 diagnostics rather than 463."
+        acceptance: "Each rule switched off in biome.jsonc is either back on with the tree clean under it, or carries a recorded reason it stays off permanently, and the command covers the specs as well as src/."
+        verification: "verify:quick"
 
 research_dispositions:
   - id: "DDM-R01"
@@ -564,12 +571,15 @@ decision_gates:
     needed_by: ["DDM-P6-T01"]
   - id: "DDM-D10"
     question: "What is the path from GitHub Pages to a local full-service server, and should production source maps stay public in the meantime?"
-    register: "DR-006"
+    register: "DR-006, DR-069"
     needed_by: ["DDM-P15-T01"]
     context: "GitHub Pages is the current static host by owner direction; a local full-service server is the eventual host. Any interim hosting experiment must prove range, CORS, cache, privacy, rollback, cost, and portability first."
     decision:
       date: "2026-09-02"
       answer: "The end state is one origin serving both the static app and the upstream relay, so workerProxy becomes a same-origin path and the CORS shim disappears; record that end state in the roadmap now with GitHub Pages named as the interim host (owner ruling DR-006 a, accepted as one of the twenty-one Part 2 defaults). DR-006 does not decide whether production source maps stay public in the meantime; that half of this gate's question is still open."
+    decision_source_maps:
+      date: "2026-09-03"
+      answer: "Production builds publish no source maps while GitHub Pages is the host, revisited when the local full-service server lands (owner ruling DR-069, the clause DR-006 left open). Executed on 2026-09-03: the build still emits maps, because the activation gate proves each initial chunk's contents from them, and it emits them without a sourceMappingURL comment; npm run strip:sourcemaps removes them from the tree the Pages upload publishes. Both halves of this gate are now answered."
   - id: "DDM-D11"
     question: "Which current ENSO question, audience, and evidence hierarchy should the first index-first product answer?"
     register: "DR-032"

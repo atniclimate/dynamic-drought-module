@@ -50,21 +50,31 @@ export default defineConfig({
     // Default outDir is 'dist'. The GitHub Actions workflow expects this.
     outDir: 'dist',
 
-    // The promised browser floors, pinned so they are a build claim and not
-    // Vite's moving default (Vite 8's `baseline-widely-available` resolves to
-    // Safari 16.4, which would quietly narrow the README's promise). Ruled
-    // 2026-09-02 (DR-009 as amended): Safari 15.5 and iOS Safari 15.5 for
-    // iPhones and iPads, Chrome 100 and later for Android phones and tablets
-    // (2022 devices forward). The bundler lowers SYNTAX to these targets; it
-    // does not polyfill runtime APIs, so a real-device check per release is
-    // the proof, not this line. MapLibre GL JS 6 needs WebGL 2, which both
+    // The promised browser floors. They are STATED ONCE, in README.md's
+    // "Browser support" section, and pinned here so they are a build claim
+    // and not Vite's moving default (Vite 8's `baseline-widely-available`
+    // resolves to Safari 16.4, which would quietly narrow that promise).
+    // `npm run check:renderer` fails if this list and that section
+    // disagree, so change the two together. Ruled 2026-09-02 (DR-009 as
+    // amended): Safari 15.5 and iOS Safari 15.5 for iPhones and iPads,
+    // Chrome 100 and later for Android phones and tablets (2022 devices
+    // forward). The bundler lowers SYNTAX to these targets; it does not
+    // polyfill runtime APIs, so a real-device check per release is the
+    // proof, not this line. MapLibre GL JS 6 needs WebGL 2, which both
     // floors ship enabled by default.
     target: ['es2020', 'safari15.5', 'ios15.5', 'chrome100'],
 
-    // Source maps in production make field-debugging possible without
-    // dramatically inflating bundle size for the kinds of bugs that
-    // show up in this codebase (network handlers, layer lifecycle).
-    sourcemap: true,
+    // Source maps are GENERATED for the activation gate and PUBLISHED
+    // never (DR-069, 2026-09-03: production builds publish no source maps
+    // while GitHub Pages is the host; the reason is recorded in
+    // DEVELOPER.md). 'hidden' still writes every .map file the gate below
+    // reads and drops the `sourceMappingURL` comment from the emitted
+    // chunks, so a published chunk never points at a file that is not
+    // there; `npm run strip:sourcemaps` deletes the files themselves after
+    // the gate has read them and before the Pages upload
+    // (.github/workflows/deploy.yml). Setting this to false instead would
+    // break the gate loudly, which is the trap this comment exists to name.
+    sourcemap: 'hidden',
 
     // Emit dist/.vite/manifest.json. The activation gate
     // (scripts/check-activation-budget.mjs, T-P0-7) needs the import
