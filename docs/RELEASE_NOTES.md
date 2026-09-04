@@ -278,6 +278,12 @@ order so the reason stays reachable, and the layer catalog still arrives with
 the map, because a checkbox for a layer that cannot exist yet would be a
 promise the page cannot keep.
 
+This also makes a published claim true. `README.md` tells readers that a
+browser without WebGL 2 "shows the sidebar and an honest not-rendering notice
+instead of a map." The notice was real, and the sidebar's frame was on screen,
+but every control inside it was an empty container, so the sentence promised
+more than the build delivered. It now describes what actually happens.
+
 ## v0.6.26
 
 `v0.6.26` is the package version and, since 2026-08-29, the release tag. One

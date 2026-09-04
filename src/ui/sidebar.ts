@@ -395,6 +395,17 @@ function enableMapDependentControls(): void {
  * presentation only, so a control a person can see never shows a region the
  * link did not ask for and an iframe does not flash a populated sidebar it
  * is about to hide.
+ *
+ * The embed class is the one piece of chrome the shell does apply early, and
+ * it comes with an obligation. `#app.embed` collapses the sidebar and REVEALS
+ * `#sidebar-expand`, whose handler resizes the map, mounts the catalog island
+ * and rebuilds the Brief head, so it cannot act until `wireTopLevelEvents`
+ * has run with a live map. Applying the class early therefore used to put a
+ * control on screen that existed and did nothing, which is the exact defect
+ * this shell exists to remove. The stylesheet closes it: the expand control
+ * is withheld until `<html data-ddm-controls="ready">`, which is where it
+ * became reachable before this change too, because the embed class itself
+ * did not exist until then.
  */
 export function buildSidebarShell(): void {
   if (shellBuilt) return;

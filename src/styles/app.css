@@ -424,6 +424,22 @@ a:hover {
   display: inline-flex;
 }
 
+/* The expand control is withheld until the map-dependent half is wired
+   (2026-09-03 launch ruling section 4; src/ui/sidebar.ts). It is the one
+   control the embed class REVEALS rather than generates, and its handler
+   resizes the map, mounts the catalog island and rebuilds the Brief head, so
+   it cannot act before `buildSidebar` has run. It is also the one control
+   with nowhere to carry a reason: it exists only while the sidebar is
+   collapsed away, and the sidebar is where the note that explains a disabled
+   control sits. A dimmed icon with no readable reason says less than its
+   absence, so this one is withheld rather than disabled. That restores what a
+   person saw before the shell built early, because the embed class that
+   reveals it did not exist until map ready either. Specificity is deliberate:
+   it has to outrank the two `display: inline-flex` rules above. */
+html:not([data-ddm-controls='ready']) .app-shell .sidebar-expand-btn {
+  display: none;
+}
+
 /* ----------------------------------------------------------------------------
    Panels
    ---------------------------------------------------------------------------- */
