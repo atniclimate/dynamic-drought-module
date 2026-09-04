@@ -12,6 +12,25 @@
  * Replacing a selection first aborts the superseded controller, detaches its
  * honesty watcher, and removes its source. A late tile from the removed
  * source therefore has nowhere to render.
+ *
+ * SURFACE CONTINUITY ACROSS A DAY CHANGE (DDM-P8-T05). That teardown is
+ * what keeps a superseded frame from painting, and it is deliberately kept:
+ * holding the previous day's raster up while the new day's tiles arrive
+ * would present a stale product under the new day's valid date, which is a
+ * worse claim than an empty one. The cost is that the map carries no
+ * surface for the length of the exportImage round trip, so the transition
+ * must SAY so for exactly that long. Two statements cover it, and both are
+ * released the moment the frame reaches a terminal verdict:
+ *
+ *   - the on-map loading indicator, held from the teardown until the tile
+ *     watcher reports (`beginFrameLoad` / `endFrameLoad` below);
+ *   - the frame event, which now announces `loading` at render time instead
+ *     of `ready`, so the on-map key qualifies the scale it is showing
+ *     rather than claiming a surface that has not painted.
+ *
+ * The watcher's request-completeness deadline bounds the loading state: it
+ * always reports `ready`, `degraded` or `error` within
+ * TILE_SUCCESS_DEADLINE_MS, so neither statement can outlive its fetch.
  */
 
 import type * as maplibregl from 'maplibre-gl';
@@ -24,6 +43,7 @@ import {
   syncHeatRiskDayParam
 } from '../state/url';
 import { hideLegend, LEGEND_ORDER, showLegend } from '../ui/legend-registry';
+import { hideLoading, showLoading } from '../ui/overlay';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
 import {
@@ -75,9 +95,29 @@ let selectedDay: number | null = null;
 let currentHasCoverage: boolean | null = null;
 let listeningForDaySelection = false;
 let coverageMoveMap: maplibregl.Map | null = null;
+/** The on-map loading-indicator token held across a frame render, or null
+ * when no frame is in flight (DDM-P8-T05). */
+let frameLoadToken: number | null = null;
 
 function reportStatus(state: Status): void {
   registry.setStatus(LAYER_KEY, state);
+}
+
+/**
+ * Say on the map that a selected frame is loading, from the instant the
+ * previous frame's source is torn down. Replaces any statement a
+ * superseded frame was still making, so a rapid run through the day
+ * selector leaves exactly one.
+ */
+function beginFrameLoad(): void {
+  endFrameLoad();
+  frameLoadToken = showLoading('Loading HeatRisk...');
+}
+
+/** Withdraw the loading statement. Idempotent; safe on every exit. */
+function endFrameLoad(): void {
+  hideLoading(frameLoadToken);
+  frameLoadToken = null;
 }
 
 function emitFrames(status: FrameEventStatus): void {
@@ -239,6 +279,10 @@ function renderFrame(map: maplibregl.Map, day: number): void {
   if (!frame) return;
 
   replaceMasterController();
+  // The statement is opened BEFORE the teardown, so there is no instant
+  // between losing the old surface and the new frame's first tile at which
+  // the map is both blank and silent (DDM-P8-T05).
+  beginFrameLoad();
   removeActiveRaster(map);
 
   selectedDay = day;
@@ -248,6 +292,9 @@ function renderFrame(map: maplibregl.Map, day: number): void {
   currentHasCoverage = hasCoverage;
   showCoverageNote(hasCoverage);
   if (!hasCoverage) {
+    // A verified absence, not a pending fetch: withdraw the loading
+    // statement in the same turn so the two never both stand.
+    endFrameLoad();
     reportStatus('no-data');
     emitFrames('no-data');
     return;
@@ -276,6 +323,9 @@ function renderFrame(map: maplibregl.Map, day: number): void {
     map,
     sourceId,
     (state) => {
+      // Every path through the watcher is a terminal verdict on this
+      // frame, so every path also ends the loading statement.
+      endFrameLoad();
       if (!mapCenterHasCoverage(map)) {
         currentHasCoverage = false;
         reportStatus('no-data');
@@ -291,7 +341,12 @@ function renderFrame(map: maplibregl.Map, day: number): void {
       requestCompletenessDeadlineMs: TILE_SUCCESS_DEADLINE_MS
     }
   );
-  emitFrames('ready');
+  // The source is on the map but nothing has painted from it yet. The
+  // frame event carried `ready` here until DDM-P8-T05, which made the
+  // on-map key present an unpainted frame as live for the whole fetch;
+  // `loading` is what is true, and the watcher above replaces it with the
+  // real verdict.
+  emitFrames('loading');
 }
 
 function onCoverageMoveEnd(): void {
@@ -302,6 +357,7 @@ function onCoverageMoveEnd(): void {
   if (!hasCoverage) {
     masterController?.abort();
     masterController = null;
+    endFrameLoad();
     removeActiveRaster(activeMap);
     reportStatus('no-data');
     emitFrames('no-data');
@@ -361,6 +417,10 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   if (activeMap === map && frames.length > 0) return;
 
   const signal = replaceMasterController();
+  // A re-activation supersedes any frame statement still standing; the
+  // controller's own indicator covers the enumeration below, and
+  // `renderFrame` opens a fresh one for the frame it draws.
+  endFrameLoad();
   activeMap = map;
   activeSourceId = null;
   frames = [];
@@ -423,6 +483,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 export function deactivate(map: maplibregl.Map): void {
   masterController?.abort();
   masterController = null;
+  endFrameLoad();
   removeActiveRaster(map);
   stopListeningForDaySelection();
   stopListeningForCoverageMoves();

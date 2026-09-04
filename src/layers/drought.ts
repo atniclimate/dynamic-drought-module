@@ -45,6 +45,7 @@ import { requestHorizon } from '../state/cluster-service';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { escapeHtml } from '../util/escape';
 import { ensureHatchImages, hatchImageId } from '../util/hatch';
+import { hideLoading, showLoading } from '../ui/overlay';
 import { DROUGHT_COLORS } from '../config/palette';
 import { setTimeBar, clearTimeBar } from '../ui/time-bar';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
@@ -354,10 +355,25 @@ async function runShowRange(map: maplibregl.Map, range: OutlookRange): Promise<v
   timeline.setHorizon(horizonForOutlookRange(range));
   timeline.setOutlookRange(range);
 
+  let loadToken: number | null = null;
+
   try {
     let fc = outlookCache.get(range);
     if (!fc) {
       reportStatus('loading');
+      // SURFACE CONTINUITY ACROSS A HORIZON CHANGE (DDM-P8-T05). A horizon
+      // flip between the two outlook horizons never leaves the map blank,
+      // because `setData` below is the only thing that replaces the
+      // polygons and it runs after the fetch. That is the good half: what
+      // it costs is that the PREVIOUS range's polygons stay on screen
+      // while the pressed horizon chip already claims the new one, and
+      // until now nothing on the map said the surface underneath was
+      // still resolving. A stale product presented as current is a worse
+      // claim than an empty map, so the indicator says so for exactly as
+      // long as the fetch runs. Released in the `finally` below, which
+      // covers the abort, supersede, failure and success exits alike.
+      // Cached ranges take no token: there is no fetch to describe.
+      loadToken = showLoading(`Loading the CPC ${rangeName(range)} Drought Outlook...`);
       try {
         // fetchJsonWithBudget, NOT fetchWithBudget + response.json(): the
         // latter's contract ends at response HEADERS, so a stalled body
@@ -409,6 +425,7 @@ async function runShowRange(map: maplibregl.Map, range: OutlookRange): Promise<v
     }
     installTimeBar(map, fc);
   } finally {
+    hideLoading(loadToken);
     masterSignal.removeEventListener('abort', onMasterAbort);
     if (rangeController === myController) rangeController = null;
   }
