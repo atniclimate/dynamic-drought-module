@@ -8,6 +8,17 @@ been assigned to this work.
 - 2026-09-03: gate transcription. DDM-D02, DDM-D06, and DDM-D10 in
   `docs/ROADMAP.yaml` now record the DR-036, DR-034, and DR-006 answers; the
   `needs_decision` lines those answers had blocked are updated or removed.
+- 2026-09-03: the tablet band, 721 to 1024 pixels (DDM-P10-T01, gate
+  DDM-D02). Tablet is a third layout band rather than a small desktop: the
+  sidebar column is fluid from 300 to 340 pixels instead of a 340 pixel
+  constant, and a coarse pointer on the desktop shell gets a 44 pixel target
+  floor on the sidebar, the map controls, the temporal rail, the briefing's
+  close control and a map popup's close corner. Two geometry collisions are
+  closed with them: the bottom dock no longer runs underneath an open impact
+  briefing between 721 and about 976 pixels, and the briefing keeps its gap
+  off the sidebar at every width in the band. Dock inset, dock lift, the
+  map-information diameter and the touch floor are new custom properties.
+  Desktop geometry at 1025 pixels and wider is unchanged.
 
 ### 2026-08-31: heat readings in plain language (pull request 53, `5e0a889`)
 
