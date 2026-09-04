@@ -1,0 +1,232 @@
+---
+title: "Dynamic Drought Module (DDM)"
+subtitle: "Interactive Web Mapping, npm Tooling, and GitHub Pages Deployment"
+author: "ATNI Climate / DDM Engineering"
+format:
+  revealjs:
+    theme: dark
+    transition: slide
+    slide-number: true
+    embed-resources: true
+    scrollable: true
+    width: 1280
+    height: 720
+---
+
+# Dynamic Drought Module: Architecture & Deployment
+
+## Overview & Repository Documents
+
+The **Dynamic Drought Module (DDM)** is an embeddable, serverless interactive web map of North American drought, wildfire, heat, and telemetry indicators built by **ATNI Climate** (Affiliated Tribes of Northwest Indians).
+
+### Core Repository Documentation
+- [README.md](README.md): Product scope, hazard coverage, sovereign data stewardship, and iframe embedding.
+- [DEVELOPER.md](DEVELOPER.md): Developer guide, layer contracts, offline data pipelines, and testing ladders.
+- [ROADMAP.md](ROADMAP.md): Implementation phases, integration branch posture, and decision registers (see also [docs/ROADMAP.yaml](docs/ROADMAP.yaml)).
+- [EXPLAIN_NPM.md](EXPLAIN_NPM.md): Comprehensive markdown reference on Node, npm, Vite, and GitHub Pages.
+
+::: {.notes}
+DDM is designed so any deployer can host a static copy on standard web infrastructure with zero telemetry and zero backend maintenance.
+:::
+
+## The Paradigm: Server-Driven vs. Static Web Apps
+
+Why can a complex mapping application run on **GitHub Pages** without a server?
+
+::: {.columns}
+::: {.column width="50%"}
+### Server-Driven (Shiny / Streamlit)
+- Requires an active **R or Python server** running 24/7.
+- Server re-calculates data and re-renders plots on every user interaction.
+- Scaling requires provisioning CPU, RAM, and managing worker processes.
+- Fails if the server backend crashes.
+:::
+
+::: {.column width="50%"}
+### Static Client-Side (DDM on Pages)
+- **Zero application backend**.
+- TypeScript is pre-compiled into static HTML, JavaScript, and CSS.
+- **Client GPU** renders map vectors via **WebGL** (MapLibre GL JS).
+- Hosted cheaply and reliably on GitHub Pages' global CDN.
+- Fetches static vector tiles (`.pmtiles`) via HTTP range requests.
+:::
+:::
+
+## High-Level System Architecture
+
+```mermaid
+flowchart TD
+    subgraph Dev["1. Development & Build (Local or CI)"]
+        direction TB
+        Src["Source Code<br/>• TypeScript (src/main.ts, src/layers/)<br/>• CSS & Assets (public/data/)"]
+        BuildEngine["Node.js + npm + Vite Bundler<br/>• tsc verifies static types<br/>• Vite bundles & minifies code<br/>• Splits MapLibre & PMTiles chunks"]
+        Dist["Production Bundle (dist/)<br/>• index.html (with SHA stamp)<br/>• Optimized JS & CSS<br/>• Vector tiles & GeoJSON"]
+        Src --> BuildEngine --> Dist
+    end
+
+    subgraph Hosting["2. GitHub Pages Deployment"]
+        direction TB
+        GHA["GitHub Actions (deploy.yml)<br/>• Checks out commit & runs gate<br/>• Uploads dist/ artifact<br/>• Publishes via actions/deploy-pages"]
+        CDN["GitHub Pages CDN<br/>• Global HTTPS static hosting<br/>• HTTP Range-request support for tiles"]
+        GHA --> CDN
+    end
+
+    subgraph Client["3. Client's Web Browser"]
+        direction TB
+        Browser["Visitor's Web Browser<br/>• Loads HTML, JS, CSS from Pages CDN<br/>• Executes MapLibre GL JS (WebGL / GPU)<br/>• Streams .pmtiles slices on demand<br/>• Directly queries public APIs (USGS, NIFC, NOAA)"]
+    end
+
+    Dist --> GHA
+    CDN --> Browser
+```
+
+## Tooling Rosetta Stone for Non-Web Developers
+
+Coming from Python (`pip`/`conda`) or R (`renv`/`devtools`)? Here is the mapping:
+
+| Tool / File | Purpose | Python Equivalent | R Equivalent | Role in DDM |
+| :--- | :--- | :--- | :--- | :--- |
+| **Node.js** | JS runtime outside browser | `python3` runtime | `R` runtime | Executes build scripts and tests |
+| **`.nvmrc`** | Pins Node version | `.python-version` (pyenv) | `.Rversion` | Enforces exact Node **24.20.0** |
+| **npm** | Package & script manager | `pip` + `poetry` | `install.packages` + `renv` | Manages dependencies & tasks |
+| **`package.json`** | Project manifest | `pyproject.toml` | `DESCRIPTION` | Defines metadata, deps & scripts |
+| **`package-lock.json`** | Cryptographic lockfile | `poetry.lock` | `renv.lock` | Guarantees exact dependency tree |
+| **`npm ci`** | Deterministic install | `pip install --no-deps` | `renv::restore()` | Clean install strictly from lockfile |
+| **TypeScript** | Static type checking | `mypy` / type hints | Type annotations | Catches type bugs at build time |
+| **Vite** | Dev server & bundler | Webpack / Sphinx | Quarto / `pkgdown` | Fast HMR & production bundler |
+| **Playwright** | Browser automation | `pytest-playwright` | `shinytest2` | Headless browser integration tests |
+
+## Core Configuration: `.nvmrc` & `package.json`
+
+### 1. Pinned Node Version (`.nvmrc`)
+- Holds `24.20.0` (Active LTS).
+- Used locally via `nvm use` and in CI via `actions/setup-node`.
+
+### 2. Dependency Manifest (`package.json`)
+- **Runtime Dependencies**:
+  - `maplibre-gl`: WebGL mapping engine.
+  - `pmtiles`: Cloud-optimized vector tile reader.
+  - `@preact/signals`: Fine-grained reactive UI state.
+- **Key Task Scripts**:
+  - `npm run dev`: Launch local Vite dev server at `http://localhost:5173`.
+  - `npm run build`: Typecheck and produce `dist/` bundle.
+  - `npm run preview`: Serve `dist/` locally at `http://localhost:4173`.
+  - `npm run gate`: Run full build, bundle budget, and schema checks.
+
+## Bundling & Optimization: `vite.config.ts`
+
+Key architectural decisions configured in `vite.config.ts`:
+
+1. **Relative Asset URLs (`base: './'`)**:
+   - Ensures the app runs seamlessly at domain root, on GitHub Pages subpaths (`/dynamic-drought-module/`), or embedded inside an `<iframe>`.
+2. **Build Stamping**:
+   - Embeds `DDM_BUILD_SHA` and `DDM_BUILD_NONCE` into the DOM.
+   - Allows browser integration tests and release workflows to prove exactly which commit is executing.
+3. **Vendor Chunk Splitting**:
+   - Isolates `maplibre-gl` (~800 kB) and `pmtiles` into distinct cache groups.
+   - App code changes do not invalidate large vendor libraries in the user's browser cache.
+
+## Local Developer Verification Ladder
+
+As detailed in [DEVELOPER.md](DEVELOPER.md), development follows a local-first verification ladder:
+
+```bash
+# 1. Clean installation matching lockfile
+npm ci
+
+# 2. Interactive local development with Hot Module Replacement
+npm run dev
+
+# 3. Fast syntax, type, and vocabulary checks (~5 seconds)
+npm run verify:quick
+
+# 4. Deterministic quality gate (~40 seconds)
+npm run gate
+
+# 5. Full serial Playwright browser test suite
+npm run test:serial
+```
+
+::: {.callout-note}
+Always run `npm run gate` before pushing. It validates bundle size ceilings, activation budgets, and upstream schema contracts.
+:::
+
+## GitHub Actions Deployment Pipeline
+
+The workflow in `.github/workflows/deploy.yml` orchestrates builds and deployments on pushes to `main`:
+
+```mermaid
+flowchart TD
+    Push["Push to 'main' Branch<br/>(paths-ignore filters docs-only commits)"] --> Concurrency["Concurrency Gate<br/>group: pages, cancel-in-progress: true"]
+
+    subgraph DeployWorkflow["deploy.yml (GitHub Actions)"]
+        direction TB
+        subgraph BuildJob["Job: build (Gate & Build)"]
+            direction TB
+            Setup["Set up Node.js 24.20.0 (.nvmrc) & npm ci"]
+            Gate["Run 'npm run gate'<br/>• tsc --noEmit (typecheck)<br/>• vite build (outputs dist/)<br/>• Bundle size & activation budget checks<br/>• Contract & unit tests"]
+            UploadArtifact["actions/upload-pages-artifact<br/>Packages dist/ for Pages"]
+            Setup --> Gate --> UploadArtifact
+        end
+
+        subgraph BrowserJob["Job: browser (Advisory)"]
+            direction TB
+            Playwright["Playwright Browser Suite<br/>• 8 parallel shards<br/>• Non-blocking (advisory on main)<br/>• Reports failures to GitHub Issue"]
+        end
+
+        subgraph DeployJob["Job: deploy (Publish to Pages)"]
+            direction TB
+            HeadCheck["Confirm commit is still HEAD of main"]
+            DeployPages["actions/deploy-pages<br/>• Writes to GitHub Pages CDN<br/>• Automatic 30s retry on transient error"]
+            HeadCheck --> DeployPages
+        end
+
+        BuildJob -->|needs: build| DeployJob
+        BuildJob -.->|parallel advisory| BrowserJob
+    end
+
+    subgraph VerifyWorkflow["verify-live.yml (Post-Deploy Proof)"]
+        direction TB
+        LiveProof["Probe Live Site<br/>• Verify live SHA & nonce match commit<br/>• Validate PMTiles byte-range requests<br/>• Run live browser smoke tests<br/>• File divergence issue if checks fail"]
+    end
+
+    Concurrency --> BuildJob
+    DeployJob -->|workflow_run on success| VerifyWorkflow
+```
+
+## Release Evidence & Live Verification
+
+In DDM, **a merged commit is not proof of a successful release**.
+
+### `.github/workflows/verify-live.yml`
+Runs automatically upon completion of the deploy workflow:
+
+1. **Build Nonce & SHA Check**:
+   - Queries the live site and reads `document.documentElement.dataset.ddmBuildSha`.
+   - Confirms the CDN is actively serving the exact merged commit, not a stale cache.
+2. **Byte-Range Capability**:
+   - Asserts HTTP `206 Partial Content` on large `.pmtiles` archives to ensure fast vector tile streaming.
+3. **Live Browser Boots**:
+   - Executes automated browser boots against live URLs to test view state, embedded mode, and layer loading.
+4. **Issue Management**:
+   - Automatically opens or updates a single tracked issue if any divergence is found.
+
+## Summary & Next Steps
+
+::: {.columns}
+::: {.column width="50%"}
+### Summary of Principles
+- **Serverless & Embeddable**: Pure static files running on standard CDNs.
+- **Local-First Verification**: Fast feedback loops before code ever hits Git.
+- **Sovereign Stewardship**: Real-time sovereign boundaries fetched live in browser sessions, never stored or redistributed.
+- **Empirical Release Evidence**: Automated verification of live CDN bytes.
+:::
+
+::: {.column width="50%"}
+### Further Reading
+- [README.md](README.md): Product scope & embed instructions.
+- [DEVELOPER.md](DEVELOPER.md): Comprehensive developer guidelines.
+- [ROADMAP.md](ROADMAP.md): Project roadmap & delivery posture.
+- [EXPLAIN_NPM.md](EXPLAIN_NPM.md): Full narrative walkthrough of npm & GitHub Pages.
+:::
+:::
