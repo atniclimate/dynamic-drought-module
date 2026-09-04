@@ -224,6 +224,28 @@ the minimap evicts only when that verdict fails, and a pure spec pins the
 agreement case by case. The malformed-payload browser contract gained the
 dedupe bound the shared key promises: at most one fetch per consumer.
 
+### 2026-09-03: the Worker gains a dependency watch and a compatibility pin
+
+Two delivery-infrastructure changes that landed with the Overture re-pin and
+had no entry of their own.
+
+DR-005 a gives the optional Cloudflare Worker's own dependency tree the watch
+the application's already had: Dependabot gains a `/workers/proxy` npm entry,
+and `validate.yml`'s existing gate job gains a Worker audit step rather than a
+new trigger. The first Dependabot run against the new entry fired within a
+minute of the merge and completed successfully.
+
+DR-010 a sets `compatibility_flags = ["no_nodejs_compat"]` in
+`workers/proxy/wrangler.toml`. Cloudflare enables `nodejs_compat` and
+`nodejs_compat_v2` by default for compatibility dates of 2026-08-04 or later.
+The Worker's date is 2026-05-09, before that line, but it is a deliberately
+minimal Cross-Origin Resource Sharing shim that must not silently acquire the
+whole Node.js built-in surface the first time a routine date bump crosses it.
+This is a source change only: **the Worker was not published.** `DEVELOPER.md`
+records the rollback handle for whenever it is, the confirmed live version
+`10af1660-5b74-4520-80a1-32c80108fc48`, revision
+`2026-08-29-options-policy-v4`.
+
 ### 2026-09-03: the Overture buildings extract re-pinned ahead of its bucket expiry
 
 `scripts/extract-overture-buildings.py`'s `DEFAULT_RELEASE` moves from
