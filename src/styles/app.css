@@ -4285,6 +4285,55 @@ button.telemetry-item {
   font-style: italic;
 }
 
+/* The four hazard rows inside one horizon section (DR-012 b). Each row is a
+   cell of the matrix and owns its own status pill; the rule that separates
+   them is what keeps one hazard's claims from reading as the next one's. */
+.impact-hazard {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.impact-hazard:first-child {
+  padding-top: 2px;
+  border-top: 0;
+}
+.impact-hazard:last-child {
+  padding-bottom: 0;
+}
+.impact-hazard-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.impact-hazard-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-1);
+}
+.impact-hazard-pill {
+  flex-shrink: 0;
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+  font-size: 9.5px;
+  color: var(--fg-3);
+  padding: 1px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.impact-hazard-pill-loading { color: var(--warn); border-color: var(--warn); }
+.impact-hazard-pill-ready { color: var(--good); border-color: var(--good); }
+.impact-hazard-pill-partial { color: var(--accent); border-color: var(--accent-strong); }
+.impact-hazard-pill-unavailable { color: var(--fg-3); font-style: italic; }
+.impact-hazard-claims {
+  margin-top: 2px;
+}
+
 .impact-claim {
   padding: 8px 0;
 }
@@ -5734,6 +5783,10 @@ a.impact-resource-link::after {
     break-inside: avoid;
   }
   .impact-horizon-head {
+    break-after: avoid;
+  }
+  /* A hazard row keeps its label with its first claim on paper. */
+  .impact-hazard-head {
     break-after: avoid;
   }
   /* Charts print as ink (the 2026-07-10 dataviz lens finding): the inline

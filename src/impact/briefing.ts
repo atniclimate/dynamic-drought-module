@@ -15,6 +15,7 @@
 
 import { buildResources } from './resources';
 import { caveatFor, kindLabel } from './context';
+import { createHorizonCells } from './matrix';
 import { briefingSourcePolicy, sourceMayRun } from './source-policy';
 import type {
   BoundarySelectionContext,
@@ -45,6 +46,7 @@ function emptyHorizon(spec: HorizonSpec): Horizon {
     key: spec.key,
     title: spec.title,
     subtitle: spec.subtitle,
+    cells: createHorizonCells(spec.key),
     claims: [],
     status: 'loading'
   };

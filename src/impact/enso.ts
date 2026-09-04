@@ -871,7 +871,9 @@ export async function fetchEnsoClaims(
             source: 'NOAA CPC ENSO Diagnostic Discussion',
             sourceUrl: CPC_STATUS_URL,
             evidence: 'analyzed',
-            dates: { retrieved: CITATIONS_VERIFIED }
+            dates: { retrieved: CITATIONS_VERIFIED },
+            // Where CPC states the status that holds now.
+            horizon: 'current'
           })
         ];
 
@@ -893,7 +895,10 @@ export async function fetchEnsoClaims(
               kind: 'typical',
               text: // vocab-allow: honesty disclaimer, denies being a forecast
                 'a tendency across past events of this phase, not a forecast of outcomes; the named modulators can reinforce or mute the signal'
-            }
+            },
+            // A tendency across a season, so it stands under the long-range
+            // horizon rather than beside the index state that holds now.
+            horizon: 'longRange'
           })
         ];
 
@@ -908,7 +913,9 @@ export async function fetchEnsoClaims(
             uncertainty: {
               kind: 'typical',
               text: 'the newest analyzed Extended Reconstructed Sea Surface Temperature inputs can revise for up to two months; this monthly companion does not declare an ENSO phase'
-            }
+            },
+            // An analyzed monthly anomaly: a current read, not a season ahead.
+            horizon: 'current'
           })
         ]
       : [];
@@ -940,6 +947,8 @@ export async function fetchEnsoClaims(
               text: // vocab-allow: honesty disclaimer, denies being a forecast
                 'category odds by overlapping three-month season, not a forecast of outcomes'
             },
+            // Odds by overlapping three-month season: the long-range horizon.
+            horizon: 'longRange',
             ...(plumeSvg ? { chartSvg: plumeSvg } : {})
           })
         );
@@ -970,6 +979,10 @@ export async function fetchEnsoClaims(
             kind: 'typical',
             text: 'the newest seasons are preliminary: CPC states that RONI values may change up to two months after the initial real-time value is posted, because of the high frequency filter applied to the ERSSTv6 data'
           },
+          // An index-state read of the season now in progress, so it belongs
+          // under the current horizon; the tendency and the official odds
+          // built from the same snapshot stand under the long-range horizon.
+          horizon: 'current',
           ...(chartSvg ? { chartSvg } : {})
         }),
         ...authorityClaims,

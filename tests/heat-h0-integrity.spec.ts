@@ -507,9 +507,20 @@ test('an invalid NWS active-products body is unavailable, never an all-clear', a
   const current = page.locator(
     '.impact-horizon[aria-labelledby="impact-horizon-title-current"]'
   );
-  await expect(current.locator('.impact-horizon-note')).toContainText(
-    'The NWS alerts service did not respond.'
-  );
+  // The failure note is the business of the two hazard rows the alerts query
+  // answers for, and of no others. Before the four-hazard by three-horizon
+  // matrix (DDM-P7-T02) this note sat on the horizon as a whole, where it
+  // spoke for the drought row as well.
+  for (const hazard of ['fire', 'heat'] as const) {
+    await expect(
+      current.locator(
+        `.impact-hazard[data-hazard="${hazard}"] .impact-horizon-note`
+      )
+    ).toContainText('The NWS alerts service did not respond.');
+  }
+  await expect(
+    current.locator('.impact-hazard[data-hazard="drought"]')
+  ).not.toContainText('The NWS alerts service did not respond.');
   await expect(current).not.toContainText(
     'No active red-flag fire-weather or extreme-heat alerts'
   );

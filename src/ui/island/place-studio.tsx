@@ -34,8 +34,8 @@ import {
 } from '../../util/bbox';
 import { geometryBboxAcrossAntimeridian } from '../../util/antimeridian';
 import { hydrateBriefing } from '../../impact/hydrate';
-import { computeOverlapRows } from '../../impact/overlap-engine';
-import type { OverlapRelationship } from '../../impact/overlap-engine';
+import { computeOverlapRows } from './overlap-engine';
+import type { OverlapRelationship } from './overlap-engine';
 import type { BoundaryKind, BoundarySelectionContext } from '../../impact/types';
 import {
   getTypedPlace,

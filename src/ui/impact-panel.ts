@@ -14,7 +14,10 @@ import {
 } from '../config/source-capability';
 import type {
   BoundarySelectionContext,
+  HazardCell,
+  HazardKey,
   Horizon,
+  HorizonKey,
   ImpactBriefing
 } from '../impact/types';
 import {
@@ -340,6 +343,36 @@ function loadRuntime(): Promise<ImpactPanelRuntime> {
   return runtimePromise;
 }
 
+/**
+ * The four cells of one horizon, every one of them unavailable for the single
+ * reason this presentation exists: the briefing module did not load.
+ *
+ * Built here rather than through `src/impact/matrix.ts` on purpose. This
+ * facade is eager, and the matrix module carries the per-cell absence prose
+ * that only the lazy runtime can act on; importing it here put a kilobyte of
+ * text the module-failure path never renders into the entry chunk. The
+ * `Record<HazardKey, HazardCell>` return type keeps the four rows exhaustive,
+ * so a fifth hazard cannot be added to the model without this compiling.
+ */
+function unavailableCells(
+  horizon: HorizonKey
+): Record<HazardKey, HazardCell> {
+  const cell = (hazard: HazardKey, label: string): HazardCell => ({
+    hazard,
+    horizon,
+    label,
+    claims: [],
+    status: 'unavailable',
+    note: UNAVAILABLE_NOTE
+  });
+  return {
+    drought: cell('drought', 'Drought'),
+    fire: cell('fire', 'Fire'),
+    heat: cell('heat', 'Heat'),
+    enso: cell('enso', 'ENSO')
+  };
+}
+
 function unavailableHorizon(
   key: Horizon['key'],
   title: string,
@@ -349,6 +382,10 @@ function unavailableHorizon(
     key,
     title,
     subtitle,
+    // Every cell says the one true thing about this briefing: the module that
+    // would fill it did not load. No cell is blank, and none of them inherits
+    // another hazard's state.
+    cells: unavailableCells(key),
     claims: [],
     status: 'unavailable',
     note: UNAVAILABLE_NOTE

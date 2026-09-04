@@ -8,6 +8,13 @@ been assigned to this work.
 - 2026-09-03: gate transcription. DDM-D02, DDM-D06, and DDM-D10 in
   `docs/ROADMAP.yaml` now record the DR-036, DR-034, and DR-006 answers; the
   `needs_decision` lines those answers had blocked are updated or removed.
+- 2026-09-03: the impact briefing is one four-hazard by three-horizon matrix.
+  Each of the three horizon sections now holds a Drought, Fire, Heat, and ENSO
+  row, and each of the twelve cells carries its own claims, its own status, and
+  its own note. A cell with nothing to show names the product it is missing and
+  why, so no cell renders blank, and no hazard row wears the issuer or the
+  validity date of the hazard beside it. The Place Studio overlap engine moved
+  from `src/impact/` to `src/ui/island/`.
 
 ### 2026-08-31: heat readings in plain language (pull request 53, `5e0a889`)
 

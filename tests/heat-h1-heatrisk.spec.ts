@@ -5,8 +5,10 @@ import {
   NWS_ALERT_COLORS
 } from '../src/config/palette';
 import { TEMPORAL_HORIZON_LABELS } from '../src/config/clusters';
-import { fillHorizon } from '../src/impact/heat-horizon';
-import type { Horizon } from '../src/impact/types';
+import { makeClaim } from '../src/impact/evidence';
+import { fillCell } from '../src/impact/matrix';
+import type { MatrixLaneKey, MatrixLaneResult } from '../src/impact/matrix';
+import type { HazardCell } from '../src/impact/types';
 import { createHeatRiskSequenceLoader } from '../src/ui/heatrisk-sequence-loader';
 import {
   gotoApp,
@@ -729,28 +731,49 @@ test.describe('review regressions for HeatRisk honesty and lifecycle', () => {
     });
   }
 
+  // The note this case guards moved from the horizon to the Heat near-term
+  // cell when the briefing became a four-hazard by three-horizon matrix
+  // (DDM-P7-T02): a HeatRisk failure is the Heat row's business and no longer
+  // speaks for the drought row beside it.
   test('review regression: clears the prior source failure note after a successful recomputation', () => {
-    const horizon: Horizon = {
-      key: 'nearTerm',
-      title: 'Near-term outlook',
-      subtitle: 'days to a season',
+    const cell: HazardCell = {
+      hazard: 'heat',
+      horizon: 'nearTerm',
+      label: 'Heat',
       status: 'loading',
       claims: []
     };
-    fillHorizon(horizon, [
-      {
-        ok: false,
-        claims: [],
-        note:
-          'The National Weather Service HeatRisk classification did not respond.'
-      }
-    ]);
-    expect(horizon.note).toBe(
+    const failure: MatrixLaneResult = {
+      ok: false,
+      claims: [],
+      note:
+        'The National Weather Service HeatRisk classification did not respond.'
+    };
+    fillCell(cell, new Map<MatrixLaneKey, MatrixLaneResult>([['heatRisk', failure]]));
+    expect(cell.note).toBe(
       'The National Weather Service HeatRisk classification did not respond.'
     );
 
-    fillHorizon(horizon, [{ ok: true, claims: [] }]);
-    expect(horizon.note).toBeUndefined();
+    const answered: MatrixLaneResult = {
+      ok: true,
+      claims: [
+        makeClaim({
+          text: 'HeatRisk (Experimental) value 2, Moderate, at the selected point.',
+          source: 'National Weather Service HeatRisk (Experimental)',
+          evidence: 'classified',
+          dates: { valid: '2026-08-03' }
+        })
+      ]
+    };
+    fillCell(
+      cell,
+      new Map<MatrixLaneKey, MatrixLaneResult>([
+        ['heatRisk', answered],
+        ['nwsForecast', { ok: true, claims: [] }]
+      ])
+    );
+    expect(cell.note).toBeUndefined();
+    expect(cell.status).toBe('ready');
   });
 });
 
