@@ -5,11 +5,13 @@ import {
   FIRE3D_COVERAGE_NOTE,
   FIRE3D_NON_PREDICTION_NOTE,
   FIRE3D_PITCH_DEGREES,
+  FIRE3D_REFUSAL_TEXT,
   FIRE3D_SKY_CLEAR_SPECIFICATION,
   FIRE3D_SKY_SPECIFICATION,
   FIRE3D_TERRAIN_EXAGGERATION,
   PERIMETER_RIBBON_QUALIFICATION,
   PERIMETER_RIBBON_SLAB_COUNT,
+  fire3dControlOffer,
   perimeterRibbonSlabOpacity
 } from '../src/config/fire3d-presentation';
 import {
@@ -213,6 +215,69 @@ test('the gate requires wildfire for entry but survives a custom demotion with a
       desktopViewport: false
     })
   ).toBe(false);
+});
+
+// ---------------------------------------------------------------------------
+// Node: what the shell offers where the toggle would be (DDM-P9-T02)
+// ---------------------------------------------------------------------------
+
+test('a device that cannot hold the scene is told, and only that device is', () => {
+  const capable = {
+    wideEnough: true,
+    tallEnough: true,
+    webgl2: true,
+    fireView: true
+  } as const;
+
+  expect(fire3dControlOffer(capable)).toBe('control');
+
+  // The two refusals. Each one is a sentence, not an omission: this is the
+  // whole of DDM-P9-T02's first acceptance clause.
+  expect(fire3dControlOffer({ ...capable, webgl2: false })).toBe('no-webgl2');
+  expect(fire3dControlOffer({ ...capable, tallEnough: false })).toBe(
+    'short-window'
+  );
+  // Capability outranks geometry: a device that cannot render the scene is
+  // told that, not told to find a taller window.
+  expect(
+    fire3dControlOffer({ ...capable, webgl2: false, tallEnough: false })
+  ).toBe('no-webgl2');
+
+  // The two silences. Another hazard view has no 3D toggle to miss, and a
+  // viewport below the desktop breakpoint is the phone chrome, where 3D is
+  // deferred by ruling rather than refused by the device. Saying anything
+  // in either place would be an advertisement or a nag.
+  expect(fire3dControlOffer({ ...capable, fireView: false })).toBe('silent');
+  expect(fire3dControlOffer({ ...capable, wideEnough: false })).toBe('silent');
+  expect(
+    fire3dControlOffer({ ...capable, wideEnough: false, webgl2: false })
+  ).toBe('silent');
+});
+
+test('each refusal states an observation and borrows no layer state', () => {
+  for (const reason of ['no-webgl2', 'short-window'] as const) {
+    const sentence = FIRE3D_REFUSAL_TEXT[reason];
+    expect(sentence.length).toBeGreaterThan(0);
+    expect(sentence.endsWith('.')).toBe(true);
+    // Not a seventh layer state (AGENTS.md invariant 6): the six honest
+    // states stay the property of the layer pills and of this control's own
+    // status line, and none of their words describes a control affordance.
+    for (const state of [
+      'loading',
+      'live',
+      'live (partial)',
+      'unavailable',
+      'no data',
+      'zoom in to load'
+    ]) {
+      expect(sentence.toLowerCase()).not.toContain(state);
+    }
+    // No promise of a fix and no instruction: the sentence says what was
+    // observed and stops.
+    for (const promise of ['will ', 'try ', 'please', 'update your', 'upgrade']) {
+      expect(sentence.toLowerCase()).not.toContain(promise);
+    }
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -962,6 +1027,9 @@ test.describe('W3/W4 browser truth', () => {
     await expect(page.locator('[data-fire3d-disclosure]')).toHaveText(
       FIRE3D_NON_PREDICTION_NOTE
     );
+    // A capable desktop is offered the control and told nothing about a
+    // refusal: the sentence appears only where it is true.
+    await expect(page.locator('#shell-fire3d-refused')).toHaveCount(0);
 
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
@@ -1283,9 +1351,13 @@ test('an embed without the flag never activates and never gains it', async ({
 
     expect(chunkRequests).toEqual([]);
     expect(await fire3dStamp(page)).toBeUndefined();
+    // The phone chrome says nothing about 3D. Mobile 3D is deferred by
+    // owner ruling, not refused by this device, so a standing notice here
+    // would be a nag about a decision the hardware did not make.
+    await expect(page.locator('#shell-fire3d-refused')).toHaveCount(0);
   });
 
-  test('a landscape phone is offered no 3D control and never enters the scene', async ({
+  test('a landscape phone is told why it has no 3D control and never enters the scene', async ({
     page
   }) => {
     await stubWildfireFeeds(page);
@@ -1299,14 +1371,27 @@ test('an embed without the flag never activates and never gains it', async ({
     await page.waitForTimeout(3_000);
 
     await expect(page.locator('#shell-fire3d')).toHaveCount(0);
+    // DDM-P9-T02's first acceptance clause: a device that cannot render the
+    // scene is TOLD so. Withdrawing the button silently left this reader
+    // with an interface indistinguishable from one where the 3D view had
+    // never been built, which is the defect this case exists to catch.
+    const refusal = page.locator('#shell-fire3d-refused');
+    await expect(refusal).toBeVisible();
+    await expect(refusal).toHaveText(FIRE3D_REFUSAL_TEXT['short-window']);
+    await expect(refusal).toHaveAttribute(
+      'data-fire3d-refused',
+      'short-window'
+    );
     // The ask itself is kept (the preference is the user's durable request
     // and the gate, not the URL, decides); only the scene is refused.
     expect(await fire3dStamp(page)).not.toBe('active');
 
     // Rotating back to tall geometry restores the offer: the control
-    // watches both queries, not only the width.
+    // watches both queries, not only the width. The sentence goes with it,
+    // because it has stopped being true.
     await page.setViewportSize({ width: 1024, height: 768 });
     await expect(page.locator('#shell-fire3d')).toHaveCount(1);
+    await expect(refusal).toHaveCount(0);
   });
 
   test('a corrupt archive reads unavailable in the control and drops the flag', async ({

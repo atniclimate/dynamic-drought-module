@@ -8,6 +8,13 @@ been assigned to this work.
 - 2026-09-03: gate transcription. DDM-D02, DDM-D06, and DDM-D10 in
   `docs/ROADMAP.yaml` now record the DR-036, DR-034, and DR-006 answers; the
   `needs_decision` lines those answers had blocked are updated or removed.
+- 2026-09-03: a device that cannot hold the 3D Fire scene is told so. The
+  capability and geometry gate withdrew the 3D toggle silently, so a browser
+  without WebGL 2, or a window too short for the tilted camera, met an
+  interface indistinguishable from one where the 3D view had never been
+  built. One sentence now stands where the button would have been, naming
+  only what was observed. Views that never offer the toggle, and viewports
+  below the desktop breakpoint, stay silent.
 
 ### 2026-08-31: heat readings in plain language (pull request 53, `5e0a889`)
 

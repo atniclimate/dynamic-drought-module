@@ -15,6 +15,17 @@
  * URL-named fire3d=true still drives the map-side effect through the
  * orchestrator.
  *
+ * Refusals are SAID, not performed by omission (DDM-P9-T02). Withdrawing
+ * the control was only half of DR-025a: it stopped offering a button the
+ * map would refuse, and left the person who cannot have the scene looking
+ * at an interface indistinguishable from one where the feature was never
+ * built. A device that cannot hold the scene now reads one sentence where
+ * the button would have been, naming what was observed and nothing else
+ * (`fire3dControlOffer` and `FIRE3D_REFUSAL_TEXT` carry both decisions and
+ * both sentences). It is a control affordance, not a seventh layer state;
+ * the status line below the button keeps the six-state vocabulary to
+ * itself.
+ *
  * The button mirrors the PREFERENCE (the user's durable ask, aria-pressed
  * flips with the click); the status line underneath tells the honest truth
  * about the scene in the project's six-state vocabulary (AGENTS.md
@@ -38,7 +49,9 @@ import {
   FIRE3D_COVERAGE_NOTE,
   FIRE3D_MIN_HEIGHT_QUERY,
   FIRE3D_MIN_WIDTH_QUERY,
-  FIRE3D_NON_PREDICTION_NOTE
+  FIRE3D_NON_PREDICTION_NOTE,
+  FIRE3D_REFUSAL_TEXT,
+  fire3dControlOffer
 } from '../../config/fire3d-presentation';
 import type { HazardClusterKey } from '../../config/clusters';
 import type { Fire3DStatus } from '../../map/fire3d';
@@ -124,10 +137,17 @@ export function Fire3DControl({
   // enough, watched as two media queries so a phone rotating into landscape
   // withdraws the control and rotating back restores it. The capability
   // half is read once; it cannot change for a page.
-  const [geometryFits, setGeometryFits] = useState<boolean>(
-    () =>
-      window.matchMedia(FIRE3D_MIN_WIDTH_QUERY).matches &&
-      window.matchMedia(FIRE3D_MIN_HEIGHT_QUERY).matches
+  //
+  // The two are held apart rather than as one boolean because they now have
+  // different ANSWERS: a viewport below the desktop breakpoint is the phone
+  // chrome and says nothing about 3D, while a wide but short viewport is a
+  // landscape phone that has to be told why the button it saw yesterday is
+  // gone (DDM-P9-T02).
+  const [wideEnough, setWideEnough] = useState<boolean>(
+    () => window.matchMedia(FIRE3D_MIN_WIDTH_QUERY).matches
+  );
+  const [tallEnough, setTallEnough] = useState<boolean>(
+    () => window.matchMedia(FIRE3D_MIN_HEIGHT_QUERY).matches
   );
   const [preference, setPreference] = useState<boolean>(getFire3DPreference);
   const [status, setStatus] = useState<Fire3DStatus | null>(null);
@@ -139,7 +159,8 @@ export function Fire3DControl({
     const width = window.matchMedia(FIRE3D_MIN_WIDTH_QUERY);
     const height = window.matchMedia(FIRE3D_MIN_HEIGHT_QUERY);
     const onChange = (): void => {
-      setGeometryFits(width.matches && height.matches);
+      setWideEnough(width.matches);
+      setTallEnough(height.matches);
     };
     width.addEventListener('change', onChange);
     height.addEventListener('change', onChange);
@@ -169,8 +190,13 @@ export function Fire3DControl({
     []
   );
 
-  const visible =
-    geometryFits && webGl2Capability().webgl2 && cluster === 'wildfire';
+  const offer = fire3dControlOffer({
+    wideEnough,
+    tallEnough,
+    webgl2: webGl2Capability().webgl2,
+    fireView: cluster === 'wildfire'
+  });
+  const visible = offer === 'control';
 
   useEffect(() => {
     if (!visible) return;
@@ -189,7 +215,30 @@ export function Fire3DControl({
     };
   }, [visible]);
 
-  if (!visible) return null;
+  // A refusal reads as one sentence in the slot the button would have
+  // occupied, directly after the hazard-view button group, so a person
+  // reading the panel in order (screen reader included) meets the reason
+  // exactly where the missing control would have been. It is a statement,
+  // not a control: there is nothing here to press, and a dead-looking
+  // button would say less than a sentence that names the refusal.
+  //
+  // It borrows `.shell-fire3d-empty`, the treatment this panel already uses
+  // for a sentence that ANSWERS rather than qualifies (one step brighter
+  // than the standing notes), so the refusal reads as the answer to "where
+  // is the 3D view" rather than as fine print. `.shell-fire3d-note` stays
+  // countable: this paragraph is not one of the standing notes.
+  if (offer !== 'control') {
+    if (offer === 'silent') return null;
+    return (
+      <p
+        class="shell-fire3d-empty"
+        id="shell-fire3d-refused"
+        data-fire3d-refused={offer}
+      >
+        {FIRE3D_REFUSAL_TEXT[offer]}
+      </p>
+    );
+  }
 
   return (
     <div class="shell-fire3d" id="shell-fire3d">
