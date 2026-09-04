@@ -822,13 +822,30 @@ export const URLS = Object.freeze({
   // Precipitation Index (SPI) is available at several accumulation windows; the
   // product slug encodes the index and window, for example
   // `ce-ACIS_NRCC_NN-spi-90d`. The full tile template is
-  // `${nidisGriddedTileRoot}/<slug>/{z}/{x}/{y}.png`. Tiles exist to zoom 6
-  // (the source maxzoom); MapLibre overzooms above that. The color scale is
-  // baked into the tiles (no per-feature properties, so no popups); the
-  // authoritative legend lives on drought.gov.
+  // `${nidisGriddedTileRoot}/<slug>/{z}/{x}/{y}.png`. The zoom ceiling is the
+  // product's own published `tilezmax`, which the layer reads from
+  // `<slug>/info.json`; MapLibre overzooms above it. (drought.gov's Data
+  // Download prose says "Tiles are currently created for zoom levels of 1-5",
+  // which every `info.json` on this bucket contradicts; the data is the
+  // authority.) The color scale is baked into the tiles (no per-feature
+  // properties, so no popups); the authoritative legend lives on drought.gov.
   // Verified 2026-05-30 (live in-page fetch from the app origin): HTTP 200,
   // Content-Type image/png, Access-Control-Allow-Origin: * for the SPI 30, 60,
   // 90, 180, and 365 day windows.
+  //
+  // COVERAGE: contiguous United States only. The wired products belong to the
+  // ACIS "Grid 1" foundational dataset, whose drought.gov page carries the
+  // field "Data Coverage: Contiguous U.S." and describes it as covering "the
+  // contiguous United States from January 1, 1950 to the present"
+  // (https://www.drought.gov/data-maps-tools/gridded-climate-datasets-applied-climate-information-system-acis-nrcc-interpolated),
+  // and whose Data Download row gives Coverage and Resolution as "ConUS 4km".
+  // Every wired window's own `info.json` agrees: `"bbox":
+  // "-128.8,24.4,-66.0,50.3"` on all five, re-verified live 2026-09-03. That
+  // box excludes Alaska, Hawaii, Puerto Rico and the Pacific territories, so
+  // the catalog row and the legend both state the limit. The US Drought
+  // Monitor surface DOES cover Alaska, Hawaii and the territories, so the two
+  // drought surfaces do not agree about where the app has data, and saying so
+  // is the honest resolution.
   //
   // SPEI and EDDI (corrected twice on 2026-09-01). The earlier note guessed
   // the slugs `spei` and `eddi` under the ACIS prefix and, when those 404ed,
@@ -847,7 +864,9 @@ export const URLS = Object.freeze({
   // carrying its valid date and true tilezmax; since 2026-09-02 the gridded
   // layer reads it on activation and on window change and shows the valid
   // date in its legend (spi-365d was 62 days old on 2026-09-01, unnoticed
-  // before that). Only SPI windows are wired today; see
+  // before that, and still carried date 2026-07-01 on 2026-09-03). Only SPI
+  // windows are wired today, and whether the selector grows is an open
+  // product question rather than a limit of the source; see
   // planning/2026-09-01-deep-dive reports 10, 12, and 14.
   nidisGriddedTileRoot:
     'https://storage.googleapis.com/noaa-nidis-drought-gov-data/current-conditions/tile/v1',

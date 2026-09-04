@@ -201,7 +201,14 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   // ground renders flat."), which the 3D control has always shown.
   { key: 'hillshade', name: 'Terrain Shading', source: 'USGS 3DEP · PMTiles · Pacific Northwest bake only', role: 'reference', defaultOn: true, load: () => import('../layers/hillshade') },
   { key: 'drought', name: 'Drought Outlook (CPC)', source: 'NOAA CPC · Monthly & Seasonal', role: 'surface', defaultOn: false, load: () => import('../layers/drought') },
-  { key: 'gridded-index', name: 'Gridded Drought Index (SPI)', source: 'NOAA NIDIS · raster tiles', role: 'surface', defaultOn: false, load: () => import('../layers/gridded-index') },
+  // The NIDIS gridded index carries its coverage limit on the source line, the
+  // same way `hillshade` above does: drought.gov gives the ACIS "Grid 1"
+  // dataset's Data Coverage as "Contiguous U.S.", and every wired SPI window
+  // publishes `bbox: -128.8,24.4,-66.0,50.3` in its own `info.json`
+  // (re-verified 2026-09-03). Alaska, Hawaii, Puerto Rico and the Pacific
+  // territories are outside it, and a row that said only "raster tiles" left
+  // that for the user to discover as an empty map.
+  { key: 'gridded-index', name: 'Gridded Drought Index (SPI)', source: 'NOAA NIDIS · raster tiles · contiguous United States only', role: 'surface', defaultOn: false, load: () => import('../layers/gridded-index') },
   // noDataLabel on the live agency layers below (usdm, wildfire pair, NWS
   // alerts, SPC, bia-reservations): a zero-feature live response is a real,
   // good answer ("no smoke drawn in the query window"), never an "empty placeholder"; the
