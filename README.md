@@ -443,12 +443,28 @@ maintainer-run artifact builders (`scripts/build-states.mjs`,
 
 ## Browser support
 
+This section is the one place the project states the renderer it runs and
+the browser and graphics floor that renderer implies. `vite.config.ts` and
+`DEVELOPER.md` point here rather than repeating it, and
+`npm run check:renderer` fails when the build configuration and this
+section disagree.
+
+The map renderer is MapLibre GL JavaScript 6.6.0, pinned exactly in
+`package.json` and matched by the lockfile and the installed tree.
+
 Any evergreen desktop browser (Chrome, Edge, Firefox, Safari). The
 supported floors for phones and tablets are Safari 15.5 or newer on iPhone
-and iPad, and Chrome 100 or newer on Android; the production build is
-compiled to those targets. MapLibre GL JavaScript 6 requires WebGL 2, which
-both floors enable by default; a browser without WebGL 2 shows the sidebar
-and an honest not-rendering notice instead of a map.
+and iPad, and Chrome 100 or newer on Android; the production build target
+is `es2020, safari15.5, ios15.5, chrome100`, so those floors are a build
+claim and not a moving default. MapLibre GL JavaScript 6 requires WebGL 2,
+which both floors enable by default; a browser without WebGL 2 shows the
+sidebar and an honest not-rendering notice instead of a map. Compiling to a
+floor lowers syntax; it does not supply missing runtime APIs, so a
+real-device check per release is the proof rather than the target line.
+
+Node.js 24 is the toolchain that builds the application, not a browser
+requirement. It is a different axis and says nothing about which browsers
+can run the result.
 
 ## Attribution and licensing
 

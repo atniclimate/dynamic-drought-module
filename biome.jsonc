@@ -1,0 +1,87 @@
+{
+  // One lint command over the TypeScript and the stylesheet (DDM-P15-T04).
+  // Biome is one tool for both surfaces, with no runtime dependencies and no
+  // install scripts; DEVELOPER.md records why it, and not the tools named in
+  // the question DR-007 answered.
+  //
+  // THE POSTURE IS A RATCHET, NOT A CLEANUP. The recommended preset stays on,
+  // so every rule the tree already satisfies is held at zero from today. The
+  // rules listed under `rules` below are the ones that fire on the tree as it
+  // stands, switched off with their measured count and the reason, so the
+  // command passes honestly instead of passing because nothing is checked.
+  // Burning them down is roadmap work (DDM-P15-T05), not a condition of
+  // adding the command: a linter introduced with a thousand-line diff is a
+  // different change from the one this is.
+  //
+  // Measured 2026-09-03 at 5be15f5, `biome lint --reporter=summary`:
+  // 463 diagnostics over 178 files, 8 errors, 202 warnings, 253 infos.
+  "$schema": "https://biomejs.dev/schemas/2.5.12/schema.json",
+
+  // The repository's own Git state is not the file selector; `files.includes`
+  // below is, so a lint run means the same thing on a dirty tree, a clean
+  // tree, and a runner.
+  "vcs": { "enabled": false },
+
+  // The product TypeScript and the single stylesheet. `tests/**/*.ts` is
+  // deliberately outside the command today: including it was measured at 712
+  // diagnostics rather than 463, which is a wider disable list for no product
+  // gain right now. Widening the scope is part of the burn-down task.
+  "files": {
+    "includes": ["src/**/*.ts", "src/styles/app.css"]
+  },
+
+  // Formatting is not linting. A formatter run would reflow a large share of
+  // src/ on its first pass, which is exactly the churn this change avoids;
+  // .editorconfig plus the conventions the tree already follows (single
+  // quotes, two spaces, LF) carry that job.
+  "formatter": { "enabled": false },
+  "assist": { "enabled": false },
+
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+
+      "suspicious": {
+        // 6, all in app.css, and every one is the deliberate `100vh` line
+        // followed by `100dvh`. The first is the fallback for engines without
+        // dvh; deleting it would narrow the browser floor README states.
+        "noDuplicateProperties": "off",
+        // 2: `listeners.forEach((listener) => listener(next))` in
+        // src/state/minimap-drought.ts and src/state/minimap-wildfire.ts. The
+        // arrow implicitly returns a void call in a listener fan-out; there is
+        // no value being discarded.
+        "useIterableCallbackReturn": "off",
+        // 4 hasOwnProperty calls on objects the runtime already narrowed.
+        "noPrototypeBuiltins": "off"
+      },
+
+      "complexity": {
+        // 65 `!important` declarations in app.css. Report 15 (DEP-08) asked for
+        // these as a burn-down list, not a red build.
+        "noImportantStyles": "off",
+        // 220 bracketed literal keys. tsconfig.json does not set
+        // noPropertyAccessFromIndexSignature, so these are a style preference
+        // rather than a compiler requirement, and rewriting them touches 220
+        // sites for no behavior change.
+        "useLiteralKeys": "off",
+        // 14 chains the rule would collapse, in code that reads clearly today.
+        "useOptionalChain": "off",
+        "noFlatMapIdentity": "off", // 2
+        "noUselessSwitchCase": "off" // 1
+      },
+
+      "style": {
+        // 89 non-null assertions. Report 15's grep estimated 2; the real figure
+        // is 89, which is itself worth knowing and is part of the burn-down.
+        "noNonNullAssertion": "off",
+        // 25 descending-specificity selectors in app.css, the specificity
+        // fights DEP-08 predicted. Burn-down, not a red build.
+        "noDescendingSpecificity": "off",
+        "useTemplate": "off", // 28
+        "useImportType": "off", // 5
+        "useExponentiationOperator": "off" // 1
+      }
+    }
+  }
+}

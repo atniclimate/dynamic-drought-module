@@ -35,8 +35,18 @@ const forbidden = [
   }
 ];
 
+// docs/ROADMAP.yaml:57-61 names four planning/ folders as repository authority
+// and .gitignore negates them; the hook source drafts are tracked so the
+// installed guardrails have a reviewable origin. Everything else under
+// planning/ stays forbidden.
+const allowed = [
+  /^planning\/(?:decisions|qa|user-research|handoffs)\//i,
+  /^planning\/2026-09-01-deep-dive\/claude-tooling\/hooks\//i
+];
+
 const problems = [];
 for (const path of tracked) {
+  if (allowed.some((pattern) => pattern.test(path))) continue;
   for (const rule of forbidden) {
     if (rule.pattern.test(path)) {
       problems.push(`${path}: ${rule.reason}`);

@@ -57,7 +57,7 @@ PROTECTED = (
      "The delivery workflows are attested by run receipts, not by this repository's"
      " gate (docs/ROADMAP.yaml component_catalog.release_delivery). Seven done P0"
      " claims rest on these files and no test reads them. The owner edits them, or"
-     " DDM-P15-T05 lands the in-repo guard test first."),
+     " DDM-P15-T06 lands the in-repo guard test first."),
     ("dist/", "dist/ is build output. Change the source and rebuild."),
     ("node_modules/", "node_modules/ is installed by npm. Change package.json instead."),
 )

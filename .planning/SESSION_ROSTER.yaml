@@ -42,21 +42,26 @@ state:
     id_rule: "docs/ROADMAP.yaml:76. A DR-, FE-, EF-IB- or EF-MM- id may be cited, never redefined. An id not in PLANNING_AUTHORITY.md section 2 is a reason to stop and ask."
     agents_md: "AGENTS.md, 79 lines, gitignored (.gitignore:42-56), never tracked. Binds Codex sessions on this machine. NOT repo authority. Not edited by this session."
 
-  task_arithmetic:                      # recounted from docs/ROADMAP.yaml this session
-    total_ids: 91
+  task_arithmetic:                      # recounted from docs/ROADMAP.yaml this session; S02a added one
+    total_ids: 92
     done: 19
-    open: 67
+    open: 68
     superseded: 5
     title_only_stubs: 22                # P3 to P6; RECONCILIATION.md:705-708
     ordered_by_import_graph: 25         # RECONCILIATION.md:660-663
-    unordered: 42
+    unordered: 43
     note: >-
       RECONCILIATION.md was written against main 5be15f5 and tallies 90 ids, 18 done
       (:368). The tree at 8b26e9c has 91 and 19, because dc32eb2 applied that document's
-      own Section 9 diff: DDM-P15-T05 was created (docs/ROADMAP.yaml:570-575, diff at
-      RECONCILIATION.md:945-950) and DDM-P15-T02 moved open to done
-      (docs/ROADMAP.yaml:537-552). P15-T02 left Wave 1 and P15-T05 entered it, so
-      25 ordered / 42 unordered is unchanged.
+      own Section 9 diff: a workflow-guard task was created (docs/ROADMAP.yaml:570-575,
+      diff at RECONCILIATION.md:945-950) and DDM-P15-T02 moved open to done
+      (docs/ROADMAP.yaml:537-552). That diff reused the id DDM-P15-T05, which
+      platform/ddm-p15-close had already defined on 2026-09-03 as the lint burn-down and
+      which PLANNING_AUTHORITY.md:265 had already registered. Owner ruling at S02a on
+      2026-09-07: the branch keeps DDM-P15-T05 and the workflow-guard task is
+      DDM-P15-T06. After S02a the tree has 92 ids, 19 done, 68 open, 43 unordered.
+      RECONCILIATION.md and PLANNING_AUTHORITY.md still say T05 for the guard task; they
+      are read-only reports and were not edited.
 
   verification_ladder:                  # exact strings from package.json scripts
     verify_quick: "typecheck && scan:emdash && check:vocabulary && check:coverage"
@@ -251,9 +256,25 @@ sessions:
     gate: "npm run verify:smoke"
     reads: [{ path: ".planning/BRANCH_REPORT.md", lines: "73-96", est_tokens: 900 }]
     budget_tokens: 40000
-    note: "11 files, +680/-37, touches RELEASE_NOTES.md (BRANCH_REPORT.md:77). Its register text describes dependency work (Overture pin, biome bump) but it does not touch either lockfile relative to main (BRANCH_REPORT.md:88-90). DDM-P15-T05 was CREATED by this branch (BRANCH_REPORT.md:193-197) and now also exists on main at docs/ROADMAP.yaml:570-575 via dc32eb2: expect a roadmap conflict on that hunk."
-    status: planned
-    outcome: null
+    note: >-
+      11 files, +680/-37, touches RELEASE_NOTES.md (BRANCH_REPORT.md:77). BRANCH_REPORT.md:88-90
+      says it touches neither lockfile relative to main; git diff --stat main...a40c69d shows
+      package.json +5/-1 and package-lock.json +176 (adds @biomejs/biome 2.5.12), so that
+      claim was wrong and the gate needs npm ci after the merge. DDM-P15-T05 was CREATED by
+      this branch (BRANCH_REPORT.md:193-197) as the lint burn-down; dc32eb2 then created a
+      DIFFERENT task under the same id on main (the workflow guard test). Owner ruling
+      2026-09-07: the branch keeps T05, the guard task becomes DDM-P15-T06.
+    status: done
+    outcome: >-
+      Merged into main by merge commit (no push). Conflicts resolved in package.json
+      (check:all keeps npm run lint and the S01 test scripts) and docs/ROADMAP.yaml (branch
+      keeps DDM-P15-T05; main's guard test renumbered DDM-P15-T06). First verify:smoke run
+      was red at check:public-tree: scripts/check-public-tree.mjs forbade every tracked
+      planning/ path, so check:all had been red on main since dc32eb2; owner ruling carved
+      out the four ledger folders and the hook drafts. Second run: exit 0, all checks clean,
+      biome checked 178 files, 86 Playwright tests passed in 4.2 min. npm ci was needed
+      (@biomejs/biome 2.5.12). .claude/hooks/ddm-guard-edit.py still says T05 in its
+      workflows message; the tracked draft says T06; install-hooks.ps1 syncs it.
 
   - id: S02b
     task_ids: [DDM-P8-T05]
@@ -638,8 +659,8 @@ title_only_stubs:
 # The 42 the import graph does not order.
 unordered:
   order: owner
-  count: 42
-  derivation: "Wave 1 (48, RECONCILIATION.md:636-639) minus the six load-bearing it names at :641-642, with DDM-P15-T02 removed (now done via dc32eb2) and DDM-P15-T05 added (created by dc32eb2)."
+  count: 43
+  derivation: "Wave 1 (48, RECONCILIATION.md:636-639) minus the six load-bearing it names at :641-642, with DDM-P15-T02 removed (now done via dc32eb2), DDM-P15-T05 (lint burn-down, landed by S02a) and DDM-P15-T06 (workflow guard test, created by dc32eb2 under the id T05 and renumbered at S02a) both added."
   receipt: "RECONCILIATION.md:660-663: 42 of the 67 open tasks have no import edge in either direction, 22 of those are the title-only stubs, and this ordering therefore governs 25 tasks, not 67."
   ids: [DDM-P0-T09, DDM-P0-T10, DDM-P0-T11, DDM-P1-T01, DDM-P1-T05, DDM-P1-T06, DDM-P1-T07,
         DDM-P2-T05, DDM-P2-T06,
@@ -648,7 +669,7 @@ unordered:
         DDM-P5-T01, DDM-P5-T02, DDM-P5-T03, DDM-P5-T04, DDM-P5-T05, DDM-P5-T06, DDM-P5-T07,
         DDM-P6-T01, DDM-P6-T02, DDM-P6-T03, DDM-P6-T04, DDM-P6-T06,
         DDM-P8-T04, DDM-P8-T05, DDM-P9-T04, DDM-P10-T03, DDM-P10-T04,
-        DDM-P12-T04, DDM-P13-T01, DDM-P14-T04, DDM-P15-T01, DDM-P15-T04, DDM-P15-T05]
+        DDM-P12-T04, DDM-P13-T01, DDM-P14-T04, DDM-P15-T01, DDM-P15-T04, DDM-P15-T05, DDM-P15-T06]
   notes:
     - "DDM-P8-T05, DDM-P15-T01 and DDM-P15-T05 are unordered but ARE claimed by branches landing in S02b and S02a."
     - "DDM-P2-T06 is structurally_untestable (RECONCILIATION.md:230) and now carries verification: none (owner-run field pass) at docs/ROADMAP.yaml:221."
@@ -750,9 +771,12 @@ owner_calls:
       (".github/workflows/", "The delivery workflows are attested by run receipts, not by
       this repository's gate (docs/ROADMAP.yaml component_catalog.release_delivery). Seven
       done P0 claims rest on these files and no test reads them. The owner edits them, or
-      DDM-P15-T05 lands the in-repo guard test first.")
+      DDM-P15-T06 lands the in-repo guard test first.")
       Apply it to the SOURCE draft, then re-run claude-tooling/install-hooks.ps1.
-    why_it_matters: "RECONCILIATION.md:106-163. Eight done P0 claims rest on workflow files, six on nothing else, and no test in the repository reads a workflow. DDM-P15-T05 (docs/ROADMAP.yaml:570-575) is the in-repo half of the same fix and lands in S02a."
+      APPLIED 2026-09-07 by owner instruction: the draft carries the entry and was copied
+      to .claude/hooks/ by hand (main 59a740e tracks the draft). The task id in the message
+      is DDM-P15-T06 after the S02a ruling.
+    why_it_matters: "RECONCILIATION.md:106-163. Eight done P0 claims rest on workflow files, six on nothing else, and no test in the repository reads a workflow. The guard-test task (DDM-P15-T06 after the S02a ruling; docs/ROADMAP.yaml:570-575 at 8b26e9c) is the in-repo half of the same fix. It does NOT land in S02a: the branch's DDM-P15-T05 is the lint burn-down, a different task."
 
   stop_level_vocabulary:
     what: "The roster's stop_level vocabulary and the installed hook's do not match."
