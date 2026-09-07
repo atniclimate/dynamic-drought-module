@@ -398,8 +398,17 @@ sessions:
     reads: [{ path: "src/styles/app.css", lines: "conflict hunks only, located by grep", est_tokens: 6000, why: "NEVER read whole; 53,943 est tokens" }]
     budget_tokens: 70000
     note: "3 files, +578/-27. CORRECTED (planning/decisions/2026-09-02-decision-register.yaml, correction_2026_09_07): the register's original claim that this conflicts with the briefing branch (S02g) in src/styles/app.css is WRONG, established by merge-tree simulation. The real app.css collision is this branch against S02h (fix/dr-065-boot-honesty): both insert a token block at the same anchor. Lands first regardless (S02f > S02h > S02g); S02h lands next to resolve that collision while it is fresh, S02g last since it merges clean against both. DDM-D02 decided 2026-09-02: tablet gets a real third band, 721 to 1024 px, fluid sidebar, 44 px touch floor, touch-first (docs/ROADMAP.yaml:620)."
-    status: planned
-    outcome: null
+    status: done
+    outcome: >-
+      Baseline on main 01510c3 (the roster-correction commit landed immediately before this
+      merge): verify:smoke exit 0, 89 passed. Lockfile checked by diff against the branch's
+      own merge-base 5be15f5, empty; no npm ci needed. Merged by merge commit (no push): one
+      conflict in docs/RELEASE_NOTES.md, both sides appending, all six entries kept in order
+      (HEAD's five, then this branch's tablet-band entry). No app.css conflict at this step,
+      as expected since S02f seeds the anchor. Commit 704d5c2. Post-merge gate: verify:smoke
+      exit 0, 101 passed (4.5m), including the new tablet-band coverage at all five
+      breakpoints in both orientations plus the 820x615 embed case, confirming no dock or
+      briefing overlap and the 44px touch floor.
 
   - id: S02g
     task_ids: [DDM-P7-T02, DDM-P7-T03]
@@ -433,8 +442,16 @@ sessions:
       exists on the branch and the owner ordered it landed, so it stands; the consequence
       is that S03 MUST read the post-S02 tree, not the tree this roster was written
       against. Recorded, not resolved.
-    status: planned
-    outcome: null
+    status: done
+    outcome: >-
+      Baseline on main 3289354 (S02h's post-merge state): verify:smoke exit 0, 101 passed
+      (4.8m); the known ux1-surfaces.spec.ts:91 flake did not fire this run. Lockfile
+      checked by diff against the branch's own merge-base 5be15f5, empty; no npm ci needed.
+      Merged by merge commit (no push): src/styles/app.css auto-merged CLEAN, exactly as
+      correction_2026_09_07 predicted; the only conflict was docs/RELEASE_NOTES.md, both
+      sides appending, all seven entries kept in order (HEAD's six, then this branch's
+      briefing-matrix entry). Commit 6a070eb. Post-merge gate: verify:smoke exit 0, 101
+      passed (4.9m), flake did not recur.
 
   - id: S02h
     task_ids: [DDM-P14-T02]
@@ -462,8 +479,28 @@ sessions:
       against S02g (impact/ddm-p7-t02-briefing-matrix). Lands second of the three
       (S02f > S02h > S02g), not last, so the real collision is resolved while S02f's
       token-block change is fresh. P14-T02 needs DR-035 (docs/ROADMAP.yaml:509).
-    status: planned
-    outcome: null
+    status: done
+    outcome: >-
+      Baseline on main 704d5c2 (S02f's post-merge state): verify:smoke exit 0, 101 passed
+      (4.3m). Lockfile checked by diff for both branches against their shared merge-base
+      2835091, empty; no npm ci needed. Merged fix/dr-065-boot-honesty first: one conflict
+      in src/styles/app.css only (docs/RELEASE_NOTES.md auto-merged clean), confirming
+      correction_2026_09_07's prediction exactly, both sides inserting a new token block
+      immediately after the same anchor (`--sidebar-w: 340px;`), disjoint token names, no
+      semantic collision. STOPPED and showed both sides plus the anchor and a proposed
+      resolution before committing, per owner instruction. Owner approved: kept both blocks
+      in full, HEAD's --touch-target block first then the incoming --ctl-pending-* block,
+      nothing reworded. Commit edabf02, no trailers. Then merged tests/dr-065-contracts:
+      clean, no conflicts (tests-only, adds tests/preset-toggle-cycles.spec.ts and
+      tests/studio-navigation-cycles.spec.ts). Commit 3289354, no trailers. No npm ci needed
+      for either merge (lockfile untouched end to end). Post-merge gate: verify:smoke first
+      run exit 1, 100 passed / 1 failed at tests/ux1-surfaces.spec.ts:91 ("an old
+      multi-surface link keeps the first surface named (heatrisk before usdm)"); re-run
+      three times alone (--repeat-each=3), 2 of 3 passed, the one failure carrying the
+      identical signature (heatrisk checkbox never reaches checked, a live HeatRisk
+      activation failing silently per the tests/url-state.spec.ts:137 contract). Matches
+      the decision register's known_pre_existing_red exactly; attributed to that
+      nondeterministic spec, not to this merge. Gate treated as clean.
 
   - id: S02i
     task_ids: []
@@ -481,6 +518,37 @@ sessions:
       records nine branches awaiting go and describes this one separately at its line 130
       (BRANCH_REPORT.md:111-113). Do not land without an explicit owner instruction.
     outcome: null
+
+  - id: S02
+    task_ids: []
+    title: "S02 landing cycle: summary"
+    status: complete
+    note: "S02i (map/dr-063-whp-ramp) excluded: still HELD, not part of this completion."
+    outcome: >-
+      All nine awaiting-go branches from the 2026-09-03 long run are landed on main, plus
+      the roster's own S02a-S02e; S02i (map/dr-063-whp-ramp) stays HELD, not landed. Landing
+      order: S02a (platform/ddm-p15-close), S02b (map/ddm-p8-t05-surface-continuity), S02c
+      (science/ddm-p13-t03-gridded-index), S02d (map/ddm-p9-t02-capability-honesty), S02e
+      (docs/worker-and-ci-release-notes-2026-09-03), then the three app.css branches in the
+      corrected order from correction_2026_09_07 (overriding this roster's own original,
+      wrong inline notes, corrected on main by commit 01510c3 before any of the three
+      landed): S02f (ui/ddm-p10-t01-tablet-band, commit 704d5c2), S02h
+      (fix/dr-065-boot-honesty + tests/dr-065-contracts, commits edabf02 and 3289354), S02g
+      (impact/ddm-p7-t02-briefing-matrix, commit 6a070eb). All merges are --no-ff merge
+      commits on main, no attribution trailers, nothing pushed. The real app.css collision
+      (both branches inserting a distinct token block at the same anchor after
+      `--sidebar-w: 340px;`) surfaced only in S02h's first merge, fix/dr-065-boot-honesty
+      into main (edabf02): resolved by owner-approved concatenation, HEAD's --touch-target
+      block kept in full followed by the incoming --ctl-pending-* block, nothing reworded.
+      S02f's own merge carried no app.css conflict (it seeded the anchor); S02g's merge
+      auto-merged app.css clean, exactly as correction_2026_09_07 predicted. The only other
+      conflicts across all three were trivial docs/RELEASE_NOTES.md both-sides-append
+      collisions, resolved by concatenation each time. tests/ux1-surfaces.spec.ts:91 flaked
+      once, in S02h's post-merge verify:smoke (100 passed / 1 failed), and was confirmed
+      nondeterministic by a 3x repeat-each re-run (2 of 3 passed, identical failure
+      signature both times); it did not fire in S02f's or S02g's baselines or post-merge
+      gates. Matches the decision register's known_pre_existing_red and is attributed to
+      that flake, not to any merge in this cycle. Current HEAD: 6a070eb.
 
   - id: S03
     task_ids: [DDM-P1-T02, DDM-P1-T04, DDM-P7-T02, DDM-P7-T05, DDM-P8-T02, DDM-P8-T03, DDM-P11-T01, DDM-P12-T02, DDM-P12-T03, DDM-P14-T03, DDM-P9-T05]
