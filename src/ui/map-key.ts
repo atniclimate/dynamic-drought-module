@@ -366,16 +366,26 @@ function heatKey(): KeySpec {
     : '';
   const firstCategory = HEATRISK_CATEGORIES[0]!;
   const lastCategory = HEATRISK_CATEGORIES.at(-1)!;
+  // A DAY CHANGE IS A FETCH (DDM-P8-T05). The selected frame's source is
+  // replaced whenever the day changes, so between the teardown and the
+  // first tile the key would otherwise present the full scale under the
+  // NEW valid date with nothing painted under it. `loading` is the honest
+  // qualification for that window, in the same W2-D6 form an activation
+  // placeholder uses; the frame watcher replaces it with the terminal
+  // verdict, so it cannot outlive the fetch.
+  const frameLoading = heatRiskFrameStatus === 'loading';
   return {
     label: 'HeatRisk',
     ariaLabel:
       `NWS HeatRisk key, value ${firstCategory.value} ${firstCategory.label} through value ${lastCategory.value} ${lastCategory.label} expected heat impact (experimental product).` +
       validDate +
-      (heatRiskFrameStatus === 'degraded'
-        ? ' Live (partial): selected frame has missing tiles.'
-        : heatRiskFrameStatus === 'error'
-          ? ' Unavailable: no selected-frame tiles loaded.'
-          : ''),
+      (frameLoading
+        ? ' Loading: the selected frame has not painted yet.'
+        : heatRiskFrameStatus === 'degraded'
+          ? ' Live (partial): selected frame has missing tiles.'
+          : heatRiskFrameStatus === 'error'
+            ? ' Unavailable: no selected-frame tiles loaded.'
+            : ''),
     itemsHtml:
       heatDateControl() +
       '<span class="map-key-scale" data-heatrisk-scale>' +
@@ -387,11 +397,14 @@ function heatKey(): KeySpec {
         )
       ).join('') +
       '</span>' +
-      (heatRiskFrameStatus === 'degraded'
-        ? '<span class="map-key-qualification" data-heatrisk-tile-status><strong>live (partial)</strong> Selected frame has missing tiles.</span>'
-        : heatRiskFrameStatus === 'error'
-          ? '<span class="map-key-qualification" data-heatrisk-tile-status><strong>unavailable</strong> No selected-frame tiles loaded.</span>'
-          : '')
+      (frameLoading
+        ? '<span class="map-key-qualification map-key-loading" data-key-loading="heatrisk">' +
+          '<strong>loading</strong> The selected frame has not painted yet.</span>'
+        : heatRiskFrameStatus === 'degraded'
+          ? '<span class="map-key-qualification" data-heatrisk-tile-status><strong>live (partial)</strong> Selected frame has missing tiles.</span>'
+          : heatRiskFrameStatus === 'error'
+            ? '<span class="map-key-qualification" data-heatrisk-tile-status><strong>unavailable</strong> No selected-frame tiles loaded.</span>'
+            : '')
   };
 }
 
@@ -925,10 +938,26 @@ export function initMapKey(): void {
     const html =
       `<span class="map-key-label">${escapeHtml(spec.label)}</span>` + spec.itemsHtml;
     if (html !== rendered) {
+      // A re-render replaces every node in the strip, so anything the
+      // person was operating loses focus. The HeatRisk valid-date select
+      // is the only focusable control in here, and since DDM-P8-T05 a day
+      // change re-renders TWICE: once to say the new frame is loading, and
+      // again when its tiles settle. Without this, a keyboard day change
+      // dropped focus the moment the tiles landed and the next arrow key
+      // went nowhere. Captured before the rewrite, restored after it.
+      const active = document.activeElement;
+      const refocusDaySelect =
+        active instanceof HTMLElement &&
+        content.contains(active) &&
+        active.matches('[data-heatrisk-day]');
       rendered = html;
       content.innerHTML = html;
       host.setAttribute('aria-label', spec.ariaLabel);
       setExpanded(false);
+      if (refocusDaySelect) {
+        const restored = content.querySelector('[data-heatrisk-day]');
+        if (restored instanceof HTMLElement) restored.focus();
+      }
     }
     // The family follows what the strip acknowledges (active plus loading
     // placeholders), so a loading key seats under the same CSS its ready

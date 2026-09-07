@@ -291,8 +291,12 @@ sessions:
     gate: "npm run verify:smoke"
     budget_tokens: 35000
     note: "5 files, +458/-12 (BRANCH_REPORT.md:78). P8-T05 is Wave 1, effort S, no decision gate (docs/ROADMAP.yaml:332-336)."
-    status: planned
-    outcome: null
+    status: done
+    outcome: >-
+      Baseline on main f521800 before the merge: verify:smoke exit 0, 86 passed. Lockfile
+      checked by git diff, untouched. Merged by merge commit (no push); one conflict in
+      docs/RELEASE_NOTES.md, both sides appending, all four entries kept. Post-merge gate:
+      verify:smoke exit 0, 9 checks clean, node tests 0 failures, 88 Playwright passed (3.7 min).
 
   - id: S02c
     task_ids: [DDM-P13-T03]

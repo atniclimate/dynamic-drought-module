@@ -39,6 +39,17 @@ been assigned to this work.
   recommended preset holds every rule the tree already satisfies at zero, and
   the thirteen rules that fire today (463 diagnostics, counted in `biome.jsonc`
   beside each) are switched off for DDM-P15-T05 to burn down.
+- 2026-09-03: a time change no longer leaves the map blank and unexplained.
+  Changing the HeatRisk valid date removed the old frame and then announced
+  the new one as live, so the map went blank while the on-map key still
+  showed a full scale; the key now carries a `loading` row and the on-map
+  indicator stands for exactly as long as that frame's tiles are in flight.
+  Changing the drought horizon between the two CPC outlook registers kept the
+  previous polygons on screen with nothing saying they were superseded; the
+  indicator now names the register being fetched. Both statements are
+  withdrawn the moment the surface reaches `live`, `live (partial)`,
+  `unavailable`, or `no data`, and a superseded request is still aborted, so
+  a failed switch reads as its honest verdict rather than as stale data.
 
 ### 2026-08-31: heat readings in plain language (pull request 53, `5e0a889`)
 
