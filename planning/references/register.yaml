@@ -1,0 +1,324 @@
+# References register (SEED)
+#
+# THIS IS A SEED, NOT A COMPLETE LEDGER. It was harvested in session S03b on
+# 2026-09-07 from exactly two files, src/impact/enso.ts and src/impact/matrix.ts,
+# plus the snapshot those two read (public/data/enso-indices.json) and the two
+# scripts that build and validate it. Every other module that cites an issuer is
+# absent. Do not read an absence here as "this claim has no source".
+#
+# Owner ruling at S03b checkpoint 2 created this file as a tracked ledger. The
+# `authority:` block in docs/ROADMAP.yaml is NOT edited by this session; the
+# owner adds the ledger there.
+#
+# ID SCHEME, an open owner call. Entries are keyed by a readable slug, not by a
+# coded id. No DR-, FE-, EF-IB- or EF-MM- id is minted, reused or redefined
+# here. If this ledger should carry a coded scheme, that scheme has to be
+# registered in .planning/PLANNING_AUTHORITY.md section 2 first.
+#
+# last_checked: an ISO date means a live HTTP check ran in S03b and is recorded
+# with its status code. "unchecked" means no request was made this session; it
+# is NOT a claim that the URL is broken.
+
+seed: true
+generated_on: "2026-09-07"
+generated_by: "S03b reconnaissance"
+harvested_from:
+  - src/impact/enso.ts
+  - src/impact/matrix.ts
+  - public/data/enso-indices.json
+  - scripts/build-enso-snapshot.mjs
+  - scripts/lib/enso-snapshot-contract.mjs
+not_harvested: "Every other src/ module. This seed covers the ENSO seam and the
+  briefing matrix only."
+citations_verified_marker: "src/impact/enso.ts:198 sets CITATIONS_VERIFIED to
+  2026-09-02. That marker is the module's own, and this register does not move it."
+
+references:
+
+  # ------------------------------------------------------------------
+  # Tilt sentences: the three tendency() branches. These are the three
+  # URLs S03b actually resolved.
+  # ------------------------------------------------------------------
+
+  - id: usda-nw-hub-el-nino
+    product: "El Nino in the Northwest: what can we expect?"
+    url: "https://www.climatehubs.usda.gov/hubs/northwest/topic/el-nino-northwest-what-can-we-expect"
+    issuer: "USDA Northwest Climate Hub"
+    claims:
+      - "src/impact/enso.ts:479 (El Nino tilt sentence, warmer and drier fall and
+         winter, rain over snow, decreased runoff, less summer water, increased
+         wildfire risk)"
+    cited_as: "src/impact/enso.ts:481 source, :482 sourceUrl via NW_HUB_EL_NINO_URL (:203)"
+    owning_task: "ENSO citations (DDM-P12-T03)"
+    last_checked: "2026-09-07"
+    check_result: "curl -sI, HTTP 200"
+
+  - id: usda-nw-hub-la-nina
+    product: "La Nina in the Northwest: what can we expect?"
+    url: "https://www.climatehubs.usda.gov/hubs/northwest/topic/la-nina-northwest-what-can-we-expect"
+    issuer: "USDA Northwest Climate Hub"
+    claims:
+      - "src/impact/enso.ts:488 (La Nina tilt sentence, cooler winter, precipitation
+         association explicitly weaker than the temperature one, deeper snowpack)"
+    cited_as: "src/impact/enso.ts:490 source, :491 sourceUrl via NW_HUB_LA_NINA_URL (:205)"
+    owning_task: "ENSO citations (DDM-P12-T03)"
+    last_checked: "2026-09-07"
+    check_result: "curl -sI, HTTP 200"
+
+  - id: cpc-enso-composites
+    product: "ENSO temperature, precipitation and snow composites"
+    url: "https://www.cpc.ncep.noaa.gov/products/precip/CWlink/ENSO/composites/"
+    issuer: "NOAA Climate Prediction Center"
+    claims:
+      - "src/impact/enso.ts:497 (neutral branch: no warm-phase or cool-phase
+         composite to lean on)"
+    cited_as: "src/impact/enso.ts:499 source, :500 sourceUrl via CPC_COMPOSITES_URL (:207)"
+    also_lineage_for:
+      - "src/impact/enso.ts:483 (El Nino branch lineage)"
+      - "src/impact/enso.ts:492 (La Nina branch lineage)"
+    owning_task: "ENSO citations (DDM-P12-T03)"
+    last_checked: "2026-09-07"
+    check_result: "curl -sI, HTTP 200"
+
+  # ------------------------------------------------------------------
+  # Named in lineage only: no URL exists in the code for these.
+  # ------------------------------------------------------------------
+
+  - id: wa-state-climate-office
+    product: "Washington State Climate Office (University of Washington College
+      of the Environment)"
+    url: null
+    url_status: "NO URL IN CODE. The El Nino branch quotes this office by name for
+      the snowpack counter-evidence but carries no link for it."
+    issuer: "Washington State Climate Office"
+    claims:
+      - "src/impact/enso.ts:479 (the three strongest El Ninos on record, 1982-83,
+         1997-98 and 2015-16, each produced near-normal Washington snowpack)"
+    cited_as: "src/impact/enso.ts:483 lineage via WA_CLIMATE_OFFICE_LINEAGE (:461)"
+    owning_task: "ENSO citations (DDM-P12-T03)"
+    last_checked: "unchecked"
+    gap: true
+
+  - id: cpc-seasonal-drought-outlook
+    product: "Seasonal Drought Outlook"
+    url: null
+    url_status: "NO URL IN CODE. Named in the neutral branch's lineage array and in
+      its sentence, with no link beside it."
+    issuer: "NOAA Climate Prediction Center"
+    claims:
+      - "src/impact/enso.ts:497 (the neutral seasonal read rests on the CPC Seasonal
+         Drought Outlook and on current conditions)"
+    cited_as: "src/impact/enso.ts:501 lineage, literal string"
+    owning_task: "ENSO citations (DDM-P12-T03)"
+    last_checked: "unchecked"
+    gap: true
+
+  # ------------------------------------------------------------------
+  # ENSO index state: the status pointer and the index products.
+  # ------------------------------------------------------------------
+
+  - id: cpc-enso-diagnostic-discussion
+    product: "ENSO Diagnostic Discussion"
+    url: "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_advisory/ensodisc.shtml"
+    issuer: "NOAA Climate Prediction Center"
+    claims:
+      - "src/impact/enso.ts:513 (AUTHORITY_TEXT: CPC states the official ENSO status,
+         including any Advisory, issued the second Thursday of each month)"
+    cited_as: "src/impact/enso.ts:871 source, :872 sourceUrl via CPC_STATUS_URL (:199)"
+    note: "Never parsed. The module computes the index state and links this page
+      rather than restating it (src/impact/enso.ts:507-511)."
+    owning_task: "ENSO horizons (DDM-P12-T02)"
+    last_checked: "unchecked"
+
+  - id: cpc-roni-product-page
+    product: "Relative Oceanic Nino Index (RONI) product page"
+    url: "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/"
+    issuer: "NOAA Climate Prediction Center"
+    claims:
+      - "src/impact/enso.ts:963 (SOURCE, :186) and :969 (RONI_PRODUCT_URL)"
+      - "public/data/enso-indices.json sourceQuotes: Cold and Warm Episodes by
+         Season, the five-season episode rule"
+      - "public/data/enso-indices.json sourceQuotes: the RONI revision window"
+    cited_as: "src/impact/enso.ts:201 RONI_PRODUCT_URL; scripts/lib/enso-snapshot-contract.mjs:314"
+    owning_task: "ENSO horizons (DDM-P12-T02)"
+    last_checked: "unchecked"
+
+  - id: cpc-roni-data-file
+    product: "RONI.ascii.txt (RONI index series)"
+    url: "https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt"
+    issuer: "NOAA Climate Prediction Center"
+    claims:
+      - "public/data/enso-indices.json roni.sourceUrl; the operational RONI value
+         every conditions sentence quotes"
+    cited_as: "scripts/build-enso-snapshot.mjs:61 (RONI_URL, hardcoded in the builder)"
+    owning_task: "ENSO horizons (DDM-P12-T02)"
+    last_checked: "unchecked"
+
+  - id: cpc-oni-data-file
+    product: "oni.ascii.txt (Oceanic Nino Index series)"
+    url: "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt"
+    issuer: "NOAA Climate Prediction Center"
+    claims:
+      - "public/data/enso-indices.json oni.sourceUrl"
+    cited_as: "scripts/build-enso-snapshot.mjs:60 (ONI_URL, hardcoded in the builder)"
+    owning_task: "ENSO horizons (DDM-P12-T02)"
+    last_checked: "unchecked"
+
+  - id: cpc-nino34-detrended-monthly
+    product: "detrend.nino34.ascii.txt (detrended MONTHLY Nino 3.4 SST anomaly)"
+    url: "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/detrend.nino34.ascii.txt"
+    issuer: "NOAA Climate Prediction Center"
+    claims:
+      - "src/impact/enso.ts:909 (NOAA CPC analyzed monthly Nino 3.4 sea surface
+         temperature anomaly), :910 sourceUrl read from the snapshot"
+      - "public/data/enso-indices.json nino34.source and nino34.sourceUrl"
+    cited_as: "scripts/build-enso-snapshot.mjs:63 (hardcoded in the builder)"
+    owning_task: "ENSO horizons (DDM-P12-T02)"
+    last_checked: "unchecked"
+    dr031_note: "This is the MONTHLY product. DR-031 option (a) asks for a WEEKLY
+      Nino 3.4 observation, which no entry in this register and no endpoint in
+      src/config/urls.ts currently supplies. See the recon report, owner call 1."
+
+  - id: cpc-soi
+    product: "Southern Oscillation Index series"
+    url: "https://www.cpc.ncep.noaa.gov/data/indices/soi"
+    issuer: "NOAA Climate Prediction Center"
+    claims:
+      - "public/data/enso-indices.json soi.source and soi.sourceUrl"
+    cited_as: "scripts/build-enso-snapshot.mjs:64 (SOI_URL, hardcoded in the builder)"
+    owning_task: "ENSO horizons (DDM-P12-T02)"
+    last_checked: "unchecked"
+
+  - id: cpc-enso-faq
+    product: "ENSO FAQ (the onset rule, one season)"
+    url: "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ensofaq.shtml"
+    issuer: "NOAA Climate Prediction Center"
+    claims:
+      - "public/data/enso-indices.json sourceQuotes[0]: CPC declares the onset of an
+         El Nino or La Nina episode on the one-season rule"
+    cited_as: "scripts/lib/enso-snapshot-contract.mjs:312 (CPC_RULE_URLS.onset)"
+    owning_task: "ENSO horizons (DDM-P12-T02)"
+    last_checked: "unchecked"
+
+  - id: cpc-enso-alert-readme
+    product: "ENSO alert system / status definitions"
+    url: "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_advisory/enso-alert-readme.shtml"
+    issuer: "NOAA Climate Prediction Center"
+    claims:
+      - "public/data/enso-indices.json sourceQuotes: the CPC ENSO status definitions"
+    cited_as: "scripts/lib/enso-snapshot-contract.mjs:320"
+    owning_task: "ENSO horizons (DDM-P12-T02)"
+    last_checked: "unchecked"
+
+  - id: cpc-oni-change
+    product: "ONI_change.shtml (the ONI revision history)"
+    url: "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_change.shtml"
+    issuer: "NOAA Climate Prediction Center"
+    claims:
+      - "scripts/build-enso-snapshot.mjs:530, the revision-window rule the builder applies"
+    cited_as: "scripts/build-enso-snapshot.mjs:530"
+    owning_task: "ENSO horizons (DDM-P12-T02)"
+    last_checked: "unchecked"
+
+  - id: cpc-iri-probabilistic-outlook
+    product: "Official probabilistic ENSO outlook (CPC/IRI consensus)"
+    url: null
+    url_status: "READ FROM THE SNAPSHOT AT RUNTIME, not from a constant. The current
+      public/data/enso-indices.json carries NO probabilities key, so this code path
+      is present and unexercised by the shipped snapshot."
+    issuer: "NOAA Climate Prediction Center and the International Research Institute
+      for Climate and Society"
+    claims:
+      - "src/impact/enso.ts:930 and :938 (probabilistic outlook claim), :939 sourceUrl"
+    cited_as: "src/impact/enso.ts:938-939; series listed OPTIONAL in
+      scripts/lib/enso-snapshot-contract.mjs:304"
+    owning_task: "ENSO horizons (DDM-P12-T02)"
+    last_checked: "unchecked"
+    gap: true
+
+  # ------------------------------------------------------------------
+  # The briefing matrix. src/impact/matrix.ts carries NO source, sourceUrl or
+  # lineage field of its own: it names products in prose, inside CELL_ABSENCE,
+  # and every one of those below has NO url in the code.
+  # ------------------------------------------------------------------
+
+  - id: usdm
+    product: "U.S. Drought Monitor"
+    url: null
+    url_status: "Named in prose in matrix.ts with no link. A URL exists elsewhere in
+      the codebase; this seed does not import it."
+    issuer: "National Drought Mitigation Center, USDA and NOAA"
+    claims:
+      - "src/impact/matrix.ts:131 (current drought cell absence names this product)"
+    owning_task: "briefing matrix (DDM-P7-T02)"
+    last_checked: "unchecked"
+
+  - id: nifc-current-perimeters
+    product: "Current mapped wildfire perimeters"
+    url: null
+    url_status: "Named in prose in matrix.ts with no link."
+    issuer: "National Interagency Fire Center"
+    claims:
+      - "src/impact/matrix.ts:132 (current fire cell absence)"
+    owning_task: "briefing matrix (DDM-P7-T02)"
+    last_checked: "unchecked"
+
+  - id: nws-active-alerts
+    product: "Active watches, warnings and advisories"
+    url: null
+    url_status: "Named in prose in matrix.ts with no link."
+    issuer: "National Weather Service"
+    claims:
+      - "src/impact/matrix.ts:134 (current heat cell absence; the query answers for
+         both the fire and the heat rows, matrix.ts:15-17)"
+    owning_task: "briefing matrix (DDM-P7-T02)"
+    last_checked: "unchecked"
+
+  - id: cpc-extended-range-outlook
+    product: "Extended-range outlook"
+    url: null
+    url_status: "Named in prose in matrix.ts with no link."
+    issuer: "NOAA Climate Prediction Center"
+    claims:
+      - "src/impact/matrix.ts:139 (near-term drought cell absence)"
+    owning_task: "briefing matrix (DDM-P7-T02)"
+    last_checked: "unchecked"
+
+  - id: spc-fire-weather-days-1-8
+    product: "Fire weather outlooks, Days 1 to 8"
+    url: null
+    url_status: "Named in prose in matrix.ts with no link. NOT WIRED: the cell says
+      so in its own words."
+    issuer: "NOAA Storm Prediction Center"
+    claims:
+      - "src/impact/matrix.ts:141 (near-term fire cell states the product is not
+         wired into this briefing)"
+    owning_task: "fire cells (DDM-P7-T03)"
+    wired: false
+    last_checked: "unchecked"
+
+  - id: nifc-predictive-services-months-1-4
+    product: "Significant wildland fire potential outlook, Months 1 to 4"
+    url: null
+    url_status: "Named in prose in matrix.ts with no link. NOT WIRED."
+    issuer: "National Interagency Fire Center Predictive Services"
+    claims:
+      - "src/impact/matrix.ts:149 (long-range fire cell states the product is not
+         wired into this briefing)"
+    owning_task: "fire cells (DDM-P7-T03)"
+    wired: false
+    last_checked: "unchecked"
+
+  - id: cpc-seasonal-temperature-outlook
+    product: "Seasonal temperature outlook"
+    url: null
+    url_status: "Named in prose in matrix.ts with no link. NOT WIRED."
+    issuer: "NOAA Climate Prediction Center"
+    claims:
+      - "src/impact/matrix.ts:151 (long-range heat cell states the product is not
+         wired into this briefing)"
+    owning_task: "heat claims without the layer (DDM-P7-T05)"
+    wired: false
+    last_checked: "unchecked"
+    note: "This is the product DDM-P7-T05's second acceptance clause names. The cell
+      currently satisfies that clause through its second branch, reads unavailable."

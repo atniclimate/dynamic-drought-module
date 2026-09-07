@@ -589,6 +589,49 @@ sessions:
       distinct source-backed meanings) and DDM-P12-T03 (cite and correct the regional tilt
       statements) leaves nine tasks cyclic; nine owner calls are recorded in the plan's section 6.
 
+  - id: S03b
+    task_ids: []
+    title: "Reconnaissance before Wave 2: D12 recount, spec audit, references seed"
+    tier: T2
+    model: claude-opus-5
+    effort: high
+    mode: default
+    run_as: main
+    subagents: "8 x Haiku 4.5, depth 1, read-only spec audit"
+    stop_level: fast
+    decision_gate: null
+    gate: "no diff under src/, tests/, docs/ or .claude/; one report, one seeded register, TRACE repairs, six preserved scripts, this entry"
+    role: "recon. Fetch receipts and refine planning files. Change no code."
+    rationale: >-
+      S03 delivered the cut plan but left nine owner calls and performed no audit of its own
+      recommendations. Three of those calls are answerable by measurement rather than judgement:
+      the DDM-D12 membership number after the TRACE repairs, whether the Wave 2 acceptance specs
+      are inside verify:smoke, and what DR-031 option (a) would actually have to touch. This
+      session measures them so the first Wave 2 task starts against facts.
+    budget_tokens: 120000
+    stop_when: "the report, the register and the roster entry exist and the second commit is made; nothing pushed"
+    status: done
+    outcome: >-
+      Two commits on main, unpushed. dc1a583 repairs three TRACE attachments S02g invalidated
+      (heat-horizon.ts removed from DDM-P7-T05 heat claims without the layer; overlap-engine.ts
+      repathed to src/ui/island/ for DDM-P9-T03 overlap engine; matrix.ts attached to DDM-P7-T02
+      briefing matrix, under a new attached_by value repair:S03b that no consumer reads). A fourth
+      repair was owner-directed at checkpoint 2 and STOPPED on its own stop condition: TRACE.yaml:2435
+      still carries a dangling covers: src/impact/heat-horizon.ts, because none of the six src files
+      tests/heat-h1-heatrisk.spec.ts imports is attached to DDM-P7-T05. THE HEADLINE NUMBER: with the
+      linter (DDM-P15-T04) excluded and the hub line at twenty, the DDM-D12 component is THREE tasks,
+      not eleven, and nothing joins it that ROADMAP.yaml:686-687 did not already name. Overlap engine
+      (DDM-P9-T03) does NOT enter it, and repairing its path changed its membership nowhere: at hub
+      line ten it is still the twelfth task, bound in through sources.ts and fire-context.ts. With the
+      linter included the component is twenty and the linter alone fuses seventeen tasks.
+      tests/briefing-matrix.spec.ts passed 11/11 on main, the first gate run of that acceptance ever.
+      Ten of the eleven Wave 2 tasks have NO acceptance spec at all; 37 of 113 specs are attached to
+      no task, five of them inside gating verify:smoke, which is wider than the two S03 found.
+      Deliverables: .planning/2026-09-07-recon-report.md (229 lines, nine numbered owner calls),
+      planning/references/register.yaml (22 entries, seed), .planning/2026-09-07-s03-edge-ledger.md
+      (S03's ledger preserved verbatim, md5 0a0e52af03dac19d5f2d0e9d011ede09),
+      .planning/tools/ (six analysis scripts, byte-identical plus a two-line provenance header each).
+
   # ---------------------------------------------------------------------------
   # S04: this session.
   # ---------------------------------------------------------------------------

@@ -67,6 +67,7 @@ workers/proxy/.wrangler/
 !/planning/qa/
 !/planning/user-research/
 !/planning/handoffs/
+!/planning/references/
 /planning/handoffs/*
 !/planning/handoffs/2026-09-04.md
 /post-mortem/
