@@ -1,23 +1,31 @@
 /**
- * Briefing hydration: fill the three horizons of an `ImpactBriefing` from the
- * live sources, updating the panel progressively as each horizon resolves.
+ * Briefing hydration: fill the twelve cells of an `ImpactBriefing` from the
+ * live sources, updating the panel progressively as each lane settles.
  *
  * The skeleton (`createBriefingSkeleton`) builds the land identity and the
- * routed resources synchronously; this module fills the horizons. Each horizon
- * runs its source fetches concurrently and reports its own status, so a slow
- * or failing source for one horizon never blocks another and never blocks the
- * panel. The master `signal` cancels every in-flight fetch on panel close or
- * reopen (the cancellation invariant); `onUpdate` re-renders the panel in
- * place after each horizon settles.
+ * routed resources synchronously; this module fills the matrix. Every source
+ * family is one lane, each lane fetches concurrently, and each lane settles
+ * into only the cells `src/impact/matrix.ts` declares for it, so a slow or
+ * failing source for one hazard never blocks another hazard and never blocks
+ * the panel. The master `signal` cancels every in-flight fetch on panel close
+ * or reopen (the cancellation invariant); `onUpdate` re-renders the panel in
+ * place after each lane settles.
  *
- * Source-to-horizon mapping (ddm-drought-impact-modeling temporal framing):
- *   Current     USDM category at the point, mapped NIFC perimeters, active NWS
- *               red-flag and extreme-heat alerts. Observations, plainly stated.
- *   Near-term   Selected NWS HeatRisk forecast classification, NWS point
- *               forecast (temperature tendency), plus the cited CPC 6-10 and
- *               8-14 day outlooks. Outlooks, stated as tendencies.
- *   Long-range  the cited CPC Seasonal Drought Outlook; the ENSO phase tilt is
- *               layered onto this horizon by Phase 6.
+ * Lane-to-cell mapping (ddm-drought-impact-modeling temporal framing; the
+ * authoritative table is `LANE_PLACEMENT` in `src/impact/matrix.ts`):
+ *   Drought     USDM point category and statewide DSCI now, the CPC
+ *               extended-range outlooks near-term, the NWRFC water-supply
+ *               outlook and the cited CPC Seasonal Drought Outlook
+ *               season-ahead.
+ *   Fire        mapped NIFC perimeters and active NWS red-flag products now.
+ *               The near-term and season-ahead cells name the outlooks they
+ *               do not yet read (DR-022).
+ *   Heat        active NWS extreme-heat products now, the selected HeatRisk
+ *               classification and the NWS point temperature tendency
+ *               near-term. The season-ahead cell names the CPC seasonal
+ *               outlook it does not yet read (DR-019).
+ *   ENSO        the observed CPC index state now, the regional tendency and
+ *               the official probabilities season-ahead.
  */
 
 import {
@@ -31,8 +39,13 @@ import {
   type SourceResult
 } from './sources';
 import { makeClaim } from './evidence';
-import { fillHorizon } from './heat-horizon';
 import { synthesizeHeatSources } from './heat-synthesis';
+import {
+  applyMatrix,
+  markHorizonCells,
+  MATRIX_LANE_KEYS,
+  type MatrixLaneKey
+} from './matrix';
 import { createNwsRequestSession } from './nws-point';
 import { sourceMayRun } from './source-policy';
 import { fetchWaterSupplyClaims } from './water-supply';
@@ -96,10 +109,10 @@ async function loadEnsoClaims(
 }
 
 /**
- * Hydrate every horizon of `briefing`. Returns when all horizons have settled
- * (or the signal aborted). Calls `onUpdate` after each horizon is filled so the
- * panel re-renders progressively; the panel's `onUpdate` is a no-op once the
- * panel is closed or superseded.
+ * Hydrate every cell of `briefing`. Returns when every lane has settled (or
+ * the signal aborted). Calls `onUpdate` after each lane settles so the panel
+ * re-renders progressively; the panel's `onUpdate` is a no-op once the panel
+ * is closed or superseded.
  */
 export async function hydrateBriefing(
   briefing: ImpactBriefing,
@@ -121,6 +134,62 @@ export async function hydrateBriefing(
     initialHeatSources.length +
     (sourceMayRun(sourcePolicy, 'pointHeat') ? 1 : 0);
 
+  // The matrix is rendered only where the capability matrix validates impact
+  // synthesis for the selection; elsewhere the panel replaces it with one
+  // named unavailable state, so the lanes below settle without publishing.
+  const matrixEnabled = sourcePolicy.droughtImpact.enabled;
+  const laneResults = new Map<MatrixLaneKey, SourceResult>();
+
+  const publishMatrix = (): void => {
+    if (signal.aborted || !matrixEnabled) return;
+    applyMatrix(horizons, laneResults);
+    onUpdate();
+  };
+
+  /** Record one lane's outcome and repaint every cell it can reach. */
+  const settleLane = (key: MatrixLaneKey, result: SourceResult): void => {
+    if (signal.aborted) return;
+    laneResults.set(key, result);
+    publishMatrix();
+  };
+
+  if (!matrixEnabled) {
+    const note =
+      sourcePolicy.droughtImpact.note ??
+      'Drought impact synthesis is unavailable for this selection.';
+    for (const horizon of [
+      horizons.current,
+      horizons.nearTerm,
+      horizons.longRange
+    ]) {
+      markHorizonCells(horizon, 'unavailable', note);
+      horizon.note = note;
+    }
+    onUpdate();
+  }
+
+  // A source the policy gates off settles immediately with the policy's own
+  // sentence, so its cells name what is missing and why from the first paint
+  // instead of spinning on a fetch that will never start.
+  for (const key of MATRIX_LANE_KEYS) {
+    if (!sourceMayRun(sourcePolicy, key)) {
+      laneResults.set(key, {
+        claims: [],
+        ok: false,
+        note: sourcePolicy.sources[key].note
+      });
+    }
+  }
+  // The seasonal outlook is fixed cited prose rather than a fetch, so its
+  // lane settles with the briefing's first paint.
+  if (sourceMayRun(sourcePolicy, 'cpcSeasonal')) {
+    laneResults.set('cpcSeasonal', {
+      claims: [CPC_SEASONAL_OUTLOOK],
+      ok: true
+    });
+  }
+  publishMatrix();
+
   const publishHeatSynthesis = (): void => {
     if (signal.aborted) return;
     briefing.heatSynthesis = synthesizeHeatSources(
@@ -134,42 +203,23 @@ export async function hydrateBriefing(
   const settleHeatResult = (
     key: 'nwsForecast' | 'nwsAlerts',
     result: SourceResult
-  ): SourceResult => {
+  ): void => {
     heatResults.set(key, result);
     heatPending = Math.max(0, heatPending - 1);
+    settleLane(key, result);
     publishHeatSynthesis();
-    return result;
   };
 
-  const settleHeatRisk = (
-    generation: number,
-    result: SourceResult
-  ): SourceResult => {
-    if (signal.aborted || generation !== heatGeneration) return result;
+  const settleHeatRisk = (generation: number, result: SourceResult): void => {
+    if (signal.aborted || generation !== heatGeneration) return;
     heatResults.set('heatRisk', result);
     if (!heatRiskSettled) {
       heatRiskSettled = true;
       heatPending = Math.max(0, heatPending - 1);
     }
+    settleLane('heatRisk', result);
     publishHeatSynthesis();
-    return result;
   };
-
-  if (!sourcePolicy.droughtImpact.enabled) {
-    const note =
-      sourcePolicy.droughtImpact.note ??
-      'Drought impact synthesis is unavailable for this selection.';
-    for (const horizon of [
-      horizons.current,
-      horizons.nearTerm,
-      horizons.longRange
-    ]) {
-      horizon.status = 'unavailable';
-      horizon.claims = [];
-      horizon.note = note;
-    }
-    onUpdate();
-  }
 
   const pointHeat = sourceMayRun(sourcePolicy, 'pointHeat')
     ? import('./point-heat')
@@ -196,25 +246,10 @@ export async function hydrateBriefing(
         })
     : Promise.resolve();
 
-  let nearTermBase: readonly [SourceResult, SourceResult] | null = null;
-  let latestHeatRisk: SourceResult | null = null;
-
-  const publishNearTerm = (): void => {
-    if (signal.aborted || !nearTermBase || !latestHeatRisk) return;
-    fillHorizon(horizons.nearTerm, [
-      latestHeatRisk,
-      nearTermBase[0],
-      nearTermBase[1]
-    ]);
-    onUpdate();
-  };
-
   const refreshHeatRisk = (generation: number): void => {
     void fetchHeatRiskClaims(context, signal).then((heatRisk) => {
       if (signal.aborted || generation !== heatGeneration) return;
-      latestHeatRisk = heatRisk;
       settleHeatRisk(generation, heatRisk);
-      publishNearTerm();
     });
   };
 
@@ -224,14 +259,17 @@ export async function hydrateBriefing(
     // completion cannot publish a classification for a superseded raster.
     const onHeatRiskFrame = (): void => {
       const generation = ++heatGeneration;
-      latestHeatRisk = { claims: [], ok: true };
       heatResults.delete('heatRisk');
+      // The lane returns to in flight, so the superseded classification
+      // leaves the heat near-term cell at once instead of standing while the
+      // new frame is read.
+      laneResults.delete('heatRisk');
       if (heatRiskSettled) {
         heatRiskSettled = false;
         heatPending += 1;
       }
+      publishMatrix();
       publishHeatSynthesis();
-      publishNearTerm();
       refreshHeatRisk(generation);
     };
     const removeHeatListener = (): void => {
@@ -242,146 +280,45 @@ export async function hydrateBriefing(
   }
 
   const initialHeatGeneration = heatGeneration;
-  const initialHeatRisk: Promise<SourceResult | null> = sourceMayRun(
-    sourcePolicy,
-    'heatRisk'
-  )
-    ? fetchHeatRiskClaims(context, signal).then((result) =>
-        settleHeatRisk(initialHeatGeneration, result)
-      )
-    : Promise.resolve(null);
-  const forecast: Promise<SourceResult | null> = sourceMayRun(
-    sourcePolicy,
-    'nwsForecast'
-  )
-    ? fetchNwsForecastClaims(context, signal, nwsSession).then((result) =>
-        settleHeatResult('nwsForecast', result)
-      )
-    : Promise.resolve(null);
-  const alerts: Promise<SourceResult | null> = sourceMayRun(
-    sourcePolicy,
-    'nwsAlerts'
-  )
-    ? fetchNwsAlertClaims(context, signal, nwsSession).then((result) =>
-        settleHeatResult('nwsAlerts', result)
-      )
-    : Promise.resolve(null);
+  const initialHeatRisk: Promise<void> = sourceMayRun(sourcePolicy, 'heatRisk')
+    ? fetchHeatRiskClaims(context, signal).then((result) => {
+        settleHeatRisk(initialHeatGeneration, result);
+      })
+    : Promise.resolve();
+  const forecast: Promise<void> = sourceMayRun(sourcePolicy, 'nwsForecast')
+    ? fetchNwsForecastClaims(context, signal, nwsSession).then((result) => {
+        settleHeatResult('nwsForecast', result);
+      })
+    : Promise.resolve();
+  const alerts: Promise<void> = sourceMayRun(sourcePolicy, 'nwsAlerts')
+    ? fetchNwsAlertClaims(context, signal, nwsSession).then((result) => {
+        settleHeatResult('nwsAlerts', result);
+      })
+    : Promise.resolve();
 
-  const longRange = (async (): Promise<void> => {
-    if (!sourcePolicy.droughtImpact.enabled) return;
-    // Each long-range source is gated by its own declared capability cell
-    // (IB-06 / ENSO-09): all three were declared in BRIEFING_SOURCE_KEYS but
-    // only the horizon as a whole was gated, so the cells were never enforced.
-    const runEnso = sourceMayRun(sourcePolicy, 'enso');
-    const runWaterSupply = sourceMayRun(sourcePolicy, 'waterSupply');
-    const runCpcSeasonal = sourceMayRun(sourcePolicy, 'cpcSeasonal');
-    if (!runEnso && !runWaterSupply && !runCpcSeasonal) {
-      horizons.longRange.status = 'unavailable';
-      horizons.longRange.claims = [];
-      horizons.longRange.note = sourcePolicy.sources.enso.note;
-      onUpdate();
-      return;
-    }
-
-    // The ENSO phase tilt leads, then the NWRFC water-supply pairing
-    // (observed runoff to date plus the seasonal volume forecast; the
-    // projection partner to the snowpack observations), then the cited CPC
-    // Seasonal Drought Outlook.
-    //
-    // The two fetches settle INDEPENDENTLY: the ENSO read is a bundled
-    // snapshot that returns almost at once, while the proxied NWRFC round
-    // trip carries a 20 second budget, and a single Promise.all made the
-    // whole horizon wait on the slower one. Ordering is preserved by keying
-    // the settled results, not by arrival.
-    const settled = new Map<'enso' | 'waterSupply', SourceResult>();
-    const order: ReadonlyArray<'enso' | 'waterSupply'> = ['enso', 'waterSupply'];
-    let pending = (runEnso ? 1 : 0) + (runWaterSupply ? 1 : 0);
-
-    const publishLongRange = (): void => {
-      if (signal.aborted) return;
-      const results = order
-        .map((key) => settled.get(key))
-        .filter((result): result is SourceResult => result !== undefined);
-      fillHorizon(
-        horizons.longRange,
-        results,
-        runCpcSeasonal ? [CPC_SEASONAL_OUTLOOK] : []
-      );
-      if (pending > 0) {
-        // A source is still in flight, so the horizon has NOT settled: what is
-        // already in hand reads live (partial), and an empty horizon keeps its
-        // loading state rather than announcing an absence that may yet fill.
-        horizons.longRange.status =
-          horizons.longRange.claims.length > 0 ? 'partial' : 'loading';
-      }
-      onUpdate();
-    };
-
-    const settle = (
-      key: 'enso' | 'waterSupply',
-      result: SourceResult
-    ): void => {
-      if (signal.aborted) return;
-      settled.set(key, result);
-      pending = Math.max(0, pending - 1);
-      publishLongRange();
-    };
-
-    await Promise.all([
-      runEnso
-        ? loadEnsoClaims(context, signal).then((result) => settle('enso', result))
-        : Promise.resolve(),
-      runWaterSupply
-        ? fetchWaterSupplyClaims(context, signal).then((result) =>
-            settle('waterSupply', result)
-          )
-        : Promise.resolve()
-    ]);
-    if (signal.aborted) return;
-    // Both sources are gated off but the fixed seasonal claim may still run.
-    if (pending === 0 && settled.size === 0) publishLongRange();
-  })();
-
-  const current = (async (): Promise<void> => {
-    if (!sourcePolicy.droughtImpact.enabled) return;
-    const results = (await Promise.all([
-      sourceMayRun(sourcePolicy, 'usdm')
-        ? fetchUsdmClaims(context, signal)
-        : Promise.resolve(null),
-      sourceMayRun(sourcePolicy, 'dsci')
-        ? fetchDsciTrendClaims(context, signal)
-        : Promise.resolve(null),
-      sourceMayRun(sourcePolicy, 'nifc')
-        ? fetchNifcClaims(context, signal)
-        : Promise.resolve(null),
-      alerts
-    ])).filter((result): result is SourceResult => result !== null);
-    if (signal.aborted) return;
-    fillHorizon(horizons.current, results);
-    onUpdate();
-  })();
-
-  const nearTerm = (async (): Promise<void> => {
-    const [heatRisk, forecastResult, cpc] = await Promise.all([
-      initialHeatRisk,
-      forecast,
-      sourcePolicy.droughtImpact.enabled &&
-      sourceMayRun(sourcePolicy, 'cpcExtended')
-        ? fetchCpcOutlookClaims(context, signal)
-        : Promise.resolve(null)
-    ]);
-    if (signal.aborted) return;
-    if (!sourcePolicy.droughtImpact.enabled) return;
-    nearTermBase = [
-      forecastResult ?? { claims: [], ok: true },
-      cpc ?? { claims: [], ok: true }
-    ];
-    if (initialHeatGeneration === heatGeneration) {
-      latestHeatRisk = heatRisk ?? { claims: [], ok: true };
-    }
-    publishNearTerm();
-  })();
+  /** Run one fetched lane, or resolve at once when its policy gated it off. */
+  const runLane = (
+    key: MatrixLaneKey,
+    fetcher: () => Promise<SourceResult>
+  ): Promise<void> =>
+    sourceMayRun(sourcePolicy, key)
+      ? fetcher().then((result) => {
+          settleLane(key, result);
+        })
+      : Promise.resolve();
 
   if (heatPending === 0) publishHeatSynthesis();
-  await Promise.all([longRange, current, nearTerm, pointHeat]);
+
+  await Promise.all([
+    runLane('usdm', () => fetchUsdmClaims(context, signal)),
+    runLane('dsci', () => fetchDsciTrendClaims(context, signal)),
+    runLane('nifc', () => fetchNifcClaims(context, signal)),
+    runLane('cpcExtended', () => fetchCpcOutlookClaims(context, signal)),
+    runLane('enso', () => loadEnsoClaims(context, signal)),
+    runLane('waterSupply', () => fetchWaterSupplyClaims(context, signal)),
+    initialHeatRisk,
+    forecast,
+    alerts,
+    pointHeat
+  ]);
 }

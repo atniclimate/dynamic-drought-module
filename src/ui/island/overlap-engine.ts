@@ -1,3 +1,15 @@
+/**
+ * The Place Studio overlap engine: which listed candidates a selected
+ * geometry contains, sits within, or merely overlaps, with the area evidence
+ * behind each verdict.
+ *
+ * It lives beside its one consumer (`place-studio.tsx`) rather than in
+ * `src/impact/` (DR-015 a). `src/impact/` builds claims; this builds a studio
+ * listing, so keeping it here leaves the briefing's dependency graph readable
+ * while the entry chunk sits near its line. Pure: geometry in, rows out, no
+ * DOM and no application state.
+ */
+
 import type {
   Feature,
   FeatureCollection,

@@ -82,6 +82,13 @@ been assigned to this work.
   off the sidebar at every width in the band. Dock inset, dock lift, the
   map-information diameter and the touch floor are new custom properties.
   Desktop geometry at 1025 pixels and wider is unchanged.
+- 2026-09-03: the impact briefing is one four-hazard by three-horizon matrix.
+  Each of the three horizon sections now holds a Drought, Fire, Heat, and ENSO
+  row, and each of the twelve cells carries its own claims, its own status, and
+  its own note. A cell with nothing to show names the product it is missing and
+  why, so no cell renders blank, and no hazard row wears the issuer or the
+  validity date of the hazard beside it. The Place Studio overlap engine moved
+  from `src/impact/` to `src/ui/island/`.
 
 ### 2026-08-31: heat readings in plain language (pull request 53, `5e0a889`)
 

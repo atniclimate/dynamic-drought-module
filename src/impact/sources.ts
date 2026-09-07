@@ -443,6 +443,13 @@ export async function fetchUsdmClaims(
         // The former extreme-heat companion was removed by ruling
         // (D-0.8.0-047); do not reintroduce a heat claim inferred from the
         // USDM category.
+        //
+        // It stays in the Drought row of the matrix deliberately. Its issuer
+        // is the U.S. Drought Monitor and its clock is that map's date, so
+        // filing it under Fire would give the Fire row a drought issuer and a
+        // drought validity date, which is exactly what the matrix exists to
+        // prevent. It is a drought-impact read that names wildfire, not a
+        // fire product.
         makeClaim({
           text: `Wildfire: ${impact.wildfire} Drought raises the odds and the potential intensity of wildfire by drying and curing fuels; it does not by itself start fires.`,
           ...usdmShared,
@@ -845,7 +852,10 @@ export async function fetchNwsAlertClaims(
         makeClaim({
           // vocab-allow: reports the NWS alert products in effect, upstream data
           text: `A fire-weather alert is in effect here: ${fire.join(', ')}. This signals imminent fire-weather conditions (low humidity, wind, dry fuels).`,
-          ...alertShared
+          ...alertShared,
+          // One query answers for two hazard rows, so each statement names
+          // the row it speaks for and neither row carries the other's.
+          hazards: ['fire']
         })
       );
     }
@@ -858,13 +868,16 @@ export async function fetchNwsAlertClaims(
           // (DWH-07); do not reintroduce a DDM-inferred drought-to-heat link.
           // vocab-allow: reports the NWS alert products in effect, upstream data
           text: `An extreme-heat alert is in effect here: ${heat.join(', ')}. Heat raises drinking-water demand and human-health stress.`,
-          ...alertShared
+          ...alertShared,
+          hazards: ['heat']
         })
       );
     }
     if (claims.length === 0) {
       claims.push(
         makeClaim({
+          // This one sentence reports both hazards, so it keeps the lane's own
+          // pair and stands in the Fire row and the Heat row alike.
           // vocab-allow: reports the absence of NWS alert products, upstream data
           text: 'No active red-flag fire-weather or extreme-heat alerts at this location right now (NWS).',
           ...alertShared

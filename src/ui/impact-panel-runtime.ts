@@ -5,13 +5,14 @@
  * Tribal Lands feature, Treaty area, or Bureau of Indian Affairs reservation)
  * opens a lightweight identity popup with an "Impact briefing" button;
  * the button opens this slide-in panel, which composes the land identity, the
- * drought impacts across three temporal horizons (wildfire and extreme heat
- * foregrounded), and the public resources routed in stewardship order.
+ * impact matrix (three horizon sections of four hazard rows each, DR-012 b),
+ * and the public resources routed in stewardship order.
  *
  * This module is the rendering half (claims to DOM). The analysis half (data
  * to claims) lives in `src/impact/`. The panel never invents a value: it
- * renders only what the briefing model carries, and an unfilled horizon reads
- * as "loading" or, honestly, "unavailable" rather than as a fabricated reading.
+ * renders only what the briefing model carries, and an unfilled cell reads as
+ * "loading" or as a named unavailable state that says which product is
+ * missing, rather than as a fabricated reading or a blank.
  *
  * Embed-safe: the panel is appended to `document.body` and positioned over the
  * map, so it does not depend on the sidebar and works under `?embed=true`.
@@ -19,13 +20,14 @@
  * dynamic strings pass through `escapeHtml`; only `https://` links render as
  * anchors. Respects `prefers-reduced-motion` via the stylesheet.
  *
- * Phase 2 renders the skeleton (land plus live resources, horizons in their
- * loading state). Phase 3 calls `hydrateBriefing` to fill the horizons from
+ * Phase 2 renders the skeleton (land plus live resources, cells in their
+ * loading state). Phase 3 calls `hydrateBriefing` to fill the cells from
  * verified sources, then `refreshOpenBriefing` to re-render in place.
  */
 
 import { createBriefingSkeleton } from '../impact/briefing';
 import { hydrateBriefing } from '../impact/hydrate';
+import { HAZARD_KEYS, markHorizonCells } from '../impact/matrix';
 import {
   formatDistanceKm,
   formatPointHeatInterval,
@@ -46,6 +48,7 @@ import type { PlaceSelection } from '../state/place-selection';
 import { setSheetBriefing } from './mobile-sheet';
 import type {
   BoundarySelectionContext,
+  HazardCell,
   HeatSynthesis,
   Horizon,
   HorizonStatus,
@@ -169,22 +172,56 @@ function ensurePanel(): HTMLElement {
 // evidence-contract spec can import it without pulling this module's
 // application state; every claim below renders through it.
 
-/** Render one horizon section: heading, status pill, claims or honest state. */
-function renderHorizon(horizon: Horizon): string {
+/**
+ * Render one hazard cell: its row label, its own status pill, and either its
+ * sourced claims or the named state that says which product is missing.
+ *
+ * The cell prints no issuer and no date of its own. Every issuer and every
+ * validity date rides the claim that owns it (`renderClaim`), so a hazard row
+ * can never wear the issuer or the clock of the hazard above it.
+ */
+function renderCell(cell: HazardCell): string {
   let inner: string;
-  if (horizon.status === 'loading') {
+  if (cell.status === 'loading') {
     inner = `<div class="impact-horizon-loading"><span class="impact-spinner" aria-hidden="true"></span> Reading sources...</div>`;
-  } else if (horizon.claims.length > 0) {
-    inner = horizon.claims.map(renderClaim).join('');
-    if (horizon.note) {
-      inner += `<p class="impact-horizon-note">${escapeHtml(horizon.note)}</p>`;
+  } else if (cell.claims.length > 0) {
+    inner = cell.claims.map(renderClaim).join('');
+    if (cell.note) {
+      inner += `<p class="impact-horizon-note">${escapeHtml(cell.note)}</p>`;
     }
   } else {
+    // Never a blank cell: `fillCell` guarantees a note whenever a settled
+    // cell has no claim, and this fallback keeps that promise if one is ever
+    // constructed by hand without one.
     const note =
-      horizon.note ??
-      'No source answered for this horizon. Open the resources below for current information.';
+      cell.note ??
+      'No source answered for this hazard at this horizon. Open the resources below for current information.';
     inner = `<p class="impact-horizon-note">${escapeHtml(note)}</p>`;
   }
+
+  const titleId = `impact-hazard-title-${cell.horizon}-${cell.hazard}`;
+  return `
+    <section class="impact-hazard" data-horizon="${escapeHtml(cell.horizon)}" data-hazard="${escapeHtml(cell.hazard)}" aria-labelledby="${titleId}">
+      <div class="impact-hazard-head">
+        <h4 class="impact-hazard-title" id="${titleId}">${escapeHtml(cell.label)}</h4>
+        <span class="impact-hazard-pill impact-hazard-pill-${cell.status}">${escapeHtml(HORIZON_PILL_TEXT[cell.status])}</span>
+      </div>
+      <div class="impact-hazard-claims">${inner}</div>
+    </section>
+  `;
+}
+
+/**
+ * Render one horizon section: heading, summary pill, and the four hazard rows
+ * of that horizon (DR-012 b).
+ *
+ * The horizon pill summarizes its four cells and carries no issuer and no
+ * date; a reader who needs either reads the cell.
+ */
+function renderHorizon(horizon: Horizon): string {
+  const rows = HAZARD_KEYS.map((hazard) =>
+    renderCell(horizon.cells[hazard])
+  ).join('');
 
   // The section is named by its own visible heading text rather than by a
   // duplicate aria-label (IB-17). The id wraps the title only, so the
@@ -197,7 +234,7 @@ function renderHorizon(horizon: Horizon): string {
         <h3 class="impact-horizon-title"><span id="${titleId}">${escapeHtml(horizon.title)}</span> <span class="impact-horizon-sub">${escapeHtml(horizon.subtitle)}</span></h3>
         <span class="impact-horizon-pill impact-horizon-pill-${horizon.status}">${escapeHtml(HORIZON_PILL_TEXT[horizon.status])}</span>
       </div>
-      <div class="impact-horizon-claims">${inner}</div>
+      <div class="impact-horizon-claims">${rows}</div>
     </section>
   `;
 }
@@ -429,9 +466,14 @@ function renderBody(
         <p class="impact-horizon-note">${escapeHtml(impactUnavailableNote)}</p>
       </section>
     `
-    : `
-      <section class="impact-horizons" aria-label="Drought impact across three horizons">
-        <h3 class="impact-section-title">Drought impact</h3>
+    : // The block now holds four hazards, so it can no longer be titled
+      // "Drought impact": that heading would speak for Fire, Heat and ENSO
+      // as well. The wording here is the plainest one that stays true to
+      // what the block contains; the briefing's names are an open question
+      // (DR-013) and this does not answer it.
+      `
+      <section class="impact-horizons" aria-label="Impact across three horizons">
+        <h3 class="impact-section-title">Impact across three horizons</h3>
         ${renderHorizon(briefing.horizons.current)}
         ${renderHorizon(briefing.horizons.nearTerm)}
         ${renderHorizon(briefing.horizons.longRange)}
@@ -459,7 +501,7 @@ function paint(
   }
 }
 
-/** Put every mirrored horizon into the same explicit unavailable state. */
+/** Put every mirrored horizon and every cell into the same explicit state. */
 function markImpactSynthesisUnavailable(
   briefing: ImpactBriefing,
   note: string
@@ -469,8 +511,7 @@ function markImpactSynthesisUnavailable(
     briefing.horizons.nearTerm,
     briefing.horizons.longRange
   ]) {
-    horizon.status = 'unavailable';
-    horizon.claims = [];
+    markHorizonCells(horizon, 'unavailable', note);
     horizon.note = note;
   }
 }

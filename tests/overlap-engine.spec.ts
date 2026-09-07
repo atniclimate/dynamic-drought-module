@@ -4,7 +4,7 @@ import type { Feature, FeatureCollection, Geometry, MultiPolygon, Polygon } from
 import {
   computeOverlapRows,
   OVERLAP_SLIVER_SHARE
-} from '../src/impact/overlap-engine';
+} from '../src/ui/island/overlap-engine';
 
 const rectangle = (west: number, south: number, east: number, north: number): Polygon => ({
   type: 'Polygon',

@@ -123,6 +123,23 @@ export interface SourcedClaim {
    * claim text. Trusted, self-generated markup; never user-supplied.
    */
   readonly chartSvg?: string;
+  /**
+   * The hazard rows of the briefing matrix this claim belongs in. Omitted
+   * when the claim belongs to every hazard row its lane feeds, which is the
+   * usual case: a lane declares its hazards once (`src/impact/matrix.ts`)
+   * and only a claim that departs from its lane names its own. Set it where
+   * one fetch answers for more than one hazard, so a claim can never land in
+   * a row its issuer does not speak for.
+   */
+  readonly hazards?: readonly HazardKey[];
+  /**
+   * The horizon column this claim belongs in. Omitted when the claim belongs
+   * to its lane's only horizon. Set it where one fetch answers across
+   * horizons (the ENSO snapshot reads a current index state and a seasonal
+   * tendency from one file), so each claim sits under the clock it speaks
+   * for.
+   */
+  readonly horizon?: HorizonKey;
 }
 
 /**
@@ -138,11 +155,37 @@ export type HorizonStatus = 'loading' | 'ready' | 'partial' | 'unavailable';
 /** Stable keys for the three temporal horizons. */
 export type HorizonKey = 'current' | 'nearTerm' | 'longRange';
 
+/** Stable keys for the four hazard rows of the briefing matrix. */
+export type HazardKey = 'drought' | 'fire' | 'heat' | 'enso';
+
 /**
- * One temporal horizon section of the briefing. Wildfire and extreme heat are
- * foregrounded inside `claims`, not modeled as separate fields, so the
- * ordering of claims (drought state, then wildfire, then heat, then water)
- * carries the foregrounding.
+ * One cell of the four-hazard by three-horizon matrix: what this briefing can
+ * say about one hazard at one horizon, and nothing else.
+ *
+ * A cell owns its own claims, its own status, and its own note, so a hazard
+ * can never borrow the issuer or the validity clock of the hazard beside it.
+ * A cell with no claims always carries a `note` that names the product it is
+ * missing and why; an empty cell with no explanation is a defect, not a
+ * state.
+ */
+export interface HazardCell {
+  readonly hazard: HazardKey;
+  readonly horizon: HorizonKey;
+  /** The row label, for example "Drought". */
+  readonly label: string;
+  claims: SourcedClaim[];
+  status: HorizonStatus;
+  /** The named unavailable, partial, or empty state for this cell alone. */
+  note?: string;
+}
+
+/**
+ * One temporal horizon section of the briefing, holding the four hazard rows
+ * of that horizon (DR-012 b: three horizon sections, four hazard rows each).
+ *
+ * `cells` is authoritative. `claims` remains the flattened view of the same
+ * content in hazard order, for the consumers that read one leading line out
+ * of the briefing rather than rendering the matrix.
  */
 export interface Horizon {
   readonly key: HorizonKey;
@@ -150,11 +193,14 @@ export interface Horizon {
   readonly title: string;
   /** Short definition of the time window, for example "now". */
   readonly subtitle: string;
+  /** The four hazard cells of this horizon, keyed by hazard. */
+  cells: Record<HazardKey, HazardCell>;
   claims: SourcedClaim[];
   status: HorizonStatus;
   /**
-   * Optional honest note shown when the horizon is unavailable or partial,
-   * for example "The near-term temperature outlook source did not respond."
+   * Optional honest note for the horizon as a whole, used only by the
+   * capability path that reports the whole synthesis unavailable. Per-cell
+   * honesty lives on `cells`, never here.
    */
   note?: string;
 }
