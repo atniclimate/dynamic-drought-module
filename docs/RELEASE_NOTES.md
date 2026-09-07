@@ -5,6 +5,20 @@
 Merged to `main` after the `v0.6.26` tag. No new package version or tag has
 been assigned to this work.
 
+- 2026-09-03: the gridded drought index states where it comes from and where
+  it stops. Each SPI window now resolves through the slug prefix NOAA NIDIS
+  publishes the ACIS "Grid 1" dataset under rather than through a literal, the
+  legend keeps showing each product's own valid date read from that product's
+  `info.json`, and both the catalog row and the legend now say the raster
+  stack covers the contiguous United States only. drought.gov gives that
+  dataset's Data Coverage as "Contiguous U.S." and every wired window
+  publishes the same extent, which excludes Alaska, Hawaii, Puerto Rico, and
+  the Pacific territories. The docblock claim that SPEI and EDDI are not
+  published under this prefix is corrected: they are, as `speih` and `eddih`;
+  they stay unoffered because how far the selector expands is an open product
+  question, not because the issuer withholds them. The selector is unchanged
+  at five SPI windows, and coverage is stated as a fact, never by repurposing
+  a layer state.
 - 2026-09-03: gate transcription. DDM-D02, DDM-D06, and DDM-D10 in
   `docs/ROADMAP.yaml` now record the DR-036, DR-034, and DR-006 answers; the
   `needs_decision` lines those answers had blocked are updated or removed.

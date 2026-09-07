@@ -69,6 +69,70 @@ test.describe('UX-3 unified legend registry', () => {
     await expect(page.locator('#gridded-index-product option')).toHaveCount(5);
   });
 
+  /**
+   * DDM-P13-T03: the gridded index must resolve to the prefix its issuer
+   * publishes it under, show its own product date, and state that the raster
+   * stack covers the contiguous United States only.
+   *
+   * The `info.json` sidecar is stubbed so the date assertions are about what
+   * the layer DOES with a published date rather than about the bucket being
+   * reachable, keeping this file's no-live-agency-fetch property. Two windows
+   * are given different dates on purpose: they are not equally fresh upstream
+   * (spi-365d carried 2026-07-01 while spi-90d carried 2026-08-31 on
+   * 2026-09-03), and the legend must show the SELECTED product's own date.
+   */
+  test('the gridded index resolves through its issuer prefix, dates each product, and states its coverage', async ({
+    page
+  }) => {
+    await gotoApp(page, '?view=console'); // catalog-driving spec (E1 deliverable 1)
+    await waitForLayerSettled(page, 'nadm-drought');
+
+    const dateByWindow: Record<string, string> = {
+      'spi-90d': '2026-08-31',
+      'spi-365d': '2026-07-01'
+    };
+    await page.route('**/current-conditions/tile/v1/*/info.json', async (route) => {
+      const parts = new URL(route.request().url()).pathname.split('/');
+      const slug = parts[parts.length - 2] ?? '';
+      const window = slug.replace('ce-ACIS_NRCC_NN-', '');
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ date: dateByWindow[window] ?? '2026-01-02', tilezmax: '6' })
+      });
+    });
+
+    await layerCheckbox(page, 'gridded-index').check();
+
+    // Every offered product resolves through `ce-ACIS_NRCC_NN-`, the prefix
+    // drought.gov publishes the ACIS "Grid 1" dataset's products under, and
+    // the selector is still the five SPI windows: DR-049 kept expansion open
+    // as a later product item, so growth here would be a decision, not a fix.
+    const values = await page.$$eval('#gridded-index-product option', (els) =>
+      els.map((e) => (e as HTMLOptionElement).value)
+    );
+    expect(values).toEqual([
+      'ce-ACIS_NRCC_NN-spi-30d',
+      'ce-ACIS_NRCC_NN-spi-60d',
+      'ce-ACIS_NRCC_NN-spi-90d',
+      'ce-ACIS_NRCC_NN-spi-180d',
+      'ce-ACIS_NRCC_NN-spi-365d'
+    ]);
+
+    // The date is the product's own, read from the issuer, and it follows the
+    // selection rather than staying on the window that happened to load first.
+    await expect(page.locator('#gridded-index-valid')).toHaveText('Valid Aug 31, 2026');
+    await page.selectOption('#gridded-index-product', 'ce-ACIS_NRCC_NN-spi-365d');
+    await expect(page.locator('#gridded-index-valid')).toHaveText('Valid Jul 1, 2026');
+
+    // The coverage limit is stated, in the issuer's own geography. "Contiguous
+    // United States" is not "the United States": the published bbox excludes
+    // Alaska, Hawaii, Puerto Rico and the Pacific territories.
+    const coverage = page.locator('#gridded-index-coverage');
+    await expect(coverage).toContainText('the contiguous United States only');
+    await expect(coverage).toContainText('Contiguous U.S.');
+  });
+
   test('the panel hides when the last legend layer is turned off', async ({ page }) => {
     await gotoApp(page, '?view=console'); // catalog-driving spec (E1 deliverable 1)
     await waitForLayerSettled(page, 'nadm-drought');

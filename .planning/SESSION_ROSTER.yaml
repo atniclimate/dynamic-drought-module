@@ -314,8 +314,18 @@ sessions:
     subagents: [{ name: ddm-science-verifier, model: claude-sonnet-5, effort: high, purpose: "confirm each gridded-index prefix and product date against the issuer's own published definition before the claim ships" }]
     budget_tokens: 40000
     note: "5 files, +221/-23 (BRANCH_REPORT.md:80). P13-T03 needs DR-049 (docs/ROADMAP.yaml:494); confirm it is decided in planning/decisions/ before landing. Wave 3, so it is downstream of the S03 cycle: landing it early is the owner's call, recorded."
-    status: planned
-    outcome: null
+    status: done
+    outcome: >-
+      DR-049 confirmed ratified 2026-09-02 (decision register :18, :52). Baseline on main
+      5b8a8ff: verify:smoke exit 1, 87 passed, 1 failed at tests/ux1-surfaces.spec.ts:91,
+      the known nondeterministic spec (passed 3/3 when re-run alone; passed in the S02a and
+      S02b gates on the same tree), attributable to main. Lockfile checked by git diff,
+      untouched. ddm-science-verifier confirmed the dataset page's "Contiguous U.S.", the
+      Data Download page's "ConUS 4km" and info.json valid-date statement, bbox and
+      tilezmax 6 on all five SPI windows with per-product dates, and speih/eddih under the
+      ACIS prefix; the noaa-eddi-conus- prefix in a docblock is indeterminate (comment only).
+      Merged by merge commit (no push), no conflicts. Post-merge gate: exit 0, 9 checks
+      clean, node tests 0 failures, 89 Playwright passed (4.0 min).
 
   - id: S02d
     task_ids: [DDM-P9-T02]
