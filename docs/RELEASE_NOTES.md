@@ -353,6 +353,37 @@ while the 3D scene is active and the perimeter layer is live, it leaves when
 either does, and it never writes the perimeter layer's status or changes a
 sentence in the Impact Briefing.
 
+### 2026-09-03: the sidebar builds before the map does (DR-065, DDM-P14-T02)
+
+Every generated control in the sidebar used to wait on the map's `load` event,
+so a browser without WebGL 2, a graphics context that failed to start, or a
+boot slower than the eight-second bound left an empty region dropdown and an
+empty quick-view row beside a map that was not painting. That is the shape
+three separate people reported as the layer studio and the place studio "not
+working": an interface that looked finished and did nothing. The region
+dropdown, the quick-view chips, the impact-briefing trigger and the mobile
+hazard rail are now generated from the static region, framing and preset
+tables at DOM ready, before the renderer is probed at all, and every boot path
+reaches them. Until the map is ready they are visibly and audibly disabled and
+one line beside them says why in plain words, with a second sentence when the
+bounded wait expires and a third when the browser cannot show a map at all.
+Each states only what was observed; none names a cause or promises a fix, and
+the line is removed rather than rewritten once the map is ready.
+
+The disabled state is a control affordance and not a seventh layer state: the
+six honest layer states are untouched, and the new `<html data-ddm-controls>`
+stamp reads `waiting`, `no-map` or `ready`, none of which borrows a word from
+them. Disabled buttons keep their accessible names and their place in the tab
+order so the reason stays reachable, and the layer catalog still arrives with
+the map, because a checkbox for a layer that cannot exist yet would be a
+promise the page cannot keep.
+
+This also makes a published claim true. `README.md` tells readers that a
+browser without WebGL 2 "shows the sidebar and an honest not-rendering notice
+instead of a map." The notice was real, and the sidebar's frame was on screen,
+but every control inside it was an empty container, so the sentence promised
+more than the build delivered. It now describes what actually happens.
+
 ## v0.6.26
 
 `v0.6.26` is the package version and, since 2026-08-29, the release tag. One
