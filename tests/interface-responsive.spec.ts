@@ -696,3 +696,287 @@ for (const width of [400, 200]) {
     await expectNoHorizontalOverflow(page, width);
   });
 }
+
+/**
+ * THE TABLET BAND, 721 to 1024 pixels (DDM-P10-T01; ROADMAP gate DDM-D02;
+ * owner ruling DR-036 a, 2026-09-02: "Real third band 721 to 1024 px, fluid
+ * sidebar, 44 px touch floor. Tablet is touch-first").
+ *
+ * The task's acceptance sentence is asserted literally: "At 721, 768, 820,
+ * 900, and 1024 pixels in both orientations no control overlaps another, the
+ * dock keeps a usable width, and every interactive target meets the
+ * coarse-pointer minimum." Five widths times two orientations is ten
+ * viewports and three conditions each.
+ *
+ * Orientation is read as the aspect of the viewport at that width, because
+ * the acceptance fixes the WIDTH and asks for both orientations: portrait is
+ * 4:3 taller than wide, landscape is 3:4 wider than tall. The landscape rows
+ * are the harder half (721x541 sits under the 600px height that keeps the
+ * inline minimap, and 768x576 is a real small-tablet frame).
+ *
+ * "Usable width" carries no number in the acceptance, so the two concrete
+ * failures named in DR-036's own question are what it means here:
+ *
+ *   "the bottom dock computes to zero width between 721 and 804px with the
+ *    briefing open, and the impact panel overlaps the sidebar below 780px"
+ *
+ * Both are pinned below, together with the case the first fix left behind:
+ * the dock's `--dock-min-w` floor kept its box alive but parked all 180px of
+ * it UNDERNEATH the open panel, where the panel's z-index hides it. A dock
+ * that is present and invisible is not a dock with a usable width.
+ *
+ * WHAT COUNTS AS AN INTERACTIVE TARGET. A tap at the element's own centre
+ * has to land on the element. That excludes three classes of node that are
+ * in the DOM but are not targets: the sidebar's controls inside an embed
+ * (the column is zero wide and clips them), anything under the open briefing
+ * (it is `aria-modal`, so its cover is correct modal behavior and not a
+ * collision), and anything scrolled out of the viewport. Two exemptions
+ * follow WCAG 2.5.5 and 2.5.8 rather than waiving them: a link whose
+ * computed display is `inline` keeps the line box of the sentence it sits
+ * in, and a layer checkbox is measured at its `label` row, which is its real
+ * activation target.
+ */
+const TABLET_BAND_WIDTHS = [721, 768, 820, 900, 1024] as const;
+const TOUCH_FLOOR = 44;
+
+interface Target extends Rect {
+  readonly sel: string;
+  readonly label: string;
+  /** The pressable area, which is the box unless a rule widened it. */
+  readonly hitWidth: number;
+  readonly hitHeight: number;
+}
+
+/**
+ * Every interactive element a finger can actually reach, with its measured
+ * box. Runs entirely in the page so one round trip covers a whole survey.
+ */
+async function reachableTargets(page: Page): Promise<Target[]> {
+  return page.evaluate(() => {
+    const selector =
+      'button, a[href], input, select, summary, [role="button"], [role="tab"], [tabindex]:not([tabindex="-1"])';
+    const found: {
+      sel: string;
+      label: string;
+      left: number;
+      top: number;
+      right: number;
+      bottom: number;
+      width: number;
+      height: number;
+      hitWidth: number;
+      hitHeight: number;
+    }[] = [];
+    for (const node of Array.from(document.querySelectorAll(selector))) {
+      let element = node as HTMLElement;
+      const initial = getComputedStyle(element);
+      if (element.tagName === 'A' && initial.display === 'inline') continue;
+      if (element.tagName === 'INPUT' && (element as HTMLInputElement).type === 'checkbox') {
+        const label = element.closest('label');
+        if (label) element = label as HTMLElement;
+      }
+      const style = getComputedStyle(element);
+      if (style.visibility === 'hidden' || style.display === 'none') continue;
+      const box = element.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue;
+      const centreX = box.left + box.width / 2;
+      const centreY = box.top + box.height / 2;
+      if (
+        centreX < 0 ||
+        centreY < 0 ||
+        centreX >= window.innerWidth ||
+        centreY >= window.innerHeight
+      ) {
+        continue;
+      }
+      const atCentre = document.elementFromPoint(centreX, centreY);
+      if (!atCentre) continue;
+      if (!(atCentre === element || element.contains(atCentre) || atCentre.contains(element))) {
+        continue;
+      }
+      const id = element.id ? `#${element.id}` : '';
+      const classes =
+        typeof element.className === 'string' && element.className.trim()
+          ? `.${element.className.trim().split(/\s+/).slice(0, 2).join('.')}`
+          : '';
+      // A minimap ocean door is the one control in this application whose
+      // hit area is deliberately larger than its box: EF-5 / MM-08 gave it
+      // a transparent 44px `::before` band so the 8px label could stay
+      // exactly where the minimap's authored geometry puts it. Measure the
+      // band, which is what a finger presses.
+      const band = element.classList.contains('shell-minimap-ocean-door')
+        ? getComputedStyle(element, '::before')
+        : null;
+      const hitWidth = Math.max(box.width, band ? Number.parseFloat(band.width) || 0 : 0);
+      const hitHeight = Math.max(box.height, band ? Number.parseFloat(band.height) || 0 : 0);
+      found.push({
+        sel: `${element.tagName.toLowerCase()}${id}${classes}`,
+        label: (element.getAttribute('aria-label') ?? element.textContent ?? '').trim().slice(0, 40),
+        left: Number(box.left.toFixed(1)),
+        top: Number(box.top.toFixed(1)),
+        right: Number(box.right.toFixed(1)),
+        bottom: Number(box.bottom.toFixed(1)),
+        width: Number(box.width.toFixed(1)),
+        height: Number(box.height.toFixed(1)),
+        hitWidth: Number(hitWidth.toFixed(1)),
+        hitHeight: Number(hitHeight.toFixed(1))
+      });
+    }
+    return found;
+  });
+}
+
+function undersizedTargets(targets: readonly Target[]): string[] {
+  return targets
+    .filter((target) => target.hitWidth < TOUCH_FLOOR || target.hitHeight < TOUCH_FLOOR)
+    .map((target) => `${target.sel} ${target.hitWidth}x${target.hitHeight} "${target.label}"`);
+}
+
+/** Pairs of reachable targets whose boxes cross, ignoring nesting. */
+function collidingTargets(targets: readonly Target[]): string[] {
+  const clashes: string[] = [];
+  for (let i = 0; i < targets.length; i += 1) {
+    for (let j = i + 1; j < targets.length; j += 1) {
+      const a = targets[i] as Target;
+      const b = targets[j] as Target;
+      if (!intersects(a, b)) continue;
+      const nested =
+        (a.left <= b.left && a.right >= b.right && a.top <= b.top && a.bottom >= b.bottom) ||
+        (b.left <= a.left && b.right >= a.right && b.top <= a.top && b.bottom >= a.bottom);
+      if (nested) continue;
+      clashes.push(`${a.sel} over ${b.sel}`);
+    }
+  }
+  return clashes;
+}
+
+/** Settle the briefing's slide-in before any geometry is read. */
+async function settledBriefing(page: Page): Promise<void> {
+  await expect(page.locator('#impact-panel')).toBeVisible({ timeout: 15_000 });
+  await expect
+    .poll(() =>
+      page.locator('#impact-panel').evaluate((element) => getComputedStyle(element).transform)
+    )
+    .toBe('matrix(1, 0, 0, 1, 0, 0)');
+}
+
+for (const bandWidth of TABLET_BAND_WIDTHS) {
+  for (const orientation of ['portrait', 'landscape'] as const) {
+    const bandHeight = Math.round(
+      orientation === 'portrait' ? (bandWidth * 4) / 3 : (bandWidth * 3) / 4
+    );
+
+    test.describe(`tablet band ${bandWidth}x${bandHeight} ${orientation}`, () => {
+      test.use({ viewport: { width: bandWidth, height: bandHeight }, hasTouch: true });
+
+      test('keeps the dock clear of the briefing and every target at the touch floor', async ({
+        page
+      }) => {
+        await gotoApp(page, '?select=state:WA');
+        expect(
+          await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches),
+          'the band is verified with a coarse pointer'
+        ).toBe(true);
+        await settledBriefing(page);
+
+        const panel = await rect(page.locator('#impact-panel'));
+        const sidebar = await rect(page.locator('.sidebar'));
+        const dock = await rect(page.locator('#map-bottom-dock'));
+
+        // DR-036 failure B: the panel covered the sidebar's right edge below
+        // 780px (12px at 768, 59px at 721), taking the sidebar's scrollbar
+        // and the right end of every control row with it.
+        expect(sidebar.width, 'the sidebar is a real column in this shell').toBeGreaterThan(0);
+        expect(intersects(panel, sidebar), 'the open briefing overlaps the sidebar').toBe(false);
+        expect(
+          panel.left - sidebar.right,
+          'the briefing keeps its gap off the sidebar'
+        ).toBeGreaterThanOrEqual(0);
+
+        // DR-036 failure A: the dock computed to zero width between 721 and
+        // 804px with the briefing open. Its declared floor is the bar.
+        const dockFloor = await page.evaluate(() =>
+          Number.parseFloat(
+            getComputedStyle(document.documentElement).getPropertyValue('--dock-min-w')
+          )
+        );
+        expect(dockFloor, 'the dock floor token is still a real floor').toBeGreaterThanOrEqual(180);
+        expect(
+          dock.width,
+          'the bottom dock lost its width under the briefing'
+        ).toBeGreaterThanOrEqual(dockFloor);
+        // That width has to be width a user can see: a dock parked under the
+        // panel is present and invisible.
+        expect(dock.right, 'the bottom dock runs underneath the open briefing').toBeLessThanOrEqual(
+          panel.left
+        );
+
+        expect(
+          undersizedTargets(await reachableTargets(page)),
+          'targets below the touch floor with the briefing open'
+        ).toEqual([]);
+        await expectNoHorizontalOverflow(page, bandWidth);
+
+        // The same conditions with the briefing closed, where nothing is
+        // modal and every control on the shell is reachable at once.
+        await page.keyboard.press('Escape');
+        await expect(page.locator('#impact-panel')).toBeHidden({ timeout: 5_000 });
+
+        const shellTargets = await reachableTargets(page);
+        expect(
+          undersizedTargets(shellTargets),
+          'targets below the touch floor with no briefing open'
+        ).toEqual([]);
+        expect(collidingTargets(shellTargets), 'two reachable controls overlap').toEqual([]);
+        await expectNoHorizontalOverflow(page, bandWidth);
+      });
+    });
+  }
+}
+
+test.describe('the tablet band inside an iframe', () => {
+  test.use({ viewport: { width: 820, height: 615 }, hasTouch: true });
+
+  test('an 820x615 embed keeps the touch floor with no sidebar to fall back on', async ({
+    page
+  }) => {
+    await gotoApp(page, '?embed=true&cluster=wildfire');
+    await expect(page.locator('#app')).toHaveClass(/\bembed\b/);
+    const targets = await reachableTargets(page);
+    expect(undersizedTargets(targets), 'embed targets below the touch floor').toEqual([]);
+    expect(collidingTargets(targets), 'two reachable embed controls overlap').toEqual([]);
+    await expectNoHorizontalOverflow(page, 820);
+  });
+});
+
+test.describe('the tablet band sidebar is fluid, not a 340px constant', () => {
+  test('the column tracks the viewport across the band and desktop is unchanged', async ({
+    page
+  }) => {
+    // One boot, resized: the sidebar width is pure CSS, so a re-boot per
+    // width would buy nothing and cost five map builds.
+    await gotoApp(page);
+    const sidebarWidthAt = async (viewport: number): Promise<number> => {
+      await page.setViewportSize({ width: viewport, height: 900 });
+      return (await rect(page.locator('.sidebar'))).width;
+    };
+
+    const at721 = await sidebarWidthAt(721);
+    const at820 = await sidebarWidthAt(820);
+    const at1024 = await sidebarWidthAt(1024);
+    const at1280 = await sidebarWidthAt(1280);
+
+    // The floor the minimap's canvas needs to keep the Atlantic door clear
+    // of ALL on a coarse pointer; see the band block in src/styles/app.css.
+    expect(at721).toBeGreaterThanOrEqual(300);
+    // Fluid: the column is strictly wider as the viewport grows inside the
+    // band. This is the clause a fixed --sidebar-w fails.
+    expect(at820).toBeGreaterThan(at721);
+    expect(at1024).toBeGreaterThan(at820);
+    // Never past the desktop constant, and desktop itself is untouched.
+    expect(at1024).toBeLessThanOrEqual(340);
+    expect(at1280).toBe(340);
+    // At the bottom of the band the map is still the larger half.
+    expect(721 - at721).toBeGreaterThan(at721);
+  });
+});

@@ -110,6 +110,15 @@
 
   /* Layout */
   --sidebar-w: 340px;
+  /* The coarse-pointer target floor (DDM-P10-T01, gate DDM-D02, owner
+     ruling DR-036 a: "real third band 721 to 1024 px, fluid sidebar,
+     44 px touch floor. Tablet is touch-first"). One name for the 44px
+     that WCAG 2.5.5 and the field-instrument doctrine both ask for, so
+     the tablet block below and the phone rules quote the same number
+     instead of restating it. It is a FLOOR, never a fixed size: rules
+     apply it as min-height / min-width so a control that is already
+     larger keeps its own geometry. */
+  --touch-target: 44px;
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
@@ -137,6 +146,18 @@
   --impact-panel-w: 440px;
   --impact-panel-gap: 12px;
   --dock-min-w: 180px;
+  /* Bottom-dock seat (DDM-P10-T01). The dock's edge inset and its lift
+     above the scale bar were literals repeated in four places (the base
+     rule, the phone rule, the embed rule) and the tablet band has to
+     move the lift so a 44px map-information button can grow under the
+     dock without meeting it. One name each, overridden per shell rather
+     than restated. */
+  --map-dock-inset: 12px;
+  --map-dock-bottom: 34px;
+  /* The round map-information disclosure. Its diameter drove three
+     literals that must move together: the button box and the top edge
+     of the panel it opens, in both the desktop and the embed corner. */
+  --map-info-size: 28px;
 
   /* Stacking order (UI-12). Every z-index in this file below was a bare
      literal spread across five orders of magnitude, so the ORDER was
@@ -246,6 +267,59 @@ a:hover {
 .app-shell.sidebar-collapsed {
   grid-template-columns: 0 1fr;
 }
+
+/* ----------------------------------------------------------------------------
+   THE TABLET BAND, 721 to 1024px (DDM-P10-T01; ROADMAP gate DDM-D02;
+   owner ruling DR-036 a, 2026-09-02).
+
+   The ruling: "Real third band 721 to 1024 px, fluid sidebar, 44 px touch
+   floor. Tablet is touch-first: phone simplest, tablet more capable but
+   touch-native, desktop full pointer controls." Tablet is therefore not a
+   small desktop and not a large phone. It keeps the desktop shell (the
+   sidebar column, the overlay control stack, the bottom dock) because it
+   is the more capable surface, and it takes the phone's target sizes on a
+   coarse pointer because it is used by hand.
+
+   This declaration is the band's ONE structural move: the sidebar stops
+   being a 340px constant. At a fixed 340px the map got 381px at 721px
+   wide, less than the sidebar beside it, and every downstream inset (the
+   impact panel's cap, the bottom dock's floor) was solving against a
+   column that had no business staying at its desktop size. The floor is
+   300px and the ceiling is the unchanged desktop 340px, reached at about
+   920px; between them the column tracks the viewport. Resolved widths:
+   300px at 721 and 768, 310px at 820, 334px at 900, 340px at 1024.
+   Nothing outside the band moves: at 1025px and wider --sidebar-w is the
+   :root constant it has always been, and below 721px the sidebar is not a
+   column at all.
+
+   THE FLOOR IS SET BY THE MINIMAP, and the arithmetic is worth writing
+   down because nothing else in the sidebar comes close. The minimap
+   canvas is `width: 100%` at a fixed 660/348 ratio, so its height is
+   (sidebar - 37) * 0.527, and every silhouette inside it is anchored in
+   percentages. Two controls in it are not: the ocean doors and ALL. The
+   binding pair is the Atlantic door (top 48%) against ALL (bottom 5.61%,
+   grown to a 44px square on a coarse pointer by the S4 block near the end
+   of this file), which need 0.48H + doorHeight <= 0.9439H - 44. With the
+   door's box hugging its label at about 16px that solves to a canvas
+   160.3px tall at 340 and 138.7px at 300, clearing by 4.3px at the floor
+   and more above it. At 280px it fails by half a pixel, which is why the
+   floor is 300 and not lower. Measured, not derived: at a 280px column
+   the Pacific door's box crossed the Hawaii inset by 1.6px and the
+   Atlantic door's crossed ALL by 2.1px, at 721, 768 and 820 in portrait.
+
+   The touch floor is a POINTER query, not a width query, and lives beside
+   the other coarse-pointer rules near the end of this file. Width alone
+   cannot tell a tablet from a desktop monitor, and a touchscreen laptop at
+   1400px deserves the same targets as one at 900px.
+   ---------------------------------------------------------------------------- */
+@media (min-width: 721px) and (max-width: 1024px) {
+  :root {
+    --sidebar-w: clamp(300px, calc(30vw + 64px), 340px);
+  }
+}
+/* The band's second minimap rule lives beside .shell-minimap-ocean-door
+   itself, further down this file, because it has to follow that rule in
+   source order to win at equal specificity. */
 
 /* embed mode: sidebar is hidden by URL param, but expand button still surfaces */
 .app-shell.embed {
@@ -2032,9 +2106,9 @@ button.conditions-metric:hover {
 
 .map-bottom-dock {
   position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 34px;
+  left: var(--map-dock-inset);
+  right: var(--map-dock-inset);
+  bottom: var(--map-dock-bottom);
   z-index: calc(var(--z-map-chrome) + 10);
   display: flex;
   flex-direction: column;
@@ -3831,12 +3905,30 @@ button.telemetry-item {
    440px from 792px up), so the cap is inert at 1025px and wider and
    desktop geometry is untouched. The sidebar is a real column only when
    the shell is neither collapsed nor embedded; in those two shells the
-   map is full-bleed and the panel keeps its 440px. */
+   map is full-bleed and the panel keeps its 440px.
+
+   DDM-P10-T01 widens that cap by the dock's floor. Clearing the sidebar
+   was only half the collision: with the panel at the old cap the bottom
+   dock's `right` inset fell through to its `--dock-min-w` floor at every
+   width from 721 to about 1010, which kept the dock's box alive (never
+   zero) but parked all 180px of it UNDERNEATH the open panel, where the
+   panel's z-index (--z-sheet + 50) hides it. Measured on 5be15f5 at
+   721, 768, 820 and 900px, both orientations: dock 180px wide, dock left
+   edge and panel left edge both at the map container's 12px inset. So
+   the panel's real ceiling is the room left after the dock's inset, the
+   dock's floor and one gap, and beyond that ceiling the two terms of the
+   dock's own `min()` swap places and the floor stops being reachable.
+   Panel widths that leaves in the band (with the fluid sidebar below):
+   237px at 721, 270px at 768, 306px at 820, 362px at 900, the full 440px
+   from about 976px up. At 1025px and wider the whole block is inert. */
 @media (min-width: 721px) and (max-width: 1024px) {
   body:has(#app.app-shell:not(.sidebar-collapsed):not(.embed)) {
     --impact-panel-w: min(
       440px,
-      calc(100vw - var(--sidebar-w) - var(--impact-panel-gap))
+      calc(
+        100vw - var(--sidebar-w) - var(--map-dock-inset) -
+          var(--dock-min-w) - var(--impact-panel-gap)
+      )
     );
   }
 }
@@ -5006,8 +5098,8 @@ a.impact-resource-link::after {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
+    width: var(--map-info-size);
+    height: var(--map-info-size);
     padding: 0;
     color: var(--fg-1);
     background: rgba(15, 23, 42, 0.85);
@@ -5037,7 +5129,10 @@ a.impact-resource-link::after {
   .app-shell:not(.embed) .map-info-panel:not([hidden]) {
     position: absolute;
     right: 10px;
-    bottom: 44px;
+    /* The button's own seat (bottom: 8px) plus its diameter plus the
+       same 8px again, so the panel keeps one gap above a button that
+       grows to the touch floor on a coarse pointer. 44px today. */
+    bottom: calc(var(--map-info-size) + 16px);
     z-index: calc(var(--z-map-control) + 20);
     display: block;
     width: min(360px, calc(100% - 24px));
@@ -5067,7 +5162,7 @@ a.impact-resource-link::after {
    covered the scale bar at 800x600.
    ---------------------------------------------------------------------------- */
 .app-shell.embed .map-bottom-dock {
-  bottom: 92px;
+  --map-dock-bottom: 92px;
 }
 
 /* The loading pulse leaves the top-right overlay stack (Share, Reset, the
@@ -5112,6 +5207,11 @@ a.impact-resource-link::after {
      there while clearing the credits button's corner seat. */
   margin-bottom: 46px;
 }
+/* The embed corner is two pixels tighter than the desktop corner, so the
+   embed shell carries its own diameter for the same token. */
+.app-shell.embed {
+  --map-info-size: 26px;
+}
 .app-shell.embed .map-info-btn {
   appearance: none;
   position: absolute;
@@ -5121,8 +5221,8 @@ a.impact-resource-link::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: var(--map-info-size);
+  height: var(--map-info-size);
   padding: 0;
   color: var(--fg-1);
   background: rgba(15, 23, 42, 0.85);
@@ -5141,7 +5241,8 @@ a.impact-resource-link::after {
 .app-shell.embed .map-info-panel:not([hidden]) {
   position: absolute;
   right: 6px;
-  bottom: 38px;
+  /* The 6px seat plus the diameter plus the same 6px again; 38px today. */
+  bottom: calc(var(--map-info-size) + 12px);
   z-index: calc(var(--z-map-control) + 20);
   display: block;
   width: min(360px, calc(100% - 16px));
@@ -5614,15 +5715,16 @@ a.impact-resource-link::after {
 
 @media (max-width: 720px) {
   .map-bottom-dock {
-    left: 8px;
-    right: 8px;
-    bottom: 28px;
+    --map-dock-inset: 8px;
+    --map-dock-bottom: 28px;
   }
   /* Same lift as the embed-corner block (FE-18): below 720px the embed
      still owns MapLibre's bottom-right stack, so the dock clears it here
-     too rather than the 42px that once cleared only the attribution. */
+     too rather than the 42px that once cleared only the attribution.
+     Higher specificity than the phone rule above, exactly as when both
+     were literal `bottom` declarations, so a phone embed still lifts. */
   .app-shell.embed .map-bottom-dock {
-    bottom: 92px;
+    --map-dock-bottom: 92px;
   }
   .time-bar {
     padding: 7px 9px 6px;
@@ -6202,6 +6304,32 @@ a.impact-resource-link::after {
   outline: 1px dotted var(--accent);
   outline-offset: 1px;
   text-shadow: 0 0 7px rgba(34, 211, 238, 0.5);
+}
+
+/* THE TABLET BAND (DDM-P10-T01; see the band block beside .app-shell).
+   With a fluid column the canvas is up to 20% shorter than the 660x348
+   frame these doors were authored against, and the 24px box floor is the
+   only piece of the composition that does not shrink with it: at a 300px
+   column the Pacific box reached into the Hawaii inset and the Atlantic
+   box into ALL. The floor comes off inside the band so the box hugs its
+   own 8px label, which is what EF-5 built the transparent 44px `::before`
+   band for in the first place: the band, not the box, is the target, and
+   it is measured unchanged at 44px. The min-width floor is inert here
+   (the three labels already measure 70.1, 68.6 and 78.2px) and stays.
+
+   Measured after: the box is 14px in the band and the unchanged 24px at
+   1025px and wider, so the Pacific box clears Hawaii by 10.2px and the
+   Atlantic box clears ALL by 5.4px at 721. KNOWN SEAM, for the owner's
+   visual pass: because the box is centred on its label, the label sits
+   about 5px higher at 1024px than at 1025px. Keeping it continuous
+   instead would need either a 315px sidebar floor (which leaves almost no
+   fluid range) or the same 14px box on desktop (an unreviewed change to a
+   surface this task was not asked to move). The band-scoped step keeps
+   desktop byte-identical; say the word and it goes the other way. */
+@media (min-width: 721px) and (max-width: 1024px) {
+  .shell-minimap-ocean-door {
+    min-height: 0;
+  }
 }
 
 .shell-minimap-ocean-door-pacific {
@@ -6825,25 +6953,153 @@ a.impact-resource-link::after {
 .app-shell.embed #panel-response { display: none; }
 
 /* Touch accommodation for the NEW S4 controls only (a coarse pointer at
-   >= 721px gets the desktop shell: tablets, landscape phones). The
-   repository-wide 44px touch floor remains separately-owned backlog per
-   the design record; these rules keep the lane from SHIPPING new
-   sub-floor targets on the surfaces it authors. The minimap silhouettes
-   keep their honest authored geometry; the Hawaii frame is already larger
-   than this floor and ALL receives the explicit width accommodation. */
+   >= 721px gets the desktop shell: tablets, landscape phones). These
+   rules kept that lane from SHIPPING new sub-floor targets on the
+   surfaces it authored; the repository-wide floor it deferred is the
+   block immediately below. The minimap silhouettes keep their honest
+   authored geometry; the Hawaii frame is already larger than this floor
+   and ALL receives the explicit width accommodation. */
 @media (pointer: coarse) and (min-width: 721px) {
   .shell-cluster-btn,
   .shell-horizon-btn,
   .shell-popover-door,
   #shell-share-host > #share-btn,
   .panel-response-close.icon-btn {
-    min-height: 44px;
+    min-height: var(--touch-target);
   }
   .shell-minimap-all {
-    min-height: 44px;
-    min-width: 44px;
+    min-height: var(--touch-target);
+    min-width: var(--touch-target);
   }
-  .shell-time { min-height: 44px; }
+  .shell-time { min-height: var(--touch-target); }
+}
+
+/* ----------------------------------------------------------------------------
+   THE TOUCH FLOOR ON THE DESKTOP SHELL (DDM-P10-T01; gate DDM-D02; owner
+   ruling DR-036 a, "44 px touch floor ... tablet is touch-first").
+
+   This is the repository-wide floor the S4 block above deferred. It is
+   deliberately a POINTER query with no upper width bound, matching that
+   block: a coarse pointer at 721px or wider is a hand on the DESKTOP
+   shell (a tablet in either orientation, a touchscreen laptop, a kiosk),
+   and the hand does not get more precise at 1100px. Below 721px the phone
+   chrome already carries its own floor (--mobile-map-control-size, the
+   sheet rules, and the 2026-07 hazard rail), so nothing here is restated
+   for it.
+
+   Every declaration is a FLOOR, expressed as min-height or min-width, so
+   a control that already clears 44px is untouched and no control is
+   re-laid-out, recolored, renamed, or given different behavior. Measured
+   on 5be15f5 with `hasTouch` at all ten band viewports, these were the
+   discrete controls under the floor; the height in the comment is the
+   worst case measured.
+
+   Two deliberate exemptions, both WCAG 2.5.5/2.5.8 exceptions rather than
+   oversights: an inline link inside a sentence (the sidebar footer's
+   repository link) keeps the line box it belongs to, and the layer
+   catalog's 14px checkbox glyph keeps its size because the whole
+   .layer-toggle label row is its activation target and that row already
+   measures well over the floor. */
+@media (pointer: coarse) and (min-width: 721px) {
+  /* Sidebar header: the seal (32px), the Brief/Console switch (17px), and
+     the collapse control (28px). */
+  .brand-seal,
+  #sidebar-collapse.icon-btn,
+  #sidebar-expand.icon-btn {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+  }
+  .view-switch button {
+    min-height: var(--touch-target);
+    padding-inline: 12px;
+  }
+
+  /* Sidebar body: the preset chips (21px), the place search (31px), the
+     region select and its briefing trigger (38px), the Tribal Nations
+     action (32px), the two studio doors (28px), the conditions metrics
+     (37px), the full-report link (17px), and the key disclosure (38px). */
+  .preset-chip,
+  .ddm-search-input,
+  .region-select,
+  .region-briefing-btn,
+  .tribal-nations-brief-action,
+  #brief-secondary-actions .tribal-nations-brief-action,
+  .brief-console-door,
+  .conditions-metric,
+  .brief-full-report-link,
+  .layer-umbrella-details-toggle,
+  .layer-toggle,
+  .sidebar-key-disclosure > summary {
+    min-height: var(--touch-target);
+  }
+
+  /* The map's own controls: Share view and Reset (34px), the basemap
+     switcher (29px), and the round map-information disclosure (28px),
+     which grows through its token so the panel it opens and the bottom
+     dock both step out of its way rather than meeting it. */
+  .overlay-btn,
+  .basemap-switcher-btn {
+    min-height: var(--touch-target);
+  }
+  .app-shell,
+  .app-shell.embed {
+    --map-info-size: var(--touch-target);
+  }
+  /* The dock rides above the taller disclosure. 8px seat + 44px button +
+     8px gap. */
+  .app-shell:not(.embed) .map-bottom-dock {
+    --map-dock-bottom: 60px;
+  }
+  /* An embed's dock rides above MapLibre's own bottom-right stack, which
+     the taller basemap switcher lifts too: the corner's 46px step plus
+     the control's own 14px margin plus the switcher at the touch floor
+     plus one 8px gap. At the shipped 92px the switcher's top edge and
+     the dock's brand link crossed by 12px (measured at 820x615). */
+  .app-shell.embed .map-bottom-dock {
+    --map-dock-bottom: calc(46px + 14px + var(--touch-target) + 8px);
+  }
+
+  /* The temporal rail: 24px steps, play, jump chips and mode pills.
+     NOT the minimap ocean doors, whose boxes also measure 24px: EF-5 /
+     MM-08 already gave each door a transparent 44px `::before` hit band
+     precisely so the button box could stay put, and growing the box
+     instead walks the Pacific door into the Hawaii silhouette and the
+     Atlantic door into ALL (measured, both orientations, 721 to 1024).
+     The doors are exempted in tests/interface-responsive.spec.ts, which
+     measures their band rather than their box. */
+  .time-bar-step,
+  .time-bar-play,
+  .time-bar-jump,
+  .time-bar-mode {
+    min-height: var(--touch-target);
+  }
+  .time-bar-step,
+  .time-bar-play {
+    min-width: var(--touch-target);
+  }
+
+  /* The embed's own chrome: the sidebar-expand control shares .icon-btn
+     above, and the dock's brand link (28px) is the iframe's route back to
+     the full module. */
+  .embed-brand {
+    min-height: var(--touch-target);
+  }
+
+  /* Transient surfaces: the briefing's close control (30px square), the
+     per-variable disclosures inside the briefing body (30px), and a
+     MapLibre popup's close corner (24px), which is the only way to
+     dismiss a popup with a finger. */
+  .impact-panel-close {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+  }
+  .impact-panel summary {
+    min-height: var(--touch-target);
+  }
+  .maplibregl-popup-close-button {
+    min-width: var(--touch-target) !important;
+    min-height: var(--touch-target) !important;
+  }
 }
 
 /* ------------------------------------------------------------------ */
