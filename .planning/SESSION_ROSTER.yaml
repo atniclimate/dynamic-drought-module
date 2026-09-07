@@ -397,7 +397,7 @@ sessions:
     subagents: [{ name: ddm-frontend-specialist, model: claude-sonnet-5, effort: high, purpose: "confirm no control overlap and the coarse-pointer minimum at 721, 768, 820, 900 and 1024 px in both orientations" }]
     reads: [{ path: "src/styles/app.css", lines: "conflict hunks only, located by grep", est_tokens: 6000, why: "NEVER read whole; 53,943 est tokens" }]
     budget_tokens: 70000
-    note: "3 files, +578/-27. Conflicts with the briefing branch in src/styles/app.css per the register (BRANCH_REPORT.md:127-128), which is why it lands before S02g in the owner's order. DDM-D02 decided 2026-09-02: tablet gets a real third band, 721 to 1024 px, fluid sidebar, 44 px touch floor, touch-first (docs/ROADMAP.yaml:620)."
+    note: "3 files, +578/-27. CORRECTED (planning/decisions/2026-09-02-decision-register.yaml, correction_2026_09_07): the register's original claim that this conflicts with the briefing branch (S02g) in src/styles/app.css is WRONG, established by merge-tree simulation. The real app.css collision is this branch against S02h (fix/dr-065-boot-honesty): both insert a token block at the same anchor. Lands first regardless (S02f > S02h > S02g); S02h lands next to resolve that collision while it is fresh, S02g last since it merges clean against both. DDM-D02 decided 2026-09-02: tablet gets a real third band, 721 to 1024 px, fluid sidebar, 44 px touch floor, touch-first (docs/ROADMAP.yaml:620)."
     status: planned
     outcome: null
 
@@ -418,8 +418,13 @@ sessions:
     budget_tokens: 80000
     note: >-
       17 files, +1101/-300, the largest of the ten (BRANCH_REPORT.md:79). Rebase onto
-      8b26e9c AND onto S02f's app.css landing. P7-T02 needs DR-012, which
-      docs/ROADMAP.yaml:280 still records as needing decision.
+      8b26e9c AND onto S02f's app.css landing. CORRECTED (correction_2026_09_07): this
+      branch does NOT collide with S02f (ui/ddm-p10-t01-tablet-band) in src/styles/app.css,
+      contra the register's original claim; the only conflict against S02f is trivial, in
+      docs/RELEASE_NOTES.md. It also merges CLEAN against S02h (fix/dr-065-boot-honesty),
+      the branch that actually does collide with S02f in app.css. Lands last of the three
+      (S02f > S02h > S02g) for that reason. P7-T02 needs DR-012, which docs/ROADMAP.yaml:280
+      still records as needing decision.
     sequencing_conflict: >-
       DDM-P7-T02 is one of the eleven tasks in the Wave 2 cycle, and
       docs/ROADMAP.yaml:680-681 states that NONE of the eleven should start before a
@@ -436,7 +441,7 @@ sessions:
     title: "Land fix/dr-065-boot-honesty with tests/dr-065-contracts, both rebased (app.css)"
     branch: "fix/dr-065-boot-honesty + tests/dr-065-contracts"
     tip: "2efdb43 + 33e877d"
-    touches_app_css: true               # BRANCH_REPORT.md:92-96, the third app.css branch, which the register did NOT flag
+    touches_app_css: true               # BRANCH_REPORT.md:92-96, the third app.css branch, which the register did NOT originally flag; correction_2026_09_07 identifies this as the branch that DOES collide with S02f
     tier: T3
     model: claude-sonnet-5
     effort: high
@@ -451,8 +456,12 @@ sessions:
       order (BRANCH_REPORT.md:107-108). 5 files +443/-26 and 2 files +534/-0. Both were
       2 behind main at 5be15f5, so 6 behind at 8b26e9c. BRANCH_REPORT.md:92-96 flags that
       fix/dr-065-boot-honesty ALSO touches app.css, a third branch the register did not
-      list, which is why it lands last of the three. P14-T02 needs DR-035
-      (docs/ROADMAP.yaml:509).
+      list. CORRECTED (correction_2026_09_07): this is the branch that actually collides
+      with S02f (ui/ddm-p10-t01-tablet-band) in src/styles/app.css, both inserting a token
+      block at the same anchor, established by merge-tree simulation. It merges CLEAN
+      against S02g (impact/ddm-p7-t02-briefing-matrix). Lands second of the three
+      (S02f > S02h > S02g), not last, so the real collision is resolved while S02f's
+      token-block change is fresh. P14-T02 needs DR-035 (docs/ROADMAP.yaml:509).
     status: planned
     outcome: null
 
