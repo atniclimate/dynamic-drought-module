@@ -1,0 +1,799 @@
+# SESSION_ROSTER.yaml
+# Which Claude runs which session, at what effort, in what environment, behind which gate.
+# Task ids mirror docs/ROADMAP.yaml exactly. Written by the session-roster skill.
+# Read before it writes: this file did not exist at 8b26e9c; this is its first version.
+#
+# Every claim carries a receipt read or run on 2026-09-07 against the tree at 8b26e9c.
+# Memory files and prose docs were leads only. Anything not re-verified is under
+# state.unverified and is labeled unverified where it appears.
+
+roster_version: 1
+project: "Dynamic Drought Module"
+planning_authority: "docs/ROADMAP.yaml"
+updated: "2026-09-07"
+plan_tier: max
+
+baseline:
+  head: "8b26e9c6a029baeb103f1908fa7f21b8bcb0089a"
+  head_committed: "2026-09-07T03:31:14-07:00"
+  receipt: "git rev-parse HEAD origin/main (equal); git show -s --format=%cI HEAD"
+  verdicts_keyed_to: "dc32eb216cb9c2b8d3fa53fa3fa552fe6ef2fdbe"
+  verdicts_keyed_to_committed: "2026-09-07T02:56:55-07:00"
+  verdicts_keyed_to_subject: "docs: name the ledgers the roadmap depends on, and track the four that hold them"
+  ledger: ".planning/trace/roster-ledger.md (gitignored, .gitignore:91, not a deliverable)"
+
+state:
+  version: "0.6.26"                     # package.json; docs/ROADMAP.yaml:42
+  last_tag: "v0.6.26"                   # assess.json git.last_tag
+  branch: "main"
+  dirty_files: 0                        # git status --porcelain, empty
+  commits: 399                          # assess.json git.commits
+  node_floor: ">=24.0.0"                # package.json engines
+  renderer: "maplibre-gl 6.6.0, pinned, locked and installed"   # docs/ROADMAP.yaml:541-546
+
+  authority:
+    task_ledger: "docs/ROADMAP.yaml"                    # :57
+    decision_ledger: "planning/decisions/"              # :58, defines all 69 DR- ids
+    defect_ledger: "planning/qa/feature-errors.yaml"    # :59, FE-01..24, EF-IB-1..10, EF-MM-1..7
+    research_inputs: "planning/user-research/"          # :60
+    handoff_entry: "planning/handoffs/2026-09-04.md"    # :61
+    read_only_history: ["planning/archive/", "planning/2026-09-03-long-run/", "planning/2026-09-03-session/"]   # :62-65
+    parked: ["planning/2026-09-01-deep-dive/", "planning/2026-09-03-foundations/", "planning/plans/"]           # :66-69
+    id_rule: "docs/ROADMAP.yaml:76. A DR-, FE-, EF-IB- or EF-MM- id may be cited, never redefined. An id not in PLANNING_AUTHORITY.md section 2 is a reason to stop and ask."
+    agents_md: "AGENTS.md, 79 lines, gitignored (.gitignore:42-56), never tracked. Binds Codex sessions on this machine. NOT repo authority. Not edited by this session."
+
+  task_arithmetic:                      # recounted from docs/ROADMAP.yaml this session
+    total_ids: 91
+    done: 19
+    open: 67
+    superseded: 5
+    title_only_stubs: 22                # P3 to P6; RECONCILIATION.md:705-708
+    ordered_by_import_graph: 25         # RECONCILIATION.md:660-663
+    unordered: 42
+    note: >-
+      RECONCILIATION.md was written against main 5be15f5 and tallies 90 ids, 18 done
+      (:368). The tree at 8b26e9c has 91 and 19, because dc32eb2 applied that document's
+      own Section 9 diff: DDM-P15-T05 was created (docs/ROADMAP.yaml:570-575, diff at
+      RECONCILIATION.md:945-950) and DDM-P15-T02 moved open to done
+      (docs/ROADMAP.yaml:537-552). P15-T02 left Wave 1 and P15-T05 entered it, so
+      25 ordered / 42 unordered is unchanged.
+
+  verification_ladder:                  # exact strings from package.json scripts
+    verify_quick: "typecheck && scan:emdash && check:vocabulary && check:coverage"
+    verify_smoke: "gate, then 12 named Playwright specs at --workers=1"
+    gate: "build && check:bundle && check:activation && check:all"
+    gate_nobuild: "typecheck && check:all"
+    test_serial: "playwright test --workers=1"
+    default_verification: "verify:smoke"      # docs/ROADMAP.yaml:6
+    concurrency: "one runner at a time (SessionStart hook)"
+
+  verified_working:
+    - "git tree clean at 8b26e9c, HEAD equals origin/main (git rev-parse, this session)"
+    - "assess scan completed, exit 0, 7435 bytes (.planning/trace/assess.json)"
+    - "seven worktrees on I:, tips matching BRANCH_REPORT.md Table B (git worktree list)"
+    - "all ten register branches passed verify:quick (BRANCH_REPORT.md:86-90), but at main 5be15f5, not 8b26e9c"
+
+  broken_or_unknown:
+    - "authorized write (c) is blocked by the repo's own guards; see owner_calls.hook_guard_blocked"
+    - "DDM_STOP_LEVEL has no smoke tier; see owner_calls.stop_level_vocabulary"
+    - "RECONCILIATION.md's Section 3 tally (27 partial / 38 not_started) disagrees with its own per-task tables (32 / 33). Sum is identical at 65, so five rows are classified differently in the two places. Tables carry per-row TRACE receipts, the tally carries none. This roster tiers from the tables."
+    - "BRANCH_REPORT.md final-state block (:204-213) names seven worktrees under C:/dev/_wt/. Verified stale: git worktree list shows all seven on I:/dynamic-drought-module-wt/. Reported, not corrected (that file is forbidden to this session)."
+
+  done_claims:                          # 19; verdicts keyed to dc32eb2; cap 8 receipts per rule
+    verified_done:                      # 6, RECONCILIATION.md:360
+      ids: [DDM-P0-T05, DDM-P2-T02, DDM-P7-T01, DDM-P8-T01, DDM-P10-T02, DDM-P14-T01]
+      receipts:
+        - "RECONCILIATION.md:199  P0-T05, tests/worker-receipts.test.mjs:472 reads workers/proxy/src/index.ts"
+        - "RECONCILIATION.md:226  P2-T02, tests/fire3d-mode.spec.ts by import"
+        - "RECONCILIATION.md:268  P7-T01, 7 files 12 tests, six of seven acceptance_testable_here true"
+        - "RECONCILIATION.md:283  P8-T01, tests/temporal-axis.spec.ts by path-ref"
+        - "RECONCILIATION.md:305  P10-T02, moved out of structurally_untestable by TRACE v3; evidence key at docs/ROADMAP.yaml:407"
+        - "RECONCILIATION.md:342  P14-T01, tests/heat-h2-point-heat.spec.ts imports src/util/bounded-cache.ts"
+    verified_externally_only:           # 8, all P0 workflow work, RECONCILIATION.md:361
+      ids: [DDM-P0-T01, DDM-P0-T02, DDM-P0-T03, DDM-P0-T04, DDM-P0-T06, DDM-P0-T07, DDM-P0-T08, DDM-P0-T12]
+      receipts:
+        - "RECONCILIATION.md:195-206, one row per task, each citing its TRACE.yaml range"
+        - "RECONCILIATION.md:108-112  .github/ is outside method.test_roots (TRACE.yaml:38-40), so a zero-tests verdict here is unfalsifiable, not false"
+        - "RECONCILIATION.md:114-117  confirmed separately: no spec or node test references a workflow path; the three hits in tests/ are prose (tests/README.md:229, :246, :316)"
+        - "RECONCILIATION.md:206  dissent: P0-T12 carries two real tests and reads more honestly as partial"
+    claimed_not_verified:               # 3, RECONCILIATION.md:362
+      ids: [DDM-P9-T01, DDM-P12-T01, DDM-P15-T03]
+      receipts:
+        - "docs/ROADMAP.yaml:355-357  P9-T01 evidence: five files, added by dc32eb2"
+        - "docs/ROADMAP.yaml:449      P12-T01 evidence: src/impact/enso.ts, tests/enso-observed-state.spec.ts"
+        - "docs/ROADMAP.yaml:560-561  P15-T03 evidence: verify-live.yml, upstream-monitor.yml, two scripts"
+        - "RECONCILIATION.md:396, :450, :474  Section 4 says each claim should stand; the gap is naming, not substance"
+        - "docs/ROADMAP.yaml:25-28  the evidence key is defined as present ONLY where closure could not be traced to a file, so it does not convert these to verified"
+    not_covered_by_the_three_buckets:   # 19 done in the tree, 6+8+3 names 17
+      - id: DDM-P1-T08
+        verdict: "partial"
+        receipt: "RECONCILIATION.md:219. Evidence is real but routed to the wrong task: tests/boundary-stubs.spec.ts and tests/boundary-boot-inventory.test.mjs are listed under DDM-P1-T02 (TRACE.yaml:865-873)."
+      - id: DDM-P15-T02
+        verdict: "unverified_this_session"
+        receipt: "No reconciliation verdict exists: it was open when that document ran (RECONCILIATION.md:352 records not_started). Closed by dc32eb2 on in-repo receipts quoted at docs/ROADMAP.yaml:538-546 (check:renderer, grep of package.json and package-lock.json, npm ls maplibre-gl, vite.config.ts:62, README.md:447). Those commands were NOT re-run this session. Its closure also resolves the cross-cutting contradiction RECONCILIATION.md:181-189 raised against DDM-P0-T03."
+
+  context_hazards:
+    - { file: "EXPLAIN_NPM.html", bytes: 6012463, est_tokens: 1503115, owns: "unknown; not read. Arrived via PR 61. See owner_calls.pr_61_disposition" }
+    - { file: "src/styles/app.css", bytes: 215772, est_tokens: 53943, owns: "stylesheet root. :1-5 declares the technical-cartographic aesthetic, slate foundation, water-cyan accent, League Spartan plus Lexend. :7-40 are self-hosted @font-face blocks with unicode-range splits. Read to line 40 only." }
+    - { file: "src/config/urls.ts", bytes: 88249, est_tokens: 22062, owns: "the endpoint catalog. :1-23 states it is centralized so a provider migration is one line, and names the OSM basemap, Overpass hydrography, public/data/ polygons, the CPC WMS, and USGS Water Services. :25-31 imports BASE_URL and BOOT_URLS from urls-boot.ts under DR-008a. :33 opens the frozen URLS table. Read to line 40 only." }
+    - { file: "src/config/station-registry.ts", bytes: 70201, est_tokens: 17550, owns: "assess.json large_files" }
+    - note: "assess.json context_note: the top three files are about 2,029,214 tokens, 1015% of a 200K window. Neither app.css nor urls.ts may be read whole in any session on this roster."
+
+  excluded_from_ordering:               # RECONCILIATION.md:581-599, unchanged by this roster
+    top_hubs: ["src/util/fetch.ts (46)", "src/config/urls.ts (45)", "src/state/registry.ts (41)", "src/config/palette.ts (27)", "src/util/escape.ts (24)", "src/map/interaction-coordinator.ts (20)", "src/ui/legend-registry.ts (18)", "src/config/layers.ts (17)", "src/util/guards.ts (17)", "src/config/wildfire-presentation.ts (12)"]
+    app_css: "src/styles/app.css is not in the module graph at all; its hub status is UNVERIFIED (RECONCILIATION.md:596-599)"
+
+  top_regression_risk:                  # RECONCILIATION.md:552-559
+    - "src/util/escape.ts: 24 importers, gated by 11 open P1/P7/P8 tasks, no test. HTML-safe escaping for user-controlled and third-party strings interpolated into HTML attributes and text content (TRACE.yaml:5138-5141). RECONCILIATION.md:556 names it the top regression risk in the repository and says it should be the roster's first gate."
+    - "src/util/guards.ts: 17 importers, 6 gating tasks, no test. The validation floor beneath every DDM-P7 briefing source (TRACE.yaml:5154-5156)."
+    - "26 of the 47 orphan files are gated by an open P1/P7/P8 task (RECONCILIATION.md:549). Full ranked table at RECONCILIATION.md:497-547. No Haiku scout was dispatched: that table already is the artifact the scout would have produced."
+
+  claude_md:
+    root: false                         # assess.json claude_md.root
+    local: false
+    nested: []
+    note: >-
+      No root CLAUDE.md exists and this session is forbidden to write one. A draft was
+      presented in the session response for owner approval, together with the list of
+      points where it would touch the same ground as AGENTS.md. Nothing was written.
+      Re-propose only if the owner has not ruled.
+
+  unverified:
+    - "schedule execution of refresh-snapshots.yml, upstream-monitor.yml: no Actions access. A GitHub MCP server IS connected this session, but it exposes no Actions API: a ToolSearch for github actions workflow runs returned only branches, commits, issues, pull requests, releases, tags, collaborators and issue fields. Not inferred from the YAML. RECONCILIATION.md:758-762 flags the same gap and warns that if scheduled runs are off, the correct move is to retire refresh-snapshots.yml AND re-open DDM-P12-T01, whose acceptance is date-coupled."
+    - "src/styles/app.css hub status, module-graph size, and current declarations (RECONCILIATION.md:596-599, :962-963). Read to line 40 only, per the read cap."
+    - "DDM-P15-T02 closure receipts were quoted from docs/ROADMAP.yaml:538-546, not re-run this session."
+    - "Whether the seven I: worktrees' node_modules are current for their branch (BRANCH_REPORT.md:176-182, itself stated against C: paths that have since moved)."
+    - "Every ahead/behind figure in BRANCH_REPORT.md is against main 5be15f5 (BRANCH_REPORT.md:4). Main is now 8b26e9c, four commits later, so every behind-count in that report is understated by four."
+
+defaults:
+  execution_model: claude-sonnet-5
+  execution_effort: high
+  planning_model: claude-opus-5
+  planning_effort: xhigh
+  scout_model: claude-haiku-4-5
+  prose_model: claude-opus-4-6          # at max
+  escalation_model: claude-fable-5-1    # T4 with an unknown path ONLY; not assigned anywhere in this roster
+  fable_note: "No session on this roster is T4. Every ordered task carries an acceptance sentence and either a decided gate or a named undecided one, so no path is genuinely unknown. Fable is not assigned."
+
+  switching_rules:                      # references/roster.md, failure modes table
+    skipped_a_file_test_or_step: "raise effort one notch. Do not change model."
+    wrong_with_full_context_and_a_clear_plan: "change model, next one up. Do not raise effort."
+    order_of_repair: "fix context first, then effort, then model. Most model-is-bad incidents are context pollution."
+    two_failed_corrections: "/clear. Write the handover FIRST, then restate the problem leading with the fact the model kept missing, and load only the needed file ranges."
+    prompting_5_series: "roles, not scaffolding. Outcome plus scope fence. Remove double-check-your-work instructions: they cause over-verification with no quality gain."
+
+  completion_rule: "No completion claim without the pasted output of the session's assigned gate."
+  compaction_rule: "/clear after two failed corrections; write the handover first."
+
+  agents:                               # .claude/agents/*.md, frontmatter set by this session
+    roster:
+    - { name: ddm-fix-worker,          model: claude-sonnet-5,  effort: high, tools: "Read, Edit, Write, Grep, Glob, Bash",        role: execute }
+    - { name: ddm-forecast-wirer,      model: claude-sonnet-5,  effort: high, tools: "Read, Edit, Write, Grep, Glob, Bash",        role: execute }
+    - { name: ddm-frontend-specialist, model: claude-sonnet-5,  effort: high, tools: "Read, Edit, Write, Grep, Glob, Bash, Skill", role: execute }
+    - { name: ddm-science-verifier,    model: claude-sonnet-5,  effort: high, tools: "Read, Grep, Glob, WebFetch, WebSearch",      role: "READ-ONLY VERIFIER, the only one" }
+    - { name: ddm-worker-steward,      model: claude-haiku-4-5, effort: null, tools: "Read, Grep, Glob, Bash, WebFetch",           role: "scout/probe. Keeps Bash for its curl probes, so it is deliberately NOT the read-only verifier." }
+    changes_made: "All five were model: opus with no effort. Bash was removed from ddm-science-verifier to make it the single read-only verifier. No body text was edited."
+    body_frontmatter_conflict:
+      agent: ddm-science-verifier
+      quoted_line: ".claude/agents/ddm-science-verifier.md:9-11  \"You verify that what this application tells the public matches what the issuing agency actually published. You are READ-ONLY: you never edit `src/`, never edit a spec, never mutate anything outside a report file the skill that invoked you names.\""
+      conflict: "The clause 'never mutate anything OUTSIDE a report file' reserves the right to write a report file. The new tools list gives it no write path at all (no Edit, no Write, no Bash). The body is stricter in intent and looser in this one clause. NOT edited, per scope. Owner decides whether the agent should return its report to the caller instead."
+      other_agents: "No over-verification scaffolding found. Grep for double-check / check your work / verify your own / re-read your across all five bodies returned nothing."
+
+  hooks:                                # .claude/settings.local.json; NOT changed except as noted
+    SessionStart: "ddm-session-start.py, prints branch, head, drift, maplibre pin, port 4173, ladder timings"
+    PreToolUse_Bash: "ddm-guard-bash.py"
+    PreToolUse_Edit: "ddm-guard-edit.py, matcher Write|Edit|MultiEdit|NotebookEdit"
+    Stop: "ddm-stop-verify.py, timeout 240"
+    stop_level_default: "fast (settings.local.json env DDM_STOP_LEVEL). UNCHANGED by this session, per instruction."
+    guarded_paths_present: ["fire3d-evidence/", ".claude/settings.json", ".claude/settings.local.json", ".claude/hooks/", "dist/", "node_modules/"]
+    guarded_paths_wanted: [".github/workflows/**"]
+    guarded_paths_status: "NOT ADDED. Blocked; see owner_calls.hook_guard_blocked."
+    tracking: "ALL of .claude/ is gitignored (.gitignore:53:/.claude/) and git ls-files .claude/ returns ZERO files. The agent frontmatter changes are real on disk but are not committable. See owner_calls.claude_dir_untracked."
+
+  mcp:
+    connected_this_session: ["github (no Actions API)", "asana (read-only; mutations denied in settings.local.json)", "brave-search", "claude-in-chrome", "context7", "cloudflare", "postman"]
+    in_repo_settings: []                # assess.json claude_config.mcp_servers
+    useful_for_this_roster: "github, for PR and branch state only. Playwright is NOT an MCP server here; browser work runs through the npm ladder."
+
+sessions:
+
+  # ---------------------------------------------------------------------------
+  # S01 to S03 are the owner's, recorded as given and not re-derived.
+  # ---------------------------------------------------------------------------
+
+  - id: S01
+    task_ids: []                        # no roadmap id: this is a gate the roster adds ahead of the backlog
+    title: "Tests for src/util/escape.ts and src/util/guards.ts"
+    tier: T2
+    model: claude-sonnet-5
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    gate: "npm run verify:quick"
+    role: "test author. Cover the two highest-in-degree untested utilities. Do not change their behaviour."
+    rationale: >-
+      escape.ts has 24 importers and gates 11 open P1/P7/P8 tasks; guards.ts has 17 and
+      gates 6 (RECONCILIATION.md:499-500). Neither has a test. RECONCILIATION.md:556 names
+      escape.ts the top regression risk in the repository and says it should be the
+      roster's first gate. Both are hub files excluded from ordering, so nothing in the
+      backlog will ever attach a test to them on its own.
+    reads:
+      - { path: "src/util/escape.ts", lines: all, est_tokens: 1500 }
+      - { path: "src/util/guards.ts", lines: all, est_tokens: 1500 }
+      - { path: "tests/upstream-drift-contract.test.mjs", lines: all, est_tokens: 2000, why: "the existing node --test pattern for reading source as text" }
+    budget_tokens: 30000
+    stop_when: "verify:quick green with the two new tests in check:all or as node --test files"
+    status: planned
+    outcome: null
+
+  # S02: land the branches. One roster entry per landing, because each app.css landing
+  # is its own session. Owner's order, which supersedes the register's suggested order
+  # quoted at BRANCH_REPORT.md:103-109.
+  #
+  # EVERY branch now rebases onto 8b26e9c, which carries PR 61 (slides.css, EXPLAIN_NPM.*)
+  # and Dependabot 60 and 62 (TypeScript 7.0.2 in workers/proxy, deploy-pages 5.0.1).
+  # BRANCH_REPORT.md's ahead/behind figures are against 5be15f5 and understate every
+  # behind-count by four.
+
+  - id: S02a
+    task_ids: [DDM-P15-T01, DDM-P15-T05]
+    title: "Land platform/ddm-p15-close"
+    branch: "platform/ddm-p15-close"
+    tip: "a40c69d"
+    touches_app_css: false              # BRANCH_REPORT.md:77
+    tier: T2
+    model: claude-sonnet-5
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    gate: "npm run verify:smoke"
+    reads: [{ path: ".planning/BRANCH_REPORT.md", lines: "73-96", est_tokens: 900 }]
+    budget_tokens: 40000
+    note: "11 files, +680/-37, touches RELEASE_NOTES.md (BRANCH_REPORT.md:77). Its register text describes dependency work (Overture pin, biome bump) but it does not touch either lockfile relative to main (BRANCH_REPORT.md:88-90). DDM-P15-T05 was CREATED by this branch (BRANCH_REPORT.md:193-197) and now also exists on main at docs/ROADMAP.yaml:570-575 via dc32eb2: expect a roadmap conflict on that hunk."
+    status: planned
+    outcome: null
+
+  - id: S02b
+    task_ids: [DDM-P8-T05]
+    title: "Land map/ddm-p8-t05-surface-continuity"
+    branch: "map/ddm-p8-t05-surface-continuity"
+    tip: "ed3fedf"
+    touches_app_css: false
+    tier: T2
+    model: claude-sonnet-5
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    gate: "npm run verify:smoke"
+    budget_tokens: 35000
+    note: "5 files, +458/-12 (BRANCH_REPORT.md:78). P8-T05 is Wave 1, effort S, no decision gate (docs/ROADMAP.yaml:332-336)."
+    status: planned
+    outcome: null
+
+  - id: S02c
+    task_ids: [DDM-P13-T03]
+    title: "Land science/ddm-p13-t03-gridded-index"
+    branch: "science/ddm-p13-t03-gridded-index"
+    tip: "0b427a4"
+    touches_app_css: false
+    tier: T2
+    model: claude-sonnet-5
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    gate: "npm run verify:smoke"
+    subagents: [{ name: ddm-science-verifier, model: claude-sonnet-5, effort: high, purpose: "confirm each gridded-index prefix and product date against the issuer's own published definition before the claim ships" }]
+    budget_tokens: 40000
+    note: "5 files, +221/-23 (BRANCH_REPORT.md:80). P13-T03 needs DR-049 (docs/ROADMAP.yaml:494); confirm it is decided in planning/decisions/ before landing. Wave 3, so it is downstream of the S03 cycle: landing it early is the owner's call, recorded."
+    status: planned
+    outcome: null
+
+  - id: S02d
+    task_ids: [DDM-P9-T02]
+    title: "Land map/ddm-p9-t02-capability-honesty"
+    branch: "map/ddm-p9-t02-capability-honesty"
+    tip: "f7b669b"
+    touches_app_css: false
+    tier: T2
+    model: claude-sonnet-5
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    gate: "npx playwright test --workers=1 tests/fire3d-mode.spec.ts tests/view-contracts.spec.ts"
+    gate_source: "docs/ROADMAP.yaml:365, the task's own verification key, which overrides default_verification"
+    budget_tokens: 35000
+    note: "4 files, +227/-11 (BRANCH_REPORT.md:81). DR-025 was widened on 2026-09-02 to carry the D03 answer including the narrow-viewport exit (docs/ROADMAP.yaml:627)."
+    status: planned
+    outcome: null
+
+  - id: S02e
+    task_ids: []
+    title: "Land docs/worker-and-ci-release-notes-2026-09-03"
+    branch: "docs/worker-and-ci-release-notes-2026-09-03"
+    tip: "965d032"
+    touches_app_css: false
+    tier: T1
+    model: claude-sonnet-5
+    effort: medium
+    mode: direct
+    run_as: main
+    stop_level: fast
+    gate: "npm run verify:quick"
+    gate_rationale: "1 file, +22/-0, RELEASE_NOTES.md only (BRANCH_REPORT.md:83). No src change, so verify:smoke's browser half asserts nothing here. This is a deliberate departure from default_verification: verify:smoke, recorded rather than silent."
+    budget_tokens: 15000
+    status: planned
+    outcome: null
+
+  - id: S02f
+    task_ids: [DDM-P10-T01]
+    title: "Land ui/ddm-p10-t01-tablet-band (app.css)"
+    branch: "ui/ddm-p10-t01-tablet-band"
+    tip: "43a9627"
+    touches_app_css: true               # BRANCH_REPORT.md:82
+    tier: T3
+    model: claude-sonnet-5
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    gate: "npm run verify:smoke"
+    subagents: [{ name: ddm-frontend-specialist, model: claude-sonnet-5, effort: high, purpose: "confirm no control overlap and the coarse-pointer minimum at 721, 768, 820, 900 and 1024 px in both orientations" }]
+    reads: [{ path: "src/styles/app.css", lines: "conflict hunks only, located by grep", est_tokens: 6000, why: "NEVER read whole; 53,943 est tokens" }]
+    budget_tokens: 70000
+    note: "3 files, +578/-27. Conflicts with the briefing branch in src/styles/app.css per the register (BRANCH_REPORT.md:127-128), which is why it lands before S02g in the owner's order. DDM-D02 decided 2026-09-02: tablet gets a real third band, 721 to 1024 px, fluid sidebar, 44 px touch floor, touch-first (docs/ROADMAP.yaml:620)."
+    status: planned
+    outcome: null
+
+  - id: S02g
+    task_ids: [DDM-P7-T02, DDM-P7-T03]
+    title: "Land impact/ddm-p7-t02-briefing-matrix, rebased (app.css)"
+    branch: "impact/ddm-p7-t02-briefing-matrix"
+    tip: "52d48ee"
+    touches_app_css: true
+    tier: T3
+    model: claude-sonnet-5
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    gate: "npm run verify:smoke"
+    reads: [{ path: "src/styles/app.css", lines: "conflict hunks only, located by grep", est_tokens: 6000 }]
+    budget_tokens: 80000
+    note: >-
+      17 files, +1101/-300, the largest of the ten (BRANCH_REPORT.md:79). Rebase onto
+      8b26e9c AND onto S02f's app.css landing. P7-T02 needs DR-012, which
+      docs/ROADMAP.yaml:280 still records as needing decision.
+    sequencing_conflict: >-
+      DDM-P7-T02 is one of the eleven tasks in the Wave 2 cycle, and
+      docs/ROADMAP.yaml:680-681 states that NONE of the eleven should start before a
+      dedicated planning session sequences the cycle by hand. That session is S03. This
+      landing therefore pre-empts part of what S03 is meant to sequence. The work already
+      exists on the branch and the owner ordered it landed, so it stands; the consequence
+      is that S03 MUST read the post-S02 tree, not the tree this roster was written
+      against. Recorded, not resolved.
+    status: planned
+    outcome: null
+
+  - id: S02h
+    task_ids: [DDM-P14-T02]
+    title: "Land fix/dr-065-boot-honesty with tests/dr-065-contracts, both rebased (app.css)"
+    branch: "fix/dr-065-boot-honesty + tests/dr-065-contracts"
+    tip: "2efdb43 + 33e877d"
+    touches_app_css: true               # BRANCH_REPORT.md:92-96, the third app.css branch, which the register did NOT flag
+    tier: T3
+    model: claude-sonnet-5
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    gate: "npm run verify:smoke"
+    reads: [{ path: "src/styles/app.css", lines: "conflict hunks only, located by grep", est_tokens: 6000 }]
+    budget_tokens: 80000
+    note: >-
+      Land the pair together, tests immediately after the fix, per the register's own
+      order (BRANCH_REPORT.md:107-108). 5 files +443/-26 and 2 files +534/-0. Both were
+      2 behind main at 5be15f5, so 6 behind at 8b26e9c. BRANCH_REPORT.md:92-96 flags that
+      fix/dr-065-boot-honesty ALSO touches app.css, a third branch the register did not
+      list, which is why it lands last of the three. P14-T02 needs DR-035
+      (docs/ROADMAP.yaml:509).
+    status: planned
+    outcome: null
+
+  - id: S02i
+    task_ids: []
+    title: "map/dr-063-whp-ramp"
+    branch: "map/dr-063-whp-ramp"
+    tip: "987c29d"
+    tier: null
+    model: null
+    effort: null
+    status: held
+    note: >-
+      HELD by the owner, RECORDED NOT RENDERED. Landing it was a flat stop condition for
+      the 2026-09-03 run (BRANCH_REPORT.md:137-140). It passed verify:quick and is 8 behind
+      5be15f5, so 12 behind 8b26e9c. Not in the register's landing order: the register
+      records nine branches awaiting go and describes this one separately at its line 130
+      (BRANCH_REPORT.md:111-113). Do not land without an explicit owner instruction.
+    outcome: null
+
+  - id: S03
+    task_ids: [DDM-P1-T02, DDM-P1-T04, DDM-P7-T02, DDM-P7-T05, DDM-P8-T02, DDM-P8-T03, DDM-P11-T01, DDM-P12-T02, DDM-P12-T03, DDM-P14-T03, DDM-P9-T05]
+    title: "Cut plan for the src/impact/enso.ts cycle"
+    tier: T3
+    model: claude-opus-5
+    effort: xhigh
+    mode: plan
+    run_as: main
+    stop_level: fast
+    decision_gate: "DDM-D12"
+    gate: "a written plan file exists that sequences all eleven tasks and names the cut; NO code changes in the diff"
+    role: "planner. Sequence the cycle by hand. Deliver a plan, not an implementation."
+    rationale: >-
+      docs/ROADMAP.yaml:668-681 defines DDM-D12 as exactly this question and states that
+      NONE of the eleven should start before a dedicated planning session sequences them,
+      because starting one in isolation risks rework against whatever the other ten land.
+      RECONCILIATION.md:644-654 proves the cycle is real, not a method artifact: P7-T02
+      and P8-T02 and P8-T03 circulate through the briefing and time-bar modules, P12-T02
+      and P12-T03 and P7-T02 circulate through the single file src/impact/enso.ts, and
+      P1-T02 and P1-T04 circulate through the sidebar/island seam. Hub exclusion does not
+      break it.
+    candidate_cut: "src/impact/enso.ts, the sole attached file for P12-T01 (done), P12-T02 and P12-T03. Cutting there drops three tasks out of the cycle (RECONCILIATION.md:652-654, docs/ROADMAP.yaml:676-679)."
+    reads:
+      - { path: "docs/ROADMAP.yaml", lines: "668-681", est_tokens: 400 }
+      - { path: ".planning/RECONCILIATION.md", lines: "570-663", est_tokens: 2500 }
+      - { path: "src/impact/enso.ts", lines: all, est_tokens: 6000 }
+    must_read_post_s02: true
+    must_read_post_s02_reason: "S02g lands DDM-P7-T02 and DDM-P7-T03, so the cycle's shape changes before this session runs. Plan against the tree as it stands after S02, not against this roster's baseline."
+    plan_file_path: "OWNER CALL, unresolved. .planning/PLANNING_AUTHORITY.md names no home for a new plan file. planning/plans/ is parked and divergent (docs/ROADMAP.yaml:69) and gitignored; planning/ is forbidden to the roster session. See owner_calls.s03_plan_file_path."
+    budget_tokens: 90000
+    stop_when: "the plan file names the cut, the resulting groups, and an order within each group. No src/ edit in the diff."
+    status: planned
+    outcome: null
+
+  # ---------------------------------------------------------------------------
+  # S04: this session.
+  # ---------------------------------------------------------------------------
+
+  - id: S04
+    task_ids: []
+    title: "Session roster: assess, map, assign"
+    tier: T3
+    model: claude-opus-5
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    gate: "one commit on main carrying .planning/SESSION_ROSTER.yaml and the five agent frontmatters, and nothing else"
+    status: done
+    outcome: >-
+      Writes (a) and (b) landed. Write (c), the .github/workflows/** guard, is BLOCKED by
+      the repository's own guards and is escalated to owner_calls.hook_guard_blocked.
+      Seven findings recorded in .planning/trace/roster-ledger.md, S-1 through S-7.
+
+  # ---------------------------------------------------------------------------
+  # S05 onward: from the 25 ordered tasks ONLY. Wave order is preserved:
+  # Wave 1 load-bearing, then the Wave 2 cycle in the order S03 sets, then Wave 3.
+  # Six of the 25 land in S02 (P10-T01, P9-T02, P13-T03, P7-T02, P7-T03, P14-T02)
+  # and are not repeated here.
+  # ---------------------------------------------------------------------------
+
+  - id: S05
+    task_ids: [DDM-P13-T02]
+    title: "Surface the methods the app already downloads"
+    wave: "1 (load-bearing)"
+    tier: T2
+    model: claude-sonnet-5
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    gate: "npm run verify:smoke"
+    subagents: [{ name: ddm-science-verifier, model: claude-sonnet-5, effort: high, purpose: "confirm the USDM percentile basis and the HeatRisk method against the issuer's own published definition" }]
+    budget_tokens: 45000
+    note: "docs/ROADMAP.yaml:485-489, effort M, no decision gate. 2 files 3 tests, both acceptance_testable_here true (RECONCILIATION.md:335). It is load-bearing for six Wave 2 tasks (RECONCILIATION.md:614-627), so it goes first."
+    status: planned
+    outcome: null
+
+  - id: S06
+    task_ids: [DDM-P2-T04]
+    title: "Defer the Fire 3D controller until eligible"
+    wave: "1 (load-bearing)"
+    tier: T2
+    model: claude-sonnet-5
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    gate: "npm run verify:smoke"
+    budget_tokens: 40000
+    note: "docs/ROADMAP.yaml:210-212. RECONCILIATION.md:228 records files-and-tests-but-acceptance-not-directly-testable: the acceptance is a negative (a bare desktop Drought boot does NOT request the chunk), so plan for an activation-budget assertion, not a DOM test. scripts/check-activation-budget.mjs already exists in check:all."
+    status: planned
+    outcome: null
+
+  - id: S07
+    task_ids: [DDM-P1-T03]
+    title: "Unify activation failure handling"
+    wave: "1 (load-bearing)"
+    tier: T2
+    model: claude-sonnet-5
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    gate: "npm run verify:smoke"
+    depends_on: [S01]
+    budget_tokens: 45000
+    note: >-
+      docs/ROADMAP.yaml:175-177. RECONCILIATION.md:214 records 30 tests but warns of
+      selector inflation: most links are via: selector on one comment line, which
+      caveat_selector calls the weakest signal (TRACE.yaml:47). The real gate is
+      src/ui/overlay.ts, an untested orphan with 10 importers that owns the announce-once
+      surface this acceptance depends on (RECONCILIATION.md:560-562). Do not trust the
+      30-test figure.
+    status: planned
+    outcome: null
+
+  - id: S08
+    task_ids: [DDM-P11-T02]
+    title: "Make popups reachable by touch and consistent about the briefing door"
+    wave: "1 (load-bearing)"
+    tier: T3
+    model: claude-opus-5
+    effort: high
+    mode: plan
+    run_as: main
+    stop_level: fast
+    gate: "npm run verify:smoke"
+    blocked_on: ["DR-042", "DR-043"]
+    budget_tokens: 60000
+    note: "docs/ROADMAP.yaml:431-436. Two undecided decisions: DR-042 (may a condition-surface click establish a place selection) and DR-043 (the completeness sentence on the deployer Tribal-Lands and Treaty popups). Both files carry acceptance_testable_here: false (RECONCILIATION.md:314). DR-043 touches sovereign-representation language, so plan_rules lines at docs/ROADMAP.yaml:85-86 bind. Opus 5 plans, then Sonnet 5 high executes."
+    status: planned
+    outcome: null
+
+  # S09 to S19: the eleven Wave 2 cycle tasks. ORDER IS SET BY S03, not here.
+  # Tiers below are per-task and apply only after S03 cuts the cycle.
+  - id: S09-S19
+    task_ids: [DDM-P1-T02, DDM-P1-T04, DDM-P7-T05, DDM-P8-T02, DDM-P8-T03, DDM-P11-T01, DDM-P12-T02, DDM-P12-T03, DDM-P14-T03, DDM-P9-T05]
+    title: "The Wave 2 cycle, sequenced by S03"
+    wave: 2
+    tier: "per task, below"
+    model: claude-sonnet-5
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    gate: "npm run verify:smoke, except DDM-P12-T03 which carries verification: verify:quick (docs/ROADMAP.yaml:467)"
+    order: "SET BY S03. Do not start any of these before S03 delivers its plan file (docs/ROADMAP.yaml:680-681)."
+    note: "DDM-P7-T02 is the eleventh member and lands early in S02g; see S02g.sequencing_conflict."
+    per_task_tier:
+      DDM-P1-T02:  { tier: T3, why: "8 files 37 tests, 5 of 8 acceptance_testable_here false (RECONCILIATION.md:213); docs/ROADMAP.yaml:172-174" }
+      DDM-P1-T04:  { tier: T3, why: "5 files 19 tests, 4 of 5 false (RECONCILIATION.md:215); highest in-degree task node, 11 inbound edges (RECONCILIATION.md:611-612)" }
+      DDM-P7-T05:  { tier: T2, why: "effort M, DR-014 and DR-019, 8 files 8 tests; docs/ROADMAP.yaml:294-299" }
+      DDM-P8-T02:  { tier: T3, why: "effort L, all four hazard screens, 4 files 7 tests; docs/ROADMAP.yaml:315-319" }
+      DDM-P8-T03:  { tier: T3, why: "effort M but three gates DR-017, DR-021, DR-037; docs/ROADMAP.yaml:320-325" }
+      DDM-P11-T01: { tier: T2, why: "effort M, DR-040 and DR-041, 4 files all acceptance_testable_here true, best-evidenced open task in the backlog (RECONCILIATION.md:313)" }
+      DDM-P12-T02: { tier: T2, why: "effort M, DR-031, src/impact/enso.ts only, zero tests (RECONCILIATION.md:321)" }
+      DDM-P12-T03: { tier: T2, why: "effort M, DR-030, own verification: verify:quick. Needs ddm-science-verifier: the acceptance requires each of four tilt sentences to cite a published source" }
+      DDM-P14-T03: { tier: T2, why: "effort M, DR-008. Acceptance is a byte budget and NONE of its 28 tests measures bytes (RECONCILIATION.md:344). The gate is scripts/check-bundle-size.mjs, already in npm run gate" }
+      DDM-P9-T05:  { tier: T2, why: "effort M, 1 file 1 path-ref test; docs/ROADMAP.yaml:379-383" }
+    status: planned
+    outcome: null
+
+  # S20 to S24: Wave 3, strictly downstream of the cycle.
+  - id: S20-S24
+    task_ids: [DDM-P2-T03, DDM-P7-T04, DDM-P7-T06, DDM-P8-T06, DDM-P9-T03]
+    title: "Wave 3, after the cycle"
+    wave: 3
+    model: claude-sonnet-5
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    gate: "npm run verify:smoke"
+    note: "The other three Wave 3 tasks (DDM-P7-T03, DDM-P13-T03, DDM-P14-T02) land in S02g, S02c and S02h."
+    per_task_tier:
+      DDM-P2-T03: { tier: T3, blocked_on: "DDM-D04", why: "gate DDM-D04 has no decision key at docs/ROADMAP.yaml:629-631, so it is UNDECIDED. files-no-tests (RECONCILIATION.md:227)" }
+      DDM-P7-T04: { tier: T2, why: "effort M, DR-019, 6 files 7 tests; docs/ROADMAP.yaml:288-293" }
+      DDM-P7-T06: { tier: T2, why: "effort M, DR-014; docs/ROADMAP.yaml:300-305" }
+      DDM-P8-T06: { tier: T2, why: "effort M, DR-018; docs/ROADMAP.yaml:337-342" }
+      DDM-P9-T03: { tier: T2, why: "effort M, DR-023, 4 files 6 tests; docs/ROADMAP.yaml:366-371" }
+    status: planned
+    outcome: null
+
+# Tiered but NOT scheduled: open partials outside the 25 ordered. They are part of the
+# 42 whose order is the owner's, and are listed here with a tier so the owner can drop
+# them into the sequence without re-deriving one.
+tiered_unscheduled:
+  - { id: DDM-P0-T11, tier: T2, model: claude-opus-4-6, effort: max, why: "prose reconciliation across runtime, tests, docs and the live build (docs/ROADMAP.yaml:159-161). Partial: the capability half only (RECONCILIATION.md:205). Prose specialist override." }
+  - { id: DDM-P1-T01, tier: T2, model: claude-sonnet-5, effort: high, why: "docs/ROADMAP.yaml:169-171. src/util/fetch.ts is acceptance_testable_here true, but the static-check half has no evidence (RECONCILIATION.md:212)" }
+  - { id: DDM-P1-T05, tier: T2, model: claude-sonnet-5, effort: high, why: "docs/ROADMAP.yaml:181-184. The acceptance is a TYPECHECK claim; no test can prove a compile error (RECONCILIATION.md:216). Gate is npm run typecheck against a deliberately broken fixture." }
+  - { id: DDM-P1-T06, tier: T2, model: claude-sonnet-5, effort: high, why: "docs/ROADMAP.yaml:185-187, acceptance-not-directly-testable (RECONCILIATION.md:217)" }
+  - { id: DDM-P1-T07, tier: T2, model: claude-sonnet-5, effort: high, why: "docs/ROADMAP.yaml:188-191, github issue 13, 7 scripts attached (RECONCILIATION.md:218)" }
+  - { id: DDM-P9-T04, tier: T2, model: claude-sonnet-5, effort: high, why: "docs/ROADMAP.yaml:372-378. DR-009 is decided through DDM-D01 (docs/ROADMAP.yaml:606-608). Both clauses are concrete: layer ordering in src/map/layer-order.ts and nearest-neighbour resampling." }
+
+# The 22 title-only stubs. tier: null, model: null, no acceptance invented.
+title_only_stubs:
+  owner_call: "acceptance criteria"
+  tier: null
+  model: null
+  ids:
+    DDM-P3: [DDM-P3-T02, DDM-P3-T03, DDM-P3-T04, DDM-P3-T05, DDM-P3-T06, DDM-P3-T07]
+    DDM-P4: [DDM-P4-T01, DDM-P4-T02, DDM-P4-T04, DDM-P4-T05]
+    DDM-P5: [DDM-P5-T01, DDM-P5-T02, DDM-P5-T03, DDM-P5-T04, DDM-P5-T05, DDM-P5-T06, DDM-P5-T07]
+    DDM-P6: [DDM-P6-T01, DDM-P6-T02, DDM-P6-T03, DDM-P6-T04, DDM-P6-T06]
+  receipts:
+    - "docs/ROADMAP.yaml:227-232, :237-241, :247-253, :258-263, the four stub blocks"
+    - "RECONCILIATION.md:705-708, the same 22 enumerated as one owner item"
+  consequences_from_the_trace:          # RECONCILIATION.md:711-717
+    - "attachment_guards.rule_1_no_statement (TRACE.yaml:19-22) withholds every attachment from a task stating neither acceptance nor closed, so these 22 CANNOT gain files or tests until they gain an acceptance."
+    - "One attachment has already been withheld on this ground: src/ui/landscape-context.ts from DDM-P3-T02 (TRACE.yaml:190-199)."
+    - "All 22 inherit default_verification: verify:smoke (docs/ROADMAP.yaml:6), which will run against nothing."
+    - "12 of the 22 sit behind undecided gates DDM-D05, DDM-D08, DDM-D09, DDM-D11. For those an acceptance sentence may be premature and a blocked_on marker is the honest state instead."
+
+# The 42 the import graph does not order.
+unordered:
+  order: owner
+  count: 42
+  derivation: "Wave 1 (48, RECONCILIATION.md:636-639) minus the six load-bearing it names at :641-642, with DDM-P15-T02 removed (now done via dc32eb2) and DDM-P15-T05 added (created by dc32eb2)."
+  receipt: "RECONCILIATION.md:660-663: 42 of the 67 open tasks have no import edge in either direction, 22 of those are the title-only stubs, and this ordering therefore governs 25 tasks, not 67."
+  ids: [DDM-P0-T09, DDM-P0-T10, DDM-P0-T11, DDM-P1-T01, DDM-P1-T05, DDM-P1-T06, DDM-P1-T07,
+        DDM-P2-T05, DDM-P2-T06,
+        DDM-P3-T02, DDM-P3-T03, DDM-P3-T04, DDM-P3-T05, DDM-P3-T06, DDM-P3-T07,
+        DDM-P4-T01, DDM-P4-T02, DDM-P4-T04, DDM-P4-T05,
+        DDM-P5-T01, DDM-P5-T02, DDM-P5-T03, DDM-P5-T04, DDM-P5-T05, DDM-P5-T06, DDM-P5-T07,
+        DDM-P6-T01, DDM-P6-T02, DDM-P6-T03, DDM-P6-T04, DDM-P6-T06,
+        DDM-P8-T04, DDM-P8-T05, DDM-P9-T04, DDM-P10-T03, DDM-P10-T04,
+        DDM-P12-T04, DDM-P13-T01, DDM-P14-T04, DDM-P15-T01, DDM-P15-T04, DDM-P15-T05]
+  notes:
+    - "DDM-P8-T05, DDM-P15-T01 and DDM-P15-T05 are unordered but ARE claimed by branches landing in S02b and S02a."
+    - "DDM-P2-T06 is structurally_untestable (RECONCILIATION.md:230) and now carries verification: none (owner-run field pass) at docs/ROADMAP.yaml:221."
+    - "DDM-P10-T03 is structurally_untestable on both halves: the CSS half is outside the trace, and the shared prefers-reduced-motion check src/util/motion.ts is an untested orphan with 10 importers (RECONCILIATION.md:306, :563-566)."
+    - "DDM-P15-T01 is structurally_untestable and now carries verification: none (documentation state) at docs/ROADMAP.yaml:533."
+
+lessons:
+  # Pre-approved by the owner, model: null. No lessons were invented; the owner supplied none.
+  - date: "2026-09-07"
+    model: null
+    effort: null
+    task: "worktree relocation across drives on Windows"
+    observed: "git worktree move does not carry a worktree across drives on Windows"
+    root_cause: "cross-drive move semantics"
+    change: "use robocopy to copy the tree, then git worktree repair to fix the gitdir pointers. Do not reach for git worktree move."
+  - date: "2026-09-07"
+    model: null
+    effort: null
+    task: "keying the defect ledger"
+    observed: "the EF id collision surfaced only at ledger-keying time: EF- was two independently numbered lists, not one"
+    root_cause: >-
+      02-impact-briefing.md:519 numbers EF-1..10 and 11-minimap-and-popups.md:433 numbers
+      EF-1..7, and shipped source cites both by bare number
+      (docs/ROADMAP.yaml:70-75). The id registry treated them as one scheme.
+    change: >-
+      Keyed as EF-IB-1..10 and EF-MM-1..7 in planning/qa/feature-errors.yaml, each carrying
+      source: and original_id:. Match a source comment through original_id:, NEVER by the
+      bare number. The src/ comments are untouched because each already names its report.
+      The registry is a lower bound, not a closed set (docs/ROADMAP.yaml:76).
+
+owner_calls:
+
+  stub_acceptance:
+    what: "Write acceptance sentences for the 22 title-only stubs in P3 to P6, or mark them blocked_on their gate."
+    detail: "See title_only_stubs above for the ids, the receipts, and the four consequences the trace records."
+
+  unordered_sequence:
+    what: "Set the order for the 42 tasks the import graph does not order."
+    detail: "See unordered above. No order was invented. 22 of the 42 are the stubs, so resolving stub_acceptance shrinks this to 20."
+
+  scheduled_workflow_execution:
+    what: "Do .github/workflows/refresh-snapshots.yml and upstream-monitor.yml actually run on schedule?"
+    status: UNVERIFIED
+    why_unverified: "A GitHub MCP server is connected this session but exposes no Actions API. Not inferred from the YAML."
+    stakes: >-
+      RECONCILIATION.md:729-762 says claim both under release_delivery and retire neither,
+      because upstream-monitor.yml is the scheduled half of the drift mechanism whose script
+      half already attests one clause of the done claim DDM-P15-T03, and refresh-snapshots.yml
+      keeps the ENSO snapshot current, which DDM-P12-T01's date-coupled acceptance depends on.
+      RECONCILIATION.md:758-762 adds the sharp edge: if the owner HAS disabled scheduled runs,
+      the correct move is to retire refresh-snapshots.yml AND re-open DDM-P12-T01. dc32eb2
+      already recorded the claim at docs/ROADMAP.yaml:90-97; only the execution question is open.
+
+  agents_md_retire_or_keep:
+    what: "Retire AGENTS.md, or keep it and accept two live contracts on disk."
+    facts:
+      - "AGENTS.md is gitignored (.gitignore:42-56) and was never tracked. It binds Codex sessions on this machine. It is NOT repo authority (docs/ROADMAP.yaml:48-76 is)."
+      - "Not edited by this session."
+    conflicts_with_a_future_root_claude_md:   # the retire-or-keep decision list
+      - "No ledger-path conflict. AGENTS.md's engineering-conventions carve-out at its own text names the same four ledgers docs/ROADMAP.yaml:57-61 names (decision register, defect ledger, user research, newest handoff) and dates the carve-out 2026-09-07. The two agree."
+      - "Duplication, not contradiction, on nine product invariants: AGENTS.md 'Stewardship and product invariants' 1 to 9 restate docs/ROADMAP.yaml plan_rules :78-87 (sovereign polygons, representation-not-jurisdiction, no proprietary providers or telemetry, static app, embed and URL-as-state, the six layer states, cancellable and time-bounded network work). A root CLAUDE.md would make a third copy."
+      - "Verification: AGENTS.md says run npm run gate for cross-cutting changes and test:serial when shared navigation or map lifecycle is affected. docs/ROADMAP.yaml:6 sets default_verification: verify:smoke. These are not contradictory (verify:smoke runs gate first) but they name different rungs as the default, and only one can be the completion gate."
+      - "Hard rule 9 (no U+2014) is enforced in three places: AGENTS.md, scripts/scan-emdash.mjs (ROOTS src, tests, docs, workers, scripts plus root markdown; .planning/ is NOT scanned), and .claude/hooks/ddm-guard-edit.py at write time. A CLAUDE.md copy would be the fourth."
+    recommendation: "Keep AGENTS.md as the Codex-facing contract; if a root CLAUDE.md is created, have it POINT at AGENTS.md and docs/ROADMAP.yaml rather than restate the nine invariants. A draft was shown in the session response and NOT written."
+
+  s03_plan_file_path:
+    what: "Name the path for S03's cut plan."
+    detail: >-
+      .planning/PLANNING_AUTHORITY.md names no home for a new plan file. planning/plans/ is
+      parked and divergent (docs/ROADMAP.yaml:69), gitignored, and holds 22 pending
+      visual-pass items with no DDM counterpart. Everything under planning/ was forbidden to
+      the roster session. .planning/ holds only the four tracked reconciliation documents.
+      Unresolved by design; S03 cannot pick its own home.
+
+  hook_guard_blocked:
+    what: "Add .github/workflows/** to the ddm-guard-edit hook's guarded paths. AUTHORIZED but BLOCKED."
+    attempted: true
+    tool_error: "File is in a directory that is denied by your permission settings."
+    blockers:
+      - ".claude/settings.local.json permissions.deny lists Edit(/.claude/hooks/**)."
+      - ".claude/hooks/ddm-guard-edit.py guards ITSELF: PROTECTED contains ('.claude/hooks/', 'These are the installed guardrails themselves. Edit the SOURCE draft under planning/2026-09-01-deep-dive/claude-tooling/hooks/ and have the owner re-run install-hooks.ps1, so the installed copy is never the one that drifts.')"
+      - "The sanctioned route is also closed to the roster session: planning/2026-09-01-deep-dive/ is parked and divergent (docs/ROADMAP.yaml:66-67) and everything under planning/ was forbidden. The source draft does exist: planning/2026-09-01-deep-dive/claude-tooling/hooks/ddm-guard-edit.py, 6644 bytes, dated 2026-09-02."
+    exact_patch_for_the_owner: >-
+      In the PROTECTED tuple, immediately before the ("dist/", ...) entry, insert:
+      (".github/workflows/", "The delivery workflows are attested by run receipts, not by
+      this repository's gate (docs/ROADMAP.yaml component_catalog.release_delivery). Seven
+      done P0 claims rest on these files and no test reads them. The owner edits them, or
+      DDM-P15-T05 lands the in-repo guard test first.")
+      Apply it to the SOURCE draft, then re-run claude-tooling/install-hooks.ps1.
+    why_it_matters: "RECONCILIATION.md:106-163. Eight done P0 claims rest on workflow files, six on nothing else, and no test in the repository reads a workflow. DDM-P15-T05 (docs/ROADMAP.yaml:570-575) is the in-repo half of the same fix and lands in S02a."
+
+  stop_level_vocabulary:
+    what: "The roster's stop_level vocabulary and the installed hook's do not match."
+    detail: >-
+      The requested vocabulary is fast | quick | smoke. .claude/hooks/ddm-stop-verify.py:47-51
+      defines LEVELS = fast (typecheck then scan:emdash), full (verify:quick) and quick
+      (verify:quick), plus off. There is NO smoke level, and full and quick are aliases that
+      run the same thing. The hook's docstring at :8-20 says every tier does no browser work
+      of any kind by design, so the browser half of verify:smoke can never be a stop level.
+    consequence: "Every session on this roster carries stop_level: fast, which the hook accepts. The browser half of each session's gate runs as the GATE COMMAND, not as a stop level. DDM_STOP_LEVEL's default in settings.local.json is unchanged, as instructed."
+    decide: "Either accept fast everywhere and treat the gate command as the real bar, or add a level to the hook's source draft."
+
+  main_branch_protection:
+    what: "Is main protected?"
+    evidence:
+      - "git log --oneline --merges shows PR 60 (3d6ce84), PR 61 (5278302) and PR 62 (51b6fe1) merged straight onto main."
+      - "PR 61 is from byandell, an account outside the org."
+      - "8b26e9c is itself a 'Merge remote-tracking branch origin/main', so local and remote diverged and were reconciled by merge."
+    decide: "Whether Dependabot and outside PRs should continue to merge direct to main, or go through a required check. The repository has a Validate workflow on pull_request (.github/workflows/validate.yml, assess.json workflows) that could be made required."
+
+  pr_61_disposition:
+    what: "What are slides.css and the EXPLAIN_NPM files, and where do they belong?"
+    evidence:
+      - "git show --stat 5278302: PR 61 from byandell adds EXPLAIN_NPM.html (5483 lines, 6,012,463 bytes), EXPLAIN_NPM.md (240), EXPLAIN_NPM.qmd (300) and slides.css (175). 6198 insertions, 4 files."
+      - "find . -name 'slides*' confirms ./slides.css at the repository root."
+      - "None of the four matches any component_catalog path (docs/ROADMAP.yaml:97-110). The documentation entry names README.md, DEVELOPER.md, ROADMAP.md, docs/ and public/data/README.md, none of these."
+      - "No task claims them."
+      - "EXPLAIN_NPM.html is now the largest file in the repository: 3x playwright-report/index.html and 28x src/styles/app.css (assess.json large_files)."
+    decide: "Claim them under a component_catalog entry, move them under docs/, or remove them. Also whether slides.css should be in the stylesheet linter's scope when DDM-P15-T04 lands one."
+
+  claude_dir_untracked:
+    what: "The whole .claude/ directory is gitignored, so agent, hook and settings changes are local-only and invisible to git."
+    evidence:
+      - ".gitignore:53 is /.claude/ ; git check-ignore -v .claude/agents/ddm-fix-worker.md confirms the match."
+      - "git ls-files .claude/ returns zero files. Nothing under .claude/ has ever been tracked."
+      - "git status --porcelain after this session's five frontmatter edits shows only ?? .planning/SESSION_ROSTER.yaml. The agent edits produce no diff."
+    consequence: >-
+      Authorized write (b) is real on disk (verified by re-reading each frontmatter) but
+      CANNOT be part of the commit. The authorized commit (d) was specified as carrying
+      (a), (b) and (c); (c) is blocked by owner_calls.hook_guard_blocked and (b) is
+      untrackable, so the commit carries (a) alone. Nothing was force-added: git add -f
+      would change the repository's tracking policy, and .gitignore is outside this
+      session's authorization.
+    decide: >-
+      Whether .claude/agents/ should be tracked so model and effort assignments survive a
+      fresh clone and are reviewable. If yes, the change is a negation in .gitignore
+      (the pattern /planning/* with !/planning/decisions/ at :64-70 is the precedent
+      already used in this file). If no, the roster's defaults.agents block is the only
+      durable record of these assignments and must be kept in step by hand.
+
+  dependabot_backlog:
+    what: "Two Dependabot PRs from the 2026-09-03 batch have not landed."
+    open_prs:
+      - "PR 58: bump @cloudflare/workers-types from 5.20260809.1 to 5.20260904.1 in /workers/proxy. Opened 2026-09-03T22:51:50Z. Base 3d6ce84."
+      - "PR 59: bump wrangler from 4.120.0 to 4.129.0 in /workers/proxy. Opened 2026-09-03T22:52:02Z. Base 3d6ce84."
+    landed_since: "PR 60 (TypeScript 7.0.2 in workers/proxy) and PR 62 (actions/deploy-pages 5.0.1) are both merged and are in 8b26e9c."
+    note: "Both open PRs are based on 3d6ce84, which is now two commits behind main. Both touch workers/ only, which the Stop hook watches deliberately because tsconfig includes it (.claude/hooks/ddm-stop-verify.py:26-29)."
+    receipt: "mcp github list_pull_requests, state open, this session."
