@@ -343,8 +343,16 @@ sessions:
     gate_source: "docs/ROADMAP.yaml:365, the task's own verification key, which overrides default_verification"
     budget_tokens: 35000
     note: "4 files, +227/-11 (BRANCH_REPORT.md:81). DR-025 was widened on 2026-09-02 to carry the D03 answer including the narrow-viewport exit (docs/ROADMAP.yaml:627)."
-    status: planned
-    outcome: null
+    status: done
+    outcome: >-
+      Baseline on main 58f13e9: task gate 39 passed, exit 0; verify:smoke exit 1 with 11
+      s4-minimap failures, all the data-ddm-build-sha assertion, because the owner committed
+      fe4bc52 and 28673eb (planning/decisions/ only) between the baseline's build and its
+      browser half; the other 78 passed and the same tree had passed 89/89 as the S02c gate.
+      Attributed to HEAD moving under the runner, not to code. Lockfile checked by git
+      diff, untouched. Merged onto 28673eb by merge commit (no push); one conflict in
+      docs/RELEASE_NOTES.md, both sides appending, all five entries kept. Post-merge task
+      gate: 41 passed, exit 0, HEAD unchanged during the run.
 
   - id: S02e
     task_ids: []

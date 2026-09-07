@@ -120,6 +120,81 @@ export const FIRE3D_MIN_HEIGHT_PX = 520;
 /** The height floor as a media query, beside the width query above. */
 export const FIRE3D_MIN_HEIGHT_QUERY = `(min-height: ${FIRE3D_MIN_HEIGHT_PX}px)`;
 
+/**
+ * What the shell offers where the 3D toggle would be (DDM-P9-T02).
+ *
+ * `control` is the toggle itself. `silent` is the case where the feature is
+ * not the subject at all, so the panel says nothing about it. The remaining
+ * two are REFUSALS, and each one is a sentence a person reads.
+ *
+ * These are CONTROL affordances, not layer states. The six honest layer
+ * states (`loading`, `live`, `live (partial)`, `unavailable`, `no data`,
+ * `zoom in to load`) gain no seventh member here and lend none of their
+ * words to this vocabulary; the toggle's own status line keeps speaking
+ * them for the scene once the scene exists.
+ */
+export type Fire3DRefusal = 'no-webgl2' | 'short-window';
+export type Fire3DOffer = 'control' | 'silent' | Fire3DRefusal;
+
+/**
+ * What the interface SAYS when it refuses. One sentence each, in the words
+ * of a person who is not a specialist, and each says only what was
+ * observed: the probe found no WebGL 2 context, or the window is shorter
+ * than the floor above. Neither names a cause it has not established
+ * ("your graphics card is too old" would be a guess), neither promises a
+ * fix, and neither asks the user to do anything.
+ */
+export const FIRE3D_REFUSAL_TEXT: Readonly<Record<Fire3DRefusal, string>> = {
+  'no-webgl2':
+    'This browser cannot render the 3D scene, so there is nothing here to turn on.',
+  'short-window':
+    'This window is too short for the 3D Fire view, so there is nothing here to turn on.'
+};
+
+/** What the shell island reads about the device and the committed view. */
+export interface Fire3DOfferInput {
+  /** The viewport meets FIRE3D_MIN_WIDTH_QUERY. */
+  readonly wideEnough: boolean;
+  /** The viewport meets FIRE3D_MIN_HEIGHT_QUERY. */
+  readonly tallEnough: boolean;
+  /** The once-per-page renderer probe's answer (`webGl2Capability()`). */
+  readonly webgl2: boolean;
+  /** The committed cluster is Wildfire, which is the only view that offers
+   * the scene today. */
+  readonly fireView: boolean;
+}
+
+/**
+ * Decide what stands where the 3D toggle would be. Pure, so the decision is
+ * Node-testable beside `shouldFire3DBeActive`, which asks the same three
+ * questions of the map (DR-025a).
+ *
+ * Silence versus a sentence is the whole point of this function. Before
+ * 2026-09-03 the control simply rendered nothing whenever the gate refused,
+ * so a person on a device that cannot hold the scene met an interface
+ * indistinguishable from one where the feature had never been built. Now a
+ * refusal that a person could otherwise mistake for a missing button says
+ * so, once, quietly, where the button would have been.
+ *
+ * The two silences are deliberate and are NOT refusals to explain:
+ *  - another hazard view has no 3D toggle to miss, so naming one would be
+ *    an advertisement rather than an answer;
+ *  - a viewport below the desktop breakpoint is the phone chrome, where 3D
+ *    is deferred by owner ruling rather than refused by this device, and a
+ *    standing notice on every phone would be a nag about a decision that
+ *    has nothing to do with the hardware in the reader's hand.
+ *
+ * Capability is tested before geometry so the deeper refusal wins: a device
+ * that cannot render the scene at all would not begin to hold it in a
+ * taller window.
+ */
+export function fire3dControlOffer(input: Fire3DOfferInput): Fire3DOffer {
+  if (!input.fireView || !input.wideEnough) return 'silent';
+  if (!input.webgl2) return 'no-webgl2';
+  if (!input.tallEnough) return 'short-window';
+  return 'control';
+}
+
 // ---------------------------------------------------------------------------
 // The mapped wildfire perimeter ribbon (DR-064, owner rendering specification)
 // ---------------------------------------------------------------------------

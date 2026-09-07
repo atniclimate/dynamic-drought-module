@@ -64,6 +64,13 @@ been assigned to this work.
   withdrawn the moment the surface reaches `live`, `live (partial)`,
   `unavailable`, or `no data`, and a superseded request is still aborted, so
   a failed switch reads as its honest verdict rather than as stale data.
+- 2026-09-03: a device that cannot hold the 3D Fire scene is told so. The
+  capability and geometry gate withdrew the 3D toggle silently, so a browser
+  without WebGL 2, or a window too short for the tilted camera, met an
+  interface indistinguishable from one where the 3D view had never been
+  built. One sentence now stands where the button would have been, naming
+  only what was observed. Views that never offer the toggle, and viewports
+  below the desktop breakpoint, stay silent.
 
 ### 2026-08-31: heat readings in plain language (pull request 53, `5e0a889`)
 
