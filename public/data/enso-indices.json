@@ -804,6 +804,388 @@
       }
     ]
   },
+  "nino34Weekly": {
+    "source": "NOAA CPC weekly Nino 3.4 sea surface temperature anomaly",
+    "sourceUrl": "https://www.cpc.ncep.noaa.gov/data/indices/wksst9120.for",
+    "attribution": "NOAA Climate Prediction Center (CPC), public domain U.S. Government work",
+    "description": "Weekly Nino 3.4 sea surface temperature and anomaly on the 1991-2020 base period. Each date is the centre of its week, as the file states on its own first line. Retained as an observed trajectory read and never used as an ENSO phase declaration, which CPC makes from three-month averages.",
+    "basePeriod": "1991-2020",
+    "dateMeaning": "week centre",
+    "published": "2026-09-07",
+    "latest": {
+      "year": 2026,
+      "month": 9,
+      "day": 2,
+      "total": 29.4,
+      "anom": 2.7
+    },
+    "values": [
+      {
+        "year": 2025,
+        "month": 9,
+        "day": 10,
+        "total": 26.2,
+        "anom": -0.5
+      },
+      {
+        "year": 2025,
+        "month": 9,
+        "day": 17,
+        "total": 26.3,
+        "anom": -0.4
+      },
+      {
+        "year": 2025,
+        "month": 9,
+        "day": 24,
+        "total": 26.2,
+        "anom": -0.5
+      },
+      {
+        "year": 2025,
+        "month": 10,
+        "day": 1,
+        "total": 26.2,
+        "anom": -0.5
+      },
+      {
+        "year": 2025,
+        "month": 10,
+        "day": 8,
+        "total": 26.4,
+        "anom": -0.3
+      },
+      {
+        "year": 2025,
+        "month": 10,
+        "day": 15,
+        "total": 26.1,
+        "anom": -0.6
+      },
+      {
+        "year": 2025,
+        "month": 10,
+        "day": 22,
+        "total": 26.2,
+        "anom": -0.6
+      },
+      {
+        "year": 2025,
+        "month": 10,
+        "day": 29,
+        "total": 26.1,
+        "anom": -0.6
+      },
+      {
+        "year": 2025,
+        "month": 11,
+        "day": 5,
+        "total": 26.1,
+        "anom": -0.7
+      },
+      {
+        "year": 2025,
+        "month": 11,
+        "day": 12,
+        "total": 26,
+        "anom": -0.8
+      },
+      {
+        "year": 2025,
+        "month": 11,
+        "day": 19,
+        "total": 25.9,
+        "anom": -0.8
+      },
+      {
+        "year": 2025,
+        "month": 11,
+        "day": 26,
+        "total": 26.1,
+        "anom": -0.6
+      },
+      {
+        "year": 2025,
+        "month": 12,
+        "day": 3,
+        "total": 26.2,
+        "anom": -0.5
+      },
+      {
+        "year": 2025,
+        "month": 12,
+        "day": 10,
+        "total": 25.9,
+        "anom": -0.7
+      },
+      {
+        "year": 2025,
+        "month": 12,
+        "day": 17,
+        "total": 25.9,
+        "anom": -0.7
+      },
+      {
+        "year": 2025,
+        "month": 12,
+        "day": 24,
+        "total": 25.9,
+        "anom": -0.7
+      },
+      {
+        "year": 2025,
+        "month": 12,
+        "day": 31,
+        "total": 25.9,
+        "anom": -0.6
+      },
+      {
+        "year": 2026,
+        "month": 1,
+        "day": 7,
+        "total": 25.8,
+        "anom": -0.7
+      },
+      {
+        "year": 2026,
+        "month": 1,
+        "day": 14,
+        "total": 25.9,
+        "anom": -0.6
+      },
+      {
+        "year": 2026,
+        "month": 1,
+        "day": 21,
+        "total": 26,
+        "anom": -0.4
+      },
+      {
+        "year": 2026,
+        "month": 1,
+        "day": 28,
+        "total": 26,
+        "anom": -0.5
+      },
+      {
+        "year": 2026,
+        "month": 2,
+        "day": 4,
+        "total": 26.1,
+        "anom": -0.4
+      },
+      {
+        "year": 2026,
+        "month": 2,
+        "day": 11,
+        "total": 26.4,
+        "anom": -0.2
+      },
+      {
+        "year": 2026,
+        "month": 2,
+        "day": 18,
+        "total": 26.6,
+        "anom": -0.1
+      },
+      {
+        "year": 2026,
+        "month": 2,
+        "day": 25,
+        "total": 26.7,
+        "anom": -0.1
+      },
+      {
+        "year": 2026,
+        "month": 3,
+        "day": 4,
+        "total": 26.8,
+        "anom": -0.1
+      },
+      {
+        "year": 2026,
+        "month": 3,
+        "day": 11,
+        "total": 27,
+        "anom": -0.1
+      },
+      {
+        "year": 2026,
+        "month": 3,
+        "day": 18,
+        "total": 27.3,
+        "anom": 0
+      },
+      {
+        "year": 2026,
+        "month": 3,
+        "day": 25,
+        "total": 27.5,
+        "anom": 0.1
+      },
+      {
+        "year": 2026,
+        "month": 4,
+        "day": 1,
+        "total": 27.6,
+        "anom": 0.1
+      },
+      {
+        "year": 2026,
+        "month": 4,
+        "day": 8,
+        "total": 27.9,
+        "anom": 0.2
+      },
+      {
+        "year": 2026,
+        "month": 4,
+        "day": 15,
+        "total": 28.3,
+        "anom": 0.5
+      },
+      {
+        "year": 2026,
+        "month": 4,
+        "day": 22,
+        "total": 28.6,
+        "anom": 0.8
+      },
+      {
+        "year": 2026,
+        "month": 4,
+        "day": 29,
+        "total": 28.8,
+        "anom": 0.9
+      },
+      {
+        "year": 2026,
+        "month": 5,
+        "day": 6,
+        "total": 28.7,
+        "anom": 0.8
+      },
+      {
+        "year": 2026,
+        "month": 5,
+        "day": 13,
+        "total": 28.8,
+        "anom": 0.9
+      },
+      {
+        "year": 2026,
+        "month": 5,
+        "day": 20,
+        "total": 28.8,
+        "anom": 0.9
+      },
+      {
+        "year": 2026,
+        "month": 5,
+        "day": 27,
+        "total": 28.8,
+        "anom": 1
+      },
+      {
+        "year": 2026,
+        "month": 6,
+        "day": 3,
+        "total": 29.1,
+        "anom": 1.3
+      },
+      {
+        "year": 2026,
+        "month": 6,
+        "day": 10,
+        "total": 29.2,
+        "anom": 1.5
+      },
+      {
+        "year": 2026,
+        "month": 6,
+        "day": 17,
+        "total": 29.4,
+        "anom": 1.7
+      },
+      {
+        "year": 2026,
+        "month": 6,
+        "day": 24,
+        "total": 29.3,
+        "anom": 1.8
+      },
+      {
+        "year": 2026,
+        "month": 7,
+        "day": 1,
+        "total": 29.2,
+        "anom": 1.7
+      },
+      {
+        "year": 2026,
+        "month": 7,
+        "day": 8,
+        "total": 29.3,
+        "anom": 2
+      },
+      {
+        "year": 2026,
+        "month": 7,
+        "day": 15,
+        "total": 29.4,
+        "anom": 2.1
+      },
+      {
+        "year": 2026,
+        "month": 7,
+        "day": 22,
+        "total": 29.4,
+        "anom": 2.2
+      },
+      {
+        "year": 2026,
+        "month": 7,
+        "day": 29,
+        "total": 29.4,
+        "anom": 2.4
+      },
+      {
+        "year": 2026,
+        "month": 8,
+        "day": 5,
+        "total": 29.5,
+        "anom": 2.5
+      },
+      {
+        "year": 2026,
+        "month": 8,
+        "day": 12,
+        "total": 29.4,
+        "anom": 2.6
+      },
+      {
+        "year": 2026,
+        "month": 8,
+        "day": 19,
+        "total": 29.4,
+        "anom": 2.6
+      },
+      {
+        "year": 2026,
+        "month": 8,
+        "day": 26,
+        "total": 29.4,
+        "anom": 2.6
+      },
+      {
+        "year": 2026,
+        "month": 9,
+        "day": 2,
+        "total": 29.4,
+        "anom": 2.7
+      }
+    ]
+  },
   "soi": {
     "source": "NOAA CPC Southern Oscillation Index (SOI)",
     "sourceUrl": "https://www.cpc.ncep.noaa.gov/data/indices/soi",

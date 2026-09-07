@@ -246,6 +246,48 @@ function isNino34Series(value) {
   );
 }
 
+/**
+ * One weekly Nino 3.4 observation (DR-031 a). Shaped like `isNino34Point` with
+ * a day added and `climAdjust` dropped: the weekly file publishes SST and SSTA
+ * only, with no climatological-adjustment column. The date is the CENTRE of the
+ * week, as the file's first line states.
+ */
+function isNino34WeeklyPoint(value) {
+  return (
+    isObject(value) &&
+    Number.isInteger(value.year) &&
+    typeof value.month === 'number' &&
+    Number.isInteger(value.month) &&
+    value.month >= 1 &&
+    value.month <= 12 &&
+    typeof value.day === 'number' &&
+    Number.isInteger(value.day) &&
+    value.day >= 1 &&
+    value.day <= 31 &&
+    typeof value.total === 'number' &&
+    Number.isFinite(value.total) &&
+    typeof value.anom === 'number' &&
+    Number.isFinite(value.anom)
+  );
+}
+
+/**
+ * At least two points are required, because the consumer's whole statement is a
+ * trajectory between two observations. A one-point series would leave nothing
+ * to compare and is a malformed block, not a short one.
+ */
+function isNino34WeeklySeries(value) {
+  return (
+    isObject(value) &&
+    typeof value.sourceUrl === 'string' &&
+    hasValidPublished(value) &&
+    isNino34WeeklyPoint(value.latest) &&
+    Array.isArray(value.values) &&
+    value.values.length >= 2 &&
+    value.values.every(isNino34WeeklyPoint)
+  );
+}
+
 function isSoiPoint(value) {
   return (
     isObject(value) &&
@@ -301,7 +343,7 @@ function isProbabilities(value) {
 }
 
 /** The optional series keys a snapshot may carry beyond the required pair. */
-export const OPTIONAL_SERIES = ['nino34', 'soi', 'probabilities'];
+export const OPTIONAL_SERIES = ['nino34', 'nino34Weekly', 'soi', 'probabilities'];
 
 /**
  * The CPC rule pages the state block cites, exported so the builder and the
@@ -480,6 +522,9 @@ export function validateEnsoSnapshot(parsed) {
   }
   if (parsed.nino34 !== undefined && !isNino34Series(parsed.nino34)) {
     warnings.push('nino34 is present but malformed (the consumer would drop it)');
+  }
+  if (parsed.nino34Weekly !== undefined && !isNino34WeeklySeries(parsed.nino34Weekly)) {
+    warnings.push('nino34Weekly is present but malformed (the consumer would drop it)');
   }
   if (parsed.soi !== undefined && !isSoiSeries(parsed.soi)) {
     warnings.push('soi is present but malformed (the consumer would drop it)');

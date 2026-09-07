@@ -122,6 +122,45 @@ const SELF_TEST = [
     make: () => ({ ...VALID(), nino34: { sourceUrl: 'x', latest: { year: 2026 }, values: [] } })
   },
   {
+    name: 'valid snapshot carrying the weekly Nino 3.4 block (DR-031 a)',
+    mustPass: true,
+    make: () => ({
+      ...VALID(),
+      nino34Weekly: {
+        sourceUrl: 'https://www.cpc.ncep.noaa.gov/data/indices/wksst9120.for',
+        latest: { year: 2026, month: 9, day: 2, total: 29.4, anom: 2.7 },
+        values: [
+          { year: 2026, month: 8, day: 26, total: 29.4, anom: 2.6 },
+          { year: 2026, month: 9, day: 2, total: 29.4, anom: 2.7 }
+        ]
+      }
+    })
+  },
+  {
+    name: 'present malformed nino34Weekly, point missing day (strict transport rejects)',
+    mustPass: false,
+    make: () => ({
+      ...VALID(),
+      nino34Weekly: {
+        sourceUrl: 'x',
+        latest: { year: 2026, month: 9, total: 29.4, anom: 2.7 },
+        values: [{ year: 2026, month: 9, total: 29.4, anom: 2.7 }]
+      }
+    })
+  },
+  {
+    name: 'present nino34Weekly with a single point (nothing to compare, strict transport rejects)',
+    mustPass: false,
+    make: () => ({
+      ...VALID(),
+      nino34Weekly: {
+        sourceUrl: 'x',
+        latest: { year: 2026, month: 9, day: 2, total: 29.4, anom: 2.7 },
+        values: [{ year: 2026, month: 9, day: 2, total: 29.4, anom: 2.7 }]
+      }
+    })
+  },
+  {
     name: 'present malformed soi (strict transport rejects)',
     mustPass: false,
     make: () => ({ ...VALID(), soi: { sourceUrl: 'x', block: 'raw', latest: { year: 2026, month: 6, value: 1 }, values: [] } })
