@@ -1,5 +1,5 @@
 {
-  "retrieved": "2026-09-02",
+  "retrieved": "2026-09-07",
   "sourceQuotes": [
     {
       "text": "NOAA's Climate Prediction Center, which is part of the National Weather Service, declares the onset of an El Nino episode when the 3-month average sea-surface temperature departure exceeds 0.5 C in the east-central equatorial Pacific [between 5 N-5 S and 170 W-120 W].",
@@ -27,7 +27,7 @@
     "sourceUrl": "https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt",
     "attribution": "NOAA Climate Prediction Center (CPC), public domain U.S. Government work",
     "description": "CPC primary operational ENSO index. The Oceanic Nino Index with the tropical-mean sea surface temperature trend removed; the application leads with its current-conditions state (CPC onset rule) and reports the five-season episode classification beside it.",
-    "published": "2026-08-03",
+    "published": "2026-09-03",
     "state": {
       "conditions": "el-nino",
       "episode": "neutral",
@@ -53,20 +53,14 @@
     },
     "phase": "neutral",
     "latest": {
-      "seas": "MJJ",
+      "seas": "JJA",
       "year": 2026,
-      "anom": 0.98,
+      "anom": 1.36,
       "preliminary": true,
       "exceedsThreshold": true,
       "thresholdSide": "above"
     },
     "values": [
-      {
-        "seas": "JJA",
-        "year": 2023,
-        "anom": 0.54,
-        "preliminary": false
-      },
       {
         "seas": "JAS",
         "year": 2023,
@@ -269,12 +263,18 @@
         "seas": "AMJ",
         "year": 2026,
         "anom": 0.49,
-        "preliminary": true
+        "preliminary": false
       },
       {
         "seas": "MJJ",
         "year": 2026,
-        "anom": 0.98,
+        "anom": 0.97,
+        "preliminary": true
+      },
+      {
+        "seas": "JJA",
+        "year": 2026,
+        "anom": 1.36,
         "preliminary": true
       }
     ]
@@ -284,7 +284,7 @@
     "sourceUrl": "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt",
     "attribution": "NOAA Climate Prediction Center (CPC), public domain U.S. Government work",
     "description": "Three-month running mean of the Nino 3.4 sea surface temperature anomaly, retained as the long historical-continuity comparison behind the operational RONI headline.",
-    "published": "2026-08-05",
+    "published": "2026-09-03",
     "state": {
       "conditions": "el-nino",
       "episode": "neutral",
@@ -310,20 +310,14 @@
     },
     "phase": "neutral",
     "latest": {
-      "seas": "MJJ",
+      "seas": "JJA",
       "year": 2026,
-      "anom": 1.39,
+      "anom": 1.8,
       "preliminary": true,
       "exceedsThreshold": true,
       "thresholdSide": "above"
     },
     "values": [
-      {
-        "seas": "JJA",
-        "year": 2023,
-        "anom": 1,
-        "preliminary": false
-      },
       {
         "seas": "JAS",
         "year": 2023,
@@ -526,12 +520,18 @@
         "seas": "AMJ",
         "year": 2026,
         "anom": 0.95,
-        "preliminary": true
+        "preliminary": false
       },
       {
         "seas": "MJJ",
         "year": 2026,
         "anom": 1.39,
+        "preliminary": true
+      },
+      {
+        "seas": "JJA",
+        "year": 2026,
+        "anom": 1.8,
         "preliminary": true
       }
     ]
@@ -809,12 +809,12 @@
     "sourceUrl": "https://www.cpc.ncep.noaa.gov/data/indices/soi",
     "attribution": "NOAA Climate Prediction Center (CPC), public domain U.S. Government work",
     "description": "Standardized monthly SOI second block, retained only as a supporting ocean-atmosphere agreement flag and never used to drive the ENSO phase.",
-    "published": "2026-08-04",
+    "published": "2026-09-04",
     "block": "standardized",
     "latest": {
       "year": 2026,
-      "month": 7,
-      "value": -2.4
+      "month": 8,
+      "value": -1.1
     },
     "values": [
       {
@@ -975,7 +975,7 @@
       {
         "year": 2026,
         "month": 8,
-        "value": null
+        "value": -1.1
       },
       {
         "year": 2026,
