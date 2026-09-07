@@ -224,8 +224,8 @@ sessions:
       - { path: "tests/upstream-drift-contract.test.mjs", lines: all, est_tokens: 2000, why: "the existing node --test pattern for reading source as text" }
     budget_tokens: 30000
     stop_when: "verify:quick green with the two new tests in check:all or as node --test files"
-    status: planned
-    outcome: null
+    status: done
+    outcome: "tests/escape-html.test.mjs (11) and tests/guards.test.mjs (10) added as node --test files importing the .ts modules directly, wired into check:all via test:escape-html and test:guards; verify:quick exit 0; neither utility changed; check:all not run in full (network checks)."
 
   # S02: land the branches. One roster entry per landing, because each app.css landing
   # is its own session. Owner's order, which supersedes the register's suggested order
@@ -678,6 +678,20 @@ lessons:
       source: and original_id:. Match a source comment through original_id:, NEVER by the
       bare number. The src/ comments are untouched because each already names its report.
       The registry is a lower bound, not a closed set (docs/ROADMAP.yaml:76).
+  - date: "2026-09-07"
+    model: null
+    effort: null
+    task: "S01, writing tests/escape-html.test.mjs"
+    observed: >-
+      .claude/hooks/ddm-guard-edit.py blocked a Write for hard rule 9 (U+2014) on a line
+      that held no em dash, only a CJK passthrough case.
+    root_cause: >-
+      The hook's em-dash scan decodes the file bytes as cp1252, so any UTF-8 character
+      whose encoding contains the byte 0x97 (CJK U+65E5 among others; the glyph itself
+      cannot be written into this file for the same reason) false-positives as U+2014.
+    change: >-
+      One test case dropped; the Latin-diacritic cases still cover non-ASCII passthrough.
+      Fix belongs in the hook's source draft (decode as UTF-8), not in the tests.
 
 owner_calls:
 
