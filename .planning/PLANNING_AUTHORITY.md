@@ -190,7 +190,9 @@ Notes:
   EF-9 / IB-15" is the briefing list; `src/impact/enso.ts:155` EF-6 and
   `src/map/interaction-coordinator.ts:254` EF-7 are minimap. The registry row above
   and `planning-tree.json` credit all ten to the briefing file; that is the misread.
-  Moving them into the defect ledger needs non-colliding ids first — an owner call.
+  Resolved 2026-09-07 by owner ruling: all 17 now live in `planning/qa/feature-errors.yaml`
+  as `EF-IB-1..10` and `EF-MM-1..7`, each carrying `source:` (report path:lines) and
+  `original_id:`; the `src/` comments stay as written because each names its report.
 
 ### Seed confirmation
 All six seeds confirmed in `src/styles/app.css`: `UI-04` `:59`, `UI-06` `:165`,

@@ -9,7 +9,11 @@
 # of whether the observation was actually resolved.
 #
 # Fields:
-#   id           FE-nn, never reused
+#   id           FE-nn, never reused. The deep-dive easy fixes are EF-IB-n
+#                (report 02) and EF-MM-n (report 11); see the block at the end.
+#   original_id  EF entries only: the bare EF-n label the source report and
+#                the src/ comments use (each comment names its report)
+#   source       EF entries only: planning path:lines the entry was taken from
 #   observed     ISO date + who/what observed it
 #   surface      where in the application it shows
 #   severity     high | medium | low  (high = misleads a user about the world)
@@ -636,3 +640,318 @@ entries:
       its label row, and below-fold items inside a scroll container are
       not unreachable; remeasure effective hit areas before filing them.
     resolution:
+
+  # ------------------------------------------------------------------------
+  # Deep-dive easy fixes, transcribed 2026-09-07. Two reports each numbered
+  # their own list EF-1 upward; the ids collide, so they are keyed here by
+  # report: EF-IB-n (02-impact-briefing.md:519-540) and EF-MM-n
+  # (11-minimap-and-popups.md:433-453). `original_id` is the bare label the
+  # source comments in src/ still use, qualified there by report name.
+  # `severity: low` throughout is a transcription default: the reports rank
+  # effort (S) and risk (low), not user impact.
+  # ------------------------------------------------------------------------
+
+  - id: EF-IB-1
+    original_id: EF-1
+    source: planning/2026-09-01-deep-dive/02-impact-briefing.md:519-521
+    observed: 2026-09-01, deep-dive review, report 02
+    surface: Impact briefing, long-range drought claim (CPC Seasonal)
+    severity: low
+    status: open
+    linked_task: []
+    evidence: >
+      The fixed CPC Seasonal claim in hydrate.ts:59 carries a stale
+      dates.retrieved (2026-07-21). The claim's own contract requires
+      re-stamping when re-checked, or marking it stale.
+    resolution: >
+      Deferred in fix wave 3 (fixes/B-impact.md:103-106): re-stamping requires
+      re-verifying the prose and link against the live CPC product, a
+      source-verification act, not an edit. Still carries retrieved
+      2026-07-21. DDM-P7-T04 replaces this frozen prose with the wired CPC
+      service (docs/ROADMAP.yaml:263-268), which retires the question.
+
+  - id: EF-IB-2
+    original_id: EF-2
+    source: planning/2026-09-01-deep-dive/02-impact-briefing.md:522-523
+    observed: 2026-09-01, deep-dive review, report 02 (IB-06)
+    surface: Impact briefing, long-range horizon source gates
+    severity: low
+    status: resolved
+    linked_task: [DDM-P7-T01]
+    evidence: >
+      enso, waterSupply and cpcSeasonal were declared in BRIEFING_SOURCE_KEYS
+      with policy cells, but only droughtImpact.enabled gated the block, so
+      the three cells were never enforced (hydrate.ts:236-249).
+    resolution: >
+      Each source now runs through sourceMayRun; when all three are gated off
+      the horizon reads unavailable with the cell's own note
+      (src/impact/hydrate.ts:238-250; fixes/B-impact.md:13-21). Closed under
+      DDM-P7-T01, "the declared per-source policy cells are consulted".
+
+  - id: EF-IB-3
+    original_id: EF-3
+    source: planning/2026-09-01-deep-dive/02-impact-briefing.md:524-525
+    observed: 2026-09-01, deep-dive review, report 02 (IB-20)
+    surface: Impact briefing, module-failure source list
+    severity: low
+    status: resolved
+    linked_task: [DDM-P7-T01]
+    evidence: >
+      The eleven-key fallback source list in impact-panel.ts:362-372 was
+      hand-written rather than derived from BRIEFING_SOURCE_KEYS.
+    resolution: >
+      unavailableSourceCells builds the list from BRIEFING_SOURCE_KEYS
+      (src/ui/impact-panel.ts:358-372; fixes/B-impact.md:23-31). Adds the
+      first eager import of source-capability.ts; the entry-chunk budget was
+      flagged and held. Closed under DDM-P7-T01, "the module-failure list is
+      built from the declared keys".
+
+  - id: EF-IB-4
+    original_id: EF-4
+    source: planning/2026-09-01-deep-dive/02-impact-briefing.md:526-527
+    observed: 2026-09-01, deep-dive review, report 02 (IB-10)
+    surface: Impact briefing, overlap engine rejection reporting
+    severity: low
+    status: resolved
+    linked_task: [DDM-P7-T01]
+    evidence: >
+      overlap-engine.ts:405 only reported rejected when invalidPolygonCount
+      was positive AND polygons.length was positive, so a candidate whose
+      every component failed was indistinguishable from a non-areal one.
+    resolution: >
+      invalidPolygonCount greater than zero alone returns rejected
+      (src/impact/overlap-engine.ts:405-411); three assertions in
+      tests/overlap-engine.spec.ts (:156, :214, :251) were retitled to expect
+      the rejection they previously pinned as absent (fixes/B-impact.md:33-54).
+      Closed under DDM-P7-T01, "the overlap engine reports a wholly malformed
+      geometry".
+
+  - id: EF-IB-5
+    original_id: EF-5
+    source: planning/2026-09-01-deep-dive/02-impact-briefing.md:528-529
+    observed: 2026-09-01, deep-dive review, report 02 (IB-18)
+    surface: Impact briefing, water-supply region lookup typing
+    severity: low
+    status: resolved
+    linked_task: []
+    evidence: >
+      REGION_POINTS in water-supply.ts:50 was keyed by string, so a region
+      rename would silently fall through to the state point instead of
+      failing at compile time.
+    resolution: >
+      Now Readonly Partial Record keyed by RegionKey (src/impact/water-supply.ts:26,
+      :55; fixes/B-impact.md:56-62). The partial is deliberate: only the six
+      NWRFC-domain regions appear. IB-18's second half, a scoped "not
+      applicable here" claim instead of silence, is new user-visible copy and
+      was NOT done. NOTE: src/styles/app.css:6169 cites a different EF-5, the
+      minimap one (EF-MM-5 below); it names its report.
+
+  - id: EF-IB-6
+    original_id: EF-6
+    source: planning/2026-09-01-deep-dive/02-impact-briefing.md:530-532
+    observed: 2026-09-01, deep-dive review, report 02 (IB-17)
+    surface: Impact briefing, horizon section accessible names
+    severity: low
+    status: resolved
+    linked_task: []
+    evidence: >
+      Horizon sections carried a duplicate aria-label
+      (impact-panel-runtime.ts:190-192) instead of pointing at their heading.
+    resolution: >
+      aria-labelledby on a span wrapping the title text; accessible name
+      unchanged (src/ui/impact-panel-runtime.ts:189-197). Selectors in
+      tests/heat-h0-integrity.spec.ts:508 and tests/heat-h1-heatrisk.spec.ts:564,567
+      updated, no assertion text changed (fixes/B-impact.md:64-72).
+
+  - id: EF-IB-7
+    original_id: EF-7
+    source: planning/2026-09-01-deep-dive/02-impact-briefing.md:533-534
+    observed: 2026-09-01, deep-dive review, report 02 (IB-16)
+    surface: Impact briefing, Escape key handling
+    severity: low
+    status: resolved
+    linked_task: []
+    evidence: >
+      A permanent document-level keydown listener (impact-panel.ts:141-145)
+      meant an Escape aimed at another overlay also dismissed the briefing.
+    resolution: >
+      Listener moved to the panel element; the panel traps focus while modal
+      so Escape still closes from inside (src/ui/impact-panel.ts:145-155;
+      fixes/B-impact.md:74-80). Both Escape paths in
+      tests/impact-panel-a11y.spec.ts pass.
+
+  - id: EF-IB-8
+    original_id: EF-8
+    source: planning/2026-09-01-deep-dive/02-impact-briefing.md:535-536
+    observed: 2026-09-01, deep-dive review, report 02
+    surface: Impact briefing, long-range horizon hydration
+    severity: low
+    status: resolved
+    linked_task: []
+    evidence: >
+      One Promise.all in hydrate.ts:242-247 made an ENSO claim wait on the 20 s
+      NWRFC budget before rendering.
+    resolution: >
+      The two sources settle independently and each settle re-fills the
+      horizon; ordering by key, not arrival; the horizon reads live (partial)
+      while a permitted source is in flight and never settles early
+      (src/impact/hydrate.ts:252-308; fixes/B-impact.md:82-92). Cancellation
+      path unchanged.
+
+  - id: EF-IB-9
+    original_id: EF-9
+    source: planning/2026-09-01-deep-dive/02-impact-briefing.md:537-538
+    observed: 2026-09-01, deep-dive review, report 02 (IB-15)
+    surface: Impact briefing panel width between 721px and 1024px
+    severity: low
+    status: resolved
+    linked_task: [DDM-P10-T01]
+    evidence: >
+      No tablet width rule existed for .impact-panel; the panel overlapped the
+      340px sidebar by 59px at 721px and 12px at 768px.
+    resolution: >
+      Resolved by a different rule than proposed. EF-9's own min(520px, 55vw)
+      would have widened the panel and deepened the dock collision, so it was
+      not taken; the UI-02 narrowing cap shipped instead
+      (src/styles/app.css:3822-3836, fixes/A-css.md:138-190). The residual
+      dock-under-panel band below roughly 845px is an owner-visible design
+      decision carried by the tablet band task DDM-P10-T01.
+
+  - id: EF-IB-10
+    original_id: EF-10
+    source: planning/2026-09-01-deep-dive/02-impact-briefing.md:539-540
+    observed: 2026-09-01, deep-dive review, report 02 (IB-12)
+    surface: Impact briefing, heat synthesis source links
+    severity: low
+    status: resolved
+    linked_task: []
+    evidence: >
+      HeatSourceRead carried no sourceUrl, so renderHeatSynthesis could not
+      link a read to its issuer.
+    resolution: >
+      Optional sourceUrl added (src/impact/types.ts:294-305), populated at
+      src/impact/sources.ts:210,231,691,896 and heat-synthesis.ts:84, rendered
+      at src/ui/impact-panel-runtime.ts:303-323 (fixes/B-impact.md:94-101). A
+      retrieved date on the read was NOT added.
+
+  - id: EF-MM-1
+    original_id: EF-1
+    source: planning/2026-09-01-deep-dive/11-minimap-and-popups.md:433-436
+    observed: 2026-09-01, deep-dive review, report 11 (MM-11)
+    surface: Popup briefing door label
+    severity: low
+    status: resolved
+    linked_task: [DDM-P7-T01]
+    evidence: >
+      The popup button read "Drought impact briefing" (src/ui/popups.ts:51)
+      while the product had been renamed Impact briefing.
+    resolution: >
+      Closed under DDM-P7-T01, "popup, sidebar, deep-link, and shell surfaces
+      say Impact briefing" (docs/ROADMAP.yaml:250). Verified 2026-09-07 by
+      grep of src/ui/popups.ts for the new label.
+
+  - id: EF-MM-2
+    original_id: EF-2
+    source: planning/2026-09-01-deep-dive/11-minimap-and-popups.md:437-439
+    observed: 2026-09-01, deep-dive review, report 11 (MM-05)
+    surface: Minimap data retention on phones
+    severity: low
+    status: resolved
+    linked_task: []
+    evidence: >
+      retainMinimapDrought and retainMinimapWildfire ran below 721px where
+      #shell-panel is display none, so a phone paid a monthly NADM polygon
+      fetch, an area sample, and a five-minute NIFC poll for a control it
+      never renders.
+    resolution: >
+      DESKTOP_MINIMAP_QUERY and useDesktopMinimap() gate both retains on
+      (min-width: 721px), re-read on mount and on change
+      (src/ui/island/minimap.tsx:229-252, :571-579; fixes/E-surfaces.md:137-148).
+
+  - id: EF-MM-3
+    original_id: EF-3
+    source: planning/2026-09-01-deep-dive/11-minimap-and-popups.md:440-441
+    observed: 2026-09-01, deep-dive review, report 11 (MM-06)
+    surface: Minimap metric note
+    severity: low
+    status: resolved
+    linked_task: []
+    evidence: >
+      The metric-note paragraph rendered for wildfire only; Drought's live
+      NADM encoding was explained only in an accessible name and Heat, ENSO
+      and custom said nothing about their flat fills.
+    resolution: >
+      droughtMetricNote() and a metricNote() dispatcher; the paragraph is
+      unconditional; neutral contexts render NEUTRAL_METRIC_NOTES verbatim
+      (src/ui/island/minimap.tsx:357-393, :1077-1084). Three assertions in
+      tests/s4-minimap.spec.ts:297-318 inverted from toHaveCount(0) to the
+      rendered text (fixes/E-surfaces.md:150-176).
+
+  - id: EF-MM-4
+    original_id: EF-4
+    source: planning/2026-09-01-deep-dive/11-minimap-and-popups.md:442-443
+    observed: 2026-09-01, deep-dive review, report 11 (MM-13)
+    surface: Provenance popup clause tests (AIANNH, BIA)
+    severity: low
+    status: resolved
+    linked_task: []
+    evidence: >
+      tests/provenance.spec.ts:26-50 did not assert the absence-is-not-absence
+      sentence that src/ui/popups.ts:154 and :231 already render.
+    resolution: >
+      AIANNH_POPUP_CLAUSES and BIA_POPUP_CLAUSES each gain the two clauses;
+      all five provenance specs pass (fixes/E-surfaces.md:178-185). Test
+      strengthened; no runtime change.
+
+  - id: EF-MM-5
+    original_id: EF-5
+    source: planning/2026-09-01-deep-dive/11-minimap-and-popups.md:444-445
+    observed: 2026-09-01, deep-dive review, report 11 (MM-08, FE-19)
+    surface: Minimap ocean-door buttons, touch target height
+    severity: low
+    status: resolved
+    linked_task: [DDM-P10-T02]
+    evidence: >
+      The ocean doors measured 70x24; the 24px short axis is under the 44px
+      coarse-pointer floor (one of the FE-19 targets).
+    resolution: >
+      Hit area grown by a transparent ::before band of 44px inside the
+      button's own box, painted label untouched; arctic door anchored to top
+      (src/styles/app.css:6169-6191; fixes/A-css.md:197-215). This is the EF-5
+      the app.css comment cites. Closed under DDM-P10-T02, "the minimap ocean
+      doors reach the touch floor" (docs/ROADMAP.yaml:383).
+
+  - id: EF-MM-6
+    original_id: EF-6
+    source: planning/2026-09-01-deep-dive/11-minimap-and-popups.md:446-449
+    observed: 2026-09-01, deep-dive review, report 11 (MM-01, ENSO half)
+    surface: ENSO screen minimap scale slot
+    severity: low
+    status: resolved
+    linked_task: []
+    evidence: >
+      The ENSO minimap read "Navigation only" although the current RONI phase
+      and index month were already bundled in public/data/enso-indices.json.
+    resolution: >
+      readEnsoPhaseLabel(signal) in src/impact/enso.ts:95-129 (no new source,
+      no phase-logic change); consumed by a lazy, desktop- and ENSO-gated
+      import in src/ui/island/minimap.tsx:581-606; the slot reads the phase
+      and month, falling back to Navigation only (fixes/E-surfaces.md:187-207).
+      Framings stay neutral per DDM-UI-004.
+
+  - id: EF-MM-7
+    original_id: EF-7
+    source: planning/2026-09-01-deep-dive/11-minimap-and-popups.md:450-453
+    observed: 2026-09-01, deep-dive review, report 11 (MM-16)
+    surface: Map click hit-testing
+    severity: low
+    status: resolved
+    linked_task: []
+    evidence: >
+      collectHits queried a bare point (interaction-coordinator.ts:266), so a
+      touch had to land on the exact pixel of a feature.
+    resolution: >
+      CLICK_BOX_FINE_PX 6 / CLICK_BOX_COARSE_PX 12 via matchMedia(pointer:
+      coarse); collectHits queries that box, ranking untouched
+      (src/map/interaction-coordinator.ts:255-273, :287-292;
+      fixes/E-surfaces.md:209-217).

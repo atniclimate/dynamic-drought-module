@@ -56,7 +56,7 @@ authority:
   # date (.gitignore); the rest of planning/ stays local and untracked.
   task_ledger: "docs/ROADMAP.yaml"
   decision_ledger: "planning/decisions/"              # defines all 69 DR- ids; this file cites, never defines
-  defect_ledger: "planning/qa/feature-errors.yaml"    # FE-01..FE-24; FE-19 is cited from src/styles/app.css:6170
+  defect_ledger: "planning/qa/feature-errors.yaml"    # FE-01..FE-24, EF-IB-1..10, EF-MM-1..7; FE-19 is cited from src/styles/app.css:6170
   research_inputs: "planning/user-research/"          # cite by path when a task draws on them; no ids adopted
   handoff_entry: "planning/handoffs/2026-09-04.md"    # newest only; older handoffs are history
   read_only_history:
@@ -67,14 +67,13 @@ authority:
     - "planning/2026-09-01-deep-dive/"                # 147 uncited ids; `source:` fields below quote it by report and finding id
     - "planning/2026-09-03-foundations/"              # 89 uncited ids; rulings A1-A7, B1-B7, C1-C5 and slice S1 await ratification
     - "planning/plans/"                               # 20 uncited ids; 22 visual-pass items, all pending
-  # Open, owner call on keying: `EF-` is not one scheme. Two parked deep-dive
-  # reports each number their own easy fixes from 1: 02-impact-briefing.md:519
-  # (EF-1..EF-10) and 11-minimap-and-popups.md:433 (EF-1..EF-7), different
-  # content. Shipped source cites BOTH by bare number: src/styles/app.css:6169
-  # EF-5 is the minimap list (ocean doors), app.css:3822 EF-9 is the briefing
-  # list (tablet rule). They move into the defect ledger once the owner picks
-  # ids that do not collide; the 2026-09-07 reconciliation misread them as one.
-  rule: "A DR- or FE- id may be cited by a task; it is never redefined in this file. An id not in .planning/PLANNING_AUTHORITY.md section 2 is a reason to stop and ask, not to guess: that registry is a lower bound, and EF- above is the proof."
+  # `EF-` was two colliding lists, not one: 02-impact-briefing.md:519 (EF-1..10)
+  # and 11-minimap-and-popups.md:433 (EF-1..7), both cited from src/ by bare
+  # number (app.css:6169 EF-5 is the minimap one; app.css:3822 EF-9 the
+  # briefing one). Keyed EF-IB-n / EF-MM-n in the defect ledger on 2026-09-07,
+  # each with `source:` and `original_id:`; the src/ comments are untouched
+  # because each already names its report.
+  rule: "A DR-, FE-, EF-IB- or EF-MM- id may be cited by a task; it is never redefined in this file. An id not in .planning/PLANNING_AUTHORITY.md section 2 is a reason to stop and ask, not to guess: that registry is a lower bound (EF- was found to be two lists only after a sixth declaration pattern)."
 
 plan_rules:
   - "Work on one bounded user-visible outcome at a time after prerequisite work."
