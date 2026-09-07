@@ -581,8 +581,13 @@ sessions:
     plan_file_path: "OWNER CALL, unresolved. .planning/PLANNING_AUTHORITY.md names no home for a new plan file. planning/plans/ is parked and divergent (docs/ROADMAP.yaml:69) and gitignored; planning/ is forbidden to the roster session. See owner_calls.s03_plan_file_path."
     budget_tokens: 90000
     stop_when: "the plan file names the cut, the resulting groups, and an order within each group. No src/ edit in the diff."
-    status: planned
-    outcome: null
+    status: done
+    outcome: >-
+      Plan committed at .planning/2026-09-07-s03-enso-cut-plan.md (fb696d5, 267 lines): two cuts,
+      src/impact/enso.ts as the file seam plus the hub line extended from ten files to twenty.
+      Cut 1 alone does NOT break the cycle, because lifting DDM-P12-T02 (give the ENSO horizons
+      distinct source-backed meanings) and DDM-P12-T03 (cite and correct the regional tilt
+      statements) leaves nine tasks cyclic; nine owner calls are recorded in the plan's section 6.
 
   # ---------------------------------------------------------------------------
   # S04: this session.
