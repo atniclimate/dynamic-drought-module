@@ -352,7 +352,11 @@ sessions:
       Attributed to HEAD moving under the runner, not to code. Lockfile checked by git
       diff, untouched. Merged onto 28673eb by merge commit (no push); one conflict in
       docs/RELEASE_NOTES.md, both sides appending, all five entries kept. Post-merge task
-      gate: 41 passed, exit 0, HEAD unchanged during the run.
+      gate: 41 passed, exit 0, HEAD unchanged during the run. Post-merge smoke receipt,
+      recorded at the owner's instruction because HEAD moved during this session's own
+      baseline: verify:smoke on main f730421 (the S02d merge commit) exit 0, 9 checks clean,
+      node tests 0 failures, 89 Playwright passed (3.7 min), HEAD unchanged during the run.
+      The same run is S02e's baseline.
 
   - id: S02e
     task_ids: []
@@ -369,8 +373,13 @@ sessions:
     gate: "npm run verify:quick"
     gate_rationale: "1 file, +22/-0, RELEASE_NOTES.md only (BRANCH_REPORT.md:83). No src change, so verify:smoke's browser half asserts nothing here. This is a deliberate departure from default_verification: verify:smoke, recorded rather than silent."
     budget_tokens: 15000
-    status: planned
-    outcome: null
+    status: done
+    outcome: >-
+      Baseline on main f730421 (also S02d's post-merge smoke receipt): verify:smoke exit 0,
+      9 checks clean, node tests 0 failures, 89 Playwright passed (3.7 min), HEAD unchanged.
+      Lockfile checked by git diff, untouched. Merged by merge commit (no push), no
+      conflicts: the branch adds one dated section to docs/RELEASE_NOTES.md. Post-merge
+      gate verify:quick exit 0.
 
   - id: S02f
     task_ids: [DDM-P10-T01]
