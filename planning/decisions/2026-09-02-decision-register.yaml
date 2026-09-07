@@ -118,6 +118,32 @@ branch_state:
       briefing branch in src/styles/app.css), then fix/dr-065-boot-honesty with
       tests/dr-065-contracts immediately after it. The last three are the only ones needing
       real thought.
+    correction_2026_09_07: >-
+      Three claims above are wrong, established by merge simulation rather than by which
+      files each branch touches. Method: git merge-tree --write-tree per pair, run
+      2026-09-07 against main at 5b8a8ff. That plumbing writes blob and tree objects, moves
+      no ref and touches no worktree, so nothing below required a checkout. The
+      suggested_landing_order is left as the owner wrote it; this records what a landing
+      session will actually meet.
+      (1) THE NAMED app.css CONFLICT IS THE WRONG PAIR. The order says
+      ui/ddm-p10-t01-tablet-band "conflicts with the briefing branch in src/styles/app.css".
+      It does not: ui/ddm-p10-t01-tablet-band + impact/ddm-p7-t02-briefing-matrix conflicts
+      only in docs/RELEASE_NOTES.md. The real src/styles/app.css collision is
+      ui/ddm-p10-t01-tablet-band + fix/dr-065-boot-honesty, which both insert a token block
+      at the same anchor. The order places those two adjacent, at positions seven and eight,
+      without flagging them. impact/ddm-p7-t02-briefing-matrix + fix/dr-065-boot-honesty
+      merges CLEAN.
+      (2) "All nine touch docs/RELEASE_NOTES.md" is false. tests/dr-065-contracts is
+      tests/ only, and shares no file with any other unmerged branch. It is the cheapest
+      available land and the order places it last.
+      (3) The note says nine; this block carries ten keys. Ten is right, the tenth being the
+      held ramp, which is recorded separately at map_dr_063_whp_ramp.
+      SEPARATELY, AND MORE IMPORTANT THAN ANY OF THE ABOVE: this order was written when the
+      nine were level with main. They are not now. Re-derive before landing. The behind-count
+      overstates the cost, though: as of 2026-09-07 the commits main gained touch no file
+      that seven of the ten branches touch, so their catch-up is close to free. What has to
+      be re-checked is what those commits touched intersected with each branch's own files,
+      not the raw count.
     fix_dr_065_boot_honesty: "2efdb43, two commits from 2835091. DR-065 option a, the FIX. The sidebar shell builds at DOM ready before the WebGL 2 probe; controls render disabled with a plain-language reason and enable on map ready; data-ddm-controls carries waiting/ready/no-map and is NOT one of the six layer states. DDM-P14-T02 acceptance satisfied IN FULL. test:serial 898 passed 1 failed at e22f777; that failure was the lane's own (umbrella.spec.ts:433, the early embed class revealed #sidebar-expand before wireTopLevelEvents wired it) and is fixed at 2efdb43 by withholding that control until ready, proven by 91 targeted cases. See DR-065.fix_2026_09_03"
     tests_dr_065_contracts: "33e877d, one commit from 2835091. The two DR-065 failure modes that had NO contract: tests/preset-toggle-cycles.spec.ts (mode 1, the Powell River iPad toggle regression, touch tablet viewport, VIEW_PRESETS as the oracle) and tests/studio-navigation-cycles.spec.ts (mode 3, the Reuben Martinez inconsistent-navigation report, desktop and phone). First studio entry and exit ever driven at phone width. tests/ only"
     platform_ddm_p15_close: "a40c69d, one commit from 5be15f5. DDM-P15-T01 (a Hosting section in DEVELOPER.md naming seven seams found in the runtime, plus DR-069 executed: sourcemap hidden plus npm run strip:sourcemaps as one step in deploy.yml between Verify build output and Configure Pages; measured 85 maps and 6,217,137 bytes removed, 0 of 91 emitted files carrying a sourceMappingURL, activation gate still clean), T02 (README Browser support is the single statement and check:renderer now PROVES the pointers agree; satisfied on the lane's judgment with the test:serial clause named as the owner's call), T04 (@biomejs/biome 2.5.12, 463 diagnostics over 178 files baselined by switching off 13 rules with counts and reasons, burn-down filed as the NEW roadmap task DDM-P15-T05). Also created DDM-P15-T05 in docs/ROADMAP.yaml"
