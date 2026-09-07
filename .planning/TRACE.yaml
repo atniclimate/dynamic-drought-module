@@ -2100,6 +2100,20 @@ tasks:
           - "src/impact/hydrate.ts:14: Each horizon runs its source fetches concurrently and reports its
             own status"
         attached_by: scout
+      # src/impact/matrix.ts attached 2026-09-07 (S03b): S02g (merge 6a070eb) added
+      # the 315-line module that IS the four-hazard by three-horizon structure this
+      # task's acceptance is about. It postdates the scout pass this trace was
+      # generated from (commit 5be15f5) and was attached to no task.
+      - path: src/impact/matrix.ts
+        owns: Declares which source lanes feed each of the twelve cells (LANE_PLACEMENT), what a cell says
+          when it has nothing to show (CELL_ABSENCE), and fills each cell from only its declared lanes
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/impact/matrix.ts:2: The briefing matrix: four hazard rows by three horizon columns
+            (DR-012 b)."
+          - "src/impact/matrix.ts:234: export function fillCell(cell: HazardCell, results:
+            MatrixLaneResults): void {"
+        attached_by: repair:S03b  # postdates the scout pass
       - path: src/impact/sources.ts
         owns: "Fetches verified CORS-open sources for impact briefing: USDM, NIFC, NWS alerts, point
           forecast, HeatRisk, CPC, DSCI, NWRFC water supply claims"
@@ -2364,15 +2378,8 @@ tasks:
             by the mobile sheet and Place"
           - "src/impact/brief-narrative-selector.ts:14: export function selectBriefNarrativeLine("
         attached_by: scout
-      - path: src/impact/heat-horizon.ts
-        owns: Folds source results into a horizon by concatenating claims and setting status from fetch
-          success count
-        acceptance_testable_here: true
-        evidence_lines:
-          - "src/impact/heat-horizon.ts:4: Fold a set of source results into a horizon: concatenate
-            the claims in the"
-          - "src/impact/heat-horizon.ts:10: export function fillHorizon("
-        attached_by: scout
+      # src/impact/heat-horizon.ts removed 2026-09-07 (S03b): S02g (merge 6a070eb)
+      # deleted the file, so this attachment named a path no longer in the tree.
       - path: src/impact/heat-synthesis.ts
         owns: Synthesizes point-heat observations and grid forecasts into a formatted heat briefing read
           with distances and times
@@ -2831,16 +2838,6 @@ tasks:
           - "src/impact/fire-context.ts:3: Fire-in-context composition (0.4.0 unit B1)."
           - "src/impact/fire-context.ts:67: export function buildFireContextHtml("
         attached_by: scout
-      - path: src/impact/overlap-engine.ts
-        owns: Calculates polygon overlap relationships (within/contains/overlaps) with area evidence and
-          sliver suppression for fire perimeter analysis
-        acceptance_testable_here: true
-        evidence_lines:
-          - "src/impact/overlap-engine.ts:11: D-0.7.0-050: overlaps below this share of the smaller
-            area are slivers."
-          - "src/impact/overlap-engine.ts:14: export type OverlapRelationship = 'within' |
-            'contains' | 'overlaps';"
-        attached_by: scout
       - path: src/impact/sources.ts
         owns: "Fetches verified CORS-open sources for impact briefing: USDM, NIFC, NWS alerts, point
           forecast, HeatRisk, CPC, DSCI, NWRFC water supply claims"
@@ -2852,6 +2849,20 @@ tasks:
           presentation, and incident-metadata popup
         acceptance_testable_here: false
         evidence_lines: *a19
+        attached_by: scout
+      # path moved 2026-09-07 (S03b): S02g (merge 6a070eb) moved the module from
+      # src/impact/overlap-engine.ts to src/ui/island/overlap-engine.ts, beside its
+      # one consumer place-studio.tsx (DR-015 a, stated at the file's head). The
+      # entry keeps its sorted position under the new path; evidence lines re-anchored.
+      - path: src/ui/island/overlap-engine.ts
+        owns: Calculates polygon overlap relationships (within/contains/overlaps) with area evidence and
+          sliver suppression for fire perimeter analysis
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/ui/island/overlap-engine.ts:23: D-0.7.0-050: overlaps below this share of the smaller
+            area are slivers."
+          - "src/ui/island/overlap-engine.ts:26: export type OverlapRelationship = 'within' |
+            'contains' | 'overlaps';"
         attached_by: scout
     tests:
       - path: tests/antimeridian.spec.ts
@@ -2874,7 +2885,7 @@ tasks:
           '../src/impact/source-policy';"
       - path: tests/overlap-engine.spec.ts
         via: import
-        covers: src/impact/overlap-engine.ts
+        covers: src/ui/island/overlap-engine.ts
         evidence: "tests/overlap-engine.spec.ts:2: import type { Feature, FeatureCollection, Geometry,
           MultiPolygon, Polygon } from 'geojson';"
       - path: tests/wildfire-source-semantics.spec.ts
