@@ -141,14 +141,17 @@ test('no cell inherits another hazard issuer or clock', () => {
   }
 });
 
-test('the four cells with no wired product say so from the first paint', () => {
+// Was four cells until DDM-P12-T02 (DR-031 a) wired the CPC weekly Nino 3.4
+// file into the ENSO near-term cell, which gave that cell a declared lane. The
+// cell can still render an absence, but it now does so because its one lane had
+// nothing to report, not because no product was ever wired to it.
+test('the three cells with no wired product say so from the first paint', () => {
   const horizons = emptyHorizons();
   const unwired = everyCell(horizons).filter(
     (cell) => lanesForCell(cell.horizon, cell.hazard).length === 0
   );
   expect(unwired.map((cell) => `${cell.horizon}:${cell.hazard}`)).toEqual([
     'nearTerm:fire',
-    'nearTerm:enso',
     'longRange:fire',
     'longRange:heat'
   ]);

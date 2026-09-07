@@ -94,10 +94,14 @@ export const LANE_PLACEMENT: Readonly<
   heatRisk: { hazards: ['heat'], horizons: ['nearTerm'] },
   nwsForecast: { hazards: ['heat'], horizons: ['nearTerm'] },
   cpcExtended: { hazards: ['drought'], horizons: ['nearTerm'] },
-  // One snapshot, two clocks: the observed index state is a current read and
-  // the seasonal tendency is a long-range one, so its claims name their own
-  // horizon rather than all landing under the season.
-  enso: { hazards: ['enso'], horizons: ['current', 'longRange'] },
+  // One snapshot, three clocks: the observed index state is a current read, the
+  // weekly Nino 3.4 trajectory is a near-term one (DR-031 a), and the seasonal
+  // tendency is a long-range one, so its claims name their own horizon rather
+  // than all landing under the season. The near-term cell activates only when
+  // the snapshot carries the weekly block and the read has not gone stale;
+  // otherwise no claim is tagged nearTerm, the cell settles empty, and it
+  // renders its CELL_ABSENCE prose exactly as before.
+  enso: { hazards: ['enso'], horizons: ['current', 'nearTerm', 'longRange'] },
   waterSupply: { hazards: ['drought'], horizons: ['longRange'] },
   cpcSeasonal: { hazards: ['drought'], horizons: ['longRange'] }
 };
@@ -141,7 +145,7 @@ export const CELL_ABSENCE: Readonly<
       'No near-term fire outlook is read here yet: the NOAA Storm Prediction Center fire weather outlooks for Days 1 to 8 are not wired into this briefing.',
     heat: 'No near-term heat read is available for this selection.',
     enso:
-      'No ENSO product is read at this horizon: the ENSO reads this briefing carries are a current index state and a season-ahead tendency, so they appear under the current and long-range horizons.'
+      'No weekly Nino 3.4 observation is available for this selection: the briefing reads the CPC weekly Nino-region file here, and it is absent from the current snapshot or too old to report.'
   },
   longRange: {
     drought: 'No long-range drought outlook is available for this selection.',
