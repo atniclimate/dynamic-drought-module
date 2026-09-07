@@ -43,6 +43,7 @@ workers/proxy/.wrangler/
 # in a working copy, but they are not part of the public application source.
 **/AGENTS.md
 **/CLAUDE.md
+!/CLAUDE.md
 **/*HANDOFF*.md
 **/*POST_MORTEM*.md
 **/*POST-MORTEM*.md
