@@ -103,6 +103,35 @@ branch_state:
     design working, so one deploy and one live proof covered both merges. The gate
     transcription fired none, as predicted, being docs/ only. Answered gates are now
     DDM-D01, D02, D03, D06, D07, D10; genuinely open are D04, D05, D08, D09, D11.
+  concurrent_writer_2026_09_07: >-
+    TWO SESSIONS WROTE TO THIS REPOSITORY AT THE SAME TIME ON 2026-09-07. Recorded because
+    the window is hard to reconstruct later and because three of the merges in it carry
+    trailers that HANDOFF.md:159 forbids.
+    The other writer landed three merges between 04:49:58 and 05:13:17 -07:00:
+    f521800 "Merge branch 'platform/ddm-p15-close' (S02a)" at 04:49:58,
+    5b8a8ff "Merge branch 'map/ddm-p8-t05-surface-continuity' (S02b)" at 05:03:08, and
+    58f13e9 "Merge branch 'science/ddm-p13-t03-gridded-index' (S02c)" at 05:13:17.
+    All three are authored and committed by Patrick Freeland
+    <patrick@atni57.onmicrosoft.com> and all three carry
+    "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>" and
+    "Claude-Session: https://claude.ai/code/session_01Awry8jrCpMu74WbKNLMMJh".
+    That session id is the handle for the window. Every one of the three violates
+    HANDOFF.md:159, "No attribution trailers on any commit, ever", which raises main's
+    trailer-bearing count above the 253 of 377 recorded at scope_found below.
+    OVERLAP WITH THIS SESSION. The skill-development session that wrote fe4bc52 (the
+    correction_2026_09_07 block under awaiting_go_2026_09_03_pm) was reading and verifying
+    this tree across the same window. It observed HEAD move 8b26e9c to 5b8a8ff to 58f13e9
+    beneath it. When it began, five files were staged and uncommitted in the shared index:
+    docs/RELEASE_NOTES.md, src/config/layers.ts, src/config/urls.ts,
+    src/layers/gridded-index.ts and tests/legend.spec.ts. Those were the other session's
+    S02c merge in flight, not stray work; 58f13e9 committed them. fe4bc52 was made with an
+    explicit pathspec and captured only this file, so the two writers did not collide, but
+    a bare "git commit -a" from either would have.
+    CONSEQUENCE. fe4bc52's merge-simulation evidence was taken against main at 5b8a8ff and
+    main has moved since. The three pairwise conflict verdicts hold regardless, being
+    between branch pairs, but the behind-counts in that block were true of 5b8a8ff only.
+    The single-writer rule now applies to this tree: confirm no other session holds it
+    before the next write.
   awaiting_go_2026_09_03_pm:
     note: >-
       Nine branches are pushed and NOT landed at the close of the 2026-09-03 long run. None
