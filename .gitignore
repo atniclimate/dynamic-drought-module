@@ -54,7 +54,20 @@ workers/proxy/.wrangler/
 /.codex/
 /.handoff/
 /drought-region-maps/
-/planning/
+# 2026-09-07: planning/ is local EXCEPT the four paths the roadmap's authority
+# block names as live ledgers (docs/ROADMAP.yaml, `authority:`). Those carry
+# the DR- decision register, the FE- defect ledger that src/styles/app.css
+# cites, the user-research inputs, and the newest handoff. Everything else
+# under planning/ (the deep-dive and foundations dumps, archive, run logs)
+# stays untracked. `/planning/*` rather than `/planning/` so the negations
+# below can reach inside the directory.
+/planning/*
+!/planning/decisions/
+!/planning/qa/
+!/planning/user-research/
+!/planning/handoffs/
+/planning/handoffs/*
+!/planning/handoffs/2026-09-04.md
 /post-mortem/
 /research/
 /reviews/
@@ -71,3 +84,8 @@ workers/proxy/.wrangler/
 
 # Preserved untracked evidence, never committed
 /fire3d-evidence/
+
+# Reconciliation working set (2026-09-07): the four documents under
+# .planning/ are tracked; the scout JSON, traces and scratch under trace/
+# are regenerable and stay local.
+/.planning/trace/

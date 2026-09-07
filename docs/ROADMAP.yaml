@@ -1,6 +1,6 @@
 schema_version: 2
 roadmap_id: "ddm-forward-roadmap"
-updated_on: "2026-09-03"
+updated_on: "2026-09-07"
 
 # Every open task takes this unless it carries its own `verification`.
 default_verification: "verify:smoke"
@@ -22,6 +22,11 @@ default_verification: "verify:smoke"
 # Task keys: `title`; then `status` with `closed` or `superseded_by`, or
 # `acceptance` for open work. The 2026-09 backlog (DDM-P7 onward) also carries
 # `source` (the 2026-09-01 deep-dive review, by report number and finding id),
+# `evidence` (added 2026-09-07: the repository paths that prove a `closed`
+# sentence, present ONLY on done tasks whose closure the 2026-09-07
+# reconciliation could not trace to a file; a done task carrying neither
+# `evidence` nor traced files is an unverified claim), and `acceptance_pending`
+# (a task with no acceptance sentence yet; it can hold no files by trace rule),
 # `effort` (S, M, L), `needs_decision` (the 2026-09-02 owner decision register
 # id, with the review's own decision label in parentheses), and
 # `verification`, present ONLY where a task differs from `default_verification`
@@ -44,6 +49,32 @@ authority:
   owner_direction: "Current written owner direction, annotations, and direct corrections govern product intent for the requested slice."
   runtime_truth: ["src/config/layers.ts", "src/config/urls.ts", "src/state/", "src/map/", "src/ui/", "tests/"]
   design_doctrine: "docs/design/README.md"
+  # 2026-09-07, from .planning/PLANNING_AUTHORITY.md. This file is the TASK
+  # ledger and nothing more. It cites 34 DR- ids and defines none; all 69 live
+  # in the decision ledger. FE- ids are cited from src/ and appear nowhere in
+  # this file. The four live planning paths below are tracked in git as of this
+  # date (.gitignore); the rest of planning/ stays local and untracked.
+  task_ledger: "docs/ROADMAP.yaml"
+  decision_ledger: "planning/decisions/"              # defines all 69 DR- ids; this file cites, never defines
+  defect_ledger: "planning/qa/feature-errors.yaml"    # FE-01..FE-24; FE-19 is cited from src/styles/app.css:6170
+  research_inputs: "planning/user-research/"          # cite by path when a task draws on them; no ids adopted
+  handoff_entry: "planning/handoffs/2026-09-04.md"    # newest only; older handoffs are history
+  read_only_history:
+    - "planning/archive/"
+    - "planning/2026-09-03-long-run/"
+    - "planning/2026-09-03-session/"
+  parked:                                             # divergent; 256 uncited ids between them; not adopted into this ledger
+    - "planning/2026-09-01-deep-dive/"                # 147 uncited ids; `source:` fields below quote it by report and finding id
+    - "planning/2026-09-03-foundations/"              # 89 uncited ids; rulings A1-A7, B1-B7, C1-C5 and slice S1 await ratification
+    - "planning/plans/"                               # 20 uncited ids; 22 visual-pass items, all pending
+  # Open, owner call on keying: `EF-` is not one scheme. Two parked deep-dive
+  # reports each number their own easy fixes from 1: 02-impact-briefing.md:519
+  # (EF-1..EF-10) and 11-minimap-and-popups.md:433 (EF-1..EF-7), different
+  # content. Shipped source cites BOTH by bare number: src/styles/app.css:6169
+  # EF-5 is the minimap list (ocean doors), app.css:3822 EF-9 is the briefing
+  # list (tablet rule). They move into the defect ledger once the owner picks
+  # ids that do not collide; the 2026-09-07 reconciliation misread them as one.
+  rule: "A DR- or FE- id may be cited by a task; it is never redefined in this file. An id not in .planning/PLANNING_AUTHORITY.md section 2 is a reason to stop and ask, not to guess: that registry is a lower bound, and EF- above is the proof."
 
 plan_rules:
   - "Work on one bounded user-visible outcome at a time after prerequisite work."
@@ -57,12 +88,25 @@ plan_rules:
   - "Do not add proprietary providers, credentials, tracking, analytics, or telemetry."
 
 component_catalog:
-  release_delivery: {paths: [".github/workflows/", "vite.config.ts", "scripts/check-upstream-drift.mjs", "workers/proxy/"], concerns: ["GitHub Pages", "Cloudflare Worker", "build identity", "range-safe static delivery"]}
+  # Item 8, 2026-09-07: refresh-snapshots.yml and upstream-monitor.yml are
+  # claimed here, not retired. upstream-monitor.yml is the scheduled half of the
+  # drift mechanism whose script half this entry already names, and it attests
+  # one clause of DDM-P15-T03. refresh-snapshots.yml keeps the bundled ENSO
+  # snapshot current, which DDM-P12-T01's date-coupled acceptance depends on.
+  # Neither is reachable by any test: `.github/` is outside the trace's test
+  # roots and no spec asserts on workflow content (tests/README.md:229 is prose).
+  release_delivery: {paths: [".github/workflows/", "vite.config.ts", "scripts/check-upstream-drift.mjs", "workers/proxy/"], concerns: ["GitHub Pages", "Cloudflare Worker", "build identity", "range-safe static delivery", "scheduled snapshot refresh and upstream liveness", "workflow files are attested by run receipts, not by this repository's gate"]}
   state_and_lifecycle: {paths: ["src/state/", "src/util/fetch.ts", "src/config/layers.ts", "src/types/layer.ts"], concerns: ["URL state", "activation and cancellation", "status semantics", "late-response protection"]}
   interface: {paths: ["src/ui/", "src/styles/app.css", "src/config/presets.ts", "src/config/clusters.ts"], concerns: ["desktop, tablet, phone, and embed", "keyboard and assistive technology", "reduced motion", "source and time receipts"]}
   map_and_visualization: {paths: ["src/map/", "src/layers/", "src/config/palette.ts", "src/config/wildfire-presentation.ts"], concerns: ["MapLibre lifecycle", "layer ordering", "2D and 3D presentation", "accessible legends"]}
   impact_and_place: {paths: ["src/impact/", "src/config/capability-matrix.ts", "src/state/typed-place.ts"], concerns: ["selected-place evidence", "regional coverage", "ENSO interpretation", "resource routing"]}
   data_pipelines: {paths: ["scripts/", "public/data/"], concerns: ["source vetting", "static artifacts", "PMTiles", "snapshot provenance", "artifact budgets"]}
+  # Item 1, 2026-09-07: before these two entries, 42 scouted files matched no
+  # catalog path, including src/config/urls.ts, which authority.runtime_truth
+  # above names as runtime truth. Resolution is longest-prefix, so the six
+  # per-file config entries and src/util/fetch.ts keep their current components.
+  declared_catalogs: {paths: ["src/config/", "src/types/"], concerns: ["one declared source of truth per catalog", "the endpoint catalog and its eager boot slice", "region, framing, and ocean vocabularies", "station and place catalogs", "source and region capability declarations", "sovereign-representation provenance strings"]}
+  shared_utilities: {paths: ["src/util/"], concerns: ["pure dependency-light helpers", "HTML escaping and payload type guards", "geometry, bbox, and antimeridian handling", "agency payload adapters", "motion, fade, and frame stepping", "archive header probing"]}
   verification: {paths: ["tests/", "scripts/check-activation-budget.mjs", "scripts/check-bundle-size.mjs"], concerns: ["strict TypeScript", "deterministic gate", "targeted browser tests", "serial release suite", "live production probes"]}
   documentation: {paths: ["README.md", "DEVELOPER.md", "ROADMAP.md", "docs/", "public/data/README.md"], concerns: ["public behavior and source qualifications", "planned scope", "maintainer and release evidence"]}
 
@@ -107,11 +151,11 @@ phases:
         closed: "Pages publication: the accepted commit published through the normal workflow and the live build marker and nonce matched the completed run."
       - id: "DDM-P0-T09"
         title: "Prove or decline globe projection"
-        acceptance: "Terrain, Fire 3D, URL, embed, phone, tablet, desktop, and reduced-motion behavior are each verified after the change, or the decline records the measured reason and removes no current capability."
+        acceptance: "Globe projection is either shipped with terrain, Fire 3D, URL, embed, phone, tablet, desktop, and reduced-motion cases each under a named test, or DDM-D01 records a dated decline naming the measured cost; no current capability is removed either way."
         decision_gate: "DDM-D01"
       - id: "DDM-P0-T10"
         title: "Prove or decline global low-zoom NASA GIBS imagery"
-        acceptance: "The layer carries its own status, timestamp, qualification, and legend and never implies current fire detection or drought assessment, or the decline records the measured source, performance, or product reason."
+        acceptance: "The GIBS layer either ships carrying its own status, timestamp, qualification, and legend, and asserting no fire detection or drought assessment, or DDM-D01 records a dated decline naming the measured source, performance, or product reason."
         decision_gate: "DDM-D01"
       - id: "DDM-P0-T11"
         title: "Record the renderer and imagery outcome across runtime, tests, docs, and the live build"
@@ -141,10 +185,10 @@ phases:
         acceptance: "An internal catalog, preset, coactivation, or cluster recipe key typo fails type checking while external URL parsing still accepts and validates strings."
       - id: "DDM-P1-T06"
         title: "Align Fire data-query scopes"
-        acceptance: "Outside the current request never reads as no data, and no scope change is made without a measured transfer and record-count benefit."
+        acceptance: "Outside the current request never renders as no data, and the scope change is accompanied by a recorded before-and-after transfer size and record count."
       - id: "DDM-P1-T07"
         title: "Update landscape-signature source pins"
-        acceptance: "A phased or incomplete upstream mosaic cannot become the national default, and any fixture or public-artifact change is explicit and source-qualified."
+        acceptance: "scripts/validate-landscape-artifact.mjs rejects a mosaic whose upstream coverage is phased or incomplete, and every landscape fixture in the tree names its source and edition in the file."
         github_issues: [13]
       - id: "DDM-P1-T08"
         status: done
@@ -162,18 +206,20 @@ phases:
         closed: "2026-09-02: gate DDM-D03 decided; the shipped rule (cluster change exits and strips the parameter, custom demotion keeps the scene with the toggle as the off control) is under contract in tests/fire3d-mode.spec.ts and tests/view-contracts.yaml."
       - id: "DDM-P2-T03"
         title: "Give ENSO a shareable Pacific camera contract"
-        acceptance: "Fire-to-ENSO, share, reload, reset, phone, and desktop cases all open on visible Pacific evidence under one explicit basemap policy."
+        acceptance: "In each of the six cases (Fire-to-ENSO, share, reload, reset, phone, desktop) the committed camera bounds contain the Nino 3.4 region and at least one ENSO surface reports a status other than unavailable, under one declared basemap policy."
         decision_gate: "DDM-D04"
       - id: "DDM-P2-T04"
         title: "Defer the Fire 3D controller until eligible"
         acceptance: "A bare desktop Drought boot does not request the Fire 3D controller chunk, and deep links and Wildfire activation remain reliable."
       - id: "DDM-P2-T05"
         title: "Complete task-based responsive verification"
-        acceptance: "Select, hazard switch, status read, share, reset, information, and mode-exit tasks are verified with keyboard, screen reader, reduced motion, high contrast, and safe-area cases represented."
+        acceptance: "Each of the seven tasks (select, hazard switch, status read, share, reset, information, mode exit) has at least one keyboard test and one reduced-motion test, and the screen-reader, high-contrast, and safe-area cases are each named by a test or recorded as declined."
         dependencies: ["DDM-P10-T01"]
       - id: "DDM-P2-T06"
         title: "Run a real-device field ergonomics pass"
-        acceptance: "Touch, scrolling, orientation, and iframe behavior are reviewed outside emulation on iOS, Android, tablet, and a small iframe, and every finding is filed or accepted with evidence."
+        acceptance: "A dated field-pass record names the four device classes exercised outside emulation (iOS, Android, tablet, small iframe) and lists every touch, scrolling, orientation, and iframe finding as filed with an id or accepted with a reason."
+        # Not reachable by any automated gate; verified by the dated record only.
+        verification: "none (owner-run field pass)"
   - id: "DDM-P3"
     name: "Fire evidence pilots and visual hierarchy"
     goal: "Test the qualified Fire evidence candidates one at a time, without attributing an observation or detection to a specific wildfire, interpolating monitor points into a surface, or blending sources into a score."
@@ -303,6 +349,13 @@ phases:
         title: "Correct the 3D control vocabulary, pitch ceiling, and station ranking"
         source: "03 FIRE-12, FIRE-14, FIRE-17, FIRE-19"
         status: done
+        # Item 4, 2026-09-07: the trace attached no file and no test to this
+        # claim, though every proving file exists and three carry tests. Not a
+        # structural block (rule_1 exempts a task with a closed sentence);
+        # scout under-attachment. Claim stands on this evidence.
+        evidence: ["src/ui/island/pill-text.ts", "src/ui/island/fire3d-control.tsx",
+                   "src/config/fire3d-presentation.ts", "src/impact/fire-context.ts",
+                   "src/config/station-registry.ts"]
         closed: "2026-09-01: the 3D control speaks the six honest layer states, the pitch ceiling and coordinate destructuring are corrected, and nearest stations carry a distance ceiling and an honest absence."
       - id: "DDM-P9-T02"
         title: "Gate the 3D scene on capability, not width alone"
@@ -322,7 +375,7 @@ phases:
         source: "03 FIRE-02, FIRE-09, FIRE-11"
         effort: M
         needs_decision: "DR-009 through gate DDM-D01 (categorical drape resampling needs a 5.20 or later renderer)"
-        acceptance: "Terrain shading names the extent of the elevation data it uses, and the hazard drape keeps perimeters legible above it without resampling categories into intermediate colors."
+        acceptance: "Terrain shading names the extent of the elevation data it uses, the perimeter layer is ordered above the hazard drape in src/map/layer-order.ts, and the drape resamples by nearest neighbour so no intermediate category colour is produced."
         verification: "npx playwright test --workers=1 tests/fire3d-mode.spec.ts tests/view-contracts.spec.ts"
       - id: "DDM-P9-T05"
         title: "Read the RAWS fire-weather values the issuer already serves"
@@ -342,7 +395,18 @@ phases:
         title: "Land the token layers the design had none of"
         source: "06 UI-04, UI-06, UI-12, UI-13, UI-17, UI-18; 11 MM-08"
         status: done
-        closed: "2026-09-01: motion and z-index tokens declared, the briefing spinner keyframe added, two dead rules removed, the minimap ocean doors reach the touch floor, and the muted foreground token was raised (it clears 4.5:1 on three of the four backgrounds; the fourth remains open)."
+        # Item 4, 2026-09-07: originally flagged structurally_untestable because
+        # src/styles/app.css was never scouted (missing from the eight src/
+        # clusters). Fixed the same day: TRACE.yaml trace_version 3 scouts it
+        # under cluster: styles and attaches it here with evidence for four of
+        # the five clauses (z-index tokens app.css:141-163, motion tokens
+        # app.css:165-184, spinner keyframe app.css:4268-4279, ocean-door touch
+        # floor app.css:6169-6186, muted-foreground token app.css:59-67). "Two
+        # dead rules removed" remains uncited: nothing in the current file can
+        # prove a deletion. The residual fourth background is moved to
+        # DDM-P10-T04, where the contrast floor already lives.
+        evidence: ["src/styles/app.css"]
+        closed: "2026-09-01: motion and z-index tokens declared, the briefing spinner keyframe added, two dead rules removed, the minimap ocean doors reach the touch floor, and the muted foreground token was raised to clear 4.5:1 on three of the four backgrounds. The fourth background is carried by DDM-P10-T04."
       - id: "DDM-P10-T03"
         title: "Give the jarring surfaces a transition and cover every animation in reduced motion"
         source: "06 UI-07, UI-09, UI-16"
@@ -354,7 +418,7 @@ phases:
         source: "06 UI-05, UI-10, UI-11, UI-14"
         effort: M
         needs_decision: "DR-037 (the on-map key, and hazard naming and order; 06 D1, D4); DR-038 (the nine-pixel type floor; 06 D3)"
-        acceptance: "The four hazard screens differ only where a hazard's evidence differs, and every control boundary and text size meets its contrast and legibility floor."
+        acceptance: "The four hazard screens present the same control set in the same order, differing only in the rows a hazard has no source for, and every control boundary and text size meets the ratified contrast and type floors, including the fourth background carried over from DDM-P10-T02."
   - id: "DDM-P11"
     name: "Minimap and popups"
     goal: "Make the minimap carry a condition on every hazard screen and make popups answer a touch."
@@ -378,6 +442,12 @@ phases:
       - id: "DDM-P12-T01"
         title: "Lead the ENSO headline with advisory semantics"
         status: done
+        # Item 4, 2026-09-07: one attached file, no test. The claim stands on
+        # commit 46f98f4 and on src/impact/enso.ts, whose header states the same
+        # three CPC rules the sentence claims. The named snapshot validator is
+        # not traced to a path; name it here, and give one of the two existing
+        # ENSO specs an import-level assertion on src/impact/enso.ts.
+        evidence: ["src/impact/enso.ts", "tests/enso-observed-state.spec.ts"]
         source: "05 ENSO-01, ENSO-03; 13 ENSOSCI-01, ENSOSCI-04"
         effort: M
         needs_decision: "DR-029 (the three-state ENSO model; 05 D-ENSO-1, D-ENSO-2); DR-032 (a persistent state panel on the ENSO screen; 05 D-ENSO-3)"
@@ -394,7 +464,7 @@ phases:
         source: "05 ENSO-02, ENSO-05; 13 ENSOSCI-09, ENSOSCI-10; 10 SCI-07"
         effort: M
         needs_decision: "DR-030 (the four Pacific Northwest tilt sentences; 05 ENSO-02)"
-        acceptance: "Each regional tilt sentence traces to a published source and states the season and the probabilistic strength that source supports, with the two over-claiming sentences narrowed."
+        acceptance: "Each of the four Pacific Northwest tilt sentences cites a published source and states the season and probabilistic strength that source supports; the two DR-030 names as over-claiming are narrowed to what their source supports."
         verification: "verify:quick"
       - id: "DDM-P12-T04"
         title: "Decide the marine product and its baseline"
@@ -411,7 +481,7 @@ phases:
         source: "14 DWH-03, DWH-04, DWH-07; 02 Question 4"
         effort: M
         needs_decision: "DR-045 (the DSCI trend band); DR-046 (the water-supply bands); DR-047 (the DDM-authored causal sentences; 14 C, 02 D5)"
-        acceptance: "The DSCI trend band and the water-supply classes either cite a published basis or are labeled a DDM presentation choice, no claim carrying observed evidence contains a DDM-authored causal tail, and no positional array index is described as a number of weeks."
+        acceptance: "The DSCI trend band and the water-supply classes each cite a published basis or are labeled a DDM presentation choice; every claim string carrying EvidenceClass observed appears in a reviewed inventory with each entry sourced or marked a DDM presentation choice; and no positional array index is described as a number of weeks."
         verification: "verify:quick"
       - id: "DDM-P13-T02"
         title: "Surface the methods the app already downloads"
@@ -444,7 +514,7 @@ phases:
         source: "01 ARCH-03, ARCH-17"
         effort: M
         needs_decision: "DR-008 (make the map key, telemetry adapters, and URL catalog lazy, or raise the ratified entry line; 01 D3)"
-        acceptance: "The entry chunk sits inside its declared budget with the budget unchanged, or the budget moves in a recorded decision that names what grew."
+        acceptance: "scripts/check-bundle-size.mjs passes against the entry budget recorded in the tree at the start of this task, or the diff that moves the budget names the byte delta and the module that grew."
       - id: "DDM-P14-T04"
         title: "Let the two raster surfaces reach live (partial)"
         source: "01 ARCH-04"
@@ -459,21 +529,37 @@ phases:
         title: "Record the local full-service server end state and the seams it needs"
         source: "01 ARCH-08; 15 DEP-05"
         effort: L
-        acceptance: "The hosting plan states that GitHub Pages is the current static host and names the seams a local server would replace, and no hosting change is made without range, cache, privacy, cost, and rollback evidence."
+        acceptance: "docs/ states that GitHub Pages is the interim static host, names each seam a local server would replace, and lists the five evidence classes (range, cache, privacy, cost, rollback) any hosting change must supply before it is made."
         decision_gate: "DDM-D10"
-        verification: "verify:quick"
+        verification: "none (documentation state; verify:quick asserts nothing here)"
       - id: "DDM-P15-T02"
         title: "Land the renderer version the gate selects and declare the browser floor it implies"
         source: "15 DEP-01, DEP-02, DEP-03, DEP-06"
-        effort: L
+        status: done
+        # 2026-09-07: resolves the DDM-P0-T03 contradiction flagged the same
+        # day (T03 closed on the same landing with no in-repo evidence). Both
+        # acceptance clauses now hold verified in-repo receipts, run this
+        # session: `npm run check:renderer` -> "renderer-version check: clean
+        # (maplibre-gl 6.6.0 pinned, locked, installed)"; `grep -n maplibre-gl
+        # package.json package-lock.json` both show "6.6.0"; `npm ls
+        # maplibre-gl` shows the same with no extraneous/invalid entries;
+        # vite.config.ts:62 sets target ['es2020', 'safari15.5', 'ios15.5',
+        # 'chrome100'] and README.md:447 states the same Safari 15.5 floor.
+        closed: "package.json, package-lock.json, and node_modules/maplibre-gl all name 6.6.0
+          (check:renderer, run 2026-09-07); vite.config.ts's build target and README's published
+          browser floor both name Safari 15.5. DDM-D01 selected 6.6.0 on 2026-09-02; the gate and
+          serial suite passed on the landing branch per DDM-P0-T03's closed sentence."
         needs_decision: "DR-009 through gate DDM-D01 (the version, and which phones must work; the build target has moved three times by dependency upgrade alone)"
-        acceptance: "The manifest, the lockfile, and the installed tree name the same renderer version, the build target and the published browser and graphics requirements state the same floor in one place, and the gate and the serial suite pass before it lands."
         decision_gate: "DDM-D01"
-        verification: "test:serial"
       - id: "DDM-P15-T03"
         title: "Quiet and stabilize the delivery workflows"
         source: "07 CI-01, CI-03, CI-04, CI-06"
         status: done
+        # Item 4, 2026-09-07: no file, no test. The trace found the proving
+        # files twice and discarded both attachments as area-word matches
+        # (rejected_rules `ci` and `pipeline`). Claim stands; name the files.
+        evidence: [".github/workflows/verify-live.yml", ".github/workflows/upstream-monitor.yml",
+                   "scripts/lib/live-receipts.mjs", "scripts/check-upstream-drift.mjs"]
         closed: "2026-09-01: the live embed-corner proof matches the shipped credits surface, the live-build resolver retries and ends green on an API outage, build-tier drift stops failing on a non-proving probe, and the unreachable light path is gone."
       - id: "DDM-P15-T04"
         title: "Add a linter for the code and the stylesheet"
@@ -481,6 +567,12 @@ phases:
         effort: M
         needs_decision: "DR-007 (Node pin and lint tooling; 15 DEP-07)"
         acceptance: "One lint command runs over the TypeScript and the stylesheet and passes on the current tree, and the gate names it."
+        verification: "verify:quick"
+      - id: "DDM-P15-T05"
+        title: "Guard the delivery workflows from the repository's own gate"
+        source: "2026-09-07 reconciliation, findings 1 and 2"
+        effort: S
+        acceptance: "One test under tests/ reads the workflow YAML as text and fails when an action is not pinned to a 40-hex commit, when deploy.yml does not set DDM_BUILD_SHA, when an artifact upload is unconditional or unbounded in retention, or when the Chromium cache action loses its separate restore and save steps; and the two scheduled workflows named in release_delivery are each reached by it."
         verification: "verify:quick"
 
 research_dispositions:
@@ -574,3 +666,17 @@ decision_gates:
     question: "Which current ENSO question, audience, and evidence hierarchy should the first index-first product answer?"
     register: "DR-032"
     needed_by: ["DDM-P4-T01"]
+  - id: "DDM-D12"
+    question: "How should the eleven tasks that cycle through src/impact/enso.ts and the briefing composer be sequenced, given no import-derived order exists inside the cycle?"
+    needed_by: ["DDM-P1-T02", "DDM-P1-T04", "DDM-P7-T02", "DDM-P7-T05", "DDM-P8-T02", "DDM-P8-T03",
+                "DDM-P11-T01", "DDM-P12-T02", "DDM-P12-T03", "DDM-P14-T03", "DDM-P9-T05"]
+    context: "2026-09-07 reconciliation, section 6: these eleven open tasks form one strongly
+      connected component under direct-import analysis (imports.json via TRACE.yaml): P7-T02
+      through P8-T03 circulate through the briefing and time-bar modules; P12-T02/T03 and P7-T02
+      circulate through the single file src/impact/enso.ts; P1-T02/T04 circulate through the
+      sidebar/island seam. No file-level ordering can separate them; the natural cut the
+      reconciliation identified is src/impact/enso.ts itself (the sole attached file for P12-T01,
+      P12-T02, and P12-T03), which would drop three tasks out of the cycle if the ENSO horizons
+      are planned as a unit separate from the briefing composer.
+      NONE of these eleven tasks should start before a dedicated planning session sequences the
+      cycle by hand; starting one in isolation risks rework against whatever the other ten land."
