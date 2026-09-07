@@ -179,6 +179,29 @@ references:
       Nino 3.4 observation, which no entry in this register and no endpoint in
       src/config/urls.ts currently supplies. See the recon report, owner call 1."
 
+  - id: cpc-nino34-weekly
+    product: "wksst9120.for (weekly Nino-region SST and anomaly, 1991-2020 base period)"
+    url: "https://www.cpc.ncep.noaa.gov/data/indices/wksst9120.for"
+    issuer: "NOAA Climate Prediction Center"
+    claims:
+      - "src/impact/enso.ts nearTerm ENSO claim: the observed trajectory of the
+         weekly Nino 3.4 anomaly across recent weeks (DR-031 option a)"
+      - "public/data/enso-indices.json nino34Weekly.source and nino34Weekly.sourceUrl"
+    cited_as: "scripts/build-enso-snapshot.mjs NINO34_WEEKLY_URL (hardcoded in the builder,
+      like the other four upstream files)"
+    owning_task: "ENSO horizons (DDM-P12-T02)"
+    last_checked: "2026-09-07"
+    check_result: "curl -sI, HTTP 200, Last-Modified Mon, 07 Sep 2026 07:00:14 GMT, 148164 bytes"
+    wired: false
+    trap_note: "DO NOT USE the sibling wksst8110.for. It still returns HTTP 200 and 102362
+      bytes, but its Last-Modified is Tue, 09 Feb 2021 18:00:06 GMT and its last data row is
+      27JAN2021, so it would ship a five-year-old number behind a 200 status. Verified live
+      2026-09-07 alongside the 9120 file. Recorded at DR-031 citations (13#13) and
+      planning/2026-09-01-deep-dive/13-enso-science-spec.md:369-372."
+    date_note: "The file's line 1 states the dates are the week CENTRE, not the week start:
+      'Weekly SST data starts week centered on 2Sept1981'. The snapshot field is named and
+      documented as the centred date accordingly."
+
   - id: cpc-soi
     product: "Southern Oscillation Index series"
     url: "https://www.cpc.ncep.noaa.gov/data/indices/soi"
