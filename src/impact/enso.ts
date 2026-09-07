@@ -90,6 +90,27 @@ interface Nino34Series {
   readonly values: Nino34Point[];
 }
 
+/**
+ * One weekly Nino 3.4 observation (DR-031 a). Like `Nino34Point` with a day and
+ * without `climAdjust`: the weekly CPC file publishes sea surface temperature
+ * and anomaly only. The date is the CENTRE of its week, which the file states
+ * on its own first line, so no code here may call it a week start.
+ */
+interface Nino34WeeklyPoint {
+  readonly year: number;
+  readonly month: number;
+  readonly day: number;
+  readonly total: number;
+  readonly anom: number;
+}
+
+interface Nino34WeeklySeries {
+  readonly sourceUrl: string;
+  readonly published?: string;
+  readonly latest: Nino34WeeklyPoint;
+  readonly values: Nino34WeeklyPoint[];
+}
+
 interface SoiPoint {
   readonly year: number;
   readonly month: number;
@@ -124,6 +145,7 @@ interface EnsoSnapshot {
   readonly oni: IndexSeries;
   readonly roni: IndexSeries;
   readonly nino34?: Nino34Series;
+  readonly nino34Weekly?: Nino34WeeklySeries;
   readonly soi?: SoiSeries;
   readonly probabilities?: EnsoProbabilities;
 }
@@ -217,6 +239,14 @@ const THRESHOLD = 0.5;
 const RUN_LENGTH = 5;
 const DIRECTION_BAND = 0.2;
 const DIRECTION_SPAN = 3;
+/**
+ * How many weekly observations back the weekly trajectory is measured across.
+ * Four is about a month, the weekly analogue of the three-season
+ * `DIRECTION_SPAN`, and like `DIRECTION_BAND` it is this application's own
+ * choice and not a CPC rule. Stated here so it is auditable, and named in the
+ * claim text so a reader is never shown it as an issuer threshold.
+ */
+const WEEKLY_DIRECTION_SPAN = 4;
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_NAMES = [
   'January',
@@ -267,6 +297,7 @@ function snapshotAge(snap: EnsoSnapshot): SnapshotAge | null {
     snap.roni.published,
     snap.oni.published,
     snap.nino34?.published,
+    snap.nino34Weekly?.published,
     snap.soi?.published
   ]
     .map((day) => (day === undefined ? null : snapshotAgeDays(day)))
@@ -284,6 +315,7 @@ function publishedParts(snap: EnsoSnapshot): string[] {
     snap.roni.published ? `RONI published ${snap.roni.published}` : null,
     snap.oni.published ? `ONI published ${snap.oni.published}` : null,
     snap.nino34?.published ? `analyzed monthly Nino 3.4 published ${snap.nino34.published}` : null,
+    snap.nino34Weekly?.published ? `weekly Nino 3.4 published ${snap.nino34Weekly.published}` : null,
     snap.soi?.published ? `standardized SOI published ${snap.soi.published}` : null
   ].filter((part): part is string => part !== null);
 }
@@ -581,6 +613,49 @@ function nino34Text(series: Nino34Series, retrieved: string): string {
   return `The analyzed monthly Nino 3.4 sea surface temperature was ${latest.total.toFixed(2)} degrees Celsius against the CPC climatological adjustment of ${latest.climAdjust.toFixed(2)} degrees Celsius, an anomaly of ${signed(latest.anom)} degrees Celsius (${monthYear(latest.year, latest.month)}, the most recent analyzed month${gapText}). It is the fast-moving monthly companion, not an ENSO phase declaration on its own.`;
 }
 
+/**
+ * The trajectory word for the weekly series. Past tense only: it reports what
+ * the anomaly HAS done across observations already published, and the band it
+ * is measured against is named in the sentence so the word is auditable.
+ */
+const WEEKLY_TREND: Record<EnsoDirection, string> = {
+  strengthening: 'warming',
+  weakening: 'cooling',
+  steady: 'little changed'
+};
+
+function weeklyDayText(point: Nino34WeeklyPoint): string {
+  return `${point.day} ${MONTH_NAMES[point.month - 1]} ${point.year}`;
+}
+
+/**
+ * The observed weekly trajectory (DR-031 a). Every clause is about weeks that
+ * have already been published: how many observations, the value at each end,
+ * the arithmetic change, and the band that change is judged against. It states
+ * no expectation about any week that has not happened.
+ *
+ * DR-031's own recorded risk is that a weekly observation sitting in a column
+ * named for the near term reads as an outlook unless the text says otherwise,
+ * so the denial is part of the claim rather than a caption around it.
+ */
+function nino34WeeklyText(series: Nino34WeeklySeries): string {
+  const latest = series.latest;
+  const span = Math.min(WEEKLY_DIRECTION_SPAN, series.values.length);
+  const earlier = series.values[series.values.length - span]!;
+  const change = latest.anom - earlier.anom;
+  const direction: EnsoDirection =
+    change >= DIRECTION_BAND
+      ? 'strengthening'
+      : change <= -DIRECTION_BAND
+        ? 'weakening'
+        : 'steady';
+  return (
+    `Across the last ${span} weekly observations the Nino 3.4 sea surface temperature anomaly went from ${signed(earlier.anom, 1)} to ${signed(latest.anom, 1)} degrees Celsius, a change of ${signed(change, 2)} degrees Celsius measured against this application's own ${DIRECTION_BAND.toFixed(1)} degree band for calling a trajectory rather than noise, so across those weeks it is ${WEEKLY_TREND[direction]} (week centred ${weeklyDayText(latest)}, the newest week CPC has posted; this file dates each week at its centre). ` +
+    // vocab-allow: honesty disclaimer, denies being a forecast
+    'These are observations of what the ocean surface has already done. They do not declare an ENSO phase, which CPC declares from three-month averages and not from single weeks, and they are not a forecast: they say nothing about the weeks ahead.'
+  );
+}
+
 function soiAgreementText(roni: IndexSeries, soi: SoiSeries): string {
   const value = soi.latest.value;
   const reading = `${signed(value, 1)} (${monthYear(soi.latest.year, soi.latest.month)})`;
@@ -687,6 +762,42 @@ function isNino34Series(value: unknown): value is Nino34Series {
   );
 }
 
+function isNino34WeeklyPoint(value: unknown): value is Nino34WeeklyPoint {
+  return (
+    isObject(value) &&
+    Number.isInteger(value.year) &&
+    typeof value.month === 'number' &&
+    Number.isInteger(value.month) &&
+    value.month >= 1 &&
+    value.month <= 12 &&
+    typeof value.day === 'number' &&
+    Number.isInteger(value.day) &&
+    value.day >= 1 &&
+    value.day <= 31 &&
+    typeof value.total === 'number' &&
+    Number.isFinite(value.total) &&
+    typeof value.anom === 'number' &&
+    Number.isFinite(value.anom)
+  );
+}
+
+/**
+ * At least two observations, because the claim built from this block is a
+ * trajectory between two of them. One point is a malformed block, not a short
+ * one, and is dropped rather than described.
+ */
+function isNino34WeeklySeries(value: unknown): value is Nino34WeeklySeries {
+  return (
+    isObject(value) &&
+    typeof value.sourceUrl === 'string' &&
+    hasValidPublished(value) &&
+    isNino34WeeklyPoint(value.latest) &&
+    Array.isArray(value.values) &&
+    value.values.length >= 2 &&
+    value.values.every(isNino34WeeklyPoint)
+  );
+}
+
 function isSoiPoint(value: unknown): value is SoiPoint {
   return (
     isObject(value) &&
@@ -786,6 +897,16 @@ async function loadEnsoSnapshot(signal: AbortSignal): Promise<EnsoSnapshot> {
     console.warn('[enso] malformed Nino 3.4 block in snapshot; seasonal indices still render.');
   }
 
+  const nino34Weekly =
+    json.nino34Weekly === undefined
+      ? undefined
+      : isNino34WeeklySeries(json.nino34Weekly)
+        ? json.nino34Weekly
+        : null;
+  if (nino34Weekly === null) {
+    console.warn('[enso] malformed weekly Nino 3.4 block in snapshot; seasonal indices still render.');
+  }
+
   const soi =
     json.soi === undefined
       ? undefined
@@ -811,6 +932,7 @@ async function loadEnsoSnapshot(signal: AbortSignal): Promise<EnsoSnapshot> {
     oni: json.oni,
     roni: json.roni,
     ...(nino34 ? { nino34 } : {}),
+    ...(nino34Weekly ? { nino34Weekly } : {}),
     ...(soi ? { soi } : {}),
     ...(probabilities ? { probabilities } : {})
   };
@@ -920,6 +1042,35 @@ export async function fetchEnsoClaims(
         ]
       : [];
 
+    // DR-031 (a): the weekly Nino 3.4 observation, under the near-term horizon
+    // and labelled an observation rather than an outlook. Withheld past the
+    // hard staleness cutoff for the same reason the tendency claim is: a
+    // trajectory read on weeks that may long since have been superseded is
+    // worse than the named absence the cell falls back to.
+    const weeklyObservationClaims =
+      snap.nino34Weekly && !stale
+        ? [
+            makeClaim({
+              text: nino34WeeklyText(snap.nino34Weekly),
+              source: 'NOAA CPC weekly Nino 3.4 sea surface temperature anomaly',
+              sourceUrl: snap.nino34Weekly.sourceUrl,
+              evidence: 'analyzed',
+              dates: claimDates(snap.retrieved, snap.nino34Weekly.published),
+              lineage: [
+                'NOAA CPC weekly Nino-region sea surface temperature file (1991-2020 base period)'
+              ],
+              uncertainty: {
+                kind: 'typical',
+                text: 'a weekly observation of the ocean surface, not an index CPC declares a phase from; a single week moves more than the three-month averages the phase rules use, and CPC publishes these values to one decimal place, so a one-tick move sits at the limit of what the file can resolve'
+              },
+              // Observations of the weeks just past, which is what this column
+              // can honestly hold: the app has no ENSO product for the weeks
+              // ahead, and DR-031 (a) chose the observation over an empty cell.
+              horizon: 'nearTerm'
+            })
+          ]
+        : [];
+
     // The forward plume remains absent unless a future snapshot carries a
     // probabilities block from a documented machine source.
     const plumeClaims = [];
@@ -988,6 +1139,7 @@ export async function fetchEnsoClaims(
         ...authorityClaims,
         ...tendencyClaims,
         ...observedCompanionClaims,
+        ...weeklyObservationClaims,
         ...plumeClaims
       ]
     };
