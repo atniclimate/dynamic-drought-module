@@ -3608,7 +3608,11 @@ tasks:
   DDM-P12-T02:
     title: Give the ENSO horizons distinct source-backed meanings
     phase: DDM-P12
-    status: open
+    # open -> done 2026-09-07: S09 shipped the weekly claim (3619d20, 0b2f5d0, fcda17f,
+    # 6586493); S10 removed "outlook" from the horizon chrome (a7ebcf1). Closed
+    # sentence in docs/ROADMAP.yaml. The S10 headings table, src/impact/horizon-chrome.ts,
+    # is attached to no task here by instruction; see the S10 handoff.
+    status: done
     roadmap: docs/ROADMAP.yaml:386
     acceptance: Every visible ENSO horizon activates evidence no other horizon shows, or is absent, and
       no horizon implies a forecast the app does not have.

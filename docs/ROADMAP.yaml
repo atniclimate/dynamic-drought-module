@@ -458,6 +458,8 @@ phases:
         effort: M
         needs_decision: "DR-031 (wire the weekly Nino 3.4 file to Weeks ahead, or label the empty registers honestly; 05 D-ENSO-4)"
         acceptance: "Every visible ENSO horizon activates evidence no other horizon shows, or is absent, and no horizon implies a forecast the app does not have."
+        status: done
+        closed: "2026-09-07: shipped across S09 and S10. S09 wired the CPC weekly Nino 3.4 file as a near-term observation (DR-031 a): 3619d20 the snapshot series, 0b2f5d0 the claim, fcda17f the matrix cell, 6586493 tests/enso-horizons.spec.ts in verify:smoke, three fixtures for the block present, absent, and stale. S10 closed the collision the claim shipped into, a7ebcf1: the horizon headings come from one table and none says outlook or forecast (Current Conditions, Near Term, Long Range), pinned by the same spec. Each ENSO horizon now shows evidence the others do not: the RONI state, the weekly trajectory, the seasonal tendency."
       - id: "DDM-P12-T03"
         title: "Cite and correct the regional tilt statements"
         source: "05 ENSO-02, ENSO-05; 13 ENSOSCI-09, ENSOSCI-10; 10 SCI-07"

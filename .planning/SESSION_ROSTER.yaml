@@ -783,10 +783,58 @@ sessions:
       by owner ruling, in scripts/check-public-tree.mjs, which keeps its own allow-list parallel to
       .gitignore. Nobody had run the full gate since 5b40dfb.
 
-  # S10 to S19: the remaining nine Wave 2 cycle tasks. ORDER IS SET BY S03, not
+  # S10: the chrome half of closing DDM-P12-T02, split out the same way S09 was
+  # so one entry closes one session. Not a Wave 2 task of its own; it finishes
+  # the one S09 opened.
+  - id: S10
+    task_ids: [DDM-P12-T02]
+    title: "Near-term column chrome, closing ENSO horizons"
+    wave: 2
+    tier: T2
+    model: claude-fable-5-1
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    decision_gate: "DR-031 (the collision its own risk line predicted)"
+    gate: "npm run verify:quick, then npm run verify:smoke once, then npm run check:public-tree"
+    role: "Wave 2 executor. Chrome only: no claim text, no CELL_ABSENCE prose, no issuer product name."
+    rationale: >-
+      S09 shipped a near-term ENSO claim whose text says it is not a forecast, under a column
+      titled "Near-term outlook" (src/impact/briefing.ts:40 at the time). DDM-P12-T02's acceptance
+      says no horizon may imply a forecast the app does not have, and a heading is part of the
+      horizon. ddm-science-verifier flagged exactly this in S09 and called it an owner call.
+    budget_tokens: 120000
+    stop_when: "the headings come from one table, say neither outlook nor forecast, the spec pins them, and the three gates are green"
+    status: done
+    outcome: >-
+      DONE on branch feature/horizon-chrome-dr031 from main at 98df11e (main fast-forwarded to S09
+      by owner ruling at the start of this session; the S09 branch is kept). Four commits:
+      ad0c2f2 one source of truth, a7ebcf1 the rename, 322cab3 the spec, plus the closing ledger
+      commit. verify:quick clean; verify:smoke 115 passed, 1 skipped (the ux1-surfaces.spec.ts:98
+      quarantine), 4.5m; check:public-tree clean, 545 tracked files.
+      THE PROMPT'S MICROTASK 1 TARGET WAS THE WRONG TABLE, and the prompt's own escape clause was
+      taken. TEMPORAL_HORIZON_LABELS (src/config/clusters.ts:57) is keyed current | weeks-ahead |
+      season-ahead, holds lowercase cadence fragments for the map shell, says in its own comment
+      that it is NOT the chip labels and that merging it with its neighbour is an owner ruling,
+      and is pinned by tests/heat-h1-heatrisk.spec.ts:349 to "next seven days". The single source
+      of truth is instead a new pure module, src/impact/horizon-chrome.ts, keyed by the briefing's
+      HorizonKey with one type-only import, so the eager panel can read it without pulling
+      briefing.ts (forbidden in the initial static set by scripts/check-activation-budget.mjs) into
+      the entry chunk. clusters.ts and the heatrisk spec were not touched.
+      The sweep found 8 hits in 4 files and no docs hits; the two title sources it exposed had
+      already drifted apart on subtitles. Files changed: briefing.ts and impact-panel.ts (in the
+      sweep), plus horizon-chrome.ts (new), a doc-comment example in types.ts, and the assertion
+      in tests/enso-horizons.spec.ts. Rendered headings now: Current Conditions / now, Near Term /
+      days to weeks, Long Range / season to water year, asserted against the table in the DOM.
+      DDM-P12-T02 flipped to done in docs/ROADMAP.yaml and .planning/TRACE.yaml. DDM-P8-T03 was
+      NOT flipped; the handoff quotes its acceptance and says which fragment this touches.
+
+  # S11 to S19: the remaining nine Wave 2 cycle tasks. ORDER IS SET BY S03, not
   # here. Tiers below are per-task and apply only after S03 cuts the cycle.
-  # Was S09-S19 until 2026-09-07, when DDM-P12-T02 closed as S09 above.
-  - id: S10-S19
+  # Was S09-S19 until 2026-09-07 (DDM-P12-T02 closed as S09), then S10-S19
+  # until S10 above took the chrome half of the same task.
+  - id: S11-S19
     task_ids: [DDM-P1-T02, DDM-P1-T04, DDM-P7-T05, DDM-P8-T02, DDM-P8-T03, DDM-P11-T01, DDM-P12-T03, DDM-P14-T03, DDM-P9-T05]
     title: "The Wave 2 cycle, sequenced by S03"
     wave: 2

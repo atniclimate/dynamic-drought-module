@@ -74,6 +74,7 @@ workers/proxy/.wrangler/
 # the session prompt required in its closing commit. Handoffs stay local by
 # default; each tracked one is opted in here individually.
 !/planning/handoffs/2026-09-07-s09-enso-horizons.md
+!/planning/handoffs/2026-09-07-s10-horizon-chrome.md
 /post-mortem/
 /research/
 /reviews/

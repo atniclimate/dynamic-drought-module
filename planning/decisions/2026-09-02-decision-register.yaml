@@ -1437,6 +1437,22 @@ groups:
           chrome around it does not. Renaming that column touches all four hazard rows and was out of
           this session's scope. Owner call.
         supersedes: "the S02g near-term ENSO absence (option b behaviour), matrix.ts CELL_ABSENCE.nearTerm.enso"
+        collision_closed_2026_09_07: >-
+          CLOSED by session S10, commit a7ebcf1 on feature/horizon-chrome-dr031 (unpushed). The
+          horizon headings no longer say "outlook". Owner-decided exact strings: Current Conditions
+          / now, Near Term / days to weeks, Long Range / season to water year; no hyphen in a title.
+          One table now carries them, src/impact/horizon-chrome.ts (ad0c2f2), read by both the lazy
+          composer and the eager panel's module-failure path, which had drifted to their own
+          subtitles ("days to a season" against "days to weeks", "season to water year" against
+          "months"). tests/enso-horizons.spec.ts (322cab3) pins the rendered headings to that table
+          and asserts that no heading contains "outlook" or "forecast" and no title a hyphen. Claim
+          text, CELL_ABSENCE prose and issuer product names were not touched: the CPC Seasonal
+          Drought Outlook is an outlook and still says so. The risk line above ("reads as a forecast
+          unless the label says otherwise") is now answered by the label as well as by the claim,
+          and DDM-P12-T02 is marked done in docs/ROADMAP.yaml. TEMPORAL_HORIZON_LABELS in
+          src/config/clusters.ts was NOT the home for this and was not changed: it is the map
+          shell's cadence table under different keys, pinned by tests/heat-h1-heatrisk.spec.ts:349,
+          and its own comment reserves any merge of the two tables for an owner ruling.
       - id: DR-032
         title: A persistent ENSO state panel on the ENSO screen
         question: >-
