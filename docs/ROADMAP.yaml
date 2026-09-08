@@ -588,6 +588,8 @@ phases:
         needs_decision: "DR-007 (Node pin and lint tooling; 15 DEP-07)"
         acceptance: "One lint command runs over the TypeScript and the stylesheet and passes on the current tree, and the gate names it."
         verification: "verify:quick"
+        status: done
+        closed: "2026-09-08: owner ruling via the S16 prompt (S14 owner call 3). npm run lint is biome lint over biome.jsonc's includes (src/**/*.ts and src/styles/app.css); on 0c09081 it checked 179 files in 332 ms with no diagnostics, and check:all in package.json names npm run lint second, after scan:emdash. The rules biome.jsonc switches off, and the specs and .tsx islands outside its includes, are DDM-P15-T05's."
       - id: "DDM-P15-T05"
         title: "Burn down the lint rules the command switched off, and widen it to the specs"
         source: "DDM-P15-T04 measurement, 2026-09-03; 15 DEP-06, DEP-08"

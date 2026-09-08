@@ -266,6 +266,7 @@ sessions:
       2026-09-07: the branch keeps T05, the guard task becomes DDM-P15-T06.
     status: done
     s14_verdict_2026_09_08: "DDM-P15-T01 DONE (1ba44d4; DEVELOPER.md:580-658). DDM-P15-T05 NOT LANDED: this branch created the task, biome.jsonc still excludes the 11 .tsx islands and tests/, and a scratch run of the recommended preset measured 17 island a11y errors (ruling A5 open). DDM-P15-T04 is still status open in docs/ROADMAP.yaml though this branch's register line says satisfied; outside S14's eight, reported."
+    owner_ruling_2026_09_08_s16: "DDM-P15-T05 ruling A5: no waiver. The 11 .tsx islands and tests/ join biome.jsonc's includes inside T05 itself, and the 17 island a11y errors measured 2026-09-08 are T05's to burn down, not to record and skip. DDM-P15-T04 flipped to done by S16 (S14 owner call 3)."
     outcome: >-
       Merged into main by merge commit (no push). Conflicts resolved in package.json
       (check:all keeps npm run lint and the S01 test scripts) and docs/ROADMAP.yaml (branch
@@ -970,6 +971,7 @@ sessions:
     stop_when: "every hazard screen shows a time control at every horizon that has a surface, every stamp reads HORIZON_CHROME and names its issuer and period or says the product is undated, outlook steps are labelled and observed steps are not, the acceptance spec is in smoke, and the three gates are green"
     status: done
     s14_verdict_2026_09_08: "landed on main (0b62a4e, 96aba35). DDM-P8-T02 TRACE status done under owner ruling R5 with nifc-fires.ts, spc-fire-weather.ts and usfs-whp.ts attached; DR-071 ratified as written (R3), DR-070 amended (R4)."
+    deploy_2026_09_08: "deploy and verify-live on 96aba35 green per the owner (S16 prompt, 2026-09-08); run ids not supplied and so unrecorded. Resolves S14 owner call 7."
     outcome: >-
       DONE on branch feature/fire-heat-time-bar-p8t02 from main at 5e261a4, unpushed; landing is
       the owner's. Commits 630df11 (TimeBarStamp.horizon required, rendered from HORIZON_CHROME;
@@ -1073,6 +1075,10 @@ sessions:
       # block-level model above (T3: claude-fable-5-1 high; T2: claude-sonnet-5 high).
       DDM-P1-T02:  { tier: T3, model: claude-fable-5-1, effort: high, why: "8 files 37 tests, 5 of 8 acceptance_testable_here false (RECONCILIATION.md:213); docs/ROADMAP.yaml:172-174" }
       DDM-P1-T04:  { tier: T3, model: claude-fable-5-1, effort: high, why: "5 files 19 tests, 4 of 5 false (RECONCILIATION.md:215); highest in-degree task node, 11 inbound edges (RECONCILIATION.md:611-612)" }
+      # DDM-P1-T04 owner ruling 2026-09-08 (S16 prompt, S14 owner call 6): the share
+      # button joins mapDependentControls() in src/ui/sidebar.ts (the :283-287
+      # comment records it as deliberately excluded, inert until map ready);
+      # the task that splits the sidebar from search adds it to the disabled set.
       DDM-P7-T05:  { tier: T2, model: claude-sonnet-5, effort: high, why: "effort M, DR-014 and DR-019, plus DR-070 amended_2026_09_08 (the HeatRisk claim's outlook register is routed here), 8 files 8 tests; docs/ROADMAP.yaml:294-299" }
       # DDM-P8-T02 moved to its own entry S13 above and closed 2026-09-08 (owner-
       # assigned ahead of S03). Its tier line was: { tier: T3, why: "effort L,
@@ -1222,6 +1228,7 @@ owner_calls:
       - "5. DDM-P15-T05: rulings A5 (repair one useKeyWithClickEvents site, record sixteen) still open; 17 island a11y errors measured 2026-09-08 (%TEMP%\\ddm-s14\\biome-islands-tsx.log)."
       - "6. src/ui/sidebar.ts:283-287: the share button is inert until map ready and is not in the disabled set; S14 corrected the comment only. Add it to mapDependentControls() or leave it."
       - "7. Precondition 6 of the S14 prompt (DEPLOY_STATE) was left as a placeholder; the deploy receipt for 96aba35 is unrecorded."
+    resolved_2026_09_08_s16: "Owner rulings via the S16 prompt, recorded by S16. 1 and 2 (popup close-button rule, view-switch padding): routed to the P16 candidate phase S15 is drafting; call 1 also noted on DR-042 (popups by touch, DDM-P11-T02). 3: DDM-P15-T04 flipped to done in docs/ROADMAP.yaml and TRACE, lint receipt 179 files clean. 4: DR-072 ratified as option a; DDM-P7-T03 stays open until the DR-022 outlooks are wired. 5: no waiver; the islands and tests join biome.jsonc scope inside DDM-P15-T05 (see S02a.owner_ruling_2026_09_08_s16). 6: the share button joins mapDependentControls() under DDM-P1-T04 (see its per_task_tier line). 7: deploy and verify-live on 96aba35 green per the owner, run ids unrecorded (see S13.deploy_2026_09_08). All seven resolved."
 
   stub_acceptance:
     what: "Write acceptance sentences for the 22 title-only stubs in P3 to P6, or mark them blocked_on their gate."

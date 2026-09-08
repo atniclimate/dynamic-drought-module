@@ -5,6 +5,10 @@
 schema_version: 1
 generated: "2026-09-02"
 updated: >-
+  2026-09-08 by session S16 (cancel layer loads): 72 entries, 52 decided, 20 pending. DR-072
+  decided (owner ratification via the S16 prompt: option a, DDM-P7-T03 stays open until the
+  DR-022 outlooks are wired); DR-042 gained owner_note_2026_09_08 (the popup close-button rule,
+  S14 owner call 1, routed to the P16 candidate phase). Previous updated:
   2026-09-08 by session S14 (close what has landed): 72 entries, 51 decided, 21 pending. DR-071 decided (owner ratification via the S14 prompt: option a as written, reading R-b affirmed, the register word stays Outlook with no vocab-allow, the heatrisk-days activation budget 10.0 kB gzip ratified); DR-070 amended_2026_09_08 (a HeatRisk claim in force is outlook register in the briefing too; implementation routed to DDM-P7-T05, no src/impact file touched); added G-session-2026-09-08-s14 with DR-072, session-proposed and pending (a "not wired" named absence does not close DDM-P7-T03). Previous updated: 2026-09-08 by session S13 (fire and heat time bar): 71 entries, 50 decided, 21 pending; added G-session-2026-09-08 with DR-071, session-proposed and pending owner ratification (the time-bar stamp grammar and what a fire or heat time step may claim; it also records that the issuer's own words contradict DR-070's classified -> observed reading of HeatRisk). S12 had added G-session-2026-09-07 with DR-070 (decided) on 2026-09-07 without bumping this line. Previous updated: 2026-09-04T11:20-07:00 by the foundations true-up: 69 entries, 49 decided, 20 pending, no entry ruled this session. Added foundations_pass_2026_09_03 (see that block). Corrections to the record's own facts: the deployed application bytes are 2835091, not 5be15f5 (docs-only diff skipped by deploy.yml paths-ignore); v0.6.26 IS tagged at 533fabd; DR-069 is unexecuted on main (vite.config.ts:67 sourcemap true), its fix rides platform/ddm-p15-close; DR-065's standing default_if_no_answer (option b) is the opposite of what was built and awaits ruling A6; DR-061 sits beside two live weekly crons (browser-suite.yml:76, refresh-snapshots.yml:18) and awaits ruling B6. Previous updated: 2026-09-03T20:05-07:00 by the long run: 69 entries, 49 decided, 20 pending. DR-067 decided b with its probe condition MET (the issuer applies a rendering rule, and it needs no Worker publish), DR-068 decided b, DR-069 created and decided and EXECUTED on platform/ddm-p15-close; DR-065 gained fix_2026_09_03 recording the flake rate falling 6 of 16 and 5 of 16 to 0 of 16; branch_state gained landed_2026_09_03_pm (main cd1d061 to 5be15f5, three merges, ribbon proven live) and awaiting_go_2026_09_03_pm (nine branches pushed, none landed, with a suggested landing order)
 posture: one integration branch, local-first verification, one PR when the owner says go
 
@@ -1996,6 +2000,14 @@ groups:
           Parked, not decided. No observation of organic discovery: Reuben Martinez reached the briefing
           via the slide-out, the NIDIS team saw it on a screen share. Worth watching. Source:
           planning/decisions/cc-prompt-decision-packet-2026-09-03.md (owner rulings, 2026-09-02 22:38 PDT)
+        owner_note_2026_09_08: >-
+          Still pending. Noted here for popups by touch (DDM-P11-T02), by the owner via the S16
+          prompt (S14 owner call 1): src/styles/app.css:7229-7232 keeps the
+          .maplibregl-popup-close-button 44px rule, which covers the popup title and falsifies the
+          popup-viewport.ts:163-174 derivation; foundations plan v1 row 7 and question 4 default to
+          deleting it. The call is routed to the P16 candidate phase S15 is drafting, and whoever
+          rules this entry should read that rule beside it, since a popup reached by touch is the
+          popup that rule sizes.
       - id: DR-043
         title: The completeness sentence on two more popups
         question: >-
@@ -3403,9 +3415,14 @@ groups:
           placeholder DDM-P7-T02 was asked for, and its own comment names DR-022 as the product
           that will fill the cell.
         default_if_no_answer: option a; DDM-P7-T03 stays open
-        status: pending
-        decided: null
-        decision: null
+        status: decided
+        decided: "2026-09-08"
+        ruling_source: "owner, 2026-09-08, via the S16 prompt (S14 owner call 4)"
+        decision: >-
+          Ratified as option a. A "not wired" named absence is a build state, not the runtime
+          "unavailable" of a wired product; DDM-P7-T03 stays open until the DR-022 outlooks (SPC
+          Days 1 to 8, NIFC Months 1 to 4) are wired and their cells carry an issuer, a valid window
+          and a geography. The fire cells (DDM-P7-T03) sit in the roster's Wave 3 block.
         session_proposed_2026_09_08: >-
           Applied as option a by S14 on 2026-09-08 under the S14 prompt's R12 (one session-proposed
           entry): DDM-P7-T03 was not flipped, no ROADMAP key was invented, and the roster's S02g
