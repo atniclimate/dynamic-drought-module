@@ -1,60 +1,103 @@
+Dynamic Drought Module (DDM)
+License
+
 Copyright (c) 2026 ATNI Climate, The Affiliated Tribes of Northwest
 Indians (ATNI). All rights reserved.
 
 Licensor: ATNI Climate, The Affiliated Tribes of Northwest Indians.
-SPDX-License-Identifier: PolyForm-Strict-1.0.0
+Developer: Patrick A. Freeland.
+SPDX-License-Identifier: LicenseRef-DDM-Community-1.0
 
-This software is licensed under the PolyForm Strict License 1.0.0, whose
-verbatim text follows the notices below. In summary (the license text
-governs): noncommercial use is permitted; selling the software,
-distributing it, changing it, or making new works based on it is NOT
-permitted without a further license from the licensor.
+======================================================================
+Plain-language summary (this section is NOT the license)
+======================================================================
 
-Additional permission from ATNI Climate (noncommercial deployment)
--------------------------------------------------------------------
+This summary is a courtesy explanation only. It has no legal effect.
+If anything here conflicts with Part A below, Part A controls.
 
-In addition to the rights granted by the PolyForm Strict License 1.0.0,
-ATNI Climate grants noncommercial entities permission to:
+- You may use, study, run, and share the Dynamic Drought Module (DDM)
+  for any noncommercial purpose, and you may modify it, as long as you
+  release your modified version under this same license: share-alike.
+- Commercial use is not permitted, full stop. This document does not
+  offer a path to a commercial license; that would take a separate
+  written agreement with ATNI Climate.
+- Every deployment must show where its data comes from: source,
+  issuer, retrieval date, and terms, for every layer the tool displays
+  and for every layer a deployer adds.
+- Every use must follow the Tiered Sovereign Data Framework (TSDF) for
+  any sovereign, Tribal, or Indigenous data the tool touches, and must
+  credit ATNI Climate, with Patrick A. Freeland as Developer.
+- This tool exists in service to Tribes and Indigenous Peoples. Use of
+  it must not work against Tribal sovereignty, treaty rights, or
+  Indigenous data sovereignty. It can, and should, be used to help any
+  community that has access to it.
+- The public data the tool displays (NOAA, NASA, USGS, USDA, the
+  Census Bureau, the Bureau of Indian Affairs, the National
+  Interagency Fire Center, and the other sources named in README.md)
+  is not owned by ATNI Climate and keeps its own terms: generally
+  public domain for U.S. federal works, or the issuing source's own
+  specific-use terms.
 
-1. Host and serve unmodified built copies of this software on their own
-   infrastructure, and embed it in their own noncommercial websites; and
-2. Populate the bundled data placeholder files (public/data/) and edit the
-   configuration tables (src/config/) for their own noncommercial
-   deployment, under their own data authorizations and the stewardship
-   notes in public/data/README.md;
+======================================================================
+Part A: The DDM Community License, Version 1.0 (2026-09-08)
+======================================================================
 
-provided attribution to ATNI Climate is preserved in the application and
-its documentation. This additional permission covers deployment
-configuration only; it does not permit selling the software, offering it
-commercially, or distributing modified versions.
+Notice on the origin of this text. The base terms below (from
+"Acceptance" through "Definitions", before "Additional Conditions")
+incorporate text originally published by the PolyForm Project as the
+PolyForm Noncommercial License, version 1.0.0. That text has been
+reproduced here and then modified by adding the Additional Conditions
+that follow it. The PolyForm Project's own rule for modified license
+text states: "If you make changes to a PolyForm license, you must
+remove all mention of 'PolyForm' and polyformproject.org." In
+compliance with that rule, this document is named differently (the DDM
+Community License), does not call itself a PolyForm license anywhere
+in its operative terms, and is not published, reviewed, or endorsed by
+the PolyForm Project. This paragraph records that history for
+attribution; it is the only place in this file that names the source.
 
-Any other permission (commercial use, modification beyond deployment
-configuration, redistribution of changed versions) requires explicit
-written permission from ATNI Climate and is granted, when granted, with
-provenance-tracking conditions: attribution to ATNI preserved, changes
-documented, and the modified work's provenance disclosed to ATNI.
-
-Requests: open an issue at
-https://github.com/atniclimate/dynamic-drought-module or contact ATNI
-Climate through https://atnitribes.org.
-
--------------------------------------------------------------------
-
-# PolyForm Strict License 1.0.0
-
-<https://polyformproject.org/licenses/strict/1.0.0>
+----------------------------------------------------------------------
+Base terms
+----------------------------------------------------------------------
 
 ## Acceptance
 
-In order to get any license under these terms, you must agree to them as both strict obligations and conditions to all your licenses.
+In order to get any license under these terms, you must agree to them
+as both strict obligations and conditions to all your licenses.
 
 ## Copyright License
 
-The licensor grants you a copyright license for the software to do everything you might do with the software that would otherwise infringe the licensor's copyright in it for any permitted purpose, other than distributing the software or making changes or new works based on the software.
+The licensor grants you a copyright license for the software to do
+everything you might do with the software that would otherwise
+infringe the licensor's copyright in it for any permitted purpose.
+However, you may only distribute the software according to
+Distribution License and make changes or new works based on the
+software according to Changes and New Works License.
+
+## Distribution License
+
+The licensor grants you an additional copyright license to distribute
+copies of the software. Your license to distribute covers distributing
+the software with changes and new works permitted by Changes and New
+Works License.
+
+## Notices
+
+You must ensure that anyone who gets a copy of any part of the
+software from you also gets a copy of these terms, as well as copies
+of any plain-text lines beginning with "Required Notice:" that the
+licensor provided with the software.
+
+## Changes and New Works License
+
+The licensor grants you an additional copyright license to make
+changes and new works based on the software for any permitted purpose.
 
 ## Patent License
 
-The licensor grants you a patent license for the software that covers patent claims the licensor can license, or becomes able to license, that you would infringe by using the software.
+The licensor grants you a patent license for the software that covers
+patent claims the licensor can license, or becomes able to license,
+that you would infringe by using the software.
 
 ## Noncommercial Purposes
 
@@ -62,40 +105,248 @@ Any noncommercial purpose is a permitted purpose.
 
 ## Personal Uses
 
-Personal use for research, experiment, and testing for the benefit of public knowledge, personal study, private entertainment, hobby projects, amateur pursuits, or religious observance, without any anticipated commercial application, is use for a permitted purpose.
+Personal use for research, experiment, and testing for the benefit of
+public knowledge, personal study, private entertainment, hobby
+projects, amateur pursuits, or religious observance, without any
+anticipated commercial application, is use for a permitted purpose.
 
 ## Noncommercial Organizations
 
-Use by any charitable organization, educational institution, public research organization, public safety or health organization, environmental protection organization, or government institution is use for a permitted purpose regardless of the source of funding or obligations resulting from the funding.
+Use by any charitable organization, educational institution, public
+research organization, public safety or health organization,
+environmental protection organization, or government institution is
+use for a permitted purpose regardless of the source of funding or
+obligations resulting from the funding.
 
 ## Fair Use
 
-You may have "fair use" rights for the software under the law. These terms do not limit them.
+You may have "fair use" rights for the software under the law. These
+terms do not limit them.
 
 ## No Other Rights
 
-These terms do not allow you to sublicense or transfer any of your licenses to anyone else, or prevent the licensor from granting licenses to anyone else.  These terms do not imply any other licenses.
+These terms do not allow you to sublicense or transfer any of your
+licenses to anyone else, or prevent the licensor from granting
+licenses to anyone else. These terms do not imply any other licenses.
 
 ## Patent Defense
 
-If you make any written claim that the software infringes or contributes to infringement of any patent, your patent license for the software granted under these terms ends immediately. If your company makes such a claim, your patent license ends immediately for work on behalf of your company.
+If you make any written claim that the software infringes or
+contributes to infringement of any patent, your patent license for the
+software granted under these terms ends immediately. If your company
+makes such a claim, your patent license ends immediately for work on
+behalf of your company.
 
 ## Violations
 
-The first time you are notified in writing that you have violated any of these terms, or done anything with the software not covered by your licenses, your licenses can nonetheless continue if you come into full compliance with these terms, and take practical steps to correct past violations, within 32 days of receiving notice.  Otherwise, all your licenses end immediately.
+The first time you are notified in writing that you have violated any
+of these terms, or done anything with the software not covered by your
+licenses, your licenses can nonetheless continue if you come into full
+compliance with these terms, and take practical steps to correct past
+violations, within 32 days of receiving notice. Otherwise, all your
+licenses end immediately.
 
 ## No Liability
 
-***As far as the law allows, the software comes as is, without any warranty or condition, and the licensor will not be liable to you for any damages arising out of these terms or the use or nature of the software, under any kind of legal claim.***
+***As far as the law allows, the software comes as is, without any
+warranty or condition, and the licensor will not be liable to you for
+any damages arising out of these terms or the use or nature of the
+software, under any kind of legal claim.***
 
 ## Definitions
 
-The **licensor** is the individual or entity offering these terms, and the **software** is the software the licensor makes available under these terms.
+The licensor is the individual or entity offering these terms, and the
+software is the software the licensor makes available under these
+terms. You refers to the individual or entity agreeing to these terms.
 
-**You** refers to the individual or entity agreeing to these terms.
+Your company is any legal entity, sole proprietorship, or other kind
+of organization that you work for, plus all organizations that have
+control over, are under the control of, or are under common control
+with that organization. Control means ownership of substantially all
+the assets of an entity, or the power to direct its management and
+policies by vote, contract, or otherwise. Control can be direct or
+indirect.
 
-**Your company** is any legal entity, sole proprietorship, or other kind of organization that you work for, plus all organizations that have control over, are under the control of, or are under common control with that organization.  **Control** means ownership of substantially all the assets of an entity, or the power to direct its management and policies by vote, contract, or otherwise.  Control can be direct or indirect.
+Your licenses are all the licenses granted to you for the software
+under these terms.
 
-**Your licenses** are all the licenses granted to you for the software under these terms.
+Use means anything you do with the software requiring one of your
+licenses.
 
-**Use** means anything you do with the software requiring one of your licenses.
+----------------------------------------------------------------------
+Additional Conditions
+----------------------------------------------------------------------
+
+These Additional Conditions are conditions on every license granted
+above. A use that fails any of them is a use outside your licenses,
+the same as a failure of any base term above.
+
+### 1. Share-Alike
+
+If you distribute the software, or any Derived Work (defined below),
+you must license the entire Derived Work, as a whole, under this same
+license: the DDM Community License, Version 1.0, unmodified except for
+the addition of your own copyright notice for your own changes. You
+may not add further restrictions this license does not already carry,
+and you may not distribute a Derived Work under any other license.
+
+### 2. Attribution
+
+Every copy or Derived Work must credit, in its user interface or in
+accompanying documentation:
+
+- ATNI Climate, The Affiliated Tribes of Northwest Indians, as the
+  original licensor;
+- Patrick A. Freeland as the Developer of the Dynamic Drought Module;
+  and
+- the project name, "Dynamic Drought Module (DDM)", and its source
+  repository, https://github.com/atniclimate/dynamic-drought-module.
+
+### 3. Data Provenance
+
+For every dataset the software displays, and for every dataset a
+deployer adds (including through deployer-provided data slots
+described in this repository's documentation), the deployment must
+carry, and make reasonably discoverable to a viewer, that dataset's
+source and issuing organization, its retrieval date or vintage, and
+its terms of use to the extent the source states them. This provenance
+must travel with any redistribution of the software or of the data
+itself. Stripping it is a violation of this license, even where the
+underlying data would otherwise be freely redistributable on its own.
+
+### 4. Tiered Sovereign Data Framework Adherence
+
+Any sovereign, Tribal, or Indigenous data the software handles or
+displays, or that a deployer adds to it, must be handled according to
+the tiers and consent rules of the Tiered Sovereign Data Framework
+(TSDF), published at
+https://github.com/atniclimate/TieredSovereignDataFramework. Without
+the consent the TSDF's tiers require, you may not redistribute
+sovereign boundary or place data, or any other Tribal or Indigenous
+data, beyond what its source and the Nation or Peoples concerned
+permit. When a dataset's tier is unclear, treat it as the TSDF's most
+protected tier until the concerned Nation or Peoples says otherwise.
+
+### 5. Service to Tribes and Indigenous Peoples
+
+This software exists in service to Tribes and Indigenous Peoples. Your
+use of it must not be adverse to Tribal sovereignty, treaty rights, or
+Indigenous data sovereignty. Subject to that condition, and to every
+other condition in this license, the software may be used to help any
+community that has access to it; this license does not limit who may
+be helped.
+
+### 6. No Commercial Use
+
+The noncommercial limitation stated in the base terms above is
+absolute. This document does not offer, and nothing in it should be
+read to imply, a separate commercial license; a commercial license, if
+ATNI Climate ever chooses to offer one, requires a separate written
+agreement outside this document.
+
+### 7. Public-Source Acknowledgment
+
+The public data sources this software displays, including but not
+limited to NOAA, NASA, USGS, USDA, the U.S. Census Bureau, the Bureau
+of Indian Affairs, the National Interagency Fire Center, and the other
+federal, state, provincial, and Tribal sources named in this
+repository's README.md, are not owned or licensed by ATNI Climate and
+are not relicensed by this document. They keep their own terms; see
+Part B below and README.md for what this repository's documentation
+states about each one.
+
+### 8. No Endorsement
+
+You may not use the name "ATNI", "ATNI Climate", "The Affiliated
+Tribes of Northwest Indians", or the Developer's name, to imply
+endorsement of a Derived Work or of any use of the software, beyond
+the attribution this license requires.
+
+### Definitions (Additional Conditions)
+
+Commercial Use means use intended for, or directed toward, commercial
+advantage or monetary compensation: selling the software or access to
+it, bundling it with a paid product or service, or using it in the
+operation of a for-profit business, whether or not the software itself
+is sold.
+
+Derived Work means the software with any change, addition, or removal,
+or any new work that incorporates the software or a material part of
+it, including a modified deployment, fork, or embed that alters the
+software itself. Configuration data a deployer supplies under
+Additional Condition 3 is not, by itself, a Derived Work.
+
+======================================================================
+Part B: Notices
+======================================================================
+
+This Part B is informational. It records what this repository's own
+documentation, principally README.md as read on 2026-09-08, states
+about the public data sources the software can display. It is not a
+representation by ATNI Climate about any source's actual current
+license, and it does not narrow Additional Condition 7. Verify current
+terms with each issuing source before relying on this section.
+
+United States federal sources named in README.md: NOAA (NIDIS, CPC,
+NWS/WPC, SPC, NCEI, HMS), NASA (GIBS), USGS (3DEP; telemetry), USDA
+(Forest Service GeoPlatform, for Wildfire Hazard Potential), the U.S.
+Census Bureau (state boundaries; AIANNH), the Bureau of Indian Affairs
+(AIAN-LAR reservation boundaries), the National Interagency Fire
+Center (WFIGS fire perimeters), NRCS, USBR, and USACE (telemetry), and
+the Energy Information Administration (power plants). Works of the
+United States federal government are generally not subject to
+copyright in the United States and are in the public domain
+domestically; a specific federal dataset may still carry a
+service-specific terms-of-use page this repository's documentation
+does not itemize beyond what is stated here and in README.md.
+
+National Drought Mitigation Center (NDMC), which publishes the U.S.
+Drought Monitor with NOAA and USDA as partners: terms not itemized in
+this repository's documentation beyond the source citation.
+
+Agriculture and Agri-Food Canada: issuer of the Canadian Drought
+Monitor snapshot bundled with this software on a monthly cadence. A
+Canadian federal source; terms not itemized in this repository's
+documentation beyond the source citation.
+
+Government of Canada, Statistics Canada, Statistical Geomatics Centre:
+issuer of the 2021 Digital Boundary File this software uses only as an
+internal analysis mask for the northern minimap framing, never as
+rendered boundary or jurisdictional geometry. README.md states this
+dataset is licensed under the Open Government Licence, Canada,
+https://open.canada.ca/en/open-government-licence-canada.
+
+EPA (Omernik Level III and IV Ecoregions), bundled as tiles: terms not
+itemized in this repository's documentation beyond the source
+citation.
+
+Natural Earth: issuer of the bundled, display-only municipal place
+labels; terms not itemized in this repository's documentation beyond
+the source citation.
+
+OpenStreetMap contributors, retrieved live via Overpass for the rivers
+layer: terms not itemized in this repository's documentation beyond
+the source citation.
+
+Live Tribal-geography sources (U.S. Census AIANNH; BIA AIAN-LAR):
+README.md states these are fetched live at view time from the
+publishing federal services, held only in browser session memory,
+requested with cache: 'no-store', and never bundled or redistributed
+by this repository.
+
+Deployer-provided data (the tribal and treaty slots): README.md states
+these ship as empty placeholders a deployer populates with its own
+authorized data, under the deployer's own governance and Additional
+Condition 4 above. They are not public sources of this repository and
+carry whatever terms the deployer's own data carries.
+
+Tribal Nations whose boundary, treaty, or place data appears through
+any live source, deployer slot, or future addition: that data remains
+the sovereign data of the Nation concerned, governed first by that
+Nation's own terms and by the Tiered Sovereign Data Framework
+(Additional Condition 4), regardless of which federal or state agency
+publishes or hosts it.
+
+======================================================================
+End of license.
+======================================================================

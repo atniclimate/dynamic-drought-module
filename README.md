@@ -34,12 +34,15 @@ layer table below).
 > with the relevant Tribal Nation before using these polygons for any
 > decision-making.
 
-License: PolyForm Strict License 1.0.0. ATNI Climate, The Affiliated
-Tribes of Northwest Indians, holds the rights. Noncommercial use is
-permitted; selling or modifying the software requires explicit written
-permission from ATNI Climate with provenance tracking. See `LICENSE`,
-including the additional ATNI permission that covers noncommercial
-self-hosting and data population.
+License: the DDM Community License 1.0 (`LICENSE`). ATNI Climate, The
+Affiliated Tribes of Northwest Indians, holds the rights; Patrick A. Freeland
+is the Developer. Anyone may use, host, modify and share the module for
+noncommercial purposes under the same terms (share-alike), carrying the
+provenance of every dataset, adhering to the Tiered Sovereign Data Framework,
+and in service to Tribes and Indigenous Peoples; the module can and should be
+used to help any community that has access to it. No commercial use is
+permitted. `CITATION.cff` gives the citation; `llms.txt` states the same
+conditions for automated readers.
 
 ## Current development baseline
 
@@ -467,19 +470,25 @@ can run the result.
 
 ## Attribution and licensing
 
-Copyright (c) 2026 ATNI Climate, The Affiliated Tribes of Northwest
-Indians (ATNI). This project is licensed under the PolyForm Strict
-License 1.0.0 (see `LICENSE`): noncommercial entities may use the
-software; selling it, modifying it, or building new works on it requires
-explicit written permission from ATNI Climate, granted with
-provenance-tracking conditions (attribution preserved, changes documented
-and disclosed to ATNI). The `LICENSE` file carries an additional ATNI
-permission allowing noncommercial deployers to host unmodified copies and
-populate the data placeholders and configuration tables for their own
-deployment; that permission is what makes the self-hosting pattern in
-this README work.
+Copyright (c) 2026 ATNI Climate, The Affiliated Tribes of Northwest Indians
+(ATNI). This project is licensed under the DDM Community License, Version
+1.0 (see `LICENSE`): permitted for anyone for noncommercial use, with any
+redistribution or modification released under this same license,
+share-alike; no commercial use is permitted, and this document offers no
+path to one.
 
-Data layers provided by sovereign Tribal Nations, state agencies, and
-federal entities retain their respective public-domain or specific-use
-licenses. Ensure you have authorization to redistribute any bundled
-reference polygons.
+Every use must cite ATNI Climate and Patrick A. Freeland, the Developer;
+carry provenance (source, issuer, retrieval date, terms) for every dataset
+shown and every dataset a deployer adds; and follow the [Tiered Sovereign
+Data Framework](https://github.com/atniclimate/TieredSovereignDataFramework)
+for sovereign, Tribal, or Indigenous data, never redistributing sovereign
+boundary or place data beyond what the source and Nation concerned permit.
+This tool serves Tribes and Indigenous Peoples and must not be used against
+Tribal sovereignty, treaty rights, or Indigenous data sovereignty; it can,
+and should, help any community with access to it.
+
+See `LICENSE` for full terms, `CITATION.cff` to cite this project, and
+`llms.txt` for machine-readable use notes. Data layers from sovereign Tribal
+Nations, state, provincial, and federal entities retain their own
+public-domain or specific-use licenses (see `LICENSE` Part B); confirm
+authorization before redistributing any bundled reference polygons.
