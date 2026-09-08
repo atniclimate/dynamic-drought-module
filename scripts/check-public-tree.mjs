@@ -40,6 +40,12 @@ const forbidden = [
 // installed guardrails have a reviewable origin. Everything else under
 // planning/ stays forbidden.
 const allowed = [
+  // The ROOT CLAUDE.md is tracked on purpose (5b40dfb, "docs: add root
+  // CLAUDE.md pointing at roster and roadmap"): the repository carries its own
+  // entry point, and docs/ROADMAP.yaml and .planning/SESSION_ROSTER.yaml both
+  // rely on it. This script predates that decision. AGENTS.md, every HANDOFF
+  // and POST-MORTEM, and any NESTED CLAUDE.md stay forbidden.
+  /^CLAUDE\.md$/,
   // planning/references/ joined the tracked ledgers on 2026-09-07 by owner
   // ruling (the S03b references register). That ruling added the matching
   // .gitignore negation; this list is the second half of it, because this
