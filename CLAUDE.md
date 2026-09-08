@@ -32,20 +32,13 @@ in `docs/ROADMAP.yaml`, unless a task's own `verification:` key or its roster en
 overrides it. One Playwright runner at a time. No completion claim without the pasted
 output of the assigned gate. Report exactly what ran and what was skipped.
 
-## Git and landing
+## Git, landing, and session conduct
 
-- Commit only when the owner says go. Show the diff and the add-list first.
-- No attribution trailers on any commit, ever.
-- Never author U+2014. `scripts/scan-emdash.mjs` and the edit hook in `.claude/hooks/`
-  enforce this.
-- Landing a branch is the owner's call and happens as a `--no-ff` merge commit on
-  `main` when it does. Do not push, open a landing PR, merge, deploy, tag, publish the
-  Worker, mutate Asana, force-push, or delete branches without the owner's say. No new
-  cron jobs (DR-061 in `planning/decisions/`).
-- One writing session per checkout, counting Codex sessions: a Claude Code session and
-  a Codex session open on the same checkout is a violation. Unexplained dirty files or
-  a moved `origin/main` belong to the owner working concurrently: report, never stage
-  or revert.
+The session conduct rules live in `.planning/PLANNING_AUTHORITY.md` section 8 and are
+read there, not here: commits and trailers, U+2014, heredocs, push and landing, schedules
+and workflows, the Playwright runner and the completion gate, receipts, one writing
+session per checkout, the public-tree check, and what a session does when a
+precondition is unmet.
 
 ## Read caps
 

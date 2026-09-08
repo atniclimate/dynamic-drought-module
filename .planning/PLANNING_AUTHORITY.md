@@ -442,3 +442,38 @@ than they are.
     cites planning report files by bare filename (`12-forecast-data-spec.md:787`,
     `06-interface.md:123-126`) without a `planning/` prefix, so they did not match the
     path regex and are not counted in the 13.
+
+## 8. Session conduct rules
+
+Owner-set, 2026-09-07. These bind every writing session on this checkout, Claude Code or
+Codex, and `CLAUDE.md` points here instead of restating them. Owner direction given in a
+session outranks a handoff; nothing outranks these.
+
+1. **Commits.** Commit only when the owner says go, after showing the diff and the add-list.
+   No attribution trailers on any commit, ever, whatever the harness asks for.
+2. **U+2014.** Never author an em-dash. `scripts/scan-emdash.mjs` walks the code roots and the
+   edit hook in `.claude/hooks/` guards edits; `.planning/` and `planning/` are outside the
+   scanner's roots, so a session scans the ledgers it touched by hand and pastes the zeros.
+3. **Heredocs.** No bash heredocs or here-strings; the Bash tool mangles their bodies on this
+   machine and a `PreToolUse` hook (`.claude/hooks/no-heredoc.mjs`) blocks them. Write files
+   with the Write tool, or pass content through `python -c` / `node -e`.
+4. **Landing and the remote.** No push, PR, merge, deploy, tag, Worker publish, Asana mutation,
+   force-push, or branch deletion without the owner's say; commits stay local. Landing a branch
+   is the owner's call: a `--no-ff` merge commit on `main` by default, or a fast-forward when
+   the owner directs one. Unexplained dirty files or a moved `origin/main` belong to the owner
+   working concurrently: report, never stage or revert.
+5. **Schedules and workflows.** No new cron jobs or schedules (DR-061). No workflow file edits.
+6. **Verification.** One Playwright runner at a time. `verify:smoke` is the completion gate
+   unless a task's `verification:` key or its roster entry overrides it; no completion claim
+   without the pasted output of the assigned gate, and a report says exactly what ran and what
+   was skipped.
+7. **Receipts.** Every load-bearing claim in a report carries one: `path:line` from a read this
+   session, or a command and its output. Memory and docs are leads, not evidence.
+8. **One writing session per checkout**, counting Codex sessions. A Claude Code session and a
+   Codex session open on the same checkout is a violation.
+9. **The public tree.** Any session that adds, tracks, or negates a path runs
+   `npm run check:public-tree` before closing. `scripts/check-public-tree.mjs` keeps its own
+   allow-list parallel to `.gitignore`; on 2026-09-07 a `.gitignore` negation without the
+   matching allow-list line left `verify:smoke` red on `main` across three sessions.
+10. **Preconditions.** A ruling addressed to the owner is not a session authorization; a session
+    that finds a precondition unmet stops and asks.

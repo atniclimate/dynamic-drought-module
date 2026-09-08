@@ -1349,7 +1349,7 @@ groups:
         decided: "2026-09-02"
         decision: "a: Three-state model with CPC advisory semantics; conditions lead the headline, five-season episode rule secondary; enso-indices.json v2."
       - id: DR-030
-        title: The four Pacific Northwest tilt sentences
+        title: The three Pacific Northwest tilt sentences
         question: >-
           Adopt the four replacement tilt sentences, including deleting the uncited fine-fuels
           sentence and adding the near-normal-snowpack counter-evidence to the El Nino branch?
@@ -1378,9 +1378,16 @@ groups:
         status: decided
         decided: "2026-09-02"
         decision: >-
-          a: adopt all four Pacific Northwest tilt sentences with a source URL on each. Recorded as the
+          a: adopt all three Pacific Northwest tilt sentences with a source URL on each. Recorded as the
           packet Part 2 default; the owner accepted all twenty-one by id with no objection.
         ruling_source: "planning/decisions/cc-prompt-decision-packet-2026-09-03.md (owner rulings, 2026-09-02 22:38 PDT)"
+        count_amended_2026_09_07: >-
+          Four became three, owner ruling 2026-09-07. src/impact/enso.ts tendency() (:474-503) has
+          three branches, el-nino, la-nina and neutral, each carrying source, sourceUrl and lineage
+          since 46f98f4 (2026-09-02). The S03b recon report and the S09 and S10 handoffs recorded
+          the mismatch; docs/ROADMAP.yaml DDM-P12-T03 acceptance is amended to three in the same
+          commit. The question, options and rationale above keep their original wording as the
+          record of what was asked; only the title and the decision state the count that is true.
       - id: DR-031
         title: Weekly Nino 3.4 in the Weeks ahead register
         question: >-

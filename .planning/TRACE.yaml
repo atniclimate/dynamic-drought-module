@@ -7,8 +7,10 @@ generated_from:
   # repairs since then are recorded per-attachment as dated comments; this names
   # the newest tree those repairs were checked against. S03b repaired three
   # attachments after S02g (dc1a583); S09 attached the DR-031 build-time files
-  # and the DDM-P12-T02 acceptance spec, and moved the heat-h1-heatrisk entry.
-  repairs_through: 96a783e
+  # and the DDM-P12-T02 acceptance spec, and moved the heat-h1-heatrisk entry. The
+  # 2026-09-07 planning commit attached src/impact/horizon-chrome.ts (S10) to
+  # DDM-P12-T02 and flipped it to done.
+  repairs_through: 549c126
   roadmap: docs/ROADMAP.yaml (schema_version 2, updated 2026-09-03)
   module_graph: .planning/trace/imports.json via .planning/trace/vite.trace.config.ts (vite 8.1.3 /
     rolldown 1.1.4, production resolution)
@@ -3611,7 +3613,7 @@ tasks:
     # open -> done 2026-09-07: S09 shipped the weekly claim (3619d20, 0b2f5d0, fcda17f,
     # 6586493); S10 removed "outlook" from the horizon chrome (a7ebcf1). Closed
     # sentence in docs/ROADMAP.yaml. The S10 headings table, src/impact/horizon-chrome.ts,
-    # is attached to no task here by instruction; see the S10 handoff.
+    # is attached below by owner ruling in the 2026-09-07 planning commit.
     status: done
     roadmap: docs/ROADMAP.yaml:386
     acceptance: Every visible ENSO horizon activates evidence no other horizon shows, or is absent, and
@@ -3649,6 +3651,19 @@ tasks:
           - "scripts/lib/enso-snapshot-contract.mjs:346: export const OPTIONAL_SERIES = ['nino34',
             'nino34Weekly', 'soi', 'probabilities'];"
         attached_by: repair:S09
+      # Attached 2026-09-07 by owner ruling: this module closed the last item of
+      # DDM-P12-T02 (S10, a7ebcf1), and a done task closing on a closed sentence is
+      # a valid target by this file's own rule (attachment_guards.rule_1_no_statement).
+      # DDM-P8-T03 (honest horizon chips) attaches it too when that session touches it.
+      - path: src/impact/horizon-chrome.ts
+        owns: The one table of briefing horizon headings (title and time-window subtitle per
+          HorizonKey), read by the lazy composer and the eager panel's module-failure path; no
+          heading says outlook or forecast
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/impact/horizon-chrome.ts:2: The briefing's three horizon headings: the title and the short time-window"
+          - "src/impact/horizon-chrome.ts:52: export const HORIZON_CHROME: Readonly<Record<HorizonKey, HorizonChrome>> = {"
+        attached_by: repair:owner
     # tests: was [] and coverage was files-no-tests until 2026-09-07 (S09); the
     # acceptance now has a spec that quotes it and drives all three cell states.
     tests:

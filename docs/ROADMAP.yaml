@@ -52,13 +52,14 @@ authority:
   # 2026-09-07, from .planning/PLANNING_AUTHORITY.md. This file is the TASK
   # ledger and nothing more. It cites 34 DR- ids and defines none; all 69 live
   # in the decision ledger. FE- ids are cited from src/ and appear nowhere in
-  # this file. The four live planning paths below are tracked in git as of this
+  # this file. The five live planning paths below are tracked in git as of this
   # date (.gitignore); the rest of planning/ stays local and untracked.
   task_ledger: "docs/ROADMAP.yaml"
   decision_ledger: "planning/decisions/"              # defines all 69 DR- ids; this file cites, never defines
   defect_ledger: "planning/qa/feature-errors.yaml"    # FE-01..FE-24, EF-IB-1..10, EF-MM-1..7; FE-19 is cited from src/styles/app.css:6170
   research_inputs: "planning/user-research/"          # cite by path when a task draws on them; no ids adopted
   handoff_entry: "planning/handoffs/2026-09-04.md"    # newest only; older handoffs are history
+  references_ledger: "planning/references/register.yaml"  # seeded by S03b 2026-09-07: one entry per cited source, url, issuer, owning task, last_checked
   read_only_history:
     - "planning/archive/"
     - "planning/2026-09-03-long-run/"
@@ -279,6 +280,8 @@ phases:
         effort: L
         needs_decision: "DR-012 (four hazard sections of three horizons, or three horizon sections of four hazard rows; 02 D2)"
         acceptance: "Every one of the twelve hazard-by-horizon cells renders either a sourced claim or a named unavailable state, and no cell inherits another hazard's issuer or clock."
+        status: done
+        closed: "2026-09-07: landed in S02g (merge 6a070eb) as src/impact/matrix.ts, whose LANE_PLACEMENT and CELL_ABSENCE tables are the structure this acceptance names. tests/briefing-matrix.spec.ts quotes the acceptance verbatim and runs in verify:smoke since d992267 (S09); the S03b recon ran it alone on main first, 11 passed, and every smoke run since has carried it."
       - id: "DDM-P7-T03"
         title: "Add the Fire near-term and long-range claims"
         source: "02 IB-02; 10 SCI-03; 12 FSPEC-05, FSPEC-06"
@@ -465,7 +468,7 @@ phases:
         source: "05 ENSO-02, ENSO-05; 13 ENSOSCI-09, ENSOSCI-10; 10 SCI-07"
         effort: M
         needs_decision: "DR-030 (the four Pacific Northwest tilt sentences; 05 ENSO-02)"
-        acceptance: "Each of the four Pacific Northwest tilt sentences cites a published source and states the season and probabilistic strength that source supports; the two DR-030 names as over-claiming are narrowed to what their source supports."
+        acceptance: "Each of the three Pacific Northwest tilt sentences cites a published source and states the season and probabilistic strength that source supports; the two DR-030 names as over-claiming are narrowed to what their source supports."
         verification: "verify:quick"
       - id: "DDM-P12-T04"
         title: "Decide the marine product and its baseline"
@@ -684,16 +687,16 @@ decision_gates:
     register: "DR-032"
     needed_by: ["DDM-P4-T01"]
   - id: "DDM-D12"
-    question: "How should the eleven tasks that cycle through src/impact/enso.ts and the briefing composer be sequenced, given no import-derived order exists inside the cycle?"
-    needed_by: ["DDM-P1-T02", "DDM-P1-T04", "DDM-P7-T02", "DDM-P7-T05", "DDM-P8-T02", "DDM-P8-T03",
-                "DDM-P11-T01", "DDM-P12-T02", "DDM-P12-T03", "DDM-P14-T03", "DDM-P9-T05"]
-    context: "2026-09-07 reconciliation, section 6: these eleven open tasks form one strongly
-      connected component under direct-import analysis (imports.json via TRACE.yaml): P7-T02
-      through P8-T03 circulate through the briefing and time-bar modules; P12-T02/T03 and P7-T02
-      circulate through the single file src/impact/enso.ts; P1-T02/T04 circulate through the
-      sidebar/island seam. No file-level ordering can separate them; the natural cut the
-      reconciliation identified is src/impact/enso.ts itself (the sole attached file for P12-T01,
-      P12-T02, and P12-T03), which would drop three tasks out of the cycle if the ENSO horizons
-      are planned as a unit separate from the briefing composer.
-      NONE of these eleven tasks should start before a dedicated planning session sequences the
-      cycle by hand; starting one in isolation risks rework against whatever the other ten land."
+    question: "How should the three tasks that still cycle through src/impact/enso.ts and the briefing composer be sequenced, given no import-derived order exists inside the cycle?"
+    needed_by: ["DDM-P12-T02", "DDM-P12-T03", "DDM-P7-T02"]
+    context: "2026-09-07 reconciliation, section 6, named eleven. RESTATED 2026-09-07 by owner
+      ruling on the S03b recount (.planning/2026-09-07-recon-report.md section 1), taken after
+      the three TRACE repairs S02g had invalidated (dc1a583) and with both S03 cuts accepted,
+      src/impact/enso.ts as the file seam and the hub line at twenty: the component is THREE
+      tasks, ENSO horizons (DDM-P12-T02), ENSO citations (DDM-P12-T03) and briefing matrix
+      (DDM-P7-T02), bound through hydrate.ts -> enso.ts and enso.ts -> ui/charts.ts. Nothing
+      joined that the eleven did not already name. The eight that leave (P1-T02, P1-T04, P7-T05,
+      P8-T02, P8-T03, P11-T01, P14-T03, P9-T05) keep the cut-2 layer order of the S03 plan,
+      .planning/2026-09-07-s03-enso-cut-plan.md section 3, and are no longer gated here. Of the
+      three, P7-T02 landed in S02g and P12-T02 closed across S09 and S10; P12-T03 is the member
+      still open. The S03 plan is the dedicated sequencing this decision asked for."

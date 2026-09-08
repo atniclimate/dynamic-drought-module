@@ -55,7 +55,7 @@ workers/proxy/.wrangler/
 /.codex/
 /.handoff/
 /drought-region-maps/
-# 2026-09-07: planning/ is local EXCEPT the four paths the roadmap's authority
+# 2026-09-07: planning/ is local EXCEPT the five paths the roadmap's authority
 # block names as live ledgers (docs/ROADMAP.yaml, `authority:`). Those carry
 # the DR- decision register, the FE- defect ledger that src/styles/app.css
 # cites, the user-research inputs, and the newest handoff. Everything else
