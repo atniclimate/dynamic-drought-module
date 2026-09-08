@@ -9,13 +9,15 @@ This software is licensed under the DDM Community License, Version
 modification must be released under this same license (share-alike).
 Any use must follow the Tiered Sovereign Data Framework (TSDF) for
 sovereign, Tribal, or Indigenous data, and must credit ATNI Climate
-and Patrick A. Freeland (Developer). Every dataset this tool displays,
-and every dataset a deployer adds, must carry its source, issuer,
-retrieval date, and terms; that provenance must travel with any
-excerpt or redistribution. This tool exists in service to Tribes and
-Indigenous Peoples: use must not work against Tribal sovereignty,
-treaty rights, or Indigenous data sovereignty, and it may be used to
-help any community that has access to it.
+and Patrick A. Freeland (Developer).
+
+Every dataset this tool displays, and every dataset a deployer adds,
+must carry its source, issuer, retrieval date, and terms; that
+provenance must travel with any excerpt or redistribution. This tool
+exists in service to Tribes and Indigenous Peoples: use must not work
+against Tribal sovereignty, treaty rights, or Indigenous data
+sovereignty, and it may be used to help any community that has access
+to it.
 
 ## For automated agents and language models
 
@@ -40,10 +42,11 @@ help any community that has access to it.
 
 ## What this is
 
-DDM is a static TypeScript and MapLibre web map that a deployer builds
-once and serves from its own infrastructure, with no backend, account,
-tracking, or analytics. It shows drought, wildfire, extreme heat, and
-water and snowpack conditions, deepest in the Pacific Northwest.
+DDM shows drought, wildfire, extreme heat, and water and snowpack
+conditions, deepest in the Pacific Northwest. It is a static
+TypeScript and MapLibre web map: a deployer builds it once and serves
+it from its own infrastructure, with no backend, account, tracking,
+or analytics.
 
 ## Key files
 
@@ -55,6 +58,7 @@ water and snowpack conditions, deepest in the Pacific Northwest.
 
 ## Contact
 
-ATNI Climate, The Affiliated Tribes of Northwest Indians. No public
-contact email is stated in this repository's documentation; open an
-issue at https://github.com/atniclimate/dynamic-drought-module.
+This project is stewarded by ATNI Climate, The Affiliated Tribes of
+Northwest Indians. No public contact email is stated in this
+repository's documentation. Open an issue at
+https://github.com/atniclimate/dynamic-drought-module.

@@ -1,8 +1,8 @@
 # Design documentation
 
-This directory preserves owner input, current presentation contracts, and
-historical implementation evidence without turning any of them into a second
-roadmap. Runtime source, state contracts, accessibility behavior, and tests are
+This directory holds the owner's design input alongside current presentation
+contracts and implementation history. None of it replaces the roadmap.
+Runtime source, state contracts, accessibility behavior, and tests are
 authoritative when an older artifact disagrees with the shipped application.
 Current written owner direction, review comments, and direct corrections
 govern the intended design change and outrank older annotations or receipts.
@@ -21,11 +21,11 @@ than silently treating either one as a veto.
 | [`fire3d-context.md`](fire3d-context.md) | Honesty framing for the desktop 3D Fire context view: the no-fire-behavior-modeling line, the "not a digital twin" naming decision, and the in-interface non-prediction disclosure. |
 | [`ddm_interface-edits_1.json`](ddm_interface-edits_1.json) and [`ddm_interface-edits_2.json`](ddm_interface-edits_2.json) | Immutable owner-annotation captures that informed pull request 6. They preserve the input as received; they are not an active plan, literal pixel specification, or current completion checklist. |
 
-Owner markup communicates hierarchy, relationships, emphasis, and intended
+Owner markup carries hierarchy, relationship, emphasis, and intended
 interaction. Its sketch colors and geometry are not automatically literal UI
-colors or fixed coordinates. A shipped implementation translates that intent
-through the current data, state, responsive, accessibility, and stewardship
-contracts.
+colors or fixed coordinates. Translating that intent through the application's
+data, state, responsive, accessibility, and stewardship contracts is the work
+of respect, not dilution.
 
 Merged product changes and observed deployment facts belong in
 [`../RELEASE_NOTES.md`](../RELEASE_NOTES.md). The roadmap defines planned
@@ -34,20 +34,20 @@ behavior. Do not duplicate those roles in this design index.
 
 ## Current direction, recorded 2026-09-01
 
-By owner direction the briefing is named the Impact Briefing, and it is being
-extended from its drought-only framing to synthesize Drought, Fire, Heat, and
-ENSO. The eventual host for the module is a local full-service server; GitHub
-Pages remains the static host for now. Per-action continuous integration
-receipts are no longer the development posture: work converges on one
-integration branch and lands as one pull request.
+By owner direction the briefing is named the Impact Briefing and extended from
+its drought-only framing to synthesize Drought, Fire, Heat, and ENSO. The
+eventual host for the module is a local full-service server; GitHub Pages
+remains the static host for now. Work converges on one integration branch and
+lands as one pull request, replacing per-action continuous integration
+receipts.
 
 ## Standing interface invariants and decisions
 
-Lifted 2026-09-01 from the closed 2026-08-10 interface-integration ledger,
-which is now archived. These are the constraints and decisions from that
-migration that the shipped runtime still enforces, kept here because nothing
-else tracked records them. Where a runtime file owns the constraint it is named,
-and each named path was confirmed to exist on 2026-09-01.
+These constraints and decisions were lifted on 2026-09-01 from the closed
+2026-08-10 interface-integration ledger, now archived. They live here because
+nothing else tracked records them, and the shipped runtime still enforces
+every one. Where a runtime file owns the constraint it is named, and each
+named path was confirmed to exist on 2026-09-01.
 
 ### Invariants
 
@@ -113,24 +113,25 @@ since shipped as the governed Fire 3D context view.
 
 DDM is not merely a map. It is an instrument for making claims responsibly
 about conditions that can shape decisions during drought, wildfire, heat, and
-other climate stress. Its design quality therefore includes the honesty of
-what it says, what it cannot say, and how visibly it preserves that boundary.
+other climate stress. There is no neutral display; design quality therefore
+includes the honesty of what the instrument says, what it cannot say, and how
+visibly it draws the line between them.
 
 ### Truthfulness is interface design
 
 The interface may compress, sequence, group, or progressively disclose a
 source claim. It must not broaden the claim's meaning, time, geography,
 completeness, or certainty. `no data`, `unavailable`, `live (partial)`, and a
-verified absence remain different states. A visual summary must retain a path
+verified absence remain different states. A visual summary must carry a path
 to its source, update time, qualification, and provenance.
 
 ### Design for a field instrument
 
-DDM should work as an instrument used in bright light, on a small screen, with
-one hand, intermittent source availability, and limited attention. The first
-read should be glanceable. Touch targets, focus, contrast, safe areas, and
-reduced-motion behavior are core design inputs. Progressive disclosure adds
-depth without hiding the condition, source, or status a decision depends on.
+DDM must work for a person in bright light, on a small screen, with one hand,
+intermittent source availability, and limited attention. The first read is
+glanceable. Touch targets, focus, contrast, safe areas, and reduced-motion
+behavior are core design inputs. Progressive disclosure adds depth; it never
+hides the condition, source, or status a decision depends on.
 
 ### Emphasis must be ethical
 
@@ -143,44 +144,46 @@ without animation. Urgency comes from clear prioritization, not alarm styling.
 ### Creativity comes from truthful arrangement
 
 Creative range lives in how governed facts are framed, layered, juxtaposed,
-sequenced, and connected through interaction. It does not require an invented
-severity score, blended hazard claim, all-clear, causal story, or capability
-the sources do not provide. A novel arrangement is successful when it helps a
-person see a truthful relationship sooner.
+sequenced, and connected through interaction; it does not extend to inventing
+a severity score, blending hazard claims, implying an all-clear, telling a
+causal story, or adding a capability the sources do not provide. A novel
+arrangement succeeds when it helps a person see a truthful relationship
+sooner.
 
 ### Urgency raises the standard
 
 Time pressure does not waive attribution, accessibility, cancellation,
 failure handling, responsive verification, or source qualification. The more
-urgent the use case, the more important it is that the display fail honestly
-and preserve the user's state. Work should move in bounded visible slices,
-with limitations and verification reported directly rather than hidden behind
-process ceremony.
+urgent the use case, the more it matters that the display fail honestly and
+preserve the person's state. Work moves in bounded visible slices, with
+limitations and verification reported directly, not hidden behind process
+ceremony.
 
 ### Co-creation is translation with receipts
 
 The owner supplies purpose, lived priorities, annotations, and acceptance
 judgment. Implementation reconciles that intent with the application's real
 data and state contracts, shared design primitives, browser constraints,
-accessibility, and Tribal stewardship. When those constraints require an
-adaptation, preserve the owner's relationship and hierarchy, record the
-reason, and return a visible working result for review. Tests and screenshots
-are evidence of the translation, not substitutes for owner judgment.
+accessibility, and Tribal stewardship. When a constraint requires adaptation,
+the implementation preserves the owner's relationship and hierarchy, records
+the reason, and returns a visible working result for review. Tests and
+screenshots are evidence of the translation, not substitutes for owner
+judgment.
 
-Neither perspective is complete alone. The owner sees community context,
-consequences, institutional relationships, and meaning that implementation
-cannot infer from a repository. The implementation partner sees cross-file
-coupling, lifecycle hazards, browser behavior, and verification seams that the
+Neither side is complete on its own, and neither is a vendor to the other.
+The owner sees community context, consequences, institutional relationships,
+and meaning no repository reveals. The implementation partner sees cross-file
+coupling, lifecycle hazards, browser behavior, and verification seams the
 owner should not have to enumerate. Respect means both forms of knowledge can
 change the work, and that a meaning-changing assumption returns to the owner
 instead of being hidden inside code.
 
 ### Convergence is systems alignment
 
-A working name for this alignment and development method is convergence
-systems architecture. It treats interface, data, state, stewardship, and
-verification as one claim-bearing system rather than separate finishing
-passes.
+Convergence systems architecture is the working name for this method. It
+treats interface, data, state, stewardship, and verification as one
+claim-bearing system rather than separate finishing passes; each layer keeps
+its own integrity while the distance between them narrows.
 
 A change converges when mission and stewardship, source evidence, application
 state, URL truth, presentation, accessibility, lifecycle behavior, tests, and
@@ -205,9 +208,11 @@ coherent foundation for the next bounded decision.
 
 ## Convergence check
 
-A design is ready to ship when these questions have concrete answers:
+These six questions are lenses a designer carries through the work, not boxes
+ticked before shipping:
 
-1. What decision or first-glance understanding improves for the user?
+1. What decision or first-glance understanding improves for the person
+   using it?
 2. Which source and state contracts support every visible claim?
 3. Does emphasis match evidence without overstating urgency or certainty?
 4. Does the same meaning survive mobile, desktop, embed, keyboard, source
