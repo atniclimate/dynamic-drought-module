@@ -74,6 +74,13 @@ import { fetchJsonWithBudget } from '../util/fetch';
 import { prefersReducedMotion } from '../util/motion';
 import { registry } from '../state/registry';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
+import {
+  clearTimeBar,
+  getTimeBarSpec,
+  onTimeBarSpecChange,
+  setTimeBar,
+  timeBarOwner
+} from '../ui/time-bar';
 import { buildFireContextHtml } from '../impact/fire-context';
 
 const LAYER_KEY = 'nifc-fires';
@@ -239,6 +246,71 @@ function reportStatus(state: NifcStatus): void {
   registry.setStatus(LAYER_KEY, state);
 }
 
+// ---------------------------------------------------------------------------
+// The time statement (DDM-P8-T02)
+// ---------------------------------------------------------------------------
+
+/** True while the perimeters source is on the map (set by activate, cleared
+ * by deactivate), so the vacancy listener below can never install a stamp
+ * for a layer that is off. */
+let timeBarEligible = false;
+/** Disposer for the vacancy subscription; armed on activate. */
+let unsubscribeTimeBar: (() => void) | null = null;
+
+/**
+ * The perimeter stamp, the Wildfire screen's time statement at the current
+ * horizon (acceptance clause 4: the product is undated). WFIGS publishes
+ * its current perimeters as one rolling set with no product-level valid
+ * time: the service is checked about every five minutes and each perimeter
+ * carries its own discovery date, which the popup states. The stamp says
+ * exactly that. It does not print the retrieval clock as if it were a
+ * product date, and it infers no perimeter age from the refresh cadence
+ * (the module header's rule).
+ *
+ * OWNERSHIP. This is an event layer, not a condition surface, and the
+ * wildfire cluster's current recipe has no surface at all (perimeters plus
+ * smoke over the basemap), so nothing else would speak for the map's time
+ * there. A surface still outranks it: the stamp installs only while no
+ * surface owns the bar, and re-installs when a surface vacates it (the
+ * horizon flip back from the SPC Day 1 outlook to the current recipe).
+ */
+function installPerimeterTimeBar(): void {
+  if (!timeBarEligible) return;
+  const owner = timeBarOwner();
+  if (owner !== null && owner !== LAYER_KEY) return;
+  setTimeBar(LAYER_KEY, {
+    ariaLabel: 'NIFC mapped fire perimeters time statement',
+    stamp: {
+      horizon: 'current',
+      headline: 'Current perimeters · no single valid time',
+      detail:
+        'NIFC WFIGS current interagency perimeters · checked for updates about every five minutes; the service states no product date and each perimeter carries its own discovery date',
+      register: 'observed'
+    }
+  });
+}
+
+function armTimeBar(): void {
+  timeBarEligible = true;
+  if (!unsubscribeTimeBar) {
+    unsubscribeTimeBar = onTimeBarSpecChange(() => {
+      // A surface cleared the bar while these perimeters are still on the
+      // map: the time statement falls back to the perimeters.
+      if (timeBarEligible && getTimeBarSpec() === null) installPerimeterTimeBar();
+    });
+  }
+  installPerimeterTimeBar();
+}
+
+function disarmTimeBar(): void {
+  timeBarEligible = false;
+  if (unsubscribeTimeBar) {
+    unsubscribeTimeBar();
+    unsubscribeTimeBar = null;
+  }
+  clearTimeBar(LAYER_KEY);
+}
+
 function resolveBeforeId(map: maplibregl.Map): string | undefined {
   return map.getLayer(BEFORE_ID) ? BEFORE_ID : undefined;
 }
@@ -312,6 +384,10 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     data: geojson,
     attribution: 'NIFC WFIGS'
   });
+
+  // The source is on the map from here on, perimeters or none: the time
+  // statement stands for both (an empty current set is still the product).
+  armTimeBar();
 
   if (features.length === 0) {
     reportStatus(truncated ? 'degraded' : 'no-data');
@@ -430,6 +506,7 @@ export function deactivate(map: maplibregl.Map): void {
   stopWildfirePulse();
   cancelActivation();
   masterController = null;
+  disarmTimeBar();
   for (const id of [
     OTHER_OUTLINE_LAYER_ID,
     PRESCRIBED_OUTLINE_LAYER_ID,

@@ -35,6 +35,7 @@ import {
 import { matchExpression } from '../config/style-expressions';
 import { parseArcGisPolygonFeatureCollection } from '../config/wildfire-presentation';
 import { buildSpcFireWeatherPopupHtml } from '../ui/popups';
+import { clearTimeBar, setTimeBar } from '../ui/time-bar';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 
@@ -93,6 +94,73 @@ function buildQueryUrl(): string {
   return `${URLS.spcFireWeatherOutlookMapServer}/${DAY1_LAYER_ID}/query?${params.toString()}`;
 }
 
+// ---------------------------------------------------------------------------
+// The time statement (DDM-P8-T02)
+// ---------------------------------------------------------------------------
+
+/**
+ * "Sep 8, 2026, 12:00 UTC" from the SPC `valid` / `expire` field
+ * (`YYYYMMDDHHMM`, UTC). Pinned to UTC, unlike the popup's local-time
+ * rendering, so the stamp reads the same for every viewer and matches the
+ * other UTC-pinned stamps. Null when the field does not parse: the stamp
+ * then says the period is not stated rather than printing a raw string.
+ */
+function spcMomentUtc(value: unknown): string | null {
+  if (typeof value !== 'string' || !/^\d{12}$/.test(value)) return null;
+  const ms = Date.UTC(
+    Number(value.slice(0, 4)),
+    Number(value.slice(4, 6)) - 1,
+    Number(value.slice(6, 8)),
+    Number(value.slice(8, 10)),
+    Number(value.slice(10, 12))
+  );
+  if (Number.isNaN(ms)) return null;
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'UTC',
+    timeZoneName: 'short'
+  }).format(new Date(ms));
+}
+
+/**
+ * The Day 1 outlook stamp, the Wildfire screen's time statement at the
+ * near-term horizon. The period is the issuer's own `valid` and `expire`
+ * on the outlined areas (clause 3); an issuance with no outlined area is
+ * the common good-news case, and its empty response carries no window, so
+ * the stamp says the period is not stated (clause 4) rather than inventing
+ * one from the calendar. The register is outlook, and the text says so in
+ * the issuer's product name.
+ */
+function installTimeBar(features: FeatureCollection['features']): void {
+  const first = features[0]?.properties ?? null;
+  const from = spcMomentUtc(first?.['valid']);
+  const until = spcMomentUtc(first?.['expire']);
+  const headline =
+    from !== null && until !== null
+      ? `Outlook valid ${from} to ${until}`
+      : from !== null
+        ? `Outlook valid from ${from}`
+        : 'Outlook · valid period not stated by the response';
+  const detail =
+    features.length === 0
+      ? 'NOAA SPC Day 1 Fire Weather Outlook · no fire-weather area is outlined in the current issuance; an empty response states no valid period'
+      : 'NOAA SPC Day 1 Fire Weather Outlook · an outlook of fire-weather conditions favorable for fire spread, not a fire danger rating and not an active fire';
+  setTimeBar(LAYER_KEY, {
+    ariaLabel: 'SPC Day 1 Fire Weather Outlook valid period',
+    stamp: {
+      horizon: 'nearTerm',
+      headline,
+      detail,
+      register: 'outlook'
+    }
+  });
+}
+
 /**
  * Fetch today's outlook and add the source plus fill and outline layers.
  * Idempotent. Empty FeatureCollection renders as `'no-data'` (no elevated
@@ -142,6 +210,10 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     data: geojson,
     attribution: 'NOAA SPC'
   });
+
+  // The outlook is the displayed surface from here on, outlined areas or
+  // none; its time statement stands for both.
+  installTimeBar(features);
 
   if (features.length === 0) {
     reportStatus(truncated ? 'degraded' : 'no-data');
@@ -213,6 +285,7 @@ export function deactivate(map: maplibregl.Map): void {
   if (map.getLayer(FILL_LAYER_ID)) map.removeLayer(FILL_LAYER_ID);
   if (map.getLayer(OUTLINE_LAYER_ID)) map.removeLayer(OUTLINE_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+  clearTimeBar(LAYER_KEY);
 }
 
 /**

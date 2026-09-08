@@ -87,6 +87,7 @@ import type * as maplibregl from 'maplibre-gl';
 
 import { URLS } from '../config/urls';
 import { registry } from '../state/registry';
+import { clearTimeBar, setTimeBar } from '../ui/time-bar';
 import { watchRasterTiles, type RasterTileWatch } from '../util/raster-status';
 
 const LAYER_KEY = 'usfs-whp';
@@ -104,6 +105,28 @@ type WhpStatus = 'loading' | 'ready' | 'degraded' | 'error';
 
 function reportStatus(state: WhpStatus): void {
   registry.setStatus(LAYER_KEY, state);
+}
+
+/**
+ * The time statement (DDM-P8-T02 clause 4), the Wildfire screen's stamp at
+ * the long-range horizon. WHP is a static edition, not a dated condition:
+ * the 2023 classified raster the issuer serves carries no valid period, so
+ * the stamp names the edition and says plainly that it is potential
+ * context, neither a current condition nor an outlook. Plain (observed)
+ * typography, because the outlook instrument would claim a forward-looking
+ * register this product does not have; the text carries the same point.
+ */
+function installTimeBar(): void {
+  setTimeBar(LAYER_KEY, {
+    ariaLabel: 'Wildfire Hazard Potential edition',
+    stamp: {
+      horizon: 'longRange',
+      headline: 'Static 2023 edition · not a dated condition',
+      detail:
+        'USDA Forest Service Wildfire Hazard Potential · a static classified index at 270 m for the conterminous United States; potential context, not current fire conditions and not an outlook',
+      register: 'observed'
+    }
+  });
 }
 
 /**
@@ -196,6 +219,10 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       reportInitialSuccess: true,
       requestCompletenessDeadlineMs: TILE_SUCCESS_DEADLINE_MS
     });
+    // The raster is the displayed surface from here on; its time statement
+    // stands while it is, and the controller's terminal-error cleanup
+    // (deactivate below) withdraws it if no tile ever paints.
+    installTimeBar();
   } catch (err) {
     console.warn('[usfs-whp] activation failed.', err);
     reportStatus('error');
@@ -215,6 +242,7 @@ export function deactivate(map: maplibregl.Map): void {
   if (map.getSource(SOURCE_ID)) {
     map.removeSource(SOURCE_ID);
   }
+  clearTimeBar(LAYER_KEY);
 }
 
 /**
