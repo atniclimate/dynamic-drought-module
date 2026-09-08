@@ -9,8 +9,8 @@ session S15 wrote in `I:\dynamic-drought-module-wt\acceptance-proposals` on
 ## Next action
 
 Owner: rule DR-073 (or let its default stand), then land
-`feature/cancel-layer-loads-p1t02` on `main` by a `--no-ff` merge commit (seven commits,
-one per step). The branch changes product behavior in one place a user can notice: a layer
+`feature/cancel-layer-loads-p1t02` on `main` by a `--no-ff` merge commit (eight commits:
+one per step, the close, and the docs commit after it). The branch changes product behavior in one place a user can notice: a layer
 turned off while its first request is still in flight now aborts that request at once, for
 every one of the four seam layers, instead of Hydrography waiting out its 12 s Overpass
 mirror budget first.
@@ -24,7 +24,8 @@ mirror budget first.
 | 4 | 7b1f540 | layers: the four seam layers take the activation signal; viewport discovery aborts on supersession (DDM-P1-T02) |
 | 5 | 776d445 | tests: layer cancellation acceptance joins verify:smoke (DDM-P1-T02) |
 | 6 | 9b6d0fb | tests: the viewport supersession case observes both boundary refreshes (DDM-P1-T02) |
-| 7 | (closing commit) | plan: close S16 (cancel layer loads) |
+| 7 | 296316c | plan: close S16 (cancel layer loads) |
+| after | 5da4577 | docs: project guide, and pointers from README, ROADMAP.md and CLAUDE.md (owner request after the close: `docs/PROJECT_GUIDE.md` maps the planning files and how a session runs; the local `docs/README-RESUME.md` was updated with S16's outcome) |
 
 ## The seam, in one paragraph
 
