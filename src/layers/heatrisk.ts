@@ -44,6 +44,7 @@ import {
 } from '../state/url';
 import { hideLegend, LEGEND_ORDER, showLegend } from '../ui/legend-registry';
 import { hideLoading, showLoading } from '../ui/overlay';
+import { clearTimeBar, setTimeBar, type TimeBarStamp } from '../ui/time-bar';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
 import {
@@ -132,6 +133,111 @@ function replaceMasterController(): AbortSignal {
   masterController?.abort();
   masterController = new AbortController();
   return masterController.signal;
+}
+
+// ---------------------------------------------------------------------------
+// The time bar (DDM-P8-T02): the Extreme Heat screen's time control
+// ---------------------------------------------------------------------------
+
+/**
+ * "Jul 30, 2026, 12:00 UTC": the same rendering the briefing's HeatRisk
+ * claim uses (src/impact/sources.ts, heatRiskMoment), so the stamp on the
+ * map and the claim in the panel state one period in one form.
+ */
+function heatRiskMoment(time: number): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'UTC',
+    timeZoneName: 'short'
+  }).format(new Date(time));
+}
+
+/**
+ * What the map says about the selected frame's raster, appended to the
+ * stamp detail so the time statement never outruns the surface (the
+ * DDM-P8-T05 loading rule, carried into the bar): a period is only
+ * "displayed" once its tiles paint.
+ */
+function surfaceNote(status: Status): string {
+  switch (status) {
+    case 'loading':
+      return ' · loading the selected day';
+    case 'degraded':
+      return ' · the selected day painted with missing tiles';
+    case 'error':
+      return ' · no tile of the selected day loaded';
+    case 'no-data':
+      return ' · no data at the map center; HeatRisk covers the contiguous United States only';
+    default:
+      return '';
+  }
+}
+
+/**
+ * The stamp for one advertised frame. The period is the issuer's own: the
+ * catalog's `idp_validtime` opens a 24-hour period (the seven-daily-period
+ * contract, DAILY_FRAME_MS; the issuer's service description says "over a
+ * 24-hour period"), and the headline states both ends in UTC (acceptance
+ * clause 3). The detail names the issuer and the product (clause 2) and the
+ * day's position in the seven the service advertises, in the issuer's own
+ * terms ("experimental", "expected heat").
+ *
+ * The register word. NWS calls HeatRisk a forecast; this module may not
+ * (the surface-vocabulary lint reserves that word for verbatim upstream
+ * product names, and the S13 session was not authorized to widen it), so
+ * "Outlook" in the headline is the interface's own cross-hazard register
+ * word (DR-070's grammar), not a claim about the issuer's name for it.
+ * The ddm-science-verifier recorded that gap on 2026-09-08; DR-071 carries
+ * it for the owner.
+ */
+function frameStamp(frame: HeatRiskFrame, status: Status): TimeBarStamp {
+  const start = frame.validTime;
+  const end = start + DAILY_FRAME_MS;
+  return {
+    horizon: 'nearTerm',
+    headline: `Outlook valid ${heatRiskMoment(start)} to ${heatRiskMoment(end)}`,
+    detail:
+      `NWS HeatRisk (experimental) · Day ${frame.day} of ${REQUIRED_FRAME_COUNT} · ` +
+      `expected heat impact over one 24-hour period${surfaceNote(status)}`,
+    register: 'outlook'
+  };
+}
+
+/**
+ * Install (or refresh) the bar for the selected frame: a seven-stop
+ * discrete rail (an authored, stepped product: Step buttons, never Play)
+ * whose steps drive the same `renderFrame` the on-map key's day select and
+ * the dock sequence drive, so the three controls can never disagree about
+ * the displayed day. Re-installed on every status change so the surface
+ * note above tracks the raster; the bar memoizes identical markup.
+ */
+function installTimeBar(status: Status): void {
+  const frame = selectedDay === null ? undefined : frames[selectedDay - 1];
+  if (!activeMap || !frame) return;
+  setTimeBar(LAYER_KEY, {
+    ariaLabel: 'NWS HeatRisk day',
+    stamp: frameStamp(frame, status),
+    rail: {
+      count: frames.length,
+      index: frame.day - 1,
+      valueText: (index) => {
+        const stop = frames[index];
+        return stop
+          ? `Day ${stop.day} · ${heatRiskMoment(stop.validTime)}`
+          : `Day ${index + 1}`;
+      },
+      onStep: (index) => {
+        const day = index + 1;
+        if (!activeMap || day < 1 || day > frames.length || day === selectedDay) return;
+        renderFrame(activeMap, day);
+      }
+    }
+  });
 }
 
 function mapCenterHasCoverage(map: maplibregl.Map): boolean {
@@ -297,6 +403,7 @@ function renderFrame(map: maplibregl.Map, day: number): void {
     endFrameLoad();
     reportStatus('no-data');
     emitFrames('no-data');
+    installTimeBar('no-data');
     return;
   }
 
@@ -330,11 +437,13 @@ function renderFrame(map: maplibregl.Map, day: number): void {
         currentHasCoverage = false;
         reportStatus('no-data');
         emitFrames('no-data');
+        installTimeBar('no-data');
         return;
       }
       currentHasCoverage = true;
       reportStatus(state);
       emitFrames(state);
+      installTimeBar(state);
     },
     {
       reportInitialSuccess: true,
@@ -347,6 +456,7 @@ function renderFrame(map: maplibregl.Map, day: number): void {
   // `loading` is what is true, and the watcher above replaces it with the
   // real verdict.
   emitFrames('loading');
+  installTimeBar('loading');
 }
 
 function onCoverageMoveEnd(): void {
@@ -361,6 +471,7 @@ function onCoverageMoveEnd(): void {
     removeActiveRaster(activeMap);
     reportStatus('no-data');
     emitFrames('no-data');
+    installTimeBar('no-data');
     return;
   }
   if (!activeSourceId || !activeMap.getSource(activeSourceId)) {
@@ -488,6 +599,7 @@ export function deactivate(map: maplibregl.Map): void {
   stopListeningForDaySelection();
   stopListeningForCoverageMoves();
   hideLegend(LAYER_KEY);
+  clearTimeBar(LAYER_KEY);
   activeMap = null;
   frames = [];
   selectedDay = null;
