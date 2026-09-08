@@ -194,18 +194,77 @@ function surfaceNote(status: Status): string {
  * word (DR-070's grammar), not a claim about the issuer's name for it.
  * The ddm-science-verifier recorded that gap on 2026-09-08; DR-071 carries
  * it for the owner.
+ *
+ * WHICH STEPS ARE OUTLOOKS (the S13 doctrine, DR-071 R-b). A time step
+ * that is an issuer outlook is labelled as one; a step that is not, is
+ * not. The issuer settles most of it: HeatRisk "provides a forecast of the
+ * potential level of risk for heat-related impacts to occur over a 24-hour
+ * period" and is calculated "from the current date through seven days in
+ * the future" (HeatRisk v2.6 Overview,
+ * wpc.ncep.noaa.gov/heatrisk/pdf/HeatRisk-v2.6-Overview.pdf, read
+ * 2026-09-08), so a frame whose 24-hour period has not begun AND the frame
+ * whose period is in progress are both outlooks in force. The one step that is not an
+ * outlook is a period that has ended: the service still advertises it,
+ * and presenting it as an outlook still in force would be the spent
+ * claim the doctrine forbids. The three phases, read against the page
+ * clock at the moment the stamp is installed:
+ *
+ *   not begun    outlook register: "Outlook valid A to B";
+ *   in progress  outlook register: "Outlook valid A to B", the detail
+ *                saying the period is now in progress;
+ *   ended        plain register, never outlook: "Period ended B".
+ *
+ * The horizon is the product's, at every frame: HeatRisk is the
+ * interface's near-term heat product (the briefing files the selected
+ * frame's classification under Near Term, src/impact/matrix.ts
+ * LANE_PLACEMENT; the heat cluster's current recipe shows it only because
+ * no current heat surface exists, DR-017's open question). The stamp
+ * therefore reads Near Term under the Current Conditions chip too, which
+ * is the truth about the surface rather than a claim about the chip.
+ *
+ * The end of each period is DDM's arithmetic (the service publishes a
+ * start field and no end field) grounded in the issuer's own words "over a
+ * 24-hour period" and the catalog's 24-hour spacing; the two moments are
+ * always the issuer's start and that start plus one day. The phase is read
+ * on every install (a day change, a status change), not on a timer; a
+ * page left open across a boundary re-reads it at the next change.
  */
+type FramePhase = 'not-begun' | 'in-progress' | 'ended';
+
+function framePhase(start: number, end: number, now: number): FramePhase {
+  if (now < start) return 'not-begun';
+  if (now < end) return 'in-progress';
+  return 'ended';
+}
+
 function frameStamp(frame: HeatRiskFrame, status: Status): TimeBarStamp {
   const start = frame.validTime;
   const end = start + DAILY_FRAME_MS;
-  return {
-    horizon: 'nearTerm',
-    headline: `Outlook valid ${heatRiskMoment(start)} to ${heatRiskMoment(end)}`,
-    detail:
-      `NWS HeatRisk (experimental) · Day ${frame.day} of ${REQUIRED_FRAME_COUNT} · ` +
-      `expected heat impact over one 24-hour period${surfaceNote(status)}`,
-    register: 'outlook'
-  };
+  const product = `NWS HeatRisk (experimental) · Day ${frame.day} of ${REQUIRED_FRAME_COUNT} · `;
+  const note = surfaceNote(status);
+  switch (framePhase(start, end, Date.now())) {
+    case 'not-begun':
+      return {
+        horizon: 'nearTerm',
+        headline: `Outlook valid ${heatRiskMoment(start)} to ${heatRiskMoment(end)}`,
+        detail: `${product}expected heat impact over a 24-hour period that has not begun${note}`,
+        register: 'outlook'
+      };
+    case 'in-progress':
+      return {
+        horizon: 'nearTerm',
+        headline: `Outlook valid ${heatRiskMoment(start)} to ${heatRiskMoment(end)}`,
+        detail: `${product}expected heat impact over the 24-hour period now in progress${note}`,
+        register: 'outlook'
+      };
+    default:
+      return {
+        horizon: 'nearTerm',
+        headline: `Period ended ${heatRiskMoment(end)}`,
+        detail: `${product}this 24-hour period has ended${note}`,
+        register: 'observed'
+      };
+  }
 }
 
 /**
