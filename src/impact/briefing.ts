@@ -15,7 +15,8 @@
 
 import { buildResources } from './resources';
 import { caveatFor, kindLabel } from './context';
-import { createHorizonCells } from './matrix';
+import { HORIZON_CHROME } from './horizon-chrome';
+import { createHorizonCells, HORIZON_KEYS } from './matrix';
 import { briefingSourcePolicy, sourceMayRun } from './source-policy';
 import type {
   BoundarySelectionContext,
@@ -24,29 +25,19 @@ import type {
   ImpactBriefing
 } from './types';
 
-interface HorizonSpec {
-  readonly key: HorizonKey;
-  readonly title: string;
-  readonly subtitle: string;
-}
-
 /**
- * The three horizons, in display order, with their time-window subtitles from
- * the impact-modeling doctrine (current = now; near-term = days to a season;
- * long-range = season to the water year).
+ * An empty horizon in the `loading` state. Its heading comes from
+ * `HORIZON_CHROME`, the one table this composer and the eager panel's
+ * module-failure presentation both read, so the two cannot drift apart again;
+ * `HORIZON_KEYS` supplies the display order.
  */
-const HORIZON_SPECS: readonly HorizonSpec[] = [
-  { key: 'current', title: 'Current conditions', subtitle: 'now' },
-  { key: 'nearTerm', title: 'Near-term outlook', subtitle: 'days to a season' },
-  { key: 'longRange', title: 'Long-range outlook', subtitle: 'season to water year' }
-];
-
-function emptyHorizon(spec: HorizonSpec): Horizon {
+function emptyHorizon(key: HorizonKey): Horizon {
+  const chrome = HORIZON_CHROME[key];
   return {
-    key: spec.key,
-    title: spec.title,
-    subtitle: spec.subtitle,
-    cells: createHorizonCells(spec.key),
+    key,
+    title: chrome.title,
+    subtitle: chrome.subtitle,
+    cells: createHorizonCells(key),
     claims: [],
     status: 'loading'
   };
@@ -63,8 +54,8 @@ export function createBriefingSkeleton(
 ): ImpactBriefing {
   const sourcePolicy = briefingSourcePolicy(context);
   const horizonByKey = {} as Record<HorizonKey, Horizon>;
-  for (const spec of HORIZON_SPECS) {
-    horizonByKey[spec.key] = emptyHorizon(spec);
+  for (const key of HORIZON_KEYS) {
+    horizonByKey[key] = emptyHorizon(key);
   }
 
   return {

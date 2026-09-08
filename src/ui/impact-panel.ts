@@ -12,6 +12,7 @@ import {
   type BriefingSourceKey,
   type SourceCapabilityCell
 } from '../config/source-capability';
+import { HORIZON_CHROME } from '../impact/horizon-chrome';
 import type {
   BoundarySelectionContext,
   HazardCell,
@@ -373,15 +374,19 @@ function unavailableCells(
   };
 }
 
-function unavailableHorizon(
-  key: Horizon['key'],
-  title: string,
-  subtitle: string
-): Horizon {
+/**
+ * The heading comes from `HORIZON_CHROME`, the same table the lazy composer
+ * reads, so the module-failure presentation shows each horizon under exactly
+ * the title and subtitle the live briefing would. That table is three constants
+ * with a type-only import, which is why it can ride the eager entry when the
+ * composer (`src/impact/briefing.ts`) and the matrix module must not.
+ */
+function unavailableHorizon(key: HorizonKey): Horizon {
+  const chrome = HORIZON_CHROME[key];
   return {
     key,
-    title,
-    subtitle,
+    title: chrome.title,
+    subtitle: chrome.subtitle,
     // Every cell says the one true thing about this briefing: the module that
     // would fill it did not load. No cell is blank, and none of them inherits
     // another hazard's state.
@@ -454,9 +459,9 @@ function unavailableBriefing(
       note: UNAVAILABLE_NOTE
     },
     horizons: {
-      current: unavailableHorizon('current', 'Current conditions', 'now'),
-      nearTerm: unavailableHorizon('nearTerm', 'Near-term outlook', 'days to weeks'),
-      longRange: unavailableHorizon('longRange', 'Long-range outlook', 'months')
+      current: unavailableHorizon('current'),
+      nearTerm: unavailableHorizon('nearTerm'),
+      longRange: unavailableHorizon('longRange')
     },
     resources: []
   };
