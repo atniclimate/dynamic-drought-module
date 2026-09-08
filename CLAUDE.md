@@ -7,6 +7,9 @@ source wins and this file is the bug.
 
 ## Read in this order
 
+0. `docs/PROJECT_GUIDE.md` is the human-readable map of every file below and of how a
+   session runs; a returning reader starts there, then at the newest handoff in
+   `planning/handoffs/`.
 1. `docs/ROADMAP.yaml` is the planning authority. `plan_rules:` at lines 78 to 87 holds
    the nine product invariants; read them there. The `authority:` block names the
    tracked ledgers and the id rule that says which id schemes may be cited and never

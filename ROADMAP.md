@@ -7,6 +7,13 @@ horizons, forecast controls that behave the same on every hazard screen, a
 complete Fire module, and a citation behind every number on screen. The real
 tablet layout landed on 2026-09-07.
 
+Where things stand: `main` is at the S14 merge (2026-09-08, deployed); the
+layer cancellation seam (DDM-P1-T02, the first task of the Wave 2 cycle) is
+complete on an unlanded branch, and the rest of the cycle follows in the order
+the S03 cut plan set. The newest file in `planning/handoffs/` is the entry
+point for the current state, and [`docs/PROJECT_GUIDE.md`](docs/PROJECT_GUIDE.md)
+maps every planning file and explains how a session of work runs.
+
 The canonical plan, with stable task ids, decision gates, component tags, and
 one testable acceptance sentence per task, is
 [`docs/ROADMAP.yaml`](docs/ROADMAP.yaml). Completion is recorded there in place:
