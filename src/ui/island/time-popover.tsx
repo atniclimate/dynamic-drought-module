@@ -24,7 +24,7 @@
 import { useEffect, useRef } from 'preact/hooks';
 import type { ReadonlySignal } from '@preact/signals';
 
-import { getTimeBarSpec } from '../time-bar';
+import { getTimeBarSpec, stampHorizonText } from '../time-bar';
 import type { TimeBarSpec } from '../time-bar';
 import { wireShellPopover } from './popover-discipline';
 
@@ -63,6 +63,9 @@ function DetailControls({ spec }: { spec: TimeBarSpec }) {
   return (
     <div class="shell-time-detail">
       <div class="shell-time-detail-stamp" data-register={spec.stamp.register}>
+        <span class="shell-time-detail-horizon" data-horizon={spec.stamp.horizon}>
+          {stampHorizonText(spec.stamp.horizon)}
+        </span>
         <span class="shell-time-detail-headline">{spec.stamp.headline}</span>
         <span class="shell-time-detail-line">{spec.stamp.detail}</span>
       </div>

@@ -171,6 +171,7 @@ function showBcTimeBar(date: string | null): void {
   setTimeBar(CONTROLLER_KEY, {
     ariaLabel: 'British Columbia basin drought levels source date',
     stamp: {
+      horizon: 'current',
       headline:
         date === null
           ? 'Source date unavailable'

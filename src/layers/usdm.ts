@@ -525,11 +525,13 @@ function installTimeBar(map: maplibregl.Map): void {
     stamp:
       mode === 'absolute'
         ? {
+            horizon: 'current',
             headline: `Valid ${weekLabel(currentKey)}`,
             detail: 'US Drought Monitor week · solid fills are observed conditions',
             register: 'observed'
           }
         : {
+            horizon: 'current',
             headline: `Change through ${weekLabel(currentKey)}`,
             // vocab-allow: honesty disclaimer, denies being a forecast
             detail: `USDM ${mode === 'chg4' ? '4-week' : '1-week'} change · observed, not forecast`,

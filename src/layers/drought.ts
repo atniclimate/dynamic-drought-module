@@ -48,6 +48,7 @@ import { ensureHatchImages, hatchImageId } from '../util/hatch';
 import { hideLoading, showLoading } from '../ui/overlay';
 import { DROUGHT_COLORS } from '../config/palette';
 import { setTimeBar, clearTimeBar } from '../ui/time-bar';
+import { SHELL_HORIZON_KEY } from '../impact/horizon-chrome';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
 
 const LAYER_KEY = 'drought';
@@ -171,6 +172,11 @@ function installTimeBar(map: maplibregl.Map, fc: GeoJSON.FeatureCollection): voi
   setTimeBar(LAYER_KEY, {
     ariaLabel: 'CPC Drought Outlook register',
     stamp: {
+      // The horizon the rendered range answers, through the same mapping
+      // the timeline uses (monthly = weeks-ahead = Near Term, seasonal =
+      // season-ahead = Long Range), so the stamp and the pressed chip can
+      // only disagree if the mapping itself does.
+      horizon: SHELL_HORIZON_KEY[horizonForOutlookRange(range)],
       headline: `${issuedPart}${targetPart}`,
       // vocab-allow: honesty disclaimer, denies being a forecast
       detail: `CPC ${rangeName(range)} Drought Outlook · a shift in odds, not a forecast of outcomes`,

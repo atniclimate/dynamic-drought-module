@@ -418,6 +418,7 @@ function installStampOnlyTimeBar(): void {
   setTimeBar(LAYER_KEY, {
     ariaLabel: 'Sea surface temperature anomaly date',
     stamp: {
+      horizon: 'current',
       headline: 'Latest available frame · date unavailable from the provider',
       detail:
         'GHRSST MUR daily SST anomaly · the provider did not answer its time axis this session, so the frame date cannot be stated and stepping stays off',
@@ -435,6 +436,10 @@ function installTimeBar(map: maplibregl.Map): void {
   setTimeBar(LAYER_KEY, {
     ariaLabel: 'Sea surface temperature anomaly timeline',
     stamp: {
+      // A measured daily field is the observed register at every ENSO
+      // horizon chip; the stamp says Current Conditions even under the Long
+      // Range chip, because that is what the surface is.
+      horizon: 'current',
       headline: `Observed ${dateLabel(date)}`,
       detail: buffering
         ? 'GHRSST MUR daily SST anomaly · buffering tiles'

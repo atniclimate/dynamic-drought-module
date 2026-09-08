@@ -269,6 +269,7 @@ function showCdmTimeBar(artifact: CdmArtifact): void {
   setTimeBar(LAYER_KEY, {
     ariaLabel: 'Canadian Drought Monitor snapshot month',
     stamp: {
+      horizon: 'current',
       headline: `Month ${monthLabel(artifact.month)}`,
       detail:
         'Canadian Drought Monitor · Agriculture and Agri-Food Canada · monthly classification',

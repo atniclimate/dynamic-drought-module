@@ -116,6 +116,7 @@ function showNadmTimeBar(month: string): void {
   setTimeBar(LAYER_KEY, {
     ariaLabel: 'North American Drought Monitor consensus month',
     stamp: {
+      horizon: 'current',
       headline: `Consensus month ${monthLabel(month)}`,
       detail:
         'North American Drought Monitor · tri-national monthly consensus · published 2 to 3 weeks after month-end',

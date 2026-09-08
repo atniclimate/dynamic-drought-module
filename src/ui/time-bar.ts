@@ -28,8 +28,20 @@
  * Accessibility: the rail is a native range input (arrow keys work, the
  * discrete `step` snaps by construction); the stamp is aria-live polite so
  * a step announces its new date; every button meets the 24 px target rule.
+ *
+ * ONE GRAMMAR (DDM-P8-T03 clause 2, closed by S13 on 2026-09-08). Every
+ * stamp now states the horizon its product answers, and the words come
+ * from `HORIZON_CHROME` (src/impact/horizon-chrome.ts), the same table the
+ * shell's horizon chips and the briefing panel headings read, so a horizon
+ * named anywhere in the interface can only be spelled one way. The owning
+ * layer DECLARES the horizon for the product it shows (`stamp.horizon`)
+ * rather than this module reading the committed timeline horizon: a custom
+ * display can commit a horizon its surface does not answer, and the stamp
+ * must describe the surface on the map, not the pressed chip.
  */
 
+import { HORIZON_CHROME } from '../impact/horizon-chrome';
+import type { HorizonKey } from '../impact/types';
 import { escapeHtml } from '../util/escape';
 
 /** A mode chip row (the USDM absolute / 1-week / 4-week change toggle). */
@@ -57,11 +69,31 @@ export interface TimeBarJump {
 export type StampRegister = 'observed' | 'outlook';
 
 export interface TimeBarStamp {
+  /**
+   * The horizon the displayed product answers, rendered as the
+   * `HORIZON_CHROME` title and subtitle above the headline. Declared by the
+   * owning layer for what is on the map (the CPC monthly outlook is
+   * `nearTerm`, a HeatRisk day that has not begun is `nearTerm`, an
+   * observed week is `current`), never inferred from the pressed chip.
+   */
+  readonly horizon: HorizonKey;
   /** Headline line ("VALID JUN 30, 2026" / "ISSUED JUN 30 · THROUGH JUL"). */
   readonly headline: string;
   /** Context line (product name and register description). */
   readonly detail: string;
+  /**
+   * The typographic register. The stamp TEXT carries the same distinction
+   * in words: an `outlook` stamp names the issuer's outlook product; an
+   * `observed` stamp never calls its product an outlook (the S13 doctrine
+   * for bare stamps, mirroring CLAIM_REGISTER_TAG for rendered claims).
+   */
   readonly register: StampRegister;
+}
+
+/** The horizon line's text: "Near Term · days to weeks". */
+export function stampHorizonText(horizon: HorizonKey): string {
+  const chrome = HORIZON_CHROME[horizon];
+  return `${chrome.title} · ${chrome.subtitle}`;
 }
 
 export interface TimeBarSpec {
@@ -355,8 +387,11 @@ function render(): void {
   parts.push('</div>');
 
   // --- stamp: the register indicator ---
+  // The horizon line comes first and reads HORIZON_CHROME (one grammar);
+  // `data-horizon` carries the key so a test can pin the words to the table.
   parts.push(
     '<div class="time-bar-stamp" aria-live="polite" aria-atomic="true">' +
+      `<span class="time-bar-stamp-horizon" data-horizon="${escapeHtml(spec.stamp.horizon)}">${escapeHtml(stampHorizonText(spec.stamp.horizon))}</span>` +
       `<span class="time-bar-stamp-headline">${escapeHtml(spec.stamp.headline)}</span>` +
       `<span class="time-bar-stamp-detail">${escapeHtml(spec.stamp.detail)}</span>` +
       '</div>'

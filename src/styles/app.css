@@ -5773,6 +5773,19 @@ a.impact-resource-link::after {
   font-size: 10.5px;
   color: var(--fg-2);
 }
+/* The horizon line (S13, DDM-P8-T03 clause 2): HORIZON_CHROME's title and
+   subtitle, the same words as the shell chips and the briefing headings.
+   Full width, so the register headline and detail keep their own row; the
+   same 9.5px caps the jump chips already use, no new color. */
+.time-bar-stamp-horizon {
+  flex-basis: 100%;
+  font-family: var(--font-display);
+  font-weight: var(--fw-subtitle);
+  font-size: 9.5px;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
 
 .time-bar-modes {
   display: flex;
@@ -6784,6 +6797,15 @@ a.impact-resource-link::after {
 .shell-time-detail-line {
   font-family: var(--font-body);
   font-size: 10.5px;
+  color: var(--fg-2);
+}
+/* The detail card's horizon line mirrors .time-bar-stamp-horizon (S13). */
+.shell-time-detail-horizon {
+  font-family: var(--font-display);
+  font-weight: var(--fw-subtitle);
+  font-size: 9.5px;
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
   color: var(--fg-2);
 }
 .shell-time-detail-rail {
