@@ -65,12 +65,16 @@ been assigned to this work.
   `unavailable`, or `no data`, and a superseded request is still aborted, so
   a failed switch reads as its honest verdict rather than as stale data.
 - 2026-09-03: a device that cannot hold the 3D Fire scene is told so. The
-  capability and geometry gate withdrew the 3D toggle silently, so a browser
-  without WebGL 2, or a window too short for the tilted camera, met an
-  interface indistinguishable from one where the 3D view had never been
-  built. One sentence now stands where the button would have been, naming
-  only what was observed. Views that never offer the toggle, and viewports
-  below the desktop breakpoint, stay silent.
+  capability and geometry gate withdrew the 3D toggle silently, so a window
+  too short for the tilted camera met an interface indistinguishable from
+  one where the 3D view had never been built. One sentence now stands where
+  the button would have been, naming only what was observed. Views that
+  never offer the toggle, and viewports below the desktop breakpoint, stay
+  silent. A second sentence, for a browser without WebGL 2, is carried by
+  the same control but is not reachable in any browser today: the control
+  mounts only once a map exists, and MapLibre 6 builds no map without
+  WebGL 2, so that browser is answered earlier by the boot's renderer notice
+  (the sidebar-builds-first entry below).
 - 2026-09-03: the tablet band, 721 to 1024 pixels (DDM-P10-T01, gate
   DDM-D02). Tablet is a third layout band rather than a small desktop: the
   sidebar column is fluid from 300 to 340 pixels instead of a 340 pixel

@@ -370,6 +370,8 @@ phases:
         needs_decision: "DR-025 (tablet and phone 3D policy, and fire3d in the URL; 03 D3)"
         acceptance: "A device that cannot render the scene is told so instead of being admitted, and a lost graphics context inside the scene produces a named failure state rather than a frozen frame."
         verification: "npx playwright test --workers=1 tests/fire3d-mode.spec.ts tests/view-contracts.spec.ts"
+        status: done
+        closed: "2026-09-08: landed 2026-09-07 in S02d (merge f730421). Clause 1: src/config/fire3d-presentation.ts:139-152 carries the two refusal sentences and :191 the pure offer decision the shell island renders where the button would have been; tests/fire3d-mode.spec.ts:224-261 (Node) and :1360-1396 (a landscape phone is told why) assert it. Clause 2: src/map/fire3d.ts:656-667 exits a lost graphics context down the failure ladder to status unavailable (already on main before the landing, confirmed by the lane). The task's own gate ran on 96aba35 by S14 on 2026-09-08: 41 passed. The no-WebGL-2 sentence is unreachable in a browser today (the island mounts only with a live map, and MapLibre 6 builds none without WebGL 2); the control's docblock and the release note say so since S14, and that browser is answered by the boot's renderer notice (DDM-P14-T02)."
       - id: "DDM-P9-T03"
         title: "Make the fire claim polygon-exact and add incident coverage"
         source: "03 FIRE-05, FIRE-08; 10 SCI-04; 12 FSPEC-10"

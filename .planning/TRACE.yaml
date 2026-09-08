@@ -2871,7 +2871,12 @@ tasks:
   DDM-P9-T02:
     title: Gate the 3D scene on capability, not width alone
     phase: DDM-P9
-    status: open
+    # open -> done 2026-09-08 by S14: landed 2026-09-07 in S02d (merge f730421).
+    # src/config/fire3d-presentation.ts (the merge --stat's third src file, which
+    # carries the refusal decision and both sentences) and the acceptance spec
+    # are attached below. Closed sentence in docs/ROADMAP.yaml; the task's own
+    # gate ran on 96aba35 (41 passed, 8.5m).
+    status: done
     roadmap: docs/ROADMAP.yaml:307
     acceptance: A device that cannot render the scene is told so instead of being admitted, and a lost
       graphics context inside the scene produces a named failure state rather than a frozen frame.
@@ -2899,7 +2904,20 @@ tasks:
         acceptance_testable_here: false
         evidence_lines: *a18
         attached_by: scout
+      - path: src/config/fire3d-presentation.ts
+        owns: Declares the 3D control's geometry queries, the pure offer decision (control, silent, or one
+          of two refusals) and the refusal sentences the shell island renders
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/config/fire3d-presentation.ts:149: 'This browser cannot render the 3D scene, so there is nothing here to turn on.',"
+          - "src/config/fire3d-presentation.ts:191: export function fire3dControlOffer(input: Fire3DOfferInput): Fire3DOffer {"
+        attached_by: repair:S14  # 2026-09-08, merge f730421 --stat
     tests:
+      - path: tests/fire3d-mode.spec.ts
+        via: import
+        covers: src/config/fire3d-presentation.ts
+        evidence: "tests/fire3d-mode.spec.ts:224: test('a device that cannot hold the scene is told, and only that device is', () => {"
+        attached_by: repair:S14  # 2026-09-08, the task's own verification key names this spec
       - path: tests/gl-capability.spec.ts
         via: import
         covers: src/map/gl-capability.ts
