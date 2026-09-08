@@ -23,11 +23,15 @@ const forbidden = [
   },
   {
     reason: 'local process directory',
-    pattern: /^(?:\.agent|\.agents|\.claude|\.codex|\.handoff|drought-region-maps|planning|post-mortem|research|reviews|skills)\//i
+    pattern: /^(?:\.agent|\.agents|\.claude|\.codex|\.handoff|\.planning|drought-region-maps|planning|post-mortem|research|reviews|skills)\//i
   },
   {
     reason: 'local product planning record',
-    pattern: /^docs\/(?:IDEAS\.md|SOURCES_CATALOG\.yaml|SUCCESSOR_PLAN\.md|handoffs\/|prompts\/)/i
+    pattern: /^docs\/(?:IDEAS\.md|SOURCES_CATALOG\.yaml|SUCCESSOR_PLAN\.md|ROADMAP\.yaml|PROJECT_GUIDE\.md|README-RESUME\.md|session-briefing|claude-|handoffs\/|prompts\/)/i
+  },
+  {
+    reason: 'development roadmap or harness entry point (private since 2026-09-08)',
+    pattern: /^(?:ROADMAP\.md|CLAUDE\.md|AGENTS\.md)$/i
   },
   {
     reason: 'execution tracker',
@@ -35,24 +39,13 @@ const forbidden = [
   }
 ];
 
-// docs/ROADMAP.yaml:57-61 names four planning/ folders as repository authority
-// and .gitignore negates them; the hook source drafts are tracked so the
-// installed guardrails have a reviewable origin. Everything else under
-// planning/ stays forbidden.
-const allowed = [
-  // The ROOT CLAUDE.md is tracked on purpose (5b40dfb, "docs: add root
-  // CLAUDE.md pointing at roster and roadmap"): the repository carries its own
-  // entry point, and docs/ROADMAP.yaml and .planning/SESSION_ROSTER.yaml both
-  // rely on it. This script predates that decision. AGENTS.md, every HANDOFF
-  // and POST-MORTEM, and any NESTED CLAUDE.md stay forbidden.
-  /^CLAUDE\.md$/,
-  // planning/references/ joined the tracked ledgers on 2026-09-07 by owner
-  // ruling (the S03b references register). That ruling added the matching
-  // .gitignore negation; this list is the second half of it, because this
-  // script keeps its own allow-list rather than reading .gitignore.
-  /^planning\/(?:decisions|qa|user-research|handoffs|references)\//i,
-  /^planning\/2026-09-01-deep-dive\/claude-tooling\/hooks\//i
-];
+// 2026-09-08: nothing under planning/ or .planning/ is tracked any more, and
+// neither are the roadmap files, the project guide, the session briefing or
+// the root CLAUDE.md: all of it moved to two private repositories that are
+// linked into a checkout as directory junctions. The allow-list is therefore
+// empty and kept only so the loop below keeps its shape for the next
+// exception the owner grants.
+const allowed = [];
 
 const problems = [];
 for (const path of tracked) {

@@ -9,3 +9,4 @@ scripts/landscape/tests/fixtures/soil/* -text
 scripts/landscape/tests/fixtures/terrain-extension/* -text
 scripts/landscape/intermediates/** -text
 public/data/landscape-signature-pnw.json -text
+.githooks/* text eol=lf

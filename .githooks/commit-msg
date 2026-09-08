@@ -1,0 +1,29 @@
+#!/bin/sh
+# commit-msg hook: authorship lives in git's author field and nowhere else.
+#
+# Rejects a commit whose message carries a co-author trailer, a session link
+# trailer, or a "Generated with" line. Enable once per clone with
+#   git config core.hooksPath .githooks
+# See DEVELOPER.md, "Commit messages".
+
+msg_file="$1"
+
+# Strip comment lines (the template git shows in the editor) before scanning.
+body=$(grep -v '^#' "$msg_file")
+
+if printf '%s\n' "$body" | grep -Eiq '^[[:space:]]*Co-Authored-By:'; then
+  echo "commit-msg: remove the Co-Authored-By trailer; authorship is the git author field only." >&2
+  exit 1
+fi
+
+if printf '%s\n' "$body" | grep -Eiq '^[[:space:]]*[A-Za-z-]*Session:[[:space:]]*https?://'; then
+  echo "commit-msg: remove the session link trailer." >&2
+  exit 1
+fi
+
+if printf '%s\n' "$body" | grep -Eiq 'Generated with'; then
+  echo "commit-msg: remove the \"Generated with\" line." >&2
+  exit 1
+fi
+
+exit 0

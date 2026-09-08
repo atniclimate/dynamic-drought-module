@@ -48,10 +48,9 @@ Wildfire Hazard Potential, structures, power, and smoke-volume refinements
 described below. A merged commit is not by itself proof that the public site is
 running it; every deploy is followed by an automated live check of the build
 marker. Release history and its verification receipts are in
-[`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md). The next phased work is
-summarized in [`ROADMAP.md`](ROADMAP.md). For where the planning ledgers, the
-session handoffs and the decision register live, and how a session of work runs,
-read [`docs/PROJECT_GUIDE.md`](docs/PROJECT_GUIDE.md).
+[`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md). Development planning is
+maintained privately by ATNI Climate; this repository carries the application,
+its tests and scripts, and the user and maintainer documentation.
 
 ---
 
@@ -412,9 +411,7 @@ history is in [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md), and the
 generated coverage record is in
 [`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md). Design-document
 authority and the durable convergence doctrine are in
-[`docs/design/README.md`](docs/design/README.md). The public development
-sequence is in [`ROADMAP.md`](ROADMAP.md), its canonical task definitions are
-in [`docs/ROADMAP.yaml`](docs/ROADMAP.yaml), and setup, architecture, layer,
+[`docs/design/README.md`](docs/design/README.md). Setup, architecture, layer,
 testing, and release guidance is in [`DEVELOPER.md`](DEVELOPER.md).
 
 ### Dependency overrides
