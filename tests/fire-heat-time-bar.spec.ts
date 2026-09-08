@@ -570,7 +570,13 @@ test.describe('DDM-P8-T02: the Extreme Heat screen has a seven-day time control'
     await page.clock.setFixedTime(CLOCK_IN_WINDOW);
     await stubCommon(page);
     await stubHeat(page, { failTime: HEAT_TIMES[4] });
-    await gotoApp(page, '?view=console&cluster=heat&heatday=5');
+    // This boot is deliberately held open: the failing day keeps HeatRisk in
+    // `loading` until the tile watcher's 10 s deadline, so the boot-idle seam
+    // lands on the helper's own 10 s expectation (it failed that race once
+    // in a full smoke run and passed alone). As the other specs that hold a
+    // boot open do, the settled state is proven below by the pill and the
+    // stamp, each with a 25 s wait, rather than by the seam.
+    await gotoApp(page, '?view=console&cluster=heat&heatday=5', { bootIdle: false });
 
     // The frame watcher's deadline turns the failed day into `unavailable`
     // without tearing the layer down (the status settles after activation),
