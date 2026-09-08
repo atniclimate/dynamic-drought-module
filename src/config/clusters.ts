@@ -49,41 +49,23 @@ export const TEMPORAL_HORIZON_KEYS: readonly TemporalHorizonKey[] = [
 ];
 
 /**
- * Prose CADENCE labels: what span the horizon key names in a sentence.
- * The durable `weeks-ahead` key predates the seven-day read. These are
- * NOT the chip labels; see TEMPORAL_HORIZON_CHIP_LABELS below and the
- * note there about why the two tables still differ.
- */
-export const TEMPORAL_HORIZON_LABELS: Readonly<
-  Record<TemporalHorizonKey, string>
-> = {
-  current: 'current',
-  'weeks-ahead': 'next seven days',
-  'season-ahead': 'season ahead'
-};
-
-/**
- * The VISIBLE horizon labels: the shell's chip text and the panel-foot
- * response line, which must read identically because they describe the
- * same committed register. One table, two consumers (src/ui/island/shell.tsx
- * and src/ui/island/panel-response.tsx), replacing the two verbatim copies
- * those modules each carried.
+ * VISIBLE HORIZON WORDS moved out of this module (DDM-P8-T03, owner ruling
+ * R1, 2026-09-07). Two tables used to live here: the shell's chip text
+ * ("Current" / "Weeks ahead" / "Season ahead", read by shell.tsx and
+ * panel-response.tsx) and a separate prose-cadence table ("next seven
+ * days", read by nothing but a test pin). They had already diverged from
+ * the briefing panel's own headings ("Near Term" for the same horizon), and
+ * this module's own comment reserved reconciling them for an owner ruling
+ * rather than a refactor.
  *
- * It stays SEPARATE from TEMPORAL_HORIZON_LABELS above on purpose: the
- * chip says "Weeks ahead" while the cadence table says "next seven days",
- * and collapsing them either changes the owner-visible chip or overwrites
- * a cadence claim that is itself an open question (the drought product
- * behind "weeks-ahead" is MONTHLY). Which string wins is an owner ruling,
- * not a refactor; until it is made, both readings stay visible here rather
- * than one being silently deleted.
+ * The ruling: `src/impact/horizon-chrome.ts` is now the single source of
+ * horizon names for the whole interface, shell chips included, through its
+ * `SHELL_HORIZON_KEY` map from `TemporalHorizonKey` (kept here for routing:
+ * URL tokens, recipe selection) to the briefing's `HorizonKey`. The chip
+ * table is retired outright. The cadence table had zero production readers
+ * and is retired too, the smaller diff; `tests/heat-h1-heatrisk.spec.ts`
+ * re-points its pin at `HORIZON_CHROME` directly.
  */
-export const TEMPORAL_HORIZON_CHIP_LABELS: Readonly<
-  Record<TemporalHorizonKey, string>
-> = {
-  current: 'Current',
-  'weeks-ahead': 'Weeks ahead',
-  'season-ahead': 'Season ahead'
-};
 
 export interface HazardClusterDef {
   /** Button title, exactly as ruled (D-0.7.0-042). */

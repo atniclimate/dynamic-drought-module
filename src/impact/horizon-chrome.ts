@@ -1,30 +1,40 @@
 /**
- * The briefing's three horizon headings: the title and the short time-window
- * subtitle a reader sees above each column of the four-hazard by
- * three-horizon matrix.
+ * The interface's three horizon headings: the title and the short
+ * time-window subtitle a reader sees for each of the three temporal
+ * horizons, wherever the interface names one.
  *
- * ONE TABLE, TWO READERS. The lazy composer (`src/impact/briefing.ts`) builds
- * the live briefing from it, and the eager panel facade
- * (`src/ui/impact-panel.ts`) builds the module-failure presentation from it.
- * Until 2026-09-07 each carried its own copy and they had already drifted:
- * the live near-term subtitle read "days to a season" while the failure path
- * read "days to weeks", and long-range read "season to water year" against
- * "months". A reader could see two different definitions of the same horizon
- * depending on whether a chunk loaded.
+ * ONE TABLE, THE WHOLE INTERFACE (DDM-P8-T03, owner ruling R1, 2026-09-07).
+ * Originally "one table, two readers" (2026-09-07, session S10): the lazy
+ * briefing composer (`src/impact/briefing.ts`) and the eager panel facade's
+ * module-failure path (`src/ui/impact-panel.ts`), which had each carried
+ * their own copy and drifted (the live near-term subtitle read "days to a
+ * season" while the failure path read "days to weeks"). The same day, a
+ * second collision surfaced: the map shell's horizon chips
+ * (`src/ui/island/shell.tsx`) and the panel-foot response line
+ * (`src/ui/island/panel-response.tsx`) read a SEPARATE table,
+ * `TEMPORAL_HORIZON_CHIP_LABELS` in `src/config/clusters.ts`
+ * ("Current" / "Weeks ahead" / "Season ahead"), so the same horizon read
+ * "Near Term" in the briefing and "Weeks ahead" on the shell at the same
+ * moment. `clusters.ts` had reserved that collision for an owner ruling
+ * rather than resolve it by refactor. The ruling: this table is the single
+ * source of horizon names for the whole interface. `TEMPORAL_HORIZON_CHIP_LABELS`
+ * is retired; the shell chips and the response line now read this table too,
+ * through `SHELL_HORIZON_KEY` below (the map shell's registers stay keyed
+ * `current | weeks-ahead | season-ahead` for routing; only the display text
+ * moved). `TEMPORAL_HORIZON_LABELS`, the map shell's separate prose-cadence
+ * table ("next seven days"), had zero production consumers by 2026-09-07 (its
+ * only reader was a test pin) and was removed outright rather than folded in,
+ * the smaller diff; `tests/heat-h1-heatrisk.spec.ts` re-points its pin at this
+ * table.
  *
- * WHY THIS IS ITS OWN MODULE. The eager facade may not import the composer
- * (`scripts/check-activation-budget.mjs` forbids `briefing.ts` in the initial
- * static set) and deliberately does not import the matrix module either, whose
- * per-cell absence prose is a kilobyte the failure path never renders
- * (`impact-panel.ts`, the comment on `unavailableCells`). A table of three
- * headings with a single type-only import costs the entry chunk nothing it was
- * not already carrying, and gives both readers the same source of truth.
- *
- * This is NOT `TEMPORAL_HORIZON_LABELS` in `src/config/clusters.ts`. That table
- * is keyed by the map shell's registers (`current | weeks-ahead | season-ahead`)
- * and holds prose cadence fragments ("next seven days"); this one is keyed by
- * the briefing's `HorizonKey` and holds column headings. The two are separate
- * on purpose, and that module says so in its own words.
+ * WHY THIS IS ITS OWN MODULE. The eager panel facade may not import the
+ * composer (`scripts/check-activation-budget.mjs` forbids `briefing.ts` in
+ * the initial static set) and deliberately does not import the matrix module
+ * either, whose per-cell absence prose is a kilobyte the failure path never
+ * renders (`impact-panel.ts`, the comment on `unavailableCells`). A table of
+ * three headings with a single type-only import costs the entry chunk
+ * nothing it was not already carrying, and gives every reader the same
+ * source of truth.
  *
  * Chrome only: nothing here is a claim, an absence note, or an issuer's product
  * name. Those stay where the evidence is.
@@ -40,6 +50,7 @@
  * Drought Outlook) keep the word; they live in claim text, not here.
  */
 
+import type { TemporalHorizonKey } from '../config/clusters';
 import type { HorizonKey } from './types';
 
 export interface HorizonChrome {
@@ -53,4 +64,16 @@ export const HORIZON_CHROME: Readonly<Record<HorizonKey, HorizonChrome>> = {
   current: { title: 'Current Conditions', subtitle: 'now' },
   nearTerm: { title: 'Near Term', subtitle: 'days to weeks' },
   longRange: { title: 'Long Range', subtitle: 'season to water year' }
+};
+
+/**
+ * The map shell's `TemporalHorizonKey` (routing: URL tokens, recipe
+ * selection) maps to this table's `HorizonKey` one for one, so a shell
+ * consumer can read `HORIZON_CHROME[SHELL_HORIZON_KEY[key]]` and never
+ * carry its own copy of the words.
+ */
+export const SHELL_HORIZON_KEY: Readonly<Record<TemporalHorizonKey, HorizonKey>> = {
+  current: 'current',
+  'weeks-ahead': 'nearTerm',
+  'season-ahead': 'longRange'
 };

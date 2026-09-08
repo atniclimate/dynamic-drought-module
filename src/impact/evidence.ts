@@ -57,6 +57,45 @@ export const EVIDENCE_PRESENTATION: Readonly<Record<EvidenceClass, EvidencePrese
   outlook: { label: 'Outlook', cssClass: 'impact-claim-outlook', tone: 'outlook' }
 };
 
+/**
+ * The reader-facing observed/outlook register word (DDM-P8-T03, owner ruling
+ * R3, 2026-09-07): a second, plainer word placed beside a claim's source
+ * line so a reader can tell, without decoding the seven-way badge, whether a
+ * claim describes something already true or something the app expects.
+ *
+ * This is NOT `EvidencePresentation.tone` above. `derived` and `classified`
+ * carry the `outlook`/`observation` TONE the T-P0-2 badge styling needs, but
+ * that tone answers "should this look cautious," not "is this the observed
+ * or the outlook register." Every `derived` claim this app builds is a
+ * present-tense read computed from already-observed inputs (the wildfire
+ * companion inferred from the current USDM category; the ENSO index-state
+ * and Pacific Northwest tendency reads), never a probability, so `derived`
+ * renders `observed` here (the exact case DR-031 raised: the near-term ENSO
+ * claim under a heading that must not imply a forecast the app does not
+ * have). `classified` is not named in the R3 ruling; it renders `observed`
+ * by the same reasoning the badge tone already gives it: an issuer's own
+ * classification of a currently valid state (HeatRisk's 0-4 class), not a
+ * forecast. `modeled` and `modeled-analysis` are unused by any claim as of
+ * this ruling; both render `outlook`, matching their existing tone, because
+ * a model output is exactly the forward-looking case the tag exists to mark.
+ *
+ * A claim whose text would be misdescribed by its class's tag renders none
+ * (R3's escape hatch) rather than take this table's default; the 2026-09-07
+ * inventory of every claim site found none that needed it, so no per-claim
+ * override exists yet. `src/ui/claim-render.ts` renders this beside the
+ * source line; `CELL_ABSENCE` prose in `src/impact/matrix.ts` never reaches
+ * this table (R4: an absence is neither register).
+ */
+export const CLAIM_REGISTER_TAG: Readonly<Record<EvidenceClass, 'observed' | 'outlook'>> = {
+  observed: 'observed',
+  analyzed: 'observed',
+  classified: 'observed',
+  'modeled-analysis': 'outlook',
+  modeled: 'outlook',
+  derived: 'observed',
+  outlook: 'outlook'
+};
+
 /** A claim under construction: everything but the derived legacy `kind`. */
 export type SourcedClaimInput = Omit<SourcedClaim, 'kind'>;
 

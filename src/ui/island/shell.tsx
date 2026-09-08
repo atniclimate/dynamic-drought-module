@@ -44,10 +44,10 @@ import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import {
   HAZARD_CLUSTERS,
   HAZARD_CLUSTER_KEYS,
-  TEMPORAL_HORIZON_CHIP_LABELS,
   TEMPORAL_HORIZON_KEYS
 } from '../../config/clusters';
 import type { HazardClusterKey, TemporalHorizonKey } from '../../config/clusters';
+import { HORIZON_CHROME, SHELL_HORIZON_KEY } from '../../impact/horizon-chrome';
 import type { FramingSelection } from '../../config/framings';
 import { getLayerDef } from '../../config/layers';
 import {
@@ -411,6 +411,7 @@ function Shell({ map, snap, framing, specTick }: ShellProps) {
         <div class="shell-horizons">
           {TEMPORAL_HORIZON_KEYS.map((key) => {
             const disabledReason = customHorizonDisabledReason(snapshot, key);
+            const chrome = HORIZON_CHROME[SHELL_HORIZON_KEY[key]];
             return (
               <button
                 type="button"
@@ -424,7 +425,8 @@ function Shell({ map, snap, framing, specTick }: ShellProps) {
                   if (disabledReason === null) chooseHorizon(key);
                 }}
               >
-                {TEMPORAL_HORIZON_CHIP_LABELS[key]}
+                <span class="shell-horizon-btn-title">{chrome.title}</span>
+                <span class="shell-horizon-btn-sub">{chrome.subtitle}</span>
               </button>
             );
           })}

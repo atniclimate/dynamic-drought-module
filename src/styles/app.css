@@ -4513,6 +4513,14 @@ button.telemetry-item {
 .impact-claim-date::before {
   content: '\00B7\00A0';
 }
+/* Observed/outlook register word (DDM-P8-T03, R3, 2026-09-07): text only,
+   inherits .impact-claim-source's own color, no new color and no motion. */
+.impact-claim-register {
+  white-space: nowrap;
+}
+.impact-claim-register::before {
+  content: '\00B7\00A0';
+}
 .impact-claim-text {
   margin: 0 0 4px;
   font-size: 12.5px;
@@ -6668,11 +6676,16 @@ a.impact-resource-link::after {
 .shell-horizon-btn {
   appearance: none;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
   background: var(--bg-2);
   color: var(--fg-2);
   border: 1px solid var(--line);
   border-radius: 999px;
-  padding: 4px 8px;
+  padding: 4px 6px;
   font-family: var(--font-display);
   font-size: 10px;
   font-weight: var(--fw-subtitle);
@@ -6680,6 +6693,19 @@ a.impact-resource-link::after {
   cursor: pointer;
 }
 .shell-horizon-btn:hover { color: var(--fg-0); }
+/* Title and subtitle from HORIZON_CHROME (DDM-P8-T03, R1, 2026-09-07):
+   text only, same tokens the button already carried. */
+.shell-horizon-btn-title {
+  line-height: 1.15;
+}
+.shell-horizon-btn-sub {
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  opacity: 0.75;
+  line-height: 1.15;
+}
 /* Honest disablement for custom compositions (DG-080 r2 finding 1):
    the chip stays perceivable and focusable so its title/accessible
    reason is reachable, but reads and behaves as unavailable. */

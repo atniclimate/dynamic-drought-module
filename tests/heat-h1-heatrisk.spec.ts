@@ -4,8 +4,8 @@ import {
   HEATRISK_CATEGORIES,
   NWS_ALERT_COLORS
 } from '../src/config/palette';
-import { TEMPORAL_HORIZON_LABELS } from '../src/config/clusters';
 import { makeClaim } from '../src/impact/evidence';
+import { HORIZON_CHROME } from '../src/impact/horizon-chrome';
 import { fillCell } from '../src/impact/matrix';
 import type { MatrixLaneKey, MatrixLaneResult } from '../src/impact/matrix';
 import type { HazardCell } from '../src/impact/types';
@@ -309,7 +309,13 @@ function boxesOverlap(
   );
 }
 
-test('the issuer HeatRisk table and next-seven-days label are exact and centralized', () => {
+// DDM-P8-T03 (R2, 2026-09-07): the second half of this test used to pin
+// TEMPORAL_HORIZON_LABELS['weeks-ahead'] to 'next seven days'. That table
+// had zero production consumers and was removed under R1 (horizon-chrome.ts
+// is now the single horizon-name source for the whole interface); this pin
+// is re-pointed at HORIZON_CHROME, the new source, at the same strength
+// (exact string equality) rather than dropped.
+test('the issuer HeatRisk table and the near-term horizon heading are exact and centralized', () => {
   expect(HEATRISK_CATEGORIES).toEqual([
     {
       value: 0,
@@ -346,7 +352,7 @@ test('the issuer HeatRisk table and next-seven-days label are exact and centrali
         'This level of rare and/or long-duration extreme heat with little to no overnight relief affects anyone without effective cooling and/or adequate hydration. Impacts likely in most health systems, heat-sensitive industries and infrastructure.'
     }
   ]);
-  expect(TEMPORAL_HORIZON_LABELS['weeks-ahead']).toBe('next seven days');
+  expect(HORIZON_CHROME.nearTerm.subtitle).toBe('days to weeks');
 });
 
 test.describe('selected-place HeatRisk sequence and briefing', () => {
