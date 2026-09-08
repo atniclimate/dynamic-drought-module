@@ -189,7 +189,7 @@ export interface HazardCell {
  */
 export interface Horizon {
   readonly key: HorizonKey;
-  /** Section heading, for example "Current conditions". */
+  /** Section heading, for example "Current Conditions" (`HORIZON_CHROME`). */
   readonly title: string;
   /** Short definition of the time window, for example "now". */
   readonly subtitle: string;

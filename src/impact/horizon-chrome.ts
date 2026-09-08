@@ -28,6 +28,16 @@
  *
  * Chrome only: nothing here is a claim, an absence note, or an issuer's product
  * name. Those stay where the evidence is.
+ *
+ * THE WORDS, owner-decided 2026-09-07 (session S10, closing DDM-P12-T02). The
+ * near-term and long-range headings used to end in "outlook". Under the
+ * near-term one sat an ENSO claim whose own text says it is not a forecast
+ * (DR-031 a), and the DDM-P12-T02 acceptance says no horizon may imply a
+ * forecast the app does not have. A heading is part of the horizon. So no
+ * heading says "outlook" or "forecast" now, the titles carry no hyphen
+ * ("Near Term", never "Near-Term"), and tests/enso-horizons.spec.ts pins both
+ * against this table. Issuer product names that ARE outlooks (the CPC Seasonal
+ * Drought Outlook) keep the word; they live in claim text, not here.
  */
 
 import type { HorizonKey } from './types';
@@ -40,7 +50,7 @@ export interface HorizonChrome {
 }
 
 export const HORIZON_CHROME: Readonly<Record<HorizonKey, HorizonChrome>> = {
-  current: { title: 'Current conditions', subtitle: 'now' },
-  nearTerm: { title: 'Near-term outlook', subtitle: 'days to a season' },
-  longRange: { title: 'Long-range outlook', subtitle: 'season to water year' }
+  current: { title: 'Current Conditions', subtitle: 'now' },
+  nearTerm: { title: 'Near Term', subtitle: 'days to weeks' },
+  longRange: { title: 'Long Range', subtitle: 'season to water year' }
 };
