@@ -40,7 +40,11 @@ const forbidden = [
 // installed guardrails have a reviewable origin. Everything else under
 // planning/ stays forbidden.
 const allowed = [
-  /^planning\/(?:decisions|qa|user-research|handoffs)\//i,
+  // planning/references/ joined the tracked ledgers on 2026-09-07 by owner
+  // ruling (the S03b references register). That ruling added the matching
+  // .gitignore negation; this list is the second half of it, because this
+  // script keeps its own allow-list rather than reading .gitignore.
+  /^planning\/(?:decisions|qa|user-research|handoffs|references)\//i,
   /^planning\/2026-09-01-deep-dive\/claude-tooling\/hooks\//i
 ];
 
