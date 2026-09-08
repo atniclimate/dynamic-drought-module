@@ -1488,10 +1488,12 @@ groups:
           BEFORE: "Snowpack is the least reliable part of the tendency: the Washington State Climate
           Office notes that the three strongest El Ninos on record in the modern era (1982-83,
           1997-98 and 2015-16) each produced near-normal Washington snowpack."
-          AFTER: "That tendency has not held for snowpack in the largest events: the Washington
-          State Climate Office notes that the three strongest El Ninos on record in the modern era
-          (1982-83, 1997-98 and 2015-16) each produced near-normal Washington snowpack, and that it
-          is hard to say whether that is a real pattern or a small sample."
+          AFTER (the shipped text, as revised in round 3 below): "That tendency has not held for
+          snowpack in the strongest events: the Washington State Climate Office notes that the three
+          strongest El Ninos on record in the modern era (1982-83, 1997-98 and 2015-16) each produced
+          near-normal Washington snowpack, and the University of Washington College of the
+          Environment report of that finding adds that it is hard to say whether it is a real
+          pattern or a small sample."
           WHY IT PASSES WHERE THE OLD ONE FAILED: the verifier was asked explicitly whether the new
           opening is still a comparative ranking and answered no. It makes a bounded factual claim
           about ONE component in ONE class of event, which the page supports directly ("During past
@@ -1501,26 +1503,29 @@ groups:
           sample size"; dropping "size" and "just" changes no meaning, and the singular "that"
           preserves the referent. The replacement claims no recurrence, predicts no winter, and
           states no general El Nino snowpack rule beyond the three named events.
-        stop_ruling_residue_2026_09_07: >-
-          TWO OPEN NOTES from the verification of the ruled replacement. Neither blocks anything and
-          neither was acted on, because the owner specified the replacement's exact words and the
-          condition they set (that the clause bind) was met.
-          1. ONE-WORD TIGHTENING, recommended by ddm-science-verifier and NOT applied. The page's
+        stop_ruling_round_3_2026_09_07: >-
+          TWO NOTES came out of verifying the ruled replacement, and the owner ACCEPTED BOTH the
+          same day. Neither is open. The revision is a third commit on the branch,
+          "enso: strongest events; attribute the sample-size caveat to the UW report", and
+          ddm-science-verifier re-verified the sentence after it.
+          1. THE WORD. "in the largest events" became "in the strongest events". The page's
           vocabulary throughout is "very strong", "the strongest El Nino on record" and "the next
-          strongest El Ninos"; it never says "large" or "largest". The verifier recommended
-          "largest" become "strongest" and was explicit that "largest" does NOT broaden the
-          category, because the clause is glossed immediately by the three named events. Against the
-          change: "strongest" already appears later in the same sentence ("the three strongest El
-          Ninos"), so the swap repeats the word twice in one sentence. The owner's exact wording
-          shipped; this is theirs to accept or wave off.
-          2. ATTRIBUTION IS INDIRECT, BY ONE STEP. In the source article the near-normal-snowpack
-          statement is a direct quotation from the Deputy Washington State Climatologist, but the
-          "hard to say" sentence sits OUTSIDE the quotation marks: it is the article's own narration
-          bridging two of her quotes. The application says "the Washington State Climate Office
-          notes that ... and that it is hard to say ...", which is reported speech and not a quoted
-          attribution, so nothing is presented as a quote that is not one. The verifier called this
-          fair but loose and raised it as a soft flag rather than a defect. Recorded so a later
-          reader does not rediscover it as a finding.
+          strongest El Ninos"; it never says "large" or "largest". The verifier was explicit that
+          "largest" did NOT broaden the category, because the three named events gloss the clause
+          immediately, so this is fidelity to the issuer's term rather than a correction of scope.
+          The cost, accepted: "strongest" now appears twice in one sentence.
+          2. THE ATTRIBUTION, which is the substantive half. The source article carries its two
+          statements DIFFERENTLY, and the sentence now reflects that instead of flattening it. The
+          near-normal-snowpack finding is a direct quotation from the Deputy Washington State
+          Climatologist and remains attributed to the Washington State Climate Office. The
+          sample-size caveat sits OUTSIDE her quotation marks and is the article's own narration
+          bridging two of her quotes, so it is now attributed to "the University of Washington
+          College of the Environment report of that finding", the party that actually wrote it. The
+          application uses reported speech, "adds that", so nothing is presented as a quotation that
+          is not one. "whether that is" also became "whether it is", tracking the page's "whether
+          they represent a real pattern". A reader now gets an accurate picture of who said what,
+          which the round-2 wording did not give: it credited the Office with a caveat the Office
+          did not publish.
         product_name_corrected_2026_09_07: >-
           RAISED as a flag by S11 and RESOLVED the same day by owner ruling 2, authorized as a
           citation correction rather than a rewrite. The CPC composites page's own title element

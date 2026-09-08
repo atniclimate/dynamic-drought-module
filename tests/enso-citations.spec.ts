@@ -281,14 +281,23 @@ test.describe('DDM-P12-T03: each tilt sentence cites a source and states its sea
     // event, not rank snowpack against the tendency's other components: no
     // issuer compares the components, which is why the old wording was
     // reported as a stop rather than narrowed.
-    expect(elNino).toContain('That tendency has not held for snowpack in the largest events');
+    expect(elNino).toContain('That tendency has not held for snowpack in the strongest events');
     expect(
       elNino,
       'the snowpack framing ranks components again; no issuer makes that comparison'
     ).not.toContain('least reliable');
-    // ...and it carries the Office's own caveat rather than leaving three
-    // events reading as an established rule.
-    expect(elNino).toContain('hard to say whether that is a real pattern or a small sample');
+    // "strongest", not "largest": the page's own vocabulary throughout is
+    // "very strong" and "the strongest El Nino on record", never "large".
+    expect(elNino).not.toContain('largest events');
+    // ...and it carries the sample-size caveat, attributed to the party that
+    // actually wrote it. The near-normal-snowpack finding is a direct quotation
+    // from the Deputy Washington State Climatologist; the caveat is the UW
+    // College of the Environment article's own narration, outside her quotes,
+    // so the sentence names two sources and not one.
+    expect(elNino).toContain(
+      'the University of Washington College of the Environment report of that finding adds'
+    );
+    expect(elNino).toContain('hard to say whether it is a real pattern or a small sample');
 
     await openBriefing(page, branchFixture('la-nina', -1.12));
     const laNina = (await tendencyClaim(page).locator('.impact-claim-text').innerText())

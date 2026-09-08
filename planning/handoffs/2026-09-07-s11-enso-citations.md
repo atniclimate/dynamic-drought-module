@@ -133,7 +133,7 @@ The object list already matched the page word for word and was not touched.
 ## The STOP, raised and ruled the same day
 
 > **was** "Snowpack is the least reliable part of the tendency"
-> **now** "That tendency has not held for snowpack in the largest events"
+> **now** "That tendency has not held for snowpack in the strongest events"
 > `src/impact/enso.ts`, `tendency()`, case `'el-nino'`
 
 **No issuer page stated the old wording.** It ranked snowpack against the tendency's other parts,
@@ -155,10 +155,14 @@ this clause is the hinge that turns the counter-evidence from a stray fact into 
 
 **It binds. Verdict VERIFIED**, so the fallback was not taken. The full replacement:
 
-> That tendency has not held for snowpack in the largest events: the Washington State Climate
+> That tendency has not held for snowpack in the strongest events: the Washington State Climate
 > Office notes that the three strongest El Ninos on record in the modern era (1982-83, 1997-98 and
-> 2015-16) each produced near-normal Washington snowpack, and that it is hard to say whether that
-> is a real pattern or a small sample.
+> 2015-16) each produced near-normal Washington snowpack, and the University of Washington College
+> of the Environment report of that finding adds that it is hard to say whether it is a real
+> pattern or a small sample.
+
+(That is the final, round-3 wording. The owner's ruling first shipped it with "largest events" and
+the caveat attributed to the Office; both were revised in a third commit after verification, below.)
 
 The verifier was asked point blank whether the new opening is still a comparative ranking of the
 kind that failed, and answered no: it makes a **bounded** factual claim about one component in one

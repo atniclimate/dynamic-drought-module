@@ -44,7 +44,7 @@ citations_verified_marker: "src/impact/enso.ts sets CITATIONS_VERIFIED to
 # on it the same day. The ruling is implemented; both halves are recorded.
 #
 #   was: "Snowpack is the least reliable part of the tendency"
-#   now: "That tendency has not held for snowpack in the largest events"
+#   now: "That tendency has not held for snowpack in the strongest events"
 #   src/impact/enso.ts, the El Nino branch, the sentence that introduces the
 #   snowpack counter-evidence.
 #
@@ -59,12 +59,13 @@ stop_raised_and_ruled_2026_09_07:
   verdict_before: "UNVERIFIED, an unsourced comparative ranking (ddm-science-verifier, 2026-09-07)"
   action_taken: "reported as a stop, not reworded, until the owner ruled the same day"
   clause_after: >-
-    That tendency has not held for snowpack in the largest events: the
+    That tendency has not held for snowpack in the strongest events: the
     Washington State Climate Office notes that the three strongest El Ninos on
     record in the modern era (1982-83, 1997-98 and 2015-16) each produced
-    near-normal Washington snowpack, and that it is hard to say whether that is
-    a real pattern or a small sample.
-  verdict_after: "VERIFIED (ddm-science-verifier, 2026-09-07)"
+    near-normal Washington snowpack, and the University of Washington College of
+    the Environment report of that finding adds that it is hard to say whether
+    it is a real pattern or a small sample.
+  verdict_after: "VERIFIED (ddm-science-verifier, 2026-09-07, re-verified after the round-3 revision)"
   supporting_quotes:
     - "During past 'very strong' El Nino years, though, things have looked a little different."
     - "it's hard to say whether they represent a real pattern or just a small sample size."
@@ -81,20 +82,24 @@ stop_raised_and_ruled_2026_09_07:
     original sentence would ship prefixed "In this application's reading, " and
     be recorded as a labelled DDM presentation choice. It bound, so the fallback
     was not used and no DDM presentation label was needed.
-  open_notes:
-    - "ONE-WORD TIGHTENING, recommended and NOT applied. The page says 'very
-      strong' and 'strongest' throughout and never 'large' or 'largest'. The
-      verifier recommended largest become strongest, and was explicit that
-      largest does NOT broaden the category because the three named events gloss
-      it immediately. Against it: strongest already appears later in the same
-      sentence. The owner's exact wording shipped; theirs to accept or wave off."
-    - "ATTRIBUTION IS INDIRECT BY ONE STEP. The near-normal-snowpack statement is
-      a direct quotation from the Deputy Washington State Climatologist, but the
-      'hard to say' sentence sits OUTSIDE the quotation marks and is the
-      article's own narration bridging two of her quotes. The application uses
-      reported speech, 'notes that ... and that it is hard to say ...', so
-      nothing is presented as a quote that is not one. Flagged as fair but loose,
-      not as a defect."
+  round_3_both_notes_accepted_2026_09_07: >-
+    The two notes S11 raised against the round-2 wording were BOTH accepted by
+    the owner and are implemented; neither is open any longer.
+    1. WORD. "in the largest events" became "in the strongest events". The page's
+    vocabulary throughout is "very strong", "the strongest El Nino on record" and
+    "the next strongest El Ninos", and never "large". The scope is unchanged;
+    only the word moved to the issuer's own. "Strongest" now appears twice in the
+    sentence, which is the accepted cost of quoting the issuer's term.
+    2. ATTRIBUTION. The sentence now names TWO sources instead of one, because
+    the page carries the two statements differently. The near-normal-snowpack
+    finding is a direct quotation from the Deputy Washington State Climatologist
+    and stays attributed to the Washington State Climate Office. The sample-size
+    caveat sits OUTSIDE her quotation marks and is the article's own narration,
+    so it is now attributed to "the University of Washington College of the
+    Environment report of that finding", which is the party that actually wrote
+    it. The app uses reported speech, "adds that", so nothing is presented as a
+    quotation that is not one. "whether that is" also became "whether it is",
+    tracking the page's "whether they represent a real pattern".
 
 references:
 
