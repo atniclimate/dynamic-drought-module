@@ -3,6 +3,10 @@
 `atniclimate/dynamic-drought-module` (the running version is stamped in
 the application footer)
 
+Every dataset in this module describes conditions on homelands, and
+presenting that data carries obligations to the people and places it
+represents.
+
 An embeddable, serverless web map for seeing drought across North America
 and understanding conditions for supported places: current drought status,
 wildfire and extreme heat risk, water and snowpack telemetry, and public
@@ -16,17 +20,18 @@ from any web host, embed it in any page with an `<iframe>`. There is no
 backend, no account, no tracking, no analytics, and no proprietary tile
 provider. Every view is a shareable URL.
 
-**Stewardship comes first.** The module is built so each deployer (a
-Tribal Nation, a state agency, a partner) controls its own copy on its own
-infrastructure. Sovereign-jurisdiction data is never redistributed by this
+**Stewardship comes first.** Each deployer (a Tribal Nation, a state
+agency, a partner) controls its own copy on its own infrastructure.
+Sovereign-jurisdiction data is never redistributed by this
 repository. The live Tribal-geography layers (Tribal Lands and Reservation
-Boundaries) are fetched LIVE from the publishing
-federal services at view time, held only in the browser session, and never
-bundled; requests run with `cache: 'no-store'` so nothing persists beyond
-the session. Separately, two deployer-owned slots (`tribal`, `treaty`)
-ship as empty placeholders a deployer may populate with its own authorized
-data; they appear in the interface only when turned on by URL (see the
-layer table below).
+Boundaries) are fetched from the publishing federal services at view time.
+Fetching live is a governance decision: boundary representations come from
+their publishing authority, stay in the browser session only
+(`cache: 'no-store'`), and are never bundled or written to disk.
+Separately, two deployer-owned slots (`tribal`, `treaty`) ship as empty
+placeholders a deployer may populate with its own authorized data; they
+appear in the interface only when turned on by URL (see the layer table
+below).
 
 > **Treaty boundaries.** Agency polygons are a representation of Treaty
 > cession areas, not a definitive depiction of Tribal jurisdiction. Treaty
@@ -59,14 +64,18 @@ its tests and scripts, and the user and maintainer documentation.
 
 ## What the module shows
 
-- **Condition surfaces** (one at a time, so they never fight visually):
+The module shows five kinds of information, plus the presets that arrange
+them. Each kind answers a different question about conditions and place.
+
+- **Condition surfaces** answer the severity question for the visible
+  area, shown one at a time so they never fight visually:
   the US Drought Monitor (USDM), the gridded Standardized Precipitation
   Index (SPI) with a 30-to-365-day window selector, the NOAA Climate
   Prediction Center (CPC) Seasonal Drought Outlook, NWS HeatRisk, the
   Storm Prediction Center fire-weather outlook, and USDA Forest Service
   Wildfire Hazard Potential.
-- **Place** (the reference boundaries that say where you are and whose
-  land you are looking at): state boundaries, EPA Omernik Level III and
+- **Place** tells you where you are and whose land you are looking at:
+  state boundaries, EPA Omernik Level III and
   Level IV ecoregions, rivers, and the Tribal Nations umbrella: Tribal
   Lands (live from the US Census AIANNH service, covering legal AND
   statistical geographies including Oklahoma Tribal Statistical Areas),
@@ -78,25 +87,28 @@ its tests and scripts, and the user and maintainer documentation.
   never blended. Deployers can additionally load their own Tribal Lands
   and Treaty Areas data into two default-off slots (URL-addressed; not
   shown in the default interface).
-- **Events**: current mapped fire perimeters from the National Interagency
+- **Events** show what is actively happening: current mapped fire
+  perimeters from the National Interagency
   Fire Center, with Wildfire and Wildfire Complex, Prescribed fire, and
   other or unclassified perimeters kept distinct; NOAA Hazard Mapping System
   smoke plumes; plus active National Weather Service (NWS) heat and
   fire-weather alerts.
-- **Stations**: live water and snowpack telemetry with values in the
-  sidebar and popups: USGS streamgages, NRCS SNOTEL snowpack, USBR
-  Hydromet reservoir storage and AgriMet agricultural observations, and
-  USACE reservoir forebay elevations.
-- **The impact briefing**: click any boundary (a state, an ecoregion, a
-  Tribal or reservation boundary) and the module composes a briefing for
-  that place: land identity, current / near-term / long-range drought
-  impact with wildfire and extreme heat foregrounded, the seasonal
-  water-supply outlook, the El Nino / Southern Oscillation (ENSO) tilt,
-  and public resources routed in stewardship order (the Tribe's own
-  resources first, then federal, then state).
-- **View presets**: five question-first chips ("Right now", "This week",
-  "Season ahead", "Fire risk", "Whose land") that set the layer stack for
-  the question being asked, without locking it.
+- **Stations** report what the instruments on the ground are reading,
+  with live values in the sidebar and popups: USGS streamgages, NRCS
+  SNOTEL snowpack, USBR Hydromet reservoir storage and AgriMet
+  agricultural observations, and USACE reservoir forebay elevations.
+- **The impact briefing** answers what all the data means for one place.
+  Click any boundary (a state, an ecoregion, a Tribal or reservation
+  boundary) and the module composes it from land identity, current /
+  near-term / long-range drought impact with wildfire and extreme heat
+  foregrounded, the seasonal water-supply outlook, the El Nino /
+  Southern Oscillation (ENSO) tilt, and public resources routed in
+  stewardship order (the Tribe's own resources first, then federal, then
+  state).
+- **View presets** organize the layer stack around a question instead of
+  asking you to build one: five question-first chips ("Right now", "This
+  week", "Season ahead", "Fire risk", "Whose land") set the stack for the
+  question being asked, without locking it.
 
 Every layer reports an honest status in the sidebar (`loading`, `live`,
 `live (partial)`, `unavailable`, `no data`, `zoom in to load`); a failed
@@ -216,7 +228,7 @@ key. Table aligned with the runtime registry on 2026-08-20.)
 
 The framing minimap derives its colors from the current monthly
 [North American Drought Monitor](https://www.drought.gov/data-maps-tools/north-american-drought-monitor-nadm).
-Each authored framing uses an approximate cosine-latitude-weighted ordinal
+Each authored framing computes an approximate cosine-latitude-weighted ordinal
 mean of assessed land, from white `None` through dark-red `D4`, for its fill.
 A separate outline carries the total D1-D4 share so the mean cannot hide
 material drought extent. The most prevalent class and distribution remain
@@ -247,6 +259,9 @@ or written to disk by this module. Each popup names its publishing
 agency, its vintage, and the representation caveat. Both layers are on
 by default.
 
+Sovereign boundary data is governed by the Nation it represents, not by
+this repository.
+
 The `tribal` and `treaty` keys are the DEPLOYER slots: bundled empty
 `FeatureCollection` placeholders (in `public/data/`), off by default,
 that a deployer may populate with its own authorized data (a Tribal
@@ -255,18 +270,20 @@ of the default interface: no catalog row or search result names them
 until a `?layers=tribal` / `?layers=treaty` URL (or a deployer's own
 configuration) turns them on. Their popups label the data as
 deployer-provided. If you populate a slot with data that
-duplicates one of the live federal layers, consider toggling that live
-layer off in your embed links to avoid a confusing double-draw; the two
-are deliberately separate so your data never silently replaces or blends
-with a federal representation. Conversion commands and population
+overlaps a live federal layer, toggle that live layer off in your embed
+links so the viewer sees one boundary rather than a confusing
+double-draw; the two are deliberately separate so your data
+never silently replaces or blends with a federal representation.
+Conversion commands and population
 instructions are in [`public/data/README.md`](public/data/README.md).
 
 ### About the basemap and hydrography
 
-The product-default basemap uses
+The product-default basemap shows recent satellite imagery as visual
+context, drawing from
 [NOAA NESDIS merged GOES East and West GeoColor](https://www.nesdis.noaa.gov/imagery/satellite-maps)
-from its rolling 24-hour archive. The Satellite control turns that recent
-context on and off without creating a second state system. An absent
+and its rolling 24-hour archive. The Satellite control turns that context
+on and off without creating a second state system. An absent
 `basemap` parameter means satellite is on; `basemap=default` records the
 explicit satellite-off choice and shows subdued OpenStreetMap ground.
 
@@ -286,11 +303,13 @@ their governed scene, but boot reconciliation and unrelated layer or horizon
 changes do not override a visitor's manual basemap choice. Future
 satellite-derived drought indicators, wildfire thermal detections, or land
 surface temperature products belong in separately named layers with their
-own status, timestamp, caveat, and legend. No proprietary tile providers,
-authentication, or application backend are added. Hydrography queries the
-volunteer-run Overpass API (three-mirror failover, viewport-driven, dormant
-below zoom 7); institutional deployments expecting heavy concurrency should
-plan for the planned National Hydrography Dataset PMTiles bundle.
+own status, timestamp, caveat, and legend; recoloring an existing layer
+would let a display claim what its source does not. No proprietary tile
+providers, authentication, or application backend are added. Hydrography
+queries the volunteer-run Overpass API (three-mirror failover,
+viewport-driven, dormant below zoom 7); institutional deployments
+expecting heavy concurrency should plan for the planned National
+Hydrography Dataset PMTiles bundle.
 
 ### The desktop 3D Fire view
 
@@ -362,6 +381,10 @@ honestly as unavailable.
 
 ## Architecture invariants
 
+Architecture encodes values. These seven commitments govern how the code
+behaves, so a person reading the interface can trust what it says and a
+deployer keeps control of the deployment.
+
 - **No backend.** The static `dist/` folder is the entire production
   deployment; the optional Worker is a CORS shim, not application logic.
 - **URL-as-state.** Region, active layers, selection, and the embed flag
@@ -408,12 +431,14 @@ honestly as unavailable.
 
 This repository carries the deployable application, bundled assets,
 browser test suite, product data builders, validation gates, and optional
-Cloudflare Worker. Run `npm run gate` for the static build and product
-checks, and `npm run test:serial` for the full browser suite. Public release
-history is in [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md), and the
-generated coverage record is in
-[`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md). Design-document
-authority and the durable convergence doctrine are in
+Cloudflare Worker. Two commands carry the checks named here: `npm run gate`
+runs the static build and product checks; `npm run test:serial` runs the
+full browser suite. Public release history is in
+[`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md), and the generated
+coverage record is in
+[`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md); both are published
+so a deployer can read what shipped and what it covers.
+Design-document authority and the durable convergence doctrine are in
 [`docs/design/README.md`](docs/design/README.md). Setup, architecture, layer,
 testing, and release guidance is in [`DEVELOPER.md`](DEVELOPER.md).
 

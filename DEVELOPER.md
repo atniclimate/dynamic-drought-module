@@ -1,8 +1,9 @@
 # DDM developer guide
 
-This guide explains how to set up, understand, change, verify, and publish the
-Dynamic Drought Module. It is intended for maintainers and contributors who
-need more implementation detail than the product README.
+This guide is for maintainers and contributors who need to set up, understand,
+change, verify, and publish the Dynamic Drought Module. The implementation
+detail here matters because each deployer builds this application once and
+owns its own copy, its own data, and its own deployment.
 
 DDM is a static TypeScript application built with Vite and MapLibre GL JS. It
 has no application backend. An optional Cloudflare Worker provides only an
@@ -43,7 +44,8 @@ and the build target in `vite.config.ts` still agree with it.
 
 ## Product and planning authority
 
-Read these sources in order when they disagree:
+Six sources carry authority in this project. Read them in this order when
+they disagree:
 
 1. Current owner direction defines product intent for the requested work.
 2. Runtime code, especially `src/config/layers.ts`, defines implemented
@@ -58,9 +60,9 @@ Read these sources in order when they disagree:
 6. [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md) records merged product
    history.
 
-Asana owns mutable execution state such as status, assignee, and due date. The
-planning record intentionally omits those fields so the repository does not
-maintain a competing clock.
+Asana tracks status, assignee, and due date because those fields change
+during execution. The planning record intentionally omits those fields so the
+repository does not maintain a competing clock.
 
 ## Architecture
 
@@ -131,19 +133,23 @@ happened.
 
 ## Data and stewardship
 
-DDM serves public agency data and deployer-owned placeholders. The empty
-`public/data/tribal-lands.geojson` and `public/data/treaty-areas.geojson`
-files must remain empty unless the relevant sovereign authority authorizes
-data for that deployment. Do not copy Tribal, Treaty, or other
-sovereign-jurisdiction polygons into the repository.
+Every decision about what data enters this repository is a governance
+decision. DDM serves public agency data and deployer-owned placeholders. The
+empty `public/data/tribal-lands.geojson` and
+`public/data/treaty-areas.geojson` files must remain empty unless the
+relevant sovereign authority authorizes data for that deployment. Do not copy
+Tribal, Treaty, or other sovereign-jurisdiction polygons into the repository.
 
 Capitalize Tribe, Tribal, and Treaty when referring to Tribal Nations or
-Treaty rights. Agency boundary products are representations, not definitive
-jurisdictional truth, and must retain the existing caveats.
+Treaty rights. This is accuracy, not courtesy. Agency boundary products are
+representations, not definitive jurisdictional truth, and must retain the
+existing caveats.
 
 Do not add proprietary tile services, credentials, tracking, analytics, or
 telemetry. Public upstream invocation logs can contain full query URLs, so
-provider logging policy is also a privacy decision.
+provider logging policy is also a privacy decision. A maintainer adding an
+upstream is responsible for knowing what that provider logs and who can
+read it.
 
 The inventory and rebuild notes for committed data are in
 [`public/data/README.md`](public/data/README.md). Builders must preserve
