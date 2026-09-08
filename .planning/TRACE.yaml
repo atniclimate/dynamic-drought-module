@@ -2678,6 +2678,22 @@ tasks:
         covers: src/ui/time-bar.ts
         evidence: "tests/temporal-axis.spec.ts:262: // (src/ui/time-bar.ts), so a status flap can no longer
           swap the DOM"
+      # Attached 2026-09-08 by S13, commit b5a4fda73ce929ef63351899cae41d41b9eaee06
+      # (amended by 0b62a4e) on feature/fire-heat-time-bar-p8t02: the acceptance
+      # spec this session added, quoting the acceptance and driving every hazard
+      # screen's time bar against fixtures under a fixed page clock. It reaches
+      # src/ui/time-bar.ts through the bar's own selectors. The three fire layer
+      # files that now install the bar (nifc-fires.ts, spc-fire-weather.ts,
+      # usfs-whp.ts) are not attached here: S13 was authorized to attach only the
+      # files it created; spc-fire-weather.ts and usfs-whp.ts sit in
+      # orphan_files_with_test_coverage and now serve this task (an owner call).
+      # docs/ROADMAP.yaml flipped this task to done on 2026-09-08; this status
+      # field is left for the owner's landing pass, as S09 to S12 left theirs.
+      - path: tests/fire-heat-time-bar.spec.ts
+        via: selector
+        covers: src/ui/time-bar.ts
+        evidence: "src/ui/time-bar.ts:394: `<span class=\"time-bar-stamp-horizon\" data-horizon=\"${escapeHtml(spec.stamp.horizon)}\">`"
+        attached_by: repair:S13
     coverage: files-and-tests
   DDM-P8-T03:
     title: Make every horizon chip and every stamp honest and uniform across the four hazards

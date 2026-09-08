@@ -5,7 +5,7 @@
 schema_version: 1
 generated: "2026-09-02"
 updated: >-
-  2026-09-04T11:20-07:00 by the foundations true-up: 69 entries, 49 decided, 20 pending, no entry ruled this session. Added foundations_pass_2026_09_03 (see that block). Corrections to the record's own facts: the deployed application bytes are 2835091, not 5be15f5 (docs-only diff skipped by deploy.yml paths-ignore); v0.6.26 IS tagged at 533fabd; DR-069 is unexecuted on main (vite.config.ts:67 sourcemap true), its fix rides platform/ddm-p15-close; DR-065's standing default_if_no_answer (option b) is the opposite of what was built and awaits ruling A6; DR-061 sits beside two live weekly crons (browser-suite.yml:76, refresh-snapshots.yml:18) and awaits ruling B6. Previous updated: 2026-09-03T20:05-07:00 by the long run: 69 entries, 49 decided, 20 pending. DR-067 decided b with its probe condition MET (the issuer applies a rendering rule, and it needs no Worker publish), DR-068 decided b, DR-069 created and decided and EXECUTED on platform/ddm-p15-close; DR-065 gained fix_2026_09_03 recording the flake rate falling 6 of 16 and 5 of 16 to 0 of 16; branch_state gained landed_2026_09_03_pm (main cd1d061 to 5be15f5, three merges, ribbon proven live) and awaiting_go_2026_09_03_pm (nine branches pushed, none landed, with a suggested landing order)
+  2026-09-08 by session S13 (fire and heat time bar): 71 entries, 50 decided, 21 pending; added G-session-2026-09-08 with DR-071, session-proposed and pending owner ratification (the time-bar stamp grammar and what a fire or heat time step may claim; it also records that the issuer's own words contradict DR-070's classified -> observed reading of HeatRisk). S12 had added G-session-2026-09-07 with DR-070 (decided) on 2026-09-07 without bumping this line. Previous updated: 2026-09-04T11:20-07:00 by the foundations true-up: 69 entries, 49 decided, 20 pending, no entry ruled this session. Added foundations_pass_2026_09_03 (see that block). Corrections to the record's own facts: the deployed application bytes are 2835091, not 5be15f5 (docs-only diff skipped by deploy.yml paths-ignore); v0.6.26 IS tagged at 533fabd; DR-069 is unexecuted on main (vite.config.ts:67 sourcemap true), its fix rides platform/ddm-p15-close; DR-065's standing default_if_no_answer (option b) is the opposite of what was built and awaits ruling A6; DR-061 sits beside two live weekly crons (browser-suite.yml:76, refresh-snapshots.yml:18) and awaits ruling B6. Previous updated: 2026-09-03T20:05-07:00 by the long run: 69 entries, 49 decided, 20 pending. DR-067 decided b with its probe condition MET (the issuer applies a rendering rule, and it needs no Worker publish), DR-068 decided b, DR-069 created and decided and EXECUTED on platform/ddm-p15-close; DR-065 gained fix_2026_09_03 recording the flake rate falling 6 of 16 and 5 of 16 to 0 of 16; branch_state gained landed_2026_09_03_pm (main cd1d061 to 5be15f5, three merges, ribbon proven live) and awaiting_go_2026_09_03_pm (nine branches pushed, none landed, with a suggested landing order)
 posture: one integration branch, local-first verification, one PR when the owner says go
 
 decide_five_first: [DR-012, DR-009, DR-029, DR-016, DR-001]
@@ -3240,3 +3240,102 @@ groups:
           the case this was ruled for). classified, not named in R3, renders observed by the same
           reasoning its EVIDENCE_PRESENTATION tone already gives it. CELL_ABSENCE prose carries no
           tag (R4). Text only, existing tokens, no new color, no motion.
+
+  - id: G-session-2026-09-08
+    title: Added by the 2026-09-08 S13 session (fire and heat time bar, DDM-P8-T02)
+    decisions:
+      - id: DR-071
+        title: The time-bar stamp grammar, and what a fire or heat time step is allowed to claim
+        question: >-
+          DDM-P8-T02 gave the Wildfire and Extreme Heat screens a time bar for the first time, and
+          the S12 handoff assigned it the stamp half of DDM-P8-T03 clause 2 ("every hazard surface
+          states its time in one grammar"). Building it forced nine readings the acceptance sentence
+          and the S13 doctrine ("an issuer outlook step is labelled as an outlook, in the issuer's
+          own product terms; an observation step is not") do not settle by themselves: where the
+          horizon words on a stamp come from; which register a HeatRisk day carries when its 24-hour
+          period has not begun, is in progress, or has ended; what the NIFC current perimeters
+          (which publish no product-level valid time) may say; which of two co-active event layers
+          owns the bar when the wildfire current recipe has no surface at all; what the SPC Day 1
+          outlook says on an issuance with no outlined area; what the static WHP raster says under
+          the Long Range chip; what the heat screen says at the season-ahead horizon, whose recipe is
+          deliberately empty; whether the embed chip carries the horizon; and which control drives
+          a HeatRisk day change when three controls now exist.
+        source:
+        - "docs/ROADMAP.yaml DDM-P8-T02 acceptance (:322) and DDM-P8-T03 clause 2 (:328)"
+        - "planning/handoffs/2026-09-07-s12-honest-horizon-chips.md:189-199 and :256-260, the stamp assignment"
+        - "the S13 session prompt (owner, 2026-09-08): the doctrine block and the inherited item"
+        - "src/config/clusters.ts:111-150, the wildfire and heat recipes (current wildfire has no surface; heat season-ahead is empty)"
+        - "src/layers/heatrisk.ts:69-70, the issuer contract of seven 24-hour periods"
+        - "seven ddm-science-verifier runs on 2026-09-08, all VERIFIED, receipts in planning/handoffs/2026-09-08-s13-fire-heat-time-bar.md"
+        blocks:
+        - DDM-P8-T02
+        - "DDM-P8-T03 clause 2 (the stamp half)"
+        options:
+        - key: a
+          text: >-
+            R-a every stamp declares the horizon of the product it shows and the bar renders it from
+            HORIZON_CHROME; R-b HeatRisk is one Near Term product at every frame (where the briefing's
+            LANE_PLACEMENT already files it); a frame whose 24-hour period has not begun and the
+            frame whose period is in progress are both outlooks in force, on the issuer's own
+            words: HeatRisk "provides a forecast of the potential level of risk for heat-related
+            impacts to occur over a 24-hour period", calculated "from the current date through
+            seven days in the future" (HeatRisk v2.6 Overview PDF, wpc.ncep.noaa.gov/heatrisk/pdf/,
+            2026-09-08; one verifier run also reported "HeatRisk values represent forecasted
+            conditions, not current observations" on whatsinheatrisk.html and a second run could
+            not re-find that exact sentence, so the PDF wording is the receipt); a period that has ended
+            reads "Period ended" in the plain register, never outlook; R-c NIFC states that the product has
+            no single valid time, and the event layer owns the bar only while no surface does,
+            re-installing when a surface vacates it; R-d HMS smoke installs no stamp; R-e SPC Day 1
+            is an outlook whose window is the issuance's own valid and expire, and an empty issuance
+            says the response states no valid period; R-f WHP reads "static 2023 edition, not a
+            dated condition" in plain typography with an explicit denial of outlook; R-g heat
+            season-ahead keeps the WHEN row's "No dated product is displayed."; R-h the embed chip
+            keeps mirroring the headline only; R-i the rail drives the same renderFrame the key's
+            select and the dock sequence drive.
+          cost: M
+          risk: >-
+            R-b makes the time bar and the briefing disagree for every HeatRisk frame in force: the
+            bar says outlook, the briefing's claim for the same selected frame still carries
+            DR-070's classified -> observed tag (src/impact/sources.ts:278, a DDM-P7-T03 file this
+            session did not touch), and DR-070's own rationale for that tag ("an issuer's own
+            classification of a currently valid state ... not a forecast") is contradicted by the
+            issuer sentence quoted above. R-a makes the stamp and the pressed chip visibly disagree
+            on the ENSO screen (Long Range chip, Current Conditions stamp) and on the heat screen
+            (Current Conditions chip, Near Term stamp); that disagreement is the truth DR-017 is
+            about and this ruling does not resolve DR-017. The heatrisk-days activation budget row
+            moved 7.5 to 10.0 kB gzip (measured 9.5) because the shared time-bar chunk now enters
+            that closure; the alternative, a nested import() to keep it out of the static closure,
+            was rejected as dodging the gate rather than honoring it.
+        - key: b
+          text: >-
+            read the committed timeline horizon onto every stamp instead of a product-declared one,
+            and label every HeatRisk frame an outlook regardless of whether its period has begun
+          cost: S
+          risk: >-
+            a custom display can commit a horizon its surface does not answer, so the stamp would
+            describe the pressed chip rather than the map; an ended HeatRisk period presented as an
+            outlook in force is the spent-forecast claim the doctrine forbids
+        recommendation: a
+        rationale: >-
+          The stamp exists to describe the surface on the map. Only the owning layer knows what it
+          is showing, and a period's relation to the clock is a fact about the product, not about
+          the chip. Option a keeps every claim product-declared and lets the interface disagree
+          with itself only where the map and the chip really do differ.
+        default_if_no_answer: option a as built on feature/fire-heat-time-bar-p8t02
+        status: pending
+        decided: null
+        decision: null
+        session_proposed_2026_09_08: >-
+          Built as option a on feature/fire-heat-time-bar-p8t02 (commits 630df11, 67bef2e, a7bf1e2,
+          7e931b9, b5a4fda, 0b62a4e; unpushed) by session S13, pending owner ratification; the
+          handoff is planning/handoffs/2026-09-08-s13-fire-heat-time-bar.md. Two items need the
+          owner's eye before the interface can be called consistent. First, R-b's outlook label on
+          a HeatRisk frame in force beside DR-070's observed tag on the briefing claim for the same
+          frame: the issuer's own words call every HeatRisk value a forecast, so DR-070's
+          classified -> observed reading of HeatRisk is the half that now looks wrong, and
+          correcting it means a per-evidence or per-claim change in src/impact/evidence.ts or
+          sources.ts (DDM-P7-T03), not this session's to make. Second, the register word: NWS says
+          forecast, the interface says Outlook, because check:vocabulary bans forecast outside a
+          vocab-allow and this session could not add one; the owner decides whether HeatRisk's own
+          strings may carry a vocab-allow for the issuer's word, or whether Outlook stays the one
+          cross-hazard register word with that convention stated somewhere a reader can reach.

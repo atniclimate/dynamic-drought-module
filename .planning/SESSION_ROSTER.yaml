@@ -938,14 +938,60 @@ sessions:
       DR-037 remain as ROADMAP's needs_decision names them; none was re-opened or re-litigated.
       DR-070 records R1 and R3 as owner rulings of 2026-09-07 in the decision register.
 
-  # S13 to S19: the remaining seven Wave 2 cycle tasks. ORDER IS SET BY S03, not
+  # S13: the fire and heat time bar, taken out of the block below the same way
+  # S09 to S12 were, on the owner's direct assignment (not S03 sequencing).
+  - id: S13
+    task_ids: [DDM-P8-T02]
+    title: "Fire and heat time bar: every hazard screen states its time in one grammar"
+    wave: 2
+    tier: T3
+    model: claude-fable-5-1
+    effort: xhigh
+    mode: direct
+    run_as: main
+    stop_level: fast
+    decision_gate: "none named in ROADMAP for this task; DR-071 (session-proposed, pending ratification) records the nine design readings the build required"
+    gate: "npm run verify:quick, then npm run verify:smoke once, then npm run check:public-tree"
+    role: "Wave 2 executor, owner-assigned ahead of S03. The session prompt inherited the stamp half of DDM-P8-T03 clause 2 from the S12 handoff and gave the observed/outlook doctrine for time steps directly."
+    rationale: >-
+      S12's handoff (2026-09-07) assigned the on-map stamp grammar to this task: the shell chips
+      and the briefing headings read HORIZON_CHROME, but every time-bar stamp was set per layer with
+      no horizon at all, and the Wildfire and Extreme Heat screens had no time bar. The owner ran
+      this session directly with the doctrine that an issuer outlook step is labelled as one and an
+      observation step is not.
+    budget_tokens: 400000
+    stop_when: "every hazard screen shows a time control at every horizon that has a surface, every stamp reads HORIZON_CHROME and names its issuer and period or says the product is undated, outlook steps are labelled and observed steps are not, the acceptance spec is in smoke, and the three gates are green"
+    status: done
+    outcome: >-
+      DONE on branch feature/fire-heat-time-bar-p8t02 from main at 5e261a4, unpushed; landing is
+      the owner's. Commits 630df11 (TimeBarStamp.horizon required, rendered from HORIZON_CHROME;
+      the six existing owners declare theirs), 67bef2e (NIFC perimeters undated, SPC Day 1 outlook
+      with its own valid/expire, WHP static 2023 edition), a7bf1e2 (HeatRisk seven-stop rail and
+      per-frame stamp), 7e931b9 (a HeatRisk frame is an outlook until its 24-hour period ends;
+      heatrisk-days activation budget 7.5 to 10.0 kB gzip, measured 9.5, reported as a threshold
+      change), b5a4fda and 0b62a4e (tests/fire-heat-time-bar.spec.ts, ten fixture-fed tests under
+      a fixed page clock, in verify:smoke). verify:quick clean; verify:smoke 135 passed, 1 skipped
+      (the tests/ux1-surfaces.spec.ts:98 quarantine), 5.8m, on the second full run after one
+      boot-idle race in the new unavailable-day test was fixed the way five existing specs handle a
+      deliberately held boot; check:public-tree clean. Every acceptance clause has a receipt, so
+      docs/ROADMAP.yaml flips DDM-P8-T02 to done; DDM-P8-T03 clause 2's stamp half has its receipt
+      (a required horizon field, one render line, the spec's expectHorizonLine on all four screens)
+      and that task's status is untouched. Seven ddm-science-verifier runs, all VERIFIED, with two
+      owner items: NWS calls HeatRisk a forecast while the interface's register word is Outlook
+      (check:vocabulary bans the word; no vocab-allow was added), and the issuer's own words
+      contradict DR-070's classified -> observed reading of HeatRisk in the briefing, so the bar
+      and the briefing now disagree for a HeatRisk frame in force. Both are in DR-071 and the
+      handoff planning/handoffs/2026-09-08-s13-fire-heat-time-bar.md.
+
+  # S14 to S19: the remaining six Wave 2 cycle tasks. ORDER IS SET BY S03, not
   # here. Tiers below are per-task and apply only after S03 cuts the cycle.
   # Was S09-S19 until 2026-09-07 (DDM-P12-T02 closed as S09), then S10-S19
   # until S10 took the chrome half of the same task, then S11-S19 until S11
-  # above took DDM-P12-T03, then S12-S19 until S12 above took DDM-P8-T03 (the
-  # owner's direct assignment, ahead of S03's own sequencing).
-  - id: S13-S19
-    task_ids: [DDM-P1-T02, DDM-P1-T04, DDM-P7-T05, DDM-P8-T02, DDM-P11-T01, DDM-P14-T03, DDM-P9-T05]
+  # above took DDM-P12-T03, then S12-S19 until S12 above took DDM-P8-T03, then
+  # S13-S19 until S13 above took DDM-P8-T02 (each the owner's direct
+  # assignment, ahead of S03's own sequencing).
+  - id: S14-S19
+    task_ids: [DDM-P1-T02, DDM-P1-T04, DDM-P7-T05, DDM-P11-T01, DDM-P14-T03, DDM-P9-T05]
     title: "The Wave 2 cycle, sequenced by S03"
     wave: 2
     tier: "per task, below"
@@ -961,7 +1007,9 @@ sessions:
       DDM-P1-T02:  { tier: T3, why: "8 files 37 tests, 5 of 8 acceptance_testable_here false (RECONCILIATION.md:213); docs/ROADMAP.yaml:172-174" }
       DDM-P1-T04:  { tier: T3, why: "5 files 19 tests, 4 of 5 false (RECONCILIATION.md:215); highest in-degree task node, 11 inbound edges (RECONCILIATION.md:611-612)" }
       DDM-P7-T05:  { tier: T2, why: "effort M, DR-014 and DR-019, 8 files 8 tests; docs/ROADMAP.yaml:294-299" }
-      DDM-P8-T02:  { tier: T3, why: "effort L, all four hazard screens, 4 files 7 tests; docs/ROADMAP.yaml:315-319" }
+      # DDM-P8-T02 moved to its own entry S13 above and closed 2026-09-08 (owner-
+      # assigned ahead of S03). Its tier line was: { tier: T3, why: "effort L,
+      # all four hazard screens, 4 files 7 tests; docs/ROADMAP.yaml:315-319" }.
       # DDM-P8-T03 moved to its own entry S12 above and went PARTIAL 2026-09-07
       # (owner-assigned ahead of S03). Its tier line was: { tier: T3, why:
       # "effort M but three gates DR-017, DR-021, DR-037; docs/ROADMAP.yaml:320-325" }.

@@ -320,6 +320,8 @@ phases:
         source: "04 TIME-01"
         effort: L
         acceptance: "Each of the four hazard screens shows a time control whose stamp names the issuer and the period the displayed surface covers, or states that the product is undated."
+        status: done
+        closed: "2026-09-08: built in S13 on feature/fire-heat-time-bar-p8t02 (commits 630df11 to 0b62a4e; landing is the owner's). Every hazard screen's time bar reads a HORIZON_CHROME horizon line, then a period or an undated statement, then its issuer: NIFC perimeters (no single valid time), the SPC Day 1 Fire Weather Outlook (its own valid and expire), WHP (static 2023 edition) and a seven-day HeatRisk rail whose frame is an outlook until its 24-hour period ends; heat long range keeps the WHEN row's empty statement because its recipe is empty. tests/fire-heat-time-bar.spec.ts quotes this sentence, runs fixture-fed under a fixed page clock, and joined verify:smoke (135 passed, 1 skipped, 2026-09-08). DR-071 (session-proposed) records the readings; the heatrisk-days activation budget moved 7.5 to 10.0 kB gzip."
       - id: "DDM-P8-T03"
         title: "Make every horizon chip and every stamp honest and uniform across the four hazards"
         source: "04 TIME-02, TIME-04, TIME-05; 03 FIRE-06"
