@@ -4288,16 +4288,31 @@ tasks:
   DDM-P15-T01:
     title: Record the local full-service server end state and the seams it needs
     phase: DDM-P15
-    status: open
+    # open -> done 2026-09-08 by S14: landed 2026-09-07 in S02a (merge f521800).
+    # The acceptance below is re-quoted from docs/ROADMAP.yaml as it reads today
+    # (the scout pass quoted an earlier wording). DEVELOPER.md, which the merge
+    # --stat names (+135) and the register names for this task at :178, is
+    # attached under the S14 rule (a merge-named file on a register-named task);
+    # it is documentation, so no test reaches it and none is claimed.
+    status: done
     roadmap: docs/ROADMAP.yaml:458
-    acceptance: The hosting plan states that GitHub Pages is the current static host and names the seams
-      a local server would replace, and no hosting change is made without range, cache, privacy,
-      cost, and rollback evidence.
+    acceptance: docs/ states that GitHub Pages is the interim static host, names each seam a local
+      server would replace, and lists the five evidence classes (range, cache, privacy, cost,
+      rollback) any hosting change must supply before it is made.
     decision_gate: DDM-D10
-    verification: verify:quick
-    files: []
+    verification: "none (documentation state; verify:quick asserts nothing here)"
+    files:
+      - path: DEVELOPER.md
+        owns: Maintainer documentation; its Hosting section records the interim host, the end state,
+          the seven seams and the evidence classes this task's acceptance names
+        acceptance_testable_here: false
+        evidence_lines:
+          - "DEVELOPER.md:580: ## Hosting: GitHub Pages now, one local origin later"
+          - "DEVELOPER.md:590: The seams a local full-service server would replace:"
+          - "DEVELOPER.md:639: No hosting change is made without evidence, gathered before the move and not"
+        attached_by: repair:S14  # 2026-09-08, merge f521800 --stat; documentation, not src
     tests: []
-    coverage: no-files-no-tests
+    coverage: files-no-tests
   DDM-P15-T02:
     title: Land the renderer version the gate selects and declare the browser floor it implies
     phase: DDM-P15

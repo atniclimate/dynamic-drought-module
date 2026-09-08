@@ -548,6 +548,8 @@ phases:
         acceptance: "docs/ states that GitHub Pages is the interim static host, names each seam a local server would replace, and lists the five evidence classes (range, cache, privacy, cost, rollback) any hosting change must supply before it is made."
         decision_gate: "DDM-D10"
         verification: "none (documentation state; verify:quick asserts nothing here)"
+        status: done
+        closed: "2026-09-08: landed 2026-09-07 in S02a (merge f521800). DEVELOPER.md:580-582 names GitHub Pages as the current static host and one local origin as the end state, :590-637 names the seven seams a local full-service server would replace, and :639-658 lists the evidence a hosting change must carry first (range, cache, privacy, cost, rollback, and portability). Inside docs/, docs/ROADMAP.yaml gate DDM-D10 (context and decision) and docs/RELEASE_NOTES.md's Unreleased hosting entry state the interim host and point at that section. Read by S14 on 2026-09-08; no test asserts documentation, as the verification key says."
       - id: "DDM-P15-T02"
         title: "Land the renderer version the gate selects and declare the browser floor it implies"
         source: "15 DEP-01, DEP-02, DEP-03, DEP-06"
