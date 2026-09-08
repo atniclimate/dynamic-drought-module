@@ -294,6 +294,33 @@ export function fetchSharedJsonWithBudget(
 }
 
 /**
+ * Make `child` abort whenever `parent` aborts (DDM-P1-T02, 2026-09-08).
+ *
+ * The layer controller owns one signal per activation attempt and hands it
+ * to the module; the module keeps its own per-fetch controller (the one it
+ * also aborts when a new viewport supersedes the request) and links it here,
+ * so the controller's abort reaches every fetch the module has in flight
+ * without the module exposing a second seam. Composed by hand for the same
+ * reason `fetchWithBudget` is: `AbortSignal.any()` is missing from the
+ * Safari floor.
+ *
+ * Returns an unlink function; call it when the child's work is over so a
+ * long-lived parent does not accumulate listeners across viewport refreshes.
+ * A parent that is already aborted aborts the child at once. A `null` parent
+ * (a module activated without the seam, as a spec may do) links nothing.
+ */
+export function linkAbort(child: AbortController, parent: AbortSignal | null): () => void {
+  if (!parent) return () => undefined;
+  if (parent.aborted) {
+    child.abort();
+    return () => undefined;
+  }
+  const onAbort = (): void => child.abort();
+  parent.addEventListener('abort', onAbort, { once: true });
+  return () => parent.removeEventListener('abort', onAbort);
+}
+
+/**
  * Sleep for `ms` milliseconds, but resolve early if the signal aborts.
  * Resolves rather than rejects on abort so callers can re-check
  * `signal.aborted` and bail cleanly without a try/catch wrapper.
