@@ -216,8 +216,15 @@ const MODULATORS = // vocab-allow: honesty disclaimer, denies being a forecast
  * Verified 2026-09-02 by research worker 13's live fetches and re-checked
  * the same day, HTTP 200 each. Re-stamp `CITATIONS_VERIFIED` whenever these
  * are re-read; do not extend a statement past what its page says.
+ *
+ * Re-read 2026-09-07 (DDM-P12-T03, DR-030): every URL below answered HTTP 200
+ * and each tendency sentence was checked clause by clause against its page's
+ * own words. Three narrowing edits, covering eight clause-level verdicts, moved
+ * text to the strength its page states and no further;
+ * the two lineage entries that carried no link gained one. The clause-level
+ * verdicts live in `planning/references/register.yaml` and the S11 handoff.
  */
-const CITATIONS_VERIFIED = '2026-09-02';
+const CITATIONS_VERIFIED = '2026-09-07';
 const CPC_STATUS_URL =
   'https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_advisory/ensodisc.shtml';
 const RONI_PRODUCT_URL =
@@ -228,6 +235,26 @@ const NW_HUB_LA_NINA_URL =
   'https://www.climatehubs.usda.gov/hubs/northwest/topic/la-nina-northwest-what-can-we-expect';
 const CPC_COMPOSITES_URL =
   'https://www.cpc.ncep.noaa.gov/products/precip/CWlink/ENSO/composites/';
+/**
+ * The page where the Washington State Climate Office states the snowpack
+ * counter-evidence the El Nino branch carries. It is a University of
+ * Washington College of the Environment article quoting the Deputy Washington
+ * State Climatologist, and it names the Office as housed within that College,
+ * which is what `WA_CLIMATE_OFFICE_LINEAGE` already says. The Office's own
+ * site corroborates the 2015-16 half of the claim and supplies the "since
+ * 1950" bound, but states near-normal SNOWPACK for 2015-16 only, so it is
+ * recorded in the register as corroboration rather than cited here.
+ */
+const WA_CLIMATE_OFFICE_URL =
+  'https://environment.uw.edu/news/2026/08/what-to-expect-from-a-very-strong-el-nino-in-the-pacific-northwest/';
+/**
+ * The CPC Seasonal Drought Outlook product page, the same (label, URL) pair
+ * this application already uses at `src/impact/hydrate.ts:72-73`. The neutral
+ * branch names the product and asserts nothing about what this rolling page
+ * currently says, so the citation does not go stale on each reissuance.
+ */
+const CPC_SEASONAL_DROUGHT_OUTLOOK_URL =
+  'https://www.cpc.ncep.noaa.gov/products/expert_assessment/sdo_summary.php';
 
 /**
  * The same rule constants the builder applies
@@ -488,10 +515,34 @@ interface TendencyRead {
 }
 
 const NW_HUB_LINEAGE = 'USDA Northwest Climate Hub ENSO regional tendency summary';
+/**
+ * The issuer's own product title, verbatim from the page's `<title>`:
+ * "Climate Prediction Center - ENSO Temperature and Precipitation Composites".
+ * It named a third variable, snow, until 2026-09-07. The snow composites do
+ * exist ("El Nino Snow", "La Nina Snow" are two of the page's six links), so
+ * the old label was not false, but it presented a three-variable name as the
+ * issuer's, which the issuer does not use. Naming a product means naming it
+ * as its issuer does (DDM-P12-T03, DR-030).
+ */
 const CPC_COMPOSITE_LINEAGE =
-  'NOAA CPC ENSO temperature, precipitation and snow composites';
+  'NOAA CPC ENSO Temperature and Precipitation Composites';
 const WA_CLIMATE_OFFICE_LINEAGE =
   'Washington State Climate Office, University of Washington College of the Environment';
+
+/**
+ * Where each lineage label above can be read, for the surfaces that will make
+ * a lineage line reachable. Recorded here so a label and its page cannot drift
+ * apart: before 2026-09-07 the Washington State Climate Office and the CPC
+ * Seasonal Drought Outlook were named in prose with no link anywhere in the
+ * codebase (DDM-P12-T03, DR-030). The labels themselves are unchanged; this
+ * table only says where each one is published.
+ */
+export const LINEAGE_SOURCE_URLS: Readonly<Record<string, string>> = {
+  [NW_HUB_LINEAGE]: NW_HUB_EL_NINO_URL,
+  [CPC_COMPOSITE_LINEAGE]: CPC_COMPOSITES_URL,
+  [WA_CLIMATE_OFFICE_LINEAGE]: WA_CLIMATE_OFFICE_URL,
+  'NOAA CPC Seasonal Drought Outlook': CPC_SEASONAL_DROUGHT_OUTLOOK_URL
+};
 
 /**
  * What past events of this phase did in the Pacific Northwest.
@@ -502,13 +553,40 @@ const WA_CLIMATE_OFFICE_LINEAGE =
  * record each produced near-normal Washington snowpack. The former La Nina
  * fine-fuels sentence is gone rather than softened; no issuer states it as
  * an ENSO teleconnection (report 13, ENSOSCI-09, UNVERIFIED).
+ *
+ * Re-verified clause by clause against the live pages 2026-09-07
+ * (DDM-P12-T03, DR-030). Three narrowings, each to the strength its page
+ * states and no further:
+ *   - El Nino: the rain-over-snow clause is the Hub's WINTER finding, not a
+ *     fall-and-winter one, and the runoff, water and wildfire chain is hedged
+ *     twice on the page ("can lead to" then "can contribute to") with drought
+ *     as the intermediate link. The flat list that dropped both hedges is gone.
+ *   - El Nino: "on record" gained the issuer's own bound, "in the modern era".
+ *     The Office's site puts the same bound as "on record (since 1950)".
+ *   - La Nina: the deeper-snowpack consequences read "can lead to", the page's
+ *     modal, not the settled "has been associated with" they carried.
+ * The La Nina and neutral pages support every other clause, and the neutral
+ * branch's redirection is carried by its lineage rather than by the composites
+ * page, which states nothing about it.
+ *
+ * A fourth edit, the framing sentence that introduces the snowpack
+ * counter-evidence, by owner ruling 2026-09-07 after it was reported as a stop
+ * rather than narrowed. It read "Snowpack is the least reliable part of the
+ * tendency", which RANKED snowpack against the tendency's other parts, and no
+ * issuer page makes that comparison. It now makes a bounded claim about one
+ * component in one class of event, which the page does support ("During past
+ * 'very strong' El Nino years, though, things have looked a little different"),
+ * and it carries the Office's own caveat, that it is hard to say whether three
+ * events are a real pattern or a small sample. That caveat is the article's
+ * narration rather than a quotation from the Deputy State Climatologist, so it
+ * is reported here as indirect speech and never as a quote.
  */
 function tendency(state: IndexState): TendencyRead {
   switch (state.conditions) {
     case 'el-nino':
       return {
         text:
-          'With El Nino conditions present, the Pacific Northwest read rests on what past El Nino events did. Across those events, fall and winter in Idaho, Oregon and Washington have tended to run warmer and drier, with more precipitation falling as rain than snow; the USDA Northwest Climate Hub associates that combination with decreased runoff, less summer water availability, and increased wildfire risk. Snowpack is the least reliable part of the tendency: the Washington State Climate Office notes that the three strongest El Ninos on record (1982-83, 1997-98 and 2015-16) each produced near-normal Washington snowpack. ' +
+          'With El Nino conditions present, the Pacific Northwest read rests on what past El Nino events did. Across those events, fall and winter in Idaho, Oregon and Washington have tended to run warmer and drier, and the USDA Northwest Climate Hub states that a drier, warmer winter results in more precipitation falling as rain than snow, which can lead to decreased runoff and less summer water availability, and can in turn contribute to drought and increased wildfire risk. That tendency has not held for snowpack in the largest events: the Washington State Climate Office notes that the three strongest El Ninos on record in the modern era (1982-83, 1997-98 and 2015-16) each produced near-normal Washington snowpack, and that it is hard to say whether that is a real pattern or a small sample. ' +
           MODULATORS,
         source: 'USDA Northwest Climate Hub, El Nino in the Northwest',
         sourceUrl: NW_HUB_EL_NINO_URL,
@@ -517,7 +595,7 @@ function tendency(state: IndexState): TendencyRead {
     case 'la-nina':
       return {
         text:
-          'With La Nina conditions present, the Pacific Northwest read rests on what past La Nina events did. Across those events, winter in Idaho, Oregon and Washington has usually run cooler, and some events brought above-normal precipitation, though the USDA Northwest Climate Hub states the precipitation association is not as strong as the temperature one. A deeper snowpack has been associated with increased runoff, more reliable summer water availability, and reduced drought severity. ' +
+          'With La Nina conditions present, the Pacific Northwest read rests on what past La Nina events did. Across those events, winter in Idaho, Oregon and Washington has usually run cooler, and some events brought above-normal precipitation, though the USDA Northwest Climate Hub states the precipitation association is not as strong as the temperature one. A deeper snowpack can lead to increased runoff, more reliable summer water availability, and reduced drought severity. ' +
           MODULATORS,
         source: 'USDA Northwest Climate Hub, La Nina in the Northwest',
         sourceUrl: NW_HUB_LA_NINA_URL,
@@ -528,7 +606,7 @@ function tendency(state: IndexState): TendencyRead {
         text:
           'With neither El Nino nor La Nina conditions present, there is no warm-phase or cool-phase composite to lean on: CPC publishes composites describing the tendencies of each phase, and with neither in place the seasonal read rests on the CPC Seasonal Drought Outlook and on current conditions (snowpack, soil moisture, the U.S. Drought Monitor). ' +
           MODULATORS,
-        source: 'NOAA CPC ENSO temperature, precipitation and snow composites',
+        source: 'NOAA CPC ENSO Temperature and Precipitation Composites',
         sourceUrl: CPC_COMPOSITES_URL,
         lineage: [CPC_COMPOSITE_LINEAGE, 'NOAA CPC Seasonal Drought Outlook']
       };

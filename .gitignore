@@ -75,6 +75,7 @@ workers/proxy/.wrangler/
 # default; each tracked one is opted in here individually.
 !/planning/handoffs/2026-09-07-s09-enso-horizons.md
 !/planning/handoffs/2026-09-07-s10-horizon-chrome.md
+!/planning/handoffs/2026-09-07-s11-enso-citations.md
 /post-mortem/
 /research/
 /reviews/

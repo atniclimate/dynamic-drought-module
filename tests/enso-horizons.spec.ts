@@ -25,6 +25,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { HORIZON_CHROME } from '../src/impact/horizon-chrome';
+import { expectNoForecastLanguage as expectClean } from './enso-forecast-language';
 import { gotoApp } from './helpers';
 
 const SNAPSHOT_PATH = join(process.cwd(), 'public', 'data', 'enso-indices.json');
@@ -34,31 +35,9 @@ const STALE_DAYS = 200;
 
 const ENSO_HORIZONS = ['current', 'nearTerm', 'longRange'] as const;
 
-/**
- * Language that would make a cell read as a statement about what the ocean is
- * going to do. Built from what src/impact/enso.ts already treats as needing a
- * denial: every `vocab-allow` comment in that module marks an honesty
- * disclaimer that "denies being a forecast", and the module's own MODULATORS,
- * tendency and plume strings each end in one.
- *
- * `forecast` is checked separately below, because the module uses the word
- * legitimately and only to deny being one. These patterns are deliberately
- * about future CONDITIONS rather than any modal verb: the module says "RONI
- * values may change up to two months" about revisions and "a new RONI season
- * has likely posted" about its own staleness, and neither is a claim about
- * the ocean's future.
- */
-const FORWARD_LOOKING: readonly { readonly name: string; readonly re: RegExp }[] = [
-  { name: 'will + condition verb', re: /\bwill\s+(be|remain|continue|persist|strengthen|weaken|warm|cool|develop)\b/i },
-  { name: 'is/are expected to', re: /\b(is|are|were|was)\s+expected\s+to\b/i },
-  { name: 'predict / project / anticipate', re: /\b(predicts?|predicted|projects?|projected|anticipates?|anticipated)\b/i },
-  { name: 'the coming/next weeks, months or seasons', re: /\b(coming|next)\s+(weeks?|months?|seasons?)\b/i },
-  { name: 'through the end of / into the season', re: /\bthrough\s+the\s+(end\s+of\s+)?(winter|spring|summer|fall|autumn|season)\b/i }
-];
-
-/** `forecast` is allowed only immediately inside a denial. */
-const FORECAST_WORD = /\bforecasts?\b/gi;
-const FORECAST_DENIED = /\b(not|never|no)\b[^.]{0,40}\bforecasts?\b/i;
+// The forbidden forward-looking language moved to ./enso-forecast-language on
+// 2026-09-07 (S11), unchanged, so tests/enso-citations.spec.ts asserts the
+// same list rather than a second copy of it.
 
 interface Snapshot {
   retrieved: string;
@@ -173,16 +152,7 @@ async function ensoTexts(page: Page): Promise<Record<string, string>> {
  */
 function expectNoForecastLanguage(texts: Record<string, string>): void {
   for (const [horizon, text] of Object.entries(texts)) {
-    for (const { name, re } of FORWARD_LOOKING) {
-      expect(re.test(text), `${horizon} ENSO cell uses forward-looking language (${name}): "${text}"`).toBe(false);
-    }
-    const uses = text.match(FORECAST_WORD) ?? [];
-    if (uses.length > 0) {
-      expect(
-        FORECAST_DENIED.test(text),
-        `${horizon} ENSO cell says "forecast" outside a denial: "${text}"`
-      ).toBe(true);
-    }
+    expectClean(`${horizon} ENSO cell`, text);
   }
 }
 
