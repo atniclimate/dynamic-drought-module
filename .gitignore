@@ -70,6 +70,10 @@ workers/proxy/.wrangler/
 !/planning/references/
 /planning/handoffs/*
 !/planning/handoffs/2026-09-04.md
+# Negated by name, the same way 2026-09-04.md is: the S09 handoff is a ledger
+# the session prompt required in its closing commit. Handoffs stay local by
+# default; each tracked one is opted in here individually.
+!/planning/handoffs/2026-09-07-s09-enso-horizons.md
 /post-mortem/
 /research/
 /reviews/

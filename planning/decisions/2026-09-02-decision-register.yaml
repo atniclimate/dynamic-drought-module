@@ -1410,6 +1410,33 @@ groups:
           a: wire the weekly Nino 3.4 observation, labeled an observation and not a forecast. Recorded as
           the packet Part 2 default; the owner accepted all twenty-one by id with no objection.
         ruling_source: "planning/decisions/cc-prompt-decision-packet-2026-09-03.md (owner rulings, 2026-09-02 22:38 PDT)"
+        implementation_2026_09_07: >-
+          IMPLEMENTED as option (a), session S09 (DDM-P12-T02), branch
+          feature/enso-horizons-dr031, unpushed. The S02g absence this supersedes was option (b)
+          behaviour: src/impact/matrix.ts gave the ENSO near-term cell a permanent named absence and
+          src/impact/enso.ts emitted no claim under nearTerm at all. Both are now gone.
+          THE SOURCE IS wksst9120.for, NOT wksst8110.for. This entry's own citations flagged 13#13,
+          "the frozen wksst8110.for file, not to be used", and that trap was reproduced live on
+          2026-09-07: the 8110 sibling answers HTTP 200 with 102362 bytes and Last-Modified
+          2021-02-09, while wksst9120.for answers HTTP 200 with 148164 bytes and Last-Modified
+          2026-09-07. Wiring the file whose name matches the base period quoted in older prose would
+          have shipped a five-year-old number behind a healthy status code.
+          What landed: the builder fetches the weekly file and emits an optional nino34Weekly series
+          (52 weeks, week-CENTRED dates as the file's own first line states); the shared contract
+          validates it and the consumer drops it independently when malformed; the near-term ENSO cell
+          activates on it and keeps its absence prose when the block is missing or past
+          HARD_STALE_DAYS. The claim states the observed trajectory across four weekly observations
+          against this application's own 0.2 degree band, and denies being an outlook.
+          ddm-science-verifier verdict 2026-09-07: 5 VERIFIED (week-centre dating, the Nino 3.4 column
+          position, the 1991-2020 base period, CPC declaring phase from three-month averages, and the
+          band self-attribution), 1 flagged for the owner and NOT a defect in the sentence.
+          THE FLAG, still open and recorded here because DR-031 predicted it: the claim renders under a
+          horizon whose user-facing title is "Near-term outlook" (src/impact/briefing.ts:40). This
+          entry's own risk line reads "a weekly observation inside a register named weeks ahead reads
+          as a forecast unless the label says otherwise". The claim text says otherwise; the column
+          chrome around it does not. Renaming that column touches all four hazard rows and was out of
+          this session's scope. Owner call.
+        supersedes: "the S02g near-term ENSO absence (option b behaviour), matrix.ts CELL_ABSENCE.nearTerm.enso"
       - id: DR-032
         title: A persistent ENSO state panel on the ENSO screen
         question: >-

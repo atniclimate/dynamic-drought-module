@@ -732,10 +732,62 @@ sessions:
     status: planned
     outcome: null
 
-  # S09 to S19: the eleven Wave 2 cycle tasks. ORDER IS SET BY S03, not here.
-  # Tiers below are per-task and apply only after S03 cuts the cycle.
-  - id: S09-S19
-    task_ids: [DDM-P1-T02, DDM-P1-T04, DDM-P7-T05, DDM-P8-T02, DDM-P8-T03, DDM-P11-T01, DDM-P12-T02, DDM-P12-T03, DDM-P14-T03, DDM-P9-T05]
+  # S09: the first Wave 2 task, split out of the S09-S19 block on 2026-09-07 by
+  # owner ruling so one entry closes one session. The block below keeps the
+  # remaining nine and its id moved from S09-S19 to S10-S19.
+  - id: S09
+    task_ids: [DDM-P12-T02]
+    title: "Give the ENSO horizons distinct source-backed meanings"
+    wave: 2
+    tier: T2
+    model: claude-opus-5
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    decision_gate: "DR-031 (ratified option a)"
+    gate: "npm run verify:smoke"
+    verifier: "ddm-science-verifier, on the near-term sentence before it shipped"
+    role: "Wave 2 executor. Group 1 first task under the S03 cut plan."
+    rationale: >-
+      S03 put ENSO horizons first in group 1, and S03b measured what option (a) would cost:
+      src/config/urls.ts holds one ENSO endpoint and it is the bundled snapshot, so the work
+      is in the builder and the shared contract, not in the browser.
+    budget_tokens: 150000
+    stop_when: "verify:smoke green, the acceptance spec exists and is in the smoke list, DR-031 records the implementation"
+    status: done
+    outcome: >-
+      DONE on branch feature/enso-horizons-dr031, nine commits, UNPUSHED and unmerged.
+      verify:smoke green: 114 passed, 1 skipped, 5.1m (the skip is the pre-existing
+      ux1-surfaces.spec.ts:98 quarantine from 0121cef, not this work).
+      THE SOURCE TRAP WAS REAL. The prompt's lead named wksst8110.for as the historical file;
+      DR-031's own citation list flags it "not to be used" and it was reproduced live on
+      2026-09-07: 8110 answers HTTP 200 with Last-Modified 2021-02-09 and a last data row of
+      27JAN2021, while wksst9120.for answers HTTP 200 with Last-Modified 2026-09-07. Wiring 8110
+      would have shipped a five-year-old number behind a healthy status code. 9120 is wired.
+      What shipped: an optional nino34Weekly series in the snapshot (52 weeks, week-CENTRED dates
+      per the file's own first line), validated by the shared contract and dropped independently
+      when malformed; a near-term ENSO claim stating the observed trajectory across four weekly
+      observations against this application's own 0.2 degree band; the near-term ENSO cell
+      activated on that claim and keeping its absence prose when the block is missing or stale;
+      and tests/enso-horizons.spec.ts (three fixtures) added to verify:smoke alongside
+      tests/briefing-matrix.spec.ts, which had never been in it.
+      ddm-science-verifier: 5 VERIFIED, 1 flagged and NOT a defect in the sentence.
+      TWO OPEN OWNER CALLS, both recorded at DR-031 implementation_2026_09_07 and in the handoff.
+      (1) The claim renders under a horizon titled "Near-term outlook" (src/impact/briefing.ts:40),
+      which is the exact collision DR-031's risk line predicted; the claim text denies being an
+      outlook, the column chrome does not. Renaming touches all four hazard rows and was out of
+      scope. (2) verify:smoke was RED ON MAIN before this session, at check:public-tree, for two
+      tracked paths unrelated to this task: CLAUDE.md (tracked deliberately by 5b40dfb) and
+      planning/references/register.yaml (tracked by S03b under owner ruling). Both were fixed here
+      by owner ruling, in scripts/check-public-tree.mjs, which keeps its own allow-list parallel to
+      .gitignore. Nobody had run the full gate since 5b40dfb.
+
+  # S10 to S19: the remaining nine Wave 2 cycle tasks. ORDER IS SET BY S03, not
+  # here. Tiers below are per-task and apply only after S03 cuts the cycle.
+  # Was S09-S19 until 2026-09-07, when DDM-P12-T02 closed as S09 above.
+  - id: S10-S19
+    task_ids: [DDM-P1-T02, DDM-P1-T04, DDM-P7-T05, DDM-P8-T02, DDM-P8-T03, DDM-P11-T01, DDM-P12-T03, DDM-P14-T03, DDM-P9-T05]
     title: "The Wave 2 cycle, sequenced by S03"
     wave: 2
     tier: "per task, below"
@@ -754,7 +806,10 @@ sessions:
       DDM-P8-T02:  { tier: T3, why: "effort L, all four hazard screens, 4 files 7 tests; docs/ROADMAP.yaml:315-319" }
       DDM-P8-T03:  { tier: T3, why: "effort M but three gates DR-017, DR-021, DR-037; docs/ROADMAP.yaml:320-325" }
       DDM-P11-T01: { tier: T2, why: "effort M, DR-040 and DR-041, 4 files all acceptance_testable_here true, best-evidenced open task in the backlog (RECONCILIATION.md:313)" }
-      DDM-P12-T02: { tier: T2, why: "effort M, DR-031, src/impact/enso.ts only, zero tests (RECONCILIATION.md:321)" }
+      # DDM-P12-T02 moved to its own entry S09 above and closed 2026-09-07. Its
+      # tier line was: { tier: T2, why: "effort M, DR-031, src/impact/enso.ts
+      # only, zero tests (RECONCILIATION.md:321)" }. The "zero tests" half is no
+      # longer true: tests/enso-horizons.spec.ts now carries its acceptance.
       DDM-P12-T03: { tier: T2, why: "effort M, DR-030, own verification: verify:quick. Needs ddm-science-verifier: the acceptance requires each of four tilt sentences to cite a published source" }
       DDM-P14-T03: { tier: T2, why: "effort M, DR-008. Acceptance is a byte budget and NONE of its 28 tests measures bytes (RECONCILIATION.md:344). The gate is scripts/check-bundle-size.mjs, already in npm run gate" }
       DDM-P9-T05:  { tier: T2, why: "effort M, 1 file 1 path-ref test; docs/ROADMAP.yaml:379-383" }

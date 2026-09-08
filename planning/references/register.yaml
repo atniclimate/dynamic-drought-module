@@ -192,7 +192,7 @@ references:
     owning_task: "ENSO horizons (DDM-P12-T02)"
     last_checked: "2026-09-07"
     check_result: "curl -sI, HTTP 200, Last-Modified Mon, 07 Sep 2026 07:00:14 GMT, 148164 bytes"
-    wired: false
+    wired: true
     trap_note: "DO NOT USE the sibling wksst8110.for. It still returns HTTP 200 and 102362
       bytes, but its Last-Modified is Tue, 09 Feb 2021 18:00:06 GMT and its last data row is
       27JAN2021, so it would ship a five-year-old number behind a 200 status. Verified live

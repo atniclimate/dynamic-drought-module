@@ -3,6 +3,12 @@ generated_on: 2026-09-07
 generated_from:
   repo: I:/dynamic-drought-module
   commit: 5be15f50388ff660fa43162996979e699805f6d9
+  # The scout pass above ran at 5be15f5 and that value is never rewritten. Hand
+  # repairs since then are recorded per-attachment as dated comments; this names
+  # the newest tree those repairs were checked against. S03b repaired three
+  # attachments after S02g (dc1a583); S09 attached the DR-031 build-time files
+  # and the DDM-P12-T02 acceptance spec, and moved the heat-h1-heatrisk entry.
+  repairs_through: 96a783e
   roadmap: docs/ROADMAP.yaml (schema_version 2, updated 2026-09-03)
   module_graph: .planning/trace/imports.json via .planning/trace/vite.trace.config.ts (vite 8.1.3 /
     rolldown 1.1.4, production resolution)
@@ -2167,6 +2173,13 @@ tasks:
         via: import
         covers: src/state/display-summary.ts
         evidence: "tests/display-summary.spec.ts:1: import { test, expect } from '@playwright/test';"
+      # Moved here from DDM-P7-T05 on 2026-09-07 (S09), owner-directed: the spec
+      # value-imports src/impact/matrix.ts, which repair three of S03b attached
+      # to this task. Its old entry claimed the deleted src/impact/heat-horizon.ts.
+      - path: tests/heat-h1-heatrisk.spec.ts
+        via: import
+        covers: src/impact/matrix.ts
+        evidence: "tests/heat-h1-heatrisk.spec.ts:9: import { fillCell } from '../src/impact/matrix';"
       - path: tests/heat-h2-point-heat.spec.ts
         via: import
         covers: src/impact/briefing.ts
@@ -2430,11 +2443,12 @@ tasks:
         via: import
         covers: src/impact/sources.ts
         evidence: "tests/antimeridian.spec.ts:35: typeof import('../src/impact/sources').fetchNifcClaims;"
-      - path: tests/heat-h1-heatrisk.spec.ts
-        via: import
-        covers: src/impact/heat-horizon.ts
-        evidence: "tests/heat-h1-heatrisk.spec.ts:7: import { TEMPORAL_HORIZON_LABELS } from
-          '../src/config/clusters';"
+      # tests/heat-h1-heatrisk.spec.ts moved out of this task 2026-09-07 (S09),
+      # owner-directed. It covered src/impact/heat-horizon.ts, which S02g
+      # deleted, and none of the six src files it imports is attached to
+      # DDM-P7-T05, so the entry covered nothing here. It now sits under
+      # DDM-P7-T02 against src/impact/matrix.ts, which it value-imports at its
+      # own line 9. This was owner call 2 of the S03b recon report.
       - path: tests/heat-h2-cancellation.spec.ts
         via: import
         covers: src/impact/point-heat.ts
@@ -3608,8 +3622,38 @@ tasks:
         acceptance_testable_here: true
         evidence_lines: *a20
         attached_by: scout
-    tests: []
-    coverage: files-no-tests
+      # Two build-time files attached 2026-09-07 (S09): DR-031 option (a) is
+      # implemented in the snapshot pipeline, not in the browser. The weekly CPC
+      # file is fetched and shaped by the builder and validated by the shared
+      # contract; src/config/urls.ts gained no entry, because the browser reads
+      # only the bundled snapshot.
+      - path: scripts/build-enso-snapshot.mjs
+        owns: Fetches the four CPC index files plus the weekly Nino-region file and writes the bundled
+          snapshot, including the optional nino34Weekly series DR-031 (a) added
+        acceptance_testable_here: true
+        evidence_lines:
+          - "scripts/build-enso-snapshot.mjs:65: DR-031 (a): the weekly Nino-region file. Wire the
+            9120 file and ONLY the 9120 file."
+          - "scripts/build-enso-snapshot.mjs:72: const NINO34_WEEKLY_URL ="
+        attached_by: repair:S09
+      - path: scripts/lib/enso-snapshot-contract.mjs
+        owns: The shared producer/consumer contract; validates the optional nino34Weekly series so a
+          malformed block is dropped rather than rendered
+        acceptance_testable_here: true
+        evidence_lines:
+          - "scripts/lib/enso-snapshot-contract.mjs:250: One weekly Nino 3.4 observation (DR-031 a)."
+          - "scripts/lib/enso-snapshot-contract.mjs:346: export const OPTIONAL_SERIES = ['nino34',
+            'nino34Weekly', 'soi', 'probabilities'];"
+        attached_by: repair:S09
+    # tests: was [] and coverage was files-no-tests until 2026-09-07 (S09); the
+    # acceptance now has a spec that quotes it and drives all three cell states.
+    tests:
+      - path: tests/enso-horizons.spec.ts
+        via: import
+        covers: src/impact/enso.ts
+        evidence: "tests/enso-horizons.spec.ts:2: The ENSO horizons, and the acceptance sentence of
+          DDM-P12-T02."
+    coverage: files-and-tests
   DDM-P12-T03:
     title: Cite and correct the regional tilt statements
     phase: DDM-P12
