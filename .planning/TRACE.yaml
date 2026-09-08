@@ -9,8 +9,13 @@ generated_from:
   # attachments after S02g (dc1a583); S09 attached the DR-031 build-time files
   # and the DDM-P12-T02 acceptance spec, and moved the heat-h1-heatrisk entry. The
   # 2026-09-07 planning commit attached src/impact/horizon-chrome.ts (S10) to
-  # DDM-P12-T02 and flipped it to done.
-  repairs_through: 549c126
+  # DDM-P12-T02 and flipped it to done. 2026-09-08: S13 attached its acceptance
+  # spec to DDM-P8-T02; S14 flipped seven landed tasks to done (DDM-P8-T02 under
+  # owner ruling R5 with the three fire layer files that install the time bar,
+  # and DDM-P8-T05, P9-T02, P10-T01, P13-T03, P14-T02, P15-T01 from the S02
+  # landings), attaching each merge's --stat files and acceptance spec by
+  # repair:S14, and regenerated the counts below from the body.
+  repairs_through: 96aba35
   roadmap: docs/ROADMAP.yaml (schema_version 2, updated 2026-09-03)
   module_graph: .planning/trace/imports.json via .planning/trace/vite.trace.config.ts (vite 8.1.3 /
     rolldown 1.1.4, production resolution)
@@ -66,13 +71,13 @@ method:
     spec this trace attaches only weakly or not at all.
 counts:
   tasks_total: 90
-  tasks_open: 67
-  tasks_done: 18
+  tasks_open: 58
+  tasks_done: 27
   tasks_superseded: 5
-  tasks_with_files: 48
-  tasks_with_tests: 37
-  tasks_with_neither: 42
-  done_claims_without_a_test: 10
+  tasks_with_files: 50
+  tasks_with_tests: 41
+  tasks_with_neither: 40
+  done_claims_without_a_test: 11
   done_claims_without_a_test_ids:
     - DDM-P0-T01
     - DDM-P0-T02
@@ -83,6 +88,9 @@ counts:
     - DDM-P0-T08
     - DDM-P9-T01
     - DDM-P12-T01
+    # DDM-P15-T01 added 2026-09-08 (S14): done on documentation (DEVELOPER.md),
+    # whose verification key says no test asserts it.
+    - DDM-P15-T01
     - DDM-P15-T03
   # DDM-P10-T02 removed from this list 2026-09-07: the styles-cluster fix
   # (files_defect_2026-09-07 above) attaches src/styles/app.css to it with 16
@@ -121,23 +129,23 @@ counts:
     - DDM-P6-T05
     - DDM-P6-T06
     - DDM-P8-T04
-    - DDM-P8-T05
+    # DDM-P8-T05 and DDM-P15-T01 removed 2026-09-08 (S14): files attached from
+    # their landing merges (5b8a8ff, f521800).
     - DDM-P9-T01
     # DDM-P10-T02, DDM-P10-T03, DDM-P10-T04 removed 2026-09-07 (styles-cluster fix)
     - DDM-P12-T04
     - DDM-P13-T01
     - DDM-P14-T04
-    - DDM-P15-T01
     - DDM-P15-T02
     - DDM-P15-T03
     - DDM-P15-T04
   files_scouted: 197
-  orphan_files_total: 124
-  orphan_files_with_test_coverage: 77
+  orphan_files_total: 122
+  orphan_files_with_test_coverage: 75
   orphan_files_without_test_coverage: 47
   orphans_by_component:
     (no component_catalog path matches): 42
-    map_and_visualization: 27
+    map_and_visualization: 25   # 2026-09-08 (S14): spc-fire-weather.ts and usfs-whp.ts attached to DDM-P8-T02
     interface: 24
     impact_and_place: 11
     state_and_lifecycle: 18
@@ -2611,7 +2619,12 @@ tasks:
   DDM-P8-T02:
     title: Give Fire and Extreme Heat a time bar
     phase: DDM-P8
-    status: open
+    # open -> done 2026-09-08 by S14 (owner ruling R5 in the S14 prompt): S13 closed
+    # the task in docs/ROADMAP.yaml on 2026-09-08 and left this status for the
+    # owner. The three fire layer files that install the bar are attached below
+    # (S13 noted them and was not authorized to attach them); the two that were
+    # orphans leave the orphans section, nifc-fires.ts gains this as a third task.
+    status: done
     roadmap: docs/ROADMAP.yaml:270
     acceptance: Each of the four hazard screens shows a time control whose stamp names the issuer and
       the period the displayed surface covers, or states that the product is undated.
@@ -2645,6 +2658,31 @@ tasks:
         acceptance_testable_here: true
         evidence_lines: *a16
         attached_by: scout
+      - path: src/layers/nifc-fires.ts
+        owns: Renders NIFC current mapped wildfire perimeters with query-scoped fetch, category-split
+          presentation, and incident-metadata popup; installs the Wildfire time bar stating that the
+          product has no single valid time
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/layers/nifc-fires.ts:250: // The time statement (DDM-P8-T02)"
+        attached_by: repair:S14  # 2026-09-08, owner ruling R5; third task on this file
+      - path: src/layers/spc-fire-weather.ts
+        owns: Renders SPC Day 1 fire-weather categorical threat (Elevated/Critical/Extreme) from MapServer
+          with fire-weather-specific framing; installs the outlook time bar with the issuance's own
+          valid and expire
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/layers/spc-fire-weather.ts:98: // The time statement (DDM-P8-T02)"
+          - "src/layers/spc-fire-weather.ts:139: function installTimeBar(features: FeatureCollection['features']): void {"
+        attached_by: repair:S14  # 2026-09-08, owner ruling R5; was an orphan with test coverage
+      - path: src/layers/usfs-whp.ts
+        owns: Renders USFS Wildfire Hazard Potential (1-5 scale) from Federal GeoPlatform ImageServer
+          through MapLibre raster source with CORS proxy; installs the static 2023 edition time bar
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/layers/usfs-whp.ts:111: * The time statement (DDM-P8-T02 clause 4), the Wildfire screen's stamp at"
+          - "src/layers/usfs-whp.ts:119: function installTimeBar(): void {"
+        attached_by: repair:S14  # 2026-09-08, owner ruling R5; was an orphan with test coverage
     tests:
       - path: tests/heat-h1-heatrisk.spec.ts
         via: symbol-ref
@@ -2793,14 +2831,46 @@ tasks:
   DDM-P8-T05:
     title: Never leave a hazard surface blank across a horizon or day change
     phase: DDM-P8
-    status: open
+    # open -> done 2026-09-08 by S14: landed 2026-09-07 in S02b (merge 5b8a8ff), which
+    # postdates the scout pass, so the entry read no-files-no-tests. The three src
+    # files the merge --stat names are attached below (the register names the
+    # task at :181), with the acceptance spec the same merge added. Closed
+    # sentence in docs/ROADMAP.yaml; the spec ran alone on 96aba35 (2 passed).
+    status: done
     roadmap: docs/ROADMAP.yaml:287
     acceptance: A HeatRisk day change and a drought horizon change each keep a surface or an honest
       loading state on the map for the whole fetch.
     verification: "verify:smoke  # repo default"
-    files: []
-    tests: []
-    coverage: no-files-no-tests
+    files:
+      - path: src/layers/drought.ts
+        owns: Renders NOAA CPC Drought Outlook (Monthly and Seasonal) as vector layers with hatched fills
+          and outlook-specific time bar typography
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/layers/drought.ts:370: // SURFACE CONTINUITY ACROSS A HORIZON CHANGE (DDM-P8-T05). A horizon"
+        attached_by: repair:S14  # 2026-09-08, merge 5b8a8ff --stat
+      - path: src/layers/heatrisk.ts
+        owns: Renders NWS HeatRisk time-aware mosaic with day selector, live catalog discovery, and
+          per-frame MapLibre sources with cancellation
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/layers/heatrisk.ts:16: * SURFACE CONTINUITY ACROSS A DAY CHANGE (DDM-P8-T05). That teardown is"
+          - "src/layers/heatrisk.ts:449: // the map is both blank and silent (DDM-P8-T05)."
+        attached_by: repair:S14  # 2026-09-08, merge 5b8a8ff --stat
+      - path: src/ui/map-key.ts
+        owns: Compact on-map key that reflects active condition surface and renders hazard-aware legend
+          swatches and NIFC fire glyphs
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/ui/map-key.ts:369: // A DAY CHANGE IS A FETCH (DDM-P8-T05). The selected frame's source is"
+        attached_by: repair:S14  # 2026-09-08, merge 5b8a8ff --stat
+    tests:
+      - path: tests/temporal-axis.spec.ts
+        via: path-ref
+        covers: src/layers/heatrisk.ts
+        evidence: "tests/temporal-axis.spec.ts:479: test.describe('DDM-P8-T05 surface continuity across a time change', () => {"
+        attached_by: repair:S14  # 2026-09-08, the acceptance spec merge 5b8a8ff added
+    coverage: files-and-tests
   DDM-P8-T06:
     title: Make the USDM weekly rail reachable from the Drought screen
     phase: DDM-P8
@@ -2839,7 +2909,12 @@ tasks:
   DDM-P9-T02:
     title: Gate the 3D scene on capability, not width alone
     phase: DDM-P9
-    status: open
+    # open -> done 2026-09-08 by S14: landed 2026-09-07 in S02d (merge f730421).
+    # src/config/fire3d-presentation.ts (the merge --stat's third src file, which
+    # carries the refusal decision and both sentences) and the acceptance spec
+    # are attached below. Closed sentence in docs/ROADMAP.yaml; the task's own
+    # gate ran on 96aba35 (41 passed, 8.5m).
+    status: done
     roadmap: docs/ROADMAP.yaml:307
     acceptance: A device that cannot render the scene is told so instead of being admitted, and a lost
       graphics context inside the scene produces a named failure state rather than a frozen frame.
@@ -2867,7 +2942,20 @@ tasks:
         acceptance_testable_here: false
         evidence_lines: *a18
         attached_by: scout
+      - path: src/config/fire3d-presentation.ts
+        owns: Declares the 3D control's geometry queries, the pure offer decision (control, silent, or one
+          of two refusals) and the refusal sentences the shell island renders
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/config/fire3d-presentation.ts:149: 'This browser cannot render the 3D scene, so there is nothing here to turn on.',"
+          - "src/config/fire3d-presentation.ts:191: export function fire3dControlOffer(input: Fire3DOfferInput): Fire3DOffer {"
+        attached_by: repair:S14  # 2026-09-08, merge f730421 --stat
     tests:
+      - path: tests/fire3d-mode.spec.ts
+        via: import
+        covers: src/config/fire3d-presentation.ts
+        evidence: "tests/fire3d-mode.spec.ts:224: test('a device that cannot hold the scene is told, and only that device is', () => {"
+        attached_by: repair:S14  # 2026-09-08, the task's own verification key names this spec
       - path: tests/gl-capability.spec.ts
         via: import
         covers: src/map/gl-capability.ts
@@ -3004,7 +3092,12 @@ tasks:
   DDM-P10-T01:
     title: Decide and build the tablet band
     phase: DDM-P10
-    status: open
+    # open -> done 2026-09-08 by S14: landed 2026-09-07 in S02f (merge 704d5c2),
+    # which postdates the scout pass. The acceptance spec the merge added is
+    # attached at the head of tests below; app.css was already attached by the
+    # styles-cluster scout. Closed sentence in docs/ROADMAP.yaml; the tablet
+    # band tests ran alone (12 passed).
+    status: done
     roadmap: docs/ROADMAP.yaml:336
     acceptance: At 721, 768, 820, 900, and 1024 pixels in both orientations no control overlaps another,
       the dock keeps a usable width, and every interactive target meets the coarse-pointer minimum.
@@ -3052,11 +3145,16 @@ tasks:
         attached_by: scout
         cluster: styles
     tests:
+      - path: tests/interface-responsive.spec.ts
+        via: path-ref
+        covers: src/styles/app.css
+        evidence: "tests/interface-responsive.spec.ts:701: * THE TABLET BAND, 721 to 1024 pixels (DDM-P10-T01; ROADMAP gate DDM-D02;"
+        attached_by: repair:S14  # 2026-09-08, the acceptance spec merge 704d5c2 added
       - path: tests/boot-without-map.spec.ts
         via: selector
         covers: src/styles/app.css
         evidence: ".planning/trace/tests.json selector_pass.per_spec['tests/boot-without-map.spec.ts']:
-          top[0]='src/styles/app.css' (5 literals, 5 matched src files; caveat_selector applies —
+          top[0]='src/styles/app.css' (5 literals, 5 matched src files; caveat_selector applies,
           a lead, not proof of ownership)."
       - path: tests/boot.spec.ts
         via: selector
@@ -3813,7 +3911,11 @@ tasks:
   DDM-P13-T03:
     title: Correct the gridded-index product table and its coverage statement
     phase: DDM-P13
-    status: open
+    # open -> done 2026-09-08 by S14: landed 2026-09-07 in S02c (merge 58f13e9),
+    # which postdates the scout pass. The merge --stat's two config files and
+    # the acceptance spec the same merge added are attached below (the register
+    # names the task at :181). Closed sentence in docs/ROADMAP.yaml.
+    status: done
     roadmap: docs/ROADMAP.yaml:421
     acceptance: Each gridded index resolves to the prefix its issuer publishes it under, shows its own
       product date, and states that the raster stack covers the contiguous United States only.
@@ -3829,8 +3931,27 @@ tasks:
           - "src/layers/gridded-index.ts:26: each product publishes `<slug>/info.json` beside its
             tiles, carrying the valid `date` of the raster"
         attached_by: scout
-    tests: []
-    coverage: files-no-tests
+      - path: src/config/layers.ts
+        owns: The declared layer catalog (key, name, source line, role, default state, loader) every
+          surface reads
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/config/layers.ts:211: { key: 'gridded-index', name: 'Gridded Drought Index (SPI)', source: 'NOAA NIDIS · raster tiles · contiguous United States only', role: 'surface', defaultOn: false, load: () => import('../layers/gridded-index') },"
+        attached_by: repair:S14  # 2026-09-08, merge 58f13e9 --stat
+      - path: src/config/urls.ts
+        owns: The endpoint catalog, read by grep-located range only (context_hazards); the ACIS Grid 1
+          coverage note lives beside the gridded-index entries
+        acceptance_testable_here: false
+        evidence_lines:
+          - "src/config/urls.ts:836: // COVERAGE: contiguous United States only. The wired products belong to the"
+        attached_by: repair:S14  # 2026-09-08, merge 58f13e9 --stat
+    tests:
+      - path: tests/legend.spec.ts
+        via: selector
+        covers: src/layers/gridded-index.ts
+        evidence: "tests/legend.spec.ts:73: * DDM-P13-T03: the gridded index must resolve to the prefix its issuer"
+        attached_by: repair:S14  # 2026-09-08, the acceptance spec merge 58f13e9 added
+    coverage: files-and-tests
   DDM-P14-T01:
     title: Bound the caches, the roster fetch, and the catalog lookup
     phase: DDM-P14
@@ -3967,13 +4088,35 @@ tasks:
   DDM-P14-T02:
     title: Give boot a watchdog and a visible failure surface
     phase: DDM-P14
-    status: open
+    # open -> done 2026-09-08 by S14: landed 2026-09-07 in S02h (merges edabf02
+    # and 3289354), which postdates the scout pass. The merge --stat's two src
+    # files the scout had not attached here (sidebar.ts, app.css) are attached
+    # below (the register names the task at :176). Closed sentence in
+    # docs/ROADMAP.yaml; tests/boot-without-map.spec.ts ran alone (2 passed).
+    status: done
     roadmap: docs/ROADMAP.yaml:436
     acceptance: A renderer that never starts produces a stated failure the user can read, instead of a
       complete-looking inert interface.
     needs_decision: DR-035 (strict boot, or boot the chrome without the map after a bounded wait; 01 D1)
     verification: "verify:smoke  # repo default"
     files:
+      - path: src/ui/sidebar.ts
+        owns: Builds the sidebar shell at DOM ready with the map-dependent controls disabled and a
+          stated reason, and enables them once the map-dependent half is wired
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/ui/sidebar.ts:217: // (2026-09-03 launch ruling section 4; DR-065; DDM-P14-T02)"
+          - "src/ui/sidebar.ts:348: * renderer (DDM-P14-T02). A no-op once the controls are live: nothing may"
+        attached_by: repair:S14  # 2026-09-08, merge edabf02 --stat
+      - path: src/styles/app.css
+        owns: The disabled-control affordance tokens and the data-ddm-controls rules that withhold or
+          hide chrome until the controls are ready
+        acceptance_testable_here: false
+        evidence_lines:
+          - "src/styles/app.css:130: --ctl-pending-opacity: 0.45;"
+          - "src/styles/app.css:977: html:not([data-ddm-controls='ready']) #app[data-ddm-boot-view='brief']:not(.embed) #panel-quick-views {"
+        attached_by: repair:S14  # 2026-09-08, merge edabf02 --stat
+        cluster: styles
       - path: src/main.ts
         owns: Orchestrates DDM boot by creating MapLibre, preparing deep-link awareness, and handing off to
           UI/state initialization with boot-idle and renderer-notice coordination.
@@ -4205,16 +4348,31 @@ tasks:
   DDM-P15-T01:
     title: Record the local full-service server end state and the seams it needs
     phase: DDM-P15
-    status: open
+    # open -> done 2026-09-08 by S14: landed 2026-09-07 in S02a (merge f521800).
+    # The acceptance below is re-quoted from docs/ROADMAP.yaml as it reads today
+    # (the scout pass quoted an earlier wording). DEVELOPER.md, which the merge
+    # --stat names (+135) and the register names for this task at :178, is
+    # attached under the S14 rule (a merge-named file on a register-named task);
+    # it is documentation, so no test reaches it and none is claimed.
+    status: done
     roadmap: docs/ROADMAP.yaml:458
-    acceptance: The hosting plan states that GitHub Pages is the current static host and names the seams
-      a local server would replace, and no hosting change is made without range, cache, privacy,
-      cost, and rollback evidence.
+    acceptance: docs/ states that GitHub Pages is the interim static host, names each seam a local
+      server would replace, and lists the five evidence classes (range, cache, privacy, cost,
+      rollback) any hosting change must supply before it is made.
     decision_gate: DDM-D10
-    verification: verify:quick
-    files: []
+    verification: "none (documentation state; verify:quick asserts nothing here)"
+    files:
+      - path: DEVELOPER.md
+        owns: Maintainer documentation; its Hosting section records the interim host, the end state,
+          the seven seams and the evidence classes this task's acceptance names
+        acceptance_testable_here: false
+        evidence_lines:
+          - "DEVELOPER.md:580: ## Hosting: GitHub Pages now, one local origin later"
+          - "DEVELOPER.md:590: The seams a local full-service server would replace:"
+          - "DEVELOPER.md:639: No hosting change is made without evidence, gathered before the move and not"
+        attached_by: repair:S14  # 2026-09-08, merge f521800 --stat; documentation, not src
     tests: []
-    coverage: no-files-no-tests
+    coverage: files-no-tests
   DDM-P15-T02:
     title: Land the renderer version the gate selects and declare the browser floor it implies
     phase: DDM-P15
@@ -4657,17 +4815,6 @@ orphan_files_with_test_coverage:
       - tests/power-layer.spec.ts
       - tests/wildfire-source-semantics.spec.ts
     strongest_link: import
-  - path: src/layers/spc-fire-weather.ts
-    owns: Renders SPC Day 1 fire-weather categorical threat (Elevated/Critical/Extreme) from MapServer
-      with fire-weather-specific framing
-    serves_component: map_and_visualization
-    component_path_rule: src/layers/
-    component_concerns: *a24
-    serves_foundation_guess: null
-    foundation_matched_terms: null
-    tests:
-      - tests/wildfire-source-semantics.spec.ts
-    strongest_link: import
   - path: src/layers/telemetry.ts
     owns: Renders telemetry station markers with MapLibre Marker API, async popup hydration for USGS IV
       data, and per-marker abort controllers
@@ -4701,19 +4848,6 @@ orphan_files_with_test_coverage:
     tests:
       - tests/boundary-boot-inventory.test.mjs
     strongest_link: path-ref
-  - path: src/layers/usfs-whp.ts
-    owns: Renders USFS Wildfire Hazard Potential (1-5 scale) from Federal GeoPlatform ImageServer
-      through MapLibre raster source with CORS proxy
-    serves_component: map_and_visualization
-    component_path_rule: src/layers/
-    component_concerns: *a24
-    serves_foundation_guess: DDM-B04
-    foundation_matched_terms:
-      - hazard
-      - potential
-    tests:
-      - tests/usfs-whp.spec.ts
-    strongest_link: import
   - path: src/map/basemap-switcher.ts
     owns: Implements the one-button satellite basemap toggle control, manages basemap mode state
       application, and handles chunk failures with honest feedback.

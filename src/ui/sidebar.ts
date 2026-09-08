@@ -280,10 +280,11 @@ const CONTROL_NOTE_ID = 'sidebar-control-note';
  * call: the chips and the dropdown are rebuilt by the shell builders, and
  * the hazard rail's markup is static in `index.html`.
  *
- * Deliberately NOT included: the share button (it copies a URL, which works
- * without a renderer), the sidebar collapse and expand controls (chrome
- * geometry), and the reset button, which lives in the map overlay rather
- * than the sidebar and would carry a reason the embed cannot show.
+ * Deliberately NOT included: the share button (wired by `wireTopLevelEvents`
+ * on the map-ready path, so until then it is inert rather than disabled;
+ * recorded by S14, 2026-09-08), the sidebar collapse and expand controls
+ * (chrome geometry), and the reset button, which lives in the map overlay
+ * rather than the sidebar and would carry a reason the embed cannot show.
  */
 function mapDependentControls(): HTMLElement[] {
   const found: HTMLElement[] = [];
@@ -421,7 +422,13 @@ export function buildSidebarShell(): void {
   }
 
   const app = document.getElementById('app');
-  if (app && boot) app.classList.toggle('embed', boot.embed);
+  if (app && boot) {
+    app.classList.toggle('embed', boot.embed);
+    // Presentation only (ruling A2; S14, 2026-09-08): the stylesheet reads
+    // this URL-derived mode to hide the Quick views panel through the boot
+    // window the way `view-brief` hides it after. `initViewShell` owns the mode.
+    app.dataset['ddmBootView'] = boot.view;
+  }
 
   buildRegionSelect();
   buildPresetChips();
@@ -1398,6 +1405,17 @@ export function buildSidebar(
   map: maplibregl.Map,
   onRegionSelect: (key: RegionKey) => void
 ): void {
+  // Ruling A3 (foundations plan v2; S14, 2026-09-08): the wiring can throw
+  // midway, and the note then kept saying "still starting" beside a painted
+  // map. The enable runs in a finally; the throw still reaches boot().
+  try {
+    wireSidebar(map, onRegionSelect);
+  } finally {
+    enableMapDependentControls();
+  }
+}
+
+function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => void): void {
   mapRef = map;
   onRegionSelectRef = onRegionSelect;
   // The shell (the dropdown, the chips, the hazard rail, the live region)
@@ -1714,10 +1732,10 @@ export function buildSidebar(
 
   // The map-dependent half is wired and the URL state is applied, so the
   // controls now do what their names say (2026-09-03 launch ruling section
-  // 4). Last, and synchronous: `<html data-ddm-controls="ready">` is the
+  // 4). The enable itself runs in `buildSidebar`'s finally, synchronously
+  // after this returns or throws: `<html data-ddm-controls="ready">` is the
   // signal a verification suite waits on in place of the preset chips,
   // which no longer prove a finished boot because they exist before one.
-  enableMapDependentControls();
 }
 
 // ---------------------------------------------------------------------------

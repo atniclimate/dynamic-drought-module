@@ -1,6 +1,6 @@
 schema_version: 2
 roadmap_id: "ddm-forward-roadmap"
-updated_on: "2026-09-07"
+updated_on: "2026-09-08"
 
 # Every open task takes this unless it carries its own `verification`.
 default_verification: "verify:smoke"
@@ -58,7 +58,7 @@ authority:
   decision_ledger: "planning/decisions/"              # defines all 69 DR- ids; this file cites, never defines
   defect_ledger: "planning/qa/feature-errors.yaml"    # FE-01..FE-24, EF-IB-1..10, EF-MM-1..7; FE-19 is cited from src/styles/app.css:6170
   research_inputs: "planning/user-research/"          # cite by path when a task draws on them; no ids adopted
-  handoff_entry: "planning/handoffs/2026-09-04.md"    # newest only; older handoffs are history
+  handoff_entry: "planning/handoffs/"                 # 2026-09-08 (S14): every handoff tracked and negated by name in .gitignore; the entry point is the newest by filename date
   references_ledger: "planning/references/register.yaml"  # seeded by S03b 2026-09-07: one entry per cited source, url, issuer, owning task, last_checked
   read_only_history:
     - "planning/archive/"
@@ -339,6 +339,8 @@ phases:
         source: "04 TIME-07, TIME-15"
         effort: S
         acceptance: "A HeatRisk day change and a drought horizon change each keep a surface or an honest loading state on the map for the whole fetch."
+        status: done
+        closed: "2026-09-08: landed 2026-09-07 in S02b (merge 5b8a8ff) in src/layers/heatrisk.ts (a day change goes to an explicit loading state, src/layers/heatrisk.ts:16 and :449), src/layers/drought.ts (a horizon change keeps the previous outlook with its own Issued stamp while the on-map indicator names the register in flight, src/layers/drought.ts:370) and src/ui/map-key.ts:369 (the key's loading row). tests/temporal-axis.spec.ts:479-560 samples every 20 ms across each change and asserts the acceptance's two clauses, one test each; run alone on 96aba35 by S14 on 2026-09-08 (2 passed), and tests/heat-h1-heatrisk.spec.ts:361 ran ten times without a failure on the same tree. In verify:smoke since the landing."
       - id: "DDM-P8-T06"
         title: "Make the USDM weekly rail reachable from the Drought screen"
         source: "04 TIME-08"
@@ -368,6 +370,8 @@ phases:
         needs_decision: "DR-025 (tablet and phone 3D policy, and fire3d in the URL; 03 D3)"
         acceptance: "A device that cannot render the scene is told so instead of being admitted, and a lost graphics context inside the scene produces a named failure state rather than a frozen frame."
         verification: "npx playwright test --workers=1 tests/fire3d-mode.spec.ts tests/view-contracts.spec.ts"
+        status: done
+        closed: "2026-09-08: landed 2026-09-07 in S02d (merge f730421). Clause 1: src/config/fire3d-presentation.ts:139-152 carries the two refusal sentences and :191 the pure offer decision the shell island renders where the button would have been; tests/fire3d-mode.spec.ts:224-261 (Node) and :1360-1396 (a landscape phone is told why) assert it. Clause 2: src/map/fire3d.ts:656-667 exits a lost graphics context down the failure ladder to status unavailable (already on main before the landing, confirmed by the lane). The task's own gate ran on 96aba35 by S14 on 2026-09-08: 41 passed. The no-WebGL-2 sentence is unreachable in a browser today (the island mounts only with a live map, and MapLibre 6 builds none without WebGL 2); the control's docblock and the release note say so since S14, and that browser is answered by the boot's renderer notice (DDM-P14-T02)."
       - id: "DDM-P9-T03"
         title: "Make the fire claim polygon-exact and add incident coverage"
         source: "03 FIRE-05, FIRE-08; 10 SCI-04; 12 FSPEC-10"
@@ -395,6 +399,8 @@ phases:
         source: "06 UI-01, UI-02, UI-03"
         effort: L
         acceptance: "At 721, 768, 820, 900, and 1024 pixels in both orientations no control overlaps another, the dock keeps a usable width, and every interactive target meets the coarse-pointer minimum."
+        status: done
+        closed: "2026-09-08: landed 2026-09-07 in S02f (merge 704d5c2) in src/styles/app.css (the band block at :285, the fluid sidebar :330, the panel cap :3925-3970, the coarse-pointer floor :7108-7240). tests/interface-responsive.spec.ts:701-960 asserts the acceptance sentence literally at the ten viewports (three conditions each) plus an 820x615 embed and the fluid sidebar; S14 ran it alone on 2026-09-08 (12 passed) and corrected the block's panel-width figures (217, 264, full width from 984) in the CSS comment and the release note. Two owner calls stay open and are not acceptance clauses: the .maplibregl-popup-close-button 44 px rule (app.css:7229) and the .view-switch padding-inline (app.css:7144), both foundations plan v2 ruling B1."
       - id: "DDM-P10-T02"
         title: "Land the token layers the design had none of"
         source: "06 UI-04, UI-06, UI-12, UI-13, UI-17, UI-18; 11 MM-08"
@@ -502,6 +508,8 @@ phases:
         effort: M
         needs_decision: "DR-049 (how far the gridded-index selector expands, and how it groups; 10 D-SCI-C)"
         acceptance: "Each gridded index resolves to the prefix its issuer publishes it under, shows its own product date, and states that the raster stack covers the contiguous United States only."
+        status: done
+        closed: "2026-09-08: landed 2026-09-07 in S02c (merge 58f13e9). All five SPI windows resolve through ACIS_GRID1.slugPrefix 'ce-ACIS_NRCC_NN-' (src/layers/gridded-index.ts:134, :166), the legend shows each product's own info.json date, and the coverage sentence quotes the issuer's 'Contiguous U.S.' (src/layers/gridded-index.ts:135, src/config/layers.ts:211; verified by ddm-science-verifier at the landing, roster S02c). tests/legend.spec.ts:85-137 asserts the three clauses in one test; S14 added the five-option wait before the one-shot read and ran the whole spec on 2026-09-08 (4 passed). In verify:smoke since the landing. The selector is unchanged at five windows (DR-049)."
   - id: "DDM-P14"
     name: "Boot, architecture, and performance"
     goal: "A boot that fails visibly, a first paint that carries only what it needs, and one authority per concern."
@@ -517,6 +525,8 @@ phases:
         effort: M
         needs_decision: "DR-035 (strict boot, or boot the chrome without the map after a bounded wait; 01 D1)"
         acceptance: "A renderer that never starts produces a stated failure the user can read, instead of a complete-looking inert interface."
+        status: done
+        closed: "2026-09-08: landed 2026-09-07 in S02h (merges edabf02 and 3289354; DR-065 option a). The stated failure: src/ui/renderer-notice.ts on the map, and src/ui/sidebar.ts:253-262 beside the controls (map-starting, map-not-started, no-map), which build at DOM ready from src/main.ts:236 and stay disabled with the reason until the map-dependent half is wired; src/main.ts:244-255 is the no-WebGL-2 path and :312-336 the bounded wait expiring. tests/boot-without-map.spec.ts:51-108 asserts the notice text, the visible chrome and, since S14, the disabled controls, their note and the no-map stamp (2 passed on 2026-09-08). S14 carried rulings A2 (the Brief door hides Quick views through the boot window, data-ddm-boot-view) and A3 (buildSidebar enables the controls in a finally; the release note narrowed to the NIDIS demonstration) and corrected the share-button comment."
       - id: "DDM-P14-T03"
         title: "Take the first paint down to what it needs"
         source: "01 ARCH-03, ARCH-17"
@@ -540,6 +550,8 @@ phases:
         acceptance: "docs/ states that GitHub Pages is the interim static host, names each seam a local server would replace, and lists the five evidence classes (range, cache, privacy, cost, rollback) any hosting change must supply before it is made."
         decision_gate: "DDM-D10"
         verification: "none (documentation state; verify:quick asserts nothing here)"
+        status: done
+        closed: "2026-09-08: landed 2026-09-07 in S02a (merge f521800). DEVELOPER.md:580-582 names GitHub Pages as the current static host and one local origin as the end state, :590-637 names the seven seams a local full-service server would replace, and :639-658 lists the evidence a hosting change must carry first (range, cache, privacy, cost, rollback, and portability). Inside docs/, docs/ROADMAP.yaml gate DDM-D10 (context and decision) and docs/RELEASE_NOTES.md's Unreleased hosting entry state the interim host and point at that section. Read by S14 on 2026-09-08; no test asserts documentation, as the verification key says."
       - id: "DDM-P15-T02"
         title: "Land the renderer version the gate selects and declare the browser floor it implies"
         source: "15 DEP-01, DEP-02, DEP-03, DEP-06"

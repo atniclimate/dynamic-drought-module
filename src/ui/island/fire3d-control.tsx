@@ -22,9 +22,16 @@
  * built. A device that cannot hold the scene now reads one sentence where
  * the button would have been, naming what was observed and nothing else
  * (`fire3dControlOffer` and `FIRE3D_REFUSAL_TEXT` carry both decisions and
- * both sentences). It is a control affordance, not a seventh layer state;
- * the status line below the button keeps the six-state vocabulary to
- * itself.
+ * both sentences). Of the two, only the short-window sentence is reachable
+ * in a browser today: this island mounts through `wireMapDependentChrome(map)`
+ * in main.ts, which needs a live map, and MapLibre 6 builds no map without
+ * WebGL 2, so a browser without it never reaches the island. That case is
+ * answered earlier, by the boot's renderer notice
+ * (`src/ui/renderer-notice.ts`, DDM-P14-T02); the no-webgl2 sentence stays
+ * as the pure function's deeper refusal, proven in Node, for a mount path
+ * that does not exist yet. It is a control affordance, not a seventh layer
+ * state; the status line below the button keeps the six-state vocabulary
+ * to itself.
  *
  * The button mirrors the PREFERENCE (the user's durable ask, aria-pressed
  * flips with the click); the status line underneath tells the honest truth

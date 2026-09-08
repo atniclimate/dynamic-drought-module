@@ -65,12 +65,16 @@ been assigned to this work.
   `unavailable`, or `no data`, and a superseded request is still aborted, so
   a failed switch reads as its honest verdict rather than as stale data.
 - 2026-09-03: a device that cannot hold the 3D Fire scene is told so. The
-  capability and geometry gate withdrew the 3D toggle silently, so a browser
-  without WebGL 2, or a window too short for the tilted camera, met an
-  interface indistinguishable from one where the 3D view had never been
-  built. One sentence now stands where the button would have been, naming
-  only what was observed. Views that never offer the toggle, and viewports
-  below the desktop breakpoint, stay silent.
+  capability and geometry gate withdrew the 3D toggle silently, so a window
+  too short for the tilted camera met an interface indistinguishable from
+  one where the 3D view had never been built. One sentence now stands where
+  the button would have been, naming only what was observed. Views that
+  never offer the toggle, and viewports below the desktop breakpoint, stay
+  silent. A second sentence, for a browser without WebGL 2, is carried by
+  the same control but is not reachable in any browser today: the control
+  mounts only once a map exists, and MapLibre 6 builds no map without
+  WebGL 2, so that browser is answered earlier by the boot's renderer notice
+  (the sidebar-builds-first entry below).
 - 2026-09-03: the tablet band, 721 to 1024 pixels (DDM-P10-T01, gate
   DDM-D02). Tablet is a third layout band rather than a small desktop: the
   sidebar column is fluid from 300 to 340 pixels instead of a 340 pixel
@@ -78,10 +82,12 @@ been assigned to this work.
   floor on the sidebar, the map controls, the temporal rail, the briefing's
   close control and a map popup's close corner. Two geometry collisions are
   closed with them: the bottom dock no longer runs underneath an open impact
-  briefing between 721 and about 976 pixels, and the briefing keeps its gap
+  briefing between 721 and 984 pixels, and the briefing keeps its gap
   off the sidebar at every width in the band. Dock inset, dock lift, the
   map-information diameter and the touch floor are new custom properties.
-  Desktop geometry at 1025 pixels and wider is unchanged.
+  Desktop geometry at 1025 pixels and wider is unchanged for a fine
+  pointer; the touch floor is a pointer query with no upper width bound,
+  so a coarse pointer on a wide desktop takes the same 44 pixel targets.
 - 2026-09-03: the impact briefing is one four-hazard by three-horizon matrix.
   Each of the three horizon sections now holds a Drought, Fire, Heat, and ENSO
   row, and each of the twelve cells carries its own claims, its own status, and
@@ -366,8 +372,14 @@ Every generated control in the sidebar used to wait on the map's `load` event,
 so a browser without WebGL 2, a graphics context that failed to start, or a
 boot slower than the eight-second bound left an empty region dropdown and an
 empty quick-view row beside a map that was not painting. That is the shape
-three separate people reported as the layer studio and the place studio "not
-working": an interface that looked finished and did nothing. The region
+the NIDIS demonstration reported as the layer studio and the place studio
+"not working": an interface that looked finished and did nothing. It is one
+of three field reports the decision register files under DR-065; the other
+two, an iPad's quick-view toggles not resetting and inconsistent studio
+navigation on desktop and phone, are not explained by this change and are
+held under their own browser contracts instead
+(`tests/preset-toggle-cycles.spec.ts`, `tests/studio-navigation-cycles.spec.ts`).
+The region
 dropdown, the quick-view chips, the impact-briefing trigger and the mobile
 hazard rail are now generated from the static region, framing and preset
 tables at DOM ready, before the renderer is probed at all, and every boot path
