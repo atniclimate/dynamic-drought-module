@@ -339,6 +339,8 @@ phases:
         source: "04 TIME-07, TIME-15"
         effort: S
         acceptance: "A HeatRisk day change and a drought horizon change each keep a surface or an honest loading state on the map for the whole fetch."
+        status: done
+        closed: "2026-09-08: landed 2026-09-07 in S02b (merge 5b8a8ff) in src/layers/heatrisk.ts (a day change goes to an explicit loading state, src/layers/heatrisk.ts:16 and :449), src/layers/drought.ts (a horizon change keeps the previous outlook with its own Issued stamp while the on-map indicator names the register in flight, src/layers/drought.ts:370) and src/ui/map-key.ts:369 (the key's loading row). tests/temporal-axis.spec.ts:479-560 samples every 20 ms across each change and asserts the acceptance's two clauses, one test each; run alone on 96aba35 by S14 on 2026-09-08 (2 passed), and tests/heat-h1-heatrisk.spec.ts:361 ran ten times without a failure on the same tree. In verify:smoke since the landing."
       - id: "DDM-P8-T06"
         title: "Make the USDM weekly rail reachable from the Drought screen"
         source: "04 TIME-08"

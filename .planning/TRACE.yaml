@@ -2793,14 +2793,46 @@ tasks:
   DDM-P8-T05:
     title: Never leave a hazard surface blank across a horizon or day change
     phase: DDM-P8
-    status: open
+    # open -> done 2026-09-08 by S14: landed 2026-09-07 in S02b (merge 5b8a8ff), which
+    # postdates the scout pass, so the entry read no-files-no-tests. The three src
+    # files the merge --stat names are attached below (the register names the
+    # task at :181), with the acceptance spec the same merge added. Closed
+    # sentence in docs/ROADMAP.yaml; the spec ran alone on 96aba35 (2 passed).
+    status: done
     roadmap: docs/ROADMAP.yaml:287
     acceptance: A HeatRisk day change and a drought horizon change each keep a surface or an honest
       loading state on the map for the whole fetch.
     verification: "verify:smoke  # repo default"
-    files: []
-    tests: []
-    coverage: no-files-no-tests
+    files:
+      - path: src/layers/drought.ts
+        owns: Renders NOAA CPC Drought Outlook (Monthly and Seasonal) as vector layers with hatched fills
+          and outlook-specific time bar typography
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/layers/drought.ts:370: // SURFACE CONTINUITY ACROSS A HORIZON CHANGE (DDM-P8-T05). A horizon"
+        attached_by: repair:S14  # 2026-09-08, merge 5b8a8ff --stat
+      - path: src/layers/heatrisk.ts
+        owns: Renders NWS HeatRisk time-aware mosaic with day selector, live catalog discovery, and
+          per-frame MapLibre sources with cancellation
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/layers/heatrisk.ts:16: * SURFACE CONTINUITY ACROSS A DAY CHANGE (DDM-P8-T05). That teardown is"
+          - "src/layers/heatrisk.ts:449: // the map is both blank and silent (DDM-P8-T05)."
+        attached_by: repair:S14  # 2026-09-08, merge 5b8a8ff --stat
+      - path: src/ui/map-key.ts
+        owns: Compact on-map key that reflects active condition surface and renders hazard-aware legend
+          swatches and NIFC fire glyphs
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/ui/map-key.ts:369: // A DAY CHANGE IS A FETCH (DDM-P8-T05). The selected frame's source is"
+        attached_by: repair:S14  # 2026-09-08, merge 5b8a8ff --stat
+    tests:
+      - path: tests/temporal-axis.spec.ts
+        via: path-ref
+        covers: src/layers/heatrisk.ts
+        evidence: "tests/temporal-axis.spec.ts:479: test.describe('DDM-P8-T05 surface continuity across a time change', () => {"
+        attached_by: repair:S14  # 2026-09-08, the acceptance spec merge 5b8a8ff added
+    coverage: files-and-tests
   DDM-P8-T06:
     title: Make the USDM weekly rail reachable from the Drought screen
     phase: DDM-P8
