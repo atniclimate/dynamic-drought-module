@@ -1,6 +1,6 @@
 schema_version: 2
 roadmap_id: "ddm-forward-roadmap"
-updated_on: "2026-09-07"
+updated_on: "2026-09-08"
 
 # Every open task takes this unless it carries its own `verification`.
 default_verification: "verify:smoke"
@@ -58,7 +58,7 @@ authority:
   decision_ledger: "planning/decisions/"              # defines all 69 DR- ids; this file cites, never defines
   defect_ledger: "planning/qa/feature-errors.yaml"    # FE-01..FE-24, EF-IB-1..10, EF-MM-1..7; FE-19 is cited from src/styles/app.css:6170
   research_inputs: "planning/user-research/"          # cite by path when a task draws on them; no ids adopted
-  handoff_entry: "planning/handoffs/2026-09-04.md"    # newest only; older handoffs are history
+  handoff_entry: "planning/handoffs/"                 # 2026-09-08 (S14): every handoff tracked and negated by name in .gitignore; the entry point is the newest by filename date
   references_ledger: "planning/references/register.yaml"  # seeded by S03b 2026-09-07: one entry per cited source, url, issuer, owning task, last_checked
   read_only_history:
     - "planning/archive/"

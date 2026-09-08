@@ -10,7 +10,7 @@
 roster_version: 1
 project: "Dynamic Drought Module"
 planning_authority: "docs/ROADMAP.yaml"
-updated: "2026-09-07"
+updated: "2026-09-08"
 plan_tier: max
 
 baseline:
@@ -265,6 +265,7 @@ sessions:
       DIFFERENT task under the same id on main (the workflow guard test). Owner ruling
       2026-09-07: the branch keeps T05, the guard task becomes DDM-P15-T06.
     status: done
+    s14_verdict_2026_09_08: "DDM-P15-T01 DONE (1ba44d4; DEVELOPER.md:580-658). DDM-P15-T05 NOT LANDED: this branch created the task, biome.jsonc still excludes the 11 .tsx islands and tests/, and a scratch run of the recommended preset measured 17 island a11y errors (ruling A5 open). DDM-P15-T04 is still status open in docs/ROADMAP.yaml though this branch's register line says satisfied; outside S14's eight, reported."
     outcome: >-
       Merged into main by merge commit (no push). Conflicts resolved in package.json
       (check:all keeps npm run lint and the S01 test scripts) and docs/ROADMAP.yaml (branch
@@ -292,6 +293,7 @@ sessions:
     budget_tokens: 35000
     note: "5 files, +458/-12 (BRANCH_REPORT.md:78). P8-T05 is Wave 1, effort S, no decision gate (docs/ROADMAP.yaml:332-336)."
     status: done
+    s14_verdict_2026_09_08: "DDM-P8-T05 DONE (b2c59bd): tests/temporal-axis.spec.ts DDM-P8-T05 block 2 passed; tests/heat-h1-heatrisk.spec.ts:361 x10 passed."
     outcome: >-
       Baseline on main f521800 before the merge: verify:smoke exit 0, 86 passed. Lockfile
       checked by git diff, untouched. Merged by merge commit (no push); one conflict in
@@ -315,6 +317,7 @@ sessions:
     budget_tokens: 40000
     note: "5 files, +221/-23 (BRANCH_REPORT.md:80). P13-T03 needs DR-049 (docs/ROADMAP.yaml:494); confirm it is decided in planning/decisions/ before landing. Wave 3, so it is downstream of the S03 cycle: landing it early is the owner's call, recorded."
     status: done
+    s14_verdict_2026_09_08: "DDM-P13-T03 DONE (9fad958): tests/legend.spec.ts 4 passed after the five-option wait was added."
     outcome: >-
       DR-049 confirmed ratified 2026-09-02 (decision register :18, :52). Baseline on main
       5b8a8ff: verify:smoke exit 1, 87 passed, 1 failed at tests/ux1-surfaces.spec.ts:91,
@@ -344,6 +347,7 @@ sessions:
     budget_tokens: 35000
     note: "4 files, +227/-11 (BRANCH_REPORT.md:81). DR-025 was widened on 2026-09-02 to carry the D03 answer including the narrow-viewport exit (docs/ROADMAP.yaml:627)."
     status: done
+    s14_verdict_2026_09_08: "DDM-P9-T02 DONE (fb79b0b): task gate 41 passed before and after the unreachable-refusal reword; clause 2 by src/map/fire3d.ts:656-667."
     outcome: >-
       Baseline on main 58f13e9: task gate 39 passed, exit 0; verify:smoke exit 1 with 11
       s4-minimap failures, all the data-ddm-build-sha assertion, because the owner committed
@@ -399,6 +403,7 @@ sessions:
     budget_tokens: 70000
     note: "3 files, +578/-27. CORRECTED (planning/decisions/2026-09-02-decision-register.yaml, correction_2026_09_07): the register's original claim that this conflicts with the briefing branch (S02g) in src/styles/app.css is WRONG, established by merge-tree simulation. The real app.css collision is this branch against S02h (fix/dr-065-boot-honesty): both insert a token block at the same anchor. Lands first regardless (S02f > S02h > S02g); S02h lands next to resolve that collision while it is fresh, S02g last since it merges clean against both. DDM-D02 decided 2026-09-02: tablet gets a real third band, 721 to 1024 px, fluid sidebar, 44 px touch floor, touch-first (docs/ROADMAP.yaml:620)."
     status: done
+    s14_verdict_2026_09_08: "DDM-P10-T01 DONE (a404638): tablet band 12 passed; panel-width figures corrected to 217/264/984. Owner calls left: the popup close-button 44px rule and the view-switch padding-inline (plan v2 B1)."
     outcome: >-
       Baseline on main 01510c3 (the roster-correction commit landed immediately before this
       merge): verify:smoke exit 0, 89 passed. Lockfile checked by diff against the branch's
@@ -443,6 +448,7 @@ sessions:
       is that S03 MUST read the post-S02 tree, not the tree this roster was written
       against. Recorded, not resolved.
     status: done
+    s14_verdict_2026_09_08: "landed P7-T02 (closed 2026-09-07); DDM-P7-T03 UNBLOCKED, NOT CLOSED: the fire near-term and long-range cells read CELL_ABSENCE 'not wired' prose (src/impact/matrix.ts:144-153) and DR-022 a is unexecuted; DR-072 (pending) records why a not-wired absence is not the acceptance's 'read unavailable'. T03 moves to the Wave 3 block below."
     outcome: >-
       Baseline on main 3289354 (S02h's post-merge state): verify:smoke exit 0, 101 passed
       (4.8m); the known ux1-surfaces.spec.ts:91 flake did not fire this run. Lockfile
@@ -480,6 +486,7 @@ sessions:
       (S02f > S02h > S02g), not last, so the real collision is resolved while S02f's
       token-block change is fresh. P14-T02 needs DR-035 (docs/ROADMAP.yaml:509).
     status: done
+    s14_verdict_2026_09_08: "DDM-P14-T02 DONE (d86da75): rulings A2 and A3 were NOT carried by edabf02 and were done by S14 with the F1 row 8 items (gating assertions, share-button comment, release note narrowed), 58 changed lines; boot-without-map, e1-calm and s4-shell 25 passed."
     outcome: >-
       Baseline on main 704d5c2 (S02f's post-merge state): verify:smoke exit 0, 101 passed
       (4.3m). Lockfile checked by diff for both branches against their shared merge-base
@@ -962,6 +969,7 @@ sessions:
     budget_tokens: 400000
     stop_when: "every hazard screen shows a time control at every horizon that has a surface, every stamp reads HORIZON_CHROME and names its issuer and period or says the product is undated, outlook steps are labelled and observed steps are not, the acceptance spec is in smoke, and the three gates are green"
     status: done
+    s14_verdict_2026_09_08: "landed on main (0b62a4e, 96aba35). DDM-P8-T02 TRACE status done under owner ruling R5 with nifc-fires.ts, spc-fire-weather.ts and usfs-whp.ts attached; DR-071 ratified as written (R3), DR-070 amended (R4)."
     outcome: >-
       DONE on branch feature/fire-heat-time-bar-p8t02 from main at 5e261a4, unpushed; landing is
       the owner's. Commits 630df11 (TimeBarStamp.horizon required, rendered from HORIZON_CHROME;
@@ -983,14 +991,69 @@ sessions:
       and the briefing now disagree for a HeatRisk frame in force. Both are in DR-071 and the
       handoff planning/handoffs/2026-09-08-s13-fire-heat-time-bar.md.
 
-  # S14 to S19: the remaining six Wave 2 cycle tasks. ORDER IS SET BY S03, not
+  # S14 and S15: 2026-09-08, two concurrent sessions on the owner's direct
+  # assignment (S14 on this checkout, S15 in a worktree), numbered ahead of the
+  # cycle block below the way S09 to S13 were.
+  - id: S14
+    task_ids: [DDM-P8-T05, DDM-P9-T02, DDM-P13-T03, DDM-P10-T01, DDM-P15-T01, DDM-P14-T02, DDM-P7-T03, DDM-P15-T05]
+    title: "Close what has landed, and put the ledgers back on the truth"
+    branch: "feature/close-landed-s14"
+    tier: T3
+    model: claude-fable-5-1
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    gate: "npm run verify:quick plus each task's own spec after each residual; npm run verify:smoke once at close; npm run check:public-tree"
+    role: >-
+      Verify the eight tasks the decision register's "satisfied" lines (:176-183) claim for the
+      S02 landings against the merged tree, finish each small residual under a 60-changed-line
+      bound (owner ruling R2), flip only where every acceptance clause has a receipt (R1), then
+      repair TRACE, the register, this roster and ROADMAP.md (R3 to R10).
+    budget_tokens: 400000
+    stop_when: "every one of the eight has a verdict with receipts, the seven ledgers agree on the counts, and the three gates are green"
+    status: done
+    outcome: >-
+      DONE on feature/close-landed-s14 from 96aba35, unpushed. Six flipped to done with receipts:
+      DDM-P8-T05 (b2c59bd), P9-T02 (fb79b0b), P13-T03 (9fad958), P10-T01 (a404638), P15-T01
+      (1ba44d4), P14-T02 (d86da75); DDM-P8-T02's TRACE status done under R5 (d0615d6). Two stay
+      open: DDM-P7-T03 was UNBLOCKED by S02g, not landed (the fire cells read "not wired", DR-022
+      a is unexecuted; DR-072 records the reading), and DDM-P15-T05 was CREATED by S02a, not
+      satisfied (the 11 .tsx islands and tests/ are outside biome.jsonc, 17 island a11y errors
+      measured 2026-09-08). Residuals done: the P9-T02 unreachable-refusal reword (5 claims
+      VERIFIED), the P13-T03 five-option wait, the P10-T01 panel-width figures (217/264/984) and
+      two sentences, the P14-T02 gating assertions, share-button comment, release-note narrowing
+      and rulings A2 (data-ddm-boot-view) and A3 (try/finally). DR-071 ratified, DR-070 amended.
+      Gates: see the S14 handoff for the verify:smoke receipt.
+    owner_calls_opened: "see owner_calls.s14_2026_09_08 below"
+
+  - id: S15
+    task_ids: []
+    title: "Stub acceptance proposals, and a link checker"
+    branch: "planning/stub-acceptances-2026-09-08"
+    worktree: "I:/dynamic-drought-module-wt/acceptance-proposals"
+    tier: T2
+    model: claude-fable-5-1
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    gate: "npm run verify:quick"
+    playwright: "none; the one-runner rule is S14's alone while both run"
+    owns_only: [planning/decisions/2026-09-08-stub-acceptance-proposals.md, scripts/check-links.mjs, "the test for scripts/check-links.mjs"]
+    role: "Concurrent with S14 by owner declaration (2026-09-08). Proposes acceptance sentences for the title-only stubs (owner_calls.stub_acceptance) as a decisions document, not as ledger edits, and adds a link checker with its test. S14 never touches its paths."
+    status: planned
+    outcome: null
+
+  # S16 to S21: the remaining six Wave 2 cycle tasks. ORDER IS SET BY S03, not
   # here. Tiers below are per-task and apply only after S03 cuts the cycle.
   # Was S09-S19 until 2026-09-07 (DDM-P12-T02 closed as S09), then S10-S19
   # until S10 took the chrome half of the same task, then S11-S19 until S11
   # above took DDM-P12-T03, then S12-S19 until S12 above took DDM-P8-T03, then
-  # S13-S19 until S13 above took DDM-P8-T02 (each the owner's direct
-  # assignment, ahead of S03's own sequencing).
-  - id: S14-S19
+  # S13-S19 until S13 above took DDM-P8-T02, then S14-S19 until S14 and S15
+  # above took the numbers on 2026-09-08 (each the owner's direct assignment,
+  # ahead of S03's own sequencing).
+  - id: S16-S21
     task_ids: [DDM-P1-T02, DDM-P1-T04, DDM-P7-T05, DDM-P11-T01, DDM-P14-T03, DDM-P9-T05]
     title: "The Wave 2 cycle, sequenced by S03"
     wave: 2
@@ -1004,16 +1067,18 @@ sessions:
     order: "SET BY S03. Do not start any of these before S03 delivers its plan file (docs/ROADMAP.yaml:680-681)."
     note: "DDM-P7-T02 is the eleventh member and lands early in S02g; see S02g.sequencing_conflict."
     per_task_tier:
-      DDM-P1-T02:  { tier: T3, why: "8 files 37 tests, 5 of 8 acceptance_testable_here false (RECONCILIATION.md:213); docs/ROADMAP.yaml:172-174" }
-      DDM-P1-T04:  { tier: T3, why: "5 files 19 tests, 4 of 5 false (RECONCILIATION.md:215); highest in-degree task node, 11 inbound edges (RECONCILIATION.md:611-612)" }
-      DDM-P7-T05:  { tier: T2, why: "effort M, DR-014 and DR-019, 8 files 8 tests; docs/ROADMAP.yaml:294-299" }
+      # 2026-09-08 (S14, ruling R9): model and effort are per task and OVERRIDE the
+      # block-level model above (T3: claude-fable-5-1 high; T2: claude-sonnet-5 high).
+      DDM-P1-T02:  { tier: T3, model: claude-fable-5-1, effort: high, why: "8 files 37 tests, 5 of 8 acceptance_testable_here false (RECONCILIATION.md:213); docs/ROADMAP.yaml:172-174" }
+      DDM-P1-T04:  { tier: T3, model: claude-fable-5-1, effort: high, why: "5 files 19 tests, 4 of 5 false (RECONCILIATION.md:215); highest in-degree task node, 11 inbound edges (RECONCILIATION.md:611-612)" }
+      DDM-P7-T05:  { tier: T2, model: claude-sonnet-5, effort: high, why: "effort M, DR-014 and DR-019, plus DR-070 amended_2026_09_08 (the HeatRisk claim's outlook register is routed here), 8 files 8 tests; docs/ROADMAP.yaml:294-299" }
       # DDM-P8-T02 moved to its own entry S13 above and closed 2026-09-08 (owner-
       # assigned ahead of S03). Its tier line was: { tier: T3, why: "effort L,
       # all four hazard screens, 4 files 7 tests; docs/ROADMAP.yaml:315-319" }.
       # DDM-P8-T03 moved to its own entry S12 above and went PARTIAL 2026-09-07
       # (owner-assigned ahead of S03). Its tier line was: { tier: T3, why:
       # "effort M but three gates DR-017, DR-021, DR-037; docs/ROADMAP.yaml:320-325" }.
-      DDM-P11-T01: { tier: T2, why: "effort M, DR-040 and DR-041, 4 files all acceptance_testable_here true, best-evidenced open task in the backlog (RECONCILIATION.md:313)" }
+      DDM-P11-T01: { tier: T2, model: claude-sonnet-5, effort: high, why: "effort M, DR-040 and DR-041, 4 files all acceptance_testable_here true, best-evidenced open task in the backlog (RECONCILIATION.md:313)" }
       # DDM-P12-T02 moved to its own entry S09 above and closed 2026-09-07. Its
       # tier line was: { tier: T2, why: "effort M, DR-031, src/impact/enso.ts
       # only, zero tests (RECONCILIATION.md:321)" }. The "zero tests" half is no
@@ -1025,14 +1090,16 @@ sessions:
       # line were already stale: the count is three, not four (DR-030
       # count_amended_2026_09_07), and every sentence already cited a source, so
       # the work was verifying the citations rather than attaching them.
-      DDM-P14-T03: { tier: T2, why: "effort M, DR-008. Acceptance is a byte budget and NONE of its 28 tests measures bytes (RECONCILIATION.md:344). The gate is scripts/check-bundle-size.mjs, already in npm run gate" }
-      DDM-P9-T05:  { tier: T2, why: "effort M, 1 file 1 path-ref test; docs/ROADMAP.yaml:379-383" }
+      DDM-P14-T03: { tier: T2, model: claude-sonnet-5, effort: high, why: "effort M, DR-008. Acceptance is a byte budget and NONE of its 28 tests measures bytes (RECONCILIATION.md:344). The gate is scripts/check-bundle-size.mjs, already in npm run gate" }
+      DDM-P9-T05:  { tier: T2, model: claude-sonnet-5, effort: high, why: "effort M, 1 file 1 path-ref test; docs/ROADMAP.yaml:379-383" }
     status: planned
     outcome: null
 
-  # S20 to S24: Wave 3, strictly downstream of the cycle.
-  - id: S20-S24
-    task_ids: [DDM-P2-T03, DDM-P7-T04, DDM-P7-T06, DDM-P8-T06, DDM-P9-T03]
+  # S22 to S26: Wave 3, strictly downstream of the cycle. Was S20-S24 until
+  # 2026-09-08 (S14 and S15 took two numbers). DDM-P7-T03 joined on the same
+  # day: S02g unblocked it and did not land it (S02g.s14_verdict_2026_09_08).
+  - id: S22-S26
+    task_ids: [DDM-P2-T03, DDM-P7-T03, DDM-P7-T04, DDM-P7-T06, DDM-P8-T06, DDM-P9-T03]
     title: "Wave 3, after the cycle"
     wave: 3
     model: claude-sonnet-5
@@ -1041,13 +1108,15 @@ sessions:
     run_as: main
     stop_level: fast
     gate: "npm run verify:smoke"
-    note: "The other three Wave 3 tasks (DDM-P7-T03, DDM-P13-T03, DDM-P14-T02) land in S02g, S02c and S02h."
+    note: "Of the three Wave 3 tasks the S02 landings claimed, DDM-P13-T03 (S02c) and DDM-P14-T02 (S02h) were closed by S14 on 2026-09-08; DDM-P7-T03 was only unblocked by S02g and is listed here."
     per_task_tier:
-      DDM-P2-T03: { tier: T3, blocked_on: "DDM-D04", why: "gate DDM-D04 has no decision key at docs/ROADMAP.yaml:629-631, so it is UNDECIDED. files-no-tests (RECONCILIATION.md:227)" }
-      DDM-P7-T04: { tier: T2, why: "effort M, DR-019, 6 files 7 tests; docs/ROADMAP.yaml:288-293" }
-      DDM-P7-T06: { tier: T2, why: "effort M, DR-014; docs/ROADMAP.yaml:300-305" }
-      DDM-P8-T06: { tier: T2, why: "effort M, DR-018; docs/ROADMAP.yaml:337-342" }
-      DDM-P9-T03: { tier: T2, why: "effort M, DR-023, 4 files 6 tests; docs/ROADMAP.yaml:366-371" }
+      # 2026-09-08 (S14, ruling R9): per-task model and effort OVERRIDE the block-level model.
+      DDM-P7-T03: { tier: T2, model: claude-sonnet-5, effort: high, why: "effort M, DR-022 decided a (SPC Days 1 to 8 near-term, NIFC Months 1 to 4 season-ahead) and unexecuted; the two cells carry CELL_ABSENCE prose today; docs/ROADMAP.yaml:285-290; DR-072" }
+      DDM-P2-T03: { tier: T3, model: claude-fable-5-1, effort: high, blocked_on: "DDM-D04", why: "gate DDM-D04 has no decision key at docs/ROADMAP.yaml:629-631, so it is UNDECIDED. files-no-tests (RECONCILIATION.md:227)" }
+      DDM-P7-T04: { tier: T2, model: claude-sonnet-5, effort: high, why: "effort M, DR-019, 6 files 7 tests; docs/ROADMAP.yaml:288-293" }
+      DDM-P7-T06: { tier: T2, model: claude-sonnet-5, effort: high, why: "effort M, DR-014; docs/ROADMAP.yaml:300-305" }
+      DDM-P8-T06: { tier: T2, model: claude-sonnet-5, effort: high, why: "effort M, DR-018; docs/ROADMAP.yaml:337-342" }
+      DDM-P9-T03: { tier: T2, model: claude-sonnet-5, effort: high, why: "effort M, DR-023, 4 files 6 tests; docs/ROADMAP.yaml:366-371" }
     status: planned
     outcome: null
 
@@ -1084,7 +1153,7 @@ title_only_stubs:
 # The 42 the import graph does not order.
 unordered:
   order: owner
-  count: 43
+  count: 41                             # 43 until 2026-09-08: DDM-P8-T05 and DDM-P15-T01 closed by S14
   derivation: "Wave 1 (48, RECONCILIATION.md:636-639) minus the six load-bearing it names at :641-642, with DDM-P15-T02 removed (now done via dc32eb2), DDM-P15-T05 (lint burn-down, landed by S02a) and DDM-P15-T06 (workflow guard test, created by dc32eb2 under the id T05 and renumbered at S02a) both added."
   receipt: "RECONCILIATION.md:660-663: 42 of the 67 open tasks have no import edge in either direction, 22 of those are the title-only stubs, and this ordering therefore governs 25 tasks, not 67."
   ids: [DDM-P0-T09, DDM-P0-T10, DDM-P0-T11, DDM-P1-T01, DDM-P1-T05, DDM-P1-T06, DDM-P1-T07,
@@ -1093,10 +1162,10 @@ unordered:
         DDM-P4-T01, DDM-P4-T02, DDM-P4-T04, DDM-P4-T05,
         DDM-P5-T01, DDM-P5-T02, DDM-P5-T03, DDM-P5-T04, DDM-P5-T05, DDM-P5-T06, DDM-P5-T07,
         DDM-P6-T01, DDM-P6-T02, DDM-P6-T03, DDM-P6-T04, DDM-P6-T06,
-        DDM-P8-T04, DDM-P8-T05, DDM-P9-T04, DDM-P10-T03, DDM-P10-T04,
-        DDM-P12-T04, DDM-P13-T01, DDM-P14-T04, DDM-P15-T01, DDM-P15-T04, DDM-P15-T05, DDM-P15-T06]
+        DDM-P8-T04, DDM-P9-T04, DDM-P10-T03, DDM-P10-T04,
+        DDM-P12-T04, DDM-P13-T01, DDM-P14-T04, DDM-P15-T04, DDM-P15-T05, DDM-P15-T06]
   notes:
-    - "DDM-P8-T05, DDM-P15-T01 and DDM-P15-T05 are unordered but ARE claimed by branches landing in S02b and S02a."
+    - "DDM-P8-T05, DDM-P15-T01 and DDM-P15-T05 were unordered but claimed by branches landing in S02b and S02a. 2026-09-08 (S14): P8-T05 and P15-T01 are done and left this list; P15-T05 was created by S02a, not satisfied, and stays."
     - "DDM-P2-T06 is structurally_untestable (RECONCILIATION.md:230) and now carries verification: none (owner-run field pass) at docs/ROADMAP.yaml:221."
     - "DDM-P10-T03 is structurally_untestable on both halves: the CSS half is outside the trace, and the shared prefers-reduced-motion check src/util/motion.ts is an untested orphan with 10 importers (RECONCILIATION.md:306, :563-566)."
     - "DDM-P15-T01 is structurally_untestable and now carries verification: none (documentation state) at docs/ROADMAP.yaml:533."
@@ -1140,6 +1209,17 @@ lessons:
       Fix belongs in the hook's source draft (decode as UTF-8), not in the tests.
 
 owner_calls:
+
+  s14_2026_09_08:
+    what: "Open calls from S14 (close what has landed), each with the file and line it lives at."
+    calls:
+      - "1. app.css:7229-7232 keeps the .maplibregl-popup-close-button 44px rule; foundations plan v1 row 7 and question 4 default to deleting it (it covers the popup title and falsifies the popup-viewport.ts:163-174 derivation). Design call, plan v2 B1; not done."
+      - "2. app.css:7142-7145 keeps .view-switch button's padding-inline: 12px; the block's floor-only comment at :7121 now names it as the one exception. Delete it or keep it; plan v2 B1."
+      - "3. docs/ROADMAP.yaml DDM-P15-T04 (one lint command) is status open while the register's platform_ddm_p15_close line (:178) says satisfied and npm run lint exists. Outside S14's eight; flip or refute."
+      - "4. DR-072 (register, G-session-2026-09-08-s14): ratify option a (DDM-P7-T03 stays open until the DR-022 outlooks are wired) or rule b."
+      - "5. DDM-P15-T05: rulings A5 (repair one useKeyWithClickEvents site, record sixteen) still open; 17 island a11y errors measured 2026-09-08 (%TEMP%\\ddm-s14\\biome-islands-tsx.log)."
+      - "6. src/ui/sidebar.ts:283-287: the share button is inert until map ready and is not in the disabled set; S14 corrected the comment only. Add it to mapDependentControls() or leave it."
+      - "7. Precondition 6 of the S14 prompt (DEPLOY_STATE) was left as a placeholder; the deploy receipt for 96aba35 is unrecorded."
 
   stub_acceptance:
     what: "Write acceptance sentences for the 22 title-only stubs in P3 to P6, or mark them blocked_on their gate."
