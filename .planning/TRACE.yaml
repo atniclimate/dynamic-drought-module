@@ -3863,7 +3863,11 @@ tasks:
   DDM-P13-T03:
     title: Correct the gridded-index product table and its coverage statement
     phase: DDM-P13
-    status: open
+    # open -> done 2026-09-08 by S14: landed 2026-09-07 in S02c (merge 58f13e9),
+    # which postdates the scout pass. The merge --stat's two config files and
+    # the acceptance spec the same merge added are attached below (the register
+    # names the task at :181). Closed sentence in docs/ROADMAP.yaml.
+    status: done
     roadmap: docs/ROADMAP.yaml:421
     acceptance: Each gridded index resolves to the prefix its issuer publishes it under, shows its own
       product date, and states that the raster stack covers the contiguous United States only.
@@ -3879,8 +3883,27 @@ tasks:
           - "src/layers/gridded-index.ts:26: each product publishes `<slug>/info.json` beside its
             tiles, carrying the valid `date` of the raster"
         attached_by: scout
-    tests: []
-    coverage: files-no-tests
+      - path: src/config/layers.ts
+        owns: The declared layer catalog (key, name, source line, role, default state, loader) every
+          surface reads
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/config/layers.ts:211: { key: 'gridded-index', name: 'Gridded Drought Index (SPI)', source: 'NOAA NIDIS · raster tiles · contiguous United States only', role: 'surface', defaultOn: false, load: () => import('../layers/gridded-index') },"
+        attached_by: repair:S14  # 2026-09-08, merge 58f13e9 --stat
+      - path: src/config/urls.ts
+        owns: The endpoint catalog, read by grep-located range only (context_hazards); the ACIS Grid 1
+          coverage note lives beside the gridded-index entries
+        acceptance_testable_here: false
+        evidence_lines:
+          - "src/config/urls.ts:836: // COVERAGE: contiguous United States only. The wired products belong to the"
+        attached_by: repair:S14  # 2026-09-08, merge 58f13e9 --stat
+    tests:
+      - path: tests/legend.spec.ts
+        via: selector
+        covers: src/layers/gridded-index.ts
+        evidence: "tests/legend.spec.ts:73: * DDM-P13-T03: the gridded index must resolve to the prefix its issuer"
+        attached_by: repair:S14  # 2026-09-08, the acceptance spec merge 58f13e9 added
+    coverage: files-and-tests
   DDM-P14-T01:
     title: Bound the caches, the roster fetch, and the catalog lookup
     phase: DDM-P14

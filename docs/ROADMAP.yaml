@@ -506,6 +506,8 @@ phases:
         effort: M
         needs_decision: "DR-049 (how far the gridded-index selector expands, and how it groups; 10 D-SCI-C)"
         acceptance: "Each gridded index resolves to the prefix its issuer publishes it under, shows its own product date, and states that the raster stack covers the contiguous United States only."
+        status: done
+        closed: "2026-09-08: landed 2026-09-07 in S02c (merge 58f13e9). All five SPI windows resolve through ACIS_GRID1.slugPrefix 'ce-ACIS_NRCC_NN-' (src/layers/gridded-index.ts:134, :166), the legend shows each product's own info.json date, and the coverage sentence quotes the issuer's 'Contiguous U.S.' (src/layers/gridded-index.ts:135, src/config/layers.ts:211; verified by ddm-science-verifier at the landing, roster S02c). tests/legend.spec.ts:85-137 asserts the three clauses in one test; S14 added the five-option wait before the one-shot read and ran the whole spec on 2026-09-08 (4 passed). In verify:smoke since the landing. The selector is unchanged at five windows (DR-049)."
   - id: "DDM-P14"
     name: "Boot, architecture, and performance"
     goal: "A boot that fails visibly, a first paint that carries only what it needs, and one authority per concern."

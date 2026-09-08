@@ -108,6 +108,10 @@ test.describe('UX-3 unified legend registry', () => {
     // drought.gov publishes the ACIS "Grid 1" dataset's products under, and
     // the selector is still the five SPI windows: DR-049 kept expansion open
     // as a later product item, so growth here would be a decision, not a fix.
+    // The selector fills after the layer's catalog read, so wait for the five
+    // options before reading them once (a one-shot $$eval on an empty
+    // selector would report [] and fail for the wrong reason).
+    await expect(page.locator('#gridded-index-product option')).toHaveCount(5);
     const values = await page.$$eval('#gridded-index-product option', (els) =>
       els.map((e) => (e as HTMLOptionElement).value)
     );
