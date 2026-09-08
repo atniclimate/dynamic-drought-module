@@ -3154,7 +3154,7 @@ tasks:
         via: selector
         covers: src/styles/app.css
         evidence: ".planning/trace/tests.json selector_pass.per_spec['tests/boot-without-map.spec.ts']:
-          top[0]='src/styles/app.css' (5 literals, 5 matched src files; caveat_selector applies —
+          top[0]='src/styles/app.css' (5 literals, 5 matched src files; caveat_selector applies,
           a lead, not proof of ownership)."
       - path: tests/boot.spec.ts
         via: selector

@@ -80,6 +80,7 @@ workers/proxy/.wrangler/
 # the S13 finding; every handoff is tracked and negated by name from here on.
 !/planning/handoffs/2026-09-07-s12-honest-horizon-chips.md
 !/planning/handoffs/2026-09-08-s13-fire-heat-time-bar.md
+!/planning/handoffs/2026-09-08-s14-close-landed.md
 /post-mortem/
 /research/
 /reviews/

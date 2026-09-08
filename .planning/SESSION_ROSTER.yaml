@@ -1024,7 +1024,9 @@ sessions:
       VERIFIED), the P13-T03 five-option wait, the P10-T01 panel-width figures (217/264/984) and
       two sentences, the P14-T02 gating assertions, share-button comment, release-note narrowing
       and rulings A2 (data-ddm-boot-view) and A3 (try/finally). DR-071 ratified, DR-070 amended.
-      Gates: see the S14 handoff for the verify:smoke receipt.
+      Gates: verify:quick clean at every step; check:public-tree clean (563 tracked files);
+      verify:smoke once at close, exit 0, 135 passed, 1 skipped (the ux1-surfaces quarantine),
+      5.5m; handoff planning/handoffs/2026-09-08-s14-close-landed.md.
     owner_calls_opened: "see owner_calls.s14_2026_09_08 below"
 
   - id: S15
