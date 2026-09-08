@@ -384,42 +384,53 @@ test.describe('DDM-P1-T02: held PMTiles requests abort promptly', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('DDM-P1-T02: viewport discovery aborts on supersession', () => {
-  test('a new viewport aborts the in-flight Tribal Lands refresh and the layer stays on', async ({
+  test('a new viewport aborts the in-flight boundary refreshes and both layers stay on', async ({
     page
   }) => {
     await stubCommon(page);
-    const failures = watchFailures(page, (url) => url.includes('tigerweb.geo.census.gov'));
+    const failures = watchFailures(page, isBoundaryRequestUrl);
 
-    // Boot with the layer on and settled from the suite-wide fixture, so
-    // the requests held below are viewport refreshes, not the activation.
+    // Boot with both boundary layers on and settled from the suite-wide
+    // fixture, so the requests held below are viewport refreshes, not the
+    // activations.
     await gotoApp(page, '?view=console');
     await waitForLayerSettled(page, 'aiannh');
+    await waitForLayerSettled(page, 'bia-reservations');
     const held = makeHeld();
-    await routeBoundary(page, AIANNH_ROUTE, (route) => {
-      held.releases.push(fulfilLater(route, JSON.stringify(syntheticAiannhBody())));
-    });
+    await holdBoundaries(page, held);
 
-    // First move: a viewport the boot envelope does not cover, so the
-    // debounced refresh issues a query, which is held.
+    // First move: a viewport the boot envelopes do not cover, so each
+    // module's debounced refresh issues a query, and both are held.
     await selectRegion(page, 'central_oregon');
-    await expect.poll(() => held.releases.length, { timeout: 30_000 }).toBe(1);
+    await expect.poll(() => held.releases.length, { timeout: 30_000 }).toBe(2);
 
-    // Second move while the first is still held: the module supersedes the
-    // in-flight request before it looks at its cache.
+    // Second move while both are still held: each module supersedes its
+    // in-flight request before it looks at its cache (aiannh.ts and
+    // bia-reservations.ts, the top of fetchAndApply).
     const movedAt = Date.now();
     await selectRegion(page, 'cascades');
-    await expectAbortedWithin(failures, movedAt);
+    await expectAbortedWithin(failures, movedAt, 2);
+    const since = failures.filter((f) => f.at >= movedAt);
+    expect(since.some((f) => f.url.includes('tigerweb.geo.census.gov'))).toBe(true);
+    expect(since.some((f) => f.url.includes('biamaps.geoplatform.gov'))).toBe(true);
 
-    // The layer never left the on state: no checkbox, URL or pill change.
+    // Neither layer left the on state: no checkbox or URL change. (These
+    // two lines hold with or without the seam; the abort above is the
+    // load-bearing observation.)
     await expect(layerCheckbox(page, 'aiannh')).toBeChecked();
-    expect((await urlLayers(page)).has('aiannh')).toBe(true);
+    await expect(layerCheckbox(page, 'bia-reservations')).toBeChecked();
+    const layers = await urlLayers(page);
+    expect(layers.has('aiannh')).toBe(true);
+    expect(layers.has('bia-reservations')).toBe(true);
 
-    // Whatever the second move issued settles from the fixture.
+    // Whatever the second move issued settles from the fixtures.
     held.releaseAll();
-    await expect.poll(() => pillClasses(page, 'aiannh'), { timeout: 30_000 }).toMatch(
-      /\b(ready|no-data|degraded)\b/
-    );
-    await expect(layerCheckbox(page, 'aiannh')).toBeChecked();
+    for (const key of ['aiannh', 'bia-reservations']) {
+      await expect.poll(() => pillClasses(page, key), { timeout: 30_000 }).toMatch(
+        /\b(ready|no-data|degraded)\b/
+      );
+      await expect(layerCheckbox(page, key)).toBeChecked();
+    }
   });
 });
 
