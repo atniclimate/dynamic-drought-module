@@ -16,8 +16,9 @@ generated_from:
   # landings), attaching each merge's --stat files and acceptance spec by
   # repair:S14, and regenerated the counts below from the body. S16 flipped
   # DDM-P15-T04 to done under the owner ruling in its prompt (no files, no
-  # tests) and adjusted the three counts it touches by hand.
-  repairs_through: 0c09081
+  # tests) and DDM-P1-T02 to done with its acceptance spec attached, and
+  # adjusted the counts it touches by hand.
+  repairs_through: 0c09081   # plus feature/cancel-layer-loads-p1t02, unpushed
   roadmap: docs/ROADMAP.yaml (schema_version 2, updated 2026-09-03)
   module_graph: .planning/trace/imports.json via .planning/trace/vite.trace.config.ts (vite 8.1.3 /
     rolldown 1.1.4, production resolution)
@@ -73,8 +74,8 @@ method:
     spec this trace attaches only weakly or not at all.
 counts:
   tasks_total: 90
-  tasks_open: 57   # 2026-09-08 (S16): DDM-P15-T04 flipped to done
-  tasks_done: 28
+  tasks_open: 56   # 2026-09-08 (S16): DDM-P15-T04 and DDM-P1-T02 flipped to done
+  tasks_done: 29
   tasks_superseded: 5
   tasks_with_files: 50
   tasks_with_tests: 41
@@ -810,7 +811,14 @@ tasks:
   DDM-P1-T02:
     title: Complete the layer cancellation seam
     phase: DDM-P1
-    status: open
+    # open -> done 2026-09-08 by S16 (feature/cancel-layer-loads-p1t02,
+    # unpushed): tests/layer-cancellation.spec.ts attached below by
+    # repair:S16 as the acceptance spec, one test per clause. The four
+    # layer files the scout marked acceptance_testable_here: false are now
+    # exercised by that spec through the controller-owned signal; the
+    # attachments and flags are left as scouted. src/config/layers.ts gained
+    # the LayerActivation type and is attached to other tasks already.
+    status: done
     roadmap: docs/ROADMAP.yaml:129
     acceptance: Held JSON, PMTiles, and viewport discovery requests abort promptly, and a late response
       cannot render after intent changes.
@@ -1067,6 +1075,11 @@ tasks:
         via: import
         covers: src/layers/hms-smoke.ts
         evidence: "tests/wildfire-source-semantics.spec.ts:38: } from '../src/config/wildfire-presentation';"
+      - path: tests/layer-cancellation.spec.ts
+        via: selector
+        covers: src/state/layer-controller.ts
+        evidence: "tests/layer-cancellation.spec.ts:5: \"Held JSON, PMTiles, and viewport discovery requests abort promptly, and a late response cannot render after intent changes.\""
+        attached_by: repair:S16   # 2026-09-08, the acceptance spec; it drives every layer named above by checkbox and holds each request kind
     coverage: files-and-tests
   DDM-P1-T03:
     title: Unify activation failure handling

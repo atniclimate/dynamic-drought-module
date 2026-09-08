@@ -36,7 +36,7 @@ state:
     decision_ledger: "planning/decisions/"              # :58, defines all 69 DR- ids
     defect_ledger: "planning/qa/feature-errors.yaml"    # :59, FE-01..24, EF-IB-1..10, EF-MM-1..7
     research_inputs: "planning/user-research/"          # :60
-    handoff_entry: "planning/handoffs/2026-09-04.md"    # :61
+    handoff_entry: "planning/handoffs/"    # :61 since S14: every handoff tracked and negated by name; the entry point is the newest by filename date (2026-09-08-s16-cancel-layer-loads.md at this writing)
     read_only_history: ["planning/archive/", "planning/2026-09-03-long-run/", "planning/2026-09-03-session/"]   # :62-65
     parked: ["planning/2026-09-01-deep-dive/", "planning/2026-09-03-foundations/", "planning/plans/"]           # :66-69
     id_rule: "docs/ROADMAP.yaml:76. A DR-, FE-, EF-IB- or EF-MM- id may be cited, never redefined. An id not in PLANNING_AUTHORITY.md section 2 is a reason to stop and ask."
@@ -1049,16 +1049,60 @@ sessions:
     status: planned
     outcome: null
 
-  # S16 to S21: the remaining six Wave 2 cycle tasks. ORDER IS SET BY S03, not
+  - id: S16
+    task_ids: [DDM-P1-T02]
+    title: "Cancel layer loads, the cycle opener"
+    branch: "feature/cancel-layer-loads-p1t02"
+    wave: 2
+    tier: T3
+    model: claude-fable-5-1
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    decision_gate: "none named in ROADMAP; DR-073 (session-proposed, pending) records the one design reading, which PMTiles requests the clause covers"
+    gate: "npm run verify:quick, then npm run verify:smoke once, then npm run check:public-tree"
+    role: >-
+      Wave 2 effective layer 1 by the S03 cut plan (section 3), owner-assigned 2026-09-08 and run
+      concurrently with S15 in its worktree. Opened with the R5 ledger commit recording the S14
+      owner rulings, then completed the seam under the owner's design default R1.
+    rationale: >-
+      Every layer already carried its own abort controller, but the controller could reach them
+      only through the optional cancelActivation seam, which hydrography never exported: a held
+      Overpass query waited out its 12 s mirror budget behind the serialized teardown after the
+      user turned the layer off. One controller-owned signal per attempt, linked by each module,
+      closes that class for good rather than one module at a time.
+    budget_tokens: 400000
+    stop_when: "every clause of the acceptance has a receipt from tests/layer-cancellation.spec.ts, the spec is in verify:smoke, budgets are under their lines, and the three gates are green"
+    status: done
+    outcome: >-
+      DONE on feature/cancel-layer-loads-p1t02 from 0c09081, unpushed; landing is the owner's.
+      Commits 18d0d33 (plan: the S14 owner rulings), d673b80 (the controller owns one abort
+      signal per activation; LayerActivation type and an optional second activate parameter in
+      src/config/layers.ts), 7b1f540 (aiannh, bia-reservations, hms-smoke and hydrography link
+      every fetch through linkAbort in src/util/fetch.ts; hms gains a request token), 776d445
+      and 9b6d0fb (tests/layer-cancellation.spec.ts, seven tests, in verify:smoke), plus the
+      closing plan commit. Spec alone 7 passed, --repeat-each=3 21 passed; negative control with
+      the base controller and hydrography restored: the hydrography test fails at 11892 ms (the
+      per-mirror timeout), the other six pass because those modules already had a seam and
+      MapLibre owns the tile abort. Budgets: entry 30.9 kB under 45, every activation row under
+      its line (R4 not triggered). R2 not triggered: pmtiles 4.4.1 passes MapLibre's tile signal
+      into the tile-data range read; the header read cannot be aborted, recorded as DR-073.
+      Verifier (Sonnet 5, read-only): no clause unproved; its one soft spot (the viewport case
+      observed AIANNH only) was closed by 9b6d0fb. verify:quick clean at every step; smoke and
+      public-tree receipts in the handoff planning/handoffs/2026-09-08-s16-cancel-layer-loads.md.
+
+  # S17 to S21: the remaining five Wave 2 cycle tasks. ORDER IS SET BY S03, not
   # here. Tiers below are per-task and apply only after S03 cuts the cycle.
   # Was S09-S19 until 2026-09-07 (DDM-P12-T02 closed as S09), then S10-S19
   # until S10 took the chrome half of the same task, then S11-S19 until S11
   # above took DDM-P12-T03, then S12-S19 until S12 above took DDM-P8-T03, then
   # S13-S19 until S13 above took DDM-P8-T02, then S14-S19 until S14 and S15
   # above took the numbers on 2026-09-08 (each the owner's direct assignment,
-  # ahead of S03's own sequencing).
-  - id: S16-S21
-    task_ids: [DDM-P1-T02, DDM-P1-T04, DDM-P7-T05, DDM-P11-T01, DDM-P14-T03, DDM-P9-T05]
+  # ahead of S03's own sequencing), then S16-S21 until S16 above took
+  # DDM-P1-T02 on 2026-09-08.
+  - id: S17-S21
+    task_ids: [DDM-P1-T04, DDM-P7-T05, DDM-P11-T01, DDM-P14-T03, DDM-P9-T05]
     title: "The Wave 2 cycle, sequenced by S03"
     wave: 2
     tier: "per task, below"
@@ -1073,7 +1117,10 @@ sessions:
     per_task_tier:
       # 2026-09-08 (S14, ruling R9): model and effort are per task and OVERRIDE the
       # block-level model above (T3: claude-fable-5-1 high; T2: claude-sonnet-5 high).
-      DDM-P1-T02:  { tier: T3, model: claude-fable-5-1, effort: high, why: "8 files 37 tests, 5 of 8 acceptance_testable_here false (RECONCILIATION.md:213); docs/ROADMAP.yaml:172-174" }
+      # DDM-P1-T02 moved to its own entry S16 above and closed 2026-09-08 (owner-
+      # assigned ahead of S03). Its tier line was: { tier: T3, why: "8 files 37
+      # tests, 5 of 8 acceptance_testable_here false (RECONCILIATION.md:213);
+      # docs/ROADMAP.yaml:172-174" }.
       DDM-P1-T04:  { tier: T3, model: claude-fable-5-1, effort: high, why: "5 files 19 tests, 4 of 5 false (RECONCILIATION.md:215); highest in-degree task node, 11 inbound edges (RECONCILIATION.md:611-612)" }
       # DDM-P1-T04 owner ruling 2026-09-08 (S16 prompt, S14 owner call 6): the share
       # button joins mapDependentControls() in src/ui/sidebar.ts (the :283-287

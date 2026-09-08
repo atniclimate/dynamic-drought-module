@@ -5,10 +5,12 @@
 schema_version: 1
 generated: "2026-09-02"
 updated: >-
-  2026-09-08 by session S16 (cancel layer loads): 72 entries, 52 decided, 20 pending. DR-072
+  2026-09-08 by session S16 (cancel layer loads): 73 entries, 52 decided, 21 pending. DR-072
   decided (owner ratification via the S16 prompt: option a, DDM-P7-T03 stays open until the
   DR-022 outlooks are wired); DR-042 gained owner_note_2026_09_08 (the popup close-button rule,
-  S14 owner call 1, routed to the P16 candidate phase). Previous updated:
+  S14 owner call 1, routed to the P16 candidate phase); added G-session-2026-09-08-s16 with
+  DR-073, session-proposed and pending (which PMTiles requests the cancellation clause covers:
+  tile-data reads abort through MapLibre's own path, the header read cannot). Previous updated:
   2026-09-08 by session S14 (close what has landed): 72 entries, 51 decided, 21 pending. DR-071 decided (owner ratification via the S14 prompt: option a as written, reading R-b affirmed, the register word stays Outlook with no vocab-allow, the heatrisk-days activation budget 10.0 kB gzip ratified); DR-070 amended_2026_09_08 (a HeatRisk claim in force is outlook register in the briefing too; implementation routed to DDM-P7-T05, no src/impact file touched); added G-session-2026-09-08-s14 with DR-072, session-proposed and pending (a "not wired" named absence does not close DDM-P7-T03). Previous updated: 2026-09-08 by session S13 (fire and heat time bar): 71 entries, 50 decided, 21 pending; added G-session-2026-09-08 with DR-071, session-proposed and pending owner ratification (the time-bar stamp grammar and what a fire or heat time step may claim; it also records that the issuer's own words contradict DR-070's classified -> observed reading of HeatRisk). S12 had added G-session-2026-09-07 with DR-070 (decided) on 2026-09-07 without bumping this line. Previous updated: 2026-09-04T11:20-07:00 by the foundations true-up: 69 entries, 49 decided, 20 pending, no entry ruled this session. Added foundations_pass_2026_09_03 (see that block). Corrections to the record's own facts: the deployed application bytes are 2835091, not 5be15f5 (docs-only diff skipped by deploy.yml paths-ignore); v0.6.26 IS tagged at 533fabd; DR-069 is unexecuted on main (vite.config.ts:67 sourcemap true), its fix rides platform/ddm-p15-close; DR-065's standing default_if_no_answer (option b) is the opposite of what was built and awaits ruling A6; DR-061 sits beside two live weekly crons (browser-suite.yml:76, refresh-snapshots.yml:18) and awaits ruling B6. Previous updated: 2026-09-03T20:05-07:00 by the long run: 69 entries, 49 decided, 20 pending. DR-067 decided b with its probe condition MET (the issuer applies a rendering rule, and it needs no Worker publish), DR-068 decided b, DR-069 created and decided and EXECUTED on platform/ddm-p15-close; DR-065 gained fix_2026_09_03 recording the flake rate falling 6 of 16 and 5 of 16 to 0 of 16; branch_state gained landed_2026_09_03_pm (main cd1d061 to 5be15f5, three merges, ribbon proven live) and awaiting_go_2026_09_03_pm (nine branches pushed, none landed, with a suggested landing order)
 posture: one integration branch, local-first verification, one PR when the owner says go
 
@@ -3427,3 +3429,64 @@ groups:
           Applied as option a by S14 on 2026-09-08 under the S14 prompt's R12 (one session-proposed
           entry): DDM-P7-T03 was not flipped, no ROADMAP key was invented, and the roster's S02g
           line records "landed P7-T02; T03 unblocked, not closed".
+
+  - id: G-session-2026-09-08-s16
+    title: Added by the 2026-09-08 S16 session (cancel layer loads, DDM-P1-T02)
+    decisions:
+      - id: DR-073
+        title: Which PMTiles requests the cancellation clause covers
+        question: >-
+          DDM-P1-T02's acceptance reads "Held JSON, PMTiles, and viewport discovery requests
+          abort promptly". A PMTiles archive is read through HTTP range requests of three kinds:
+          the header and root directory (the first 16,384 bytes, once per archive per session),
+          leaf directories (rare, cached), and tile data (one per tile, the recurring kind).
+          pmtiles 4.4.1 passes MapLibre's per-tile AbortController signal only into the tile-data
+          read (node_modules/pmtiles/dist/esm/index.d.ts:60 `tilev4(params, abortController)`
+          and :174 `getBytes(offset, length, signal?)`; the minified body calls
+          `getZxy(z, x, y, e.signal)` and `fetch(url, { signal })`), while `getHeader` and
+          `getDirectory` call `getBytes` with no signal. MapLibre 6.6.0 aborts every in-flight
+          tile of a removed source (src/style/style.ts:1033-1050 `removeSource` ->
+          `tileManager.onRemove`; src/tile/tile_manager.ts:137-143 `onRemove` -> `clearTiles`,
+          :781-799 `_removeTile` -> `_abortTile`; src/source/vector_tile_source.ts:299-303
+          `abortTile` aborts `tile.abortController`). So a held tile-data read aborts on
+          deactivate with no new code, and a held header or directory read cannot be aborted by
+          any API the installed libraries expose. Does the clause cover tile-data reads only,
+          or must the header read abort too?
+        source:
+        - "docs/ROADMAP.yaml DDM-P1-T02 acceptance"
+        - "node_modules/pmtiles/dist/esm/index.d.ts:60, :174 and the tilev4 and getBytes bodies in index.js"
+        - "node_modules/maplibre-gl/src/style/style.ts:1033-1050, src/tile/tile_manager.ts:137-143 and :781-799, src/source/vector_tile_source.ts:299-303"
+        - "tests/layer-cancellation.spec.ts, the PMTiles test (holds tile-data range reads by tileDataOffset)"
+        blocks:
+        - DDM-P1-T02 (which clause the PMTiles test proves; the task's status)
+        options:
+        - key: a
+          text: >-
+            tile-data reads are the PMTiles requests the clause names: they recur on every pan
+            and zoom and are what a weak connection holds open; the header and directory reads
+            are a few cached bytes per archive per session, issued without a signal by the
+            library, and a late one renders nothing because no source remains to render into.
+            The acceptance is met by the MapLibre abort path plus the spec that observes it.
+          cost: S
+          risk: a reader of the clause expects every range read to abort and finds the header read does not
+        - key: b
+          text: >-
+            the clause covers every range read; fork or wrap the pmtiles Protocol so the header
+            and directory reads take a signal, or reword the clause to "PMTiles tile requests".
+          cost: M
+          risk: a vendored protocol wrapper to abort a 16 kB read that is cached for the session
+        recommendation: a
+        rationale: >-
+          The header read is bounded, cached, and harmless late; the tile read is the one a user
+          on a weak connection pays for repeatedly. Owning the abort in MapLibre's tile pipeline
+          rather than in this repository keeps the seam additive, which the S16 prompt required.
+        default_if_no_answer: option a; the PMTiles test holds tile-data reads and the clause is read as tile requests
+        status: pending
+        decided: null
+        decision: null
+        session_proposed_2026_09_08: >-
+          Read as option a by S16 on 2026-09-08 under the S16 prompt's R6 (one DR entry for a
+          design reading). The R2 stop condition (no way to abort an in-flight tile request) was
+          not met, so the session did not stop; the header-read gap is recorded here for the
+          owner rather than as a weakened clause. If the owner rules b, DDM-P1-T02 reopens on the
+          PMTiles clause with the wrapper as its residual.

@@ -173,6 +173,8 @@ phases:
       - id: "DDM-P1-T02"
         title: "Complete the layer cancellation seam"
         acceptance: "Held JSON, PMTiles, and viewport discovery requests abort promptly, and a late response cannot render after intent changes."
+        status: done
+        closed: "2026-09-08: S16 on feature/cancel-layer-loads-p1t02 (d673b80, 7b1f540, 776d445, 9b6d0fb; unpushed). The layer controller owns one AbortController per activation attempt and aborts it on deactivate, on a superseding activate of the same key, and on stand-down; the four seam layers (aiannh, bia-reservations, hms-smoke, hydrography) link every fetch to it through linkAbort in src/util/fetch.ts and drop a response whose request token is stale. tests/layer-cancellation.spec.ts (seven tests, in verify:smoke) holds each request kind and observes the browser's own abort: held JSON for all four layers, held PMTiles tile-data reads through MapLibre's removeSource abort path (DR-073 records that the archive header read cannot be aborted by any installed API), viewport supersession for both boundary refreshes, an off/on cycle, and a response released as intent changes. Negative control: with the base controller and hydrography restored the hydrography test fails at 11892 ms, the Overpass per-mirror timeout."
       - id: "DDM-P1-T03"
         title: "Unify activation failure handling"
         acceptance: "A thrown and a non-thrown activation failure both leave the checkbox and URL self-corrected and the unavailable state visible and announced once."
