@@ -15,7 +15,11 @@
  *
  *   1. A single module-level `currentController: AbortController | null`
  *      governs the "current" Overpass operation. A new fetch supersedes
- *      (aborts) any in-flight predecessor.
+ *      (aborts) any in-flight predecessor. Since 2026-09-08 (DDM-P1-T02)
+ *      each one is also a child of the controller-owned activation
+ *      signal (`activationSignal`, via `linkAbort`), so the layer
+ *      controller's abort on deactivate or supersession reaches a held
+ *      Overpass request at once instead of behind the serialized teardown.
  *   2. Each mirror gets its own per-call timeout via `fetchWithBudget`.
  *   3. 350 ms `sleepUnlessAborted` between failed mirror attempts so a
  *      hung connection does not block the cycle.
@@ -47,7 +51,8 @@ import type { Feature, FeatureCollection, LineString } from 'geojson';
 import { URLS } from '../config/urls';
 import { quantizeBbox } from '../util/bbox';
 import { ExpiringLruCache } from '../util/bounded-cache';
-import { fetchWithBudget, sleepUnlessAborted } from '../util/fetch';
+import type { LayerActivation } from '../config/layers';
+import { fetchWithBudget, linkAbort, sleepUnlessAborted } from '../util/fetch';
 import { registry } from '../state/registry';
 
 // ---------------------------------------------------------------------------
@@ -147,6 +152,14 @@ const HYDRO_CACHE = new ExpiringLruCache<string, FeatureCollection<LineString>>(
 let currentController: AbortController | null = null;
 
 /**
+ * The controller-owned activation signal (invariant 1 above, DDM-P1-T02):
+ * set by `activate`, cleared by `deactivate`, and linked to every
+ * `currentController` this module creates. Null when activated without
+ * the seam (a direct call), where the module's own controller suffices.
+ */
+let activationSignal: AbortSignal | null = null;
+
+/**
  * Pending debounce timer for the `moveend` handler. Cleared AND nulled
  * by `deactivate`; clearing without nulling was the v0.1.x bug fix.
  */
@@ -170,7 +183,11 @@ let moveendHandler: (() => void) | null = null;
  * an already-active layer leaves the existing source and layer in place
  * but still issues a fresh fetch for the current viewport.
  */
-export async function activate(map: maplibregl.Map): Promise<void> {
+export async function activate(
+  map: maplibregl.Map,
+  activation?: LayerActivation
+): Promise<void> {
+  activationSignal = activation?.signal ?? null;
   setStatus('loading');
 
   if (!map.getSource(SOURCE_ID)) {
@@ -243,6 +260,7 @@ export function deactivate(map: maplibregl.Map): void {
   }
 
   // Abort any in-flight Overpass operation.
+  activationSignal = null;
   if (currentController) {
     currentController.abort();
     currentController = null;
@@ -408,6 +426,7 @@ async function runFetchForCurrentViewport(map: maplibregl.Map): Promise<void> {
   if (currentController) currentController.abort();
   const controller = new AbortController();
   currentController = controller;
+  const unlink = linkAbort(controller, activationSignal);
 
   setStatus('loading');
 
@@ -415,24 +434,29 @@ async function runFetchForCurrentViewport(map: maplibregl.Map): Promise<void> {
   try {
     collection = await fetchOSMWaterways(map, map.getBounds(), controller.signal);
   } catch (err) {
+    unlink();
     // `fetchOSMWaterways` is designed to not throw on abort or mirror
     // failure, but a surprise from the runtime should still respect the
     // supersede contract.
-    if (controller.signal.aborted) return;
-    if (controller !== currentController) return;
+    if (controller.signal.aborted || controller !== currentController) {
+      console.debug('[hydrography] request dropped: aborted or superseded before it settled');
+      return;
+    }
     console.warn('[hydrography] unexpected fetch error.', err);
     setStatus('error');
     return;
   }
 
+  unlink();
   // After every `await`, re-check `controller.signal.aborted` and bail
-  // without touching status.
-  if (controller.signal.aborted) return;
-
-  // Final supersede check: if a newer fetch replaced `currentController`
-  // mid-flight, drop this payload on the floor rather than rendering a
-  // stale viewport.
-  if (controller !== currentController) return;
+  // without touching status; and the final supersede check: if a newer
+  // fetch replaced `currentController` mid-flight, drop this payload on
+  // the floor rather than rendering a stale viewport. One debug line, so a
+  // dropped response is visible to a maintainer and to nobody else.
+  if (controller.signal.aborted || controller !== currentController) {
+    console.debug('[hydrography] request dropped: a late response after intent changed');
+    return;
+  }
 
   // A truly empty collection from a non-cancelled run means every mirror
   // failed; surface as the canonical 'error' state ("unavailable" in the

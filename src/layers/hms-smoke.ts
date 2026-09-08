@@ -33,7 +33,8 @@ import {
 } from '../config/wildfire-presentation';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import { escapeHtml } from '../util/escape';
-import { fetchJsonWithBudget } from '../util/fetch';
+import type { LayerActivation } from '../config/layers';
+import { fetchJsonWithBudget, linkAbort } from '../util/fetch';
 import { registry } from '../state/registry';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
 
@@ -57,6 +58,21 @@ const FETCH_TIMEOUT_MS = 15_000;
  * never render into a torn-down layer (the cancellation invariant).
  */
 let masterController: AbortController | null = null;
+
+/**
+ * The controller-owned activation signal (DDM-P1-T02): handed in by
+ * `activate` and linked to `masterController`, so the layer controller's
+ * abort on deactivate or supersession reaches a held query at once. Null
+ * when activated without the seam, where `cancelActivation` alone applies.
+ */
+let activationSignal: AbortSignal | null = null;
+
+/**
+ * Request-identity token, the same belt-and-braces the boundary layers wear:
+ * each query takes `++requestSeq` at fetch start and a response whose token
+ * is no longer current renders nothing, even one that raced past the abort.
+ */
+let requestSeq = 0;
 
 type HmsStatus = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
 
@@ -109,7 +125,11 @@ function buildQueryUrl(): string {
  * result is `'no-data'` (no smoke drawn in the two-day query window is a
  * real, good answer).
  */
-export async function activate(map: maplibregl.Map): Promise<void> {
+export async function activate(
+  map: maplibregl.Map,
+  activation?: LayerActivation
+): Promise<void> {
+  activationSignal = activation?.signal ?? null;
   if (map.getSource(SOURCE_ID)) {
     return;
   }
@@ -117,6 +137,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   if (masterController) masterController.abort();
   masterController = new AbortController();
   const signal = masterController.signal;
+  const unlink = linkAbort(masterController, activationSignal);
+  const token = ++requestSeq;
 
   reportStatus('loading');
 
@@ -135,13 +157,22 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     geojson = parsed.collection;
     truncated = parsed.truncated;
   } catch (err) {
-    if (signal.aborted) return;
+    unlink();
+    if (signal.aborted || token !== requestSeq) {
+      console.debug(`[hms-smoke] request ${token} dropped: aborted or superseded before it settled`);
+      return;
+    }
     console.warn('[hms-smoke] HMS smoke fetch failed.', err);
     reportStatus('error');
     return;
   }
 
-  if (signal.aborted) return;
+  unlink();
+  // A late response to a superseded or torn-down request must not render.
+  if (signal.aborted || token !== requestSeq) {
+    console.debug(`[hms-smoke] request ${token} dropped: a late response after intent changed`);
+    return;
+  }
 
   const features = geojson?.features ?? [];
 
@@ -209,11 +240,14 @@ export async function activate(map: maplibregl.Map): Promise<void> {
  */
 export function cancelActivation(): void {
   masterController?.abort();
+  // Invalidate any response that already raced past its abort check.
+  requestSeq++;
 }
 
 export function deactivate(map: maplibregl.Map): void {
   cancelActivation();
   masterController = null;
+  activationSignal = null;
   // Remove the retired outline defensively during a hot module replacement.
   if (map.getLayer(LEGACY_OUTLINE_LAYER_ID)) map.removeLayer(LEGACY_OUTLINE_LAYER_ID);
   if (map.getLayer(FILL_LAYER_ID)) map.removeLayer(FILL_LAYER_ID);

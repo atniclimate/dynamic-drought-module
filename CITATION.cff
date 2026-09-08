@@ -1,0 +1,51 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "Dynamic Drought Module (DDM)"
+type: software
+version: "0.6.26"
+date-released: "2026-09-08"
+repository-code: "https://github.com/atniclimate/dynamic-drought-module"
+url: "https://atniclimate.github.io/dynamic-drought-module/"
+license: "LicenseRef-DDM-Community-1.0"
+abstract: >-
+  An embeddable, serverless static web map for seeing drought across
+  North America and understanding conditions for supported places:
+  current drought status, wildfire and extreme heat risk, water and
+  snowpack telemetry, and public resources that address the impacts.
+  Built by ATNI Climate (The Affiliated Tribes of Northwest Indians) in
+  service to Tribes and Indigenous Peoples, and usable by any community
+  with access to it, under the DDM Community License, Version 1.0,
+  which requires noncommercial use, share-alike redistribution, data
+  provenance for every displayed or added dataset, and adherence to the
+  Tiered Sovereign Data Framework for sovereign, Tribal, and Indigenous
+  data.
+authors:
+  - name: "ATNI Climate, The Affiliated Tribes of Northwest Indians"
+  - family-names: "Freeland"
+    given-names: "Patrick A."
+    affiliation: "ATNI Climate"
+    role: "Developer"
+references:
+  - type: generic
+    title: "Tiered Sovereign Data Framework"
+    abstract: >-
+      A comprehensive framework for Indigenous data classification and
+      governance that operationalizes Indigenous Data Sovereignty
+      principles (CARE, OCAP, UNDRIP) into implementable standards,
+      including a tiered data classification scheme from open/public
+      through sovereign, Tribally-controlled data.
+    repository-code: "https://github.com/atniclimate/TieredSovereignDataFramework"
+    authors:
+      - name: "ATNI Climate, The Affiliated Tribes of Northwest Indians"
+keywords:
+  - drought
+  - wildfire
+  - extreme heat
+  - water resources
+  - Tribal data sovereignty
+  - Indigenous data sovereignty
+  - Tiered Sovereign Data Framework
+  - MapLibre
+  - Pacific Northwest
+  - climate adaptation
+  - ATNI Climate

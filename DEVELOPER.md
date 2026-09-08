@@ -51,13 +51,15 @@ Read these sources in order when they disagree:
 3. Tests define asserted behavior and provide regression evidence.
 4. [`docs/design/README.md`](docs/design/README.md) defines durable design and
    interaction doctrine.
-5. [`docs/ROADMAP.yaml`](docs/ROADMAP.yaml) defines future scope,
-   dependencies, decisions, and acceptance evidence.
+5. The ATNI Climate planning record (private; not in this repository) defines
+   future scope, dependencies, decisions, and acceptance evidence. Task and
+   decision ids cited in comments and test docblocks (`DDM-P<n>-T<m>`,
+   `DR-<nnn>`, `FE-<nn>`) refer to it.
 6. [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md) records merged product
    history.
 
 Asana owns mutable execution state such as status, assignee, and due date. The
-roadmap YAML intentionally omits those fields so the repository does not
+planning record intentionally omits those fields so the repository does not
 maintain a competing clock.
 
 ## Architecture
@@ -694,9 +696,8 @@ Keep public documents factual and durable:
 
 - update `README.md` for current user-visible behavior;
 - update `DEVELOPER.md` for stable maintainer practice;
-- update `docs/ROADMAP.yaml` for planned scope or dependencies, without
-  adding live status fields;
-- update `ROADMAP.md` only when its human-readable phase projection changes;
+- keep planned scope, dependencies, decisions and session records in the
+  private planning record, never in this repository;
 - update `docs/design/` for durable design doctrine;
 - update `docs/RELEASE_NOTES.md` for merged history and observed deployment
   facts; and
@@ -706,6 +707,19 @@ Keep public documents factual and durable:
 Never publish credentials, workstation paths, private notes, research prompts,
 or session records. Keep implementation claims tied to runtime and tests, and
 keep release claims tied to observed workflow and live-build evidence.
+
+## Commit messages
+
+Authorship is recorded in git's author field and nowhere else. A commit message
+carries a subject and, when useful, a body; it carries no `Co-Authored-By:`
+trailer, no `*-Session:` link, and no "Generated with" line. The tracked hook in
+`.githooks/commit-msg` rejects those lines. Enable it once per clone:
+
+```powershell
+git config core.hooksPath .githooks
+```
+
+Do not bypass it with `--no-verify`.
 
 ## Contribution scope
 

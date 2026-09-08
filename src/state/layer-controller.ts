@@ -40,7 +40,7 @@ import {
   loadLayerModule,
   getLoadedLayerModule
 } from '../config/layers';
-import type { LayerDef, LayerModule } from '../config/layers';
+import type { LayerActivation, LayerDef, LayerModule } from '../config/layers';
 import type { ViewPreset } from '../config/presets';
 import { registry } from './registry';
 import { reassertLabelOrder, reassertThematicOrder } from '../map/layer-order';
@@ -138,6 +138,47 @@ export function createLayerController(
   /** Layers whose bindPopups has already run (once, on first activation). */
   const popupsBound = new Set<string>();
 
+  /**
+   * The controller-owned cancellation seam (DDM-P1-T02, 2026-09-08): the
+   * live activation attempt per key. Exactly one exists per key at a time;
+   * it is created inside the activation op, handed to the module as
+   * `LayerActivation`, and aborted by `abortAttempt` the moment off intent
+   * is recorded (synchronously, ahead of the serialized teardown), when a
+   * newer activate of the same key supersedes it, and when the attempt stands
+   * down or fails. The modules' own `cancelActivation` seam stays beside it
+   * for the modules that keep private controllers; this signal is what lets a
+   * module without one (hydrography) abort just as promptly.
+   */
+  const attempts = new Map<string, AbortController>();
+
+  /** Abort and forget the key's live attempt, if any. Safe to call twice. */
+  function abortAttempt(key: string): void {
+    const attempt = attempts.get(key);
+    if (!attempt) return;
+    attempts.delete(key);
+    attempt.abort();
+  }
+
+  /** Supersede any prior attempt for the key and open a new one. */
+  function beginAttempt(key: string, generation: number): LayerActivation {
+    abortAttempt(key);
+    const attempt = new AbortController();
+    attempts.set(key, attempt);
+    return { signal: attempt.signal, generation };
+  }
+
+  /**
+   * Close one attempt that stood down or failed, but only if it is still the
+   * key's live attempt: a deactivate that already aborted it, or a newer
+   * activate that already superseded it, owns the map entry by then.
+   */
+  function endAttempt(key: string, activation: LayerActivation): void {
+    const attempt = attempts.get(key);
+    if (!attempt || attempt.signal !== activation.signal) return;
+    attempts.delete(key);
+    attempt.abort();
+  }
+
   function enqueueLayerOp(key: string, op: () => Promise<void> | void): Promise<void> {
     const prev = layerOpChain.get(key) ?? Promise.resolve();
     // Run after the prior op regardless of how it settled; each op carries its
@@ -196,11 +237,18 @@ export function createLayerController(
         const mod = await loadLayerModule(def);
         if (!ownsIntent()) return;
         ensurePopupsBound(def.key, mod);
-        await mod.activate(map);
+        // The attempt opens here, after the chunk import, so a module never
+        // sees a signal older than its own code; it is aborted by
+        // deactivateInternal the instant off intent is recorded, so a held
+        // fetch inside mod.activate aborts promptly rather than running out
+        // its network budget behind this op (DDM-P1-T02).
+        const activation = beginAttempt(def.key, gen);
+        await mod.activate(map, activation);
         if (!ownsIntent()) {
           // Turned off (or superseded by a newer flip) during activation:
           // undo before anything registers. A queued deactivation clears the
           // pill and announces; a queued newer activation starts clean.
+          endAttempt(def.key, activation);
           try {
             mod.deactivate(map);
           } catch (err) {
@@ -217,6 +265,7 @@ export function createLayerController(
         // no-data, or zoom-in). This protects the URL-as-state invariant
         // (critical-review finding #2, 2026-07-07).
         if (registry.getStatus(def.key) === 'error') {
+          endAttempt(def.key, activation);
           view.setCheckbox(def.key, false);
           desiredOn.set(def.key, false);
           try {
@@ -248,6 +297,9 @@ export function createLayerController(
         reassertLabelOrder(map);
         registry.activate(def.key);
       } catch (err) {
+        // A thrown activation has nothing left in flight worth keeping; the
+        // attempt closes so a later activate starts from a fresh signal.
+        abortAttempt(def.key);
         console.error(`Layer "${def.key}" failed to load:`, err);
         registry.setStatus(def.key, 'error');
         view.setCheckbox(def.key, false);
@@ -274,12 +326,16 @@ export function createLayerController(
    */
   function deactivateInternal(def: LayerDef): void {
     bumpIntent(def.key, false);
-    // Synchronously cancel any in-flight activation work through the optional
-    // LayerModule seam: the queued teardown below cannot run until the
-    // activation op ahead of it in the chain settles, so without this an
+    // Synchronously abort the controller-owned attempt FIRST (DDM-P1-T02):
+    // every fetch the module linked to it, the initial load and any viewport
+    // refresh alike, aborts here and now, and the module's late-response
+    // guards then drop whatever raced past the abort. Then the optional
+    // module seam: the queued teardown below cannot run until the
+    // activation op ahead of it in the chain settles, so without these an
     // abandoned activation fetch would run out its full network budget after
     // the user withdrew intent (invariant 5; Codex Unit B finding 1,
     // 2026-07-15). Map-state teardown stays serialized in the op below.
+    abortAttempt(def.key);
     try {
       getLoadedLayerModule(def.key)?.cancelActivation?.();
     } catch (err) {

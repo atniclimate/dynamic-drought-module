@@ -43,7 +43,6 @@ workers/proxy/.wrangler/
 # in a working copy, but they are not part of the public application source.
 **/AGENTS.md
 **/CLAUDE.md
-!/CLAUDE.md
 **/*HANDOFF*.md
 **/*POST_MORTEM*.md
 **/*POST-MORTEM*.md
@@ -55,32 +54,19 @@ workers/proxy/.wrangler/
 /.codex/
 /.handoff/
 /drought-region-maps/
-# 2026-09-07: planning/ is local EXCEPT the five paths the roadmap's authority
-# block names as live ledgers (docs/ROADMAP.yaml, `authority:`). Those carry
-# the DR- decision register, the FE- defect ledger that src/styles/app.css
-# cites, the user-research inputs, and the newest handoff. Everything else
-# under planning/ (the deep-dive and foundations dumps, archive, run logs)
-# stays untracked. `/planning/*` rather than `/planning/` so the negations
-# below can reach inside the directory.
-/planning/*
-!/planning/decisions/
-!/planning/qa/
-!/planning/user-research/
-!/planning/handoffs/
-!/planning/references/
-/planning/handoffs/*
-!/planning/handoffs/2026-09-04.md
-# Negated by name, the same way 2026-09-04.md is: the S09 handoff is a ledger
-# the session prompt required in its closing commit. Handoffs stay local by
-# default; each tracked one is opted in here individually.
-!/planning/handoffs/2026-09-07-s09-enso-horizons.md
-!/planning/handoffs/2026-09-07-s10-horizon-chrome.md
-!/planning/handoffs/2026-09-07-s11-enso-citations.md
-# 2026-09-08 (S14): the S12 handoff was written 2026-09-07 and never negated,
-# the S13 finding; every handoff is tracked and negated by name from here on.
-!/planning/handoffs/2026-09-07-s12-honest-horizon-chips.md
-!/planning/handoffs/2026-09-08-s13-fire-heat-time-bar.md
-!/planning/handoffs/2026-09-08-s14-close-landed.md
+# 2026-09-08: every planning ledger, process record and roadmap left the public
+# repository. They live in two private repositories linked into this checkout
+# as directory junctions (.planning/ and planning/); the public tree carries
+# the application, its tests, its scripts and its user and maintainer docs
+# only. scripts/check-public-tree.mjs forbids the same paths.
+/planning/
+/.planning/
+/ROADMAP.md
+/docs/ROADMAP.yaml
+/docs/PROJECT_GUIDE.md
+/docs/session-briefing-*.md
+/docs/README-RESUME.md
+/docs/claude-*.md
 /post-mortem/
 /research/
 /reviews/

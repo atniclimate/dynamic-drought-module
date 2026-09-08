@@ -3,13 +3,36 @@ import type * as maplibregl from 'maplibre-gl';
 import type { LayerRole } from '../types/layer';
 
 /**
+ * What one activation attempt hands a layer module (DDM-P1-T02). The layer
+ * controller creates one per attempt and aborts it on deactivate, on a
+ * superseding activate of the same key, and when the attempt stands down;
+ * `generation` is the key's intent generation the attempt was born under, so
+ * a module can tell a response from a superseded attempt apart from its own
+ * even after the boolean intent has aliased back to on.
+ */
+export interface LayerActivation {
+  readonly signal: AbortSignal;
+  readonly generation: number;
+}
+
+/**
  * Layer module contract: every layer file under `src/layers/` exports
  * `activate`, `deactivate`, and (optionally) `bindPopups`; these names are
  * a frozen contract. The registry below pairs each module with the UI metadata
  * the sidebar (M8) consumes when building the toggle list.
  */
 export interface LayerModule {
-  activate(map: maplibregl.Map): Promise<void>;
+  /**
+   * `activation` is the controller-owned cancellation seam (DDM-P1-T02,
+   * 2026-09-08): one signal per activation attempt, aborted the moment off
+   * intent is recorded, when a newer activate of the same key supersedes
+   * this one, and on any stand-down. A module with network work links its
+   * own controllers to it and drops a response whose `generation` is no
+   * longer the module's current one. Optional: a module that fetches
+   * nothing ignores it, and every module keeps working when called without
+   * it (a direct call in a spec, say).
+   */
+  activate(map: maplibregl.Map, activation?: LayerActivation): Promise<void>;
   deactivate(map: maplibregl.Map): void;
   bindPopups?(map: maplibregl.Map): void;
   /**

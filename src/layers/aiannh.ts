@@ -63,7 +63,8 @@ import { AIANNH_FILL_COLOR, AIANNH_OUTLINE_COLOR } from '../config/palette';
 import { buildAiannhPopupHtml } from '../ui/popups';
 import { buildBoundaryContext, resolveBoundaryTitle } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
-import { fetchWithBudget } from '../util/fetch';
+import type { LayerActivation } from '../config/layers';
+import { fetchWithBudget, linkAbort } from '../util/fetch';
 import { registry } from '../state/registry';
 
 const LAYER_KEY = 'aiannh';
@@ -153,6 +154,16 @@ const EMPTY_FEATURE_COLLECTION: FeatureCollection = {
  * never render into a torn-down or newer view.
  */
 let masterController: AbortController | null = null;
+
+/**
+ * The controller-owned activation signal (DDM-P1-T02): handed in by
+ * `activate`, linked to every `masterController` this module creates, the
+ * initial load and each viewport refresh alike, so the layer controller's
+ * abort on deactivate or supersession reaches a held request at once,
+ * without waiting for the serialized teardown. Null when activated without
+ * the seam (a direct call), where `cancelActivation` alone does the job.
+ */
+let activationSignal: AbortSignal | null = null;
 
 /**
  * Request-identity token: each fetch takes `++requestSeq` and drops its
@@ -432,6 +443,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
 
   masterController = new AbortController();
   const signal = masterController.signal;
+  const unlink = linkAbort(masterController, activationSignal);
 
   reportStatus('loading');
 
@@ -456,17 +468,25 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
     geojson = assertFeatureCollection(raw);
     truncated = isTruncated(raw);
   } catch (err) {
-    // Aborted or superseded means a newer request owns the view; drop
-    // silently per invariant 5.
-    if (signal.aborted || token !== requestSeq) return;
+    unlink();
+    // Aborted or superseded means a newer request owns the view; drop it
+    // per invariant 5, saying so once at debug level and nowhere louder.
+    if (signal.aborted || token !== requestSeq) {
+      console.debug(`[aiannh] request ${token} dropped: aborted or superseded before it settled`);
+      return;
+    }
     console.warn('[aiannh] Census AIANNH fetch failed.', err);
     clearRenderedFeatures(map);
     reportStatus('error');
     return;
   }
 
+  unlink();
   // A late response to a superseded or torn-down request must not render.
-  if (signal.aborted || token !== requestSeq) return;
+  if (signal.aborted || token !== requestSeq) {
+    console.debug(`[aiannh] request ${token} dropped: a late response after intent changed`);
+    return;
+  }
 
   if (truncated) {
     console.warn(
@@ -613,7 +633,11 @@ function detachRefresh(map: maplibregl.Map): void {
  * already exists the call only (re)ensures the refresh handler, so the
  * URL-restore path cannot stack duplicates.
  */
-export async function activate(map: maplibregl.Map): Promise<void> {
+export async function activate(
+  map: maplibregl.Map,
+  activation?: LayerActivation
+): Promise<void> {
+  activationSignal = activation?.signal ?? null;
   attachRefresh(map);
   if (map.getSource(SOURCE_ID)) {
     return;
@@ -655,6 +679,7 @@ export function cancelActivation(): void {
  */
 export function deactivate(map: maplibregl.Map): void {
   detachRefresh(map);
+  activationSignal = null;
   if (masterController) {
     masterController.abort();
     masterController = null;

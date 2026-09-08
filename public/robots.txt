@@ -1,0 +1,11 @@
+# Dynamic Drought Module (DDM) - ATNI Climate
+# Machine-readable use notes: /llms.txt
+# This site's content is licensed under the DDM Community License,
+# Version 1.0 (noncommercial, share-alike, attribution, data
+# provenance required) and must adhere to the Tiered Sovereign Data
+# Framework (TSDF) for any sovereign, Tribal, or Indigenous data:
+# https://github.com/atniclimate/TieredSovereignDataFramework
+# See /llms.txt and the repository LICENSE before reuse of any kind.
+
+User-agent: *
+Allow: /

@@ -5,6 +5,21 @@
 Merged to `main` after the `v0.6.26` tag. No new package version or tag has
 been assigned to this work.
 
+- 2026-09-08: the repository is the application only. Every planning ledger,
+  session record, roadmap file and harness entry point left the public tree
+  for a private planning record maintained by ATNI Climate;
+  `scripts/check-public-tree.mjs` now forbids those paths outright and the
+  gate fails if one is ever tracked again. Task and decision ids cited in
+  comments and test docblocks still refer to that record. In the same change
+  the license moved from PolyForm Strict 1.0.0 to the DDM Community License
+  1.0 (`LICENSE`): use, modification and redistribution are permitted for
+  noncommercial purposes under share-alike terms, with attribution to ATNI
+  Climate and Patrick A. Freeland, data provenance carried with every
+  redistribution, adherence to the Tiered Sovereign Data Framework, and the
+  tool's service to Tribes and Indigenous Peoples stated as a condition.
+  `CITATION.cff` gives the citation, `llms.txt` and `robots.txt` on the
+  published site state the same conditions for automated readers, and a
+  tracked `commit-msg` hook keeps authorship in git's author field only.
 - 2026-09-03: the gridded drought index states where it comes from and where
   it stops. Each SPI window now resolves through the slug prefix NOAA NIDIS
   publishes the ACIS "Grid 1" dataset under rather than through a literal, the
