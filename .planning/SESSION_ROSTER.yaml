@@ -830,12 +830,69 @@ sessions:
       DDM-P12-T02 flipped to done in docs/ROADMAP.yaml and .planning/TRACE.yaml. DDM-P8-T03 was
       NOT flipped; the handoff quotes its acceptance and says which fragment this touches.
 
-  # S11 to S19: the remaining nine Wave 2 cycle tasks. ORDER IS SET BY S03, not
+  # S11: ENSO citations, the second member of the S03 group-1 cycle and the
+  # last of the three DDM-D12 named. Taken out of the block below the same way
+  # S09 and S10 were, so one entry closes one session.
+  - id: S11
+    task_ids: [DDM-P12-T03]
+    title: "ENSO citations, citing and correcting the regional tilt statements"
+    wave: 2
+    tier: T2
+    model: claude-opus-5
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    decision_gate: "DR-030 (the Pacific Northwest tilt sentences)"
+    gate: "npm run verify:quick (the task's own verification key), then npm run verify:smoke once, then npm run check:public-tree"
+    role: "Wave 2 executor. Verification and citation completion, NOT a rewrite: a sentence changes only where a live page fails to support a clause."
+    rationale: >-
+      46f98f4 (2026-09-02) rewrote the three tendency sentences and attached a source URL to each,
+      but nothing had since read the pages against the sentences clause by clause, two lineage
+      entries carried no link at all, and CITATIONS_VERIFIED still read 2026-09-02. S10's handoff
+      also recorded that DR-030 never named the two sentences it calls over-claiming, and called
+      that naming a precondition for this task's acceptance.
+    budget_tokens: 150000
+    stop_when: "every clause of all three sentences has a verdict against its own page, the two unlinked lineage entries have a URL or a STOP, the spec is in smoke, and the three gates are green"
+    status: done
+    outcome: >-
+      DONE on branch feature/enso-citations-dr030 from main at bd291d7, unpushed. Verification
+      commit 8faa028, plus the closing ledger commit. verify:quick clean; verify:smoke
+      119 passed, 1 skipped, 4.9m (the skip is the same tests/ux1-surfaces.spec.ts:98 quarantine
+      S10 reported); check:public-tree clean.
+      THE PRECONDITION S10 FLAGGED IS ANSWERED. DR-030 does NOT name the two over-claiming
+      sentences and neither does its source, ENSOSCI-09, whose heading repeats the count and names
+      none; 00-MASTER-FINDINGS.md:90 repeats it a third time. Reading ENSOSCI-09's per-string
+      bodies settles it: they are the El Nino and La Nina sentences, and both are sentences
+      46f98f4 already narrowed or deleted. Neither is a sentence 46f98f4 left untouched, so
+      nothing came into scope from the naming. Recorded in DR-030 as
+      the_two_over_claiming_sentences_2026_09_07.
+      WHAT CHANGED. Thirty-two clauses across the three sentences were checked by
+      ddm-science-verifier with the fetched page text supplied as the evidence. Three narrowing
+      edits, covering eight clause-level verdicts, moved text to its page's own strength and no
+      further: the El Nino rain-over-snow clause is the Hub's
+      WINTER finding and its runoff, water and wildfire chain is hedged twice with drought as the
+      intermediate link; the El Nino snowpack counter-evidence gained the issuers' bound "in the
+      modern era"; the La Nina deeper-snowpack consequences read "can lead to". Everything else
+      stands as it was. The two unlinked lineage entries were both resolved with live pages.
+      ONE CLAUSE WAS REPORTED AS A STOP rather than narrowed, and the owner ruled the same day.
+      "Snowpack is the least reliable part of the tendency" is stated by no issuer page: it ranked
+      snowpack against the tendency's other components, a comparison no issuer makes. It now reads
+      "That tendency has not held for snowpack in the largest events" and carries the Office's own
+      caveat, that it is hard to say whether that is a real pattern or a small sample.
+      ddm-science-verifier returned VERIFIED for the replacement and confirmed it is no longer a
+      comparative ranking, so the ruling's fallback (ship the original prefixed "In this
+      application's reading, " as a labelled DDM presentation choice) was not taken. A second owner
+      ruling authorized correcting the composites product name to the issuer's own title. Both are
+      recorded in DR-030 as stop_raised_and_ruled_2026_09_07 and product_name_corrected_2026_09_07.
+
+  # S12 to S19: the remaining eight Wave 2 cycle tasks. ORDER IS SET BY S03, not
   # here. Tiers below are per-task and apply only after S03 cuts the cycle.
   # Was S09-S19 until 2026-09-07 (DDM-P12-T02 closed as S09), then S10-S19
-  # until S10 above took the chrome half of the same task.
-  - id: S11-S19
-    task_ids: [DDM-P1-T02, DDM-P1-T04, DDM-P7-T05, DDM-P8-T02, DDM-P8-T03, DDM-P11-T01, DDM-P12-T03, DDM-P14-T03, DDM-P9-T05]
+  # until S10 took the chrome half of the same task, then S11-S19 until S11
+  # above took DDM-P12-T03.
+  - id: S12-S19
+    task_ids: [DDM-P1-T02, DDM-P1-T04, DDM-P7-T05, DDM-P8-T02, DDM-P8-T03, DDM-P11-T01, DDM-P14-T03, DDM-P9-T05]
     title: "The Wave 2 cycle, sequenced by S03"
     wave: 2
     tier: "per task, below"
@@ -844,7 +901,7 @@ sessions:
     mode: direct
     run_as: main
     stop_level: fast
-    gate: "npm run verify:smoke, except DDM-P12-T03 which carries verification: verify:quick (docs/ROADMAP.yaml:467)"
+    gate: "npm run verify:smoke. The one member carrying its own verification key, DDM-P12-T03 with verify:quick, left this block for S11 on 2026-09-07."
     order: "SET BY S03. Do not start any of these before S03 delivers its plan file (docs/ROADMAP.yaml:680-681)."
     note: "DDM-P7-T02 is the eleventh member and lands early in S02g; see S02g.sequencing_conflict."
     per_task_tier:
@@ -858,7 +915,13 @@ sessions:
       # tier line was: { tier: T2, why: "effort M, DR-031, src/impact/enso.ts
       # only, zero tests (RECONCILIATION.md:321)" }. The "zero tests" half is no
       # longer true: tests/enso-horizons.spec.ts now carries its acceptance.
-      DDM-P12-T03: { tier: T2, why: "effort M, DR-030, own verification: verify:quick. Needs ddm-science-verifier: the acceptance requires each of four tilt sentences to cite a published source" }
+      # DDM-P12-T03 moved to its own entry S11 above and closed 2026-09-07. Its
+      # tier line was: { tier: T2, why: "effort M, DR-030, own verification:
+      # verify:quick. Needs ddm-science-verifier: the acceptance requires each
+      # of four tilt sentences to cite a published source" }. Two halves of that
+      # line were already stale: the count is three, not four (DR-030
+      # count_amended_2026_09_07), and every sentence already cited a source, so
+      # the work was verifying the citations rather than attaching them.
       DDM-P14-T03: { tier: T2, why: "effort M, DR-008. Acceptance is a byte budget and NONE of its 28 tests measures bytes (RECONCILIATION.md:344). The gate is scripts/check-bundle-size.mjs, already in npm run gate" }
       DDM-P9-T05:  { tier: T2, why: "effort M, 1 file 1 path-ref test; docs/ROADMAP.yaml:379-383" }
     status: planned

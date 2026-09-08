@@ -3676,7 +3676,7 @@ tasks:
   DDM-P12-T03:
     title: Cite and correct the regional tilt statements
     phase: DDM-P12
-    status: open
+    status: done
     roadmap: docs/ROADMAP.yaml:392
     acceptance: Each regional tilt sentence traces to a published source and states the season and the
       probabilistic strength that source supports, with the two over-claiming sentences narrowed.
@@ -3689,8 +3689,19 @@ tasks:
         acceptance_testable_here: true
         evidence_lines: *a20
         attached_by: scout
-    tests: []
-    coverage: files-no-tests
+    # tests: was [] and coverage was files-no-tests until 2026-09-07 (S11); the
+    # acceptance now has a spec that quotes it and drives one fixture per
+    # tendency branch. The spec reads planning/references/register.yaml for each
+    # branch's URL rather than restating it, so the code and the ledger cannot
+    # drift apart without this failing.
+    tests:
+      - path: tests/enso-citations.spec.ts
+        via: import
+        covers: src/impact/enso.ts
+        evidence: "tests/enso-citations.spec.ts:2: The Pacific Northwest tilt sentences, and the
+          acceptance sentence of DDM-P12-T03."
+        attached_by: repair:S11
+    coverage: files-and-tests
   DDM-P12-T04:
     title: Decide the marine product and its baseline
     phase: DDM-P12

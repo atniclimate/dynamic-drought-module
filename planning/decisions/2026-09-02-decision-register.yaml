@@ -1388,6 +1388,156 @@ groups:
           the mismatch; docs/ROADMAP.yaml DDM-P12-T03 acceptance is amended to three in the same
           commit. The question, options and rationale above keep their original wording as the
           record of what was asked; only the title and the decision state the count that is true.
+        resolved_2026_09_07: >-
+          RESOLVED by session S11 (DDM-P12-T03), verification commit 8faa028 on branch
+          feature/enso-citations-dr030, unpushed. Option (a) is now EXECUTED, not merely decided.
+          Each of the three tilt sentences was fetched to its own page and checked clause by clause
+          by ddm-science-verifier, thirty-two clauses in all, with the page text supplied as the
+          evidence rather than left to the agent to find.
+          PER-BRANCH VERDICTS. El Nino, eleven clauses: 5 SUPPORTED, 4 NARROWED, 2 NOT ON THAT PAGE
+          (one of them the snowpack counter-evidence, which belongs to the Washington State Climate
+          Office and is now linked; the other is the STOP below). La Nina, ten clauses: 7 SUPPORTED,
+          3 NARROWED, 0 unsupported; the page also confirmed it contains no fine-fuels or grass-fire
+          content of any kind, so 46f98f4's deletion is corroborated rather than merely unchallenged.
+          Neutral, six clauses: 3 SUPPORTED, 0 NARROWED, 2 NOT ON THAT PAGE, both of them the
+          redirection that the branch's second lineage entry carries and that is now linked. All
+          three sourceUrls answered HTTP 200 on 2026-09-07 and CITATIONS_VERIFIED is re-stamped.
+        the_two_over_claiming_sentences_2026_09_07: >-
+          THE NAMING THIS ENTRY OWED. This entry never named the two it calls over-claiming: the
+          rationale above says "Two of the four current sentences over-claim" and stops there, and
+          its source pointer, 13-enso-science-spec.md ENSOSCI-09, repeats the same count in its own
+          heading ("Every one of the four tilt strings can now be cited, and two of them
+          over-claim", 13:519) and also stops there. 00-MASTER-FINDINGS.md:90 repeats the count a
+          third time and names none. S10's handoff flagged the gap and called the naming a
+          precondition for this task's acceptance. Reading ENSOSCI-09's per-string bodies settles
+          it, and the two are the El Nino and La Nina sentences:
+            1. EL NINO. ENSOSCI-09 marked three things unsupported (13:550-561): "below-normal
+               snowpack" stated flatly, contradicted in every one of the three strongest events;
+               "an earlier melt-out", which appears in no source; and "tilts the following fire and
+               heat season toward elevated risk", which reaches a season further than any source.
+               46f98f4 NARROWED it: the flat snowpack claim became the counter-evidence the branch
+               now carries, and the melt-out and following-season clauses are gone.
+            2. LA NINA. ENSOSCI-09 marked two things unsupported (13:594-605): the app gave
+               "cooler" and "wetter" equal weight where the Hub says "the association is not as
+               strong as for temperature", and the entire fine-fuels sentence, the one worker 05
+               called "the single most specific and least sourced sentence in the module", marked
+               UNVERIFIED. 46f98f4 NARROWED the first, by quoting the Hub's caveat in the sentence,
+               and DELETED the second outright rather than softening it.
+          So the two DR-030 calls over-claiming ARE the two 46f98f4 narrowed or deleted, and neither
+          is a sentence 46f98f4 left untouched. The neutral sentence's own defect, the uncited
+          forecast-skill assertion "offers little long-range signal" (13:640-645), was also fixed by
+          46f98f4 and is not one of the two. This session's four further narrowings are a second,
+          finer pass against the live pages, not a re-litigation of these two.
+        narrowings_2026_09_07: >-
+          Three edits moved text, each to the strength its page states and no further, covering
+          eight clause-level NARROW verdicts (four on the El Nino page, three on the La Nina page,
+          one on the Washington State Climate Office page). Each has a verifier receipt in
+          planning/references/register.yaml.
+            EL NINO, before: "fall and winter in Idaho, Oregon and Washington have tended to run
+            warmer and drier, with more precipitation falling as rain than snow; the USDA Northwest
+            Climate Hub associates that combination with decreased runoff, less summer water
+            availability, and increased wildfire risk."
+            EL NINO, after: "fall and winter in Idaho, Oregon and Washington have tended to run
+            warmer and drier, and the USDA Northwest Climate Hub states that a drier, warmer winter
+            results in more precipitation falling as rain than snow, which can lead to decreased
+            runoff and less summer water availability, and can in turn contribute to drought and
+            increased wildfire risk."
+            WHY: the page scopes rain-over-snow to WINTER, not to fall and winter, and hedges the
+            consequences twice, "These impacts CAN lead to decreased runoff and summer water
+            availability which CAN contribute to drought and increased wildfire risk", with drought
+            as an intermediate link. The app had dropped both hedges, dropped the drought link, and
+            put wildfire risk in direct parallel with runoff.
+            EL NINO, before: "the three strongest El Ninos on record (1982-83, 1997-98 and 2015-16)"
+            EL NINO, after: "the three strongest El Ninos on record in the modern era (1982-83,
+            1997-98 and 2015-16)"
+            WHY: both issuers bound the phrase. The cited page says "the strongest El Nino on record
+            in the modern era"; the Office's own site says "on record (since 1950)" and adds that
+            "Different indices rank the events differently". Bare "on record" claimed an unbounded
+            record neither states.
+            LA NINA, before: "A deeper snowpack has been associated with increased runoff, more
+            reliable summer water availability, and reduced drought severity."
+            LA NINA, after: "A deeper snowpack can lead to increased runoff, more reliable summer
+            water availability, and reduced drought severity."
+            WHY: the page's modality is "A deeper snowpack CAN HAVE positive implications ... and
+            CAN LEAD TO", a possibility, not the settled past-tense association the app asserted.
+            The object list already matched the page word for word and was not touched.
+        stop_raised_and_ruled_2026_09_07: >-
+          ONE CLAUSE WAS REPORTED AS A STOP rather than narrowed, because the session's instruction
+          is that a clause no page states is ruled on and not quietly reworded. The owner ruled the
+          same day and the ruling is IMPLEMENTED; this entry records both halves.
+          THE CLAUSE AS IT STOOD: "Snowpack is the least reliable part of the tendency", the
+          sentence in the El Nino branch that introduces the snowpack counter-evidence.
+          WHY IT STOPPED: it ranked snowpack against the tendency's other parts, temperature and
+          precipitation, and no issuer page makes that comparison. ddm-science-verifier confirmed
+          the current text UNVERIFIED on exactly that ground. What the Washington State Climate
+          Office does support is narrower and different: that because these very strong events
+          "haven't happened very often", it is "hard to say whether they represent a real pattern or
+          just a small sample size". That is uncertainty about RECURRENCE, not a ranking across
+          components.
+          WHY IT WAS NOT QUIETLY CUT: this entry's own rationale calls the snowpack qualification
+          "the most important single change ... because the app is about to make a snowpack claim
+          during exactly the class of event that historically defied it", and the clause is the
+          hinge that turns the counter-evidence from a stray fact into the reason a reader should
+          discount the snowpack tilt. Deleting it would have left the counter-evidence unexplained.
+          THE OWNER'S RULING, 2026-09-07: replace the framing sentence, conditional on the new final
+          clause binding to the issuer's own words, with the fallback that if it did not bind the
+          original sentence would ship prefixed "In this application's reading, " and be recorded
+          here as a labelled DDM presentation choice.
+          THE VERIFICATION: it BINDS. ddm-science-verifier returned VERIFIED for the replacement as
+          a whole. The fallback was therefore NOT taken and no DDM presentation label was needed.
+          BEFORE: "Snowpack is the least reliable part of the tendency: the Washington State Climate
+          Office notes that the three strongest El Ninos on record in the modern era (1982-83,
+          1997-98 and 2015-16) each produced near-normal Washington snowpack."
+          AFTER: "That tendency has not held for snowpack in the largest events: the Washington
+          State Climate Office notes that the three strongest El Ninos on record in the modern era
+          (1982-83, 1997-98 and 2015-16) each produced near-normal Washington snowpack, and that it
+          is hard to say whether that is a real pattern or a small sample."
+          WHY IT PASSES WHERE THE OLD ONE FAILED: the verifier was asked explicitly whether the new
+          opening is still a comparative ranking and answered no. It makes a bounded factual claim
+          about ONE component in ONE class of event, which the page supports directly ("During past
+          'very strong' El Nino years, though, things have looked a little different"), rather than
+          a comparison across the tendency's components that no issuer makes. The new final clause
+          is faithful to "it's hard to say whether they represent a real pattern or just a small
+          sample size"; dropping "size" and "just" changes no meaning, and the singular "that"
+          preserves the referent. The replacement claims no recurrence, predicts no winter, and
+          states no general El Nino snowpack rule beyond the three named events.
+        stop_ruling_residue_2026_09_07: >-
+          TWO OPEN NOTES from the verification of the ruled replacement. Neither blocks anything and
+          neither was acted on, because the owner specified the replacement's exact words and the
+          condition they set (that the clause bind) was met.
+          1. ONE-WORD TIGHTENING, recommended by ddm-science-verifier and NOT applied. The page's
+          vocabulary throughout is "very strong", "the strongest El Nino on record" and "the next
+          strongest El Ninos"; it never says "large" or "largest". The verifier recommended
+          "largest" become "strongest" and was explicit that "largest" does NOT broaden the
+          category, because the clause is glossed immediately by the three named events. Against the
+          change: "strongest" already appears later in the same sentence ("the three strongest El
+          Ninos"), so the swap repeats the word twice in one sentence. The owner's exact wording
+          shipped; this is theirs to accept or wave off.
+          2. ATTRIBUTION IS INDIRECT, BY ONE STEP. In the source article the near-normal-snowpack
+          statement is a direct quotation from the Deputy Washington State Climatologist, but the
+          "hard to say" sentence sits OUTSIDE the quotation marks: it is the article's own narration
+          bridging two of her quotes. The application says "the Washington State Climate Office
+          notes that ... and that it is hard to say ...", which is reported speech and not a quoted
+          attribution, so nothing is presented as a quote that is not one. The verifier called this
+          fair but loose and raised it as a soft flag rather than a defect. Recorded so a later
+          reader does not rediscover it as a finding.
+        product_name_corrected_2026_09_07: >-
+          RAISED as a flag by S11 and RESOLVED the same day by owner ruling 2, authorized as a
+          citation correction rather than a rewrite. The CPC composites page's own title element
+          reads "Climate Prediction Center - ENSO Temperature and Precipitation Composites" and its
+          section heading reads "ENSO Temperature & Precipitation Composites"; snow appears only in
+          the six product links, "El Nino Snow" and "La Nina Snow" among them. The neutral branch's
+          source string and the CPC_COMPOSITE_LINEAGE constant both read "NOAA CPC ENSO temperature,
+          precipitation and snow composites", which presented a three-variable name as if it were
+          the issuer's own. The snow composites do exist, so the old label was not false, only not
+          the issuer's; naming a product means naming it as its issuer does. Both strings now read
+          "NOAA CPC ENSO Temperature and Precipitation Composites". The references register keeps
+          its slug, cpc-enso-composites, and only its product label moved. Two historical documents
+          quote the old label and are deliberately NOT edited, being the record of what was found:
+          planning/2026-09-01-deep-dive/13-enso-science-spec.md:684 and
+          .planning/2026-09-07-recon-report.md:96. Note that this entry's own citations list still
+          reads "13#17 CPC per-season composites including snow", which remains accurate about the
+          page's CONTENT and is left verbatim as the record of what was asked.
       - id: DR-031
         title: Weekly Nino 3.4 in the Weeks ahead register
         question: >-
