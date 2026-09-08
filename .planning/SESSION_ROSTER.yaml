@@ -888,13 +888,64 @@ sessions:
       ruling authorized correcting the composites product name to the issuer's own title. Both are
       recorded in DR-030 as stop_raised_and_ruled_2026_09_07 and product_name_corrected_2026_09_07.
 
-  # S12 to S19: the remaining eight Wave 2 cycle tasks. ORDER IS SET BY S03, not
+  # S12: honest horizon chips, taken out of the block below the same way S09,
+  # S10 and S11 were, on the owner's direct assignment (not S03 sequencing).
+  - id: S12
+    task_ids: [DDM-P8-T03]
+    title: "Honest horizon chips: one horizon-name source, and the observed/outlook claim tag"
+    wave: 2
+    tier: T3
+    model: claude-sonnet-5
+    effort: high
+    mode: direct
+    run_as: main
+    stop_level: fast
+    decision_gate: "DR-017 (the chip when two horizons share one recipe), DR-021 (outlook badge and jump-chip wording, already decided 2026-09-02), DR-037 (the on-map key for all four hazards or none)"
+    gate: "npm run verify:quick, then npm run verify:smoke once, then npm run check:public-tree"
+    role: "Wave 2 executor, owner-assigned ahead of S03. R1-R4 given directly in the session prompt rather than left to DR-017/021/037, which stay open for what this session did not touch."
+    rationale: >-
+      S10's handoff (2026-09-07) carried this task's finding forward: the briefing panel's headings
+      read HORIZON_CHROME while the map shell's chips and the panel-foot line still read the
+      separate TEMPORAL_HORIZON_CHIP_LABELS table in src/config/clusters.ts, so the same committed
+      horizon read two names at once, and clusters.ts:72-78 explicitly reserved resolving that for
+      an owner ruling. S11 carried the same finding forward untouched. The owner ruled directly in
+      this session's prompt (R1-R4) rather than waiting for the S12-S19 block's own sequencing.
+    budget_tokens: 200000
+    stop_when: "the shell chips and the panel headings read one table, every rendered claim carries one observed/outlook tag matching its evidence, CELL_ABSENCE carries none, the acceptance spec is in smoke, and the three gates are green"
+    status: partial
+    outcome: >-
+      PARTIAL on branch feature/horizon-chips-p8t03 from main at c07ec915, unpushed. Commits: this
+      branch carries R1 (horizon-chrome.ts is the single horizon-name source; TEMPORAL_HORIZON_CHIP_LABELS
+      and TEMPORAL_HORIZON_LABELS retired), R3 (CLAIM_REGISTER_TAG, src/impact/evidence.ts, rendered
+      beside the source line by src/ui/claim-render.ts), R4 (CELL_ABSENCE carries no tag, true by
+      construction), and R2 (tests/heat-h1-heatrisk.spec.ts:349 re-pointed at HORIZON_CHROME.nearTerm.subtitle).
+      verify:quick clean; verify:smoke 125 passed, 1 skipped (the tests/ux1-surfaces.spec.ts:98
+      quarantine), 4.8m; check:public-tree clean, 558 tracked files. tests/horizon-chips.spec.ts
+      added, quoting the acceptance, added to verify:smoke.
+      DDM-P8-T03 NOT flipped to done: two of the three acceptance clauses have only a partial
+      receipt. Clause 1 ("absent or visibly disabled with its reason") is the shell's pre-existing
+      customHorizonDisabledReason behaviour, not touched or freshly verified this session. Clause 2
+      ("every hazard surface states its time in one grammar") is satisfied for horizon NAMING
+      (chips, panel headings, and the panel-foot line all now read HORIZON_CHROME) but not for the
+      on-map validity STAMPS each layer sets through src/ui/time-bar.ts, a separate system this
+      session did not touch and which reads as DDM-P8-T02's territory ("give Fire and Extreme Heat
+      a time bar"), still open. Clause 3 ("forecast register visually distinct from observed") is
+      satisfied for every claim rendered in the briefing panel (the observed/outlook tag), but
+      whether "hazard surface" in the acceptance sentence also means the MAP LAYERS themselves
+      (not just the claim text) is genuinely ambiguous and was not resolved by this session; flagged
+      for the owner rather than assumed either way.
+      DR-017, DR-021 (already decided 2026-09-02, unrelated to this session's chip rename) and
+      DR-037 remain as ROADMAP's needs_decision names them; none was re-opened or re-litigated.
+      DR-070 records R1 and R3 as owner rulings of 2026-09-07 in the decision register.
+
+  # S13 to S19: the remaining seven Wave 2 cycle tasks. ORDER IS SET BY S03, not
   # here. Tiers below are per-task and apply only after S03 cuts the cycle.
   # Was S09-S19 until 2026-09-07 (DDM-P12-T02 closed as S09), then S10-S19
   # until S10 took the chrome half of the same task, then S11-S19 until S11
-  # above took DDM-P12-T03.
-  - id: S12-S19
-    task_ids: [DDM-P1-T02, DDM-P1-T04, DDM-P7-T05, DDM-P8-T02, DDM-P8-T03, DDM-P11-T01, DDM-P14-T03, DDM-P9-T05]
+  # above took DDM-P12-T03, then S12-S19 until S12 above took DDM-P8-T03 (the
+  # owner's direct assignment, ahead of S03's own sequencing).
+  - id: S13-S19
+    task_ids: [DDM-P1-T02, DDM-P1-T04, DDM-P7-T05, DDM-P8-T02, DDM-P11-T01, DDM-P14-T03, DDM-P9-T05]
     title: "The Wave 2 cycle, sequenced by S03"
     wave: 2
     tier: "per task, below"
@@ -911,7 +962,9 @@ sessions:
       DDM-P1-T04:  { tier: T3, why: "5 files 19 tests, 4 of 5 false (RECONCILIATION.md:215); highest in-degree task node, 11 inbound edges (RECONCILIATION.md:611-612)" }
       DDM-P7-T05:  { tier: T2, why: "effort M, DR-014 and DR-019, 8 files 8 tests; docs/ROADMAP.yaml:294-299" }
       DDM-P8-T02:  { tier: T3, why: "effort L, all four hazard screens, 4 files 7 tests; docs/ROADMAP.yaml:315-319" }
-      DDM-P8-T03:  { tier: T3, why: "effort M but three gates DR-017, DR-021, DR-037; docs/ROADMAP.yaml:320-325" }
+      # DDM-P8-T03 moved to its own entry S12 above and went PARTIAL 2026-09-07
+      # (owner-assigned ahead of S03). Its tier line was: { tier: T3, why:
+      # "effort M but three gates DR-017, DR-021, DR-037; docs/ROADMAP.yaml:320-325" }.
       DDM-P11-T01: { tier: T2, why: "effort M, DR-040 and DR-041, 4 files all acceptance_testable_here true, best-evidenced open task in the backlog (RECONCILIATION.md:313)" }
       # DDM-P12-T02 moved to its own entry S09 above and closed 2026-09-07. Its
       # tier line was: { tier: T2, why: "effort M, DR-031, src/impact/enso.ts

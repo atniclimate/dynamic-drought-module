@@ -2707,6 +2707,23 @@ tasks:
           - "src/ui/map-key.ts:13: The active condition surface picks the key (US Drought Monitor,
             NWS HeatRisk, or the SPC fire-weather outlook)"
         attached_by: scout
+      # Attached 2026-09-07 by S12, per the note DDM-P12-T02's own attachment
+      # left here: commit 2e3a8323e8e583c0c46aadedd46fb584a30f3efc on
+      # feature/horizon-chips-p8t03 made horizon-chrome.ts the single
+      # horizon-name source for the whole interface (R1), shell chips and the
+      # panel-foot line included, and added the observed/outlook claim tag it
+      # carries no value for (R3 lives in src/impact/evidence.ts and
+      # src/ui/claim-render.ts, not attached here; R1's SHELL_HORIZON_KEY does).
+      - path: src/impact/horizon-chrome.ts
+        owns: The single horizon-name source for the whole interface (title and subtitle per
+          HorizonKey, plus SHELL_HORIZON_KEY mapping the map shell's TemporalHorizonKey onto it);
+          read by the briefing composer, the eager panel's module-failure path, the shell's
+          horizon chips, and the panel-foot response line
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/impact/horizon-chrome.ts:2: The interface's three horizon headings: the title and the short"
+          - "src/impact/horizon-chrome.ts:66: export const SHELL_HORIZON_KEY: Readonly<Record<TemporalHorizonKey, HorizonKey>> = {"
+        attached_by: repair:S12
     tests:
       - path: tests/boundary-boot-inventory.test.mjs
         via: symbol-ref
@@ -2735,6 +2752,15 @@ tasks:
         covers: src/ui/map-key.ts
         evidence: "tests/wildfire-source-semantics.spec.ts:57: import { registry } from
           '../src/state/registry';"
+      # Attached 2026-09-07 (S12), commit 2e3a8323e8e583c0c46aadedd46fb584a30f3efc
+      # on feature/horizon-chips-p8t03: the acceptance spec this session added,
+      # quoting the acceptance and driving R1/R3/R4 against the live app.
+      - path: tests/horizon-chips.spec.ts
+        via: import
+        covers: src/impact/horizon-chrome.ts
+        evidence: "tests/horizon-chips.spec.ts:2: Honest horizon chips, and the acceptance sentence of
+          DDM-P8-T03"
+        attached_by: repair:S12
     coverage: files-and-tests
   DDM-P8-T04:
     title: Make the drought near-term horizon a near-term product

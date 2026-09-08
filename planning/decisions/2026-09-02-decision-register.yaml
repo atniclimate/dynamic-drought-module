@@ -3177,3 +3177,66 @@ groups:
           still written and would still be uploaded unless removed. Whichever path is taken, the
           reason goes in DEVELOPER.md as the ruling requires, and the activation gate must still be
           green afterward.
+
+  - id: G-session-2026-09-07
+    title: Added by the 2026-09-07 S12 session (honest horizon chips, DDM-P8-T03)
+    decisions:
+      - id: DR-070
+        title: One horizon-name source for the whole interface, and the observed/outlook claim tag
+        question: >-
+          Two open threads collided in DDM-P8-T03. First, src/config/clusters.ts:72-78 (S10,
+          2026-09-07) explicitly reserved which horizon vocabulary wins: the shell's chips and the
+          panel-foot response line read TEMPORAL_HORIZON_CHIP_LABELS ("Current" / "Weeks ahead" /
+          "Season ahead"), while the briefing panel's headings read HORIZON_CHROME ("Current
+          Conditions" / "Near Term" / "Long Range") for the same three horizons, so the same
+          committed horizon read two different names at once (also DR-017's chip-wording question,
+          04 D-1). Second, the acceptance's "forecast register visually distinct from its observed
+          register" clause was unmet: every rendered claim carried its seven-way evidence badge but
+          nothing told a reader, at a glance, whether a claim was already true or only expected.
+        source:
+        - "src/config/clusters.ts:72-78, the reserved-for-owner-ruling comment (S10, 2026-09-07)"
+        - "docs/ROADMAP.yaml DDM-P8-T03 acceptance, and its needs_decision citing DR-017"
+        - "planning/handoffs/2026-09-07-s10-horizon-chrome.md and
+          2026-09-07-s11-enso-citations.md, both carrying the finding forward unresolved"
+        blocks:
+        - DDM-P8-T03
+        - "DR-017 (the underlying chip-wording question this ruling answers for the shared-recipe
+          case)"
+        options:
+        - key: a
+          text: horizon-chrome.ts becomes the single horizon-name source for the whole interface
+            (shell chips and the panel-foot line included); tag every rendered claim observed or
+            outlook from its own evidence field, placed beside the source line
+          cost: M
+          risk: the shell's horizon chips grow from one line to a title-plus-subtitle pair, which
+            widens the pill and needed a small CSS change
+        - key: b
+          text: leave the shell on its own chip table and the panel on horizon-chrome.ts,
+            unreconciled, and add the observed/outlook tag only to the panel
+          cost: S
+          risk: the two-vocabulary collision this ruling exists to close stays open; a shared
+            horizon still reads two names on two surfaces at once
+        recommendation: a
+        rationale: >-
+          Option b treats the symptom the S12 prompt was written to fix as still acceptable. A
+          single table every reader shares is the only way a horizon's name and a claim's register
+          can both stop being surface-dependent.
+        default_if_no_answer: the shell keeps "Weeks ahead" / "Season ahead" and no claim carries a
+          register tag
+        status: decided
+        decided: "2026-09-07"
+        ruling_source: "session S12 (owner prompt, rulings R1-R4), 2026-09-07; implemented in
+          commit 2e3a8323e8e583c0c46aadedd46fb584a30f3efc on feature/horizon-chips-p8t03;
+          planning/handoffs/2026-09-07-s12-honest-horizon-chips.md"
+        decision: >-
+          R1: horizon-chrome.ts (SHELL_HORIZON_KEY added) is the single source of horizon names for
+          the whole interface; TEMPORAL_HORIZON_CHIP_LABELS is retired, shell.tsx and
+          panel-response.tsx now read it. TEMPORAL_HORIZON_LABELS (the separate prose-cadence
+          table) had zero production consumers and was removed outright rather than folded in, the
+          smaller diff; tests/heat-h1-heatrisk.spec.ts:349 is re-pointed at HORIZON_CHROME.
+          R3: every rendered claim carries exactly one observed/outlook text tag
+          (CLAIM_REGISTER_TAG, src/impact/evidence.ts) derived from its evidence field: outlook
+          renders outlook; analyzed and derived render observed (the DR-031 near-term ENSO claim is
+          the case this was ruled for). classified, not named in R3, renders observed by the same
+          reasoning its EVIDENCE_PRESENTATION tone already gives it. CELL_ABSENCE prose carries no
+          tag (R4). Text only, existing tokens, no new color, no motion.
