@@ -2611,7 +2611,12 @@ tasks:
   DDM-P8-T02:
     title: Give Fire and Extreme Heat a time bar
     phase: DDM-P8
-    status: open
+    # open -> done 2026-09-08 by S14 (owner ruling R5 in the S14 prompt): S13 closed
+    # the task in docs/ROADMAP.yaml on 2026-09-08 and left this status for the
+    # owner. The three fire layer files that install the bar are attached below
+    # (S13 noted them and was not authorized to attach them); the two that were
+    # orphans leave the orphans section, nifc-fires.ts gains this as a third task.
+    status: done
     roadmap: docs/ROADMAP.yaml:270
     acceptance: Each of the four hazard screens shows a time control whose stamp names the issuer and
       the period the displayed surface covers, or states that the product is undated.
@@ -2645,6 +2650,31 @@ tasks:
         acceptance_testable_here: true
         evidence_lines: *a16
         attached_by: scout
+      - path: src/layers/nifc-fires.ts
+        owns: Renders NIFC current mapped wildfire perimeters with query-scoped fetch, category-split
+          presentation, and incident-metadata popup; installs the Wildfire time bar stating that the
+          product has no single valid time
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/layers/nifc-fires.ts:250: // The time statement (DDM-P8-T02)"
+        attached_by: repair:S14  # 2026-09-08, owner ruling R5; third task on this file
+      - path: src/layers/spc-fire-weather.ts
+        owns: Renders SPC Day 1 fire-weather categorical threat (Elevated/Critical/Extreme) from MapServer
+          with fire-weather-specific framing; installs the outlook time bar with the issuance's own
+          valid and expire
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/layers/spc-fire-weather.ts:98: // The time statement (DDM-P8-T02)"
+          - "src/layers/spc-fire-weather.ts:139: function installTimeBar(features: FeatureCollection['features']): void {"
+        attached_by: repair:S14  # 2026-09-08, owner ruling R5; was an orphan with test coverage
+      - path: src/layers/usfs-whp.ts
+        owns: Renders USFS Wildfire Hazard Potential (1-5 scale) from Federal GeoPlatform ImageServer
+          through MapLibre raster source with CORS proxy; installs the static 2023 edition time bar
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/layers/usfs-whp.ts:111: * The time statement (DDM-P8-T02 clause 4), the Wildfire screen's stamp at"
+          - "src/layers/usfs-whp.ts:119: function installTimeBar(): void {"
+        attached_by: repair:S14  # 2026-09-08, owner ruling R5; was an orphan with test coverage
     tests:
       - path: tests/heat-h1-heatrisk.spec.ts
         via: symbol-ref
@@ -4777,17 +4807,6 @@ orphan_files_with_test_coverage:
       - tests/power-layer.spec.ts
       - tests/wildfire-source-semantics.spec.ts
     strongest_link: import
-  - path: src/layers/spc-fire-weather.ts
-    owns: Renders SPC Day 1 fire-weather categorical threat (Elevated/Critical/Extreme) from MapServer
-      with fire-weather-specific framing
-    serves_component: map_and_visualization
-    component_path_rule: src/layers/
-    component_concerns: *a24
-    serves_foundation_guess: null
-    foundation_matched_terms: null
-    tests:
-      - tests/wildfire-source-semantics.spec.ts
-    strongest_link: import
   - path: src/layers/telemetry.ts
     owns: Renders telemetry station markers with MapLibre Marker API, async popup hydration for USGS IV
       data, and per-marker abort controllers
@@ -4821,19 +4840,6 @@ orphan_files_with_test_coverage:
     tests:
       - tests/boundary-boot-inventory.test.mjs
     strongest_link: path-ref
-  - path: src/layers/usfs-whp.ts
-    owns: Renders USFS Wildfire Hazard Potential (1-5 scale) from Federal GeoPlatform ImageServer
-      through MapLibre raster source with CORS proxy
-    serves_component: map_and_visualization
-    component_path_rule: src/layers/
-    component_concerns: *a24
-    serves_foundation_guess: DDM-B04
-    foundation_matched_terms:
-      - hazard
-      - potential
-    tests:
-      - tests/usfs-whp.spec.ts
-    strongest_link: import
   - path: src/map/basemap-switcher.ts
     owns: Implements the one-button satellite basemap toggle control, manages basemap mode state
       application, and handles chunk failures with honest feedback.

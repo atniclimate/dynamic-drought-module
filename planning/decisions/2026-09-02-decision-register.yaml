@@ -5,7 +5,7 @@
 schema_version: 1
 generated: "2026-09-02"
 updated: >-
-  2026-09-08 by session S13 (fire and heat time bar): 71 entries, 50 decided, 21 pending; added G-session-2026-09-08 with DR-071, session-proposed and pending owner ratification (the time-bar stamp grammar and what a fire or heat time step may claim; it also records that the issuer's own words contradict DR-070's classified -> observed reading of HeatRisk). S12 had added G-session-2026-09-07 with DR-070 (decided) on 2026-09-07 without bumping this line. Previous updated: 2026-09-04T11:20-07:00 by the foundations true-up: 69 entries, 49 decided, 20 pending, no entry ruled this session. Added foundations_pass_2026_09_03 (see that block). Corrections to the record's own facts: the deployed application bytes are 2835091, not 5be15f5 (docs-only diff skipped by deploy.yml paths-ignore); v0.6.26 IS tagged at 533fabd; DR-069 is unexecuted on main (vite.config.ts:67 sourcemap true), its fix rides platform/ddm-p15-close; DR-065's standing default_if_no_answer (option b) is the opposite of what was built and awaits ruling A6; DR-061 sits beside two live weekly crons (browser-suite.yml:76, refresh-snapshots.yml:18) and awaits ruling B6. Previous updated: 2026-09-03T20:05-07:00 by the long run: 69 entries, 49 decided, 20 pending. DR-067 decided b with its probe condition MET (the issuer applies a rendering rule, and it needs no Worker publish), DR-068 decided b, DR-069 created and decided and EXECUTED on platform/ddm-p15-close; DR-065 gained fix_2026_09_03 recording the flake rate falling 6 of 16 and 5 of 16 to 0 of 16; branch_state gained landed_2026_09_03_pm (main cd1d061 to 5be15f5, three merges, ribbon proven live) and awaiting_go_2026_09_03_pm (nine branches pushed, none landed, with a suggested landing order)
+  2026-09-08 by session S14 (close what has landed): 72 entries, 51 decided, 21 pending. DR-071 decided (owner ratification via the S14 prompt: option a as written, reading R-b affirmed, the register word stays Outlook with no vocab-allow, the heatrisk-days activation budget 10.0 kB gzip ratified); DR-070 amended_2026_09_08 (a HeatRisk claim in force is outlook register in the briefing too; implementation routed to DDM-P7-T05, no src/impact file touched); added G-session-2026-09-08-s14 with DR-072, session-proposed and pending (a "not wired" named absence does not close DDM-P7-T03). Previous updated: 2026-09-08 by session S13 (fire and heat time bar): 71 entries, 50 decided, 21 pending; added G-session-2026-09-08 with DR-071, session-proposed and pending owner ratification (the time-bar stamp grammar and what a fire or heat time step may claim; it also records that the issuer's own words contradict DR-070's classified -> observed reading of HeatRisk). S12 had added G-session-2026-09-07 with DR-070 (decided) on 2026-09-07 without bumping this line. Previous updated: 2026-09-04T11:20-07:00 by the foundations true-up: 69 entries, 49 decided, 20 pending, no entry ruled this session. Added foundations_pass_2026_09_03 (see that block). Corrections to the record's own facts: the deployed application bytes are 2835091, not 5be15f5 (docs-only diff skipped by deploy.yml paths-ignore); v0.6.26 IS tagged at 533fabd; DR-069 is unexecuted on main (vite.config.ts:67 sourcemap true), its fix rides platform/ddm-p15-close; DR-065's standing default_if_no_answer (option b) is the opposite of what was built and awaits ruling A6; DR-061 sits beside two live weekly crons (browser-suite.yml:76, refresh-snapshots.yml:18) and awaits ruling B6. Previous updated: 2026-09-03T20:05-07:00 by the long run: 69 entries, 49 decided, 20 pending. DR-067 decided b with its probe condition MET (the issuer applies a rendering rule, and it needs no Worker publish), DR-068 decided b, DR-069 created and decided and EXECUTED on platform/ddm-p15-close; DR-065 gained fix_2026_09_03 recording the flake rate falling 6 of 16 and 5 of 16 to 0 of 16; branch_state gained landed_2026_09_03_pm (main cd1d061 to 5be15f5, three merges, ribbon proven live) and awaiting_go_2026_09_03_pm (nine branches pushed, none landed, with a suggested landing order)
 posture: one integration branch, local-first verification, one PR when the owner says go
 
 decide_five_first: [DR-012, DR-009, DR-029, DR-016, DR-001]
@@ -3240,6 +3240,16 @@ groups:
           the case this was ruled for). classified, not named in R3, renders observed by the same
           reasoning its EVIDENCE_PRESENTATION tone already gives it. CELL_ABSENCE prose carries no
           tag (R4). Text only, existing tokens, no new color, no motion.
+        amended_2026_09_08: >-
+          Owner, via the S14 prompt (ruling R4), amended and not reopened: a HeatRisk claim in force
+          is outlook register in the briefing as well as on the time bar. The issuer's own words
+          (HeatRisk "provides a forecast of the potential level of risk ... over a 24-hour period",
+          the DR-071 receipt) override the classified -> observed reading above for HeatRisk; the
+          reasoning for classified stands for every other classified source. Implementation is
+          routed to heat claims without the layer (DDM-P7-T05): the per-evidence or per-claim
+          change in src/impact/evidence.ts or src/impact/sources.ts is that task's, and S14 touched
+          no src/impact file. Until it lands, the bar says outlook and the briefing's HeatRisk claim
+          still says observed; this amendment is the record that the bar is right.
 
   - id: G-session-2026-09-08
     title: Added by the 2026-09-08 S13 session (fire and heat time bar, DDM-P8-T02)
@@ -3322,9 +3332,17 @@ groups:
           the chip. Option a keeps every claim product-declared and lets the interface disagree
           with itself only where the map and the chip really do differ.
         default_if_no_answer: option a as built on feature/fire-heat-time-bar-p8t02
-        status: pending
-        decided: null
-        decision: null
+        status: decided
+        decided: "2026-09-08"
+        ruling_source: "owner, 2026-09-08, via the S14 prompt"
+        decision: >-
+          Ratified as written: option a, readings R-a to R-i as built on
+          feature/fire-heat-time-bar-p8t02 and landed on main (0b62a4e, 96aba35). Reading R-b is
+          affirmed: a HeatRisk frame is an outlook until its 24-hour period ends, and a period that
+          has ended reads "Period ended" in the plain register. The register word stays "Outlook";
+          no vocab-allow is added for the issuer's word "forecast". The heatrisk-days activation
+          budget at 10.0 kB gzip (measured 9.5) is ratified. The first of the two owner items below
+          is answered on DR-070 (amended_2026_09_08); the second is answered here.
         session_proposed_2026_09_08: >-
           Built as option a on feature/fire-heat-time-bar-p8t02 (commits 630df11, 67bef2e, a7bf1e2,
           7e931b9, b5a4fda, 0b62a4e; unpushed) by session S13, pending owner ratification; the
@@ -3339,3 +3357,56 @@ groups:
           vocab-allow and this session could not add one; the owner decides whether HeatRisk's own
           strings may carry a vocab-allow for the issuer's word, or whether Outlook stays the one
           cross-hazard register word with that convention stated somewhere a reader can reach.
+
+  - id: G-session-2026-09-08-s14
+    title: Added by the 2026-09-08 S14 session (close what has landed)
+    decisions:
+      - id: DR-072
+        title: Does a briefing cell that names the product it is missing close a task that was to add that product
+        question: >-
+          DDM-P7-T03's acceptance reads "The Fire near-term and long-range cells each state one
+          issuer's outlook with its valid window and geography, or read unavailable, and neither
+          presents a static hazard raster as a forecast." Since S02g (merge 6a070eb) both cells
+          render CELL_ABSENCE prose (src/impact/matrix.ts:144-153): "No near-term fire outlook is
+          read here yet: the NOAA Storm Prediction Center fire weather outlooks for Days 1 to 8 are
+          not wired into this briefing", and the season-ahead sentence for the NIFC Predictive
+          Services Months 1 to 4 outlook. Read literally, the disjunction "or read unavailable" is
+          met and no raster is presented as a forecast, so the sentence would flip the task to done
+          with DR-022 a (SPC Days 1 to 8, NIFC Months 1 to 4) decided and never wired. The register
+          itself says S02g "UNBLOCKS DDM-P7-T03" (:180), not that it satisfies it.
+        source:
+        - "docs/ROADMAP.yaml DDM-P7-T03 (title, acceptance, needs_decision DR-022)"
+        - "src/impact/matrix.ts:126-153, the CELL_ABSENCE table and its comment naming DR-022"
+        - "planning/decisions/2026-09-02-decision-register.yaml:180 (impact_ddm_p7_t02) and :1091-1093 (DR-022 decision a)"
+        blocks:
+        - DDM-P7-T03 (its status; the work itself is DR-022's)
+        options:
+        - key: a
+          text: >-
+            a named absence that says a product is "not wired" is a build state, not the runtime
+            "unavailable" of a wired product; DDM-P7-T03 stays open until the DR-022 outlooks are
+            wired and their cells carry an issuer, a valid window and a geography, with "unavailable"
+            reserved for a wired source that did not answer
+          cost: S
+          risk: the task keeps reading open while its cells already say something honest
+        - key: b
+          text: >-
+            read the acceptance literally, flip DDM-P7-T03 to done on the named absences, and file
+            the DR-022 wiring under a new task
+          cost: S
+          risk: a decided ruling loses its task; the roadmap says the fire claims were added when
+            none was
+        recommendation: a
+        rationale: >-
+          The title is "Add the Fire near-term and long-range claims" and DR-022 is decided; a
+          closing sentence must name the landing that added them. The matrix's prose is the honest
+          placeholder DDM-P7-T02 was asked for, and its own comment names DR-022 as the product
+          that will fill the cell.
+        default_if_no_answer: option a; DDM-P7-T03 stays open
+        status: pending
+        decided: null
+        decision: null
+        session_proposed_2026_09_08: >-
+          Applied as option a by S14 on 2026-09-08 under the S14 prompt's R12 (one session-proposed
+          entry): DDM-P7-T03 was not flipped, no ROADMAP key was invented, and the roster's S02g
+          line records "landed P7-T02; T03 unblocked, not closed".
