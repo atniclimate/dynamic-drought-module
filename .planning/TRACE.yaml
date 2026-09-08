@@ -4050,13 +4050,35 @@ tasks:
   DDM-P14-T02:
     title: Give boot a watchdog and a visible failure surface
     phase: DDM-P14
-    status: open
+    # open -> done 2026-09-08 by S14: landed 2026-09-07 in S02h (merges edabf02
+    # and 3289354), which postdates the scout pass. The merge --stat's two src
+    # files the scout had not attached here (sidebar.ts, app.css) are attached
+    # below (the register names the task at :176). Closed sentence in
+    # docs/ROADMAP.yaml; tests/boot-without-map.spec.ts ran alone (2 passed).
+    status: done
     roadmap: docs/ROADMAP.yaml:436
     acceptance: A renderer that never starts produces a stated failure the user can read, instead of a
       complete-looking inert interface.
     needs_decision: DR-035 (strict boot, or boot the chrome without the map after a bounded wait; 01 D1)
     verification: "verify:smoke  # repo default"
     files:
+      - path: src/ui/sidebar.ts
+        owns: Builds the sidebar shell at DOM ready with the map-dependent controls disabled and a
+          stated reason, and enables them once the map-dependent half is wired
+        acceptance_testable_here: true
+        evidence_lines:
+          - "src/ui/sidebar.ts:217: // (2026-09-03 launch ruling section 4; DR-065; DDM-P14-T02)"
+          - "src/ui/sidebar.ts:348: * renderer (DDM-P14-T02). A no-op once the controls are live: nothing may"
+        attached_by: repair:S14  # 2026-09-08, merge edabf02 --stat
+      - path: src/styles/app.css
+        owns: The disabled-control affordance tokens and the data-ddm-controls rules that withhold or
+          hide chrome until the controls are ready
+        acceptance_testable_here: false
+        evidence_lines:
+          - "src/styles/app.css:130: --ctl-pending-opacity: 0.45;"
+          - "src/styles/app.css:977: html:not([data-ddm-controls='ready']) #app[data-ddm-boot-view='brief']:not(.embed) #panel-quick-views {"
+        attached_by: repair:S14  # 2026-09-08, merge edabf02 --stat
+        cluster: styles
       - path: src/main.ts
         owns: Orchestrates DDM boot by creating MapLibre, preparing deep-link awareness, and handing off to
           UI/state initialization with boot-idle and renderer-notice coordination.

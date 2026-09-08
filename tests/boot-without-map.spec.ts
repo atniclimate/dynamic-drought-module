@@ -70,6 +70,21 @@ test('without WebGL 2 the chrome still boots and says so', async ({ page }) => {
     'Dynamic Drought Module'
   );
 
+  // DDM-P14-T02, the second surface: the generated controls exist, each is
+  // disabled with the reason beside it, and the stamp says there will be no
+  // map. Removing the early buildSidebarShell() call in main.ts fails these.
+  await expect(page.locator('html')).toHaveAttribute('data-ddm-controls', 'no-map');
+  const regionSelect = page.locator('#region-select');
+  await expect(regionSelect).toBeDisabled();
+  await expect(regionSelect).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.locator('#preset-chips .preset-chip')).not.toHaveCount(0);
+  await expect(
+    page.locator('#preset-chips .preset-chip:not([aria-disabled="true"])')
+  ).toHaveCount(0);
+  await expect(page.locator('#sidebar-control-note')).toHaveText(
+    'This browser cannot show the map, so these controls have nothing to change.'
+  );
+
   // The build stamps still identify this boot (T1-0 receipt integrity):
   // they are written before the capability probe, so a degraded boot is
   // still attributable to a commit and a run.

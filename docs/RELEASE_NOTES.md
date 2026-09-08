@@ -372,8 +372,14 @@ Every generated control in the sidebar used to wait on the map's `load` event,
 so a browser without WebGL 2, a graphics context that failed to start, or a
 boot slower than the eight-second bound left an empty region dropdown and an
 empty quick-view row beside a map that was not painting. That is the shape
-three separate people reported as the layer studio and the place studio "not
-working": an interface that looked finished and did nothing. The region
+the NIDIS demonstration reported as the layer studio and the place studio
+"not working": an interface that looked finished and did nothing. It is one
+of three field reports the decision register files under DR-065; the other
+two, an iPad's quick-view toggles not resetting and inconsistent studio
+navigation on desktop and phone, are not explained by this change and are
+held under their own browser contracts instead
+(`tests/preset-toggle-cycles.spec.ts`, `tests/studio-navigation-cycles.spec.ts`).
+The region
 dropdown, the quick-view chips, the impact-briefing trigger and the mobile
 hazard rail are now generated from the static region, framing and preset
 tables at DOM ready, before the renderer is probed at all, and every boot path

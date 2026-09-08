@@ -525,6 +525,8 @@ phases:
         effort: M
         needs_decision: "DR-035 (strict boot, or boot the chrome without the map after a bounded wait; 01 D1)"
         acceptance: "A renderer that never starts produces a stated failure the user can read, instead of a complete-looking inert interface."
+        status: done
+        closed: "2026-09-08: landed 2026-09-07 in S02h (merges edabf02 and 3289354; DR-065 option a). The stated failure: src/ui/renderer-notice.ts on the map, and src/ui/sidebar.ts:253-262 beside the controls (map-starting, map-not-started, no-map), which build at DOM ready from src/main.ts:236 and stay disabled with the reason until the map-dependent half is wired; src/main.ts:244-255 is the no-WebGL-2 path and :312-336 the bounded wait expiring. tests/boot-without-map.spec.ts:51-108 asserts the notice text, the visible chrome and, since S14, the disabled controls, their note and the no-map stamp (2 passed on 2026-09-08). S14 carried rulings A2 (the Brief door hides Quick views through the boot window, data-ddm-boot-view) and A3 (buildSidebar enables the controls in a finally; the release note narrowed to the NIDIS demonstration) and corrected the share-button comment."
       - id: "DDM-P14-T03"
         title: "Take the first paint down to what it needs"
         source: "01 ARCH-03, ARCH-17"
