@@ -82,10 +82,12 @@ been assigned to this work.
   floor on the sidebar, the map controls, the temporal rail, the briefing's
   close control and a map popup's close corner. Two geometry collisions are
   closed with them: the bottom dock no longer runs underneath an open impact
-  briefing between 721 and about 976 pixels, and the briefing keeps its gap
+  briefing between 721 and 984 pixels, and the briefing keeps its gap
   off the sidebar at every width in the band. Dock inset, dock lift, the
   map-information diameter and the touch floor are new custom properties.
-  Desktop geometry at 1025 pixels and wider is unchanged.
+  Desktop geometry at 1025 pixels and wider is unchanged for a fine
+  pointer; the touch floor is a pointer query with no upper width bound,
+  so a coarse pointer on a wide desktop takes the same 44 pixel targets.
 - 2026-09-03: the impact briefing is one four-hazard by three-horizon matrix.
   Each of the three horizon sections now holds a Drought, Fire, Heat, and ENSO
   row, and each of the twelve cells carries its own claims, its own status, and

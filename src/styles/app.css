@@ -3947,9 +3947,12 @@ button.telemetry-item {
    the panel's real ceiling is the room left after the dock's inset, the
    dock's floor and one gap, and beyond that ceiling the two terms of the
    dock's own `min()` swap places and the floor stops being reachable.
-   Panel widths that leaves in the band (with the fluid sidebar below):
-   237px at 721, 270px at 768, 306px at 820, 362px at 900, the full 440px
-   from about 976px up. At 1025px and wider the whole block is inert. */
+   Panel widths that leaves in the band (with the fluid sidebar below,
+   --sidebar-w = clamp(300px, 30vw + 64px, 340px), minus the 12px dock
+   inset, the 180px dock floor and the 12px gap): 217px at 721, 264px at
+   768, 306px at 820, 362px at 900, the full 440px from 984px up (the
+   sidebar reaches 340px at 920). At 1025px and wider the whole block is
+   inert. */
 @media (min-width: 721px) and (max-width: 1024px) {
   body:has(#app.app-shell:not(.sidebar-collapsed):not(.embed)) {
     --impact-panel-w: min(
@@ -7117,9 +7120,13 @@ a.impact-resource-link::after {
    sheet rules, and the 2026-07 hazard rail), so nothing here is restated
    for it.
 
-   Every declaration is a FLOOR, expressed as min-height or min-width, so
-   a control that already clears 44px is untouched and no control is
-   re-laid-out, recolored, renamed, or given different behavior. Measured
+   Every declaration but one is a FLOOR, expressed as min-height or
+   min-width, so a control that already clears 44px is untouched and no
+   control is recolored, renamed, or given different behavior. The one
+   exception is `.view-switch button`'s padding-inline, which widens the
+   Brief/Console switch sideways because that button declares no
+   min-width; whether it stays is an owner call (foundations plan v2,
+   ruling B1). Measured
    on 5be15f5 with `hasTouch` at all ten band viewports, these were the
    discrete controls under the floor; the height in the comment is the
    worst case measured.

@@ -399,6 +399,8 @@ phases:
         source: "06 UI-01, UI-02, UI-03"
         effort: L
         acceptance: "At 721, 768, 820, 900, and 1024 pixels in both orientations no control overlaps another, the dock keeps a usable width, and every interactive target meets the coarse-pointer minimum."
+        status: done
+        closed: "2026-09-08: landed 2026-09-07 in S02f (merge 704d5c2) in src/styles/app.css (the band block at :285, the fluid sidebar :330, the panel cap :3925-3970, the coarse-pointer floor :7108-7240). tests/interface-responsive.spec.ts:701-960 asserts the acceptance sentence literally at the ten viewports (three conditions each) plus an 820x615 embed and the fluid sidebar; S14 ran it alone on 2026-09-08 (12 passed) and corrected the block's panel-width figures (217, 264, full width from 984) in the CSS comment and the release note. Two owner calls stay open and are not acceptance clauses: the .maplibregl-popup-close-button 44 px rule (app.css:7229) and the .view-switch padding-inline (app.css:7144), both foundations plan v2 ruling B1."
       - id: "DDM-P10-T02"
         title: "Land the token layers the design had none of"
         source: "06 UI-04, UI-06, UI-12, UI-13, UI-17, UI-18; 11 MM-08"

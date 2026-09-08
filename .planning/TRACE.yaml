@@ -3054,7 +3054,12 @@ tasks:
   DDM-P10-T01:
     title: Decide and build the tablet band
     phase: DDM-P10
-    status: open
+    # open -> done 2026-09-08 by S14: landed 2026-09-07 in S02f (merge 704d5c2),
+    # which postdates the scout pass. The acceptance spec the merge added is
+    # attached at the head of tests below; app.css was already attached by the
+    # styles-cluster scout. Closed sentence in docs/ROADMAP.yaml; the tablet
+    # band tests ran alone (12 passed).
+    status: done
     roadmap: docs/ROADMAP.yaml:336
     acceptance: At 721, 768, 820, 900, and 1024 pixels in both orientations no control overlaps another,
       the dock keeps a usable width, and every interactive target meets the coarse-pointer minimum.
@@ -3102,6 +3107,11 @@ tasks:
         attached_by: scout
         cluster: styles
     tests:
+      - path: tests/interface-responsive.spec.ts
+        via: path-ref
+        covers: src/styles/app.css
+        evidence: "tests/interface-responsive.spec.ts:701: * THE TABLET BAND, 721 to 1024 pixels (DDM-P10-T01; ROADMAP gate DDM-D02;"
+        attached_by: repair:S14  # 2026-09-08, the acceptance spec merge 704d5c2 added
       - path: tests/boot-without-map.spec.ts
         via: selector
         covers: src/styles/app.css
