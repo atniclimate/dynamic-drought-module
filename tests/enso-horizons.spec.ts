@@ -24,6 +24,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { HORIZON_CHROME } from '../src/impact/horizon-chrome';
 import { gotoApp } from './helpers';
 
 const SNAPSHOT_PATH = join(process.cwd(), 'public', 'data', 'enso-indices.json');
@@ -251,5 +252,44 @@ test.describe('DDM-P12-T02: the ENSO horizons carry distinct source-backed meani
     expect(texts.current).toContain('snapshot dated');
 
     expectNoForecastLanguage(texts);
+  });
+
+  /**
+   * The acceptance's second clause reaches the column chrome, not only the
+   * cell text: a heading that says "outlook" over an observation implies a
+   * forecast the app does not have, which is the collision DR-031's own risk
+   * line predicted and S09 shipped into. The headings are asserted against
+   * HORIZON_CHROME rather than a literal, so this test and the rendered DOM
+   * can only disagree if the panel stops reading the table. The hyphen check
+   * pins the owner's spelling ("Near Term", not "Near-Term") so a later edit
+   * cannot quietly bring it back.
+   */
+  test('no horizon heading says outlook or forecast, and no title carries a hyphen', async ({
+    page
+  }) => {
+    await openBriefing(page, withWeekly());
+    for (const key of ENSO_HORIZONS) {
+      const chrome = HORIZON_CHROME[key];
+      const title = (await page.locator(`#impact-horizon-title-${key}`).innerText()).trim();
+      const subtitle = (
+        await page
+          .locator(`.impact-horizon[aria-labelledby="impact-horizon-title-${key}"] .impact-horizon-sub`)
+          .innerText()
+      ).trim();
+
+      // The DOM shows exactly the table, nothing restated.
+      expect(title, `${key} title in the DOM`).toBe(chrome.title);
+      expect(subtitle, `${key} subtitle in the DOM`).toBe(chrome.subtitle);
+
+      for (const [what, text] of [
+        ['title', chrome.title],
+        ['subtitle', chrome.subtitle]
+      ] as const) {
+        expect(text, `${key} ${what} implies a forecast register: "${text}"`).not.toMatch(
+          /outlook|forecast/i
+        );
+      }
+      expect(chrome.title, `${key} title carries a hyphen: "${chrome.title}"`).not.toContain('-');
+    }
   });
 });
