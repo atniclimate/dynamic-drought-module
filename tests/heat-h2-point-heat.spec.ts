@@ -24,7 +24,7 @@ import type {
   BoundarySelectionContext,
   PointHeatBriefing
 } from '../src/impact/types';
-import { gotoApp } from './helpers';
+import { gotoApp, layerCheckbox, layerPill } from './helpers';
 
 function context(
   code: string | null,
@@ -747,6 +747,338 @@ test.describe('H2 critical-first surfaces', () => {
     );
     await page.waitForTimeout(100);
     expect(requestCount).toBe(6);
+  });
+});
+
+test.describe('H2 near-term HeatRisk claim independent of the map layer (DR-014 a)', () => {
+  const HEATRISK_PATH = '/experimental/rest/services/NWS_HeatRisk/ImageServer';
+  const HEATRISK_ONE_PIXEL_PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    'base64'
+  );
+  // idp_validtime is in ascending order, so index 0 is the catalog's earliest
+  // advertised granule ("day 1 of 7 of the catalog") whether or not the map
+  // layer ever asks for it. Its value is deliberately null so the same
+  // rendered branch (sources.ts fetchHeatRiskClaims, the `identified.value
+  // === null` arm) exercises the "for day 1 of 7 of the catalog" / "for the
+  // selected frame" wording.
+  //
+  // These times are FIXED 2026 literals, not built relative to the test
+  // clock, and this suite runs with the real system clock (no
+  // `page.clock.setFixedTime` in this describe block): every period below
+  // has therefore ENDED by the time this runs (DR-070 amended 2026-09-08,
+  // DR-071's phase rule, mirrored by heatRiskClaimRegister in
+  // src/ui/heatrisk-sequence.ts), so the register assertions below read
+  // `observed`, not `outlook`. That is deliberate: it is this fixture's one
+  // proof of the ended-period branch. The paired in-force case lives in its
+  // own test below, built relative to Date.now() instead of moving this
+  // fixture (moving it would also force every `Valid ...` UTC-moment
+  // assertion in this describe block onto computed, rather than literal,
+  // strings, for no honesty gain over the dedicated case).
+  const CATALOG_TIMES = [
+    1785240000000,
+    1785326400000,
+    1785412800000,
+    1785499200000,
+    1785585600000,
+    1785672000000,
+    1785758400000
+  ] as const;
+  const CATALOG_VALUES = [null, 1, 0, 3, 4, 2, 2] as const;
+
+  interface HeatRiskCatalogReceipt {
+    /** Every `/identify` request's `time` param, in call order. */
+    readonly identifyCalls: number[];
+  }
+
+  interface StubHeatRiskCatalogOptions {
+    readonly catalogTimes?: readonly number[];
+    readonly catalogValues?: readonly (number | null)[];
+  }
+
+  async function stubHeatRiskCatalog(
+    page: Page,
+    options: StubHeatRiskCatalogOptions = {}
+  ): Promise<HeatRiskCatalogReceipt> {
+    const times = options.catalogTimes ?? CATALOG_TIMES;
+    const values = options.catalogValues ?? CATALOG_VALUES;
+    const identifyCalls: number[] = [];
+    await page.route(
+      (url) => url.pathname.startsWith(HEATRISK_PATH),
+      async (route) => {
+        const requestUrl = new URL(route.request().url());
+        if (requestUrl.pathname.endsWith('/query')) {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              features: times.map((validTime, index) => ({
+                attributes: {
+                  name: `HeatRisk_${index + 1}_Mercator`,
+                  idp_validtime: validTime
+                }
+              }))
+            })
+          });
+          return;
+        }
+        if (requestUrl.pathname.endsWith('/identify')) {
+          const time = Number(requestUrl.searchParams.get('time'));
+          identifyCalls.push(time);
+          const index = times.indexOf(time);
+          const value = index < 0 ? undefined : values[index];
+          if (value === undefined) {
+            await route.fulfill({
+              status: 400,
+              contentType: 'application/json',
+              body: JSON.stringify({ error: { message: 'unknown time' } })
+            });
+            return;
+          }
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              value: value === null ? 'NoData' : String(value),
+              catalogItems: {
+                features:
+                  value === null
+                    ? []
+                    : [{ attributes: { idp_validtime: time } }]
+              }
+            })
+          });
+          return;
+        }
+        if (requestUrl.pathname.endsWith('/exportImage')) {
+          await route.fulfill({
+            status: 200,
+            contentType: 'image/png',
+            body: HEATRISK_ONE_PIXEL_PNG
+          });
+          return;
+        }
+        // Service metadata: reached by the map layer's own activation AND by
+        // the briefing's independent-catalog fallback
+        // (src/ui/heatrisk-sequence.ts identifyHeatRiskForBriefing), which
+        // reads it whether or not the map layer ever activates (DDM-P7-T05
+        // F8 correction: this comment previously said the opposite).
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            timeInfo: { timeExtent: [times[0], times.at(-1)] }
+          })
+        });
+      }
+    );
+    return { identifyCalls };
+  }
+
+  /** Copies heat-h1-heatrisk.spec.ts's own counting-fixture toggle helper. */
+  async function setLayerChecked(
+    page: Page,
+    key: string,
+    checked: boolean
+  ): Promise<void> {
+    await layerCheckbox(page, key).evaluate((element, next) => {
+      element.checked = next;
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+    }, checked);
+  }
+
+  test('layer off: the claim is present with its source and validity, naming day 1 of 7 of the catalog', async ({
+    page
+  }) => {
+    await stubBrowserNwsHeat(page);
+    await stubHeatRiskCatalog(page);
+    await gotoApp(page, '?embed=true&view=console&select=state:WA');
+
+    await expect(page.locator('#heatrisk-sequence')).toBeHidden();
+    const heatClaim = page.locator(
+      '#impact-panel .impact-claim-classified',
+      { hasText: 'HeatRisk (Experimental)' }
+    );
+    await expect(heatClaim).toContainText(
+      'no data at the selected point for Washington for day 1 of 7 of the catalog'
+    );
+    await expect(heatClaim).toContainText(
+      'Valid Jul 28, 2026, 12:00 UTC to Jul 29, 2026, 12:00 UTC'
+    );
+    await expect(heatClaim.locator('.impact-claim-badge')).toHaveText(
+      'Classified'
+    );
+    // DR-070 amended 2026-09-08, DR-071: HeatRisk stays Classified evidence,
+    // but its register follows the SAME phase the time bar draws
+    // (heatRiskClaimRegister in src/ui/heatrisk-sequence.ts): this
+    // fixture's day 1 period (Jul 28 to Jul 29, 2026) has long since ended
+    // by the real clock this suite runs under, so it reads observed, not
+    // outlook (an ended period is "the spent claim the doctrine forbids"
+    // as an outlook). The in-force case is proven separately below.
+    await expect(heatClaim.locator('.impact-claim-register')).toHaveText(
+      'observed'
+    );
+  });
+
+  test('layer on selecting the same frame: the claim carries the same source and validity, naming the selected frame', async ({
+    page
+  }) => {
+    await stubBrowserNwsHeat(page);
+    await stubHeatRiskCatalog(page);
+    await gotoApp(
+      page,
+      '?embed=true&view=console&layers=heatrisk&heatday=1&select=state:WA'
+    );
+    await expect(layerPill(page, 'heatrisk')).toHaveText('live');
+
+    const heatClaim = page.locator(
+      '#impact-panel .impact-claim-classified',
+      { hasText: 'HeatRisk (Experimental)' }
+    );
+    await expect(heatClaim).toContainText(
+      'no data at the selected point for Washington for the selected frame'
+    );
+    await expect(heatClaim).toContainText(
+      'Valid Jul 28, 2026, 12:00 UTC to Jul 29, 2026, 12:00 UTC'
+    );
+    await expect(heatClaim.locator('.impact-claim-badge')).toHaveText(
+      'Classified'
+    );
+    // DR-070 amended 2026-09-08, DR-071: same ended-period reasoning as the
+    // layer-off case above; the selected frame is the same day 1 period.
+    await expect(heatClaim.locator('.impact-claim-register')).toHaveText(
+      'observed'
+    );
+  });
+
+  test('a frame whose 24-hour period has not ended reads the outlook register', async ({
+    page
+  }) => {
+    // Built relative to THIS test's own clock (real time, no
+    // page.clock.setFixedTime in this describe block), three hours into day
+    // 1, so day 1 is in force at the moment the briefing boots below. This
+    // is the paired proof for the two ended-period cases immediately above:
+    // heatRiskClaimRegister reads BOTH directions of the same boundary.
+    const day1Start = Date.now() - 3 * 60 * 60 * 1000;
+    const inForceTimes = Array.from(
+      { length: 7 },
+      (_, index) => day1Start + index * 24 * 60 * 60 * 1000
+    );
+    await stubBrowserNwsHeat(page);
+    await stubHeatRiskCatalog(page, {
+      catalogTimes: inForceTimes,
+      catalogValues: [2, 1, 0, 3, 4, null, 2]
+    });
+    await gotoApp(page, '?embed=true&view=console&select=state:WA');
+
+    const heatClaim = page.locator(
+      '#impact-panel .impact-claim-classified',
+      { hasText: 'HeatRisk (Experimental)' }
+    );
+    await expect(heatClaim).toContainText(
+      'value 2, Moderate, at the selected point for Washington'
+    );
+    await expect(heatClaim.locator('.impact-claim-badge')).toHaveText(
+      'Classified'
+    );
+    await expect(heatClaim.locator('.impact-claim-register')).toHaveText(
+      'outlook'
+    );
+  });
+
+  test('toggling the layer off then on with the briefing open costs no extra identify request', async ({
+    page
+  }) => {
+    await stubBrowserNwsHeat(page);
+    const receipt = await stubHeatRiskCatalog(page);
+    await gotoApp(
+      page,
+      '?embed=true&view=console&layers=heatrisk&heatday=1&select=state:WA'
+    );
+    await expect(layerPill(page, 'heatrisk')).toHaveText('live');
+    await expect
+      .poll(() => receipt.identifyCalls.length)
+      .toBe(CATALOG_TIMES.length);
+
+    // A toggle off then quickly on must cost only the layer's own two
+    // seven-frame reads (activation, then reactivation); the briefing's
+    // independent-catalog fallback (src/ui/heatrisk-sequence.ts
+    // identifyHeatRiskForBriefing) must settle through the toggle without
+    // firing a request of its own (the RACE correction, DDM-P7-T05 brief 2).
+    await setLayerChecked(page, 'heatrisk', false);
+    await expect(layerCheckbox(page, 'heatrisk')).not.toBeChecked();
+    await setLayerChecked(page, 'heatrisk', true);
+    await expect(layerPill(page, 'heatrisk')).toHaveText('live');
+    await expect
+      .poll(() => receipt.identifyCalls.length)
+      .toBe(CATALOG_TIMES.length * 2);
+
+    // Give the fallback's settle window (about 500 ms) time to fully elapse;
+    // it must still make no request once it does.
+    await page.waitForTimeout(700);
+    expect(receipt.identifyCalls.length).toBe(CATALOG_TIMES.length * 2);
+  });
+
+  test('toggling the layer off and LEAVING it off: the fallback answers once, past the settle window', async ({
+    page
+  }) => {
+    // DDM-P7-T05 F5: the case DR-014 a is actually about. Unlike the test
+    // above (toggled back on quickly, the fallback never runs), this leaves
+    // the layer off, so the fallback's own settle-then-fetch sequence
+    // (src/ui/heatrisk-sequence.ts identifyHeatRiskForBriefing) runs to
+    // completion: the layer's own seven /identify calls (activation) plus
+    // the fallback's own one.
+    await stubBrowserNwsHeat(page);
+    const receipt = await stubHeatRiskCatalog(page);
+    await gotoApp(
+      page,
+      '?embed=true&view=console&layers=heatrisk&heatday=1&select=state:WA'
+    );
+    await expect(layerPill(page, 'heatrisk')).toHaveText('live');
+    await expect
+      .poll(() => receipt.identifyCalls.length)
+      .toBe(CATALOG_TIMES.length);
+
+    await setLayerChecked(page, 'heatrisk', false);
+    await expect(layerCheckbox(page, 'heatrisk')).not.toBeChecked();
+
+    // Past the ~500 ms deactivation settle window: the fallback's own
+    // catalog read and single /identify have had time to complete.
+    await page.waitForTimeout(800);
+
+    const heatClaim = page.locator(
+      '#impact-panel .impact-claim-classified',
+      { hasText: 'HeatRisk (Experimental)' }
+    );
+    await expect(heatClaim).toContainText(
+      'no data at the selected point for Washington for day 1 of 7 of the catalog'
+    );
+    await expect(heatClaim).toContainText(
+      'Valid Jul 28, 2026, 12:00 UTC to Jul 29, 2026, 12:00 UTC'
+    );
+    expect(receipt.identifyCalls.length).toBe(CATALOG_TIMES.length + 1);
+  });
+
+  test('the season-ahead heat cell reads unavailable and names the CPC seasonal temperature outlook', async ({
+    page
+  }) => {
+    await stubBrowserNwsHeat(page);
+    await stubHeatRiskCatalog(page);
+    await gotoApp(page, '?embed=true&view=console&select=state:WA');
+
+    const cell = page.locator(
+      '.impact-hazard[data-horizon="longRange"][data-hazard="heat"]'
+    );
+    await expect(cell.locator('.impact-hazard-pill')).toHaveText(
+      'unavailable'
+    );
+    await expect(cell.locator('.impact-horizon-note')).toContainText(
+      'the NOAA CPC seasonal temperature outlook is not wired into this briefing'
+    );
+    // The long-range drought cell keeps its own cited CPC Seasonal Drought
+    // Outlook prose (hydrate.ts CPC_SEASONAL_OUTLOOK); it must not appear
+    // under heat, which would misattribute a drought-tendency claim to heat.
+    await expect(cell).not.toContainText('CPC Seasonal Drought Outlook');
   });
 });
 
