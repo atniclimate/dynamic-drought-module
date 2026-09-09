@@ -535,9 +535,14 @@ function mountSheetSearch(): void {
   if (!container) return;
   searchMounted = true;
   const map = mapRef;
-  void import('./search-controller').then(({ mountSearchInto }) => {
-    mountSearchInto(map, container);
-  });
+  void import('./search-controller')
+    .then(({ mountSearchInto }) => {
+      mountSearchInto(map, container);
+    })
+    .catch((err: unknown) => {
+      searchMounted = false;
+      console.error('[mobile-sheet] search mount failed:', err);
+    });
 }
 
 /** Add the one D-0.7.0-054 entry below the sheet's time control. */

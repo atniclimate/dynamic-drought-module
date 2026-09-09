@@ -436,6 +436,66 @@ test.describe('U2 embed stays sheetless; expand reveals the sheet at peek (400x6
     await expect(app).toHaveAttribute('data-sheet-detent', 'peek');
     await expect(page.locator('#sheet-grabber')).toBeVisible();
   });
+
+  test('a failed search-controller chunk on embed-exit leaves the sheet intact and the mount recoverable', async ({
+    page
+  }) => {
+    const pageErrors: Error[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error));
+    const consoleErrors: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
+    });
+    // A brief embed defers the catalog island (and the search-controller
+    // chunk it shares with the sheet) entirely, so the boot itself never
+    // requests it (headroom C1). The route is armed only after boot, so it
+    // catches exactly the embed-exit's own request, never the boot's.
+    await gotoApp(page, '?embed=true');
+    await page.route('**/assets/search-controller-*.js', (route) => route.abort('failed'));
+
+    const app = page.locator('#app');
+    await expect(app).toHaveClass(/\bembed\b/);
+
+    // The expand control still exits embed and reveals the sheet at peek:
+    // that transition does not wait on the search mount. The SAME click
+    // also asks the shared island and the Brief-head search to mount
+    // (`sidebar.ts`'s expand handler), so this one route touches three
+    // `import('./search-controller')` call sites; only two can reject
+    // visibly (`src/ui/sidebar.ts:1498-1504` already catches its own), and
+    // the assertions below are scoped to the one this defect owns.
+    await page.locator('#sidebar-expand').click();
+    await expect(app).not.toHaveClass(/\bembed\b/);
+    await expect(app).toHaveAttribute('data-sheet-detent', 'peek');
+    await expect(page.locator('#sheet-grabber')).toBeVisible();
+
+    // The sheet itself stays intact: the at-hand answer renders and the
+    // search container exists, honestly carrying no input rather than a
+    // half-built control a user could tap and get nothing from.
+    await expect(page.locator('.sheet-at-hand-title')).toHaveText('Pick a place');
+    await expect(page.locator('#sheet-search')).toBeAttached();
+    await expect(page.locator('#sheet-search [data-ddm-search]')).toHaveCount(0);
+
+    // mobile-sheet.ts's own catch (this defect's fix) ran: it logs its own
+    // tagged message and resets `searchMounted` rather than leaving the
+    // rejection unhandled.
+    await expect
+      .poll(() => consoleErrors.some((line) => line.includes('[mobile-sheet] search mount failed')))
+      .toBe(true);
+
+    // One unhandled rejection may be on record here and is NOT this defect:
+    // `src/ui/view-shell.ts:544-546`'s `mountBriefSearch` (called from the
+    // same expand handler via `ensureBriefHeadSearch`) imports the same
+    // chunk with no `.catch`, the identical bug this defect fixes in
+    // mobile-sheet.ts, in a file this brief does not own (DDM-P1-T04 owns
+    // the fix). The bound is at most one today, because that sibling site
+    // still rejects visibly; once DDM-P1-T04 lands its own `.catch`, the
+    // count goes to zero and this assertion keeps passing rather than
+    // pinning the bug's continued existence.
+    expect(pageErrors.length).toBeLessThanOrEqual(1);
+    if (pageErrors.length === 1) {
+      expect(pageErrors[0]?.message ?? '').toContain('search-controller');
+    }
+  });
 });
 
 test.describe('U2 the sheet settle survives a main-thread stall (390x844)', () => {

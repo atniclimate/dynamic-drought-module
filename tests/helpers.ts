@@ -298,8 +298,62 @@ export async function gotoApp(
   // transport in flight. It moves the moment a spec's own assertions run,
   // and changes none of them. Derived from registry and transport state,
   // never from elapsed time, so it cannot flip early and hide a failure.
+  //
+  // `expect.poll` at the same default timeout `toHaveAttribute` used
+  // (`playwright.config.ts`'s `expect.timeout`, 10s; never lengthened here):
+  // on a miss it names which layers are still owed, read from the DOM the
+  // same way `pendingBootLayers()` (src/state/boot-idle.ts:80-102) computes
+  // it (checked-but-not-terminal, or a live `loading...` pill), because that
+  // function's own module state is private to the running page's closure
+  // and unreachable from a production bundle without a product-code change
+  // outside this file. `pendingSharedTransportCount()` (src/util/fetch.ts:193)
+  // is the same kind of private counter with no DOM reflection at all, so a
+  // miss says plainly that it could not be read from this seam rather than
+  // guess at it. The read itself is wrapped in its own try/catch: a page
+  // teardown race during the evaluate must not replace the original
+  // boot-idle failure with an unrelated one, so the fallback is a literal
+  // clause and the original error survives as `cause`, never flattened.
   if (options.bootIdle !== false) {
-    await expect(page.locator('html')).toHaveAttribute('data-ddm-boot', 'idle');
+    try {
+      await expect.poll(() => page.locator('html').getAttribute('data-ddm-boot')).toBe('idle');
+    } catch (err) {
+      let diagnostic: string;
+      try {
+        const read = await page.evaluate(
+          ({ loadingText, terminalPills }) => {
+            const inputs = Array.from(
+              document.querySelectorAll<HTMLInputElement>('input[data-layer-key]')
+            );
+            if (inputs.length === 0) return { noToggles: true as const, pending: [] };
+            const pending = inputs
+              .filter((input) => {
+                const key = input.dataset['layerKey'];
+                const pill = document.querySelector(`[data-layer-status="${key}"]`);
+                const text = (pill?.textContent ?? '').trim();
+                if (text === loadingText) return true;
+                return input.checked && !terminalPills.includes(text);
+              })
+              .map((input) => input.dataset['layerKey']);
+            return { noToggles: false as const, pending };
+          },
+          { loadingText: PILL.loading, terminalPills: TERMINAL_PILLS }
+        );
+        // A brief-embed boot defers the catalog island (src/ui/sidebar.ts:
+        // 1702-1703), so no `input[data-layer-key]` exists yet; an empty
+        // pending list there would misread as "everything settled".
+        diagnostic = read.noToggles
+          ? 'the layer toggles are not in the DOM (a brief-embed boot defers the catalog island, src/ui/sidebar.ts:1702-1703)'
+          : `pending layers (checked and not yet terminal) = ${JSON.stringify(read.pending)}`;
+      } catch (evalErr) {
+        diagnostic = `the pending-layer proxy could not be read (${(evalErr as Error).message})`;
+      }
+      throw new Error(
+        `boot-idle never reached "idle" within the default expect timeout; ${diagnostic}; ` +
+          'pending shared transport count is not observable from this seam (a private counter ' +
+          'in src/util/fetch.ts with no DOM reflection).',
+        { cause: err }
+      );
+    }
   }
 }
 

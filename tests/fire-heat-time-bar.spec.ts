@@ -678,7 +678,32 @@ test.describe('DDM-P8-T02: the Drought and ENSO screens state their horizon in t
   }) => {
     await stubCommon(page);
     await stubSst(page);
-    await gotoApp(page, '?view=console&cluster=enso&horizon=season-ahead&sst=2026-07-03');
+    // The SST stamp race (defect 1): hold the target frame's own tiles back
+    // so the interim, still-buffering state can be read. The headline must
+    // already name the frame being loaded, never the frame the surface is
+    // fading from, for the whole width of the buffering window.
+    let releaseTile: (() => void) | undefined;
+    const tileGate = new Promise<void>((resolve) => {
+      releaseTile = resolve;
+    });
+    await page.route(
+      (url) => url.href.includes('GHRSST_L4_MUR') && url.pathname.endsWith('.png'),
+      async (route) => {
+        await tileGate;
+        await route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG });
+      }
+    );
+    await gotoApp(page, '?view=console&cluster=enso&horizon=season-ahead&sst=2026-07-03', {
+      bootIdle: false
+    });
+    await expect.poll(async () => (await readStamp(page)).detail).toContain('buffering tiles');
+    expect((await readStamp(page)).headline).toBe('Observed Jul 3, 2026');
+    releaseTile?.();
+    // `{ bootIdle: false }` above opted out of gotoApp's own settled-boot
+    // wait so this case could read the interim buffering state; restore
+    // that precondition before the closing assertions run, at the same
+    // default timeout the seam always uses.
+    await expect.poll(() => page.locator('html').getAttribute('data-ddm-boot')).toBe('idle');
     await expect(layerPill(page, 'sst-anomaly')).toHaveText(PILL.live, { timeout: 25_000 });
     const stamp = await readStamp(page);
     // The pressed chip says Long Range; the surface is a measured daily

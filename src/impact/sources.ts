@@ -1053,13 +1053,29 @@ function outlookValiditySentence(v: OutlookValue | null): string {
   return parts.length > 0 ? ` ${parts.join('; ')}.` : '';
 }
 
-/** Render a category and probability into a lean phrase for one variable. */
+/**
+ * Render a category and probability into a lean phrase for one variable.
+ * `EC` (Equal Chances) is CPC's own statement that no forecast tool favors
+ * any tercile, which is a different claim from a near-normal tilt (the
+ * issuer's own glossary: "areas where equal chances of experiencing
+ * below-normal, normal, or above-normal conditions are possible";
+ * ddm-science-verifier EC verdict, 2026-09-09). It is never folded into
+ * `Normal`'s "near-normal" phrase. A category code that is none of the
+ * four the issuer's service carries renders nothing rather than invent a
+ * tilt: `leanPhrase` returning `null` here already leaves the claim to the
+ * surviving variable, or drops the window if neither answers (see the
+ * `parts.filter` call above this function's caller).
+ */
 function leanPhrase(v: OutlookValue | null, variable: string): string | null {
   if (!v) return null;
   const odds = Number.isFinite(v.prob) ? ` (${v.prob}% odds)` : '';
   if (v.cat === 'Above') return `above-normal ${variable}${odds}`;
   if (v.cat === 'Below') return `below-normal ${variable}${odds}`;
-  return `near-normal ${variable}`;
+  if (v.cat === 'Normal') return `near-normal ${variable}`;
+  if (v.cat === 'EC') {
+    return `equal chances of above-, near-, or below-normal ${variable} (no CPC-favored category)`;
+  }
+  return null;
 }
 
 /** Drought-and-fire interpretation of a temperature and precipitation lean. */
