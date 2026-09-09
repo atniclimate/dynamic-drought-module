@@ -444,3 +444,52 @@ test.describe.serial('retained minimap wildfire runtime', () => {
     }
   });
 });
+
+/**
+ * DDM-P11-T01, DR-041 b, at the data layer this file already stays at
+ * (this file is in `playwright.pure.config.ts`'s PURE_SPECS: no `page`
+ * fixture, no `gotoApp`; see `tests/pure-lane-inventory.test.mjs`, which
+ * fails `check:all` on the first browser-fixture request here). The
+ * RENDERING half of DR-041 b (the `-whp-` pattern id, the desaturated
+ * fill, the `data-metric-time` edition year, the metric-note caption) is
+ * proved at the DOM in `tests/s4-minimap.spec.ts` instead, against this
+ * exact same fixture shape (`pacific-coast`, a successful zero with
+ * `moderate-potential` WHP data).
+ */
+test.describe('minimap wildfire fallback data contract (DDM-P11-T01, DR-041 b)', () => {
+  test('a successful zero-perimeter classification is never mapped-wildfire, and the edition year the UI caption cites actually parses', () => {
+    const fallback = deriveMinimapWildfireSummary(
+      { status: 'live', count: 0 },
+      whp(60, 70, 'live-partial'),
+    );
+    expect(fallback.condition).not.toBe('mapped-wildfire');
+    expect(['high-potential', 'moderate-potential', 'below-threshold']).toContain(
+      fallback.condition,
+    );
+    expect(fallback.status).not.toBe('unavailable');
+    // The UI's WHP_EDITION_YEAR (src/ui/island/minimap.tsx) extracts the
+    // LEADING year from this same field, deliberately not the trailing
+    // "updated" date: per the issuer's own metadata (USFS
+    // RDS-2015-0047-4), that later date is a Nodata-classification patch
+    // to the already-published 2023 raster, not a refresh of the hazard
+    // assessment (ddm-science-verifier, 2026-09-09). This pins that the
+    // source data still leads with a bare four-digit year today.
+    expect(MINIMAP_WHP.source.edition).toMatch(/^\d{4}/);
+  });
+
+  test('an unavailable current-fire read never carries WHP data forward', () => {
+    const summary = deriveMinimapWildfireSummary(
+      { status: 'unavailable', count: null },
+      whp(90, 95, 'live'),
+    );
+    expect(summary.condition).toBe('unavailable');
+    expect(summary.status).toBe('unavailable');
+    // Only the three WHP-classified conditions ever get the fallback
+    // treatment; 'unavailable' (this case) and 'no-data' render neither
+    // the live red nor the desaturated WHP pattern.
+    expect(summary.condition).not.toBe('mapped-wildfire');
+    expect(['high-potential', 'moderate-potential', 'below-threshold']).not.toContain(
+      summary.condition,
+    );
+  });
+});

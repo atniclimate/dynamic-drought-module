@@ -1,13 +1,15 @@
 import { test, expect } from '@playwright/test';
-import type { Page } from '@playwright/test';
 import { gotoApp, search } from './helpers';
 import {
   FRAMINGS,
   FRAMING_KEYS,
   framingFitBounds,
 } from '../src/config/framings';
-import type { FramingKey } from '../src/config/framings';
-import { buildMinimapWildfireQueryBody } from '../src/state/minimap-wildfire';
+import { MINIMAP_WHP } from '../src/config/minimap-whp';
+import {
+  stubWildfireMinimap,
+  stubWildfireMinimapUnavailable,
+} from './minimap-fixtures';
 
 test('the Alaska framing camera includes the wrapped western Aleutians', () => {
   const [[west], [east]] = framingFitBounds(FRAMINGS['alaska-northwest']);
@@ -36,55 +38,6 @@ const NADM_FIXTURE = {
     },
   ],
 };
-
-const WILDFIRE_GEOMETRY_KEYS = new Map(
-  FRAMING_KEYS.map((key) => [
-    buildMinimapWildfireQueryBody(key).get('geometry'),
-    key,
-  ]),
-);
-
-async function stubWildfireMinimap(
-  page: Page,
-  counts: Readonly<Partial<Record<FramingKey, number>>> = {},
-  onPost?: () => void,
-): Promise<void> {
-  await page.route(
-    '**/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query**',
-    (route) => {
-      if (route.request().method() !== 'POST') {
-        return route.fulfill({
-          status: 200,
-          contentType: 'application/geo+json',
-          body: JSON.stringify({ type: 'FeatureCollection', features: [] }),
-        });
-      }
-      onPost?.();
-      const body = new URLSearchParams(route.request().postData() ?? '');
-      const key = WILDFIRE_GEOMETRY_KEYS.get(body.get('geometry'));
-      if (key === undefined) {
-        return route.fulfill({
-          status: 400,
-          contentType: 'application/json',
-          body: JSON.stringify({ error: { message: 'Unknown test geometry' } }),
-        });
-      }
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ count: counts[key] ?? 0 }),
-      });
-    },
-  );
-  await page.route('**/NOAA_Satellite_Smoke_Detection_*/FeatureServer/0/query**',
-    (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/geo+json',
-        body: JSON.stringify({ type: 'FeatureCollection', features: [] }),
-      }),
-  );
-}
 
 /**
  * S4b: the framing minimap, pointer and keyboard (the S4 design record
@@ -263,6 +216,12 @@ test.describe('S4b minimap', () => {
     await expect(
       minimap.locator('[data-framing="alaska-northwest"]'),
     ).toHaveCSS('fill', 'rgb(215, 48, 39)');
+    // A live mapped-fire framing has no discrete date to claim.
+    expect(
+      await minimap
+        .locator('[data-framing="alaska-northwest"]')
+        .getAttribute('data-metric-time'),
+    ).toBeNull();
     const pacific = minimap.locator('[data-framing="pacific-coast"]');
     await expect(pacific).toHaveAttribute(
       'data-wildfire-condition',
@@ -276,9 +235,30 @@ test.describe('S4b minimap', () => {
       'aria-label',
       /static strategic landscape potential, not current fire conditions or a forecast/i,
     );
+    // DR-041 b: a WHP fallback (this framing's zero current-fire count with
+    // WHP data) renders desaturated and stippled, distinct from the older
+    // plain partial-coverage crosshatch; its source's valid time is the
+    // edition year, never a retrieval timestamp.
     await expect(
-      minimap.locator('#shell-minimap-partial-pacific-coast rect'),
-    ).toHaveAttribute('fill', '#FFE066');
+      minimap.locator('#shell-minimap-whp-pacific-coast rect'),
+    ).toHaveAttribute('fill', '#C4BE93');
+    await expect(
+      minimap.locator('#shell-minimap-whp-pacific-coast circle'),
+    ).toHaveCount(1);
+    // The edition YEAR, never the trailing "updated" date in the same
+    // field (that later date is a Nodata-classification patch to the
+    // already-published 2023 raster, not a refresh of the assessment;
+    // ddm-science-verifier, USFS RDS-2015-0047-4, 2026-09-09).
+    await expect(pacific).toHaveAttribute(
+      'data-metric-time',
+      MINIMAP_WHP.source.edition.match(/^\d{4}/)?.[0] ?? '',
+    );
+    await expect(
+      minimap.locator('.shell-minimap-metric-note'),
+    ).toContainText('desaturated and stippled');
+    await expect(
+      minimap.locator('.shell-minimap-metric-note'),
+    ).toContainText(MINIMAP_WHP.source.edition);
     await expect(
       minimap.locator('[data-framing="plains-prairies"]'),
     ).toHaveAttribute('data-wildfire-condition', 'below-threshold');
@@ -293,6 +273,11 @@ test.describe('S4b minimap', () => {
       'NADM · Jul 2026',
     );
     expect(nadmRequests).toBe(1);
+    // The source's valid month (NADM YEAR_MONTH), never a retrieval time.
+    await expect(minimap.locator('.shell-minimap-canvas')).toHaveAttribute(
+      'data-metric-time',
+      '2026-07',
+    );
 
     // EF-3: the metric note renders for EVERY metric context, not wildfire
     // only. On Heat and ENSO it states the honest absence of a framing
@@ -300,12 +285,29 @@ test.describe('S4b minimap', () => {
     // so the former `toHaveCount(0)` is now the neutral sentence.
     await page.locator('.shell-cluster-btn[data-cluster="heat"]').click();
     await expect(minimap.locator('.shell-minimap-metric-note')).toHaveText(
-      'No verified Extreme Heat framing metric applied.',
+      'Navigation only: no verified Extreme Heat framing metric applied.',
     );
+    // DR-040 c clause 1: the visible note AND every framing target's
+    // accessible name say the same "navigation only" thing (both read
+    // NEUTRAL_METRIC_NOTES), and the canvas carries no status word at all
+    // (absent, not the retired 'neutral' sentinel) since none of the six
+    // states apply to a metric-free context.
+    await expect(
+      minimap.locator('[data-framing="pacific-coast"]'),
+    ).toHaveAttribute('aria-label', /Navigation only:/);
+    expect(
+      await minimap.locator('.shell-minimap-canvas').getAttribute('data-minimap-status'),
+    ).toBeNull();
     await page.locator('.shell-cluster-btn[data-cluster="enso"]').click();
     await expect(minimap.locator('.shell-minimap-metric-note')).toHaveText(
-      'No verified ENSO framing metric applied.',
+      'Navigation only: no verified ENSO framing metric applied.',
     );
+    await expect(
+      minimap.locator('[data-framing="pacific-coast"]'),
+    ).toHaveAttribute('aria-label', /Navigation only:/);
+    expect(
+      await minimap.locator('.shell-minimap-canvas').getAttribute('data-minimap-status'),
+    ).toBeNull();
   });
 
   test('the annotated granular drought URL keeps the selected drought metric and regional fills', async ({
@@ -585,5 +587,116 @@ test.describe('S4b minimap', () => {
     ).toHaveAttribute('aria-checked', 'true');
     expect(new URLSearchParams(await search(page)).get('framing')).toBe('all');
     expect(new URLSearchParams(await search(page)).get('region')).toBeNull();
+  });
+
+  test('the viewport footprint tracks the main map camera and stays inside the card (DDM-P11-T01 clause 2)', async ({
+    page,
+  }) => {
+    // Reduced motion: the footprint jumps to the new bounds with fitBounds's
+    // own animation skipped, rather than this test racing an easing curve.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await gotoApp(page);
+    const minimap = page.locator('.shell-minimap-map');
+    const footprint = minimap.locator('#shell-minimap-viewport');
+    await expect(footprint).toHaveCount(1);
+    await expect(footprint).toHaveAttribute('data-viewport', 'true');
+
+    const readBox = () =>
+      footprint.evaluate((el) => ({
+        x: Number(el.getAttribute('x')),
+        y: Number(el.getAttribute('y')),
+        width: Number(el.getAttribute('width')),
+        height: Number(el.getAttribute('height')),
+      }));
+    const before = await readBox();
+
+    // The SAME `map` instance the minimap's own fit* helpers fly: clicking
+    // a framing region is the established way this suite already moves the
+    // main map's real camera (see the pointer-selection test above), so it
+    // doubles as this clause's camera-mover with no second map handle
+    // needed.
+    await minimap.locator('[data-framing="arid-west"]').click();
+    await page.waitForFunction(() =>
+      window.location.search.includes('framing=arid-west'),
+    );
+
+    await expect.poll(readBox).not.toEqual(before);
+    const after = await readBox();
+    // Stays inside the card: the drawing plane's own viewBox (the boot
+    // test above pins it to "0 0 660 348").
+    expect(after.x).toBeGreaterThanOrEqual(0);
+    expect(after.y).toBeGreaterThanOrEqual(0);
+    expect(after.x + after.width).toBeLessThanOrEqual(660);
+    expect(after.y + after.height).toBeLessThanOrEqual(348);
+    // Feedback only: the click already committed framing=arid-west above;
+    // the footprint reflecting the SAME camera does not itself write a
+    // second, competing claim.
+    expect(new URLSearchParams(await search(page)).get('framing')).toBe(
+      'arid-west',
+    );
+  });
+
+  test('an unavailable current-fire read renders unavailable and never falls through to a WHP fill (DR-041 b)', async ({
+    page,
+  }) => {
+    await stubWildfireMinimap(page, {});
+    await stubWildfireMinimapUnavailable(page, FRAMING_KEYS);
+    await gotoApp(page, '?view=brief&cluster=wildfire');
+    const minimap = page.locator('.shell-minimap-map');
+    await expect(minimap.locator('.shell-minimap-canvas')).toHaveAttribute(
+      'data-wildfire-status',
+      'unavailable',
+    );
+    const pacific = minimap.locator('[data-framing="pacific-coast"]');
+    await expect(pacific).toHaveAttribute('data-wildfire-condition', 'unavailable');
+    // No fallthrough to either WHP treatment (new stipple or old crosshatch).
+    await expect(minimap.locator('#shell-minimap-whp-pacific-coast')).toHaveCount(0);
+    await expect(
+      minimap.locator('#shell-minimap-partial-pacific-coast'),
+    ).toHaveCount(0);
+    expect(await pacific.getAttribute('data-metric-time')).toBeNull();
+    await expect(minimap.locator('.shell-minimap-metric-note')).toContainText(
+      'Static WHP is not substituted',
+    );
+  });
+});
+
+test.describe('S4b minimap: compact height band geometry gating (DDM-P11-T01 clause 3)', () => {
+  // The short/landscape touch band from tests/interface-responsive.spec.ts's
+  // "short landscape coarse-pointer shell" describe (width >= 721,
+  // height <= 699): `.shell-minimap-map` yields to the popover door there,
+  // which is the desktop inline card's own "hidden" case, not a phone-width
+  // one (below 721px hides `#shell-panel` entirely, unrelated to this gate).
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
+
+  test('neither instance builds geometry until the popover opens', async ({
+    page,
+  }) => {
+    await page.route('**/NADM-current.geojson', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify(NADM_FIXTURE),
+      }),
+    );
+    await gotoApp(page);
+
+    const inline = page.locator('.shell-minimap-map');
+    await expect(inline).toBeHidden();
+    await expect(inline.locator('path')).toHaveCount(0);
+    await expect(inline.locator('svg')).toHaveCount(0);
+
+    const popover = page.locator('#shell-minimap-popover');
+    await expect(popover.locator('path')).toHaveCount(0);
+    await expect(popover.locator('svg')).toHaveCount(0);
+
+    const door = page.locator('#shell-minimap-door');
+    await door.scrollIntoViewIfNeeded();
+    await door.click();
+    await expect(popover).toBeVisible();
+    await expect(popover.locator('svg.shell-minimap-drawing')).toHaveCount(1);
+    await expect(
+      popover.locator('svg.shell-minimap-drawing path.shell-minimap-mainland'),
+    ).toHaveCount(8);
   });
 });
