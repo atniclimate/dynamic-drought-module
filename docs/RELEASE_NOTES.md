@@ -5,6 +5,27 @@
 Merged to `main` after the `v0.6.26` tag. No new package version or tag has
 been assigned to this work.
 
+- 2026-09-08: four closures from the integration cycle. A layer whose
+  activation fails, whether the failure throws or is reported by the layer
+  itself, now corrects the sidebar checkbox and the share URL, shows
+  `unavailable`, and announces the failure once to assistive technology.
+  Before this the two paths diverged: a thrown failure lost its
+  `unavailable` status and read as off, and a failure the layer reported
+  itself was announced twice. A briefing claim now shows the
+  issuer's method or basis beneath its source: the U.S. Drought Monitor
+  percentile ranges as the National Drought Mitigation Center publishes
+  them, and the National Weather Service HeatRisk definition as a 24-hour
+  forecast. Each claim that names a legend section carries a legend link
+  that reaches it, turning the layer on when it is off and disclosing the
+  replacement. The near-term heat claim states its evidence whether or not
+  the HeatRisk layer is displayed: when the layer is off the briefing reads
+  the National Weather Service catalog's first available day rather than
+  reporting nothing, and the claim's register reads `outlook` while the
+  frame is in force and `observed` once the period has ended, matching the
+  time bar. The season-ahead heat cell still reads `unavailable` and names
+  the Climate Prediction Center seasonal temperature outlook as the product
+  not yet wired. The entry chunk sits at 31 kB against its 45 kB budget
+  with no code change.
 - 2026-09-08: the repository is the application only. Every planning ledger,
   session record, roadmap file and harness entry point left the public tree
   for a private planning record maintained by ATNI Climate;

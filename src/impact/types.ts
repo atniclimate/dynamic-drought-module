@@ -63,6 +63,14 @@ export interface ClaimSupport {
   readonly effective?: string;
   /** What the claim reports over, for example "statewide" or "basin forecast point". */
   readonly reporting?: string;
+  /**
+   * DDM-P13-T02: the key of the `src/ui/legend-registry.ts` section that
+   * carries this claim's product legend (for example `'usdm'`, `'heatrisk'`),
+   * when that legend already exists in the app. Set only to a key a real
+   * legend section is built under; the renderer uses this to make the
+   * per-product legend reachable from the claim, never to invent one.
+   */
+  readonly legendKey?: string;
 }
 
 /**
@@ -79,6 +87,14 @@ export interface ClaimMethod {
   readonly version?: string;
   readonly baseline?: string;
   readonly sourceVintage?: string;
+  /**
+   * DDM-P13-T02: the issuer's own statement of the method or basis behind the
+   * claim's value (for example a percentile basis or a forecast-period
+   * definition), quoted from prose the tree already carries elsewhere
+   * (never authored fresh at a construction site). Renders as its own line
+   * beneath the source, under the claim that carries it.
+   */
+  readonly basis?: string;
 }
 
 /**
@@ -96,6 +112,18 @@ export interface SourcedClaim {
   readonly sourceUrl?: string;
   /** What kind of knowledge the statement rests on. Required; set truthfully. */
   readonly evidence: EvidenceClass;
+  /**
+   * An explicit observed/outlook register that overrides `CLAIM_REGISTER_TAG`'s
+   * per-evidence-class default (DR-070 amended 2026-09-08): HeatRisk is
+   * `classified` evidence (the badge stays Classified, an issuer-published
+   * class of a currently valid state) but the issuer's own words describe a
+   * forecast, so its register reads `outlook` in the briefing and on the time
+   * bar alike. Set only where the owner has ruled a per-claim exception;
+   * every other classified claim, and every other evidence class, still gets
+   * its register from the class default. Read through `claimRegisterTag` in
+   * `src/impact/evidence.ts`, never this field or the table directly.
+   */
+  readonly register?: 'observed' | 'outlook';
   /**
    * Legacy compatibility tone, DERIVED from `evidence` by `makeClaim`
    * (observation for observed/analyzed/classified; outlook for the

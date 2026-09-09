@@ -26,7 +26,7 @@ import { join } from 'node:path';
 
 import { HORIZON_CHROME } from '../src/impact/horizon-chrome';
 import { expectNoForecastLanguage as expectClean } from './enso-forecast-language';
-import { gotoApp } from './helpers';
+import { gotoApp, stubHeatRiskCatalog } from './helpers';
 
 const SNAPSHOT_PATH = join(process.cwd(), 'public', 'data', 'enso-indices.json');
 
@@ -127,6 +127,9 @@ async function openBriefing(page: Page, snapshot: Snapshot): Promise<void> {
   await page.route('**/proxy?*', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
   );
+  // DDM-P7-T05 F2: fetchHeatRiskClaims reads the NWS HeatRisk catalog
+  // independently of the map layer (DR-014 a), so this boot reaches it too.
+  await stubHeatRiskCatalog(page);
   await gotoApp(page, '?view=brief&layers=places&select=state:WA');
 }
 

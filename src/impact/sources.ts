@@ -253,19 +253,38 @@ export async function fetchHeatRiskClaims(
   signal: AbortSignal
 ): Promise<SourceResult> {
   try {
-    const { identifySelectedHeatRisk } = await import(
-      '../ui/heatrisk-sequence'
-    );
-    const identified = await identifySelectedHeatRisk(
+    const { identifyHeatRiskForBriefing, heatRiskClaimRegister, REQUIRED_FRAME_COUNT } =
+      await import('../ui/heatrisk-sequence');
+    // DR-014 a: this reads independently of the map layer's activation, so
+    // the near-term heat claim states its evidence whether or not HeatRisk is
+    // displayed. The briefing describes the place, not the map.
+    const result = await identifyHeatRiskForBriefing(
       context.lngLat.lng,
       context.lngLat.lat,
       signal
     );
     if (signal.aborted) return { claims: [], ok: false };
-    // HeatRisk is contextual to its active displayed frame. An inactive layer
-    // adds no source slot and does not make an otherwise complete horizon
-    // partial.
-    if (!identified) return { claims: [], ok: true };
+    // DDM-P7-T05 F3: the three nulls the old signature collapsed into one
+    // note are told apart here (see HeatRiskBriefingRead's own doc).
+    if (result.kind === 'no-displayed-frame') {
+      // HeatRisk is contextual to its active displayed frame. An inactive
+      // layer adds no source slot and does not make an otherwise complete
+      // horizon partial.
+      return { claims: [], ok: true };
+    }
+    if (result.kind === 'catalog-failed') {
+      return {
+        claims: [],
+        ok: false,
+        note: 'The National Weather Service HeatRisk catalog did not respond.'
+      };
+    }
+    if (result.kind === 'superseded') return { claims: [], ok: false };
+    const identified = result.identify;
+    const frameLabel =
+      identified.frameSource === 'selected'
+        ? 'the selected frame'
+        : `day ${identified.frame.day} of ${REQUIRED_FRAME_COUNT} of the catalog`;
 
     const validity =
       `${heatRiskMoment(identified.frame.validTime)} to ` +
@@ -276,13 +295,37 @@ export async function fetchHeatRiskClaims(
       source,
       sourceUrl,
       evidence: 'classified',
+      // DR-070 amended 2026-09-08, DR-071: HeatRisk stays 'classified'
+      // evidence (the badge stays Classified), but the issuer's own words
+      // describe a forecast, "provides a forecast of the potential level of
+      // risk for heat-related impacts to occur over a 24-hour period"
+      // (HeatRisk v2.6 Overview). A claim whose 24-hour period is still IN
+      // FORCE (has not ended) therefore overrides the classified ->
+      // observed default and reads outlook; an ENDED period reads observed
+      // (the spent claim the doctrine forbids as an outlook). This is the
+      // same boundary the time bar draws for the same product
+      // (src/layers/heatrisk.ts frameStamp/framePhase), read here through
+      // the one shared helper (heatRiskClaimRegister) so the briefing and
+      // the map can never disagree about when a HeatRisk claim is in force.
+      register: heatRiskClaimRegister(identified.validThrough, Date.now()),
       dates: {
         valid: isoDayUtc(identified.frame.validTime),
         retrieved: todayIso()
       },
       support: {
         native: 'National Weather Service HeatRisk raster cell',
-        reporting: 'the cell at the selected point'
+        reporting: 'the cell at the selected point',
+        // DDM-P13-T02: `heatrisk` is the src/ui/legend-registry.ts key this
+        // layer already builds its category legend under (src/layers/heatrisk.ts).
+        legendKey: 'heatrisk'
+      },
+      // DDM-P13-T02: quoted, not authored here. The issuer's own definition
+      // of the product this claim reads, already carried in prose at
+      // src/layers/heatrisk.ts:200-204 (HeatRisk v2.6 Overview, read
+      // 2026-09-08): a 24-hour-period forecast, not an instant reading.
+      method: {
+        // vocab-allow: verbatim quoted upstream product definition (HeatRisk v2.6 Overview), quotation marks and all; not DDM's own word for its own read
+        basis: 'HeatRisk "provides a forecast of the potential level of risk for heat-related impacts to occur over a 24-hour period" and is calculated "from the current date through seven days in the future" (HeatRisk v2.6 Overview).'
       },
       uncertainty: {
         kind: 'categorical',
@@ -290,9 +333,14 @@ export async function fetchHeatRiskClaims(
       }
     } as const;
 
+    const heatReadLabel =
+      identified.frameSource === 'selected'
+        ? 'NWS HeatRisk selected frame'
+        : `NWS HeatRisk day ${identified.frame.day} of ${REQUIRED_FRAME_COUNT}`;
+
     if (identified.value === null) {
       const text =
-        `HeatRisk (Experimental): no data at the selected point for ${context.title} for the selected frame. ` +
+        `HeatRisk (Experimental): no data at the selected point for ${context.title} for ${frameLabel}. ` +
         `Valid ${validity}.`;
       return {
         ok: true,
@@ -304,7 +352,7 @@ export async function fetchHeatRiskClaims(
         ],
         heatRead: {
           key: 'heatRisk',
-          label: 'NWS HeatRisk selected frame',
+          label: heatReadLabel,
           text,
           sourceUrl
         }
@@ -325,7 +373,7 @@ export async function fetchHeatRiskClaims(
       ],
       heatRead: {
         key: 'heatRisk',
-        label: 'NWS HeatRisk selected frame',
+        label: heatReadLabel,
         text,
         sourceUrl
       }
@@ -353,6 +401,20 @@ export async function fetchHeatRiskClaims(
  * to the same parse without a second round trip.
  */
 const USDM_OUT_FIELDS = 'DM,MapDate,ValidStart,ValidEnd';
+
+/**
+ * DDM-P13-T02 F2: the U.S. Drought Monitor's own published percentile basis
+ * for its D0 to D4 categories, quoted from the issuer (NDMC, "Drought
+ * Classification",
+ * https://droughtmonitor.unl.edu/About/AbouttheData/DroughtClassification.aspx),
+ * not authored here. Every claim that names a D-category (the per-point USDM
+ * claims below, and the statewide DSCI claim) carries this SAME string
+ * character for character, so the method line reads identically wherever a
+ * category appears.
+ */
+// vocab-allow: verbatim quoted upstream table heading ("example percentile range for most indicators"), quotation marks and all; not DDM's own word for its own read
+const USDM_PERCENTILE_BASIS =
+  'The U.S. Drought Monitor assigns D0 to D4 by percentile; the NDMC\'s "example percentile range for most indicators" is D0 20.01-30.00, D1 10.01-20.00, D2 5.01-10.00, D3 2.01-5.00, D4 0.00-2.00 (NDMC, Drought Classification).';
 
 /**
  * Query the United States Drought Monitor FeatureServer for the polygons that
@@ -425,7 +487,9 @@ export async function fetchUsdmClaims(
         claims: [
           makeClaim({
             text: `This location is in a mapped drought category (DM ${worst}) in ${asOfMap}.`,
-            ...usdmShared
+            ...usdmShared,
+            support: { ...usdmShared.support, legendKey: 'usdm' },
+            method: { basis: USDM_PERCENTILE_BASIS }
           })
         ]
       };
@@ -436,7 +500,9 @@ export async function fetchUsdmClaims(
       claims: [
         makeClaim({
           text: `This location is in ${impact.code} ${impact.label} as of ${asOfMap}. ${impact.summary}`,
-          ...usdmShared
+          ...usdmShared,
+          support: { ...usdmShared.support, legendKey: 'usdm' },
+          method: { basis: USDM_PERCENTILE_BASIS }
         }),
         // The wildfire companion translates the analyzed category through the
         // documented USDM impact profiles: a DDM-derived read, labeled so.
@@ -660,7 +726,21 @@ export async function fetchDsciTrendClaims(
           sourceUrl,
           evidence: 'analyzed',
           dates: { valid: calendarToIso(lastCal), retrieved: todayIso() },
-          support: { reporting: `statewide (${stateName})` },
+          support: {
+            reporting: `statewide (${stateName})`,
+            // DDM-P13-T02: `usdm` is the src/ui/legend-registry.ts key the
+            // U.S. Drought Monitor layer already builds its category legend
+            // under (src/layers/usdm.ts showAbsoluteLegend).
+            legendKey: 'usdm'
+          },
+          // DDM-P13-T02 correction: quoted from the issuer's own published
+          // basis, held once as USDM_PERCENTILE_BASIS above and shared with
+          // the per-point USDM category claims. The DSCI caveat stays in the
+          // claim `text` above, unmoved; this is the USDM category's
+          // percentile basis, a distinct fact from the DSCI caveat.
+          method: {
+            basis: USDM_PERCENTILE_BASIS
+          },
           ...(chartSvg ? { chartSvg } : {})
         })
       ]

@@ -127,6 +127,76 @@ test.describe('claim rendering honesty', () => {
     expect(html).not.toContain('<p class="impact-claim-lineage" title=');
   });
 
+  test('method and support are rendered, not just carried (DDM-P13-T02)', () => {
+    const html = renderClaim(
+      makeClaim({
+        text: 't',
+        source: 's',
+        evidence: 'classified',
+        dates: { valid: '2026-09-08', retrieved: '2026-09-08' },
+        method: { basis: 'HeatRisk is calculated over a 24-hour period, not an instant.' },
+        support: { reporting: 'the cell at the selected point', legendKey: 'heatrisk' }
+      })
+    );
+    expect(html).toContain('impact-claim-uncertainty');
+    expect(html).toContain(
+      'Method: HeatRisk is calculated over a 24-hour period, not an instant.'
+    );
+    expect(html).toContain('Support: the cell at the selected point');
+    // The legend is reachable from the claim through a link to the shared
+    // legend panel, keyed to the section that already carries it. The title
+    // names what happens when the layer is off (DDM-P13-T02 correction,
+    // clause 3): the visible text stays the plain "Legend".
+    expect(html).toContain(
+      '<a href="#legend-panel" data-legend-key="heatrisk" title="Legend; turns the layer on if it is off">Legend</a>'
+    );
+  });
+
+  test('a claim with neither method nor support renders no method/support line', () => {
+    const html = renderClaim(claimOf('observed'));
+    expect(html).not.toContain('Method:');
+    expect(html).not.toContain('Support:');
+    expect(html).not.toContain('legend-panel');
+  });
+
+  test('DR-070 amended 2026-09-08: a per-claim register override renders its own word, not its evidence class default', () => {
+    // The HeatRisk exception: classified evidence, but the register reads
+    // outlook because the claim sets it explicitly. The badge (evidence
+    // class) is unaffected; only the register word beside the source line
+    // changes.
+    const overridden = renderClaim(
+      makeClaim({
+        text: 't',
+        source: 's',
+        evidence: 'classified',
+        register: 'outlook',
+        dates: { retrieved: '2026-09-08' }
+      })
+    );
+    expect(overridden).toContain('impact-claim impact-claim-classified"');
+    expect(overridden).toContain('>Classified</span>');
+    expect(overridden).toContain('<span class="impact-claim-register">outlook</span>');
+    expect(overridden).not.toContain('<span class="impact-claim-register">observed</span>');
+
+    // Every other classified claim, with no override set, still renders the
+    // class default (observed): the amendment names HeatRisk alone.
+    const defaulted = renderClaim(claimOf('classified'));
+    expect(defaulted).toContain('<span class="impact-claim-register">observed</span>');
+  });
+
+  test('method provenance fields join baseline, version, and source vintage', () => {
+    const html = renderClaim(
+      makeClaim({
+        text: 't',
+        source: 's',
+        evidence: 'observed',
+        dates: { retrieved: '2026-07-21' },
+        method: { baseline: '1991-2020 normal', version: '2.6', sourceVintage: '2025 release' }
+      })
+    );
+    expect(html).toContain('Method: 1991-2020 normal baseline; version 2.6; source vintage 2025 release');
+  });
+
   test('a lineage reference rides the title attribute, never the sentence (DR-058 a)', () => {
     const html = renderClaim(
       makeClaim({
@@ -200,6 +270,54 @@ test.describe('date precedence (valid > issued > published > retrieved)', () => 
 });
 
 // ---------------------------------------------------------------------------
+// Day, not instant: a product defined over a day (USDM's weekly map, valid on
+// a Tuesday; HeatRisk's daily raster) is never presented with clock-time
+// precision at the claim's date chip (DDM-P13-T02, ROADMAP.yaml:506 clause 4).
+// `makeClaim` already enforces every date as a bare YYYY-MM-DD (evidence.ts's
+// ISO_DAY check), so this pins that the render layer never widens that back
+// out into a timestamp, for the two named day-defined products specifically.
+// ---------------------------------------------------------------------------
+
+test.describe('day, not instant', () => {
+  test('the USDM-shaped claim (weekly map, valid on a Tuesday) renders a day, never a clock time', () => {
+    const html = renderClaim(
+      makeClaim({
+        text: 'As of the Sep 2, 2026 map, statewide drought severity is 210.',
+        source: 'U.S. Drought Monitor (NDMC / NOAA / USDA)',
+        evidence: 'analyzed',
+        dates: { valid: '2026-09-02', retrieved: '2026-09-08' },
+        support: { reporting: 'statewide (Test State)', legendKey: 'usdm' },
+        method: { basis: 'The NDMC publishes no DSCI trend threshold and calls the index itself experimental.' }
+      })
+    );
+    expect(html).toContain('impact-claim-date">Valid 2026-09-02</span>');
+    // No hour, minute, "T" separator, or UTC clock reaches the date chip.
+    expect(html).not.toMatch(/impact-claim-date">[^<]*(?:UTC|[T:]\d)/);
+  });
+
+  test('the HeatRisk-shaped claim (daily raster) renders a day, never a clock time, and names its own 24-hour-period basis', () => {
+    const html = renderClaim(
+      makeClaim({
+        text: 'HeatRisk (Experimental) value 2, Moderate, at the selected point.',
+        source: 'National Weather Service HeatRisk (Experimental)',
+        evidence: 'classified',
+        dates: { valid: '2026-09-08', retrieved: '2026-09-08' },
+        support: { native: 'National Weather Service HeatRisk raster cell', reporting: 'the cell at the selected point', legendKey: 'heatrisk' },
+        method: {
+          basis:
+            'HeatRisk "provides a forecast of the potential level of risk for heat-related impacts to occur over a 24-hour period" and is calculated "from the current date through seven days in the future" (HeatRisk v2.6 Overview).'
+        }
+      })
+    );
+    expect(html).toContain('impact-claim-date">Valid 2026-09-08</span>');
+    expect(html).not.toMatch(/impact-claim-date">[^<]*(?:UTC|[T:]\d)/);
+    // The 24-hour-period framing itself is what makes "a day, not an instant"
+    // honest here; it is reachable in the rendered method line.
+    expect(html).toContain('over a 24-hour period');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Rendered panel: real briefing claims carry evidence badges and date lines
 // ---------------------------------------------------------------------------
 
@@ -246,6 +364,20 @@ test.describe('rendered briefing under the contract', () => {
     await expect(usdmClaim.first()).toBeVisible({ timeout: 15_000 });
     await expect(usdmClaim.first().locator('.impact-claim-badge')).toHaveText('Analyzed');
     await expect(usdmClaim.first().locator('.impact-claim-date')).toContainText('Retrieved');
+
+    // DDM-P13-T02 F2: the USDM category claim carries the same percentile
+    // basis as the DSCI claim, and the Legend link that reaches the USDM
+    // legend section (support.legendKey: 'usdm').
+    await expect(usdmClaim.first()).toContainText('Method:');
+    await expect(usdmClaim.first()).toContainText('D0 to D4 by percentile');
+    const usdmLegendLink = usdmClaim.first().locator('a[data-legend-key="usdm"]');
+    await expect(usdmLegendLink).toBeVisible();
+    // DDM-P13-T02 F4: `usdm` is role: 'surface' (src/config/layers.ts), so
+    // the hydrated title discloses the surface replacement BEFORE the click.
+    await expect(usdmLegendLink).toHaveAttribute(
+      'title',
+      'Legend; turns the US Drought Monitor layer on if it is off, replacing the surface layer showing now'
+    );
 
     // The wildfire companion is a DDM-derived read and is labeled so.
     const wildfireClaim = panel.locator('.impact-claim', { hasText: 'Wildfire:' });
@@ -316,5 +448,74 @@ test.describe('rendered briefing under the contract', () => {
     expect(colors.modeled).not.toBe(colors.observed);
     expect(colors.modeledAnalysis).not.toBe(colors.observed);
     expect(colors.modeledAnalysisLabel).toBe('Modeled analysis');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Legend reachable in one click, layer off or on (DDM-P13-T02 correction,
+// clause 3). The verifier refuted the first cut: the Legend link pointed at
+// `#legend-panel`, which the registry (src/ui/legend-registry.ts) leaves
+// hidden and empty while the product's map layer is off. This pins the fix:
+// clicking the link with the layer off turns the layer on and reaches the
+// section, and the URL's `layers=` list picks up the layer key.
+// ---------------------------------------------------------------------------
+
+test.describe('legend reachable from the claim (DDM-P13-T02 correction)', () => {
+  test('the USDM claim\'s Legend link turns the layer on and opens its section when the layer starts off', async ({
+    page
+  }) => {
+    await stubBriefingSources(page);
+    // The generic `**/proxy?*` stub above answers every proxied call with an
+    // empty body; the severity-trend claim that carries `support.legendKey:
+    // 'usdm'` (src/impact/sources.ts fetchDsciTrendClaims) needs a real
+    // two-point DSCI series to render at all, so this narrower, later route
+    // wins for that one upstream call (Playwright runs the most recently
+    // registered matching route first).
+    const end = new Date();
+    const start = new Date(end);
+    start.setDate(start.getDate() - 84);
+    const isoDay = (d: Date): string => d.toISOString().slice(0, 10);
+    await page.route('**/proxy?url=*GetDSCI*', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify([
+          { mapDate: isoDay(start), dsci: 200 },
+          { mapDate: isoDay(end), dsci: 210 }
+        ])
+      })
+    );
+
+    await gotoApp(page, '?select=state:WA');
+    const panel = page.locator('#impact-panel');
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // The USDM layer starts off: no `layers=` naming it yet.
+    expect(new URL(page.url()).searchParams.get('layers') ?? '').not.toContain('usdm');
+    await expect(page.locator('#layer-toggle-usdm')).not.toBeChecked();
+
+    const legendLink = panel.locator('a[data-legend-key="usdm"]').first();
+    await expect(legendLink).toBeVisible({ timeout: 15_000 });
+    await legendLink.click();
+
+    // The layer turns on...
+    await expect(page.locator('#layer-toggle-usdm')).toBeChecked();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('layers'), { timeout: 10_000 })
+      .toContain('usdm');
+
+    // ...and its legend section becomes visible in the shared panel
+    // (getLegendSection non-null, the panel not hidden), which is exactly
+    // what the click promised.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const legendPanel = document.getElementById('legend-panel');
+            const section = document.querySelector('.legend-section[data-legend="usdm"]');
+            return { panelHidden: legendPanel?.hidden ?? true, sectionExists: section !== null };
+          }),
+        { timeout: 10_000 }
+      )
+      .toEqual({ panelHidden: false, sectionExists: true });
   });
 });
