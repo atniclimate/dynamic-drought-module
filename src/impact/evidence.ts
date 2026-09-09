@@ -80,11 +80,18 @@ export const EVIDENCE_PRESENTATION: Readonly<Record<EvidenceClass, EvidencePrese
  * a model output is exactly the forward-looking case the tag exists to mark.
  *
  * A claim whose text would be misdescribed by its class's tag renders none
- * (R3's escape hatch) rather than take this table's default; the 2026-09-07
- * inventory of every claim site found none that needed it, so no per-claim
- * override exists yet. `src/ui/claim-render.ts` renders this beside the
- * source line; `CELL_ABSENCE` prose in `src/impact/matrix.ts` never reaches
- * this table (R4: an absence is neither register).
+ * (R3's escape hatch) rather than take this table's default. The 2026-09-07
+ * inventory of every claim site found none that needed it; DR-070 amended
+ * 2026-09-08 later created the first one: a HeatRisk claim in force is
+ * OUTLOOK register (the issuer's own words, HeatRisk "provides a forecast of
+ * the potential level of risk ... over a 24-hour period", override the
+ * classified -> observed reading for HeatRisk only; every other classified
+ * source keeps observed). `src/impact/sources.ts` sets that one claim's
+ * `register` field; read this table through `claimRegisterTag`, not
+ * directly, so a per-claim override is never missed. `src/ui/claim-render.ts`
+ * renders the result beside the source line; `CELL_ABSENCE` prose in
+ * `src/impact/matrix.ts` never reaches this table (R4: an absence is neither
+ * register).
  */
 export const CLAIM_REGISTER_TAG: Readonly<Record<EvidenceClass, 'observed' | 'outlook'>> = {
   observed: 'observed',
@@ -95,6 +102,19 @@ export const CLAIM_REGISTER_TAG: Readonly<Record<EvidenceClass, 'observed' | 'ou
   derived: 'observed',
   outlook: 'outlook'
 };
+
+/**
+ * The reader-facing register for one claim: its explicit `register` override
+ * when set (DR-070 amended 2026-09-08), else `CLAIM_REGISTER_TAG`'s
+ * per-evidence-class default. The only sanctioned way to read a claim's
+ * register; callers must not index `CLAIM_REGISTER_TAG` directly, or a
+ * future per-claim override would be silently skipped.
+ */
+export function claimRegisterTag(
+  claim: Pick<SourcedClaim, 'evidence' | 'register'>
+): 'observed' | 'outlook' {
+  return claim.register ?? CLAIM_REGISTER_TAG[claim.evidence];
+}
 
 /** A claim under construction: everything but the derived legacy `kind`. */
 export type SourcedClaimInput = Omit<SourcedClaim, 'kind'>;

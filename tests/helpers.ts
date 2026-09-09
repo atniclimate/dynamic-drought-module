@@ -430,6 +430,137 @@ export async function openTribalNationsDetails(page: Page): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// NWS HeatRisk network stub (DDM-P7-T05 F2)
+// ---------------------------------------------------------------------------
+
+const HEATRISK_IMAGE_SERVER_PATH =
+  '/experimental/rest/services/NWS_HeatRisk/ImageServer';
+
+/** HeatRisk publishes seven daily granules, one day apart (mirrors src/layers/heatrisk.ts). */
+const HEATRISK_DAY_MS = 24 * 60 * 60 * 1000;
+
+/** A one-pixel PNG for the layer's `/exportImage` tile requests. */
+const HEATRISK_ONE_PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64'
+);
+
+export interface HeatRiskCatalogReceipt {
+  /** Every `/identify` request's `time` param, in call order. */
+  readonly identifyCalls: number[];
+  /** The seven granule times this stub advertises, day 1 first. */
+  readonly frameTimes: readonly number[];
+}
+
+export interface StubHeatRiskCatalogOptions {
+  /** The seven days' issuer classes, day 1 first; default has one of each and one no-data day. */
+  readonly values?: readonly (number | null)[];
+}
+
+/**
+ * Route the NWS HeatRisk ImageServer (service metadata, the catalog
+ * `/query`, `/identify`, and `/exportImage`) to a deterministic seven-frame
+ * fixture. `fetchHeatRiskClaims` (src/impact/sources.ts) reads this catalog
+ * independently of whether the HeatRisk map layer is on (DR-014 a), so ANY
+ * briefing boot reaches this service; without this stub, a spec that never
+ * names the `heatrisk` layer still sends the metadata/query/identify
+ * requests to the live agency, against playwright.config.ts's "Deterministic
+ * backbone only" (lines 16-23).
+ *
+ * Day 1's period is built relative to THIS CALL's own clock, three hours in,
+ * so it reads in force (the outlook register, DR-070 amended 2026-09-08,
+ * DR-071) at the moment a caller boots the briefing right after calling
+ * this. A spec that needs an ENDED period for its own assertions builds its
+ * own fixture instead (see tests/heat-h2-point-heat.spec.ts's DR-014 a
+ * describe block, which keeps fixed literal frame times for exactly that
+ * reason and says so in its own comment).
+ */
+export async function stubHeatRiskCatalog(
+  page: Page,
+  options: StubHeatRiskCatalogOptions = {}
+): Promise<HeatRiskCatalogReceipt> {
+  const day1Start = Date.now() - 3 * 60 * 60 * 1000;
+  const frameTimes = Array.from(
+    { length: 7 },
+    (_, index) => day1Start + index * HEATRISK_DAY_MS
+  );
+  const values: readonly (number | null)[] =
+    options.values ?? [2, 1, 0, 3, 4, null, 2];
+  const identifyCalls: number[] = [];
+
+  await page.route(
+    (url) => url.pathname.startsWith(HEATRISK_IMAGE_SERVER_PATH),
+    async (route) => {
+      const requestUrl = new URL(route.request().url());
+      if (requestUrl.pathname.endsWith('/query')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            features: frameTimes.map((validTime, index) => ({
+              attributes: {
+                name: `HeatRisk_${index + 1}_Mercator`,
+                idp_validtime: validTime
+              }
+            }))
+          })
+        });
+        return;
+      }
+      if (requestUrl.pathname.endsWith('/identify')) {
+        const time = Number(requestUrl.searchParams.get('time'));
+        identifyCalls.push(time);
+        const index = frameTimes.indexOf(time);
+        const value = index < 0 ? undefined : values[index];
+        if (value === undefined) {
+          await route.fulfill({
+            status: 400,
+            contentType: 'application/json',
+            body: JSON.stringify({ error: { message: 'unknown time' } })
+          });
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            value: value === null ? 'NoData' : String(value),
+            catalogItems: {
+              features:
+                value === null
+                  ? []
+                  : [{ attributes: { idp_validtime: time } }]
+            }
+          })
+        });
+        return;
+      }
+      if (requestUrl.pathname.endsWith('/exportImage')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'image/png',
+          body: HEATRISK_ONE_PIXEL_PNG
+        });
+        return;
+      }
+      // Service metadata: reached by the map layer's own activation
+      // (src/layers/heatrisk.ts) AND the briefing's independent-catalog
+      // fallback (src/ui/heatrisk-sequence.ts identifyHeatRiskForBriefing);
+      // neither depends on the other being present on the page.
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          timeInfo: { timeExtent: [frameTimes[0], frameTimes.at(-1)] }
+        })
+      });
+    }
+  );
+
+  return { identifyCalls, frameTimes };
+}
+
 /**
  * The set of layer keys currently encoded in the URL's `layers=` parameter.
  * Empty set for an explicit `?layers=` (all off) or when the parameter is a
