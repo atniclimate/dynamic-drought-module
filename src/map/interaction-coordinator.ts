@@ -31,13 +31,17 @@ import * as maplibregl from 'maplibre-gl';
 
 import { interactionRank } from '../config/interaction-ranks';
 import type { InteractionTargetKind } from '../config/interaction-ranks';
-import type { BoundarySelectionContext } from '../impact/types';
+import type { BoundaryKind, BoundarySelectionContext } from '../impact/types';
 import { getEmphasisTargets, emphasizePlaces } from '../state/place-emphasis';
 import type { EmphasisTarget } from '../state/place-emphasis';
 import { getPlaceSelection, setPlaceSelection } from '../state/place-selection';
 import type { PlaceSelection } from '../state/place-selection';
+import { getCurrentRegion } from '../state/region-store';
 import { getStudioRoute, onStudioRouteChange } from '../state/studio-route';
 import { getViewMode, onViewModeChange } from '../state/view-mode';
+import { resolveLocationIdentity } from '../state/location-identity';
+import type { LocationIdentity } from '../state/location-identity';
+import { buildImpactTriggerButtonHtml } from '../ui/popups';
 import { openImpactPanel } from '../ui/impact-panel';
 import { isSheetActive } from '../ui/mobile-sheet';
 
@@ -474,11 +478,121 @@ function renderPopup(
     .setDOMContent(container)
     .addTo(map);
 
+  // Keyboard dismissal (acceptance clause 2). MapLibre's Popup focuses its
+  // content on open (`focusAfterOpen`) but does not itself bind Escape to
+  // close; without this, a keyboard user who tabs into the popup has no
+  // keyboard path out of it at all except tabbing all the way past every
+  // link. One document-level listener per open popup, removed the moment
+  // the popup closes (by any route: this key, the close button, or the
+  // next commit's `dismissResponse`), so it can never fire against a
+  // popup that already closed nor leak across commits.
+  const onEscape = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape') dismissResponse();
+  };
+  document.addEventListener('keydown', onEscape);
+
   popup.on('close', () => {
+    document.removeEventListener('keydown', onEscape);
     if (currentPopup === popup) currentPopup = null;
     if (selection && getPlaceSelection() === selection) setPlaceSelection(null);
   });
   currentPopup = popup;
+
+  // DR-042 option a (session-ruled 2026-09-09): a NON-place response (the
+  // map feature itself is the subject: drought category, fire perimeter,
+  // smoke plume, alert, and their peers) painted above with no door. Try,
+  // asynchronously, to resolve the tap's PLACE anyway, and if one exists
+  // append a place-specific door to the already-painted head. This never
+  // races the paint above (the popup is already on screen) and never
+  // routes straight to the briefing (only a person clicking the door
+  // opens it); see `attachConditionDoor`.
+  if (!selection) {
+    void attachConditionDoor(map, popup, head, click);
+  }
+}
+
+/**
+ * The place a condition-surface or point-event tap resolves to, for
+ * `attachConditionDoor` below: the containing Tribal / reservation land
+ * first (D-0.8.0-052 already resolved which active layer wins that), the
+ * containing state otherwise. Null over open country or open water, where
+ * `resolveLocationIdentity` itself resolves nothing -- the honest case in
+ * which no door is offered.
+ */
+function doorSubjectFromIdentity(
+  identity: LocationIdentity
+): { kind: BoundaryKind; title: string } | null {
+  if (identity.containingTribal) {
+    return { kind: identity.containingTribal.source, title: identity.containingTribal.name };
+  }
+  if (identity.state) {
+    return { kind: 'state', title: identity.state.name };
+  }
+  return null;
+}
+
+/**
+ * DR-042 option a: resolve a condition-surface or point-event tap's PLACE
+ * through the same location-identity stack the briefing panel's own state
+ * tier reads (src/state/location-identity.ts), and, only when one
+ * resolves, append a place-specific door to the popup's frozen `head`.
+ *
+ * The popup above has ALREADY painted (this runs after `currentPopup =
+ * popup`), so a slow resolve never delays or blocks the response the tap
+ * aimed at; the door is a later addition a person may click, never a
+ * redirect. This deliberately does NOT call `setPlaceSelection` or
+ * `emphasizePlaces`: those are owned by a true boundary commit (the
+ * comment above `commit`), and a condition tap must never silently
+ * promote or replace the subject a selected boundary or a prior briefing
+ * still owns.
+ *
+ * Stale guard: `currentPopup !== popup` once resolution settles means a
+ * later click already replaced or dismissed this popup, so the resolved
+ * door is simply dropped rather than appended to detached markup.
+ */
+async function attachConditionDoor(
+  map: maplibregl.Map,
+  popup: maplibregl.Popup,
+  head: HTMLElement,
+  click: CoordinatorClick
+): Promise<void> {
+  let identity: LocationIdentity;
+  try {
+    identity = await resolveLocationIdentity(
+      map,
+      { lng: click.lngLat.lng, lat: click.lngLat.lat },
+      new AbortController().signal
+    );
+  } catch {
+    return;
+  }
+  if (currentPopup !== popup || !head.isConnected) return;
+
+  const subject = doorSubjectFromIdentity(identity);
+  if (!subject) return;
+
+  const context: BoundarySelectionContext = {
+    kind: subject.kind,
+    title: subject.title,
+    properties: null,
+    lngLat: { lng: click.lngLat.lng, lat: click.lngLat.lat },
+    regionKey: getCurrentRegion()
+  };
+
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = buildImpactTriggerButtonHtml(subject.title);
+  const button = wrapper.firstElementChild;
+  if (!(button instanceof HTMLButtonElement)) return;
+  button.addEventListener('click', () => {
+    openImpactPanel(context);
+    dismissResponse();
+  });
+
+  // The same head order a place-bearing commit uses: directly after the
+  // title, before the "Other map features here" disclosure.
+  const title = head.querySelector('.popup-title');
+  if (title) title.after(button);
+  else head.appendChild(button);
 }
 
 /**
