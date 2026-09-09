@@ -1,6 +1,7 @@
 import type { GeoJsonProperties } from 'geojson';
 import { pickTreatyEntry } from '../config/palette';
-import { stationCustody } from '../config/station-registry';
+import { stationCustody, fetchRawsStationConditions } from '../config/station-registry';
+import type { RawsStationConditions } from '../config/station-registry';
 import type { TelemetryStation, TelemetryFreshness } from '../types/station';
 import {
   fetchAwdbDailySeries,
@@ -415,12 +416,18 @@ export function buildTelemetryPopupSkeleton(station: TelemetryStation): string {
     )
     .join('');
 
-  // A station hydrates in-browser if it carries one of the four wired live
-  // sources. The discovered networks without a hydration path (RAWS, NOAA
+  // A station hydrates in-browser if it carries one of the five wired live
+  // sources (DDM-P9-T05 added RAWS: relative humidity, wind, and fuel
+  // moisture are served by the same NIFC layer discovery already reads).
+  // The remaining discovered networks without a hydration path (NOAA
   // CO-OPS, AgriMet, CoCoRaHS) instead show an honest custody block: the
   // update cadence plus a pointer to the source link, never a faked reading.
   const hydrates =
-    station.usgsSite || station.awdbStation || station.hydrometParams || station.cwms;
+    station.usgsSite ||
+    station.awdbStation ||
+    station.hydrometParams ||
+    station.cwms ||
+    station.rawsStationId;
   const custody = hydrates ? null : stationCustody(station);
   const dataBlockHtml = hydrates
     ? `<div class="popup-data" data-station-data="${escapeHtml(station.id)}">
@@ -502,6 +509,12 @@ export async function hydrateTelemetryPopupData(
       const latest = await fetchCwmsLatest(station.cwms, signal);
       if (signal.aborted) return;
       slot.innerHTML = renderCwmsRow(station, latest);
+    } else if (station.rawsStationId) {
+      // NIFC RAWS FeatureServer, direct fetch (DDM-P9-T05; see
+      // src/config/station-registry.ts fetchRawsStationConditions).
+      const conditions = await fetchRawsStationConditions(station.rawsStationId, signal);
+      if (signal.aborted) return;
+      slot.innerHTML = renderRawsRows(conditions);
     }
   } catch (_err) {
     // AbortError is the expected close path; swallow silently. Anything else
@@ -657,6 +670,69 @@ function renderCwmsRow(station: TelemetryStation, latest: CwmsLatest | null): st
     </div>
     ${asOfRow(tsStr, value.freshness)}
   `;
+}
+
+// =============================================================================
+// Internal: NIFC RAWS render (DDM-P9-T05)
+// =============================================================================
+
+/**
+ * One popup-data row for a RAWS reading. The served string already carries
+ * its own unit (the issuer's field, verified live: "21 %", "5 mph",
+ * "7.3 (unk)"), so it renders verbatim rather than re-deriving a unit; a
+ * `null` reading (the service affirmatively reported none) renders "Station
+ * reported none" for that row only, never a faked value.
+ */
+function rawsConditionRow(label: string, servedText: string | null): string {
+  const display = servedText === null ? 'Station reported none' : servedText;
+  return `
+    <div class="popup-data-row">
+      <span class="popup-data-label">${escapeHtml(label)}</span>
+      <span class="popup-data-value">${escapeHtml(display)}</span>
+    </div>
+  `;
+}
+
+/**
+ * Wind text: the served speed, plus direction when the station reports one,
+ * else the gust speed when the station reports THAT instead. `null` only
+ * when the station reports no wind speed at all.
+ */
+function rawsWindText(conditions: RawsStationConditions): string | null {
+  if (conditions.windSpeed === null) return null;
+  if (conditions.windDirection !== null) {
+    return `${conditions.windSpeed} from ${conditions.windDirection}`;
+  }
+  if (conditions.windGustSpeed !== null) {
+    return `${conditions.windSpeed}, gusting ${conditions.windGustSpeed}`;
+  }
+  return conditions.windSpeed;
+}
+
+/**
+ * Render the three independent RAWS reading rows (relative humidity, wind,
+ * fuel moisture) plus an "As of" line naming the source, or the honest
+ * "no recent values" fallback when the station resolves to no feature at
+ * all. A transport or parse failure never reaches here: the caller's catch
+ * (see `hydrateTelemetryPopupData`) renders the shared "unavailable"
+ * fallback instead.
+ */
+function renderRawsRows(conditions: RawsStationConditions | null): string {
+  if (!conditions) {
+    return '<div class="popup-data-error">No recent NIFC RAWS values for this station.</div>';
+  }
+
+  const rows =
+    rawsConditionRow('Relative humidity', conditions.relativeHumidity) +
+    rawsConditionRow('Wind', rawsWindText(conditions)) +
+    rawsConditionRow('Fuel moisture', conditions.fuelMoisture);
+
+  if (!conditions.observedAtIso) return rows;
+  const observed = new Date(conditions.observedAtIso);
+  const display = Number.isNaN(observed.getTime())
+    ? conditions.observedAtIso
+    : observed.toLocaleString();
+  return rows + asOfRow(`${display} (NIFC RAWS)`);
 }
 
 // =============================================================================
