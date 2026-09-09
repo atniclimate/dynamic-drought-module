@@ -22,14 +22,16 @@
  *               do not yet read (DR-022).
  *   Heat        active NWS extreme-heat products now, the selected HeatRisk
  *               classification and the NWS point temperature tendency
- *               near-term. The season-ahead cell names the CPC seasonal
- *               outlook it does not yet read (DR-019).
+ *               near-term. The season-ahead cell reads the NOAA CPC seasonal
+ *               temperature outlook live (DDM-P7-T07, DR-075 a), never
+ *               presented as an ENSO forecast (DR-019).
  *   ENSO        the observed CPC index state now, the regional tendency and
  *               the official probabilities season-ahead.
  */
 
 import {
   fetchCpcOutlookClaims,
+  fetchCpcSeasonalTempClaims,
   fetchDsciTrendClaims,
   fetchHeatRiskClaims,
   fetchNifcClaims,
@@ -316,6 +318,7 @@ export async function hydrateBriefing(
     runLane('cpcExtended', () => fetchCpcOutlookClaims(context, signal)),
     runLane('enso', () => loadEnsoClaims(context, signal)),
     runLane('waterSupply', () => fetchWaterSupplyClaims(context, signal)),
+    runLane('cpcSeasonalTemp', () => fetchCpcSeasonalTempClaims(context, signal)),
     initialHeatRisk,
     forecast,
     alerts,

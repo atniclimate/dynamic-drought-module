@@ -62,7 +62,13 @@ export function briefingSourcePolicy(
       key === 'pointHeat' ||
       key === 'nwsForecast' ||
       key === 'nwsAlerts' ||
-      key === 'heatRisk'
+      key === 'heatRisk' ||
+      // DDM-P7-T07, DR-075 a (director ruling 2026-09-09): the coverage
+      // gate follows the issuer's own service extent (STEP 0), not the
+      // drought-impact-synthesis doctrine region every other non-heat
+      // source below reads. Bounded to this one key; every other key keeps
+      // the regionalCell branch unchanged.
+      key === 'cpcSeasonalTemp'
     ) {
       sources[key] = heat[key];
     } else {

@@ -1176,6 +1176,166 @@ export async function fetchCpcOutlookClaims(
 }
 
 // ---------------------------------------------------------------------------
+// Season-ahead: CPC seasonal temperature outlook (DDM-P7-T07, DR-075 a)
+// ---------------------------------------------------------------------------
+
+/**
+ * The fields the CPC seasonal temperature outlook's Lead 1 layer (layer 0)
+ * publishes that the briefing can state honestly: the tercile category, its
+ * probability, the issuer's own season label, and the forecast issuance
+ * date. Verified 2026-09-09 (STEP 0, ddm-forecast-wirer): neither `cat` nor
+ * `valid_seas` carries a coded domain on the service; both are read as raw
+ * codes and expanded through the issuer's own legend/page reading below
+ * (ddm-science-verifier, 2026-09-09), never invented.
+ */
+const CPC_SEASONAL_TEMP_FIELDS = 'cat,prob,valid_seas,fcst_date';
+
+/**
+ * The issuer's own reading of its `cat` code, from the service's renderer
+ * legend (STEP 0's `uniqueValueGroups`,
+ * `I:\claude-temp\ddm-s18\DDM-P7-T07\layer0-description.json`): the raw
+ * codes `Normal` and `EC` are never shown to the public by the issuer, which
+ * labels them "Near Normal" and "Equal Chances". `Above` and `Below` are
+ * already the issuer's own words. A code this table does not carry (an
+ * unknown value) renders verbatim, never invented.
+ */
+function cpcSeasonalCatLegendLabel(cat: string): string {
+  if (cat === 'Normal') return 'Near Normal';
+  if (cat === 'EC') return 'Equal Chances';
+  return cat;
+}
+
+/**
+ * CPC's own "Mon-Mon-Mon YYYY" reading of its three-letter `valid_seas` code
+ * (ddm-science-verifier, 2026-09-09: CPC's page writes "Sep-Oct-Nov 2026",
+ * https://www.cpc.ncep.noaa.gov/products/predictions/long_range/seasonal_info.php).
+ * A code outside this fixed 12-entry table, or a `valid_seas` value that does
+ * not parse as `<code> <year>`, renders verbatim, never invented.
+ */
+const CPC_SEASON_CODE_EXPANSION: Readonly<Record<string, string>> = {
+  JFM: 'Jan-Feb-Mar',
+  FMA: 'Feb-Mar-Apr',
+  MAM: 'Mar-Apr-May',
+  AMJ: 'Apr-May-Jun',
+  MJJ: 'May-Jun-Jul',
+  JJA: 'Jun-Jul-Aug',
+  JAS: 'Jul-Aug-Sep',
+  ASO: 'Aug-Sep-Oct',
+  SON: 'Sep-Oct-Nov',
+  OND: 'Oct-Nov-Dec',
+  NDJ: 'Nov-Dec-Jan',
+  DJF: 'Dec-Jan-Feb'
+};
+
+function cpcSeasonalValidSeasLabel(validSeas: string): string {
+  const match = /^([A-Za-z]{3})(?:\s+(\d{4}))?$/.exec(validSeas.trim());
+  if (!match) return validSeas;
+  const expansion = CPC_SEASON_CODE_EXPANSION[match[1]!.toUpperCase()];
+  if (!expansion) return validSeas;
+  return match[2] ? `${expansion} ${match[2]}` : expansion;
+}
+
+/**
+ * Query the CPC seasonal temperature outlook (`cpcSeasonalTempOutlookMapServer`,
+ * Lead 1 = layer 0) at the point and surface its category, probability and
+ * the issuer's own season label as an outlook claim. This is a NOAA Climate
+ * Prediction Center product, never presented as an ENSO forecast (DR-019).
+ * The layer publishes no region-name attribute, so the claim states the
+ * geography the query answered for as "at the selected point" (matching the
+ * rest of this file's point-query claims). A failed fetch, an ArcGIS error
+ * envelope, or a point the service returns no feature (or a malformed one)
+ * for all report `ok: false` with a note naming the product, per the
+ * honesty contract above; none of them renders a claim.
+ */
+export async function fetchCpcSeasonalTempClaims(
+  context: BoundarySelectionContext,
+  signal: AbortSignal
+): Promise<SourceResult> {
+  const { lng, lat } = context.lngLat;
+  const source = 'NOAA Climate Prediction Center seasonal temperature outlook';
+  // The issuer's Seasonal Outlook landing page (ddm-science-verifier,
+  // 2026-09-09: verified 200).
+  const sourceUrl = 'https://www.cpc.ncep.noaa.gov/products/predictions/long_range/';
+  const base = URLS.cpcSeasonalTempOutlookMapServer;
+  const url = `${base}/0/query?${esriPointQuery(lng, lat, CPC_SEASONAL_TEMP_FIELDS).toString()}`;
+  try {
+    const json: unknown = await fetchJson(url, GEOJSON_ACCEPT, signal);
+    if (signal.aborted) return { claims: [], ok: false };
+    const f = featuresOf(json)[0] ?? null;
+    if (!isObject(f) || !isObject(f.properties)) {
+      return {
+        claims: [],
+        ok: false,
+        note: 'The NOAA CPC seasonal temperature outlook returned no reading for this point.'
+      };
+    }
+    const cat = f.properties.cat;
+    const validSeas = f.properties.valid_seas;
+    const prob = f.properties.prob;
+    if (
+      typeof cat !== 'string' ||
+      typeof validSeas !== 'string' ||
+      typeof prob !== 'number' ||
+      !Number.isFinite(prob)
+    ) {
+      return {
+        claims: [],
+        ok: false,
+        note: 'The NOAA CPC seasonal temperature outlook returned no reading for this point.'
+      };
+    }
+    // `fcst_date`'s field alias equals its field name on this service (STEP
+    // 0): the issuer publishes no descriptive alias for it. "Issued" below
+    // is this code's own inference from CPC's published near-mid-month
+    // release cadence plus the sampled value, not a reading of an issuer
+    // field description.
+    const issued = epochField(f.properties.fcst_date);
+    const issuedText = issued !== null ? ` Issued ${humanDayUtc(issued)}.` : '';
+    const season = cpcSeasonalValidSeasLabel(validSeas);
+    const legendLabel = cpcSeasonalCatLegendLabel(cat);
+    const text =
+      legendLabel === 'Equal Chances'
+        ? `NOAA Climate Prediction Center seasonal temperature outlook for ${season}: Equal Chances (no favored tercile), at the selected point.${issuedText}`
+        : `NOAA Climate Prediction Center seasonal temperature outlook for ${season}: ${prob}% chance of ${
+            legendLabel === 'Above'
+              ? 'above-normal'
+              : legendLabel === 'Below'
+                ? 'below-normal'
+                : legendLabel === 'Near Normal'
+                  ? 'near-normal'
+                  : legendLabel
+          } temperature, at the selected point.${issuedText}`;
+    return {
+      claims: [
+        makeClaim({
+          text,
+          source,
+          sourceUrl,
+          evidence: 'outlook',
+          dates:
+            issued === null
+              ? { retrieved: todayIso() }
+              : { issued: isoDayUtc(issued), retrieved: todayIso() },
+          uncertainty: {
+            kind: 'categorical',
+            text: 'a tercile category and its stated probability, not a deterministic outcome'
+          }
+        })
+      ],
+      ok: true
+    };
+  } catch (err) {
+    if (signal.aborted) return { claims: [], ok: false };
+    console.warn('[impact] CPC seasonal temperature outlook query failed.', err);
+    return {
+      claims: [],
+      ok: false,
+      note: upstreamNote(err, 'The NOAA CPC seasonal temperature outlook')
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Near-term: NWS point forecast (temperature tendency)
 // ---------------------------------------------------------------------------
 
