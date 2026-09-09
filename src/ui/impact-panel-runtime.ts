@@ -38,8 +38,11 @@ import {
   resolveLandscapeSelection
 } from '../impact/landscape-resolution';
 import type { LandscapeEcoregionKey } from '../impact/landscape-resolution';
+import { getLayerDef } from '../config/layers';
 import { renderClaim } from './claim-render';
 import { renderLandscapeContext } from './landscape-context';
+import { getLegendSection } from './legend-registry';
+import { requestLayerOn } from './layer-toggle-command';
 import { loadFederalResources, resourcesForIdentity } from '../impact/resource-catalog';
 import { resolveLocationIdentity } from '../state/location-identity';
 import { getMap } from '../state/map-store';
@@ -88,6 +91,15 @@ let activeImpactUnavailableNote: string | null = null;
  * since been closed or reopened for a different boundary.
  */
 let openToken = 0;
+
+/**
+ * DDM-P13-T02 F3: legend-poll generation. Captured by `waitForLegendSection`
+ * when a Legend click starts its poll; every Legend click and every panel
+ * close bumps it, so any older poll stops at its next tick instead of
+ * calling `focusLegendSection` (and stealing focus) after the user has
+ * gone elsewhere.
+ */
+let legendPollGeneration = 0;
 
 /**
  * Master abort controller for the active briefing's live hydration. Aborted on
@@ -161,7 +173,122 @@ function ensurePanel(): HTMLElement {
   bodyEl = shared.body;
   titleEl = shared.title;
   kindEl = shared.kind;
+  // ONE delegated click listener on the panel root, bound once (the shell
+  // itself is never re-created; `renderBody` only replaces `bodyEl`'s
+  // innerHTML, so a listener on the child would be lost on every
+  // hydration re-render, DDM-P13-T02 correction, clause 3).
+  panelEl.addEventListener('click', handleLegendLinkClick);
   return shared.panel;
+}
+
+// ---------------------------------------------------------------------------
+// Legend reachability (DDM-P13-T02 correction, clause 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Move focus and scroll to an already-built legend section. `tabindex="-1"`
+ * is added only if the section does not already carry a focus target, so a
+ * screen-reader user lands somewhere sensible without the section becoming
+ * a permanent tab stop.
+ */
+function focusLegendSection(section: HTMLElement): void {
+  section.scrollIntoView({ block: 'nearest' });
+  if (!section.hasAttribute('tabindex')) {
+    section.setAttribute('tabindex', '-1');
+  }
+  section.focus();
+}
+
+/**
+ * Poll for a legend section that a just-requested layer activation is
+ * building. The registry (`src/state/registry.ts`) has no per-key "legend
+ * built" event; `getLegendSection` reading the live DOM is the honest
+ * signal. Gives up silently after 10 seconds (an unavailable or failed
+ * layer already tells its own story through the sidebar pill).
+ *
+ * DDM-P13-T02 F3: captures `legendPollGeneration` at the moment the poll
+ * starts and checks it on every tick. A later Legend click or a panel close
+ * bumps the counter, and a poll whose generation has moved on stops without
+ * calling `onFound`, so it can never call `section.focus()` (through
+ * `focusLegendSection`) and steal focus from wherever the user has since
+ * gone.
+ */
+function waitForLegendSection(
+  key: string,
+  onFound: (section: HTMLElement) => void
+): void {
+  const generation = legendPollGeneration;
+  const deadlineMs = Date.now() + 10_000;
+  const poll = (): void => {
+    if (generation !== legendPollGeneration) return;
+    const section = getLegendSection(key);
+    if (section) {
+      onFound(section);
+      return;
+    }
+    if (Date.now() >= deadlineMs) return;
+    setTimeout(poll, 250);
+  };
+  setTimeout(poll, 250);
+}
+
+/**
+ * DDM-P13-T02 F4: disclose what a Legend click actually does, once the
+ * claims naming a legend are in the DOM. `requestLayerOn`
+ * (`src/ui/layer-toggle-command.ts`) turns a layer on through the
+ * controller's surface exclusivity: for a `role: 'surface'` layer
+ * (`src/config/layers.ts`), turning it on when it is off replaces whatever
+ * surface layer is showing now, drought included. `claim-render.ts` stays
+ * pure and sets the plain pre-hydration default title; this hydrates the
+ * honest, layer-specific title from the catalog so a surface layer's Legend
+ * link says what it will do BEFORE it is clicked.
+ */
+function discloseLegendAnchorTitles(root: ParentNode): void {
+  const anchors = root.querySelectorAll<HTMLAnchorElement>('a[data-legend-key]');
+  anchors.forEach((anchor) => {
+    const key = anchor.dataset['legendKey'];
+    if (!key) return;
+    const def = getLayerDef(key);
+    if (!def) return;
+    anchor.title =
+      def.role === 'surface'
+        ? `Legend; turns the ${def.name} layer on if it is off, replacing the surface layer showing now`
+        : `Legend; turns the ${def.name} layer on if it is off`;
+  });
+}
+
+/**
+ * Delegated handler for every `a[data-legend-key]` a rendered claim carries
+ * (`src/ui/claim-render.ts`). The href stays `#legend-panel` as the
+ * no-script fallback; this makes the link reach the SECTION, whether the
+ * product's map layer is already on (the section exists now) or off (the
+ * layer is turned on first, through the same intent-first door every other
+ * UI caller uses, `requestLayerOn`).
+ */
+function handleLegendLinkClick(event: MouseEvent): void {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const anchor = target.closest<HTMLAnchorElement>('a[data-legend-key]');
+  if (!anchor) return;
+  const key = anchor.dataset['legendKey'];
+  if (!key) return;
+  event.preventDefault();
+  // DDM-P13-T02 F3: every click bumps the generation before either branch
+  // runs, so a poll from an earlier click (still in flight because its
+  // layer is still activating) stops on its next tick even when this click
+  // resolves synchronously below and never starts a poll of its own.
+  legendPollGeneration++;
+
+  const existing = getLegendSection(key);
+  if (existing) {
+    focusLegendSection(existing);
+    return;
+  }
+  // The product's map layer builds its own legend section on activation
+  // (src/layers/usdm.ts, src/layers/heatrisk.ts); this only asks it to turn
+  // on, through the shared UI-level door (never touches the layer module).
+  requestLayerOn(key);
+  waitForLegendSection(key, focusLegendSection);
 }
 
 // ---------------------------------------------------------------------------
@@ -498,6 +625,7 @@ function paint(
   if (kindEl) kindEl.textContent = briefing.landKind;
   if (bodyEl) {
     bodyEl.innerHTML = renderBody(briefing, impactUnavailableNote);
+    discloseLegendAnchorTitles(bodyEl);
   }
 }
 
@@ -710,6 +838,7 @@ export function refreshOpenBriefing(token: number): void {
     activeBriefing,
     activeImpactUnavailableNote
   );
+  discloseLegendAnchorTitles(bodyEl);
   if (hadFocusInBody && panelEl && !panelEl.contains(document.activeElement)) {
     panelEl.querySelector<HTMLButtonElement>('.impact-panel-close')?.focus();
   }
@@ -724,6 +853,9 @@ export function closeImpactPanel(): void {
   // user said "no panel", so a late-resolving boundary fetch must yield.
   onClose?.();
   openToken++;
+  // DDM-P13-T02 F3: a close ends any legend poll still in flight so it
+  // cannot focus a section after the user has left the panel.
+  legendPollGeneration++;
   activeBriefing = null;
   activeImpactUnavailableNote = null;
   setSheetBriefing(null);
