@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { expect, test, type Page } from '@playwright/test';
 
 import {
@@ -8,10 +11,14 @@ import {
   FIRE3D_REFUSAL_TEXT,
   FIRE3D_SKY_CLEAR_SPECIFICATION,
   FIRE3D_SKY_SPECIFICATION,
+  FIRE3D_TERRAIN_COVERAGE,
+  FIRE3D_TERRAIN_COVERAGE_SENTENCE,
   FIRE3D_TERRAIN_EXAGGERATION,
   PERIMETER_RIBBON_QUALIFICATION,
   PERIMETER_RIBBON_SLAB_COUNT,
   fire3dControlOffer,
+  formatLatitudeDeg,
+  formatLongitudeDeg,
   perimeterRibbonSlabOpacity
 } from '../src/config/fire3d-presentation';
 import {
@@ -471,6 +478,191 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     expect(harness.listenerCount('error')).toBe(0);
   } finally {
     setFire3DActive(map, false);
+    restoreFetch();
+    browser.restore();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Node: DDM-P9-T04, terrain coverage, perimeter-over-drape order, and
+// resampling
+// ---------------------------------------------------------------------------
+
+const HILLSHADE_ARCHIVE_PATH = join(
+  process.cwd(),
+  'public',
+  'data',
+  'hillshade-dem-pnw.pmtiles'
+);
+
+/**
+ * Read the PMTiles v3 header fields the coverage sentence claims (min/max
+ * zoom at bytes 100-101, the WGS84 bounding box at bytes 102-117, stored as
+ * int32 degrees times 1e-7 per the spec), straight from the committed
+ * archive. No dependency beyond Node's own fs and DataView, mirroring the
+ * tile-data-offset reader in tests/layer-cancellation.spec.ts: a re-bake
+ * that shifts the box makes this reader disagree with
+ * FIRE3D_TERRAIN_COVERAGE and fails the test below, rather than only
+ * leaving the sentence quietly wrong.
+ */
+function readHillshadeArchiveExtent(): {
+  minZoom: number;
+  maxZoom: number;
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+} {
+  const header = readFileSync(HILLSHADE_ARCHIVE_PATH).subarray(0, 127);
+  if (header.toString('latin1', 0, 7) !== 'PMTiles' || header[7] !== 3) {
+    throw new Error(
+      'the bundled hillshade archive is not a PMTiles v3 archive'
+    );
+  }
+  const view = new DataView(header.buffer, header.byteOffset, header.byteLength);
+  return {
+    minZoom: view.getUint8(100),
+    maxZoom: view.getUint8(101),
+    west: view.getInt32(102, true) * 1e-7,
+    south: view.getInt32(106, true) * 1e-7,
+    east: view.getInt32(110, true) * 1e-7,
+    north: view.getInt32(114, true) * 1e-7
+  };
+}
+
+test('the terrain coverage constant matches the committed archive header, so a re-bake cannot silently falsify the coverage sentence', () => {
+  const extent = readHillshadeArchiveExtent();
+  expect(extent.maxZoom).toBe(FIRE3D_TERRAIN_COVERAGE.maxZoom);
+  expect(extent.west).toBe(FIRE3D_TERRAIN_COVERAGE.west);
+  expect(extent.south).toBe(FIRE3D_TERRAIN_COVERAGE.south);
+  expect(extent.east).toBe(FIRE3D_TERRAIN_COVERAGE.east);
+  expect(extent.north).toBe(FIRE3D_TERRAIN_COVERAGE.north);
+
+  // The rendered sentence states the issuer and derives from the same
+  // constant; it is composed, not typed by hand a second time. Each
+  // header-derived bound string is asserted individually (not just the
+  // issuer and the zoom figure) so a hand-typed rewrite of the sentence
+  // that drops or mis-states a bound fails here rather than only failing
+  // to notice.
+  expect(FIRE3D_COVERAGE_NOTE).toContain(FIRE3D_TERRAIN_COVERAGE.issuer);
+  expect(FIRE3D_COVERAGE_NOTE).toContain(
+    formatLongitudeDeg(FIRE3D_TERRAIN_COVERAGE.west)
+  );
+  expect(FIRE3D_COVERAGE_NOTE).toContain(
+    formatLongitudeDeg(FIRE3D_TERRAIN_COVERAGE.east)
+  );
+  expect(FIRE3D_COVERAGE_NOTE).toContain(
+    formatLatitudeDeg(FIRE3D_TERRAIN_COVERAGE.south)
+  );
+  expect(FIRE3D_COVERAGE_NOTE).toContain(
+    formatLatitudeDeg(FIRE3D_TERRAIN_COVERAGE.north)
+  );
+  // The zoom figure is stated as a DETAIL clause, never as part of the
+  // coverage clause (an earlier draft read "through zoom 8; outside
+  // it...flat", which a reader could misread as "past zoom 8 the ground
+  // goes flat" -- false, since the archive is merely overzoomed past its
+  // bake depth, per src/layers/hillshade.ts:7-11).
+  expect(FIRE3D_COVERAGE_NOTE).toContain(
+    `detail ends at zoom ${FIRE3D_TERRAIN_COVERAGE.maxZoom}`
+  );
+  expect(FIRE3D_COVERAGE_NOTE).not.toContain('terrarium');
+});
+
+const MAP_KEY_SOURCE_PATH = join(process.cwd(), 'src', 'ui', 'map-key.ts');
+
+/**
+ * src/ui/map-key.ts sits in the eager graph and therefore mirrors
+ * FIRE3D_TERRAIN_COVERAGE_SENTENCE as a LITERAL string rather than
+ * importing the 3D Fire chunk (protocol item 10). Read the literal back
+ * out of the source text itself (map-key.ts does not export the constant)
+ * so the two cannot drift silently.
+ */
+function readMapKeyHillshadeCoverageLiteral(): string {
+  const source = readFileSync(MAP_KEY_SOURCE_PATH, 'utf8');
+  const match = source.match(
+    /const HILLSHADE_COVERAGE_NOTE =\s*\n?\s*(['"])([\s\S]*?)\1;/
+  );
+  if (!match) {
+    throw new Error(
+      'src/ui/map-key.ts no longer declares HILLSHADE_COVERAGE_NOTE as a single string literal'
+    );
+  }
+  // Reverse the minimal JS escaping the literal can carry (only the quote
+  // character used to delimit it needs unescaping here).
+  return match[2]!.replace(new RegExp(`\\\\${match[1]}`, 'g'), match[1]!);
+}
+
+test('the flat hillshade key mirrors the 3D scene\'s terrain sentence literally, so the two cannot drift', () => {
+  expect(readMapKeyHillshadeCoverageLiteral()).toBe(
+    FIRE3D_TERRAIN_COVERAGE_SENTENCE
+  );
+});
+
+test('the perimeter layer sits above the hazard drape in the style order while the scene is active (clause 2, read-only proof)', async () => {
+  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+  const restoreFetch = stubPmtilesFetch();
+  const harness = fakeMapHarness();
+  const { map } = harness;
+
+  // The flat perimeter layer, exactly as src/layers/nifc-fires.ts leaves it
+  // on the map: one GeoJSON source with its own fill and outline, already
+  // up before the scene is entered. This proof touches no ordering code;
+  // src/map/layer-order.ts's CONDITION_SURFACE_IDS/EVENT_OVERLAY_IDS chain
+  // is read only through its effect on map.getStyle().layers.
+  map.addSource('nifc-fires', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+  } as never);
+  map.addLayer({ id: 'nifc-fires-fill', type: 'fill', source: 'nifc-fires' } as never);
+  map.addLayer({ id: 'nifc-fires-outline', type: 'line', source: 'nifc-fires' } as never);
+
+  try {
+    const controller = new AbortController();
+    const activation = await activateContextLayers(map, controller.signal);
+    expect(activation.keys).toContain('whp');
+    expect(harness.layerSpecs.has('whp-2023')).toBe(true);
+
+    const order = map.getStyle().layers?.map((l) => l.id) ?? [];
+    const drapeIndex = order.indexOf('whp-2023');
+    expect(drapeIndex).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf('nifc-fires-fill')).toBeGreaterThan(drapeIndex);
+    expect(order.indexOf('nifc-fires-outline')).toBeGreaterThan(drapeIndex);
+  } finally {
+    deactivateContextLayers(map);
+    restoreFetch();
+    browser.restore();
+  }
+});
+
+test('the hazard drape module still SETS nearest-neighbour resampling (clause 3; the renderer honouring it is a separate, cited fact, not proved by this fake-map read-back)', async () => {
+  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+  const restoreFetch = stubPmtilesFetch();
+  const harness = fakeMapHarness();
+  const { map } = harness;
+
+  try {
+    const controller = new AbortController();
+    const activation = await activateContextLayers(map, controller.signal);
+    expect(activation.keys).toContain('whp');
+
+    // This assertion proves only that whp-3d.ts's own map.addLayer call
+    // still sets the property; the fake map has no GPU draw path, so it
+    // cannot prove the renderer HONOURS it. That the shipped renderer does
+    // honour it rests on two facts outside this test: DR-009 pins
+    // maplibre-gl to 6.6.0 (package.json:72), and 6.6.0's own raster draw
+    // path (node_modules/maplibre-gl/dist/maplibre-gl-dev.mjs, function
+    // drawTiles, line 18332) reads
+    // `layer.paint.get("resampling") === "nearest" ||
+    // layer.paint.get("raster-resampling") === "nearest" ? gl.NEAREST :
+    // gl.LINEAR`, selecting GL's nearest-texel filter when either the
+    // deprecated `resampling` or this `raster-resampling` property is
+    // 'nearest'; this layer sets only the latter. See the comment beside
+    // the value itself in src/layers/whp-3d.ts for the same citation.
+    expect(harness.layerSpecs.get('whp-2023')?.paint).toMatchObject({
+      'raster-resampling': 'nearest'
+    });
+  } finally {
+    deactivateContextLayers(map);
     restoreFetch();
     browser.restore();
   }

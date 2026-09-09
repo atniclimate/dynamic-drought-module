@@ -133,9 +133,22 @@ export async function activateWhpDrape(
           // orange hazard the issuer never assigned to that ground, and
           // water blended into Very High reads as nothing at all. Crisp
           // class boundaries are the honest presentation of a
-          // classification. Note this may be inert on MapLibre 4, which
-          // has a known nearest-resampling defect; re-verify when the
-          // library is upgraded.
+          // classification. MapLibre 4 had a known nearest-resampling
+          // defect that could make this property inert. The test in
+          // tests/fire3d-mode.spec.ts reads this paint property back and
+          // proves only that this module still SETS it; it cannot prove
+          // the renderer honours it, because the test runs against a
+          // fake map with no GPU draw path. That the shipped renderer
+          // DOES honour it rests on DR-009 (MapLibre 6.6.0, pinned at
+          // package.json:72) and on the 6.6.0 raster draw path itself:
+          // node_modules/maplibre-gl/dist/maplibre-gl-dev.mjs, function
+          // drawTiles, the line reading
+          // `layer.paint.get("resampling") === "nearest" ||
+          // layer.paint.get("raster-resampling") === "nearest" ? gl.NEAREST
+          // : gl.LINEAR` (line 18332 in the 6.6.0 package), which selects
+          // GL's nearest-texel filter when either the deprecated
+          // `resampling` or this `raster-resampling` property is 'nearest';
+          // this layer sets only the latter.
           'raster-resampling': 'nearest'
         }
       });
