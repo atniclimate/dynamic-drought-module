@@ -313,12 +313,12 @@ async function showFrame(map: maplibregl.Map, index: number): Promise<void> {
 
   buffering = true;
   reportStatus('loading');
+  dateIndex = clamped;
   installTimeBar(map);
   await waitForSourceTiles(map, frameSourceId(date), signal);
   if (signal.aborted || myEpoch !== stepEpoch) return;
   buffering = false;
 
-  dateIndex = clamped;
   timeline.setSstDate(clamped === dates.length - 1 ? null : date);
   reportStatus('ready');
 
