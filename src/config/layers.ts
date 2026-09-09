@@ -219,9 +219,11 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   // src/config/urls.ts on the hillshade entry), but the layer is default-on at
   // every viewport, so a user in Alaska, Hawaii, or the Southeast saw a
   // `live` pill over an empty basemap with nothing saying why. The coverage
-  // qualification rides the source line, mirroring FIRE3D_COVERAGE_NOTE
-  // ("Terrain relief covers the Pacific Northwest data bake; outside it the
-  // ground renders flat."), which the 3D control has always shown.
+  // qualification rides the source line, mirroring the terrain clause of
+  // FIRE3D_COVERAGE_NOTE (src/config/fire3d-presentation.ts, named there
+  // FIRE3D_TERRAIN_COVERAGE_SENTENCE: the USGS 3DEP issuer, the archive's
+  // own bounding box, and its zoom-8 detail limit), which the 3D control
+  // has always shown.
   { key: 'hillshade', name: 'Terrain Shading', source: 'USGS 3DEP · PMTiles · Pacific Northwest bake only', role: 'reference', defaultOn: true, load: () => import('../layers/hillshade') },
   { key: 'drought', name: 'Drought Outlook (CPC)', source: 'NOAA CPC · Monthly & Seasonal', role: 'surface', defaultOn: false, load: () => import('../layers/drought') },
   // The NIDIS gridded index carries its coverage limit on the source line, the

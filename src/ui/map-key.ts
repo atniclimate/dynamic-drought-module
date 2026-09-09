@@ -703,13 +703,19 @@ function loadingKeySpec(key: string): KeySpec {
 const HILLSHADE_COVERAGE_LABEL = 'Terrain: Pacific Northwest only';
 
 /**
- * The terrain sentence of `FIRE3D_COVERAGE_NOTE` verbatim. That constant is
- * not imported whole because its second sentence describes the 3D view's
- * bundled structure bake (the central Oregon pilot area), which says nothing
- * about the flat hillshade and would broaden the claim made here.
+ * `FIRE3D_TERRAIN_COVERAGE_SENTENCE` (src/config/fire3d-presentation.ts)
+ * mirrored here as a LITERAL, not an import: this module sits in the eager
+ * graph (loaded at first paint), and that constant's owning file is reached
+ * only through the 3D Fire mode's dynamic-import chain, so importing it here
+ * would pull that chunk into first paint. The full `FIRE3D_COVERAGE_NOTE` is
+ * not mirrored because its trailing sentence describes the 3D view's bundled
+ * structure bake (the central Oregon pilot area), which says nothing about
+ * the flat hillshade and would broaden the claim made here.
+ * tests/fire3d-mode.spec.ts asserts this string equals the source constant,
+ * so the two cannot drift silently.
  */
 const HILLSHADE_COVERAGE_NOTE =
-  'Terrain relief covers the Pacific Northwest data bake; outside it the ground renders flat.';
+  "Terrain relief uses the USGS 3D Elevation Program's elevation data for 125°W to 110.5°W, 41.5°N to 49.5°N; outside that box the ground renders flat. The archive's detail ends at zoom 8; closer views stretch its deepest tiles.";
 
 /**
  * Append the terrain coverage entry when Terrain Shading is on. It rides an
