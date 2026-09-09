@@ -43,7 +43,8 @@
  * displayed outlook product no longer shows.
  */
 
-import type { TemporalHorizonKey } from '../config/clusters';
+import { HAZARD_CLUSTERS } from '../config/clusters';
+import type { HazardClusterKey, TemporalHorizonKey } from '../config/clusters';
 
 /** USDM surface view mode: absolute categories, or the honest derivative. */
 export type UsdmViewMode = 'absolute' | 'chg1' | 'chg4';
@@ -244,4 +245,32 @@ export function outlookRangeForHorizon(
  */
 export function horizonForOutlookRange(range: OutlookRange): TemporalHorizonKey {
   return range === 'monthly' ? 'weeks-ahead' : 'season-ahead';
+}
+
+/**
+ * The capability signature of a hazard cluster's recipe at a horizon
+ * (DDM-P8-T03, DR-017 a): `null` when the recipe is empty (no verified
+ * surface exists for that horizon), otherwise the recipe's layer keys
+ * joined in order, with the outlook register appended when and only
+ * when the recipe contains the 'drought' outlook layer (the one
+ * register-sensitive surface: `outlookRangeForHorizon` is the only
+ * within-surface effect a horizon has beyond recipe composition, so it
+ * is the only case where two identical recipe arrays can still mean two
+ * different displays).
+ *
+ * Signature identity means "the same map": two horizons whose signatures
+ * match render the identical surface, so a chip committing the later one
+ * changes nothing on screen. Computed from `HAZARD_CLUSTERS` only, never
+ * from a claim or the briefing (the briefing must not drive chip state).
+ */
+export function horizonSurfaceSignature(
+  cluster: HazardClusterKey,
+  horizon: TemporalHorizonKey
+): string | null {
+  const recipe = HAZARD_CLUSTERS[cluster].recipes[horizon];
+  if (recipe.length === 0) return null;
+  const base = recipe.join(',');
+  return recipe.includes('drought')
+    ? `${base}|${outlookRangeForHorizon(horizon)}`
+    : base;
 }
