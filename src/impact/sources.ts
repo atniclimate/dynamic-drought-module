@@ -253,19 +253,38 @@ export async function fetchHeatRiskClaims(
   signal: AbortSignal
 ): Promise<SourceResult> {
   try {
-    const { identifySelectedHeatRisk } = await import(
-      '../ui/heatrisk-sequence'
-    );
-    const identified = await identifySelectedHeatRisk(
+    const { identifyHeatRiskForBriefing, heatRiskClaimRegister, REQUIRED_FRAME_COUNT } =
+      await import('../ui/heatrisk-sequence');
+    // DR-014 a: this reads independently of the map layer's activation, so
+    // the near-term heat claim states its evidence whether or not HeatRisk is
+    // displayed. The briefing describes the place, not the map.
+    const result = await identifyHeatRiskForBriefing(
       context.lngLat.lng,
       context.lngLat.lat,
       signal
     );
     if (signal.aborted) return { claims: [], ok: false };
-    // HeatRisk is contextual to its active displayed frame. An inactive layer
-    // adds no source slot and does not make an otherwise complete horizon
-    // partial.
-    if (!identified) return { claims: [], ok: true };
+    // DDM-P7-T05 F3: the three nulls the old signature collapsed into one
+    // note are told apart here (see HeatRiskBriefingRead's own doc).
+    if (result.kind === 'no-displayed-frame') {
+      // HeatRisk is contextual to its active displayed frame. An inactive
+      // layer adds no source slot and does not make an otherwise complete
+      // horizon partial.
+      return { claims: [], ok: true };
+    }
+    if (result.kind === 'catalog-failed') {
+      return {
+        claims: [],
+        ok: false,
+        note: 'The National Weather Service HeatRisk catalog did not respond.'
+      };
+    }
+    if (result.kind === 'superseded') return { claims: [], ok: false };
+    const identified = result.identify;
+    const frameLabel =
+      identified.frameSource === 'selected'
+        ? 'the selected frame'
+        : `day ${identified.frame.day} of ${REQUIRED_FRAME_COUNT} of the catalog`;
 
     const validity =
       `${heatRiskMoment(identified.frame.validTime)} to ` +
@@ -276,6 +295,19 @@ export async function fetchHeatRiskClaims(
       source,
       sourceUrl,
       evidence: 'classified',
+      // DR-070 amended 2026-09-08, DR-071: HeatRisk stays 'classified'
+      // evidence (the badge stays Classified), but the issuer's own words
+      // describe a forecast, "provides a forecast of the potential level of
+      // risk for heat-related impacts to occur over a 24-hour period"
+      // (HeatRisk v2.6 Overview). A claim whose 24-hour period is still IN
+      // FORCE (has not ended) therefore overrides the classified ->
+      // observed default and reads outlook; an ENDED period reads observed
+      // (the spent claim the doctrine forbids as an outlook). This is the
+      // same boundary the time bar draws for the same product
+      // (src/layers/heatrisk.ts frameStamp/framePhase), read here through
+      // the one shared helper (heatRiskClaimRegister) so the briefing and
+      // the map can never disagree about when a HeatRisk claim is in force.
+      register: heatRiskClaimRegister(identified.validThrough, Date.now()),
       dates: {
         valid: isoDayUtc(identified.frame.validTime),
         retrieved: todayIso()
@@ -301,9 +333,14 @@ export async function fetchHeatRiskClaims(
       }
     } as const;
 
+    const heatReadLabel =
+      identified.frameSource === 'selected'
+        ? 'NWS HeatRisk selected frame'
+        : `NWS HeatRisk day ${identified.frame.day} of ${REQUIRED_FRAME_COUNT}`;
+
     if (identified.value === null) {
       const text =
-        `HeatRisk (Experimental): no data at the selected point for ${context.title} for the selected frame. ` +
+        `HeatRisk (Experimental): no data at the selected point for ${context.title} for ${frameLabel}. ` +
         `Valid ${validity}.`;
       return {
         ok: true,
@@ -315,7 +352,7 @@ export async function fetchHeatRiskClaims(
         ],
         heatRead: {
           key: 'heatRisk',
-          label: 'NWS HeatRisk selected frame',
+          label: heatReadLabel,
           text,
           sourceUrl
         }
@@ -336,7 +373,7 @@ export async function fetchHeatRiskClaims(
       ],
       heatRead: {
         key: 'heatRisk',
-        label: 'NWS HeatRisk selected frame',
+        label: heatReadLabel,
         text,
         sourceUrl
       }
