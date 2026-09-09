@@ -1352,6 +1352,20 @@ function awdbDiscoveryRecord(station: AwdbStationMetadata): StationDiscoveryReco
   };
 }
 
+// DDM-P9-T05: the field list the RAWS FeatureServer serves for a station's
+// identity AND its current fire-weather conditions (verified live via
+// `?f=pjson` 2026-09-09: RelativeHumidity, WindSpeedMPH, WindDirDegrees,
+// WindSpeedPeak, WindDirPeak, and FuelMoisture are all `esriFieldTypeString`
+// on this layer; the issuer serves the unit as part of the string, for
+// example "21 %", "5 mph", "7.3 (unk)", never a separate numeric+unit pair).
+// One constant so the viewport discovery query below and the popup's
+// per-station hydration query (`fetchRawsStationConditions`) can never drift
+// from each other.
+const RAWS_OUT_FIELDS =
+  'StationName,StationID,MesoWestStationID,Latitude,Longitude,State,Agency,Status,ObservedDate,' +
+  'RelativeHumidity,WindSpeedMPH,WindDirDegrees,WindSpeedPeak,WindDirPeak,FuelMoisture';
+const RAWS_HYDRATE_TIMEOUT_MS = 10_000;
+
 async function discoverRawsStations(
   bounds: ViewportBounds,
   signal: AbortSignal | null
@@ -1364,8 +1378,7 @@ async function discoverRawsStations(
     geometryType: 'esriGeometryEnvelope',
     inSR: '4326',
     spatialRel: 'esriSpatialRelIntersects',
-    outFields:
-      'StationName,StationID,MesoWestStationID,Latitude,Longitude,State,Agency,Status,ObservedDate',
+    outFields: RAWS_OUT_FIELDS,
     f: 'geojson'
   });
 
@@ -1403,6 +1416,21 @@ function rawsDiscoveryRecord(feature: unknown): StationDiscoveryRecord | null {
 
   const mesowestStationId = readIdentifier(properties.MesoWestStationID);
   const id = `raws-${stationId}`;
+
+  // DDM-P9-T05: an honest headline reading for the marker's freshness pill
+  // (src/layers/telemetry.ts reads `entry.values[0]?.freshness`), parsed
+  // from the SAME discovery response (no second fetch here; the popup's
+  // three-row rendering runs its own per-station query, see
+  // `fetchRawsStationConditions` below). Relative humidity is the headline
+  // parameter because it is the field the service serves most consistently
+  // as a plain "NN %" string. `null` means the station reported none.
+  const relativeHumidityRaw = readNonEmptyString(properties.RelativeHumidity);
+  const headlineRelativeHumidity = relativeHumidityRaw
+    ? parseLeadingNumber(relativeHumidityRaw)
+    : null;
+  const observedMs = readFiniteNumber(properties.ObservedDate);
+  const observedAtIso = observedMs !== null ? new Date(observedMs).toISOString() : null;
+
   return {
     network: 'raws',
     station: {
@@ -1431,17 +1459,88 @@ function rawsDiscoveryRecord(feature: unknown): StationDiscoveryRecord | null {
     },
     value: {
       stationId: id,
-      parameter: 'fire_weather_conditions',
-      label: 'Fire weather conditions',
-      value: null,
-      unit: '',
-      timestamp: '',
-      freshness: 'unknown',
+      parameter: 'relative_humidity_pct',
+      label: 'Relative humidity',
+      value: headlineRelativeHumidity,
+      unit: '%',
+      timestamp: observedAtIso ?? '',
+      freshness: observedAtIso ? freshnessForNetwork('raws', observedAtIso) : 'unavailable',
       source: 'raws'
     },
     primaryParameterCategory: 'fire-weather',
     handles: { rawsStationId: stationId }
   };
+}
+
+/**
+ * DDM-P9-T05: one RAWS station's current conditions, served-string verbatim
+ * (never re-derived into an invented unit; the issuer already appends its
+ * unit to the value, for example "21 %", "5 mph", "7.3 (unk)"). `null` on
+ * any field means the service affirmatively reported no reading for that
+ * parameter, distinct from the whole fetch failing.
+ */
+export interface RawsStationConditions {
+  readonly relativeHumidity: string | null;
+  readonly windSpeed: string | null;
+  readonly windDirection: string | null;
+  readonly windGustSpeed: string | null;
+  readonly windGustDirection: string | null;
+  readonly fuelMoisture: string | null;
+  readonly observedAtIso: string | null;
+}
+
+function parseRawsConditionProperties(properties: unknown): RawsStationConditions | null {
+  if (!isObject(properties)) return null;
+  const observedMs = readFiniteNumber(properties.ObservedDate);
+  const field = (key: string): string | null => {
+    const raw = readNonEmptyString((properties as Record<string, unknown>)[key]);
+    return raw ? raw.trim() : null;
+  };
+  return {
+    relativeHumidity: field('RelativeHumidity'),
+    windSpeed: field('WindSpeedMPH'),
+    windDirection: field('WindDirDegrees'),
+    windGustSpeed: field('WindSpeedPeak'),
+    windGustDirection: field('WindDirPeak'),
+    fuelMoisture: field('FuelMoisture'),
+    observedAtIso: observedMs !== null ? new Date(observedMs).toISOString() : null
+  };
+}
+
+/**
+ * Live per-station RAWS read for popup hydration (DDM-P9-T05), mirroring the
+ * USGS/AWDB/Hydromet/CWMS hydration fetches in src/ui/popups.ts: viewport
+ * discovery above finds the station; this is the fresh read at popup-open
+ * time, on the exact same field list (`RAWS_OUT_FIELDS`) and the same
+ * `f: 'geojson'` shape as discovery, so one live schema and one test fixture
+ * cover both. Throws on a transport or HTTP failure; the caller's existing
+ * catch renders the honest "unavailable" fallback. Returns `null` only when
+ * the station id resolves no feature at all (distinct from a field the
+ * service reports as null).
+ */
+export async function fetchRawsStationConditions(
+  stationId: string,
+  signal: AbortSignal | null
+): Promise<RawsStationConditions | null> {
+  const params = new URLSearchParams({
+    where: `StationID='${stationId.replace(/'/g, "''")}'`,
+    outFields: RAWS_OUT_FIELDS,
+    resultRecordCount: '1',
+    f: 'geojson'
+  });
+  const response = await fetchWithBudget(
+    `${URLS.nifcRawsFeatureServer}/query?${params.toString()}`,
+    {},
+    signal,
+    RAWS_HYDRATE_TIMEOUT_MS
+  );
+  if (!response.ok) {
+    throw new Error(`NIFC RAWS station conditions HTTP ${response.status}`);
+  }
+  const payload: unknown = await response.json();
+  const [feature] = readRawsFeatures(payload);
+  if (!feature) return null;
+  return parseRawsConditionProperties(feature.properties);
 }
 
 async function discoverCoopsStations(
@@ -1912,6 +2011,17 @@ function readFiniteNumber(value: unknown): number | null {
   if (typeof value !== 'string') return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * The leading numeric token in a served string (DDM-P9-T05), for example
+ * "21" out of "21 % ". Never invents a unit; callers keep the served string
+ * itself as the unit of record and use this only where a genuine number is
+ * required (the marker's headline `StationValue.value`).
+ */
+function parseLeadingNumber(raw: string): number | null {
+  const match = /-?\d+(?:\.\d+)?/.exec(raw);
+  return match ? Number(match[0]) : null;
 }
 
 function isCoordinateInBounds(lat: number, lon: number, bounds: ViewportBounds): boolean {
