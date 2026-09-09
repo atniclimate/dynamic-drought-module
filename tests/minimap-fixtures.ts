@@ -45,6 +45,10 @@
 
 import type { BrowserContext, Page, Route } from '@playwright/test';
 
+import { FRAMING_KEYS } from '../src/config/framings';
+import type { FramingKey } from '../src/config/framings';
+import { buildMinimapWildfireQueryBody } from '../src/state/minimap-wildfire';
+
 /**
  * Route patterns for the two continental analysis inputs. They match the
  * paths in `URLS.nadmNorthAmericaBaseGeojson` and
@@ -197,4 +201,99 @@ export async function installMinimapAnalysisStubs(page: Page): Promise<void> {
 /** Every minimap analysis request the suite-wide stub answered in this context. */
 export function minimapAnalysisStubLog(page: Page): readonly string[] {
   return stubbedContexts.get(page.context()) ?? [];
+}
+
+/**
+ * The nine framings' authored geometry, keyed by the SAME `geometry` string
+ * `buildMinimapWildfireQueryBody` posts, so a routed WFIGS count query can
+ * recover which framing asked without parsing the ArcGIS ring payload.
+ * Shared between `tests/s4-minimap.spec.ts` and `tests/minimap-wildfire.spec.ts`
+ * (DDM-P11-T01) so both drive the exact same wildfire minimap fixture through
+ * the exact same route, rather than one drifting from the other.
+ */
+const WILDFIRE_GEOMETRY_KEYS = new Map(
+  FRAMING_KEYS.map((key) => [
+    buildMinimapWildfireQueryBody(key).get('geometry'),
+    key,
+  ]),
+);
+
+/**
+ * Route the WFIGS current-perimeter count query (the minimap's live
+ * wildfire signal) and the NOAA smoke-detection query it also fires, to a
+ * per-framing fixture. `counts` names which framings answer with a
+ * positive current-perimeter count; every other framing answers zero,
+ * which is the DR-041 b fallback path (a SUCCESSFUL zero, not an
+ * unavailable read) unless the caller's own route overrides this one.
+ */
+export async function stubWildfireMinimap(
+  page: Page,
+  counts: Readonly<Partial<Record<FramingKey, number>>> = {},
+  onPost?: () => void,
+): Promise<void> {
+  await page.route(
+    '**/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query**',
+    (route) => {
+      if (route.request().method() !== 'POST') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/geo+json',
+          body: JSON.stringify({ type: 'FeatureCollection', features: [] }),
+        });
+      }
+      onPost?.();
+      const body = new URLSearchParams(route.request().postData() ?? '');
+      const key = WILDFIRE_GEOMETRY_KEYS.get(body.get('geometry'));
+      if (key === undefined) {
+        return route.fulfill({
+          status: 400,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { message: 'Unknown test geometry' } }),
+        });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ count: counts[key] ?? 0 }),
+      });
+    },
+  );
+  await page.route('**/NOAA_Satellite_Smoke_Detection_*/FeatureServer/0/query**',
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify({ type: 'FeatureCollection', features: [] }),
+      }),
+  );
+}
+
+/**
+ * Fail every WFIGS count query for the named framings (DR-041 b: an
+ * unavailable current-fire read must render `unavailable`, never fall
+ * through to WHP as if it had answered). Combine with `stubWildfireMinimap`
+ * by registering this route SECOND: Playwright's page routes resolve most
+ * recently registered first, so this one wins for the framings it names
+ * and the earlier stub still answers every other framing.
+ */
+export async function stubWildfireMinimapUnavailable(
+  page: Page,
+  framings: readonly FramingKey[],
+): Promise<void> {
+  const geometries = new Set(
+    framings.map((key) => buildMinimapWildfireQueryBody(key).get('geometry')),
+  );
+  await page.route(
+    '**/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query**',
+    (route) => {
+      if (route.request().method() !== 'POST') return route.fallback();
+      const body = new URLSearchParams(route.request().postData() ?? '');
+      if (!geometries.has(body.get('geometry'))) return route.fallback();
+      return route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'synthetic unavailable' } }),
+      });
+    },
+  );
 }
