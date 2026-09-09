@@ -86,17 +86,28 @@ test.describe('S4a desktop shell boot', () => {
     }
   });
 
-  test('the empty heat/season-ahead recipe yields the honest no-surface primary', async ({
+  test('the empty heat/season-ahead recipe is disabled with its reason and yields the honest no-surface primary', async ({
     page
   }) => {
-    await gotoApp(page);
-    await page.locator('.shell-cluster-btn[data-cluster="heat"]').click();
-    await page.locator('.shell-horizon-btn[data-horizon="season-ahead"]').click();
-    await expect(
-      page.locator('.shell-horizon-btn[data-horizon="season-ahead"]')
-    ).toHaveAttribute('aria-pressed', 'true');
+    // DDM-P8-T03 (DR-017 a): the season-ahead chip is now disabled for an
+    // empty recipe, so a click no longer reaches it; the deep link
+    // (already used at tests/fire-heat-time-bar.spec.ts:641) is the
+    // honest way to land here.
+    await gotoApp(page, '?cluster=heat&horizon=season-ahead');
+    const season = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
+    await expect(season).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#shell-summary-primary')).toHaveText(
       'No verified Extreme Heat surface is available at this horizon; showing reference layers only.'
+    );
+    await expect(season).toHaveAttribute('aria-disabled', 'true');
+    // DDM-P8-T03 step 3 stop rule: the always-visible `.shell-horizon-note`
+    // line was reverted (interface-responsive.spec.ts's 900x675 tablet
+    // band went red on the collision it introduced); the reason still
+    // reaches every consumer through `title`, the same pattern the
+    // custom-composition case above already uses.
+    await expect(season).toHaveAttribute(
+      'title',
+      'No verified season-ahead Extreme Heat map surface exists yet.'
     );
   });
 

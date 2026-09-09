@@ -148,6 +148,13 @@ test.describe('0.5.0b temporal axis', () => {
     // The full bar stays sidebar-hosted and therefore out of the embed.
     await expect(page.locator('#time-bar')).toBeHidden();
 
+    // DDM-P8-T03: the on-map key mirrors the same register the embed
+    // stamp carries, and neither depends on the sidebar shell, which does
+    // not exist in embed (tests/s4-shell.spec.ts:657).
+    const key = page.locator('#map-key');
+    await expect(key).toBeVisible();
+    await expect(key).toHaveAttribute('data-register', 'observed');
+
     // Invariant 2: embed= and week= both survive the boot's canonical
     // URL writes.
     expect(new URLSearchParams(await search(page)).get('embed')).toBe('true');
