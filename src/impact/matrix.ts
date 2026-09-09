@@ -107,7 +107,14 @@ export const LANE_PLACEMENT: Readonly<
   // DDM-P7-T07 (DR-075 option a): the NOAA CPC seasonal TEMPERATURE outlook,
   // read live at Lead 1. A distinct lane from `cpcSeasonal` above, which is
   // the cited CPC Seasonal DROUGHT Outlook prose and feeds the drought row.
-  cpcSeasonalTemp: { hazards: ['heat'], horizons: ['longRange'] }
+  cpcSeasonalTemp: { hazards: ['heat'], horizons: ['longRange'] },
+  // DDM-P7-T03 (DR-022 a): the NOAA SPC Day 1-8 Fire Weather Outlook, read
+  // live at the selected point. The season-ahead fire half of DR-022 a (the
+  // NIFC National Wildland Significant Fire Potential Outlook) has no
+  // machine-readable endpoint (verify-spc-nifc.md, S20) and so declares no
+  // lane here; the long-range fire cell keeps its CELL_ABSENCE prose, now
+  // naming that product's PDF-only posture rather than "not wired".
+  spcFireOutlook: { hazards: ['fire'], horizons: ['nearTerm'] }
 };
 
 /** Every lane key, in a stable order. */
@@ -122,17 +129,22 @@ export const MATRIX_LANE_KEYS: readonly MatrixLaneKey[] = [
   'enso',
   'waterSupply',
   'cpcSeasonal',
-  'cpcSeasonalTemp'
+  'cpcSeasonalTemp',
+  'spcFireOutlook'
 ];
 
 /**
  * What each cell says when it holds no claim and no source failure explained
- * the absence. Two of these describe work this briefing has not done yet and
- * name the product that will fill the cell (DR-022 for the two fire cells);
- * the rest name the product that had nothing to report for this selection,
- * including the season-ahead heat cell now that DDM-P7-T07 (DR-075 option a)
- * has wired its live read. None of them is a claim about conditions, and none
- * is a blank.
+ * the absence. One of these describes a product this briefing will never read
+ * from here and names why (the long-range fire cell, DR-022 a: the NIFC
+ * National Wildland Significant Fire Potential Outlook is PDF-only, per
+ * verify-spc-nifc.md, S20); the rest name the product that had nothing to
+ * report for this selection, including the near-term fire cell now that
+ * DDM-P7-T03 (DR-022 a) has wired its live SPC Day 1-8 read (this fallback
+ * fires only if that lane ever settles with zero claims and no note of its
+ * own, which its own composition avoids in the ordinary case) and the
+ * season-ahead heat cell now that DDM-P7-T07 (DR-075 option a) has wired its
+ * live read. None of them is a claim about conditions, and none is a blank.
  */
 export const CELL_ABSENCE: Readonly<
   Record<HorizonKey, Readonly<Record<HazardKey, string>>>
@@ -148,15 +160,20 @@ export const CELL_ABSENCE: Readonly<
     drought:
       'No NOAA CPC extended-range outlook is available for this selection.',
     fire:
-      'No near-term fire outlook is read here yet: the NOAA Storm Prediction Center fire weather outlooks for Days 1 to 8 are not wired into this briefing.',
+      'No NOAA SPC Day 1-8 Fire Weather Outlook read is available for this selection.',
     heat: 'No near-term heat read is available for this selection.',
     enso:
       'No weekly Nino 3.4 observation is available for this selection: the briefing reads the CPC weekly Nino-region file here, and it is absent from the current snapshot or too old to report.'
   },
   longRange: {
     drought: 'No long-range drought outlook is available for this selection.',
+    // DDM-P7-T03 (DR-022 a; verify-spc-nifc.md, S20): NIFC publishes this
+    // outlook as a PDF only, with no ArcGIS, GeoJSON, KML or shapefile
+    // distribution on any NIFC or GACC host, so this cell reads unavailable
+    // naming the product rather than scraping the PDF or its map images.
+    // Verbatim from the science verdict (science-verdict.md section 5).
     fire:
-      'No season-ahead fire outlook is read here yet: the National Interagency Fire Center Predictive Services significant fire potential outlook for Months 1 to 4 is not wired into this briefing.',
+      'The National Wildland Significant Fire Potential Outlook (NIFC/NICC Predictive Services; also called the National Monthly and Seasonal Significant Fire Potential Outlook by the GACCs) is published as a PDF only and is not read here. Read the issuer: https://www.nifc.gov/nicc/predictive-services/outlooks',
     heat: 'No NOAA CPC seasonal temperature outlook read is available for this selection.',
     enso: 'No ENSO seasonal tendency is shown for this selection.'
   }

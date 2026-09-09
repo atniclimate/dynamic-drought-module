@@ -24,7 +24,7 @@
  */
 
 import { URLS } from '../config/urls';
-import { HEATRISK_CATEGORIES } from '../config/palette';
+import { HEATRISK_CATEGORIES, SPC_FIREWX_CATEGORIES } from '../config/palette';
 import {
   NIFC_AREA_QUERY_RECORD_CAP,
   buildNifcAreaPerimeterClaim
@@ -1344,6 +1344,342 @@ export async function fetchCpcSeasonalTempClaims(
       note: upstreamNote(err, 'The NOAA CPC seasonal temperature outlook')
     };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Near-term: SPC Day 1-8 Fire Weather Outlook (DDM-P7-T03, DR-022 a)
+// ---------------------------------------------------------------------------
+
+/**
+ * The SPC fire weather outlook layers this fetch reads at the selected
+ * point (verified 2026-09-09, verify-spc-nifc.md, S20): layer 1 is Day 1 and
+ * layer 4 is Day 2, both categorical on field `dn` (5 Elevated, 8 Critical,
+ * 10 Extremely Critical, SPC's own public product word per the science
+ * verdict; `SPC_FIREWX_CATEGORIES` carries the correction, so the map legend
+ * and this text agree). Layers 8, 11, 14, 17, 20, 23 are the Days 3-8
+ * probabilistic product on field `label` ("0.40", "0.70"), plus a live third
+ * value with `dn` 0 and `label` "Probability Too Low" that the service's own
+ * renderer does not document (stated honestly as a DDM-convention reading,
+ * never as no data and never as an invented risk category). All six Days
+ * 3-8 layers share one `issue` timestamp; every layer carries its own
+ * `valid` and `expire` window as a `YYYYMMDDHHMM` UTC string, matching
+ * `src/layers/spc-fire-weather.ts`'s own Day 1 field reading. NOAA's own
+ * serviceDescription and about.html disagree on the Day 1 cadence (S20), so
+ * no sentence here states a cadence: every window comes only from the
+ * feature's own `valid` and `expire`, never invented from the calendar.
+ */
+const SPC_CATEGORICAL_DAYS: ReadonlyArray<{ readonly day: 1 | 2; readonly layer: number }> = [
+  { day: 1, layer: 1 },
+  { day: 2, layer: 4 }
+];
+
+/** Days 3-8, layer id order (S20: 8 Day 3, 11 Day 4, 14 Day 5, 17 Day 6, 20 Day 7, 23 Day 8). */
+const SPC_PROBABILISTIC_DAYS: ReadonlyArray<{
+  readonly day: 3 | 4 | 5 | 6 | 7 | 8;
+  readonly layer: number;
+}> = [
+  { day: 3, layer: 8 },
+  { day: 4, layer: 11 },
+  { day: 5, layer: 14 },
+  { day: 6, layer: 17 },
+  { day: 7, layer: 20 },
+  { day: 8, layer: 23 }
+];
+
+const SPC_CATEGORICAL_OUT_FIELDS = 'dn,valid,expire';
+const SPC_PROBABILISTIC_OUT_FIELDS = 'dn,label,label2,valid,expire,issue';
+
+/** The issuer's SPC fire weather definitions page (dn categories, product names). */
+const SPC_ABOUT_URL = 'https://www.spc.noaa.gov/misc/about.html';
+/** The issuer's Days 3-8 probability definition (verify-spc-nifc.md S20 quote). */
+const SPC_PROBABILISTIC_INFO_URL = 'https://www.spc.noaa.gov/misc/SPC_Fire_Probabilistic_Information.pdf';
+
+/** One SPC layer query's outcome: `ok: false` is a transport or envelope
+ * failure (no claim is ever built from it); `ok: true, props: null` is a
+ * legitimate empty result (the layer drew no area over the point). */
+interface SpcLayerOutcome {
+  readonly ok: boolean;
+  readonly props: Record<string, unknown> | null;
+  readonly err?: unknown;
+}
+
+async function fetchSpcLayerOutcome(
+  base: string,
+  layer: number,
+  outFields: string,
+  lng: number,
+  lat: number,
+  signal: AbortSignal
+): Promise<SpcLayerOutcome> {
+  try {
+    const url = `${base}/${layer}/query?${esriPointQuery(lng, lat, outFields).toString()}`;
+    const json: unknown = await fetchJson(url, GEOJSON_ACCEPT, signal);
+    const f = featuresOf(json)[0] ?? null;
+    return { ok: true, props: isObject(f) && isObject(f.properties) ? f.properties : null };
+  } catch (err) {
+    return { ok: false, props: null, err };
+  }
+}
+
+/**
+ * SPC's `YYYYMMDDHHMM` UTC field into epoch milliseconds, or null when the
+ * field is missing or malformed. Mirrors `spcMomentUtc` in
+ * `src/layers/spc-fire-weather.ts` (module-private there, and that file is a
+ * different task's; kept as its own small parser here rather than imported).
+ */
+function parseSpcMoment(value: unknown): number | null {
+  if (typeof value !== 'string' || !/^\d{12}$/.test(value)) return null;
+  const ms = Date.UTC(
+    Number(value.slice(0, 4)),
+    Number(value.slice(4, 6)) - 1,
+    Number(value.slice(6, 8)),
+    Number(value.slice(8, 10)),
+    Number(value.slice(10, 12))
+  );
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/**
+ * "Sep 8, 2026, 12:00 UTC", the SPC map layer's own valid/expire stamp
+ * grammar (`src/layers/spc-fire-weather.ts`), so the briefing's window reads
+ * the same as the map's time bar for the same field.
+ */
+function spcMomentText(ms: number): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'UTC',
+    timeZoneName: 'short'
+  }).format(new Date(ms));
+}
+
+/**
+ * ", valid <from> to <until>." from whichever of `valid`/`expire` parsed.
+ * Each half is stated only when the service gave it (the honest-outlook
+ * rule: never invent a window edge), and a feature with neither closes the
+ * sentence with a bare period.
+ */
+function spcValidityClause(validMs: number | null, expireMs: number | null): string {
+  if (validMs !== null && expireMs !== null) {
+    return `, valid ${spcMomentText(validMs)} to ${spcMomentText(expireMs)}.`;
+  }
+  if (validMs !== null) return `, valid from ${spcMomentText(validMs)}.`;
+  if (expireMs !== null) return `, valid through ${spcMomentText(expireMs)}.`;
+  return '.';
+}
+
+/**
+ * The issuer's own `dn` word (`SPC_FIREWX_CATEGORIES`, corrected to
+ * "Extremely Critical" for `dn` 10), or an honest `Category <n>` fallback
+ * for a value the palette table does not carry (mirrors
+ * `src/layers/spc-fire-weather.ts`'s `categoryLabel` fallback: never guess a
+ * severity for an unrecognized code).
+ */
+function spcCategoryWord(dn: number): string {
+  const entry = SPC_FIREWX_CATEGORIES.find((c) => c.dn === dn);
+  return entry ? entry.label : `Category ${dn}`;
+}
+
+/**
+ * One Day 1 or Day 2 categorical read, science verdict sentence shapes (a)
+ * and (b) (section 4). `outcome.ok === false` (a failed query) yields no
+ * claim at all here: the caller reports the day's absence from the cell
+ * only through the lane's own failure note, never through this sentence
+ * shape, so an outage can never read as an honest "no area is drawn".
+ */
+function spcCategoricalClaim(
+  day: 1 | 2,
+  outcome: SpcLayerOutcome,
+  source: string
+): SourcedClaim | null {
+  if (!outcome.ok) return null;
+  const product = `SPC Day ${day} Fire Weather Outlook`;
+  const props = outcome.props;
+  const dn = props ? (typeof props.dn === 'number' ? props.dn : Number(props.dn)) : NaN;
+  if (!props || !Number.isFinite(dn)) {
+    return makeClaim({
+      text: `${product}: no Elevated, Critical, or Extremely Critical area is drawn over this point for this day.`,
+      source,
+      sourceUrl: SPC_ABOUT_URL,
+      evidence: 'outlook',
+      dates: { retrieved: todayIso() }
+    });
+  }
+  const validMs = parseSpcMoment(props.valid);
+  const expireMs = parseSpcMoment(props.expire);
+  return makeClaim({
+    text: `${product}: ${spcCategoryWord(dn)} risk from wind and relative humidity at this point${spcValidityClause(validMs, expireMs)}`,
+    source,
+    sourceUrl: SPC_ABOUT_URL,
+    evidence: 'outlook',
+    dates:
+      validMs !== null
+        ? { valid: isoDayUtc(validMs), retrieved: todayIso() }
+        : { retrieved: todayIso() },
+    uncertainty: {
+      kind: 'categorical',
+      text: 'a categorical fire-weather threat class, not a deterministic outcome'
+    }
+  });
+}
+
+/** "Day 5", "Days 5 and 6", or "Days 5, 6 and 7", for the compact fold. */
+function joinDayList(days: readonly number[]): string {
+  if (days.length === 1) return `Day ${days[0]}`;
+  if (days.length === 2) return `Days ${days[0]} and ${days[1]}`;
+  return `Days ${days.slice(0, -1).join(', ')} and ${days[days.length - 1]}`;
+}
+
+/**
+ * Query the SPC Day 1-8 Fire Weather Outlook (`spcFireWeatherOutlookMapServer`)
+ * at the selected point and surface the near-term fire cell's claims: Day 1
+ * and Day 2 first, then the Days 3-8 probabilistic reads in day order,
+ * compactly (DDM-P7-T03, DR-022 a). Every sentence carries the issuer, the
+ * product name, and the valid window the service gave it (never a cadence
+ * claim, per the Day 1 cadence contradiction S20 found in NOAA's own
+ * metadata); a day with no drawn area says so honestly (never no data,
+ * never unavailable), and the live undocumented "Probability Too Low" value
+ * is stated as a DDM-convention reading, never as no data and never as an
+ * invented risk category. A day whose own query failed contributes no claim
+ * (never a false "no area" reading of an outage); the whole lane reads
+ * unavailable naming the product only when every one of the eight queries
+ * failed. This never speaks for the 2023 Wildfire Hazard Potential raster,
+ * which is not a forecast and is not read here.
+ */
+export async function fetchSpcFireOutlookClaims(
+  context: BoundarySelectionContext,
+  signal: AbortSignal
+): Promise<SourceResult> {
+  const { lng, lat } = context.lngLat;
+  const source = 'NOAA Storm Prediction Center';
+  const base = URLS.spcFireWeatherOutlookMapServer;
+
+  const [day1, day2, ...probOutcomes] = await Promise.all([
+    fetchSpcLayerOutcome(base, SPC_CATEGORICAL_DAYS[0]!.layer, SPC_CATEGORICAL_OUT_FIELDS, lng, lat, signal),
+    fetchSpcLayerOutcome(base, SPC_CATEGORICAL_DAYS[1]!.layer, SPC_CATEGORICAL_OUT_FIELDS, lng, lat, signal),
+    ...SPC_PROBABILISTIC_DAYS.map(({ layer }) =>
+      fetchSpcLayerOutcome(base, layer, SPC_PROBABILISTIC_OUT_FIELDS, lng, lat, signal)
+    )
+  ]);
+
+  if (signal.aborted) return { claims: [], ok: false };
+
+  const allOutcomes: readonly SpcLayerOutcome[] = [day1, day2, ...probOutcomes];
+  const anySucceeded = allOutcomes.some((o) => o.ok);
+  if (!anySucceeded) {
+    const serviceError = allOutcomes.find((o) => o.err instanceof EsriServiceError)?.err;
+    return {
+      claims: [],
+      ok: false,
+      note: upstreamNote(serviceError, 'The NOAA Storm Prediction Center Day 1-8 Fire Weather Outlook')
+    };
+  }
+
+  const claims: SourcedClaim[] = [];
+  const day1Claim = spcCategoricalClaim(1, day1, source);
+  if (day1Claim) claims.push(day1Claim);
+  const day2Claim = spcCategoricalClaim(2, day2, source);
+  if (day2Claim) claims.push(day2Claim);
+
+  const noFeatureDays: number[] = [];
+  for (let i = 0; i < SPC_PROBABILISTIC_DAYS.length; i += 1) {
+    const { day } = SPC_PROBABILISTIC_DAYS[i]!;
+    const outcome = probOutcomes[i]!;
+    // A failed query contributes nothing, not even to the "no area" fold
+    // (an outage is never a positive finding of absence, FSPEC-01).
+    if (!outcome.ok) continue;
+    const props = outcome.props;
+    if (props === null) {
+      noFeatureDays.push(day);
+      continue;
+    }
+    const product = `SPC Day ${day} Fire Weather Outlook`;
+    const label = typeof props.label === 'string' ? props.label.trim() : '';
+    const issuedMs = parseSpcMoment(props.issue);
+    const dates =
+      issuedMs !== null
+        ? { issued: isoDayUtc(issuedMs), retrieved: todayIso() }
+        : { retrieved: todayIso() };
+    if (label === '0.40' || label === '0.70') {
+      const pct = label === '0.40' ? 40 : 70;
+      const validMs = parseSpcMoment(props.valid);
+      const expireMs = parseSpcMoment(props.expire);
+      claims.push(
+        makeClaim({
+          text: `${product}: ${pct}% probability of critical fire weather and/or lightning-based ignition within 12 miles of this point${spcValidityClause(validMs, expireMs)}`,
+          source,
+          sourceUrl: SPC_PROBABILISTIC_INFO_URL,
+          evidence: 'outlook',
+          dates,
+          uncertainty: {
+            kind: 'categorical',
+            text: 'a probability of occurrence within 12 miles of the point during the outlook period, not a deterministic outcome'
+          }
+        })
+      );
+    } else if (label === 'Probability Too Low') {
+      claims.push(
+        makeClaim({
+          text: `${product}: this point returns "Probability Too Low", a service value with no public SPC definition found; treated here as below the 10% threshold SPC does map, not as no-data.`,
+          source,
+          sourceUrl: SPC_PROBABILISTIC_INFO_URL,
+          evidence: 'outlook',
+          dates,
+          uncertainty: {
+            kind: 'not-quantified',
+            text: 'a live service value with no issuer-published definition found'
+          }
+        })
+      );
+    } else {
+      // No verified sentence exists for any other label the service might
+      // send; dropped rather than invented, and never folded into the
+      // "no area" sentence below (an area WAS drawn here, just not one of
+      // the three verified values).
+      console.warn(
+        `[impact] SPC Day ${day} outlook returned an unrecognized label; dropped rather than invented.`,
+        label
+      );
+    }
+  }
+
+  if (noFeatureDays.length > 0) {
+    claims.push(
+      makeClaim({
+        text: `SPC Day 3-8 Fire Weather Outlook: no area is drawn over this point for ${joinDayList(noFeatureDays)}.`,
+        source,
+        sourceUrl: SPC_ABOUT_URL,
+        evidence: 'outlook',
+        dates: { retrieved: todayIso() }
+      })
+    );
+  }
+
+  if (claims.length === 0) {
+    // Every query that answered found nothing claimable (for example every
+    // probabilistic label was unrecognized while both categorical layers
+    // also failed): report the same honest unavailable the total-failure
+    // branch above uses, naming the product, rather than an empty cell with
+    // no note.
+    return {
+      claims: [],
+      ok: false,
+      note: 'The NOAA Storm Prediction Center Day 1-8 Fire Weather Outlook returned no reading this briefing can state for this point.'
+    };
+  }
+
+  const anyFailed = allOutcomes.some((o) => !o.ok);
+  return {
+    claims,
+    ok: true,
+    ...(anyFailed
+      ? { note: 'One SPC fire weather outlook layer query did not respond.' }
+      : {})
+  };
 }
 
 // ---------------------------------------------------------------------------

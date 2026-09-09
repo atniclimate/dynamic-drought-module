@@ -490,7 +490,11 @@ export const SPC_FIREWX_CATEGORIES: ReadonlyArray<{
 }> = [
   { dn: 5, label: 'Elevated', color: '#e69800' },
   { dn: 8, label: 'Critical', color: '#e60000' },
-  { dn: 10, label: 'Extreme', color: '#ff00ff' }
+  // DDM-P7-T03 (science verdict, 2026-09-09): the MapServer renderer's own
+  // word here is "Extreme", but SPC's public product word (about.html) is
+  // "Extremely Critical"; the label is corrected to the issuer's word so the
+  // map legend and the briefing agree (director grant, brief section 2).
+  { dn: 10, label: 'Extremely Critical', color: '#ff00ff' }
 ];
 
 export const SPC_FIREWX_DEFAULT_COLOR = '#9ca3af';

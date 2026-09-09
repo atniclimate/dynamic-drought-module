@@ -17,7 +17,8 @@ export type BriefingSourceKey =
   | 'enso'
   | 'waterSupply'
   | 'cpcSeasonal'
-  | 'cpcSeasonalTemp';
+  | 'cpcSeasonalTemp'
+  | 'spcFireOutlook';
 
 export type SourceCapabilityState =
   | 'available'
@@ -41,7 +42,8 @@ export const BRIEFING_SOURCE_KEYS: readonly BriefingSourceKey[] = [
   'enso',
   'waterSupply',
   'cpcSeasonal',
-  'cpcSeasonalTemp'
+  'cpcSeasonalTemp',
+  'spcFireOutlook'
 ];
 
 export const BRIEFING_SOURCE_LABELS: Readonly<
@@ -60,7 +62,9 @@ export const BRIEFING_SOURCE_LABELS: Readonly<
   enso: 'ENSO phase context',
   waterSupply: 'NWRFC water-supply outlook',
   cpcSeasonal: 'NOAA CPC seasonal drought outlook',
-  cpcSeasonalTemp: 'NOAA CPC seasonal temperature outlook'
+  cpcSeasonalTemp: 'NOAA CPC seasonal temperature outlook',
+  // DDM-P7-T03 (DR-022 a): SPC Day 1-8 Fire Weather Outlook, near-term fire.
+  spcFireOutlook: 'NOAA SPC Day 1-8 Fire Weather Outlook'
 };
 
 type NationalHeatSourceKey =
@@ -215,4 +219,44 @@ export const NATIONAL_HEAT_SOURCE_CAPABILITY: Readonly<
     heatRisk: unavailable('The selected point has no recognized source geography.'),
     cpcSeasonalTemp: unavailable('The selected point has no recognized source geography.')
   }
+};
+
+/**
+ * DDM-P7-T03 (DR-022 a): the SPC Day 1-8 Fire Weather Outlook's own service
+ * extent, the same national-geography model DDM-P7-T07 used above for the
+ * CPC seasonal temperature outlook, bounded to this one new key so no
+ * existing row above changes shape. The verify-spc-nifc.md receipt (S20)
+ * states the service covers the continental United States; no extent probe
+ * was run for Alaska, Hawaii, or the territories, so those geographies read
+ * unavailable naming the same CONUS-only extent, matching the shipped
+ * HeatRisk row's pattern for a CONUS-only product.
+ */
+export const SPC_FIRE_OUTLOOK_CAPABILITY: Readonly<
+  Record<CanonicalGeographyKey, SourceCapabilityCell>
+> = {
+  conus: available(
+    'The SPC Day 1-8 Fire Weather Outlook service extent covers the continental United States (verified 2026-09-09).'
+  ),
+  alaska: unavailable(
+    'The SPC Day 1-8 Fire Weather Outlook service extent covers the continental United States only.'
+  ),
+  hawaii: unavailable(
+    'The SPC Day 1-8 Fire Weather Outlook service extent covers the continental United States only.'
+  ),
+  'puerto-rico': unavailable(
+    'The SPC Day 1-8 Fire Weather Outlook service extent covers the continental United States only.'
+  ),
+  'served-territory': unavailable(
+    'The SPC Day 1-8 Fire Weather Outlook service extent covers the continental United States only.'
+  ),
+  'american-samoa': unavailable(
+    'The SPC Day 1-8 Fire Weather Outlook service extent covers the continental United States only.'
+  ),
+  canada: unavailable(
+    'The SPC Day 1-8 Fire Weather Outlook is a United States NOAA product, not issued for Canada.'
+  ),
+  transboundary: unavailable(
+    'No point source runs until the selected point has a country-specific identity.'
+  ),
+  unknown: unavailable('The selected point has no recognized source geography.')
 };
