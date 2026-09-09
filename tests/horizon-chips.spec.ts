@@ -73,10 +73,11 @@ async function openBriefing(page: Page, snapshot: Snapshot): Promise<void> {
       body: JSON.stringify(snapshot)
     })
   );
-  // The other briefing lanes are stubbed empty: fire, drought and heat cells
-  // with no lane declared for their horizon (fire nearTerm/longRange, heat
-  // longRange) settle to CELL_ABSENCE, which is exactly what the R4 check
-  // below needs.
+  // The other briefing lanes are stubbed empty: fire cells with no lane
+  // declared for their horizon (fire nearTerm/longRange) settle to
+  // CELL_ABSENCE, which is exactly what the R4 check below needs. Heat
+  // longRange now has a lane (DDM-P7-T07); `gotoApp` stubs its endpoint with
+  // a default fixture, so that cell renders a claim, not an absence.
   await page.route('**/USDM_current/FeatureServer/0/query?*', (route) =>
     route.fulfill({
       status: 200,
@@ -235,13 +236,14 @@ test.describe('DDM-P8-T03: every rendered claim carries exactly one observed/out
   test('R4: absence cells carry no tag', async ({ page }) => {
     await openBriefing(page, withWeekly());
 
-    // Fire nearTerm and longRange, and Heat longRange, have no lane declared
-    // for them (matrix.ts LANE_PLACEMENT), so with the other lanes stubbed
-    // empty they render CELL_ABSENCE prose, never a claim.
+    // Fire nearTerm and longRange have no lane declared for them
+    // (matrix.ts LANE_PLACEMENT), so with the other lanes stubbed empty they
+    // render CELL_ABSENCE prose, never a claim. Heat longRange left this list
+    // when DDM-P7-T07 wired the CPC seasonal temperature outlook lane; it now
+    // renders a claim (see tests/heat-h2-point-heat.spec.ts).
     const absenceCells: ReadonlyArray<readonly ['fire' | 'heat', 'nearTerm' | 'longRange']> = [
       ['fire', 'nearTerm'],
-      ['fire', 'longRange'],
-      ['heat', 'longRange']
+      ['fire', 'longRange']
     ];
     for (const [hazard, horizon] of absenceCells) {
       const cell = page.locator(
