@@ -159,6 +159,31 @@ test.describe('claim rendering honesty', () => {
     expect(html).not.toContain('legend-panel');
   });
 
+  test('DR-070 amended 2026-09-08: a per-claim register override renders its own word, not its evidence class default', () => {
+    // The HeatRisk exception: classified evidence, but the register reads
+    // outlook because the claim sets it explicitly. The badge (evidence
+    // class) is unaffected; only the register word beside the source line
+    // changes.
+    const overridden = renderClaim(
+      makeClaim({
+        text: 't',
+        source: 's',
+        evidence: 'classified',
+        register: 'outlook',
+        dates: { retrieved: '2026-09-08' }
+      })
+    );
+    expect(overridden).toContain('impact-claim impact-claim-classified"');
+    expect(overridden).toContain('>Classified</span>');
+    expect(overridden).toContain('<span class="impact-claim-register">outlook</span>');
+    expect(overridden).not.toContain('<span class="impact-claim-register">observed</span>');
+
+    // Every other classified claim, with no override set, still renders the
+    // class default (observed): the amendment names HeatRisk alone.
+    const defaulted = renderClaim(claimOf('classified'));
+    expect(defaulted).toContain('<span class="impact-claim-register">observed</span>');
+  });
+
   test('method provenance fields join baseline, version, and source vintage', () => {
     const html = renderClaim(
       makeClaim({
