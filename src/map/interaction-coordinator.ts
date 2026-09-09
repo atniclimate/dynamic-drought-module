@@ -36,12 +36,9 @@ import { getEmphasisTargets, emphasizePlaces } from '../state/place-emphasis';
 import type { EmphasisTarget } from '../state/place-emphasis';
 import { getPlaceSelection, setPlaceSelection } from '../state/place-selection';
 import type { PlaceSelection } from '../state/place-selection';
-import { getCurrentRegion } from '../state/region-store';
 import { getStudioRoute, onStudioRouteChange } from '../state/studio-route';
 import { getViewMode, onViewModeChange } from '../state/view-mode';
-import { resolveLocationIdentity } from '../state/location-identity';
 import type { LocationIdentity } from '../state/location-identity';
-import { buildImpactTriggerButtonHtml } from '../ui/popups';
 import { openImpactPanel } from '../ui/impact-panel';
 import { isSheetActive } from '../ui/mobile-sheet';
 
@@ -556,8 +553,17 @@ async function attachConditionDoor(
   head: HTMLElement,
   click: CoordinatorClick
 ): Promise<void> {
+  // Dynamic, not static: `interaction-coordinator.ts` sits in the eager
+  // entry graph (first paint), and a static import of any of these three
+  // drags the location-identity stack, popups.ts, and the urls catalog
+  // chunk into first paint too (DDM-P11-T02 fix-wave: measured 31.1 kB to
+  // 50.2 kB gzip at the entry chunk, over the DR-008 45 kB budget). This
+  // path only runs after a non-place-bearing popup has ALREADY painted
+  // (see the call site below), so the import cost lands on that later
+  // async step, never on boot.
   let identity: LocationIdentity;
   try {
+    const { resolveLocationIdentity } = await import('../state/location-identity');
     identity = await resolveLocationIdentity(
       map,
       { lng: click.lngLat.lng, lat: click.lngLat.lat },
@@ -570,6 +576,11 @@ async function attachConditionDoor(
 
   const subject = doorSubjectFromIdentity(identity);
   if (!subject) return;
+
+  const [{ getCurrentRegion }, { buildImpactTriggerButtonHtml }] = await Promise.all([
+    import('../state/region-store'),
+    import('../ui/popups')
+  ]);
 
   const context: BoundarySelectionContext = {
     kind: subject.kind,
