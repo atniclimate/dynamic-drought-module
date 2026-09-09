@@ -9,7 +9,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { expect, type BrowserContext, type Page, type Locator } from '@playwright/test';
+import { expect, type BrowserContext, type Page, type Locator, type Route } from '@playwright/test';
 import { stubRecentSatellite } from './satellite-fixture';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
 import { installBoundaryStubs, type BoundaryStubMode } from './tribal-fixtures';
@@ -253,6 +253,13 @@ export async function gotoApp(
   // bodies. See tests/minimap-fixtures.ts for why they are stubbed rather
   // than waived.
   await installMinimapAnalysisStubs(page);
+  // DDM-P7-T07: the season-ahead heat cell reads the CPC seasonal
+  // temperature outlook live, independent of any map layer, on every
+  // briefing whose selection falls inside the regional impact synthesis
+  // capability. Stubbed unconditionally, like the three calls above, so no
+  // spec that opens the briefing sends this new query to the live agency
+  // (see `stubCpcSeasonalTempOutlook`'s own comment).
+  await stubCpcSeasonalTempOutlook(page);
   coverFuturePages(page);
   if (!/[?&](?:layers|cluster)=/.test(query)) {
     await stubDefaultNadm(page);
@@ -560,6 +567,141 @@ export async function stubHeatRiskCatalog(
 
   return { identifyCalls, frameTimes };
 }
+
+// ---------------------------------------------------------------------------
+// CPC seasonal temperature outlook network stub (DDM-P7-T07)
+// ---------------------------------------------------------------------------
+
+const CPC_SEASONAL_TEMP_OUTLOOK_PATH =
+  '/vector/rest/services/outlooks/cpc_sea_temp_outlk/MapServer';
+
+export interface CpcSeasonalTempReading {
+  /** The issuer's own `cat` string; default `'Above'`. */
+  readonly cat?: string;
+  /** The issuer's own `prob` value; default `50`. */
+  readonly prob?: number;
+  /** The issuer's own `valid_seas` label, verbatim; default `'SON 2026'`. */
+  readonly validSeas?: string;
+  /** The issuer's `fcst_date`, epoch ms; default a fixed 2026 literal. */
+  readonly fcstDate?: number | null;
+  /** Serve zero features (the empty-read case) instead of the fixture row. */
+  readonly empty?: boolean;
+  /** Serve an ArcGIS HTTP-200 error envelope instead of the fixture row. */
+  readonly errorEnvelope?: boolean;
+  /** Serve this HTTP status with a plain failure body (the 500 case). */
+  readonly httpStatus?: number;
+}
+
+export interface StubCpcSeasonalTempOutlookOptions extends CpcSeasonalTempReading {
+  /**
+   * Per-request readings in call order, for a spec proving supersession: the
+   * Nth matching request is answered from `sequence[N-1]` (the last entry
+   * repeats once the sequence is exhausted). The top-level fixture fields
+   * above are ignored once `sequence` is given.
+   */
+  readonly sequence?: readonly CpcSeasonalTempReading[];
+  /**
+   * Resolved externally to delay only the FIRST matching request's
+   * response, so a spec can hold an old generation's read open while a
+   * newer selection's read (the second matching request) answers at once.
+   */
+  readonly holdFirst?: Promise<void>;
+}
+
+/**
+ * Route the CPC seasonal temperature outlook MapServer (`cpc_sea_temp_outlk`,
+ * `src/config/urls.ts` `cpcSeasonalTempOutlookMapServer`) to a deterministic
+ * fixture. `fetchCpcSeasonalTempClaims` (src/impact/sources.ts) reads this
+ * service on every briefing whose selection falls inside the regional impact
+ * synthesis capability (the same gate `cpcSeasonal` and `cpcExtended`
+ * already read), independent of any map layer, so `gotoApp` below calls this
+ * unconditionally with its defaults (S17's lesson: an unstubbed briefing
+ * lane reaches the live agency).
+ *
+ * De-duplicated per page (mirrors `stubRecentSatellite`): a spec that needs
+ * a specific reading, a failure arm, or a held-open supersession race calls
+ * this itself, WITH its own options, BEFORE `gotoApp`; `gotoApp`'s own later
+ * call then finds this page already stubbed and is a no-op, so the spec's
+ * reading is never shadowed by the default one.
+ */
+export async function stubCpcSeasonalTempOutlook(
+  page: Page,
+  options: StubCpcSeasonalTempOutlookOptions = {}
+): Promise<void> {
+  if (cpcSeasonalTempOutlookStubbedPages.has(page)) return;
+  cpcSeasonalTempOutlookStubbedPages.add(page);
+
+  const fulfillReading = async (
+    route: Route,
+    reading: CpcSeasonalTempReading
+  ): Promise<void> => {
+    const {
+      cat = 'Above',
+      prob = 50,
+      validSeas = 'SON 2026',
+      fcstDate = Date.UTC(2026, 8, 1),
+      empty = false,
+      errorEnvelope = false,
+      httpStatus = 200
+    } = reading;
+    if (httpStatus !== 200) {
+      await route.fulfill({
+        status: httpStatus,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'stubbed upstream failure' })
+      });
+      return;
+    }
+    if (errorEnvelope) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/plain',
+        body: JSON.stringify({
+          status: 'error',
+          messages: ['Could not access any server machines.']
+        })
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/geo+json',
+      body: JSON.stringify({
+        type: 'FeatureCollection',
+        features: empty
+          ? []
+          : [
+              {
+                type: 'Feature',
+                geometry: null,
+                properties: {
+                  cat,
+                  prob,
+                  valid_seas: validSeas,
+                  fcst_date: fcstDate
+                }
+              }
+            ]
+      })
+    });
+  };
+
+  let requestIndex = 0;
+  await page.route(
+    (url) => url.pathname.startsWith(CPC_SEASONAL_TEMP_OUTLOOK_PATH),
+    async (route) => {
+      const index = requestIndex;
+      requestIndex += 1;
+      if (index === 0 && options.holdFirst) await options.holdFirst;
+      const reading = options.sequence
+        ? (options.sequence[Math.min(index, options.sequence.length - 1)] ?? {})
+        : options;
+      await fulfillReading(route, reading);
+    }
+  );
+}
+
+const cpcSeasonalTempOutlookStubbedPages = new WeakSet<Page>();
 
 /**
  * The set of layer keys currently encoded in the URL's `layers=` parameter.

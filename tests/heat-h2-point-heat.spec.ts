@@ -24,7 +24,13 @@ import type {
   BoundarySelectionContext,
   PointHeatBriefing
 } from '../src/impact/types';
-import { gotoApp, layerCheckbox, layerPill } from './helpers';
+import {
+  gotoApp,
+  layerCheckbox,
+  layerPill,
+  stubCpcSeasonalTempOutlook,
+  stubHeatRiskCatalog as stubHeatRiskCatalogShared
+} from './helpers';
 
 function context(
   code: string | null,
@@ -1059,26 +1065,248 @@ test.describe('H2 near-term HeatRisk claim independent of the map layer (DR-014 
     expect(receipt.identifyCalls.length).toBe(CATALOG_TIMES.length + 1);
   });
 
-  test('the season-ahead heat cell reads unavailable and names the CPC seasonal temperature outlook', async ({
+});
+
+test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
+  const CELL = '.impact-hazard[data-horizon="longRange"][data-hazard="heat"]';
+
+  test('(a) a stubbed outlook renders an outlook-register claim naming the CPC seasonal temperature outlook, the stubbed season, the fcst_date day and the point geography', async ({
     page
   }) => {
     await stubBrowserNwsHeat(page);
-    await stubHeatRiskCatalog(page);
+    await stubHeatRiskCatalogShared(page);
+    await stubCpcSeasonalTempOutlook(page, {
+      cat: 'Above',
+      prob: 60,
+      validSeas: 'DJF 2027',
+      fcstDate: Date.UTC(2026, 10, 15)
+    });
     await gotoApp(page, '?embed=true&view=console&select=state:WA');
 
-    const cell = page.locator(
-      '.impact-hazard[data-horizon="longRange"][data-hazard="heat"]'
+    const cell = page.locator(CELL);
+    await expect(cell.locator('.impact-hazard-pill')).toHaveText('live');
+    const claim = cell.locator('.impact-claim');
+    await expect(claim).toHaveCount(1);
+    await expect(claim.locator('.impact-claim-register')).toHaveText(
+      'outlook'
     );
-    await expect(cell.locator('.impact-hazard-pill')).toHaveText(
-      'unavailable'
+    await expect(claim).toContainText(
+      'NOAA Climate Prediction Center seasonal temperature outlook'
     );
-    await expect(cell.locator('.impact-horizon-note')).toContainText(
-      'the NOAA CPC seasonal temperature outlook is not wired into this briefing'
+    await expect(claim).toContainText(
+      'for Dec-Jan-Feb 2027: 60% chance of above-normal temperature, at the selected point.'
     );
+    await expect(claim.locator('.impact-claim-date')).toContainText(
+      '2026-11-15'
+    );
+
+    // DR-019: never presented as an ENSO forecast.
+    await expect(claim).not.toContainText('ENSO');
     // The long-range drought cell keeps its own cited CPC Seasonal Drought
     // Outlook prose (hydrate.ts CPC_SEASONAL_OUTLOOK); it must not appear
     // under heat, which would misattribute a drought-tendency claim to heat.
     await expect(cell).not.toContainText('CPC Seasonal Drought Outlook');
+  });
+
+  test('(b1) a 500 response renders the named unavailable state, no claim', async ({
+    page
+  }) => {
+    await stubBrowserNwsHeat(page);
+    await stubHeatRiskCatalogShared(page);
+    await stubCpcSeasonalTempOutlook(page, { httpStatus: 500 });
+    await gotoApp(page, '?embed=true&view=console&select=state:WA');
+
+    const cell = page.locator(CELL);
+    await expect(cell.locator('.impact-claim')).toHaveCount(0);
+    await expect(cell.locator('.impact-horizon-note')).toContainText(
+      'NOAA CPC seasonal temperature outlook'
+    );
+  });
+
+  test('(b2) an empty-features response renders the named unavailable state, no claim', async ({
+    page
+  }) => {
+    await stubBrowserNwsHeat(page);
+    await stubHeatRiskCatalogShared(page);
+    await stubCpcSeasonalTempOutlook(page, { empty: true });
+    await gotoApp(page, '?embed=true&view=console&select=state:WA');
+
+    const cell = page.locator(CELL);
+    await expect(cell.locator('.impact-claim')).toHaveCount(0);
+    await expect(cell.locator('.impact-horizon-note')).toContainText(
+      'NOAA CPC seasonal temperature outlook'
+    );
+  });
+
+  test('(c) a superseded selection renders only the newer selection\'s claim', async ({
+    page
+  }) => {
+    await stubBrowserNwsHeat(page);
+    await stubHeatRiskCatalogShared(page);
+    let releaseOld: (() => void) | null = null;
+    const holdFirst = new Promise<void>((resolve) => {
+      releaseOld = resolve;
+    });
+    await stubCpcSeasonalTempOutlook(page, {
+      holdFirst,
+      sequence: [
+        { validSeas: 'DJF 2027 (superseded)' },
+        { validSeas: 'MAM 2027' }
+      ]
+    });
+
+    try {
+      await gotoApp(page, '?view=brief&select=state:WA');
+      await expect(page.locator('#impact-panel')).toBeVisible();
+      await page.locator('#impact-panel .impact-panel-close').click();
+
+      const search = page.locator('#brief-search [data-ddm-search]');
+      await search.fill('oregon');
+      await page
+        .locator(
+          '#brief-search [data-search-kind="place"][data-search-id="OR"]'
+        )
+        .click();
+      await page.locator('#brief-full-report-link').click();
+
+      const cell = page.locator(CELL);
+      await expect(cell.locator('.impact-claim')).toContainText(
+        'Mar-Apr-May 2027'
+      );
+
+      releaseOld?.();
+      await page.waitForTimeout(200);
+      await expect(cell.locator('.impact-claim')).toHaveCount(1);
+      await expect(cell.locator('.impact-claim')).not.toContainText(
+        'DJF 2027 (superseded)'
+      );
+      await expect(cell.locator('.impact-horizon-note')).toHaveCount(0);
+    } finally {
+      releaseOld?.();
+    }
+  });
+
+  test('(d) the Heat season-ahead chip, #map-key and #time-bar stay exactly as before this task', async ({
+    page
+  }) => {
+    await stubBrowserNwsHeat(page);
+    await gotoApp(page, '?view=console&cluster=heat&horizon=season-ahead');
+
+    // The map recipe for heat/season-ahead stays empty (clusters.ts is
+    // untouched by this task): no dated product is displayed, and the chip
+    // is enabled (a single-hazard cluster, not `customHorizonDisabledReason`'s
+    // 'custom' case), exactly as before this task.
+    await expect(page.locator('#shell-time .shell-time-empty')).toHaveText(
+      'No dated product is displayed.'
+    );
+    await expect(page.locator('#time-bar')).toBeHidden();
+    const chip = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
+    await expect(chip).toBeVisible();
+    await expect(chip).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(page.locator('#map-key')).not.toContainText(
+      'seasonal temperature outlook'
+    );
+  });
+
+  test('(e) a United States selection outside the Pacific Northwest (Texas) renders the claim (DR-075 a director ruling: the gate follows the issuer service extent, not the drought-doctrine region)', async ({
+    page
+  }) => {
+    await stubBrowserNwsHeat(page);
+    await stubHeatRiskCatalogShared(page);
+    await stubCpcSeasonalTempOutlook(page, {
+      cat: 'Below',
+      prob: 40,
+      validSeas: 'JJA 2027',
+      fcstDate: Date.UTC(2027, 5, 1)
+    });
+    await gotoApp(page, '?embed=true&view=console&select=state:TX');
+
+    const cell = page.locator(CELL);
+    await expect(cell.locator('.impact-hazard-pill')).toHaveText('live');
+    const claim = cell.locator('.impact-claim');
+    await expect(claim).toHaveCount(1);
+    await expect(claim.locator('.impact-claim-register')).toHaveText(
+      'outlook'
+    );
+    await expect(claim).toContainText(
+      'for Jun-Jul-Aug 2027: 40% chance of below-normal temperature, at the selected point.'
+    );
+  });
+
+  test('(g) an Equal Chances reading renders "Equal Chances (no favored tercile)" with no percent (the issuer\'s own EC semantics, not a forecast confidence)', async ({
+    page
+  }) => {
+    await stubBrowserNwsHeat(page);
+    await stubHeatRiskCatalogShared(page);
+    await stubCpcSeasonalTempOutlook(page, {
+      cat: 'EC',
+      prob: 33,
+      validSeas: 'JJA 2027',
+      fcstDate: Date.UTC(2027, 5, 1)
+    });
+    await gotoApp(page, '?embed=true&view=console&select=state:WA');
+
+    const cell = page.locator(CELL);
+    const claim = cell.locator('.impact-claim');
+    await expect(claim).toHaveCount(1);
+    await expect(claim).toContainText(
+      'for Jun-Jul-Aug 2027: Equal Chances (no favored tercile), at the selected point.'
+    );
+    await expect(claim).not.toContainText('33%');
+  });
+
+  test('(h) a Normal reading renders the issuer legend label "near-normal"', async ({
+    page
+  }) => {
+    await stubBrowserNwsHeat(page);
+    await stubHeatRiskCatalogShared(page);
+    await stubCpcSeasonalTempOutlook(page, {
+      cat: 'Normal',
+      prob: 40,
+      validSeas: 'SON 2026',
+      fcstDate: Date.UTC(2026, 8, 1)
+    });
+    await gotoApp(page, '?embed=true&view=console&select=state:WA');
+
+    const cell = page.locator(CELL);
+    const claim = cell.locator('.impact-claim');
+    await expect(claim).toHaveCount(1);
+    await expect(claim).toContainText(
+      'for Sep-Oct-Nov 2026: 40% chance of near-normal temperature, at the selected point.'
+    );
+  });
+
+  test('(f) a selection outside the United States renders a named unavailable note, never a claim, and issues no CPC seasonal temperature outlook request', async () => {
+    // Mirrors the existing "Canada remains unavailable..." unit test above
+    // (context(null, 'british_columbia', 'watershed') -> canonical geography
+    // 'canada'): a pure hydrateBriefing() run, no page, so a stray fetch is
+    // an immediate thrown error rather than a silent live request.
+    const originalFetch = globalThis.fetch;
+    let cpcRequestCount = 0;
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url.includes('cpc_sea_temp_outlk')) cpcRequestCount += 1;
+      throw new Error(`Unexpected fetch in the Canada fixture: ${url}`);
+    };
+    try {
+      const briefing = createBriefingSkeleton(
+        context(null, 'british_columbia', 'watershed')
+      );
+      const master = new AbortController();
+      await hydrateBriefing(briefing, master.signal, () => undefined);
+
+      expect(cpcRequestCount).toBe(0);
+      expect(briefing.sourcePolicy.geography.key).toBe('canada');
+      expect(briefing.sourcePolicy.sources.cpcSeasonalTemp.state).toBe(
+        'unavailable'
+      );
+      const heatLongRange = briefing.horizons.longRange.cells.heat;
+      expect(heatLongRange.claims).toHaveLength(0);
+      expect(heatLongRange.status).toBe('unavailable');
+      expect(heatLongRange.note ?? '').not.toBe('');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 

@@ -107,6 +107,30 @@ export const URLS = Object.freeze({
   cpc814OutlookMapServer:
     'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_8_14_day_outlk/MapServer',
 
+  // ---------- CPC seasonal temperature outlook (NOAA, ArcGIS MapServer) ----------
+  // The Climate Prediction Center (CPC) seasonal temperature outlook,
+  // DDM-P7-T07 (DR-075 option a), hosted on the same NOAA mapservices cloud
+  // host as `cpc610OutlookMapServer` / `cpc814OutlookMapServer`. 13 lead
+  // layers (layer 0 = "Lead 1"); a point query against layer 0
+  // (`/0/query?...&geometry=<lon>,<lat>&geometryType=esriGeometryPoint
+  // &inSR=4326&f=geojson`) returns one polygon feature carrying `cat`
+  // ("Above" / "Below" / "Normal" / "EC"), `prob` (a percentage), `valid_seas`
+  // (the issuer's own season label, for example "SON 2026") and `fcst_date`
+  // (the issuance date, epoch ms). The season-ahead heat cell of the impact
+  // briefing reads Lead 1 for the outlook claim.
+  // Verified 2026-09-09 (STEP 0, ddm-forecast-wirer): `/0?f=pjson` returns
+  // HTTP 200, layer name "Lead 1", geometryType esriGeometryPolygon, fields
+  // objectid, fcst_date (esriFieldTypeDate), valid_seas (esriFieldTypeString,
+  // no coded domain), prob (esriFieldTypeDouble), cat (esriFieldTypeString,
+  // no coded domain), idp_ingestdate, idp_filedate, idp_source, shape; no
+  // region-name attribute. A live point query with an `Origin` header echoed
+  // `Access-Control-Allow-Origin` back to that origin (browser fetch from the
+  // app origin succeeds), and returned `{"cat":"Above","prob":50,
+  // "valid_seas":"SON 2026","fcst_date":1787184000000}` for a Pacific
+  // Northwest point.
+  cpcSeasonalTempOutlookMapServer:
+    'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_sea_temp_outlk/MapServer',
+
   // ---------- USGS Water Services Instantaneous Values (open data, CORS-OK) ----------
   // United States Geological Survey (USGS) Water Services, Instantaneous
   // Values (IV). Two query shapes share this base URL:

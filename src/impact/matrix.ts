@@ -103,7 +103,11 @@ export const LANE_PLACEMENT: Readonly<
   // renders its CELL_ABSENCE prose exactly as before.
   enso: { hazards: ['enso'], horizons: ['current', 'nearTerm', 'longRange'] },
   waterSupply: { hazards: ['drought'], horizons: ['longRange'] },
-  cpcSeasonal: { hazards: ['drought'], horizons: ['longRange'] }
+  cpcSeasonal: { hazards: ['drought'], horizons: ['longRange'] },
+  // DDM-P7-T07 (DR-075 option a): the NOAA CPC seasonal TEMPERATURE outlook,
+  // read live at Lead 1. A distinct lane from `cpcSeasonal` above, which is
+  // the cited CPC Seasonal DROUGHT Outlook prose and feeds the drought row.
+  cpcSeasonalTemp: { hazards: ['heat'], horizons: ['longRange'] }
 };
 
 /** Every lane key, in a stable order. */
@@ -117,16 +121,18 @@ export const MATRIX_LANE_KEYS: readonly MatrixLaneKey[] = [
   'cpcExtended',
   'enso',
   'waterSupply',
-  'cpcSeasonal'
+  'cpcSeasonal',
+  'cpcSeasonalTemp'
 ];
 
 /**
  * What each cell says when it holds no claim and no source failure explained
- * the absence. Three of these describe work this briefing has not done yet
- * and name the product that will fill the cell (DR-022 for the two fire
- * cells, DR-019 for the seasonal heat cell); the rest name the product that
- * had nothing to report for this selection. None of them is a claim about
- * conditions, and none is a blank.
+ * the absence. Two of these describe work this briefing has not done yet and
+ * name the product that will fill the cell (DR-022 for the two fire cells);
+ * the rest name the product that had nothing to report for this selection,
+ * including the season-ahead heat cell now that DDM-P7-T07 (DR-075 option a)
+ * has wired its live read. None of them is a claim about conditions, and none
+ * is a blank.
  */
 export const CELL_ABSENCE: Readonly<
   Record<HorizonKey, Readonly<Record<HazardKey, string>>>
@@ -151,8 +157,7 @@ export const CELL_ABSENCE: Readonly<
     drought: 'No long-range drought outlook is available for this selection.',
     fire:
       'No season-ahead fire outlook is read here yet: the National Interagency Fire Center Predictive Services significant fire potential outlook for Months 1 to 4 is not wired into this briefing.',
-    heat:
-      'No season-ahead heat outlook is read here yet: the NOAA CPC seasonal temperature outlook is not wired into this briefing.',
+    heat: 'No NOAA CPC seasonal temperature outlook read is available for this selection.',
     enso: 'No ENSO seasonal tendency is shown for this selection.'
   }
 };

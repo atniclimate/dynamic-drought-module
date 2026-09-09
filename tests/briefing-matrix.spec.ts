@@ -142,18 +142,20 @@ test('no cell inherits another hazard issuer or clock', () => {
 });
 
 // Was four cells until DDM-P12-T02 (DR-031 a) wired the CPC weekly Nino 3.4
-// file into the ENSO near-term cell, which gave that cell a declared lane. The
-// cell can still render an absence, but it now does so because its one lane had
-// nothing to report, not because no product was ever wired to it.
-test('the three cells with no wired product say so from the first paint', () => {
+// file into the ENSO near-term cell, which gave that cell a declared lane;
+// down to two (the fire cells only) since DDM-P7-T07 wired the CPC seasonal
+// temperature outlook into the heat long-range cell, which gave that cell a
+// declared lane too. Each remaining cell can still render an absence, but it
+// now does so because its one lane had nothing to report, not because no
+// product was ever wired to it.
+test('the two cells with no wired product say so from the first paint', () => {
   const horizons = emptyHorizons();
   const unwired = everyCell(horizons).filter(
     (cell) => lanesForCell(cell.horizon, cell.hazard).length === 0
   );
   expect(unwired.map((cell) => `${cell.horizon}:${cell.hazard}`)).toEqual([
     'nearTerm:fire',
-    'longRange:fire',
-    'longRange:heat'
+    'longRange:fire'
   ]);
   for (const cell of unwired) {
     // Never a spinner for a source that will not come.
@@ -166,7 +168,6 @@ test('the three cells with no wired product say so from the first paint', () => 
   expect(horizons.longRange.cells.fire.note).toContain(
     'National Interagency Fire Center'
   );
-  expect(horizons.longRange.cells.heat.note).toContain('CPC seasonal');
 });
 
 test('one query answering two hazards files each statement in its own row', () => {
