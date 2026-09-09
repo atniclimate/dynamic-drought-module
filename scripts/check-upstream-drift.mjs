@@ -545,6 +545,8 @@ export const OUT_FIELDS_SENDERS_COVERED_ELSEWHERE = Object.freeze({
     'NOT extracted (the template is a positional argument to geometryParams); byte-identical to the place-catalog template today',
   'src/impact/sources.ts':
     'NOT extracted (positional arguments to esriPointQuery and esriEnvelopeQuery): USDM DM and the NIFC identity fields are subsets of their rows today; the CPC 6-10 and 8-14 day point query (cat,prob) has no row',
+  'src/ui/heatrisk-sequence.ts':
+    "the briefing's independent HeatRisk catalog read (DDM-P7-T05) queries the same nwsHeatRisk catalog with the same outFields (name, idp_validtime) as src/layers/heatrisk.ts, whose probe row covers the fields; the two parsers are kept identical by cross-reference comments",
 });
 
 const OUT_FIELDS_RE =
