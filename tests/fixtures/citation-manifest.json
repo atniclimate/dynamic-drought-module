@@ -1,0 +1,19 @@
+{
+  "entries": [
+    {
+      "id": "usda-nw-hub-el-nino",
+      "url": "https://www.climatehubs.usda.gov/hubs/northwest/topic/el-nino-northwest-what-can-we-expect",
+      "title": "El Nino in the Northwest: what can we expect? (USDA Northwest Climate Hub)"
+    },
+    {
+      "id": "usda-nw-hub-la-nina",
+      "url": "https://www.climatehubs.usda.gov/hubs/northwest/topic/la-nina-northwest-what-can-we-expect",
+      "title": "La Nina in the Northwest: what can we expect? (USDA Northwest Climate Hub)"
+    },
+    {
+      "id": "cpc-enso-composites",
+      "url": "https://www.cpc.ncep.noaa.gov/products/precip/CWlink/ENSO/composites/",
+      "title": "ENSO Temperature and Precipitation Composites (NOAA Climate Prediction Center)"
+    }
+  ]
+}

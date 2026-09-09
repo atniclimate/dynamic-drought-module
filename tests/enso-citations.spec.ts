@@ -14,10 +14,15 @@
  * acceptance against the rendered DOM, one fixture per branch:
  *
  *   1. CITES A PUBLISHED SOURCE. The long-range ENSO claim carries a source
- *      link whose href equals the URL the references ledger records for that
- *      branch. The ledger is READ, not restated, so the code and
- *      planning/references/register.yaml cannot drift apart without this
- *      failing. Every one of those URLs answered HTTP 200 on 2026-09-07.
+ *      link whose href equals the URL the tracked citation manifest
+ *      (tests/fixtures/citation-manifest.json) records for that branch. The
+ *      manifest is READ, not restated. planning/references/register.yaml is
+ *      the private ledger the manifest is copied from; it is a directory
+ *      junction into a private repository and is absent from the public tree
+ *      and from CI, so scripts/check-citation-manifest.mjs holds the two in
+ *      agreement wherever the ledger is present, including on the
+ *      maintainer's machine. Every one of those URLs answered HTTP 200 on
+ *      2026-09-07.
  *   2. STATES THE SEASON AND THE STRENGTH. The claim names a season and hedges
  *      it. Both word lists below are derived from the three verified pages
  *      themselves, not invented here; see their comments.
@@ -37,7 +42,7 @@ import { expectNoForecastLanguage } from './enso-forecast-language';
 import { gotoApp, stubHeatRiskCatalog } from './helpers';
 
 const SNAPSHOT_PATH = join(process.cwd(), 'public', 'data', 'enso-indices.json');
-const REGISTER_PATH = join(process.cwd(), 'planning', 'references', 'register.yaml');
+const MANIFEST_PATH = join(process.cwd(), 'tests', 'fixtures', 'citation-manifest.json');
 
 /**
  * Season words. Every one of them is a word the three verified pages use to
@@ -80,7 +85,8 @@ type Conditions = 'el-nino' | 'la-nina' | 'neutral';
 
 /**
  * One case per tendency branch. `registerId` is the entry in
- * planning/references/register.yaml whose `url` the branch must link, and
+ * tests/fixtures/citation-manifest.json (copied from
+ * planning/references/register.yaml) whose `url` the branch must link, and
  * `anom` keeps the fixture coherent so the current-horizon sentence does not
  * report a positive index under a La Nina state.
  */
@@ -113,18 +119,26 @@ function readSnapshot(): Snapshot {
 }
 
 /**
- * The URL the references ledger records for one entry, read out of the YAML
- * by id. Deliberately a small text scan rather than a YAML dependency: the
- * point is only that the spec quotes the ledger instead of a literal, so a URL
- * changed in one place and not the other fails here.
+ * The URL the tracked citation manifest records for one entry, read by id.
+ * The manifest (tests/fixtures/citation-manifest.json) is a small tracked
+ * copy of the entries this spec needs from the private references ledger
+ * (planning/references/register.yaml), which is a directory junction into a
+ * private repository and is absent from the public tree and from CI.
+ * scripts/check-citation-manifest.mjs compares the two when the ledger is
+ * present locally, so a URL changed in one place and not the other is still
+ * caught, just not inside this spec: the point here is only that the spec
+ * quotes the manifest instead of a literal.
  */
 function registerUrl(id: string): string {
-  const yaml = readFileSync(REGISTER_PATH, 'utf8');
-  const block = new RegExp(`^  - id: ${id}\\s*$([\\s\\S]*?)(?=^  - id: |\\Z)`, 'm').exec(yaml);
-  if (!block) throw new Error(`no entry "${id}" in planning/references/register.yaml`);
-  const url = /^\s*url:\s*"([^"]+)"\s*$/m.exec(block[1]!);
-  if (!url) throw new Error(`entry "${id}" in the references ledger carries no url`);
-  return url[1]!;
+  const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')) as {
+    entries: readonly { id: string; url: string; title: string }[];
+  };
+  const entry = manifest.entries.find((candidate) => candidate.id === id);
+  if (!entry) throw new Error(`no entry "${id}" in tests/fixtures/citation-manifest.json`);
+  if (!entry.url) {
+    throw new Error(`entry "${id}" in tests/fixtures/citation-manifest.json carries no url`);
+  }
+  return entry.url;
 }
 
 function daysAgo(days: number): string {
@@ -239,7 +253,7 @@ test.describe('DDM-P12-T03: each tilt sentence cites a source and states its sea
       const href = await claim.locator('.impact-claim-source a').getAttribute('href');
       expect(
         href,
-        `the ${branch.conditions} tilt sentence links a source that is not the one planning/references/register.yaml records for "${branch.registerId}"`
+        `the ${branch.conditions} tilt sentence links a source that is not the one tests/fixtures/citation-manifest.json records for "${branch.registerId}"`
       ).toBe(registerUrl(branch.registerId));
 
       // 2. States the season and the probabilistic strength its source supports.
