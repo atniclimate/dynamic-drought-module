@@ -152,6 +152,25 @@ taskkill //PID <pid> //F
 A killed run can also leave a `chrome-headless-shell.exe` behind; it holds no
 port and exits on its own, so stop it only if it is burning CPU.
 
+## The citation manifest
+
+`tests/enso-citations.spec.ts` asserts that each Pacific Northwest ENSO tilt
+sentence links the source its own text claims. It checks that against
+`tests/fixtures/citation-manifest.json`, a small tracked copy of the three
+entries the spec needs, rather than against the private references ledger,
+`planning/references/register.yaml`, which is a directory junction into a
+private repository and is absent from the public tree and from CI. That
+keeps the spec's own assertion true in every environment it runs in,
+including CI, where the junction does not exist.
+
+`npm run check:citations` (`scripts/check-citation-manifest.mjs`, part of
+`check:all`) is what still holds the tracked manifest and the private ledger
+in agreement. Where the ledger is present, such as on the maintainer's
+machine through the junction, it compares every manifest entry's URL against
+the ledger's and fails on any disagreement or missing id. Where the ledger
+is absent, it reports that honestly, "private ledger unavailable", and
+exits clean rather than assuming agreement it cannot check.
+
 ## What it asserts, and what it deliberately does not
 
 Two doctrines shape the coverage.
