@@ -179,6 +179,50 @@ export function createLayerController(
     attempt.abort();
   }
 
+  /**
+   * The shared tail of a failed activation, thrown or not (DDM-P1-T03,
+   * 2026-09-08; corrected same day after the verifier found a double
+   * announcement): uncheck the box and clear the on-intent BEFORE
+   * `registry.deactivate`, because the sidebar's URL sync reads the checkbox
+   * DOM snapshot synchronously off the registry's `change` event
+   * (`checkedLayerKeys` in src/ui/sidebar.ts), not the registry's active set;
+   * a share URL booted from a failed key must self-correct on this same
+   * tick.
+   *
+   * Then read `registry.getStatus(key)` BEFORE deactivating, to tell the two
+   * failure shapes apart:
+   *
+   *   - A module that follows the self-reporting contract already called
+   *     `registry.setStatus(key, 'error')` itself (for example
+   *     usdm.ts:794 `reportStatus('error'); return`) before this ever runs.
+   *     Its status-change already announced "unavailable" once. Calling
+   *     `registry.deactivate(key)` plain would wipe that stored status
+   *     (registry.ts's documented clear-on-deactivate), and re-asserting it
+   *     with a second `setStatus` would emit and announce it a second time
+   *     for the same failure. So here we call
+   *     `registry.deactivate(key, { keepStatus: true })` and do NOT call
+   *     `setStatus` again: one status-change, one announcement.
+   *   - Otherwise (a thrown chunk import, or any other path that never
+   *     reported a status) there is nothing recorded yet, so
+   *     `registry.deactivate(key)` (default: clears status, which is a
+   *     no-op here) followed by `registry.setStatus(key, 'error')` is the
+   *     ONE status-change for this failure.
+   *
+   * Either branch produces exactly one `registry.setStatus` call carrying
+   * 'error' per failure, so `getStatus()` reads 'error' afterward and
+   * `#layer-status-live` announces "unavailable" once, not twice.
+   */
+  function failActivation(key: string): void {
+    view.setCheckbox(key, false);
+    desiredOn.set(key, false);
+    if (registry.getStatus(key) === 'error') {
+      registry.deactivate(key, { keepStatus: true });
+    } else {
+      registry.deactivate(key);
+      registry.setStatus(key, 'error');
+    }
+  }
+
   function enqueueLayerOp(key: string, op: () => Promise<void> | void): Promise<void> {
     const prev = layerOpChain.get(key) ?? Promise.resolve();
     // Run after the prior op regardless of how it settled; each op carries its
@@ -266,20 +310,15 @@ export function createLayerController(
         // (critical-review finding #2, 2026-07-07).
         if (registry.getStatus(def.key) === 'error') {
           endAttempt(def.key, activation);
-          view.setCheckbox(def.key, false);
-          desiredOn.set(def.key, false);
           try {
             mod.deactivate(map);
           } catch (err) {
             console.error(`Layer "${def.key}" failed to deactivate cleanly:`, err);
           }
-          // Emit a `change` so the URL re-syncs from the active set without this
-          // key (a boot from ?layers=<failed> must self-correct); registry.
-          // deactivate also clears the stored status.
-          registry.deactivate(def.key);
-          // Re-assert the terminal 'error' after that clear so the pill and any
-          // getStatus() reader see "unavailable", not "off".
-          registry.setStatus(def.key, 'error');
+          // Shared failure tail (DDM-P1-T03): the module already
+          // self-reported 'error', so failActivation keeps that status
+          // instead of re-asserting it. See failActivation above.
+          failActivation(def.key);
           return;
         }
         // Ease the just-added layers in (no-op for reduced-motion users and
@@ -299,12 +338,15 @@ export function createLayerController(
       } catch (err) {
         // A thrown activation has nothing left in flight worth keeping; the
         // attempt closes so a later activate starts from a fresh signal.
+        // `mod` may never have been assigned (a chunk import failure throws
+        // before that binding exists), so unlike the non-thrown branch above
+        // there is no module instance here to call `deactivate` on.
         abortAttempt(def.key);
         console.error(`Layer "${def.key}" failed to load:`, err);
-        registry.setStatus(def.key, 'error');
-        view.setCheckbox(def.key, false);
-        desiredOn.set(def.key, false);
-        registry.deactivate(def.key);
+        // Shared failure tail (DDM-P1-T03): nothing was reported here, so
+        // failActivation asserts 'error' once after registry.deactivate.
+        // See failActivation above.
+        failActivation(def.key);
       } finally {
         hideLoading(token);
       }
