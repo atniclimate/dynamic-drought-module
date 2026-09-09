@@ -3,35 +3,44 @@
 `atniclimate/dynamic-drought-module` (the running version is stamped in
 the application footer)
 
-Every dataset in this module describes conditions on homelands, and
-presenting that data carries obligations to the people and places it
-represents.
+The Planet is changing rapidly, and stable systems cannot be assumed to maintain their usual patterns. What were once rare occurrences are now becoming more and more regular. We feel these impacts, both directly and indirectly, through the communities we care for and the information we curate. Drought, wildfire, extreme heat, marine heatwaves, hurricanes; are all interrelated. The El Niño and La Niña events, atmospheric waves and heat domes, these are all drivers of the weather and climate conditions and extremes. The changes we experience are irrefutable; through drought, extreme heat, wildfire, and even hurricanes, we must adapt. The impacts of these extremes are physical, they affect real communities, and can cause great pain and suffering. Therefore, we must respond in a way that is strategic, tactical, and with great care and consideration of others.
 
-An embeddable, serverless web map for seeing drought across North America
-and understanding conditions for supported places: current drought status,
-wildfire and extreme heat risk, water and snowpack telemetry, and public
-resources that address the impacts. The monthly continental overview covers
-the United States, Canada, and Mexico; detailed place analysis remains
-strongest in the United States and deepest in the Pacific Northwest (PNW).
-Built by ATNI Climate (Affiliated Tribes of Northwest Indians).
+This tool began as a way to connect the disparate data and information sources from the North American Drought Monitor overlain with Tribal Lands; soon, through the data sources from NOAA and the National Weather Service, localized Impact Briefings could be generated, with Tribal, State, and Regional areas able to have curated reports. But soon, it evolved to include Wildfire, and to find sources where fuel-loads were high, or where extreme heat and red flag warnings would make traceable areas vulnerable. But the discovery of APIs that access large datasets from NOAA, NASA, USGS, and state and federal agencies, and with the right formula and engineering, could be integrated to show the interrelations of these measures, and to help connect it within one place that is easily accessible and open to the public.
+
+This module is built in service to others. Every dataset within it describes conditions of the rivers, mountains, forests, and coastlines, and the atmosphere… Relatives. We, the People, live with and depend upon these interrelated systems; and we have a responsibility to respect and honor this reality. Countless scientists, professionals, communities, and tax-payer funded infrastructure, have contributed to the ability to access a broad range of geospatial data, and the computational resources we have access are more powerful than we may realize. With Honor, Pride, and Respect, this climate intelligence system, with responsible utilization of these technologies and information systems, and commitment to data sovereignty and provenance, transforms our ability to respond to life-threatening impacts in the defense and protection of the lands and waters we call Home.
+
+Ultimately, this module, this tool, this system… still not sure what to call, is meant for all Peoples. Its principal focus remains to serve Tribal Nations; whose connections with the landscapes and seascapes have existed since time immemorial. Together, we must understand one another. We must understand the world around us. Critical climate intelligence, and finding ways to respond rapidly, can be a way to transform this understanding into coordinated action. It is with the hope, that good information leads to good decision-making, and through collaboration of knowledges and institutions, it allows us to care better for one another; to be good Relatives and to be good Ancestors.
+
+It is with this sense of humility, of Honor and Respect for sovereignty and preserving life and ways of life, that this tool exists. It is meant to be used, to be built upon, and to be shared. It is never meant to be hoarded, never meant to be sold, and never meant to be used in a way that could harm. This platform strives to Honor sovereignty in many forms: data, Indigenous data, network, digital, and computational sovereignty. It is intended to be able to stand alone, the publicly accessible data as its baseline, but federated in such a way that it is not centralized. It does not rely on ATNI Climate or GitHub, however this is the place that it emerges from. Building a Fire; little to big.
+
+While there exists explicit licensure to protect this system from exploitation, it is asked that whomever utilizes it does so with care and with responsibility.
+
+In Service and Friendship, Mvto,
+Patrick A Freeland | Affiliated Tribes of Northwest Indians
+
+An embeddable, serverless web map of drought, wildfire, and extreme heat
+across North America, wherever the issuing agencies publish data: current
+drought status, wildfire and heat risk, water and snowpack telemetry, and
+the public resources that address the impacts. Coverage is rich for the
+United States, the source of most layers, and limited for Canada and
+Mexico: the tri-national North American Drought Monitor covers all three
+countries, and Canada adds its Canadian Drought Monitor and British
+Columbia's basin drought levels. Built by ATNI Climate (Affiliated Tribes
+of Northwest Indians).
 
 **For a deployer, the module is a static folder.** Build it once, serve it
-from any web host, embed it in any page with an `<iframe>`. There is no
-backend, no account, no tracking, no analytics, and no proprietary tile
-provider. Every view is a shareable URL.
+from any web host, embed it in any page with an `<iframe>`. No backend, no
+account, no tracking, no analytics, no proprietary tile provider; every
+view is a shareable URL.
 
-**Stewardship comes first.** Each deployer (a Tribal Nation, a state
-agency, a partner) controls its own copy on its own infrastructure.
-Sovereign-jurisdiction data is never redistributed by this
-repository. The live Tribal-geography layers (Tribal Lands and Reservation
-Boundaries) are fetched from the publishing federal services at view time.
-Fetching live is a governance decision: boundary representations come from
-their publishing authority, stay in the browser session only
-(`cache: 'no-store'`), and are never bundled or written to disk.
-Separately, two deployer-owned slots (`tribal`, `treaty`) ship as empty
-placeholders a deployer may populate with its own authorized data; they
-appear in the interface only when turned on by URL (see the layer table
-below).
+**Stewardship comes first.** Each deployer (Tribal Nation, state agency,
+partner) controls its own copy on its own infrastructure.
+Sovereign-jurisdiction data is never redistributed by this repository; the
+live Tribal-geography layers are fetched from their publishing federal
+services at view time, a governance decision detailed under Live Tribal
+geography below. Two deployer-owned slots (`tribal`, `treaty`) ship as
+empty placeholders a deployer may populate with its own authorized data;
+they appear only when turned on by URL.
 
 > **Treaty boundaries.** Agency polygons are a representation of Treaty
 > cession areas, not a definitive depiction of Tribal jurisdiction. Treaty
@@ -39,26 +48,21 @@ below).
 > with the relevant Tribal Nation before using these polygons for any
 > decision-making.
 
-License: the DDM Community License 1.0 (`LICENSE`). ATNI Climate, The
-Affiliated Tribes of Northwest Indians, holds the rights; Patrick A. Freeland
-is the Developer. Anyone may use, host, modify and share the module for
-noncommercial purposes under the same terms (share-alike), carrying the
-provenance of every dataset, adhering to the Tiered Sovereign Data Framework,
-and in service to Tribes and Indigenous Peoples; the module can and should be
-used to help any community that has access to it. No commercial use is
-permitted. `CITATION.cff` gives the citation; `llms.txt` states the same
-conditions for automated readers.
+License: the DDM Community License 1.0 (`LICENSE`). Anyone may use, host,
+modify, and share the module for noncommercial purposes under the same
+terms (share-alike); no commercial use is permitted. `CITATION.cff` gives
+the citation; `llms.txt` states the same conditions for automated readers.
+Full obligations are in Attribution and licensing below.
 
 ## Current development baseline
 
-The source package is `0.6.26`. It includes the interface, Fire 3D,
-Wildfire Hazard Potential, structures, power, and smoke-volume refinements
-described below. A merged commit is not by itself proof that the public site is
-running it; every deploy is followed by an automated live check of the build
-marker. Release history and its verification receipts are in
-[`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md). Development planning is
-maintained privately by ATNI Climate; this repository carries the application,
-its tests and scripts, and the user and maintainer documentation.
+The source package is `0.6.26`. A merged commit is not by itself proof
+that the public site is running it; every deploy is followed by an
+automated live check of the build marker. Release history and verification
+receipts are in [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md).
+Development planning is maintained privately by ATNI Climate; this
+repository carries the application, its tests and scripts, and the user
+and maintainer documentation.
 
 ---
 
@@ -68,60 +72,56 @@ The module shows five kinds of information, plus the presets that arrange
 them. Each kind answers a different question about conditions and place.
 
 - **Condition surfaces** answer the severity question for the visible
-  area, shown one at a time so they never fight visually:
-  the US Drought Monitor (USDM), the gridded Standardized Precipitation
-  Index (SPI) with a 30-to-365-day window selector, the NOAA Climate
-  Prediction Center (CPC) Seasonal Drought Outlook, NWS HeatRisk, the
-  Storm Prediction Center fire-weather outlook, and USDA Forest Service
+  area, shown one at a time so they never fight visually: the US Drought
+  Monitor (USDM), the gridded Standardized Precipitation Index (SPI)
+  with a 30-to-365-day window selector, the NOAA Climate Prediction
+  Center (CPC) Seasonal Drought Outlook, NWS HeatRisk, the Storm
+  Prediction Center fire-weather outlook, and USDA Forest Service
   Wildfire Hazard Potential.
 - **Place** tells you where you are and whose land you are looking at:
-  state boundaries, EPA Omernik Level III and
-  Level IV ecoregions, rivers, and the Tribal Nations umbrella: Tribal
-  Lands (live from the US Census AIANNH service, covering legal AND
-  statistical geographies including Oklahoma Tribal Statistical Areas),
-  Reservation Boundaries (live from the Bureau of Indian Affairs (BIA)
-  AIAN-LAR service, authoritative for BIA mission use only; feature
-  definitions last published 2019 with continuing service updates, and
-  never legal, survey, or jurisdictional truth). Where two agencies depict the
-  same land the overlap is drawn legibly as two labeled representations,
-  never blended. Deployers can additionally load their own Tribal Lands
-  and Treaty Areas data into two default-off slots (URL-addressed; not
-  shown in the default interface).
+  state boundaries, EPA Omernik Level III and Level IV ecoregions,
+  rivers, and the Tribal Nations umbrella: Tribal Lands (live from the
+  US Census AIANNH service, covering legal AND statistical geographies
+  including Oklahoma Tribal Statistical Areas), Reservation Boundaries
+  (live from the Bureau of Indian Affairs (BIA) AIAN-LAR service,
+  authoritative for BIA mission use only; feature definitions last
+  published 2019 with continuing service updates, and never legal,
+  survey, or jurisdictional truth). Where two agencies depict the same
+  land the overlap is drawn legibly as two labeled representations,
+  never blended.
 - **Events** show what is actively happening: current mapped fire
-  perimeters from the National Interagency
-  Fire Center, with Wildfire and Wildfire Complex, Prescribed fire, and
-  other or unclassified perimeters kept distinct; NOAA Hazard Mapping System
-  smoke plumes; plus active National Weather Service (NWS) heat and
-  fire-weather alerts.
+  perimeters from the National Interagency Fire Center (Wildfire and
+  Wildfire Complex, Prescribed fire, and other or unclassified perimeters
+  kept distinct), NOAA Hazard Mapping System smoke plumes, and active
+  National Weather Service (NWS) heat and fire-weather alerts.
 - **Stations** report what the instruments on the ground are reading,
   with live values in the sidebar and popups: USGS streamgages, NRCS
   SNOTEL snowpack, USBR Hydromet reservoir storage and AgriMet
   agricultural observations, and USACE reservoir forebay elevations.
-- **The impact briefing** answers what all the data means for one place.
-  Click any boundary (a state, an ecoregion, a Tribal or reservation
-  boundary) and the module composes it from land identity, current /
-  near-term / long-range drought impact with wildfire and extreme heat
-  foregrounded, the seasonal water-supply outlook, the El Nino /
-  Southern Oscillation (ENSO) tilt, and public resources routed in
-  stewardship order (the Tribe's own resources first, then federal, then
-  state).
+- **The impact briefing** answers what the data means for one place.
+  Click any boundary (state, ecoregion, Tribal, or reservation) and the
+  module composes it from land identity, current / near-term / long-range
+  drought impact with wildfire and extreme heat foregrounded, the
+  seasonal water-supply outlook, the El Nino / Southern Oscillation
+  (ENSO) tilt, and public resources routed in stewardship order (Tribe
+  first, then federal, then state).
 - **View presets** organize the layer stack around a question instead of
   asking you to build one: five question-first chips ("Right now", "This
-  week", "Season ahead", "Fire risk", "Whose land") set the stack for the
-  question being asked, without locking it.
+  week", "Season ahead", "Fire risk", "Whose land") set the stack for
+  the question being asked, without locking it.
 
-Every layer reports an honest status in the sidebar (`loading`, `live`,
-`live (partial)`, `unavailable`, `no data`, `zoom in to load`); a failed
-or truncated upstream shows an honest pill, never a silent blank and
-never an unqualified `live`.
+Every layer reports an honest status (`loading`, `live`,
+`live (partial)`, `unavailable`, `no data`, `zoom in to load`); a failure
+or truncation shows an honest pill, never a silent blank or an
+unqualified `live`.
 
 ---
 
 ## Quick start
 
 Use Node.js 24 from the Active LTS line. The repository `.nvmrc` pins the
-exact runtime (24.20.0) that every validation workflow uses; match it locally
-with `nvm use` or `fnm use`.
+exact runtime (24.20.0) that every validation workflow uses; match it
+locally with `nvm use` or `fnm use`.
 
 ```powershell
 npm ci
@@ -141,8 +141,8 @@ npm run preview
 The ATNI deployment lives at
 `https://atniclimate.github.io/dynamic-drought-module/` and is rebuilt on
 every push to `main` via `.github/workflows/deploy.yml`. Deployers
-self-hosting on their own infrastructure run `npm run build` and serve the
-resulting `dist/` from any static web host.
+self-hosting run `npm run build` and serve `dist/` from any static web
+host.
 
 ---
 
@@ -170,15 +170,13 @@ current URL.
 
 Temporal display parameters also round-trip (`week` for the USDM archive,
 `dmode`, `sst`, `outlook`, and `heatday`). The authoritative grammar is
-implemented in `src/state/url.ts` and pinned by the URL-state and legacy-link
-browser tests. Old shared links keep working:
-`tribal` is still a valid key (now the deployer-data slot, off by default and
-not shown in the default interface; naming it in `layers` turns it on and
-reveals its toggle), and legacy layer lists resolve deterministically.
+in `src/state/url.ts`, pinned by the URL-state and legacy-link browser
+tests. Old shared links keep working: `tribal` is still a valid key (now
+the deployer-data slot, off by default; naming it in `layers` turns it
+on), and legacy layer lists resolve deterministically.
 
 Because condition surfaces render one at a time, a `layers` list naming
-several surfaces resolves deterministically to the first surface named
-(older shared links keep working).
+several surfaces resolves deterministically to the first surface named.
 
 ### Embedding
 
@@ -217,9 +215,9 @@ several surfaces resolves deterministically to the first surface named
 | `treaty` | Treaty Areas (your own data) | reference | deployer slot, bundled EMPTY PLACEHOLDER, default-off, URL-only (no catalog row until turned on) |
 | `hydrography` | Rivers | reference | OpenStreetMap via Overpass (live) |
 | `nifc-fires` | Current Mapped Fire Perimeters (NIFC) | event | NIFC WFIGS FeatureServer (live) |
-| `hms-smoke` | Smoke plumes | event | NOAA HMS FeatureServer (live) |
+| `hms-smoke` | Smoke plumes | event | NOAA OSPO FeatureServer (live) |
 | `nws-alerts` | Heat & Fire Weather Alerts | event | NOAA NWS MapServer (live) |
-| `telemetry` | Telemetry Stations | stations | USGS, NRCS, USBR, USACE (live) |
+| `telemetry` | Telemetry Stations | stations | USGS, NRCS, USBR, USACE, NIFC, NOAA CO-OPS, Iowa State IEM (live) |
 | `power-infrastructure` | Power Lines & Plants | reference | archived HIFLD transmission lines and live EIA plants, default-off |
 
 (The British Columbia drought-levels surface swaps in for the US Drought
@@ -228,16 +226,14 @@ key. Table aligned with the runtime registry on 2026-08-20.)
 
 The framing minimap derives its colors from the current monthly
 [North American Drought Monitor](https://www.drought.gov/data-maps-tools/north-american-drought-monitor-nadm).
-Each authored framing computes an approximate cosine-latitude-weighted ordinal
-mean of assessed land, from white `None` through dark-red `D4`, for its fill.
-A separate outline carries the total D1-D4 share so the mean cannot hide
-material drought extent. The most prevalent class and distribution remain
-available as supporting detail, but they do not determine the fill. NADM does
-not publish its exact analyzed-area mask. The minimap therefore excludes
-Nunavut using a Statistics Canada 2021 Digital Boundary File as an
-analysis-mask proxy and reports the northern framing as `live (partial)`. The
-proxy is used only for calculation, never rendered as boundary or
-jurisdictional geometry.
+Each authored framing computes an approximate cosine-latitude-weighted
+ordinal mean of assessed land, from white `None` through dark-red `D4`,
+for its fill; a separate outline carries the total D1-D4 share so the
+mean cannot hide material drought extent. NADM does not publish its exact
+analyzed-area mask, so the minimap excludes Nunavut using a Statistics
+Canada 2021 Digital Boundary File as an analysis-mask proxy and reports
+the northern framing as `live (partial)`. The proxy is used only for
+calculation, never rendered as boundary or jurisdictional geometry.
 
 Nunavut proxy source: Government of Canada; Statistics Canada; Statistical
 Geomatics Centre, 2021 Digital Boundary Files, reference date January 1,
@@ -252,130 +248,110 @@ caveats, verification date). Read it before touching a fetcher.
 ### Live Tribal geography and the deployer slots
 
 The two live Tribal-geography layers (`aiannh`, `bia-reservations`) fetch
-the publishing federal services live at view
-time and redistribute nothing: responses are held in session memory
-only, requested with `cache: 'no-store'`, and are never bundled, baked,
-or written to disk by this module. Each popup names its publishing
-agency, its vintage, and the representation caveat. Both layers are on
-by default.
+their publishing federal services at view time and redistribute nothing:
+responses are held in session memory only, requested with
+`cache: 'no-store'`, and never bundled, baked, or written to disk. Each
+popup names its publishing agency, vintage, and representation caveat.
+Both layers are on by default.
 
 Sovereign boundary data is governed by the Nation it represents, not by
 this repository.
 
 The `tribal` and `treaty` keys are the DEPLOYER slots: bundled empty
 `FeatureCollection` placeholders (in `public/data/`), off by default,
-that a deployer may populate with its own authorized data (a Tribal
-Nation's own boundary data, under its own governance). They are not part
-of the default interface: no catalog row or search result names them
-until a `?layers=tribal` / `?layers=treaty` URL (or a deployer's own
-configuration) turns them on. Their popups label the data as
-deployer-provided. If you populate a slot with data that
-overlaps a live federal layer, toggle that live layer off in your embed
-links so the viewer sees one boundary rather than a confusing
-double-draw; the two are deliberately separate so your data
-never silently replaces or blends with a federal representation.
-Conversion commands and population
-instructions are in [`public/data/README.md`](public/data/README.md).
+that a deployer may populate with its own authorized data under its own
+governance. No catalog row or search result names them until a
+`?layers=tribal` / `?layers=treaty` URL (or a deployer's own
+configuration) turns them on; popups label the data as deployer-provided.
+If a slot overlaps a live federal layer, toggle that live layer off in
+your embed links so the viewer sees one boundary rather than a confusing
+double-draw; the two are deliberately separate so deployer data never
+silently replaces or blends with a federal representation. Conversion
+commands and population instructions are in
+[`public/data/README.md`](public/data/README.md).
 
 ### About the basemap and hydrography
 
-The product-default basemap shows recent satellite imagery as visual
-context, drawing from
+The product-default basemap shows recent satellite imagery from
 [NOAA NESDIS merged GOES East and West GeoColor](https://www.nesdis.noaa.gov/imagery/satellite-maps)
-and its rolling 24-hour archive. The Satellite control turns that context
-on and off without creating a second state system. An absent
-`basemap` parameter means satellite is on; `basemap=default` records the
-explicit satellite-off choice and shows subdued OpenStreetMap ground.
-
-The recent-imagery lifecycle queries a bounded set of catalog items and
-selects the newest frame that passes a known-data image probe, then pins all
-tiles to that one observed frame. The map displays the exact UTC observation
-range and checks for a new frame every 10 minutes while active. A failed
-refresh leaves the last known-good recent frame in place. If initial
-activation fails, the basemap store and URL return honestly to `default`.
-OpenStreetMap remains underneath because GOES coverage ends near 76 degrees
-north and imagery can contain clouds or gaps. GeoColor is context only:
-daytime areas approximate true color, while nighttime areas use infrared and
-static reference lights.
+and its rolling 24-hour archive. The lifecycle selects the newest frame
+passing a known-data image probe, pins all tiles to it, displays the exact
+UTC observation range, and checks every 10 minutes. A failed refresh keeps
+the last good frame; if initial activation fails, the URL reverts honestly
+to `default`. The Satellite control turns imagery on and off;
+`basemap=default` records the satellite-off choice, showing subdued
+OpenStreetMap ground. OpenStreetMap also remains underneath because GOES
+coverage ends near 76 degrees north and imagery can contain clouds or
+gaps. GeoColor is context only: daytime areas approximate true color,
+nighttime areas use infrared and static reference lights.
 
 Explicit Fire and Wildfire controls may request recent GeoColor as part of
-their governed scene, but boot reconciliation and unrelated layer or horizon
-changes do not override a visitor's manual basemap choice. Future
-satellite-derived drought indicators, wildfire thermal detections, or land
-surface temperature products belong in separately named layers with their
-own status, timestamp, caveat, and legend; recoloring an existing layer
-would let a display claim what its source does not. No proprietary tile
-providers, authentication, or application backend are added. Hydrography
-queries the volunteer-run Overpass API (three-mirror failover,
-viewport-driven, dormant below zoom 7); institutional deployments
-expecting heavy concurrency should plan for the planned National
-Hydrography Dataset PMTiles bundle.
+their governed scene, but unrelated layer or horizon changes do not
+override a visitor's manual basemap choice. Future satellite-derived
+products belong in separately named layers with their own status,
+timestamp, caveat, and legend; recoloring an existing layer would let a
+display claim what its source does not. Hydrography queries the
+volunteer-run Overpass API (three-mirror failover, viewport-driven, dormant
+below zoom 7); institutional deployments expecting heavy concurrency should
+plan for the planned National Hydrography Dataset PMTiles bundle.
 
 ### The desktop 3D Fire view
 
-On desktop widths, the Fire view offers a 3D toggle: terrain relief from
+The Fire view offers a 3D toggle on desktop widths: terrain relief from
 the bundled Pacific Northwest USGS 3DEP archive under a pitched camera,
-with the NOAA HMS smoke plumes re-presented as a stylized volume (vertical
-extent encodes the issuer's density class, never measured plume height)
-and issuer-published landscape context draped over the relief. When the
-NIFC perimeter layer is live, each mapped wildfire perimeter also stands up
-as a low ribbon along its own edge, opaque where it meets the terrain and
-fading out above it, pulsing in step with the flat outline. That vertical
-extent is a presentation convention held at a constant on-screen height,
-not flame height or fire intensity, and the band is centered on the
-published edge so the ribbon neither enlarges nor shrinks the mapped
-perimeter. The first
-context layer is USFS Wildfire Hazard Potential 2023, baked to a bundled
-archive with the issuer's categorical colors and nearest-neighbor sampling so
-class boundaries never acquire invented colors. It is a long-term hazard
-context, not an incident forecast.
+NOAA HMS smoke plumes re-presented as a stylized volume (vertical extent
+encodes the issuer's density class, never measured plume height), and
+issuer-published landscape context draped over the relief. When the NIFC
+perimeter layer is live, each wildfire perimeter stands as a low ribbon
+along its edge (constant on-screen height, not flame height or intensity;
+centered on the published edge, neither enlarging nor shrinking the mapped
+perimeter), pulsing in step with the flat outline. The first context layer
+is USFS Wildfire Hazard Potential 2023, baked with the issuer's categorical
+colors and nearest-neighbor sampling so class boundaries never acquire
+invented colors. It is a long-term hazard context, not an incident
+forecast.
 
-Power infrastructure is a separate, default-off catalog layer that can be used
-in flat or 3D views. It is not activated automatically by Fire 3D. Its
-transmission lines come from the ARCHIVED federal HIFLD dataset (baked once,
-last data update 2024-09-30, with that currency caveat always in the legend),
-and its live power plants come from the U.S. Energy Information
+Power infrastructure is a separate, default-off catalog layer usable in
+flat or 3D views, not activated automatically by Fire 3D. Its transmission
+lines come from the ARCHIVED federal HIFLD dataset (baked once, last data
+update 2024-09-30, with that currency caveat always in the legend), and
+its live power plants come from the U.S. Energy Information
 Administration, labeled with the issuer's own reporting period. Substations
-and distribution lines are absent: substation locations are withheld by the
-publishing agencies for security reasons, and no authoritative public national
-distribution-circuit dataset exists.
+and distribution lines are absent: substation locations are withheld by
+publishing agencies for security reasons, and no authoritative public
+national distribution-circuit dataset exists.
 
-Building structures come from the Overture Maps Foundation buildings
-theme (ODbL), extruded over the terrain from zoom 13: footprints with an
-issuer-published height rise to it, and the rest draw in a visibly
-dimmer tone at a disclosed placeholder height. The committed bake covers
-the central Oregon region framing only; a full Pacific Northwest bake
-was projected from the measured per-building tile rate at roughly
-240 MB for z14-only tiles (about 380 MB at the shipped z13-14 scheme,
-9.16 million footprints either way) and cannot ride the same-origin
-hosting path, so the extract script's `--bbox` parameter is the
-documented route for a deployer to bake their own region (see
-`public/data/README.md`).
+Building structures come from the Overture Maps Foundation buildings theme
+(ODbL), extruded over the terrain from zoom 13: footprints with an
+issuer-published height rise to it; the rest draw in a visibly dimmer tone
+at a disclosed placeholder height. The committed bake covers the central
+Oregon region framing only; a full Pacific Northwest bake was projected
+from the measured per-building tile rate at roughly 240 MB for z14-only
+tiles (about 380 MB at the shipped z13-14 scheme, 9.16 million footprints
+either way) and cannot ride the same-origin hosting path, so the extract
+script's `--bbox` parameter is the documented route for a deployer to bake
+their own region (see `public/data/README.md`).
 
 The view is a 3D context view, deliberately not a "digital twin": that
-phrase is a term of art for systems that bundle physics-based fire
-simulation with rendering, and this module runs no simulation of any
-kind. The control carries two always-visible notes: the terrain coverage
-statement, and a non-prediction disclosure stating that nothing in the
-view shows or implies fire spread, ignition, or an all-clear. Wildland
-fire science context for reading the terrain (for example, that fires
-tend to spread faster uphill because rising heat preheats upslope fuels)
-is published in NWCG's *Introduction to Wildland Fire Behavior* (S-190);
-the module states no such inference about any specific incident.
+phrase names systems bundling physics-based fire simulation with rendering,
+and this module runs no simulation. The control carries two always-visible
+notes: the terrain coverage statement, and a non-prediction disclosure
+stating that nothing in the view shows or implies fire spread, ignition,
+or an all-clear. Wildland fire science context for reading terrain is
+published in NWCG's *Introduction to Wildland Fire Behavior* (S-190); the
+module states no such inference about any specific incident.
 
 ### The Cloudflare Worker proxy (optional)
 
-Most sources serve the browser directly. The allow-list in
-`workers/proxy/src/index.ts` (mirrored in the `wrangler.toml` header) is
-the authoritative set of proxied upstream routes. It permits only the exact
-AWDB, AgriMet, Hydromet, NWRFC, USFS Wildfire Hazard Potential, US Drought
-Monitor DSCI, and `api.weather.gov` reads used by the application.
-The Worker in `workers/proxy/` is a CORS shim
-with a strict allow-list; it returns upstream body bytes unchanged and injects
-the browser-facing CORS headers.
-Deploy it with `wrangler` and set `URLS.workerProxy` to enable those
-sources; without it, the module still runs and reports those values
-honestly as unavailable.
+Most sources serve the browser directly. The Worker in `workers/proxy/` is
+a CORS shim with a strict allow-list (the authoritative set is in
+`workers/proxy/src/index.ts`, mirrored in the `wrangler.toml` header): it
+permits only the exact AWDB, AgriMet, Hydromet, NWRFC, USFS Wildfire
+Hazard Potential, US Drought Monitor DSCI, and `api.weather.gov` reads
+used by the application, returning upstream bytes unchanged with
+browser-facing CORS headers. Deploy with `wrangler` and set
+`URLS.workerProxy` to enable those sources; without it, the module still
+runs and reports those values honestly as unavailable.
 
 ---
 
@@ -385,31 +361,27 @@ Architecture encodes values. These seven commitments govern how the code
 behaves, so a person reading the interface can trust what it says and a
 deployer keeps control of the deployment.
 
-- **No backend.** The static `dist/` folder is the entire production
-  deployment; the optional Worker is a CORS shim, not application logic.
+- **No backend.** The `dist/` folder is the entire deployment; the optional
+  Worker is a CORS shim, not application logic.
 - **URL-as-state.** Region, active layers, selection, and the embed flag
-  round-trip through the URL; every view is shareable and embeddable.
+  round-trip through the URL.
 - **One surface at a time.** Condition surfaces are mutually exclusive by
   construction; place, events, and stations stack over the active surface.
-- **Lazy loading with honest status.** Layers load on first toggle-on and
-  report six canonical states; a data failure keeps the layer checked
-  with an honest `unavailable` pill (a shared link never silently loses a
-  layer because an upstream blipped), and a truncated response reads
+- **Lazy loading with honest status.** Layers load on first toggle-on; a
+  data failure keeps the layer checked with an honest pill (a shared link
+  never silently loses a layer), and a truncated response reads
   `live (partial)`, never an unqualified `live`.
 - **Cancellable network operations.** Master abort signal plus per-call
   timeout on every non-trivial fetch; late responses to superseded
   operations are dropped, not rendered.
-- **Live-fetch stewardship.** Sovereign-jurisdiction geography is never
-  redistributed: the federal representations are fetched live per session
-  (no-store), and the deployer-owned slots ship empty for population
-  under the deployer's own authorizations.
-- **Mobile and accessibility.** Outside embed mode, the map-first phone view
-  at 720 pixels and narrower uses footer navigation and a three-detent bottom
-  sheet. Shared map controls retain 44-pixel or larger targets, accessible
-  names, keyboard focus, safe-area seating, and reduced-motion behavior.
-  Region selection is arrow-key navigable; status changes are announced
-  through a polite live region; embed semantics remain owned by the separate
-  embed shell.
+- **Live-fetch stewardship.** Sovereign-jurisdiction geometry is fetched
+  live per session, never redistributed; deployer slots ship empty.
+- **Mobile and accessibility.** Outside embed mode, the map-first phone
+  view at 720 pixels and narrower uses footer navigation and a three-detent
+  bottom sheet. Controls retain 44-pixel targets, accessible names,
+  keyboard focus, safe-area seating, reduced-motion behavior, and arrow-key
+  region navigation; status changes announce through a polite live region;
+  embed semantics remain owned by the separate embed shell.
 
 ---
 
@@ -431,48 +403,44 @@ deployer keeps control of the deployment.
 
 This repository carries the deployable application, bundled assets,
 browser test suite, product data builders, validation gates, and optional
-Cloudflare Worker. Two commands carry the checks named here: `npm run gate`
-runs the static build and product checks; `npm run test:serial` runs the
-full browser suite. Public release history is in
-[`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md), and the generated
-coverage record is in
-[`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md); both are published
-so a deployer can read what shipped and what it covers.
-Design-document authority and the durable convergence doctrine are in
-[`docs/design/README.md`](docs/design/README.md). Setup, architecture, layer,
-testing, and release guidance is in [`DEVELOPER.md`](DEVELOPER.md).
+Cloudflare Worker. `npm run gate` runs the static build and product
+checks; `npm run test:serial` runs the full browser suite. Public release
+history is in [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md) and the
+generated coverage record in
+[`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md). Design-document
+authority and the durable convergence doctrine are in
+[`docs/design/README.md`](docs/design/README.md). Setup, architecture,
+layer, testing, and release guidance is in [`DEVELOPER.md`](DEVELOPER.md).
 
 ### Dependency overrides
 
 `package.json` pins two `overrides` so the full `npm audit` (dev
 dependencies included) reports zero vulnerabilities. Both target the
-dev-only `mapshaper` chain, which is used exclusively by four offline
-maintainer-run artifact builders (`scripts/build-states.mjs`,
+dev-only `mapshaper` chain, used exclusively by four offline maintainer-run
+artifact builders (`scripts/build-states.mjs`,
 `scripts/build-minimap-geometry.mjs`, `scripts/build-cdm-snapshot.mjs`,
 `scripts/build-ecoregion-tiles.mjs`) and never ships in the bundle.
 
 - `adm-zip: ^0.6.0` lifts mapshaper's zip helper past
-  GHSA-xcpc-8h2w-3j85. mapshaper calls it as a plain function
-  constructor for `.zip` read and write, and 0.6.0 keeps that export
-  shape; both directions are exercised by regenerating the committed
-  minimap artifact after any mapshaper upgrade.
+  GHSA-xcpc-8h2w-3j85; 0.6.0 keeps the `.zip` read/write export shape.
+  Both directions are exercised by regenerating the committed minimap
+  artifact after any mapshaper upgrade.
 - `@ngageoint/geopackage: npm:noop2@^2.0.0` replaces the GeoPackage
   subtree with an empty module. That subtree pins `image-size` 0.8.x
   (GHSA-w3rx-r6r6-pgpr, GHSA-5p2g-fcmc-qvqq, no fixed release exists)
   and a vulnerable `file-type`, so the only honest fix is removing it.
-  mapshaper requires the library lazily and only for `.gpkg` input or
-  output (guarded require sites in `mapshaper.js`: `importGeoPackage`
-  and `exportGeoPackage`), and every pipeline here feeds mapshaper
-  GeoJSON buffers or fflate-unzipped shapefile members, never `.gpkg`.
-  A `.gpkg` request now stops with mapshaper's own "GeoPackage library
-  is not loaded" message. Drop this override if a pipeline ever needs
-  GeoPackage I/O and the upstream chain has a patched `image-size`.
+  mapshaper requires it lazily for `.gpkg` I/O only (guarded require
+  sites in `mapshaper.js`: `importGeoPackage` and `exportGeoPackage`),
+  and every pipeline here feeds mapshaper GeoJSON buffers or
+  fflate-unzipped shapefile members, never `.gpkg`. A `.gpkg` request
+  now stops with mapshaper's own "GeoPackage library is not loaded"
+  message. Drop this override if a pipeline ever needs GeoPackage I/O
+  and the upstream chain has a patched `image-size`.
 
 ## Browser support
 
-This section is the one place the project states the renderer it runs and
-the browser and graphics floor that renderer implies. `vite.config.ts` and
-`DEVELOPER.md` point here rather than repeating it, and
+This section is the canonical statement of the map renderer and browser
+floor; `vite.config.ts` and `DEVELOPER.md` point here, and
 `npm run check:renderer` fails when the build configuration and this
 section disagree.
 
@@ -480,18 +448,134 @@ The map renderer is MapLibre GL JavaScript 6.6.0, pinned exactly in
 `package.json` and matched by the lockfile and the installed tree.
 
 Any evergreen desktop browser (Chrome, Edge, Firefox, Safari). The
-supported floors for phones and tablets are Safari 15.5 or newer on iPhone
-and iPad, and Chrome 100 or newer on Android; the production build target
-is `es2020, safari15.5, ios15.5, chrome100`, so those floors are a build
-claim and not a moving default. MapLibre GL JavaScript 6 requires WebGL 2,
-which both floors enable by default; a browser without WebGL 2 shows the
-sidebar and an honest not-rendering notice instead of a map. Compiling to a
-floor lowers syntax; it does not supply missing runtime APIs, so a
+supported floors are Safari 15.5 or newer on iPhone and iPad, and
+Chrome 100 or newer on Android; the production build target is
+`es2020, safari15.5, ios15.5, chrome100`, so those floors are a build
+claim, not a moving default. MapLibre GL JavaScript 6 requires WebGL 2,
+which both floors enable by default; a browser without it shows the
+sidebar and an honest not-rendering notice instead of a map. Compiling to
+a floor lowers syntax; it does not supply missing runtime APIs, so a
 real-device check per release is the proof rather than the target line.
 
 Node.js 24 is the toolchain that builds the application, not a browser
-requirement. It is a different axis and says nothing about which browsers
-can run the result.
+requirement.
+
+## Acknowledgements
+
+The module reads what the agencies, institutions, and contributors below
+publish. They are named by issuing office, because each product carries
+its own clock, method, and caveats.
+
+**NOAA** (National Oceanic and Atmospheric Administration)
+
+- **NIDIS** (National Integrated Drought Information System): gridded SPI
+  drought-index tiles
+- **NWS** (National Weather Service): active weather alerts, point
+  forecasts, USDM weekly change, heat and fire-weather warnings
+- **NWS / Weather Prediction Center**: HeatRisk index
+- **NCEI** (National Centers for Environmental Information): North American
+  Drought Monitor and continental base mask
+- **CPC** (Climate Prediction Center): Seasonal Drought Outlook,
+  temperature and precipitation outlooks (6-to-10-day, 8-to-14-day), ENSO
+  index snapshots and diagnostic discussion
+- **SPC** (Storm Prediction Center): Fire Weather Outlook
+- **NESDIS** (National Environmental Satellite, Data, and Information
+  Service): merged GOES GeoColor satellite imagery
+- **OSPO** (Office of Satellite and Product Operations): HMS satellite
+  smoke plumes
+- **CO-OPS** (Center for Operational Oceanographic Products and Services):
+  tide and current station metadata
+- **NWRFC** (Northwest River Forecast Center): water-supply forecast
+  reports
+
+**National Drought Mitigation Center** (NOAA, USDA, and University of
+Nebraska-Lincoln)
+
+- **NDMC**: US Drought Monitor current conditions, weekly archive, and
+  DSCI data services
+
+**DOI** (Department of the Interior)
+
+- **USGS**: 3DEP elevation tiles, instantaneous-values streamflow,
+  Watershed Boundary Dataset
+- **Bureau of Indian Affairs**: AIAN-LAR reservation boundaries and
+  LARNAME crosswalk
+- **USBR** (Bureau of Reclamation): Hydromet daily values and AgriMet
+  site registry
+
+**USDA** (Department of Agriculture)
+
+- **Forest Service**: Wildfire Hazard Potential 2023 (ImageServer and
+  baked PMTiles)
+- **NRCS** (Natural Resources Conservation Service): SNOTEL and SCAN
+  station data via AWDB
+- **Farm Service Agency**: drought-relief and disaster-assistance resource
+  links
+
+**Census Bureau** (Geography Division)
+
+- **TIGERweb**: AIANNH Tribal legal and statistical areas
+- Cartographic boundary files (states)
+
+**NIFC** (National Interagency Fire Center)
+
+- **WFIGS**: current mapped fire perimeters
+- **RAWS**: fire-weather station metadata and observations
+
+**USACE** (Army Corps of Engineers)
+
+- **CWMS**: reservoir and water-control data
+
+**Government of Canada**
+
+- **Agriculture and Agri-Food Canada**: Canadian Drought Monitor monthly
+  snapshot
+- **Statistics Canada**: 2021 Digital Boundary Files (provincial
+  boundaries, Nunavut analysis mask)
+
+**Province of British Columbia**
+
+- **GeoBC / Water Management Branch**: drought levels by water basin
+
+**EPA** (Environmental Protection Agency)
+
+- **Office of Research and Development**: Omernik Level III and Level IV
+  ecoregion boundaries
+
+**NASA**
+
+- **EOSDIS GIBS**: GHRSST sea-surface temperature anomaly tiles
+
+**OpenStreetMap contributors**
+
+- Standard raster basemap
+- **Overpass API**: waterway and hydrography features
+
+**Natural Earth**
+
+- **Natural Earth Data project**: populated places and physical land/lake
+  boundaries
+
+**HIFLD** (Homeland Infrastructure Foundation-Level Data, archived)
+
+- US electric power transmission lines (archived; last data update
+  2024-09-30)
+
+**EIA** (Energy Information Administration)
+
+- Power plant locations and attributes (Forms 860 / 860M)
+
+**Overture Maps Foundation**
+
+- Building footprints (central Oregon extract, ODbL)
+
+**Iowa State University**
+
+- **Iowa Environmental Mesonet**: CoCoRaHS network metadata
+
+**Federal Register** (National Archives and Records Administration)
+
+- Indian Entities Recognized by and Eligible to Receive Services from BIA
 
 ## Attribution and licensing
 
