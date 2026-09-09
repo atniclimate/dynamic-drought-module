@@ -47,14 +47,24 @@ export class LayerRegistry {
   /**
    * Remove `key` from the active set. Safe to call for keys that are
    * not currently active; emits `change` regardless.
+   *
+   * By default this also clears the recorded load status, so a `change`
+   * subscriber that reads getStatus() after deactivate sees "off"
+   * (undefined) rather than the layer's last terminal status
+   * (adversarial-review finding, 2026-07-06). Pass `{ keepStatus: true }`
+   * to skip that clear: a module that already self-reported a terminal
+   * `'error'` status before this call must not have that status wiped
+   * and then re-announced by the caller re-asserting it afterward
+   * (DDM-P1-T03 correction, 2026-09-08) -- the wipe-then-reassert
+   * sequence is exactly what produced a second, redundant
+   * `status-change` (and a second "unavailable" announcement) for the
+   * same failure.
    */
-  deactivate(key: string): void {
+  deactivate(key: string, options?: { readonly keepStatus?: boolean }): void {
     this.active.delete(key);
-    // Clear the recorded load status too, so a `change` subscriber that
-    // reads getStatus() after deactivate sees "off" (undefined) rather
-    // than the layer's last terminal status (adversarial-review finding,
-    // 2026-07-06).
-    this.statusByKey.delete(key);
+    if (!options?.keepStatus) {
+      this.statusByKey.delete(key);
+    }
     this.emitChange();
   }
 
