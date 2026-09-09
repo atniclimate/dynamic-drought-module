@@ -16,7 +16,8 @@ export type BriefingSourceKey =
   | 'cpcExtended'
   | 'enso'
   | 'waterSupply'
-  | 'cpcSeasonal';
+  | 'cpcSeasonal'
+  | 'cpcSeasonalTemp';
 
 export type SourceCapabilityState =
   | 'available'
@@ -39,7 +40,8 @@ export const BRIEFING_SOURCE_KEYS: readonly BriefingSourceKey[] = [
   'cpcExtended',
   'enso',
   'waterSupply',
-  'cpcSeasonal'
+  'cpcSeasonal',
+  'cpcSeasonalTemp'
 ];
 
 export const BRIEFING_SOURCE_LABELS: Readonly<
@@ -57,14 +59,16 @@ export const BRIEFING_SOURCE_LABELS: Readonly<
   cpcExtended: 'NOAA CPC extended-range outlooks',
   enso: 'ENSO phase context',
   waterSupply: 'NWRFC water-supply outlook',
-  cpcSeasonal: 'NOAA CPC seasonal drought outlook'
+  cpcSeasonal: 'NOAA CPC seasonal drought outlook',
+  cpcSeasonalTemp: 'NOAA CPC seasonal temperature outlook'
 };
 
 type NationalHeatSourceKey =
   | 'pointHeat'
   | 'nwsForecast'
   | 'nwsAlerts'
-  | 'heatRisk';
+  | 'heatRisk'
+  | 'cpcSeasonalTemp';
 
 const available = (note: string): SourceCapabilityCell => ({
   state: 'available',
@@ -103,19 +107,32 @@ export const NATIONAL_HEAT_SOURCE_CAPABILITY: Readonly<
     nwsAlerts: available(NWS_ALERTS_SUPPORTED),
     heatRisk: conditional(
       'HeatRisk is available only inside the issuer raster coverage and while the layer has a selected frame.'
+    ),
+    // DDM-P7-T07, DR-075 a (director ruling): the coverage gate follows the
+    // issuer's own service extent (STEP 0, verified 2026-09-09: layer
+    // extent lat ~18.9 to 71.4N, nearly the full longitude range), not the
+    // drought-impact-synthesis doctrine region.
+    cpcSeasonalTemp: available(
+      'The CPC seasonal temperature outlook service extent covers CONUS (verified 2026-09-09).'
     )
   },
   alaska: {
     pointHeat: available('NWS point observation and grid guidance are supported.'),
     nwsForecast: available(NWS_FORECAST_SUPPORTED),
     nwsAlerts: available(NWS_ALERTS_SUPPORTED),
-    heatRisk: unavailable('The shipped HeatRisk raster covers CONUS only.')
+    heatRisk: unavailable('The shipped HeatRisk raster covers CONUS only.'),
+    cpcSeasonalTemp: available(
+      'The CPC seasonal temperature outlook service extent covers Alaska (verified 2026-09-09).'
+    )
   },
   hawaii: {
     pointHeat: available('NWS point observation and grid guidance are supported.'),
     nwsForecast: available(NWS_FORECAST_SUPPORTED),
     nwsAlerts: available(NWS_ALERTS_SUPPORTED),
-    heatRisk: unavailable('The shipped HeatRisk raster covers CONUS only.')
+    heatRisk: unavailable('The shipped HeatRisk raster covers CONUS only.'),
+    cpcSeasonalTemp: available(
+      'The CPC seasonal temperature outlook service extent covers Hawaii (verified 2026-09-09).'
+    )
   },
   'puerto-rico': {
     pointHeat: available(
@@ -126,7 +143,14 @@ export const NATIONAL_HEAT_SOURCE_CAPABILITY: Readonly<
       'NWS point forecast discovery was live-verified for Puerto Rico.'
     ),
     nwsAlerts: available(NWS_ALERTS_SUPPORTED),
-    heatRisk: unavailable('The shipped HeatRisk raster covers CONUS only.')
+    heatRisk: unavailable('The shipped HeatRisk raster covers CONUS only.'),
+    // DR-075 a follow-up (director ruling, 2026-09-09): the STEP 0 extent
+    // is not confirmed for Puerto Rico specifically, so this mirrors the
+    // HeatRisk row above rather than asserting coverage; see this task's
+    // Owner decisions for the ambiguity.
+    cpcSeasonalTemp: unavailable(
+      'The CPC seasonal temperature outlook coverage for Puerto Rico is not confirmed.'
+    )
   },
   'served-territory': {
     pointHeat: conditional(
@@ -137,7 +161,10 @@ export const NATIONAL_HEAT_SOURCE_CAPABILITY: Readonly<
       'NWS point forecast is attempted only when point discovery publishes a forecast link.'
     ),
     nwsAlerts: available(NWS_ALERTS_SUPPORTED),
-    heatRisk: unavailable('The shipped HeatRisk raster covers CONUS only.')
+    heatRisk: unavailable('The shipped HeatRisk raster covers CONUS only.'),
+    cpcSeasonalTemp: unavailable(
+      'The CPC seasonal temperature outlook coverage for this territory is not confirmed.'
+    )
   },
   'american-samoa': {
     pointHeat: conditional(
@@ -148,14 +175,21 @@ export const NATIONAL_HEAT_SOURCE_CAPABILITY: Readonly<
       'NWS point discovery is checked once; a missing forecast link becomes no data.'
     ),
     nwsAlerts: available(NWS_ALERTS_SUPPORTED),
-    heatRisk: unavailable('The shipped HeatRisk raster covers CONUS only.')
+    heatRisk: unavailable('The shipped HeatRisk raster covers CONUS only.'),
+    // STEP 0's extent (ymin ~18.9N) does not reach American Samoa (~-14S).
+    cpcSeasonalTemp: unavailable(
+      'The CPC seasonal temperature outlook service extent does not reach American Samoa.'
+    )
   },
   canada: {
     pointHeat: unavailable('The United States NWS point API is not used for Canada.'),
     nwsForecast: unavailable('The United States NWS point API is not used for Canada.'),
     // vocab-allow: names the upstream United States NWS alerts API
     nwsAlerts: unavailable('The United States NWS alerts API is not used for Canada.'),
-    heatRisk: unavailable('The shipped HeatRisk raster covers CONUS only.')
+    heatRisk: unavailable('The shipped HeatRisk raster covers CONUS only.'),
+    cpcSeasonalTemp: unavailable(
+      'The CPC seasonal temperature outlook is a United States CPC product, not issued for Canada.'
+    )
   },
   transboundary: {
     pointHeat: unavailable(
@@ -169,12 +203,16 @@ export const NATIONAL_HEAT_SOURCE_CAPABILITY: Readonly<
     ),
     heatRisk: unavailable(
       'No point source runs until the selected point has a country-specific identity.'
+    ),
+    cpcSeasonalTemp: unavailable(
+      'No point source runs until the selected point has a country-specific identity.'
     )
   },
   unknown: {
     pointHeat: unavailable('The selected point has no recognized source geography.'),
     nwsForecast: unavailable('The selected point has no recognized source geography.'),
     nwsAlerts: unavailable('The selected point has no recognized source geography.'),
-    heatRisk: unavailable('The selected point has no recognized source geography.')
+    heatRisk: unavailable('The selected point has no recognized source geography.'),
+    cpcSeasonalTemp: unavailable('The selected point has no recognized source geography.')
   }
 };
