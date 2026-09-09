@@ -113,6 +113,18 @@ export interface SourcedClaim {
   /** What kind of knowledge the statement rests on. Required; set truthfully. */
   readonly evidence: EvidenceClass;
   /**
+   * An explicit observed/outlook register that overrides `CLAIM_REGISTER_TAG`'s
+   * per-evidence-class default (DR-070 amended 2026-09-08): HeatRisk is
+   * `classified` evidence (the badge stays Classified, an issuer-published
+   * class of a currently valid state) but the issuer's own words describe a
+   * forecast, so its register reads `outlook` in the briefing and on the time
+   * bar alike. Set only where the owner has ruled a per-claim exception;
+   * every other classified claim, and every other evidence class, still gets
+   * its register from the class default. Read through `claimRegisterTag` in
+   * `src/impact/evidence.ts`, never this field or the table directly.
+   */
+  readonly register?: 'observed' | 'outlook';
+  /**
    * Legacy compatibility tone, DERIVED from `evidence` by `makeClaim`
    * (observation for observed/analyzed/classified; outlook for the
    * model-borne and forward classes). The renderer styles from `evidence`.

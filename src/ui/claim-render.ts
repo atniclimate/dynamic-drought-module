@@ -9,7 +9,7 @@
  * every claim it renders.
  */
 
-import { CLAIM_REGISTER_TAG, claimDateLine, EVIDENCE_PRESENTATION } from '../impact/evidence';
+import { claimDateLine, claimRegisterTag, EVIDENCE_PRESENTATION } from '../impact/evidence';
 import type { SourcedClaim } from '../impact/types';
 import { escapeHtml } from '../util/escape';
 
@@ -64,10 +64,11 @@ export function renderClaim(claim: SourcedClaim): string {
   // user-supplied), so it is injected as-is beneath the claim text.
   const chart = claim.chartSvg ? `<div class="impact-claim-chart">${claim.chartSvg}</div>` : '';
   const dateHtml = dateLine ? ` <span class="impact-claim-date">${escapeHtml(dateLine)}</span>` : '';
-  // Observed/outlook register word (DDM-P8-T03, R3): text only, beside the
-  // source line, so a reader can tell the register without decoding the
-  // seven-way badge above. src/impact/evidence.ts owns the one mapping.
-  const registerHtml = ` <span class="impact-claim-register">${escapeHtml(CLAIM_REGISTER_TAG[claim.evidence])}</span>`;
+  // Observed/outlook register word (DDM-P8-T03, R3; per-claim override
+  // DR-070 amended 2026-09-08): text only, beside the source line, so a
+  // reader can tell the register without decoding the seven-way badge above.
+  // src/impact/evidence.ts owns the one mapping and its override.
+  const registerHtml = ` <span class="impact-claim-register">${escapeHtml(claimRegisterTag(claim))}</span>`;
   const uncertainty = claim.uncertainty
     ? `<p class="impact-claim-uncertainty">Uncertainty: ${escapeHtml(claim.uncertainty.kind === 'not-quantified' ? `not quantified (${claim.uncertainty.text})` : claim.uncertainty.text)}</p>`
     : '';
