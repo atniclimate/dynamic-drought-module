@@ -9,6 +9,10 @@ import { applyDeepLink } from './state/deep-link';
 import { parseSelectParam } from './state/url';
 import type { SelectParam } from './state/url';
 import { getStudioRoute, onStudioRouteChange } from './state/studio-route';
+import {
+  getCommittedSnapshot,
+  onCommittedSnapshotChange
+} from './state/cluster-service';
 import { onTypedPlaceChange } from './state/typed-place';
 import {
   buildSidebar,
@@ -387,23 +391,48 @@ function wireMapDependentChrome(map: maplibregl.Map): void {
   initMapInformation();
 
   // The desktop 3D Fire mode (W3/W4) rides its own lazy chunk behind the
-  // shell's desktop breakpoint, so a mobile boot never fetches it. A boot
-  // below the breakpoint arms a one-shot widen listener instead: the mode's
-  // toggle only renders on desktop widths, and a later resize into them
-  // must find a live controller rather than an inert control.
+  // shell's desktop breakpoint, so a mobile boot never fetches it (DDM-P2-T04
+  // narrowed this further: a DESKTOP Drought boot must not fetch it either,
+  // since nothing on that screen can use it). The chunk is fetched only once
+  // eligibility is real: the committed cluster is 'wildfire' (the same
+  // condition that shows the control, fire3d-control.tsx:199-205), or the
+  // boot URL names the mode directly (only the exact single token `true`
+  // counts, matching src/state/url.ts's parseFire3dParam so a stray or
+  // duplicated parameter never triggers a fetch a bare boot has no use for).
+  // A boot below the breakpoint still arms a one-shot widen listener; the
+  // same eligibility rule applies when it fires, so a later resize into
+  // desktop width finds a live controller rather than an inert control.
   const fire3dViewport = window.matchMedia('(min-width: 721px)');
+  let fire3dLoaded = false;
+  let unsubscribeFire3dEligibility: (() => void) | null = null;
   const loadFire3D = (): void => {
+    if (fire3dLoaded) return;
+    fire3dLoaded = true;
+    unsubscribeFire3dEligibility?.();
+    unsubscribeFire3dEligibility = null;
     void import('./map/fire3d').then(({ initFire3DController }) => {
       initFire3DController(map);
     });
   };
+  const fire3dParamRequested = (): boolean => {
+    const values = new URLSearchParams(window.location.search).getAll(
+      'fire3d'
+    );
+    return values.length === 1 && values[0] === 'true';
+  };
+  const fire3dEligible = (): boolean =>
+    getCommittedSnapshot().cluster === 'wildfire' || fire3dParamRequested();
+  const maybeLoadFire3D = (): void => {
+    if (fire3dViewport.matches && fire3dEligible()) loadFire3D();
+  };
+  unsubscribeFire3dEligibility = onCommittedSnapshotChange(maybeLoadFire3D);
   if (fire3dViewport.matches) {
-    loadFire3D();
+    maybeLoadFire3D();
   } else {
     const onWiden = (): void => {
       if (!fire3dViewport.matches) return;
       fire3dViewport.removeEventListener('change', onWiden);
-      loadFire3D();
+      maybeLoadFire3D();
     };
     fire3dViewport.addEventListener('change', onWiden);
   }
