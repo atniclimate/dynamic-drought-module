@@ -1195,15 +1195,17 @@ const CPC_SEASONAL_TEMP_FIELDS = 'cat,prob,valid_seas,fcst_date';
  * legend (STEP 0's `uniqueValueGroups`,
  * `I:\claude-temp\ddm-s18\DDM-P7-T07\layer0-description.json`): the raw
  * codes `Normal` and `EC` are never shown to the public by the issuer, which
- * labels them "Near Normal" and "Equal Chances". `Above` and `Below` are
- * already the issuer's own words. A code this table does not carry (an
- * unknown value) renders verbatim, never invented.
+ * labels them "Near Normal" and "Equal Chances"; this table carries the
+ * sentence's own lowercase hyphenated reading of that legend directly
+ * (`Above`/`Below` are already the issuer's words). `EC` renders its own
+ * branch below rather than a table entry (its sentence carries no percent).
+ * A code this table does not carry renders verbatim, never invented.
  */
-function cpcSeasonalCatLegendLabel(cat: string): string {
-  if (cat === 'Normal') return 'Near Normal';
-  if (cat === 'EC') return 'Equal Chances';
-  return cat;
-}
+const CPC_SEASONAL_CAT_LABEL: Readonly<Record<string, string>> = {
+  Above: 'above-normal',
+  Below: 'below-normal',
+  Normal: 'near-normal'
+};
 
 /**
  * CPC's own "Mon-Mon-Mon YYYY" reading of its three-letter `valid_seas` code
@@ -1292,18 +1294,11 @@ export async function fetchCpcSeasonalTempClaims(
     const issued = epochField(f.properties.fcst_date);
     const issuedText = issued !== null ? ` Issued ${humanDayUtc(issued)}.` : '';
     const season = cpcSeasonalValidSeasLabel(validSeas);
-    const legendLabel = cpcSeasonalCatLegendLabel(cat);
     const text =
-      legendLabel === 'Equal Chances'
+      cat === 'EC'
         ? `NOAA Climate Prediction Center seasonal temperature outlook for ${season}: Equal Chances (no favored tercile), at the selected point.${issuedText}`
         : `NOAA Climate Prediction Center seasonal temperature outlook for ${season}: ${prob}% chance of ${
-            legendLabel === 'Above'
-              ? 'above-normal'
-              : legendLabel === 'Below'
-                ? 'below-normal'
-                : legendLabel === 'Near Normal'
-                  ? 'near-normal'
-                  : legendLabel
+            CPC_SEASONAL_CAT_LABEL[cat] ?? cat
           } temperature, at the selected point.${issuedText}`;
     return {
       claims: [
