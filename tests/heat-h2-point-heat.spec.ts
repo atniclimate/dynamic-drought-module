@@ -1186,7 +1186,7 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
     }
   });
 
-  test('(d) the Heat season-ahead chip, #map-key and #time-bar stay exactly as before this task', async ({
+  test('(d) the Heat season-ahead chip stays disabled with its reason, and #map-key and #time-bar carry no seasonal product', async ({
     page
   }) => {
     await stubBrowserNwsHeat(page);
@@ -1194,15 +1194,20 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
 
     // The map recipe for heat/season-ahead stays empty (clusters.ts is
     // untouched by this task): no dated product is displayed, and the chip
-    // is enabled (a single-hazard cluster, not `customHorizonDisabledReason`'s
-    // 'custom' case), exactly as before this task.
+    // is disabled with its reason (DDM-P8-T03, DR-017 a: an empty map
+    // recipe disables the chip even when it is the committed horizon); the
+    // briefing's seasonal claim (this task) does not enable it.
     await expect(page.locator('#shell-time .shell-time-empty')).toHaveText(
       'No dated product is displayed.'
     );
     await expect(page.locator('#time-bar')).toBeHidden();
     const chip = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
     await expect(chip).toBeVisible();
-    await expect(chip).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(chip).toHaveAttribute('aria-disabled', 'true');
+    await expect(chip).toHaveAttribute(
+      'title',
+      'No verified season-ahead Extreme Heat map surface exists yet.'
+    );
     await expect(page.locator('#map-key')).not.toContainText(
       'seasonal temperature outlook'
     );
