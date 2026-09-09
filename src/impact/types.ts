@@ -63,6 +63,14 @@ export interface ClaimSupport {
   readonly effective?: string;
   /** What the claim reports over, for example "statewide" or "basin forecast point". */
   readonly reporting?: string;
+  /**
+   * DDM-P13-T02: the key of the `src/ui/legend-registry.ts` section that
+   * carries this claim's product legend (for example `'usdm'`, `'heatrisk'`),
+   * when that legend already exists in the app. Set only to a key a real
+   * legend section is built under; the renderer uses this to make the
+   * per-product legend reachable from the claim, never to invent one.
+   */
+  readonly legendKey?: string;
 }
 
 /**
@@ -79,6 +87,14 @@ export interface ClaimMethod {
   readonly version?: string;
   readonly baseline?: string;
   readonly sourceVintage?: string;
+  /**
+   * DDM-P13-T02: the issuer's own statement of the method or basis behind the
+   * claim's value (for example a percentile basis or a forecast-period
+   * definition), quoted from prose the tree already carries elsewhere
+   * (never authored fresh at a construction site). Renders as its own line
+   * beneath the source, under the claim that carries it.
+   */
+  readonly basis?: string;
 }
 
 /**
