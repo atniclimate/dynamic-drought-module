@@ -48,6 +48,7 @@ import {
 } from '../../config/clusters';
 import type { HazardClusterKey, TemporalHorizonKey } from '../../config/clusters';
 import { HORIZON_CHROME, SHELL_HORIZON_KEY } from '../../impact/horizon-chrome';
+import { horizonSurfaceSignature } from '../../state/timeline';
 import type { FramingSelection } from '../../config/framings';
 import { getLayerDef } from '../../config/layers';
 import {
@@ -223,33 +224,80 @@ function isPending(snap: CommittedShellSnapshot): boolean {
 }
 
 /**
- * The honest reason a horizon chip is disabled for a CUSTOM composition,
- * or null when the chip is honestly applicable (DG-080 r2 finding 1).
- *
- * A custom set has no recipe, so a horizon switch cannot re-resolve the
- * displayed layers; committing the register alone would press a chip
- * for a time the map does not show (the two review counterexamples:
- * custom plus the US Drought Monitor with Weeks ahead clicked, and
- * custom plus the Seasonal outlook with Current clicked). The ONE
- * honest exception is flipping BETWEEN the two outlook horizons while
- * the CPC Drought Outlook surface is part of the custom display: that
- * mounted surface follows the outlook register itself and re-renders
- * the register the chip claims. The committed chip stays enabled (an
- * idempotent no-op press, and the honest pressed state).
+ * The detail clause of the duplicate-surface reason: one sentence per
+ * hazard whose recipe repeats across horizons (DDM-P8-T03, DR-017 a).
+ * Named here rather than derived, because only the owning layer's own
+ * doctrine explains why its one surface honestly answers every horizon
+ * (`src/layers/heatrisk.ts`, `src/layers/sst-anomaly.ts`); drought and
+ * wildfire never hit this branch (every one of their three recipes has
+ * a distinct signature), so they carry no entry.
  */
-function customHorizonDisabledReason(
+const DUPLICATE_SURFACE_DETAIL: Partial<Record<HazardClusterKey, string>> = {
+  heat:
+    'the National Weather Service HeatRisk sequence publishes seven daily ' +
+    'periods on one surface, and the day control selects the day.',
+  enso:
+    'the sea-surface-temperature anomaly field is one analysed daily ' +
+    'surface at every horizon.'
+};
+
+/**
+ * The honest reason a horizon chip is disabled, or null when the chip is
+ * honestly applicable (DR-017 a). Two independent cases:
+ *
+ * CUSTOM composition (DG-080 r2 finding 1, unchanged): a custom set has
+ * no recipe, so a horizon switch cannot re-resolve the displayed layers;
+ * committing the register alone would press a chip for a time the map
+ * does not show (the two review counterexamples: custom plus the US
+ * Drought Monitor with Weeks ahead clicked, and custom plus the Seasonal
+ * outlook with Current clicked). The ONE honest exception is flipping
+ * BETWEEN the two outlook horizons while the CPC Drought Outlook surface
+ * is part of the custom display: that mounted surface follows the
+ * outlook register itself and re-renders the register the chip claims.
+ * The committed chip stays enabled (an idempotent no-op press, and the
+ * honest pressed state).
+ *
+ * A COMMITTED cluster (DDM-P8-T03): the recipe's capability signature
+ * (`horizonSurfaceSignature`, computed from `HAZARD_CLUSTERS` only, never
+ * from a claim: the briefing is consulted nowhere in this function, and
+ * no import of `matrix.ts`, `hydrate.ts` or any claim module may appear
+ * in this file) decides. An empty recipe disables the chip even when it
+ * is the committed horizon (a deep link into an unanswerable horizon is
+ * exactly what "cannot answer" means). Otherwise, a signature that
+ * repeats an EARLIER key's in `TEMPORAL_HORIZON_KEYS` disables the chip
+ * with a reason naming that earlier horizon's title; `current` is first,
+ * so this rule can never disable it and it always remains the way back.
+ */
+function horizonDisabledReason(
   snap: CommittedShellSnapshot,
   key: TemporalHorizonKey
 ): string | null {
-  if (snap.cluster !== 'custom') return null;
-  if (key === snap.horizon) return null;
-  const outlookDisplayed = snap.intendedKeys.has('drought');
-  if (outlookDisplayed && key !== 'current') return null;
-  return (
-    'Not available for this custom layer set: applying this time horizon ' +
-    'would change which layers are displayed, and a custom set keeps the ' +
-    'layers you chose. Pick a hazard view to change the time horizon.'
-  );
+  if (snap.cluster === 'custom') {
+    if (key === snap.horizon) return null;
+    const outlookDisplayed = snap.intendedKeys.has('drought');
+    if (outlookDisplayed && key !== 'current') return null;
+    return (
+      'Not available for this custom layer set: applying this time horizon ' +
+      'would change which layers are displayed, and a custom set keeps the ' +
+      'layers you chose. Pick a hazard view to change the time horizon.'
+    );
+  }
+
+  const signature = horizonSurfaceSignature(snap.cluster, key);
+  if (signature === null) {
+    return `No verified ${key} ${HAZARD_CLUSTERS[snap.cluster].title} map surface exists yet.`;
+  }
+
+  const idx = TEMPORAL_HORIZON_KEYS.indexOf(key);
+  for (let i = 0; i < idx; i++) {
+    const earlierKey = TEMPORAL_HORIZON_KEYS[i]!;
+    if (horizonSurfaceSignature(snap.cluster, earlierKey) !== signature) continue;
+    const ownTitle = HORIZON_CHROME[SHELL_HORIZON_KEY[key]].title;
+    const earlierTitle = HORIZON_CHROME[SHELL_HORIZON_KEY[earlierKey]].title;
+    const detail = DUPLICATE_SURFACE_DETAIL[snap.cluster] ?? '';
+    return `${ownTitle} shows the same map as ${earlierTitle} here: ${detail}`;
+  }
+  return null;
 }
 
 interface ShellProps {
@@ -410,7 +458,19 @@ function Shell({ map, snap, framing, specTick }: ShellProps) {
       <div class="shell-when" role="group" aria-label="Time horizon">
         <div class="shell-horizons">
           {TEMPORAL_HORIZON_KEYS.map((key) => {
-            const disabledReason = customHorizonDisabledReason(snapshot, key);
+            // DDM-P8-T03 step 3 STOP RULE: a visible `.shell-horizon-note`
+            // per disabled chip was tried and reverted (interface-
+            // responsive.spec.ts's tablet band at 900x675 landscape went
+            // red: "button.shell-horizon-btn over button.conditions-metric",
+            // a real control collision, not a flaky measurement). The
+            // reason still reaches every consumer honestly through
+            // `aria-disabled` plus `title` (unchanged, WCAG-valid, and the
+            // pattern this shell already used for the custom-composition
+            // case); only the always-visible prose line is deferred. See
+            // "Owner decisions" in this task's report: the visible-text
+            // half of DR-017 a needs an `app.css` grant (DDM-P10-T04
+            // territory), and this clause lands partial until then.
+            const disabledReason = horizonDisabledReason(snapshot, key);
             const chrome = HORIZON_CHROME[SHELL_HORIZON_KEY[key]];
             return (
               <button

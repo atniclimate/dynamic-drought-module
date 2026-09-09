@@ -43,6 +43,7 @@ import {
   type HeatRiskFrameEventDetail
 } from './heatrisk-sequence-loader';
 import { watchDesktopMapSeat } from './map-control-seat';
+import { getTimeBarSpec, onTimeBarSpecChange } from './time-bar';
 
 export interface KeySpec {
   readonly label: string;
@@ -117,6 +118,7 @@ let nwsSnapshotTruncated = false;
 let disposeMapKeyLayout: (() => void) | null = null;
 let disposeMapKeyOverflow: (() => void) | null = null;
 let disposeMapKeySeat: (() => void) | null = null;
+let disposeMapKeyTimeBarSpec: (() => void) | null = null;
 
 /**
  * Seat the on-map key beside the map controls on the desktop shell, and
@@ -805,6 +807,7 @@ export function initMapKey(): void {
   disposeMapKeyLayout?.();
   disposeMapKeyOverflow?.();
   disposeMapKeySeat?.();
+  disposeMapKeyTimeBarSpec?.();
   const layout = watchMapKeyLayout(host);
   disposeMapKeyLayout = layout.dispose;
   disposeMapKeySeat = watchMapKeySeat(host);
@@ -926,6 +929,7 @@ export function initMapKey(): void {
       host.hidden = true;
       delete host.dataset.keyFamily;
       delete host.dataset.keyOverflow;
+      delete host.dataset.register;
       canExpand = false;
       baseInteractive = false;
       expandButton.hidden = true;
@@ -965,6 +969,16 @@ export function initMapKey(): void {
     const { active, eligible } = keyEligibility();
     family = resolveMapKeyFamily(eligible);
     host.dataset.keyFamily = family;
+    // A MIRROR of the owning layer's own declared register (never
+    // computed from the pressed horizon chip, never invented for a
+    // layer, such as WHP, that declares none): src/ui/time-bar.ts is
+    // the single source, so the key and the time bar can never disagree.
+    const timeBarSpec = getTimeBarSpec();
+    if (timeBarSpec) {
+      host.dataset.register = timeBarSpec.stamp.register;
+    } else {
+      delete host.dataset.register;
+    }
     baseInteractive =
       active.has('heatrisk') || (active.has('cdm-drought') && cdmLicense !== null);
     reflectInteraction();
@@ -1027,6 +1041,7 @@ export function initMapKey(): void {
     sstObservedDate = detail.status === 'ready' ? detail.date : null;
     update();
   });
+  disposeMapKeyTimeBarSpec = onTimeBarSpecChange(update);
 
   registry.on('change', update);
   // Every status transition can change the strip now that a loading key
