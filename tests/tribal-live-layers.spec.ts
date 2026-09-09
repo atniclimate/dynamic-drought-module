@@ -17,6 +17,14 @@ import {
   emptyCollectionBody,
   arcgisErrorBody
 } from './tribal-fixtures';
+import {
+  RAWS_ROUTE,
+  RAWS_FIXTURE_MARKER_ID,
+  RAWS_FIXTURE_OBSERVED_MS,
+  RAWS_MALFORMED_BODY,
+  rawsAffirmativeNullBody,
+  rawsHappyBody
+} from './fixtures/raws-fixtures';
 
 /**
  * Unit G: the deterministic backbone for the live Tribal-geography layers
@@ -454,5 +462,191 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
     await expect(layerPill(page, 'tribal')).toHaveText(
       'no data (see data/README.md)'
     );
+  });
+});
+
+/**
+ * DDM-P9-T05: the RAWS station popup reads the served relative humidity,
+ * wind, and fuel moisture, with their units and observation time, or says
+ * the station reported none for a field the service affirmatively left
+ * null.
+ *
+ * The station-registry viewport discovery query and the popup's own
+ * per-station hydration query (`fetchRawsStationConditions`) hit the same
+ * `**\/PublicView_RAWS/**` endpoint and parse the same `f=geojson` shape, so
+ * one route stub answers both; case (c) below tells them apart by the
+ * per-station query's `StationID=` filter, which the bbox discovery query
+ * never sends.
+ *
+ * Discovery only fires inside the RAWS viewport cap, so every case flies to
+ * the curated Ice Harbor Dam station first (mirrors
+ * tests/telemetry-raws-gate.spec.ts), which the fixture's coordinates sit
+ * inside.
+ */
+test.describe('DDM-P9-T05: RAWS popup readings', () => {
+  /**
+   * Flying into the RAWS viewport cap fires EVERY discovery source at once
+   * (USGS, NRCS AWDB, NOAA CO-OPS, USBR AgriMet, CoCoRaHS), and the merge
+   * that produces the RAWS marker waits on all of them to settle. Aborting
+   * the other four (mirrors tests/popup-viewport.spec.ts's DEF-4 cases)
+   * keeps this suite's own RAWS assertion independent of those agencies'
+   * live latency, never the reason a RAWS-focused case is slow or flaky.
+   */
+  async function abortOtherDiscoverySources(page: Page): Promise<void> {
+    const abort = (route: import('@playwright/test').Route): unknown => route.abort('failed');
+    await page.route('**/waterservices.usgs.gov/**', abort);
+    await page.route('**/wcc.sc.egov.usda.gov/**', abort);
+    await page.route('**/api.tidesandcurrents.noaa.gov/**', abort);
+    await page.route('**/mesonet.agron.iastate.edu/**', abort);
+    await page.route('**/ddm-proxy.atniclimate.workers.dev/**', abort);
+  }
+
+  async function flyToIceHarborDam(page: Page): Promise<void> {
+    await abortOtherDiscoverySources(page);
+    await gotoApp(page, '?layers=telemetry');
+    await waitForLayerSettled(page, 'telemetry');
+    await page.locator('#telemetry-reveal').click();
+    await page.locator('.telemetry-item', { hasText: 'Ice Harbor Dam' }).click();
+  }
+
+  function rawsMarker(page: Page) {
+    return page.locator(`.telemetry-marker[data-telemetry-station-id="${RAWS_FIXTURE_MARKER_ID}"]`);
+  }
+
+  test('shows relative humidity, wind, fuel moisture, and the served observation time', async ({
+    page
+  }) => {
+    await page.route(RAWS_ROUTE, (route) =>
+      route.fulfill({
+        contentType: 'application/geo+json',
+        body: JSON.stringify(rawsHappyBody())
+      })
+    );
+
+    await flyToIceHarborDam(page);
+
+    const marker = rawsMarker(page);
+    await expect(marker).toHaveCount(1, { timeout: 20_000 });
+
+    const popup = page.locator('.maplibregl-popup');
+    const humidityRow = popup.locator('.popup-data-row', { hasText: 'Relative humidity' });
+    await expect(async () => {
+      await marker.click();
+      await expect(humidityRow).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
+
+    await expect(humidityRow).toContainText('21 %');
+    const windRow = popup.locator('.popup-data-row', { hasText: 'Wind' });
+    await expect(windRow).toContainText('5 mph from 295 degrees');
+    const fuelRow = popup.locator('.popup-data-row', { hasText: 'Fuel moisture' });
+    await expect(fuelRow).toContainText('7.3 (unk)');
+
+    // The observation time is the FIXTURE'S served ObservedDate, never the
+    // wall clock: the same conversion the runtime uses
+    // (src/ui/popups.ts renderRawsRows), so a locale mismatch between the
+    // test process and the browser would fail this honestly rather than by
+    // coincidence.
+    const expectedAsOf = new Date(RAWS_FIXTURE_OBSERVED_MS).toLocaleString();
+    const asOfRow = popup.locator('.popup-data-row', { hasText: 'As of' });
+    await expect(asOfRow).toContainText(expectedAsOf);
+    await expect(asOfRow).toContainText('NIFC RAWS');
+  });
+
+  test('a field the service affirmatively reports as null reads "Station reported none", the others stay real', async ({
+    page
+  }) => {
+    await page.route(RAWS_ROUTE, (route) =>
+      route.fulfill({
+        contentType: 'application/geo+json',
+        body: JSON.stringify(rawsAffirmativeNullBody())
+      })
+    );
+
+    await flyToIceHarborDam(page);
+
+    const marker = rawsMarker(page);
+    await expect(marker).toHaveCount(1, { timeout: 20_000 });
+
+    const popup = page.locator('.maplibregl-popup');
+    const fuelRow = popup.locator('.popup-data-row', { hasText: 'Fuel moisture' });
+    await expect(async () => {
+      await marker.click();
+      await expect(fuelRow).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
+
+    await expect(fuelRow).toContainText('Station reported none');
+    const humidityRow = popup.locator('.popup-data-row', { hasText: 'Relative humidity' });
+    await expect(humidityRow).toContainText('94 %');
+    const windRow = popup.locator('.popup-data-row', { hasText: 'Wind' });
+    await expect(windRow).toContainText('0 mph');
+  });
+
+  test('a transport failure leaves the slot unavailable, never "reported none"', async ({
+    page
+  }) => {
+    // The bbox discovery query (`where=1=1`) always gets the happy fixture
+    // so the marker renders; only the per-station hydration query (its
+    // `where` names the StationID) fails, isolating the popup's own live
+    // read from the marker's own honest discovery-time value.
+    await page.route(RAWS_ROUTE, (route) => {
+      // `StationID` also names an OUTPUT field on the bbox discovery query
+      // (`outFields=...StationID...`), so the discriminator has to be the
+      // `where` clause specifically, which only the per-station hydration
+      // query sets to a `StationID=` filter.
+      const where = new URL(route.request().url()).searchParams.get('where') ?? '';
+      if (where.startsWith('StationID=')) {
+        return route.fulfill({ status: 500, contentType: 'text/plain', body: 'synthetic failure' });
+      }
+      return route.fulfill({
+        contentType: 'application/geo+json',
+        body: JSON.stringify(rawsHappyBody())
+      });
+    });
+
+    await flyToIceHarborDam(page);
+
+    const marker = rawsMarker(page);
+    await expect(marker).toHaveCount(1, { timeout: 20_000 });
+
+    const popup = page.locator('.maplibregl-popup');
+    await expect(async () => {
+      await marker.click();
+      await expect(popup.locator('.popup-data-error')).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
+
+    await expect(popup).not.toContainText('Station reported none');
+  });
+
+  test('a malformed body leaves the slot unavailable, never "reported none"', async ({ page }) => {
+    await page.route(RAWS_ROUTE, (route) => {
+      // See the transport-failure case above: `StationID` also names an
+      // output field on the bbox discovery query, so the discriminator is
+      // the `where` clause, not a plain URL substring match.
+      const where = new URL(route.request().url()).searchParams.get('where') ?? '';
+      if (where.startsWith('StationID=')) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/geo+json',
+          body: RAWS_MALFORMED_BODY
+        });
+      }
+      return route.fulfill({
+        contentType: 'application/geo+json',
+        body: JSON.stringify(rawsHappyBody())
+      });
+    });
+
+    await flyToIceHarborDam(page);
+
+    const marker = rawsMarker(page);
+    await expect(marker).toHaveCount(1, { timeout: 20_000 });
+
+    const popup = page.locator('.maplibregl-popup');
+    await expect(async () => {
+      await marker.click();
+      await expect(popup.locator('.popup-data-error')).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
+
+    await expect(popup).not.toContainText('Station reported none');
   });
 });
