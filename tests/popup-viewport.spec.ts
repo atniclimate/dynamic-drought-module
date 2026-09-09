@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Route } from '@playwright/test';
 import { gotoApp, waitForLayerSettled } from './helpers';
 import {
   MIN_COMPACT_BODY_REGION_HEIGHT_PX,
@@ -1031,5 +1031,411 @@ test.describe('DEF-4: the telemetry popup fits a 390px viewport (390x844)', () =
     // Reachability receipt: the close control actually dismisses.
     await closeButton.click();
     await expect(popup).toHaveCount(0);
+  });
+});
+
+/**
+ * DDM-P11-T02 acceptance (ROADMAP.yaml, verbatim): "A tap within the pointer
+ * tolerance opens the popup it aimed at, the popup can be dismissed and
+ * traversed from the keyboard, and the briefing door is labeled for the
+ * briefing it opens." Clauses below map 1:1 onto that sentence; DR-042
+ * (session-ruled 2026-09-09) is cited where it bears on a clause.
+ *
+ * Clause 1 (pointer tolerance) is proved with a hand-authored perimeter
+ * fixture placed well inside the default Washington State region fit
+ * (src/config/regions.ts `washington_state`), so the polygon's on-screen
+ * position never depends on the raw boot camera constants (which a region
+ * fit moves away from) or on guessing MapLibre's Web Mercator math: the
+ * true edge is found EMPIRICALLY, by clicking and reading which title (if
+ * any) painted, exactly the black-box technique the rest of this suite
+ * already uses for canvas-rendered features (interaction-coordinator.spec.ts
+ * `clickCenterUntilPrimary`; the production build strips the dev map
+ * handle, so no spec can query the render set directly).
+ */
+const TOLERANCE_FIXTURE_NAME = 'Pointer Tolerance Test Fire';
+const TOLERANCE_FIXTURE_FC = {
+  type: 'FeatureCollection',
+  features: [
+    {
+      type: 'Feature',
+      properties: {
+        attr_IncidentTypeCategory: 'WF',
+        poly_IncidentName: TOLERANCE_FIXTURE_NAME
+      },
+      // Large on purpose: the `nifc-fires`-only boot's camera fit zooms out
+      // far enough (measured: about 1200km of visible width at a 390px
+      // phone viewport) that a realistic incident-sized polygon renders as
+      // a ~20px sliver, too small for a reliable coarse grid scan or a
+      // meaningful "8px off the edge" test. This fixture trades realism
+      // for a comfortably large, reliably discoverable on-screen target.
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [-123.0, 45.6],
+            [-119.0, 45.6],
+            [-119.0, 48.8],
+            [-123.0, 48.8],
+            [-123.0, 45.6]
+          ]
+        ]
+      }
+    }
+  ]
+};
+
+/** Route the one NIFC WFIGS perimeters query to the tolerance fixture above. */
+async function stubToleranceFixture(page: Page): Promise<void> {
+  await page.route(
+    (url) => url.href.includes('WFIGS_Interagency_Perimeters_Current'),
+    (route: Route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify(TOLERANCE_FIXTURE_FC)
+      })
+  );
+}
+
+async function bootToleranceFixture(page: Page): Promise<{ x: number; y: number; width: number; height: number }> {
+  await stubToleranceFixture(page);
+  await gotoApp(page, '?view=console&layers=nifc-fires');
+  await waitForLayerSettled(page, 'nifc-fires');
+  const box = await page.locator('#map').boundingBox();
+  if (!box) throw new Error('map container has no box');
+  return box;
+}
+
+/**
+ * Read the coordinated response's title after a click, WITHOUT paying a
+ * full auto-wait timeout on a miss: the coordinator paints (or tears down)
+ * a popup synchronously on the MapLibre `click` handler, so a short fixed
+ * settle is enough, and a plain `count()` after it distinguishes hit from
+ * miss in one round trip instead of waiting out a locator timeout on every
+ * miss (which a grid scan or a binary search produces many of).
+ */
+async function titleAfterClick(page: Page, x: number, y: number): Promise<string | null> {
+  await page.mouse.click(Math.round(x), Math.round(y));
+  await page.waitForTimeout(150);
+  const title = page.locator('.maplibregl-popup-content .popup-title').first();
+  if ((await title.count()) === 0) return null;
+  return ((await title.textContent()) ?? '').trim();
+}
+
+/**
+ * Find a pixel on the tolerance fixture's RIGHT edge, under FINE (mouse)
+ * tolerance: a coarse grid scan locates any point inside the polygon, then
+ * a rightward binary search converges on the largest x that still returns
+ * the fixture's title. That x is the fine-tolerance clickable boundary
+ * (CLICK_BOX_FINE_PX past the true geometric edge; the true edge itself is
+ * never needed, only this empirically observed, deterministic boundary,
+ * reused verbatim by every context that boots the same fixture at the same
+ * viewport size).
+ */
+async function findFineToleranceBoundary(
+  page: Page,
+  box: { x: number; y: number; width: number; height: number }
+): Promise<{ x: number; y: number }> {
+  let insideX: number | null = null;
+  let insideY: number | null = null;
+  outer: for (let gy = 1; gy < 5; gy++) {
+    const y = box.y + (box.height * gy) / 5;
+    for (let gx = 2; gx <= 8; gx++) {
+      const x = box.x + (box.width * gx) / 10;
+      const t = await titleAfterClick(page, x, y);
+      if (t === TOLERANCE_FIXTURE_NAME) {
+        insideX = x;
+        insideY = y;
+        break outer;
+      }
+    }
+  }
+  if (insideX === null || insideY === null) {
+    throw new Error(
+      `the "${TOLERANCE_FIXTURE_NAME}" fixture was never found in the coarse grid scan`
+    );
+  }
+
+  let lo = insideX;
+  let hi = box.x + box.width - 4;
+  const hiTitle = await titleAfterClick(page, hi, insideY);
+  if (hiTitle === TOLERANCE_FIXTURE_NAME) {
+    throw new Error('the right map edge is still inside the fixture; it does not fit this viewport');
+  }
+  while (hi - lo > 1) {
+    const mid = (lo + hi) / 2;
+    const t = await titleAfterClick(page, mid, insideY);
+    if (t === TOLERANCE_FIXTURE_NAME) lo = mid;
+    else hi = mid;
+  }
+  return { x: lo, y: insideY };
+}
+
+for (const [label, viewport] of [
+  ['phone (390x844)', { width: 390, height: 844 }],
+  ['tablet (820x1180)', { width: 820, height: 1180 }]
+] as const) {
+  // One page per test (the ordinary Playwright fixture), never a second
+  // Page or context: tests/boundary-boot-inventory.test.mjs requires any
+  // second Page in this suite to be recorded, with its own stub story, in
+  // `SECOND_PAGE_REASONS`, and the two pointer profiles below do not need
+  // one. `.serial` threads the fine-tolerance boundary (a closure
+  // variable) from the first test into the second instead: the SAME
+  // deterministic boot (same URL, same viewport, same fixture) reproduces
+  // the SAME projection on a fresh page, so the measured pixel transfers.
+  test.describe.serial(`DDM-P11-T02 clause 1: pointer tolerance at ${label}`, () => {
+    let boundary: { x: number; y: number } | null = null;
+
+    test.describe('fine pointer (mouse-like, pointer: fine)', () => {
+      test.use({ viewport });
+
+      test(`locates the fine-tolerance boundary; 1px beyond it misses (${label})`, async ({
+        page
+      }) => {
+        // `CLICK_BOX_FINE_PX = 6` (src/map/interaction-coordinator.ts), so
+        // the located boundary is empirically the true edge plus about 6px.
+        const box = await bootToleranceFixture(page);
+        boundary = await findFineToleranceBoundary(page, box);
+
+        const missTitle = await titleAfterClick(page, boundary.x + 1, boundary.y);
+        expect(
+          missTitle,
+          'one pixel past the fine-tolerance boundary must miss (outside the 6px fine box)'
+        ).not.toBe(TOLERANCE_FIXTURE_NAME);
+      });
+    });
+
+    test.describe('coarse pointer (touch, pointer: coarse)', () => {
+      test.use({ viewport, hasTouch: true });
+
+      test(`a point about 8px past the true edge hits under the coarse box (${label})`, async ({
+        page
+      }) => {
+        expect(boundary, 'the fine-tolerance boundary was not measured by the prior test').not.toBeNull();
+        await bootToleranceFixture(page);
+
+        // 2px past the fine boundary (itself the true edge plus about 6px)
+        // is about 8px past the true edge: `CLICK_BOX_COARSE_PX = 12` must
+        // reach it and open the fixture's OWN popup, not a neighbor (there
+        // is no other feature anywhere near this fixture).
+        const testX = boundary!.x + 2;
+        const hitTitle = await titleAfterClick(page, testX, boundary!.y);
+        expect(
+          hitTitle,
+          'a touch tap about 8px outside the fixture edge must hit it (inside the 12px coarse box) and open ITS OWN popup'
+        ).toBe(TOLERANCE_FIXTURE_NAME);
+      });
+    });
+  });
+}
+
+/**
+ * Clause 2: the popup can be dismissed and traversed from the keyboard.
+ * MapLibre's own Popup focuses its content on open (`focusAfterOpen`,
+ * default true) and this project adds no separate focus manager (the
+ * brief: "do not invent a new focus manager"), so this proves the NATIVE
+ * behavior on the coordinator's own head/body layout: focus lands inside
+ * the popup, Tab reaches the briefing door and then the body's source
+ * links in DOM order, Escape dismisses, and focus is not left dangling
+ * inside the now-removed popup afterward.
+ */
+test.describe('DDM-P11-T02 clause 2: the popup is dismissable and keyboard-traversable', () => {
+  test('Tab reaches the door and the body links; Escape dismisses; focus does not stay in the removed popup', async ({
+    page
+  }) => {
+    await gotoApp(page, '?view=console&layers=bia-reservations');
+    await waitForLayerSettled(page, 'bia-reservations');
+
+    const mapBox = await page.locator('#map').boundingBox();
+    expect(mapBox).not.toBeNull();
+    const popup = page.locator('.maplibregl-popup');
+    const content = popup.locator('.maplibregl-popup-content');
+    await expect(async () => {
+      await page.mouse.click(mapBox!.x + mapBox!.width / 2, mapBox!.y + mapBox!.height / 2);
+      await expect(content).toBeVisible({ timeout: 1500 });
+    }).toPass({ timeout: 20_000 });
+
+    // Focus lands inside the popup on open (MapLibre's native
+    // `focusAfterOpen`); no collision fixture is active, so the head
+    // carries no "Other map features here" disclosure and Tab order is
+    // exactly: (close button or door, in DOM order) then the body links.
+    await expect
+      .poll(async () => content.evaluate((el) => el.contains(document.activeElement)), {
+        message: 'focus never landed inside the popup on open'
+      })
+      .toBe(true);
+
+    const door = popup.locator('[data-ddm-impact-trigger]');
+    await expect(door).toBeVisible();
+    let reachedDoor = false;
+    let reachedLink = false;
+    for (let i = 0; i < 8; i++) {
+      const isDoor = await door.evaluate((el) => el === document.activeElement).catch(() => false);
+      if (isDoor) reachedDoor = true;
+      const isLink = await page.evaluate(
+        () => document.activeElement?.closest('.popup-links a') !== null
+      );
+      if (isLink) reachedLink = true;
+      if (reachedDoor && reachedLink) break;
+      await page.keyboard.press('Tab');
+    }
+    expect(reachedDoor, 'Tab never reached the briefing door').toBe(true);
+    expect(reachedLink, 'Tab never reached a body source link').toBe(true);
+
+    // Escape dismisses, and focus is not left inside the (now-removed)
+    // popup: it returns to the document (map or trigger), per the brief.
+    await page.keyboard.press('Escape');
+    await expect(popup).toHaveCount(0);
+    const strandedInPopup = await page.evaluate(
+      () => document.activeElement?.closest('.maplibregl-popup') !== null
+    );
+    expect(strandedInPopup, 'focus was left inside the removed popup after Escape').toBe(false);
+    const focusIsLive = await page.evaluate(
+      () => document.activeElement !== null && document.body.contains(document.activeElement)
+    );
+    expect(focusIsLive, 'focus fell off the document entirely after Escape').toBe(true);
+  });
+});
+
+/**
+ * Clause 3: the briefing door is labeled for the briefing it opens. Proved
+ * on a place-bearing (boundary) popup outside the mobile Brief sheet's U2
+ * route (the shipped route stays: interaction-coordinator.ts:376-385
+ * sends a place-bearing tap in the active mobile Brief sheet straight to
+ * the half detent with no popup; this is `?view=console`, not that
+ * surface).
+ */
+test.describe('DDM-P11-T02 clause 3: the door names the place it opens a briefing for', () => {
+  test('the door sits after the title in the frozen head, names the place, and opens its own briefing', async ({
+    page
+  }) => {
+    await gotoApp(page, '?view=console&layers=bia-reservations');
+    await waitForLayerSettled(page, 'bia-reservations');
+
+    const mapBox = await page.locator('#map').boundingBox();
+    expect(mapBox).not.toBeNull();
+    const popup = page.locator('.maplibregl-popup-content');
+    const head = popup.locator('.coordinated-response-head');
+    await expect(async () => {
+      await page.mouse.click(mapBox!.x + mapBox!.width / 2, mapBox!.y + mapBox!.height / 2);
+      await expect(popup).toBeVisible({ timeout: 1500 });
+    }).toPass({ timeout: 20_000 });
+
+    const title = (await head.locator('.popup-title').textContent())?.trim();
+    expect(title, 'the boundary popup carries no title to compare the door against').toBeTruthy();
+
+    const door = head.locator('[data-ddm-impact-trigger]');
+    await expect(door).toBeVisible();
+    // Head order: title, then the door (this fixture has no collision, so
+    // no "Other map features here" disclosure follows).
+    const order = await head.evaluate((el) =>
+      [...el.children].map((c) =>
+        c.matches('.popup-title') ? 'title' : c.matches('[data-ddm-impact-trigger]') ? 'door' : 'other'
+      )
+    );
+    expect(order.indexOf('door')).toBeGreaterThan(order.indexOf('title'));
+
+    // Visible text and accessible name are the SAME string (no separate
+    // `aria-label`), and both name the place.
+    const doorText = (await door.textContent())?.trim() ?? '';
+    const doorAccessibleName = await door.evaluate((el) => el.getAttribute('aria-label'));
+    expect(doorAccessibleName, 'the door must not carry a diverging aria-label').toBeNull();
+    expect(doorText).toContain(title!);
+    expect(doorText.toLowerCase()).toContain('impact briefing');
+
+    await door.click();
+    const panelTitle = page.locator('#impact-panel-title');
+    await expect(page.locator('#impact-panel')).toBeVisible();
+    await expect(panelTitle).toHaveText(title!);
+  });
+});
+
+/**
+ * Clause 3 continued, DR-042 option a (session-ruled 2026-09-09): a
+ * condition-surface tap (the map feature itself is the subject, not a
+ * place) that resolves a place through `resolveLocationIdentity` gains
+ * the SAME place-specific door in its already-painted head; one that
+ * resolves nothing gets none. The default NADM drought polygon
+ * (tests/helpers.ts `stubDefaultNadm`) is replaced here by an equally
+ * broad hand-authored polygon so `nadm-drought` can be the ONLY active
+ * layer (no `states` boundary competing for the same click, which would
+ * out-rank the condition surface under the precedence table and defeat
+ * the point of this case): `region=` alone then decides whether the
+ * click resolves a US state (`washington_state`, the default region) or
+ * nothing (`british_columbia`, entirely outside every US state and with
+ * no Tribal boundary layer active).
+ */
+const BROAD_CONDITION_FC = {
+  type: 'FeatureCollection',
+  features: [
+    {
+      type: 'Feature',
+      properties: { DROUGHTCAT: 'd2', YEAR_MONTH: '202606' },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[[-140, 20], [-50, 20], [-50, 75], [-140, 75], [-140, 20]]]
+      }
+    }
+  ]
+};
+
+async function stubBroadCondition(page: Page): Promise<void> {
+  await page.route('**/NADM-current.geojson', (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/geo+json',
+      body: JSON.stringify(BROAD_CONDITION_FC)
+    })
+  );
+}
+
+test.describe('DDM-P11-T02 clause 3, DR-042 option a: the condition-surface door', () => {
+  test('a condition tap that resolves a place gains a place-specific door', async ({ page }) => {
+    await stubBroadCondition(page);
+    // washington_state is DEFAULT_REGION (src/config/regions.ts); no
+    // `region=` needed. Only `nadm-drought` is active, so `states` never
+    // competes for the click.
+    await gotoApp(page, '?view=console&layers=nadm-drought');
+    await waitForLayerSettled(page, 'nadm-drought');
+
+    const mapBox = await page.locator('#map').boundingBox();
+    expect(mapBox).not.toBeNull();
+    const popup = page.locator('.maplibregl-popup-content');
+    const head = popup.locator('.coordinated-response-head');
+    await expect(async () => {
+      await page.mouse.click(mapBox!.x + mapBox!.width / 2, mapBox!.y + mapBox!.height / 2);
+      await expect(popup).toBeVisible({ timeout: 1500 });
+    }).toPass({ timeout: 20_000 });
+
+    // The popup painted FIRST with no door (the condition tap's own
+    // response carries no `selection`): true right after open, and the
+    // door appears only once identity resolution settles.
+    const door = head.locator('[data-ddm-impact-trigger]');
+    await expect(door).toBeVisible({ timeout: 10_000 });
+    await expect(door).toContainText('Washington');
+
+    await door.click();
+    await expect(page.locator('#impact-panel')).toBeVisible();
+    await expect(page.locator('#impact-panel-title')).toHaveText('Washington');
+  });
+
+  test('a condition tap that resolves nothing gets no door', async ({ page }) => {
+    await stubBroadCondition(page);
+    await gotoApp(page, '?view=console&layers=nadm-drought&region=british_columbia');
+    await waitForLayerSettled(page, 'nadm-drought');
+
+    const mapBox = await page.locator('#map').boundingBox();
+    expect(mapBox).not.toBeNull();
+    const popup = page.locator('.maplibregl-popup-content');
+    await expect(async () => {
+      await page.mouse.click(mapBox!.x + mapBox!.width / 2, mapBox!.y + mapBox!.height / 2);
+      await expect(popup).toBeVisible({ timeout: 1500 });
+    }).toPass({ timeout: 20_000 });
+
+    // Give identity resolution the same budget as the positive case above,
+    // then assert the door never arrived: British Columbia is outside
+    // every US state and no Tribal boundary layer is active.
+    await page.waitForTimeout(3_000);
+    await expect(popup.locator('[data-ddm-impact-trigger]')).toHaveCount(0);
   });
 });
