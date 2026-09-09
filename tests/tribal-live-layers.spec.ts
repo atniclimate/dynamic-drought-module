@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
+  PILL,
   gotoApp,
   layerCheckbox,
   layerPill,
@@ -23,7 +24,9 @@ import {
   RAWS_FIXTURE_OBSERVED_MS,
   RAWS_MALFORMED_BODY,
   rawsAffirmativeNullBody,
-  rawsHappyBody
+  rawsHappyBody,
+  rawsNullWindBody,
+  rawsPeakOnlyWindBody
 } from './fixtures/raws-fixtures';
 
 /**
@@ -650,3 +653,178 @@ test.describe('DDM-P9-T05: RAWS popup readings', () => {
     await expect(popup).not.toContainText('Station reported none');
   });
 });
+
+/**
+ * DDM-P9-T06: the RAWS marker carries a wind symbol built from the SAME
+ * discovery response DDM-P9-T05 already reads (no second fetch: the bbox
+ * query's WindSpeedMPH/WindDirDegrees already ride in `RAWS_OUT_FIELDS`).
+ * The helpers below intentionally mirror the DDM-P9-T05 describe block's own
+ * (module-private) helpers rather than importing them, so this task's tests
+ * touch no line of that block.
+ */
+test.describe('DDM-P9-T06: RAWS wind symbol', () => {
+  async function abortOtherDiscoverySources(page: Page): Promise<void> {
+    const abort = (route: import('@playwright/test').Route): unknown => route.abort('failed');
+    await page.route('**/waterservices.usgs.gov/**', abort);
+    await page.route('**/wcc.sc.egov.usda.gov/**', abort);
+    await page.route('**/api.tidesandcurrents.noaa.gov/**', abort);
+    await page.route('**/mesonet.agron.iastate.edu/**', abort);
+    await page.route('**/ddm-proxy.atniclimate.workers.dev/**', abort);
+  }
+
+  async function flyToIceHarborDam(page: Page): Promise<void> {
+    await abortOtherDiscoverySources(page);
+    await gotoApp(page, '?layers=telemetry');
+    await waitForLayerSettled(page, 'telemetry');
+    await page.locator('#telemetry-reveal').click();
+    await page.locator('.telemetry-item', { hasText: 'Ice Harbor Dam' }).click();
+  }
+
+  function rawsMarker(page: Page) {
+    return page.locator(`.telemetry-marker[data-telemetry-station-id="${RAWS_FIXTURE_MARKER_ID}"]`);
+  }
+
+  function windGlyph(page: Page) {
+    return rawsMarker(page).locator('svg[data-telemetry-wind-glyph]');
+  }
+
+  test('a served wind renders a glyph on the marker whose rotation and label match the served speed, direction, observation time, and issuer', async ({
+    page
+  }) => {
+    await page.route(RAWS_ROUTE, (route) =>
+      route.fulfill({
+        contentType: 'application/geo+json',
+        body: JSON.stringify(rawsHappyBody())
+      })
+    );
+
+    await flyToIceHarborDam(page);
+
+    const marker = rawsMarker(page);
+    await expect(marker).toHaveCount(1, { timeout: 20_000 });
+
+    const glyph = windGlyph(page);
+    await expect(glyph).toHaveCount(1);
+    // The fixture serves "5 mph" and "295 degrees " (rawsHappyBody): the
+    // glyph's own accessible name carries both served strings verbatim,
+    // the issuer, and the observation time, and its rotation is the parsed
+    // leading number from the served direction string, never a re-derived
+    // value.
+    await expect(glyph).toHaveAttribute(
+      'aria-label',
+      /^Wind 5 mph from 295 degrees \(NIFC RAWS\), observed .+$/
+    );
+    const expectedAsOf = new Date(RAWS_FIXTURE_OBSERVED_MS).toLocaleString();
+    await expect(glyph).toHaveAttribute('aria-label', new RegExp(escapeRegExp(expectedAsOf)));
+    const transform = await glyph.evaluate((el) => (el as SVGElement).style.transform);
+    expect(transform).toContain('rotate(295deg)');
+  });
+
+  test('a null served wind renders no glyph, and the popup Wind row reads "Station reported none"', async ({
+    page
+  }) => {
+    await page.route(RAWS_ROUTE, (route) =>
+      route.fulfill({
+        contentType: 'application/geo+json',
+        body: JSON.stringify(rawsNullWindBody())
+      })
+    );
+
+    await flyToIceHarborDam(page);
+
+    const marker = rawsMarker(page);
+    await expect(marker).toHaveCount(1, { timeout: 20_000 });
+    await expect(windGlyph(page)).toHaveCount(0);
+
+    const popup = page.locator('.maplibregl-popup');
+    const windRow = popup.locator('.popup-data-row', { hasText: 'Wind' });
+    await expect(async () => {
+      await marker.click();
+      await expect(windRow).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
+    await expect(windRow).toContainText('Station reported none');
+  });
+
+  test('a sustained speed with no sustained direction renders no glyph, and the popup Wind row carries the NWCG peak wording, never "gusting"', async ({
+    page
+  }) => {
+    await page.route(RAWS_ROUTE, (route) =>
+      route.fulfill({
+        contentType: 'application/geo+json',
+        body: JSON.stringify(rawsPeakOnlyWindBody())
+      })
+    );
+
+    await flyToIceHarborDam(page);
+
+    const marker = rawsMarker(page);
+    await expect(marker).toHaveCount(1, { timeout: 20_000 });
+    // No sustained direction served: the symbol's rotation would have
+    // nothing honest to draw from, so no glyph, matching the acceptance's
+    // "no value is interpolated" clause (a placeholder rotation would be an
+    // invented direction).
+    await expect(windGlyph(page)).toHaveCount(0);
+
+    const popup = page.locator('.maplibregl-popup');
+    const windRow = popup.locator('.popup-data-row', { hasText: 'Wind' });
+    await expect(async () => {
+      await marker.click();
+      await expect(windRow).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
+    await expect(windRow).toContainText('3 mph, peak 11 mph from 212 degrees over the previous 60 minutes');
+    await expect(windRow).not.toContainText('gusting');
+  });
+
+  test('a transport failure on RAWS discovery renders no marker and no glyph, and the telemetry layer reads live (partial)', async ({
+    page
+  }) => {
+    await abortOtherDiscoverySources(page);
+    await page.route(RAWS_ROUTE, (route) =>
+      route.fulfill({ status: 500, contentType: 'text/plain', body: 'synthetic failure' })
+    );
+
+    await gotoApp(page, '?layers=telemetry');
+    await waitForLayerSettled(page, 'telemetry');
+    await page.locator('#telemetry-reveal').click();
+    await page.locator('.telemetry-item', { hasText: 'Ice Harbor Dam' }).click();
+
+    // The discovery source failed non-abort (0.7.0 H4): the layer reads
+    // "live (partial)", never a bare "live" and never a structural "error"
+    // (the curated seeds, including the Ice Harbor Dam seed itself, still
+    // render).
+    await expect(layerPill(page, 'telemetry')).toHaveText(PILL.degraded, { timeout: 20_000 });
+    await expect(rawsMarker(page)).toHaveCount(0);
+    await expect(page.locator('svg[data-telemetry-wind-glyph]')).toHaveCount(0);
+  });
+
+  test('no wind glyph exists anywhere except on the one station marker it belongs to (no interpolation between stations)', async ({
+    page
+  }) => {
+    await page.route(RAWS_ROUTE, (route) =>
+      route.fulfill({
+        contentType: 'application/geo+json',
+        body: JSON.stringify(rawsHappyBody())
+      })
+    );
+
+    await flyToIceHarborDam(page);
+
+    const marker = rawsMarker(page);
+    await expect(marker).toHaveCount(1, { timeout: 20_000 });
+    await expect(windGlyph(page)).toHaveCount(1);
+
+    // Every wind glyph anywhere in the document is a descendant of a
+    // `.telemetry-marker`: nothing is drawn off a station's own point (no
+    // field, no arrow between stations).
+    const totalGlyphs = await page.locator('svg[data-telemetry-wind-glyph]').count();
+    const glyphsInsideMarkers = await page
+      .locator('.telemetry-marker svg[data-telemetry-wind-glyph]')
+      .count();
+    expect(totalGlyphs).toBeGreaterThan(0);
+    expect(glyphsInsideMarkers).toBe(totalGlyphs);
+  });
+});
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

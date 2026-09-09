@@ -43,6 +43,7 @@ import {
   mergeTelemetryStations,
   stationNetworkByKey
 } from '../config/station-registry';
+import type { RawsWindStationFields } from '../config/station-registry';
 import type {
   PrimaryParameterCategory,
   StationRegistryEntry,
@@ -190,6 +191,26 @@ function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView
     el.style.width = '16px';
     el.style.height = '16px';
 
+    // DDM-P9-T06: a RAWS station's served wind rides on `station` itself
+    // (src/config/station-registry.ts's `RawsWindStationFields`, cast on
+    // both ends since `TelemetryStation` in types/station.ts is not owned
+    // by this task). Every other network's station simply never carries
+    // these properties, so this is a no-op for them: no glyph, no
+    // interpolation, nothing drawn off a station's own point.
+    const rawsWind = readRawsWindFields(station);
+    // Only a station the service served BOTH a speed and a direction for
+    // gets a glyph: a null field (the station reported none) or a missing
+    // field (this is not a RAWS station at all) both draw nothing, per the
+    // acceptance's "Station reported none" and "no value is interpolated"
+    // clauses.
+    if (rawsWind && rawsWind.windSpeedServed !== null && rawsWind.windDirectionServed !== null) {
+      // overflow stays visible on `.telemetry-marker` (no CSS rule says
+      // otherwise), so an absolutely-positioned child sized past the
+      // marker's own 16px box still renders in full; no src/styles/app.css
+      // edit needed (that grant does not exist for this task).
+      el.appendChild(buildRawsWindGlyph(rawsWind));
+    }
+
     // TelemetryStation.coords is [lat, lng]; MapLibre wants [lng, lat].
     const [lat, lng] = station.coords;
 
@@ -216,6 +237,102 @@ function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView
 
   bindPopups(map);
   showStationLegend();
+}
+
+/**
+ * DDM-P9-T06: read the served wind fields off a discovered RAWS station's
+ * own identity object. `undefined` on `windSpeedServed` means the property
+ * was never set at all (every non-RAWS station, and RAWS stations rendered
+ * from the curated seed table rather than live discovery); `null` means a
+ * RAWS station whose discovery response affirmatively reported no wind
+ * speed. Only the latter is a RAWS station with nothing to draw; the
+ * caller treats both the same way (no glyph), but the distinction matters
+ * for anyone extending this later: never draw a glyph for a station this
+ * function returns `null` for, and never invent a value for one it returns
+ * a `RawsWindStationFields` for with a `null` field.
+ */
+function readRawsWindFields(station: TelemetryStation): RawsWindStationFields | null {
+  const widened = station as TelemetryStation & Partial<RawsWindStationFields>;
+  if (widened.windSpeedServed === undefined) return null;
+  return {
+    windSpeedServed: widened.windSpeedServed,
+    windDirectionServed: widened.windDirectionServed ?? null,
+    windDirectionDeg: widened.windDirectionDeg ?? null,
+    windObservedAtIso: widened.windObservedAtIso ?? null
+  };
+}
+
+/**
+ * The observation time in the same "As of" style the RAWS popup already
+ * uses (src/ui/popups.ts `renderRawsRows`), so the two never disagree about
+ * how a timestamp reads. `null` reads "an unknown time" rather than
+ * omitting the clause the acceptance requires.
+ */
+function formatRawsObservedTime(observedAtIso: string | null): string {
+  if (!observedAtIso) return 'an unknown time';
+  const observed = new Date(observedAtIso);
+  return Number.isNaN(observed.getTime()) ? observedAtIso : observed.toLocaleString();
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/**
+ * The sustained-wind symbol: an inline-styled SVG child of the marker
+ * element (no CSS class whose appearance depends on src/styles/app.css;
+ * that grant does not exist for this task). Only ever built for a RAWS
+ * station whose discovery response served BOTH a speed and a direction
+ * (the null-speed and null-direction cases render no glyph at all, per the
+ * acceptance's "Station reported none" and "no value is interpolated"
+ * clauses; the popup's own wind row, src/ui/popups.ts `rawsWindText`,
+ * carries "Station reported none" for the missing-value case).
+ *
+ * Rotation convention, stated here and in the glyph's own accessible name:
+ * `WindDirDegrees` is the direction the wind is blowing FROM, in degrees
+ * clockwise from true north (NWCG PMS 426-3, verified against the NIFC
+ * PublicView_RAWS FeatureServer's own field description). The glyph is a
+ * wind-vane arrowhead that points INTO the wind, so rotating an
+ * upward-pointing (north-pointing) arrow clockwise by exactly the served
+ * number of degrees draws it correctly with no sign inversion and no
+ * re-derivation of the served value.
+ */
+function buildRawsWindGlyph(wind: RawsWindStationFields): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, 'svg') as unknown as SVGSVGElement;
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', '22');
+  svg.setAttribute('height', '22');
+  svg.setAttribute('data-telemetry-wind-glyph', 'true');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('focusable', 'false');
+  svg.style.position = 'absolute';
+  svg.style.left = '50%';
+  svg.style.top = '50%';
+  svg.style.pointerEvents = 'none';
+
+  if (wind.windSpeedServed !== null && wind.windDirectionServed !== null) {
+    const observed = formatRawsObservedTime(wind.windObservedAtIso);
+    const accessibleName = `Wind ${wind.windSpeedServed} from ${wind.windDirectionServed} (NIFC RAWS), observed ${observed}`;
+    svg.setAttribute('aria-label', accessibleName);
+    // An SVG `<title>` is the element's native tooltip-on-hover text
+    // (mirrors `el.title` on the marker's own HTMLElement above); `aria-label`
+    // alone gives the accessible name to assistive tech but not a hover
+    // tooltip, and the acceptance's "carrying the observation time in its
+    // title and accessible name" asks for both.
+    const title = document.createElementNS(SVG_NS, 'title');
+    title.textContent = accessibleName;
+    svg.appendChild(title);
+    const rotationDeg = wind.windDirectionDeg ?? 0;
+    svg.style.transform = `translate(-50%, -50%) rotate(${rotationDeg}deg)`;
+
+    const arrow = document.createElementNS(SVG_NS, 'path');
+    arrow.setAttribute('d', 'M12 2 L17 15 L12 11.5 L7 15 Z');
+    arrow.setAttribute('fill', '#1a1a1a');
+    arrow.setAttribute('stroke', '#ffffff');
+    arrow.setAttribute('stroke-width', '1.25');
+    arrow.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(arrow);
+  }
+
+  return svg;
 }
 
 /**

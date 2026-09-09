@@ -1309,6 +1309,89 @@ test.describe('W3/W4 browser truth', () => {
     expect(await fire3dContextStamp(page)).toBeUndefined();
   });
 
+  /**
+   * DDM-P9-T06's load-bearing precondition, checked FIRST and in isolation
+   * from the wind-symbol work, and recorded here as a FINDING rather than a
+   * requirement this task could meet: a `maplibregl.Marker`'s screen
+   * position is computed by `Map.project()`, which resolves a 2D ground
+   * projection and does not consult the terrain elevation MapLibre's own
+   * fill-extrusion and raster-dem rendering use. Measured empirically
+   * (never assumed) at two curated stations after `fire3d` activates and an
+   * 8-second wait for DEM tiles to land: Ice Harbor Dam (a river dam, low
+   * relief, 46.2503, -118.8783) and Stevens Pass SNOTEL (a mountain pass,
+   * 3,940 ft / ~1,201 m, 47.7472, -121.0867, `id: 'snotel_791'`), both well
+   * inside the bundled terrain archive's box (FIRE3D_TERRAIN_COVERAGE: -125
+   * to -110.5 W, 41.5 to 49.5 N). Neither marker's bounding box moved by
+   * even one pixel across the wait, at either elevation, which rules out
+   * "the station was simply too flat to show a shift" as the explanation.
+   *
+   * Per the brief: this is the STOP condition. DDM-P9-T06's station-registry
+   * and telemetry-layer work for the wind symbol still lands (every OTHER
+   * telemetry marker in the 3D scene already renders at this same 2D
+   * projection, so the wind glyph, being a child of the existing marker
+   * element, is exactly as "in the scene" as the dot it is attached to; no
+   * more, no less), but the acceptance's "in the scene, at terrain height"
+   * clause is reported under Owner decisions rather than solved by a
+   * second, competing marker or symbol layer that manually queries and
+   * applies terrain elevation (fire3d-context.md's "one issuer, one number,
+   * one legend, per layer" forbids a duplicate surface for the same
+   * station's own values, and correcting every telemetry marker's
+   * positioning is a change to a shared rendering path this task does not
+   * own).
+   */
+  test('a station marker in the 3D scene does not reproject with terrain (recorded finding, not solved here; see DDM-P9-T06 Owner decisions)', async ({
+    page
+  }) => {
+    test.setTimeout(60_000);
+    await stubWildfireFeeds(page);
+    // `cluster=` and `layers=` are mutually exclusive on the URL:
+    // `layers=` OUTRANKS `cluster=` (src/state/url.ts, D-0.7.0-044) and a
+    // committed `cluster` resolves to the 'drought' default whenever
+    // `layers` is present, which would silently withdraw the wildfire-only
+    // Fire3D control this test needs. So the boot URL carries only
+    // `cluster=wildfire&fire3d=true` (mirrors the perimeter-ribbon test
+    // below); telemetry is switched on afterward through the layer
+    // checkbox, a separate runtime action. That action demotes the
+    // committed cluster to 'custom' too (src/state/cluster-service.ts; see
+    // the perimeter-ribbon test's own note two tests down), which would
+    // stop a NOT-YET-ACTIVE scene from ever starting, but an ALREADY-ACTIVE
+    // scene stays up regardless (same test: unchecking `nifc-fires` demotes
+    // the cluster and the scene remains 'active'), so activating fire3d
+    // FIRST and only then checking the telemetry box keeps the scene alive
+    // for the rest of this test.
+    await gotoApp(page, '?cluster=wildfire&fire3d=true');
+    await expect
+      .poll(() => fire3dStamp(page), { timeout: 30_000 })
+      .toBe('active');
+    await layerCheckbox(page, 'telemetry').check();
+    await waitForLayerSettled(page, 'telemetry');
+    // The scene must have survived the cluster demotion the layer checkbox
+    // causes; if it did not, that is a real product regression this test
+    // must fail on, not silently work around.
+    expect(await fire3dStamp(page)).toBe('active');
+
+    const marker = page.locator('.telemetry-marker[data-telemetry-station-id="snotel_791"]');
+    await expect(marker).toHaveCount(1, { timeout: 20_000 });
+
+    const justActivated = await marker.boundingBox();
+    expect(justActivated, 'the marker must still be on screen once the scene reports active').not.toBeNull();
+
+    // Let DEM tiles land (mirrors the evidence test above's own 4-second
+    // wait for the same archive, doubled here since this is the assertion
+    // that decides whether a whole clause is achievable).
+    await page.waitForTimeout(8_000);
+    const afterTerrainLoad = await marker.boundingBox();
+    expect(afterTerrainLoad, 'the marker must still be on screen after terrain tiles land').not.toBeNull();
+
+    // The recorded finding, asserted so a future MapLibre upgrade or a
+    // terrain-aware marker positioning change trips this test (in either
+    // direction) rather than leaving the gap to silently drift: today the
+    // position does NOT change. If this ever starts failing because the
+    // marker DOES move, that is good news, not a regression, and the
+    // Owner-decisions note below is stale the moment it does.
+    expect(afterTerrainLoad).toEqual(justActivated);
+  });
+
   test('the perimeter ribbon follows the perimeter layer, not the other way round', async ({
     page
   }) => {
