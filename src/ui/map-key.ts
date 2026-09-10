@@ -42,7 +42,7 @@ import {
   USDM_NONE_SWATCH,
   SPC_FIREWX_CATEGORIES
 } from '../config/palette';
-import { getDroughtSurfacePresentation, LAYER_DEFS } from '../config/layers';
+import { getDroughtSurfacePresentation } from '../config/layers';
 import {
   NIFC_INCIDENT_PRESENTATION,
   USFS_WHP_PRESENTATION,
@@ -50,10 +50,7 @@ import {
 } from '../config/wildfire-presentation';
 import { FRAMINGS } from '../config/framings';
 import { getFraming, onFramingChange } from '../state/framing-store';
-import {
-  isUsScopeCautionLayer,
-  userFacingCoverageClause
-} from '../state/display-summary';
+import { userFacingCoverageClause } from '../state/display-summary';
 import { escapeHtml } from '../util/escape';
 import {
   createHeatRiskSequenceLoader,
@@ -768,18 +765,27 @@ function withTerrainCoverage(
  * identical user-facing text those two sites used to render.
  *
  * Independent of `hazardKey()` (see `withFrameCoverage` below) so it never
- * vanishes just because the active surface is not North America Drought:
- * the caution applies whenever ANY US-scoped display layer is currently
- * active under a coverage-noted framing, exactly the rule
- * `isUsScopeCautionLayer` states for the retired caveat.
+ * vanishes just because the active surface is not North America Drought.
+ * It is also independent of WHICH layers are active: this sentence is
+ * framing provenance and is true whichever hazard is displayed.
  */
-function frameCoverageNote(active: ReadonlySet<string>): string {
+function frameCoverageNote(): string {
   const selection = getFraming();
   const framing = selection === null || selection === 'all' ? null : selection;
   const def = framing !== null ? FRAMINGS[framing] : undefined;
   if (def?.coverageNote === undefined) return '';
-  const activeDefs = LAYER_DEFS.filter((layer) => active.has(layer.key));
-  if (!activeDefs.some(isUsScopeCautionLayer)) return '';
+  // NOT gated on isUsScopeCautionLayer, deliberately, and the S23 gate is the
+  // reason. This sentence is FRAMING PROVENANCE ("the monthly North American
+  // Drought Monitor informs the minimap across the prairie provinces"), which
+  // is true whichever hazard is displayed. It came from the minimap's own
+  // `.shell-minimap-note`, which was UNGATED. The predicate belonged to the
+  // separate US-scope CAVEAT in display-summary.ts, which excluded
+  // `nadm-drought` and `sst-anomaly` because a "this display is US-scoped"
+  // caution is meaningless for a product that is already tri-national or
+  // global. Applying that gate to this text suppressed it on exactly the
+  // default drought boot, where NADM is the active layer, and took three
+  // s4-minimap cases red. The caveat render site is gone now, so the
+  // predicate has no remaining consumer here.
   return userFacingCoverageClause(def.coverageNote);
 }
 
@@ -813,7 +819,7 @@ function activeKey(): KeySpec | null {
   const active = registry.getActiveKeys();
   return withFrameCoverage(
     withTerrainCoverage(hazardKey(), active),
-    frameCoverageNote(active)
+    frameCoverageNote()
   );
 }
 
