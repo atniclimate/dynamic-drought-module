@@ -12,6 +12,7 @@ import { Catalog } from './catalog';
 import { checkedSnapshot, onCheckedChange } from './bridge';
 import { Search } from './search';
 import type { SearchProps } from './search';
+import { applyStudioInertScope } from './studio-inert';
 
 interface LayersStudioProps {
   controller: LayerController;
@@ -52,12 +53,7 @@ function LayersStudio({ controller, checked, statuses, search }: LayersStudioPro
   const basemapHostRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const app = document.getElementById('app');
-    const priorAriaHidden = app?.getAttribute('aria-hidden') ?? null;
-    if (app) {
-      app.inert = true;
-      app.setAttribute('aria-hidden', 'true');
-    }
+    const releaseInertScope = applyStudioInertScope();
 
     const telemetry = moveIntoHost(
       document.getElementById('panel-telemetry'),
@@ -74,11 +70,7 @@ function LayersStudio({ controller, checked, statuses, search }: LayersStudioPro
     return () => {
       restore(basemap);
       restore(telemetry);
-      if (app) {
-        app.inert = false;
-        if (priorAriaHidden === null) app.removeAttribute('aria-hidden');
-        else app.setAttribute('aria-hidden', priorAriaHidden);
-      }
+      releaseInertScope();
     };
   }, []);
 

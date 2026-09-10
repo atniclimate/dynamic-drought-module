@@ -9,9 +9,12 @@
  *
  * Terrain source discipline: this module owns its OWN raster-dem source
  * ('fire3d-terrain-dem') and never reuses the hillshade layer's source, so
- * toggling either feature cannot tear the other down. It DOES reuse the
- * hillshade module's archive resolution (URL preference plus the PMTiles
- * header probe), so both features agree on which archive is trustworthy.
+ * toggling either feature cannot tear the other down. Since DR-079 it also
+ * resolves its own archive, deepest first (`resolveFire3DTerrainUrl`): this
+ * scene is the one place the DEPTH is the point, because it exists to answer
+ * whether a fire sits at the foot of a mountain. It still falls back to the
+ * hillshade module's resolution, so when the deep archive is unreachable both
+ * features agree on which archive is trustworthy, exactly as before.
  *
  * Failure ladder (invariant: never a silent style error):
  *   1. Probe failure before any map mutation: nothing to roll back;
@@ -46,12 +49,17 @@ import {
   FIRE3D_MIN_HEIGHT_QUERY,
   FIRE3D_MIN_WIDTH_QUERY,
   FIRE3D_NON_PREDICTION_NOTE,
+  FIRE3D_OUT_OF_COVERAGE_STATUS,
   FIRE3D_PITCH_DEGREES,
   FIRE3D_SKY_CLEAR_SPECIFICATION,
   FIRE3D_SKY_SPECIFICATION,
-  FIRE3D_TERRAIN_EXAGGERATION
+  FIRE3D_TERRAIN_COVERAGE,
+  FIRE3D_TERRAIN_EXAGGERATION,
+  isWithinTerrainCoverage
 } from '../config/fire3d-presentation';
+import { URLS } from '../config/urls';
 import { resolveHillshadeArchiveUrl } from '../layers/hillshade';
+import { probeArchiveHeader } from '../util/pmtiles-probe';
 import { watchContextLoss, webGl2Capability } from './gl-capability';
 import {
   getCommittedSnapshot,
@@ -95,6 +103,15 @@ export interface Fire3DStatus {
   /** The context layers actually in the scene (issuer-published landscape
    * context; empty while inactive or when every context layer degraded). */
   readonly contextLayers: readonly string[];
+  /**
+   * True only while the scene is active AND the view's center currently
+   * sits outside FIRE3D_TERRAIN_COVERAGE. The ground there is genuinely
+   * flat (MapLibre's terrain sampler has no data to return), not broken;
+   * this is what lets the status line say so instead of leaving the two
+   * readings indistinguishable. False while inactive, checking, or
+   * unavailable, so it never competes with those states' own sentences.
+   */
+  readonly outOfTerrainCoverage: boolean;
 }
 
 export interface Fire3DGateInput {
@@ -160,13 +177,20 @@ let status: Fire3DStatus = {
   reason: null,
   smokeVolume: false,
   perimeterRibbon: false,
-  contextLayers: []
+  contextLayers: [],
+  outOfTerrainCoverage: false
 };
 const statusListeners = new Set<() => void>();
 
 let controllerWired = false;
 let active = false;
 let activation: AbortController | null = null;
+/** Mirrors Fire3DStatus.outOfTerrainCoverage; read by publishStatus and by
+ * syncEmbedNote, kept current by coverageMoveListener while active. */
+let terrainOutOfCoverage = false;
+/** The 'moveend' listener that keeps terrainOutOfCoverage current across a
+ * pan while the scene stays active; detached in rollbackScene. */
+let coverageMoveListener: (() => void) | null = null;
 /** Bumped on every activation start and every teardown so an awaited step
  * (the smoke-volume dynamic import) can detect it was superseded. */
 let generation = 0;
@@ -226,6 +250,7 @@ function syncEmbedNote(active: boolean): void {
   const lines = [
     FIRE3D_NON_PREDICTION_NOTE,
     FIRE3D_COVERAGE_NOTE,
+    ...(terrainOutOfCoverage ? [FIRE3D_OUT_OF_COVERAGE_STATUS] : []),
     ...contextEmbedLines
   ].filter((line) => line.length > 0);
   const note = existing ?? document.createElement('p');
@@ -245,7 +270,8 @@ function publishStatus(
     reason,
     smokeVolume: state === 'active' && smokeVolumeOn,
     perimeterRibbon: state === 'active' && ribbonOn,
-    contextLayers: state === 'active' ? contextKeys : []
+    contextLayers: state === 'active' ? contextKeys : [],
+    outOfTerrainCoverage: state === 'active' && terrainOutOfCoverage
   };
   // Production-observable truth stamp (the dev-only __ddmMap handle is
   // dead-code-eliminated from dist/, so the verification suite reads mode
@@ -326,6 +352,11 @@ function applyCamera(
 function rollbackScene(map: maplibregl.Map): void {
   generation += 1;
   active = false;
+  if (coverageMoveListener) {
+    map.off('moveend', coverageMoveListener);
+    coverageMoveListener = null;
+  }
+  terrainOutOfCoverage = false;
   if (tileWatch) {
     tileWatch.detach();
     tileWatch = null;
@@ -367,6 +398,42 @@ function failScene(map: maplibregl.Map, reason: string, err?: unknown): void {
   showToast('3D Fire view unavailable; the flat map remains accurate.');
 }
 
+/**
+ * The terrain archive this scene should use, deepest first (DR-079).
+ *
+ * The 2D hillshade underlay is a SUBTLE texture and the bundled zoom 8
+ * archive is the honest trade for it, so `resolveHillshadeArchiveUrl` is left
+ * exactly as it was. This scene is the one place the depth is the whole
+ * point: it exists to answer whether a fire sits at the foot of a mountain,
+ * and at about 212 m per pixel there is no foot. Measured in this scene
+ * through `queryTerrainElevation` on 2026-09-10, the bundled archive reads
+ * the Mount Jefferson summit 931 m low while reading the Bend valley floor
+ * within 19 m; the deep archive reads that summit 50 m low.
+ *
+ * The deep archive is a bounded probe away, never a dependency: a failure
+ * here is not a scene failure, it is a fall back to the bundled copy that
+ * every deployer already ships, and the scene then behaves exactly as it did
+ * before this function existed. So a deployer who cannot reach the Worker, or
+ * an installation that has not published one, loses resolution and nothing
+ * else. Only a failure of BOTH reaches the caller's `failScene` ladder.
+ */
+async function resolveFire3DTerrainUrl(signal: AbortSignal): Promise<string> {
+  try {
+    await probeArchiveHeader(URLS.terrainPmtilesDeep, signal);
+    return URLS.terrainPmtilesDeep;
+  } catch (err) {
+    // An aborted probe is a withdrawn activation, not a missing archive: let
+    // the caller's own abort handling see it rather than spending a second
+    // probe on a scene nobody is waiting for.
+    if (signal.aborted) throw err;
+    console.info(
+      '[fire3d] the deep terrain archive is unreachable; falling back to the bundled archive.',
+      err
+    );
+    return resolveHillshadeArchiveUrl(signal);
+  }
+}
+
 async function activateScene(map: maplibregl.Map): Promise<void> {
   if (active || activation !== null) return;
   const myController = new AbortController();
@@ -378,7 +445,7 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
 
   let archiveUrl: string;
   try {
-    archiveUrl = await resolveHillshadeArchiveUrl(signal);
+    archiveUrl = await resolveFire3DTerrainUrl(signal);
   } catch (err) {
     if (activation === myController) activation = null;
     if (signal.aborted || myGeneration !== generation) {
@@ -415,7 +482,20 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
         type: 'raster-dem',
         url: 'pmtiles://' + archiveUrl,
         encoding: 'terrarium',
-        tileSize: 512
+        tileSize: 512,
+        // Explicit, not left to the PMTiles protocol's own metadata reply:
+        // MapLibre's raster-dem default is 22 (maplibre-gl-style-spec), and
+        // the protocol only overwrites it once the archive's header round
+        // trip resolves. Stating the measured depth up front means the very
+        // first frame already knows to overzoom the deepest tile instead of
+        // requesting a zoom the archive has never had. Confirmed this is
+        // not the cause of the reported flatness: a Node probe of the
+        // committed archive's own embedded metadata (public/data/
+        // hillshade-dem-pnw.pmtiles) shows the pmtiles library already
+        // answers MapLibre's tilejson-style request with the real
+        // maxzoom: 8 read from the header, so overzoom was already
+        // engaging correctly past zoom 8 without this line.
+        maxzoom: FIRE3D_TERRAIN_COVERAGE.maxZoom
       });
     }
     map.setTerrain({
@@ -424,6 +504,24 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
     });
     map.setSky(FIRE3D_SKY_SPECIFICATION);
     applyCamera(map, { pitch: FIRE3D_PITCH_DEGREES });
+    // Terrain relief fix lane, 2026-09-10: a fire outside the Pacific
+    // Northwest bake enters this scene exactly as fully as one inside it
+    // (the gate in shouldFire3DBeActive asks nothing about location), so
+    // the camera and context still have value there; only the ground is
+    // flat. Read once at entry and kept current across a pan by
+    // coverageMoveListener, never gating activation itself.
+    terrainOutOfCoverage = !isWithinTerrainCoverage(
+      map.getCenter().lng,
+      map.getCenter().lat
+    );
+    coverageMoveListener = () => {
+      const center = map.getCenter();
+      const next = !isWithinTerrainCoverage(center.lng, center.lat);
+      if (next === terrainOutOfCoverage) return;
+      terrainOutOfCoverage = next;
+      if (active) publishStatus('active', null);
+    };
+    map.on('moveend', coverageMoveListener);
   } catch (err) {
     failScene(map, 'Terrain setup failed.', err);
     return;

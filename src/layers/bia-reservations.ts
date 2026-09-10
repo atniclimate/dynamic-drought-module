@@ -73,6 +73,7 @@ import {
   RESERVATION_OUTLINE_COLOR
 } from '../config/palette';
 import { buildBiaReservationPopupHtml } from '../ui/popups';
+import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
 import { buildBoundaryContext, resolveBoundaryTitle } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import type { LayerActivation } from '../config/layers';
@@ -692,10 +693,10 @@ export function bindPopups(map: maplibregl.Map): void {
     kind: 'reservation-boundary',
     layerIds: [FILL_LAYER_ID],
     label: (feature) => resolveBoundaryTitle('bia-reservation', feature.properties ?? null),
-    respond: (feature, click) => {
+    respond: (feature, click, map) => {
       const props: GeoJsonProperties = feature.properties ?? null;
       return {
-        content: buildBiaReservationPopupHtml(props),
+        content: buildBiaReservationPopupHtml(props, buildPlaceConditionsHtml(map, click.point, feature.geometry)),
         selection: buildBoundaryContext('bia-reservation', props, feature.geometry, click.lngLat),
         // An id-less feature clears any prior emphasis (the old
         // emphasizePlace contract) rather than lighting an unknown one.

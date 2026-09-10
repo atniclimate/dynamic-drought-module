@@ -17,10 +17,12 @@ import { gotoApp } from './helpers';
  * spec ran that, and no spec ran studio entry and exit on a phone at all.
  *
  * What a repeated cycle can catch that a single cycle cannot is state that
- * survives a close: an `#app` left inert so the map stops responding, a
- * focus anchor stranded on a torn-down opener, a `studio=` token left in a
- * URL that no longer has a studio, or a second open that lands somewhere
- * other than where the first one did. Every one of those reads to a user as
+ * survives a close: the map (or, at phone width, the whole app) left
+ * wrongly inert so it stops responding, the sidebar wrongly caught in that
+ * same veil at desktop width where it was never covered, a focus anchor
+ * stranded on a torn-down opener, a `studio=` token left in a URL that no
+ * longer has a studio, or a second open that lands somewhere other than
+ * where the first one did. Every one of those reads to a user as
  * "inconsistent navigation", and every one is asserted below on EACH pass,
  * not only on the first.
  *
@@ -32,23 +34,48 @@ import { gotoApp } from './helpers';
 const PLACE_ROOT = '#place-studio-root';
 const LAYERS_ROOT = '#layers-studio-root';
 
-/** Both studios take the whole app out of the accessibility tree while open. */
-async function expectAppSealed(page: Page, moment: string): Promise<void> {
-  await expect(page.locator('#app'), `${moment}: the app is not hidden behind the studio`)
+/**
+ * A studio takes out of the accessibility tree exactly what it covers, no
+ * more: the whole `#app` at phone width, where the sidebar is a bottom
+ * sheet sharing the screen with the (also full-viewport) studio, or just
+ * `#map-container` at desktop width, where the studio docks beside the
+ * sidebar and covers only the map. Either way the breakpoint is the same
+ * 721px the CSS geometry and src/ui/mobile-sheet.ts both key off.
+ */
+async function expectStudioSealed(page: Page, moment: string): Promise<void> {
+  const isDesktop = await page.evaluate(() => window.matchMedia('(min-width: 721px)').matches);
+  const covered = isDesktop ? '#map-container' : '#app';
+  await expect(page.locator(covered), `${moment}: ${covered} is not hidden behind the studio`)
     .toHaveAttribute('aria-hidden', 'true');
   expect(
-    await page.locator('#app').evaluate((app) => app.inert),
-    `${moment}: the app is not inert behind the studio`
+    await page.locator(covered).evaluate((el) => (el as HTMLElement).inert),
+    `${moment}: ${covered} is not inert behind the studio`
   ).toBe(true);
+  if (isDesktop) {
+    // The whole point of docking beside the sidebar instead of over it:
+    // the sidebar must stay live, focusable and screen-reader-visible.
+    await expect(
+      page.locator('#sidebar'),
+      `${moment}: the sidebar is wrongly hidden behind the studio`
+    ).not.toHaveAttribute('aria-hidden', 'true');
+    expect(
+      await page.locator('#sidebar').evaluate((el) => (el as HTMLElement).inert),
+      `${moment}: the sidebar is wrongly inert behind the studio`
+    ).toBe(false);
+  }
 }
 
 /** And must hand it back, every time, not only the first time. */
-async function expectAppReleased(page: Page, moment: string): Promise<void> {
-  await expect(page.locator('#app'), `${moment}: the app is still hidden after the studio closed`)
-    .not.toHaveAttribute('aria-hidden', 'true');
+async function expectStudioReleased(page: Page, moment: string): Promise<void> {
+  const isDesktop = await page.evaluate(() => window.matchMedia('(min-width: 721px)').matches);
+  const covered = isDesktop ? '#map-container' : '#app';
+  await expect(
+    page.locator(covered),
+    `${moment}: ${covered} is still hidden after the studio closed`
+  ).not.toHaveAttribute('aria-hidden', 'true');
   expect(
-    await page.locator('#app').evaluate((app) => app.inert),
-    `${moment}: the app is still inert after the studio closed`
+    await page.locator(covered).evaluate((el) => (el as HTMLElement).inert),
+    `${moment}: ${covered} is still inert after the studio closed`
   ).toBe(false);
 }
 
@@ -77,7 +104,7 @@ async function studioCycle(
 
   const studio = page.locator(root);
   await expect(studio, `${moment}: the ${kind} studio did not open`).toBeVisible();
-  await expectAppSealed(page, `${moment} (${kind} open)`);
+  await expectStudioSealed(page, `${moment} (${kind} open)`);
   const studioUrl = page.url();
   expect(
     new URL(studioUrl).searchParams.get('studio'),
@@ -86,7 +113,7 @@ async function studioCycle(
 
   await studio.getByRole('button', { name: 'Back to map' }).click();
   await expect(studio, `${moment}: the ${kind} studio did not close`).toHaveCount(0);
-  await expectAppReleased(page, `${moment} (${kind} closed)`);
+  await expectStudioReleased(page, `${moment} (${kind} closed)`);
   await expect(opener, `${moment}: focus did not return to the ${kind} door`).toBeFocused();
   await expect
     .poll(() => page.url(), {

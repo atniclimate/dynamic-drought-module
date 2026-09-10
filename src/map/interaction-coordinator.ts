@@ -401,15 +401,32 @@ function renderPopup(
   const container = document.createElement('div');
   container.className = 'coordinated-response';
 
-  // Split the response into a FROZEN head and a SCROLLING body
-  // (maintainer directive 2026-07-18). The head, top to bottom, is the
-  // title, then the briefing door, then the "Other map features here"
-  // switcher; the body carries the agency line, meta, the caveat, and
-  // links. Body scrolling never moves the head (the body, not the
-  // card, is the scroll container via .ddm-coordinated-popup); whether
-  // the head is VISIBLE at a given popup size is governed solely by
-  // the canonical tier table in src/ui/popup-viewport.ts, which does
-  // not promise head visibility in every tier.
+  // Split the response into a FROZEN head and a SCROLLING body. The
+  // maintainer directive of 2026-07-18 kept the head to title, door, and
+  // the feature switcher, with even the agency line scrolling in the
+  // body; the owner amended that on 2026-09-10 ("a change from a prior
+  // opinion"): a place popup is now a conditions card, not only an
+  // identity card, so its succinct identity AND its conditions belong
+  // where they are always visible. The head, top to bottom, is now: the
+  // title, the one-line "kind of place" (`.popup-agency`) when the
+  // content carries a `.popup-conditions` block (see below), that
+  // Conditions block itself (`src/ui/popup-conditions.ts`), THEN the
+  // briefing door, THEN the "Other map features here" switcher. The
+  // boundary detail (acres, classification, treaty year, and the like)
+  // and the representation caveat stay in the scrolling body, below the
+  // fold, exactly where the owner asked for them NOT to lead the card.
+  // Body scrolling never moves the head (the body, not the card, is the
+  // scroll container via .ddm-coordinated-popup); whether the head is
+  // VISIBLE at a given popup size is governed solely by the canonical
+  // tier table in src/ui/popup-viewport.ts, which does not promise head
+  // visibility in every tier.
+  //
+  // A response that carries no `.popup-conditions` block (the NWS alert
+  // and SPC Fire Weather Outlook popups, the NIFC perimeter popup, and
+  // the telemetry-station skeleton) is NOT a place-identity card in the
+  // owner's sense -- the map feature itself IS the subject -- so it keeps
+  // the pre-2026-09-10 shape exactly: only the title and the door move to
+  // the head, and its own agency line stays in the body.
   const raw = document.createElement('div');
   if (typeof response.content === 'string') raw.innerHTML = response.content;
   else raw.appendChild(response.content);
@@ -419,11 +436,17 @@ function renderPopup(
   const body = document.createElement('div');
   body.className = 'coordinated-response-body';
 
-  // Title first (frozen), if the content carries one; then the briefing
-  // door directly below it. querySelector on the working fragment moves
-  // each node out of `raw`, so whatever remains falls through to the body.
+  // Title first (frozen), if the content carries one. querySelector on the
+  // working fragment moves each node out of `raw`, so whatever remains
+  // falls through to the body.
   const title = raw.querySelector('.popup-title');
   if (title) head.appendChild(title);
+  const conditions = raw.querySelector('.popup-conditions');
+  if (conditions) {
+    const agency = raw.querySelector('.popup-agency');
+    if (agency) head.appendChild(agency);
+    head.appendChild(conditions);
+  }
   const trigger = raw.querySelector('[data-ddm-impact-trigger]');
   if (trigger) head.appendChild(trigger);
   while (raw.firstChild) body.appendChild(raw.firstChild);

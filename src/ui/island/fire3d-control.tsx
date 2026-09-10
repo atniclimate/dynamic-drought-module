@@ -57,6 +57,7 @@ import {
   FIRE3D_MIN_HEIGHT_QUERY,
   FIRE3D_MIN_WIDTH_QUERY,
   FIRE3D_NON_PREDICTION_NOTE,
+  FIRE3D_OUT_OF_COVERAGE_STATUS,
   FIRE3D_REFUSAL_TEXT,
   fire3dControlOffer
 } from '../../config/fire3d-presentation';
@@ -132,6 +133,25 @@ function emptySmokeLine(status: Fire3DStatus | null, smokeStatus: string | undef
   if (status?.state !== 'active' || !status.smokeVolume) return '';
   return smokeStatus === 'no-data'
     ? 'No current smoke plumes in view; the issuer returned none for this area.'
+    : '';
+}
+
+/**
+ * The out-of-coverage line (defect 1 of the terrain relief lane, 2026-09-10:
+ * the owner reported "no terrain, it's flat", and part of that report is a
+ * fire outside the Pacific Northwest bake, where the ground is genuinely
+ * flat because MapLibre's terrain sampler has no elevation to return there).
+ *
+ * Same pattern as emptySmokeLine above: a conditional line beside the live
+ * status, not a new member of the six-state vocabulary (the scene is still
+ * `active`; this qualifies what "active" means for the ground under THIS
+ * view). It renders and clears with `status.outOfTerrainCoverage`, which the
+ * orchestrator keeps current across a pan, so the sentence tracks the
+ * camera rather than only ever describing where the scene happened to enter.
+ */
+function outOfCoverageLine(status: Fire3DStatus | null): string {
+  return status?.state === 'active' && status.outOfTerrainCoverage
+    ? FIRE3D_OUT_OF_COVERAGE_STATUS
     : '';
 }
 
@@ -270,6 +290,11 @@ export function Fire3DControl({
       {emptySmokeLine(status, smokeStatus) ? (
         <p class="shell-fire3d-empty" data-fire3d-empty-smoke>
           {emptySmokeLine(status, smokeStatus)}
+        </p>
+      ) : null}
+      {outOfCoverageLine(status) ? (
+        <p class="shell-fire3d-empty" data-fire3d-out-of-coverage>
+          {outOfCoverageLine(status)}
         </p>
       ) : null}
       <p class="shell-fire3d-note">{FIRE3D_COVERAGE_NOTE}</p>

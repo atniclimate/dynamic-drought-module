@@ -17,6 +17,17 @@
  * the fire fallback when only the event layer is on. Nothing is fetched.
  * Vector swatches come from the map-fill palettes. HeatRisk uses the one
  * issuer-owned mirror table while its raster remains colorized upstream.
+ *
+ * Also, since 2026-09-10, the ONE render site for the S4 minimap's framing
+ * coverage caution (`frameCoverageNote`/`withFrameCoverage` below): a
+ * coverage-noted framing (Mexico, the prairie provinces, and the rest) with
+ * a US-scoped display layer active earns a coverage line here regardless of
+ * which hazard key (or no key at all) is otherwise showing, so it never
+ * goes silent just because the surface is not North America Drought. This
+ * relocated a sentence that used to pop up on the minimap itself on every
+ * framing click and, at the same time, repeat verbatim in the conditions
+ * summary caveat; both were retired in its favor (owner ask; see
+ * src/config/framings.ts and src/state/display-summary.ts).
  */
 
 import { registry } from '../state/registry';
@@ -37,6 +48,9 @@ import {
   USFS_WHP_PRESENTATION,
   NIFC_KEY_GENERALIZATION_NOTE
 } from '../config/wildfire-presentation';
+import { FRAMINGS } from '../config/framings';
+import { getFraming, onFramingChange } from '../state/framing-store';
+import { userFacingCoverageClause } from '../state/display-summary';
 import { escapeHtml } from '../util/escape';
 import {
   createHeatRiskSequenceLoader,
@@ -119,6 +133,7 @@ let disposeMapKeyLayout: (() => void) | null = null;
 let disposeMapKeyOverflow: (() => void) | null = null;
 let disposeMapKeySeat: (() => void) | null = null;
 let disposeMapKeyTimeBarSpec: (() => void) | null = null;
+let disposeMapKeyFraming: (() => void) | null = null;
 
 /**
  * Seat the on-map key beside the map controls on the desktop shell, and
@@ -741,9 +756,71 @@ function withTerrainCoverage(
   };
 }
 
+/**
+ * The active framing's coverage caution (D-0.7.0-051; the S4 handoff), the
+ * ONE render site since 2026-09-10 (owner: the sentence used to pop up on
+ * the minimap itself on every click AND repeat, word for word, in the
+ * conditions summary caveat; both were retired here, src/config/framings.ts
+ * and src/state/display-summary.ts). `userFacingCoverageClause` supplies the
+ * identical user-facing text those two sites used to render.
+ *
+ * Independent of `hazardKey()` (see `withFrameCoverage` below) so it never
+ * vanishes just because the active surface is not North America Drought.
+ * It is also independent of WHICH layers are active: this sentence is
+ * framing provenance and is true whichever hazard is displayed.
+ */
+function frameCoverageNote(): string {
+  const selection = getFraming();
+  const framing = selection === null || selection === 'all' ? null : selection;
+  const def = framing !== null ? FRAMINGS[framing] : undefined;
+  if (def?.coverageNote === undefined) return '';
+  // NOT gated on isUsScopeCautionLayer, deliberately, and the S23 gate is the
+  // reason. This sentence is FRAMING PROVENANCE ("the monthly North American
+  // Drought Monitor informs the minimap across the prairie provinces"), which
+  // is true whichever hazard is displayed. It came from the minimap's own
+  // `.shell-minimap-note`, which was UNGATED. The predicate belonged to the
+  // separate US-scope CAVEAT in display-summary.ts, which excluded
+  // `nadm-drought` and `sst-anomaly` because a "this display is US-scoped"
+  // caution is meaningless for a product that is already tri-national or
+  // global. Applying that gate to this text suppressed it on exactly the
+  // default drought boot, where NADM is the active layer, and took three
+  // s4-minimap cases red. The caveat render site is gone now, so the
+  // predicate has no remaining consumer here.
+  return userFacingCoverageClause(def.coverageNote);
+}
+
+/**
+ * Fold the framing coverage caution into whatever key the active layer set
+ * already earned, OR stand up a minimal key of its own when nothing else
+ * would render one (the stations-only or no-active-hazard case): a coverage
+ * caution that only showed up when some OTHER key happened to be visible
+ * would silently vanish exactly when the display is otherwise quiet, which
+ * is the case that most needs the honesty (FIRE-09 precedent:
+ * `withTerrainCoverage` rides an existing key instead, but the hillshade
+ * note is a bonus qualification, not a standing coverage-honesty contract).
+ */
+function withFrameCoverage(spec: KeySpec | null, coverage: string): KeySpec | null {
+  if (coverage.length === 0) return spec;
+  const html =
+    '<span class="map-key-qualification" data-frame-coverage>' +
+    `${escapeHtml(coverage)}.</span>`;
+  if (spec === null) {
+    return { label: 'Map coverage', ariaLabel: `${coverage}.`, itemsHtml: html };
+  }
+  return {
+    ...spec,
+    ariaLabel: `${spec.ariaLabel} ${coverage}.`,
+    itemsHtml: spec.itemsHtml + html
+  };
+}
+
 /** The key the active layer set earns, or null to hide the strip. */
 function activeKey(): KeySpec | null {
-  return withTerrainCoverage(hazardKey(), registry.getActiveKeys());
+  const active = registry.getActiveKeys();
+  return withFrameCoverage(
+    withTerrainCoverage(hazardKey(), active),
+    frameCoverageNote()
+  );
 }
 
 /** The condition-surface key, before shared reference qualifications. */
@@ -814,6 +891,7 @@ export function initMapKey(): void {
   disposeMapKeyOverflow?.();
   disposeMapKeySeat?.();
   disposeMapKeyTimeBarSpec?.();
+  disposeMapKeyFraming?.();
   const layout = watchMapKeyLayout(host);
   disposeMapKeyLayout = layout.dispose;
   disposeMapKeySeat = watchMapKeySeat(host);
@@ -1048,6 +1126,10 @@ export function initMapKey(): void {
     update();
   });
   disposeMapKeyTimeBarSpec = onTimeBarSpecChange(update);
+  // A framing click never fires a registry event (D-0.7.0-039: camera-only,
+  // no layer write), so without this the coverage caution above would only
+  // refresh on the NEXT unrelated key change.
+  disposeMapKeyFraming = onFramingChange(update);
 
   registry.on('change', update);
   // Every status transition can change the strip now that a loading key

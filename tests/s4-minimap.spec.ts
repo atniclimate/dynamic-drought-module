@@ -417,10 +417,15 @@ test.describe('S4b minimap', () => {
     );
     // Camera exclusivity (S2): one camera vocabulary at a time.
     expect(await search(page)).not.toContain('region=');
-    // Coverage honesty: the caption carries the user-facing clause.
+    // Coverage honesty relocated off the popped-up caption (2026-09-10,
+    // owner ask) and onto the on-map key, its one home now: the caption
+    // still names the framing but never repeats the coverage sentence,
+    // and the key (whatever hazard is active; the default boot's US
+    // Drought Monitor here) carries it instead.
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-note'),
-    ).toContainText(
+    ).not.toContainText('North American Drought Monitor');
+    await expect(page.locator('#map-key')).toContainText(
       'North American Drought Monitor informs the minimap across the border',
     );
     await expect(
@@ -447,11 +452,13 @@ test.describe('S4b minimap', () => {
     ).toHaveCount(0);
     await region.click();
     await expect(page.locator('#region-select')).toHaveValue('framing:pacific-coast');
-    // Coverage copy stays a separate sentence; it does not substitute
-    // for the geometry provenance.
+    // Coverage copy stays out of the caption (relocated to the on-map
+    // key, 2026-09-10) and never substitutes for the geometry provenance,
+    // which the accessible name above still carries on its own.
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-note'),
-    ).toContainText(
+    ).not.toContainText('North American Drought Monitor');
+    await expect(page.locator('#map-key')).toContainText(
       'North American Drought Monitor informs the minimap across the border',
     );
   });
@@ -557,10 +564,12 @@ test.describe('S4b minimap', () => {
       window.location.search.includes('framing=mexico'),
     );
     // The Mexico coverage sentence distinguishes the monthly minimap from
-    // place and briefing capability.
+    // place and briefing capability; it renders on the on-map key now
+    // (2026-09-10), never in the caption, which names only the framing.
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-note'),
-    ).toContainText(
+    ).not.toContainText('North American Drought Monitor');
+    await expect(page.locator('#map-key')).toContainText(
       'North American Drought Monitor informs this minimap in Mexico',
     );
     await page.locator('.shell-minimap-map .shell-minimap-all').click();

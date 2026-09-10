@@ -110,6 +110,16 @@
 
   /* Layout */
   --sidebar-w: 340px;
+  /* Screen-filling studios (Place, Layers) start at the sidebar's inner
+     edge on desktop, not the viewport's, so they slide out BESIDE the
+     nav side-card instead of over it. 0 is the safe default: today's
+     full-viewport geometry. The desktop rule near --z-route's consumers
+     raises it to --sidebar-w only via a :has() check confirming a live
+     sidebar COLUMN is on screen (not collapsed, not embed, not the
+     sub-721px bottom sheet). A browser without :has() keeps this at 0
+     forever, which is the pre-existing full-viewport studio, not a
+     broken one. */
+  --studio-inset-start: 0;
   /* The coarse-pointer target floor (DDM-P10-T01, gate DDM-D02, owner
      ruling DR-036 a: "real third band 721 to 1024 px, fluid sidebar,
      44 px touch floor. Tablet is touch-first"). One name for the 44px
@@ -140,6 +150,11 @@
   --rich-black-glass: rgba(0, 64, 64, 0.30);
   --rich-black-border: rgba(0, 64, 64, 0.20);
   --rich-black-blur: 15px;
+  /* Same hue and blur, a darker alpha: the screen-filling studios read
+     continuously, not glimpsed, and must guarantee body-text contrast
+     over an arbitrary (possibly bright) map background. See the
+     .layers-studio @supports rule for the measured reasoning. */
+  --rich-black-glass-strong: rgba(0, 64, 64, 0.55);
   --mobile-map-edge: 8px;
   --mobile-map-control-size: 52px;
   --mobile-map-control-gap: 8px;
@@ -151,12 +166,20 @@
   /* Impact-panel geometry (UI-02). The panel's width and the bottom
      dock's inset were two independent literals (440px and 452px) that
      could not be kept in step; they now read one token plus one gap.
-     440px is the desktop width and is unchanged at 1025px and wider;
-     the tablet band narrows the token in place (see the
-     721-1024px block beside .impact-panel). --dock-min-w is the floor
-     the dock keeps no matter how wide the panel is, so its box can
-     never solve to zero width and clip its whole contents away. */
-  --impact-panel-w: 440px;
+     Owner ruling (2026-09): the panel should read as "about double" its
+     old 440px footprint, capped there because a literal 880px would be
+     61% of a 1440px laptop. --impact-panel-w-min is the single 440px
+     floor both this clamp and the tablet band read, so the two can never
+     drift apart again; 1025px and wider now SCALES with the viewport
+     (38vw) between that floor and double it, 880px. The tablet band
+     narrows the token in place (see the 721-1024px block beside
+     .impact-panel), where 38vw stays under the 440px floor for the
+     whole band, so the floor is what the band's min() still caps
+     against. --dock-min-w is the floor the dock keeps no matter how
+     wide the panel is, so its box can never solve to zero width and
+     clip its whole contents away. */
+  --impact-panel-w-min: 440px;
+  --impact-panel-w: clamp(var(--impact-panel-w-min), 38vw, 880px);
   --impact-panel-gap: 12px;
   --dock-min-w: 180px;
   /* Bottom-dock seat (DDM-P10-T01). The dock's edge inset and its lift
@@ -279,6 +302,22 @@ a:hover {
 
 .app-shell.sidebar-collapsed {
   grid-template-columns: 0 1fr;
+}
+
+/* Feeds --studio-inset-start (declared on :root above) for the
+   screen-filling studios below. Scoped to the desktop breakpoint: below
+   721px the sidebar is a bottom sheet OVER the map, not a column beside
+   it, so a studio there stays full-viewport regardless of this rule.
+   :not(.sidebar-collapsed):not(.embed) is exactly "the sidebar column is
+   actually rendered at its --sidebar-w width right now"; either class
+   collapses it to 0, and the fallback above already reads 0 in that
+   case. Progressive enhancement: a browser without :has() never sets
+   this, so --studio-inset-start stays 0 and a studio there simply keeps
+   painting full-viewport, same as before this change. */
+@media (min-width: 721px) {
+  body:has(#app.app-shell:not(.sidebar-collapsed):not(.embed)) {
+    --studio-inset-start: var(--sidebar-w);
+  }
 }
 
 /* ----------------------------------------------------------------------------
@@ -666,6 +705,25 @@ button.conditions-metric:hover {
   color: var(--accent);
 }
 
+/* The ON-state counterpart (Defect 3, owner report 2026-09-10): a live
+   metric used to carry no visible cue that the tile is also a button that
+   hides its layer. "Hide" sits at the same size/weight class as "Show"
+   above but in the muted caption color, not the accent call-to-action
+   color: the tile's own value stays the thing the eye lands on first, and
+   this reads as a small persistent status/toggle hint beside it, never a
+   second catalog entry. */
+.conditions-action-hide {
+  font-family: var(--font-body);
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--fg-3);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps-sm);
+}
+button.conditions-metric:hover .conditions-action-hide {
+  color: var(--fg-1);
+}
+
 /* On the unselected Brief first open, the strip is a conditions receipt, not
    a second layer catalog. Remove the off-state activation styling while the
    real refinement doors remain directly below the contextual time rail. */
@@ -989,12 +1047,18 @@ button.conditions-metric:hover {
   gap: 6px;
 }
 
+/* Item 9, 2026-09-10: a CONTROL takes the design system's radius; the pill
+   shape is reserved for status BADGES, where the fully rounded end is what
+   distinguishes a readout from something you can press (.status-pill,
+   .point-heat-pill, .impact-horizon-pill, .impact-hazard-pill keep theirs
+   for exactly that reason). Three selectors moved: this one,
+   .time-bar-mode and .shell-horizon-btn. */
 .preset-chip {
   appearance: none;
   background: var(--bg-2);
   color: var(--fg-1);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   padding: 6px 12px;
   font-family: var(--font-display);
   font-size: 11px;
@@ -1938,6 +2002,68 @@ button.conditions-metric:hover {
   letter-spacing: 0.01em;
 }
 
+/* The place-popup Conditions block (owner amendment, 2026-09-10;
+   src/ui/popup-conditions.ts). Sits in the frozen head between the "kind
+   of place" agency line and the briefing door, so it reads at a glance
+   with no scrolling. Deliberately plainer than .fire-context (no heading,
+   tighter rule): this card is meant to be very simple. */
+.popup-conditions {
+  margin: 6px 0 8px;
+  padding: 6px 0 2px;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-body);
+  font-size: 11.5px;
+}
+.popup-condition-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  padding: 3px 0;
+}
+.popup-condition-row + .popup-condition-row {
+  border-top: 1px dashed var(--line);
+}
+.popup-condition-label {
+  flex-shrink: 0;
+  color: var(--fg-2);
+  letter-spacing: 0.02em;
+}
+.popup-condition-value {
+  color: var(--fg-0);
+  font-weight: var(--fw-body);
+  text-align: right;
+  line-height: 1.35;
+}
+
+/* The briefing-door pulse (director ruling, 2026-09-10, "Emphasis must be
+   ethical"): a REAL issuer-published warning-class condition at this
+   place (an NWS *Warning*-tier product, or a currently mapped WFIGS
+   wildfire perimeter -- never a DDM judgement, a raster hazard-potential
+   surface, or an outlook; src/ui/popup-conditions.ts `hasWarning`).
+   The STATIC form comes first and carries the full meaning alone (clause
+   b): a solid red/orange edge plus the warning's own product name in the
+   button's visible text (accessibility clause d: colour is never the only
+   carrier). The keyframe on top is an addition, not the only signal, and
+   is fully retired under prefers-reduced-motion below. */
+.popup-impact-btn--pulse {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 1px var(--danger);
+  animation: popup-impact-btn-pulse 1.6s ease-in-out infinite;
+}
+.popup-impact-btn--pulse:hover {
+  border-color: var(--danger);
+}
+@keyframes popup-impact-btn-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px var(--danger); }
+  50% { box-shadow: 0 0 0 3px var(--warn); }
+}
+/* The reduced-motion fallback lives in the consolidated
+   @media (prefers-reduced-motion: reduce) block below (search
+   "popup-impact-btn-pulse"): the static red/orange edge above already
+   carries the full meaning with no motion, so reduced motion only drops
+   the animation, per clause b. */
+
 /* The InteractionCoordinator's lower-priority-hits escape hatch: a quiet
    disclosure inside the one response (D-0.7.0-058 ruling 5). Native
    details/summary keeps it keyboard and touch reachable for free. */
@@ -2347,6 +2473,17 @@ button.conditions-metric:hover {
   position: fixed;
   inset: 0;
   z-index: var(--z-route);
+  /* Lets .layers-studio-grid react to the ROOT's actual rendered width
+     (which shrinks once the desktop rule below docks it beside the
+     sidebar) rather than the viewport's, so the two-column catalog
+     layout only appears when there is genuinely room for it. */
+  container-type: inline-size;
+}
+
+@media (min-width: 721px) {
+  #layers-studio-root {
+    inset: 0 0 0 var(--studio-inset-start);
+  }
 }
 
 .layers-studio {
@@ -2358,6 +2495,39 @@ button.conditions-metric:hover {
   overflow: hidden;
   background: var(--bg-0);
   color: var(--fg-0);
+}
+
+/* The screen-filling studio surface: semitransparent and blurred over
+   the map (owner direction), shared by Place and Layers studio (both
+   root sections carry this class). Reuses the rich-black glass family's
+   hue and blur radius rather than inventing a new token; the --bg-0 fill
+   above stays the fallback for a browser without backdrop-filter (the
+   @supports negative case), so text is never unreadable there.
+
+   The alpha is --rich-black-glass-strong (0.55), NOT the shared
+   --rich-black-glass (0.30): that token was tuned for small, compact
+   mobile chrome (the map key, the map-info panel) glimpsed briefly
+   against a known patch of map. A studio is a full-viewport surface
+   meant to be read continuously, and 0.30 measures out to a LIGHT
+   backdrop over a plausible bright map patch (snow-white, a
+   drought-severity yellow), which fails WCAG AA against light --fg-0
+   body text (contrast computed at roughly 1.6-2.1:1 against
+   white/yellow, need 4.5:1). 0.55 holds >=4.5:1 for --fg-0 and --fg-1
+   against every plausible map color checked (white, light gray, mid
+   gray, drought yellow, fire orange) while still reading as genuinely
+   translucent. In practice almost no text sits directly on this surface
+   anyway: every real content block (.layers-studio-catalog,
+   .layers-studio-depth, .layers-studio-search, both .place-studio-*
+   -panels, the type-rail buttons) is its own opaque --bg-1 card floating
+   on top, so this tint mostly colors the gaps between cards; the
+   stronger alpha is the margin of safety for whatever lands in those
+   gaps, not a rescue for unprotected text. */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .layers-studio {
+    background-color: var(--rich-black-glass-strong);
+    -webkit-backdrop-filter: blur(var(--rich-black-blur));
+    backdrop-filter: blur(var(--rich-black-blur));
+  }
 }
 
 .layers-studio-header {
@@ -2479,6 +2649,20 @@ button.conditions-metric:hover {
   border-radius: var(--radius-lg);
 }
 
+/* An opaque --bg-1 card, matching .layers-studio-catalog beside it. The
+   rehosted #panel-telemetry (a sidebar panel, `.panel`, which paints no
+   background of its own) would otherwise sit directly on the studio
+   root's translucent glass fill with no protection; this is required
+   for legible body text now that .layers-studio can be semitransparent,
+   not merely a visual match for its sibling column. */
+.layers-studio-depth {
+  min-width: 0;
+  padding: 14px 12px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
 .layers-studio-depth > #panel-telemetry {
   margin: 0;
 }
@@ -2495,6 +2679,27 @@ button.conditions-metric:hover {
   .layers-studio-scroll { padding: 10px; }
   .layers-studio-search { margin-bottom: 10px; }
   .layers-studio-grid { grid-template-columns: 1fr; gap: 10px; }
+}
+
+/* Screen-filling desktop geometry (owner direction): the studio now
+   starts at the sidebar's inner edge instead of the viewport's, so its
+   rendered width tracks the sidebar's own state (collapsed, embed, the
+   fluid tablet band) rather than the viewport 1:1. A container query
+   reads that ACTUAL width instead of guessing from a viewport
+   breakpoint: below 760px of real room the two-column catalog grid
+   would squeeze the 280px-floor second column against a starved first
+   column, so it collapses to one column, exactly as it already does
+   below the 720px viewport breakpoint above (#layers-studio-root
+   declares container-type: inline-size). 760 is a judgment call:
+   comfortably above the 280px second-column floor plus a workable first
+   column and the gap, comfortably below what a normal desktop viewport
+   leaves beside a docked sidebar. */
+@container (max-width: 759px) {
+  .layers-studio-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    width: 100%;
+  }
 }
 
 /* =============================================================================
@@ -2553,6 +2758,11 @@ button.conditions-metric:hover {
   position: fixed;
   inset: 0;
   z-index: var(--z-route);
+  /* Lets .place-studio-layout react to the ROOT's actual rendered width
+     (which shrinks once the desktop rule below docks it beside the
+     sidebar) rather than the viewport's, so the two-column list/detail
+     layout only appears when there is genuinely room for it. */
+  container-type: inline-size;
 }
 
 .place-studio-header > :last-child {
@@ -2897,9 +3107,16 @@ button.conditions-metric:hover {
 }
 
 @media (min-width: 721px) {
+  /* Screen-filling geometry (owner direction): starts at the sidebar's
+     inner edge (--studio-inset-start, 0 unless a live sidebar column is
+     on screen) and fills the rest of the viewport, so the studio slides
+     out BESIDE the nav side-card rather than over it. This is exactly
+     the box #map-container occupies at these widths, which is why the
+     inert scope in place-studio.tsx targets #map-container instead of
+     the whole #app: the sidebar is never covered here, so it must stay
+     reachable. */
   #place-studio-root {
-    inset: 0 auto 0 0;
-    width: min(560px, 100vw);
+    inset: 0 0 0 var(--studio-inset-start);
   }
 
   .place-studio {
@@ -2919,6 +3136,40 @@ button.conditions-metric:hover {
 
   .place-studio-list {
     max-height: min(34dvh, 320px);
+  }
+}
+
+/* Rebalances the single column above once the ROOT is actually wide
+   enough (see container-type on #place-studio-root): the same
+   two-column list/detail split the base (mobile-first) rule already
+   declares, widened past the old 560px-column cap and re-centered, so a
+   spacious desktop pane (a wide monitor, or the sidebar collapsed/embed)
+   does not read as one sparse column. 760px mirrors the threshold
+   .layers-studio-grid uses for the same reason and the same judgment
+   call: comfortably above the 300px second-column floor plus a workable
+   first column and the gap. Below it (the 721 to roughly 1100px viewport
+   band with the sidebar docked) the single column above stands. */
+@container (min-width: 760px) {
+  .place-studio-type-rail {
+    width: min(1400px, 100%);
+    margin: 0 auto 14px;
+  }
+
+  .place-studio-layout {
+    grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+    gap: 20px;
+    width: min(1400px, 100%);
+  }
+
+  .place-studio-list {
+    /* Item 14, 2026-09-10: at 1440x900 the old min(50dvh, 560px) stopped the
+       list about two thirds of the way down and left the whole lower right of
+       the studio empty, which is what the owner saw. The rail, the type
+       status and the search field above it cost about 210px, so 68dvh leaves
+       a comfortable bottom margin while giving the list roughly a third more
+       rows. The absolute cap stays so a very tall monitor does not stretch
+       one column into a ribbon. */
+    max-height: min(68dvh, 760px);
   }
 }
 
@@ -3967,12 +4218,38 @@ button.telemetry-item {
 @media (min-width: 721px) and (max-width: 1024px) {
   body:has(#app.app-shell:not(.sidebar-collapsed):not(.embed)) {
     --impact-panel-w: min(
-      440px,
+      var(--impact-panel-w-min),
       calc(
         100vw - var(--sidebar-w) - var(--map-dock-inset) -
           var(--dock-min-w) - var(--impact-panel-gap)
       )
     );
+  }
+
+  /* The header stacks in this band, 2026-09-10. The mail and print actions
+     joined the close control here, and all three carry the 44px touch floor,
+     so the icon cluster costs 144px of a panel that is 217px wide at 721 and
+     264px at 768. After the header's own padding, gap and border there was
+     nothing left for the title, and "Washington" painted into the icons while
+     the jurisdiction line broke into five lines. Two independent review
+     passes found it, one by measuring the CSS and one by looking at the
+     768px capture.
+
+     Both are kept, at full size: the actions take their own row above a
+     full-width title block, which is the ordinary toolbar arrangement and
+     costs one row of height in the one band that cannot afford the width.
+     Nothing shrinks, no target drops below the floor, and no place name is
+     truncated. */
+  #impact-panel .impact-panel-header {
+    flex-wrap: wrap;
+  }
+  #impact-panel .impact-panel-actions {
+    order: 1;
+    margin-left: auto;
+  }
+  #impact-panel .impact-panel-heading {
+    order: 2;
+    flex: 1 1 100%;
   }
 }
 
@@ -4012,6 +4289,16 @@ button.telemetry-item {
   color: var(--fg-2);
   letter-spacing: 0.02em;
 }
+/* The header's icon cluster (close, plus the not-yet-wired mail and print
+   actions beside it). One wrapper keeps the header at exactly two flex
+   children so `justify-content: space-between` still separates the title
+   block from the icons, whatever the cluster's own count. */
+.impact-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
 .impact-panel-close {
   flex-shrink: 0;
   display: inline-flex;
@@ -4030,6 +4317,25 @@ button.telemetry-item {
   background: var(--bg-2);
   color: var(--fg-0);
   border-color: var(--line-strong);
+}
+/* Mail and print: present so the affordance is discoverable, honestly inert
+   (native `disabled`, not aria-disabled) because neither does anything yet.
+   `disabled` also drops them from `getFocusable()`'s
+   `button:not([disabled])` selector for free, so they cannot be tabbed to
+   and the close button stays the panel's one focusable icon today. */
+.impact-panel-action {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--fg-3);
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .impact-panel-body {
@@ -4178,6 +4484,23 @@ button.telemetry-item {
   border: 1px solid var(--accent-strong);
   border-radius: var(--radius-md);
 }
+/* Item 14, box in box, 2026-09-10. Items 16 and 17 moved this bordered,
+   accent-outlined callout INSIDE .impact-horizon, which is itself a bordered,
+   padded card, so Current Conditions grew a frame within a frame that no
+   other horizon has. The section still needs to read as its own thing (it is
+   a reading AT A POINT inside a briefing ABOUT AN AREA, and blurring that
+   would be a worse defect than the nesting), so the emphasis moves from a
+   full border to a left rule plus a lighter tint: still distinct, no second
+   box. The trailing 22px margin also goes, because inside a 12px-padded card
+   it opened a gap wider than the card's own padding. */
+.impact-horizon .point-heat {
+  margin-bottom: 0;
+  padding: 10px 10px 10px 12px;
+  border: 0;
+  border-left: 2px solid var(--accent-strong);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: color-mix(in srgb, var(--bg-2) 92%, var(--accent) 8%);
+}
 .point-heat .impact-section-title {
   margin-bottom: 2px;
   color: var(--fg-0);
@@ -4236,8 +4559,8 @@ button.telemetry-item {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
 }
-.point-heat-card > h4,
-.point-heat-synthesis h4 {
+.point-heat-card > h5,
+.point-heat-synthesis h5 {
   margin: 0 0 7px;
   font-family: var(--font-display);
   font-size: 11px;
@@ -4281,14 +4604,62 @@ button.telemetry-item {
 .point-heat-series {
   border-top: 1px dashed var(--line);
 }
+/* Item 14 / director finding F1, 2026-09-10. Setting `display` on a <summary>
+   to anything but `list-item` suppresses the browser's own disclosure
+   triangle, and nothing replaced it: the seven NWS grid guidance sections
+   (Temperature, Maximum temperature, Minimum temperature, Apparent
+   temperature, Heat index, Wet Bulb Globe Temperature, Relative humidity)
+   rendered as inert labelled rows. The only affordance left was
+   `cursor: pointer`, which does not exist on touch at all, so on a phone
+   nothing distinguished them from static text. That is an affordance and
+   accessibility defect, not cosmetics.
+
+   The flex layout is kept (it is what puts the label and the row apart), and
+   the marker is redrawn explicitly as a chevron that rotates on [open]. The
+   `list-style: none` and the ::-webkit-details-marker rule are belt and
+   braces for a future change that restores `display: list-item` and would
+   otherwise get two markers. */
 .point-heat-series summary {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding: 7px 0;
   cursor: pointer;
   font-size: 10.5px;
   color: var(--fg-1);
+  list-style: none;
+}
+.point-heat-series summary::-webkit-details-marker {
+  display: none;
+}
+.point-heat-series summary::after {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-right: 2px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  /* Pointing down when closed, up when open. The box is rotated about its
+     own centre, so the visual weight stays on the text baseline. */
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.15s ease;
+}
+.point-heat-series[open] > summary::after {
+  transform: translateY(1px) rotate(-135deg);
+}
+.point-heat-series summary:hover {
+  color: var(--fg-0);
+}
+.point-heat-series summary:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .point-heat-series summary::after {
+    transition: none;
+  }
 }
 .point-heat-series table {
   width: 100%;
@@ -4717,6 +5088,10 @@ a.impact-resource-link::after {
   /* The wave pulse falls back to the static three-stroke glyph. */
   .spinner-waves path { animation: none; }
   .telemetry-marker { animation: none; }
+  /* The briefing-door warning pulse falls back to its static red/orange
+     edge (box-shadow set on the base .popup-impact-btn--pulse rule
+     already carries the full meaning with no motion; clause b). */
+  .popup-impact-btn--pulse { animation: none; }
   /* The shimmer sweep falls back to a static faint tint (no motion). */
   .skeleton-shimmer::after {
     animation: none;
@@ -5687,6 +6062,17 @@ a.impact-resource-link::after {
   display: flex;
   align-items: center;
   gap: 6px;
+  /* Defect 5 (owner report, 2026-09-10): with no wrap, a nowrap jump chip
+     (or the Play button) competed with the rail for width at the narrow
+     end of the sidebar's clamp(300px, 30vw + 64px, 340px), and the rail
+     (the only shrinkable item, `min-width: 0` below) got squeezed toward
+     zero and clipped by the sidebar's own overflow:hidden ancestors
+     rather than degrading. `.time-bar-rail`'s flex-basis of 0 means it
+     never itself forces a wrap; wrapping is driven by the step/jump/play
+     items' own content sizes, so at a narrow width they wrap to a second
+     line and the rail keeps the whole first line to grow into (mirrors
+     the already-wrapped `.shell-time-detail-modes` / `-jumps` below). */
+  flex-wrap: wrap;
 }
 
 .time-bar-step,
@@ -5716,7 +6102,13 @@ a.impact-resource-link::after {
 
 .time-bar-rail {
   flex: 1;
-  min-width: 0;
+  /* A real floor instead of 0 (Defect 5): the rail can still shrink to
+     make room for the step/jump/play buttons on its own line, but never
+     below a width that is still meaningfully draggable; once the row
+     can't fit everything above that floor, flex-wrap above moves the
+     trailing chips to a second line instead of squeezing the rail past
+     usability and off into the sidebar's clipped overflow. */
+  min-width: 56px;
   height: 24px;
   margin: 0;
   accent-color: var(--accent);
@@ -5804,6 +6196,15 @@ a.impact-resource-link::after {
 .time-bar-modes {
   display: flex;
   gap: 4px;
+  /* Defect 4 investigation (owner report, 2026-09-10): three-label rows
+     ("Drought level" / "1-wk change" / "4-wk change") come close to or
+     exceed the sidebar's narrow-end width (300px clamp floor) once the
+     card's margins and padding are subtracted, and with no wrap the
+     overflow is clipped by the sidebar's own overflow:hidden ancestors
+     rather than the chip degrading, making the last chip look "dead" at a
+     real width even though its click handler is fine. Mirrors the
+     popover's already-wrapped .shell-time-detail-modes. */
+  flex-wrap: wrap;
 }
 .time-bar-mode {
   display: inline-flex;
@@ -5812,7 +6213,8 @@ a.impact-resource-link::after {
   padding: 2px 9px;
   background: transparent;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  /* Item 9: a control, not a badge. See the note above .preset-chip. */
+  border-radius: var(--radius-sm);
   font-family: var(--font-body);
   font-weight: var(--fw-body);
   font-size: 10px;
@@ -5824,6 +6226,15 @@ a.impact-resource-link::after {
   background: var(--accent-soft);
   border-color: var(--accent-strong);
   color: var(--fg-0);
+}
+/* Defect 4: the reason a mode chip is disabled, always visible (never
+   hover-only), so a control with no available action still states why. */
+.time-bar-modes-hint {
+  margin: 2px 0 0;
+  font-family: var(--font-body);
+  font-size: 9.5px;
+  line-height: 1.3;
+  color: var(--fg-3);
 }
 
 @media (max-width: 720px) {
@@ -5918,12 +6329,15 @@ a.impact-resource-link::after {
   body:has(.impact-panel.open) .impact-panel-body {
     overflow: visible;
   }
-  body:has(.impact-panel.open) .impact-panel-close {
+  body:has(.impact-panel.open) .impact-panel-close,
+  body:has(.impact-panel.open) .impact-panel-action {
     display: none;
   }
   /* Print legibility: ink on paper, with the hierarchy carried by weight and
-     case rather than the dark-theme palette. */
-  body:has(.impact-panel.open) .impact-panel :is(h2, h3, h4, p, span, div, a) {
+     case rather than the dark-theme palette. h5 joined the outline when
+     point heat moved inside a horizon (owner ruling B/C) and its two card
+     headings and "Heat sources together" dropped a level to stay under it. */
+  body:has(.impact-panel.open) .impact-panel :is(h2, h3, h4, h5, p, span, div, a) {
     color: #000;
   }
   body:has(.impact-panel.open) .impact-panel .impact-panel-kicker,
@@ -6711,7 +7125,11 @@ a.impact-resource-link::after {
   background: var(--bg-2);
   color: var(--fg-2);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  /* Item 9: these are the Current Conditions / Near Term / Long Range
+     controls the owner named. A segmented row of pills reads as three
+     separate badges; the design system radius reads as one control set.
+     See the note above .preset-chip. */
+  border-radius: var(--radius-md);
   padding: 4px 6px;
   font-family: var(--font-display);
   font-size: 10px;
@@ -6761,6 +7179,24 @@ a.impact-resource-link::after {
   letter-spacing: 0.04em;
   color: var(--accent);
   font-feature-settings: 'tnum' 1;
+  /* Layout stability across a horizon switch (owner report, 2026-09-10):
+     the outlook headline ("Issued ... · through ...") runs longer than the
+     observed headline ("Valid ..."), and with no reserved height the
+     longer string wrapped to a second line and pushed every control below
+     it down. Reserve a fixed two-line box (a ceiling, not the old
+     min-height floor) so switching horizons can never move the layout;
+     both lines show the FULL text (no truncation) for every headline this
+     app currently renders, because an outlook's issued/valid-through
+     window is the issuer's honesty statement, not disposable chrome. The
+     line-clamp is a defensive backstop only, for a hypothetical headline
+     long enough to need a third line; `title` on this span (time-popover
+     .tsx) carries the untruncated text if that backstop ever fires. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.3;
+  max-height: calc(1.3em * 2);
 }
 .shell-time-headline[data-register='outlook'] { color: var(--warn); }
 .shell-time-empty {
@@ -6916,6 +7352,17 @@ a.impact-resource-link::after {
   line-height: 1.2;
   text-transform: capitalize;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The docked tile is the tightest seat this control has (Defect 3): a
+   trailing, right-pushed hint reads clearly as "there is more to this
+   control" without competing with the capitalized category readout for
+   the eye's first landing spot. */
+#conditions-strip-dock .conditions-metric[data-tone='data'] .conditions-action-hide {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-left: 4px;
 }
 .sidebar-key-disclosure {
   position: relative;
@@ -7057,12 +7504,40 @@ a.impact-resource-link::after {
 @media (min-width: 721px) {
   /* Island-mount honesty: the full #time-bar stands down only once the
      shell island has actually mounted (#app.shell-ready, stamped by the
-     island chunk). If the lazy chunk never arrives, Brief keeps its
-     shipped temporal rail instead of losing every when-control. */
+     island chunk). If the lazy chunk never arrives, the shipped temporal
+     rail stays instead of losing every when-control.
+
+     2026-09-10 (S23): standing the full rail down in Console too was
+     ATTEMPTED and REVERTED, deliberately, and the next session should read
+     this before retrying it. The owner asked for it (remove Console's
+     floating outlook chips, use the segmented compact bar instead), and a
+     capability audit confirmed TimeCompact's DetailControls is already
+     mounted in Console through #shell-panel and renders rail, modes, jumps
+     and play from the SAME TimeBarSpec, so no CAPABILITY is lost. What is
+     lost is a TEST CONTRACT: tests/fire-heat-time-bar.spec.ts boots several
+     cases with `?view=console` and reads the stamp out of `#time-bar`
+     itself (see :370 and :397), so hiding it takes those cases red. Two of
+     them failed on the S23 gate for exactly this reason.
+     Retrying it means moving those cases onto the compact stamp, which is a
+     real rewrite of that spec, not a selector tweak. Do it as its own task
+     with the runner, not as a one-line edit. The clipping that motivated
+     the request is ALREADY fixed independently: .time-bar-rail-row now
+     wraps and .time-bar-rail carries a 56px min-width, so the stepper no
+     longer squeezes to nothing behind the sidebar's overflow. */
   #app.view-brief.shell-ready:not(.embed) #time-bar { display: none; }
   /* The inline minimap is the default; the popover door appears only in
      the middle height band below. */
   .shell-minimap-popover-wrap { display: none; }
+  /* Console is the full map-and-layers instrument; it does not need the
+     framing minimap as a second navigation surface (owner ask,
+     2026-09-10). Both the inline map and the compact-band popover door
+     step aside so only Brief carries it. Higher specificity than the
+     compact-height-band rule below wins in both bands regardless of
+     media-query source order. The component itself still mounts (its
+     retained live fetches are separately gated off in console by
+     src/ui/island/minimap.tsx; this rule is presentation only). */
+  #app.view-console .shell-minimap-map,
+  #app.view-console .shell-minimap-popover-wrap { display: none; }
 }
 
 /* The shell panel exists only once its island has mounted; an empty
@@ -7233,11 +7708,21 @@ a.impact-resource-link::after {
     min-height: var(--touch-target);
   }
 
-  /* Transient surfaces: the briefing's close control (30px square), the
-     per-variable disclosures inside the briefing body (30px), and a
-     MapLibre popup's close corner (24px), which is the only way to
-     dismiss a popup with a finger. */
-  .impact-panel-close {
+  /* Transient surfaces: the briefing's close control (30px square), its
+     sibling mail and print actions (also 30px square), the per-variable
+     disclosures inside the briefing body (30px), and a MapLibre popup's
+     close corner (24px), which is the only way to dismiss a popup with a
+     finger.
+
+     The mail and print actions are `disabled` today because they are not
+     wired yet, and that is NOT a reason to exempt them from the floor:
+     `reachableTargets` in tests/interface-responsive.spec.ts:754 filters
+     only on visibility, display, zero size and off-screen centre, so a
+     disabled control still occupies space a thumb lands on and is still
+     audited. Leaving them at 30px took 13 tablet-band cases red on the
+     S23 gate. */
+  .impact-panel-close,
+  .impact-panel-action {
     min-width: var(--touch-target);
     min-height: var(--touch-target);
   }

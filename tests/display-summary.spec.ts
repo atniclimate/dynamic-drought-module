@@ -1,12 +1,17 @@
 import { test, expect } from '@playwright/test';
 
-import { deriveDisplaySummary } from '../src/state/display-summary';
+import {
+  deriveDisplaySummary,
+  isUsScopeCautionLayer,
+  userFacingCoverageClause
+} from '../src/state/display-summary';
 import type {
   DisplaySummaryInput,
   TimelineSnapshot
 } from '../src/types/display-summary';
 import type { LayerStatus } from '../src/types/layer';
 import { LAYER_DEFS } from '../src/config/layers';
+import { FRAMINGS } from '../src/config/framings';
 import { STATUS_PILL_TEXT } from '../src/ui/island/pill-text';
 
 /**
@@ -160,25 +165,37 @@ test.describe('S3 display summary: the six ruled statuses', () => {
   });
 });
 
-test.describe('S3 display summary: coverage honesty (the framing caveat)', () => {
-  test('Mexico framing over a ready US-scoped surface states the display does not cover Mexico', () => {
+test.describe('S3 display summary: coverage honesty relocated to the on-map key (DDM fix lane, 2026-09-10)', () => {
+  // The framing coverage caution used to lead this module's own caveat AND
+  // pop up a second time on the minimap's own caption (src/ui/island/minimap.tsx)
+  // for the same click: the same sentence, twice, at once. The owner called
+  // the popup noise; the fix retired BOTH renderings in favor of one, the
+  // on-map key (src/ui/map-key.ts). The tests below now prove the NEGATIVE
+  // half of that (this module never re-adds the clause) and unit-test the
+  // two exported building blocks (`isUsScopeCautionLayer`,
+  // `userFacingCoverageClause`) the key now drives directly, since their
+  // only remaining caller is DOM-driven and untestable at this pure layer.
+
+  test('Mexico framing over a ready US-scoped surface adds no caveat here; the on-map key states the caution instead', () => {
     const summary = deriveDisplaySummary(
       input(DROUGHT_KEYS, allReady(DROUGHT_KEYS), { framing: 'mexico' })
     );
-    expect(summary.caveat).toContain('The current display layers do not cover Mexico');
+    expect(summary.caveat).toBeNull();
   });
 
-  test('a ready status over an out-of-coverage framing never reads as unqualified coverage', () => {
+  test('a ready status over an out-of-coverage framing (Boreal & Arctic) also adds no caveat here now', () => {
     const summary = deriveDisplaySummary(
       input(DROUGHT_KEYS, allReady(DROUGHT_KEYS), { framing: 'boreal-arctic' })
     );
-    expect(summary.caveat).not.toBeNull();
+    expect(summary.caveat).toBeNull();
   });
 
-  test('an events-only US-scoped display (wildfire at current) still triggers the Mexico coverage caution', () => {
+  test('an events-only US-scoped display (wildfire at current) still adds no caveat coverage clause here', () => {
     // The wildfire 'current' recipe has no condition surface, only the
-    // NIFC/HMS event pair; NIFC WFIGS is US-scoped, so the framing
-    // caution applies to display LAYERS, not only surfaces.
+    // NIFC/HMS event pair; NIFC WFIGS is US-scoped, so the retired rule
+    // applied to display LAYERS, not only surfaces. The key's own
+    // frameCoverageNote (src/ui/map-key.ts) applies the identical rule via
+    // the same exported isUsScopeCautionLayer, unit-tested below.
     const keys = [...REFERENCE_KEYS, 'nifc-fires', 'hms-smoke'];
     const summary = deriveDisplaySummary(
       input(keys, allReady(keys), { cluster: 'wildfire', framing: 'mexico' })
@@ -186,29 +203,39 @@ test.describe('S3 display summary: coverage honesty (the framing caveat)', () =>
     expect(summary.primary).toContain(
       'Current Mapped Fire Perimeters (National Interagency Fire Center, NIFC)'
     );
-    expect(summary.caveat).toContain('The current display layers do not cover Mexico');
+    expect(summary.caveat).toBeNull();
   });
 
-  test('a substantive second coverage clause survives (Alaska & Northwest); authoring guidance is still dropped', () => {
-    const alaska = deriveDisplaySummary(
-      input(DROUGHT_KEYS, allReady(DROUGHT_KEYS), { framing: 'alaska-northwest' })
-    );
-    expect(alaska.caveat).toContain('US display layers cover Alaska variably');
-    expect(alaska.caveat).toContain(
+  test('isUsScopeCautionLayer: the exemption rule the on-map key now applies, unit-tested directly since it no longer drives a caveat here', () => {
+    expect(isUsScopeCautionLayer({ key: 'usdm', role: 'surface' })).toBe(true);
+    expect(isUsScopeCautionLayer({ key: 'nifc-fires', role: 'event' })).toBe(true);
+    expect(isUsScopeCautionLayer({ key: 'telemetry', role: 'stations' })).toBe(true);
+    // The two named exceptions: the ocean anomaly is global, NADM is the
+    // tri-national continental product.
+    expect(isUsScopeCautionLayer({ key: 'sst-anomaly', role: 'surface' })).toBe(false);
+    expect(isUsScopeCautionLayer({ key: 'nadm-drought', role: 'surface' })).toBe(false);
+    // Reference layers never count, regardless of key.
+    expect(isUsScopeCautionLayer({ key: 'hillshade', role: 'reference' })).toBe(false);
+  });
+
+  test('userFacingCoverageClause keeps a substantive second clause (Alaska & Northwest) but drops the authoring-guidance tail (Boreal & Arctic), exercised directly now that its only caller is the DOM-driven on-map key', () => {
+    const alaskaNote = FRAMINGS['alaska-northwest'].coverageNote;
+    if (!alaskaNote) {
+      throw new Error('Alaska & Northwest must define a coverageNote for this test.');
+    }
+    const alaska = userFacingCoverageClause(alaskaNote);
+    expect(alaska).toContain('US display layers cover Alaska variably');
+    expect(alaska).toContain(
       'Yukon and British Columbia are outside US-scoped sources'
     );
 
-    // The guidance tails (naming the shell or the status machinery)
-    // never surface to the user.
-    const mexico = deriveDisplaySummary(
-      input(DROUGHT_KEYS, allReady(DROUGHT_KEYS), { framing: 'mexico' })
-    );
-    expect(mexico.caveat).not.toContain('the shell');
-    const boreal = deriveDisplaySummary(
-      input(DROUGHT_KEYS, allReady(DROUGHT_KEYS), { framing: 'boreal-arctic' })
-    );
-    expect(boreal.caveat).toContain('Mostly outside US-scoped display sources');
-    expect(boreal.caveat).not.toContain('per-layer status');
+    const borealNote = FRAMINGS['boreal-arctic'].coverageNote;
+    if (!borealNote) {
+      throw new Error('Boreal & Arctic must define a coverageNote for this test.');
+    }
+    const boreal = userFacingCoverageClause(borealNote);
+    expect(boreal).toContain('Mostly outside US-scoped display sources');
+    expect(boreal).not.toContain('per-layer status');
   });
 
   test('a globally-scoped surface (Ocean Temperature Anomaly) does not trigger the US-coverage caution', () => {
