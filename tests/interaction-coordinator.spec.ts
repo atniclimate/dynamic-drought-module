@@ -378,3 +378,77 @@ test.describe('InteractionCoordinator: one click, one response', () => {
     await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
   });
 });
+
+/**
+ * The Conditions block's ABSENCE claims, pinned (S24, 2026-09-10).
+ *
+ * The block shipped in the S23 popup lane with no test on any of its
+ * sentences, and an adversarial pass found two places where it turned "we do
+ * not know" into "there is nothing here". Nothing about a boundary popup is
+ * worth more than that distinction: a person reads this card to decide
+ * whether to prepare, and a false all-clear is the one failure this project
+ * treats as unacceptable. These cases exist so a future change cannot quietly
+ * restore either overstatement with a green suite.
+ */
+test.describe('the Conditions block never claims an absence it did not read', () => {
+  const WWA_QUERY = '/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/1/query';
+
+  /** Boot the collision fixture WITH the NWS alerts layer, answering its
+   * query with `body`, and open the reservation popup. */
+  async function bootWithAlerts(
+    page: Page,
+    fulfil: (route: import('@playwright/test').Route) => Promise<void> | void
+  ): Promise<void> {
+    await page.route((url) => url.pathname.endsWith(WWA_QUERY), fulfil);
+    await gotoApp(page, '?view=console&layers=aiannh,bia-reservations,nws-alerts');
+    await waitForLayerSettled(page, 'aiannh');
+    await waitForLayerSettled(page, 'bia-reservations');
+    await clickCenterUntilPrimary(page, 'Synthetic Reservation Fixture', 1);
+  }
+
+  test('a condition layer that failed to load is named as unread, never as nothing here and never as nothing asked for', async ({
+    page
+  }) => {
+    // The refresh-failure path clears the displayed snapshot and reports
+    // `error` while KEEPING the fill layer and the active key
+    // (src/layers/nws-alerts.ts), so a reader that asks only "is the layer
+    // on and does its fill exist" sees an empty query and cannot tell a
+    // quiet sky from a broken pipe.
+    await bootWithAlerts(page, (route) => route.abort());
+
+    const conditions = page.locator('.maplibregl-popup-content .popup-conditions');
+    await expect(conditions).toBeVisible();
+    // An activation that never succeeded leaves no active key and no
+    // rendered fill, so the alerts row itself is absent; what must NOT
+    // happen is the card describing that as a quiet sky, or as nobody
+    // having asked for the layer at all.
+    await expect(conditions).not.toContainText('No active');
+    await expect(conditions).not.toContainText('No condition layer');
+    await expect(conditions).toContainText('could not be read');
+  });
+
+  test('a successful empty read scopes its absence to the products actually requested', async ({
+    page
+  }) => {
+    // The layer asks for seven heat and fire weather products only
+    // (ALERT_EVENTS in src/layers/nws-alerts.ts). An absence sentence that
+    // said "no NWS watch, warning, or advisory" spoke past that query and
+    // would have denied an active Flash Flood Warning.
+    await bootWithAlerts(page, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify({ type: 'FeatureCollection', features: [] })
+      })
+    );
+
+    const conditions = page.locator('.maplibregl-popup-content .popup-conditions');
+    await expect(conditions).toBeVisible();
+    const alertRow = conditions.locator('.popup-condition-row', {
+      hasText: 'NWS alert'
+    });
+    await expect(alertRow).toHaveCount(1);
+    await expect(alertRow).toContainText('heat or fire weather');
+    await expect(alertRow).toContainText('Only those products are requested');
+  });
+});

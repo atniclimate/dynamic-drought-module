@@ -52,6 +52,7 @@ import type * as maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties, Geometry } from 'geojson';
 
 import { registry } from '../state/registry';
+import { timeline } from '../state/timeline';
 import { USDM_CATEGORIES, NADM_CATEGORIES } from '../config/palette';
 import { classifyNifcIncidentType } from '../config/wildfire-presentation';
 import { escapeHtml } from '../util/escape';
@@ -214,6 +215,21 @@ function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): string | 
   }
 
   if (isLayerOn(USDM_KEY)) {
+    // The change register displays `usdm-change-fill` and HIDES both frame
+    // slots (src/layers/usdm.ts, showChange), while leaving the slot layers
+    // in the style. Querying the slots in that mode therefore returns nothing
+    // for a place that plainly has a rendered change polygon, and the
+    // absence branch below would report that as "no category here", which is
+    // a statement about the ground rather than about which register is on
+    // screen. Named as a register, following the mode-aware precedent in
+    // src/ui/island/strip-metrics.ts: no absolute category is invented from
+    // change data, and no absence is claimed from a hidden layer.
+    if (timeline.usdmMode !== 'absolute') {
+      return conditionRow(
+        'Drought',
+        'The map is showing the U.S. Drought Monitor change register, so no current category is displayed at this point.'
+      );
+    }
     const presentFills = USDM_FILLS.filter((id) => map.getLayer(id));
     if (presentFills.length === 0) return null;
     const feats = map.queryRenderedFeatures(point, { layers: [...presentFills] });
@@ -236,6 +252,21 @@ function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): string | 
 
   return null;
 }
+
+/**
+ * The confirmed-zero sentence, scoped to what was actually asked for. The
+ * layer requests seven products only (`ALERT_EVENTS` in
+ * `src/layers/nws-alerts.ts`: the Extreme and Excessive Heat Warnings and
+ * Watches, the Heat Advisory, the Red Flag Warning and the Fire Weather
+ * Watch), so the older sentence, "No active NWS watch, warning, or advisory
+ * here", spoke past its own evidence: a place under an active Flash Flood
+ * Warning was told there was nothing. This says what was checked, in the
+ * same limited sense the layer's own legend already uses ("No active
+ * requested National Weather Service products", `nws-alerts.ts`).
+ */
+const NO_REQUESTED_ALERT_HERE =
+  // vocab-allow: names the NWS watch/warning/advisory product category (src/layers/nws-alerts.ts), scoped to the products this layer requests
+  'No active NWS heat or fire weather watch, warning, or advisory here. Only those products are requested.';
 
 /** The NWS product name this app already requests (see
  * `src/layers/nws-alerts.ts` `ALERT_EVENTS`): true only for the
@@ -268,9 +299,41 @@ function alertRows(
   }
 
   if (seen.size === 0) {
-    return {
+    // An empty rendered query is not evidence of absence unless the layer
+    // actually holds a complete, current read. The refresh-failure path
+    // clears the displayed snapshot and reports `error` while KEEPING the
+    // fill layer and the active key (src/layers/nws-alerts.ts), and a
+    // response that hit its transfer limit reports `degraded`; in both
+    // states the old branch turned "we do not know" into "there is nothing
+    // here". The six layer states are named instead, and none of them is a
+    // claim about the ground.
+    const status = registry.getStatus(ALERTS_KEY);
+    // 'no-data' is a CONFIRMED zero: the service answered and published
+    // nothing, which is exactly the state an absence sentence is for. Only
+    // the states that mean "not read" (loading, live partial, unavailable)
+    // withhold the claim.
+    if (status !== 'ready' && status !== 'no-data') {
+      const value =
+        status === 'loading'
+          ? 'Still loading, so this card cannot say whether one is active here.'
+          : status === 'degraded'
+            ? 'The response was incomplete, so this card cannot rule one out here.'
+            : 'Unavailable, so this card cannot say whether one is active here.';
       // vocab-allow: names the NWS watch/warning/advisory product category (src/layers/nws-alerts.ts), matching that module's own description
-      rows: [conditionRow('NWS alert', 'No active NWS watch, warning, or advisory here.')],
+      return { rows: [conditionRow('NWS alert', value)], hasWarning: false, warningLabel: null };
+    }
+    return {
+      // The absence must not reach further than the query did. This layer
+      // asks for seven products only (ALERT_EVENTS in src/layers/nws-alerts.ts:
+      // the Extreme and Excessive Heat Warnings and Watches, Heat Advisory,
+      // Red Flag Warning and Fire Weather Watch), so a place under an active
+      // Flash Flood Warning would have been told, wrongly, that no NWS watch,
+      // warning or advisory was in force. The sentence now says what was
+      // actually checked, in the same limited sense the layer's own legend
+      // already uses ("No active requested National Weather Service
+      // products", nws-alerts.ts).
+      // vocab-allow: names the NWS watch/warning/advisory product category (src/layers/nws-alerts.ts), matching that module's own description, and scopes the absence to the products actually requested
+      rows: [conditionRow('NWS alert', NO_REQUESTED_ALERT_HERE)],
       hasWarning: false,
       warningLabel: null
     };
@@ -396,10 +459,28 @@ export function buildPlaceConditionsHtml(
     }
   }
 
+  // A condition layer that was ASKED for and then failed to activate leaves
+  // no rendered fill and no active key, so a card built only from rendered
+  // rows would report "no condition layer is currently active" while the
+  // sidebar shows one enabled and unavailable. That is the same overstatement
+  // as a false all-clear, one level up: it describes the map rather than the
+  // reader's own request. Named separately here, and never merged into the
+  // genuinely-nothing-on case below.
+  const enabledButUnread = [NADM_KEY, USDM_KEY, ALERTS_KEY, FIRES_KEY].filter((key) => {
+    if (isLayerOn(key)) return false;
+    const status = registry.getStatus(key);
+    return status === 'error' || status === 'degraded';
+  });
+
   const body =
     rows.length > 0
       ? rows.join('')
-      : conditionRow(
+      : enabledButUnread.length > 0
+        ? conditionRow(
+            'Conditions',
+            'A condition layer is switched on but could not be read, so this card cannot describe conditions here.'
+          )
+        : conditionRow(
           'Conditions',
           // vocab-allow: names the layer this card checked (src/layers/nws-alerts.ts), matching that layer's own name; not a DDM-computed judgement
           'No condition layer (drought, NWS alerts, or wildfire perimeters) is currently active on the map.'
