@@ -709,3 +709,78 @@ test.describe('S4b minimap: compact height band geometry gating (DDM-P11-T01 cla
     ).toHaveCount(8);
   });
 });
+
+/**
+ * Each framing coverage clause renders only where it is true (Codex
+ * adversarial review 2026-09-10, finding 5; `FramingCoverage` in
+ * src/config/framings.ts and `frameCoverageNote` in src/ui/map-key.ts).
+ *
+ * The three cases below are the three the review found, and they are three
+ * different subjects wrongly bound to one gate: a claim about the DISPLAY was
+ * published while a tri-national surface covered the ground it denied, a
+ * claim about the MINIMAP survived into a view that hides the minimap, and
+ * both survived a camera that had left the land framing entirely for an ocean.
+ */
+test.describe('framing coverage clauses render only where each is true', () => {
+  const MEXICO_DISPLAY = 'The current display layers do not cover Mexico';
+  const MEXICO_MINIMAP = 'North American Drought Monitor informs this minimap in Mexico';
+  const MEXICO_BRIEFING = 'Place selection and local briefings are unavailable';
+
+  test('the tri-national NADM surface is not told it fails to cover Mexico, while the clauses that stay true still render', async ({
+    page,
+  }) => {
+    // Finding 5's first case, which is the DEFAULT drought boot: the drought
+    // cluster's `current` recipe is ['nadm-drought'] (src/config/clusters.ts),
+    // the app's own tri-national monthly surface. So "the current display
+    // layers do not cover Mexico" was a statement about the display that the
+    // display itself refuted, on the most ordinary path into this framing.
+    await gotoApp(page, '?view=brief&cluster=drought&framing=mexico');
+    const key = page.locator('#map-key');
+    await expect(key).toContainText(MEXICO_MINIMAP);
+    await expect(key).not.toContainText(MEXICO_DISPLAY);
+    // The place catalog still ends at the border whatever is displayed, so
+    // that clause is unaffected: this is a narrowing of one claim, not a
+    // silencing of the framing's honesty.
+    await expect(key).toContainText(MEXICO_BRIEFING);
+  });
+
+  test('a US-scoped surface over the same framing still earns the display clause', async ({
+    page,
+  }) => {
+    // The control for the case above. Without it, a fix that simply deleted
+    // the sentence would pass just as well as one that gated it.
+    await gotoApp(page, '?view=brief&layers=usdm&framing=mexico');
+    const key = page.locator('#map-key');
+    await expect(key).toContainText(MEXICO_DISPLAY);
+    await expect(key).toContainText(MEXICO_MINIMAP);
+  });
+
+  test('Console, which hides the minimap and stops its reads, carries no sentence about that minimap', async ({
+    page,
+  }) => {
+    // Finding 5's second case. The widget is hidden in Console and its
+    // retained drought and wildfire reads stop; a sentence about what
+    // "informs this minimap" has no referent there.
+    await gotoApp(page, '?view=console&layers=usdm&framing=mexico');
+    await expect(page.locator('.shell-minimap-map')).toBeHidden();
+    const key = page.locator('#map-key');
+    await expect(key).not.toContainText(MEXICO_MINIMAP);
+    // The other two clauses do not depend on the minimap and stay.
+    await expect(key).toContainText(MEXICO_DISPLAY);
+    await expect(key).toContainText(MEXICO_BRIEFING);
+  });
+
+  test('an ocean camera takes precedence, so the land framing left underneath it says nothing', async ({
+    page,
+  }) => {
+    // Finding 5's third case. Choosing an ocean deliberately preserves
+    // `framing=` (D-0.7.0-042/053: an ocean click is an ENSO entry, display
+    // plus camera) while taking the camera, so reading the land framing alone
+    // put Mexico copy on a Pacific scene.
+    await gotoApp(page, '?view=brief&cluster=enso&ocean=pacific&framing=mexico');
+    const key = page.locator('#map-key');
+    await expect(key).not.toContainText(MEXICO_DISPLAY);
+    await expect(key).not.toContainText(MEXICO_MINIMAP);
+    await expect(key).not.toContainText(MEXICO_BRIEFING);
+  });
+});
