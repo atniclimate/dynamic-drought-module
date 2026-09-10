@@ -5,6 +5,73 @@
 Merged to `main` after the `v0.6.26` tag. No new package version or tag has
 been assigned to this work.
 
+- 2026-09-09: the Fire rows read an issuer, and the wind on a station
+  marker has a shape. The near-term fire cell reads the NOAA Storm
+  Prediction Center Day 1 to 8 Fire Weather Outlook at the selected point,
+  stating each window from the feature's own valid and expire times and
+  naming its geography as at this point, or within 12 miles of this point.
+  It uses the issuer's own category words, so the highest categorical area
+  reads Extremely Critical rather than the shorter word the map renderer
+  uses, and a category code the service does not define is dropped rather
+  than given a meaning it does not have. The season-ahead fire cell now
+  names its product and says why it is not read: the National Wildland
+  Significant Fire Potential Outlook, which the geographic area
+  coordination centers also call the National Monthly and Seasonal
+  Significant Fire Potential Outlook, is published as a PDF only, with no
+  data endpoint on any National Interagency Fire Center or coordination
+  center host. Coverage is claimed only where it was verified: the
+  contiguous United States row of the fire outlook table, and no other. The
+  six remaining geographies read unavailable by stated convention rather
+  than by assumption, and Canada is not claimed at all. Each Remote
+  Automatic Weather Station marker now carries a wind arrow scaled to the
+  speed the station served, coloured to the network's own swatch, titled
+  with the observation time, and drawing nothing when the served direction
+  cannot be parsed. The legend states the convention the arrow follows.
+  What did not close: the long-range fire cell closes on its unavailable
+  arm only. There is no season-ahead fire forecast in this release, and
+  there will not be one until that outlook is published as something other
+  than a PDF.
+- 2026-09-09: terrain shading states its coverage, and four defects found
+  outside any task's boundary are fixed. The 3D scene's terrain note names
+  the United States Geological Survey 3D Elevation Program and the extent
+  the archive's own header pins, so a reader can tell where the shading is
+  real and where it stops. The hazard drape stays legible above it, drawn
+  in order and resampled nearest, so a category boundary does not blur into
+  its neighbour. Separately: the sea-surface temperature stamp no longer
+  names the frame it is leaving while it loads the next one; a boot that
+  stalls now names the layers still pending instead of failing without
+  saying why; a failed search chunk on the mobile sheet resets its mount
+  instead of leaving the sheet half-built; and the Climate Prediction
+  Center's Equal Chances category is rendered as the issuer defines it,
+  equal chances of above-, near-, or below-normal conditions with no
+  favoured category, rather than folded into a near-normal tilt it does not
+  mean.
+- 2026-09-09: seven closures, and an empty cell now describes the place
+  rather than the software. Where a briefing cell has nothing to show, it
+  used to say the product was not wired into this briefing, which told a
+  reader about the state of the build rather than about their location.
+  Every such cell now states that no read is available for this selection
+  and names the product it would have read. The season-ahead heat cell is
+  no longer one of them: it reads the NOAA Climate Prediction Center
+  seasonal temperature outlook live, in the issuer's own legend words, and
+  is never presented as an ENSO forecast. A horizon chip whose map recipe
+  repeats another horizon's, or is empty, is disabled with its reason
+  instead of offering a click that does nothing, and the on-map key carries
+  the time bar's register, so the bar, the stamp and the key state time in
+  one grammar. Every hazard minimap either carries a condition or says it
+  is navigation only and names the metric it lacks, shows the main map's
+  viewport, and builds no geometry while it is hidden. A popup can be
+  reached by touch at phone and tablet widths, is dismissed by Escape, and
+  its briefing door names the place it opens. A Remote Automatic Weather
+  Station popup renders the relative humidity, wind and fuel moisture the
+  issuer already serves, or says the station reported none. The Fire 3D
+  controller chunk no longer loads on a plain desktop Drought boot, only
+  when the committed cluster is wildfire or a deep link asks for the scene.
+  And the citation acceptance test reads a tracked public manifest, so it
+  tells the truth in public CI instead of depending on a ledger this
+  repository does not carry. What did not close: the horizon-chip work is
+  partial, with the visible reason line and the desktop Drought key
+  deferred.
 - 2026-09-08: four closures from the integration cycle. A layer whose
   activation fails, whether the failure throws or is reported by the layer
   itself, now corrects the sidebar checkbox and the share URL, shows
@@ -22,10 +89,12 @@ been assigned to this work.
   the National Weather Service catalog's first available day rather than
   reporting nothing, and the claim's register reads `outlook` while the
   frame is in force and `observed` once the period has ended, matching the
-  time bar. The season-ahead heat cell still reads `unavailable` and names
-  the Climate Prediction Center seasonal temperature outlook as the product
-  not yet wired. The entry chunk sits at 31 kB against its 45 kB budget
-  with no code change.
+  time bar. At this date the season-ahead heat cell still read
+  `unavailable` and named the Climate Prediction Center seasonal
+  temperature outlook as the product not yet wired; it was wired the
+  following day, and the 2026-09-09 entry above describes what it reads
+  now. The entry chunk sits at 31 kB against its 45 kB budget with no code
+  change.
 - 2026-09-08: the repository is the application only. Every planning ledger,
   session record, roadmap file and harness entry point left the public tree
   for a private planning record maintained by ATNI Climate;
