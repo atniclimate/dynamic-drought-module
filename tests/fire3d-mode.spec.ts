@@ -1434,12 +1434,30 @@ test.describe('W3/W4 browser truth', () => {
     // to allow for the heavier concurrent archive traffic (terrain, hazard
     // drape, structures) fire3d's own activation still has in flight.
     await page.locator('#telemetry-reveal').click();
-    await page.locator('.telemetry-item', { hasText: 'Ice Harbor Dam' }).click();
 
     const marker = page.locator(
       `.telemetry-marker[data-telemetry-station-id="${RAWS_FIXTURE_MARKER_ID}"]`
     );
-    await expect(marker).toHaveCount(1, { timeout: 45_000 });
+    // The marker exists only after a viewport discovery pass finds the
+    // stubbed RAWS feature, and discovery is driven by `moveend`
+    // (`discoverStationsForViewport`, src/config/station-registry.ts, behind
+    // telemetry's own moveend debounce). Under this scene's concurrent
+    // archive traffic a single fly can have its discovery superseded or
+    // aborted by the camera work still in flight, and then nothing re-runs
+    // it: a one-shot click followed by a long wait failed once in three
+    // full-suite runs of this file (S21 claim-verifier, 33 passed 1 failed,
+    // then 34 passed on the rerun; the single test alone always passed).
+    // So the fly is the retried action rather than a one-shot before a
+    // fixed wait, the same `toPass` idiom tests/tribal-live-layers.spec.ts
+    // already uses for the RAWS popup. `flyToStation` centers the camera on
+    // the station and is idempotent, so re-clicking the panel row simply
+    // asks for another discovery pass; the row is in the sidebar, never
+    // under the canvas-center marker that the withdrawn hover approach
+    // deadlocked on.
+    await expect(async () => {
+      await page.locator('.telemetry-item', { hasText: 'Ice Harbor Dam' }).click();
+      await expect(marker).toHaveCount(1, { timeout: 20_000 });
+    }).toPass({ timeout: 90_000 });
     expect(await fire3dStamp(page)).toBe('active');
 
     await expect(marker).toHaveClass(/maplibregl-marker/);
