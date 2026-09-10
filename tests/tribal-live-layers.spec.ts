@@ -1,6 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
-  PILL,
   gotoApp,
   layerCheckbox,
   layerPill,
@@ -26,7 +25,9 @@ import {
   rawsAffirmativeNullBody,
   rawsHappyBody,
   rawsNullWindBody,
-  rawsPeakOnlyWindBody
+  rawsPeakOnlyWindBody,
+  rawsStrongWindBody,
+  rawsUnparseableDirectionBody
 } from './fixtures/raws-fixtures';
 
 /**
@@ -718,6 +719,104 @@ test.describe('DDM-P9-T06: RAWS wind symbol', () => {
     await expect(glyph).toHaveAttribute('aria-label', new RegExp(escapeRegExp(expectedAsOf)));
     const transform = await glyph.evaluate((el) => (el as SVGElement).style.transform);
     expect(transform).toContain('rotate(295deg)');
+
+    // DDM-P9-T06 fix F5 (opus-read.md): the served speed ("5 mph", the
+    // display mapping's own floor) is now visible in the glyph's drawn size,
+    // not only in the accessible name. 5 mph clamps to the mapping's
+    // minimum shaft length (6px): dot radius 8 + shaft 6 + arrowhead 8 +
+    // pad 2, doubled, is 48.
+    await expect(glyph).toHaveAttribute('width', '48');
+    await expect(glyph.locator('line')).toHaveCount(1);
+    await expect(glyph.locator('path')).toHaveCount(1);
+  });
+
+  test('a stronger served speed draws a visibly larger glyph than the weaker served speed above', async ({
+    page
+  }) => {
+    await page.route(RAWS_ROUTE, (route) =>
+      route.fulfill({
+        contentType: 'application/geo+json',
+        body: JSON.stringify(rawsStrongWindBody())
+      })
+    );
+
+    await flyToIceHarborDam(page);
+
+    const glyph = windGlyph(page);
+    await expect(glyph).toHaveCount(1);
+    // 35 mph is the display mapping's own ceiling: dot radius 8 + shaft 22
+    // (the mapping's max) + arrowhead 8 + pad 2, doubled, is 80: larger than
+    // the 48 the "5 mph" case above draws, proving the drawn size scales
+    // with the served speed rather than being a fixed size regardless of
+    // the reading.
+    await expect(glyph).toHaveAttribute('width', '80');
+  });
+
+  test('a served direction with no numeric token renders no glyph, and the popup Wind row still carries the served string verbatim', async ({
+    page
+  }) => {
+    await page.route(RAWS_ROUTE, (route) =>
+      route.fulfill({
+        contentType: 'application/geo+json',
+        body: JSON.stringify(rawsUnparseableDirectionBody())
+      })
+    );
+
+    await flyToIceHarborDam(page);
+
+    const marker = rawsMarker(page);
+    await expect(marker).toHaveCount(1, { timeout: 20_000 });
+    // DDM-P9-T06 fix F3 (opus-read.md): a speed AND a direction STRING are
+    // both served here ("4 mph" and "VRB"), but the direction has no
+    // numeric token, so drawing a glyph would have to either fake a
+    // due-north rotation or silently drop the direction half of the
+    // acceptance. Neither is acceptable: no glyph.
+    await expect(windGlyph(page)).toHaveCount(0);
+
+    const popup = page.locator('.maplibregl-popup');
+    const windRow = popup.locator('.popup-data-row', { hasText: 'Wind' });
+    await expect(async () => {
+      await marker.click();
+      await expect(windRow).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
+    await expect(windRow).toContainText('4 mph from VRB');
+  });
+
+  test('a calm (0 mph) served speed draws no arrowhead, while the served strings still render verbatim', async ({
+    page
+  }) => {
+    await page.route(RAWS_ROUTE, (route) =>
+      route.fulfill({
+        contentType: 'application/geo+json',
+        body: JSON.stringify(rawsAffirmativeNullBody())
+      })
+    );
+
+    await flyToIceHarborDam(page);
+
+    const marker = rawsMarker(page);
+    await expect(marker).toHaveCount(1, { timeout: 20_000 });
+    const glyph = windGlyph(page);
+    // rawsAffirmativeNullBody serves "0 mph" WITH a direction ("320
+    // degrees"): the glyph still exists (a direction was served, and the
+    // accessible name and title still need to carry it), but fix F5's
+    // opus-read.md caveat says a 0 mph arrow would assert a direction the
+    // near-zero speed does not meaningfully have, so no shaft and no
+    // arrowhead are drawn.
+    await expect(glyph).toHaveCount(1);
+    await expect(glyph.locator('line')).toHaveCount(0);
+    await expect(glyph.locator('path')).toHaveCount(0);
+    // dot radius 8 + no shaft + no arrowhead + pad 2, doubled, is 20.
+    await expect(glyph).toHaveAttribute('width', '20');
+
+    const popup = page.locator('.maplibregl-popup');
+    const windRow = popup.locator('.popup-data-row', { hasText: 'Wind' });
+    await expect(async () => {
+      await marker.click();
+      await expect(windRow).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
+    // Withholding the drawn shape never withholds the served value.
+    await expect(windRow).toContainText('0 mph from 320 degrees');
   });
 
   test('a null served wind renders no glyph, and the popup Wind row reads "Station reported none"', async ({
@@ -745,7 +844,7 @@ test.describe('DDM-P9-T06: RAWS wind symbol', () => {
     await expect(windRow).toContainText('Station reported none');
   });
 
-  test('a sustained speed with no sustained direction renders no glyph, and the popup Wind row carries the NWCG peak wording, never "gusting"', async ({
+  test('a sustained speed with no sustained direction renders no glyph, and the popup Wind row carries the NWCG peak wording, never the invented word', async ({
     page
   }) => {
     await page.route(RAWS_ROUTE, (route) =>
@@ -772,12 +871,33 @@ test.describe('DDM-P9-T06: RAWS wind symbol', () => {
       await expect(windRow).toBeVisible({ timeout: 2_000 });
     }).toPass({ timeout: 15_000 });
     await expect(windRow).toContainText('3 mph, peak 11 mph from 212 degrees over the previous 60 minutes');
+    // DDM-P9-T06 fix F11 (opus-read.md): the ONE sanctioned appearance of
+    // this literal string anywhere in the lane is this negative assertion,
+    // a permanent regression guard against the invented word ever coming
+    // back into the served-word popup text.
     await expect(windRow).not.toContainText('gusting');
   });
 
-  test('a transport failure on RAWS discovery renders no marker and no glyph, and the telemetry layer reads live (partial)', async ({
+  test('a transport failure on RAWS discovery makes the request, renders no marker and no glyph', async ({
     page
   }) => {
+    // DDM-P9-T06 fix F7 (opus-read.md): with every other discovery host
+    // also aborted below, `settleDiscoverySource`
+    // (src/config/station-registry.ts) already marks EVERY one of them
+    // `failed: true`, so the telemetry layer's degraded pill would read
+    // "live (partial)" whether or not the RAWS request below ever
+    // succeeded or failed; asserting the pill text here proves nothing
+    // about THIS failure specifically. No fixture anywhere in
+    // tests/fixtures or tests/helpers.ts serves an EMPTY successful body
+    // for the other four discovery hosts (grepped, none found), and
+    // writing new fixture families for other networks is not this task's
+    // to do, so the pill assertion is dropped rather than left vacuous; the
+    // RAWS-specific failure is proved directly instead, by observing the
+    // request itself.
+    let rawsRequested = false;
+    page.on('request', (req) => {
+      if (req.url().includes('/PublicView_RAWS/')) rawsRequested = true;
+    });
     await abortOtherDiscoverySources(page);
     await page.route(RAWS_ROUTE, (route) =>
       route.fulfill({ status: 500, contentType: 'text/plain', body: 'synthetic failure' })
@@ -788,11 +908,7 @@ test.describe('DDM-P9-T06: RAWS wind symbol', () => {
     await page.locator('#telemetry-reveal').click();
     await page.locator('.telemetry-item', { hasText: 'Ice Harbor Dam' }).click();
 
-    // The discovery source failed non-abort (0.7.0 H4): the layer reads
-    // "live (partial)", never a bare "live" and never a structural "error"
-    // (the curated seeds, including the Ice Harbor Dam seed itself, still
-    // render).
-    await expect(layerPill(page, 'telemetry')).toHaveText(PILL.degraded, { timeout: 20_000 });
+    await expect.poll(() => rawsRequested, { timeout: 20_000 }).toBe(true);
     await expect(rawsMarker(page)).toHaveCount(0);
     await expect(page.locator('svg[data-telemetry-wind-glyph]')).toHaveCount(0);
   });
@@ -822,6 +938,16 @@ test.describe('DDM-P9-T06: RAWS wind symbol', () => {
       .count();
     expect(totalGlyphs).toBeGreaterThan(0);
     expect(glyphsInsideMarkers).toBe(totalGlyphs);
+
+    // DDM-P9-T06 fix F9 (opus-read.md): strengthened from ">0" to an exact
+    // count. The fixture serves exactly one RAWS station, so the glyph
+    // count must equal the RAWS marker count (one), and that one glyph must
+    // sit inside that one marker specifically, not merely inside "a"
+    // marker somewhere.
+    const rawsMarkerCount = await rawsMarker(page).count();
+    expect(rawsMarkerCount).toBe(1);
+    expect(totalGlyphs).toBe(rawsMarkerCount);
+    await expect(rawsMarker(page).locator('svg[data-telemetry-wind-glyph]')).toHaveCount(1);
   });
 });
 

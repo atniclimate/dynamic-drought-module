@@ -1522,6 +1522,18 @@ function rawsDiscoveryRecord(feature: unknown): StationDiscoveryRecord | null {
  * All four are `null` together for any non-RAWS station (the field is
  * simply absent there) or for a RAWS station the service reports no wind
  * value for.
+ *
+ * DDM-P9-T06 fix F8 (opus-read.md, recorded constraint, not fixed here):
+ * these fields survive `discoveredEntry` (this file, base = `record.station`)
+ * but NOT `mergeStationHandles` (this file, spreads `current.station` as its
+ * base), so a merge of a discovered RAWS record into an existing registry
+ * entry silently drops them. Unreachable today (no curated seed carries a
+ * `rawsStationId`, and `primaryParameterCategory: 'fire-weather'` is
+ * RAWS-only, so two RAWS discoveries only ever collide with each other, not
+ * with a merge target), but latent: the day a curated seed gains a
+ * `rawsStationId`, the wind glyph disappears for that station with no type
+ * error and no failing test. A follow-up should widen `mergeStationHandles`
+ * or `TelemetryStation` properly rather than leave the drop implicit.
  */
 export interface RawsWindStationFields {
   readonly windSpeedServed: string | null;

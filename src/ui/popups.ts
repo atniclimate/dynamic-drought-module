@@ -712,10 +712,10 @@ function rawsConditionRow(label: string, servedText: string | null): string {
  * NWCG PMS 426-3 defines "Peak WS"/"Peak WD" as "Maximum speed for previous
  * 60 minutes from no less than 720 samples" and "Direction at peak wind
  * speed", a 60-minute-window maximum, not an instantaneous gust in the WMO
- * or NWS sense. The prior wording ("gusting") was never the issuer's word
- * and is corrected here to the NWCG term; `windGustDirection` (WindDirPeak)
- * is fetched but was never rendered before this task and now appears
- * beside the peak speed when the service serves one.
+ * or NWS sense. The prior wording invented a term that was never the
+ * issuer's and is corrected here to the NWCG term; `windGustDirection`
+ * (WindDirPeak) is fetched but was never rendered before this task and now
+ * appears beside the peak speed when the service serves one.
  */
 function rawsWindText(conditions: RawsStationConditions): string | null {
   if (conditions.windSpeed === null) return null;

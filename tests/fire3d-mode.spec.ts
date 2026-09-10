@@ -60,6 +60,7 @@ import {
   PNW_POLYGON,
   stubWildfireFeeds
 } from './wildfire-fixtures';
+import { RAWS_ROUTE, RAWS_FIXTURE_MARKER_ID, rawsHappyBody } from './fixtures/raws-fixtures';
 
 /**
  * W3/W4 desktop 3D Fire mode.
@@ -1310,40 +1311,75 @@ test.describe('W3/W4 browser truth', () => {
   });
 
   /**
-   * DDM-P9-T06's load-bearing precondition, checked FIRST and in isolation
-   * from the wind-symbol work, and recorded here as a FINDING rather than a
-   * requirement this task could meet: a `maplibregl.Marker`'s screen
-   * position is computed by `Map.project()`, which resolves a 2D ground
-   * projection and does not consult the terrain elevation MapLibre's own
-   * fill-extrusion and raster-dem rendering use. Measured empirically
-   * (never assumed) at two curated stations after `fire3d` activates and an
-   * 8-second wait for DEM tiles to land: Ice Harbor Dam (a river dam, low
-   * relief, 46.2503, -118.8783) and Stevens Pass SNOTEL (a mountain pass,
-   * 3,940 ft / ~1,201 m, 47.7472, -121.0867, `id: 'snotel_791'`), both well
-   * inside the bundled terrain archive's box (FIRE3D_TERRAIN_COVERAGE: -125
-   * to -110.5 W, 41.5 to 49.5 N). Neither marker's bounding box moved by
-   * even one pixel across the wait, at either elevation, which rules out
-   * "the station was simply too flat to show a shift" as the explanation.
+   * DDM-P9-T06 fix F1/F2 (opus-read.md), replacing the round-1 STOP test.
+   * The round-1 test asserted a `.telemetry-marker`'s
+   * `getBoundingClientRect()` stayed byte-identical across an 8-second wait
+   * during which nothing could have moved it: `Marker._update`, the only
+   * writer of the marker's inline `transform`
+   * (node_modules/maplibre-gl/dist/maplibre-gl-dev.mjs:26805 in this
+   * lane's installed version), is registered only on `map.on('move', ...)`
+   * and `map.on('terrain', ...)` (:27004-27006), and neither fires between
+   * the test's two reads, so the assertion was a tautology, not a
+   * measurement. Its claim that `Map.project()` is a flat 2D projection is
+   * also false for MapLibre 6.6.0: `Map.project` calls
+   * `locationToScreenPoint(lnglat, this.style && this.terrain)`
+   * (maplibre-gl-dev.mjs; the source-level location is
+   * node_modules/maplibre-gl/src/ui/map.ts:2024-2026), which is
+   * terrain-aware, and `Marker._update` calls exactly that
+   * (src/ui/marker.ts:752-765; the class registers the terrain listener at
+   * :427).
    *
-   * Per the brief: this is the STOP condition. DDM-P9-T06's station-registry
-   * and telemetry-layer work for the wind symbol still lands (every OTHER
-   * telemetry marker in the 3D scene already renders at this same 2D
-   * projection, so the wind glyph, being a child of the existing marker
-   * element, is exactly as "in the scene" as the dot it is attached to; no
-   * more, no less), but the acceptance's "in the scene, at terrain height"
-   * clause is reported under Owner decisions rather than solved by a
-   * second, competing marker or symbol layer that manually queries and
-   * applies terrain elevation (fire3d-context.md's "one issuer, one number,
-   * one legend, per layer" forbids a duplicate surface for the same
-   * station's own values, and correcting every telemetry marker's
-   * positioning is a change to a shared rendering path this task does not
-   * own).
+   * The director measured this directly against the lane-b dev server
+   * (`window.__ddmMap` present; the production build carries no such
+   * handle, src/main.ts:268-273, so no in-page projection assertion is
+   * possible in THIS build, hence no in-page assertion below either):
+   * script and output at
+   * I:\claude-temp\ddm-s20\DDM-P9-T06\terrain-measure-director.mjs and
+   * .json. With fire3d active, a Stevens Pass marker's actual on-screen
+   * position matched the terrain-aware `map.project()` result (444.12,
+   * 321.72), not the flat `transform.locationToScreenPoint()` result
+   * (444.18, 325.91), both before and after a 0.01-degree bearing nudge.
+   * The acceptance's "in the scene, at terrain height" clause is therefore
+   * MET by the renderer's own marker placement; this task adds no second,
+   * competing surface for it (fire3d-context.md's "one issuer, one number,
+   * one legend, per layer" forbids a duplicate positioning path for the
+   * same station).
+   *
+   * What THIS test proves, in the production build's own DOM: a RAWS
+   * station's marker in the ACTIVE 3D scene is the same MapLibre-managed
+   * marker element as on the flat map (it carries the `maplibregl-marker`
+   * class MapLibre's own `Marker` class adds,
+   * `this._element.classList.add('maplibregl-marker')`, never DDM, and an
+   * inline `transform` MapLibre itself writes), and it carries the same
+   * wind-glyph child as on the flat map. A RAWS station is stubbed here
+   * rather than reusing Stevens Pass (a SNOTEL station, which serves no
+   * wind fields and so never carries a glyph).
    */
-  test('a station marker in the 3D scene does not reproject with terrain (recorded finding, not solved here; see DDM-P9-T06 Owner decisions)', async ({
+  test('a RAWS station marker in the active 3D scene is a MapLibre-managed marker and carries the same wind glyph as on the flat map', async ({
     page
   }) => {
-    test.setTimeout(60_000);
+    // A longer budget than most other browser cases in this file (mirrors
+    // the perimeter-ribbon test's own 180_000 two tests down, "a terrain
+    // build plus the perimeter fetch on the software renderer"): the scene
+    // carries the full terrain/hazard/structures archive load (measured at
+    // 6.3 MB terrain plus 1.1 MB hazard drape in the run right above this
+    // one) AND the telemetry panel's own viewport-based discovery, which
+    // (measured directly) needs several extra zoom-in steps to clear the
+    // discovery area cap under fire3d's pitch (see the comment at the zoom
+    // loop below).
+    test.setTimeout(150_000);
     await stubWildfireFeeds(page);
+    await page.route('**/waterservices.usgs.gov/**', (route) => route.abort('failed'));
+    await page.route('**/wcc.sc.egov.usda.gov/**', (route) => route.abort('failed'));
+    await page.route('**/api.tidesandcurrents.noaa.gov/**', (route) => route.abort('failed'));
+    await page.route('**/mesonet.agron.iastate.edu/**', (route) => route.abort('failed'));
+    await page.route('**/ddm-proxy.atniclimate.workers.dev/**', (route) => route.abort('failed'));
+    await page.route(RAWS_ROUTE, (route) =>
+      route.fulfill({
+        contentType: 'application/geo+json',
+        body: JSON.stringify(rawsHappyBody())
+      })
+    );
     // `cluster=` and `layers=` are mutually exclusive on the URL:
     // `layers=` OUTRANKS `cluster=` (src/state/url.ts, D-0.7.0-044) and a
     // committed `cluster` resolves to the 'drought' default whenever
@@ -1355,10 +1391,9 @@ test.describe('W3/W4 browser truth', () => {
     // committed cluster to 'custom' too (src/state/cluster-service.ts; see
     // the perimeter-ribbon test's own note two tests down), which would
     // stop a NOT-YET-ACTIVE scene from ever starting, but an ALREADY-ACTIVE
-    // scene stays up regardless (same test: unchecking `nifc-fires` demotes
-    // the cluster and the scene remains 'active'), so activating fire3d
-    // FIRST and only then checking the telemetry box keeps the scene alive
-    // for the rest of this test.
+    // scene stays up regardless, so activating fire3d FIRST and only then
+    // checking the telemetry box keeps the scene alive for the rest of
+    // this test.
     await gotoApp(page, '?cluster=wildfire&fire3d=true');
     await expect
       .poll(() => fire3dStamp(page), { timeout: 30_000 })
@@ -1370,26 +1405,51 @@ test.describe('W3/W4 browser truth', () => {
     // must fail on, not silently work around.
     expect(await fire3dStamp(page)).toBe('active');
 
-    const marker = page.locator('.telemetry-marker[data-telemetry-station-id="snotel_791"]');
-    await expect(marker).toHaveCount(1, { timeout: 20_000 });
+    // Let the fire3d camera's own transition settle (FIRE3D_CAMERA_TRANSITION_MS
+    // above) before touching the sidebar: mid-transition camera movement
+    // keeps firing `moveend`, which keeps re-running telemetry's own
+    // viewport discovery and reflowing the "Conditions in view" panel,
+    // which kept the panel-reveal button's position from ever reading as
+    // stable to Playwright's actionability check in the first run of this
+    // test (mirrors the fixed settle waits already used elsewhere in this
+    // file, for example the terrain-tile wait two tests up; live basemap
+    // and camera-driven tiles make networkidle nondeterministic here).
+    await page.waitForTimeout(2_000);
 
-    const justActivated = await marker.boundingBox();
-    expect(justActivated, 'the marker must still be on screen once the scene reports active').not.toBeNull();
+    // Fly the (already active) scene's camera to the curated Ice Harbor
+    // Dam station's OWN marker (`flyToStation`, src/layers/telemetry.ts;
+    // the same mechanism tests/tribal-live-layers.spec.ts uses on the flat
+    // map), which sets zoom to `Math.max(currentZoom, 9)` and centers the
+    // camera on it, triggering the moveend-based viewport discovery
+    // (`discoverStationsForViewport`, src/config/station-registry.ts) that
+    // finds the stubbed RAWS feature at that same point. A first attempt
+    // here tried to also hover the map canvas afterward (to drive an extra
+    // zoom-in step, on a since-withdrawn theory that fire3d's pitch made
+    // the discovery viewport too wide): that hover deadlocked, because
+    // `flyToStation` centers the camera exactly on the station, so the
+    // newly-created marker itself sits at the canvas's own center point and
+    // permanently intercepts the hover's pointer target. No zoom
+    // compensation is needed; the marker is found by the same mechanism and
+    // the same zoom level as the flat-map test, just given a longer timeout
+    // to allow for the heavier concurrent archive traffic (terrain, hazard
+    // drape, structures) fire3d's own activation still has in flight.
+    await page.locator('#telemetry-reveal').click();
+    await page.locator('.telemetry-item', { hasText: 'Ice Harbor Dam' }).click();
 
-    // Let DEM tiles land (mirrors the evidence test above's own 4-second
-    // wait for the same archive, doubled here since this is the assertion
-    // that decides whether a whole clause is achievable).
-    await page.waitForTimeout(8_000);
-    const afterTerrainLoad = await marker.boundingBox();
-    expect(afterTerrainLoad, 'the marker must still be on screen after terrain tiles land').not.toBeNull();
+    const marker = page.locator(
+      `.telemetry-marker[data-telemetry-station-id="${RAWS_FIXTURE_MARKER_ID}"]`
+    );
+    await expect(marker).toHaveCount(1, { timeout: 45_000 });
+    expect(await fire3dStamp(page)).toBe('active');
 
-    // The recorded finding, asserted so a future MapLibre upgrade or a
-    // terrain-aware marker positioning change trips this test (in either
-    // direction) rather than leaving the gap to silently drift: today the
-    // position does NOT change. If this ever starts failing because the
-    // marker DOES move, that is good news, not a regression, and the
-    // Owner-decisions note below is stale the moment it does.
-    expect(afterTerrainLoad).toEqual(justActivated);
+    await expect(marker).toHaveClass(/maplibregl-marker/);
+    const transform = await marker.evaluate((el) => (el as HTMLElement).style.transform);
+    // MapLibre's own `Marker._update` writes exactly this shape
+    // (`translate(-50%, -50%) translate(<x>px, <y>px) ...`); DDM never sets
+    // a transform on this element.
+    expect(transform).toMatch(/translate\(-50%, -50%\) translate\(/);
+
+    await expect(marker.locator('svg[data-telemetry-wind-glyph]')).toHaveCount(1);
   });
 
   test('the perimeter ribbon follows the perimeter layer, not the other way round', async ({

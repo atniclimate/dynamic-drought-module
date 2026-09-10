@@ -41,9 +41,9 @@ import {
   STATION_MARKER_LEGEND,
   discoverStationsForViewport,
   mergeTelemetryStations,
-  stationNetworkByKey
+  stationNetworkByKey,
+  type RawsWindStationFields
 } from '../config/station-registry';
-import type { RawsWindStationFields } from '../config/station-registry';
 import type {
   PrimaryParameterCategory,
   StationRegistryEntry,
@@ -156,7 +156,15 @@ function showStationLegend(): void {
         body,
         'Monitoring stations',
         STATION_MARKER_LEGEND,
-        'Featured stations keep their own marker colors; open a marker for its source.'
+        // DDM-P9-T06 fix F6 (opus-read.md), NEW bounded grant for this one
+        // sentence only: the wind symbol had no legend entry anywhere. Not
+        // added to `STATION_MARKER_LEGEND` itself (that table is a color
+        // swatch list; a wind-direction convention does not fit its shape,
+        // per the fix brief). "NIFC RAWS" and "the direction from which the
+        // air is moving" are the issuer's own words (science verdict item 3,
+        // NWCG PMS 426-3 / the FeatureServer's own field description); the
+        // rest states a DDM display convention, not an issuer definition.
+        'Featured stations keep their own marker colors; open a marker for its source. An arrow on a NIFC RAWS marker is that station\'s served wind: it points into the wind (the direction from which the air is moving), its length scales with the served speed, and the marker\'s popup carries the values and observation time.'
       );
     }
   });
@@ -173,7 +181,32 @@ function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView
     el.dataset.telemetryFreshness = view.freshness;
     el.dataset.telemetryCategory = view.primaryParameterCategory;
     const accessibleLabel = markerAccessibleLabel(view);
-    el.title = accessibleLabel;
+
+    // DDM-P9-T06: a RAWS station's served wind rides on `station` itself
+    // (src/config/station-registry.ts's `RawsWindStationFields`, cast on
+    // both ends since `TelemetryStation` in types/station.ts is not owned
+    // by this task). Every other network's station simply never carries
+    // these properties, so this is a no-op for them: no glyph, no
+    // interpolation, nothing drawn off a station's own point.
+    //
+    // `glyphEligibleWind` (below) is the ONE eligibility gate: a null,
+    // missing, or unparseable field of ANY of the three (speed string,
+    // direction string, numeric direction) means no glyph, per the
+    // acceptance's "Station reported none" clause and fix F3 (opus-read.md:
+    // an unparseable served direction, for example "VRB" or "calm", must
+    // never fall back to an invented due-north rotation).
+    const glyphWind = glyphEligibleWind(readRawsWindFields(station));
+
+    // Fix F4 (opus-read.md): `buildRawsWindGlyph`'s own SVG carries
+    // `pointer-events: none` (a hover target would intercept clicks meant
+    // for the marker), so its `<title>` can never actually receive a hover
+    // and show a tooltip; the browser resolves the hover to THIS element,
+    // `.telemetry-marker`, whose `title` attribute is the one the acceptance's
+    // "carrying the observation time in its title" clause needs. Appended,
+    // not replaced, so the marker's base identity sentence is never lost.
+    el.title = glyphWind
+      ? `${accessibleLabel} ${buildRawsWindAccessibleName(glyphWind)}`
+      : accessibleLabel;
     el.setAttribute('aria-label', accessibleLabel);
 
     const inner = document.createElement('div');
@@ -191,24 +224,12 @@ function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView
     el.style.width = '16px';
     el.style.height = '16px';
 
-    // DDM-P9-T06: a RAWS station's served wind rides on `station` itself
-    // (src/config/station-registry.ts's `RawsWindStationFields`, cast on
-    // both ends since `TelemetryStation` in types/station.ts is not owned
-    // by this task). Every other network's station simply never carries
-    // these properties, so this is a no-op for them: no glyph, no
-    // interpolation, nothing drawn off a station's own point.
-    const rawsWind = readRawsWindFields(station);
-    // Only a station the service served BOTH a speed and a direction for
-    // gets a glyph: a null field (the station reported none) or a missing
-    // field (this is not a RAWS station at all) both draw nothing, per the
-    // acceptance's "Station reported none" and "no value is interpolated"
-    // clauses.
-    if (rawsWind && rawsWind.windSpeedServed !== null && rawsWind.windDirectionServed !== null) {
+    if (glyphWind) {
       // overflow stays visible on `.telemetry-marker` (no CSS rule says
       // otherwise), so an absolutely-positioned child sized past the
       // marker's own 16px box still renders in full; no src/styles/app.css
       // edit needed (that grant does not exist for this task).
-      el.appendChild(buildRawsWindGlyph(rawsWind));
+      el.appendChild(buildRawsWindGlyph(glyphWind, station.color));
     }
 
     // TelemetryStation.coords is [lat, lng]; MapLibre wants [lng, lat].
@@ -263,6 +284,51 @@ function readRawsWindFields(station: TelemetryStation): RawsWindStationFields | 
 }
 
 /**
+ * The narrowed, definitely-non-null shape a glyph (and its shared accessible
+ * name) may be built from. `glyphEligibleWind` below is the ONLY place that
+ * decides eligibility; `buildRawsWindGlyph` and `buildRawsWindAccessibleName`
+ * both take this type as their parameter so neither one can re-check (or
+ * mis-check) what the caller already guaranteed (opus-read.md F12: the
+ * former inner `if` in `buildRawsWindGlyph` was dead code because its only
+ * caller already enforced the same condition; removed, not duplicated).
+ */
+interface RawsWindGlyphFields {
+  readonly windSpeedServed: string;
+  readonly windDirectionServed: string;
+  readonly windDirectionDeg: number;
+  readonly windObservedAtIso: string | null;
+}
+
+/**
+ * DDM-P9-T06 fix F3 (opus-read.md): the single eligibility gate for the wind
+ * symbol. A glyph exists ONLY when the discovery response served a speed
+ * string, a direction string, AND a numeric direction: `windDirectionDeg` is
+ * `null` whenever `windDirectionServed` has no leading numeric token (for
+ * example the issuer's own "calm" or "VRB"), and drawing a rotated arrow in
+ * that case would silently invent a due-north reading the issuer never
+ * served. The popup's own wind row (src/ui/popups.ts `rawsWindText`) still
+ * renders the served strings verbatim regardless of what this function
+ * returns; only the marker's visual glyph and its title/accessible-name
+ * sentence are gated here.
+ */
+function glyphEligibleWind(wind: RawsWindStationFields | null): RawsWindGlyphFields | null {
+  if (
+    wind === null ||
+    wind.windSpeedServed === null ||
+    wind.windDirectionServed === null ||
+    wind.windDirectionDeg === null
+  ) {
+    return null;
+  }
+  return {
+    windSpeedServed: wind.windSpeedServed,
+    windDirectionServed: wind.windDirectionServed,
+    windDirectionDeg: wind.windDirectionDeg,
+    windObservedAtIso: wind.windObservedAtIso
+  };
+}
+
+/**
  * The observation time in the same "As of" style the RAWS popup already
  * uses (src/ui/popups.ts `renderRawsRows`), so the two never disagree about
  * how a timestamp reads. `null` reads "an unknown time" rather than
@@ -274,60 +340,170 @@ function formatRawsObservedTime(observedAtIso: string | null): string {
   return Number.isNaN(observed.getTime()) ? observedAtIso : observed.toLocaleString();
 }
 
+/**
+ * The one accessible-name sentence for a station's sustained wind, shared by
+ * the marker's own `title` tooltip (fix F4: the SVG glyph's
+ * `pointer-events: none` means ITS `<title>` never receives a hover, so
+ * `renderStations` appends this same sentence to the parent
+ * `.telemetry-marker` element's `title` instead) and the glyph's own
+ * `aria-label` / `<title>` below, so a mouse hover and a screen reader read
+ * the identical served sentence rather than two independently-worded claims
+ * about the same reading.
+ */
+function buildRawsWindAccessibleName(wind: RawsWindGlyphFields): string {
+  const observed = formatRawsObservedTime(wind.windObservedAtIso);
+  return `Wind ${wind.windSpeedServed} from ${wind.windDirectionServed} (NIFC RAWS), observed ${observed}`;
+}
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// DDM-P9-T06 fix F5 and F10 (opus-read.md): the glyph's drawn size and shape
+// are a stated DDM display convention, never an issuer-defined unit or
+// threshold. `WIND_GLYPH_DOT_RADIUS_PX` matches the 16px network-color dot's
+// own radius (`el.style.width/height = '16px'` above) so the shaft always
+// starts just outside the dot regardless of the served speed, keeping the
+// dot fully visible under the glyph (fix F10). The shaft then grows linearly
+// from `WIND_GLYPH_SHAFT_MIN_PX` at `WIND_GLYPH_SHAFT_MIN_MPH` (5 mph) or
+// slower up to `WIND_GLYPH_SHAFT_MAX_PX` at `WIND_GLYPH_SHAFT_MAX_MPH`
+// (35 mph) or faster, clamped at both ends; the arrowhead is a fixed size at
+// the shaft's outer end. None of these numbers are read from, or shown as, a
+// served value: the served strings themselves are what the accessible name,
+// the title, and the popup always display.
+const WIND_GLYPH_DOT_RADIUS_PX = 8;
+const WIND_GLYPH_SHAFT_MIN_PX = 6;
+const WIND_GLYPH_SHAFT_MAX_PX = 22;
+const WIND_GLYPH_SHAFT_MIN_MPH = 5;
+const WIND_GLYPH_SHAFT_MAX_MPH = 35;
+const WIND_GLYPH_ARROWHEAD_LENGTH_PX = 8;
+const WIND_GLYPH_ARROWHEAD_HALF_WIDTH_PX = 5;
+const WIND_GLYPH_STROKE_WIDTH_PX = 1.5;
+// Padding so the arrowhead's white contrast stroke never clips against the
+// SVG's own edge.
+const WIND_GLYPH_PAD_PX = 2;
+
+/**
+ * The served speed's leading numeric token, for example 5 out of "5 mph".
+ * Mirrors `parseLeadingNumber` in src/config/station-registry.ts (a private,
+ * unexported helper; that file's non-doc-comment lines are not owned by this
+ * round), duplicated rather than imported for that reason. Never invents a
+ * value: a string with no numeric token (the issuer's own "calm" or similar)
+ * returns `null`, and the caller draws no directional shape for it, the same
+ * way it already does for a parsed speed of exactly 0.
+ */
+function parseServedWindSpeedMph(served: string): number | null {
+  const match = /-?\d+(?:\.\d+)?/.exec(served);
+  return match ? Number(match[0]) : null;
+}
+
+function clampWindSpeedForShaft(speedMph: number): number {
+  return Math.min(Math.max(speedMph, WIND_GLYPH_SHAFT_MIN_MPH), WIND_GLYPH_SHAFT_MAX_MPH);
+}
+
+function windGlyphShaftLengthPx(speedMph: number): number {
+  const clamped = clampWindSpeedForShaft(speedMph);
+  const t =
+    (clamped - WIND_GLYPH_SHAFT_MIN_MPH) / (WIND_GLYPH_SHAFT_MAX_MPH - WIND_GLYPH_SHAFT_MIN_MPH);
+  return WIND_GLYPH_SHAFT_MIN_PX + t * (WIND_GLYPH_SHAFT_MAX_PX - WIND_GLYPH_SHAFT_MIN_PX);
+}
 
 /**
  * The sustained-wind symbol: an inline-styled SVG child of the marker
  * element (no CSS class whose appearance depends on src/styles/app.css;
- * that grant does not exist for this task). Only ever built for a RAWS
- * station whose discovery response served BOTH a speed and a direction
- * (the null-speed and null-direction cases render no glyph at all, per the
- * acceptance's "Station reported none" and "no value is interpolated"
- * clauses; the popup's own wind row, src/ui/popups.ts `rawsWindText`,
- * carries "Station reported none" for the missing-value case).
+ * that grant does not exist for this task). The caller (`renderStations`,
+ * via `glyphEligibleWind`) is the only gate on when this is built at all; a
+ * missing or unparseable field never reaches here (fix F12: no inner
+ * re-check, no dead branch).
  *
  * Rotation convention, stated here and in the glyph's own accessible name:
  * `WindDirDegrees` is the direction the wind is blowing FROM, in degrees
  * clockwise from true north (NWCG PMS 426-3, verified against the NIFC
  * PublicView_RAWS FeatureServer's own field description). The glyph is a
  * wind-vane arrowhead that points INTO the wind, so rotating an
- * upward-pointing (north-pointing) arrow clockwise by exactly the served
+ * upward-pointing (north-pointing) shaft clockwise by exactly the served
  * number of degrees draws it correctly with no sign inversion and no
  * re-derivation of the served value.
+ *
+ * `color` is `station.color`, the SAME network color the unified legend
+ * already keys on (fix F10: the glyph no longer carries its own hardcoded
+ * dark fill). Measured for the RAWS network color specifically (DDM-P9-T06
+ * report, WCAG 2.1 non-text contrast, 3:1 minimum): `#ef4444` (raws) against
+ * a white basemap area is 3.76:1 (relative luminance 0.2291 vs 1.0), so the
+ * network color passes and is used directly, with a white 1px contrast
+ * stroke; a live satellite or terrain basemap varies pixel to pixel, so this
+ * is a representative check against the lightest plausible background, not
+ * an exhaustive one.
  */
-function buildRawsWindGlyph(wind: RawsWindStationFields): SVGSVGElement {
+function buildRawsWindGlyph(wind: RawsWindGlyphFields, color: string): SVGSVGElement {
+  const accessibleName = buildRawsWindAccessibleName(wind);
+  const parsedSpeedMph = parseServedWindSpeedMph(wind.windSpeedServed);
+  // Fix F5 (opus-read.md, including its "0 mph with a direction" caveat): a
+  // parsed speed of 0, or a speed string with no numeric token at all, draws
+  // no directional shape. A calm or unparseable reading has nothing honest
+  // to point; the accessible name, the marker's title, and the popup's own
+  // wind row still carry the served strings verbatim regardless.
+  const drawArrow = parsedSpeedMph !== null && parsedSpeedMph > 0;
+  const shaftLength = drawArrow ? windGlyphShaftLengthPx(parsedSpeedMph) : 0;
+  const halfSize =
+    WIND_GLYPH_DOT_RADIUS_PX +
+    shaftLength +
+    (drawArrow ? WIND_GLYPH_ARROWHEAD_LENGTH_PX : 0) +
+    WIND_GLYPH_PAD_PX;
+  const size = halfSize * 2;
+
   const svg = document.createElementNS(SVG_NS, 'svg') as unknown as SVGSVGElement;
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('width', '22');
-  svg.setAttribute('height', '22');
+  // A viewBox centered on (0, 0) so the drawn shape's own coordinates are
+  // measured from the marker's center, matching the `translate(-50%, -50%)`
+  // positioning below with no separate offset math.
+  svg.setAttribute('viewBox', `${-halfSize} ${-halfSize} ${size} ${size}`);
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
   svg.setAttribute('data-telemetry-wind-glyph', 'true');
   svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', accessibleName);
   svg.setAttribute('focusable', 'false');
   svg.style.position = 'absolute';
   svg.style.left = '50%';
   svg.style.top = '50%';
   svg.style.pointerEvents = 'none';
+  svg.style.transform = `translate(-50%, -50%) rotate(${wind.windDirectionDeg}deg)`;
 
-  if (wind.windSpeedServed !== null && wind.windDirectionServed !== null) {
-    const observed = formatRawsObservedTime(wind.windObservedAtIso);
-    const accessibleName = `Wind ${wind.windSpeedServed} from ${wind.windDirectionServed} (NIFC RAWS), observed ${observed}`;
-    svg.setAttribute('aria-label', accessibleName);
-    // An SVG `<title>` is the element's native tooltip-on-hover text
-    // (mirrors `el.title` on the marker's own HTMLElement above); `aria-label`
-    // alone gives the accessible name to assistive tech but not a hover
-    // tooltip, and the acceptance's "carrying the observation time in its
-    // title and accessible name" asks for both.
-    const title = document.createElementNS(SVG_NS, 'title');
-    title.textContent = accessibleName;
-    svg.appendChild(title);
-    const rotationDeg = wind.windDirectionDeg ?? 0;
-    svg.style.transform = `translate(-50%, -50%) rotate(${rotationDeg}deg)`;
+  // An SVG `<title>` is the element's native tooltip-on-hover text, but
+  // `pointer-events: none` above means this element is never itself the
+  // hover target (the browser resolves the hover to the parent
+  // `.telemetry-marker`, whose own `title` attribute carries this same
+  // sentence; see `renderStations`). The SVG `<title>` still records the
+  // accessible sentence directly in the DOM for anything that reads it there.
+  const title = document.createElementNS(SVG_NS, 'title');
+  title.textContent = accessibleName;
+  svg.appendChild(title);
+
+  if (drawArrow) {
+    // Fix F10: the shaft starts exactly `WIND_GLYPH_DOT_RADIUS_PX` from
+    // center, the SAME radius as the network-color dot underneath, so the
+    // glyph's stroke never overlaps the dot at any served speed; the
+    // arrowhead sits further out still, at the shaft's far end.
+    const shaftStart = WIND_GLYPH_DOT_RADIUS_PX;
+    const shaftEnd = shaftStart + shaftLength;
+    const tipY = shaftEnd + WIND_GLYPH_ARROWHEAD_LENGTH_PX;
+
+    const shaft = document.createElementNS(SVG_NS, 'line');
+    shaft.setAttribute('x1', '0');
+    shaft.setAttribute('y1', String(-shaftStart));
+    shaft.setAttribute('x2', '0');
+    shaft.setAttribute('y2', String(-shaftEnd));
+    shaft.setAttribute('stroke', color);
+    shaft.setAttribute('stroke-width', String(WIND_GLYPH_STROKE_WIDTH_PX));
+    shaft.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(shaft);
 
     const arrow = document.createElementNS(SVG_NS, 'path');
-    arrow.setAttribute('d', 'M12 2 L17 15 L12 11.5 L7 15 Z');
-    arrow.setAttribute('fill', '#1a1a1a');
+    arrow.setAttribute(
+      'd',
+      `M0 ${-tipY} L${WIND_GLYPH_ARROWHEAD_HALF_WIDTH_PX} ${-shaftEnd} L${-WIND_GLYPH_ARROWHEAD_HALF_WIDTH_PX} ${-shaftEnd} Z`
+    );
+    arrow.setAttribute('fill', color);
     arrow.setAttribute('stroke', '#ffffff');
-    arrow.setAttribute('stroke-width', '1.25');
+    arrow.setAttribute('stroke-width', '1');
     arrow.setAttribute('stroke-linejoin', 'round');
     svg.appendChild(arrow);
   }
