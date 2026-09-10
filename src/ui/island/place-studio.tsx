@@ -1197,11 +1197,20 @@ function PlaceStudio() {
             </div>
             <label class="place-studio-search" for="place-studio-search">
               <span class="sr-only">Search</span>
+              {/* Item 14, 2026-09-10: the field was correctly NAMED for
+                  assistive technology (the sr-only span and the aria-label
+                  above) and completely UNLABELLED for everyone else, so it
+                  rendered as an empty bordered box above a long list with
+                  nothing saying it filtered that list. The visible
+                  placeholder states what typing here does, in the sidebar
+                  search's own voice; it is a hint, never a substitute for
+                  the accessible name, which is unchanged. */}
               <input
                 id="place-studio-search"
                 type="search"
                 value={query}
                 aria-label="Search"
+                placeholder="Filter this list"
                 onInput={(event) => setQuery(event.currentTarget.value)}
               />
             </label>

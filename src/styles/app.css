@@ -1047,12 +1047,18 @@ button.conditions-metric:hover .conditions-action-hide {
   gap: 6px;
 }
 
+/* Item 9, 2026-09-10: a CONTROL takes the design system's radius; the pill
+   shape is reserved for status BADGES, where the fully rounded end is what
+   distinguishes a readout from something you can press (.status-pill,
+   .point-heat-pill, .impact-horizon-pill, .impact-hazard-pill keep theirs
+   for exactly that reason). Three selectors moved: this one,
+   .time-bar-mode and .shell-horizon-btn. */
 .preset-chip {
   appearance: none;
   background: var(--bg-2);
   color: var(--fg-1);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   padding: 6px 12px;
   font-family: var(--font-display);
   font-size: 11px;
@@ -3156,7 +3162,14 @@ button.conditions-metric:hover .conditions-action-hide {
   }
 
   .place-studio-list {
-    max-height: min(50dvh, 560px);
+    /* Item 14, 2026-09-10: at 1440x900 the old min(50dvh, 560px) stopped the
+       list about two thirds of the way down and left the whole lower right of
+       the studio empty, which is what the owner saw. The rail, the type
+       status and the search field above it cost about 210px, so 68dvh leaves
+       a comfortable bottom margin while giving the list roughly a third more
+       rows. The absolute cap stays so a very tall monitor does not stretch
+       one column into a ribbon. */
+    max-height: min(68dvh, 760px);
   }
 }
 
@@ -4445,6 +4458,23 @@ button.telemetry-item {
   border: 1px solid var(--accent-strong);
   border-radius: var(--radius-md);
 }
+/* Item 14, box in box, 2026-09-10. Items 16 and 17 moved this bordered,
+   accent-outlined callout INSIDE .impact-horizon, which is itself a bordered,
+   padded card, so Current Conditions grew a frame within a frame that no
+   other horizon has. The section still needs to read as its own thing (it is
+   a reading AT A POINT inside a briefing ABOUT AN AREA, and blurring that
+   would be a worse defect than the nesting), so the emphasis moves from a
+   full border to a left rule plus a lighter tint: still distinct, no second
+   box. The trailing 22px margin also goes, because inside a 12px-padded card
+   it opened a gap wider than the card's own padding. */
+.impact-horizon .point-heat {
+  margin-bottom: 0;
+  padding: 10px 10px 10px 12px;
+  border: 0;
+  border-left: 2px solid var(--accent-strong);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: color-mix(in srgb, var(--bg-2) 92%, var(--accent) 8%);
+}
 .point-heat .impact-section-title {
   margin-bottom: 2px;
   color: var(--fg-0);
@@ -4548,14 +4578,62 @@ button.telemetry-item {
 .point-heat-series {
   border-top: 1px dashed var(--line);
 }
+/* Item 14 / director finding F1, 2026-09-10. Setting `display` on a <summary>
+   to anything but `list-item` suppresses the browser's own disclosure
+   triangle, and nothing replaced it: the seven NWS grid guidance sections
+   (Temperature, Maximum temperature, Minimum temperature, Apparent
+   temperature, Heat index, Wet Bulb Globe Temperature, Relative humidity)
+   rendered as inert labelled rows. The only affordance left was
+   `cursor: pointer`, which does not exist on touch at all, so on a phone
+   nothing distinguished them from static text. That is an affordance and
+   accessibility defect, not cosmetics.
+
+   The flex layout is kept (it is what puts the label and the row apart), and
+   the marker is redrawn explicitly as a chevron that rotates on [open]. The
+   `list-style: none` and the ::-webkit-details-marker rule are belt and
+   braces for a future change that restores `display: list-item` and would
+   otherwise get two markers. */
 .point-heat-series summary {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding: 7px 0;
   cursor: pointer;
   font-size: 10.5px;
   color: var(--fg-1);
+  list-style: none;
+}
+.point-heat-series summary::-webkit-details-marker {
+  display: none;
+}
+.point-heat-series summary::after {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-right: 2px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  /* Pointing down when closed, up when open. The box is rotated about its
+     own centre, so the visual weight stays on the text baseline. */
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.15s ease;
+}
+.point-heat-series[open] > summary::after {
+  transform: translateY(1px) rotate(-135deg);
+}
+.point-heat-series summary:hover {
+  color: var(--fg-0);
+}
+.point-heat-series summary:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .point-heat-series summary::after {
+    transition: none;
+  }
 }
 .point-heat-series table {
   width: 100%;
@@ -6109,7 +6187,8 @@ a.impact-resource-link::after {
   padding: 2px 9px;
   background: transparent;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  /* Item 9: a control, not a badge. See the note above .preset-chip. */
+  border-radius: var(--radius-sm);
   font-family: var(--font-body);
   font-weight: var(--fw-body);
   font-size: 10px;
@@ -7020,7 +7099,11 @@ a.impact-resource-link::after {
   background: var(--bg-2);
   color: var(--fg-2);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  /* Item 9: these are the Current Conditions / Near Term / Long Range
+     controls the owner named. A segmented row of pills reads as three
+     separate badges; the design system radius reads as one control set.
+     See the note above .preset-chip. */
+  border-radius: var(--radius-md);
   padding: 4px 6px;
   font-family: var(--font-display);
   font-size: 10px;
