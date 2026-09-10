@@ -250,13 +250,17 @@ test.describe('DDM-P8-T03: every rendered claim carries exactly one observed/out
   test('R4: absence cells carry no tag', async ({ page }) => {
     await openBriefing(page, withWeekly());
 
-    // Fire nearTerm and longRange have no lane declared for them
-    // (matrix.ts LANE_PLACEMENT), so with the other lanes stubbed empty they
-    // render CELL_ABSENCE prose, never a claim. Heat longRange left this list
-    // when DDM-P7-T07 wired the CPC seasonal temperature outlook lane; it now
-    // renders a claim (see tests/heat-h2-point-heat.spec.ts).
+    // Fire longRange has no lane declared for it (matrix.ts LANE_PLACEMENT),
+    // so with the other lanes stubbed empty it renders CELL_ABSENCE prose,
+    // never a claim. Two cells have left this list as their lanes were wired:
+    // heat longRange when DDM-P7-T07 wired the CPC seasonal temperature
+    // outlook lane (see tests/heat-h2-point-heat.spec.ts), and fire nearTerm
+    // when DDM-P7-T03 wired the SPC Day 1-8 Fire Weather Outlook lane, which
+    // gotoApp now stubs on every briefing boot (tests/helpers.ts
+    // stubSpcFireOutlook), so that cell renders a claim here (see
+    // tests/briefing-matrix.spec.ts). Fire longRange stays: NIFC publishes
+    // its seasonal outlook as a PDF only, so no lane can be declared for it.
     const absenceCells: ReadonlyArray<readonly ['fire' | 'heat', 'nearTerm' | 'longRange']> = [
-      ['fire', 'nearTerm'],
       ['fire', 'longRange']
     ];
     for (const [hazard, horizon] of absenceCells) {
@@ -453,6 +457,18 @@ test.describe('DDM-P8-T03 clauses 2 and 3: one grammar, product-specific registe
       page
     }) => {
       await stubWildfireProducts(page);
+      // The heat step below reads the NWS HeatRisk catalog, which this case
+      // left live. That made an assertion about OUR register grammar depend
+      // on an agency's publication state: `extractFrames`
+      // (src/layers/heatrisk.ts) rejects a catalog with a duplicate
+      // `idp_validtime`, the layer then reports unavailable, no time bar
+      // installs, and `#time-bar` has no `data-register` to compare the key
+      // against. Observed 2026-09-09 (S21), when the live catalog served
+      // seven granules with only five distinct valid times and a two-day
+      // gap. Stubbed for the same reason `openBriefing` above already stubs
+      // it (DDM-P7-T05 F2): this case is about the key and the bar stating
+      // ONE register, never about whether NWS published cleanly today.
+      await stubHeatRiskCatalog(page);
       // Wildfire current: NIFC perimeters, observed.
       await gotoApp(page, '?cluster=wildfire');
       let key = page.locator('#map-key');

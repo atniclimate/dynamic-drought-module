@@ -22,7 +22,17 @@ import { stubWildfireFeeds } from './wildfire-fixtures';
  * "src/map/fire3d.ts": "assets/fire3d-<hash>.js"); the sibling names insert
  * a hyphenated word first, which the pattern's `\w+` cannot cross.
  */
-const FIRE3D_CHUNK_PATTERN = /\/assets\/fire3d-\w+\.js(?:[?#]|$)/;
+// The deferred Fire 3D controller chunk, `assets/fire3d-<hash>.js`. The hash
+// is Vite's base64url alphabet, which includes `-` and `_`, so `\w+` is not
+// enough: it was silently unable to match any build whose hash happened to
+// contain a hyphen, and this test then counted zero requests forever and
+// failed while the product was correct (DDM-P7-T03 landing, S21: the build's
+// hash became `BKOq_V-I`). The two sibling chunks `fire3d-context-<hash>.js`
+// and `fire3d-presentation-<hash>.js` are NOT this chunk and were excluded
+// before only as an accident of `\w` rejecting their hyphen, so they are
+// excluded explicitly now that the hash class allows one.
+const FIRE3D_CHUNK_PATTERN =
+  /\/assets\/fire3d-(?!context-|presentation-)[A-Za-z0-9_-]+\.js(?:[?#]|$)/;
 
 function fire3dStamp(page: import('@playwright/test').Page): Promise<string | undefined> {
   return page.evaluate(() => document.documentElement.dataset['ddmFire3d']);
