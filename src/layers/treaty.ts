@@ -28,6 +28,7 @@ import type { Feature, FeatureCollection, GeoJsonProperties, Geometry } from 'ge
 import { URLS } from '../config/urls';
 import { TREATY_COLOR_DEFAULT, pickTreatyColor } from '../config/palette';
 import { buildTreatyPopupHtml } from '../ui/popups';
+import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
 import { buildBoundaryContext } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import { registry } from '../state/registry';
@@ -214,11 +215,11 @@ export function bindPopups(map: maplibregl.Map): void {
     kind: 'treaty-cession',
     layerIds: [OUTLINE_LAYER_ID],
     label: (feature) => pickTreatyName(feature.properties ?? {}) ?? 'Treaty Area',
-    respond: (feature, click) => {
+    respond: (feature, click, map) => {
       const props: GeoJsonProperties = feature.properties ?? {};
       const featureName = pickTreatyName(props) ?? 'Treaty Area';
       return {
-        content: buildTreatyPopupHtml(props, featureName),
+        content: buildTreatyPopupHtml(props, featureName, buildPlaceConditionsHtml(map, click.point, feature.geometry)),
         selection: buildBoundaryContext('treaty', props, feature.geometry, click.lngLat, featureName),
         // An id-less feature clears any prior emphasis (the old
         // emphasizePlace contract) rather than lighting an unknown one.

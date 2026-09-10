@@ -27,6 +27,7 @@ import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 import { URLS } from '../config/urls';
 import { TRIBAL_FILL_COLOR, TRIBAL_OUTLINE_COLOR } from '../config/palette';
 import { buildTribalPopupHtml } from '../ui/popups';
+import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
 import { buildBoundaryContext, resolveBoundaryTitle } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import { registry } from '../state/registry';
@@ -223,10 +224,10 @@ export function bindPopups(_map: maplibregl.Map): void {
     kind: 'tribal-lands',
     layerIds: [FILL_LAYER_ID],
     label: (feature) => resolveBoundaryTitle('tribal', feature.properties ?? null),
-    respond: (feature, click) => {
+    respond: (feature, click, map) => {
       const props: GeoJsonProperties = feature.properties ?? null;
       return {
-        content: buildTribalPopupHtml(props),
+        content: buildTribalPopupHtml(props, buildPlaceConditionsHtml(map, click.point, feature.geometry)),
         selection: buildBoundaryContext('tribal', props, feature.geometry, click.lngLat),
         // An id-less feature clears any prior emphasis (the old
         // emphasizePlace contract) rather than lighting an unknown one.

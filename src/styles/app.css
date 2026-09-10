@@ -1996,6 +1996,68 @@ button.conditions-metric:hover .conditions-action-hide {
   letter-spacing: 0.01em;
 }
 
+/* The place-popup Conditions block (owner amendment, 2026-09-10;
+   src/ui/popup-conditions.ts). Sits in the frozen head between the "kind
+   of place" agency line and the briefing door, so it reads at a glance
+   with no scrolling. Deliberately plainer than .fire-context (no heading,
+   tighter rule): this card is meant to be very simple. */
+.popup-conditions {
+  margin: 6px 0 8px;
+  padding: 6px 0 2px;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-body);
+  font-size: 11.5px;
+}
+.popup-condition-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  padding: 3px 0;
+}
+.popup-condition-row + .popup-condition-row {
+  border-top: 1px dashed var(--line);
+}
+.popup-condition-label {
+  flex-shrink: 0;
+  color: var(--fg-2);
+  letter-spacing: 0.02em;
+}
+.popup-condition-value {
+  color: var(--fg-0);
+  font-weight: var(--fw-body);
+  text-align: right;
+  line-height: 1.35;
+}
+
+/* The briefing-door pulse (director ruling, 2026-09-10, "Emphasis must be
+   ethical"): a REAL issuer-published warning-class condition at this
+   place (an NWS *Warning*-tier product, or a currently mapped WFIGS
+   wildfire perimeter -- never a DDM judgement, a raster hazard-potential
+   surface, or an outlook; src/ui/popup-conditions.ts `hasWarning`).
+   The STATIC form comes first and carries the full meaning alone (clause
+   b): a solid red/orange edge plus the warning's own product name in the
+   button's visible text (accessibility clause d: colour is never the only
+   carrier). The keyframe on top is an addition, not the only signal, and
+   is fully retired under prefers-reduced-motion below. */
+.popup-impact-btn--pulse {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 1px var(--danger);
+  animation: popup-impact-btn-pulse 1.6s ease-in-out infinite;
+}
+.popup-impact-btn--pulse:hover {
+  border-color: var(--danger);
+}
+@keyframes popup-impact-btn-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px var(--danger); }
+  50% { box-shadow: 0 0 0 3px var(--warn); }
+}
+/* The reduced-motion fallback lives in the consolidated
+   @media (prefers-reduced-motion: reduce) block below (search
+   "popup-impact-btn-pulse"): the static red/orange edge above already
+   carries the full meaning with no motion, so reduced motion only drops
+   the animation, per clause b. */
+
 /* The InteractionCoordinator's lower-priority-hits escape hatch: a quiet
    disclosure inside the one response (D-0.7.0-058 ruling 5). Native
    details/summary keeps it keyboard and touch reachable for free. */
@@ -4922,6 +4984,10 @@ a.impact-resource-link::after {
   /* The wave pulse falls back to the static three-stroke glyph. */
   .spinner-waves path { animation: none; }
   .telemetry-marker { animation: none; }
+  /* The briefing-door warning pulse falls back to its static red/orange
+     edge (box-shadow set on the base .popup-impact-btn--pulse rule
+     already carries the full meaning with no motion; clause b). */
+  .popup-impact-btn--pulse { animation: none; }
   /* The shimmer sweep falls back to a static faint tint (no motion). */
   .skeleton-shimmer::after {
     animation: none;

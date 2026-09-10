@@ -14,6 +14,7 @@ import type { CwmsLatest } from '../util/cwms';
 import { fetchHydrometDaily, hydrometStationValue } from '../util/hydromet';
 import type { HydrometSeries } from '../util/hydromet';
 import { escapeHtml } from '../util/escape';
+import type { PlaceConditions } from './popup-conditions';
 import {
   fetchUsgsIV,
   extractTimeSeries,
@@ -47,18 +48,49 @@ import { sparklineSvg } from './charts';
  * point-event popup that the InteractionCoordinator resolved to a place
  * through the location-identity stack; src/map/interaction-coordinator.ts
  * `attachConditionDoor`). The `data-ddm-impact-trigger` attribute is the
- * hook the InteractionCoordinator wires to, keeping the popup a
- * lightweight identity card while the rich briefing lives in the slide-in
- * panel.
+ * hook the InteractionCoordinator wires to. Since the 2026-09-10 owner
+ * amendment the popup itself now carries a Conditions block above this
+ * door (src/ui/popup-conditions.ts); the door still opens the fuller,
+ * rich briefing in the slide-in panel.
  *
  * The label is PLACE-SPECIFIC: the visible text and the accessible name
  * are the identical string (no separate `aria-label`, so there is nothing
  * for the two to diverge on), naming the place the door opens a briefing
  * for rather than repeating the same bare noun on every boundary popup.
  * `placeTitle` runs through `escapeHtml`: never inline it unescaped.
+ *
+ * `opts.pulse` plus `opts.warningLabel` (director ruling, 2026-09-10,
+ * "Emphasis must be ethical"): set ONLY when `src/ui/popup-conditions.ts`
+ * found a REAL issuer-published warning-class condition at this place (an
+ * NWS product ending "Warning", or a currently mapped NIFC WFIGS wildfire
+ * perimeter) -- never for a DDM-computed judgement, a raster
+ * hazard-potential surface, or an outlook. `warningLabel` is that
+ * condition's own verbatim product name (or, for a fire perimeter, the
+ * plain "Mapped wildfire perimeter" legend phrase): the surface-vocabulary
+ * doctrine (scripts/check-surface-vocabulary.mjs) holds that DDM never
+ * calls its own read "a warning" in its own voice, only the issuer's own
+ * product name earns that word, so the button names the actual product
+ * rather than a generic badge. That text is part of the SAME string as the
+ * place name (still no separate `aria-label`), so colour is never the only
+ * carrier of the warning (accessibility clause d). `pulse` only takes
+ * effect when a `warningLabel` is also given (a pulse with nothing to name
+ * would be colour alone); the motion itself is added by CSS
+ * (`.popup-impact-btn--pulse`) and is fully retired under
+ * `prefers-reduced-motion: reduce`, where the class still renders its
+ * static red/orange edge treatment (clause b).
  */
-export function buildImpactTriggerButtonHtml(placeTitle: string): string {
-  return `<button type="button" class="popup-impact-btn" data-ddm-impact-trigger>Open the Impact Briefing for ${escapeHtml(placeTitle)}</button>`;
+export function buildImpactTriggerButtonHtml(
+  placeTitle: string,
+  opts?: { pulse?: boolean; warningLabel?: string | null }
+): string {
+  const warningLabel = opts?.warningLabel ?? null;
+  const pulse = opts?.pulse === true && warningLabel !== null;
+  const cls = pulse ? 'popup-impact-btn popup-impact-btn--pulse' : 'popup-impact-btn';
+  const label =
+    pulse && warningLabel !== null
+      ? `${escapeHtml(warningLabel)} - Open the Impact Briefing for ${escapeHtml(placeTitle)}`
+      : `Open the Impact Briefing for ${escapeHtml(placeTitle)}`;
+  return `<button type="button" class="${cls}" data-ddm-impact-trigger>${label}</button>`;
 }
 
 
@@ -85,6 +117,7 @@ function formatAcres(raw: unknown): string {
  */
 export function buildEcoregionPopupHtml(
   name: string,
+  conditions: PlaceConditions,
   opts?: { level?: 'III' | 'IV'; parentL3?: string }
 ): string {
   const level = opts?.level ?? 'III';
@@ -96,9 +129,10 @@ export function buildEcoregionPopupHtml(
   return `
     <div class="popup-title">${escapeHtml(name)}</div>
     <div class="popup-agency">${agency}</div>
+    ${conditions.html}
+    ${buildImpactTriggerButtonHtml(name, { pulse: conditions.hasWarning, warningLabel: conditions.warningLabel })}
     ${withinHtml}
     <div class="popup-description">Ecoregions denote areas of general similarity in ecosystems and in the type, quality, and quantity of environmental resources.</div>
-    ${buildImpactTriggerButtonHtml(name)}
     <div class="popup-links">
       <a href="https://www.epa.gov/eco-research/level-iii-and-iv-ecoregions-continental-united-states" target="_blank" rel="noopener">EPA Ecoregions</a>
     </div>
@@ -118,7 +152,7 @@ export function buildEcoregionPopupHtml(
  * representations have their own layers and popups (aiannh,
  * bia-reservations), each naming its actual agency.
  */
-export function buildTribalPopupHtml(props: GeoJsonProperties): string {
+export function buildTribalPopupHtml(props: GeoJsonProperties, conditions: PlaceConditions): string {
   const p = props ?? {};
   const name = p.LARName || p.LARNAME || p.NAME || p.name || p.TRIBE || p.RESERV_NAM || 'Tribal Land Area';
   const govt = p.LARGovernment || p.GOVT || p.tribe || '';
@@ -128,11 +162,12 @@ export function buildTribalPopupHtml(props: GeoJsonProperties): string {
   return `
     <div class="popup-title">${escapeHtml(String(name))}</div>
     <div class="popup-agency">Tribal Lands (deployer data)</div>
+    ${conditions.html}
+    ${buildImpactTriggerButtonHtml(String(name), { pulse: conditions.hasWarning, warningLabel: conditions.warningLabel })}
     ${govt ? `<div class="popup-description"><strong>Government:</strong> ${escapeHtml(String(govt))}</div>` : ''}
     ${type ? `<div class="popup-treaty-meta">Type: ${escapeHtml(String(type))}</div>` : ''}
     ${acresStr ? `<div class="popup-treaty-meta">Acres: ${escapeHtml(acresStr)}</div>` : ''}
     <div class="popup-description">This boundary comes from data supplied by this deployment's operator under its own authorization (see data/README.md in the deployed module). It is a representation, not a definitive depiction of Tribal jurisdiction; Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority.</div>
-    ${buildImpactTriggerButtonHtml(String(name))}
   `;
 }
 
@@ -148,7 +183,7 @@ export function buildTribalPopupHtml(props: GeoJsonProperties): string {
  * legal, survey, or jurisdictional truth. Tribal sovereignty and a Tribe's
  * own understanding of its territory are matters of sovereign authority.
  */
-export function buildBiaReservationPopupHtml(props: GeoJsonProperties): string {
+export function buildBiaReservationPopupHtml(props: GeoJsonProperties, conditions: PlaceConditions): string {
   const p = props ?? {};
   const name = p.LARNAME || p.LARName || p.NAME || p.name || 'Reservation land area';
   const classification = p.CLASSIFICATION || p.Classification || '';
@@ -159,11 +194,12 @@ export function buildBiaReservationPopupHtml(props: GeoJsonProperties): string {
   return `
     <div class="popup-title">${escapeHtml(String(name))}</div>
     <div class="popup-agency">BIA · AIAN Land Area Representation</div>
+    ${conditions.html}
+    ${buildImpactTriggerButtonHtml(String(name), { pulse: conditions.hasWarning, warningLabel: conditions.warningLabel })}
     ${classification ? `<div class="popup-treaty-meta">Classification: ${escapeHtml(String(classification))}</div>` : ''}
     ${region ? `<div class="popup-treaty-meta">BIA region: ${escapeHtml(String(region))}</div>` : ''}
     ${acresStr ? `<div class="popup-treaty-meta">Acres: ${escapeHtml(acresStr)}</div>` : ''}
     <div class="popup-description">This boundary is from the Bureau of Indian Affairs (BIA) American Indian and Alaska Native Land Area Representation (AIAN-LAR). Land Area Representation (LAR) feature definitions were last published in 2019. The live BIA service separately reports continuing spatial-accuracy and attribute updates. Retrieved on ${escapeHtml(String(retrievedOn))}. The layer is BIA-authoritative for BIA mission use only. This representation is for illustrative, reference, and statistical use, not legal, survey, or jurisdictional truth. It is requested live from the BIA service when the layer needs it, held only in this browser session's memory, and not bundled by this module. Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority. No federal dataset maps every Tribal Nation; absence from this layer is not absence of a Nation or of its rights.</div>
-    ${buildImpactTriggerButtonHtml(String(name))}
     <div class="popup-links">
       <a href="https://biamaps.geoplatform.gov/" target="_blank" rel="noopener">BIA GeoPlatform</a>
       <a href="https://onemap-bia-geospatial.hub.arcgis.com/" target="_blank" rel="noopener">BIA OneMap</a>
@@ -217,7 +253,7 @@ function resolveAiannhSubtype(code: string): { label: string; isLegal: boolean }
  * distinct, separately labeled representation and is never blended with the
  * BIA AIAN-LAR layer (the architectural-review HIGH constraint).
  */
-export function buildAiannhPopupHtml(props: GeoJsonProperties): string {
+export function buildAiannhPopupHtml(props: GeoJsonProperties, conditions: PlaceConditions): string {
   const p = props ?? {};
   const name = p.NAME || p.BASENAME || p.name || 'Tribal land area';
   const code = String(p.AIANNHCC || p.aiannhcc || '');
@@ -245,16 +281,21 @@ export function buildAiannhPopupHtml(props: GeoJsonProperties): string {
   return `
     <div class="popup-title">${escapeHtml(String(name))}</div>
     <div class="popup-agency">US Census Bureau · AIANNH (live)</div>
+    ${conditions.html}
+    ${buildImpactTriggerButtonHtml(String(name), { pulse: conditions.hasWarning, warningLabel: conditions.warningLabel })}
     <div class="popup-treaty-meta">Type: ${escapeHtml(subtype.label)}</div>
     <div class="popup-description">${caveat}</div>
-    ${buildImpactTriggerButtonHtml(String(name))}
     <div class="popup-links">
       <a href="https://www.census.gov/programs-surveys/geography.html" target="_blank" rel="noopener">US Census geography</a>
     </div>
   `;
 }
 
-export function buildTreatyPopupHtml(props: GeoJsonProperties, featureName: string): string {
+export function buildTreatyPopupHtml(
+  props: GeoJsonProperties,
+  featureName: string,
+  conditions: PlaceConditions
+): string {
   const p = props ?? {};
   const year = p.treaty_year || p.TREATY_DAT || p.TREATY_DATE || p.SIGNED_DAT || p.YEAR_SIGNED || p.year || '';
   const dataTribe = p.tribe || p.TRIBE_NAME || p.TRIBE || '';
@@ -267,10 +308,11 @@ export function buildTreatyPopupHtml(props: GeoJsonProperties, featureName: stri
   return `
     <div class="popup-title">${escapeHtml(featureName)}</div>
     <div class="popup-agency">Historical Treaty Area</div>
+    ${conditions.html}
+    ${buildImpactTriggerButtonHtml(featureName, { pulse: conditions.hasWarning, warningLabel: conditions.warningLabel })}
     ${year ? `<div class="popup-treaty-meta">Signed: ${escapeHtml(String(year))}</div>` : ''}
     ${tribe ? `<div class="popup-treaty-meta">Tribe: ${escapeHtml(tribe)}</div>` : ''}
     <div class="popup-description">Agency polygons are a representation of Treaty cession areas, not a definitive depiction of Tribal jurisdiction. Treaty rights and Tribal sovereignty are matters of sovereign authority.</div>
-    ${buildImpactTriggerButtonHtml(featureName)}
     <div class="popup-links">
       <a href="https://wisaard.dahp.wa.gov/" target="_blank" rel="noopener">WA DAHP WISAARD</a>
       <a href="https://native-land.ca/" target="_blank" rel="noopener">Native Land Digital</a>
@@ -382,7 +424,7 @@ function formatSpcTime(value: unknown): string {
  * boundaries (no sovereignty caveat applies); the generalization note keeps
  * the coarse 1:20,000,000 source honest.
  */
-export function buildStatePopupHtml(props: GeoJsonProperties): string {
+export function buildStatePopupHtml(props: GeoJsonProperties, conditions: PlaceConditions): string {
   const p = props ?? {};
   const name = p.NAME || p.name || 'State';
   const postal = p.STUSPS || '';
@@ -390,9 +432,10 @@ export function buildStatePopupHtml(props: GeoJsonProperties): string {
   return `
     <div class="popup-title">${escapeHtml(String(name))}</div>
     <div class="popup-agency">US Census Bureau · State Boundary</div>
+    ${conditions.html}
+    ${buildImpactTriggerButtonHtml(String(name), { pulse: conditions.hasWarning, warningLabel: conditions.warningLabel })}
     ${postal ? `<div class="popup-treaty-meta">Postal code: ${escapeHtml(String(postal))}</div>` : ''}
     <div class="popup-description">State boundary from the United States Census Bureau cartographic boundary file (1:20,000,000 generalization); a reference frame for conditions and resources, not a survey-grade line.</div>
-    ${buildImpactTriggerButtonHtml(String(name))}
     <div class="popup-links">
       <a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html" target="_blank" rel="noopener">Census cartographic boundary files</a>
     </div>
