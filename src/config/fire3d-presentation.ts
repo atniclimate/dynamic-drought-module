@@ -122,6 +122,64 @@ export function isWithinTerrainCoverage(lng: number, lat: number): boolean {
   );
 }
 
+/** A geographic box, the shape MapLibre's `LngLatBounds` reports. */
+export interface ViewBox {
+  readonly west: number;
+  readonly south: number;
+  readonly east: number;
+  readonly north: number;
+}
+
+/**
+ * How much of a VIEW the bundled archive covers: all of it, some of it, or
+ * none of it.
+ *
+ * `full` earns no sentence, `none` earns the wholly-outside sentence, and
+ * `partial` earns its own, because those are three different facts about the
+ * ground and only two of them were ever said.
+ */
+export type TerrainCoverageReading = 'full' | 'partial' | 'none';
+
+/**
+ * Classify a view's footprint against the archive's extent (Codex adversarial
+ * review 2026-09-10, finding 8).
+ *
+ * The predicate this replaces asked `isWithinTerrainCoverage` about the view's
+ * CENTER and then made a categorical claim about the whole view. A point
+ * cannot carry that claim: at the eastern edge, a viewport straddling
+ * longitude -110.5 said nothing at all while half its ground was unmodelled,
+ * and two thousandths of a degree of pan later the same mixed scene announced
+ * that "this view is outside" the extent and "the ground here carries no
+ * archived elevation". Both readings were wrong about the same picture.
+ *
+ * The view box is a SUPERSET of the visible ground when the camera is pitched
+ * (MapLibre reports the bounding box of a trapezoid), and that asymmetry is
+ * deliberate here: a superset can turn a `full` into a `partial`, which
+ * over-qualifies, and can never turn a `partial` into a `full`, which would
+ * under-qualify. Coverage prose is allowed to be cautious; it is not allowed
+ * to be confident and wrong.
+ *
+ * Edges are inclusive, matching `isWithinTerrainCoverage` and the archive's
+ * own inclusive bounding box: a view touching an edge without crossing it is
+ * still fully covered. Antimeridian-naive, like every other box in this
+ * codebase.
+ */
+export function classifyTerrainCoverage(view: ViewBox): TerrainCoverageReading {
+  const box = FIRE3D_TERRAIN_COVERAGE;
+  const disjoint =
+    view.west > box.east ||
+    view.east < box.west ||
+    view.south > box.north ||
+    view.north < box.south;
+  if (disjoint) return 'none';
+  const contained =
+    view.west >= box.west &&
+    view.east <= box.east &&
+    view.south >= box.south &&
+    view.north <= box.north;
+  return contained ? 'full' : 'partial';
+}
+
 /**
  * Exported (not just an internal helper) so the header-vs-sentence test in
  * tests/fire3d-mode.spec.ts asserts against the exact same formatting the
@@ -171,8 +229,15 @@ export const FIRE3D_COVERAGE_NOTE =
   'central Oregon pilot area only, from zoom 13.';
 
 /**
- * What the scene's live status line adds the moment the view's center sits
+ * What the scene's live status line adds the moment the view sits WHOLLY
  * outside FIRE3D_TERRAIN_COVERAGE while the mode is active.
+ *
+ * "Wholly", since 2026-09-10: this used to be published from the view's
+ * CENTER, so it also fired for a view whose ground was half covered, and
+ * stayed silent for a view whose ground was half MISSING. A view that only
+ * overlaps the extent gets FIRE3D_PARTIAL_COVERAGE_STATUS instead, and only a
+ * view with no covered ground at all gets this one. See
+ * `classifyTerrainCoverage`.
  *
  * FIRE3D_COVERAGE_NOTE states the box once, always, beside the toggle,
  * whether or not it is presently true of the view; a reader who has not
@@ -191,6 +256,27 @@ export const FIRE3D_OUT_OF_COVERAGE_STATUS =
   `This view is outside the ${FIRE3D_TERRAIN_COVERAGE.issuer}'s bundled ` +
   'elevation extent, so the ground here carries no archived elevation and ' +
   'renders flat; that is a coverage gap, not a failed scene.';
+
+/**
+ * What the status line says when the view STRADDLES the extent's edge: some
+ * of the visible ground is modelled and some of it is not.
+ *
+ * The third reading the center-point test could not express (Codex adversarial
+ * review 2026-09-10, finding 8). It has to exist as its own sentence rather
+ * than reusing either neighbour, because both neighbours are categorical
+ * about the whole view and this case is the one where that is false. It makes
+ * the same no-data-versus-broken distinction the wholly-outside sentence
+ * makes, and for the same reason: MapLibre's sampler returns elevation 0 for
+ * uncovered ground, which is indistinguishable from an unwired scene unless
+ * the interface says which it is. It names no boundary coordinate, because
+ * the standing FIRE3D_COVERAGE_NOTE already states the box and repeating it
+ * mid-sentence would read as a second, competing claim.
+ */
+export const FIRE3D_PARTIAL_COVERAGE_STATUS =
+  `Part of this view lies outside the ${FIRE3D_TERRAIN_COVERAGE.issuer}'s ` +
+  'bundled elevation extent; that ground carries no archived elevation and ' +
+  'renders flat, while the rest of the view is modelled. That is a coverage ' +
+  'gap, not a failed scene.';
 
 /**
  * Always-visible non-prediction disclosure for the 3D view and its context
