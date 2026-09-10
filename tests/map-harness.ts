@@ -65,12 +65,21 @@ export interface FakeMapHarness {
    */
   setZoom(next: number): void;
   getZoom(): number;
+  /**
+   * Move the view center and fire `moveend`, the way a real pan settles
+   * (fire3d.ts's coverage tracking watches this event). Defaults to
+   * FIRE3D_TERRAIN_COVERAGE's own declared center so a spec that never
+   * calls this behaves as an ordinary in-coverage activation, unchanged
+   * from before this method existed.
+   */
+  setCenter(next: { lng: number; lat: number }): void;
 }
 
 export function fakeMapHarness(initial?: {
   readonly pitch?: number;
   readonly bearing?: number;
   readonly zoom?: number;
+  readonly center?: { readonly lng: number; readonly lat: number };
 }): FakeMapHarness {
   const sources = new Map<string, Record<string, unknown>>();
   const layerOrder: string[] = [];
@@ -89,6 +98,12 @@ export function fakeMapHarness(initial?: {
   // The default sits above every zoom gate in the application, so a spec
   // that does not care about zoom behaves as it always did.
   let zoom = initial?.zoom ?? 8;
+  // Defaults to the bundled terrain archive's own declared center
+  // (public/data/hillshade-dem-pnw.pmtiles metadata: [-119, 45.5]), so a
+  // spec that never calls setCenter keeps behaving as an ordinary
+  // in-coverage activation, exactly as before FIRE3D_TERRAIN_COVERAGE
+  // tracking existed.
+  let center = { lng: initial?.center?.lng ?? -119, lat: initial?.center?.lat ?? 45.5 };
 
   const applyCameraOptions = (options: Record<string, unknown>): void => {
     if (typeof options['pitch'] === 'number') camera.pitch = options['pitch'];
@@ -170,6 +185,7 @@ export function fakeMapHarness(initial?: {
     getPitch: () => camera.pitch,
     getBearing: () => camera.bearing,
     getZoom: () => zoom,
+    getCenter: () => ({ ...center }),
     easeTo: (options: Record<string, unknown>) => {
       cameraCalls.push({ kind: 'easeTo', options });
       applyCameraOptions(options);
@@ -212,7 +228,13 @@ export function fakeMapHarness(initial?: {
         listener({});
       }
     },
-    getZoom: () => zoom
+    getZoom: () => zoom,
+    setCenter: (next: { lng: number; lat: number }) => {
+      center = { ...next };
+      for (const listener of [...(listeners.get('moveend') ?? [])]) {
+        listener({});
+      }
+    }
   };
 }
 

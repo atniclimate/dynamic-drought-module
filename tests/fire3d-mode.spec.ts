@@ -7,6 +7,7 @@ import {
   FIRE3D_CAMERA_TRANSITION_MS,
   FIRE3D_COVERAGE_NOTE,
   FIRE3D_NON_PREDICTION_NOTE,
+  FIRE3D_OUT_OF_COVERAGE_STATUS,
   FIRE3D_PITCH_DEGREES,
   FIRE3D_REFUSAL_TEXT,
   FIRE3D_SKY_CLEAR_SPECIFICATION,
@@ -19,6 +20,7 @@ import {
   fire3dControlOffer,
   formatLatitudeDeg,
   formatLongitudeDeg,
+  isWithinTerrainCoverage,
   perimeterRibbonSlabOpacity
 } from '../src/config/fire3d-presentation';
 import {
@@ -482,6 +484,70 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     restoreFetch();
     browser.restore();
   }
+});
+
+// ---------------------------------------------------------------------------
+// Node: terrain-relief lane defect 1 -- the scene still builds outside the
+// archive box, and says so, at the moment it is true
+// ---------------------------------------------------------------------------
+
+test('isWithinTerrainCoverage agrees with FIRE3D_TERRAIN_COVERAGE at its own edges', () => {
+  const { west, south, east, north } = FIRE3D_TERRAIN_COVERAGE;
+  // Inclusive at every edge: the archive's own bounding box is inclusive.
+  expect(isWithinTerrainCoverage(west, south)).toBe(true);
+  expect(isWithinTerrainCoverage(east, north)).toBe(true);
+  expect(isWithinTerrainCoverage(west - 0.001, south)).toBe(false);
+  expect(isWithinTerrainCoverage(east + 0.001, north)).toBe(false);
+  expect(isWithinTerrainCoverage(west, south - 0.001)).toBe(false);
+  expect(isWithinTerrainCoverage(east, north + 0.001)).toBe(false);
+  // The archive's own declared center (public/data/hillshade-dem-pnw.pmtiles
+  // metadata: [-119, 45.5]), well inside the box.
+  expect(isWithinTerrainCoverage(-119, 45.5)).toBe(true);
+});
+
+test('a fire outside the archive box still gets the full scene, and the status names the coverage gap the moment it is true', async () => {
+  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+  const restoreFetch = stubPmtilesFetch();
+  // Miami: well outside FIRE3D_TERRAIN_COVERAGE (west -125 to east -110.5).
+  const harness = fakeMapHarness({ center: { lng: -80.19, lat: 25.76 } });
+  const { map } = harness;
+
+  try {
+    setFire3DActive(map, true);
+    await expect.poll(() => getFire3DStatus().state).toBe('active');
+
+    // Entry never asked about location (shouldFire3DBeActive tests only
+    // preference, viewport, capability, and the committed cluster): the
+    // scene still builds in full, camera and context included.
+    expect(harness.getTerrain()).toEqual({
+      source: 'fire3d-terrain-dem',
+      exaggeration: FIRE3D_TERRAIN_EXAGGERATION
+    });
+    expect(getFire3DStatus().outOfTerrainCoverage).toBe(true);
+
+    // Panning back inside the box clears it live, without leaving the scene.
+    harness.setCenter({ lng: -119, lat: 45.5 });
+    expect(getFire3DStatus().state).toBe('active');
+    expect(getFire3DStatus().outOfTerrainCoverage).toBe(false);
+
+    // And panning back out sets it again.
+    harness.setCenter({ lng: -80.19, lat: 25.76 });
+    expect(getFire3DStatus().outOfTerrainCoverage).toBe(true);
+
+    setFire3DActive(map, false);
+    // The moveend listener detaches with the scene (mirrors the existing
+    // error-listener check on the activation test above), so a stray pan
+    // after exit cannot resurrect or leak it.
+    expect(harness.listenerCount('moveend')).toBe(0);
+  } finally {
+    setFire3DActive(map, false);
+    restoreFetch();
+    browser.restore();
+  }
+});
+
+test('FIRE3D_OUT_OF_COVERAGE_STATUS names the same issuer as the standing coverage sentence and invents no new one', () => {
+  expect(FIRE3D_OUT_OF_COVERAGE_STATUS).toContain(FIRE3D_TERRAIN_COVERAGE.issuer);
 });
 
 // ---------------------------------------------------------------------------
