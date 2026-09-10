@@ -17,7 +17,8 @@ export type BriefingSourceKey =
   | 'enso'
   | 'waterSupply'
   | 'cpcSeasonal'
-  | 'cpcSeasonalTemp';
+  | 'cpcSeasonalTemp'
+  | 'spcFireOutlook';
 
 export type SourceCapabilityState =
   | 'available'
@@ -41,7 +42,8 @@ export const BRIEFING_SOURCE_KEYS: readonly BriefingSourceKey[] = [
   'enso',
   'waterSupply',
   'cpcSeasonal',
-  'cpcSeasonalTemp'
+  'cpcSeasonalTemp',
+  'spcFireOutlook'
 ];
 
 export const BRIEFING_SOURCE_LABELS: Readonly<
@@ -60,7 +62,9 @@ export const BRIEFING_SOURCE_LABELS: Readonly<
   enso: 'ENSO phase context',
   waterSupply: 'NWRFC water-supply outlook',
   cpcSeasonal: 'NOAA CPC seasonal drought outlook',
-  cpcSeasonalTemp: 'NOAA CPC seasonal temperature outlook'
+  cpcSeasonalTemp: 'NOAA CPC seasonal temperature outlook',
+  // DDM-P7-T03 (DR-022 a): SPC Day 1-8 Fire Weather Outlook, near-term fire.
+  spcFireOutlook: 'NOAA SPC Day 1-8 Fire Weather Outlook'
 };
 
 type NationalHeatSourceKey =
@@ -215,4 +219,59 @@ export const NATIONAL_HEAT_SOURCE_CAPABILITY: Readonly<
     heatRisk: unavailable('The selected point has no recognized source geography.'),
     cpcSeasonalTemp: unavailable('The selected point has no recognized source geography.')
   }
+};
+
+/**
+ * DDM-P7-T03 (DR-022 a): the SPC Day 1-8 Fire Weather Outlook's own service
+ * extent, the same national-geography model DDM-P7-T07 used above for the
+ * CPC seasonal temperature outlook, bounded to this one new key so no
+ * existing row above changes shape. F2 (S20 fix round): round 1's comment
+ * falsely cited verify-spc-nifc.md for an extent claim that receipt never
+ * made. A dedicated science verifier then ran on this extent
+ * (science-verdict-extent.md, S20 round 2): SPC's own about.html states the
+ * outlook depicts risk "across the continental United States" (VERIFIED,
+ * cited on the `conus` row), and the service's own EPSG:3857 `fullExtent`,
+ * converted that session to about 25 N-50 N, 125 W-67 W, corroborates a
+ * CONUS-shaped bound; but SPC never states an explicit Alaska, Hawaii,
+ * Puerto Rico, served-territory, or American Samoa exclusion, and it
+ * publishes nothing about Canada at all (UNVERIFIED for that specific
+ * claim). The six non-conus rows below are therefore worded as a DDM
+ * convention derived from the measured extent plus the issuer's own
+ * domain sentence, never as a quoted issuer exclusion, and all six stay
+ * `unavailable`, the conservative default, unchanged by this round. The
+ * note strings themselves are reader-facing copy (src/impact/hydrate.ts
+ * settles a policy-gated lane with `sources[key].note`, which the panel
+ * renders as the cell note), so each is one short sentence on the model of
+ * the HeatRisk and CPC rows above; the provenance lives here, in this
+ * comment, and in I:/claude-temp/ddm-s20/DDM-P7-T03/science-verdict-extent.md
+ * (a director edit at the merge, S20 round 2).
+ */
+export const SPC_FIRE_OUTLOOK_CAPABILITY: Readonly<
+  Record<CanonicalGeographyKey, SourceCapabilityCell>
+> = {
+  conus: available(
+    'The SPC Fire Weather Outlook covers the continental United States, in SPC\'s own words (verified 2026-09-09).'
+  ),
+  alaska: unavailable(
+    'The SPC Fire Weather Outlook\'s own service extent does not reach this geography.'
+  ),
+  hawaii: unavailable(
+    'The SPC Fire Weather Outlook\'s own service extent does not reach this geography.'
+  ),
+  'puerto-rico': unavailable(
+    'The SPC Fire Weather Outlook\'s own service extent does not reach this geography.'
+  ),
+  'served-territory': unavailable(
+    'The SPC Fire Weather Outlook\'s own service extent does not reach this geography.'
+  ),
+  'american-samoa': unavailable(
+    'The SPC Fire Weather Outlook\'s own service extent does not reach this geography.'
+  ),
+  canada: unavailable(
+    'The SPC Fire Weather Outlook is a NOAA product whose stated coverage is the continental United States.'
+  ),
+  transboundary: unavailable(
+    'No point source runs until the selected point has a country-specific identity.'
+  ),
+  unknown: unavailable('The selected point has no recognized source geography.')
 };

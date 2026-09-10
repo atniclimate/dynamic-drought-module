@@ -260,6 +260,12 @@ export async function gotoApp(
   // spec that opens the briefing sends this new query to the live agency
   // (see `stubCpcSeasonalTempOutlook`'s own comment).
   await stubCpcSeasonalTempOutlook(page);
+  // DDM-P7-T03: the near-term fire cell reads the SPC Day 1-8 Fire Weather
+  // Outlook live, independent of any map layer, on every briefing. Stubbed
+  // unconditionally, like the calls above, so no spec that opens the
+  // briefing sends these eight new queries to the live agency (see
+  // `stubSpcFireOutlook`'s own comment; S17's lesson, missed in round 1).
+  await stubSpcFireOutlook(page);
   coverFuturePages(page);
   if (!/[?&](?:layers|cluster)=/.test(query)) {
     await stubDefaultNadm(page);
@@ -756,6 +762,92 @@ export async function stubCpcSeasonalTempOutlook(
 }
 
 const cpcSeasonalTempOutlookStubbedPages = new WeakSet<Page>();
+
+// ---------------------------------------------------------------------------
+// SPC Day 1-8 Fire Weather Outlook network stub (DDM-P7-T03)
+// ---------------------------------------------------------------------------
+
+export interface StubSpcFireOutlookOptions {
+  /** Serve this HTTP status with a plain failure body (the 503 case). */
+  readonly httpStatus?: number;
+  /** Serve an ArcGIS HTTP-200 error envelope instead of the fixture rows. */
+  readonly errorEnvelope?: boolean;
+}
+
+/**
+ * Route every SPC fire weather outlook layer query
+ * (`spcFireWeatherOutlookMapServer`, the SPC_firewx MapServer,
+ * `src/impact/sources.ts` `fetchSpcFireOutlookClaims`) to a deterministic
+ * fixture, keyed by ArcGIS layer id (1 Day 1, 4 Day 2, 8/11/14/17/20/23 Days
+ * 3-8). A layer with no entry in `layerFeatures` answers with an empty
+ * FeatureCollection, the honest "no area drawn" case, on the
+ * `stubCpcSeasonalTempOutlook` model above (S17's lesson: an unstubbed
+ * briefing lane reaches the live agency).
+ *
+ * De-duplicated per browser context (the guard is keyed on the context the
+ * route is registered on): a spec that
+ * needs a specific reading or a failure arm calls this itself, WITH its own
+ * `layerFeatures`/`options`, BEFORE `gotoApp`; `gotoApp`'s own later call
+ * then finds this context already stubbed and is a no-op, so the spec's own
+ * reading is never shadowed by the default empty one (Playwright tries the
+ * most recently registered matching route handler first).
+ *
+ * Registered on the browser CONTEXT, not the page: Playwright resolves a
+ * page-level `page.route` ahead of a context-level `browserContext.route`
+ * regardless of registration order, so `gotoApp`'s later, context-level
+ * default here can never shadow an already-page-level SPC stub a spec set
+ * up its own way before calling `gotoApp` (found in
+ * tests/fire-heat-time-bar.spec.ts's `stubFire`, which this lane does not
+ * own and so cannot rewrite onto this helper this round); it still answers
+ * every spec that has no page-level SPC stub of its own.
+ */
+export async function stubSpcFireOutlook(
+  page: Page,
+  layerFeatures: Partial<Record<number, unknown[]>> = {},
+  options: StubSpcFireOutlookOptions = {}
+): Promise<void> {
+  const context = page.context();
+  if (spcFireOutlookStubbedContexts.has(context)) return;
+  spcFireOutlookStubbedContexts.add(context);
+
+  await context.route('**/SPC_firewx/MapServer/*/query?*', async (route: Route) => {
+    if (options.httpStatus !== undefined && options.httpStatus !== 200) {
+      await route.fulfill({
+        status: options.httpStatus,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'stubbed upstream failure' })
+      });
+      return;
+    }
+    if (options.errorEnvelope) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/plain',
+        body: JSON.stringify({
+          status: 'error',
+          messages: ['Could not access any server machines.']
+        })
+      });
+      return;
+    }
+    const url = new URL(route.request().url());
+    const layerMatch = /\/MapServer\/(\d+)\/query/.exec(url.pathname);
+    const layer = layerMatch ? Number(layerMatch[1]) : NaN;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/geo+json',
+      body: JSON.stringify({
+        type: 'FeatureCollection',
+        features: layerFeatures[layer] ?? []
+      })
+    });
+  });
+}
+
+// Keyed on the CONTEXT the route lives on (not the page), so a second page in
+// one context can never register a second context-level default that would
+// shadow the first page's fixture (the `coveredContexts` precedent above).
+const spcFireOutlookStubbedContexts = new WeakSet<BrowserContext>();
 
 /**
  * The set of layer keys currently encoded in the URL's `layers=` parameter.

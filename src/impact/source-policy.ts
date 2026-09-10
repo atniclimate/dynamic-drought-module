@@ -5,6 +5,7 @@ import {
 import {
   BRIEFING_SOURCE_KEYS,
   NATIONAL_HEAT_SOURCE_CAPABILITY,
+  SPC_FIRE_OUTLOOK_CAPABILITY,
   type BriefingSourceKey,
   type SourceCapabilityCell
 } from '../config/source-capability';
@@ -71,6 +72,15 @@ export function briefingSourcePolicy(
       key === 'cpcSeasonalTemp'
     ) {
       sources[key] = heat[key];
+    } else if (
+      // DDM-P7-T03 (DR-022 a): the SPC fire weather outlook's coverage
+      // follows its own service extent (SPC_FIRE_OUTLOOK_CAPABILITY),
+      // the same national-geography model as cpcSeasonalTemp above,
+      // bounded to this one key; every other key keeps the regionalCell
+      // branch below unchanged.
+      key === 'spcFireOutlook'
+    ) {
+      sources[key] = SPC_FIRE_OUTLOOK_CAPABILITY[geography.key];
     } else {
       sources[key] = regionalCell(
         droughtEnabled,

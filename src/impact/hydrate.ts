@@ -37,6 +37,7 @@ import {
   fetchNifcClaims,
   fetchNwsAlertClaims,
   fetchNwsForecastClaims,
+  fetchSpcFireOutlookClaims,
   fetchUsdmClaims,
   type SourceResult
 } from './sources';
@@ -319,6 +320,7 @@ export async function hydrateBriefing(
     runLane('enso', () => loadEnsoClaims(context, signal)),
     runLane('waterSupply', () => fetchWaterSupplyClaims(context, signal)),
     runLane('cpcSeasonalTemp', () => fetchCpcSeasonalTempClaims(context, signal)),
+    runLane('spcFireOutlook', () => fetchSpcFireOutlookClaims(context, signal)),
     initialHeatRisk,
     forecast,
     alerts,
