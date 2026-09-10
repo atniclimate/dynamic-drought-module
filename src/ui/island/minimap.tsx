@@ -40,7 +40,7 @@
 
 import type * as maplibregl from 'maplibre-gl';
 import type { ReadonlySignal } from '@preact/signals';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
 import {
   ALL_FRAMING_BOUNDS,
@@ -62,6 +62,7 @@ import {
   MINIMAP_LAKE_PATHS,
   MINIMAP_LAND_PATH,
 } from '../../config/minimap-geometry';
+import { MINIMAP_WHP } from '../../config/minimap-whp';
 import {
   MINIMAP_DROUGHT_COLORS,
   MINIMAP_WILDFIRE_COLORS,
@@ -150,6 +151,40 @@ function shapesPath(
   return shapes.map((shape) => shapePath(shape, projector)).join('');
 }
 
+interface ViewportFootprintRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+const VIEWPORT_FOOTPRINT_MIN_SIZE = 2;
+
+/**
+ * Project the main map's current bounds into the drawing plane, clamped to
+ * the authored equirectangular window (LON_MIN/MAX, LAT_MIN/MAX) so a
+ * camera panned or zoomed past this schematic's coverage still "stays
+ * inside the card" (clause 2) instead of drawing off it. This is feedback
+ * only: nothing here writes to the framing store or the URL.
+ */
+function viewportFootprintRect(
+  bounds: maplibregl.LngLatBounds | null,
+): ViewportFootprintRect | null {
+  if (!bounds) return null;
+  const clampLon = (lon: number): number =>
+    Math.min(LON_MAX, Math.max(LON_MIN, lon));
+  const clampLat = (lat: number): number =>
+    Math.min(LAT_MAX, Math.max(LAT_MIN, lat));
+  const [x1, y1] = project([clampLon(bounds.getWest()), clampLat(bounds.getNorth())]);
+  const [x2, y2] = project([clampLon(bounds.getEast()), clampLat(bounds.getSouth())]);
+  return {
+    x: Math.min(x1, x2),
+    y: Math.min(y1, y2),
+    width: Math.max(VIEWPORT_FOOTPRINT_MIN_SIZE, Math.abs(x2 - x1)),
+    height: Math.max(VIEWPORT_FOOTPRINT_MIN_SIZE, Math.abs(y2 - y1)),
+  };
+}
+
 const HAWAII_INSET_SCALE = 2.6;
 const HAWAII_INSET_X = 8;
 const HAWAII_INSET_Y = DRAWING_MAP_HEIGHT - 96;
@@ -214,12 +249,21 @@ const CAMERA_ONLY_NOTE = 'Click fits the camera. Camera-only; selects nothing.';
 
 export type MinimapMetricContext = HazardClusterKey | 'custom';
 
+/**
+ * DR-040 c: Heat and ENSO stay explicitly neutral (DDM-UI-004); the minimap
+ * never invents a product for them. The literal phrase "Navigation only"
+ * leads every one of these sentences so the visible note, its accessible
+ * label fallback, and every framing target's accessible name (which all
+ * read this same table via `metricNote` / `accessibleName`) say the same
+ * honest thing in the same words, satisfying the acceptance clause's
+ * "states that it is for navigation only" alternative to a shaded metric.
+ */
 const NEUTRAL_METRIC_NOTES: Readonly<
   Record<Exclude<MinimapMetricContext, 'drought' | 'wildfire'>, string>
 > = {
-  heat: 'No verified Extreme Heat framing metric applied.',
-  enso: 'No verified ENSO framing metric applied.',
-  custom: 'No verified custom-display framing metric applied.'
+  heat: 'Navigation only: no verified Extreme Heat framing metric applied.',
+  enso: 'Navigation only: no verified ENSO framing metric applied.',
+  custom: 'Navigation only: no verified custom-display framing metric applied.'
 };
 
 /**
@@ -242,6 +286,32 @@ function useDesktopMinimap(): boolean {
     const sync = (): void => setMatches(query.matches);
     // Re-read once on mount: the viewport can change between the lazy
     // island chunk's first render and this effect.
+    sync();
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
+  return matches;
+}
+
+/**
+ * The compact height band (src/styles/app.css: `@media (min-width: 721px)
+ * and (max-height: 699px)`) is where `.shell-minimap-map` (the inline
+ * instance) yields to `.shell-minimap-popover-wrap` (the popover instance,
+ * behind the "Map areas" door). Duplicated here for the same reason
+ * `DESKTOP_MINIMAP_QUERY` is: a JS-side gate on whether an instance's
+ * geometry has any chance of being seen (EF-2 in spirit, DDM-P11-T01 in
+ * fact) has to match the CSS breakpoint that actually hides it, or the
+ * gate lies in one direction or the other.
+ */
+const COMPACT_HEIGHT_BAND_QUERY = '(min-width: 721px) and (max-height: 699px)';
+
+function useCompactHeightBand(): boolean {
+  const [matches, setMatches] = useState(
+    () => window.matchMedia(COMPACT_HEIGHT_BAND_QUERY).matches,
+  );
+  useEffect(() => {
+    const query = window.matchMedia(COMPACT_HEIGHT_BAND_QUERY);
+    const sync = (): void => setMatches(query.matches);
     sync();
     query.addEventListener('change', sync);
     return () => query.removeEventListener('change', sync);
@@ -382,6 +452,27 @@ function wildfireDescription(
   );
 }
 
+/**
+ * DR-041 b's fallback caption, named for the science verifier: the
+ * organization and product name are fixed strings authored here, the
+ * edition is read straight off the generated artifact
+ * (src/config/minimap-whp.ts, `source.edition`), never hand-typed.
+ */
+const WHP_EDITION_CAPTION = `USFS Wildfire Hazard Potential, ${MINIMAP_WHP.source.edition}`;
+const WHP_EDITION_YEAR_MATCH = MINIMAP_WHP.source.edition.match(/^\d{4}/);
+/**
+ * The edition YEAR (e.g. "2023"), not the trailing "updated YYYY-MM-DD"
+ * date in the same field: per the issuer's own metadata (USFS
+ * RDS-2015-0047-4, ddm-science-verifier check 2026-09-09), that later
+ * date is when the Forest Service patched a Nodata classification bug in
+ * the already-published 2023 raster, a technical correction, not a
+ * refresh of the underlying hazard assessment. The surface itself
+ * reflects landscape conditions as of the end of 2020 and is published
+ * as the 2023, 4th edition; using the patch date as `data-metric-time`
+ * would overstate how current the static fallback is.
+ */
+const WHP_EDITION_YEAR: string | undefined = WHP_EDITION_YEAR_MATCH?.[0];
+
 function wildfireMetricNote(snapshot: MinimapWildfireSnapshot): string {
   if (snapshot.status === 'loading' || snapshot.status === 'idle') {
     return (
@@ -400,7 +491,8 @@ function wildfireMetricNote(snapshot: MinimapWildfireSnapshot): string {
     'Red marks a current mapped wildfire perimeter; a zero count does not establish no active wildfire. ' +
     'Otherwise, WHP 2023 fills are orange above 50% High or Very High, yellow above 30% Moderate or higher, light below both thresholds, and dark for no data or an unavailable current check. ' +
     // vocab-allow: honesty disclaimer denying that static WHP is a forecast
-    'Percentages are approximate shares of classified WHP land in the covered United States portion. WHP is static strategic context, not a forecast; hatching marks partial coverage.'
+    'Percentages are approximate shares of classified WHP land in the covered United States portion. WHP is static strategic context, not a forecast; hatching marks partial coverage. ' +
+    `A zero current-fire count with WHP data renders desaturated and stippled: ${WHP_EDITION_CAPTION}, a static potential overview, not a current wildfire condition.`
   );
 }
 
@@ -464,6 +556,96 @@ function metricIsPartial(
     (wildfireSummary?.status === 'live-partial' &&
       wildfireSummary.condition !== 'mapped-wildfire')
   );
+}
+
+/**
+ * DR-041 b: the fallback case. `condition` reaches one of these three only
+ * when the current-perimeter read SUCCEEDED at zero and WHP 2023 answered
+ * for the gap (src/state/minimap-wildfire.ts:190-220,
+ * `deriveMinimapWildfireSummary`); `unavailable` (the read failed) and
+ * `no-data` (WHP has no coverage either) are excluded on purpose, so this
+ * never marks a state that has nothing to fall back to. Wildfire's
+ * `live-partial` status is unreachable except through one of these three
+ * (`mapped-wildfire` is always `status: 'live'`), so this fully subsumes
+ * the wildfire share of `metricIsPartial`.
+ */
+function isWildfireWhpFallback(
+  wildfireSummary: MinimapWildfireSummary | undefined,
+): boolean {
+  return (
+    wildfireSummary !== undefined &&
+    wildfireSummary.condition !== 'mapped-wildfire' &&
+    wildfireSummary.condition !== 'no-data' &&
+    wildfireSummary.condition !== 'unavailable'
+  );
+}
+
+function hexToRgb(hex: string): readonly [number, number, number] {
+  const value = hex.replace('#', '');
+  return [
+    parseInt(value.slice(0, 2), 16),
+    parseInt(value.slice(2, 4), 16),
+    parseInt(value.slice(4, 6), 16),
+  ];
+}
+
+function rgbToHex(channels: readonly [number, number, number]): string {
+  return `#${channels
+    .map((channel) =>
+      Math.round(Math.min(255, Math.max(0, channel)))
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`.toUpperCase();
+}
+
+/** A neutral slate, already the palette's "unknown/static" hue family
+ * (MINIMAP_WILDFIRE_COLORS['no-data'] / ['unavailable']). */
+const WHP_FALLBACK_NEUTRAL: readonly [number, number, number] = [148, 163, 184];
+const WHP_FALLBACK_DESATURATION = 0.55;
+
+/**
+ * DR-041 b: blend a WHP condition color 55% toward neutral slate so the
+ * static fallback fill is UNMISTAKABLY not the vivid live/current palette,
+ * independent of which of the three WHP condition colors it started from.
+ */
+function desaturateForWhpFallback(hex: string): string {
+  const [r, g, b] = hexToRgb(hex);
+  const [nr, ng, nb] = WHP_FALLBACK_NEUTRAL;
+  return rgbToHex([
+    r + (nr - r) * WHP_FALLBACK_DESATURATION,
+    g + (ng - g) * WHP_FALLBACK_DESATURATION,
+    b + (nb - b) * WHP_FALLBACK_DESATURATION,
+  ]);
+}
+
+type MinimapFillTreatment =
+  | { readonly kind: 'solid'; readonly color: string }
+  | { readonly kind: 'pattern'; readonly patternId: string };
+
+/**
+ * One fill decision per framing shape, used identically for the mainland
+ * paths and the Hawaii islands. `whp-fallback` (DR-041 b, desaturated +
+ * stippled) takes precedence over the older partial-coverage crosshatch
+ * for wildfire, since every wildfire `live-partial` state IS a WHP
+ * fallback state (see `isWildfireWhpFallback`); drought's crosshatch is
+ * unaffected, wildfire summaries never reach it.
+ */
+function fillTreatment(
+  idPrefix: string,
+  key: string,
+  droughtSummary: FramingDroughtSummary | undefined,
+  wildfireSummary: MinimapWildfireSummary | undefined,
+): MinimapFillTreatment | undefined {
+  const fill = metricFill(droughtSummary, wildfireSummary);
+  if (fill === undefined) return undefined;
+  if (isWildfireWhpFallback(wildfireSummary)) {
+    return { kind: 'pattern', patternId: `${idPrefix}-whp-${key}` };
+  }
+  if (metricIsPartial(droughtSummary, wildfireSummary)) {
+    return { kind: 'pattern', patternId: `${idPrefix}-partial-${key}` };
+  }
+  return { kind: 'solid', color: fill };
 }
 
 /** Commit a minimap choice: store write plus camera fit, one gesture. */
@@ -566,7 +748,54 @@ export function Minimap({
   );
   const [ensoPhase, setEnsoPhase] = useState<EnsoPhaseLabel | null>(null);
   const desktopMinimap = useDesktopMinimap();
+  const compactHeightBand = useCompactHeightBand();
   const roving = focused === undefined ? active : focused;
+
+  // DDM-P11-T01 clause 3: this is the ONE shell.tsx mounts the popover
+  // instance under (idPrefix "shell-minimap-pop", shell.tsx:309); the
+  // inline instance never matches. Derived from the frozen prefix contract
+  // shell.tsx documents (":394-406"), not from DOM traversal, so it is
+  // known synchronously on the first render with no visibility flash.
+  const isPopoverInstance = idPrefix.endsWith('-pop');
+  const rootRef = useRef<HTMLDivElement>(null);
+  // Closed is the only correct default: a popover starts closed on every
+  // boot, and nothing here can open one before this component paints.
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  useEffect(() => {
+    if (!isPopoverInstance) return;
+    const host = rootRef.current?.closest('[popover]');
+    if (!(host instanceof HTMLElement)) return;
+    const sync = (): void => setPopoverOpen(host.matches(':popover-open'));
+    sync();
+    host.addEventListener('toggle', sync);
+    return () => host.removeEventListener('toggle', sync);
+  }, [isPopoverInstance]);
+  // The inline instance is hidden below 721px (#shell-panel, the whole
+  // shell) and again in the compact height band (.shell-minimap-map
+  // yields to the popover door there); the popover instance is visible
+  // ONLY inside that same band, and only once opened. Either way, this is
+  // the single signal that gates every <svg>/<path> below (clause 3): a
+  // hidden instance renders none.
+  const geometryVisible = isPopoverInstance
+    ? compactHeightBand && popoverOpen
+    : desktopMinimap && !compactHeightBand;
+
+  // Clause 2: a live footprint of the main map's own camera, independent
+  // of the committed framing selection. `map` is the SAME instance the
+  // fit* helpers already fly (choose/chooseOcean above); this is the only
+  // place anything in this module listens to it move, so there is no
+  // second map-listener store to invent.
+  const [viewportBounds, setViewportBounds] = useState<maplibregl.LngLatBounds | null>(
+    () => map.getBounds(),
+  );
+  useEffect(() => {
+    const sync = (): void => setViewportBounds(map.getBounds());
+    sync();
+    map.on('moveend', sync);
+    return () => {
+      map.off('moveend', sync);
+    };
+  }, [map]);
 
   useEffect(() => {
     if (!showDroughtMetric || !desktopMinimap) return;
@@ -727,9 +956,12 @@ export function Minimap({
       : activeWildfire?.status === 'no-data'
         ? ' WHP 2023 does not cover this framing.'
         : '';
+  const viewportRect = geometryVisible
+    ? viewportFootprintRect(viewportBounds)
+    : null;
 
   return (
-    <div class="shell-minimap">
+    <div class="shell-minimap" ref={rootRef}>
       <div class="shell-minimap-heading">
         <h2 id={`${idPrefix}-heading`} class="panel-title shell-minimap-title">
           Jump to region
@@ -756,32 +988,46 @@ export function Minimap({
         data-drought-status={showDroughtMetric ? drought.status : 'neutral'}
         data-wildfire-status={showWildfireMetric ? wildfire.status : 'neutral'}
         data-minimap-status={
+          // Six-state vocabulary only (src/ui/island/pill-text.ts:18-25):
+          // Heat/ENSO/custom carry no status word at all rather than the
+          // former novel 'neutral' sentinel.
           showDroughtMetric
             ? drought.status
             : showWildfireMetric
               ? wildfire.status
-              : 'neutral'
+              : undefined
         }
         data-metric-context={metricContext}
+        // The source's valid month, never a retrieval timestamp; wildfire
+        // has no single canvas-wide valid time to put here honestly (its
+        // live share is dateless-current, its WHP share is dated per
+        // framing below), so it is left absent at this level on purpose.
+        data-metric-time={
+          showDroughtMetric && drought.status === 'live'
+            ? (drought.month ?? undefined)
+            : undefined
+        }
       >
-        <svg
-          class="shell-minimap-oceans"
-          viewBox={`0 0 ${DRAWING_WIDTH} ${DRAWING_HEIGHT}`}
-          preserveAspectRatio="xMidYMid meet"
-          aria-hidden="true"
-          focusable="false"
-        >
-          {OCEAN_KEYS.map((key) => {
-            return (
-              <path
-                key={key}
-                class={`shell-minimap-ocean${activeOcean === key ? ' active' : ''}`}
-                d={OCEAN_ZONE_PATHS[key]}
-                vectorEffect="non-scaling-stroke"
-              />
-            );
-          })}
-        </svg>
+        {geometryVisible && (
+          <svg
+            class="shell-minimap-oceans"
+            viewBox={`0 0 ${DRAWING_WIDTH} ${DRAWING_HEIGHT}`}
+            preserveAspectRatio="xMidYMid meet"
+            aria-hidden="true"
+            focusable="false"
+          >
+            {OCEAN_KEYS.map((key) => {
+              return (
+                <path
+                  key={key}
+                  class={`shell-minimap-ocean${activeOcean === key ? ' active' : ''}`}
+                  d={OCEAN_ZONE_PATHS[key]}
+                  vectorEffect="non-scaling-stroke"
+                />
+              );
+            })}
+          </svg>
+        )}
 
         <div class="shell-minimap-ocean-doors" role="group" aria-label="Ocean views">
           {OCEAN_KEYS.map((key) => (
@@ -807,6 +1053,7 @@ export function Minimap({
           onKeyDown={onKeyDown}
           onFocusOut={onFocusOut}
         >
+          {geometryVisible && (
           <svg
             class="shell-minimap-drawing"
             viewBox={`0 0 ${DRAWING_WIDTH} ${DRAWING_HEIGHT}`}
@@ -835,12 +1082,22 @@ export function Minimap({
               const wildfireSummary = showWildfireMetric
                 ? wildfire.summaries[key]
                 : undefined;
-              if (!metricIsPartial(droughtSummary, wildfireSummary)) return null;
+              const treatment = fillTreatment(
+                idPrefix,
+                key,
+                droughtSummary,
+                wildfireSummary,
+              );
+              if (!treatment || treatment.kind !== 'pattern') return null;
               const fill = metricFill(droughtSummary, wildfireSummary);
               if (fill === undefined) return null;
+              // DR-041 b: the WHP fallback pattern is desaturated fill plus
+              // a stipple dot, deliberately distinct from the older
+              // diagonal-hatch partial-coverage pattern below it.
+              const whpFallback = isWildfireWhpFallback(wildfireSummary);
               return (
                 <pattern
-                  id={`${idPrefix}-partial-${key}`}
+                  id={treatment.patternId}
                   key={key}
                   width="8"
                   height="8"
@@ -849,9 +1106,13 @@ export function Minimap({
                   <rect
                     width="8"
                     height="8"
-                    fill={fill}
+                    fill={whpFallback ? desaturateForWhpFallback(fill) : fill}
                   />
-                  <path d="M-2,2L2,-2M0,8L8,0M6,10L10,6" />
+                  {whpFallback ? (
+                    <circle cx="2" cy="2" r="0.9" fill="#0F172A" fill-opacity="0.4" />
+                  ) : (
+                    <path d="M-2,2L2,-2M0,8L8,0M6,10L10,6" />
+                  )}
                 </pattern>
               );
             })}
@@ -882,7 +1143,13 @@ export function Minimap({
             const wildfireSummary = showWildfireMetric
               ? wildfire.summaries[key]
               : undefined;
-            const fill = metricFill(droughtSummary, wildfireSummary);
+            const treatment = fillTreatment(
+              idPrefix,
+              key,
+              droughtSummary,
+              wildfireSummary,
+            );
+            const whpFallback = isWildfireWhpFallback(wildfireSummary);
             return (
               <path
                 key={key}
@@ -897,12 +1164,12 @@ export function Minimap({
                 vectorEffect="non-scaling-stroke"
                 clip-path={`url(#${idPrefix}-physical-land)`}
                 style={
-                  fill !== undefined
+                  treatment
                     ? {
                         fill:
-                          metricIsPartial(droughtSummary, wildfireSummary)
-                            ? `url(#${idPrefix}-partial-${key})`
-                            : fill,
+                          treatment.kind === 'pattern'
+                            ? `url(#${treatment.patternId})`
+                            : treatment.color,
                       }
                     : undefined
                 }
@@ -950,6 +1217,14 @@ export function Minimap({
                     ? wildfireSummary?.moderateOrHigherPercent
                     : undefined
                 }
+                // DR-041 b: the source's valid time (the WHP edition
+                // year, never the trailing correction date in the same
+                // field), present only on framings actually showing that
+                // static fallback fill; a live mapped-fire framing has no
+                // discrete date to claim, so it is absent.
+                data-metric-time={
+                  showWildfireMetric && whpFallback ? WHP_EDITION_YEAR : undefined
+                }
                 onClick={() => choose(map, key)}
                 onKeyDown={(event) => onRegionKeyDown(event, key)}
                 onFocus={() => setFocused(key)}
@@ -973,7 +1248,53 @@ export function Minimap({
               vectorEffect="non-scaling-stroke"
             />
           ))}
+          {viewportRect && (
+            <>
+              {/* Clause 2: feedback only (no onClick/onKeyDown, no store
+                  write) mirroring the main map's own getBounds()/moveend,
+                  never the committed framing. A white-on-navy halo keeps
+                  at least one ring at ~15:1 contrast against every fill
+                  in the drought and wildfire palettes (report has the
+                  computed ratios); reduced motion needs no handling here
+                  because neither rect carries a transition. */}
+              <rect
+                id={`${idPrefix}-viewport`}
+                class="shell-minimap-viewport"
+                data-viewport="true"
+                x={viewportRect.x}
+                y={viewportRect.y}
+                width={viewportRect.width}
+                height={viewportRect.height}
+                aria-hidden="true"
+                focusable="false"
+                style={{
+                  fill: 'none',
+                  stroke: '#0F172A',
+                  strokeWidth: 3,
+                  vectorEffect: 'non-scaling-stroke',
+                  pointerEvents: 'none',
+                }}
+              />
+              <rect
+                class="shell-minimap-viewport shell-minimap-viewport-inner"
+                x={viewportRect.x}
+                y={viewportRect.y}
+                width={viewportRect.width}
+                height={viewportRect.height}
+                aria-hidden="true"
+                focusable="false"
+                style={{
+                  fill: 'none',
+                  stroke: '#FFFFFF',
+                  strokeWidth: 1.5,
+                  vectorEffect: 'non-scaling-stroke',
+                  pointerEvents: 'none',
+                }}
+              />
+            </>
+          )}
           </svg>
+          )}
 
         <button
           type="button"
@@ -1027,92 +1348,94 @@ export function Minimap({
               ? wildfire.summaries.hawaii?.moderateOrHigherPercent
               : undefined
           }
+          data-metric-time={
+            showWildfireMetric &&
+            isWildfireWhpFallback(wildfire.summaries.hawaii)
+              ? WHP_EDITION_YEAR
+              : undefined
+          }
           onClick={() => choose(map, 'hawaii')}
           onFocus={() => setFocused('hawaii')}
         >
           <span class="shell-minimap-hawaii-label">Hawaii (enlarged)</span>
-          <svg
-            class="shell-minimap-hawaii-islands"
-            viewBox="4 205 132 104"
-            aria-hidden="true"
-            focusable="false"
-          >
-            {metricIsPartial(
-              showDroughtMetric ? drought.summaries.hawaii : undefined,
-              showWildfireMetric ? wildfire.summaries.hawaii : undefined,
-            ) ? (
-              <defs>
-                <pattern
-                  id={`${idPrefix}-partial-hawaii`}
-                  width="8"
-                  height="8"
-                  patternUnits="userSpaceOnUse"
-                >
-                  <rect
-                    width="8"
-                    height="8"
-                    fill={
-                      metricFill(
-                        showDroughtMetric
-                          ? drought.summaries.hawaii
-                          : undefined,
-                        showWildfireMetric
-                          ? wildfire.summaries.hawaii
-                          : undefined,
-                      ) ?? MINIMAP_WILDFIRE_COLORS['no-data']
+          {geometryVisible && (() => {
+            const hawaiiDrought = showDroughtMetric
+              ? drought.summaries.hawaii
+              : undefined;
+            const hawaiiWildfire = showWildfireMetric
+              ? wildfire.summaries.hawaii
+              : undefined;
+            const hawaiiTreatment = fillTreatment(
+              idPrefix,
+              'hawaii',
+              hawaiiDrought,
+              hawaiiWildfire,
+            );
+            const hawaiiWhpFallback = isWildfireWhpFallback(hawaiiWildfire);
+            const hawaiiFill = metricFill(hawaiiDrought, hawaiiWildfire);
+            return (
+              <svg
+                class="shell-minimap-hawaii-islands"
+                viewBox="4 205 132 104"
+                aria-hidden="true"
+                focusable="false"
+              >
+                {hawaiiTreatment && hawaiiTreatment.kind === 'pattern' ? (
+                  <defs>
+                    <pattern
+                      id={hawaiiTreatment.patternId}
+                      width="8"
+                      height="8"
+                      patternUnits="userSpaceOnUse"
+                    >
+                      <rect
+                        width="8"
+                        height="8"
+                        fill={
+                          hawaiiWhpFallback && hawaiiFill !== undefined
+                            ? desaturateForWhpFallback(hawaiiFill)
+                            : (hawaiiFill ?? MINIMAP_WILDFIRE_COLORS['no-data'])
+                        }
+                      />
+                      {hawaiiWhpFallback ? (
+                        <circle cx="2" cy="2" r="0.9" fill="#0F172A" fill-opacity="0.4" />
+                      ) : (
+                        <path d="M-2,2L2,-2M0,8L8,0M6,10L10,6" />
+                      )}
+                    </pattern>
+                  </defs>
+                ) : null}
+                {HAWAII_PATHS.map((path, index) => (
+                  <path
+                    key={`impact-${index}`}
+                    class="shell-minimap-impact"
+                    d={path}
+                    vector-effect="non-scaling-stroke"
+                    stroke-width={droughtImpactStrokeWidth(hawaiiDrought)}
+                    data-impact-framing="hawaii"
+                  />
+                ))}
+                {HAWAII_PATHS.map((path, index) => (
+                  <path
+                    key={index}
+                    class="shell-minimap-island"
+                    d={path}
+                    vectorEffect="non-scaling-stroke"
+                    style={
+                      hawaiiTreatment
+                        ? {
+                            fill:
+                              hawaiiTreatment.kind === 'pattern'
+                                ? `url(#${hawaiiTreatment.patternId})`
+                                : hawaiiTreatment.color,
+                          }
+                        : undefined
                     }
                   />
-                  <path d="M-2,2L2,-2M0,8L8,0M6,10L10,6" />
-                </pattern>
-              </defs>
-            ) : null}
-            {HAWAII_PATHS.map((path, index) => (
-              <path
-                key={`impact-${index}`}
-                class="shell-minimap-impact"
-                d={path}
-                vector-effect="non-scaling-stroke"
-                stroke-width={droughtImpactStrokeWidth(
-                  showDroughtMetric ? drought.summaries.hawaii : undefined,
-                )}
-                data-impact-framing="hawaii"
-              />
-            ))}
-            {HAWAII_PATHS.map((path, index) => (
-              <path
-                key={index}
-                class="shell-minimap-island"
-                d={path}
-                vectorEffect="non-scaling-stroke"
-                style={
-                  metricFill(
-                    showDroughtMetric ? drought.summaries.hawaii : undefined,
-                    showWildfireMetric ? wildfire.summaries.hawaii : undefined,
-                  ) !== undefined
-                    ? {
-                        fill: metricIsPartial(
-                          showDroughtMetric
-                            ? drought.summaries.hawaii
-                            : undefined,
-                          showWildfireMetric
-                            ? wildfire.summaries.hawaii
-                            : undefined,
-                        )
-                          ? `url(#${idPrefix}-partial-hawaii)`
-                          : metricFill(
-                              showDroughtMetric
-                                ? drought.summaries.hawaii
-                                : undefined,
-                              showWildfireMetric
-                                ? wildfire.summaries.hawaii
-                                : undefined,
-                            ),
-                      }
-                    : undefined
-                }
-              />
-            ))}
-          </svg>
+                ))}
+              </svg>
+            );
+          })()}
         </button>
 
         <button

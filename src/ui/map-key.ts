@@ -43,6 +43,7 @@ import {
   type HeatRiskFrameEventDetail
 } from './heatrisk-sequence-loader';
 import { watchDesktopMapSeat } from './map-control-seat';
+import { getTimeBarSpec, onTimeBarSpecChange } from './time-bar';
 
 export interface KeySpec {
   readonly label: string;
@@ -117,6 +118,7 @@ let nwsSnapshotTruncated = false;
 let disposeMapKeyLayout: (() => void) | null = null;
 let disposeMapKeyOverflow: (() => void) | null = null;
 let disposeMapKeySeat: (() => void) | null = null;
+let disposeMapKeyTimeBarSpec: (() => void) | null = null;
 
 /**
  * Seat the on-map key beside the map controls on the desktop shell, and
@@ -701,13 +703,19 @@ function loadingKeySpec(key: string): KeySpec {
 const HILLSHADE_COVERAGE_LABEL = 'Terrain: Pacific Northwest only';
 
 /**
- * The terrain sentence of `FIRE3D_COVERAGE_NOTE` verbatim. That constant is
- * not imported whole because its second sentence describes the 3D view's
- * bundled structure bake (the central Oregon pilot area), which says nothing
- * about the flat hillshade and would broaden the claim made here.
+ * `FIRE3D_TERRAIN_COVERAGE_SENTENCE` (src/config/fire3d-presentation.ts)
+ * mirrored here as a LITERAL, not an import: this module sits in the eager
+ * graph (loaded at first paint), and that constant's owning file is reached
+ * only through the 3D Fire mode's dynamic-import chain, so importing it here
+ * would pull that chunk into first paint. The full `FIRE3D_COVERAGE_NOTE` is
+ * not mirrored because its trailing sentence describes the 3D view's bundled
+ * structure bake (the central Oregon pilot area), which says nothing about
+ * the flat hillshade and would broaden the claim made here.
+ * tests/fire3d-mode.spec.ts asserts this string equals the source constant,
+ * so the two cannot drift silently.
  */
 const HILLSHADE_COVERAGE_NOTE =
-  'Terrain relief covers the Pacific Northwest data bake; outside it the ground renders flat.';
+  "Terrain relief uses the USGS 3D Elevation Program's elevation data for 125°W to 110.5°W, 41.5°N to 49.5°N; outside that box the ground renders flat. The archive's detail ends at zoom 8; closer views stretch its deepest tiles.";
 
 /**
  * Append the terrain coverage entry when Terrain Shading is on. It rides an
@@ -805,6 +813,7 @@ export function initMapKey(): void {
   disposeMapKeyLayout?.();
   disposeMapKeyOverflow?.();
   disposeMapKeySeat?.();
+  disposeMapKeyTimeBarSpec?.();
   const layout = watchMapKeyLayout(host);
   disposeMapKeyLayout = layout.dispose;
   disposeMapKeySeat = watchMapKeySeat(host);
@@ -926,6 +935,7 @@ export function initMapKey(): void {
       host.hidden = true;
       delete host.dataset.keyFamily;
       delete host.dataset.keyOverflow;
+      delete host.dataset.register;
       canExpand = false;
       baseInteractive = false;
       expandButton.hidden = true;
@@ -965,6 +975,16 @@ export function initMapKey(): void {
     const { active, eligible } = keyEligibility();
     family = resolveMapKeyFamily(eligible);
     host.dataset.keyFamily = family;
+    // A MIRROR of the owning layer's own declared register (never
+    // computed from the pressed horizon chip, never invented for a
+    // layer, such as WHP, that declares none): src/ui/time-bar.ts is
+    // the single source, so the key and the time bar can never disagree.
+    const timeBarSpec = getTimeBarSpec();
+    if (timeBarSpec) {
+      host.dataset.register = timeBarSpec.stamp.register;
+    } else {
+      delete host.dataset.register;
+    }
     baseInteractive =
       active.has('heatrisk') || (active.has('cdm-drought') && cdmLicense !== null);
     reflectInteraction();
@@ -1027,6 +1047,7 @@ export function initMapKey(): void {
     sstObservedDate = detail.status === 'ready' ? detail.date : null;
     update();
   });
+  disposeMapKeyTimeBarSpec = onTimeBarSpecChange(update);
 
   registry.on('change', update);
   // Every status transition can change the strip now that a loading key

@@ -1,6 +1,7 @@
 import type { GeoJsonProperties } from 'geojson';
 import { pickTreatyEntry } from '../config/palette';
-import { stationCustody } from '../config/station-registry';
+import { stationCustody, fetchRawsStationConditions } from '../config/station-registry';
+import type { RawsStationConditions } from '../config/station-registry';
 import type { TelemetryStation, TelemetryFreshness } from '../types/station';
 import {
   fetchAwdbDailySeries,
@@ -41,14 +42,24 @@ import { sparklineSvg } from './charts';
 // =============================================================================
 
 /**
- * The "Impact briefing" button appended to every boundary popup. The
- * `data-ddm-impact-trigger` attribute is the hook the InteractionCoordinator
- * wires to (src/map/interaction-coordinator.ts), keeping the popup a
+ * The Impact Briefing door appended to a place-bearing popup's frozen head
+ * (and, since DR-042 (session-ruled 2026-09-09), to a condition-surface or
+ * point-event popup that the InteractionCoordinator resolved to a place
+ * through the location-identity stack; src/map/interaction-coordinator.ts
+ * `attachConditionDoor`). The `data-ddm-impact-trigger` attribute is the
+ * hook the InteractionCoordinator wires to, keeping the popup a
  * lightweight identity card while the rich briefing lives in the slide-in
- * panel. Static markup, no interpolation, so it is safe to inline.
+ * panel.
+ *
+ * The label is PLACE-SPECIFIC: the visible text and the accessible name
+ * are the identical string (no separate `aria-label`, so there is nothing
+ * for the two to diverge on), naming the place the door opens a briefing
+ * for rather than repeating the same bare noun on every boundary popup.
+ * `placeTitle` runs through `escapeHtml`: never inline it unescaped.
  */
-export const IMPACT_TRIGGER_BUTTON_HTML =
-  '<button type="button" class="popup-impact-btn" data-ddm-impact-trigger>Impact briefing</button>';
+export function buildImpactTriggerButtonHtml(placeTitle: string): string {
+  return `<button type="button" class="popup-impact-btn" data-ddm-impact-trigger>Open the Impact Briefing for ${escapeHtml(placeTitle)}</button>`;
+}
 
 
 /**
@@ -87,7 +98,7 @@ export function buildEcoregionPopupHtml(
     <div class="popup-agency">${agency}</div>
     ${withinHtml}
     <div class="popup-description">Ecoregions denote areas of general similarity in ecosystems and in the type, quality, and quantity of environmental resources.</div>
-    ${IMPACT_TRIGGER_BUTTON_HTML}
+    ${buildImpactTriggerButtonHtml(name)}
     <div class="popup-links">
       <a href="https://www.epa.gov/eco-research/level-iii-and-iv-ecoregions-continental-united-states" target="_blank" rel="noopener">EPA Ecoregions</a>
     </div>
@@ -121,7 +132,7 @@ export function buildTribalPopupHtml(props: GeoJsonProperties): string {
     ${type ? `<div class="popup-treaty-meta">Type: ${escapeHtml(String(type))}</div>` : ''}
     ${acresStr ? `<div class="popup-treaty-meta">Acres: ${escapeHtml(acresStr)}</div>` : ''}
     <div class="popup-description">This boundary comes from data supplied by this deployment's operator under its own authorization (see data/README.md in the deployed module). It is a representation, not a definitive depiction of Tribal jurisdiction; Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority.</div>
-    ${IMPACT_TRIGGER_BUTTON_HTML}
+    ${buildImpactTriggerButtonHtml(String(name))}
   `;
 }
 
@@ -152,7 +163,7 @@ export function buildBiaReservationPopupHtml(props: GeoJsonProperties): string {
     ${region ? `<div class="popup-treaty-meta">BIA region: ${escapeHtml(String(region))}</div>` : ''}
     ${acresStr ? `<div class="popup-treaty-meta">Acres: ${escapeHtml(acresStr)}</div>` : ''}
     <div class="popup-description">This boundary is from the Bureau of Indian Affairs (BIA) American Indian and Alaska Native Land Area Representation (AIAN-LAR). Land Area Representation (LAR) feature definitions were last published in 2019. The live BIA service separately reports continuing spatial-accuracy and attribute updates. Retrieved on ${escapeHtml(String(retrievedOn))}. The layer is BIA-authoritative for BIA mission use only. This representation is for illustrative, reference, and statistical use, not legal, survey, or jurisdictional truth. It is requested live from the BIA service when the layer needs it, held only in this browser session's memory, and not bundled by this module. Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority. No federal dataset maps every Tribal Nation; absence from this layer is not absence of a Nation or of its rights.</div>
-    ${IMPACT_TRIGGER_BUTTON_HTML}
+    ${buildImpactTriggerButtonHtml(String(name))}
     <div class="popup-links">
       <a href="https://biamaps.geoplatform.gov/" target="_blank" rel="noopener">BIA GeoPlatform</a>
       <a href="https://onemap-bia-geospatial.hub.arcgis.com/" target="_blank" rel="noopener">BIA OneMap</a>
@@ -236,7 +247,7 @@ export function buildAiannhPopupHtml(props: GeoJsonProperties): string {
     <div class="popup-agency">US Census Bureau · AIANNH (live)</div>
     <div class="popup-treaty-meta">Type: ${escapeHtml(subtype.label)}</div>
     <div class="popup-description">${caveat}</div>
-    ${IMPACT_TRIGGER_BUTTON_HTML}
+    ${buildImpactTriggerButtonHtml(String(name))}
     <div class="popup-links">
       <a href="https://www.census.gov/programs-surveys/geography.html" target="_blank" rel="noopener">US Census geography</a>
     </div>
@@ -259,7 +270,7 @@ export function buildTreatyPopupHtml(props: GeoJsonProperties, featureName: stri
     ${year ? `<div class="popup-treaty-meta">Signed: ${escapeHtml(String(year))}</div>` : ''}
     ${tribe ? `<div class="popup-treaty-meta">Tribe: ${escapeHtml(tribe)}</div>` : ''}
     <div class="popup-description">Agency polygons are a representation of Treaty cession areas, not a definitive depiction of Tribal jurisdiction. Treaty rights and Tribal sovereignty are matters of sovereign authority.</div>
-    ${IMPACT_TRIGGER_BUTTON_HTML}
+    ${buildImpactTriggerButtonHtml(featureName)}
     <div class="popup-links">
       <a href="https://wisaard.dahp.wa.gov/" target="_blank" rel="noopener">WA DAHP WISAARD</a>
       <a href="https://native-land.ca/" target="_blank" rel="noopener">Native Land Digital</a>
@@ -381,7 +392,7 @@ export function buildStatePopupHtml(props: GeoJsonProperties): string {
     <div class="popup-agency">US Census Bureau · State Boundary</div>
     ${postal ? `<div class="popup-treaty-meta">Postal code: ${escapeHtml(String(postal))}</div>` : ''}
     <div class="popup-description">State boundary from the United States Census Bureau cartographic boundary file (1:20,000,000 generalization); a reference frame for conditions and resources, not a survey-grade line.</div>
-    ${IMPACT_TRIGGER_BUTTON_HTML}
+    ${buildImpactTriggerButtonHtml(String(name))}
     <div class="popup-links">
       <a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html" target="_blank" rel="noopener">Census cartographic boundary files</a>
     </div>
@@ -415,12 +426,18 @@ export function buildTelemetryPopupSkeleton(station: TelemetryStation): string {
     )
     .join('');
 
-  // A station hydrates in-browser if it carries one of the four wired live
-  // sources. The discovered networks without a hydration path (RAWS, NOAA
+  // A station hydrates in-browser if it carries one of the five wired live
+  // sources (DDM-P9-T05 added RAWS: relative humidity, wind, and fuel
+  // moisture are served by the same NIFC layer discovery already reads).
+  // The remaining discovered networks without a hydration path (NOAA
   // CO-OPS, AgriMet, CoCoRaHS) instead show an honest custody block: the
   // update cadence plus a pointer to the source link, never a faked reading.
   const hydrates =
-    station.usgsSite || station.awdbStation || station.hydrometParams || station.cwms;
+    station.usgsSite ||
+    station.awdbStation ||
+    station.hydrometParams ||
+    station.cwms ||
+    station.rawsStationId;
   const custody = hydrates ? null : stationCustody(station);
   const dataBlockHtml = hydrates
     ? `<div class="popup-data" data-station-data="${escapeHtml(station.id)}">
@@ -502,6 +519,12 @@ export async function hydrateTelemetryPopupData(
       const latest = await fetchCwmsLatest(station.cwms, signal);
       if (signal.aborted) return;
       slot.innerHTML = renderCwmsRow(station, latest);
+    } else if (station.rawsStationId) {
+      // NIFC RAWS FeatureServer, direct fetch (DDM-P9-T05; see
+      // src/config/station-registry.ts fetchRawsStationConditions).
+      const conditions = await fetchRawsStationConditions(station.rawsStationId, signal);
+      if (signal.aborted) return;
+      slot.innerHTML = renderRawsRows(conditions);
     }
   } catch (_err) {
     // AbortError is the expected close path; swallow silently. Anything else
@@ -657,6 +680,82 @@ function renderCwmsRow(station: TelemetryStation, latest: CwmsLatest | null): st
     </div>
     ${asOfRow(tsStr, value.freshness)}
   `;
+}
+
+// =============================================================================
+// Internal: NIFC RAWS render (DDM-P9-T05)
+// =============================================================================
+
+/**
+ * One popup-data row for a RAWS reading. The served string already carries
+ * its own unit (the issuer's field, verified live: "21 %", "5 mph",
+ * "7.3 (unk)"), so it renders verbatim rather than re-deriving a unit; a
+ * `null` reading (the service affirmatively reported none) renders "Station
+ * reported none" for that row only, never a faked value.
+ */
+function rawsConditionRow(label: string, servedText: string | null): string {
+  const display = servedText === null ? 'Station reported none' : servedText;
+  return `
+    <div class="popup-data-row">
+      <span class="popup-data-label">${escapeHtml(label)}</span>
+      <span class="popup-data-value">${escapeHtml(display)}</span>
+    </div>
+  `;
+}
+
+/**
+ * Wind text: the served speed, plus direction when the station reports one,
+ * else the WindSpeedPeak/WindDirPeak pair when the station reports THAT
+ * instead. `null` only when the station reports no wind speed at all.
+ *
+ * DDM-P9-T06 science verdict (I:\claude-temp\ddm-s20\DDM-P9-T06\science-verdict.md):
+ * NWCG PMS 426-3 defines "Peak WS"/"Peak WD" as "Maximum speed for previous
+ * 60 minutes from no less than 720 samples" and "Direction at peak wind
+ * speed", a 60-minute-window maximum, not an instantaneous gust in the WMO
+ * or NWS sense. The prior wording invented a term that was never the
+ * issuer's and is corrected here to the NWCG term; `windGustDirection`
+ * (WindDirPeak) is fetched but was never rendered before this task and now
+ * appears beside the peak speed when the service serves one.
+ */
+function rawsWindText(conditions: RawsStationConditions): string | null {
+  if (conditions.windSpeed === null) return null;
+  if (conditions.windDirection !== null) {
+    return `${conditions.windSpeed} from ${conditions.windDirection}`;
+  }
+  if (conditions.windGustSpeed !== null) {
+    const peakDirection =
+      conditions.windGustDirection !== null
+        ? ` from ${conditions.windGustDirection}`
+        : '';
+    return `${conditions.windSpeed}, peak ${conditions.windGustSpeed}${peakDirection} over the previous 60 minutes`;
+  }
+  return conditions.windSpeed;
+}
+
+/**
+ * Render the three independent RAWS reading rows (relative humidity, wind,
+ * fuel moisture) plus an "As of" line naming the source, or the honest
+ * "no recent values" fallback when the station resolves to no feature at
+ * all. A transport or parse failure never reaches here: the caller's catch
+ * (see `hydrateTelemetryPopupData`) renders the shared "unavailable"
+ * fallback instead.
+ */
+function renderRawsRows(conditions: RawsStationConditions | null): string {
+  if (!conditions) {
+    return '<div class="popup-data-error">No recent NIFC RAWS values for this station.</div>';
+  }
+
+  const rows =
+    rawsConditionRow('Relative humidity', conditions.relativeHumidity) +
+    rawsConditionRow('Wind', rawsWindText(conditions)) +
+    rawsConditionRow('Fuel moisture', conditions.fuelMoisture);
+
+  if (!conditions.observedAtIso) return rows;
+  const observed = new Date(conditions.observedAtIso);
+  const display = Number.isNaN(observed.getTime())
+    ? conditions.observedAtIso
+    : observed.toLocaleString();
+  return rows + asOfRow(`${display} (NIFC RAWS)`);
 }
 
 // =============================================================================

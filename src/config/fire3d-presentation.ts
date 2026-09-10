@@ -78,12 +78,73 @@ export const FIRE3D_SKY_CLEAR_SPECIFICATION: maplibregl.SkySpecification = {
 };
 
 /**
+ * The bundled terrain archive's own extent (DDM-P9-T04), read from the
+ * committed public/data/hillshade-dem-pnw.pmtiles PMTiles v3 header
+ * (min/max zoom at header bytes 100-101, the WGS84 bounding box at bytes
+ * 102-117, int32 degrees times 1e-7 per the spec) rather than typed by
+ * hand, so a re-bake that shifts the box makes this constant wrong and the
+ * archive-header test in tests/fire3d-mode.spec.ts catches it before the
+ * sentence below can silently claim ground the new archive does not cover.
+ * The archive is USGS 3D Elevation Program elevation data served through
+ * the 3DEPElevation ImageServer (src/layers/hillshade.ts:4-6); it carries
+ * no vertical-accuracy claim, and none is made here.
+ */
+export const FIRE3D_TERRAIN_COVERAGE = {
+  issuer: 'USGS 3D Elevation Program',
+  west: -125,
+  south: 41.5,
+  east: -110.5,
+  north: 49.5,
+  maxZoom: 8
+} as const;
+
+/**
+ * Exported (not just an internal helper) so the header-vs-sentence test in
+ * tests/fire3d-mode.spec.ts asserts against the exact same formatting the
+ * sentence uses, rather than a second hand-written copy that could drift
+ * from it silently.
+ */
+export function formatLatitudeDeg(value: number): string {
+  return `${Math.abs(value)}°${value >= 0 ? 'N' : 'S'}`;
+}
+
+/** See formatLatitudeDeg. */
+export function formatLongitudeDeg(value: number): string {
+  return `${Math.abs(value)}°${value >= 0 ? 'E' : 'W'}`;
+}
+
+/**
+ * The terrain-only clause: the geographic extent is the coverage claim
+ * (outside the box there is no archive at all, so the ground renders
+ * flat); the zoom figure is stated separately as a DETAIL, never folded
+ * into the same clause as "outside it...flat", because it is not a
+ * coverage boundary. Above zoom 8 MapLibre overzooms the archive's
+ * deepest level rather than going flat (src/layers/hillshade.ts:7-11),
+ * and the 3D scene builds its own raster-dem from this same archive
+ * (src/map/fire3d.ts), so relief persists, softened, at every zoom; a
+ * sentence that read "through zoom 8; outside it...flat" would have let
+ * "outside" be misread as "past zoom 8", which is false.
+ *
+ * Exported so src/ui/map-key.ts's flat-hillshade coverage entry can mirror
+ * it verbatim (that module is in the eager graph and must not import this
+ * chunk); tests/fire3d-mode.spec.ts pins the two against drift.
+ */
+export const FIRE3D_TERRAIN_COVERAGE_SENTENCE =
+  `Terrain relief uses the ${FIRE3D_TERRAIN_COVERAGE.issuer}'s elevation data for ` +
+  `${formatLongitudeDeg(FIRE3D_TERRAIN_COVERAGE.west)} to ${formatLongitudeDeg(FIRE3D_TERRAIN_COVERAGE.east)}, ` +
+  `${formatLatitudeDeg(FIRE3D_TERRAIN_COVERAGE.south)} to ${formatLatitudeDeg(FIRE3D_TERRAIN_COVERAGE.north)}; ` +
+  'outside that box the ground renders flat. ' +
+  `The archive's detail ends at zoom ${FIRE3D_TERRAIN_COVERAGE.maxZoom}; closer views stretch its deepest tiles.`;
+
+/**
  * Honest coverage statement rendered beside the toggle whenever the control
- * shows: the bundled DEM archive covers the Pacific Northwest only, and the
- * mode must not imply national relief.
+ * shows: names the issuer and the bundled DEM archive's own extent (derived
+ * from FIRE3D_TERRAIN_COVERAGE, not typed by hand), so the mode never
+ * implies national relief or a precision the archive does not carry.
  */
 export const FIRE3D_COVERAGE_NOTE =
-  'Terrain relief covers the Pacific Northwest data bake; outside it the ground renders flat. Bundled structure data covers the central Oregon pilot area only, from zoom 13.';
+  `${FIRE3D_TERRAIN_COVERAGE_SENTENCE} Bundled structure data covers the ` +
+  'central Oregon pilot area only, from zoom 13.';
 
 /**
  * Always-visible non-prediction disclosure for the 3D view and its context

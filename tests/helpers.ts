@@ -9,7 +9,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { expect, type BrowserContext, type Page, type Locator } from '@playwright/test';
+import { expect, type BrowserContext, type Page, type Locator, type Route } from '@playwright/test';
 import { stubRecentSatellite } from './satellite-fixture';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
 import { installBoundaryStubs, type BoundaryStubMode } from './tribal-fixtures';
@@ -253,6 +253,19 @@ export async function gotoApp(
   // bodies. See tests/minimap-fixtures.ts for why they are stubbed rather
   // than waived.
   await installMinimapAnalysisStubs(page);
+  // DDM-P7-T07: the season-ahead heat cell reads the CPC seasonal
+  // temperature outlook live, independent of any map layer, on every
+  // briefing whose selection falls inside the regional impact synthesis
+  // capability. Stubbed unconditionally, like the three calls above, so no
+  // spec that opens the briefing sends this new query to the live agency
+  // (see `stubCpcSeasonalTempOutlook`'s own comment).
+  await stubCpcSeasonalTempOutlook(page);
+  // DDM-P7-T03: the near-term fire cell reads the SPC Day 1-8 Fire Weather
+  // Outlook live, independent of any map layer, on every briefing. Stubbed
+  // unconditionally, like the calls above, so no spec that opens the
+  // briefing sends these eight new queries to the live agency (see
+  // `stubSpcFireOutlook`'s own comment; S17's lesson, missed in round 1).
+  await stubSpcFireOutlook(page);
   coverFuturePages(page);
   if (!/[?&](?:layers|cluster)=/.test(query)) {
     await stubDefaultNadm(page);
@@ -291,8 +304,62 @@ export async function gotoApp(
   // transport in flight. It moves the moment a spec's own assertions run,
   // and changes none of them. Derived from registry and transport state,
   // never from elapsed time, so it cannot flip early and hide a failure.
+  //
+  // `expect.poll` at the same default timeout `toHaveAttribute` used
+  // (`playwright.config.ts`'s `expect.timeout`, 10s; never lengthened here):
+  // on a miss it names which layers are still owed, read from the DOM the
+  // same way `pendingBootLayers()` (src/state/boot-idle.ts:80-102) computes
+  // it (checked-but-not-terminal, or a live `loading...` pill), because that
+  // function's own module state is private to the running page's closure
+  // and unreachable from a production bundle without a product-code change
+  // outside this file. `pendingSharedTransportCount()` (src/util/fetch.ts:193)
+  // is the same kind of private counter with no DOM reflection at all, so a
+  // miss says plainly that it could not be read from this seam rather than
+  // guess at it. The read itself is wrapped in its own try/catch: a page
+  // teardown race during the evaluate must not replace the original
+  // boot-idle failure with an unrelated one, so the fallback is a literal
+  // clause and the original error survives as `cause`, never flattened.
   if (options.bootIdle !== false) {
-    await expect(page.locator('html')).toHaveAttribute('data-ddm-boot', 'idle');
+    try {
+      await expect.poll(() => page.locator('html').getAttribute('data-ddm-boot')).toBe('idle');
+    } catch (err) {
+      let diagnostic: string;
+      try {
+        const read = await page.evaluate(
+          ({ loadingText, terminalPills }) => {
+            const inputs = Array.from(
+              document.querySelectorAll<HTMLInputElement>('input[data-layer-key]')
+            );
+            if (inputs.length === 0) return { noToggles: true as const, pending: [] };
+            const pending = inputs
+              .filter((input) => {
+                const key = input.dataset['layerKey'];
+                const pill = document.querySelector(`[data-layer-status="${key}"]`);
+                const text = (pill?.textContent ?? '').trim();
+                if (text === loadingText) return true;
+                return input.checked && !terminalPills.includes(text);
+              })
+              .map((input) => input.dataset['layerKey']);
+            return { noToggles: false as const, pending };
+          },
+          { loadingText: PILL.loading, terminalPills: TERMINAL_PILLS }
+        );
+        // A brief-embed boot defers the catalog island (src/ui/sidebar.ts:
+        // 1702-1703), so no `input[data-layer-key]` exists yet; an empty
+        // pending list there would misread as "everything settled".
+        diagnostic = read.noToggles
+          ? 'the layer toggles are not in the DOM (a brief-embed boot defers the catalog island, src/ui/sidebar.ts:1702-1703)'
+          : `pending layers (checked and not yet terminal) = ${JSON.stringify(read.pending)}`;
+      } catch (evalErr) {
+        diagnostic = `the pending-layer proxy could not be read (${(evalErr as Error).message})`;
+      }
+      throw new Error(
+        `boot-idle never reached "idle" within the default expect timeout; ${diagnostic}; ` +
+          'pending shared transport count is not observable from this seam (a private counter ' +
+          'in src/util/fetch.ts with no DOM reflection).',
+        { cause: err }
+      );
+    }
   }
 }
 
@@ -560,6 +627,227 @@ export async function stubHeatRiskCatalog(
 
   return { identifyCalls, frameTimes };
 }
+
+// ---------------------------------------------------------------------------
+// CPC seasonal temperature outlook network stub (DDM-P7-T07)
+// ---------------------------------------------------------------------------
+
+const CPC_SEASONAL_TEMP_OUTLOOK_PATH =
+  '/vector/rest/services/outlooks/cpc_sea_temp_outlk/MapServer';
+
+export interface CpcSeasonalTempReading {
+  /** The issuer's own `cat` string; default `'Above'`. */
+  readonly cat?: string;
+  /** The issuer's own `prob` value; default `50`. */
+  readonly prob?: number;
+  /** The issuer's own `valid_seas` label, verbatim; default `'SON 2026'`. */
+  readonly validSeas?: string;
+  /** The issuer's `fcst_date`, epoch ms; default a fixed 2026 literal. */
+  readonly fcstDate?: number | null;
+  /** Serve zero features (the empty-read case) instead of the fixture row. */
+  readonly empty?: boolean;
+  /** Serve an ArcGIS HTTP-200 error envelope instead of the fixture row. */
+  readonly errorEnvelope?: boolean;
+  /** Serve this HTTP status with a plain failure body (the 500 case). */
+  readonly httpStatus?: number;
+}
+
+export interface StubCpcSeasonalTempOutlookOptions extends CpcSeasonalTempReading {
+  /**
+   * Per-request readings in call order, for a spec proving supersession: the
+   * Nth matching request is answered from `sequence[N-1]` (the last entry
+   * repeats once the sequence is exhausted). The top-level fixture fields
+   * above are ignored once `sequence` is given.
+   */
+  readonly sequence?: readonly CpcSeasonalTempReading[];
+  /**
+   * Resolved externally to delay only the FIRST matching request's
+   * response, so a spec can hold an old generation's read open while a
+   * newer selection's read (the second matching request) answers at once.
+   */
+  readonly holdFirst?: Promise<void>;
+}
+
+/**
+ * Route the CPC seasonal temperature outlook MapServer (`cpc_sea_temp_outlk`,
+ * `src/config/urls.ts` `cpcSeasonalTempOutlookMapServer`) to a deterministic
+ * fixture. `fetchCpcSeasonalTempClaims` (src/impact/sources.ts) reads this
+ * service on every briefing whose selection falls inside the regional impact
+ * synthesis capability (the same gate `cpcSeasonal` and `cpcExtended`
+ * already read), independent of any map layer, so `gotoApp` below calls this
+ * unconditionally with its defaults (S17's lesson: an unstubbed briefing
+ * lane reaches the live agency).
+ *
+ * De-duplicated per page (mirrors `stubRecentSatellite`): a spec that needs
+ * a specific reading, a failure arm, or a held-open supersession race calls
+ * this itself, WITH its own options, BEFORE `gotoApp`; `gotoApp`'s own later
+ * call then finds this page already stubbed and is a no-op, so the spec's
+ * reading is never shadowed by the default one.
+ */
+export async function stubCpcSeasonalTempOutlook(
+  page: Page,
+  options: StubCpcSeasonalTempOutlookOptions = {}
+): Promise<void> {
+  if (cpcSeasonalTempOutlookStubbedPages.has(page)) return;
+  cpcSeasonalTempOutlookStubbedPages.add(page);
+
+  const fulfillReading = async (
+    route: Route,
+    reading: CpcSeasonalTempReading
+  ): Promise<void> => {
+    const {
+      cat = 'Above',
+      prob = 50,
+      validSeas = 'SON 2026',
+      fcstDate = Date.UTC(2026, 8, 1),
+      empty = false,
+      errorEnvelope = false,
+      httpStatus = 200
+    } = reading;
+    if (httpStatus !== 200) {
+      await route.fulfill({
+        status: httpStatus,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'stubbed upstream failure' })
+      });
+      return;
+    }
+    if (errorEnvelope) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/plain',
+        body: JSON.stringify({
+          status: 'error',
+          messages: ['Could not access any server machines.']
+        })
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/geo+json',
+      body: JSON.stringify({
+        type: 'FeatureCollection',
+        features: empty
+          ? []
+          : [
+              {
+                type: 'Feature',
+                geometry: null,
+                properties: {
+                  cat,
+                  prob,
+                  valid_seas: validSeas,
+                  fcst_date: fcstDate
+                }
+              }
+            ]
+      })
+    });
+  };
+
+  let requestIndex = 0;
+  await page.route(
+    (url) => url.pathname.startsWith(CPC_SEASONAL_TEMP_OUTLOOK_PATH),
+    async (route) => {
+      const index = requestIndex;
+      requestIndex += 1;
+      if (index === 0 && options.holdFirst) await options.holdFirst;
+      const reading = options.sequence
+        ? (options.sequence[Math.min(index, options.sequence.length - 1)] ?? {})
+        : options;
+      await fulfillReading(route, reading);
+    }
+  );
+}
+
+const cpcSeasonalTempOutlookStubbedPages = new WeakSet<Page>();
+
+// ---------------------------------------------------------------------------
+// SPC Day 1-8 Fire Weather Outlook network stub (DDM-P7-T03)
+// ---------------------------------------------------------------------------
+
+export interface StubSpcFireOutlookOptions {
+  /** Serve this HTTP status with a plain failure body (the 503 case). */
+  readonly httpStatus?: number;
+  /** Serve an ArcGIS HTTP-200 error envelope instead of the fixture rows. */
+  readonly errorEnvelope?: boolean;
+}
+
+/**
+ * Route every SPC fire weather outlook layer query
+ * (`spcFireWeatherOutlookMapServer`, the SPC_firewx MapServer,
+ * `src/impact/sources.ts` `fetchSpcFireOutlookClaims`) to a deterministic
+ * fixture, keyed by ArcGIS layer id (1 Day 1, 4 Day 2, 8/11/14/17/20/23 Days
+ * 3-8). A layer with no entry in `layerFeatures` answers with an empty
+ * FeatureCollection, the honest "no area drawn" case, on the
+ * `stubCpcSeasonalTempOutlook` model above (S17's lesson: an unstubbed
+ * briefing lane reaches the live agency).
+ *
+ * De-duplicated per browser context (the guard is keyed on the context the
+ * route is registered on): a spec that
+ * needs a specific reading or a failure arm calls this itself, WITH its own
+ * `layerFeatures`/`options`, BEFORE `gotoApp`; `gotoApp`'s own later call
+ * then finds this context already stubbed and is a no-op, so the spec's own
+ * reading is never shadowed by the default empty one (Playwright tries the
+ * most recently registered matching route handler first).
+ *
+ * Registered on the browser CONTEXT, not the page: Playwright resolves a
+ * page-level `page.route` ahead of a context-level `browserContext.route`
+ * regardless of registration order, so `gotoApp`'s later, context-level
+ * default here can never shadow an already-page-level SPC stub a spec set
+ * up its own way before calling `gotoApp` (found in
+ * tests/fire-heat-time-bar.spec.ts's `stubFire`, which this lane does not
+ * own and so cannot rewrite onto this helper this round); it still answers
+ * every spec that has no page-level SPC stub of its own.
+ */
+export async function stubSpcFireOutlook(
+  page: Page,
+  layerFeatures: Partial<Record<number, unknown[]>> = {},
+  options: StubSpcFireOutlookOptions = {}
+): Promise<void> {
+  const context = page.context();
+  if (spcFireOutlookStubbedContexts.has(context)) return;
+  spcFireOutlookStubbedContexts.add(context);
+
+  await context.route('**/SPC_firewx/MapServer/*/query?*', async (route: Route) => {
+    if (options.httpStatus !== undefined && options.httpStatus !== 200) {
+      await route.fulfill({
+        status: options.httpStatus,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'stubbed upstream failure' })
+      });
+      return;
+    }
+    if (options.errorEnvelope) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/plain',
+        body: JSON.stringify({
+          status: 'error',
+          messages: ['Could not access any server machines.']
+        })
+      });
+      return;
+    }
+    const url = new URL(route.request().url());
+    const layerMatch = /\/MapServer\/(\d+)\/query/.exec(url.pathname);
+    const layer = layerMatch ? Number(layerMatch[1]) : NaN;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/geo+json',
+      body: JSON.stringify({
+        type: 'FeatureCollection',
+        features: layerFeatures[layer] ?? []
+      })
+    });
+  });
+}
+
+// Keyed on the CONTEXT the route lives on (not the page), so a second page in
+// one context can never register a second context-level default that would
+// shadow the first page's fixture (the `coveredContexts` precedent above).
+const spcFireOutlookStubbedContexts = new WeakSet<BrowserContext>();
 
 /**
  * The set of layer keys currently encoded in the URL's `layers=` parameter.
