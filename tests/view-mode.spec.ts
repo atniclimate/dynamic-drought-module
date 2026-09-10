@@ -2,7 +2,10 @@ import { test, expect } from '@playwright/test';
 import { gotoApp, search, urlLayers } from './helpers';
 import { stubRecentSatellite } from './satellite-fixture';
 import { routeAllTribalFixtures } from './tribal-fixtures';
-import { installMinimapAnalysisStubs } from './minimap-fixtures';
+import {
+  installMinimapAnalysisStubs,
+  minimapAnalysisStubLog
+} from './minimap-fixtures';
 
 /**
  * U1 the two doors (D-ARCH-002), REWRITTEN for S2 (D-0.7.0-041): the
@@ -189,5 +192,32 @@ test.describe('U1 the two doors (view mode)', () => {
     await expect(page.locator('#app')).toHaveClass(/\bembed\b/);
     await expect(page.locator('#app')).toHaveClass(/\bview-console\b/);
     await expect(page.locator('#impact-panel')).toHaveCount(0);
+  });
+
+  test('console does not need the minimap: it is hidden and stops the retained analysis fetches; Brief keeps both (owner ask, 2026-09-10)', async ({
+    page
+  }) => {
+    await gotoApp(page, '?view=console');
+    await expect(page.locator('#app')).toHaveClass(/\bview-console\b/);
+    await expect(page.locator('.shell-minimap-map')).toBeHidden();
+    await expect(page.locator('.shell-minimap-popover-wrap')).toBeHidden();
+
+    // A hidden widget that keeps fetching is a performance defect, not a
+    // fix: the default boot is the 'drought' cluster (the default
+    // display, src/state/cluster-store.ts), which is exactly the
+    // condition that used to start `retainMinimapDrought`'s NCEI/StatCan
+    // analysis fetch on every non-brief-embed boot regardless of door.
+    // Give it a real chance to have started before asserting its absence.
+    await page.waitForTimeout(1_500);
+    expect(minimapAnalysisStubLog(page)).toEqual([]);
+
+    // The widget is Brief's, not retired outright: switching doors
+    // restores both the visible minimap and its live analysis fetch.
+    await page.locator('.view-switch [data-view="brief"]').click();
+    await expect(page.locator('#app')).toHaveClass(/\bview-brief\b/);
+    await expect(page.locator('.shell-minimap-map')).toBeVisible();
+    await expect
+      .poll(() => minimapAnalysisStubLog(page).length)
+      .toBeGreaterThan(0);
   });
 });

@@ -24,18 +24,21 @@
  *             distinct; no invented synonyms.
  *   zoom-in   excluded; "X appears after you zoom in".
  *
- * COVERAGE HONESTY: when the active framing carries a coverageNote and
- * the committed display includes ANY US-scoped display layer (a
- * condition surface, an event layer, or the stations; every
- * non-reference role), the caveat leads with that coverage caution
- * (the Mexico framing over the US Drought Monitor, or over the
- * events-only Wildfire display, must say the display does not cover
- * Mexico). The handoff section 2 and the framings config bind the note
- * to US-scoped display LAYERS; section 4's narrower literal word
- * "surface" is the drift, reconciled here per the coverage rule it
- * states ("ready over an out-of-coverage framing must not read as
- * unqualified coverage"). A globally-scoped layer (the Ocean
- * Temperature Anomaly) does not trigger the caution.
+ * COVERAGE HONESTY moved OFF this module 2026-09-10 (a DDM fix lane;
+ * owner: the minimap's popped-up coverage caption was noise, and the
+ * SAME sentence was rendering a second time in this module's own
+ * caveat, so it now has exactly one home). The rule it used to apply
+ * here still governs, just at the new site (`src/ui/map-key.ts`): when
+ * the active framing carries a coverageNote and the display includes
+ * ANY US-scoped display layer (a condition surface, an event layer, or
+ * the stations; every non-reference role), a viewer must be told the
+ * display does not cover the framing (the Mexico framing over the US
+ * Drought Monitor, or over the events-only Wildfire display, must say
+ * the display does not cover Mexico). A globally-scoped layer (the
+ * Ocean Temperature Anomaly) does not trigger the caution. This module
+ * still exports `isUsScopeCautionLayer` and `userFacingCoverageClause`
+ * so the key applies the identical rule and the identical user-facing
+ * text; see their doc comments below.
  *
  * The empty recipe (Extreme Heat at season-ahead) yields an honest
  * "no verified surface" primary, never a silently substituted surface.
@@ -46,7 +49,6 @@
  */
 
 import { CLUSTER_DISPLAY_NAMES } from '../config/clusters';
-import { FRAMINGS } from '../config/framings';
 import { LAYER_DEFS } from '../config/layers';
 import type { LayerDef } from '../config/layers';
 import { resolveStatusPillText } from '../ui/island/pill-text';
@@ -71,6 +73,19 @@ const US_SCOPE_CAUTION_EXEMPT_KEYS: ReadonlySet<string> = new Set([
   'sst-anomaly',
   'nadm-drought'
 ]);
+
+/**
+ * Whether a layer counts toward a framing's US-scope coverage caution: any
+ * non-reference role the exemption list above does not name. Exported so
+ * the on-map key (`src/ui/map-key.ts`), the sole renderer of the caution
+ * since 2026-09-10, applies the SAME rule against the registry's currently
+ * active keys that this module used to apply against the committed
+ * `intendedKeys`, so the two call sites can never rule differently on the
+ * same layer.
+ */
+export function isUsScopeCautionLayer(def: Pick<LayerDef, 'key' | 'role'>): boolean {
+  return def.role !== 'reference' && !US_SCOPE_CAUTION_EXEMPT_KEYS.has(def.key);
+}
 
 /**
  * Prose names for layers whose compact catalog labels lead with a bare
@@ -129,8 +144,10 @@ const AUTHORING_CLAUSE_RE = /\b(?:the shell|per-layer status)\b/;
  * kind, so instead each clause is kept unless it matches the narrow
  * authoring-guidance pattern above. The Mexico framing still yields
  * exactly the ruled sentence: "The current display layers do not cover
- * Mexico." Exported for the S4 minimap's coverage caption, so the two
- * surfaces render the same user-facing slice of the same note.
+ * Mexico." Exported for the on-map key (`src/ui/map-key.ts`), the sole
+ * renderer of this text since 2026-09-10 (it previously also fed the S4
+ * minimap's own caption and this module's caveat; both were retired in
+ * favor of the key so the sentence has exactly one home).
  */
 export function userFacingCoverageClause(note: string): string {
   const clauses = note
@@ -185,18 +202,14 @@ export const deriveDisplaySummary: DeriveDisplaySummary = (input) => {
   }
 
   // The caveat: at most ONE string; clauses joined with semicolons,
-  // never a second status dashboard. Coverage honesty leads.
+  // never a second status dashboard. Coverage honesty no longer leads
+  // here: it rendered a second time (this caveat and the minimap's own
+  // caption said the same sentence at once), so it was relocated to the
+  // on-map key (src/ui/map-key.ts), the ONE site now, per the framings.ts
+  // and S4 handoff contract. `isUsScopeCautionLayer` above is exported
+  // so the key applies the identical exemption rule against its own
+  // active-layer set.
   const clauses: string[] = [];
-
-  const framingDef = input.framing !== null ? FRAMINGS[input.framing] : null;
-  const hasUsScopedDisplayLayer = intended.some(
-    (def) =>
-      def.role !== 'reference' && !US_SCOPE_CAUTION_EXEMPT_KEYS.has(def.key)
-  );
-  if (framingDef?.coverageNote !== undefined && hasUsScopedDisplayLayer) {
-    const coverage = userFacingCoverageClause(framingDef.coverageNote);
-    if (coverage.length > 0) clauses.push(coverage);
-  }
 
   const degraded = withStatus('degraded');
   if (degraded.length > 0) {
