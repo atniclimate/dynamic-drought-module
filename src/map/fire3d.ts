@@ -54,7 +54,6 @@ import {
   FIRE3D_PITCH_DEGREES,
   FIRE3D_SKY_CLEAR_SPECIFICATION,
   FIRE3D_SKY_SPECIFICATION,
-  FIRE3D_TERRAIN_COVERAGE,
   FIRE3D_TERRAIN_EXAGGERATION,
   classifyTerrainCoverage,
   isWithinTerrainCoverage
@@ -541,20 +540,25 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
         type: 'raster-dem',
         url: 'pmtiles://' + archiveUrl,
         encoding: 'terrarium',
-        tileSize: 512,
-        // Explicit, not left to the PMTiles protocol's own metadata reply:
-        // MapLibre's raster-dem default is 22 (maplibre-gl-style-spec), and
-        // the protocol only overwrites it once the archive's header round
-        // trip resolves. Stating the measured depth up front means the very
-        // first frame already knows to overzoom the deepest tile instead of
-        // requesting a zoom the archive has never had. Confirmed this is
-        // not the cause of the reported flatness: a Node probe of the
-        // committed archive's own embedded metadata (public/data/
-        // hillshade-dem-pnw.pmtiles) shows the pmtiles library already
-        // answers MapLibre's tilejson-style request with the real
-        // maxzoom: 8 read from the header, so overzoom was already
-        // engaging correctly past zoom 8 without this line.
-        maxzoom: FIRE3D_TERRAIN_COVERAGE.maxZoom
+        tileSize: 512
+        // NO maxzoom (and no minzoom) here, deliberately: the archive that
+        // resolved above decides its own depth, and it is not always the
+        // bundled one.
+        //
+        // An earlier comment here had the mechanism backwards. It claimed
+        // the protocol overwrites a declared zoom once the header round trip
+        // resolves. The opposite is true: MapLibre merges the two with
+        // `extend(tileJSON, options)` (load_tilejson.ts), so a declared
+        // option WINS over the archive header, permanently. With
+        // `maxzoom: 8` declared, a zoom 0-10 archive was read zoom 0-8 only,
+        // because covering_tiles.ts takes `nominalZ = Math.min(desiredZ,
+        // maxZoom)`; the deeper tiles were never requested at all.
+        //
+        // Omit the KEY, never set it to `undefined`. `extend` is a `for...in`
+        // over own enumerable keys, so an explicit `undefined` still
+        // enumerates and still stomps the header, while an absent key leaves
+        // the header's own zooms standing. src/layers/hillshade.ts:113-118
+        // has always had this shape; this call is now the same.
       });
     }
     map.setTerrain({

@@ -489,6 +489,52 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
 });
 
 // ---------------------------------------------------------------------------
+// Node: the terrain source must not pin its own depth
+// ---------------------------------------------------------------------------
+
+/**
+ * The scene must let the ARCHIVE decide how deep it goes.
+ *
+ * MapLibre resolves a source's zooms with `extend(tileJSON, options)`
+ * (load_tilejson.ts), so an explicit option OVERRIDES the header the pmtiles
+ * protocol supplies, rather than being overwritten by it. Pinning `maxzoom`
+ * therefore caps the source at the pinned value for every archive, including
+ * a deeper one resolved at runtime: `covering_tiles.ts` computes
+ * `nominalZ = Math.min(desiredZ, maxZoom)` and the deeper tiles are simply
+ * never requested.
+ *
+ * The assertion is on the KEY'S ABSENCE, not on its value. `extend` is a
+ * `for...in` over own enumerable keys, so `maxzoom: undefined` is NOT the
+ * same as no key at all: an explicit `undefined` still enumerates and still
+ * stomps the header. `src/layers/hillshade.ts:113-118` already omits the
+ * key, and this pins the 3D scene to the same shape.
+ *
+ * Nothing else in tests/ reads the terrain source's declared zooms, and the
+ * spec assertion in the activation test uses `toMatchObject`, which ignores
+ * extra keys. That is why a green gate was consistent with the pin.
+ */
+test('the terrain source declares no maxzoom of its own, so the resolved archive header sets the depth', async () => {
+  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+  const restoreFetch = stubPmtilesFetch();
+  const harness = fakeMapHarness({ pitch: 15, bearing: 30 });
+  const { map } = harness;
+
+  try {
+    setFire3DActive(map, true);
+    await expect.poll(() => getFire3DStatus().state).toBe('active');
+
+    const dem = harness.sources.get('fire3d-terrain-dem');
+    expect(dem).toBeTruthy();
+    expect(Object.prototype.hasOwnProperty.call(dem, 'maxzoom')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(dem, 'minzoom')).toBe(false);
+  } finally {
+    setFire3DActive(map, false);
+    restoreFetch();
+    browser.restore();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Node: terrain-relief lane defect 1 -- the scene still builds outside the
 // archive box, and says so, at the moment it is true
 // ---------------------------------------------------------------------------
