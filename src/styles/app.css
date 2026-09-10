@@ -151,12 +151,20 @@
   /* Impact-panel geometry (UI-02). The panel's width and the bottom
      dock's inset were two independent literals (440px and 452px) that
      could not be kept in step; they now read one token plus one gap.
-     440px is the desktop width and is unchanged at 1025px and wider;
-     the tablet band narrows the token in place (see the
-     721-1024px block beside .impact-panel). --dock-min-w is the floor
-     the dock keeps no matter how wide the panel is, so its box can
-     never solve to zero width and clip its whole contents away. */
-  --impact-panel-w: 440px;
+     Owner ruling (2026-09): the panel should read as "about double" its
+     old 440px footprint, capped there because a literal 880px would be
+     61% of a 1440px laptop. --impact-panel-w-min is the single 440px
+     floor both this clamp and the tablet band read, so the two can never
+     drift apart again; 1025px and wider now SCALES with the viewport
+     (38vw) between that floor and double it, 880px. The tablet band
+     narrows the token in place (see the 721-1024px block beside
+     .impact-panel), where 38vw stays under the 440px floor for the
+     whole band, so the floor is what the band's min() still caps
+     against. --dock-min-w is the floor the dock keeps no matter how
+     wide the panel is, so its box can never solve to zero width and
+     clip its whole contents away. */
+  --impact-panel-w-min: 440px;
+  --impact-panel-w: clamp(var(--impact-panel-w-min), 38vw, 880px);
   --impact-panel-gap: 12px;
   --dock-min-w: 180px;
   /* Bottom-dock seat (DDM-P10-T01). The dock's edge inset and its lift
@@ -3967,7 +3975,7 @@ button.telemetry-item {
 @media (min-width: 721px) and (max-width: 1024px) {
   body:has(#app.app-shell:not(.sidebar-collapsed):not(.embed)) {
     --impact-panel-w: min(
-      440px,
+      var(--impact-panel-w-min),
       calc(
         100vw - var(--sidebar-w) - var(--map-dock-inset) -
           var(--dock-min-w) - var(--impact-panel-gap)
@@ -4012,6 +4020,16 @@ button.telemetry-item {
   color: var(--fg-2);
   letter-spacing: 0.02em;
 }
+/* The header's icon cluster (close, plus the not-yet-wired mail and print
+   actions beside it). One wrapper keeps the header at exactly two flex
+   children so `justify-content: space-between` still separates the title
+   block from the icons, whatever the cluster's own count. */
+.impact-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
 .impact-panel-close {
   flex-shrink: 0;
   display: inline-flex;
@@ -4030,6 +4048,25 @@ button.telemetry-item {
   background: var(--bg-2);
   color: var(--fg-0);
   border-color: var(--line-strong);
+}
+/* Mail and print: present so the affordance is discoverable, honestly inert
+   (native `disabled`, not aria-disabled) because neither does anything yet.
+   `disabled` also drops them from `getFocusable()`'s
+   `button:not([disabled])` selector for free, so they cannot be tabbed to
+   and the close button stays the panel's one focusable icon today. */
+.impact-panel-action {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--fg-3);
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .impact-panel-body {
@@ -4236,8 +4273,8 @@ button.telemetry-item {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
 }
-.point-heat-card > h4,
-.point-heat-synthesis h4 {
+.point-heat-card > h5,
+.point-heat-synthesis h5 {
   margin: 0 0 7px;
   font-family: var(--font-display);
   font-size: 11px;
@@ -5918,12 +5955,15 @@ a.impact-resource-link::after {
   body:has(.impact-panel.open) .impact-panel-body {
     overflow: visible;
   }
-  body:has(.impact-panel.open) .impact-panel-close {
+  body:has(.impact-panel.open) .impact-panel-close,
+  body:has(.impact-panel.open) .impact-panel-action {
     display: none;
   }
   /* Print legibility: ink on paper, with the hierarchy carried by weight and
-     case rather than the dark-theme palette. */
-  body:has(.impact-panel.open) .impact-panel :is(h2, h3, h4, p, span, div, a) {
+     case rather than the dark-theme palette. h5 joined the outline when
+     point heat moved inside a horizon (owner ruling B/C) and its two card
+     headings and "Heat sources together" dropped a level to stay under it. */
+  body:has(.impact-panel.open) .impact-panel :is(h2, h3, h4, h5, p, span, div, a) {
     color: #000;
   }
   body:has(.impact-panel.open) .impact-panel .impact-panel-kicker,
