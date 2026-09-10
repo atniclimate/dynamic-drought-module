@@ -249,6 +249,22 @@ const patternExpression: maplibregl.ExpressionSpecification = [
   ''
 ];
 
+/**
+ * The outlook register's fill paint: a hatch `fill-pattern`, never a solid
+ * `fill-color` (that distinction IS the observed-vs-outlook grammar, DR-070).
+ * Exported as a pure seam, mirroring `buildD4RimLayerSpecification` in
+ * usdm.ts, so a future edit cannot silently flatten the register without a
+ * test noticing (tests/drought-semantics.spec.ts).
+ */
+export function buildOutlookFillPaint(): NonNullable<maplibregl.FillLayerSpecification['paint']> {
+  return {
+    'fill-pattern': patternExpression,
+    // The hatch tiles carry their own transparency; full layer opacity
+    // keeps the strokes crisp over the basemap.
+    'fill-opacity': 1
+  };
+}
+
 const outlineColorExpression: maplibregl.ExpressionSpecification = [
   'match',
   ['get', 'outlook'],
@@ -489,12 +505,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
         id: FILL_LAYER_ID,
         type: 'fill',
         source: SOURCE_ID,
-        paint: {
-          'fill-pattern': patternExpression,
-          // The hatch tiles carry their own transparency; full layer
-          // opacity keeps the strokes crisp over the basemap.
-          'fill-opacity': 1
-        }
+        paint: buildOutlookFillPaint()
       },
       beforeId
     );

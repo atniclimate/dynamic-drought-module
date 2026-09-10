@@ -705,6 +705,25 @@ button.conditions-metric:hover {
   color: var(--accent);
 }
 
+/* The ON-state counterpart (Defect 3, owner report 2026-09-10): a live
+   metric used to carry no visible cue that the tile is also a button that
+   hides its layer. "Hide" sits at the same size/weight class as "Show"
+   above but in the muted caption color, not the accent call-to-action
+   color: the tile's own value stays the thing the eye lands on first, and
+   this reads as a small persistent status/toggle hint beside it, never a
+   second catalog entry. */
+.conditions-action-hide {
+  font-family: var(--font-body);
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--fg-3);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps-sm);
+}
+button.conditions-metric:hover .conditions-action-hide {
+  color: var(--fg-1);
+}
+
 /* On the unselected Brief first open, the strip is a conditions receipt, not
    a second layer catalog. Remove the off-state activation styling while the
    real refinement doors remain directly below the contextual time rail. */
@@ -5873,6 +5892,17 @@ a.impact-resource-link::after {
   display: flex;
   align-items: center;
   gap: 6px;
+  /* Defect 5 (owner report, 2026-09-10): with no wrap, a nowrap jump chip
+     (or the Play button) competed with the rail for width at the narrow
+     end of the sidebar's clamp(300px, 30vw + 64px, 340px), and the rail
+     (the only shrinkable item, `min-width: 0` below) got squeezed toward
+     zero and clipped by the sidebar's own overflow:hidden ancestors
+     rather than degrading. `.time-bar-rail`'s flex-basis of 0 means it
+     never itself forces a wrap; wrapping is driven by the step/jump/play
+     items' own content sizes, so at a narrow width they wrap to a second
+     line and the rail keeps the whole first line to grow into (mirrors
+     the already-wrapped `.shell-time-detail-modes` / `-jumps` below). */
+  flex-wrap: wrap;
 }
 
 .time-bar-step,
@@ -5902,7 +5932,13 @@ a.impact-resource-link::after {
 
 .time-bar-rail {
   flex: 1;
-  min-width: 0;
+  /* A real floor instead of 0 (Defect 5): the rail can still shrink to
+     make room for the step/jump/play buttons on its own line, but never
+     below a width that is still meaningfully draggable; once the row
+     can't fit everything above that floor, flex-wrap above moves the
+     trailing chips to a second line instead of squeezing the rail past
+     usability and off into the sidebar's clipped overflow. */
+  min-width: 56px;
   height: 24px;
   margin: 0;
   accent-color: var(--accent);
@@ -5990,6 +6026,15 @@ a.impact-resource-link::after {
 .time-bar-modes {
   display: flex;
   gap: 4px;
+  /* Defect 4 investigation (owner report, 2026-09-10): three-label rows
+     ("Drought level" / "1-wk change" / "4-wk change") come close to or
+     exceed the sidebar's narrow-end width (300px clamp floor) once the
+     card's margins and padding are subtracted, and with no wrap the
+     overflow is clipped by the sidebar's own overflow:hidden ancestors
+     rather than the chip degrading, making the last chip look "dead" at a
+     real width even though its click handler is fine. Mirrors the
+     popover's already-wrapped .shell-time-detail-modes. */
+  flex-wrap: wrap;
 }
 .time-bar-mode {
   display: inline-flex;
@@ -6010,6 +6055,15 @@ a.impact-resource-link::after {
   background: var(--accent-soft);
   border-color: var(--accent-strong);
   color: var(--fg-0);
+}
+/* Defect 4: the reason a mode chip is disabled, always visible (never
+   hover-only), so a control with no available action still states why. */
+.time-bar-modes-hint {
+  margin: 2px 0 0;
+  font-family: var(--font-body);
+  font-size: 9.5px;
+  line-height: 1.3;
+  color: var(--fg-3);
 }
 
 @media (max-width: 720px) {
@@ -6950,6 +7004,24 @@ a.impact-resource-link::after {
   letter-spacing: 0.04em;
   color: var(--accent);
   font-feature-settings: 'tnum' 1;
+  /* Layout stability across a horizon switch (owner report, 2026-09-10):
+     the outlook headline ("Issued ... · through ...") runs longer than the
+     observed headline ("Valid ..."), and with no reserved height the
+     longer string wrapped to a second line and pushed every control below
+     it down. Reserve a fixed two-line box (a ceiling, not the old
+     min-height floor) so switching horizons can never move the layout;
+     both lines show the FULL text (no truncation) for every headline this
+     app currently renders, because an outlook's issued/valid-through
+     window is the issuer's honesty statement, not disposable chrome. The
+     line-clamp is a defensive backstop only, for a hypothetical headline
+     long enough to need a third line; `title` on this span (time-popover
+     .tsx) carries the untruncated text if that backstop ever fires. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.3;
+  max-height: calc(1.3em * 2);
 }
 .shell-time-headline[data-register='outlook'] { color: var(--warn); }
 .shell-time-empty {
@@ -7105,6 +7177,17 @@ a.impact-resource-link::after {
   line-height: 1.2;
   text-transform: capitalize;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The docked tile is the tightest seat this control has (Defect 3): a
+   trailing, right-pushed hint reads clearly as "there is more to this
+   control" without competing with the capitalized category readout for
+   the eye's first landing spot. */
+#conditions-strip-dock .conditions-metric[data-tone='data'] .conditions-action-hide {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-left: 4px;
 }
 .sidebar-key-disclosure {
   position: relative;

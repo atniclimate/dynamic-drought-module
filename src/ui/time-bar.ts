@@ -409,6 +409,18 @@ function render(): void {
       );
     }
     parts.push('</div>');
+    // Defect 4 (owner report, 2026-09-10): a disabled mode chip's reason
+    // lived only in its `title` (hover-only; unreachable on touch, and not
+    // reliably surfaced by every screen reader for a disabled control). A
+    // control that is inert with no STATED reason is the honesty problem,
+    // not the disabling itself (the disabled state is legitimate: change
+    // maps exist for the current week only). Render the first disabled
+    // option's reason as a persistent, always-visible line so the
+    // explanation does not depend on hover.
+    const disabledHint = spec.modes.options.find((m) => m.disabled === true)?.title;
+    if (disabledHint) {
+      parts.push(`<p class="time-bar-modes-hint">${escapeHtml(disabledHint)}</p>`);
+    }
   }
 
   // Identical markup: keep the existing DOM and its listeners (the memo

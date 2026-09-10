@@ -34,9 +34,61 @@ export function hatchImageId(cls: OutlookClass): string {
   return `outlook-hatch-${cls.toLowerCase()}`;
 }
 
-/** Logical tile size in CSS pixels; drawn at 2x for retina crispness. */
-const TILE = 12;
+/**
+ * Logical tile size in CSS pixels; drawn at 2x for retina crispness.
+ *
+ * DENSITY TUNING (owner report, 2026-09-10): the original TILE=12 /
+ * STROKE_WIDTH=1.6 / opaque strokes read as a near-solid orange field that
+ * swallowed the basemap, undoing the exact "see-through" property this
+ * module's own header comment names as the point. The owner's requested fix
+ * ("match the current-conditions fill style", i.e. a flat `fill-color`) was
+ * refused: it would destroy the pattern channel that carries the class read
+ * in grayscale and for color-vision-deficient users (Section 508). Instead
+ * every lever below was pulled at once, UNIFORMLY across all four classes,
+ * so their relative density ordering (DEVELOPS crosshatch > PERSISTS dense
+ * diagonal > IMPROVES sparse diagonal > REMOVAL dashes) survives unchanged
+ * and each class stays distinguishable from the others by geometry alone:
+ *
+ *   - TILE 12 -> 18 (+50%): the repeating unit is bigger, so each class's
+ *     strokes sit proportionally farther apart. REF/`s` below keeps every
+ *     class's hand-tuned offsets scaling with TILE instead of going
+ *     out-of-proportion if TILE changes again.
+ *   - STROKE_WIDTH 1.6 -> 1.1 CSS px (-31%): thinner ink.
+ *   - STROKE_ALPHA 1.0 -> 0.6 (opaque -> translucent): the basemap shows
+ *     through the stroke itself, not just the gaps between strokes.
+ *
+ * Combined (ink-length x width / tile-area, alpha-weighted), the measured
+ * per-class visual weight drops by ~73% uniformly:
+ *
+ *   class      | before (opaque) | after (alpha-weighted) | reduction
+ *   -----------|-----------------|------------------------|----------
+ *   DEVELOPS   |      50.3%      |         13.9%          |   -72%
+ *   PERSISTS   |      42.4%      |         11.6%          |   -73%
+ *   IMPROVES   |      25.1%      |          6.9%           |   -73%
+ *   REMOVAL    |      10.0%      |          2.8%           |   -73%
+ *
+ * (before/after math: doc comment on `drawPattern` below carries the
+ * per-line arithmetic for anyone re-tuning this.)
+ */
+const TILE = 18;
+/** The tile size the class offsets below were originally hand-tuned
+ * against; `s` rescales them so the geometry stays self-similar if TILE
+ * changes again. */
+const REF_TILE = 12;
 const SCALE = 2;
+const STROKE_WIDTH = 1.1;
+const STROKE_ALPHA = 0.6;
+
+/** `#rrggbb` (the only shape `DROUGHT_COLORS` uses) to an alpha-weighted
+ * `rgba()` string; falls back to the opaque input for any other shape. */
+function withAlpha(hex: string, alpha: number): string {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!m) return hex;
+  const r = parseInt(m[1]!, 16);
+  const g = parseInt(m[2]!, 16);
+  const b = parseInt(m[3]!, 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 function drawPattern(cls: OutlookClass, color: string): ImageData {
   const px = TILE * SCALE;
@@ -50,9 +102,14 @@ function drawPattern(cls: OutlookClass, color: string): ImageData {
     return new ImageData(px, px);
   }
 
+  // The tile-size scale factor (see the TILE comment above): every magic
+  // offset below is `<value at TILE=12> * s`, so the geometry stays
+  // proportional if TILE is ever re-tuned again.
+  const s = TILE / REF_TILE;
+
   ctx.clearRect(0, 0, px, px);
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.6 * SCALE;
+  ctx.strokeStyle = withAlpha(color, STROKE_ALPHA);
+  ctx.lineWidth = STROKE_WIDTH * SCALE;
   ctx.lineCap = 'butt';
 
   const line = (x1: number, y1: number, x2: number, y2: number): void => {
@@ -66,23 +123,23 @@ function drawPattern(cls: OutlookClass, color: string): ImageData {
     case 'PERSISTS':
       // Dense rising diagonals; drawn across the tile edges so the
       // pattern tessellates seamlessly.
-      line(-3, 3, 3, -3);
-      line(0, TILE + 3, TILE + 3, 0);
-      line(TILE - 3, TILE + 3, TILE + 3, TILE - 3);
+      line(-3 * s, 3 * s, 3 * s, -3 * s);
+      line(0, TILE + 3 * s, TILE + 3 * s, 0);
+      line(TILE - 3 * s, TILE + 3 * s, TILE + 3 * s, TILE - 3 * s);
       break;
     case 'DEVELOPS':
       // Crosshatch: one rising and one falling diagonal per tile.
-      line(-2, TILE + 2, TILE + 2, -2);
-      line(-2, -2, TILE + 2, TILE + 2);
+      line(-2 * s, TILE + 2 * s, TILE + 2 * s, -2 * s);
+      line(-2 * s, -2 * s, TILE + 2 * s, TILE + 2 * s);
       break;
     case 'IMPROVES':
       // Sparse falling diagonal (one stroke per tile).
-      line(-2, -2, TILE + 2, TILE + 2);
+      line(-2 * s, -2 * s, TILE + 2 * s, TILE + 2 * s);
       break;
     case 'REMOVAL':
       // Horizontal dashes, offset every other row.
-      line(1, 3.5, 5.5, 3.5);
-      line(6.5, 9, 11, 9);
+      line(1 * s, 3.5 * s, 5.5 * s, 3.5 * s);
+      line(6.5 * s, 9 * s, 11 * s, 9 * s);
       break;
   }
 

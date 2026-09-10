@@ -365,6 +365,19 @@ export function buildD4RimLayerSpecification(
   };
 }
 
+/**
+ * The observed register's fill paint: a solid `fill-color`, never a hatch
+ * `fill-pattern` (that distinction IS the observed-vs-outlook grammar,
+ * DR-070). Exported as a pure seam, mirroring `buildD4RimLayerSpecification`
+ * above, so a future edit cannot silently flatten the register without a
+ * test noticing (tests/drought-semantics.spec.ts).
+ */
+export function buildUsdmFillPaint(
+  color: maplibregl.ExpressionSpecification
+): NonNullable<maplibregl.FillLayerSpecification['paint']> {
+  return { 'fill-color': color, 'fill-opacity': FILL_OPACITY };
+}
+
 function addPolygonPair(
   map: maplibregl.Map,
   sourceId: string,
@@ -381,7 +394,7 @@ function addPolygonPair(
         type: 'fill',
         source: sourceId,
         layout: { visibility },
-        paint: { 'fill-color': color, 'fill-opacity': FILL_OPACITY }
+        paint: buildUsdmFillPaint(color)
       },
       beforeId
     );

@@ -5,10 +5,12 @@ import { USDM_NONE_SWATCH } from '../src/config/palette';
 import { buildFireContextHtml } from '../src/impact/fire-context';
 import {
   buildD4RimLayerSpecification,
+  buildUsdmFillPaint,
   fadeLayerIds,
   USDM_D4_RIM_LAYER_IDS,
   USDM_D4_RIM_STYLE
 } from '../src/layers/usdm';
+import { buildOutlookFillPaint } from '../src/layers/drought';
 import { registry } from '../src/state/registry';
 import { timeline } from '../src/state/timeline';
 import { droughtMetric } from '../src/ui/island/strip-metrics';
@@ -84,4 +86,27 @@ test('every absolute USDM frame keeps polygon borders visually absent', () => {
   const hidden = buildD4RimLayerSpecification('usdm-frame-b', false);
   expect(hidden.layout).toEqual({ visibility: 'none' });
   for (const id of USDM_D4_RIM_LAYER_IDS) expect(fadeLayerIds).toContain(id);
+});
+
+// ---------------------------------------------------------------------------
+// The observed-vs-outlook register split (DR-070): the CPC outlook is
+// hatched (`fill-pattern`), the USDM observed week is solid (`fill-color`).
+// Both modules build their fill paint through a pure, exported seam
+// (buildOutlookFillPaint / buildUsdmFillPaint) precisely so this split can be
+// pinned here without a network-backed activation; a future edit that
+// flattens either surface onto the other's paint property fails this test.
+// ---------------------------------------------------------------------------
+
+test('the CPC drought outlook fills with a hatch fill-pattern, never a solid fill-color', () => {
+  const paint = buildOutlookFillPaint() as Record<string, unknown>;
+  expect(Object.keys(paint).sort()).toEqual(['fill-opacity', 'fill-pattern']);
+  expect(paint['fill-pattern']).toBeTruthy();
+  expect(paint['fill-opacity']).toBe(1);
+});
+
+test('the USDM observed week fills with a solid fill-color, never a hatch fill-pattern', () => {
+  const dummyColor = '#123456' as unknown as maplibregl.ExpressionSpecification;
+  const paint = buildUsdmFillPaint(dummyColor) as Record<string, unknown>;
+  expect(Object.keys(paint).sort()).toEqual(['fill-color', 'fill-opacity']);
+  expect(paint['fill-color']).toBe(dummyColor);
 });

@@ -135,6 +135,18 @@ function MetricTile({
         {m.stale ? <span class="conditions-stale-tag">stale</span> : null}
       </span>
       {!isOn && m.tone === 'off' ? <span class="conditions-action">Show</span> : null}
+      {/* Defect 3 (owner report, 2026-09-10): with a live value this tile
+          reads as a category readout (a D0-D4 swatch), especially once the
+          Brief dock capitalizes the sublabel beside a large code. Nothing
+          on screen said it was ALSO a button whose click hides the whole
+          surface; only the hover title and the screen-reader-only
+          aria-label carried that. This persistent "Hide" cue mirrors the
+          existing off-state "Show" cue at the same visual weight, so the
+          toggle affordance is visible before the click in every state,
+          not just discoverable by hover or a screen reader. */}
+      {isOn && m.tone !== 'loading' ? (
+        <span class="conditions-action conditions-action-hide">Hide</span>
+      ) : null}
     </button>
   );
 }

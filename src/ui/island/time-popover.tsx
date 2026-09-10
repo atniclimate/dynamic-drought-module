@@ -148,6 +148,14 @@ function DetailControls({ spec }: { spec: TimeBarSpec }) {
           ))}
         </div>
       )}
+      {/* Defect 4: mirrors time-bar.ts's always-visible disabled-reason
+          line, so the popover's detail controls carry the same honesty
+          the compact bar does rather than relying on a hover-only title. */}
+      {spec.modes && spec.modes.options.some((m) => m.disabled === true) && (
+        <p class="time-bar-modes-hint">
+          {spec.modes.options.find((m) => m.disabled === true)?.title}
+        </p>
+      )}
       {spec.jumps && (
         <div class="shell-time-detail-jumps">
           {spec.jumps.options.map((j) => (
@@ -219,7 +227,16 @@ export function TimeCompact({ specTick }: TimeCompactProps) {
         <span class="shell-time-empty">No dated product is displayed.</span>
       ) : (
         <>
-          <span class="shell-time-headline" data-register={spec.stamp.register}>
+          <span
+            class="shell-time-headline"
+            data-register={spec.stamp.register}
+            // The CSS reserves a fixed two-line box and clamps beyond it
+            // only as a defensive backstop (app.css .shell-time-headline);
+            // this title carries the full, untruncated headline so that
+            // backstop can never hide the issuer's date behind an ellipsis
+            // with no way to read the rest.
+            title={spec.stamp.headline}
+          >
             {spec.stamp.headline}
           </span>
           <button
