@@ -111,27 +111,39 @@ test.describe('InteractionCoordinator: one click, one response', () => {
       'Synthetic Legal Fixture Area'
     );
 
-    // Frozen-head layout (maintainer directive 2026-07-18): the head
-    // carries the title, then the briefing door, then the features
-    // switcher, in that order; the caveat and links live in the scrolling
-    // body, not the head.
+    // Frozen-head layout, AMENDED by the owner 2026-09-10 (superseding the
+    // 2026-07-18 maintainer directive this comment used to describe): the
+    // head now carries the title, then the one-line "kind of place"
+    // (.popup-agency), then the Conditions block (.popup-conditions,
+    // src/ui/popup-conditions.ts), then the briefing door, then the
+    // features switcher, in that order. The boundary detail (acres,
+    // classification, and the like) and the representation caveat still
+    // scroll in the body, not the head -- that part of the old directive
+    // stands.
     const head = popup.locator('.coordinated-response-head');
     await expect(head.locator('.popup-title')).toHaveText('Synthetic Reservation Fixture');
+    await expect(head.locator('.popup-agency')).toBeVisible();
+    await expect(head.locator('.popup-conditions')).toBeVisible();
     await expect(head.locator('[data-ddm-impact-trigger]')).toBeVisible();
     await expect(head.locator('.popup-other-features')).toBeVisible();
     const headOrder = await head.evaluate((el) =>
       [...el.children].map((c) =>
         c.matches('.popup-title')
           ? 'title'
-          : c.matches('[data-ddm-impact-trigger]')
-            ? 'briefing'
-            : c.matches('.popup-other-features')
-              ? 'features'
-              : c.tagName.toLowerCase()
+          : c.matches('.popup-agency')
+            ? 'agency'
+            : c.matches('.popup-conditions')
+              ? 'conditions'
+              : c.matches('[data-ddm-impact-trigger]')
+                ? 'briefing'
+                : c.matches('.popup-other-features')
+                  ? 'features'
+                  : c.tagName.toLowerCase()
       )
     );
-    expect(headOrder).toEqual(['title', 'briefing', 'features']);
-    // The descriptive caveat scrolls in the body, not the frozen head.
+    expect(headOrder).toEqual(['title', 'agency', 'conditions', 'briefing', 'features']);
+    // The boundary meta and the descriptive caveat still scroll in the
+    // body, not the frozen head.
     await expect(popup.locator('.coordinated-response-body .popup-description')).toHaveCount(1);
     await expect(head.locator('.popup-description')).toHaveCount(0);
   });

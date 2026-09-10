@@ -29,6 +29,7 @@ import { matchExpression } from '../config/style-expressions';
 import { URLS } from '../config/urls';
 import { firstLayerIdAbove, BOTTOM_STACK_IDS } from '../map/layer-order';
 import { buildEcoregionPopupHtml } from '../ui/popups';
+import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
 import { buildBoundaryContext } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import { escapeHtml } from '../util/escape';
@@ -155,13 +156,14 @@ export function bindPopups(map: maplibregl.Map): void {
     layerIds: [L3_FILL_ID, L4_FILL_ID],
     label: (feature) =>
       pickName(feature.properties ?? null, levelForFill(feature.layer.id)),
-    respond: (feature, click) => {
+    respond: (feature, click, respondMap) => {
       const props = feature.properties ?? null;
       const level = levelForFill(feature.layer.id);
       const name = pickName(props, level);
       const parentL3 = level === 'IV' ? pickL3Name(props) : null;
+      const conditions = buildPlaceConditionsHtml(respondMap, click.point, feature.geometry);
       return {
-        content: buildEcoregionPopupHtml(name, parentL3 ? { level, parentL3 } : { level }),
+        content: buildEcoregionPopupHtml(name, conditions, parentL3 ? { level, parentL3 } : { level }),
         selection: buildBoundaryContext('ecoregion', props, feature.geometry, click.lngLat, name)
       };
     }
