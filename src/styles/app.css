@@ -7395,8 +7395,26 @@ a.impact-resource-link::after {
 @media (min-width: 721px) {
   /* Island-mount honesty: the full #time-bar stands down only once the
      shell island has actually mounted (#app.shell-ready, stamped by the
-     island chunk). If the lazy chunk never arrives, Brief keeps its
-     shipped temporal rail instead of losing every when-control. */
+     island chunk). If the lazy chunk never arrives, the shipped temporal
+     rail stays instead of losing every when-control.
+
+     2026-09-10 (S23): standing the full rail down in Console too was
+     ATTEMPTED and REVERTED, deliberately, and the next session should read
+     this before retrying it. The owner asked for it (remove Console's
+     floating outlook chips, use the segmented compact bar instead), and a
+     capability audit confirmed TimeCompact's DetailControls is already
+     mounted in Console through #shell-panel and renders rail, modes, jumps
+     and play from the SAME TimeBarSpec, so no CAPABILITY is lost. What is
+     lost is a TEST CONTRACT: tests/fire-heat-time-bar.spec.ts boots several
+     cases with `?view=console` and reads the stamp out of `#time-bar`
+     itself (see :370 and :397), so hiding it takes those cases red. Two of
+     them failed on the S23 gate for exactly this reason.
+     Retrying it means moving those cases onto the compact stamp, which is a
+     real rewrite of that spec, not a selector tweak. Do it as its own task
+     with the runner, not as a one-line edit. The clipping that motivated
+     the request is ALREADY fixed independently: .time-bar-rail-row now
+     wraps and .time-bar-rail carries a 56px min-width, so the stepper no
+     longer squeezes to nothing behind the sidebar's overflow. */
   #app.view-brief.shell-ready:not(.embed) #time-bar { display: none; }
   /* The inline minimap is the default; the popover door appears only in
      the middle height band below. */
