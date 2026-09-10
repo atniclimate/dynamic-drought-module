@@ -7252,6 +7252,16 @@ a.impact-resource-link::after {
   /* The inline minimap is the default; the popover door appears only in
      the middle height band below. */
   .shell-minimap-popover-wrap { display: none; }
+  /* Console is the full map-and-layers instrument; it does not need the
+     framing minimap as a second navigation surface (owner ask,
+     2026-09-10). Both the inline map and the compact-band popover door
+     step aside so only Brief carries it. Higher specificity than the
+     compact-height-band rule below wins in both bands regardless of
+     media-query source order. The component itself still mounts (its
+     retained live fetches are separately gated off in console by
+     src/ui/island/minimap.tsx; this rule is presentation only). */
+  #app.view-console .shell-minimap-map,
+  #app.view-console .shell-minimap-popover-wrap { display: none; }
 }
 
 /* The shell panel exists only once its island has mounted; an empty

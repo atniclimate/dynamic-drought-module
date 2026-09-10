@@ -8,17 +8,22 @@
  * kit, clipped to bundled Natural Earth 1:50m physical coastline linework;
  * Hawaii is the enlarged inset whose whole frame is its hit target. The
  * drawing itself uses only quiet ocean affordance labels for pointer users
- * (D-0.7.0-054); names, provenance framing, and coverage cautions ride
- * the accessible name and the selected-framing caption below. Pointer
- * hover is deliberately visual-only: a soft glow marks the target
- * without covering the map with a description popup.
+ * (D-0.7.0-054); names and provenance framing ride the accessible name
+ * and the selected-framing caption below. Pointer hover is deliberately
+ * visual-only: a soft glow marks the target without covering the map
+ * with a description popup.
  *
  * A framing is CAMERA-ONLY (D-0.7.0-039): choosing one fits the
  * viewport and writes `framing=` through the shared store; it never
  * selects a briefing place, never changes the hazard cluster, and never
- * claims data coverage. Coverage honesty is the caption's job here and
- * the display summary's job in prose: both render the SAME user-facing
- * slice of the framing's coverageNote via userFacingCoverageClause.
+ * claims data coverage. Coverage honesty (a framing's coverageNote) no
+ * longer renders in this module's own post-click caption (2026-09-10,
+ * owner: that read as an unwanted popup and duplicated the display
+ * summary's caveat); its one visible home is now the on-map key
+ * (`src/ui/map-key.ts`), via the same `userFacingCoverageClause`. The
+ * per-option accessible name below still carries its own coverage
+ * clause: that is inherent control labeling read before a commit, not a
+ * rendered popup, so it was left in place.
  *
  * The three ocean zones are schematic controls, not geographic boundaries.
  * Each enters the shipped ENSO display and fits its configured ocean camera
@@ -76,6 +81,7 @@ import {
 } from '../../state/cluster-store';
 import { requestOcean } from '../../state/cluster-service';
 import { userFacingCoverageClause } from '../../state/display-summary';
+import { getViewMode, onViewModeChange } from '../../state/view-mode';
 import {
   getMinimapDroughtSnapshot,
   retainMinimapDrought,
@@ -749,6 +755,14 @@ export function Minimap({
   const [ensoPhase, setEnsoPhase] = useState<EnsoPhaseLabel | null>(null);
   const desktopMinimap = useDesktopMinimap();
   const compactHeightBand = useCompactHeightBand();
+  // Console does not need the minimap (owner, 2026-09-10): the stylesheet
+  // hides it (`#app.view-console .shell-minimap-map`), and this state
+  // stops the retained drought/wildfire summary fetches and the ENSO
+  // phase read below from running behind that hidden widget. Read via the
+  // shared store (src/state/view-mode.ts) rather than a prop so this
+  // component needs no change from shell.tsx, which is reserved.
+  const [viewMode, setViewMode] = useState(getViewMode);
+  useEffect(() => onViewModeChange(setViewMode), []);
   const roving = focused === undefined ? active : focused;
 
   // DDM-P11-T01 clause 3: this is the ONE shell.tsx mounts the popover
@@ -798,14 +812,14 @@ export function Minimap({
   }, [map]);
 
   useEffect(() => {
-    if (!showDroughtMetric || !desktopMinimap) return;
+    if (!showDroughtMetric || !desktopMinimap || viewMode === 'console') return;
     return retainMinimapDrought(setDrought);
-  }, [showDroughtMetric, desktopMinimap]);
+  }, [showDroughtMetric, desktopMinimap, viewMode]);
 
   useEffect(() => {
-    if (!showWildfireMetric || !desktopMinimap) return;
+    if (!showWildfireMetric || !desktopMinimap || viewMode === 'console') return;
     return retainMinimapWildfire(setWildfire);
-  }, [showWildfireMetric, desktopMinimap]);
+  }, [showWildfireMetric, desktopMinimap, viewMode]);
 
   // EF-6: name the current ENSO phase in the scale slot instead of the bare
   // "Navigation only". Label only, from the SAME bundled snapshot and the
@@ -815,7 +829,7 @@ export function Minimap({
   // accessible name still says so. An unavailable read leaves the existing
   // label untouched rather than asserting a phase.
   useEffect(() => {
-    if (metricContext !== 'enso' || !desktopMinimap) return;
+    if (metricContext !== 'enso' || !desktopMinimap || viewMode === 'console') return;
     const controller = new AbortController();
     let live = true;
     void (async () => {
@@ -831,7 +845,7 @@ export function Minimap({
       live = false;
       controller.abort();
     };
-  }, [metricContext, desktopMinimap]);
+  }, [metricContext, desktopMinimap, viewMode]);
 
   useEffect(
     () =>
@@ -900,10 +914,9 @@ export function Minimap({
     showWildfireMetric && active !== null
       ? wildfire.summaries[active]
       : undefined;
-  const coverage =
-    activeDef?.coverageNote !== undefined
-      ? userFacingCoverageClause(activeDef.coverageNote)
-      : '';
+  // A framing's coverageNote no longer renders here (2026-09-10, owner:
+  // the popped-up caption was noise); it renders once, in the on-map key
+  // (src/ui/map-key.ts), independent of this component's mount state.
   // EF-6: the ENSO scale slot names the current operational RONI CONDITIONS
   // (the CPC onset rule on the newest season) and the season they are read
   // from, never the historical five-season episode classification, which
@@ -1454,15 +1467,19 @@ export function Minimap({
         </div>
       </div>
       <hr class="shell-minimap-divider" />
-      {/* A committed framing keeps its visible coverage caution. ALL uses
-          the divider alone so the default state does not repeat itself. */}
+      {/* A committed framing names itself and any live-data partial-coverage
+          note (Nunavut's analysis-mask proxy, the WHP US-only fallback).
+          The framing's own coverageNote (British Columbia, Mexico, and the
+          rest are outside US-scoped sources) does NOT render here: it read
+          as an unwanted popup (owner, 2026-09-10) and duplicated the same
+          sentence already in the on-map key, so the key is now its one
+          home (src/ui/map-key.ts). ALL uses the divider alone so the
+          default state does not repeat itself. */}
       {activeDef !== null ? (
         <p class="shell-minimap-note" aria-live="polite">
           {activeOcean !== null
             ? `Ocean view: ${OCEANS[activeOcean].label}. ${OCEANS[activeOcean].provenance} Preserved land framing: ${activeDef.label}.`
-            : coverage.length > 0
-              ? `Framing: ${activeDef.label}. ${coverage}.${activePartialNote}${activeWildfireNote}`
-              : `Framing: ${activeDef.label}.${activePartialNote}${activeWildfireNote}`}
+            : `Framing: ${activeDef.label}.${activePartialNote}${activeWildfireNote}`}
         </p>
       ) : activeOcean !== null ? (
         <p class="shell-minimap-note" aria-live="polite">

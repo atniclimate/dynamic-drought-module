@@ -25,8 +25,10 @@
  * A framing is CAMERA-ONLY state (plan 9.11 "framing context"): choosing
  * one fits the viewport and never selects a briefing place, changes the
  * display cluster, or claims data coverage. Coverage honesty is the
- * shell's job (S4): a Mexico click under a US-scoped display must say
- * so.
+ * on-map key's job (S4; relocated 2026-09-10 from a popped-up caption on
+ * the minimap itself, owner: that popup was noise, and the key is where
+ * a viewer already looks for what a symbol means): a Mexico click under
+ * a US-scoped display must say so there, via `src/ui/map-key.ts`.
  *
  * The ALL state is not an editorial framing entry. A user-selected ALL camera
  * serializes as `framing=all` so the North American extent survives reload;
