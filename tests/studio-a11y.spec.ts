@@ -48,26 +48,51 @@ test.describe('studio focus and geometry', () => {
     });
   }
 
-  test('desktop PLACE reveals the inert map while LAYERS stays full viewport', async ({
+  test('desktop PLACE and LAYERS dock beside the sidebar, which stays live', async ({
     page
   }) => {
+    // Screen-filling studios now start at the sidebar's inner edge and
+    // fill the rest of the viewport instead of painting over the
+    // sidebar, so #map-container (which they cover completely) goes
+    // inert while #sidebar stays a live, focusable, screen-reader-visible
+    // column (the owner's slide-out-beside-the-side-card direction).
     await page.setViewportSize({ width: 1280, height: 900 });
     await gotoApp(page, '?view=brief&layers=places');
+    const sidebarWidth = await page.locator('#sidebar').evaluate((el) => el.getBoundingClientRect().width);
+    expect(sidebarWidth).toBeGreaterThan(0);
 
     await page.locator('#place-studio-entry').click();
     const placeBox = await page.locator(PLACE_ROOT).boundingBox();
-    expect(placeBox?.x).toBe(0);
-    expect(placeBox?.width).toBe(560);
+    expect(placeBox?.x).toBe(sidebarWidth);
+    expect(placeBox?.width).toBe(1280 - sidebarWidth);
     expect(placeBox?.height).toBe(900);
-    await expect(page.locator('#app')).toHaveAttribute('aria-hidden', 'true');
-    expect(await page.locator('#app').evaluate((app) => app.inert)).toBe(true);
+
+    // #map-container is what the studio actually covers: inert and
+    // hidden from assistive tech.
+    await expect(page.locator('#map-container')).toHaveAttribute('aria-hidden', 'true');
+    expect(await page.locator('#map-container').evaluate((el) => (el as HTMLElement).inert)).toBe(
+      true
+    );
+    // #app itself is no longer blanket-inerted; only what the studio
+    // actually covers is.
+    expect(await page.locator('#app').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
+    // The sidebar is NOT covered, so it must stay reachable and visible
+    // to assistive tech: no aria-hidden, not inert, and a real control
+    // inside it can still take focus.
+    await expect(page.locator('#sidebar')).not.toHaveAttribute('aria-hidden', 'true');
+    expect(await page.locator('#sidebar').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
+    await page.locator('#sidebar-collapse').focus();
+    await expect(page.locator('#sidebar-collapse')).toBeFocused();
 
     await page.locator(`${PLACE_ROOT} #place-studio-back`).click();
     await page.locator('#layers-studio-entry').click();
     const layersBox = await page.locator(LAYERS_ROOT).boundingBox();
-    expect(layersBox?.x).toBe(0);
-    expect(layersBox?.width).toBe(1280);
+    expect(layersBox?.x).toBe(sidebarWidth);
+    expect(layersBox?.width).toBe(1280 - sidebarWidth);
     expect(layersBox?.height).toBe(900);
+    await expect(page.locator('#map-container')).toHaveAttribute('aria-hidden', 'true');
+    await expect(page.locator('#sidebar')).not.toHaveAttribute('aria-hidden', 'true');
+    expect(await page.locator('#sidebar').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
   });
 
   test('mobile PLACE remains full-screen and restores its sheet opener', async ({ page }) => {

@@ -63,6 +63,7 @@ import {
 import { fetchJsonWithBudget } from '../../util/fetch';
 import { foldSearchText } from '../../util/search-fold';
 import { openImpactPanel } from '../impact-panel';
+import { applyStudioInertScope } from './studio-inert';
 
 const CAPABILITY_ORDER: readonly PlaceCapabilityKey[] = [
   'selectable',
@@ -822,21 +823,12 @@ function PlaceStudio() {
 
   useEffect(() => {
     beginPlaceStudioDisplay(kind);
-    const app = document.getElementById('app');
-    const priorAriaHidden = app?.getAttribute('aria-hidden') ?? null;
-    if (app) {
-      app.inert = true;
-      app.setAttribute('aria-hidden', 'true');
-    }
+    const releaseInertScope = applyStudioInertScope();
     backRef.current?.focus();
 
     return () => {
       restoreDisplaySnapshot();
-      if (app) {
-        app.inert = false;
-        if (priorAriaHidden === null) app.removeAttribute('aria-hidden');
-        else app.setAttribute('aria-hidden', priorAriaHidden);
-      }
+      releaseInertScope();
       // Restore-then-brief (ruled ordering): the selected-exit briefing
       // hand-off runs only here, AFTER restoreDisplaySnapshot(), so it can
       // neither open before the restore nor be cancelled by the restore's
