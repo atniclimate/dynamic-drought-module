@@ -8,6 +8,7 @@ import {
   FIRE3D_COVERAGE_NOTE,
   FIRE3D_NON_PREDICTION_NOTE,
   FIRE3D_OUT_OF_COVERAGE_STATUS,
+  FIRE3D_PARTIAL_COVERAGE_STATUS,
   FIRE3D_PITCH_DEGREES,
   FIRE3D_REFUSAL_TEXT,
   FIRE3D_SKY_CLEAR_SPECIFICATION,
@@ -17,6 +18,7 @@ import {
   FIRE3D_TERRAIN_EXAGGERATION,
   PERIMETER_RIBBON_QUALIFICATION,
   PERIMETER_RIBBON_SLAB_COUNT,
+  classifyTerrainCoverage,
   fire3dControlOffer,
   formatLatitudeDeg,
   formatLongitudeDeg,
@@ -523,16 +525,16 @@ test('a fire outside the archive box still gets the full scene, and the status n
       source: 'fire3d-terrain-dem',
       exaggeration: FIRE3D_TERRAIN_EXAGGERATION
     });
-    expect(getFire3DStatus().outOfTerrainCoverage).toBe(true);
+    expect(getFire3DStatus().terrainCoverage).toBe('none');
 
     // Panning back inside the box clears it live, without leaving the scene.
     harness.setCenter({ lng: -119, lat: 45.5 });
     expect(getFire3DStatus().state).toBe('active');
-    expect(getFire3DStatus().outOfTerrainCoverage).toBe(false);
+    expect(getFire3DStatus().terrainCoverage).toBe('full');
 
     // And panning back out sets it again.
     harness.setCenter({ lng: -80.19, lat: 25.76 });
-    expect(getFire3DStatus().outOfTerrainCoverage).toBe(true);
+    expect(getFire3DStatus().terrainCoverage).toBe('none');
 
     setFire3DActive(map, false);
     // The moveend listener detaches with the scene (mirrors the existing
@@ -548,6 +550,85 @@ test('a fire outside the archive box still gets the full scene, and the status n
 
 test('FIRE3D_OUT_OF_COVERAGE_STATUS names the same issuer as the standing coverage sentence and invents no new one', () => {
   expect(FIRE3D_OUT_OF_COVERAGE_STATUS).toContain(FIRE3D_TERRAIN_COVERAGE.issuer);
+  expect(FIRE3D_PARTIAL_COVERAGE_STATUS).toContain(FIRE3D_TERRAIN_COVERAGE.issuer);
+  // The two must not be interchangeable: the wholly-outside sentence is a
+  // claim about all of the view, the partial one explicitly is not.
+  expect(FIRE3D_OUT_OF_COVERAGE_STATUS).not.toBe(FIRE3D_PARTIAL_COVERAGE_STATUS);
+  expect(FIRE3D_PARTIAL_COVERAGE_STATUS).toContain('Part of this view');
+  expect(FIRE3D_PARTIAL_COVERAGE_STATUS).toContain('the rest of the view is modelled');
+});
+
+/**
+ * A view is classified by its FOOTPRINT, never by its centre point (Codex
+ * adversarial review 2026-09-10, finding 8).
+ *
+ * The centre test this replaced was wrong in both directions at the extent's
+ * edge, and the pair of cases below are exactly those two directions: a view
+ * that straddles the edge from the inside used to say nothing while half its
+ * ground rendered flat, and the same view nudged a fraction of a degree east
+ * used to announce that the whole view had no archived elevation.
+ */
+test('a view straddling the coverage edge reads as partial, from either side of the line', () => {
+  const { west, south, east, north } = FIRE3D_TERRAIN_COVERAGE;
+
+  // Wholly inside, comfortably: no qualification earned.
+  expect(
+    classifyTerrainCoverage({ west: west + 1, south: south + 1, east: east - 1, north: north - 1 })
+  ).toBe('full');
+
+  // Straddling the eastern edge from the inside. The centre is INSIDE the box,
+  // so the old predicate said nothing at all while real ground rendered flat.
+  expect(
+    classifyTerrainCoverage({ west: east - 1, south: south + 1, east: east + 1, north: north - 1 })
+  ).toBe('partial');
+
+  // The same picture, centre now just OUTSIDE. The old predicate flipped to a
+  // categorical "this view is outside" for a view still mostly covered.
+  expect(
+    classifyTerrainCoverage({ west: east - 0.5, south: south + 1, east: east + 1.5, north: north - 1 })
+  ).toBe('partial');
+
+  // Wholly outside: the categorical sentence is now the true one.
+  expect(
+    classifyTerrainCoverage({ west: east + 1, south: south + 1, east: east + 2, north: north - 1 })
+  ).toBe('none');
+
+  // Edges are inclusive, matching isWithinTerrainCoverage and the archive's
+  // own inclusive box: touching the edge without crossing it is still full.
+  expect(classifyTerrainCoverage({ west, south, east, north })).toBe('full');
+
+  // A view larger than the whole archive contains it: partial, not full, and
+  // certainly not none.
+  expect(
+    classifyTerrainCoverage({ west: west - 5, south: south - 5, east: east + 5, north: north + 5 })
+  ).toBe('partial');
+});
+
+test('the scene publishes the partial reading for a straddling view, and clears it on a pan back in', async () => {
+  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+  const restoreFetch = stubPmtilesFetch();
+  const harness = fakeMapHarness();
+  const { map } = harness;
+  const { east, south, north } = FIRE3D_TERRAIN_COVERAGE;
+
+  try {
+    setFire3DActive(map, true);
+    await expect.poll(() => getFire3DStatus().state).toBe('active');
+    expect(getFire3DStatus().terrainCoverage).toBe('full');
+
+    // Pan to a view whose box crosses the eastern edge.
+    harness.setBounds({ west: east - 1, south: south + 1, east: east + 1, north: north - 1 });
+    expect(getFire3DStatus().state).toBe('active');
+    expect(getFire3DStatus().terrainCoverage).toBe('partial');
+
+    // Back to a view wholly inside: the qualification clears.
+    harness.setCenter({ lng: -119, lat: 45.5 });
+    expect(getFire3DStatus().terrainCoverage).toBe('full');
+  } finally {
+    setFire3DActive(map, false);
+    restoreFetch();
+    browser.restore();
+  }
 });
 
 // ---------------------------------------------------------------------------

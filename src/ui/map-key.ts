@@ -42,7 +42,7 @@ import {
   USDM_NONE_SWATCH,
   SPC_FIREWX_CATEGORIES
 } from '../config/palette';
-import { getDroughtSurfacePresentation } from '../config/layers';
+import { LAYER_DEFS, getDroughtSurfacePresentation } from '../config/layers';
 import {
   NIFC_INCIDENT_PRESENTATION,
   USFS_WHP_PRESENTATION,
@@ -50,7 +50,9 @@ import {
 } from '../config/wildfire-presentation';
 import { FRAMINGS } from '../config/framings';
 import { getFraming, onFramingChange } from '../state/framing-store';
-import { userFacingCoverageClause } from '../state/display-summary';
+import { getOceanFraming } from '../state/cluster-store';
+import { getViewMode, onViewModeChange } from '../state/view-mode';
+import { isUsScopeCautionLayer } from '../state/display-summary';
 import { escapeHtml } from '../util/escape';
 import {
   createHeatRiskSequenceLoader,
@@ -134,6 +136,7 @@ let disposeMapKeyOverflow: (() => void) | null = null;
 let disposeMapKeySeat: (() => void) | null = null;
 let disposeMapKeyTimeBarSpec: (() => void) | null = null;
 let disposeMapKeyFraming: (() => void) | null = null;
+let disposeMapKeyViewMode: (() => void) | null = null;
 
 /**
  * Seat the on-map key beside the map controls on the desktop shell, and
@@ -757,36 +760,95 @@ function withTerrainCoverage(
 }
 
 /**
- * The active framing's coverage caution (D-0.7.0-051; the S4 handoff), the
+ * Whether the land framing's coverage clauses apply to the CURRENT CAMERA.
+ *
+ * An ocean framing takes camera precedence while deliberately preserving the
+ * land framing underneath it (D-0.7.0-042/053: an ocean click is an entry
+ * into ENSO, display plus camera, and it does not clear `framing=`). Reading
+ * only the land framing therefore put Mexico-specific copy on a Pacific
+ * ocean scene (Codex adversarial review 2026-09-10, finding 5). The land
+ * framing's sentences describe land the camera is no longer looking at, so
+ * none of them applies until the ocean camera is released.
+ */
+function landFramingGovernsCamera(): boolean {
+  return getOceanFraming() === null;
+}
+
+/**
+ * Whether a minimap actually exists in this scene, which is what makes a
+ * sentence about "this minimap" mean anything.
+ *
+ * Console hides the widget and stops its retained drought and wildfire reads
+ * (src/ui/island/minimap.tsx), so its provenance sentence has no referent
+ * there and used to render anyway (finding 5's second case). The view mode is
+ * the deterministic half of the answer and the DOM presence check is the
+ * honest half: the minimap also stands down on narrow viewports and in the
+ * compact height band, and duplicating those media queries here would be a
+ * second copy of a rule that is already hard to keep in step. A key that
+ * renders before the widget mounts simply omits the clause, which
+ * under-claims rather than over-claims and corrects itself on the next
+ * render.
+ */
+function minimapInScene(): boolean {
+  if (getViewMode() === 'console') return false;
+  if (typeof document === 'undefined') return false;
+  const el = document.querySelector('.shell-minimap-map');
+  return el instanceof HTMLElement && el.getClientRects().length > 0;
+}
+
+/**
+ * The active framing's coverage cautions (D-0.7.0-051; the S4 handoff), the
  * ONE render site since 2026-09-10 (owner: the sentence used to pop up on
  * the minimap itself on every click AND repeat, word for word, in the
  * conditions summary caveat; both were retired here, src/config/framings.ts
- * and src/state/display-summary.ts). `userFacingCoverageClause` supplies the
- * identical user-facing text those two sites used to render.
+ * and src/state/display-summary.ts).
  *
  * Independent of `hazardKey()` (see `withFrameCoverage` below) so it never
  * vanishes just because the active surface is not North America Drought.
- * It is also independent of WHICH layers are active: this sentence is
- * framing provenance and is true whichever hazard is displayed.
+ *
+ * Each clause carries its own gate, because they do not share conditions of
+ * truth (Codex adversarial review 2026-09-10, finding 5; the reasoning is in
+ * `FramingCoverage` in src/config/framings.ts). This function's predecessor
+ * rendered all of them together and ungated, which is how a tri-national
+ * surface came to be told it did not cover Mexico, and how Console came to
+ * carry a sentence about a minimap it does not show.
  */
 function frameCoverageNote(): string {
   const selection = getFraming();
   const framing = selection === null || selection === 'all' ? null : selection;
   const def = framing !== null ? FRAMINGS[framing] : undefined;
-  if (def?.coverageNote === undefined) return '';
-  // NOT gated on isUsScopeCautionLayer, deliberately, and the S23 gate is the
-  // reason. This sentence is FRAMING PROVENANCE ("the monthly North American
-  // Drought Monitor informs the minimap across the prairie provinces"), which
-  // is true whichever hazard is displayed. It came from the minimap's own
-  // `.shell-minimap-note`, which was UNGATED. The predicate belonged to the
-  // separate US-scope CAVEAT in display-summary.ts, which excluded
-  // `nadm-drought` and `sst-anomaly` because a "this display is US-scoped"
-  // caution is meaningless for a product that is already tri-national or
-  // global. Applying that gate to this text suppressed it on exactly the
-  // default drought boot, where NADM is the active layer, and took three
-  // s4-minimap cases red. The caveat render site is gone now, so the
-  // predicate has no remaining consumer here.
-  return userFacingCoverageClause(def.coverageNote);
+  const coverage = def?.coverage;
+  if (coverage === undefined) return '';
+  if (!landFramingGovernsCamera()) return '';
+
+  const clauses: string[] = [];
+
+  if (coverage.displayScope !== undefined) {
+    // What is actually on the map right now, by the same rule
+    // display-summary.ts applies (`isUsScopeCautionLayer`): a non-reference
+    // layer that is not one of the two that already reach past the US.
+    const activeDisplay = LAYER_DEFS.filter(
+      (d) => registry.getActiveKeys().has(d.key) && d.role !== 'reference'
+    );
+    const usScoped = activeDisplay.filter((d) => isUsScopeCautionLayer(d));
+    // A clause phrased about the WHOLE display is false the moment one
+    // active layer reaches further, so it needs every layer to be US-scoped.
+    // A clause phrased about the US-scoped layers among them needs only one.
+    const earned = coverage.claimsWholeDisplay === true
+      ? activeDisplay.length > 0 && usScoped.length === activeDisplay.length
+      : usScoped.length > 0;
+    if (earned) clauses.push(coverage.displayScope);
+  }
+
+  if (coverage.minimapProvenance !== undefined && minimapInScene()) {
+    clauses.push(coverage.minimapProvenance);
+  }
+
+  // Ungated: the place catalog ends where it ends, whatever is displayed.
+  if (coverage.briefingScope !== undefined) clauses.push(coverage.briefingScope);
+
+  // Trailing periods are re-added by the caller, which appends exactly one.
+  return clauses.join(' ').replace(/\.\s*$/, '');
 }
 
 /**
@@ -892,6 +954,7 @@ export function initMapKey(): void {
   disposeMapKeySeat?.();
   disposeMapKeyTimeBarSpec?.();
   disposeMapKeyFraming?.();
+  disposeMapKeyViewMode?.();
   const layout = watchMapKeyLayout(host);
   disposeMapKeyLayout = layout.dispose;
   disposeMapKeySeat = watchMapKeySeat(host);
@@ -1130,6 +1193,10 @@ export function initMapKey(): void {
   // no layer write), so without this the coverage caution above would only
   // refresh on the NEXT unrelated key change.
   disposeMapKeyFraming = onFramingChange(update);
+  // Nor does a Brief/Console flip, and it decides whether the minimap
+  // provenance clause has a referent at all (finding 5). Without this the
+  // sentence would linger into Console until some unrelated key change.
+  disposeMapKeyViewMode = onViewModeChange(update);
 
   registry.on('change', update);
   // Every status transition can change the strip now that a loading key

@@ -58,6 +58,7 @@ import {
   FIRE3D_MIN_WIDTH_QUERY,
   FIRE3D_NON_PREDICTION_NOTE,
   FIRE3D_OUT_OF_COVERAGE_STATUS,
+  FIRE3D_PARTIAL_COVERAGE_STATUS,
   FIRE3D_REFUSAL_TEXT,
   fire3dControlOffer
 } from '../../config/fire3d-presentation';
@@ -145,14 +146,20 @@ function emptySmokeLine(status: Fire3DStatus | null, smokeStatus: string | undef
  * Same pattern as emptySmokeLine above: a conditional line beside the live
  * status, not a new member of the six-state vocabulary (the scene is still
  * `active`; this qualifies what "active" means for the ground under THIS
- * view). It renders and clears with `status.outOfTerrainCoverage`, which the
+ * view). It renders and clears with `status.terrainCoverage`, which the
  * orchestrator keeps current across a pan, so the sentence tracks the
  * camera rather than only ever describing where the scene happened to enter.
+ *
+ * THREE readings since 2026-09-10, not two (Codex adversarial review finding
+ * 8). A view that straddles the extent's edge gets its own sentence, because
+ * the wholly-outside one is false about the half of the view that IS
+ * modelled, and saying nothing is false about the half that is not.
  */
 function outOfCoverageLine(status: Fire3DStatus | null): string {
-  return status?.state === 'active' && status.outOfTerrainCoverage
-    ? FIRE3D_OUT_OF_COVERAGE_STATUS
-    : '';
+  if (status?.state !== 'active') return '';
+  if (status.terrainCoverage === 'none') return FIRE3D_OUT_OF_COVERAGE_STATUS;
+  if (status.terrainCoverage === 'partial') return FIRE3D_PARTIAL_COVERAGE_STATUS;
+  return '';
 }
 
 export function Fire3DControl({

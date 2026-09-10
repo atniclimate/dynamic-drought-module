@@ -82,9 +82,68 @@ export interface FramingDef {
   /** The honest label consumers must carry: where this shape came from
    * and what it is not. Required, never empty (D-0.7.0-051). */
   readonly provenance: string;
-  /** One-line coverage caution for the shell's honesty surfaces, when a
-   * framing extends beyond the US-scoped display layers. */
-  readonly coverageNote?: string;
+  /** Coverage cautions for the shell's honesty surfaces, when a framing
+   * extends beyond the US-scoped display layers. Three separately-gated
+   * clauses; see FramingCoverage. */
+  readonly coverage?: FramingCoverage;
+}
+
+/**
+ * A framing's coverage honesty, split by WHAT EACH CLAUSE DESCRIBES (Codex
+ * adversarial review 2026-09-10, finding 5).
+ *
+ * These used to be one `coverageNote` string, semicolon-joined and rendered
+ * whole. That was wrong three ways at once, because the clauses inside it do
+ * not share conditions of truth:
+ *
+ *  - A claim about the DISPLAY depends on which layers are active. With the
+ *    tri-national North American Drought Monitor on, the Mexico framing's
+ *    note announced that "the current display layers do not cover Mexico"
+ *    while the active surface covered exactly that.
+ *  - A claim about the MINIMAP requires a minimap. In Console the widget is
+ *    hidden and its reads stop, and the key still said the Drought Monitor
+ *    "informs this minimap".
+ *  - A claim about PLACE SELECTION depends on neither: the place catalog
+ *    ends at the border whatever is displayed and whichever view is open.
+ *
+ * Splitting them is also what unblocks a conflict an earlier pass could not
+ * resolve: gating the WHOLE note on the active layer set suppressed the
+ * minimap provenance on the default drought boot and took three s4-minimap
+ * cases red, so the gate was removed entirely and the display claim went
+ * back to being sometimes false. Each clause now carries its own gate.
+ */
+export interface FramingCoverage {
+  /**
+   * What the currently displayed layers do and do not reach. Rendered only
+   * while a US-scoped layer is actually on the map (`isUsScopeCautionLayer`,
+   * src/state/display-summary.ts).
+   */
+  readonly displayScope?: string;
+  /**
+   * Where the minimap's own monthly drought read comes from. Rendered only
+   * in a scene that HAS a minimap: Console hides it and stops its fetches,
+   * so the sentence has no referent there.
+   */
+  readonly minimapProvenance?: string;
+  /**
+   * What place selection and local briefings can do here. Ungated: it
+   * describes the bundled place catalog, which no layer choice, view mode
+   * or camera changes.
+   */
+  readonly briefingScope?: string;
+  /**
+   * True when `displayScope` is phrased as a claim about the WHOLE display
+   * ("the current display layers do not cover Mexico") rather than about the
+   * US-scoped ones among them ("British Columbia portions are outside
+   * US-scoped display sources"). A whole-display claim is false as soon as
+   * ONE active layer reaches past the US, so it needs the stricter gate:
+   * every active display layer must be US-scoped, not merely one of them.
+   *
+   * The wording is ruled text and is preserved verbatim rather than
+   * rephrased to fit the looser gate, which would be a session redefining an
+   * owner ruling to make its own predicate simpler.
+   */
+  readonly claimsWholeDisplay?: boolean;
 }
 
 /** Convert and pad one framing for a compact MapLibre fit across the dateline. */
@@ -119,8 +178,12 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
     ],
     padding: 1.0,
     provenance: AUTHORED_NOTE,
-    coverageNote:
-      'US display layers cover Alaska variably; Yukon and British Columbia are outside US-scoped sources. The monthly North American Drought Monitor informs this minimap across Alaska and the Aleutians.',
+    coverage: {
+      displayScope:
+        'US display layers cover Alaska variably; Yukon and British Columbia are outside US-scoped sources.',
+      minimapProvenance:
+        'The monthly North American Drought Monitor informs this minimap across Alaska and the Aleutians.',
+    },
   },
   'boreal-arctic': {
     label: 'Boreal Northern Canada',
@@ -133,8 +196,15 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
     ],
     padding: 1.0,
     provenance: AUTHORED_NOTE,
-    coverageNote:
-      'Mostly outside US-scoped display sources; per-layer status stays honest here. The monthly continental drought summary uses an analysis-mask proxy for Nunavut and is partial in northern Canada.',
+    coverage: {
+      // "per-layer status stays honest here" was authoring guidance addressed
+      // to the implementation, never user-facing text; the old renderer
+      // stripped it with a regex. A structured shape has nowhere to put it,
+      // which is the point: it is not a clause a reader was ever shown.
+      displayScope: 'Mostly outside US-scoped display sources.',
+      minimapProvenance:
+        'The monthly continental drought summary uses an analysis-mask proxy for Nunavut and is partial in northern Canada.',
+    },
   },
   'pacific-coast': {
     label: 'Pacific Coast & Northwest Cascades',
@@ -146,8 +216,12 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
     ],
     padding: 0.5,
     provenance: AUTHORED_NOTE,
-    coverageNote:
-      'British Columbia portions are outside US-scoped display sources. The monthly North American Drought Monitor informs the minimap across the border.',
+    coverage: {
+      displayScope:
+        'British Columbia portions are outside US-scoped display sources.',
+      minimapProvenance:
+        'The monthly North American Drought Monitor informs the minimap across the border.',
+    },
   },
   'arid-west': {
     label: 'Arid West & Desert Southwest',
@@ -166,8 +240,12 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
     ],
     padding: 0.5,
     provenance: AUTHORED_NOTE,
-    coverageNote:
-      'The prairie provinces are outside US-scoped display sources. The monthly North American Drought Monitor informs the minimap across them.',
+    coverage: {
+      displayScope:
+        'The prairie provinces are outside US-scoped display sources.',
+      minimapProvenance:
+        'The monthly North American Drought Monitor informs the minimap across them.',
+    },
   },
   'eastern-forests': {
     label: 'Eastern Forests & Great Lakes',
@@ -177,8 +255,12 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
     ],
     padding: 0.5,
     provenance: AUTHORED_NOTE,
-    coverageNote:
-      'Ontario, Quebec, and the Maritimes are outside US-scoped display sources. The monthly North American Drought Monitor informs the minimap across Canada.',
+    coverage: {
+      displayScope:
+        'Ontario, Quebec, and the Maritimes are outside US-scoped display sources.',
+      minimapProvenance:
+        'The monthly North American Drought Monitor informs the minimap across Canada.',
+    },
   },
   'southeast-gulf': {
     label: 'Southeast & Gulf Coast',
@@ -200,8 +282,17 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
     ],
     padding: 0.5,
     provenance: AUTHORED_NOTE,
-    coverageNote:
-      'The current display layers do not cover Mexico. The monthly North American Drought Monitor informs this minimap in Mexico; place selection and local briefings are unavailable.',
+    coverage: {
+      // Ruled wording, kept verbatim. It is a claim about the WHOLE display,
+      // so it carries claimsWholeDisplay and the stricter gate: with the
+      // tri-national NADM on, this framing's own surface DOES cover Mexico
+      // and the sentence must not render.
+      displayScope: 'The current display layers do not cover Mexico.',
+      claimsWholeDisplay: true,
+      minimapProvenance:
+        'The monthly North American Drought Monitor informs this minimap in Mexico.',
+      briefingScope: 'Place selection and local briefings are unavailable.',
+    },
   },
   hawaii: {
     label: 'Hawaii',
@@ -215,8 +306,13 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
     ],
     padding: 0.3,
     provenance: AUTHORED_NOTE,
-    coverageNote:
-      'Layer coverage varies for Hawaii; per-layer status stays honest here. The monthly North American Drought Monitor informs this minimap.',
+    coverage: {
+      // As with Boreal & Arctic, the "per-layer status stays honest here"
+      // tail was authoring guidance and never reached a reader.
+      displayScope: 'Layer coverage varies for Hawaii.',
+      minimapProvenance:
+        'The monthly North American Drought Monitor informs this minimap.',
+    },
   },
 };
 

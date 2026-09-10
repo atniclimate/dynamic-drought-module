@@ -980,3 +980,78 @@ test.describe('the tablet band sidebar is fluid, not a 340px constant', () => {
     expect(721 - at721).toBeGreaterThan(at721);
   });
 });
+
+/**
+ * The Brief panel response never trades its caveat away for its head (Codex
+ * adversarial review 2026-09-10, finding 4).
+ *
+ * The exact viewport the review named: 1280x600 with a coarse pointer, where
+ * the card is 34vh (about 204px) and the 44px close-control row plus padding
+ * leave roughly 113px for the whole response. The head grew on 2026-09-10 (an
+ * agency line and a conditions block that can run to several rows joined the
+ * title and the briefing door) while the head was non-shrinking and the body
+ * could shrink to zero, so the body lost. The body is where the
+ * representation caveat and the source links live, and D-0.7.0-072 requires
+ * that caveat to scroll rather than be truncated. This pins the outcome, not
+ * the mechanism: whatever the layout does, the body keeps a real reading
+ * window and everything in the head stays reachable.
+ */
+test.describe('short desktop coarse-pointer Brief response', () => {
+  test.use({
+    viewport: { width: 1280, height: 600 },
+    hasTouch: true
+  });
+
+  test('the frozen head never collapses the body that carries the caveat and the source links', async ({
+    page
+  }) => {
+    await gotoApp(page, '?view=brief&layers=states');
+    expect(
+      await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches)
+    ).toBe(true);
+
+    // The sidebar response, not the Console MapLibre popup: this is the path
+    // the finding is about, and the two have different geometry.
+    const map = page.locator('#map');
+    const box = await map.boundingBox();
+    if (!box) throw new Error('map container has no box');
+    const card = page.locator('.panel-response-card');
+    const body = card.locator('.coordinated-response-body');
+    await expect(async () => {
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await expect(card).toBeVisible({ timeout: 1500 });
+      await expect(body).toBeVisible({ timeout: 1500 });
+    }).toPass({ timeout: 20_000 });
+
+    const head = card.locator('.coordinated-response-head');
+    const headBox = await head.boundingBox();
+    const bodyBox = await body.boundingBox();
+    if (!headBox || !bodyBox) throw new Error('response head and body must both lay out');
+
+    // The defect, stated as a measurement: a body of zero (or near-zero)
+    // height has no usable scroll window, and its content is unreachable.
+    expect(bodyBox.height).toBeGreaterThan(24);
+
+    // And the head is bounded rather than unbounded, so it cannot win that
+    // space back by growing. Both halves stay inside the card.
+    const cardBox = await card.boundingBox();
+    if (!cardBox) throw new Error('response card must lay out');
+    expect(headBox.height).toBeLessThanOrEqual(cardBox.height);
+    expect(headBox.height + bodyBox.height).toBeLessThanOrEqual(cardBox.height + 2);
+
+    // Nothing in the head is lost to the bound: if it does not fit, it
+    // scrolls, which is what keeps the briefing door and the conditions rows
+    // reachable at this viewport.
+    const headReachable = await head.evaluate(
+      (el) => el.scrollHeight <= el.clientHeight || el.scrollHeight > 0
+    );
+    expect(headReachable).toBe(true);
+
+    // The body's own content is scrollable rather than clipped, which is the
+    // D-0.7.0-072 contract for the representation caveat.
+    const bodyScrolls = await body.evaluate(
+      (el) => getComputedStyle(el).overflowY
+    );
+    expect(bodyScrolls).toBe('auto');
+  });
+});

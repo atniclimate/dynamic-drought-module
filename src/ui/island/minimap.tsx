@@ -16,14 +16,14 @@
  * A framing is CAMERA-ONLY (D-0.7.0-039): choosing one fits the
  * viewport and writes `framing=` through the shared store; it never
  * selects a briefing place, never changes the hazard cluster, and never
- * claims data coverage. Coverage honesty (a framing's coverageNote) no
- * longer renders in this module's own post-click caption (2026-09-10,
+ * claims data coverage. Coverage honesty (a framing's `coverage` clauses)
+ * no longer renders in this module's own post-click caption (2026-09-10,
  * owner: that read as an unwanted popup and duplicated the display
  * summary's caveat); its one visible home is now the on-map key
- * (`src/ui/map-key.ts`), via the same `userFacingCoverageClause`. The
- * per-option accessible name below still carries its own coverage
- * clause: that is inherent control labeling read before a commit, not a
- * rendered popup, so it was left in place.
+ * (`src/ui/map-key.ts`), which gates each clause on its own conditions of
+ * truth. The per-option accessible name below still carries the two clauses
+ * that describe THIS control: that is inherent control labeling read before
+ * a commit, not a rendered popup, so it was left in place.
  *
  * The three ocean zones are schematic controls, not geographic boundaries.
  * Each enters the shipped ENSO display and fits its configured ocean camera
@@ -80,7 +80,6 @@ import {
   onHazardClusterChange,
 } from '../../state/cluster-store';
 import { requestOcean } from '../../state/cluster-service';
-import { userFacingCoverageClause } from '../../state/display-summary';
 import { getViewMode, onViewModeChange } from '../../state/view-mode';
 import {
   getMinimapDroughtSnapshot,
@@ -688,12 +687,22 @@ function accessibleName(
   metricContext: MinimapMetricContext,
 ): string {
   const def = FRAMINGS[key];
-  const coverage =
-    def.coverageNote !== undefined
-      ? userFacingCoverageClause(def.coverageNote)
-      : '';
-  const base =
-    coverage.length > 0 ? `${def.label}. ${coverage}.` : `${def.label}.`;
+  // The accessible name of a MINIMAP control, so it carries the clauses that
+  // describe this widget and the ground it draws: what the display reaches
+  // and where this minimap's own monthly read comes from. The briefing-scope
+  // clause is deliberately not here; it describes place selection, which this
+  // control does not perform, and the on-map key already carries it
+  // (src/config/framings.ts FramingCoverage; Codex review finding 5).
+  //
+  // Unlike the on-map key, these are NOT gated on the active layer set: an
+  // accessible name is read on demand for a control the user is inspecting,
+  // not published as a live claim about the current display, and a name that
+  // changed its words as layers toggled would be worse for a screen-reader
+  // user than one that is stable and slightly broader.
+  const clauses = [def.coverage?.displayScope, def.coverage?.minimapProvenance]
+    .filter((clause): clause is string => clause !== undefined && clause.length > 0)
+    .join(' ');
+  const base = clauses.length > 0 ? `${def.label}. ${clauses}` : `${def.label}.`;
   // The required provenance qualification travels with the name
   // (FramingDef.provenance is required, never empty, D-0.7.0-051; DG-080
   // review blocker 2): these rectangles visually resemble selectable

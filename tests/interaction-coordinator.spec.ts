@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { gotoApp, waitForLayerSettled } from './helpers';
+import { BIA_ROUTE, NOTCH_BOUNDS, concaveBiaBody, routeGeojson } from './tribal-fixtures';
 
 /**
  * The InteractionCoordinator click-collision contract (D-0.7.0-058
@@ -450,5 +451,139 @@ test.describe('the Conditions block never claims an absence it did not read', ()
     await expect(alertRow).toHaveCount(1);
     await expect(alertRow).toContainText('heat or fire weather');
     await expect(alertRow).toContainText('Only those products are requested');
+  });
+});
+
+/**
+ * The Conditions block attributes an alert to a place only when the alert
+ * actually touches that place (Codex adversarial review 2026-09-10, finding 3;
+ * the ATTRIBUTION FIX in src/ui/popup-conditions.ts, whose predicate is unit-
+ * tested in tests/polygon-overlap.spec.ts).
+ *
+ * The card retrieves alert candidates with the clicked place's screen-space
+ * BOUNDING BOX, deliberately and for a reason that has not changed: nws-alerts
+ * registers as the highest-ranked `point-event` kind, so an alert covering the
+ * clicked pixel wins the click outright and a bare point query would make the
+ * alert row unreachable from a boundary popup entirely. A rectangle is
+ * therefore the right RETRIEVAL shape. It is the wrong ATTRIBUTION shape,
+ * because a concave place's rectangle also contains ground that is not that
+ * place, and until the fix a warning in that gap was reported as this place's
+ * warning AND pulsed its briefing door.
+ *
+ * The pair below is the evidence, and it is a pair on purpose. Both cases boot
+ * the SAME camera and the SAME fixture alert at the SAME coordinates; the only
+ * thing that differs is whether the reservation polygon has a notch where that
+ * alert sits. Same box, same pixels, opposite answers. A single case could be
+ * passing because the alert never painted at all.
+ */
+test.describe('the Conditions block attributes an alert only where it touches the place', () => {
+  const WWA_QUERY = '/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/1/query';
+
+  /** A Red Flag Warning square, `[w, s, e, n]`, shaped as the layer's own
+   * validator requires (a requested product name and an expiry that parses).
+   * Placed inside NOTCH_BOUNDS so the concave fixture excludes it. */
+  function redFlagAt(w: number, s: number, e: number, n: number): unknown {
+    return {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {
+            prod_type: 'Red Flag Warning', // vocab-allow: verbatim NWS product name, quoted source data
+            onset: '2026-09-10T12:00:00Z',
+            ends: '2026-09-11T02:00:00Z',
+            expiration: '2026-09-11T02:00:00Z',
+            wfo: 'OTX'
+          },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [w, s],
+                [e, s],
+                [e, n],
+                [w, n],
+                [w, s]
+              ]
+            ]
+          }
+        }
+      ]
+    };
+  }
+
+  /**
+   * Boot with the alerts layer holding one Red Flag Warning in the notch, and
+   * with the reservation shaped either as the plain rectangle (which CONTAINS
+   * the notch region) or as the L (which does not).
+   */
+  async function bootWithNotchAlert(page: Page, shape: 'rectangle' | 'concave'): Promise<void> {
+    const [w, s, e, n] = NOTCH_BOUNDS;
+    // Inset from the notch edges so neither answer depends on a boundary case.
+    const alert = redFlagAt(w + 0.5, s + 0.2, e - 0.5, n - 0.2);
+    await page.route(
+      (url) => url.pathname.endsWith(WWA_QUERY),
+      (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/geo+json',
+          body: JSON.stringify(alert)
+        })
+    );
+    if (shape === 'concave') {
+      await routeGeojson(page, BIA_ROUTE, concaveBiaBody());
+    }
+    await gotoApp(page, '?view=console&layers=bia-reservations,nws-alerts');
+    await waitForLayerSettled(page, 'bia-reservations');
+    await waitForLayerSettled(page, 'nws-alerts');
+    await clickCenterUntilPrimary(page, 'Synthetic Reservation Fixture');
+  }
+
+  test('a rectangular place that really contains the warning reports it', async ({ page }) => {
+    // The control. Without this the negative case below proves nothing: it
+    // establishes that this alert, at these coordinates, IS retrieved by the
+    // box query and IS reportable, so the negative case can only be the
+    // polygon test doing its work.
+    await bootWithNotchAlert(page, 'rectangle');
+
+    const conditions = page.locator('.maplibregl-popup-content .popup-conditions');
+    await expect(conditions).toBeVisible();
+    const alertRow = conditions.locator('.popup-condition-row', { hasText: 'NWS alert' });
+    await expect(alertRow).toContainText('Red Flag Warning');
+    // The place-wide scope is stated, so a reader never reads a box query as a
+    // measurement at the pixel they clicked.
+    await expect(alertRow).toContainText('in this area');
+
+    // And the emphasis IS earned here: a Warning-tier product really does
+    // cover this place, so the briefing door pulses. The negative case asserts
+    // the opposite on the same fixture, which is what makes either meaningful.
+    const door = page.locator('.maplibregl-popup-content [data-ddm-impact-trigger]');
+    await expect(door).toHaveClass(/popup-impact-btn--pulse/);
+  });
+
+  test('a concave place whose notch holds the warning does not report it, and does not pulse', async ({
+    page
+  }) => {
+    await bootWithNotchAlert(page, 'concave');
+
+    const conditions = page.locator('.maplibregl-popup-content .popup-conditions');
+    await expect(conditions).toBeVisible();
+    const alertRow = conditions.locator('.popup-condition-row', { hasText: 'NWS alert' });
+    // The row still exists: the layer read cleanly and found nothing HERE,
+    // which is a confirmed zero and must be said, not omitted.
+    await expect(alertRow).toHaveCount(1);
+    await expect(alertRow).not.toContainText('Red Flag Warning');
+    await expect(alertRow).toContainText('No active NWS heat or fire weather');
+
+    // Amendment A2 gates the briefing door's emphasis on real issuer evidence
+    // AT the clicked place. Somewhere else's warning must not pulse it
+    // (`popup-impact-btn--pulse`, src/ui/popups.ts buildImpactTriggerButtonHtml).
+    const door = page.locator('.maplibregl-popup-content [data-ddm-impact-trigger]');
+    await expect(door).toHaveCount(1);
+    await expect(door).not.toHaveClass(/popup-impact-btn--pulse/);
+    await expect(door).toHaveAttribute(
+      'class',
+      /popup-impact-btn/
+    );
   });
 });

@@ -278,3 +278,66 @@ test('an immediate browser Back still delivers the promised briefing (wave A fin
   await expect(panel).toBeVisible({ timeout: 15_000 });
   await expect(panel.locator('.impact-panel-title')).toHaveText('Oregon');
 });
+
+/**
+ * A sidebar display command taken from inside the Place studio survives
+ * (Codex adversarial review 2026-09-10, finding 6).
+ *
+ * The sidebar became reachable from inside a studio on 2026-09-10, a real
+ * accessibility fix: a keyboard or screen-reader user can now reach these
+ * controls while a studio is open. But focusable is not the same as
+ * operative. Place studio captures the display on entry, reasserts that
+ * capture on every intent change (`enforceCleanIntent`), and restores it
+ * again on exit, so a cluster requested from the newly-live sidebar was
+ * stripped within a microtask and then overwritten a second time on the way
+ * out. The control looked like it worked and did not.
+ *
+ * The fix sequences the command behind the studio's own exit rather than
+ * suppressing it, so the assertion is on the OUTCOME a user would expect:
+ * click Wildfire, end up on Wildfire, with the studio closed.
+ */
+test.describe('the exposed sidebar commands survive the Place studio', () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  test('choosing a hazard from inside Place studio leaves the studio and lands on that hazard', async ({
+    page
+  }) => {
+    await gotoApp(page, '?layers=states&view=brief');
+    await waitForLayerSettled(page, 'states');
+
+    const wildfire = page.locator('.shell-cluster-btn[data-cluster="wildfire"]');
+    await expect(wildfire).toHaveAttribute('aria-pressed', 'false');
+
+    await page.locator('#studio-entry-pair #place-studio-entry').click();
+    const studio = page.locator(PLACE_ROOT);
+    await expect(studio).toBeVisible();
+
+    // The control is genuinely reachable, which is the 2026-09-10 a11y win
+    // this test must not undo: the fix is allowed to change what the click
+    // DOES, never to put the control back behind an inert scope.
+    await expect(wildfire).toBeVisible();
+    await expect(wildfire).toBeEnabled();
+
+    await wildfire.click();
+
+    // The studio yields, rather than silently reverting the choice.
+    await expect(studio).toHaveCount(0);
+    // And the choice is the one that stands, after the exit restore rather
+    // than in a race with it.
+    await expect(wildfire).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
+    await expect(page).toHaveURL(/cluster=wildfire/);
+    // The studio really is gone from the URL too, not merely unmounted.
+    await expect(page).not.toHaveURL(/studio=place/);
+  });
+
+  test('the same command outside any studio is unchanged', async ({ page }) => {
+    // The control: the deferral must apply ONLY inside Place studio, or the
+    // fix would have made every hazard click depend on a history pop.
+    await gotoApp(page, '?layers=states&view=brief');
+    await waitForLayerSettled(page, 'states');
+    const wildfire = page.locator('.shell-cluster-btn[data-cluster="wildfire"]');
+    await wildfire.click();
+    await expect(wildfire).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
+    await expect(page).toHaveURL(/cluster=wildfire/);
+  });
+});

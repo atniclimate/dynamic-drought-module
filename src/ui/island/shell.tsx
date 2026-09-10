@@ -60,6 +60,11 @@ import {
 } from '../../state/cluster-service';
 import type { CommittedShellSnapshot } from '../../state/cluster-service';
 import { requestBasemapMode } from '../../map/basemap-switcher';
+import {
+  backToMap,
+  getStudioRoute,
+  setPlaceStudioReturnAction
+} from '../../state/studio-route';
 import { onTimeBarSpecChange } from '../time-bar';
 import { Fire3DControl } from './fire3d-control';
 import { Minimap } from './minimap';
@@ -368,10 +373,50 @@ function Shell({ map, snap, framing, specTick }: ShellProps) {
   const snapshot = snap.value;
   const pending = isPending(snapshot);
 
+  /**
+   * Run a display command that the Place studio would otherwise reverse
+   * (Codex adversarial review 2026-09-10, finding 6).
+   *
+   * The sidebar became reachable from inside a studio on 2026-09-10, which
+   * was an accessibility fix: the narrowed inert scope means a keyboard or
+   * screen-reader user can finally reach these controls while a studio is
+   * open. Making a control FOCUSABLE, though, does not make its command
+   * compatible with the state machine underneath it. The Place studio
+   * captures the display on entry and reasserts that capture on every intent
+   * change (`enforceCleanIntent`, src/state/display-snapshot.ts), then
+   * restores it again on exit. A cluster or horizon requested from the
+   * exposed sidebar was therefore stripped within a microtask and then
+   * overwritten a second time on the way out: an apparently operative choice
+   * that did not survive, which is worse than one that was never offered.
+   *
+   * The fix is to sequence, not to suppress. The command is deferred behind
+   * the studio's OWN exit, using the ruled restore-then-act ordering the
+   * selected-exit briefing hand-off already uses
+   * (`setPlaceStudioReturnAction`, run by the island's unmount cleanup AFTER
+   * `restoreDisplaySnapshot`). So clicking Wildfire from inside Place studio
+   * leaves the studio and lands on Wildfire, which is what the control says
+   * it does. Nothing about the snapshot contract changes: the studio still
+   * captures on entry and still restores on exit, and the new display is
+   * applied after that restore rather than in a race with it.
+   *
+   * Only the PLACE studio needs this. The Layers studio is the layer editor;
+   * edits there are meant to persist and it captures no snapshot to reassert.
+   */
+  const runDisplayCommand = (apply: () => void): void => {
+    if (getStudioRoute() === 'place') {
+      setPlaceStudioReturnAction(apply);
+      backToMap();
+      return;
+    }
+    apply();
+  };
+
   const chooseCluster = (key: HazardClusterKey): void => {
-    requestCluster(key);
-    const preferredBasemap = HAZARD_CLUSTERS[key].preferredBasemap;
-    if (preferredBasemap) requestBasemapMode(map, preferredBasemap);
+    runDisplayCommand(() => {
+      requestCluster(key);
+      const preferredBasemap = HAZARD_CLUSTERS[key].preferredBasemap;
+      if (preferredBasemap) requestBasemapMode(map, preferredBasemap);
+    });
   };
 
   const chooseHorizon = (key: TemporalHorizonKey): void => {
@@ -379,7 +424,7 @@ function Shell({ map, snap, framing, specTick }: ShellProps) {
     // commit (it re-resolves an explicit cluster once via its own
     // timeline subscription, applies the derived boot case itself, and
     // lets a 'custom' display keep its set).
-    requestHorizon(key);
+    runDisplayCommand(() => requestHorizon(key));
   };
 
   return (

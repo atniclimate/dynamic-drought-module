@@ -37,6 +37,7 @@ export const PURE_SPECS = [
   'tests/minimap-wildfire.spec.ts',
   'tests/nadm-shared-payload.spec.ts',
   'tests/point-in-polygon.spec.ts',
+  'tests/polygon-overlap.spec.ts',
   'tests/s1-substrate.spec.ts',
   'tests/satellite-source.spec.ts',
   'tests/umbrella-config.spec.ts',

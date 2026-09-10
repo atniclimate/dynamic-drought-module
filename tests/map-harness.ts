@@ -73,6 +73,20 @@ export interface FakeMapHarness {
    * from before this method existed.
    */
   setCenter(next: { lng: number; lat: number }): void;
+  /**
+   * Set the view box `getBounds` reports directly and fire `moveend`. The
+   * centre follows the box's middle, so a spec that sets bounds does not
+   * leave the two disagreeing. Use this for a view that straddles a coverage
+   * edge, which is the case a centre alone cannot describe.
+   */
+  setBounds(next: {
+    west: number;
+    south: number;
+    east: number;
+    north: number;
+  }): void;
+  /** Widen or narrow the derived view box around the centre, in degrees. */
+  setViewHalfSpan(next: number): void;
 }
 
 export function fakeMapHarness(initial?: {
@@ -80,6 +94,8 @@ export function fakeMapHarness(initial?: {
   readonly bearing?: number;
   readonly zoom?: number;
   readonly center?: { readonly lng: number; readonly lat: number };
+  /** Half the width/height of the reported view box, degrees. Default 0.05. */
+  readonly viewHalfSpan?: number;
 }): FakeMapHarness {
   const sources = new Map<string, Record<string, unknown>>();
   const layerOrder: string[] = [];
@@ -104,6 +120,20 @@ export function fakeMapHarness(initial?: {
   // in-coverage activation, exactly as before FIRE3D_TERRAIN_COVERAGE
   // tracking existed.
   let center = { lng: initial?.center?.lng ?? -119, lat: initial?.center?.lat ?? 45.5 };
+  // Half the width and half the height of the view box getBounds reports, in
+  // degrees. Small by default (a tight view around the centre) so every spec
+  // written before getBounds existed still reads as a fully covered view
+  // wherever its centre used to read as covered, and as fully uncovered
+  // wherever its centre used to read as uncovered.
+  let viewHalfSpan = initial?.viewHalfSpan ?? 0.05;
+  // An explicit box wins over the derived one, for the straddling cases the
+  // centre-plus-span form cannot express as clearly.
+  let explicitBounds: {
+    west: number;
+    south: number;
+    east: number;
+    north: number;
+  } | null = null;
 
   const applyCameraOptions = (options: Record<string, unknown>): void => {
     if (typeof options['pitch'] === 'number') camera.pitch = options['pitch'];
@@ -186,6 +216,29 @@ export function fakeMapHarness(initial?: {
     getBearing: () => camera.bearing,
     getZoom: () => zoom,
     getCenter: () => ({ ...center }),
+    /**
+     * The visible footprint, in MapLibre's `LngLatBounds` accessor shape.
+     * Derived from the centre and `viewHalfSpan` so an existing spec that
+     * only calls `setCenter` keeps behaving as it did, while a spec that
+     * needs a view straddling a coverage edge can widen the span or set an
+     * explicit box with `setBounds`. Read by fire3d.ts's
+     * `readTerrainCoverage`, which is what makes the three coverage
+     * readings testable at all.
+     */
+    getBounds: () => {
+      const box = explicitBounds ?? {
+        west: center.lng - viewHalfSpan,
+        south: center.lat - viewHalfSpan,
+        east: center.lng + viewHalfSpan,
+        north: center.lat + viewHalfSpan
+      };
+      return {
+        getWest: () => box.west,
+        getSouth: () => box.south,
+        getEast: () => box.east,
+        getNorth: () => box.north
+      };
+    },
     easeTo: (options: Record<string, unknown>) => {
       cameraCalls.push({ kind: 'easeTo', options });
       applyCameraOptions(options);
@@ -231,6 +284,29 @@ export function fakeMapHarness(initial?: {
     getZoom: () => zoom,
     setCenter: (next: { lng: number; lat: number }) => {
       center = { ...next };
+      explicitBounds = null;
+      for (const listener of [...(listeners.get('moveend') ?? [])]) {
+        listener({});
+      }
+    },
+    setBounds: (next: {
+      west: number;
+      south: number;
+      east: number;
+      north: number;
+    }) => {
+      explicitBounds = { ...next };
+      center = {
+        lng: (next.west + next.east) / 2,
+        lat: (next.south + next.north) / 2
+      };
+      for (const listener of [...(listeners.get('moveend') ?? [])]) {
+        listener({});
+      }
+    },
+    setViewHalfSpan: (next: number) => {
+      viewHalfSpan = next;
+      explicitBounds = null;
       for (const listener of [...(listeners.get('moveend') ?? [])]) {
         listener({});
       }

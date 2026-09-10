@@ -2,8 +2,7 @@ import { test, expect } from '@playwright/test';
 
 import {
   deriveDisplaySummary,
-  isUsScopeCautionLayer,
-  userFacingCoverageClause
+  isUsScopeCautionLayer
 } from '../src/state/display-summary';
 import type {
   DisplaySummaryInput,
@@ -11,7 +10,7 @@ import type {
 } from '../src/types/display-summary';
 import type { LayerStatus } from '../src/types/layer';
 import { LAYER_DEFS } from '../src/config/layers';
-import { FRAMINGS } from '../src/config/framings';
+import { FRAMINGS, FRAMING_KEYS } from '../src/config/framings';
 import { STATUS_PILL_TEXT } from '../src/ui/island/pill-text';
 
 /**
@@ -171,10 +170,10 @@ test.describe('S3 display summary: coverage honesty relocated to the on-map key 
   // for the same click: the same sentence, twice, at once. The owner called
   // the popup noise; the fix retired BOTH renderings in favor of one, the
   // on-map key (src/ui/map-key.ts). The tests below now prove the NEGATIVE
-  // half of that (this module never re-adds the clause) and unit-test the
-  // two exported building blocks (`isUsScopeCautionLayer`,
-  // `userFacingCoverageClause`) the key now drives directly, since their
-  // only remaining caller is DOM-driven and untestable at this pure layer.
+  // half of that (this module never re-adds the clause) and unit-test what
+  // the key drives directly: `isUsScopeCautionLayer`, and the structure of
+  // the framing coverage clauses themselves, since the key's own gating is
+  // DOM-driven and is proven in tests/s4-minimap.spec.ts instead.
 
   test('Mexico framing over a ready US-scoped surface adds no caveat here; the on-map key states the caution instead', () => {
     const summary = deriveDisplaySummary(
@@ -218,24 +217,60 @@ test.describe('S3 display summary: coverage honesty relocated to the on-map key 
     expect(isUsScopeCautionLayer({ key: 'hillshade', role: 'reference' })).toBe(false);
   });
 
-  test('userFacingCoverageClause keeps a substantive second clause (Alaska & Northwest) but drops the authoring-guidance tail (Boreal & Arctic), exercised directly now that its only caller is the DOM-driven on-map key', () => {
-    const alaskaNote = FRAMINGS['alaska-northwest'].coverageNote;
-    if (!alaskaNote) {
-      throw new Error('Alaska & Northwest must define a coverageNote for this test.');
-    }
-    const alaska = userFacingCoverageClause(alaskaNote);
-    expect(alaska).toContain('US display layers cover Alaska variably');
-    expect(alaska).toContain(
+  test('every framing coverage clause is filed by what it describes, and no clause smuggles a second subject in with it', () => {
+    // The structural half of Codex adversarial review finding 5. The clauses
+    // used to share one string and were rendered together; the defect was
+    // never a wording defect, it was that a display claim, a minimap claim
+    // and a place-selection claim have different conditions of truth and
+    // cannot be gated as one. This asserts the separation itself, so a future
+    // edit cannot quietly re-merge them by appending a second sentence to
+    // whichever field was handy.
+    const alaska = FRAMINGS['alaska-northwest'].coverage;
+    expect(alaska?.displayScope).toContain('US display layers cover Alaska variably');
+    expect(alaska?.displayScope).toContain(
       'Yukon and British Columbia are outside US-scoped sources'
     );
+    expect(alaska?.minimapProvenance).toContain('informs this minimap');
 
-    const borealNote = FRAMINGS['boreal-arctic'].coverageNote;
-    if (!borealNote) {
-      throw new Error('Boreal & Arctic must define a coverageNote for this test.');
+    // The authoring-guidance tails the old regex stripped are simply gone:
+    // a structured shape has no field for text a reader never saw.
+    const boreal = FRAMINGS['boreal-arctic'].coverage;
+    expect(boreal?.displayScope).toBe('Mostly outside US-scoped display sources.');
+    expect(boreal?.displayScope).not.toContain('per-layer status');
+    expect(FRAMINGS['hawaii'].coverage?.displayScope).not.toContain('per-layer status');
+
+    // Mexico is the framing the finding was found on. Its ruled display
+    // sentence is preserved verbatim and marked as a whole-display claim,
+    // which is what earns it the stricter gate in the on-map key; its
+    // minimap and place-selection clauses are now separate subjects.
+    const mexico = FRAMINGS['mexico'].coverage;
+    expect(mexico?.displayScope).toBe('The current display layers do not cover Mexico.');
+    expect(mexico?.claimsWholeDisplay).toBe(true);
+    expect(mexico?.minimapProvenance).toBe(
+      'The monthly North American Drought Monitor informs this minimap in Mexico.'
+    );
+    expect(mexico?.briefingScope).toBe(
+      'Place selection and local briefings are unavailable.'
+    );
+
+    for (const key of FRAMING_KEYS) {
+      const coverage = FRAMINGS[key].coverage;
+      if (coverage === undefined) continue;
+      // A minimap clause talks about the minimap and nothing else; a display
+      // clause never claims to speak for the minimap. Either would put a
+      // subject back under a gate that is not its own.
+      if (coverage.displayScope !== undefined) {
+        expect(coverage.displayScope).not.toContain('minimap');
+      }
+      if (coverage.briefingScope !== undefined) {
+        expect(coverage.briefingScope).not.toContain('minimap');
+      }
+      // Only a whole-display claim gets the strict gate, and only Mexico
+      // phrases one; a new one is a deliberate act, not an accident.
+      if (coverage.claimsWholeDisplay === true) {
+        expect(key).toBe('mexico');
+      }
     }
-    const boreal = userFacingCoverageClause(borealNote);
-    expect(boreal).toContain('Mostly outside US-scoped display sources');
-    expect(boreal).not.toContain('per-layer status');
   });
 
   test('a globally-scoped surface (Ocean Temperature Anomaly) does not trigger the US-coverage caution', () => {

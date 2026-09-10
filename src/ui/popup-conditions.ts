@@ -47,6 +47,24 @@
  * actually reachable. Drought is unaffected: `condition-surface` is the
  * LOWEST-ranked kind, so a boundary always wins over it regardless, and
  * the point-exact read stays consistent with `fire-context.ts`.
+ *
+ * ATTRIBUTION FIX (2026-09-10, Codex adversarial review finding 3). The box
+ * above is the right RETRIEVAL shape and the wrong ATTRIBUTION shape. A
+ * rectangle drawn around a concave place also contains ground that is not
+ * that place: the notch of a coastline, a hole, the gap between two
+ * components of a MultiPolygon. Until this fix a Red Flag Warning lying
+ * wholly OUTSIDE a boundary but inside its rectangle was reported as that
+ * place's warning AND pulsed its briefing door, which is the emphasis
+ * amendment A2 gates on real issuer evidence AT the clicked place. The box
+ * is still what retrieves candidates, because the reachability finding
+ * above has not changed; every candidate is then intersected against the
+ * clicked feature's own geometry in memory (`geometriesOverlap`,
+ * `src/util/polygon-overlap.ts`) and the ones that do not touch the place
+ * are dropped. Nothing is persisted and no polygon is redistributed. The
+ * rows say "in this area" rather than "here" so the reader knows the claim
+ * is place-wide and not a reading at the clicked pixel; the bare-point
+ * fallback, which cannot be place-scoped, keeps saying "here" because for
+ * it that is the true scope.
  */
 import type * as maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties, Geometry } from 'geojson';
@@ -56,9 +74,39 @@ import { timeline } from '../state/timeline';
 import { USDM_CATEGORIES, NADM_CATEGORIES } from '../config/palette';
 import { classifyNifcIncidentType } from '../config/wildfire-presentation';
 import { escapeHtml } from '../util/escape';
+import { geometriesOverlap } from '../util/polygon-overlap';
 
 /** A `queryRenderedFeatures` region: a bare point, or a screen-space box. */
 type QueryRegion = maplibregl.PointLike | [maplibregl.PointLike, maplibregl.PointLike];
+
+/**
+ * How far a row's claim reaches. `area` is the clicked place's own extent,
+ * used whenever the caller gave a polygon and the box query ran; `point` is
+ * the bare click pixel, the fallback when there is no polygon to scope to.
+ * The two are never blurred: a place-wide read must not be read as a
+ * measurement at the pixel, and a pixel read must not be inflated into a
+ * statement about a whole place.
+ */
+type ClaimScope = 'area' | 'point';
+
+/** The words each scope is allowed to use, so no row invents its own. */
+function scopePhrase(scope: ClaimScope): string {
+  return scope === 'area' ? 'in this area' : 'here';
+}
+
+/**
+ * The candidates a box query retrieved, narrowed to those that actually touch
+ * the clicked place (the ATTRIBUTION FIX in this module's header). `place` is
+ * null for the bare-point fallback, where the query was already exact and
+ * there is no polygon to intersect against, so nothing is dropped.
+ */
+function touchingPlace<T extends { geometry?: Geometry | null }>(
+  feats: readonly T[],
+  place: Geometry | null
+): readonly T[] {
+  if (place === null) return feats;
+  return feats.filter((f) => geometriesOverlap(place, f.geometry ?? null));
+}
 
 // ---------------------------------------------------------------------------
 // Layer and fill ids, restated (not imported) by design: these ids are
@@ -264,9 +312,10 @@ function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): string | 
  * same limited sense the layer's own legend already uses ("No active
  * requested National Weather Service products", `nws-alerts.ts`).
  */
-const NO_REQUESTED_ALERT_HERE =
+function noRequestedAlert(scope: ClaimScope): string {
   // vocab-allow: names the NWS watch/warning/advisory product category (src/layers/nws-alerts.ts), scoped to the products this layer requests
-  'No active NWS heat or fire weather watch, warning, or advisory here. Only those products are requested.';
+  return `No active NWS heat or fire weather watch, warning, or advisory ${scopePhrase(scope)}. Only those products are requested.`;
+}
 
 /** The NWS product name this app already requests (see
  * `src/layers/nws-alerts.ts` `ALERT_EVENTS`): true only for the
@@ -283,13 +332,17 @@ function isNwsWarningTier(prodType: string): boolean {
  * one honest "none" row. */
 function alertRows(
   map: maplibregl.Map,
-  region: QueryRegion
+  region: QueryRegion,
+  place: Geometry | null,
+  scope: ClaimScope
 ): { rows: string[]; hasWarning: boolean; warningLabel: string | null } {
   if (!isLayerOn(ALERTS_KEY) || !map.getLayer(ALERTS_FILL)) {
     return { rows: [], hasWarning: false, warningLabel: null };
   }
 
-  const feats = map.queryRenderedFeatures(region, { layers: [ALERTS_FILL] });
+  // Retrieved by the place's box, kept only where the alert actually touches
+  // the place: see the ATTRIBUTION FIX in this module's header.
+  const feats = touchingPlace(map.queryRenderedFeatures(region, { layers: [ALERTS_FILL] }), place);
   const seen = new Map<string, { prodType: string; ends: string | null }>();
   for (const f of feats) {
     const prodType = String(f.properties?.['prod_type'] ?? '').trim();
@@ -313,12 +366,13 @@ function alertRows(
     // the states that mean "not read" (loading, live partial, unavailable)
     // withhold the claim.
     if (status !== 'ready' && status !== 'no-data') {
+      const where = scopePhrase(scope);
       const value =
         status === 'loading'
-          ? 'Still loading, so this card cannot say whether one is active here.'
+          ? `Still loading, so this card cannot say whether one is active ${where}.`
           : status === 'degraded'
-            ? 'The response was incomplete, so this card cannot rule one out here.'
-            : 'Unavailable, so this card cannot say whether one is active here.';
+            ? `The response was incomplete, so this card cannot rule one out ${where}.`
+            : `Unavailable, so this card cannot say whether one is active ${where}.`;
       // vocab-allow: names the NWS watch/warning/advisory product category (src/layers/nws-alerts.ts), matching that module's own description
       return { rows: [conditionRow('NWS alert', value)], hasWarning: false, warningLabel: null };
     }
@@ -333,7 +387,7 @@ function alertRows(
       // already uses ("No active requested National Weather Service
       // products", nws-alerts.ts).
       // vocab-allow: names the NWS watch/warning/advisory product category (src/layers/nws-alerts.ts), matching that module's own description, and scopes the absence to the products actually requested
-      rows: [conditionRow('NWS alert', NO_REQUESTED_ALERT_HERE)],
+      rows: [conditionRow('NWS alert', noRequestedAlert(scope))],
       hasWarning: false,
       warningLabel: null
     };
@@ -347,7 +401,10 @@ function alertRows(
       warningLabel ??= prodType;
     }
     const until = formatWhen(ends);
-    const value = until ? `${prodType}, until ${until} (NOAA NWS)` : `${prodType} (NOAA NWS)`;
+    // The scope rides on the product name, so a reader is never left to assume
+    // a place-wide read was taken at the pixel they clicked.
+    const named = `${prodType} ${scopePhrase(scope)}`;
+    const value = until ? `${named}, until ${until} (NOAA NWS)` : `${named} (NOAA NWS)`;
     // vocab-allow: names the NWS alert product category (src/layers/nws-alerts.ts); the value is the issuer's own verbatim product name
     return conditionRow('NWS alert', value);
   });
@@ -375,24 +432,31 @@ function pickIncidentName(props: GeoJsonProperties): string {
  * row. */
 function fireRow(
   map: maplibregl.Map,
-  region: QueryRegion
+  region: QueryRegion,
+  place: Geometry | null,
+  scope: ClaimScope
 ): { row: string; hasWarning: boolean; warningLabel: string | null } | null {
   if (!isLayerOn(FIRES_KEY) || !map.getLayer(FIRES_FILL)) return null;
 
-  const feats = map
-    .queryRenderedFeatures(region, { layers: [FIRES_FILL] })
-    .filter((f) => classifyNifcIncidentType(f.properties?.['attr_IncidentTypeCategory']) === 'wildfire');
+  // Retrieved by the place's box, kept only where the perimeter actually
+  // touches the place: see the ATTRIBUTION FIX in this module's header.
+  const feats = touchingPlace(
+    map
+      .queryRenderedFeatures(region, { layers: [FIRES_FILL] })
+      .filter((f) => classifyNifcIncidentType(f.properties?.['attr_IncidentTypeCategory']) === 'wildfire'),
+    place
+  );
 
   if (feats.length === 0) {
     return {
-      row: conditionRow('Wildfire', 'No mapped wildfire perimeter here (NIFC WFIGS).'),
+      row: conditionRow('Wildfire', `No mapped wildfire perimeter ${scopePhrase(scope)} (NIFC WFIGS).`),
       hasWarning: false,
       warningLabel: null
     };
   }
 
   const names = [...new Set(feats.map((f) => pickIncidentName(f.properties)))];
-  const value = `Active mapped perimeter here: ${names.join(', ')} (NIFC WFIGS).`;
+  const value = `Active mapped perimeter ${scopePhrase(scope)}: ${names.join(', ')} (NIFC WFIGS).`;
   // The plain legend phrase this app already uses for a real WF/CX
   // perimeter (src/config/wildfire-presentation.ts NIFC_INCIDENT_PRESENTATION.wildfire.legendLabel), not a DDM-authored "warning" word.
   return { row: conditionRow('Wildfire', value), hasWarning: true, warningLabel: 'Mapped wildfire perimeter' };
@@ -427,8 +491,11 @@ function conditionRow(label: string, value: string): string {
  * are read against ITS screen-space bounding box instead of the bare
  * point (see the REACHABILITY FINDING in this module's header) so that a
  * real warning covering the place, not only the exact pixel, is not
- * missed. Falls back to the bare point when no geometry is given or it is
- * not a polygon.
+ * missed, and are then intersected against that same geometry so that a
+ * warning inside the box but outside the place is not attributed to it
+ * (see the ATTRIBUTION FIX). Falls back to the bare point when no geometry
+ * is given or it is not a polygon, in which case the rows say "here"
+ * because the pixel is then the whole of what was read.
  */
 export function buildPlaceConditionsHtml(
   map: maplibregl.Map,
@@ -438,19 +505,26 @@ export function buildPlaceConditionsHtml(
   const rows: string[] = [];
   let hasWarning = false;
   let warningLabel: string | null = null;
-  const region: QueryRegion = screenBoxForGeometry(map, geometry ?? null) ?? point;
+  // The box and the polygon it was drawn around travel together: the box
+  // retrieves, the polygon attributes. When there is no box there is no
+  // polygon to attribute against either, and the bare-point read is already
+  // exact, so `place` is null and the scope is the pixel.
+  const box = screenBoxForGeometry(map, geometry ?? null);
+  const region: QueryRegion = box ?? point;
+  const place: Geometry | null = box === null ? null : (geometry ?? null);
+  const scope: ClaimScope = place === null ? 'point' : 'area';
 
   const drought = droughtRow(map, point);
   if (drought) rows.push(drought);
 
-  const alerts = alertRows(map, region);
+  const alerts = alertRows(map, region, place, scope);
   rows.push(...alerts.rows);
   if (alerts.hasWarning) {
     hasWarning = true;
     warningLabel ??= alerts.warningLabel;
   }
 
-  const fire = fireRow(map, region);
+  const fire = fireRow(map, region, place, scope);
   if (fire) {
     rows.push(fire.row);
     if (fire.hasWarning) {

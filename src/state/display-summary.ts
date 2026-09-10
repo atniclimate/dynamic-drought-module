@@ -126,36 +126,19 @@ function showingNames(defs: readonly LayerDef[]): string {
   return `${names[0]} with ${rest.slice(0, -1).join(', ')}, and ${rest[rest.length - 1]}`;
 }
 
-/**
- * A coverageNote clause that is authoring guidance addressed to the
- * implementation, not user-facing coverage truth: it names the shell
- * ("the shell must say so on this framing") or the status machinery
- * ("per-layer status stays honest here"). Only these are dropped.
+/*
+ * `userFacingCoverageClause` and its AUTHORING_CLAUSE_RE lived here until
+ * 2026-09-10. They split a framing's single `coverageNote` string on
+ * semicolons and dropped the clauses that matched an authoring-guidance
+ * pattern, which was the best available answer while the note WAS one
+ * string. Codex adversarial review finding 5 showed why that shape could not
+ * be made honest: the clauses inside a note describe the display, the
+ * minimap, and place selection, and those are true under different
+ * conditions, so no filter over one joined string can render the right
+ * subset. `FramingDef.coverage` now carries them as separate fields and
+ * `frameCoverageNote` in src/ui/map-key.ts gates each one; a regex that
+ * guessed at sentence boundaries has nothing left to do.
  */
-const AUTHORING_CLAUSE_RE = /\b(?:the shell|per-layer status)\b/;
-
-/**
- * The user-facing slice of a framing's coverageNote. The notes in
- * src/config/framings.ts are semicolon-joined clauses; SOME tails are
- * authoring guidance (Mexico, Hawaii, Boreal & Arctic) but others are
- * substantive coverage honesty a viewer needs (Alaska & Northwest:
- * "Yukon and British Columbia are outside US-scoped sources").
- * Truncating at the first semicolon silently dropped the substantive
- * kind, so instead each clause is kept unless it matches the narrow
- * authoring-guidance pattern above. The Mexico framing still yields
- * exactly the ruled sentence: "The current display layers do not cover
- * Mexico." Exported for the on-map key (`src/ui/map-key.ts`), the sole
- * renderer of this text since 2026-09-10 (it previously also fed the S4
- * minimap's own caption and this module's caveat; both were retired in
- * favor of the key so the sentence has exactly one home).
- */
-export function userFacingCoverageClause(note: string): string {
-  const clauses = note
-    .split(';')
-    .map((clause) => clause.trim())
-    .filter((clause) => clause.length > 0 && !AUTHORING_CLAUSE_RE.test(clause));
-  return clauses.join('; ').replace(/\.\s*$/, '');
-}
 
 /** Strip a trailing period so clauses join cleanly with semicolons. */
 function unterminated(clause: string): string {

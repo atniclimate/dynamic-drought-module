@@ -50,13 +50,16 @@ import {
   FIRE3D_MIN_WIDTH_QUERY,
   FIRE3D_NON_PREDICTION_NOTE,
   FIRE3D_OUT_OF_COVERAGE_STATUS,
+  FIRE3D_PARTIAL_COVERAGE_STATUS,
   FIRE3D_PITCH_DEGREES,
   FIRE3D_SKY_CLEAR_SPECIFICATION,
   FIRE3D_SKY_SPECIFICATION,
   FIRE3D_TERRAIN_COVERAGE,
   FIRE3D_TERRAIN_EXAGGERATION,
+  classifyTerrainCoverage,
   isWithinTerrainCoverage
 } from '../config/fire3d-presentation';
+import type { TerrainCoverageReading } from '../config/fire3d-presentation';
 import { URLS } from '../config/urls';
 import { resolveHillshadeArchiveUrl } from '../layers/hillshade';
 import { probeArchiveHeader } from '../util/pmtiles-probe';
@@ -104,14 +107,21 @@ export interface Fire3DStatus {
    * context; empty while inactive or when every context layer degraded). */
   readonly contextLayers: readonly string[];
   /**
-   * True only while the scene is active AND the view's center currently
-   * sits outside FIRE3D_TERRAIN_COVERAGE. The ground there is genuinely
-   * flat (MapLibre's terrain sampler has no data to return), not broken;
-   * this is what lets the status line say so instead of leaving the two
-   * readings indistinguishable. False while inactive, checking, or
-   * unavailable, so it never competes with those states' own sentences.
+   * How much of the CURRENT VIEW's ground FIRE3D_TERRAIN_COVERAGE holds,
+   * while the scene is active: `full`, `partial`, or `none`. Uncovered
+   * ground is genuinely flat (MapLibre's terrain sampler has no data to
+   * return), not broken; this is what lets the status line say so instead
+   * of leaving the two readings indistinguishable. `full` while inactive,
+   * checking, or unavailable, so it never competes with those states' own
+   * sentences.
+   *
+   * Three values, not a boolean, since 2026-09-10: this was
+   * `outOfTerrainCoverage`, computed from the view's CENTER, which made a
+   * categorical claim about a footprint from a single point and was wrong
+   * in both directions at the extent's edge (Codex adversarial review
+   * finding 8).
    */
-  readonly outOfTerrainCoverage: boolean;
+  readonly terrainCoverage: TerrainCoverageReading;
 }
 
 export interface Fire3DGateInput {
@@ -178,17 +188,18 @@ let status: Fire3DStatus = {
   smokeVolume: false,
   perimeterRibbon: false,
   contextLayers: [],
-  outOfTerrainCoverage: false
+  terrainCoverage: 'full'
 };
 const statusListeners = new Set<() => void>();
 
 let controllerWired = false;
 let active = false;
 let activation: AbortController | null = null;
-/** Mirrors Fire3DStatus.outOfTerrainCoverage; read by publishStatus and by
- * syncEmbedNote, kept current by coverageMoveListener while active. */
-let terrainOutOfCoverage = false;
-/** The 'moveend' listener that keeps terrainOutOfCoverage current across a
+/** Mirrors Fire3DStatus.terrainCoverage; read by publishStatus and by
+ * syncEmbedNote, kept current by coverageMoveListener while active. `full`
+ * while inactive, so neither coverage sentence renders outside the scene. */
+let terrainCoverage: TerrainCoverageReading = 'full';
+/** The 'moveend' listener that keeps terrainCoverage current across a
  * pan while the scene stays active; detached in rollbackScene. */
 let coverageMoveListener: (() => void) | null = null;
 /** Bumped on every activation start and every teardown so an awaited step
@@ -226,6 +237,21 @@ export function onFire3DStatusChange(fn: () => void): () => void {
 const EMBED_NOTE_ID = 'fire3d-embed-note';
 
 /**
+ * The coverage sentence a reading earns, as a zero-or-one-element list so
+ * both call sites can spread it. `full` earns nothing: a view entirely
+ * within the archive has no gap to disclose, and a standing sentence that
+ * said so anyway would dilute the two that matter. Shared by the embed note
+ * and the sidebar status line (`outOfCoverageLine` in fire3d-control.tsx
+ * selects the same way) so the two surfaces can never disagree about which
+ * sentence a view has earned.
+ */
+function terrainCoverageLines(reading: TerrainCoverageReading): string[] {
+  if (reading === 'none') return [FIRE3D_OUT_OF_COVERAGE_STATUS];
+  if (reading === 'partial') return [FIRE3D_PARTIAL_COVERAGE_STATUS];
+  return [];
+}
+
+/**
  * Embeds hide the sidebar chrome that carries the coverage note, the
  * non-prediction disclosure, and the context legends, while a URL-named
  * fire3d=true still drives the scene. The honesty surfaces therefore
@@ -250,7 +276,7 @@ function syncEmbedNote(active: boolean): void {
   const lines = [
     FIRE3D_NON_PREDICTION_NOTE,
     FIRE3D_COVERAGE_NOTE,
-    ...(terrainOutOfCoverage ? [FIRE3D_OUT_OF_COVERAGE_STATUS] : []),
+    ...terrainCoverageLines(terrainCoverage),
     ...contextEmbedLines
   ].filter((line) => line.length > 0);
   const note = existing ?? document.createElement('p');
@@ -259,6 +285,39 @@ function syncEmbedNote(active: boolean): void {
   note.setAttribute('role', 'note');
   note.textContent = lines.join(' ');
   if (!existing) shell.appendChild(note);
+}
+
+/**
+ * How much of the CURRENT VIEW the bundled archive covers.
+ *
+ * Reads `map.getBounds()`, not `map.getCenter()` (Codex adversarial review
+ * 2026-09-10, finding 8): a centre is a point, and a point cannot answer a
+ * question about a footprint. The old centre test both overstated (a view
+ * two thousandths of a degree past the eastern edge announced that the whole
+ * view had no archived elevation, while most of its ground did) and
+ * understated (a view straddling that edge from the inside said nothing at
+ * all, while half its ground rendered flat).
+ *
+ * A map that cannot report bounds falls back to the centre point, which is
+ * the reading this replaced: strictly no worse than the old behaviour, and it
+ * keeps a harness or a partially-built map from throwing inside a `moveend`
+ * listener. `isWithinTerrainCoverage` is still the point predicate, so both
+ * paths compare against the archive's own numbers and neither hand-types a
+ * second box.
+ */
+function readTerrainCoverage(map: maplibregl.Map): TerrainCoverageReading {
+  const bounds = typeof map.getBounds === 'function' ? map.getBounds() : null;
+  if (bounds) {
+    const west = bounds.getWest();
+    const south = bounds.getSouth();
+    const east = bounds.getEast();
+    const north = bounds.getNorth();
+    if ([west, south, east, north].every(Number.isFinite)) {
+      return classifyTerrainCoverage({ west, south, east, north });
+    }
+  }
+  const center = map.getCenter();
+  return isWithinTerrainCoverage(center.lng, center.lat) ? 'full' : 'none';
 }
 
 function publishStatus(
@@ -271,7 +330,7 @@ function publishStatus(
     smokeVolume: state === 'active' && smokeVolumeOn,
     perimeterRibbon: state === 'active' && ribbonOn,
     contextLayers: state === 'active' ? contextKeys : [],
-    outOfTerrainCoverage: state === 'active' && terrainOutOfCoverage
+    terrainCoverage: state === 'active' ? terrainCoverage : 'full'
   };
   // Production-observable truth stamp (the dev-only __ddmMap handle is
   // dead-code-eliminated from dist/, so the verification suite reads mode
@@ -356,7 +415,7 @@ function rollbackScene(map: maplibregl.Map): void {
     map.off('moveend', coverageMoveListener);
     coverageMoveListener = null;
   }
-  terrainOutOfCoverage = false;
+  terrainCoverage = 'full';
   if (tileWatch) {
     tileWatch.detach();
     tileWatch = null;
@@ -510,15 +569,11 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
     // the camera and context still have value there; only the ground is
     // flat. Read once at entry and kept current across a pan by
     // coverageMoveListener, never gating activation itself.
-    terrainOutOfCoverage = !isWithinTerrainCoverage(
-      map.getCenter().lng,
-      map.getCenter().lat
-    );
+    terrainCoverage = readTerrainCoverage(map);
     coverageMoveListener = () => {
-      const center = map.getCenter();
-      const next = !isWithinTerrainCoverage(center.lng, center.lat);
-      if (next === terrainOutOfCoverage) return;
-      terrainOutOfCoverage = next;
+      const next = readTerrainCoverage(map);
+      if (next === terrainCoverage) return;
+      terrainCoverage = next;
       if (active) publishStatus('active', null);
     };
     map.on('moveend', coverageMoveListener);
