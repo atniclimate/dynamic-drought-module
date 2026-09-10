@@ -181,6 +181,65 @@ export function syntheticBiaBody(): FixtureCollection {
   };
 }
 
+/**
+ * The same synthetic reservation with its NORTHEAST QUADRANT REMOVED, so the
+ * feature is concave while its bounding rectangle is unchanged. Used to pin
+ * the place-conditions card's spatial predicate (Codex adversarial review
+ * 2026-09-10, finding 3): the card retrieves alert and perimeter candidates
+ * with this feature's screen-space BOX, and the notch is ground that is inside
+ * that box and outside the place. A claim about the notch is a claim about
+ * somewhere else.
+ *
+ * Deliberately the same bbox as `syntheticBiaBody`, so a spec can swap one
+ * body for the other and change NOTHING about the camera, the screen box, or
+ * where a fixture alert paints. That is what makes the pair evidence: the only
+ * variable left is whether the place actually contains the alert.
+ *
+ * NO-REDISTRIBUTION GUARD, restated because this file's rule is absolute: this
+ * is a hand-authored rectangle with a rectangular bite taken out of it, placed
+ * to sit under the default Washington viewport. It is not, and does not
+ * resemble, any real AIAN-LAR polygon.
+ */
+export function concaveBiaBody(): FixtureCollection {
+  return {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        id: 11,
+        properties: {
+          LARID: '99001',
+          LARNAME: 'Synthetic Reservation Fixture',
+          CLASSIFICATION: 'Fixture Classification',
+          GISACRES: 1000,
+          REGION: 'Fixture Region'
+        },
+        geometry: { type: 'Polygon', coordinates: [CONCAVE_RESERVATION_RING] }
+      }
+    ]
+  };
+}
+
+/**
+ * The L-shaped ring `concaveBiaBody` uses, and the notch it leaves behind.
+ * The notch is `NOTCH_BOUNDS`: inside the bounding rectangle
+ * (-123.5, 46.0) to (-118.0, 48.6), outside the polygon.
+ */
+const CONCAVE_RESERVATION_RING: number[][] = [
+  [-123.5, 46.0],
+  [-118.0, 46.0],
+  [-118.0, 47.3],
+  [-120.75, 47.3],
+  [-120.75, 48.6],
+  [-123.5, 48.6],
+  [-123.5, 46.0]
+];
+
+/** The removed quadrant, `[w, s, e, n]`: in the box, out of the place. */
+export const NOTCH_BOUNDS: readonly [number, number, number, number] = [
+  -120.75, 47.3, -118.0, 48.6
+];
+
 /** An empty FeatureCollection (the honest live-zero case). */
 export function emptyCollectionBody(): FixtureCollection {
   return { type: 'FeatureCollection', features: [] };
