@@ -2512,16 +2512,27 @@ button.conditions-metric:hover .conditions-action-hide {
    backdrop over a plausible bright map patch (snow-white, a
    drought-severity yellow), which fails WCAG AA against light --fg-0
    body text (contrast computed at roughly 1.6-2.1:1 against
-   white/yellow, need 4.5:1). 0.55 holds >=4.5:1 for --fg-0 and --fg-1
-   against every plausible map color checked (white, light gray, mid
-   gray, drought yellow, fire orange) while still reading as genuinely
-   translucent. In practice almost no text sits directly on this surface
-   anyway: every real content block (.layers-studio-catalog,
-   .layers-studio-depth, .layers-studio-search, both .place-studio-*
-   -panels, the type-rail buttons) is its own opaque --bg-1 card floating
-   on top, so this tint mostly colors the gaps between cards; the
-   stronger alpha is the margin of safety for whatever lands in those
-   gaps, not a rescue for unprotected text. */
+   white/yellow, need 4.5:1). 0.55 is better but it is NOT a 4.5:1
+   guarantee, and this comment used to claim one (corrected 2026-09-10,
+   Codex adversarial review finding 9, arithmetic re-derived here rather
+   than taken on trust). Composited over a snow-white map patch this
+   glass is rgb(114.75, 149.95, 149.95), against which --fg-0 measures
+   2.94:1 and --fg-1 2.17:1. Both fail AA. What actually protects text on
+   this surface is the SECOND rule below, not the alpha: every real
+   content block (.layers-studio-catalog, .layers-studio-depth,
+   .layers-studio-search, both .place-studio-*-panels, and the type-rail
+   buttons INCLUDING the selected one) carries its own opaque --bg-1
+   backing, so text is read against a known dark card and never against
+   the map. This tint colors the gaps between those cards, and the
+   stronger alpha is the margin of safety for the gaps, not a rescue for
+   unprotected text.
+
+   That invariant is load-bearing, so putting translucent-only text on
+   this surface is a defect even when it looks fine over the map you
+   happened to be viewing: the selected type control did exactly that
+   until 2026-09-10, replacing its opaque backing with --accent-soft
+   alone and computing to 1.29:1 over white imagery. See
+   .place-studio-type[aria-pressed='true']. */
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .layers-studio {
     background-color: var(--rich-black-glass-strong);
@@ -2796,9 +2807,25 @@ button.conditions-metric:hover .conditions-action-hide {
   border-color: var(--accent-strong);
 }
 
+/* The type rail sits directly on the studio glass (.place-studio-type-rail
+   has no backing of its own), so a selected control that swapped its opaque
+   --bg-1 for the translucent --accent-soft was reading its --accent label
+   against whatever the map showed through: 1.29:1 over a snow-white patch,
+   down from 6.23:1 over the opaque root (Codex adversarial review
+   2026-09-10, finding 9; the arithmetic is in the studio-glass comment
+   above). The tint is still the tint, but it is composited over the same
+   opaque backing the UNSELECTED control uses (--bg-1), as a gradient layer
+   rather than a precomputed hex so it stays correct if either token is
+   retuned; a rail of sibling buttons should not change backing when one is
+   pressed. Measured after the fix: --accent on that composite is 5.86:1.
+   (The review quoted 6.23:1 for the pre-glass state. That figure composites
+   over --bg-0, the studio root; over --bg-1, the button's own backing, the
+   same state is 5.86:1. Both clear 4.5:1, and the choice of --bg-1 is what
+   keeps the two controls in one family.) */
 .place-studio-type[aria-pressed='true'] {
   color: var(--accent);
-  background: var(--accent-soft);
+  background-color: var(--bg-1);
+  background-image: linear-gradient(var(--accent-soft), var(--accent-soft));
   border-color: var(--accent-strong);
 }
 
@@ -7464,10 +7491,63 @@ a.impact-resource-link::after {
   flex-direction: column;
   min-height: 0;
 }
-.panel-response-host .coordinated-response-head { flex-shrink: 0; }
-.panel-response-host .coordinated-response-body {
-  overflow-y: auto;
+/* The frozen head is BOUNDED, not merely non-shrinking (Codex adversarial
+   review 2026-09-10, finding 4).
+
+   `flex-shrink: 0` on its own says "never give up height", and the body's
+   `min-height: 0` says "give up all of it". At 1280x600 with a coarse
+   pointer the card is 34vh, about 204px, and the 44px close-control row and
+   the padding leave roughly 113px for the whole response. The head now
+   carries the title, the agency line, the conditions block (which since
+   2026-09-10 can run to several rows plus a default no-condition paragraph)
+   and the briefing door, and that can exceed 113px on its own. The body then
+   got zero, and the body is where the representation caveat and the source
+   links live.
+
+   That is not a cosmetic loss. D-0.7.0-072 requires the full representation
+   caveat to SCROLL, never to be truncated, and the same path carries the
+   protected Tribal and Treaty representation caveats. A head that scrolls
+   inside a bound keeps every word of both halves reachable; a head that
+   pushes the body to zero does not. So when the head cannot fit, it becomes
+   the second scroll region rather than the winner of a fight with the
+   caveat. The head still does not SHRINK its content, and it is still frozen
+   in the ordinary case, which is every case where it fits.
+
+   Capping the head is necessary and NOT sufficient, which a measurement at
+   the named viewport showed: with the head capped and the body the only
+   shrinkable item, flex handed the body the entire shortfall and it went to
+   zero anyway, carrying 131px of Census caveat text with it. The floor has
+   to be on the BODY. `flex: 0 1 auto` on the head means it sizes to its
+   content in the ordinary case (so it still reads as frozen, with no
+   stretched empty space) and gives way, scrolling, only once the body has
+   claimed its minimum. Measured at 1280x600 coarse: card 180px, head 90px
+   scrolling 151px of content, body 48px scrolling 131px. Both halves
+   reachable; neither erased. */
+.panel-response-host .coordinated-response-head {
+  /* Sizes to its content, and gives way LAST. */
+  flex: 0 1 auto;
   min-height: 0;
+  max-height: 20vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.panel-response-host .coordinated-response-body {
+  /* Gives way FIRST, down to its floor. The lopsided shrink factor is the
+     whole ordering rule: flex distributes shrinkage in proportion to
+     flex-shrink times base size, so a body that shrinks a hundred times more
+     readily than the head absorbs the shortfall alone until `min-height`
+     stops it, and only the remainder reaches the head. That keeps the head
+     genuinely frozen at every height where it can be (measured at 1280x900:
+     head 151px unshrunk, body 80px scrolling, exactly as before this fix)
+     and makes the head the second scroll region only where the alternative
+     is erasing the caveat (1280x600 coarse: head 57px, body at its 48px
+     floor, both scrolling, nothing lost). */
+  flex: 1 100 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Three lines or so: enough that the caveat is visibly present and
+     visibly scrollable, rather than a scroll region a reader cannot see. */
+  min-height: 48px;
 }
 
 /* ----------------------------------------------------------------------------
