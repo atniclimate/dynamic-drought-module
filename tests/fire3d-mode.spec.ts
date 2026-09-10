@@ -60,6 +60,7 @@ import {
   PNW_POLYGON,
   stubWildfireFeeds
 } from './wildfire-fixtures';
+import { RAWS_ROUTE, RAWS_FIXTURE_MARKER_ID, rawsHappyBody } from './fixtures/raws-fixtures';
 
 /**
  * W3/W4 desktop 3D Fire mode.
@@ -1307,6 +1308,166 @@ test.describe('W3/W4 browser truth', () => {
     await expect(powerLegend).toHaveCount(0);
     await expect(structuresLegend).toHaveCount(0);
     expect(await fire3dContextStamp(page)).toBeUndefined();
+  });
+
+  /**
+   * DDM-P9-T06 fix F1/F2 (opus-read.md), replacing the round-1 STOP test.
+   * The round-1 test asserted a `.telemetry-marker`'s
+   * `getBoundingClientRect()` stayed byte-identical across an 8-second wait
+   * during which nothing could have moved it: `Marker._update`, the only
+   * writer of the marker's inline `transform`
+   * (node_modules/maplibre-gl/dist/maplibre-gl-dev.mjs:26805 in this
+   * lane's installed version), is registered only on `map.on('move', ...)`
+   * and `map.on('terrain', ...)` (:27004-27006), and neither fires between
+   * the test's two reads, so the assertion was a tautology, not a
+   * measurement. Its claim that `Map.project()` is a flat 2D projection is
+   * also false for MapLibre 6.6.0: `Map.project` calls
+   * `locationToScreenPoint(lnglat, this.style && this.terrain)`
+   * (maplibre-gl-dev.mjs; the source-level location is
+   * node_modules/maplibre-gl/src/ui/map.ts:2024-2026), which is
+   * terrain-aware, and `Marker._update` calls exactly that
+   * (src/ui/marker.ts:752-765; the class registers the terrain listener at
+   * :427).
+   *
+   * The director measured this directly against the lane-b dev server
+   * (`window.__ddmMap` present; the production build carries no such
+   * handle, src/main.ts:268-273, so no in-page projection assertion is
+   * possible in THIS build, hence no in-page assertion below either):
+   * script and output at
+   * I:\claude-temp\ddm-s20\DDM-P9-T06\terrain-measure-director.mjs and
+   * .json. With fire3d active, a Stevens Pass marker's actual on-screen
+   * position matched the terrain-aware `map.project()` result (444.12,
+   * 321.72), not the flat `transform.locationToScreenPoint()` result
+   * (444.18, 325.91), both before and after a 0.01-degree bearing nudge.
+   * The acceptance's "in the scene, at terrain height" clause is therefore
+   * MET by the renderer's own marker placement; this task adds no second,
+   * competing surface for it (fire3d-context.md's "one issuer, one number,
+   * one legend, per layer" forbids a duplicate positioning path for the
+   * same station).
+   *
+   * What THIS test proves, in the production build's own DOM: a RAWS
+   * station's marker in the ACTIVE 3D scene is the same MapLibre-managed
+   * marker element as on the flat map (it carries the `maplibregl-marker`
+   * class MapLibre's own `Marker` class adds,
+   * `this._element.classList.add('maplibregl-marker')`, never DDM, and an
+   * inline `transform` MapLibre itself writes), and it carries the same
+   * wind-glyph child as on the flat map. A RAWS station is stubbed here
+   * rather than reusing Stevens Pass (a SNOTEL station, which serves no
+   * wind fields and so never carries a glyph).
+   */
+  test('a RAWS station marker in the active 3D scene is a MapLibre-managed marker and carries the same wind glyph as on the flat map', async ({
+    page
+  }) => {
+    // A longer budget than most other browser cases in this file (mirrors
+    // the perimeter-ribbon test's own 180_000 two tests down, "a terrain
+    // build plus the perimeter fetch on the software renderer"): the scene
+    // carries the full terrain/hazard/structures archive load (measured at
+    // 6.3 MB terrain plus 1.1 MB hazard drape in the run right above this
+    // one) AND the telemetry panel's own viewport-based discovery, which
+    // (measured directly) needs several extra zoom-in steps to clear the
+    // discovery area cap under fire3d's pitch (see the comment at the zoom
+    // loop below).
+    test.setTimeout(150_000);
+    await stubWildfireFeeds(page);
+    await page.route('**/waterservices.usgs.gov/**', (route) => route.abort('failed'));
+    await page.route('**/wcc.sc.egov.usda.gov/**', (route) => route.abort('failed'));
+    await page.route('**/api.tidesandcurrents.noaa.gov/**', (route) => route.abort('failed'));
+    await page.route('**/mesonet.agron.iastate.edu/**', (route) => route.abort('failed'));
+    await page.route('**/ddm-proxy.atniclimate.workers.dev/**', (route) => route.abort('failed'));
+    await page.route(RAWS_ROUTE, (route) =>
+      route.fulfill({
+        contentType: 'application/geo+json',
+        body: JSON.stringify(rawsHappyBody())
+      })
+    );
+    // `cluster=` and `layers=` are mutually exclusive on the URL:
+    // `layers=` OUTRANKS `cluster=` (src/state/url.ts, D-0.7.0-044) and a
+    // committed `cluster` resolves to the 'drought' default whenever
+    // `layers` is present, which would silently withdraw the wildfire-only
+    // Fire3D control this test needs. So the boot URL carries only
+    // `cluster=wildfire&fire3d=true` (mirrors the perimeter-ribbon test
+    // below); telemetry is switched on afterward through the layer
+    // checkbox, a separate runtime action. That action demotes the
+    // committed cluster to 'custom' too (src/state/cluster-service.ts; see
+    // the perimeter-ribbon test's own note two tests down), which would
+    // stop a NOT-YET-ACTIVE scene from ever starting, but an ALREADY-ACTIVE
+    // scene stays up regardless, so activating fire3d FIRST and only then
+    // checking the telemetry box keeps the scene alive for the rest of
+    // this test.
+    await gotoApp(page, '?cluster=wildfire&fire3d=true');
+    await expect
+      .poll(() => fire3dStamp(page), { timeout: 30_000 })
+      .toBe('active');
+    await layerCheckbox(page, 'telemetry').check();
+    await waitForLayerSettled(page, 'telemetry');
+    // The scene must have survived the cluster demotion the layer checkbox
+    // causes; if it did not, that is a real product regression this test
+    // must fail on, not silently work around.
+    expect(await fire3dStamp(page)).toBe('active');
+
+    // Let the fire3d camera's own transition settle (FIRE3D_CAMERA_TRANSITION_MS
+    // above) before touching the sidebar: mid-transition camera movement
+    // keeps firing `moveend`, which keeps re-running telemetry's own
+    // viewport discovery and reflowing the "Conditions in view" panel,
+    // which kept the panel-reveal button's position from ever reading as
+    // stable to Playwright's actionability check in the first run of this
+    // test (mirrors the fixed settle waits already used elsewhere in this
+    // file, for example the terrain-tile wait two tests up; live basemap
+    // and camera-driven tiles make networkidle nondeterministic here).
+    await page.waitForTimeout(2_000);
+
+    // Fly the (already active) scene's camera to the curated Ice Harbor
+    // Dam station's OWN marker (`flyToStation`, src/layers/telemetry.ts;
+    // the same mechanism tests/tribal-live-layers.spec.ts uses on the flat
+    // map), which sets zoom to `Math.max(currentZoom, 9)` and centers the
+    // camera on it, triggering the moveend-based viewport discovery
+    // (`discoverStationsForViewport`, src/config/station-registry.ts) that
+    // finds the stubbed RAWS feature at that same point. A first attempt
+    // here tried to also hover the map canvas afterward (to drive an extra
+    // zoom-in step, on a since-withdrawn theory that fire3d's pitch made
+    // the discovery viewport too wide): that hover deadlocked, because
+    // `flyToStation` centers the camera exactly on the station, so the
+    // newly-created marker itself sits at the canvas's own center point and
+    // permanently intercepts the hover's pointer target. No zoom
+    // compensation is needed; the marker is found by the same mechanism and
+    // the same zoom level as the flat-map test, just given a longer timeout
+    // to allow for the heavier concurrent archive traffic (terrain, hazard
+    // drape, structures) fire3d's own activation still has in flight.
+    await page.locator('#telemetry-reveal').click();
+
+    const marker = page.locator(
+      `.telemetry-marker[data-telemetry-station-id="${RAWS_FIXTURE_MARKER_ID}"]`
+    );
+    // The marker exists only after a viewport discovery pass finds the
+    // stubbed RAWS feature, and discovery is driven by `moveend`
+    // (`discoverStationsForViewport`, src/config/station-registry.ts, behind
+    // telemetry's own moveend debounce). Under this scene's concurrent
+    // archive traffic a single fly can have its discovery superseded or
+    // aborted by the camera work still in flight, and then nothing re-runs
+    // it: a one-shot click followed by a long wait failed once in three
+    // full-suite runs of this file (S21 claim-verifier, 33 passed 1 failed,
+    // then 34 passed on the rerun; the single test alone always passed).
+    // So the fly is the retried action rather than a one-shot before a
+    // fixed wait, the same `toPass` idiom tests/tribal-live-layers.spec.ts
+    // already uses for the RAWS popup. `flyToStation` centers the camera on
+    // the station and is idempotent, so re-clicking the panel row simply
+    // asks for another discovery pass; the row is in the sidebar, never
+    // under the canvas-center marker that the withdrawn hover approach
+    // deadlocked on.
+    await expect(async () => {
+      await page.locator('.telemetry-item', { hasText: 'Ice Harbor Dam' }).click();
+      await expect(marker).toHaveCount(1, { timeout: 20_000 });
+    }).toPass({ timeout: 90_000 });
+    expect(await fire3dStamp(page)).toBe('active');
+
+    await expect(marker).toHaveClass(/maplibregl-marker/);
+    const transform = await marker.evaluate((el) => (el as HTMLElement).style.transform);
+    // MapLibre's own `Marker._update` writes exactly this shape
+    // (`translate(-50%, -50%) translate(<x>px, <y>px) ...`); DDM never sets
+    // a transform on this element.
+    expect(transform).toMatch(/translate\(-50%, -50%\) translate\(/);
+
+    await expect(marker.locator('svg[data-telemetry-wind-glyph]')).toHaveCount(1);
   });
 
   test('the perimeter ribbon follows the perimeter layer, not the other way round', async ({

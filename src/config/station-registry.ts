@@ -1431,6 +1431,32 @@ function rawsDiscoveryRecord(feature: unknown): StationDiscoveryRecord | null {
   const observedMs = readFiniteNumber(properties.ObservedDate);
   const observedAtIso = observedMs !== null ? new Date(observedMs).toISOString() : null;
 
+  // DDM-P9-T06: the sustained-wind symbol src/layers/telemetry.ts draws on
+  // the marker needs the served speed and direction at DISCOVERY time (the
+  // same bbox response already carries them; RAWS_OUT_FIELDS above), not at
+  // popup-open time (fetchRawsStationConditions below runs a SEPARATE later
+  // fetch for the popup's own three-row read). windDirectionDeg is the one
+  // numeric derivation in this record: a parse of the issuer's own served
+  // direction string, used only to orient the glyph's rotation and never
+  // displayed or spoken in place of the served string itself.
+  // Trimmed the same way `parseRawsConditionProperties`'s `field()` helper
+  // trims below: incidental whitespace around the issuer's own
+  // string is not part of the served value, and an untrimmed trailing
+  // space would double up in the glyph's composed accessible name.
+  const windSpeedRaw = readNonEmptyString(properties.WindSpeedMPH);
+  const windDirectionRaw = readNonEmptyString(properties.WindDirDegrees);
+  const windSpeedServed = windSpeedRaw ? windSpeedRaw.trim() : null;
+  const windDirectionServed = windDirectionRaw ? windDirectionRaw.trim() : null;
+  const windDirectionDeg = windDirectionServed
+    ? parseLeadingNumber(windDirectionServed)
+    : null;
+  const windFields: RawsWindStationFields = {
+    windSpeedServed,
+    windDirectionServed,
+    windDirectionDeg,
+    windObservedAtIso: observedAtIso
+  };
+
   return {
     network: 'raws',
     station: {
@@ -1455,8 +1481,13 @@ function rawsDiscoveryRecord(feature: unknown): StationDiscoveryRecord | null {
               label: 'NIFC RAWS open data',
               url: 'https://data-nifc.opendata.arcgis.com/'
             }
-      ]
-    },
+      ],
+      // Extra properties beyond TelemetryStation (types/station.ts is not
+      // owned by this task): src/layers/telemetry.ts reads them back with
+      // the SAME `RawsWindStationFields` widening cast, and this is the one
+      // place the two ends have to agree, by name, on what rides along.
+      ...windFields
+    } as TelemetryStation & RawsWindStationFields,
     value: {
       stationId: id,
       parameter: 'relative_humidity_pct',
@@ -1470,6 +1501,45 @@ function rawsDiscoveryRecord(feature: unknown): StationDiscoveryRecord | null {
     primaryParameterCategory: 'fire-weather',
     handles: { rawsStationId: stationId }
   };
+}
+
+/**
+ * DDM-P9-T06: the served wind fields riding along on a discovered RAWS
+ * station's OWN identity object, alongside `TelemetryStation`'s declared
+ * shape, rather than through `StationDiscoveryRecord.value` (a single
+ * numeric headline reading; relative humidity already occupies it) or
+ * through `StationRegistryEntry.values` (assembled by `mergeTelemetryStations`
+ * and `markerViewForEntry` in src/layers/telemetry.ts, neither of which is
+ * owned by this task). `TelemetryStation` in types/station.ts is not
+ * extended: both this file's `rawsDiscoveryRecord` and telemetry.ts's
+ * `renderStations` cast to `TelemetryStation & RawsWindStationFields` at
+ * their own ends, by name, so the two stay in agreement without a shared
+ * type-file edit. `windSpeedServed` and `windDirectionServed` are the
+ * issuer's own strings verbatim (never re-derived into an invented unit,
+ * same convention as `RawsStationConditions` below); `windDirectionDeg` is
+ * the one numeric parse, present only to orient the marker glyph's
+ * rotation and never displayed or spoken in place of the served string.
+ * All four are `null` together for any non-RAWS station (the field is
+ * simply absent there) or for a RAWS station the service reports no wind
+ * value for.
+ *
+ * DDM-P9-T06 fix F8 (opus-read.md, recorded constraint, not fixed here):
+ * these fields survive `discoveredEntry` (this file, base = `record.station`)
+ * but NOT `mergeStationHandles` (this file, spreads `current.station` as its
+ * base), so a merge of a discovered RAWS record into an existing registry
+ * entry silently drops them. Unreachable today (no curated seed carries a
+ * `rawsStationId`, and `primaryParameterCategory: 'fire-weather'` is
+ * RAWS-only, so two RAWS discoveries only ever collide with each other, not
+ * with a merge target), but latent: the day a curated seed gains a
+ * `rawsStationId`, the wind glyph disappears for that station with no type
+ * error and no failing test. A follow-up should widen `mergeStationHandles`
+ * or `TelemetryStation` properly rather than leave the drop implicit.
+ */
+export interface RawsWindStationFields {
+  readonly windSpeedServed: string | null;
+  readonly windDirectionServed: string | null;
+  readonly windDirectionDeg: number | null;
+  readonly windObservedAtIso: string | null;
 }
 
 /**

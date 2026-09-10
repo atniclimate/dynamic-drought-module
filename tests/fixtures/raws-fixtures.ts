@@ -100,6 +100,83 @@ export function rawsAffirmativeNullBody(): unknown {
   );
 }
 
+/** DDM-P9-T06: wind affirmatively `null` (both speed and direction), the
+ * live service's own representation of "the station reports no wind
+ * reading", so the marker draws no glyph and the popup's Wind row reads
+ * "Station reported none". Relative humidity and fuel moisture stay real so
+ * this fixture proves the null wind is independent of the station's other
+ * readings. */
+export function rawsNullWindBody(): unknown {
+  return collection(
+    feature({
+      ...baseProperties(),
+      RelativeHumidity: '60 % ',
+      WindSpeedMPH: null,
+      WindDirDegrees: null,
+      WindSpeedPeak: null,
+      WindDirPeak: null,
+      FuelMoisture: '9.1 (unk)'
+    })
+  );
+}
+
+/** DDM-P9-T06 science verdict: a station serving a sustained speed but no
+ * sustained direction, with a peak pair (WindSpeedPeak/WindDirPeak). Proves
+ * `rawsWindText`'s corrected NWCG wording ("peak ... over the previous 60
+ * minutes") and that `windGustDirection` (WindDirPeak), fetched since
+ * DDM-P9-T05 but never rendered before this task, now appears beside it. */
+export function rawsPeakOnlyWindBody(): unknown {
+  return collection(
+    feature({
+      ...baseProperties(),
+      RelativeHumidity: '45 % ',
+      WindSpeedMPH: '3 mph',
+      WindDirDegrees: null,
+      WindSpeedPeak: '11 mph',
+      WindDirPeak: '212 degrees',
+      FuelMoisture: '6.0 (unk)'
+    })
+  );
+}
+
+/** DDM-P9-T06 fix F3 (opus-read.md): a served direction with no numeric
+ * token ("VRB", a real NWS/RAWS representation of a variable wind
+ * direction), served alongside a genuine speed, so the case proves the
+ * marker glyph's guard checks the DIRECTION specifically and does not fall
+ * back to an invented due-north rotation just because SOME wind field is
+ * present. */
+export function rawsUnparseableDirectionBody(): unknown {
+  return collection(
+    feature({
+      ...baseProperties(),
+      RelativeHumidity: '50 % ',
+      WindSpeedMPH: '4 mph',
+      WindDirDegrees: 'VRB',
+      WindSpeedPeak: '9 mph',
+      WindDirPeak: '188 degrees',
+      FuelMoisture: '5.5 (unk)'
+    })
+  );
+}
+
+/** DDM-P9-T06 fix F5: a strong served speed, at the display mapping's own
+ * ceiling (35 mph), so a case can prove the glyph's drawn size actually
+ * scales with the served speed rather than being a fixed size regardless of
+ * the reading. */
+export function rawsStrongWindBody(): unknown {
+  return collection(
+    feature({
+      ...baseProperties(),
+      RelativeHumidity: '30 % ',
+      WindSpeedMPH: '35 mph',
+      WindDirDegrees: '180 degrees',
+      WindSpeedPeak: '41 mph',
+      WindDirPeak: '182 degrees',
+      FuelMoisture: '4.0 (unk)'
+    })
+  );
+}
+
 /** A malformed body: not JSON, so `response.json()` rejects and the popup's
  * shared catch renders the honest "unavailable" fallback, never "reported
  * none". */
