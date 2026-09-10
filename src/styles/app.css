@@ -110,6 +110,16 @@
 
   /* Layout */
   --sidebar-w: 340px;
+  /* Screen-filling studios (Place, Layers) start at the sidebar's inner
+     edge on desktop, not the viewport's, so they slide out BESIDE the
+     nav side-card instead of over it. 0 is the safe default: today's
+     full-viewport geometry. The desktop rule near --z-route's consumers
+     raises it to --sidebar-w only via a :has() check confirming a live
+     sidebar COLUMN is on screen (not collapsed, not embed, not the
+     sub-721px bottom sheet). A browser without :has() keeps this at 0
+     forever, which is the pre-existing full-viewport studio, not a
+     broken one. */
+  --studio-inset-start: 0;
   /* The coarse-pointer target floor (DDM-P10-T01, gate DDM-D02, owner
      ruling DR-036 a: "real third band 721 to 1024 px, fluid sidebar,
      44 px touch floor. Tablet is touch-first"). One name for the 44px
@@ -140,6 +150,11 @@
   --rich-black-glass: rgba(0, 64, 64, 0.30);
   --rich-black-border: rgba(0, 64, 64, 0.20);
   --rich-black-blur: 15px;
+  /* Same hue and blur, a darker alpha: the screen-filling studios read
+     continuously, not glimpsed, and must guarantee body-text contrast
+     over an arbitrary (possibly bright) map background. See the
+     .layers-studio @supports rule for the measured reasoning. */
+  --rich-black-glass-strong: rgba(0, 64, 64, 0.55);
   --mobile-map-edge: 8px;
   --mobile-map-control-size: 52px;
   --mobile-map-control-gap: 8px;
@@ -279,6 +294,22 @@ a:hover {
 
 .app-shell.sidebar-collapsed {
   grid-template-columns: 0 1fr;
+}
+
+/* Feeds --studio-inset-start (declared on :root above) for the
+   screen-filling studios below. Scoped to the desktop breakpoint: below
+   721px the sidebar is a bottom sheet OVER the map, not a column beside
+   it, so a studio there stays full-viewport regardless of this rule.
+   :not(.sidebar-collapsed):not(.embed) is exactly "the sidebar column is
+   actually rendered at its --sidebar-w width right now"; either class
+   collapses it to 0, and the fallback above already reads 0 in that
+   case. Progressive enhancement: a browser without :has() never sets
+   this, so --studio-inset-start stays 0 and a studio there simply keeps
+   painting full-viewport, same as before this change. */
+@media (min-width: 721px) {
+  body:has(#app.app-shell:not(.sidebar-collapsed):not(.embed)) {
+    --studio-inset-start: var(--sidebar-w);
+  }
 }
 
 /* ----------------------------------------------------------------------------
@@ -2347,6 +2378,17 @@ button.conditions-metric:hover {
   position: fixed;
   inset: 0;
   z-index: var(--z-route);
+  /* Lets .layers-studio-grid react to the ROOT's actual rendered width
+     (which shrinks once the desktop rule below docks it beside the
+     sidebar) rather than the viewport's, so the two-column catalog
+     layout only appears when there is genuinely room for it. */
+  container-type: inline-size;
+}
+
+@media (min-width: 721px) {
+  #layers-studio-root {
+    inset: 0 0 0 var(--studio-inset-start);
+  }
 }
 
 .layers-studio {
@@ -2358,6 +2400,39 @@ button.conditions-metric:hover {
   overflow: hidden;
   background: var(--bg-0);
   color: var(--fg-0);
+}
+
+/* The screen-filling studio surface: semitransparent and blurred over
+   the map (owner direction), shared by Place and Layers studio (both
+   root sections carry this class). Reuses the rich-black glass family's
+   hue and blur radius rather than inventing a new token; the --bg-0 fill
+   above stays the fallback for a browser without backdrop-filter (the
+   @supports negative case), so text is never unreadable there.
+
+   The alpha is --rich-black-glass-strong (0.55), NOT the shared
+   --rich-black-glass (0.30): that token was tuned for small, compact
+   mobile chrome (the map key, the map-info panel) glimpsed briefly
+   against a known patch of map. A studio is a full-viewport surface
+   meant to be read continuously, and 0.30 measures out to a LIGHT
+   backdrop over a plausible bright map patch (snow-white, a
+   drought-severity yellow), which fails WCAG AA against light --fg-0
+   body text (contrast computed at roughly 1.6-2.1:1 against
+   white/yellow, need 4.5:1). 0.55 holds >=4.5:1 for --fg-0 and --fg-1
+   against every plausible map color checked (white, light gray, mid
+   gray, drought yellow, fire orange) while still reading as genuinely
+   translucent. In practice almost no text sits directly on this surface
+   anyway: every real content block (.layers-studio-catalog,
+   .layers-studio-depth, .layers-studio-search, both .place-studio-*
+   -panels, the type-rail buttons) is its own opaque --bg-1 card floating
+   on top, so this tint mostly colors the gaps between cards; the
+   stronger alpha is the margin of safety for whatever lands in those
+   gaps, not a rescue for unprotected text. */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .layers-studio {
+    background-color: var(--rich-black-glass-strong);
+    -webkit-backdrop-filter: blur(var(--rich-black-blur));
+    backdrop-filter: blur(var(--rich-black-blur));
+  }
 }
 
 .layers-studio-header {
@@ -2479,6 +2554,20 @@ button.conditions-metric:hover {
   border-radius: var(--radius-lg);
 }
 
+/* An opaque --bg-1 card, matching .layers-studio-catalog beside it. The
+   rehosted #panel-telemetry (a sidebar panel, `.panel`, which paints no
+   background of its own) would otherwise sit directly on the studio
+   root's translucent glass fill with no protection; this is required
+   for legible body text now that .layers-studio can be semitransparent,
+   not merely a visual match for its sibling column. */
+.layers-studio-depth {
+  min-width: 0;
+  padding: 14px 12px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
 .layers-studio-depth > #panel-telemetry {
   margin: 0;
 }
@@ -2495,6 +2584,27 @@ button.conditions-metric:hover {
   .layers-studio-scroll { padding: 10px; }
   .layers-studio-search { margin-bottom: 10px; }
   .layers-studio-grid { grid-template-columns: 1fr; gap: 10px; }
+}
+
+/* Screen-filling desktop geometry (owner direction): the studio now
+   starts at the sidebar's inner edge instead of the viewport's, so its
+   rendered width tracks the sidebar's own state (collapsed, embed, the
+   fluid tablet band) rather than the viewport 1:1. A container query
+   reads that ACTUAL width instead of guessing from a viewport
+   breakpoint: below 760px of real room the two-column catalog grid
+   would squeeze the 280px-floor second column against a starved first
+   column, so it collapses to one column, exactly as it already does
+   below the 720px viewport breakpoint above (#layers-studio-root
+   declares container-type: inline-size). 760 is a judgment call:
+   comfortably above the 280px second-column floor plus a workable first
+   column and the gap, comfortably below what a normal desktop viewport
+   leaves beside a docked sidebar. */
+@container (max-width: 759px) {
+  .layers-studio-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    width: 100%;
+  }
 }
 
 /* =============================================================================
@@ -2553,6 +2663,11 @@ button.conditions-metric:hover {
   position: fixed;
   inset: 0;
   z-index: var(--z-route);
+  /* Lets .place-studio-layout react to the ROOT's actual rendered width
+     (which shrinks once the desktop rule below docks it beside the
+     sidebar) rather than the viewport's, so the two-column list/detail
+     layout only appears when there is genuinely room for it. */
+  container-type: inline-size;
 }
 
 .place-studio-header > :last-child {
@@ -2897,9 +3012,16 @@ button.conditions-metric:hover {
 }
 
 @media (min-width: 721px) {
+  /* Screen-filling geometry (owner direction): starts at the sidebar's
+     inner edge (--studio-inset-start, 0 unless a live sidebar column is
+     on screen) and fills the rest of the viewport, so the studio slides
+     out BESIDE the nav side-card rather than over it. This is exactly
+     the box #map-container occupies at these widths, which is why the
+     inert scope in place-studio.tsx targets #map-container instead of
+     the whole #app: the sidebar is never covered here, so it must stay
+     reachable. */
   #place-studio-root {
-    inset: 0 auto 0 0;
-    width: min(560px, 100vw);
+    inset: 0 0 0 var(--studio-inset-start);
   }
 
   .place-studio {
@@ -2919,6 +3041,33 @@ button.conditions-metric:hover {
 
   .place-studio-list {
     max-height: min(34dvh, 320px);
+  }
+}
+
+/* Rebalances the single column above once the ROOT is actually wide
+   enough (see container-type on #place-studio-root): the same
+   two-column list/detail split the base (mobile-first) rule already
+   declares, widened past the old 560px-column cap and re-centered, so a
+   spacious desktop pane (a wide monitor, or the sidebar collapsed/embed)
+   does not read as one sparse column. 760px mirrors the threshold
+   .layers-studio-grid uses for the same reason and the same judgment
+   call: comfortably above the 300px second-column floor plus a workable
+   first column and the gap. Below it (the 721 to roughly 1100px viewport
+   band with the sidebar docked) the single column above stands. */
+@container (min-width: 760px) {
+  .place-studio-type-rail {
+    width: min(1400px, 100%);
+    margin: 0 auto 14px;
+  }
+
+  .place-studio-layout {
+    grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+    gap: 20px;
+    width: min(1400px, 100%);
+  }
+
+  .place-studio-list {
+    max-height: min(50dvh, 560px);
   }
 }
 
