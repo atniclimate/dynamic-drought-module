@@ -337,6 +337,36 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
         !window.location.search.includes('outlook=monthly')
     );
   });
+
+  test('a horizon switch to a longer outlook headline does not shift the shell layout (fix-lane Defect 1)', async ({
+    page
+  }) => {
+    // NADM's 'Consensus month ...' stamp is short and single-line; the CPC
+    // outlook's 'Issued ... . through ...' stamp is markedly longer and,
+    // pre-fix, wrapped the headline to a second line with no reserved
+    // height, pushing every control below it down. app.css's
+    // .shell-time-headline now reserves a fixed two-line box, so this
+    // switch must not move anything seated after it (#shell-share-host,
+    // the next sibling of .shell-when in the shell panel).
+    await routeCpcOutlook(page);
+    await gotoApp(page);
+
+    const headline = page.locator('.shell-time-headline');
+    await expect(headline).toBeVisible();
+    await expect(headline).toContainText('Consensus month');
+
+    const shareHost = page.locator('#shell-share-host');
+    const before = await shareHost.boundingBox();
+    expect(before).not.toBeNull();
+
+    await page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]').click();
+    await expect(headline).toContainText('Issued', { timeout: 45_000 });
+    await expect(headline).toContainText('through Jul 2026');
+
+    const after = await shareHost.boundingBox();
+    expect(after).not.toBeNull();
+    expect(Math.abs(after!.y - before!.y)).toBeLessThanOrEqual(1);
+  });
 });
 
 test.describe('S4 r2: custom-composition horizon honesty and the failed range switch (DG-080 r2 finding 1)', () => {
