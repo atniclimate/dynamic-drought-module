@@ -7432,11 +7432,21 @@ a.impact-resource-link::after {
     min-height: var(--touch-target);
   }
 
-  /* Transient surfaces: the briefing's close control (30px square), the
-     per-variable disclosures inside the briefing body (30px), and a
-     MapLibre popup's close corner (24px), which is the only way to
-     dismiss a popup with a finger. */
-  .impact-panel-close {
+  /* Transient surfaces: the briefing's close control (30px square), its
+     sibling mail and print actions (also 30px square), the per-variable
+     disclosures inside the briefing body (30px), and a MapLibre popup's
+     close corner (24px), which is the only way to dismiss a popup with a
+     finger.
+
+     The mail and print actions are `disabled` today because they are not
+     wired yet, and that is NOT a reason to exempt them from the floor:
+     `reachableTargets` in tests/interface-responsive.spec.ts:754 filters
+     only on visibility, display, zero size and off-screen centre, so a
+     disabled control still occupies space a thumb lands on and is still
+     audited. Leaving them at 30px took 13 tablet-band cases red on the
+     S23 gate. */
+  .impact-panel-close,
+  .impact-panel-action {
     min-width: var(--touch-target);
     min-height: var(--touch-target);
   }
