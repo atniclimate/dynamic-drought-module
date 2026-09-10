@@ -32,7 +32,7 @@ import {
   type MatrixLaneResult
 } from '../src/impact/matrix';
 import type { HazardCell, Horizon, HorizonKey } from '../src/impact/types';
-import { gotoApp } from './helpers';
+import { gotoApp, stubSpcFireOutlook } from './helpers';
 
 function emptyHorizon(key: HorizonKey): Horizon {
   return {
@@ -332,19 +332,11 @@ test('the open briefing renders all twelve cells, each with a claim or a named s
   page
 }) => {
   await stubBaselineBriefingHosts(page);
-  // DDM-P7-T03: the near-term fire cell now holds a live SPC lane, so every
-  // one of the eight Day 1-8 layer queries needs a deterministic empty
-  // answer here (an unstubbed request would otherwise reach the live
-  // agency, S17's lesson). An empty FeatureCollection is the honest "no
-  // area is drawn" case, not an error.
-  await page.route('**/SPC_firewx/MapServer/*/query?*', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/geo+json',
-      body: collection([])
-    })
-  );
-
+  // DDM-P7-T03: the near-term fire cell holds a live SPC lane; `gotoApp`
+  // itself now stubs every one of the eight Day 1-8 layer queries with a
+  // deterministic empty answer by default (F1, tests/helpers.ts
+  // `stubSpcFireOutlook`), the honest "no area is drawn" case, so no
+  // explicit route is needed here.
   await gotoApp(page, '?view=brief&layers=places&select=state:WA');
 
   const cells = page.locator('.impact-horizons .impact-hazard');
@@ -381,50 +373,11 @@ function spcFeature(properties: Record<string, unknown>): unknown {
   return { type: 'Feature', geometry: null, properties };
 }
 
-/**
- * Route every SPC fire weather outlook layer query
- * (`spcFireWeatherOutlookMapServer`, the SPC_firewx MapServer) to a
- * deterministic fixture, keyed by ArcGIS layer id (1 Day 1, 4 Day 2, 8/11/
- * 14/17/20/23 Days 3-8). A layer with no entry in `layerFeatures` answers
- * with an empty FeatureCollection, the honest "no area drawn" case. Modeled
- * on the `stubCpcSeasonalTempOutlook` precedent in tests/helpers.ts (read,
- * not edited: this task owns only this spec file).
- */
-async function stubSpcFireOutlook(
-  page: Page,
-  layerFeatures: Partial<Record<number, unknown[]>>,
-  options: { readonly httpStatus?: number; readonly errorEnvelope?: boolean } = {}
-): Promise<void> {
-  await page.route('**/SPC_firewx/MapServer/*/query?*', async (route) => {
-    if (options.httpStatus !== undefined && options.httpStatus !== 200) {
-      await route.fulfill({
-        status: options.httpStatus,
-        contentType: 'application/json',
-        body: JSON.stringify({ message: 'stubbed upstream failure' })
-      });
-      return;
-    }
-    if (options.errorEnvelope) {
-      await route.fulfill({
-        status: 200,
-        contentType: 'text/plain',
-        body: JSON.stringify({
-          status: 'error',
-          messages: ['Could not access any server machines.']
-        })
-      });
-      return;
-    }
-    const url = new URL(route.request().url());
-    const layerMatch = /\/MapServer\/(\d+)\/query/.exec(url.pathname);
-    const layer = layerMatch ? Number(layerMatch[1]) : NaN;
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/geo+json',
-      body: collection(layerFeatures[layer] ?? [])
-    });
-  });
-}
+// `stubSpcFireOutlook` (tests/helpers.ts, DDM-P7-T03 fix round) replaces the
+// local helper that lived here in round 1: `gotoApp` now stubs this host by
+// default (F1), so every case below calls the shared, imported helper WITH
+// its own reading BEFORE `gotoApp`, which the helper's WeakSet guard makes
+// authoritative over `gotoApp`'s later, empty-default call.
 
 test('SPC Day 1 categorical: a stubbed dn 8 feature renders the VERIFIED word, product name, issuer and valid window in the outlook register', async ({
   page
@@ -440,7 +393,10 @@ test('SPC Day 1 categorical: a stubbed dn 8 feature renders the VERIFIED word, p
   );
   const day1Claim = cell.locator('.impact-claim').first();
   await expect(day1Claim).toContainText('SPC Day 1 Fire Weather Outlook');
-  // The issuer's public word (about.html), never the renderer's "Extreme".
+  // This dn 8 fixture proves the issuer's "Critical" word and the sentence
+  // shape (about.html); it does NOT exercise the dn 10 "Extreme" to
+  // "Extremely Critical" palette correction, which the dn 10 case below
+  // proves (F4, S20 fix round: the prior comment overclaimed this).
   await expect(day1Claim).toContainText(
     'Critical risk from wind and relative humidity'
   );
@@ -451,6 +407,49 @@ test('SPC Day 1 categorical: a stubbed dn 8 feature renders the VERIFIED word, p
     'Storm Prediction Center'
   );
   await expect(day1Claim.locator('.impact-claim-register')).toHaveText('outlook');
+});
+
+test('SPC Day 2 categorical: a stubbed dn 10 feature renders the issuer\'s own "Extremely Critical" word, never the renderer\'s "Extreme"', async ({
+  page
+}) => {
+  await stubBaselineBriefingHosts(page);
+  await stubSpcFireOutlook(page, {
+    4: [spcFeature({ dn: 10, valid: '202609091700', expire: '202609101200' })]
+  });
+  await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+
+  const cell = page.locator(
+    '.impact-hazard[data-horizon="nearTerm"][data-hazard="fire"]'
+  );
+  await expect(cell).toContainText(
+    'SPC Day 2 Fire Weather Outlook: Extremely Critical risk from wind and relative humidity at this point'
+  );
+  await expect(cell).not.toContainText('Extreme risk');
+});
+
+test('SPC Day 1 with a malformed dn: the point-heat-briefing convention drops the feature rather than inventing a "Category 0" risk or a false no-area reading', async ({
+  page
+}) => {
+  await stubBaselineBriefingHosts(page);
+  await stubSpcFireOutlook(page, {
+    1: [spcFeature({ dn: 0, valid: '202609091700', expire: '202609101200' })]
+  });
+  await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+
+  const cell = page.locator(
+    '.impact-hazard[data-horizon="nearTerm"][data-hazard="fire"]'
+  );
+  // Day 1 states neither an invented risk nor a false "no area" reading.
+  await expect(cell).not.toContainText('Category 0');
+  await expect(cell).not.toContainText(
+    'SPC Day 1 Fire Weather Outlook: no Elevated, Critical, or Extremely Critical area is drawn over this point for this day.'
+  );
+  // Day 2 (layer 4, no stubbed feature) still states its own honest no-area
+  // sentence, and the cell as a whole is not unavailable.
+  await expect(cell).toContainText(
+    'SPC Day 2 Fire Weather Outlook: no Elevated, Critical, or Extremely Critical area is drawn over this point for this day.'
+  );
+  await expect(cell.locator('.impact-horizon-note')).toHaveCount(0);
 });
 
 test('SPC Day 1 and Day 2 with no feature: the cell states the no-area sentence, never no data and never unavailable', async ({
@@ -544,9 +543,11 @@ test('the Days 3-8 probabilistic reads: 0.40, 0.70 and the live "Probability Too
   );
   // The renderer's own band names are never printed for these layers.
   await expect(cell).not.toContainText('Marginal');
-  // Days 5, 6 and 7 drew no probabilistic feature and fold into one sentence.
+  await expect(cell).not.toContainText('Critical (70%)');
+  // Days 5, 6, and 7 drew no probabilistic feature and fold into one
+  // sentence, with the serial comma the verdict's own (c) sentence uses.
   await expect(cell).toContainText(
-    'SPC Day 3-8 Fire Weather Outlook: no area is drawn over this point for Days 5, 6 and 7.'
+    'SPC Day 3-8 Fire Weather Outlook: no area is drawn over this point for Days 5, 6, and 7.'
   );
 });
 

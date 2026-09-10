@@ -171,9 +171,15 @@ export const CELL_ABSENCE: Readonly<
     // outlook as a PDF only, with no ArcGIS, GeoJSON, KML or shapefile
     // distribution on any NIFC or GACC host, so this cell reads unavailable
     // naming the product rather than scraping the PDF or its map images.
-    // Verbatim from the science verdict (science-verdict.md section 5).
+    // Verbatim from the science verdict (science-verdict.md section 5). F9
+    // (S20 fix round): round 1 appended "Read the issuer: <bare url>" to
+    // this sentence, but `HazardCell.note` has no link mechanism
+    // (`src/ui/impact-panel-runtime.ts` renders it as escaped plain text),
+    // so a 62-character unclickable URL is not the cell's "existing link
+    // form"; removed. The owner ask for a `noteUrl` on `HazardCell` is
+    // recorded in the report's Owner decisions.
     fire:
-      'The National Wildland Significant Fire Potential Outlook (NIFC/NICC Predictive Services; also called the National Monthly and Seasonal Significant Fire Potential Outlook by the GACCs) is published as a PDF only and is not read here. Read the issuer: https://www.nifc.gov/nicc/predictive-services/outlooks',
+      'The National Wildland Significant Fire Potential Outlook (NIFC/NICC Predictive Services; also called the National Monthly and Seasonal Significant Fire Potential Outlook by the GACCs) is published as a PDF only and is not read here.',
     heat: 'No NOAA CPC seasonal temperature outlook read is available for this selection.',
     enso: 'No ENSO seasonal tendency is shown for this selection.'
   }

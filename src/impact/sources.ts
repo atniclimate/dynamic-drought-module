@@ -1368,9 +1368,13 @@ export async function fetchCpcSeasonalTempClaims(
  * no sentence here states a cadence: every window comes only from the
  * feature's own `valid` and `expire`, never invented from the calendar.
  */
-const SPC_CATEGORICAL_DAYS: ReadonlyArray<{ readonly day: 1 | 2; readonly layer: number }> = [
-  { day: 1, layer: 1 },
-  { day: 2, layer: 4 }
+// The `day` each layer answers (1, 2) is never read back from this table:
+// `spcCategoricalClaim`'s two call sites below name their day literally, so
+// only `layer` is carried here (F11, S20 fix round: an unused `day` field
+// was deleted rather than kept dead).
+const SPC_CATEGORICAL_DAYS: ReadonlyArray<{ readonly layer: number }> = [
+  { layer: 1 },
+  { layer: 4 }
 ];
 
 /** Days 3-8, layer id order (S20: 8 Day 3, 11 Day 4, 14 Day 5, 17 Day 6, 20 Day 7, 23 Day 8). */
@@ -1403,16 +1407,23 @@ interface SpcLayerOutcome {
   readonly err?: unknown;
 }
 
+/**
+ * The field list threaded as an object property (`{ outFields }`) rather
+ * than a bare positional string, so `scripts/check-upstream-drift.mjs`'s
+ * static `outFields:` extraction can see each SPC layer's field list
+ * (F6, S20 fix round: the SPC 6-day and 12-day column-family drift-contract
+ * probe needs a real source-text anchor, not a positional argument).
+ */
 async function fetchSpcLayerOutcome(
   base: string,
   layer: number,
-  outFields: string,
+  query: { readonly outFields: string },
   lng: number,
   lat: number,
   signal: AbortSignal
 ): Promise<SpcLayerOutcome> {
   try {
-    const url = `${base}/${layer}/query?${esriPointQuery(lng, lat, outFields).toString()}`;
+    const url = `${base}/${layer}/query?${esriPointQuery(lng, lat, query.outFields).toString()}`;
     const json: unknown = await fetchJson(url, GEOJSON_ACCEPT, signal);
     const f = featuresOf(json)[0] ?? null;
     return { ok: true, props: isObject(f) && isObject(f.properties) ? f.properties : null };
@@ -1440,48 +1451,34 @@ function parseSpcMoment(value: unknown): number | null {
 }
 
 /**
- * "Sep 8, 2026, 12:00 UTC", the SPC map layer's own valid/expire stamp
- * grammar (`src/layers/spc-fire-weather.ts`), so the briefing's window reads
- * the same as the map's time bar for the same field.
- */
-function spcMomentText(ms: number): string {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'UTC',
-    timeZoneName: 'short'
-  }).format(new Date(ms));
-}
-
-/**
  * ", valid <from> to <until>." from whichever of `valid`/`expire` parsed.
  * Each half is stated only when the service gave it (the honest-outlook
  * rule: never invent a window edge), and a feature with neither closes the
- * sentence with a bare period.
+ * sentence with a bare period. The moment grammar itself is `heatRiskMoment`
+ * above (F11, S20 fix round: a byte-identical `spcMomentText` duplicated it;
+ * deleted in favor of the one formatter), the same "Sep 8, 2026, 12:00 UTC"
+ * grammar `src/layers/spc-fire-weather.ts:118` uses for the same SPC
+ * valid/expire field (DR-037 i: one grammar per field, shared).
  */
 function spcValidityClause(validMs: number | null, expireMs: number | null): string {
   if (validMs !== null && expireMs !== null) {
-    return `, valid ${spcMomentText(validMs)} to ${spcMomentText(expireMs)}.`;
+    return `, valid ${heatRiskMoment(validMs)} to ${heatRiskMoment(expireMs)}.`;
   }
-  if (validMs !== null) return `, valid from ${spcMomentText(validMs)}.`;
-  if (expireMs !== null) return `, valid through ${spcMomentText(expireMs)}.`;
+  if (validMs !== null) return `, valid from ${heatRiskMoment(validMs)}.`;
+  if (expireMs !== null) return `, valid through ${heatRiskMoment(expireMs)}.`;
   return '.';
 }
 
 /**
  * The issuer's own `dn` word (`SPC_FIREWX_CATEGORIES`, corrected to
- * "Extremely Critical" for `dn` 10), or an honest `Category <n>` fallback
- * for a value the palette table does not carry (mirrors
- * `src/layers/spc-fire-weather.ts`'s `categoryLabel` fallback: never guess a
- * severity for an unrecognized code).
+ * "Extremely Critical" for `dn` 10), or `null` for a value the palette
+ * table does not carry: the caller drops the read rather than inventing a
+ * severity for an unrecognized code (F3, S20 fix round: a prior `Category
+ * <n>` fallback fabricated a risk sentence for a malformed `dn`).
  */
-function spcCategoryWord(dn: number): string {
+function spcCategoryWord(dn: number): string | null {
   const entry = SPC_FIREWX_CATEGORIES.find((c) => c.dn === dn);
-  return entry ? entry.label : `Category ${dn}`;
+  return entry ? entry.label : null;
 }
 
 /**
@@ -1490,6 +1487,16 @@ function spcCategoryWord(dn: number): string {
  * claim at all here: the caller reports the day's absence from the cell
  * only through the lane's own failure note, never through this sentence
  * shape, so an outage can never read as an honest "no area is drawn".
+ * `outcome.props === null` (the layer legitimately drew nothing here) is
+ * the only path to the no-area sentence; a feature WITH an unrecognized or
+ * malformed `dn` (F3: `null`, `''`, or any value not in
+ * `SPC_FIREWX_CATEGORIES`) is dropped with a console warning instead,
+ * never folded into "no area is drawn" (an area WAS returned) and never
+ * printed as an invented "Category <n>" risk. One conflation remains and is
+ * stated rather than hidden: `fetchSpcLayerOutcome` also folds a returned
+ * feature whose `properties` is absent or not an object into `props: null`,
+ * so such a feature would read as no area drawn; ArcGIS GeoJSON always
+ * carries a properties object, so no live path reaches it.
  */
 function spcCategoricalClaim(
   day: 1 | 2,
@@ -1499,8 +1506,7 @@ function spcCategoricalClaim(
   if (!outcome.ok) return null;
   const product = `SPC Day ${day} Fire Weather Outlook`;
   const props = outcome.props;
-  const dn = props ? (typeof props.dn === 'number' ? props.dn : Number(props.dn)) : NaN;
-  if (!props || !Number.isFinite(dn)) {
+  if (props === null) {
     return makeClaim({
       text: `${product}: no Elevated, Critical, or Extremely Critical area is drawn over this point for this day.`,
       source,
@@ -1509,10 +1515,19 @@ function spcCategoricalClaim(
       dates: { retrieved: todayIso() }
     });
   }
+  const dn = typeof props.dn === 'number' ? props.dn : Number(props.dn);
+  const categoryWord = Number.isFinite(dn) ? spcCategoryWord(dn) : null;
+  if (categoryWord === null) {
+    console.warn(
+      `[impact] SPC Day ${day} outlook returned an unrecognized dn; dropped rather than invented.`,
+      props.dn
+    );
+    return null;
+  }
   const validMs = parseSpcMoment(props.valid);
   const expireMs = parseSpcMoment(props.expire);
   return makeClaim({
-    text: `${product}: ${spcCategoryWord(dn)} risk from wind and relative humidity at this point${spcValidityClause(validMs, expireMs)}`,
+    text: `${product}: ${categoryWord} risk from wind and relative humidity at this point${spcValidityClause(validMs, expireMs)}`,
     source,
     sourceUrl: SPC_ABOUT_URL,
     evidence: 'outlook',
@@ -1527,11 +1542,12 @@ function spcCategoricalClaim(
   });
 }
 
-/** "Day 5", "Days 5 and 6", or "Days 5, 6 and 7", for the compact fold. */
+/** "Day 5", "Days 5 and 6", or "Days 5, 6, and 7" (the serial comma, F11:
+ * the verdict's own section 4(c) sentence uses one), for the compact fold. */
 function joinDayList(days: readonly number[]): string {
   if (days.length === 1) return `Day ${days[0]}`;
   if (days.length === 2) return `Days ${days[0]} and ${days[1]}`;
-  return `Days ${days.slice(0, -1).join(', ')} and ${days[days.length - 1]}`;
+  return `Days ${days.slice(0, -1).join(', ')}, and ${days[days.length - 1]}`;
 }
 
 /**
@@ -1559,10 +1575,10 @@ export async function fetchSpcFireOutlookClaims(
   const base = URLS.spcFireWeatherOutlookMapServer;
 
   const [day1, day2, ...probOutcomes] = await Promise.all([
-    fetchSpcLayerOutcome(base, SPC_CATEGORICAL_DAYS[0]!.layer, SPC_CATEGORICAL_OUT_FIELDS, lng, lat, signal),
-    fetchSpcLayerOutcome(base, SPC_CATEGORICAL_DAYS[1]!.layer, SPC_CATEGORICAL_OUT_FIELDS, lng, lat, signal),
+    fetchSpcLayerOutcome(base, SPC_CATEGORICAL_DAYS[0]!.layer, { outFields: SPC_CATEGORICAL_OUT_FIELDS }, lng, lat, signal),
+    fetchSpcLayerOutcome(base, SPC_CATEGORICAL_DAYS[1]!.layer, { outFields: SPC_CATEGORICAL_OUT_FIELDS }, lng, lat, signal),
     ...SPC_PROBABILISTIC_DAYS.map(({ layer }) =>
-      fetchSpcLayerOutcome(base, layer, SPC_PROBABILISTIC_OUT_FIELDS, lng, lat, signal)
+      fetchSpcLayerOutcome(base, layer, { outFields: SPC_PROBABILISTIC_OUT_FIELDS }, lng, lat, signal)
     )
   ]);
 
@@ -1672,14 +1688,15 @@ export async function fetchSpcFireOutlookClaims(
     };
   }
 
-  const anyFailed = allOutcomes.some((o) => !o.ok);
-  return {
-    claims,
-    ok: true,
-    ...(anyFailed
-      ? { note: 'One SPC fire weather outlook layer query did not respond.' }
-      : {})
-  };
+  // F5 (S20 fix round): a per-layer failure is NOT surfaced to the reader
+  // here, on purpose for now. `fillCell` (src/impact/matrix.ts:262-310, not
+  // granted to this lane) collects a lane's `note` only when the whole lane
+  // answers `ok: false`; an `ok: true` lane's note is silently dropped, so a
+  // note reporting a partial outage on this path would never reach the DOM
+  // (the same gap exists for `fetchCpcOutlookClaims` above, which this
+  // lane's round 1 copied without noticing). Handed off rather than fixed
+  // here: see the report's Handoffs section.
+  return { claims, ok: true };
 }
 
 // ---------------------------------------------------------------------------
