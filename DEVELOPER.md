@@ -669,6 +669,29 @@ benchmarked before hosting moves. Cloudflare Pages is not a direct replacement
 while an artifact exceeds its per-file limit, and moving large archives to R2
 would introduce a new service, state, cost, and governance decision.
 
+**That governance decision was taken on 2026-09-10 (DR-079), for the terrain
+archive only.** The paragraph above stays true about what such a move costs;
+what changed is that the project has now paid it once, deliberately and in a
+bounded way. The 3D Fire scene's terrain needs about 27 m per pixel to answer
+the question it exists to answer, a fire at the foot of a mountain, and the
+bundled zoom 8 archive resolves about 212 m per pixel: measured in the running
+scene, it reads the Mount Jefferson summit 931 m low while reading the Bend
+valley floor within 19 m, because a coarse elevation model does not lower a
+landscape, it flattens it. The same box at zoom 11 is over 1.1 GB, past the
+GitHub Pages 1 GB site cap, and Git LFS is not usable with Pages, so no GitHub
+plan reaches it. A deep archive therefore lives in a Cloudflare R2 bucket
+behind a NEW Worker, `ddm-terrain`, never a widened route on `ddm-proxy`.
+
+Three things bound that move and are not to be widened quietly. The bundled
+zoom 8 archive stays shipped and stays the fallback the client probes down to,
+so a static deployer is still self-contained and nothing new ships in `dist`.
+Workers Logs stay off (DDM-D07) and R2 Data Access Logs stay off on the bucket,
+because this tool serves Tribal Nations and request logging would be a
+stewardship failure rather than a configuration detail. And the work stops at
+the free tiers: R2 storage and egress are $0 inside 10 GB, and the Workers free
+tier is 100,000 requests per day account-wide, shared with `ddm-proxy`; needing
+Workers Paid is a reason to stop and ask, not a step to take.
+
 **Production source maps.** Production builds publish no source maps while
 GitHub Pages is the host (owner ruling DR-069, 2026-09-03: the second clause of
 gate DDM-D10, which DR-006 does not answer). The repository being public is an
