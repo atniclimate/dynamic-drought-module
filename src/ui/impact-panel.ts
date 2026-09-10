@@ -120,9 +120,17 @@ export function ensureImpactPanelShell(): ImpactPanelShell {
         <h2 id="impact-panel-title" class="impact-panel-title"></h2>
         <p class="impact-panel-kind"></p>
       </div>
-      <button type="button" class="impact-panel-close" aria-label="Close briefing">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
+      <div class="impact-panel-actions">
+        <button type="button" class="impact-panel-close" aria-label="Close briefing">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <button type="button" class="impact-panel-action impact-panel-action-mail" aria-label="Email this briefing" title="Email this briefing (not wired up yet)" disabled>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>
+        </button>
+        <button type="button" class="impact-panel-action impact-panel-action-print" aria-label="Print this briefing" title="Print this briefing (not wired up yet)" disabled>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg>
+        </button>
+      </div>
     </header>
     <div class="impact-panel-body"></div>
   `;

@@ -345,10 +345,17 @@ function renderCell(cell: HazardCell): string {
  * The horizon pill summarizes its four cells and carries no issuer and no
  * date; a reader who needs either reads the cell.
  */
-function renderHorizon(horizon: Horizon): string {
-  const rows = HAZARD_KEYS.map((hazard) =>
-    renderCell(horizon.cells[hazard])
-  ).join('');
+function renderHorizon(horizon: Horizon, afterHeatCell?: string): string {
+  // `afterHeatCell` carries the point-heat section into the current horizon,
+  // in the heat position: after the heat hazard cell and before the ENSO
+  // cell (owner ruling, B/C: point heat sits in the heat row, below Fire and
+  // above ENSO, and the briefing now leads with Current Conditions instead
+  // of a floating point-heat block above every horizon). Only the current
+  // horizon receives it; nearTerm and longRange call this with one argument.
+  const rows = HAZARD_KEYS.map((hazard) => {
+    const cell = renderCell(horizon.cells[hazard]);
+    return hazard === 'heat' && afterHeatCell ? cell + afterHeatCell : cell;
+  }).join('');
 
   // The section is named by its own visible heading text rather than by a
   // duplicate aria-label (IB-17). The id wraps the title only, so the
@@ -487,7 +494,7 @@ function renderHeatSynthesis(synthesis: HeatSynthesis): string {
   return `
     <section class="point-heat-synthesis" aria-label="Heat sources together">
       <div class="impact-horizon-head">
-        <h4>Heat sources together</h4>
+        <h5>Heat sources together</h5>
         <span class="point-heat-pill point-heat-pill-${synthesis.status}">${escapeHtml(SOURCE_PILL_TEXT[synthesis.status])}</span>
       </div>
       ${reads}
@@ -506,7 +513,7 @@ function renderPointHeat(
     <section class="point-heat" aria-label="Heat at selected point">
       <div class="impact-horizon-head">
         <div>
-          <h3 class="impact-section-title">Heat at selected point</h3>
+          <h4 class="impact-section-title">Heat at selected point</h4>
           <p class="point-heat-coordinate">${escapeHtml(pointLabel)}</p>
         </div>
         <span class="point-heat-pill point-heat-pill-${pointHeat.status}">${escapeHtml(SOURCE_PILL_TEXT[pointHeat.status])}</span>
@@ -515,11 +522,11 @@ function renderPointHeat(
       ${pointHeat.note ? `<p class="impact-horizon-note">${escapeHtml(pointHeat.note)}</p>` : ''}
       <div class="point-heat-grid">
         <section class="point-heat-card" aria-label="Observed nearby">
-          <h4>Observed nearby</h4>
+          <h5>Observed nearby</h5>
           ${renderObservation(pointHeat)}
         </section>
         <section class="point-heat-card" aria-label="NWS grid guidance">
-          <h4>NWS grid guidance</h4>
+          <h5>NWS grid guidance</h5>
           ${renderGrid(pointHeat)}
         </section>
       </div>
@@ -586,8 +593,16 @@ function renderBody(
   const caveat = briefing.landCaveat
     ? `<p class="impact-land-caveat">${escapeHtml(briefing.landCaveat)}</p>`
     : '';
+  const pointHeatSection = renderPointHeat(briefing.pointHeat, briefing.heatSynthesis);
   const impact = impactUnavailableNote
-    ? `
+    ? // Drought impact (the horizon matrix) can be disabled on its own
+      // source-policy switch while point heat, which reads NWS directly and
+      // not through that capability, still has something to say. Keeping it
+      // here (rather than dropping it with the matrix it would otherwise
+      // nest inside) is this lane's call, not one the owner's B/C wording
+      // covered; see the completion report.
+      `
+      ${pointHeatSection}
       <section class="impact-capability-unavailable" aria-label="Drought impact unavailable">
         <h3 class="impact-section-title">Drought impact unavailable</h3>
         <p class="impact-horizon-note">${escapeHtml(impactUnavailableNote)}</p>
@@ -598,17 +613,20 @@ function renderBody(
       // as well. The wording here is the plainest one that stays true to
       // what the block contains; the briefing's names are an open question
       // (DR-013) and this does not answer it.
+      // Point heat no longer floats above the horizons (owner ruling B/C):
+      // it renders inside Current Conditions, after the heat cell and
+      // before the ENSO cell, so the briefing leads with Current Conditions
+      // and the point-heat material sits in the heat row.
       `
       <section class="impact-horizons" aria-label="Impact across three horizons">
         <h3 class="impact-section-title">Impact across three horizons</h3>
-        ${renderHorizon(briefing.horizons.current)}
+        ${renderHorizon(briefing.horizons.current, pointHeatSection)}
         ${renderHorizon(briefing.horizons.nearTerm)}
         ${renderHorizon(briefing.horizons.longRange)}
       </section>
     `;
   return `
     ${caveat}
-    ${renderPointHeat(briefing.pointHeat, briefing.heatSynthesis)}
     ${renderLandscapeContext(briefing.landscape)}
     ${impact}
     ${renderResources(briefing.resources)}
