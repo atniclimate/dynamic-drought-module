@@ -1,0 +1,56 @@
+# Cloudflare Workers configuration for ddm-terrain, the Dynamic Drought
+# Module's terrain elevation archive reader.
+#
+# This Worker exists solely to serve ONE R2 object, the baked USGS 3D
+# Elevation Program archive for the Pacific Northwest, with byte-range and
+# CORS support so a PMTiles reader in the browser can open it. It reaches no
+# upstream, holds no allow-list of foreign hosts, transforms no bodies,
+# authenticates nothing, logs nothing, and writes nothing. See
+# src/index.ts for the logic and DR-079 for the decision that created it.
+#
+# It is deliberately SEPARATE from ddm-proxy rather than a widened route on
+# it: that Worker is held to an exact route table by the worker-steward
+# contract, and "just add a route" is how a narrow, auditable shim turns into
+# a general one.
+#
+# Deployer notes:
+#   1. Run `npm install` inside `workers/terrain/` before the first
+#      `npm run dev`.
+#   2. The published Worker URL goes into `URLS.terrainPmtilesDeep` in
+#      `src/config/urls.ts` (root project).
+#   3. The bucket must contain the object named in ALLOWED_KEYS
+#      (src/index.ts). Upload with:
+#      `wrangler r2 object put ddm-terrain/<key> --file <archive> --remote`
+#   4. There are no secrets. Do not add any.
+
+name = "ddm-terrain"
+main = "src/index.ts"
+compatibility_date = "2026-05-09"
+
+# DR-010 a, matching workers/proxy: this Worker uses only Web APIs (Request,
+# Response, R2Bucket) and must not gain the Node.js built-in surface by way of
+# a routine compatibility-date bump (hard rule 4).
+compatibility_flags = ["no_nodejs_compat"]
+
+# The one piece of state this Worker touches, read-only by convention: it
+# calls head() and get() and never put, delete or list.
+[[r2_buckets]]
+binding = "ddm_terrain"
+bucket_name = "ddm-terrain"
+
+# DDM-D07 (2026-08-29), restated here because it matters more on this Worker
+# than on the proxy: a terrain request URL plus its byte range maps to roughly
+# a 10 km area of interest, so a request log would record WHERE PEOPLE LOOK.
+# This tool serves Tribal Nations. Recording that would be a stewardship
+# failure, not a configuration detail. Declared in reviewed source so the
+# account dashboard default cannot govern the deployed script; no Logpush job
+# targets it either, and R2 Data Access Logs (opt-in per bucket since
+# 2026-09-04) stay off on the ddm-terrain bucket for the same reason.
+[observability]
+enabled = false
+
+# No custom route: the workers.dev subdomain is the published surface, exactly
+# as ddm-proxy uses. Uncomment and edit if a deployer prefers a zone route.
+# [[routes]]
+# pattern = "terrain.example.org/*"
+# zone_name = "example.org"

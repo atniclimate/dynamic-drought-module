@@ -1,0 +1,18 @@
+{
+  "name": "ddm-terrain",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Cloudflare Worker that serves the Dynamic Drought Module terrain elevation archive from R2 with byte-range and CORS support. Read-only, stateless, no logging.",
+  "license": "PolyForm-Strict-1.0.0",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260904.1",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.129.0"
+  }
+}

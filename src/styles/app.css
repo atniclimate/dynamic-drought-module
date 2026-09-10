@@ -4225,6 +4225,32 @@ button.telemetry-item {
       )
     );
   }
+
+  /* The header stacks in this band, 2026-09-10. The mail and print actions
+     joined the close control here, and all three carry the 44px touch floor,
+     so the icon cluster costs 144px of a panel that is 217px wide at 721 and
+     264px at 768. After the header's own padding, gap and border there was
+     nothing left for the title, and "Washington" painted into the icons while
+     the jurisdiction line broke into five lines. Two independent review
+     passes found it, one by measuring the CSS and one by looking at the
+     768px capture.
+
+     Both are kept, at full size: the actions take their own row above a
+     full-width title block, which is the ordinary toolbar arrangement and
+     costs one row of height in the one band that cannot afford the width.
+     Nothing shrinks, no target drops below the floor, and no place name is
+     truncated. */
+  #impact-panel .impact-panel-header {
+    flex-wrap: wrap;
+  }
+  #impact-panel .impact-panel-actions {
+    order: 1;
+    margin-left: auto;
+  }
+  #impact-panel .impact-panel-heading {
+    order: 2;
+    flex: 1 1 100%;
+  }
 }
 
 .impact-panel-header {

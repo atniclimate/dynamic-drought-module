@@ -942,6 +942,33 @@ export const URLS = Object.freeze({
   // bounded header probe, so normal static deployments remain self-contained.
   hillshadePmtilesFallback:
     'https://atniclimate.github.io/dynamic-drought-module/data/hillshade-dem-pnw.pmtiles',
+  // The DEEP terrain archive for the 3D Fire scene (DR-079, owner ruling
+  // 2026-09-10): the same USGS 3D Elevation Program box as the bundled
+  // archive above, baked to zoom 10 (about 53 m per pixel at 46N) instead of
+  // zoom 8 (about 212 m). Only the DEPTH differs; the geographic coverage
+  // claim is unchanged, so FIRE3D_TERRAIN_COVERAGE and its sentence still
+  // describe it exactly.
+  //
+  // Why it is not bundled: 435,700,035 bytes. GitHub Pages caps a published
+  // site at 1 GB and blocks any file over 100 MiB, and Git LFS is not usable
+  // with Pages, so no GitHub plan reaches it. It is served from a Cloudflare
+  // R2 bucket through the `ddm-terrain` Worker (workers/terrain/), which does
+  // nothing but return byte ranges with CORS and keeps no logs.
+  //
+  // Why depending on it is SAFE even before it is published: the scene probes
+  // this archive's header first and falls back to the bundled zoom 8 copy,
+  // which stays shipped, so an unreachable deep archive costs one bounded
+  // probe and the flat-map guarantee is untouched. That fallback path was
+  // exercised in both directions against a live scene on 2026-09-10 (the
+  // MapLibre terrain source swaps at runtime with no page errors).
+  //
+  // The measurement that justified it, taken in the running scene through
+  // queryTerrainElevation: the bundled archive reads the Mount Jefferson
+  // summit 931 m low and this one reads it 50 m low, while both read the Bend
+  // valley floor within 20 m. A coarse elevation model does not lower a
+  // landscape, it flattens it, and the mountain is what it removes.
+  terrainPmtilesDeep:
+    'https://ddm-terrain.atniclimate.workers.dev/pnw-z10-2026-09-10.pmtiles',
   // The PNW LANDFIRE fuel-model drape for the desktop 3D Fire mode: LF2024
   // Scott and Burgan 40 Fire Behavior Fuel Models (FBFM40), CONUS, rendered
   // server-side by the LANDFIRE ImageServer's own class colors and baked to
