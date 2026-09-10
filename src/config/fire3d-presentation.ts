@@ -99,6 +99,30 @@ export const FIRE3D_TERRAIN_COVERAGE = {
 } as const;
 
 /**
+ * Whether a lng/lat sits inside the bundled terrain archive's own extent.
+ * Compared directly against FIRE3D_TERRAIN_COVERAGE's own numbers, never a
+ * second hand-typed box, so a re-bake that moves the coverage changes this
+ * test the same way it changes the sentence below. The box is a closed
+ * interval (inclusive at every edge): the archive's own bounding box is
+ * itself inclusive, so a view centered exactly on an edge coordinate is
+ * inside, not outside.
+ *
+ * FIRE3D_TERRAIN_COVERAGE.maxZoom plays no part here: this answers ONLY the
+ * geographic question (is there any baked elevation here at all), never the
+ * separate and non-boundary question of how deep the bake goes once inside
+ * the box (see FIRE3D_TERRAIN_COVERAGE_SENTENCE's own comment on why the two
+ * must stay apart).
+ */
+export function isWithinTerrainCoverage(lng: number, lat: number): boolean {
+  return (
+    lng >= FIRE3D_TERRAIN_COVERAGE.west &&
+    lng <= FIRE3D_TERRAIN_COVERAGE.east &&
+    lat >= FIRE3D_TERRAIN_COVERAGE.south &&
+    lat <= FIRE3D_TERRAIN_COVERAGE.north
+  );
+}
+
+/**
  * Exported (not just an internal helper) so the header-vs-sentence test in
  * tests/fire3d-mode.spec.ts asserts against the exact same formatting the
  * sentence uses, rather than a second hand-written copy that could drift
@@ -145,6 +169,28 @@ export const FIRE3D_TERRAIN_COVERAGE_SENTENCE =
 export const FIRE3D_COVERAGE_NOTE =
   `${FIRE3D_TERRAIN_COVERAGE_SENTENCE} Bundled structure data covers the ` +
   'central Oregon pilot area only, from zoom 13.';
+
+/**
+ * What the scene's live status line adds the moment the view's center sits
+ * outside FIRE3D_TERRAIN_COVERAGE while the mode is active.
+ *
+ * FIRE3D_COVERAGE_NOTE states the box once, always, beside the toggle,
+ * whether or not it is presently true of the view; a reader who has not
+ * memorized four coordinates cannot tell from a standing paragraph whether
+ * THIS view is inside it. MapLibre's own terrain sampler falls back to
+ * elevation 0 for a location its raster-dem source does not cover, which
+ * renders identically to terrain never having been wired at all: a person
+ * cannot otherwise tell "verified no elevation data here" from "the scene is
+ * broken" (the no-data/unavailable distinction docs/design/README.md
+ * requires). This sentence answers that, at the moment it is true, beside
+ * the live status line, and it stops rendering the moment a pan returns the
+ * view to the box. It reuses FIRE3D_TERRAIN_COVERAGE.issuer rather than
+ * naming the source a second way.
+ */
+export const FIRE3D_OUT_OF_COVERAGE_STATUS =
+  `This view is outside the ${FIRE3D_TERRAIN_COVERAGE.issuer}'s bundled ` +
+  'elevation extent, so the ground here carries no archived elevation and ' +
+  'renders flat; that is a coverage gap, not a failed scene.';
 
 /**
  * Always-visible non-prediction disclosure for the 3D view and its context

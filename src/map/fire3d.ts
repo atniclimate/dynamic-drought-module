@@ -46,10 +46,13 @@ import {
   FIRE3D_MIN_HEIGHT_QUERY,
   FIRE3D_MIN_WIDTH_QUERY,
   FIRE3D_NON_PREDICTION_NOTE,
+  FIRE3D_OUT_OF_COVERAGE_STATUS,
   FIRE3D_PITCH_DEGREES,
   FIRE3D_SKY_CLEAR_SPECIFICATION,
   FIRE3D_SKY_SPECIFICATION,
-  FIRE3D_TERRAIN_EXAGGERATION
+  FIRE3D_TERRAIN_COVERAGE,
+  FIRE3D_TERRAIN_EXAGGERATION,
+  isWithinTerrainCoverage
 } from '../config/fire3d-presentation';
 import { resolveHillshadeArchiveUrl } from '../layers/hillshade';
 import { watchContextLoss, webGl2Capability } from './gl-capability';
@@ -95,6 +98,15 @@ export interface Fire3DStatus {
   /** The context layers actually in the scene (issuer-published landscape
    * context; empty while inactive or when every context layer degraded). */
   readonly contextLayers: readonly string[];
+  /**
+   * True only while the scene is active AND the view's center currently
+   * sits outside FIRE3D_TERRAIN_COVERAGE. The ground there is genuinely
+   * flat (MapLibre's terrain sampler has no data to return), not broken;
+   * this is what lets the status line say so instead of leaving the two
+   * readings indistinguishable. False while inactive, checking, or
+   * unavailable, so it never competes with those states' own sentences.
+   */
+  readonly outOfTerrainCoverage: boolean;
 }
 
 export interface Fire3DGateInput {
@@ -160,13 +172,20 @@ let status: Fire3DStatus = {
   reason: null,
   smokeVolume: false,
   perimeterRibbon: false,
-  contextLayers: []
+  contextLayers: [],
+  outOfTerrainCoverage: false
 };
 const statusListeners = new Set<() => void>();
 
 let controllerWired = false;
 let active = false;
 let activation: AbortController | null = null;
+/** Mirrors Fire3DStatus.outOfTerrainCoverage; read by publishStatus and by
+ * syncEmbedNote, kept current by coverageMoveListener while active. */
+let terrainOutOfCoverage = false;
+/** The 'moveend' listener that keeps terrainOutOfCoverage current across a
+ * pan while the scene stays active; detached in rollbackScene. */
+let coverageMoveListener: (() => void) | null = null;
 /** Bumped on every activation start and every teardown so an awaited step
  * (the smoke-volume dynamic import) can detect it was superseded. */
 let generation = 0;
@@ -226,6 +245,7 @@ function syncEmbedNote(active: boolean): void {
   const lines = [
     FIRE3D_NON_PREDICTION_NOTE,
     FIRE3D_COVERAGE_NOTE,
+    ...(terrainOutOfCoverage ? [FIRE3D_OUT_OF_COVERAGE_STATUS] : []),
     ...contextEmbedLines
   ].filter((line) => line.length > 0);
   const note = existing ?? document.createElement('p');
@@ -245,7 +265,8 @@ function publishStatus(
     reason,
     smokeVolume: state === 'active' && smokeVolumeOn,
     perimeterRibbon: state === 'active' && ribbonOn,
-    contextLayers: state === 'active' ? contextKeys : []
+    contextLayers: state === 'active' ? contextKeys : [],
+    outOfTerrainCoverage: state === 'active' && terrainOutOfCoverage
   };
   // Production-observable truth stamp (the dev-only __ddmMap handle is
   // dead-code-eliminated from dist/, so the verification suite reads mode
@@ -326,6 +347,11 @@ function applyCamera(
 function rollbackScene(map: maplibregl.Map): void {
   generation += 1;
   active = false;
+  if (coverageMoveListener) {
+    map.off('moveend', coverageMoveListener);
+    coverageMoveListener = null;
+  }
+  terrainOutOfCoverage = false;
   if (tileWatch) {
     tileWatch.detach();
     tileWatch = null;
@@ -415,7 +441,20 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
         type: 'raster-dem',
         url: 'pmtiles://' + archiveUrl,
         encoding: 'terrarium',
-        tileSize: 512
+        tileSize: 512,
+        // Explicit, not left to the PMTiles protocol's own metadata reply:
+        // MapLibre's raster-dem default is 22 (maplibre-gl-style-spec), and
+        // the protocol only overwrites it once the archive's header round
+        // trip resolves. Stating the measured depth up front means the very
+        // first frame already knows to overzoom the deepest tile instead of
+        // requesting a zoom the archive has never had. Confirmed this is
+        // not the cause of the reported flatness: a Node probe of the
+        // committed archive's own embedded metadata (public/data/
+        // hillshade-dem-pnw.pmtiles) shows the pmtiles library already
+        // answers MapLibre's tilejson-style request with the real
+        // maxzoom: 8 read from the header, so overzoom was already
+        // engaging correctly past zoom 8 without this line.
+        maxzoom: FIRE3D_TERRAIN_COVERAGE.maxZoom
       });
     }
     map.setTerrain({
@@ -424,6 +463,24 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
     });
     map.setSky(FIRE3D_SKY_SPECIFICATION);
     applyCamera(map, { pitch: FIRE3D_PITCH_DEGREES });
+    // Terrain relief fix lane, 2026-09-10: a fire outside the Pacific
+    // Northwest bake enters this scene exactly as fully as one inside it
+    // (the gate in shouldFire3DBeActive asks nothing about location), so
+    // the camera and context still have value there; only the ground is
+    // flat. Read once at entry and kept current across a pan by
+    // coverageMoveListener, never gating activation itself.
+    terrainOutOfCoverage = !isWithinTerrainCoverage(
+      map.getCenter().lng,
+      map.getCenter().lat
+    );
+    coverageMoveListener = () => {
+      const center = map.getCenter();
+      const next = !isWithinTerrainCoverage(center.lng, center.lat);
+      if (next === terrainOutOfCoverage) return;
+      terrainOutOfCoverage = next;
+      if (active) publishStatus('active', null);
+    };
+    map.on('moveend', coverageMoveListener);
   } catch (err) {
     failScene(map, 'Terrain setup failed.', err);
     return;
