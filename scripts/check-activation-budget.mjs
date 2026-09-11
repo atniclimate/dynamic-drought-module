@@ -44,8 +44,17 @@
  *      runtime residual, owned by the rendered verifier lane).
  *      Statically checkable columns are enforced the moment they carry
  *      a number:
- *        - activationJsGzipKb: summed gzip kB of the closure's chunks
- *          (kB = 1000 bytes, matching the bundle gate and Vite).
+ *        - measuredJsGzipKb: the last ratified measurement of the
+ *          closure's summed gzip kB (kB = 1000 bytes, matching the
+ *          bundle gate and Vite). The enforced budget is DERIVED from
+ *          it by budgetForMeasurement(): the measurement plus
+ *          ACTIVATION_HEADROOM, rounded to one decimal. Growth beyond
+ *          that headroom fails the gate until a commit re-records the
+ *          measurement with a dated reason in the row's label. The
+ *          rule replaced the per-row "measurement plus whatever
+ *          headroom the row carried" convention on 2026-09-10 (S28),
+ *          which had left rows sharing a chunk with unequal margins
+ *          (fire3d-mode 0.7 kB, power-infrastructure 0.1 kB).
  *        - dataAssets[].maxBytes: on-disk size of a bundled asset
  *          file, path-contained under dist/.
  *      networkBytes / requestCount cannot be measured without a live
@@ -53,8 +62,8 @@
  *      verified by the T-M0-6 transport spike and the rendered
  *      verifier lane. Every column must be the exact sentinel
  *      'pending-measurement' or a finite number (positive for the JS
- *      budget, since the enforcement line is `total >= budget` and a
- *      zero budget could never pass; non-negative elsewhere); anything
+ *      measurement, since the enforcement line is `total >= budget` and
+ *      a zero budget could never pass; non-negative elsewhere); anything
  *      else fails. A numeric JS budget requires declared roots that
  *      exist in the manifest AND resolve to a nonempty closure outside
  *      the initial set (a missing root or an empty resolved closure is
@@ -111,6 +120,19 @@ import { tmpdir } from 'node:os';
 import { gzipSync } from 'node:zlib';
 
 const PENDING = 'pending-measurement';
+
+// The one headroom every JS row carries above its ratified measurement.
+// Eight percent is about 1.5 kB on the largest row and 0.5 kB on the
+// smallest: one small helper module, the size of change that should
+// force a written reason. Not a latency target; no network profile has
+// been stated for this gate, and a ceiling derived from one would be an
+// owner decision recorded here when it exists.
+const ACTIVATION_HEADROOM = 0.08;
+
+/** The enforced budget for a ratified measurement, in kB to one decimal. */
+function budgetForMeasurement(measuredKb) {
+  return Math.round(measuredKb * (1 + ACTIVATION_HEADROOM) * 10) / 10;
+}
 
 // The governed ZIP-library list. Extend it (with the tripwire below
 // keeping it honest) rather than claiming universality.
@@ -285,13 +307,21 @@ const MAP_EXEMPT = [
 /* ------------------------------------------------------------------ *
  * The per-feature activation budget table. Row contract is enforced
  * by validateBudgets(); see the header for column semantics.
+ *
+ * measuredJsGzipKb is the closure's last ratified measurement, taken
+ * with `npm run build && npm run check:activation`; the budget is
+ * derived from it (ACTIVATION_HEADROOM). Re-recorded 2026-09-10 (S28)
+ * from the gate's own numbers on c894c3a: every row's label keeps the
+ * history of why the closure has the size it has, and the "budget is
+ * the measurement plus the same headroom" sentences in those labels
+ * describe the convention this rule replaced.
  * ------------------------------------------------------------------ */
 const FEATURE_BUDGETS = [
   {
     key: 'landscape-signature-artifact',
     label: 'rebalanced 2026-09-03 with DR-064, the perimeter ribbon: the fade slabs, the band geometry and their presentation constants add a fourth dynamically imported root to this closure (src/layers/nifc-perimeter-ribbon.ts, declared beside the smoke and context roots for the same reason), and the ribbon constants grew the shared fire3d-presentation chunk; measured 18.1 kB, up from 16.6, and the budget is that measurement plus the same 0.7 kB headroom the row has carried since the v6 landing. The ribbon fetches nothing: it derives its geometry from the perimeter GeoJSON the flat layer already holds, so the network and request columns below are unchanged. Earlier: rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 6.2 kB; Landscape signature briefing consumer (T3-2 measured 3.33 kB gzip in its first-activation static closure and one 531,090-byte bundled artifact request on 2026-07-29; unsupported boundary kinds do not request the artifact)',
     rootModules: ['src/impact/landscape-consumer.ts'],
-    activationJsGzipKb: 6.7,
+    measuredJsGzipKb: 6.1,
     networkBytes: 531_090,
     requestCount: 1,
     dataAssets: [{
@@ -303,7 +333,7 @@ const FEATURE_BUDGETS = [
     key: 'mco-gridded-index',
     label: 'MCO gridded drought indices (T-M0-6 spike records the first real numbers; U-MCO-SHIP declares roots and enforces)',
     rootModules: [], // no MCO module exists yet; U-MCO-SHIP names it here
-    activationJsGzipKb: PENDING,
+    measuredJsGzipKb: PENDING,
     networkBytes: PENDING,
     requestCount: PENDING,
     dataAssets: [],
@@ -312,7 +342,7 @@ const FEATURE_BUDGETS = [
     key: 'heatrisk-days',
     label: 'rebalanced 2026-09-08 with DDM-P8-T02 (the fire and heat time bar): src/layers/heatrisk.ts now installs the time bar, so the shared src/ui/time-bar.ts chunk (2.1 kB gzip, already inside every drought closure) enters this first-activation closure, and the layer itself grew by the seven-stop rail and the per-frame stamp; measured 9.5 kB across seven chunks; the budget is the measurement plus the same 0.5 kB headroom as before; a user who opens the Extreme Heat screen transfers the same time-bar chunk the Drought screen already transfers; rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 7.0 kB; HeatRisk multi-day selector (JS budget 5.0 kB; 4.2 kB covered the 4.1 kB shared HeatRisk closure measured after H2 integration; rebalanced 2026-09-02 with the MapLibre 6 landing: DR-008 a made the map key and the telemetry adapters lazy, which dropped the entry chunk from 43.4 to 33.6 kB gzip and moved the shared guards, legend-registry, style-expressions and wildfire-presentation chunks from the eager closure into first activation, so this closure measured 4.3 kB; the budget is the measurement plus headroom, and a user who activates the feature now transfers less in total; the H0 coverage qualification measured 3.5 kB across three chunks on 2026-07-28; network numbers measured 30,326 bytes / 18 requests at 1280x720 on 2026-07-27)',
     rootModules: ['src/layers/heatrisk.ts'],
-    activationJsGzipKb: 10.0,
+    measuredJsGzipKb: 9.6,
     networkBytes: 30_326,
     requestCount: 18,
     dataAssets: [],
@@ -321,7 +351,7 @@ const FEATURE_BUDGETS = [
     key: 'point-heat-briefing',
     label: "rebalanced 2026-09-09 with DDM-P7-T03: the near-term fire cell's SPC Day 1-8 Fire Weather Outlook read (src/impact/sources.ts fetchSpcFireOutlookClaims with its layer tables, the shared moment formatter and sentence builders, plus the spcFireOutlook lane in src/impact/hydrate.ts) grew this closure from 30.1 to 31.3 kB, measured by the director with npm run build && npm run check:activation on the lane tip after the round-2 fixes (S20, 2026-09-09; the coder's own row was an unmeasured 31.5 estimate, since a coder lane may not build); the budget is the measurement plus the same 0.2 kB headroom the row carried; the briefing now issues eight SPC point queries beside the six-request NWS ceiling stated below, which this row's requestCount does not count (the ceiling names the point-heat feature's own NWS reads); " +"rebalanced 2026-09-09 with DDM-P7-T07: the season-ahead heat cell's CPC seasonal temperature outlook read (src/impact/sources.ts fetchCpcSeasonalTempClaims with its legend and season tables, and the cpcSeasonalTemp lane in src/impact/hydrate.ts) grew this closure from 29.5 to 30.1 kB; the budget is the measurement plus the same 0.2 kB headroom the row carried; " + 'rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 28.8 kB; Point heat briefing with bounded NWS discovery, nearby observation, grid time series, point forecast, and alerts (21.2 kB measured first-activation closure on 2026-09-02, including the shared impact hydrator; rebalanced 2026-09-02 with the MapLibre 6 landing: DR-008 a made the map key and the telemetry adapters lazy, which dropped the entry chunk from 43.4 to 33.6 kB gzip and moved the shared guards, legend-registry, style-expressions and wildfire-presentation chunks from the eager closure into first activation, so this closure measured 26.1 kB; the budget is the measurement plus headroom, and a user who activates the feature now transfers less in total; the ENSO module loads lazily inside the long-range horizon; six-request ceiling; completed responses use the bounded client cache and the Worker retains its 60-second edge cache)',
     rootModules: ['src/impact/point-heat.ts'],
-    activationJsGzipKb: 31.5,
+    measuredJsGzipKb: 31.3,
     networkBytes: 3_000_000,
     requestCount: 6,
     dataAssets: [],
@@ -330,7 +360,7 @@ const FEATURE_BUDGETS = [
     key: 'bc-basin-drought',
     label: 'rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 7.9 kB; Province of British Columbia basin drought levels (measured 3,908,396 bytes and one request with the 0.01-degree generalized query on 2026-07-27)',
     rootModules: ['src/layers/bc-drought.ts'],
-    activationJsGzipKb: 8.2,
+    measuredJsGzipKb: 7.9,
     networkBytes: 4_250_000,
     requestCount: 1,
     dataAssets: [],
@@ -339,7 +369,7 @@ const FEATURE_BUDGETS = [
     key: 'canadian-drought-monitor-snapshot',
     label: 'rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 8.3 kB; Canadian Drought Monitor monthly committed snapshot (June 2026 artifact measured 960,818 bytes on 2026-07-28; S4 shared time-bar closure measured 5,591 gzip bytes on 2026-07-29)',
     rootModules: ['src/layers/cdm-drought.ts'],
-    activationJsGzipKb: 8.6,
+    measuredJsGzipKb: 8.4,
     networkBytes: 1_000_000,
     requestCount: 1,
     dataAssets: [{
@@ -351,7 +381,7 @@ const FEATURE_BUDGETS = [
     key: 'north-american-drought-monitor',
     label: 'rebalanced again 2026-09-03 with the shared NADM verdict (DR-052 follow-up): src/util/nadm-collection.ts replaced the layer\'s local validator and is its own 0.4 kB chunk in this closure because the minimap shares it, so the closure measured 8.2 kB; budget 8.5 kB, the measurement plus the same headroom; rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 7.8 kB; North American Drought Monitor continental context (measured 616,132 bytes and one direct request on 2026-07-27)',
     rootModules: ['src/layers/nadm-drought.ts'],
-    activationJsGzipKb: 8.5,
+    measuredJsGzipKb: 8.2,
     networkBytes: 650_000,
     requestCount: 1,
     dataAssets: [],
@@ -360,7 +390,7 @@ const FEATURE_BUDGETS = [
     key: 'fire3d-mode',
     label: 'rebalanced 2026-09-10 with DR-083 (S27): src/util/pmtiles-probe.ts now reads and parses the whole 127-byte PMTiles header and checks the archive\'s declared extent against Content-Range (Codex finding S1), which grew the shared pmtiles-probe chunk from 0.40 to 0.98 kB gzip, and the resolved-depth coverage sentence (Fire3DStatus.terrainMaxZoom, the fire3dCoverageNote formatter, resolveHillshadeArchive keeping the header) grew fire3d, fire3d-presentation and hillshade by 0.13 kB together; measured 19.3 kB across the same fourteen chunks; the budget is the measurement plus the same 0.7 kB headroom the row has carried since the ribbon landing; the probe was first trimmed to the four header fields a caller reads before this row moved; ' +'measured 17.9 kB on 2026-09-09 at the DDM-P9-T04 landing (3c12f66) and again at 4b1b007, against the 18.8 kB budget below (the perimeter-ribbon landing of 2026-09-03, 4d49192, set that budget; this sentence records the gate\'s own number so the row is not read as the 15.8 kB the 2026-09-03 sentence measured before the ribbon joined the closure); ' +'rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 15.8 kB; Desktop 3D Fire mode: terrain + camera + sky orchestrator, the volumetric smoke companion, and the issuer-published context chunk with the WHP 2023 hazard drape and the structures pilot (JS budget 14 kB; rebalanced 2026-09-02 with the MapLibre 6 landing: DR-008 a made the map key and the telemetry adapters lazy, which dropped the entry chunk from 43.4 to 33.6 kB gzip and moved the shared guards, legend-registry, style-expressions and wildfire-presentation chunks from the eager closure into first activation, so this closure measured 13.0 kB; the budget is the measurement plus headroom, and a user who activates the feature now transfers less in total; archive transport at 1280x720 measured 2,278,573 terrain bytes over 19 ranged requests; the hazard drape replaced the 25.7 MB FBFM40 fuels drape 2026-08-19 at roughly half the archive weight, and its transport is logged by the fire3d spec; the z13-14 structures archive measured 16,512 activation-time bytes over 2 ranged reads with tile reads only when zoomed into the pilot area; power infrastructure left this closure 2026-08-19 when it became its own catalog layer, below; the smoke and context roots are reached via dynamic import from the first root and are invisible to the static closure walk, so ALL roots are declared)',
     rootModules: ['src/map/fire3d.ts', 'src/layers/hms-smoke-volume.ts', 'src/map/fire3d-context.ts', 'src/layers/nifc-perimeter-ribbon.ts'],
-    activationJsGzipKb: 20.0,
+    measuredJsGzipKb: 19.3,
     networkBytes: 4_800_000,
     requestCount: 56,
     dataAssets: [{
@@ -381,7 +411,7 @@ const FEATURE_BUDGETS = [
     key: 'power-infrastructure',
     label: 'rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 11.6 kB; JS budget 9.5 kB; rebalanced 2026-09-02 with the MapLibre 6 landing: DR-008 a made the map key and the telemetry adapters lazy, which dropped the entry chunk from 43.4 to 33.6 kB gzip and moved the shared guards, legend-registry, style-expressions and wildfire-presentation chunks from the eager closure into first activation, so this closure measured 8.9 kB; the budget is the measurement plus headroom, and a user who activates the feature now transfers less in total; Power lines and plants as a catalog layer (owner direction 2026-08-19; it left the 3D Fire closure above). Nothing is fetched below zoom 6, where the layer reports zoom in to load. Above the gate: the bundled z0-11 transmission archive over ranged requests, plus ONE bounded live EIA plants read probed at 174,970 raw bytes',
     rootModules: ['src/layers/power-3d.ts'],
-    activationJsGzipKb: 12.2,
+    measuredJsGzipKb: 12.1,
     networkBytes: 1_200_000,
     requestCount: 20,
     dataAssets: [{
@@ -622,21 +652,21 @@ function validateBudgets(budgets) {
     const before = findings.length;
     if (!f.key || keys.has(f.key)) findings.push(`budget table: missing or duplicate feature key "${f.key}"`);
     keys.add(f.key);
-    for (const col of ['activationJsGzipKb', 'networkBytes', 'requestCount']) {
+    for (const col of ['measuredJsGzipKb', 'networkBytes', 'requestCount']) {
       if (!isPendingOrBudget(f[col])) {
         findings.push(`feature ${f.key}: invalid ${col} (${String(f[col])}); must be a finite non-negative number or '${PENDING}'`);
       }
     }
-    if (f.activationJsGzipKb === 0) {
+    if (f.measuredJsGzipKb === 0) {
       // The enforcement line is `total >= budget`; zero could never pass.
-      findings.push(`feature ${f.key}: invalid activationJsGzipKb; an enforced JS budget must be positive (use '${PENDING}' to declare without enforcing)`);
+      findings.push(`feature ${f.key}: invalid measuredJsGzipKb; an enforced JS budget must be positive (use '${PENDING}' to declare without enforcing)`);
     }
     if (!Array.isArray(f.dataAssets)) {
       findings.push(`feature ${f.key}: invalid dataAssets; must be an array (empty is fine)`);
     }
     if (!Array.isArray(f.rootModules) || f.rootModules.some((r) => typeof r !== 'string')) {
       findings.push(`feature ${f.key}: invalid rootModules; must be an array of manifest keys`);
-    } else if (typeof f.activationJsGzipKb === 'number' && isPendingOrBudget(f.activationJsGzipKb) && f.rootModules.length === 0) {
+    } else if (typeof f.measuredJsGzipKb === 'number' && isPendingOrBudget(f.measuredJsGzipKb) && f.rootModules.length === 0) {
       findings.push(`feature ${f.key}: a numeric activation budget needs at least one root module; filename guessing undercounts and is not supported`);
     }
     for (const a of Array.isArray(f.dataAssets) ? f.dataAssets : []) {
@@ -762,7 +792,8 @@ function runChecks(distDir, { forbidden, mapExempt, budgets }) {
   const distRoot = resolve(distDir);
   for (const feature of budgets) {
     if (invalidKeys.has(feature.key)) continue;
-    const jsKb = feature.activationJsGzipKb;
+    const measuredKb = feature.measuredJsGzipKb;
+    const jsKb = typeof measuredKb === 'number' ? budgetForMeasurement(measuredKb) : measuredKb;
     const roots = Array.isArray(feature.rootModules) ? feature.rootModules : [];
     const missingRoots = roots.filter((r) => !(r in manifest));
     if (missingRoots.length) {
@@ -781,7 +812,7 @@ function runChecks(distDir, { forbidden, mapExempt, budgets }) {
           findings.push(`feature ${feature.key}: the resolved first-activation set is empty (roots resolve inside the initial set or to non-JS); an enforced budget needs a nonempty lazy closure, else a typo or a feature that stopped being lazy passes silently`);
           continue;
         }
-        report.push(`  ${feature.key}: ${line}; budget ${jsKb} kB`);
+        report.push(`  ${feature.key}: ${line}; budget ${jsKb} kB (ratified ${measuredKb} kB plus ${Math.round(ACTIVATION_HEADROOM * 100)}% headroom)`);
         if (total / 1000 >= jsKb) {
           findings.push(`feature ${feature.key} first-activation JS ${kb(total)} kB gzip is at or over its ${jsKb} kB budget (chunks: ${activationFiles.join(', ')})`);
         }
@@ -980,7 +1011,7 @@ const SELF_TEST_CASES = [
   },
   {
     name: 'fail-budget-over', kind: 'fail', expect: 'kB budget',
-    budgets: [{ key: 'fx', rootModules: ['src/features/fixture.ts'], activationJsGzipKb: 0.05, ...PENDING_COLS }],
+    budgets: [{ key: 'fx', rootModules: ['src/features/fixture.ts'], measuredJsGzipKb: 0.05, ...PENDING_COLS }],
     files: {
       'index.html': htmlWith(),
       '.vite/manifest.json': manifestWith([], { 'src/features/fixture.ts': { file: 'assets/feature-big.js', isDynamicEntry: true, imports: [] } }),
@@ -990,22 +1021,22 @@ const SELF_TEST_CASES = [
   },
   {
     name: 'fail-budget-root-missing', kind: 'fail', expect: 'root module',
-    budgets: [{ key: 'fx', rootModules: ['src/features/nope.ts'], activationJsGzipKb: 10, ...PENDING_COLS }],
+    budgets: [{ key: 'fx', rootModules: ['src/features/nope.ts'], measuredJsGzipKb: 10, ...PENDING_COLS }],
     files: { 'index.html': htmlWith(), '.vite/manifest.json': manifestWith([]), ...CLEAN_ENTRY },
   },
   {
     name: 'fail-budget-no-roots', kind: 'fail', expect: 'root module',
-    budgets: [{ key: 'fx', rootModules: [], activationJsGzipKb: 10, ...PENDING_COLS }],
+    budgets: [{ key: 'fx', rootModules: [], measuredJsGzipKb: 10, ...PENDING_COLS }],
     files: { 'index.html': htmlWith(), '.vite/manifest.json': manifestWith([]), ...CLEAN_ENTRY },
   },
   {
     name: 'fail-budget-invalid-value', kind: 'fail', expect: 'invalid',
-    budgets: [{ key: 'fx', rootModules: [], activationJsGzipKb: Number.NaN, ...PENDING_COLS }],
+    budgets: [{ key: 'fx', rootModules: [], measuredJsGzipKb: Number.NaN, ...PENDING_COLS }],
     files: { 'index.html': htmlWith(), '.vite/manifest.json': manifestWith([]), ...CLEAN_ENTRY },
   },
   {
     name: 'fail-data-asset-over', kind: 'fail', expect: 'over its',
-    budgets: [{ key: 'fx', rootModules: [], activationJsGzipKb: PENDING, networkBytes: PENDING, requestCount: PENDING, dataAssets: [{ path: 'data/big.json', maxBytes: 10 }] }],
+    budgets: [{ key: 'fx', rootModules: [], measuredJsGzipKb: PENDING, networkBytes: PENDING, requestCount: PENDING, dataAssets: [{ path: 'data/big.json', maxBytes: 10 }] }],
     files: {
       'index.html': htmlWith(), '.vite/manifest.json': manifestWith([]), ...CLEAN_ENTRY,
       'data/big.json': JSON.stringify({ padding: 'x'.repeat(100) }),
@@ -1013,12 +1044,12 @@ const SELF_TEST_CASES = [
   },
   {
     name: 'fail-data-asset-escape', kind: 'fail', expect: 'escapes',
-    budgets: [{ key: 'fx', rootModules: [], activationJsGzipKb: PENDING, networkBytes: PENDING, requestCount: PENDING, dataAssets: [{ path: '../outside.json', maxBytes: 10 }] }],
+    budgets: [{ key: 'fx', rootModules: [], measuredJsGzipKb: PENDING, networkBytes: PENDING, requestCount: PENDING, dataAssets: [{ path: '../outside.json', maxBytes: 10 }] }],
     files: { 'index.html': htmlWith(), '.vite/manifest.json': manifestWith([]), ...CLEAN_ENTRY },
   },
   {
     name: 'fail-budget-empty-closure', kind: 'fail', expect: 'first-activation set is empty',
-    budgets: [{ key: 'fx', rootModules: ['src/features/fixture.ts'], activationJsGzipKb: 5, ...PENDING_COLS }],
+    budgets: [{ key: 'fx', rootModules: ['src/features/fixture.ts'], measuredJsGzipKb: 5, ...PENDING_COLS }],
     files: {
       'index.html': htmlWith(),
       // The root's file IS the entry file: the closure resolves entirely inside the initial set.
@@ -1028,7 +1059,7 @@ const SELF_TEST_CASES = [
   },
   {
     name: 'fail-budget-zero', kind: 'fail', expect: 'invalid',
-    budgets: [{ key: 'fx', rootModules: ['src/features/fixture.ts'], activationJsGzipKb: 0, ...PENDING_COLS }],
+    budgets: [{ key: 'fx', rootModules: ['src/features/fixture.ts'], measuredJsGzipKb: 0, ...PENDING_COLS }],
     files: {
       'index.html': htmlWith(),
       '.vite/manifest.json': manifestWith([], { 'src/features/fixture.ts': { file: 'assets/feature-big.js', isDynamicEntry: true, imports: [] } }),
@@ -1038,30 +1069,30 @@ const SELF_TEST_CASES = [
   },
   {
     name: 'fail-budget-invalid-network', kind: 'fail', expect: 'invalid',
-    budgets: [{ key: 'fx', rootModules: [], activationJsGzipKb: PENDING, networkBytes: -1, requestCount: PENDING, dataAssets: [] }],
+    budgets: [{ key: 'fx', rootModules: [], measuredJsGzipKb: PENDING, networkBytes: -1, requestCount: PENDING, dataAssets: [] }],
     files: { 'index.html': htmlWith(), '.vite/manifest.json': manifestWith([]), ...CLEAN_ENTRY },
   },
   {
     name: 'fail-budget-duplicate-key', kind: 'fail', expect: 'duplicate',
     budgets: [
-      { key: 'fx', rootModules: [], activationJsGzipKb: PENDING, ...PENDING_COLS },
-      { key: 'fx', rootModules: [], activationJsGzipKb: PENDING, ...PENDING_COLS },
+      { key: 'fx', rootModules: [], measuredJsGzipKb: PENDING, ...PENDING_COLS },
+      { key: 'fx', rootModules: [], measuredJsGzipKb: PENDING, ...PENDING_COLS },
     ],
     files: { 'index.html': htmlWith(), '.vite/manifest.json': manifestWith([]), ...CLEAN_ENTRY },
   },
   {
     name: 'fail-data-assets-not-array', kind: 'fail', expect: 'invalid dataAssets',
-    budgets: [{ key: 'fx', rootModules: [], activationJsGzipKb: PENDING, networkBytes: PENDING, requestCount: PENDING, dataAssets: 'nope' }],
+    budgets: [{ key: 'fx', rootModules: [], measuredJsGzipKb: PENDING, networkBytes: PENDING, requestCount: PENDING, dataAssets: 'nope' }],
     files: { 'index.html': htmlWith(), '.vite/manifest.json': manifestWith([]), ...CLEAN_ENTRY },
   },
   {
     name: 'fail-data-asset-missing', kind: 'fail', expect: 'is not in',
-    budgets: [{ key: 'fx', rootModules: [], activationJsGzipKb: PENDING, networkBytes: PENDING, requestCount: PENDING, dataAssets: [{ path: 'data/absent.json', maxBytes: 10 }] }],
+    budgets: [{ key: 'fx', rootModules: [], measuredJsGzipKb: PENDING, networkBytes: PENDING, requestCount: PENDING, dataAssets: [{ path: 'data/absent.json', maxBytes: 10 }] }],
     files: { 'index.html': htmlWith(), '.vite/manifest.json': manifestWith([]), ...CLEAN_ENTRY },
   },
   {
     name: 'fail-data-asset-directory', kind: 'fail', expect: 'regular file',
-    budgets: [{ key: 'fx', rootModules: [], activationJsGzipKb: PENDING, networkBytes: PENDING, requestCount: PENDING, dataAssets: [{ path: 'data', maxBytes: 10 }] }],
+    budgets: [{ key: 'fx', rootModules: [], measuredJsGzipKb: PENDING, networkBytes: PENDING, requestCount: PENDING, dataAssets: [{ path: 'data', maxBytes: 10 }] }],
     files: {
       'index.html': htmlWith(), '.vite/manifest.json': manifestWith([]), ...CLEAN_ENTRY,
       'data/inner.json': '{}',
@@ -1111,7 +1142,7 @@ const SELF_TEST_CASES = [
   },
   {
     name: 'pass-budget-under-closure', kind: 'pass',
-    budgets: [{ key: 'fx', rootModules: ['src/features/fixture.ts'], activationJsGzipKb: 10, ...PENDING_COLS }],
+    budgets: [{ key: 'fx', rootModules: ['src/features/fixture.ts'], measuredJsGzipKb: 10, ...PENDING_COLS }],
     files: {
       'index.html': htmlWith(),
       '.vite/manifest.json': manifestWith([], {
@@ -1233,6 +1264,12 @@ function runSelfTest() {
     }
   }
   // Pure-function directions that need no dist tree.
+  // The derived budget: 8% headroom to one decimal, on the two rows that
+  // share the pmtiles-probe chunk, so the rule is proven by its own numbers.
+  if (budgetForMeasurement(19.3) !== 20.8 || budgetForMeasurement(12.1) !== 13.1 || budgetForMeasurement(0) !== 0) {
+    console.error(`  self-test FAIL: budgetForMeasurement direction broken (19.3 -> ${budgetForMeasurement(19.3)}, 12.1 -> ${budgetForMeasurement(12.1)})`);
+    ok = false;
+  }
   if (checkZipDependencyNames(['node-stream-zip']).length !== 0) {
     // node-stream-zip IS on the governed list; it must NOT trip.
     console.error('  self-test FAIL: governed ZIP package tripped the dependency tripwire');
