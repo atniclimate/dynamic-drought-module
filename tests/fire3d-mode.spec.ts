@@ -1741,15 +1741,40 @@ test.describe('W3/W4 browser truth', () => {
     // build plus the perimeter fetch on the software renderer"): the scene
     // carries the full terrain/hazard/structures archive load (measured at
     // 6.3 MB terrain plus 1.1 MB hazard drape in the run right above this
-    // one) AND the telemetry panel's own viewport-based discovery, which
-    // (measured directly) needs several extra zoom-in steps to clear the
-    // discovery area cap under fire3d's pitch (see the comment at the zoom
-    // loop below). Re-derived 2026-09-11 when the settled-transport wait
-    // joined the case: the worst-case poll sum is 30 s to 'active', 60 s to
-    // 'settled', 25 s for telemetry, 2 s fixed, and 90 s for the fly loop,
-    // 207 s, so the budget sits above it; before that wait the sum was
-    // 147 s against 150 s, three seconds of headroom.
-    test.setTimeout(210_000);
+    // one) AND the telemetry panel's own viewport-based discovery. The
+    // worst-case poll sum is 30 s to 'active', 60 s to 'settled', 25 s for
+    // telemetry, 2 s fixed, and 90 s for the marker, 207 s, and the renderer
+    // drain below carries no poll of its own (measured 5.8 to 11.9 s), so
+    // the ceiling is 240 s. No individual wait grew; the ceiling grew to
+    // cover the drain step. The case itself now runs in 36 to 56 s.
+    test.setTimeout(240_000);
+    // Reduced motion, and why (measured 2026-09-11, s28, scripts and logs
+    // in I:\claude-temp\ddm-s28\raws\). This is the only 3D browser case
+    // that puts DOM markers on the terrain map, and MapLibre's Marker checks
+    // terrain occlusion with a synchronous `gl.readPixels`
+    // (node_modules/maplibre-gl/src/ui/marker.ts `_updateOpacity`, through
+    // src/render/terrain.ts `depthAtPoint`). On the SwiftShader renderer
+    // this suite runs on, the wildfire pulse (src/layers/nifc-fires.ts,
+    // a paint change every 60 ms) keeps queueing full pitch-60 terrain
+    // frames faster than SwiftShader draws them, and nothing in the page
+    // can see that queue until something reads the GPU back. A bare 1x1
+    // readPixels on the settled scene, before telemetry was even on,
+    // blocked the page's main thread 43 to 62 s (six probes, two workers);
+    // the markers' own occlusion reads blocked it 41 to 61 s the moment
+    // they appeared. During those stalls no timer, no moveend debounce, no
+    // status write and no Playwright query runs, which is what failed this
+    // case's 25 s telemetry wait and its 90 s marker wait on the
+    // 2026-09-10/11 intermittents. With reduced motion the pulse never
+    // starts (its own prefersReducedMotion gate) and the camera jumps
+    // instead of easing: the worst read fell to 3 to 16 s and the click to
+    // marker time from 51 to 62 s (six runs) to 1.6 and 12 s (two runs).
+    // What this case asserts (a MapLibre-managed marker, at terrain height,
+    // carrying the wind glyph, in the ACTIVE scene) depends on neither
+    // animation, and the reduced-motion scene still has terrain, pitch and
+    // the occlusion reads; the animated enter and exit are covered by the
+    // desktop toggle case above, and reduced motion's own by the case
+    // further down.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
     await page.route('**/waterservices.usgs.gov/**', (route) => route.abort('failed'));
@@ -1796,6 +1821,26 @@ test.describe('W3/W4 browser truth', () => {
     await expect
       .poll(() => fire3dTransportStamp(page), { timeout: 60_000 })
       .toBe('settled');
+    // 'settled' says every scene SOURCE has loaded. It says nothing about
+    // whether SwiftShader has finished DRAWING them, and that queue is the
+    // stall documented at the top of this case: the page cannot see it, and
+    // the first GPU readback pays all of it at once. So drain it here, on
+    // purpose, in a step with no budget of its own, rather than leave it to
+    // be paid inside the 25 s telemetry wait by the markers' own occlusion
+    // reads. One 1x1 `readPixels` on the map's own context is the whole
+    // drain; it blocked 5.8 to 11.9 s on the settled scene (four runs, two
+    // workers) and a second and third read right behind it returned in
+    // 0 to 1 ms, and with the pulse gone nothing refills the queue. The
+    // markers' twelve reads then cost 41 to 96 ms in total instead of the
+    // 10 to 61 s that failed this wait.
+    await page.evaluate(() => {
+      const canvas = document.querySelector(
+        'canvas.maplibregl-canvas'
+      ) as HTMLCanvasElement | null;
+      const gl = (canvas?.getContext('webgl2') ??
+        canvas?.getContext('webgl')) as WebGLRenderingContext | null;
+      gl?.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+    });
     await layerCheckbox(page, 'telemetry').check();
     await waitForLayerSettled(page, 'telemetry');
     // The scene must have survived the cluster demotion the layer checkbox
@@ -1828,9 +1873,7 @@ test.describe('W3/W4 browser truth', () => {
     // newly-created marker itself sits at the canvas's own center point and
     // permanently intercepts the hover's pointer target. No zoom
     // compensation is needed; the marker is found by the same mechanism and
-    // the same zoom level as the flat-map test, just given a longer timeout
-    // to allow for the heavier concurrent archive traffic (terrain, hazard
-    // drape, structures) fire3d's own activation still has in flight.
+    // the same zoom level as the flat-map test.
     await page.locator('#telemetry-reveal').click();
 
     const marker = page.locator(
@@ -1839,23 +1882,23 @@ test.describe('W3/W4 browser truth', () => {
     // The marker exists only after a viewport discovery pass finds the
     // stubbed RAWS feature, and discovery is driven by `moveend`
     // (`discoverStationsForViewport`, src/config/station-registry.ts, behind
-    // telemetry's own moveend debounce). Under this scene's concurrent
-    // archive traffic a single fly can have its discovery superseded or
-    // aborted by the camera work still in flight, and then nothing re-runs
-    // it: a one-shot click followed by a long wait failed once in three
-    // full-suite runs of this file (S21 claim-verifier, 33 passed 1 failed,
-    // then 34 passed on the rerun; the single test alone always passed).
-    // So the fly is the retried action rather than a one-shot before a
-    // fixed wait, the same `toPass` idiom tests/tribal-live-layers.spec.ts
-    // already uses for the RAWS popup. `flyToStation` centers the camera on
-    // the station and is idempotent, so re-clicking the panel row simply
-    // asks for another discovery pass; the row is in the sidebar, never
-    // under the canvas-center marker that the withdrawn hover approach
-    // deadlocked on.
-    await expect(async () => {
-      await page.locator('.telemetry-item', { hasText: 'Ice Harbor Dam' }).click();
-      await expect(marker).toHaveCount(1, { timeout: 20_000 });
-    }).toPass({ timeout: 90_000 });
+    // telemetry's own moveend debounce). ONE click, then one wait: this
+    // case used to re-click the row inside a `toPass` on the theory that a
+    // fly's discovery could be superseded or aborted and never re-run. The
+    // s28 instrumentation (2026-09-11, 17 runs) found no such loss: 22
+    // clicks gave 22 moveends, a re-click at the station's own center and
+    // zoom included (MapLibre's flyTo falls through to easeTo and still
+    // ends in moveend), and 21 discovery passes (the 22nd moveend landed
+    // as its test closed the page); every pass at zoom 9 under pitch 60
+    // read 6.20 raw square degrees against the 25 gate, 20 of the 21
+    // passes finished before their test closed the page and all 20
+    // returned the RAWS record, and none took the superseded or aborted
+    // exit. The failures were the renderer stalls documented at the top of
+    // this case. A retry would also hide a real lost pass, which is exactly
+    // the regression this wait should catch. The 90 s is the retry loop's
+    // own former budget, not a longer one.
+    await page.locator('.telemetry-item', { hasText: 'Ice Harbor Dam' }).click();
+    await expect(marker).toHaveCount(1, { timeout: 90_000 });
     expect(await fire3dStamp(page)).toBe('active');
 
     await expect(marker).toHaveClass(/maplibregl-marker/);
