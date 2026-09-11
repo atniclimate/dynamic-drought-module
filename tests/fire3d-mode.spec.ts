@@ -37,6 +37,7 @@ import { WILDFIRE_PULSE_PAINT_TARGETS } from '../src/layers/nifc-fires';
 import { PERIMETER_RIBBON_LAYER_IDS } from '../src/layers/nifc-perimeter-ribbon';
 import { EVENT_OVERLAY_IDS } from '../src/map/layer-order';
 import {
+  deriveSceneTransport,
   getFire3DStatus,
   setFire3DActive,
   shouldFire3DBeActive
@@ -64,6 +65,7 @@ import {
   NIFC_STUB,
   PLANTS_STUB_FC,
   PNW_POLYGON,
+  stubDeepTerrainArchive,
   stubWildfireFeeds
 } from './wildfire-fixtures';
 import { RAWS_ROUTE, RAWS_FIXTURE_MARKER_ID, rawsHappyBody } from './fixtures/raws-fixtures';
@@ -114,6 +116,65 @@ test('syncFire3dParam round-trips through the URL and preserves neighbors', () =
   } finally {
     browser.restore();
   }
+});
+
+// ---------------------------------------------------------------------------
+// Node: the transport reading's own derivation (Fire3DStatus.transport)
+// ---------------------------------------------------------------------------
+
+/**
+ * `deriveSceneTransport` is the pure predicate behind `Fire3DStatus.transport`
+ * (src/map/fire3d.ts): it never touches a map, so its own state machine is
+ * proved here at the function seam, the same way `parseFire3dParam` is
+ * proved above without a URL. The wiring that calls it from real
+ * `sourcedata`/`idle` events, and the RAWS case that waits on the resulting
+ * stamp, are asserted at the browser level below (W3/W4 browser truth).
+ */
+test('deriveSceneTransport reads streaming until every known source is loaded, then settled', () => {
+  // No known sources yet (an activation still discovering which context
+  // layers it will add): streaming, not a vacuous "nothing to wait for".
+  expect(deriveSceneTransport([], () => true)).toBe('streaming');
+
+  // One source, not yet loaded.
+  expect(deriveSceneTransport(['fire3d-terrain-dem'], () => false)).toBe(
+    'streaming'
+  );
+
+  // One source, loaded: settled.
+  expect(deriveSceneTransport(['fire3d-terrain-dem'], () => true)).toBe(
+    'settled'
+  );
+
+  // Several sources: every one of them must report loaded, not just one.
+  const loaded = new Set(['fire3d-terrain-dem', 'whp-2023']);
+  expect(
+    deriveSceneTransport(['fire3d-terrain-dem', 'whp-2023', 'structures-3d'], (id) =>
+      loaded.has(id)
+    )
+  ).toBe('streaming');
+  loaded.add('structures-3d');
+  expect(
+    deriveSceneTransport(['fire3d-terrain-dem', 'whp-2023', 'structures-3d'], (id) =>
+      loaded.has(id)
+    )
+  ).toBe('settled');
+});
+
+test('deriveSceneTransport goes back to streaming the moment any settled source starts loading again', () => {
+  // Models a pan that re-fetches tiles for a source already marked loaded:
+  // the caller re-derives on every sourcedata/idle event, so a predicate
+  // that flips back to false is exactly a source that started streaming
+  // again, and the reading must follow it back down.
+  let terrainLoaded = true;
+  const isLoaded = (id: string): boolean =>
+    id === 'fire3d-terrain-dem' ? terrainLoaded : true;
+  expect(
+    deriveSceneTransport(['fire3d-terrain-dem', 'whp-2023'], isLoaded)
+  ).toBe('settled');
+  terrainLoaded = false;
+  expect(
+    deriveSceneTransport(['fire3d-terrain-dem', 'whp-2023'], isLoaded)
+  ).toBe('streaming');
 });
 
 /**
@@ -354,6 +415,11 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
   try {
     setFire3DActive(map, true);
     await expect.poll(() => getFire3DStatus().state).toBe('active');
+    // The fake map declares no `isSourceLoaded`, so the transport watch's
+    // own defensive guard (isSceneSourceLoaded) reads every scene source as
+    // still streaming; the field is populated (not null) the moment 'active'
+    // first publishes, never one publish behind it.
+    expect(getFire3DStatus().transport).toBe('streaming');
 
     // Terrain rides its OWN source, never the hillshade layer's.
     expect(harness.getTerrain()).toEqual({
@@ -483,6 +549,11 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     expect(harness.camera).toEqual({ pitch: 15, bearing: 30 });
     // The tile watch detached with the scene.
     expect(harness.listenerCount('error')).toBe(0);
+    // The transport watch detached too: no stale reading survives
+    // deactivation, and no listener leaks past the scene it was watching.
+    expect(getFire3DStatus().transport).toBeNull();
+    expect(harness.listenerCount('sourcedata')).toBe(0);
+    expect(harness.listenerCount('idle')).toBe(0);
   } finally {
     setFire3DActive(map, false);
     restoreFetch();
@@ -1416,6 +1487,16 @@ function fire3dRibbonStamp(page: Page): Promise<string | undefined> {
   );
 }
 
+/** Fire3DStatus.transport's own production stamp: 'streaming' from the
+ * scene's first 'active' publish until every scene source reports loaded,
+ * then 'settled'; absent while inactive. See src/map/fire3d.ts,
+ * `deriveSceneTransport` and the `Fire3DStatus.transport` doc comment. */
+function fire3dTransportStamp(page: Page): Promise<string | undefined> {
+  return page.evaluate(
+    () => document.documentElement.dataset['ddmFire3dTransport']
+  );
+}
+
 const TOGGLE = '.shell-fire3d-btn';
 
 // The evidence captures below render the live scene, including the
@@ -1471,6 +1552,7 @@ test.describe('W3/W4 browser truth', () => {
     // evidence-bearing case, so it gets explicit room.
     test.setTimeout(180_000);
     await stubWildfireFeeds(page);
+    await stubDeepTerrainArchive(page);
 
     // Measure the terrain archive's real transport for the activation
     // budget row (logged, not asserted; the preview serves the bundled
@@ -1665,6 +1747,7 @@ test.describe('W3/W4 browser truth', () => {
     // loop below).
     test.setTimeout(150_000);
     await stubWildfireFeeds(page);
+    await stubDeepTerrainArchive(page);
     await page.route('**/waterservices.usgs.gov/**', (route) => route.abort('failed'));
     await page.route('**/wcc.sc.egov.usda.gov/**', (route) => route.abort('failed'));
     await page.route('**/api.tidesandcurrents.noaa.gov/**', (route) => route.abort('failed'));
@@ -1694,6 +1777,21 @@ test.describe('W3/W4 browser truth', () => {
     await expect
       .poll(() => fire3dStamp(page), { timeout: 30_000 })
       .toBe('active');
+    // The scene publishes 'active' as soon as its context layers activate
+    // (src/map/fire3d.ts:`activateScene`, the final `publishStatus('active',
+    // null)`), while the terrain DEM, the hazard drape, and the structures
+    // archive can still be streaming tiles under it; on the software
+    // renderer every arriving tile re-renders the pitch-60 scene, and that
+    // traffic starved telemetry's own first activation (a dynamic import,
+    // six stubbed fetches, and the marker render) when it was checked
+    // immediately after 'active' (recorded 2026-09-10/11, intermittent).
+    // `Fire3DStatus.transport` names exactly the honest condition to wait
+    // for instead of a fixed sleep: it reads 'settled' only once every
+    // scene source reports loaded. Its own 25 s waitForLayerSettled budget
+    // below is unchanged; this wait is a new, separate one ahead of it.
+    await expect
+      .poll(() => fire3dTransportStamp(page), { timeout: 60_000 })
+      .toBe('settled');
     await layerCheckbox(page, 'telemetry').check();
     await waitForLayerSettled(page, 'telemetry');
     // The scene must have survived the cluster demotion the layer checkbox
@@ -1772,6 +1870,7 @@ test.describe('W3/W4 browser truth', () => {
     // A terrain build plus the perimeter fetch on the software renderer.
     test.setTimeout(180_000);
     await stubWildfireFeeds(page);
+    await stubDeepTerrainArchive(page);
     await gotoApp(page, '?cluster=wildfire&fire3d=true');
 
     await expect
@@ -1824,6 +1923,7 @@ test.describe('W3/W4 browser truth', () => {
     page
   }) => {
     await stubWildfireFeeds(page);
+    await stubDeepTerrainArchive(page);
     await gotoApp(page, '?cluster=wildfire&fire3d=true', {
       boundaries: EVIDENCE_BOUNDARIES
     });
@@ -1856,6 +1956,7 @@ test.describe('W3/W4 browser truth', () => {
   }) => {
     test.setTimeout(120_000);
     await stubWildfireFeeds(page);
+    await stubDeepTerrainArchive(page);
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await gotoApp(page, '?cluster=wildfire&fire3d=true');
 
@@ -1892,6 +1993,7 @@ test.describe('W3/W4 browser truth', () => {
     // case above rather than the cheaper siblings.
     test.setTimeout(180_000);
     await stubWildfireFeeds(page);
+    await stubDeepTerrainArchive(page);
     await gotoApp(page, '?cluster=wildfire&fire3d=true&embed=true', {
       boundaries: EVIDENCE_BOUNDARIES
     });
@@ -1935,6 +2037,7 @@ test.describe('W3/W4 browser truth', () => {
 }) => {
   test.setTimeout(150_000);
   await stubWildfireFeeds(page);
+  await stubDeepTerrainArchive(page);
   // Registered AFTER the shared stub, so it wins: HMS answers with a valid
   // but EMPTY collection, which is an ordinary and correct answer from a
   // daytime satellite analysis product.
@@ -2047,6 +2150,10 @@ test('an embed without the flag never activates and never gains it', async ({
     page
   }) => {
     await stubWildfireFeeds(page);
+    // The deep archive resolves before the bundled one (DR-079): left
+    // unstubbed, the probe below would succeed against the real Worker and
+    // this case would never reach the corrupted BUNDLED fixture at all.
+    await stubDeepTerrainArchive(page);
     // Boot against the REAL bundled archive first: the default-on
     // hillshade layer shares the archive, and corrupting it at boot would
     // fail hillshade, honestly demote the cluster to custom, and hide
@@ -2096,6 +2203,7 @@ test('an embed without the flag never activates and never gains it', async ({
     // slower than the scene-building siblings, so carry their ceiling.
     test.setTimeout(180_000);
     await stubWildfireFeeds(page);
+    await stubDeepTerrainArchive(page);
     await gotoApp(page, '?cluster=wildfire&view=console&fire3d=true');
 
     await expect
@@ -2140,6 +2248,7 @@ test('an embed without the flag never activates and never gains it', async ({
     // cluster button. Match the budget its build-twice workload calls for.
     test.setTimeout(150_000);
     await stubWildfireFeeds(page);
+    await stubDeepTerrainArchive(page);
     await gotoApp(page, '?cluster=wildfire&fire3d=true');
     await expect
       .poll(() => fire3dStamp(page), { timeout: 30_000 })

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { gotoApp } from './helpers';
-import { stubWildfireFeeds } from './wildfire-fixtures';
+import { stubDeepTerrainArchive, stubWildfireFeeds } from './wildfire-fixtures';
 
 /**
  * DDM-P2-T04: the Fire 3D controller chunk is fetched only once eligibility
@@ -60,6 +60,7 @@ test.describe('Fire 3D controller deferral (DDM-P2-T04)', () => {
   }) => {
     test.setTimeout(120_000);
     await stubWildfireFeeds(page);
+    await stubDeepTerrainArchive(page);
 
     let fire3dRequests = 0;
     page.on('request', (req) => {
@@ -108,6 +109,7 @@ test.describe('Fire 3D controller deferral (DDM-P2-T04)', () => {
     // task's clause 2a, that the deferred loader still lets the deep link
     // win the race to an active scene.
     await stubWildfireFeeds(page);
+    await stubDeepTerrainArchive(page);
     await gotoApp(page, '?cluster=wildfire&fire3d=true');
 
     await expect
