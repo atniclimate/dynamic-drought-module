@@ -36,7 +36,7 @@
  */
 
 import { URLS } from '../config/urls';
-import { fetchWithBudget } from '../util/fetch';
+import { fetchBufferedWithBudget } from '../util/fetch';
 import type { ResourceLink } from './types';
 import type { LocationIdentity } from '../state/location-identity';
 
@@ -131,7 +131,7 @@ function loadCatalogFile(
 
   const load = (async (): Promise<StateResourceCatalog | null> => {
     try {
-      const response = await fetchWithBudget(
+      const response = await fetchBufferedWithBudget(
         `${URLS.resourcesLocalBase}${key}.json`,
         null,
         null,

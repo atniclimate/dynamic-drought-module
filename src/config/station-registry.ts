@@ -13,7 +13,7 @@ import type {
   StationViewportDiscoveryRequest,
   ViewportBounds
 } from '../types/station-network';
-import { fetchBufferedWithBudget, fetchWithBudget } from '../util/fetch';
+import { fetchBufferedWithBudget } from '../util/fetch';
 import { quantizeBbox } from '../util/bbox';
 import { isObject } from '../util/guards';
 import { ExpiringLruCache } from '../util/bounded-cache';
@@ -536,7 +536,7 @@ async function discoverUsgsStations(
     siteStatus: 'active'
   });
 
-  const response = await fetchWithBudget(
+  const response = await fetchBufferedWithBudget(
     `${URLS.usgsIV}?${params.toString()}`,
     {},
     signal,
@@ -1280,7 +1280,7 @@ async function fetchAwdbStationsForNetwork(
     activeOnly: 'true',
     returnStationElements: 'false'
   });
-  const response = await fetchWithBudget(
+  const response = await fetchBufferedWithBudget(
     `${URLS.nrcsAwdbStations}?${params.toString()}`,
     {},
     signal,
@@ -1382,7 +1382,7 @@ async function discoverRawsStations(
     f: 'geojson'
   });
 
-  const response = await fetchWithBudget(
+  const response = await fetchBufferedWithBudget(
     `${URLS.nifcRawsFeatureServer}/query?${params.toString()}`,
     {},
     signal,
@@ -1598,7 +1598,7 @@ export async function fetchRawsStationConditions(
     resultRecordCount: '1',
     f: 'geojson'
   });
-  const response = await fetchWithBudget(
+  const response = await fetchBufferedWithBudget(
     `${URLS.nifcRawsFeatureServer}/query?${params.toString()}`,
     {},
     signal,
@@ -1686,7 +1686,7 @@ function maybeAbortCoopsCacheFetch(inflight: CoopsStationCacheInflight): void {
 
 async function fetchCoopsStationList(signal: AbortSignal): Promise<readonly CoopsStationMetadata[]> {
   const params = new URLSearchParams({ type: 'waterlevels' });
-  const response = await fetchWithBudget(
+  const response = await fetchBufferedWithBudget(
     `${URLS.noaaCoopsStations}?${params.toString()}`,
     {},
     signal,
@@ -1957,7 +1957,7 @@ async function fetchCocorahsStationsForState(
   signal: AbortSignal
 ): Promise<readonly CocorahsStationMetadata[]> {
   const params = new URLSearchParams({ network: `${state}_COCORAHS` });
-  const response = await fetchWithBudget(
+  const response = await fetchBufferedWithBudget(
     `${URLS.iemCocorahsNetwork}?${params.toString()}`,
     {},
     signal,

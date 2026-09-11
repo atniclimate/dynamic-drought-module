@@ -52,7 +52,7 @@ import {
 } from '../config/palette';
 import { registry } from '../state/registry';
 import { timeline } from '../state/timeline';
-import { fetchWithBudget, sleepUnlessAborted } from '../util/fetch';
+import { fetchBufferedWithBudget, sleepUnlessAborted } from '../util/fetch';
 import { prefersReducedMotion } from '../util/motion';
 import { prefetchAllowed, crossfadeFrames, FRAME_FADE_MS } from '../util/frame-stepper';
 import { watchRasterTiles, type RasterTileWatch } from '../util/raster-status';
@@ -584,7 +584,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   // ---- The temporal axis: enumerate real dates, then offer the loop. ----
   try {
-    const response = await fetchWithBudget(
+    const response = await fetchBufferedWithBudget(
       URLS.gibsSstDescribeDomains,
       null,
       signal,

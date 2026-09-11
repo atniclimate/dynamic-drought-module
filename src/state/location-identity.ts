@@ -38,7 +38,7 @@
 import type * as maplibregl from 'maplibre-gl';
 import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
-import { fetchWithBudget } from '../util/fetch';
+import { fetchBufferedWithBudget } from '../util/fetch';
 import { pointInPolygonGeometry } from '../util/point-in-polygon';
 
 /** Two-letter postal code plus display name for the containing state. */
@@ -176,7 +176,7 @@ function loadBundledStates(signal: AbortSignal): Promise<FeatureCollection | nul
   if (statesCachePromise) return statesCachePromise;
   statesCachePromise = (async () => {
     try {
-      const response = await fetchWithBudget(STATES_LOCAL_URL, null, signal, STATES_FETCH_TIMEOUT_MS);
+      const response = await fetchBufferedWithBudget(STATES_LOCAL_URL, null, signal, STATES_FETCH_TIMEOUT_MS);
       if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
       return (await response.json()) as FeatureCollection;
     } catch (err) {

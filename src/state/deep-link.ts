@@ -32,7 +32,7 @@ import type { BoundarySelectionContext } from '../impact/types';
 import { BOOT_URLS } from '../config/urls-boot';
 import { bboxCenter, bboxToContinuousBounds } from '../util/bbox';
 import { geometryBboxAcrossAntimeridian } from '../util/antimeridian';
-import { fetchWithBudget } from '../util/fetch';
+import { fetchBufferedWithBudget } from '../util/fetch';
 import {
   isCurrentBriefingIntent,
   nextBriefingIntent,
@@ -172,7 +172,7 @@ export async function openStateBriefing(
 ): Promise<void> {
   let feature: Feature | undefined;
   try {
-    const response = await fetchWithBudget(
+    const response = await fetchBufferedWithBudget(
       BOOT_URLS.usStatesLocal,
       null,
       null,

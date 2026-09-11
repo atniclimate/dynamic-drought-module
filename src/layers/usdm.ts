@@ -49,7 +49,7 @@ import type { GeoJsonProperties } from 'geojson';
 import { URLS } from '../config/urls';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import { escapeHtml } from '../util/escape';
-import { fetchWithBudget } from '../util/fetch';
+import { fetchBufferedWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 import { getCurrentRegion, onRegionChange } from '../state/region-store';
 import {
@@ -302,7 +302,7 @@ async function fetchFrame(
   url: string,
   signal: AbortSignal
 ): Promise<GeoJSON.FeatureCollection> {
-  const response = await fetchWithBudget(url, null, signal, FETCH_TIMEOUT_MS);
+  const response = await fetchBufferedWithBudget(url, null, signal, FETCH_TIMEOUT_MS);
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} ${response.statusText}`);
   }
@@ -742,7 +742,7 @@ async function setMode(map: maplibregl.Map, mode: UsdmViewMode): Promise<void> {
     reportStatus('loading');
     try {
       const url = mode === 'chg4' ? URLS.usdmChange4wkGeojson : URLS.usdmChange1wkGeojson;
-      const response = await fetchWithBudget(url, null, signal, FETCH_TIMEOUT_MS);
+      const response = await fetchBufferedWithBudget(url, null, signal, FETCH_TIMEOUT_MS);
       if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
       fc = stampChangeFeatures(
         (await response.json()) as GeoJSON.FeatureCollection & { date?: unknown }

@@ -4,7 +4,7 @@ import { URLS } from '../config/urls';
 import type { PlaceCatalogEntry } from '../config/place-catalog';
 import type { OceanKey } from '../config/oceans';
 import type { LayerStatus } from '../types/layer';
-import { fetchWithBudget } from '../util/fetch';
+import { fetchBufferedWithBudget } from '../util/fetch';
 import { isChecked, checkedSnapshot, onCheckedChange } from '../ui/island/bridge';
 import {
   requestLayerOff,
@@ -332,7 +332,7 @@ async function resolveEmphasisTargets(
   if (cached) return cached;
 
   if (place.kind === 'state') {
-    const response = await fetchWithBudget(
+    const response = await fetchBufferedWithBudget(
       URLS.usStatesLocal,
       null,
       signal,
@@ -365,7 +365,7 @@ async function resolveEmphasisTargets(
       returnGeometry: 'false',
       f: 'json'
     });
-    const response = await fetchWithBudget(
+    const response = await fetchBufferedWithBudget(
       `${URLS.biaLarFeatureServer}/query?${params.toString()}`,
       { cache: 'no-store' },
       signal,
