@@ -10,7 +10,7 @@ import {
   search,
   waitForLayerSettled
 } from './helpers';
-import { stubWildfireFeeds } from './wildfire-fixtures';
+import { stubDeepTerrainArchive, stubWildfireFeeds } from './wildfire-fixtures';
 
 /**
  * The cross-view contract net.
@@ -323,7 +323,16 @@ test.describe('view contracts', () => {
         description: row.description
       });
 
-      if (row.stub_wildfire) await stubWildfireFeeds(page);
+      if (row.stub_wildfire) {
+        await stubWildfireFeeds(page);
+        // Every `stub_wildfire: true` row either enters the 3D scene or
+        // shares its boot with rows that do (tests/view-contracts.yaml); the
+        // deep terrain host went LIVE 2026-09-10, so a row that omits this
+        // would otherwise stream a real archive from Cloudflare instead of
+        // the deterministic bundled fixture (see stubDeepTerrainArchive's
+        // own comment in wildfire-fixtures.ts).
+        await stubDeepTerrainArchive(page);
+      }
       await gotoApp(page, row.url);
 
       for (const step of row.steps ?? []) await runStep(page, step);

@@ -29,7 +29,7 @@ import type { FeatureCollection } from 'geojson';
 import { URLS } from '../config/urls';
 import { PLACE_LABEL_COLOR, PLACE_LABEL_HALO } from '../config/palette';
 import { registerClickTarget } from '../map/interaction-coordinator';
-import { fetchWithBudget } from '../util/fetch';
+import { fetchBufferedWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 
 const LAYER_KEY = 'places';
@@ -81,7 +81,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   let bundle: PlacesBundle;
   try {
-    const response = await fetchWithBudget(URLS.usPlacesLocal, null, signal, FETCH_TIMEOUT_MS);
+    const response = await fetchBufferedWithBudget(URLS.usPlacesLocal, null, signal, FETCH_TIMEOUT_MS);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} ${response.statusText}`);
     }

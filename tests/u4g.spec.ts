@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { URLS } from '../src/config/urls';
 import { resolveHillshadeArchiveUrl } from '../src/layers/hillshade';
 import { gotoApp, layerCheckbox, waitForLayerSettled, search } from './helpers';
+import { pmtilesHeaderResponse } from './map-harness';
 import { stubRecentSatellite } from './satellite-fixture';
 
 /**
@@ -37,10 +38,7 @@ test.describe('U4g: terrain shading', () => {
         return new Response('file exceeds host limit', { status: 413 });
       }
       if (url === URLS.hillshadePmtilesFallback) {
-        return new Response(
-          new Uint8Array([0x50, 0x4d, 0x54, 0x69, 0x6c, 0x65, 0x73, 0x03]),
-          { status: 206 }
-        );
+        return pmtilesHeaderResponse();
       }
       throw new Error(`Unexpected URL ${url}`);
     };

@@ -2,6 +2,8 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { SST_ANOMALY_SCALE } from '../src/config/palette';
 import { gotoApp } from './helpers';
+import { routeAllTribalFixtures } from './tribal-fixtures';
+import { installMinimapAnalysisStubs } from './minimap-fixtures';
 
 interface Rect {
   readonly left: number;
@@ -745,11 +747,36 @@ interface Target extends Rect {
   /** The pressable area, which is the box unless a rule widened it. */
   readonly hitWidth: number;
   readonly hitHeight: number;
+  /**
+   * The PAINTED area (DDM-P10-T05): the box intersected with the viewport
+   * and with every ancestor that clips on that axis. This is the only
+   * rectangle the collision audit may compare. The raw box above stays for
+   * the touch floor, which asks what a finger presses, not what is drawn.
+   */
+  readonly effective: Rect;
+}
+
+/**
+ * Two rectangles that share painted pixels. Kept as its own predicate so a
+ * collision can never silently fall back to the raw box.
+ */
+function paintedOverlap(a: Target, b: Target): boolean {
+  return intersects(a.effective, b.effective);
 }
 
 /**
  * Every interactive element a finger can actually reach, with its measured
  * box. Runs entirely in the page so one round trip covers a whole survey.
+ *
+ * DDM-P10-T05, the geometry defect behind three red gates: this survey used
+ * to prove reachability at the box CENTRE via elementFromPoint and then keep
+ * the FULL box. A control row whose centre sits one pixel above the
+ * sidebar's scroll fold was admitted with its unpainted tail intact, and
+ * that phantom tail was then reported as colliding with the fixed bottom
+ * dock, a sibling outside the scroller. Which row lands at the fold is a
+ * matter of timing, which is the whole intermittency. The survey now also
+ * records the effective rectangle, clipped by every overflow ancestor, and
+ * drops a control whose painted area is empty.
  */
 async function reachableTargets(page: Page): Promise<Target[]> {
   return page.evaluate(() => {
@@ -766,7 +793,33 @@ async function reachableTargets(page: Page): Promise<Target[]> {
       height: number;
       hitWidth: number;
       hitHeight: number;
+      effective: { left: number; top: number; right: number; bottom: number; width: number; height: number };
     }[] = [];
+    const clips = (value: string): boolean =>
+      value === 'auto' || value === 'scroll' || value === 'hidden' || value === 'clip';
+    /** The box clipped by the viewport and by each clipping ancestor. */
+    const effectiveRect = (
+      element: HTMLElement,
+      box: DOMRect
+    ): { left: number; top: number; right: number; bottom: number } => {
+      let left = Math.max(box.left, 0);
+      let top = Math.max(box.top, 0);
+      let right = Math.min(box.right, window.innerWidth);
+      let bottom = Math.min(box.bottom, window.innerHeight);
+      for (let a = element.parentElement; a && a !== document.body; a = a.parentElement) {
+        const s = getComputedStyle(a);
+        const r = a.getBoundingClientRect();
+        if (clips(s.overflowX)) {
+          left = Math.max(left, r.left);
+          right = Math.min(right, r.right);
+        }
+        if (clips(s.overflowY)) {
+          top = Math.max(top, r.top);
+          bottom = Math.min(bottom, r.bottom);
+        }
+      }
+      return { left, top, right, bottom };
+    };
     for (const node of Array.from(document.querySelectorAll(selector))) {
       let element = node as HTMLElement;
       const initial = getComputedStyle(element);
@@ -809,6 +862,10 @@ async function reachableTargets(page: Page): Promise<Target[]> {
         : null;
       const hitWidth = Math.max(box.width, band ? Number.parseFloat(band.width) || 0 : 0);
       const hitHeight = Math.max(box.height, band ? Number.parseFloat(band.height) || 0 : 0);
+      const eff = effectiveRect(element, box);
+      // Nothing of it is painted: reachable by centre, but no pixels to
+      // collide with and none to press. It is not a target.
+      if (eff.right <= eff.left || eff.bottom <= eff.top) continue;
       found.push({
         sel: `${element.tagName.toLowerCase()}${id}${classes}`,
         label: (element.getAttribute('aria-label') ?? element.textContent ?? '').trim().slice(0, 40),
@@ -819,10 +876,68 @@ async function reachableTargets(page: Page): Promise<Target[]> {
         width: Number(box.width.toFixed(1)),
         height: Number(box.height.toFixed(1)),
         hitWidth: Number(hitWidth.toFixed(1)),
-        hitHeight: Number(hitHeight.toFixed(1))
+        hitHeight: Number(hitHeight.toFixed(1)),
+        effective: {
+          left: Number(eff.left.toFixed(1)),
+          top: Number(eff.top.toFixed(1)),
+          right: Number(eff.right.toFixed(1)),
+          bottom: Number(eff.bottom.toFixed(1)),
+          width: Number((eff.right - eff.left).toFixed(1)),
+          height: Number((eff.bottom - eff.top).toFixed(1))
+        }
       });
     }
     return found;
+  });
+}
+
+/**
+ * Wait for a layout the audit can trust (DDM-P10-T05): the local faces load
+ * with `font-display: swap`, so a survey taken before `document.fonts.ready`
+ * measures fallback metrics, and a row can be mid-transition. Two
+ * consecutive frames with an unchanged control survey is the settle point.
+ */
+async function settledLayout(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    const sample = (): string =>
+      Array.from(document.querySelectorAll('button, summary, a[href]'))
+        .map((e) => {
+          const r = e.getBoundingClientRect();
+          return `${r.left | 0},${r.top | 0},${r.right | 0},${r.bottom | 0}`;
+        })
+        .join(';');
+    const frame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));
+    let previous = sample();
+    for (let i = 0; i < 30; i += 1) {
+      await frame();
+      await frame();
+      const next = sample();
+      if (next === previous) return;
+      previous = next;
+    }
+  });
+}
+
+/**
+ * What a collision red has to say to be diagnosed from its own output
+ * (DDM-P10-T05 acceptance): the scroller's client box and scroll offset,
+ * the fold this audit is really about, and the strip's tile count and tones.
+ */
+async function layoutDiagnostics(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const scroller = document.querySelector('.sidebar-scroll');
+    const r = scroller?.getBoundingClientRect();
+    const tiles = Array.from(document.querySelectorAll('.conditions-metric')).map(
+      (t) => t.getAttribute('data-tone') ?? '?'
+    );
+    return [
+      r
+        ? `sidebar-scroll ${r.left | 0},${r.top | 0},${r.right | 0},${r.bottom | 0} scrollTop=${(scroller as HTMLElement).scrollTop}`
+        : 'sidebar-scroll: absent',
+      `tiles=${tiles.length} [${tiles.join(',')}]`,
+      `fonts=${document.fonts.status}`
+    ].join(' | ');
   });
 }
 
@@ -832,23 +947,129 @@ function undersizedTargets(targets: readonly Target[]): string[] {
     .map((target) => `${target.sel} ${target.hitWidth}x${target.hitHeight} "${target.label}"`);
 }
 
-/** Pairs of reachable targets whose boxes cross, ignoring nesting. */
+/**
+ * Pairs of reachable targets whose PAINTED areas cross, ignoring nesting.
+ * Compares effective rectangles only (DDM-P10-T05); each clash prints both
+ * the raw and the effective boxes so a red explains itself.
+ */
 function collidingTargets(targets: readonly Target[]): string[] {
   const clashes: string[] = [];
+  const raw = (t: Target): string => `raw ${t.left},${t.top},${t.right},${t.bottom}`;
+  const eff = (t: Target): string =>
+    `eff ${t.effective.left},${t.effective.top},${t.effective.right},${t.effective.bottom}`;
   for (let i = 0; i < targets.length; i += 1) {
     for (let j = i + 1; j < targets.length; j += 1) {
       const a = targets[i] as Target;
       const b = targets[j] as Target;
-      if (!intersects(a, b)) continue;
+      if (!paintedOverlap(a, b)) continue;
+      const ae = a.effective;
+      const be = b.effective;
       const nested =
-        (a.left <= b.left && a.right >= b.right && a.top <= b.top && a.bottom >= b.bottom) ||
-        (b.left <= a.left && b.right >= a.right && b.top <= a.top && b.bottom >= a.bottom);
+        (ae.left <= be.left && ae.right >= be.right && ae.top <= be.top && ae.bottom >= be.bottom) ||
+        (be.left <= ae.left && be.right >= ae.right && be.top <= ae.top && be.bottom >= ae.bottom);
       if (nested) continue;
-      clashes.push(`${a.sel} over ${b.sel}`);
+      clashes.push(`${a.sel} [${raw(a)}; ${eff(a)}] over ${b.sel} [${raw(b)}; ${eff(b)}]`);
     }
   }
   return clashes;
 }
+
+// ---------------------------------------------------------------------------
+// DDM-P10-T05 fixtures: the audit's reading, proved in both directions on a
+// controlled DOM. Without the true-positive control a filter that quietly
+// dropped inconvenient controls would make every tablet case green.
+// ---------------------------------------------------------------------------
+
+test.describe('collision audit geometry (DDM-P10-T05)', () => {
+  // These fixtures never boot the application: each paints a synthetic
+  // document and nothing in it makes a request. The suite-wide boundary and
+  // minimap stubs are installed anyway, because
+  // tests/boundary-boot-inventory.test.mjs holds every navigation outside
+  // gotoApp to the same fail-closed contract, and a fixture that one day
+  // framed the app would otherwise reach a live service unnoticed.
+  test.beforeEach(async ({ page }) => {
+    await routeAllTribalFixtures(page);
+    await installMinimapAnalysisStubs(page);
+  });
+
+  const shell = (body: string): string =>
+    `<!doctype html><style>
+      body{margin:0}
+      .col{display:flex;flex-direction:column;height:200px;width:300px;overflow:hidden}
+      .scroll{flex:1 1 auto;min-height:0;overflow-y:auto}
+      .dock{flex:0 0 auto;height:60px}
+      button{display:block;width:120px;height:44px;margin:0;padding:0;border:0}
+    </style>${body}`;
+
+  test('a control whose raw box crosses an overflow clip does not collide with the dock', async ({
+    page
+  }) => {
+    // The scroller is 140px tall; the second button's raw box runs from 114
+    // to 158, so its centre (136) is still inside the scroller while its
+    // lower 18px are clipped. The dock button starts at 140. Raw boxes
+    // overlap by 18px; painted pixels never do.
+    await page.setContent(
+      shell(`<div class="col">
+        <div class="scroll" id="s">
+          <div style="height:70px"></div>
+          <button id="row1">above</button>
+          <button id="row2">at the fold</button>
+          <div style="height:200px"></div>
+        </div>
+        <div class="dock"><button id="dockbtn">dock</button></div>
+      </div>`)
+    );
+    await page.evaluate(() => {
+      (document.getElementById('s') as HTMLElement).scrollTop = 0;
+    });
+    const targets = await reachableTargets(page);
+    const row2 = targets.find((t) => t.sel.includes('#row2'));
+    const dock = targets.find((t) => t.sel.includes('#dockbtn'));
+    expect(row2, 'the fold row is still reachable at its centre').toBeTruthy();
+    expect(dock).toBeTruthy();
+    expect(
+      intersects(row2 as Target, dock as Target),
+      'the RAW boxes do overlap, which is the false positive the old audit reported'
+    ).toBe(true);
+    expect(collidingTargets(targets), 'clipped pixels are not a collision').toEqual([]);
+    expect(
+      undersizedTargets(targets),
+      'the touch floor still sees the full 44px hit area'
+    ).toEqual([]);
+  });
+
+  test('a deliberately painted overlap still fails', async ({ page }) => {
+    // A PARTIAL overlap, 20x14px at the corner, with both centres clear: a
+    // control whose centre is covered is not reachable and never was, so a
+    // total overlap would prove nothing about the collision check.
+    await page.setContent(
+      shell(`<div style="position:relative;width:300px;height:200px">
+        <button id="under" style="position:absolute;left:0;top:0">under</button>
+        <button id="over" style="position:absolute;left:100px;top:30px">over</button>
+      </div>`)
+    );
+    const clashes = collidingTargets(await reachableTargets(page));
+    expect(clashes, 'a real overlap is reported').toHaveLength(1);
+    expect(clashes[0]).toContain('#under');
+    expect(clashes[0]).toContain('#over');
+    expect(clashes[0], 'the report carries both rectangles').toMatch(/raw .*; eff /);
+  });
+
+  test('a control clipped entirely out of view is not a target at all', async ({ page }) => {
+    await page.setContent(
+      shell(`<div class="col">
+        <div class="scroll" id="s">
+          <div style="height:400px"></div>
+          <button id="hidden">below the fold</button>
+        </div>
+        <div class="dock"><button id="dockbtn">dock</button></div>
+      </div>`)
+    );
+    const targets = await reachableTargets(page);
+    expect(targets.some((t) => t.sel.includes('#hidden'))).toBe(false);
+    expect(targets.some((t) => t.sel.includes('#dockbtn'))).toBe(true);
+  });
+});
 
 /** Settle the briefing's slide-in before any geometry is read. */
 async function settledBriefing(page: Page): Promise<void> {
@@ -911,6 +1132,7 @@ for (const bandWidth of TABLET_BAND_WIDTHS) {
           panel.left
         );
 
+        await settledLayout(page);
         expect(
           undersizedTargets(await reachableTargets(page)),
           'targets below the touch floor with the briefing open'
@@ -922,12 +1144,20 @@ for (const bandWidth of TABLET_BAND_WIDTHS) {
         await page.keyboard.press('Escape');
         await expect(page.locator('#impact-panel')).toBeHidden({ timeout: 5_000 });
 
+        // DDM-P10-T05: sample only a settled layout, and compare painted
+        // rectangles. The 900x675 horizon-button red and the 820x1093
+        // studio-door red were both this audit reading a clipped tail at the
+        // scroller/dock fold, never a product overlap.
+        await settledLayout(page);
         const shellTargets = await reachableTargets(page);
         expect(
           undersizedTargets(shellTargets),
           'targets below the touch floor with no briefing open'
         ).toEqual([]);
-        expect(collidingTargets(shellTargets), 'two reachable controls overlap').toEqual([]);
+        expect(
+          collidingTargets(shellTargets),
+          `two reachable controls overlap (${await layoutDiagnostics(page)})`
+        ).toEqual([]);
         await expectNoHorizontalOverflow(page, bandWidth);
       });
     });

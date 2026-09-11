@@ -42,10 +42,48 @@ import {
 
 export type BootPhase = 'booting' | 'idle';
 
+/**
+ * One read of what holds a wait open (DDM-P1-T09 step 1, 2026-09-10).
+ * `pendingLayerKeys` is the same computation the boot-idle tracker
+ * evaluates; `pendingTransportCount` is `pendingSharedTransportCount()`
+ * from src/util/fetch.ts, which until this seam existed no test could read.
+ */
+export interface DdmSeamSnapshot {
+  readonly phase: BootPhase | null;
+  readonly pendingLayerKeys: readonly string[];
+  readonly pendingTransportCount: number;
+}
+
+/**
+ * The `window.__ddm` test seam. Read-only: every member reports state and
+ * none of them changes a layer, a checkbox, or a transport. It survives the
+ * production build for the same reason `ready` does: a spec that boots
+ * `dist/` must be able to name what it waited on when the wait fails,
+ * rather than infer it from pills and checkboxes.
+ */
+export interface DdmSeam {
+  /** The boot-idle seam's promise form; resolves when the attribute flips. */
+  readonly ready: Promise<void>;
+  /** The layer keys still owed: checked and not terminal, or active and re-loading. A fresh array. */
+  pendingLayerKeys(): string[];
+  /** Shared JSON transports in flight right now (never a cached fulfilled entry). */
+  pendingTransportCount(): number;
+  /** All three readings taken together. */
+  snapshot(): DdmSeamSnapshot;
+  /**
+   * Resolve with a snapshot on the first evaluation, event-driven and never
+   * polled, that finds no pending layer and no transport in flight; reject
+   * with a `DdmQuiescenceTimeout` naming both readings when `budgetMs`
+   * elapses first. Unlike `ready` this is not a boot statement: it answers
+   * for whatever the page is doing when it is called, so a spec can await
+   * it after a toggle, a preset swap, or a region jump.
+   */
+  whenQuiescent(budgetMs?: number): Promise<DdmSeamSnapshot>;
+}
+
 declare global {
   interface Window {
-    /** The boot-idle seam's promise form; resolves when the attribute flips. */
-    __ddm?: { readonly ready: Promise<void> };
+    __ddm?: DdmSeam;
   }
 }
 
@@ -62,12 +100,94 @@ function stamp(next: BootPhase): void {
   }
 }
 
-/** The first line of boot: say the page is booting and publish the promise. */
+/** Playwright's `expect.timeout` in playwright.config.ts; the seam's default budget matches it. */
+const DEFAULT_QUIESCENCE_BUDGET_MS = 10_000;
+
+function snapshotSeam(): DdmSeamSnapshot {
+  return {
+    phase,
+    pendingLayerKeys: [...pendingBootLayers()],
+    pendingTransportCount: pendingSharedTransportCount()
+  };
+}
+
+function describeSnapshot(snapshot: DdmSeamSnapshot): string {
+  return (
+    `pending layer keys = ${JSON.stringify(snapshot.pendingLayerKeys)}; ` +
+    `pending shared transports = ${snapshot.pendingTransportCount}`
+  );
+}
+
+/**
+ * Subscribe `evaluate` to every event that can move a seam reading: an
+ * activation or deactivation, a status write, a checkbox write, and a
+ * shared-transport settlement. Returns one function that unsubscribes all.
+ */
+function watchSeamInputs(evaluate: () => void): () => void {
+  const unsubscribe = [
+    registry.on('change', evaluate),
+    registry.on('status-change', evaluate),
+    onCheckedChange(evaluate),
+    onSharedTransportSettled(evaluate)
+  ];
+  return () => {
+    for (const off of unsubscribe) off();
+  };
+}
+
+function whenQuiescent(budgetMs: number = DEFAULT_QUIESCENCE_BUDGET_MS): Promise<DdmSeamSnapshot> {
+  return new Promise<DdmSeamSnapshot>((resolve, reject) => {
+    if (typeof budgetMs !== 'number' || !Number.isFinite(budgetMs) || budgetMs <= 0) {
+      reject(new RangeError(`whenQuiescent budget must be a positive finite number of ms, received ${String(budgetMs)}`));
+      return;
+    }
+    let settled = false;
+    let stopWatching: (() => void) | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const finish = (): void => {
+      settled = true;
+      if (timer !== null) clearTimeout(timer);
+      stopWatching?.();
+    };
+    const evaluate = (): void => {
+      if (settled) return;
+      const snapshot = snapshotSeam();
+      if (snapshot.pendingLayerKeys.length > 0) return;
+      if (snapshot.pendingTransportCount > 0) return;
+      finish();
+      resolve(snapshot);
+    };
+    timer = setTimeout(() => {
+      if (settled) return;
+      const snapshot = snapshotSeam();
+      finish();
+      const error = new Error(
+        `quiescence not reached within ${budgetMs} ms: ${describeSnapshot(snapshot)}`
+      );
+      error.name = 'DdmQuiescenceTimeout';
+      reject(error);
+    }, budgetMs);
+    stopWatching = watchSeamInputs(evaluate);
+    // The first look runs on its own macrotask, as the boot tracker's does,
+    // so an operation queued just before the call has posted its `loading`.
+    setTimeout(evaluate, 0);
+  });
+}
+
+const seam: DdmSeam = Object.freeze({
+  ready,
+  pendingLayerKeys: (): string[] => [...pendingBootLayers()],
+  pendingTransportCount: (): number => pendingSharedTransportCount(),
+  snapshot: snapshotSeam,
+  whenQuiescent
+});
+
+/** The first line of boot: say the page is booting and publish the seam. */
 export function markBooting(): void {
   if (phase !== null) return;
   stamp('booting');
   if (typeof window !== 'undefined') {
-    window.__ddm = { ready };
+    window.__ddm = seam;
   }
 }
 
@@ -119,19 +239,16 @@ export function armBootIdle(deepLink: Promise<void>): void {
   if (phase === 'idle') return;
 
   void deepLink.catch(() => undefined).then(() => {
-    const unsubscribe: Array<() => void> = [];
+    let stopWatching: (() => void) | null = null;
     const evaluate = (): void => {
       if (phase === 'idle') return;
       if (pendingBootLayers().length > 0) return;
       if (pendingSharedTransportCount() > 0) return;
       stamp('idle');
       resolveReady?.();
-      for (const off of unsubscribe) off();
+      stopWatching?.();
     };
-    unsubscribe.push(registry.on('change', evaluate));
-    unsubscribe.push(registry.on('status-change', evaluate));
-    unsubscribe.push(onCheckedChange(evaluate));
-    unsubscribe.push(onSharedTransportSettled(evaluate));
+    stopWatching = watchSeamInputs(evaluate);
     // The first look runs on its own macrotask, after the queued layer
     // operations have posted their first `loading` status.
     setTimeout(evaluate, 0);

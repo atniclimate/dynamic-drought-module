@@ -16,7 +16,7 @@
  * resource list (Tribe's-own slot first) applies to every briefing.
  *
  * Cancellation (the cancellation invariant): the bundled-file fetch goes
- * through `fetchWithBudget` with a per-call timeout and a master abort signal
+ * through `fetchBufferedWithBudget` with a per-call timeout and a master abort signal
  * that fires on `deactivate` or a superseding `activate`, matching the
  * hardened usdm / nifc-fires / bia-reservations pattern.
  */
@@ -30,7 +30,7 @@ import { buildStatePopupHtml } from '../ui/popups';
 import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
 import { buildBoundaryContext, resolveBoundaryTitle } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
-import { fetchWithBudget } from '../util/fetch';
+import { fetchBufferedWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 
 const LAYER_KEY = 'states';
@@ -107,7 +107,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   let geojson: FeatureCollection;
   try {
-    const response = await fetchWithBudget(
+    const response = await fetchBufferedWithBudget(
       URLS.usStatesLocal,
       null,
       signal,

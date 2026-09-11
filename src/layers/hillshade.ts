@@ -33,6 +33,7 @@ import {
 } from '../config/palette';
 import { firstLayerIdAbove, BOTTOM_STACK_IDS } from '../map/layer-order';
 import { probeArchiveHeader } from '../util/pmtiles-probe';
+import type { PmtilesHeader } from '../util/pmtiles-probe';
 import { isObject } from '../util/guards';
 import { registry } from '../state/registry';
 
@@ -52,6 +53,12 @@ function reportStatus(state: 'loading' | 'ready' | 'error'): void {
   registry.setStatus(LAYER_KEY, state);
 }
 
+/** The bundled archive that answered its probe, with the header it declared. */
+export interface ResolvedHillshadeArchive {
+  readonly url: string;
+  readonly header: PmtilesHeader;
+}
+
 /**
  * Prefer the deployer's bundled archive. A host with a per-file size ceiling
  * may omit it and use the verified byte-identical ATNI copy instead.
@@ -59,14 +66,25 @@ function reportStatus(state: 'loading' | 'ready' | 'error'): void {
 export async function resolveHillshadeArchiveUrl(
   signal: AbortSignal
 ): Promise<string> {
+  return (await resolveHillshadeArchive(signal)).url;
+}
+
+/**
+ * The same ladder, keeping the probed header: the 3D scene's coverage
+ * sentence names the depth of the archive that actually resolved (DR-083),
+ * and the header is where that depth lives.
+ */
+export async function resolveHillshadeArchive(
+  signal: AbortSignal
+): Promise<ResolvedHillshadeArchive> {
   try {
-    await probeArchiveHeader(URLS.hillshadePmtilesLocal, signal);
-    return URLS.hillshadePmtilesLocal;
+    const header = await probeArchiveHeader(URLS.hillshadePmtilesLocal, signal);
+    return { url: URLS.hillshadePmtilesLocal, header };
   } catch (localError) {
     if (signal.aborted) throw localError;
     try {
-      await probeArchiveHeader(URLS.hillshadePmtilesFallback, signal);
-      return URLS.hillshadePmtilesFallback;
+      const header = await probeArchiveHeader(URLS.hillshadePmtilesFallback, signal);
+      return { url: URLS.hillshadePmtilesFallback, header };
     } catch (fallbackError) {
       if (signal.aborted) throw fallbackError;
       const localMessage =

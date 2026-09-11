@@ -27,7 +27,11 @@
   // diagnostics rather than 463, which is a wider disable list for no product
   // gain right now. Widening the scope is part of the burn-down task.
   "files": {
-    "includes": ["src/**/*.ts", "src/styles/app.css"]
+    // `!.claude` keeps Biome out of the gitignored agent worktrees that
+    // Claude Code places under .claude/worktrees/: each is a full checkout
+    // with its own copy of this file, and Biome 2 refuses a nested root
+    // configuration it finds while walking (observed 2026-09-11, S28).
+    "includes": ["src/**/*.ts", "src/styles/app.css", "!.claude"]
   },
 
   // Formatting is not linting. A formatter run would reflow a large share of

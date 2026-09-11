@@ -945,9 +945,12 @@ export const URLS = Object.freeze({
   // The DEEP terrain archive for the 3D Fire scene (DR-079, owner ruling
   // 2026-09-10): the same USGS 3D Elevation Program box as the bundled
   // archive above, baked to zoom 10 (about 53 m per pixel at 46N) instead of
-  // zoom 8 (about 212 m). Only the DEPTH differs; the geographic coverage
-  // claim is unchanged, so FIRE3D_TERRAIN_COVERAGE and its sentence still
-  // describe it exactly.
+  // zoom 8 (about 212 m). Only the DEPTH differs: FIRE3D_TERRAIN_COVERAGE's
+  // bounds describe both archives, but its maxZoom (8) and the constant
+  // coverage sentence describe the BUNDLED one only. The 3D scene formats
+  // its own sentence from the header of whichever archive resolved
+  // (DR-083; src/map/fire3d.ts, `Fire3DStatus.terrainMaxZoom`), so a scene
+  // reading this archive says zoom 10 and never claims zoom 8.
   //
   // Why it is not bundled: 435,700,035 bytes. GitHub Pages caps a published
   // site at 1 GB and blocks any file over 100 MiB, and Git LFS is not usable

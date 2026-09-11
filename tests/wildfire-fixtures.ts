@@ -116,3 +116,40 @@ export async function stubWildfireFeeds(page: Page): Promise<void> {
     (route) => fulfillJson(route, PLANTS_STUB_FC)
   );
 }
+
+/**
+ * Stub the deep terrain archive host (DR-083; the R2-backed Worker at
+ * `URLS.terrainPmtilesDeep`, src/config/urls.ts) as unreachable, so a case
+ * that boots the 3D Fire scene falls back to the bundled archive the
+ * preview server already serves with byte ranges, deterministically and
+ * offline, instead of streaming a real 6+ MB archive from Cloudflare.
+ * `resolveFire3DTerrainUrl` (src/map/fire3d.ts) probes this host FIRST and
+ * falls back silently on ANY probe failure, so a 404 here is the same
+ * honest "no deep archive published" case the fallback ladder already
+ * handles, not a new failure mode; `probeArchiveHeader` throws on a
+ * non-`ok` response (src/util/pmtiles-probe.ts), so the fallback triggers
+ * immediately rather than after a timeout.
+ *
+ * The Worker went LIVE on 2026-09-10: before that, every browser case
+ * booting the scene got this fallback for free (the archive did not exist
+ * yet to answer), which is why no case needed this stub until now. A case
+ * that omits it now streams the real archive from Cloudflare instead,
+ * which is slower, non-hermetic, and was the direct cause of an
+ * intermittent failure in the RAWS station marker case (recorded
+ * 2026-09-10/11): it also masks a corrupted BUNDLED archive fixture,
+ * because the deep archive is tried first and would resolve successfully
+ * over it.
+ *
+ * A handful of NODE-level cases in fire3d-mode.spec.ts model this host
+ * directly (`stubDeepTerrainFetch`, answering with a real or deliberately
+ * truncated header) to prove the depth-disclosure and probe-hardening
+ * behavior; this is their browser-level opposite number, for every case
+ * that only needs the scene to boot fast, offline, and on the bundled
+ * archive.
+ */
+export async function stubDeepTerrainArchive(page: Page): Promise<void> {
+  await page.route(
+    '**/ddm-terrain.atniclimate.workers.dev/**',
+    (route) => route.fulfill({ status: 404, body: 'not found' })
+  );
+}

@@ -860,3 +860,61 @@ export async function urlLayers(page: Page): Promise<Set<string>> {
   if (!raw) return new Set();
   return new Set(raw.split(',').map((x) => x.trim()).filter(Boolean));
 }
+
+/**
+ * One read of the `window.__ddm` seam (DDM-P1-T09 step 1;
+ * src/state/boot-idle.ts `DdmSeam`): the boot phase, the layer keys still
+ * owed, and the shared-transport count. Mirrors `DdmSeamSnapshot` there.
+ */
+export interface DdmSeamRead {
+  readonly phase: 'booting' | 'idle' | null;
+  readonly pendingLayerKeys: readonly string[];
+  readonly pendingTransportCount: number;
+}
+
+type DdmSeamWindow = Window & {
+  __ddm?: {
+    snapshot(): DdmSeamRead;
+    whenQuiescent(budgetMs?: number): Promise<DdmSeamRead>;
+  };
+};
+
+/**
+ * Read the seam once, or `null` when the page has not reached
+ * `markBooting()` (a pre-boot navigation, or a page that is not the app).
+ * A diagnostic that wants to NAME what holds a wait open reads this rather
+ * than inferring from pills and checkboxes.
+ */
+export async function readDdmSeam(page: Page): Promise<DdmSeamRead | null> {
+  return page.evaluate(() => {
+    const seam = (window as DdmSeamWindow).__ddm;
+    return seam ? seam.snapshot() : null;
+  });
+}
+
+/**
+ * Wait until no layer is pending and no shared transport is in flight,
+ * event-driven inside the page and never polled, within `budgetMs`
+ * (default 10 s, the same as `expect.timeout`). On a miss the page's own
+ * `DdmQuiescenceTimeout` names both readings, and this helper re-throws
+ * it with the seam read attached as `cause` so nothing is flattened.
+ *
+ * This is the session-wide sibling of the boot-only `data-ddm-boot`
+ * attribute `gotoApp` waits on: use it after a toggle, a preset swap, or
+ * a region jump, where a spec would otherwise reach for a fixed timeout.
+ * Demonstrative for now; `gotoApp`'s boot-idle diagnostic is the next
+ * consumer (DDM-P1-T09 step 2).
+ */
+export async function awaitQuiescence(page: Page, budgetMs = 10_000): Promise<DdmSeamRead> {
+  const outcome = await page.evaluate(async (budget) => {
+    const seam = (window as DdmSeamWindow).__ddm;
+    if (!seam) return { ok: false as const, message: 'window.__ddm is not installed (markBooting has not run)' };
+    try {
+      return { ok: true as const, snapshot: await seam.whenQuiescent(budget) };
+    } catch (err) {
+      return { ok: false as const, message: (err as Error).message, snapshot: seam.snapshot() };
+    }
+  }, budgetMs);
+  if (outcome.ok) return outcome.snapshot;
+  throw new Error(`awaitQuiescence: ${outcome.message}`, { cause: outcome.snapshot ?? null });
+}

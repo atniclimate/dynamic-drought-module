@@ -475,7 +475,77 @@ export function captureWarnings(): CapturedWarnings {
   };
 }
 
-/** A minimal valid PMTiles v3 header prefix (magic + spec version 3). */
-export const PMTILES_V3_HEADER_PREFIX = new Uint8Array([
-  0x50, 0x4d, 0x54, 0x69, 0x6c, 0x65, 0x73, 0x03
-]);
+/** The shape of a synthetic PMTiles v3 header; every field has a bundled-archive default. */
+export interface PmtilesHeaderShape {
+  readonly minZoom?: number;
+  readonly maxZoom?: number;
+  readonly tileDataOffset?: number;
+  readonly tileDataLength?: number;
+  /** 2 is PNG, the terrarium raster-dem archives' type. */
+  readonly tileType?: number;
+  /** [west, south, east, north] in degrees. */
+  readonly bounds?: readonly [number, number, number, number];
+}
+
+/**
+ * The bundled hillshade archive's own header numbers (read from
+ * public/data/hillshade-dem-pnw.pmtiles on 2026-09-10: tile data at offset
+ * 1133 for 35,251,077 bytes, a 35,252,210-byte object, zoom 0 to 8, the
+ * PNW box). A fixture built with no overrides describes that archive.
+ */
+const BUNDLED_HEADER_SHAPE: Required<PmtilesHeaderShape> = {
+  minZoom: 0,
+  maxZoom: 8,
+  tileDataOffset: 1133,
+  tileDataLength: 35_251_077,
+  tileType: 2,
+  bounds: [-125, 41.5, -110.5, 49.5]
+};
+
+/**
+ * A complete 127-byte PMTiles v3 header (magic, version 3, and the fields
+ * src/util/pmtiles-probe.ts reads at their spec offsets), so a stub answers
+ * the probe the way a real archive does. Before 2026-09-10 the fixture was
+ * the eight-byte magic alone, which is exactly the truncated shape the
+ * hardened probe now rejects.
+ */
+export function pmtilesV3Header(shape: PmtilesHeaderShape = {}): Uint8Array {
+  const s = { ...BUNDLED_HEADER_SHAPE, ...shape };
+  const bytes = new Uint8Array(127);
+  bytes.set([0x50, 0x4d, 0x54, 0x69, 0x6c, 0x65, 0x73, 0x03], 0);
+  const view = new DataView(bytes.buffer);
+  view.setBigUint64(56, BigInt(s.tileDataOffset), true);
+  view.setBigUint64(64, BigInt(s.tileDataLength), true);
+  view.setUint8(99, s.tileType);
+  view.setUint8(100, s.minZoom);
+  view.setUint8(101, s.maxZoom);
+  const [west, south, east, north] = s.bounds;
+  view.setInt32(102, Math.round(west * 1e7), true);
+  view.setInt32(106, Math.round(south * 1e7), true);
+  view.setInt32(110, Math.round(east * 1e7), true);
+  view.setInt32(114, Math.round(north * 1e7), true);
+  return bytes;
+}
+
+/** The whole-object size a header of this shape implies. */
+export function pmtilesObjectSize(shape: PmtilesHeaderShape = {}): number {
+  const s = { ...BUNDLED_HEADER_SHAPE, ...shape };
+  return s.tileDataOffset + s.tileDataLength;
+}
+
+/**
+ * The response a ranged header probe gets from a healthy server: 206 with a
+ * Content-Range whose total matches the header's own extent. Pass `total`
+ * to model a server holding a different number of bytes (a truncated
+ * upload), which the probe must reject.
+ */
+export function pmtilesHeaderResponse(
+  shape: PmtilesHeaderShape = {},
+  options: { readonly total?: number } = {}
+): Response {
+  const total = options.total ?? pmtilesObjectSize(shape);
+  return new Response(pmtilesV3Header(shape), {
+    status: 206,
+    headers: { 'Content-Range': `bytes 0-126/${total}` }
+  });
+}

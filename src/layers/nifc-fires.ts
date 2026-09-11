@@ -68,6 +68,7 @@ import {
   nifcIncidentTypeLabel,
   parseArcGisPolygonFeatureCollection
 } from '../config/wildfire-presentation';
+import { mapRendererClass, type RendererClass } from '../map/gl-capability';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import { escapeHtml } from '../util/escape';
 import { fetchJsonWithBudget } from '../util/fetch';
@@ -99,10 +100,11 @@ const OTHER_OUTLINE_LAYER_ID = 'nifc-other-outline';
  * src/layers/nifc-perimeter-ribbon.ts, kept in step by the fire3d spec).
  * Listing them here rather than wiring a second animation owner is what
  * keeps the ribbon in PHASE with the flat outline: one clock, one color,
- * one reduced-motion rule. The controller skips a target whose layer is not
- * in the style, so on a flat map these six are simply absent, and the two
- * 2D targets guarantee the controller always finds work while the layer is
- * on.
+ * one reduced-motion rule. The controller paints only the targets whose
+ * layers are in the style (a cached list, re-read when the ribbon's source
+ * comes or goes and whenever a commit finds a cached layer gone), so on a
+ * flat map these six are simply absent, and the two 2D targets guarantee
+ * the controller always finds work while the layer is on.
  */
 export const WILDFIRE_PULSE_PAINT_TARGETS = [
   { layerId: FILL_LAYER_ID, paintProperty: 'fill-color' },
@@ -115,8 +117,45 @@ export const WILDFIRE_PULSE_PAINT_TARGETS = [
   { layerId: 'nifc-perimeter-ribbon-5', paintProperty: 'fill-extrusion-color' }
 ] as const;
 
-/** About 17 paint updates per second, while requestAnimationFrame owns timing. */
-const WILDFIRE_PULSE_PAINT_INTERVAL_MS = 60;
+type WildfirePulsePaintTarget = (typeof WILDFIRE_PULSE_PAINT_TARGETS)[number];
+
+/**
+ * The ribbon's derived source (mirrored literal from
+ * src/layers/nifc-perimeter-ribbon.ts, lazy-chunk independence). The ribbon
+ * adds this source and its six slabs in one synchronous step and removes
+ * them the same way, so a `sourcedata` event for it is the moment the
+ * pulse's cached target list goes stale.
+ */
+const PERIMETER_RIBBON_SOURCE_ID = 'nifc-perimeter-ribbon';
+
+/** Flat map: about 17 paint commits per second, requestAnimationFrame owns timing (decision A keeps it). */
+export const WILDFIRE_PULSE_PAINT_INTERVAL_MS = 60;
+/** Decision A (owner, 2026-09-11): 4 commits per second while 3D terrain is on the map, where each commit forces a full terrain redraw (measured 2026-09-11, S28). */
+export const WILDFIRE_PULSE_TERRAIN_PAINT_INTERVAL_MS = 250;
+/** Decision A: 2 per second on terrain with a known software renderer, where 60 ms queued pitch-60 frames and a marker readback then blocked the main thread 43 to 62 s (measured 2026-09-11, S28). */
+export const WILDFIRE_PULSE_SOFTWARE_TERRAIN_PAINT_INTERVAL_MS = 500;
+
+/**
+ * The pulse's paint-commit interval for the current scene (decision A,
+ * docs/design/fire3d-entry.md). Pure, for the Node spec. The cadence only
+ * decides how OFTEN paint is committed; the colour committed is always a
+ * function of elapsed time alone, so a cadence change is never a pause or a
+ * restart. An `unknown` renderer is treated as hardware, never as software.
+ */
+export function wildfirePulsePaintIntervalMs(scene: {
+  readonly terrainPresent: boolean;
+  readonly rendererClass: RendererClass;
+}): number {
+  if (!scene.terrainPresent) return WILDFIRE_PULSE_PAINT_INTERVAL_MS;
+  return scene.rendererClass === 'software'
+    ? WILDFIRE_PULSE_SOFTWARE_TERRAIN_PAINT_INTERVAL_MS
+    : WILDFIRE_PULSE_TERRAIN_PAINT_INTERVAL_MS;
+}
+
+/** True when the map carries 3D terrain right now; false for a map double without the method. */
+function mapHasTerrain(map: maplibregl.Map): boolean {
+  return typeof map.getTerrain === 'function' && map.getTerrain() !== null;
+}
 
 /**
  * One layer-level animation owner. Every WF/CX feature shares these two
@@ -128,11 +167,26 @@ class WildfirePulseController {
   private originMs: number | null = null;
   private lastPaintAtMs = Number.NEGATIVE_INFINITY;
   private stopped = false;
+  /**
+   * The paint targets whose layers were in the style at the last read, or
+   * null to read again before the next commit (decision A). A commit
+   * confirms only these; the absent slabs are not probed again until the
+   * ribbon's source changes.
+   */
+  private presentTargets: readonly WildfirePulsePaintTarget[] | null = null;
 
   constructor(private readonly map: maplibregl.Map) {}
 
   start(): void {
     document.addEventListener('visibilitychange', this.onVisibilityChange);
+    // `styledata` is NOT the refresh signal: MapLibre emits it after every
+    // style change, the pulse's own paint commits included (Style.update
+    // fires `data` whenever `_changed`, and setPaintProperty sets it), so
+    // it would re-read the list on every commit. The ribbon's source is the
+    // only thing that adds targets while the pulse runs.
+    if (typeof this.map.on === 'function') {
+      this.map.on('sourcedata', this.onSourceData);
+    }
     this.scheduleFrame();
   }
 
@@ -140,8 +194,15 @@ class WildfirePulseController {
     if (this.stopped) return;
     this.stopped = true;
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    if (typeof this.map.off === 'function') {
+      this.map.off('sourcedata', this.onSourceData);
+    }
     this.cancelFrame();
   }
+
+  private readonly onSourceData = (event: maplibregl.MapSourceDataEvent): void => {
+    if (event.sourceId === PERIMETER_RIBBON_SOURCE_ID) this.presentTargets = null;
+  };
 
   private readonly onVisibilityChange = (): void => {
     if (this.stopped) return;
@@ -157,20 +218,12 @@ class WildfirePulseController {
     if (this.stopped || document.hidden) return;
 
     // Begin at the canonical static midpoint, then ease toward the hot end.
+    // The origin is set once and never moved, so the colour is a function
+    // of elapsed time alone and a cadence change cannot shift the phase.
     this.originMs ??= timestampMs - WILDFIRE_PULSE_DURATION_MS / 4;
-    if (timestampMs - this.lastPaintAtMs >= WILDFIRE_PULSE_PAINT_INTERVAL_MS) {
+    if (timestampMs - this.lastPaintAtMs >= this.paintIntervalMs()) {
       const color = interpolateWildfirePulseColor(timestampMs - this.originMs);
-      let foundTarget = false;
-      for (const target of WILDFIRE_PULSE_PAINT_TARGETS) {
-        if (!this.map.getLayer(target.layerId)) continue;
-        foundTarget = true;
-        this.map.setPaintProperty(
-          target.layerId,
-          target.paintProperty,
-          color
-        );
-      }
-      if (!foundTarget) {
+      if (!this.commitPaint(color)) {
         this.stop();
         return;
       }
@@ -178,6 +231,39 @@ class WildfirePulseController {
     }
     this.scheduleFrame();
   };
+
+  /** Decision A's cadence for the scene as it is at this frame. */
+  private paintIntervalMs(): number {
+    const terrainPresent = mapHasTerrain(this.map);
+    return wildfirePulsePaintIntervalMs({
+      terrainPresent,
+      // The renderer is asked only once terrain is up, and only once per map.
+      rendererClass: terrainPresent ? mapRendererClass(this.map) : 'unknown'
+    });
+  }
+
+  /** Paint every present target; false when none is left. */
+  private commitPaint(color: string): boolean {
+    let targets = this.presentTargets;
+    if (
+      targets === null ||
+      targets.some((target) => !this.map.getLayer(target.layerId))
+    ) {
+      targets = this.readPresentTargets();
+    }
+    for (const target of targets) {
+      this.map.setPaintProperty(target.layerId, target.paintProperty, color);
+    }
+    return targets.length > 0;
+  }
+
+  private readPresentTargets(): readonly WildfirePulsePaintTarget[] {
+    const present = WILDFIRE_PULSE_PAINT_TARGETS.filter((target) =>
+      Boolean(this.map.getLayer(target.layerId))
+    );
+    this.presentTargets = present;
+    return present;
+  }
 
   private scheduleFrame(): void {
     if (this.stopped || document.hidden || this.frameId !== null) return;

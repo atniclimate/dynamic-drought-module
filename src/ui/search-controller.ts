@@ -38,7 +38,7 @@ import { showLocatedBoundary } from '../state/located-boundary';
 import { getViewMode } from '../state/view-mode';
 import { onPlaceSelectionChange, setPlaceSelection } from '../state/place-selection';
 import { loadTribalRoster, TRUSTED_PROVENANCE } from '../state/tribal-roster';
-import { fetchWithBudget } from '../util/fetch';
+import { fetchBufferedWithBudget } from '../util/fetch';
 import { isSheetActive } from './mobile-sheet';
 import { requestLayerOn } from './layer-toggle-command';
 import { isCurrentBriefingIntent, nextBriefingIntent, openImpactPanel } from './impact-panel';
@@ -183,7 +183,7 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
     // cache: 'no-store': this response carries sovereign-boundary geometry,
     // so it must never persist in the browser HTTP cache (hard rule 1;
     // the same transport guard as the three live Tribal-geography layers).
-    const res = await fetchWithBudget(url, { cache: 'no-store' }, abort.signal, LOCATE_TIMEOUT_MS);
+    const res = await fetchBufferedWithBudget(url, { cache: 'no-store' }, abort.signal, LOCATE_TIMEOUT_MS);
     if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
     fc = (await res.json()) as FeatureCollection;
   } catch (err) {

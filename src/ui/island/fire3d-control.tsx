@@ -60,7 +60,8 @@ import {
   FIRE3D_OUT_OF_COVERAGE_STATUS,
   FIRE3D_PARTIAL_COVERAGE_STATUS,
   FIRE3D_REFUSAL_TEXT,
-  fire3dControlOffer
+  fire3dControlOffer,
+  fire3dCoverageNote
 } from '../../config/fire3d-presentation';
 import type { HazardClusterKey } from '../../config/clusters';
 import type { Fire3DStatus } from '../../map/fire3d';
@@ -110,6 +111,21 @@ function statusLine(status: Fire3DStatus | null): string {
     default:
       return '';
   }
+}
+
+/**
+ * The coverage note for the archive the scene actually reads (DR-083 step
+ * 1). While the scene is active, the depth comes from the resolved
+ * archive's own header, so a scene reading the deep archive says zoom 10.
+ * Before activation, and whenever the scene is not active, the bundled
+ * form stands: the bundled archive is what ships, so it is the honest
+ * claim about a scene that has not yet chosen.
+ */
+function coverageNote(status: Fire3DStatus | null): string {
+  if (status?.state === 'active' && status.terrainMaxZoom !== null) {
+    return fire3dCoverageNote(status.terrainMaxZoom);
+  }
+  return FIRE3D_COVERAGE_NOTE;
 }
 
 /**
@@ -290,6 +306,7 @@ export function Fire3DControl({
       <p
         class="shell-fire3d-status"
         data-fire3d-status={status?.state ?? 'inactive'}
+        data-fire3d-transport={status?.transport ?? undefined}
         aria-live="polite"
       >
         {statusLine(status)}
@@ -304,7 +321,7 @@ export function Fire3DControl({
           {outOfCoverageLine(status)}
         </p>
       ) : null}
-      <p class="shell-fire3d-note">{FIRE3D_COVERAGE_NOTE}</p>
+      <p class="shell-fire3d-note">{coverageNote(status)}</p>
       {/* The non-prediction disclosure renders whenever the control does
           (never a dismissible tooltip): viewers over-trust fire visuals,
           so the boundary statement lives in the interface itself. */}

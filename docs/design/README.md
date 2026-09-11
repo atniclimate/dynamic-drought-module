@@ -19,6 +19,7 @@ than silently treating either one as a veto.
 | [`../ROADMAP.yaml`](../ROADMAP.yaml) | Canonical product plan: phases and tasks with stable ids, decision gates, component tags, and one acceptance sentence per open task. Execution status lives outside the repository. |
 | [`mobile-map-chrome.md`](mobile-map-chrome.md) | Current presentation contract for the map-first phone chrome implemented by pull request 7. |
 | [`fire3d-context.md`](fire3d-context.md) | Honesty framing for the desktop 3D Fire context view: the no-fire-behavior-modeling line, the "not a digital twin" naming decision, and the in-interface non-prediction disclosure. |
+| [`fire3d-entry.md`](fire3d-entry.md) | Proposed entry contract for the 3D Fire scene: staged loading, the deferred loading screen, cancel, and the honest sidebar state (S28, 2026-09-11). |
 | [`ddm_interface-edits_1.json`](ddm_interface-edits_1.json) and [`ddm_interface-edits_2.json`](ddm_interface-edits_2.json) | Immutable owner-annotation captures that informed pull request 6. They preserve the input as received; they are not an active plan, literal pixel specification, or current completion checklist. |
 
 Owner markup carries hierarchy, relationship, emphasis, and intended

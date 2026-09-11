@@ -20,10 +20,10 @@ import {
   buildPowerPlantPopupHtml
 } from '../src/ui/power-popups';
 import {
-  PMTILES_V3_HEADER_PREFIX,
   captureWarnings,
   fakeMapHarness,
-  installFakeBrowser
+  installFakeBrowser,
+  pmtilesHeaderResponse
 } from './map-harness';
 import { PLANTS_STUB_FC } from './wildfire-fixtures';
 
@@ -59,7 +59,7 @@ function stubHealthyFetch(): () => void {
     if (String(input).includes('Power_Plants_in_the_US')) {
       return new Response(JSON.stringify(PLANTS_STUB_FC), { status: 200 });
     }
-    return new Response(PMTILES_V3_HEADER_PREFIX, { status: 206 });
+    return pmtilesHeaderResponse();
   }) as typeof fetch;
   return () => {
     globalThis.fetch = originalFetch;
@@ -176,7 +176,7 @@ test('below the gate nothing is fetched or drawn and the pill says zoom in', asy
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => {
     requests += 1;
-    return new Response(PMTILES_V3_HEADER_PREFIX, { status: 206 });
+    return pmtilesHeaderResponse();
   }) as typeof fetch;
   const harness = fakeMapHarness({ zoom: POWER_MIN_ZOOM - 1 });
 

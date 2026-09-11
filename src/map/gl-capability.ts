@@ -95,6 +95,125 @@ export function webGl2Capability(): WebGl2Capability {
 }
 
 /**
+ * What kind of renderer draws the map, as far as the browser will say.
+ *
+ * `unknown` is the honest answer whenever the browser withholds or masks
+ * the renderer string; it is never promoted to `hardware`. The only reader
+ * today is the wildfire pulse's paint cadence (decision A, owner
+ * 2026-09-11, docs/design/fire3d-entry.md), which slows further on a known
+ * software renderer. Session-local: the class is kept in memory for this
+ * page, never transmitted, and never shown to the user.
+ */
+export type RendererClass = 'software' | 'hardware' | 'unknown';
+
+/**
+ * Renderer strings that name a CPU rasteriser: Chromium's SwiftShader (the
+ * renderer the headless browser suite runs on), Mesa's llvmpipe, Windows'
+ * Microsoft Basic Render Driver, and anything that calls itself software.
+ */
+const SOFTWARE_RENDERER_PATTERN =
+  /swiftshader|llvmpipe|microsoft basic render driver|software/i;
+
+/**
+ * Placeholder strings browsers return instead of the real renderer: the
+ * generic `RENDERER` answers of WebKit, Chromium and older Firefox, and
+ * Firefox's privacy fallback.
+ */
+const MASKED_RENDERER_PATTERN = /^(?:webkit webgl|mozilla|generic renderer)$/i;
+
+/**
+ * Classify a WebGL renderer string. Pure, for the Node spec.
+ *
+ * Null, empty and masked strings are `unknown`, never `hardware`: a browser
+ * that declined to say is not a browser that said it has a GPU.
+ */
+export function classifyRendererString(
+  renderer: string | null | undefined
+): RendererClass {
+  if (typeof renderer !== 'string') return 'unknown';
+  const trimmed = renderer.trim();
+  if (trimmed.length === 0 || MASKED_RENDERER_PATTERN.test(trimmed)) {
+    return 'unknown';
+  }
+  return SOFTWARE_RENDERER_PATTERN.test(trimmed) ? 'software' : 'hardware';
+}
+
+/**
+ * The map's OWN WebGL context, or null. Read from the painter MapLibre
+ * already holds (`Map.painter.context.gl`, declared in maplibre-gl.d.ts);
+ * never through `canvas.getContext`, which on a canvas without a context
+ * would create one. Never throws: a map double, a map torn down, or a
+ * renamed internal all read as null.
+ */
+function existingMapContext(map: maplibregl.Map): WebGL2RenderingContext | null {
+  try {
+    const loose = map as unknown as {
+      painter?: { context?: { gl?: unknown } } | null;
+    };
+    const gl = loose.painter?.context?.gl;
+    if (
+      gl === null ||
+      typeof gl !== 'object' ||
+      typeof (gl as WebGL2RenderingContext).getParameter !== 'function' ||
+      typeof (gl as WebGL2RenderingContext).getExtension !== 'function'
+    ) {
+      return null;
+    }
+    return gl as WebGL2RenderingContext;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The renderer string from an existing context, or null. The standard
+ * `RENDERER` parameter is asked first, because Firefox answers it with the
+ * real (sanitised) renderer and logs a deprecation warning for the debug
+ * extension; only when that answer is masked is `WEBGL_debug_renderer_info`
+ * asked for `UNMASKED_RENDERER_WEBGL` (Chromium and WebKit mask `RENDERER`
+ * as "WebKit WebGL"). Never throws.
+ */
+export function readRendererString(gl: WebGL2RenderingContext): string | null {
+  try {
+    const standard: unknown = gl.getParameter(gl.RENDERER);
+    if (
+      typeof standard === 'string' &&
+      classifyRendererString(standard) !== 'unknown'
+    ) {
+      return standard;
+    }
+    const extension = gl.getExtension('WEBGL_debug_renderer_info');
+    if (!extension) return typeof standard === 'string' ? standard : null;
+    const unmasked: unknown = gl.getParameter(
+      extension.UNMASKED_RENDERER_WEBGL
+    );
+    return typeof unmasked === 'string' ? unmasked : null;
+  } catch {
+    return null;
+  }
+}
+
+/** One answer per map, measured once; the renderer cannot change for a page. */
+const rendererClassByMap = new WeakMap<object, RendererClass>();
+
+/**
+ * The renderer class of the context this map draws with, read once and
+ * memoised per map. Before the map has a context (or for a map double)
+ * the answer is `unknown` and is NOT memoised, so an early reader cannot
+ * pin `unknown` for the rest of the session. Creates no context and never
+ * throws.
+ */
+export function mapRendererClass(map: maplibregl.Map): RendererClass {
+  const memo = rendererClassByMap.get(map);
+  if (memo !== undefined) return memo;
+  const gl = existingMapContext(map);
+  if (!gl) return 'unknown';
+  const answer = classifyRendererString(readRendererString(gl));
+  rendererClassByMap.set(map, answer);
+  return answer;
+}
+
+/**
  * True when `err` is MapLibre 6's `GPUInitializationError`.
  *
  * MapLibre fires this through the map's `error` event (it does not throw

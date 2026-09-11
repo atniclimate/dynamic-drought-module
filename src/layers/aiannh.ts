@@ -45,7 +45,7 @@
  * behave as peers under the Tribal Nations umbrella.
  *
  * Cancellation (the cancellation invariant): every fetch goes through
- * `fetchWithBudget` with a per-call timeout and a master abort signal that
+ * `fetchBufferedWithBudget` with a per-call timeout and a master abort signal that
  * fires on `deactivate` or on a superseding fetch. Late responses to
  * superseded requests are dropped, not rendered. A cache hit renders
  * synchronously and never touches the abort signal.
@@ -65,7 +65,7 @@ import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
 import { buildBoundaryContext, resolveBoundaryTitle } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import type { LayerActivation } from '../config/layers';
-import { fetchWithBudget, linkAbort } from '../util/fetch';
+import { fetchBufferedWithBudget, linkAbort } from '../util/fetch';
 import { registry } from '../state/registry';
 
 const LAYER_KEY = 'aiannh';
@@ -456,7 +456,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
     // transport level: the upstream sends max-age=0 + ETag (storable,
     // revalidate-on-use), so without this the browser HTTP cache may
     // persist sovereign-boundary responses across page loads.
-    const resp = await fetchWithBudget(
+    const resp = await fetchBufferedWithBudget(
       buildQueryUrl(envelope, zoomBucket),
       { cache: 'no-store' },
       signal,

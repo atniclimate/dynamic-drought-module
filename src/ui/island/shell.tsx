@@ -63,7 +63,7 @@ import { requestBasemapMode } from '../../map/basemap-switcher';
 import {
   backToMap,
   getStudioRoute,
-  setPlaceStudioReturnAction
+  setPlaceStudioReturnDisplayCommand
 } from '../../state/studio-route';
 import { onTimeBarSpecChange } from '../time-bar';
 import { Fire3DControl } from './fire3d-control';
@@ -391,20 +391,27 @@ function Shell({ map, snap, framing, specTick }: ShellProps) {
    *
    * The fix is to sequence, not to suppress. The command is deferred behind
    * the studio's OWN exit, using the ruled restore-then-act ordering the
-   * selected-exit briefing hand-off already uses
-   * (`setPlaceStudioReturnAction`, run by the island's unmount cleanup AFTER
-   * `restoreDisplaySnapshot`). So clicking Wildfire from inside Place studio
-   * leaves the studio and lands on Wildfire, which is what the control says
-   * it does. Nothing about the snapshot contract changes: the studio still
-   * captures on entry and still restores on exit, and the new display is
-   * applied after that restore rather than in a race with it.
+   * selected-exit briefing hand-off already uses (run by the island's
+   * unmount cleanup AFTER `restoreDisplaySnapshot`). So clicking Wildfire
+   * from inside Place studio leaves the studio and lands on Wildfire, which
+   * is what the control says it does. Nothing about the snapshot contract
+   * changes: the studio still captures on entry and still restores on exit,
+   * and the new display is applied after that restore rather than in a race
+   * with it.
+   *
+   * The command has its OWN hand-off slot (`setPlaceStudioReturnDisplayCommand`,
+   * src/state/place-return.ts), not the briefing's. The first cut wrote it
+   * through `setPlaceStudioReturnAction`, the single slot the studio uses for
+   * the briefing of its selected place, so a hazard click after a selection
+   * silently dropped the promised briefing (/code-review, 2026-09-10). Both
+   * now survive: the exit runs the display command, then opens the briefing.
    *
    * Only the PLACE studio needs this. The Layers studio is the layer editor;
    * edits there are meant to persist and it captures no snapshot to reassert.
    */
   const runDisplayCommand = (apply: () => void): void => {
     if (getStudioRoute() === 'place') {
-      setPlaceStudioReturnAction(apply);
+      setPlaceStudioReturnDisplayCommand(apply);
       backToMap();
       return;
     }

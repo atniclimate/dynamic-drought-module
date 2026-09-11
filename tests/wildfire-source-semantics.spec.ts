@@ -45,7 +45,11 @@ import {
   activate as activateNifc,
   cancelActivation as cancelNifc,
   deactivate as deactivateNifc,
-  WILDFIRE_PULSE_PAINT_TARGETS
+  WILDFIRE_PULSE_PAINT_INTERVAL_MS,
+  WILDFIRE_PULSE_PAINT_TARGETS,
+  WILDFIRE_PULSE_SOFTWARE_TERRAIN_PAINT_INTERVAL_MS,
+  WILDFIRE_PULSE_TERRAIN_PAINT_INTERVAL_MS,
+  wildfirePulsePaintIntervalMs
 } from '../src/layers/nifc-fires';
 import {
   activate as activateSpc,
@@ -433,6 +437,233 @@ test('reduced motion keeps wildfire paint static and schedules no pulse', async 
     expect(harness.layerSpecs.get('nifc-other-outline')?.paint).toMatchObject({
       'line-color': NIFC_INCIDENT_PRESENTATION.other.lineColor
     });
+  } finally {
+    deactivateNifc(harness.map);
+    registry.deactivate('nifc-fires');
+    globalThis.fetch = originalFetch;
+    browser.restore();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Decision A (owner, 2026-09-11): the pulse's cadence on terrain
+// ---------------------------------------------------------------------------
+
+test('the pulse cadence is 60 ms flat, 250 ms on terrain, 500 ms on terrain with a software renderer', () => {
+  expect(WILDFIRE_PULSE_PAINT_INTERVAL_MS).toBe(60);
+  expect(WILDFIRE_PULSE_TERRAIN_PAINT_INTERVAL_MS).toBe(250);
+  expect(WILDFIRE_PULSE_SOFTWARE_TERRAIN_PAINT_INTERVAL_MS).toBe(500);
+
+  // The flat map keeps 60 ms whatever the renderer.
+  for (const rendererClass of ['hardware', 'software', 'unknown'] as const) {
+    expect(
+      wildfirePulsePaintIntervalMs({ terrainPresent: false, rendererClass })
+    ).toBe(WILDFIRE_PULSE_PAINT_INTERVAL_MS);
+  }
+  expect(
+    wildfirePulsePaintIntervalMs({ terrainPresent: true, rendererClass: 'hardware' })
+  ).toBe(WILDFIRE_PULSE_TERRAIN_PAINT_INTERVAL_MS);
+  // An unknown renderer is not treated as software.
+  expect(
+    wildfirePulsePaintIntervalMs({ terrainPresent: true, rendererClass: 'unknown' })
+  ).toBe(WILDFIRE_PULSE_TERRAIN_PAINT_INTERVAL_MS);
+  expect(
+    wildfirePulsePaintIntervalMs({ terrainPresent: true, rendererClass: 'software' })
+  ).toBe(WILDFIRE_PULSE_SOFTWARE_TERRAIN_PAINT_INTERVAL_MS);
+});
+
+/** A stand-in for the map's own GL context that reports SwiftShader. */
+const SWIFTSHADER_PAINTER = {
+  context: {
+    gl: {
+      RENDERER: 0x1f01,
+      getParameter: (name: number) =>
+        name === 0x9246 ? 'Google SwiftShader' : 'WebKit WebGL',
+      getExtension: () => ({ UNMASKED_RENDERER_WEBGL: 0x9246 })
+    }
+  }
+};
+
+/**
+ * Activate NIFC on a fresh fake map, feed the pulse one frame per
+ * timestamp, and record the colour committed at each frame that committed
+ * (frames that did not commit are absent from the result). `beforeFrame`
+ * may change the scene between frames.
+ */
+async function runPulse(
+  extraMap: Record<string, unknown>,
+  timestamps: readonly number[],
+  beforeFrame?: (timestamp: number) => void
+): Promise<Map<number, unknown>> {
+  const originalFetch = globalThis.fetch;
+  const browser = installAnimationBrowser(false);
+  const harness = fakeMapHarness();
+  Object.assign(harness.map as object, extraMap);
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify(MIXED_FIRE_COLLECTION), {
+      status: 200,
+      headers: { 'content-type': 'application/geo+json' }
+    });
+  const committed = new Map<number, unknown>();
+  try {
+    await activateNifc(harness.map);
+    for (const timestamp of timestamps) {
+      beforeFrame?.(timestamp);
+      const before = harness.paintChanges.length;
+      browser.takeNextFrame()(timestamp);
+      const writes = harness.paintChanges.slice(before);
+      if (writes.length === 0) continue;
+      // Every present target gets the same colour in one commit.
+      expect(new Set(writes.map(({ value }) => value)).size).toBe(1);
+      committed.set(timestamp, writes[0]?.value);
+    }
+  } finally {
+    deactivateNifc(harness.map);
+    registry.deactivate('nifc-fires');
+    globalThis.fetch = originalFetch;
+    browser.restore();
+  }
+  return committed;
+}
+
+/** The colour the pulse owes at `timestamp` when its first frame ran at `firstFrameAt`. */
+function pulseColorAt(timestamp: number, firstFrameAt: number): string {
+  return interpolateWildfirePulseColor(
+    timestamp - firstFrameAt + WILDFIRE_PULSE_DURATION_MS / 4
+  );
+}
+
+test('on terrain the pulse commits at the slower cadence, and back on the flat map it returns to 60 ms without a restart', async () => {
+  const t0 = 1_000;
+
+  // Terrain present, renderer unknown (the fake map has no painter): 250 ms.
+  let terrain: { source: string } | null = { source: 'terrain' };
+  const hardware = await runPulse(
+    { getTerrain: () => terrain },
+    [t0, t0 + 60, t0 + 100, t0 + 249, t0 + 250, t0 + 400, t0 + 500, t0 + 560],
+    (timestamp) => {
+      // Leave 3D after the 500 ms commit: the next frame, 60 ms later,
+      // commits at once on the flat cadence.
+      if (timestamp === t0 + 560) terrain = null;
+    }
+  );
+  expect([...hardware.keys()]).toEqual([t0, t0 + 250, t0 + 500, t0 + 560]);
+  for (const [timestamp, color] of hardware) {
+    // The phase never restarted: every commit is the colour elapsed time
+    // since the FIRST frame owes, across the cadence change.
+    expect(color).toBe(pulseColorAt(timestamp, t0));
+  }
+
+  // Terrain present on a software renderer: 500 ms.
+  const software = await runPulse(
+    { getTerrain: () => ({ source: 'terrain' }), painter: SWIFTSHADER_PAINTER },
+    [t0, t0 + 250, t0 + 499, t0 + 500, t0 + 750, t0 + 1_000]
+  );
+  expect([...software.keys()]).toEqual([t0, t0 + 500, t0 + 1_000]);
+});
+
+test('the pulse colour at a given elapsed time does not depend on the cadence', async () => {
+  const t0 = 2_000;
+  const frames = Array.from({ length: 41 }, (_unused, index) => t0 + index * 50);
+
+  const flat = await runPulse({ getTerrain: () => null }, frames);
+  const onTerrain = await runPulse(
+    { getTerrain: () => ({ source: 'terrain' }) },
+    frames
+  );
+  const onSoftware = await runPulse(
+    { getTerrain: () => ({ source: 'terrain' }), painter: SWIFTSHADER_PAINTER },
+    frames
+  );
+
+  // Three cadences, three different commit counts over the same two seconds.
+  expect(flat.size).toBeGreaterThan(onTerrain.size);
+  expect(onTerrain.size).toBeGreaterThan(onSoftware.size);
+  // Wherever two cadences commit at the same moment they commit the same
+  // colour, and it is the colour elapsed time owes.
+  for (const [timestamp, color] of onSoftware) {
+    expect(onTerrain.get(timestamp)).toBe(color);
+    expect(flat.get(timestamp)).toBe(color);
+    expect(color).toBe(pulseColorAt(timestamp, t0));
+  }
+  for (const [timestamp, color] of onTerrain) {
+    expect(color).toBe(pulseColorAt(timestamp, t0));
+  }
+});
+
+test('the pulse reads its paint targets once, re-reads them when the ribbon source changes or a layer goes, and never probes absent slabs per commit', async () => {
+  const originalFetch = globalThis.fetch;
+  const browser = installAnimationBrowser(false);
+  const harness = fakeMapHarness();
+  const sourceDataListeners = new Set<(event: { sourceId?: string }) => void>();
+  let layerLookups = 0;
+  const probedLayer = harness.map.getLayer.bind(harness.map);
+  Object.assign(harness.map as object, {
+    getLayer: (id: string) => {
+      layerLookups += 1;
+      return probedLayer(id);
+    },
+    on: (type: string, listener: (event: { sourceId?: string }) => void) => {
+      if (type === 'sourcedata') sourceDataListeners.add(listener);
+    },
+    off: (type: string, listener: (event: { sourceId?: string }) => void) => {
+      if (type === 'sourcedata') sourceDataListeners.delete(listener);
+    }
+  });
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify(MIXED_FIRE_COLLECTION), {
+      status: 200,
+      headers: { 'content-type': 'application/geo+json' }
+    });
+  const ribbonTargets = WILDFIRE_PULSE_PAINT_TARGETS.filter((target) =>
+    target.layerId.startsWith('nifc-perimeter-ribbon')
+  );
+  const writtenLayers = (from: number): string[] =>
+    harness.paintChanges.slice(from).map(({ layerId }) => layerId);
+
+  try {
+    await activateNifc(harness.map);
+    expect(sourceDataListeners.size).toBe(1);
+
+    // First commit: one read of all eight targets.
+    layerLookups = 0;
+    browser.takeNextFrame()(1_000);
+    expect(layerLookups).toBe(WILDFIRE_PULSE_PAINT_TARGETS.length);
+
+    // Later commits confirm only the two present targets; the six absent
+    // slabs are not probed again.
+    layerLookups = 0;
+    browser.takeNextFrame()(1_100);
+    expect(layerLookups).toBe(2);
+
+    // The ribbon arrives (its source and six slabs in one step) and its
+    // sourcedata event marks the list stale: the next commit paints all eight.
+    for (const target of ribbonTargets) {
+      harness.map.addLayer({ id: target.layerId, type: 'fill-extrusion' } as never);
+    }
+    for (const listener of sourceDataListeners) listener({ sourceId: 'nifc-perimeter-ribbon' });
+    let from = harness.paintChanges.length;
+    browser.takeNextFrame()(1_200);
+    expect(writtenLayers(from)).toEqual(
+      WILDFIRE_PULSE_PAINT_TARGETS.map(({ layerId }) => layerId)
+    );
+
+    // An unrelated source's event does not invalidate the list.
+    for (const listener of sourceDataListeners) listener({ sourceId: 'hms-smoke' });
+    layerLookups = 0;
+    browser.takeNextFrame()(1_300);
+    expect(layerLookups).toBe(WILDFIRE_PULSE_PAINT_TARGETS.length);
+
+    // A slab removed with no event is caught by the commit itself: the list
+    // is re-read and the missing layer is never painted.
+    harness.map.removeLayer(ribbonTargets[0]!.layerId);
+    from = harness.paintChanges.length;
+    browser.takeNextFrame()(1_400);
+    expect(writtenLayers(from)).not.toContain(ribbonTargets[0]!.layerId);
+    expect(writtenLayers(from)).toHaveLength(WILDFIRE_PULSE_PAINT_TARGETS.length - 1);
+
+    deactivateNifc(harness.map);
+    expect(sourceDataListeners.size).toBe(0);
   } finally {
     deactivateNifc(harness.map);
     registry.deactivate('nifc-fires');

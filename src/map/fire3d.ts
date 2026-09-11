@@ -56,11 +56,12 @@ import {
   FIRE3D_SKY_SPECIFICATION,
   FIRE3D_TERRAIN_EXAGGERATION,
   classifyTerrainCoverage,
+  fire3dCoverageNote,
   isWithinTerrainCoverage
 } from '../config/fire3d-presentation';
 import type { TerrainCoverageReading } from '../config/fire3d-presentation';
 import { URLS } from '../config/urls';
-import { resolveHillshadeArchiveUrl } from '../layers/hillshade';
+import { resolveHillshadeArchive } from '../layers/hillshade';
 import { probeArchiveHeader } from '../util/pmtiles-probe';
 import { watchContextLoss, webGl2Capability } from './gl-capability';
 import {
@@ -106,6 +107,18 @@ export interface Fire3DStatus {
    * context; empty while inactive or when every context layer degraded). */
   readonly contextLayers: readonly string[];
   /**
+   * The deepest zoom the RESOLVED terrain archive declares in its own
+   * header, while the scene is active; null otherwise. DR-083 step 1
+   * (2026-09-10): the scene probes the deep archive first and falls back
+   * to the bundled one, and the two differ only in depth (10 against 8),
+   * so the coverage sentence's zoom figure is formatted from this value
+   * rather than from the bundled constant, which would be false on the
+   * first frame after the deep archive resolves. It is disclosure only:
+   * the number is never written back into the source as a declared zoom,
+   * because a declared option overrides the archive header permanently.
+   */
+  readonly terrainMaxZoom: number | null;
+  /**
    * How much of the CURRENT VIEW's ground FIRE3D_TERRAIN_COVERAGE holds,
    * while the scene is active: `full`, `partial`, or `none`. Uncovered
    * ground is genuinely flat (MapLibre's terrain sampler has no data to
@@ -121,6 +134,56 @@ export interface Fire3DStatus {
    * finding 8).
    */
   readonly terrainCoverage: TerrainCoverageReading;
+  /**
+   * Whether the scene's OWN sources (the terrain DEM and any drape/
+   * structures sources this activation added) are still streaming tiles, or
+   * have all reported loaded. 'streaming' from the moment the scene first
+   * publishes 'active' until every scene source reports loaded via
+   * `map.isSourceLoaded`, then 'settled'; back to 'streaming' if a source
+   * starts loading again (for example a re-fetch after a pan). `null` while
+   * inactive, checking, or unavailable, so it never claims a transport
+   * reading for a scene that is not there.
+   *
+   * Exists because the scene publishes 'active' as soon as its context
+   * layers activate (`publishStatus('active', null)` at the end of
+   * `activateScene`, below), while the terrain DEM, the hazard drape, and
+   * the structures archive can still be streaming tiles under it on the
+   * software renderer; a caller that treats 'active' alone as "the scene is
+   * ready" can starve a layer it activates in the same breath. Recorded
+   * 2026-09-10/11: the RAWS station marker case in tests/fire3d-mode.spec.ts
+   * checked the telemetry layer immediately after 'active' and starved
+   * telemetry's own first activation against the still-arriving terrain
+   * traffic; that case now waits on this field instead of on 'active' alone.
+   */
+  readonly transport: SceneTransportReading | null;
+}
+
+/** `Fire3DStatus.transport`'s own two live values (the field is otherwise
+ * `null`). Named separately so the derivation below can be imported and
+ * exercised without a `Fire3DStatus`. */
+export type SceneTransportReading = 'streaming' | 'settled';
+
+/**
+ * Derive the scene transport reading from the scene's own source ids and a
+ * loaded predicate. Pure, so the state machine behind `Fire3DStatus.transport`
+ * is node-testable without a MapLibre map at all (see the node cases beside
+ * `parseFire3dParam` near the top of tests/fire3d-mode.spec.ts, and the
+ * derivation's own cases beside this function's export).
+ *
+ * 'streaming' whenever the scene has not yet added every source it owns (an
+ * activation still building its context layers) or when any added source is
+ * still loading; 'settled' only once every known scene source reports
+ * loaded. An empty source list reads as 'streaming': the scene always adds
+ * at least its own terrain source while active, so an empty list here means
+ * the caller asked before that happened, not that there is nothing left to
+ * wait for.
+ */
+export function deriveSceneTransport(
+  sourceIds: readonly string[],
+  isLoaded: (id: string) => boolean
+): SceneTransportReading {
+  if (sourceIds.length === 0) return 'streaming';
+  return sourceIds.every((id) => isLoaded(id)) ? 'settled' : 'streaming';
 }
 
 export interface Fire3DGateInput {
@@ -187,7 +250,9 @@ let status: Fire3DStatus = {
   smokeVolume: false,
   perimeterRibbon: false,
   contextLayers: [],
-  terrainCoverage: 'full'
+  terrainMaxZoom: null,
+  terrainCoverage: 'full',
+  transport: null
 };
 const statusListeners = new Set<() => void>();
 
@@ -198,6 +263,9 @@ let activation: AbortController | null = null;
  * syncEmbedNote, kept current by coverageMoveListener while active. `full`
  * while inactive, so neither coverage sentence renders outside the scene. */
 let terrainCoverage: TerrainCoverageReading = 'full';
+/** Mirrors Fire3DStatus.terrainMaxZoom: the resolved archive's header
+ * depth from activation to rollback, null in between. */
+let resolvedTerrainMaxZoom: number | null = null;
 /** The 'moveend' listener that keeps terrainCoverage current across a
  * pan while the scene stays active; detached in rollbackScene. */
 let coverageMoveListener: (() => void) | null = null;
@@ -214,6 +282,11 @@ let ribbonModule: typeof import('../layers/nifc-perimeter-ribbon') | null =
   null;
 let contextModule: typeof import('./fire3d-context') | null = null;
 let contextKeys: readonly string[] = [];
+/** Mirrors Fire3DStatus.transport; null while inactive, set from the first
+ * 'active' publish and cleared by detachTransportWatch in rollbackScene. */
+let sceneTransport: SceneTransportReading | null = null;
+let transportSourceDataListener: (() => void) | null = null;
+let transportIdleListener: (() => void) | null = null;
 /** Truthful per-layer embed disclosure lines, composed at activation from
  * what actually rendered (never static claims). */
 let contextEmbedLines: readonly string[] = [];
@@ -274,7 +347,9 @@ function syncEmbedNote(active: boolean): void {
   }
   const lines = [
     FIRE3D_NON_PREDICTION_NOTE,
-    FIRE3D_COVERAGE_NOTE,
+    resolvedTerrainMaxZoom === null
+      ? FIRE3D_COVERAGE_NOTE
+      : fire3dCoverageNote(resolvedTerrainMaxZoom),
     ...terrainCoverageLines(terrainCoverage),
     ...contextEmbedLines
   ].filter((line) => line.length > 0);
@@ -329,7 +404,9 @@ function publishStatus(
     smokeVolume: state === 'active' && smokeVolumeOn,
     perimeterRibbon: state === 'active' && ribbonOn,
     contextLayers: state === 'active' ? contextKeys : [],
-    terrainCoverage: state === 'active' ? terrainCoverage : 'full'
+    terrainMaxZoom: state === 'active' ? resolvedTerrainMaxZoom : null,
+    terrainCoverage: state === 'active' ? terrainCoverage : 'full',
+    transport: state === 'active' ? sceneTransport : null
   };
   // Production-observable truth stamp (the dev-only __ddmMap handle is
   // dead-code-eliminated from dist/, so the verification suite reads mode
@@ -349,6 +426,11 @@ function publishStatus(
       root.dataset.ddmFire3dContext = contextKeys.join(' ');
     } else {
       delete root.dataset.ddmFire3dContext;
+    }
+    if (state === 'active' && sceneTransport !== null) {
+      root.dataset.ddmFire3dTransport = sceneTransport;
+    } else {
+      delete root.dataset.ddmFire3dTransport;
     }
     syncEmbedNote(state === 'active');
   }
@@ -405,16 +487,87 @@ function applyCamera(
   }
 }
 
+/** whp-3d.ts's own private SOURCE_ID, mirrored here rather than imported:
+ * the module is one of the lazy context chunks (fire3d-context.ts), and a
+ * static import into this file would pull it into fire3d's own bundle
+ * instead (the same reasoning TERRAIN_SOURCE_ID's neighbourhood documents
+ * for the deep-archive resolver, and the mobile test above asserts the
+ * chunk boundary this would otherwise break). */
+const WHP_DRAPE_SOURCE_ID = 'whp-2023';
+/** structures-3d.ts's own private SOURCE_ID, mirrored for the same reason. */
+const STRUCTURES_SOURCE_ID = 'structures-3d';
+
+/** The scene's own source ids that are ACTUALLY on the map right now: the
+ * terrain DEM always, plus whichever context sources this activation added
+ * (read from `contextKeys`, which the context module already reports
+ * truthfully per layer). Filtered by `map.getSource` so a layer that never
+ * activated (a corrupt archive, a chunk load failure) is never asked to be
+ * "loaded". */
+function currentSceneSourceIds(map: maplibregl.Map): string[] {
+  const ids = [TERRAIN_SOURCE_ID];
+  if (contextKeys.includes('whp')) ids.push(WHP_DRAPE_SOURCE_ID);
+  if (contextKeys.includes('structures')) ids.push(STRUCTURES_SOURCE_ID);
+  return ids.filter((id) => Boolean(map.getSource(id)));
+}
+
+/** `map.isSourceLoaded` under a defensive guard: a Node-level test's fake
+ * map (tests/map-harness.ts) declares no such method, and an unproven
+ * source reads as still streaming rather than as settled, matching this
+ * module's usual honesty bias (see readTerrainCoverage's own fallback). */
+function isSceneSourceLoaded(map: maplibregl.Map, id: string): boolean {
+  if (typeof map.isSourceLoaded !== 'function') return false;
+  try {
+    return map.isSourceLoaded(id);
+  } catch {
+    return false;
+  }
+}
+
+/** Recompute `sceneTransport` from the map's current source-load state and
+ * republish only on an actual change (mirrors reconcileSmokeVolume /
+ * reconcilePerimeterRibbon's own re-publish-on-change shape). */
+function recomputeSceneTransport(map: maplibregl.Map): void {
+  if (!active) return;
+  const next = deriveSceneTransport(currentSceneSourceIds(map), (id) =>
+    isSceneSourceLoaded(map, id)
+  );
+  if (next === sceneTransport) return;
+  sceneTransport = next;
+  publishStatus('active', null);
+}
+
+/** Start watching the scene's own sources for load progress. Idempotent;
+ * detachTransportWatch is its only counterpart. */
+function attachTransportWatch(map: maplibregl.Map): void {
+  if (transportSourceDataListener) return;
+  transportSourceDataListener = () => recomputeSceneTransport(map);
+  transportIdleListener = () => recomputeSceneTransport(map);
+  map.on('sourcedata', transportSourceDataListener);
+  map.on('idle', transportIdleListener);
+}
+
+function detachTransportWatch(map: maplibregl.Map): void {
+  if (transportSourceDataListener) {
+    map.off('sourcedata', transportSourceDataListener);
+  }
+  if (transportIdleListener) map.off('idle', transportIdleListener);
+  transportSourceDataListener = null;
+  transportIdleListener = null;
+  sceneTransport = null;
+}
+
 /** Remove everything the activation added, in reverse, then restore the
  * captured camera. Safe against partial setups (defensive guards). */
 function rollbackScene(map: maplibregl.Map): void {
   generation += 1;
   active = false;
+  detachTransportWatch(map);
   if (coverageMoveListener) {
     map.off('moveend', coverageMoveListener);
     coverageMoveListener = null;
   }
   terrainCoverage = 'full';
+  resolvedTerrainMaxZoom = null;
   if (tileWatch) {
     tileWatch.detach();
     tileWatch = null;
@@ -475,10 +628,18 @@ function failScene(map: maplibregl.Map, reason: string, err?: unknown): void {
  * an installation that has not published one, loses resolution and nothing
  * else. Only a failure of BOTH reaches the caller's `failScene` ladder.
  */
-async function resolveFire3DTerrainUrl(signal: AbortSignal): Promise<string> {
+interface ResolvedTerrainArchive {
+  readonly url: string;
+  /** The depth the archive's own header declares (byte 101), for disclosure. */
+  readonly maxZoom: number;
+}
+
+async function resolveFire3DTerrainUrl(
+  signal: AbortSignal
+): Promise<ResolvedTerrainArchive> {
   try {
-    await probeArchiveHeader(URLS.terrainPmtilesDeep, signal);
-    return URLS.terrainPmtilesDeep;
+    const header = await probeArchiveHeader(URLS.terrainPmtilesDeep, signal);
+    return { url: URLS.terrainPmtilesDeep, maxZoom: header.maxZoom };
   } catch (err) {
     // An aborted probe is a withdrawn activation, not a missing archive: let
     // the caller's own abort handling see it rather than spending a second
@@ -488,7 +649,8 @@ async function resolveFire3DTerrainUrl(signal: AbortSignal): Promise<string> {
       '[fire3d] the deep terrain archive is unreachable; falling back to the bundled archive.',
       err
     );
-    return resolveHillshadeArchiveUrl(signal);
+    const bundled = await resolveHillshadeArchive(signal);
+    return { url: bundled.url, maxZoom: bundled.header.maxZoom };
   }
 }
 
@@ -501,9 +663,9 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
   publishStatus('checking', null);
   savedCamera = { pitch: map.getPitch(), bearing: map.getBearing() };
 
-  let archiveUrl: string;
+  let resolved: ResolvedTerrainArchive;
   try {
-    archiveUrl = await resolveFire3DTerrainUrl(signal);
+    resolved = await resolveFire3DTerrainUrl(signal);
   } catch (err) {
     if (activation === myController) activation = null;
     if (signal.aborted || myGeneration !== generation) {
@@ -534,11 +696,14 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
     return;
   }
 
+  // Recorded before the source exists so the first 'active' publish and the
+  // embed note already name the archive that answered.
+  resolvedTerrainMaxZoom = resolved.maxZoom;
   try {
     if (!map.getSource(TERRAIN_SOURCE_ID)) {
       map.addSource(TERRAIN_SOURCE_ID, {
         type: 'raster-dem',
-        url: 'pmtiles://' + archiveUrl,
+        url: 'pmtiles://' + resolved.url,
         encoding: 'terrarium',
         tileSize: 512
         // NO maxzoom (and no minzoom) here, deliberately: the archive that
@@ -676,6 +841,14 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
     contextKeys = activation.keys;
     contextEmbedLines = activation.embedLines;
   }
+  // Every scene source this activation is ever going to add is now known
+  // (contextKeys is final): start watching them, and read the first
+  // transport reading before the FIRST 'active' publish names it, so a
+  // caller polling the stamp never sees 'active' with no transport value.
+  attachTransportWatch(map);
+  sceneTransport = deriveSceneTransport(currentSceneSourceIds(map), (id) =>
+    isSceneSourceLoaded(map, id)
+  );
   publishStatus('active', null);
 }
 
