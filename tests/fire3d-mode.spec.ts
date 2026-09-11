@@ -1755,8 +1755,10 @@ test.describe('W3/W4 browser truth', () => {
     // (node_modules/maplibre-gl/src/ui/marker.ts `_updateOpacity`, through
     // src/render/terrain.ts `depthAtPoint`). On the SwiftShader renderer
     // this suite runs on, the wildfire pulse (src/layers/nifc-fires.ts,
-    // a paint change every 60 ms) keeps queueing full pitch-60 terrain
-    // frames faster than SwiftShader draws them, and nothing in the page
+    // a paint change every 60 ms when this was measured; since decision A
+    // of 2026-09-11 it commits every 500 ms on terrain with this renderer,
+    // and this case keeps reduced motion regardless) keeps queueing full
+    // pitch-60 terrain frames faster than SwiftShader draws them, and nothing in the page
     // can see that queue until something reads the GPU back. A bare 1x1
     // readPixels on the settled scene, before telemetry was even on,
     // blocked the page's main thread 43 to 62 s (six probes, two workers);
