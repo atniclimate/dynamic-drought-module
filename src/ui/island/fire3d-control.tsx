@@ -306,6 +306,7 @@ export function Fire3DControl({
       <p
         class="shell-fire3d-status"
         data-fire3d-status={status?.state ?? 'inactive'}
+        data-fire3d-transport={status?.transport ?? undefined}
         aria-live="polite"
       >
         {statusLine(status)}
