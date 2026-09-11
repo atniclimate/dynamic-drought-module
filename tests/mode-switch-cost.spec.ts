@@ -8,7 +8,7 @@ import { gotoApp, awaitQuiescence } from './helpers';
 import {
   SWITCHES,
   switchId,
-  isCountedRequest,
+  classifyRequest,
   strippedUrl,
   tallyUrls,
   emptyRecord,
@@ -25,10 +25,19 @@ import {
  * merges into the committed record, and how the record renders. This file
  * owns the browser, the clock, and the one git read.
  *
+ * Correction 2 (this file): the regression gate compares DATA reads only
+ * (`classifyRequest`'s `'data'` verdict), not the raw request total.
+ * Raster map tiles (`'tile'`) dominate a switch's traffic and their count
+ * depends on viewport timing and on how much of the previous mode's tile
+ * streaming was still in flight, not on what the app did differently; a
+ * tile count is recorded for every switch but never gates. Both counts
+ * are merged into `requests` (the raw total) for the committed record's
+ * own visibility.
+ *
  * Run it directly with `npm run measure:mode-switch`. It writes nothing to
  * `docs/` unless `DDM_MEASURE_LABEL` is `baseline` or `candidate`; a bare
  * run still prints its numbers and, when a baseline is already committed,
- * still checks that no switch's request count rose.
+ * still checks that no switch's data-read count rose.
  */
 
 const VIEWPORT = { width: 1280, height: 800 };
@@ -55,9 +64,12 @@ interface SwitchResult {
   readonly from: string;
   readonly to: string;
   readonly requests: number;
+  readonly dataRequests: number;
+  readonly tileRequests: number;
   readonly quiescentMs: number;
   readonly pendingAtStart: readonly string[];
   readonly counted: readonly CountedEntry[];
+  readonly tiles: readonly CountedEntry[];
 }
 
 test.describe('mode-switch cost', () => {
@@ -81,15 +93,18 @@ test.describe('mode-switch cost', () => {
         ).toHaveAttribute('aria-pressed', 'true');
 
         // Counting starts only now: the boot's own reads are not the
-        // switch's cost.
+        // switch's cost. Data reads gate; tile reads are recorded but
+        // never gate (see the file doc comment above).
         const appOrigin = new URL(page.url()).origin;
-        const countedUrls: string[] = [];
-        let requestCount = 0;
+        const dataUrls: string[] = [];
+        const tileUrls: string[] = [];
         page.on('request', (request) => {
           const url = request.url();
-          if (isCountedRequest(url, appOrigin)) {
-            requestCount += 1;
-            countedUrls.push(strippedUrl(url, appOrigin));
+          const verdict = classifyRequest(url, appOrigin);
+          if (verdict === 'data') {
+            dataUrls.push(strippedUrl(url, appOrigin));
+          } else if (verdict === 'tile') {
+            tileUrls.push(strippedUrl(url, appOrigin));
           }
         });
 
@@ -125,12 +140,26 @@ test.describe('mode-switch cost', () => {
           `${id}: switching did not commit the "to" mode "${sw.to}"`
         ).toHaveAttribute('aria-pressed', 'true');
 
-        const counted = tallyUrls(countedUrls);
-        results.push({ id, from: sw.from, to: sw.to, requests: requestCount, quiescentMs, pendingAtStart, counted });
+        const counted = tallyUrls(dataUrls);
+        const tiles = tallyUrls(tileUrls);
+        const dataRequests = dataUrls.length;
+        const tileRequests = tileUrls.length;
+        results.push({
+          id,
+          from: sw.from,
+          to: sw.to,
+          requests: dataRequests + tileRequests,
+          dataRequests,
+          tileRequests,
+          quiescentMs,
+          pendingAtStart,
+          counted,
+          tiles
+        });
 
         console.log(
-          `${id}: ${requestCount} requests, ${quiescentMs} ms to quiescence, ` +
-            `pending at start = ${JSON.stringify(pendingAtStart)}`
+          `${id}: ${dataRequests} data reads, ${tileRequests} tile requests, ` +
+            `${quiescentMs} ms to quiescence, pending at start = ${JSON.stringify(pendingAtStart)}`
         );
       } finally {
         await context.close();
@@ -165,9 +194,12 @@ test.describe('mode-switch cost', () => {
     if (baselineRun && label !== 'baseline') {
       const { rises } = compareRuns(baselineRun, run);
       const detail = rises
-        .map((r: { id: string; baseline: number; candidate: number }) => `${r.id} (baseline ${r.baseline} to candidate ${r.candidate})`)
+        .map(
+          (r: { id: string; baselineData: number; candidateData: number }) =>
+            `${r.id} (baseline ${r.baselineData} to candidate ${r.candidateData})`
+        )
         .join('; ');
-      expect(rises, `request count rose for: ${detail}`).toEqual([]);
+      expect(rises, `data-read count rose for: ${detail}`).toEqual([]);
     } else {
       console.log('mode-switch-cost: no committed baseline run to compare against; skipping the regression check.');
     }

@@ -17,6 +17,7 @@ import {
   SWITCHES,
   switchId,
   isCountedRequest,
+  classifyRequest,
   strippedUrl,
   tallyUrls,
   emptyRecord,
@@ -33,9 +34,15 @@ function makeSwitchEntry(pair, overrides = {}) {
     from: pair.from,
     to: pair.to,
     requests: 3,
+    dataRequests: 3,
+    tileRequests: 0,
     quiescentMs: 400,
-    pendingAtStart: [],
+    // Non-empty by default so an unrelated test does not accidentally
+    // trip the "lower bound" footnote; tests that need the footnote set
+    // this to [] explicitly.
+    pendingAtStart: ['stub-layer'],
     counted: [{ url: '/data/us-states.geojson', n: 1 }],
+    tiles: [],
     ...overrides
   };
 }
@@ -98,6 +105,73 @@ test('isCountedRequest returns false, never throws, for an unparseable string', 
   assert.equal(isCountedRequest('not a url at all', ORIGIN), false);
 });
 
+// --- classifyRequest: ignored -------------------------------------------
+
+test('classifyRequest returns ignored for anything isCountedRequest rejects', () => {
+  assert.equal(classifyRequest(`${ORIGIN}/assets/index.js`, ORIGIN), 'ignored');
+  assert.equal(classifyRequest(`${ORIGIN}/`, ORIGIN), 'ignored');
+  assert.equal(classifyRequest('data:text/plain;base64,aGVsbG8=', ORIGIN), 'ignored');
+  assert.equal(classifyRequest('not a url at all', ORIGIN), 'ignored');
+});
+
+// --- classifyRequest: the DescribeDomains / GetCapabilities trap --------
+
+test('classifyRequest returns data for a GIBS WMTS DescribeDomains request, not tile', () => {
+  const url =
+    'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/wmts.cgi?SERVICE=WMTS&REQUEST=DescribeDomains&VERSION=1.0.0';
+  assert.equal(classifyRequest(url, ORIGIN), 'data');
+});
+
+test('classifyRequest returns data for a GetCapabilities request, case-insensitively', () => {
+  const url = 'https://example.com/wmts/service.cgi?service=wmts&request=getcapabilities';
+  assert.equal(classifyRequest(url, ORIGIN), 'data');
+});
+
+// --- classifyRequest: tile rules -----------------------------------------
+
+test('classifyRequest returns tile for a GIBS WMTS tile URL', () => {
+  const url =
+    'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2026-09-11/GoogleMapsCompatible_Level9/7/22/45.jpg';
+  assert.equal(classifyRequest(url, ORIGIN), 'tile');
+});
+
+test('classifyRequest returns tile for an ArcGIS ImageServer exportImage URL with a bbox', () => {
+  const url =
+    'https://example.com/arcgis/rest/services/Fire/MapServer/exportImage?bbox=-120,40,-119,41&f=image';
+  assert.equal(classifyRequest(url, ORIGIN), 'tile');
+});
+
+test('classifyRequest returns data for an ArcGIS MapServer /query URL', () => {
+  const url = 'https://example.com/arcgis/rest/services/WFIGS/MapServer/0/query?where=1=1&f=json';
+  assert.equal(classifyRequest(url, ORIGIN), 'data');
+});
+
+test('classifyRequest returns data for /data/enso-indices.json', () => {
+  assert.equal(classifyRequest(`${ORIGIN}/data/enso-indices.json`, ORIGIN), 'data');
+});
+
+test('classifyRequest returns tile for /tiles/x.pmtiles', () => {
+  assert.equal(classifyRequest(`${ORIGIN}/tiles/x.pmtiles`, ORIGIN), 'tile');
+});
+
+test('classifyRequest returns ignored for /assets/index.js', () => {
+  assert.equal(classifyRequest(`${ORIGIN}/assets/index.js`, ORIGIN), 'ignored');
+});
+
+test('classifyRequest returns tile for a z/x/y path with an extension', () => {
+  assert.equal(
+    classifyRequest('https://tiles.example.com/layer/7/22/45.png', ORIGIN),
+    'tile'
+  );
+});
+
+test('classifyRequest returns tile for a z/x/y path with no extension', () => {
+  assert.equal(
+    classifyRequest('https://tiles.example.com/layer/7/22/45', ORIGIN),
+    'tile'
+  );
+});
+
 // --- renderReport --------------------------------------------------------
 
 test('renderReport with one run renders a row per switch in SWITCHES order and no em dash', () => {
@@ -120,18 +194,24 @@ test('renderReport with one run renders a row per switch in SWITCHES order and n
   });
 });
 
-test('renderReport with both runs adds candidate columns and a delta column, each pinned to its own row', () => {
+test('renderReport with both runs adds candidate columns and a delta column computed on data reads, each pinned to its own row', () => {
   let record = mergeRun(emptyRecord(), makeRun('baseline'));
   record = mergeRun(
     record,
     makeRun('candidate', {
       switches: SWITCHES.map((pair, i) =>
-        makeSwitchEntry(pair, { requests: i === 0 ? 5 : 3, quiescentMs: i === 0 ? 900 : 400 })
+        makeSwitchEntry(pair, {
+          dataRequests: i === 0 ? 5 : 3,
+          requests: i === 0 ? 5 : 3,
+          quiescentMs: i === 0 ? 900 : 400
+        })
       )
     })
   );
   const markdown = renderReport(record);
 
+  assert.match(markdown, /Candidate data reads/);
+  assert.match(markdown, /Candidate tiles/);
   assert.match(markdown, /Candidate requests/);
   assert.match(markdown, /Candidate ms/);
   assert.match(markdown, /Delta/);
@@ -142,14 +222,14 @@ test('renderReport with both runs adds candidate columns and a delta column, eac
     .filter((line) => line.startsWith('|') && !line.includes('From') && !line.includes('---'));
   assert.equal(rows.length, SWITCHES.length);
   SWITCHES.forEach((pair, i) => {
-    const baselineRequests = 3;
-    const candidateRequests = i === 0 ? 5 : 3;
+    const baselineData = 3;
+    const candidateData = i === 0 ? 5 : 3;
     const candidateMs = i === 0 ? 900 : 400;
     const delta = i === 0 ? '\\+2' : '0';
     assert.match(
       rows[i],
       new RegExp(
-        `\\| ${pair.from} \\| ${pair.to} \\| ${baselineRequests} \\| 400 \\| ${candidateRequests} \\| ${candidateMs} \\| ${delta} \\|`
+        `\\| ${pair.from} \\| ${pair.to} \\| ${baselineData} \\| 0 \\| 3 \\| 400 \\| ${candidateData} \\| 0 \\| ${candidateData} \\| ${candidateMs} \\| ${delta} \\|`
       ),
       `row ${i} (${switchId(pair)}) did not carry its own baseline, candidate, and delta values`
     );
@@ -197,19 +277,19 @@ test('compareRuns does not throw for a run whose switches array is empty', () =>
 test('compareRuns reports a rise when the candidate exceeds the baseline', () => {
   const baseline = makeRun('baseline');
   const candidate = makeRun('candidate', {
-    switches: SWITCHES.map((pair, i) => makeSwitchEntry(pair, { requests: i === 0 ? 4 : 3 }))
+    switches: SWITCHES.map((pair, i) => makeSwitchEntry(pair, { dataRequests: i === 0 ? 4 : 3 }))
   });
   const { rises } = compareRuns(baseline, candidate);
   assert.equal(rises.length, 1);
   assert.equal(rises[0].id, switchId(SWITCHES[0]));
-  assert.equal(rises[0].baseline, 3);
-  assert.equal(rises[0].candidate, 4);
+  assert.equal(rises[0].baselineData, 3);
+  assert.equal(rises[0].candidateData, 4);
 });
 
 test('compareRuns reports unchanged when equal and a fall when the candidate is lower', () => {
   const baseline = makeRun('baseline');
   const candidate = makeRun('candidate', {
-    switches: SWITCHES.map((pair, i) => makeSwitchEntry(pair, { requests: i === 1 ? 1 : 3 }))
+    switches: SWITCHES.map((pair, i) => makeSwitchEntry(pair, { dataRequests: i === 1 ? 1 : 3 }))
   });
   const { falls, unchanged, rises } = compareRuns(baseline, candidate);
   assert.equal(rises.length, 0);
@@ -226,9 +306,44 @@ test('compareRuns reports a switch present in the baseline and absent from the c
   const { missing, falls, rises } = compareRuns(baseline, candidate);
   assert.equal(missing.length, 1);
   assert.equal(missing[0].id, switchId(SWITCHES[2]));
-  assert.equal(missing[0].candidate, null);
+  assert.equal(missing[0].candidateData, null);
+  assert.equal(missing[0].candidateTiles, null);
   assert.equal(falls.length, 0);
   assert.equal(rises.length, 0);
+});
+
+test('compareRuns compares dataRequests and ignores a tile-count-only change', () => {
+  const baseline = makeRun('baseline', {
+    switches: SWITCHES.map((pair) =>
+      makeSwitchEntry(pair, { requests: 19, dataRequests: 3, tileRequests: 16 })
+    )
+  });
+  const candidate = makeRun('candidate', {
+    switches: SWITCHES.map((pair) =>
+      makeSwitchEntry(pair, { requests: 40, dataRequests: 3, tileRequests: 37 })
+    )
+  });
+  const { rises, falls, unchanged } = compareRuns(baseline, candidate);
+  assert.equal(rises.length, 0, 'a tile-only rise must not be reported as a rise');
+  assert.equal(falls.length, 0);
+  assert.equal(unchanged.length, SWITCHES.length);
+  assert.equal(unchanged[0].baselineData, 3);
+  assert.equal(unchanged[0].candidateData, 3);
+  assert.equal(unchanged[0].baselineTiles, 16);
+  assert.equal(unchanged[0].candidateTiles, 37);
+});
+
+test('compareRuns refuses a run whose switches lack dataRequests', () => {
+  const oldShapeSwitch = { id: switchId(SWITCHES[0]), from: SWITCHES[0].from, to: SWITCHES[0].to, requests: 19, quiescentMs: 400, pendingAtStart: [], counted: [] };
+  const oldRun = makeRun('baseline', { switches: [oldShapeSwitch] });
+  assert.throws(
+    () => compareRuns(oldRun, makeRun('candidate')),
+    (err) => err instanceof TypeError && /dataRequests/.test(err.message)
+  );
+  assert.throws(
+    () => compareRuns(makeRun('baseline'), oldRun),
+    (err) => err instanceof TypeError && /dataRequests/.test(err.message)
+  );
 });
 
 // --- mergeRun --------------------------------------------------------------

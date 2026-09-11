@@ -21,9 +21,21 @@
  *   { label: 'baseline' | 'candidate', commit: '<short sha>',
  *     recordedAt: '<ISO 8601>', viewport: { width: 1280, height: 800 },
  *     switches: [ { id, from, to, requests: <integer>,
+ *                   dataRequests: <integer>, tileRequests: <integer>,
  *                   quiescentMs: <integer>,
  *                   pendingAtStart: [<layer key>, ...],
- *                   counted: [{ url, n }, ...] }, ... ] }
+ *                   counted: [{ url, n }, ...],
+ *                   tiles: [{ url, n }, ...] }, ... ] }
+ *
+ * `requests` is the raw total of `dataRequests` plus `tileRequests`, kept
+ * because the milestone's acceptance sentence names "the request count".
+ * The report's regression gate compares `dataRequests` only: almost all of
+ * a switch's raw request count is raster map tiles, whose count depends on
+ * viewport timing and on how much of the previous mode's tile streaming was
+ * still in flight, not on anything the app did differently (DDM-P14-T08
+ * correction 2). `counted` holds the DATA reads only (what `classifyRequest`
+ * calls `'data'`); `tiles` holds the tile reads (what it calls `'tile'`),
+ * tallied the same way.
  *
  * A RECORD is `{ schema: 1, note: <string>, runs: { baseline?: RUN,
  * candidate?: RUN } }`, the shape written to and read from the committed
@@ -91,6 +103,66 @@ export function isCountedRequest(url, appOrigin) {
   if (pathname === '/' || pathname.endsWith('/')) return false;
   if (SAME_ORIGIN_REJECT_EXTENSIONS.has(sameOriginPathnameExtension(pathname))) return false;
   return true;
+}
+
+const TILE_EXTENSIONS = new Set([
+  '.png', '.jpg', '.jpeg', '.webp', '.avif', '.pbf', '.mvt', '.pmtiles'
+]);
+
+const XYZ_TRIPLE = /\/\d+\/\d+\/\d+(\.[a-z0-9]+)?$/;
+
+/**
+ * Classifies a counted request (see `isCountedRequest`) as `'tile'` (a
+ * raster or vector map tile, whose count is viewport and timing dependent)
+ * or `'data'` (everything else: a JSON, GeoJSON, or query-style read whose
+ * count reflects what the app actually did). Anything `isCountedRequest`
+ * rejects is `'ignored'`. Never throws, for the same reason
+ * `isCountedRequest` never throws.
+ *
+ * The rules run in this fixed order and the first match wins:
+ *
+ *   1. A query string containing `REQUEST=DescribeDomains` or
+ *      `REQUEST=GetCapabilities` (case-insensitive) is `'data'`, even
+ *      though its path looks like a tile endpoint (a GIBS WMTS
+ *      `wmts.cgi?...&REQUEST=DescribeDomains&...` is a metadata call, not a
+ *      tile fetch). This exception is checked before every tile rule.
+ *   2. A pathname containing `/wmts/` is `'tile'`.
+ *   3. A pathname ending in a z/x/y triple (three final numeric path
+ *      segments, with an optional extension) is `'tile'`.
+ *   4. A pathname whose extension is one of `.png .jpg .jpeg .webp .avif
+ *      .pbf .mvt .pmtiles` is `'tile'`.
+ *   5. A pathname ending with `/exportimage` (case-insensitive), or
+ *      containing `/imageserver/` with a `bbox=` query parameter, is
+ *      `'tile'`.
+ *   6. A pathname containing `/tile/` or `/tiles/` is `'tile'`.
+ *   7. Anything counted that matches none of the above is `'data'`.
+ *
+ * Matching is case-insensitive on the pathname and query string and
+ * ignores the hash.
+ */
+export function classifyRequest(url, appOrigin) {
+  if (!isCountedRequest(url, appOrigin)) return 'ignored';
+
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return 'ignored';
+  }
+
+  const pathname = parsed.pathname.toLowerCase();
+  const search = parsed.search.toLowerCase();
+
+  if (search.includes('request=describedomains') || search.includes('request=getcapabilities')) {
+    return 'data';
+  }
+  if (pathname.includes('/wmts/')) return 'tile';
+  if (XYZ_TRIPLE.test(pathname)) return 'tile';
+  if (TILE_EXTENSIONS.has(sameOriginPathnameExtension(pathname))) return 'tile';
+  if (pathname.endsWith('/exportimage')) return 'tile';
+  if (pathname.includes('/imageserver/') && search.includes('bbox=')) return 'tile';
+  if (pathname.includes('/tile/') || pathname.includes('/tiles/')) return 'tile';
+  return 'data';
 }
 
 const STRIPPED_MAX_LENGTH = 160;
@@ -173,10 +245,12 @@ export function mergeRun(record, run) {
 
 /**
  * Throws a TypeError when `value` is not a RUN: refuses `undefined`, `null`,
- * and a RECORD passed by mistake (a RECORD has no top-level `switches`
- * array; it has `switches` nested under `runs.baseline` or
- * `runs.candidate`). An array is required, but an empty array is a legal
- * run with no switches recorded yet, so it passes.
+ * a RECORD passed by mistake (a RECORD has no top-level `switches` array;
+ * it has `switches` nested under `runs.baseline` or `runs.candidate`), and
+ * an old-shape RUN whose switch entries predate DDM-P14-T08 correction 2
+ * (no `dataRequests` field), which cannot be compared on data reads. An
+ * array is required, but an empty array is a legal run with no switches
+ * recorded yet, so it passes.
  */
 function assertIsRun(value, argName) {
   if (!value || !Array.isArray(value.switches)) {
@@ -186,14 +260,24 @@ function assertIsRun(value, argName) {
         `"runs.candidate"); got ${value === null ? 'null' : typeof value}.`
     );
   }
+  const oldShapeEntry = value.switches.find((s) => typeof s.dataRequests !== 'number');
+  if (oldShapeEntry) {
+    throw new TypeError(
+      `compareRuns: "${argName}" has a switch entry ("${oldShapeEntry.id}") with no ` +
+        'numeric "dataRequests" field. This is an old-shape RUN recorded before ' +
+        'DDM-P14-T08 correction 2 (which gates on data reads, not raw request ' +
+        'count); it must be re-measured, not compared as-is.'
+    );
+  }
 }
 
 /**
  * Compares a candidate run against a baseline run, switch by switch, in
- * SWITCHES order. A switch the baseline never recorded is skipped
- * entirely. A switch present in the baseline and absent from the
- * candidate is reported as `missing`, never as a fall. Throws a TypeError
- * if either argument is not a RUN (see `assertIsRun`).
+ * SWITCHES order, on `dataRequests` (raster tile counts are viewport and
+ * timing dependent and are reported, never gated). A switch the baseline
+ * never recorded is skipped entirely. A switch present in the baseline and
+ * absent from the candidate is reported as `missing`, never as a fall.
+ * Throws a TypeError if either argument is not a RUN (see `assertIsRun`).
  */
 export function compareRuns(baseline, candidate) {
   assertIsRun(baseline, 'baseline');
@@ -213,12 +297,28 @@ export function compareRuns(baseline, candidate) {
     if (!b) continue;
     const c = candidateById.get(id);
     if (!c) {
-      missing.push({ id, from: pair.from, to: pair.to, baseline: b.requests, candidate: null });
+      missing.push({
+        id,
+        from: pair.from,
+        to: pair.to,
+        baselineData: b.dataRequests,
+        candidateData: null,
+        baselineTiles: b.tileRequests,
+        candidateTiles: null
+      });
       continue;
     }
-    const entry = { id, from: pair.from, to: pair.to, baseline: b.requests, candidate: c.requests };
-    if (c.requests > b.requests) rises.push(entry);
-    else if (c.requests < b.requests) falls.push(entry);
+    const entry = {
+      id,
+      from: pair.from,
+      to: pair.to,
+      baselineData: b.dataRequests,
+      candidateData: c.dataRequests,
+      baselineTiles: b.tileRequests,
+      candidateTiles: c.tileRequests
+    };
+    if (c.dataRequests > b.dataRequests) rises.push(entry);
+    else if (c.dataRequests < b.dataRequests) falls.push(entry);
     else unchanged.push(entry);
   }
 
@@ -230,20 +330,21 @@ function formatDelta(delta) {
   return `${delta}`;
 }
 
-function renderCountedDetail(run) {
+function renderUrlDetail(run, { title, field, emptyLabel }) {
   const lines = [];
   lines.push('<details>');
-  lines.push(`<summary>Counted requests per switch (${run.label}, ${run.commit})</summary>`);
+  lines.push(`<summary>${title} (${run.label}, ${run.commit})</summary>`);
   lines.push('');
   for (const pair of SWITCHES) {
     const id = switchId(pair);
     const entry = run.switches.find((s) => s.id === id);
+    const list = entry ? entry[field] : null;
     lines.push(`- \`${id}\`:`);
-    if (!entry || entry.counted.length === 0) {
-      lines.push('  - (no counted requests recorded)');
+    if (!list || list.length === 0) {
+      lines.push(`  - (${emptyLabel})`);
       continue;
     }
-    for (const { url, n } of entry.counted) {
+    for (const { url, n } of list) {
       lines.push(`  - ${url} (${n})`);
     }
   }
@@ -252,12 +353,33 @@ function renderCountedDetail(run) {
   return lines.join('\n');
 }
 
+function renderCountedDetail(run) {
+  return renderUrlDetail(run, {
+    title: 'Counted data reads per switch',
+    field: 'counted',
+    emptyLabel: 'no data reads recorded'
+  });
+}
+
+function renderTileDetail(run) {
+  return renderUrlDetail(run, {
+    title: 'Tile requests per switch',
+    field: 'tiles',
+    emptyLabel: 'no tile requests recorded'
+  });
+}
+
+const LOWER_BOUND_MARK = '†'; // dagger footnote marker
+
 /**
  * Renders the committed markdown table for `record`. With only a baseline
- * run, the table has Requests and Time to quiescence columns; with both
- * runs, it adds Candidate requests, Candidate ms, and a Delta column
- * (candidate minus baseline, written with a leading + when positive and 0
- * when equal).
+ * run, the table has From, To, Data reads, Tiles, Requests, and Time to
+ * quiescence columns; with both runs, it adds Candidate data reads,
+ * Candidate tiles, Candidate requests, Candidate ms, and a Delta column
+ * computed on data reads (candidate minus baseline, written with a leading
+ * + when positive and 0 when equal). A row whose recorded `pendingAtStart`
+ * was empty carries a footnote mark: the boot-idle seam reported
+ * quiescence immediately for that switch, so its time is a lower bound.
  */
 export function renderReport(record) {
   const baseline = record.runs.baseline ?? null;
@@ -275,33 +397,73 @@ export function renderReport(record) {
   );
   lines.push('');
   lines.push(
-    'Request count and time to quiescence (read from `window.__ddm`) for each of ' +
-      'the twelve ordered switches among Drought, Heat, Wildfire, and ENSO, at one ' +
-      'desktop viewport with stubbed upstreams (DDM-P14-T08).'
+    'Data reads, tile requests, and time to quiescence (read from `window.__ddm`) ' +
+      'for each of the twelve ordered switches among Drought, Heat, Wildfire, and ' +
+      'ENSO, at one desktop viewport with stubbed upstreams (DDM-P14-T08).'
+  );
+  lines.push('');
+  lines.push(
+    'The regression gate below compares data reads, not the raw request count: ' +
+      'almost all of a switch\'s traffic is raster map tiles, and a tile count ' +
+      'depends on viewport timing and on how much of the previous mode\'s tile ' +
+      'streaming was still in flight, not on what the app did differently. ' +
+      'Measured evidence: on one unchanged commit, `enso->drought` counted 42 ' +
+      'requests on one run and 14 on the next, entirely from tile-timing variance. ' +
+      'Data reads and tile requests are both recorded below; only data reads gate.'
   );
   lines.push('');
 
-  const header = ['From', 'To', 'Requests', 'Time to quiescence (ms)'];
-  if (hasCandidate) header.push('Candidate requests', 'Candidate ms', 'Delta');
+  const header = ['From', 'To', 'Data reads', 'Tiles', 'Requests', 'Time to quiescence (ms)'];
+  if (hasCandidate) {
+    header.push('Candidate data reads', 'Candidate tiles', 'Candidate requests', 'Candidate ms', 'Delta');
+  }
   lines.push(`| ${header.join(' | ')} |`);
   lines.push(`| ${header.map(() => '---').join(' | ')} |`);
 
   const baselineById = new Map((baseline?.switches ?? []).map((s) => [s.id, s]));
   const candidateById = new Map((candidate?.switches ?? []).map((s) => [s.id, s]));
 
+  const lowerBoundIds = [];
+
   for (const pair of SWITCHES) {
     const id = switchId(pair);
     const b = baselineById.get(id) ?? null;
-    const row = [pair.from, pair.to, b ? String(b.requests) : 'n/a', b ? String(b.quiescentMs) : 'n/a'];
+    const c = hasCandidate ? candidateById.get(id) ?? null : null;
+
+    const isLowerBound =
+      (b && b.pendingAtStart.length === 0) || (c && c.pendingAtStart.length === 0);
+    if (isLowerBound) lowerBoundIds.push(id);
+    const toCell = isLowerBound ? `${pair.to} ${LOWER_BOUND_MARK}` : pair.to;
+
+    const row = [
+      pair.from,
+      toCell,
+      b ? String(b.dataRequests) : 'n/a',
+      b ? String(b.tileRequests) : 'n/a',
+      b ? String(b.requests) : 'n/a',
+      b ? String(b.quiescentMs) : 'n/a'
+    ];
     if (hasCandidate) {
-      const c = candidateById.get(id) ?? null;
+      row.push(c ? String(c.dataRequests) : 'n/a');
+      row.push(c ? String(c.tileRequests) : 'n/a');
       row.push(c ? String(c.requests) : 'n/a');
       row.push(c ? String(c.quiescentMs) : 'n/a');
-      row.push(b && c ? formatDelta(c.requests - b.requests) : 'n/a');
+      row.push(b && c ? formatDelta(c.dataRequests - b.dataRequests) : 'n/a');
     }
     lines.push(`| ${row.join(' | ')} |`);
   }
   lines.push('');
+
+  if (lowerBoundIds.length > 0) {
+    lines.push(
+      `${LOWER_BOUND_MARK} ${lowerBoundIds.map((id) => `\`${id}\``).join(', ')}: recorded with no ` +
+        'layer pending at the start of the switch, because the boot-idle seam ' +
+        '(src/layers/sst-anomaly.ts:575) reports its layer `\'ready\'` at activation, ' +
+        'before any tile is fetched, so the seam declared quiescence immediately; ' +
+        'the recorded time is a lower bound, not a measured settle time.'
+    );
+    lines.push('');
+  }
 
   for (const run of [baseline, candidate].filter(Boolean)) {
     lines.push(
@@ -314,15 +476,19 @@ export function renderReport(record) {
   for (const run of [baseline, candidate].filter(Boolean)) {
     lines.push(renderCountedDetail(run));
     lines.push('');
+    lines.push(renderTileDetail(run));
+    lines.push('');
   }
 
   if (hasCandidate) {
     const { rises } = compareRuns(baseline, candidate);
     if (rises.length > 0) {
-      const names = rises.map((r) => `\`${r.id}\` (${r.baseline} to ${r.candidate})`).join(', ');
-      lines.push(`Request count rose for: ${names}.`);
+      const names = rises
+        .map((r) => `\`${r.id}\` (baseline ${r.baselineData} to candidate ${r.candidateData})`)
+        .join(', ');
+      lines.push(`Data-read count rose for: ${names}.`);
     } else {
-      lines.push("No switch's request count rose.");
+      lines.push("No switch's data-read count rose.");
     }
   }
 
