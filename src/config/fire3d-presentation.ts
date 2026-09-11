@@ -211,12 +211,29 @@ export function formatLongitudeDeg(value: number): string {
  * it verbatim (that module is in the eager graph and must not import this
  * chunk); tests/fire3d-mode.spec.ts pins the two against drift.
  */
-export const FIRE3D_TERRAIN_COVERAGE_SENTENCE =
-  `Terrain relief uses the ${FIRE3D_TERRAIN_COVERAGE.issuer}'s elevation data for ` +
-  `${formatLongitudeDeg(FIRE3D_TERRAIN_COVERAGE.west)} to ${formatLongitudeDeg(FIRE3D_TERRAIN_COVERAGE.east)}, ` +
-  `${formatLatitudeDeg(FIRE3D_TERRAIN_COVERAGE.south)} to ${formatLatitudeDeg(FIRE3D_TERRAIN_COVERAGE.north)}; ` +
-  'outside that box the ground renders flat. ' +
-  `The archive's detail ends at zoom ${FIRE3D_TERRAIN_COVERAGE.maxZoom}; closer views stretch its deepest tiles.`;
+export function fire3dTerrainCoverageSentence(maxZoom: number): string {
+  return (
+    `Terrain relief uses the ${FIRE3D_TERRAIN_COVERAGE.issuer}'s elevation data for ` +
+    `${formatLongitudeDeg(FIRE3D_TERRAIN_COVERAGE.west)} to ${formatLongitudeDeg(FIRE3D_TERRAIN_COVERAGE.east)}, ` +
+    `${formatLatitudeDeg(FIRE3D_TERRAIN_COVERAGE.south)} to ${formatLatitudeDeg(FIRE3D_TERRAIN_COVERAGE.north)}; ` +
+    'outside that box the ground renders flat. ' +
+    `The archive's detail ends at zoom ${maxZoom}; closer views stretch its deepest tiles.`
+  );
+}
+
+/**
+ * The sentence for the BUNDLED archive, the one every deployer ships. Since
+ * DR-083 (2026-09-10) this is the sentence's constant form only: the 3D
+ * scene may resolve the deep archive instead (src/config/urls.ts,
+ * `terrainPmtilesDeep`, zoom 10), and its own note is then formatted from
+ * the depth the resolved archive's header declares, through
+ * `fire3dCoverageNote`. This constant describes the bundled archive and the
+ * flat hillshade, which reads only that one, and tests/fire3d-mode.spec.ts
+ * pins it to the committed header.
+ */
+export const FIRE3D_TERRAIN_COVERAGE_SENTENCE = fire3dTerrainCoverageSentence(
+  FIRE3D_TERRAIN_COVERAGE.maxZoom
+);
 
 /**
  * Honest coverage statement rendered beside the toggle whenever the control
@@ -224,9 +241,22 @@ export const FIRE3D_TERRAIN_COVERAGE_SENTENCE =
  * from FIRE3D_TERRAIN_COVERAGE, not typed by hand), so the mode never
  * implies national relief or a precision the archive does not carry.
  */
-export const FIRE3D_COVERAGE_NOTE =
-  `${FIRE3D_TERRAIN_COVERAGE_SENTENCE} Bundled structure data covers the ` +
-  'central Oregon pilot area only, from zoom 13.';
+export function fire3dCoverageNote(terrainMaxZoom: number): string {
+  return (
+    `${fire3dTerrainCoverageSentence(terrainMaxZoom)} Bundled structure data covers the ` +
+    'central Oregon pilot area only, from zoom 13.'
+  );
+}
+
+/**
+ * The note in its bundled-archive form: what the control shows before a
+ * scene has resolved an archive (the bundled one is what ships, so it is
+ * the honest pre-activation claim) and what an active scene shows when the
+ * bundled archive is the one that answered. An active scene that resolved
+ * the deep archive renders `fire3dCoverageNote(status.terrainMaxZoom)`
+ * instead (DR-083 step 1).
+ */
+export const FIRE3D_COVERAGE_NOTE = fire3dCoverageNote(FIRE3D_TERRAIN_COVERAGE.maxZoom);
 
 /**
  * What the scene's live status line adds the moment the view sits WHOLLY

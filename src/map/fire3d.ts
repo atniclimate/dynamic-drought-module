@@ -56,11 +56,12 @@ import {
   FIRE3D_SKY_SPECIFICATION,
   FIRE3D_TERRAIN_EXAGGERATION,
   classifyTerrainCoverage,
+  fire3dCoverageNote,
   isWithinTerrainCoverage
 } from '../config/fire3d-presentation';
 import type { TerrainCoverageReading } from '../config/fire3d-presentation';
 import { URLS } from '../config/urls';
-import { resolveHillshadeArchiveUrl } from '../layers/hillshade';
+import { resolveHillshadeArchive } from '../layers/hillshade';
 import { probeArchiveHeader } from '../util/pmtiles-probe';
 import { watchContextLoss, webGl2Capability } from './gl-capability';
 import {
@@ -105,6 +106,18 @@ export interface Fire3DStatus {
   /** The context layers actually in the scene (issuer-published landscape
    * context; empty while inactive or when every context layer degraded). */
   readonly contextLayers: readonly string[];
+  /**
+   * The deepest zoom the RESOLVED terrain archive declares in its own
+   * header, while the scene is active; null otherwise. DR-083 step 1
+   * (2026-09-10): the scene probes the deep archive first and falls back
+   * to the bundled one, and the two differ only in depth (10 against 8),
+   * so the coverage sentence's zoom figure is formatted from this value
+   * rather than from the bundled constant, which would be false on the
+   * first frame after the deep archive resolves. It is disclosure only:
+   * the number is never written back into the source as a declared zoom,
+   * because a declared option overrides the archive header permanently.
+   */
+  readonly terrainMaxZoom: number | null;
   /**
    * How much of the CURRENT VIEW's ground FIRE3D_TERRAIN_COVERAGE holds,
    * while the scene is active: `full`, `partial`, or `none`. Uncovered
@@ -187,6 +200,7 @@ let status: Fire3DStatus = {
   smokeVolume: false,
   perimeterRibbon: false,
   contextLayers: [],
+  terrainMaxZoom: null,
   terrainCoverage: 'full'
 };
 const statusListeners = new Set<() => void>();
@@ -198,6 +212,9 @@ let activation: AbortController | null = null;
  * syncEmbedNote, kept current by coverageMoveListener while active. `full`
  * while inactive, so neither coverage sentence renders outside the scene. */
 let terrainCoverage: TerrainCoverageReading = 'full';
+/** Mirrors Fire3DStatus.terrainMaxZoom: the resolved archive's header
+ * depth from activation to rollback, null in between. */
+let resolvedTerrainMaxZoom: number | null = null;
 /** The 'moveend' listener that keeps terrainCoverage current across a
  * pan while the scene stays active; detached in rollbackScene. */
 let coverageMoveListener: (() => void) | null = null;
@@ -274,7 +291,9 @@ function syncEmbedNote(active: boolean): void {
   }
   const lines = [
     FIRE3D_NON_PREDICTION_NOTE,
-    FIRE3D_COVERAGE_NOTE,
+    resolvedTerrainMaxZoom === null
+      ? FIRE3D_COVERAGE_NOTE
+      : fire3dCoverageNote(resolvedTerrainMaxZoom),
     ...terrainCoverageLines(terrainCoverage),
     ...contextEmbedLines
   ].filter((line) => line.length > 0);
@@ -329,6 +348,7 @@ function publishStatus(
     smokeVolume: state === 'active' && smokeVolumeOn,
     perimeterRibbon: state === 'active' && ribbonOn,
     contextLayers: state === 'active' ? contextKeys : [],
+    terrainMaxZoom: state === 'active' ? resolvedTerrainMaxZoom : null,
     terrainCoverage: state === 'active' ? terrainCoverage : 'full'
   };
   // Production-observable truth stamp (the dev-only __ddmMap handle is
@@ -415,6 +435,7 @@ function rollbackScene(map: maplibregl.Map): void {
     coverageMoveListener = null;
   }
   terrainCoverage = 'full';
+  resolvedTerrainMaxZoom = null;
   if (tileWatch) {
     tileWatch.detach();
     tileWatch = null;
@@ -475,10 +496,18 @@ function failScene(map: maplibregl.Map, reason: string, err?: unknown): void {
  * an installation that has not published one, loses resolution and nothing
  * else. Only a failure of BOTH reaches the caller's `failScene` ladder.
  */
-async function resolveFire3DTerrainUrl(signal: AbortSignal): Promise<string> {
+interface ResolvedTerrainArchive {
+  readonly url: string;
+  /** The depth the archive's own header declares (byte 101), for disclosure. */
+  readonly maxZoom: number;
+}
+
+async function resolveFire3DTerrainUrl(
+  signal: AbortSignal
+): Promise<ResolvedTerrainArchive> {
   try {
-    await probeArchiveHeader(URLS.terrainPmtilesDeep, signal);
-    return URLS.terrainPmtilesDeep;
+    const header = await probeArchiveHeader(URLS.terrainPmtilesDeep, signal);
+    return { url: URLS.terrainPmtilesDeep, maxZoom: header.maxZoom };
   } catch (err) {
     // An aborted probe is a withdrawn activation, not a missing archive: let
     // the caller's own abort handling see it rather than spending a second
@@ -488,7 +517,8 @@ async function resolveFire3DTerrainUrl(signal: AbortSignal): Promise<string> {
       '[fire3d] the deep terrain archive is unreachable; falling back to the bundled archive.',
       err
     );
-    return resolveHillshadeArchiveUrl(signal);
+    const bundled = await resolveHillshadeArchive(signal);
+    return { url: bundled.url, maxZoom: bundled.header.maxZoom };
   }
 }
 
@@ -501,9 +531,9 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
   publishStatus('checking', null);
   savedCamera = { pitch: map.getPitch(), bearing: map.getBearing() };
 
-  let archiveUrl: string;
+  let resolved: ResolvedTerrainArchive;
   try {
-    archiveUrl = await resolveFire3DTerrainUrl(signal);
+    resolved = await resolveFire3DTerrainUrl(signal);
   } catch (err) {
     if (activation === myController) activation = null;
     if (signal.aborted || myGeneration !== generation) {
@@ -534,11 +564,14 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
     return;
   }
 
+  // Recorded before the source exists so the first 'active' publish and the
+  // embed note already name the archive that answered.
+  resolvedTerrainMaxZoom = resolved.maxZoom;
   try {
     if (!map.getSource(TERRAIN_SOURCE_ID)) {
       map.addSource(TERRAIN_SOURCE_ID, {
         type: 'raster-dem',
-        url: 'pmtiles://' + archiveUrl,
+        url: 'pmtiles://' + resolved.url,
         encoding: 'terrarium',
         tileSize: 512
         // NO maxzoom (and no minzoom) here, deliberately: the archive that

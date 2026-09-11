@@ -20,6 +20,7 @@ import {
   PERIMETER_RIBBON_SLAB_COUNT,
   classifyTerrainCoverage,
   fire3dControlOffer,
+  fire3dCoverageNote,
   formatLatitudeDeg,
   formatLongitudeDeg,
   isWithinTerrainCoverage,
@@ -49,13 +50,14 @@ import {
   activateContextLayers,
   deactivateContextLayers
 } from '../src/map/fire3d-context';
+import { URLS } from '../src/config/urls';
 import { registry } from '../src/state/registry';
 import { parseFire3dParam, syncFire3dParam } from '../src/state/url';
 import {
-  PMTILES_V3_HEADER_PREFIX,
   captureWarnings,
   fakeMapHarness,
-  installFakeBrowser
+  installFakeBrowser,
+  pmtilesHeaderResponse
 } from './map-harness';
 import { gotoApp, layerCheckbox, search, waitForLayerSettled } from './helpers';
 import {
@@ -305,7 +307,7 @@ function stubPmtilesFetch(): () => void {
     if (String(input).includes('Power_Plants_in_the_US')) {
       return new Response(JSON.stringify(PLANTS_STUB_FC), { status: 200 });
     }
-    return new Response(PMTILES_V3_HEADER_PREFIX, { status: 206 });
+    return pmtilesHeaderResponse();
   }) as typeof fetch;
   return () => {
     globalThis.fetch = originalFetch;
@@ -332,7 +334,7 @@ function stubDrapeCorruptFetch(): () => void {
     if (url.includes('Power_Plants_in_the_US')) {
       return new Response(JSON.stringify(PLANTS_STUB_FC), { status: 200 });
     }
-    return new Response(PMTILES_V3_HEADER_PREFIX, { status: 206 });
+    return pmtilesHeaderResponse();
   }) as typeof fetch;
   return () => {
     globalThis.fetch = originalFetch;
@@ -532,6 +534,107 @@ test('the terrain source declares no maxzoom of its own, so the resolved archive
     restoreFetch();
     browser.restore();
   }
+});
+
+// ---------------------------------------------------------------------------
+// Node: DR-083 step 1 -- the coverage sentence names the archive that
+// actually resolved, read from its header, never from a constant
+// ---------------------------------------------------------------------------
+
+/**
+ * The deep archive answers however `deep` says; every other archive answers
+ * with the bundled zoom 0 to 8 header shape.
+ */
+function stubDeepTerrainFetch(deep: () => Response): () => void {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === URLS.terrainPmtilesDeep) return deep();
+    if (url.includes('Power_Plants_in_the_US')) {
+      return new Response(JSON.stringify(PLANTS_STUB_FC), { status: 200 });
+    }
+    return pmtilesHeaderResponse();
+  }) as typeof fetch;
+  return () => {
+    globalThis.fetch = originalFetch;
+  };
+}
+
+test('when the deep archive resolves, the status carries its header depth and the sentence says zoom 10', async () => {
+  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+  const restoreFetch = stubDeepTerrainFetch(() => pmtilesHeaderResponse({ maxZoom: 10 }));
+  const harness = fakeMapHarness({ pitch: 15, bearing: 30 });
+  const { map } = harness;
+
+  try {
+    setFire3DActive(map, true);
+    await expect.poll(() => getFire3DStatus().state).toBe('active');
+    expect(getFire3DStatus().terrainMaxZoom).toBe(10);
+    const dem = harness.sources.get('fire3d-terrain-dem') as { url?: string };
+    expect(dem.url).toBe('pmtiles://' + URLS.terrainPmtilesDeep);
+    expect(fire3dCoverageNote(10)).toContain('detail ends at zoom 10');
+    expect(fire3dCoverageNote(10)).not.toContain('zoom 8');
+
+    setFire3DActive(map, false);
+    await expect.poll(() => getFire3DStatus().state).toBe('inactive');
+    expect(getFire3DStatus().terrainMaxZoom, 'no stale depth survives deactivation').toBeNull();
+  } finally {
+    setFire3DActive(map, false);
+    restoreFetch();
+    browser.restore();
+  }
+});
+
+test('when the deep archive is unreachable, the bundled archive resolves and the status says zoom 8', async () => {
+  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+  const restoreFetch = stubDeepTerrainFetch(
+    () => new Response('error code: 1042', { status: 404 })
+  );
+  const harness = fakeMapHarness({ pitch: 15, bearing: 30 });
+  const { map } = harness;
+
+  try {
+    setFire3DActive(map, true);
+    await expect.poll(() => getFire3DStatus().state).toBe('active');
+    expect(getFire3DStatus().terrainMaxZoom).toBe(FIRE3D_TERRAIN_COVERAGE.maxZoom);
+    const dem = harness.sources.get('fire3d-terrain-dem') as { url?: string };
+    expect(dem.url).toBe('pmtiles://' + URLS.hillshadePmtilesLocal);
+  } finally {
+    setFire3DActive(map, false);
+    restoreFetch();
+    browser.restore();
+  }
+});
+
+test('a truncated deep upload with a valid header is refused by the probe and the bundled archive is used instead', async () => {
+  // Codex S1's scenario: the header is whole and says zoom 10, but the
+  // server holds fewer bytes than the header's own extent. Before the
+  // probe hardening this passed the probe, was installed, and tore the
+  // scene down on its first tile read; the bundled archive was never tried.
+  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+  const restoreFetch = stubDeepTerrainFetch(() =>
+    pmtilesHeaderResponse({ maxZoom: 10, tileDataLength: 435_000_000 }, { total: 20_000_000 })
+  );
+  const harness = fakeMapHarness({ pitch: 15, bearing: 30 });
+  const { map } = harness;
+
+  try {
+    setFire3DActive(map, true);
+    await expect.poll(() => getFire3DStatus().state).toBe('active');
+    expect(getFire3DStatus().terrainMaxZoom).toBe(8);
+    const dem = harness.sources.get('fire3d-terrain-dem') as { url?: string };
+    expect(dem.url).toBe('pmtiles://' + URLS.hillshadePmtilesLocal);
+  } finally {
+    setFire3DActive(map, false);
+    restoreFetch();
+    browser.restore();
+  }
+});
+
+test('the bundled constants still describe the bundled archive; only the formatter varies', () => {
+  expect(FIRE3D_TERRAIN_COVERAGE.maxZoom).toBe(8);
+  expect(fire3dCoverageNote(FIRE3D_TERRAIN_COVERAGE.maxZoom)).toBe(FIRE3D_COVERAGE_NOTE);
+  expect(FIRE3D_COVERAGE_NOTE).toContain('detail ends at zoom 8');
 });
 
 // ---------------------------------------------------------------------------
@@ -1213,7 +1316,7 @@ test('a corrupt structures archive degrades only the buildings; the rest stays',
     if (url.includes('Power_Plants_in_the_US')) {
       return new Response(JSON.stringify(PLANTS_STUB_FC), { status: 200 });
     }
-    return new Response(PMTILES_V3_HEADER_PREFIX, { status: 206 });
+    return pmtilesHeaderResponse();
   }) as typeof fetch;
   const harness = fakeMapHarness({ pitch: 0, bearing: 0 });
   const { map } = harness;

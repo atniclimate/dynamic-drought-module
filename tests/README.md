@@ -34,7 +34,7 @@ than no number.
 | --- | --- | --- |
 | `npm run verify:quick` | `typecheck`, `scan:emdash`, `check:vocabulary`, `check:coverage` | about 5 s |
 | `npm run verify:pure` | the twelve browser-free spec files under `playwright.pure.config.ts`, no build, no server | seconds |
-| `npm run verify:smoke` | `gate` plus the smoke specs named in `package.json` (24 on 2026-09-10; read the script, not this table, for the roster), `--workers=1` | about 11 min measured 2026-09-10 (10.7 and 10.8 min on the same tree) |
+| `npm run verify:smoke` | `gate` plus the smoke specs named in `package.json` (25 on 2026-09-10; read the script, not this table, for the roster), `--workers=1` | about 11 min measured 2026-09-10 (10.7 and 10.8 min on the same tree) |
 | `npm run test:serial` | all tests, all three projects, one worker | 31.1 min measured 2026-09-03 with the boot-idle seam (894 tests; 23.9 min before the seam, which makes every boot wait for real idle) |
 
 `verify:quick` is the save-and-think loop. No build, no network, no browser.
