@@ -451,7 +451,10 @@ test.describe('U2 embed stays sheetless; expand reveals the sheet at peek (400x6
     // requests it (headroom C1). The route is armed only after boot, so it
     // catches exactly the embed-exit's own request, never the boot's.
     await gotoApp(page, '?embed=true');
-    await page.route('**/assets/search-controller-*.js', (route) => route.abort('failed'));
+    // Tolerates a trailing `?retry=<n>`: the chunk loads through the
+    // retry-capable shared loader, so a bare `.js`-anchored glob would let
+    // a retried attempt through unaborted.
+    await page.route(/\/search-controller-[^/?]*\.js(\?|$)/, (route) => route.abort('failed'));
 
     const app = page.locator('#app');
     await expect(app).toHaveClass(/\bembed\b/);
@@ -460,9 +463,11 @@ test.describe('U2 embed stays sheetless; expand reveals the sheet at peek (400x6
     // that transition does not wait on the search mount. The SAME click
     // also asks the shared island and the Brief-head search to mount
     // (`sidebar.ts`'s expand handler), so this one route touches three
-    // `import('./search-controller')` call sites; only two can reject
-    // visibly (`src/ui/sidebar.ts:1498-1504` already catches its own), and
-    // the assertions below are scoped to the one this defect owns.
+    // `loadSearchController()` call sites, and every one of them now
+    // catches its own rejection (`src/ui/sidebar.ts:1510-1516`,
+    // `src/ui/mobile-sheet.ts`'s `mountSheetSearch` below, and
+    // `src/ui/view-shell.ts`'s `mountBriefSearch`, fixed by DDM-P1-T04):
+    // none of the three can surface as a page error.
     await page.locator('#sidebar-expand').click();
     await expect(app).not.toHaveClass(/\bembed\b/);
     await expect(app).toHaveAttribute('data-sheet-detent', 'peek');
@@ -482,19 +487,14 @@ test.describe('U2 embed stays sheetless; expand reveals the sheet at peek (400x6
       .poll(() => consoleErrors.some((line) => line.includes('[mobile-sheet] search mount failed')))
       .toBe(true);
 
-    // One unhandled rejection may be on record here and is NOT this defect:
-    // `src/ui/view-shell.ts:544-546`'s `mountBriefSearch` (called from the
-    // same expand handler via `ensureBriefHeadSearch`) imports the same
-    // chunk with no `.catch`, the identical bug this defect fixes in
-    // mobile-sheet.ts, in a file this brief does not own (DDM-P1-T04 owns
-    // the fix). The bound is at most one today, because that sibling site
-    // still rejects visibly; once DDM-P1-T04 lands its own `.catch`, the
-    // count goes to zero and this assertion keeps passing rather than
-    // pinning the bug's continued existence.
-    expect(pageErrors.length).toBeLessThanOrEqual(1);
-    if (pageErrors.length === 1) {
-      expect(pageErrors[0]?.message ?? '').toContain('search-controller');
-    }
+    // `src/ui/view-shell.ts`'s `mountBriefSearch` (called from the same
+    // expand handler via `ensureBriefHeadSearch`) now catches its own
+    // rejection too (DDM-P1-T04), so no page error names the
+    // search-controller chunk at all.
+    const searchControllerErrors = pageErrors.filter((error) =>
+      error.message.includes('search-controller')
+    );
+    expect(searchControllerErrors).toHaveLength(0);
   });
 });
 

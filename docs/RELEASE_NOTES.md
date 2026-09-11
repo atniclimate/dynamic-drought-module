@@ -1,10 +1,76 @@
 # Release notes
 
-## Unreleased (after v0.6.26)
+## v0.7.0
 
-Merged to `main` after the `v0.6.26` tag. No new package version or tag has
-been assigned to this work.
+`v0.7.0` is the package version and, since 2026-09-11, the release tag. It
+collects everything merged to `main` after `v0.6.26`, newest first. The tag
+waited on one task, DDM-P1-T04, the first entry below: a search that fails to
+download now costs search and nothing else.
 
+- 2026-09-11: a failed search download costs search, not the sidebar. The
+  layer catalog, the conditions strip and the main-screen controls used to
+  arrive on the same download as the search box, so a search download that
+  failed left a map with no catalog at all. They arrive separately now, and a
+  failed search shows an empty search slot and nothing else, in the console
+  catalog, the Layers studio, the Brief head and the phone sheet alike. A
+  control panel whose own download fails is also no longer lost for the rest
+  of the visit: the next time the app needs it, at a mode switch, it asks for
+  it again at a fresh address. That last part is not a detail. A browser
+  remembers a download that failed and refuses to repeat it, so asking again
+  for the same address returns the same failure without ever reaching the
+  network, which is measured here rather than assumed. What did not close:
+  nothing retries on its own. The second attempt rides the next time the app
+  needs the panel, and a download that failed because a file it depends on
+  failed still needs a reload.
+- 2026-09-11: terrain that says which archive it drew, a wildfire pulse that
+  respects it, and a briefing a display command can no longer lose. The 3D
+  scene's coverage sentence now names the terrain archive that actually
+  loaded, the deeper zoom 10 archive served by the terrain Worker or the
+  bundled zoom 8 copy it falls back to, because the probe reads the archive's
+  whole header rather than inferring it. The wildfire pulse paints on one
+  clock, every 60 ms on a flat map, every 250 ms with terrain and every
+  500 ms with terrain on a software renderer, so the scene stops spending its
+  frames on the pulse. A briefing queued behind a display command is no
+  longer dropped when the command runs. And every network read the app makes
+  stays time-bounded until its body has arrived, not only until its headers
+  do. Behind these, the verification got more honest: the tablet collision
+  audit compares the rectangles a person can actually see, clipped by every
+  scrolling ancestor, which retired a false intermittent; each activation
+  budget is a ratified measurement plus 8 percent; and the 3D test cases
+  answer the terrain host locally instead of reaching the live Worker. What
+  did not close: the proposed entry contract for the 3D Fire scene is
+  recorded with only its first decision built, and the intermittent
+  boot-idle stall has its first step only, a seam that lets a test see which
+  layers and transports hold the boot open.
+- 2026-09-10: the 3D scene reads the terrain archive to its own deepest zoom.
+  The terrain source declared a maximum zoom of 8, and a declared option
+  overrides the archive's header, so a deeper archive would have been read to
+  zoom 8 and no further. The declaration is gone and the header's own zooms
+  stand.
+- 2026-09-10: five fixes from an adversarial review of the visual pass. A
+  place's conditions card no longer reports a warning that lies outside the
+  place, the 3D coverage sentence describes the view's footprint rather than
+  its centre, each framing coverage clause renders only where that clause is
+  true, the briefing's response head keeps its caveat, and a hazard chosen
+  from inside Place studio survives leaving the studio.
+- 2026-09-10: the visual pass, nineteen owner findings. The Impact Briefing
+  widens to a scaling clamp, point heat moves into the heat row, and its mail
+  and print actions are inert until they work. Both studios dock beside the
+  sidebar on a readable glass surface, and for the first time the sidebar
+  stays reachable by keyboard and screen reader while a studio is open. The
+  minimap's coverage sentence moves to the on-map key, and the console
+  minimap stops mounting and fetching where it is not shown. Five console
+  Drought defects are fixed, including a lightened outlook hatch that keeps
+  its Section 508 stroke geometry. The six boundary popups become conditions
+  cards whose warning treatment appears only on evidence. And the 3D scene
+  can draw a deeper terrain archive for the Pacific Northwest, served from
+  Cloudflare storage by its own Worker, with a tested fallback to the bundled
+  copy. Two requests were deliberately not built as asked: the hatched
+  outlook fill stays hatched, because the hatch is the outlook's primary
+  channel and is load-bearing for Section 508, and the owner ratified the
+  lightened version instead; and Tribal-over-state click precedence needed no
+  change, since a live probe resolved Colville, Yakama and Coeur d'Alene over
+  the state as the precedence table already says.
 - 2026-09-09: the Fire rows read an issuer, and the wind on a station
   marker has a shape. The near-term fire cell reads the NOAA Storm
   Prediction Center Day 1 to 8 Fire Weather Outlook at the selected point,

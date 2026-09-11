@@ -57,7 +57,7 @@ const coveredContexts = new WeakSet<BrowserContext>();
  * so this hook is defense in depth for the day one appears: it closes the
  * page-level half of the same hole context routing already closed.
  */
-function coverFuturePages(page: Page): void {
+export function coverFuturePages(page: Page): void {
   const context = page.context();
   if (coveredContexts.has(context)) return;
   coveredContexts.add(context);
@@ -425,7 +425,7 @@ function localBuildSha(): string | undefined {
  * asserts the page carries it. If git cannot answer, it keeps the old
  * posture and asserts nothing.
  */
-async function assertBuildIdentity(page: Page): Promise<void> {
+export async function assertBuildIdentity(page: Page): Promise<void> {
   const expectedSha = process.env['DDM_BUILD_SHA'] ?? localBuildSha();
   const expectedNonce = process.env['DDM_BUILD_NONCE'];
   if (!expectedSha && !expectedNonce) return;

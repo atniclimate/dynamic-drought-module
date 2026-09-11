@@ -133,7 +133,10 @@ async function gotoWithoutIsland(page: Page, query: string): Promise<void> {
   // cannot be used); the suite-wide boundary stub is installed by hand.
   await routeAllTribalFixtures(page);
   await installMinimapAnalysisStubs(page);
-  await page.route(/island-[^/]*\.js$/, (route) => route.abort());
+  // Tolerates a trailing `?retry=<n>`: the chunk loads through the
+  // retry-capable shared loader, so a bare `$`-anchored pattern would let
+  // a retried attempt through unaborted.
+  await page.route(/\/island-[^/?]*\.js(\?|$)/, (route) => route.abort());
   await page.goto(query, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#region-select option')).not.toHaveCount(0);
   await expect(page.locator('input[data-layer-key]')).toHaveCount(0);

@@ -64,6 +64,7 @@ import { prefersReducedMotion } from '../util/motion';
 import { TRIBAL_NATIONS_GROUP } from '../config/layer-groups';
 import { enterPlaceStudio } from '../state/studio-route';
 import { activateTribalNationsGroup, wireTribalNationsHealth } from './tribal-nations-action';
+import { loadSearchController } from './search-chunk';
 
 // ---------------------------------------------------------------------------
 // Types and module state
@@ -535,7 +536,7 @@ function mountSheetSearch(): void {
   if (!container) return;
   searchMounted = true;
   const map = mapRef;
-  void import('./search-controller')
+  void loadSearchController()
     .then(({ mountSearchInto }) => {
       mountSearchInto(map, container);
     })

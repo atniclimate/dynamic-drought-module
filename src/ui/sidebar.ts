@@ -154,6 +154,8 @@ import { getSheetDetent, isSheetActive, revealSheetAtPeek, setSheetDetent } from
 import { wireShareButton } from './share';
 import { showToast } from './overlay';
 import { escapeHtml } from '../util/escape';
+import { createChunkLoader } from '../util/chunk-retry';
+import { loadSearchController } from './search-chunk';
 
 // ---------------------------------------------------------------------------
 // Module-level state
@@ -1487,21 +1489,52 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
   // deferred, not dropped: expanding the sidebar or switching to console
   // calls `ensureIslandMounted` below, and the island snapshots the bridge
   // and the registry at that moment, so a late mount is always consistent.
+  //
+  // DDM-P1-T04: the island chunk and the search-controller chunk fail
+  // independently, and both requests start together so a slow link never
+  // pays for the search chunk only after the island chunk resolves.
+  // `loadSearchController` (src/ui/search-chunk.ts) is shared across every
+  // host, so its retry memory is shared too; a search failure here only
+  // drops search props, never the catalog. The island's own loader retries
+  // under a new URL (src/util/chunk-retry.ts) on a later
+  // `ensureIslandMounted` call (a mode switch re-arms it below), since a
+  // second `import()` of the SAME failed URL never issues a new request.
   const controllerForIsland = controllerRef;
+  const loadIsland = createChunkLoader(() => import('./island'), import.meta.url);
   let islandPromise: Promise<void> | null = null;
   const ensureIslandMounted = (): Promise<void> => {
     if (!islandPromise) {
-      // The search controller rides the same lazy chunk as the island (U3d):
-      // it reaches impact / deep-link, which the pure island must not, so it
-      // stays outside the island and is injected as props. Loading it here
-      // keeps it off the entry chunk.
-      islandPromise = Promise.all([import('./island'), import('./search-controller')])
-        .then(([{ mountSidebarIsland }, { buildSearchWiring }]) => {
-          mountSidebarIsland(map, controllerForIsland, buildSearchWiring(map));
-        })
-        .catch((err: unknown) => {
+      // Started immediately, alongside loadIsland() below, with its .catch
+      // attached right here so it can never surface as an unhandled
+      // rejection while the island chunk is still loading.
+      const searchLoad = loadSearchController().catch((err: unknown) => {
+        console.error(
+          '[sidebar] search chunk failed; the catalog mounts without search:',
+          err
+        );
+        return null;
+      });
+      // The island chunk's own load failure (the `onRejected` sibling of
+      // this `.then`) resets `islandPromise` so a later call retries under
+      // a new URL. A mount-time throw once the chunk DID load (below) is a
+      // different failure and must NOT reset: a second mount would double
+      // every registry listener the island wires up.
+      const promise: Promise<void> = loadIsland().then(
+        ({ mountSidebarIsland }) =>
+          searchLoad
+            .then((searchModule) => {
+              const searchProps = searchModule?.buildSearchWiring(map);
+              mountSidebarIsland(map, controllerForIsland, searchProps);
+            })
+            .catch((err: unknown) => {
+              console.error('[sidebar] island mount failed:', err);
+            }),
+        (err: unknown) => {
+          if (islandPromise === promise) islandPromise = null;
           console.error('[sidebar] island mount failed:', err);
-        });
+        }
+      );
+      islandPromise = promise;
     }
     return islandPromise;
   };
@@ -1526,8 +1559,20 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
   const loadStudio = (root: HTMLElement): void => {
     const promise = studioPromise ?? import('./island/layers-studio');
     studioPromise = promise;
-    void Promise.all([promise, import('./search-controller')])
-      .then(([module, { buildSearchWiring }]) => {
+    // The search half is loaded and caught on its own (DDM-P1-T04), so the
+    // failure panel below is reached only by the studio chunk's own
+    // failure, never by a search-controller failure.
+    void Promise.all([
+      promise,
+      loadSearchController().catch((err: unknown) => {
+        console.error(
+          '[sidebar] search chunk failed; the catalog mounts without search:',
+          err
+        );
+        return null;
+      })
+    ])
+      .then(([module, searchModule]) => {
         studioModule = module;
         if (
           getStudioRoute() !== 'layers' ||
@@ -1537,14 +1582,11 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
         ) {
           return;
         }
-        module.mountLayersStudio(
-          root,
-          controllerForIsland,
-          buildSearchWiring(map, {
-            permittedKinds: ['layer'],
-            placeholder: 'Search layers'
-          })
-        );
+        const search = searchModule?.buildSearchWiring(map, {
+          permittedKinds: ['layer'],
+          placeholder: 'Search layers'
+        });
+        module.mountLayersStudio(root, controllerForIsland, search);
       })
       .catch((err: unknown) => {
         if (studioPromise === promise) studioPromise = null;

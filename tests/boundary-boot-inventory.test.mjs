@@ -166,6 +166,11 @@ const DIRECT_BOOT_REASONS = {
     reason:
       'three DDM-P10-T05 fixtures paint a synthetic document to prove the collision audit reads clipped geometry in both directions; no application boots, and the describe installs both stubs before each'
   },
+  'tests/island-chunk-isolation.spec.ts': {
+    sites: 1,
+    reason:
+      'one case needs a view=brief non-embed boot whose island chunk is deliberately broken; gotoApp waits unconditionally on the catalog for any boot that is not a brief embed, so it cannot express a boot where the catalog is expected to stay absent, and the helper installs the same suite-wide stubs by hand before navigating'
+  },
   'tests/island-premount.spec.ts': {
     sites: 1,
     reason:

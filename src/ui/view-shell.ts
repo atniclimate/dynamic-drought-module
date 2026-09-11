@@ -40,6 +40,7 @@ import { getViewMode, onViewModeChange, setViewMode } from '../state/view-mode';
 import type { ViewMode } from '../state/view-mode';
 import { closeImpactPanel, openImpactPanel } from './impact-panel';
 import { buildTribalNationsBriefAction } from './tribal-nations-action';
+import { loadSearchController } from './search-chunk';
 import { prefersReducedMotion } from '../util/motion';
 import {
   backToMap,
@@ -534,16 +535,26 @@ export function refreshLayersStudioEntry(): void {
  * class is gone, so an exited embed gets the head search without a reload
  * (the U3 stage-5 minor 7 fix). Every other boot has the island mounted
  * already, so the extra chunk is free. Mounting is idempotent: the search
- * renders into a dedicated container and a re-render replaces it.
+ * renders into a dedicated container and a re-render replaces it, so there
+ * is no mounted flag to reset on failure. The chunk is imported through the
+ * shared `loadSearchController` (src/ui/search-chunk.ts, DDM-P1-T04) rather
+ * than a bare `import('./search-controller')`, so a failed attempt is
+ * recorded there too: a later `ensureBriefHeadSearch` call (the same
+ * embed-exit path) retries through that shared loader under a new URL
+ * instead of replaying the same cached module-map failure.
  */
 function mountBriefSearch(map: maplibregl.Map): void {
   const isEmbed = document.getElementById('app')?.classList.contains('embed') ?? false;
   if (isEmbed && getViewMode() === 'brief') return;
   const container = document.getElementById('brief-search');
   if (!container) return;
-  void import('./search-controller').then(({ mountSearchInto }) => {
-    mountSearchInto(map, container);
-  });
+  void loadSearchController()
+    .then(({ mountSearchInto }) => {
+      mountSearchInto(map, container);
+    })
+    .catch((err: unknown) => {
+      console.error('[view-shell] Brief-head search mount failed:', err);
+    });
 }
 
 /**

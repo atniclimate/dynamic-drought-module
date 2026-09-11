@@ -18,7 +18,9 @@ interface LayersStudioProps {
   controller: LayerController;
   checked: ReadonlySignal<ReadonlyMap<string, boolean>>;
   statuses: ReadonlySignal<ReadonlyMap<string, LayerStatus>>;
-  search: SearchProps;
+  // Optional: a search-controller chunk failure (DDM-P1-T04) degrades the
+  // studio to no search box rather than to no studio at all.
+  search?: SearchProps;
 }
 
 interface RehostRecord {
@@ -89,9 +91,11 @@ function LayersStudio({ controller, checked, statuses, search }: LayersStudioPro
         <div class="layers-studio-basemap" ref={basemapHostRef} />
       </header>
       <div class="layers-studio-scroll">
-        <div class="layers-studio-search">
-          <Search {...search} />
-        </div>
+        {search && (
+          <div class="layers-studio-search">
+            <Search {...search} />
+          </div>
+        )}
         <div class="layers-studio-grid">
           <div class="layers-studio-catalog">
             <Catalog
@@ -128,7 +132,7 @@ const mounted = new WeakMap<HTMLElement, MountedStudio>();
 export function mountLayersStudio(
   root: HTMLElement,
   controller: LayerController,
-  search: SearchProps
+  search?: SearchProps
 ): void {
   let state = mounted.get(root);
   if (!state) {
@@ -160,7 +164,7 @@ export function mountLayersStudio(
       controller={controller}
       checked={state.checked}
       statuses={state.statuses}
-      search={search}
+      {...(search ? { search } : {})}
     />,
     root
   );
