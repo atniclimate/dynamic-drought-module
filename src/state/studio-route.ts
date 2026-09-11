@@ -1,3 +1,9 @@
+import {
+  clearPlaceReturn,
+  setPlaceReturnBriefing,
+  setPlaceReturnDisplayCommand,
+  takePlaceReturn
+} from './place-return';
 import { parseStudioParam } from './url';
 
 /** The bounded query-state route vocabulary for the two studios. */
@@ -12,7 +18,6 @@ type StudioRouteListener = (
 let route: StudioRoute = null;
 let popstateBound = false;
 const listeners = new Set<StudioRouteListener>();
-let placeReturnAction: (() => void) | null = null;
 
 /**
  * Physical framing is immutable for this document, so detect it eagerly.
@@ -117,8 +122,9 @@ export function initializeStudioRoute(
         // so the ruled restore-then-brief order holds on both exits (a
         // bare microtask here raced the lazy island's unmount: the
         // briefing could open before restore, or be cancelled by the
-        // restore's intent supersede and never open).
-        placeReturnAction = null;
+        // restore's intent supersede and never open). Both hand-off slots
+        // go: a display command deferred behind this exit is void too.
+        clearPlaceReturn();
       }
       notify('popstate');
     });
@@ -146,7 +152,7 @@ export function onStudioRouteChange(listener: StudioRouteListener): () => void {
  */
 function enterStudio(next: Exclude<StudioRoute, null>): void {
   if (route === next) return;
-  if (route === 'place') placeReturnAction = null;
+  if (route === 'place') clearPlaceReturn();
   const target = locationWithStudio(next);
   if (route === null) {
     window.history.pushState({ ddmStudioEntry: true }, '', target);
@@ -170,20 +176,33 @@ export function backToMap(): void {
   window.history.back();
 }
 
-/** Run one lazy PLACE callback after popstate has unmounted the studio. */
+/**
+ * Queue the selected-exit BRIEFING to run after popstate has unmounted the
+ * studio. The studio owns this slot: newest selection wins, null clears it.
+ */
 export function setPlaceStudioReturnAction(action: (() => void) | null): void {
-  placeReturnAction = action;
+  setPlaceReturnBriefing(action);
 }
 
 /**
- * Take (and clear) the pending PLACE return action. Called by the PLACE
- * studio island's unmount cleanup AFTER restoreDisplaySnapshot(), which is
- * the only ordering that honors restore-then-brief deterministically.
+ * Queue a sidebar DISPLAY COMMAND (cluster, horizon) behind the studio's
+ * exit. Its own slot, so it neither overwrites nor is overwritten by the
+ * briefing above (src/state/place-return.ts). Newest command wins.
+ */
+export function setPlaceStudioReturnDisplayCommand(
+  action: (() => void) | null
+): void {
+  setPlaceReturnDisplayCommand(action);
+}
+
+/**
+ * Take (and clear) the pending PLACE return hand-off, the display command
+ * composed before the briefing. Called by the PLACE studio island's unmount
+ * cleanup AFTER restoreDisplaySnapshot(), which is the only ordering that
+ * honors restore-then-act deterministically.
  */
 export function takePlaceStudioReturnAction(): (() => void) | null {
-  const action = placeReturnAction;
-  placeReturnAction = null;
-  return action;
+  return takePlaceReturn();
 }
 
 /** Build an embed link-out from the latest current URL state. */

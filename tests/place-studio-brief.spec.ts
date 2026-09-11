@@ -548,6 +548,72 @@ test.describe('PS-BRIEF return hand-off', () => {
   });
 });
 
+/**
+ * A sidebar hazard chosen AFTER a selection keeps the promised briefing
+ * (/code-review, 2026-09-10).
+ *
+ * The exposed-sidebar fix (Codex finding 6, tests/studio-restore.spec.ts)
+ * defers a cluster click behind the studio's exit. Its first cut wrote that
+ * command into the single hand-off slot the studio uses for the briefing of
+ * its selected place, so selecting Washington and then clicking Wildfire
+ * landed on Wildfire with no briefing: the studio's contract ("Back opens
+ * the briefing of the place you selected", the first case above) was broken
+ * by a control that promised nothing about briefings. The two now live in
+ * separate slots composed at exit, display command first, then briefing.
+ */
+test.describe('PS-BRIEF return hand-off composes with a sidebar hazard', () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  test.beforeEach(async ({ page }) => {
+    await stubStateGeometry(page);
+    await stubBriefingSources(page);
+    await stubTribalCandidates(page, false);
+    await stubEcoregionCandidates(page, false);
+    await stubWatershedCandidates(page);
+    // The Wildfire cluster's smoke layer must not reach the network.
+    await page.route('**/NOAA_Satellite_Smoke_Detection*/**', (route) =>
+      route.fulfill({ contentType: 'application/geo+json', body: EMPTY_COLLECTION })
+    );
+  });
+
+  test('a sidebar hazard chosen after a selection leaves the studio on that hazard with the briefing open', async ({
+    page
+  }) => {
+    await gotoApp(page, '?view=brief&layers=places&studio=place');
+    await selectWashington(page);
+
+    const wildfire = page.locator('.shell-cluster-btn[data-cluster="wildfire"]');
+    await expect(wildfire).toBeVisible();
+    await expect(wildfire).toHaveAttribute('aria-pressed', 'false');
+    await wildfire.click();
+
+    // The studio yields (finding 6 still holds)...
+    await expect(page.locator(PLACE_ROOT)).toHaveCount(0);
+    await expect(page).not.toHaveURL(/studio=place/);
+    // ...the hazard the user chose is the one that stands...
+    await expect(wildfire).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
+    await expect(page).toHaveURL(/cluster=wildfire/);
+    // ...AND the briefing the selection promised opens. Before the fix the
+    // panel never mounted: the cluster command had replaced the briefing.
+    const panel = page.locator('#impact-panel');
+    await expect(panel).toBeVisible();
+    await expect(panel.locator('.impact-panel-title')).toHaveText('Washington');
+  });
+
+  test('a sidebar hazard chosen with no selection lands on the hazard and briefs nothing', async ({
+    page
+  }) => {
+    // The control: composing must not invent a briefing (D-0.7.0-041, never
+    // an unsolicited briefing).
+    await gotoApp(page, '?view=brief&layers=places&studio=place');
+    await page.locator('.shell-cluster-btn[data-cluster="wildfire"]').click();
+
+    await expect(page.locator(PLACE_ROOT)).toHaveCount(0);
+    await expect(page).toHaveURL(/cluster=wildfire/);
+    await expect(page.locator('#impact-panel')).toHaveCount(0);
+  });
+});
+
 test('embed mode keeps the PLACE studio out of frame', async ({ page }) => {
   await gotoApp(page, '?embed=true&view=brief&layers=places&studio=place');
   await expect(page.locator(PLACE_ROOT)).toHaveCount(0);
