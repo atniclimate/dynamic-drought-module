@@ -1744,8 +1744,12 @@ test.describe('W3/W4 browser truth', () => {
     // one) AND the telemetry panel's own viewport-based discovery, which
     // (measured directly) needs several extra zoom-in steps to clear the
     // discovery area cap under fire3d's pitch (see the comment at the zoom
-    // loop below).
-    test.setTimeout(150_000);
+    // loop below). Re-derived 2026-09-11 when the settled-transport wait
+    // joined the case: the worst-case poll sum is 30 s to 'active', 60 s to
+    // 'settled', 25 s for telemetry, 2 s fixed, and 90 s for the fly loop,
+    // 207 s, so the budget sits above it; before that wait the sum was
+    // 147 s against 150 s, three seconds of headroom.
+    test.setTimeout(210_000);
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
     await page.route('**/waterservices.usgs.gov/**', (route) => route.abort('failed'));
