@@ -2,6 +2,8 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { SST_ANOMALY_SCALE } from '../src/config/palette';
 import { gotoApp } from './helpers';
+import { routeAllTribalFixtures } from './tribal-fixtures';
+import { installMinimapAnalysisStubs } from './minimap-fixtures';
 
 interface Rect {
   readonly left: number;
@@ -979,6 +981,17 @@ function collidingTargets(targets: readonly Target[]): string[] {
 // ---------------------------------------------------------------------------
 
 test.describe('collision audit geometry (DDM-P10-T05)', () => {
+  // These fixtures never boot the application: each paints a synthetic
+  // document and nothing in it makes a request. The suite-wide boundary and
+  // minimap stubs are installed anyway, because
+  // tests/boundary-boot-inventory.test.mjs holds every navigation outside
+  // gotoApp to the same fail-closed contract, and a fixture that one day
+  // framed the app would otherwise reach a live service unnoticed.
+  test.beforeEach(async ({ page }) => {
+    await routeAllTribalFixtures(page);
+    await installMinimapAnalysisStubs(page);
+  });
+
   const shell = (body: string): string =>
     `<!doctype html><style>
       body{margin:0}

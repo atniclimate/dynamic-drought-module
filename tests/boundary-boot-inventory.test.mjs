@@ -161,6 +161,11 @@ const DIRECT_BOOT_REASONS = {
     reason:
       'navigates to a synthesized host page that frames the app in an iframe at the minimum embed width'
   },
+  'tests/interface-responsive.spec.ts': {
+    sites: 3,
+    reason:
+      'three DDM-P10-T05 fixtures paint a synthetic document to prove the collision audit reads clipped geometry in both directions; no application boots, and the describe installs both stubs before each'
+  },
   'tests/island-premount.spec.ts': {
     sites: 1,
     reason:
