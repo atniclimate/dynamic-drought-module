@@ -457,10 +457,10 @@ export function renderReport(record) {
   if (lowerBoundIds.length > 0) {
     lines.push(
       `${LOWER_BOUND_MARK} ${lowerBoundIds.map((id) => `\`${id}\``).join(', ')}: recorded with no ` +
-        'layer pending at the start of the switch, because the boot-idle seam ' +
-        '(src/layers/sst-anomaly.ts:575) reports its layer `\'ready\'` at activation, ' +
-        'before any tile is fetched, so the seam declared quiescence immediately; ' +
-        'the recorded time is a lower bound, not a measured settle time.'
+        'layer pending at the start of the switch, because the SST anomaly layer ' +
+        '(src/layers/sst-anomaly.ts:575) reports `\'ready\'` at activation, ' +
+        'before any tile is fetched, so the boot-idle seam declared quiescence ' +
+        'immediately; the recorded time is a lower bound, not a measured settle time.'
     );
     lines.push('');
   }
