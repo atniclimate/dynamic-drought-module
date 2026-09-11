@@ -21,7 +21,7 @@ import {
 } from '../ui/legend-registry';
 import { clearTimeBar, setTimeBar } from '../ui/time-bar';
 import { escapeHtml } from '../util/escape';
-import { fetchWithBudget } from '../util/fetch';
+import { fetchBufferedWithBudget } from '../util/fetch';
 
 const LAYER_KEY = 'cdm-drought';
 const SOURCE_ID = 'cdm-drought-areas';
@@ -352,7 +352,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   let artifact: CdmArtifact;
   try {
-    const response = await fetchWithBudget(
+    const response = await fetchBufferedWithBudget(
       URLS.cdmDroughtAreasLocal,
       null,
       signal,

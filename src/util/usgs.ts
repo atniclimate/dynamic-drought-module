@@ -17,7 +17,7 @@
  */
 
 import { URLS } from '../config/urls';
-import { fetchWithBudget } from './fetch';
+import { fetchBufferedWithBudget } from './fetch';
 import { isObject } from './guards';
 import type { StationValue, TelemetryFreshness } from '../types/station';
 
@@ -60,7 +60,7 @@ export async function fetchUsgsIV(
     period: 'P7D',
     siteStatus: 'all'
   });
-  const resp = await fetchWithBudget(
+  const resp = await fetchBufferedWithBudget(
     URLS.usgsIV + '?' + params.toString(),
     {},
     signal,

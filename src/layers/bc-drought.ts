@@ -30,7 +30,7 @@ import {
   showLegend
 } from '../ui/legend-registry';
 import { escapeHtml } from '../util/escape';
-import { fetchWithBudget } from '../util/fetch';
+import { fetchBufferedWithBudget } from '../util/fetch';
 
 const CONTROLLER_KEY = 'usdm';
 export const BC_DROUGHT_SOURCE_ID = 'bc-drought-basins';
@@ -281,7 +281,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   let collection: GeoJSON.FeatureCollection;
   try {
-    const response = await fetchWithBudget(
+    const response = await fetchBufferedWithBudget(
       buildBcDroughtQueryUrl(),
       null,
       signal,

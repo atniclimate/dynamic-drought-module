@@ -32,7 +32,7 @@ import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
 import { buildBoundaryContext } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import { registry } from '../state/registry';
-import { fetchWithBudget } from '../util/fetch';
+import { fetchBufferedWithBudget } from '../util/fetch';
 
 const LAYER_KEY = 'treaty';
 const SOURCE_ID = 'treaty-areas';
@@ -95,7 +95,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   let geojson: FeatureCollection;
   try {
-    const response = await fetchWithBudget(URLS.treatyAreasLocal, null, signal, FETCH_TIMEOUT_MS);
+    const response = await fetchBufferedWithBudget(URLS.treatyAreasLocal, null, signal, FETCH_TIMEOUT_MS);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} fetching ${URLS.treatyAreasLocal}`);
     }

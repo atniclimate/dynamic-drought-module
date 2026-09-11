@@ -24,7 +24,7 @@
  */
 
 import { URLS } from '../config/urls';
-import { fetchWithBudget } from './fetch';
+import { fetchBufferedWithBudget } from './fetch';
 import type { StationValue, TelemetryFreshness } from '../types/station';
 import type { CwmsSource } from '../types/station';
 import { isObject } from './guards';
@@ -68,7 +68,7 @@ async function fetchTimeseriesWindow(
     begin: begin.toISOString(),
     end: end.toISOString()
   });
-  const resp = await fetchWithBudget(
+  const resp = await fetchBufferedWithBudget(
     `${URLS.usaceCwmsData}/timeseries?${params.toString()}`,
     { headers: ACCEPT_V2 },
     signal,
@@ -88,7 +88,7 @@ async function discoverTimeseriesId(
   signal: AbortSignal | null
 ): Promise<string | null> {
   const params = new URLSearchParams({ office, like });
-  const resp = await fetchWithBudget(
+  const resp = await fetchBufferedWithBudget(
     `${URLS.usaceCwmsData}/catalog/TIMESERIES?${params.toString()}`,
     { headers: ACCEPT_V2 },
     signal,

@@ -20,7 +20,7 @@
  *      signal (`activationSignal`, via `linkAbort`), so the layer
  *      controller's abort on deactivate or supersession reaches a held
  *      Overpass request at once instead of behind the serialized teardown.
- *   2. Each mirror gets its own per-call timeout via `fetchWithBudget`.
+ *   2. Each mirror gets its own per-call timeout via `fetchBufferedWithBudget`.
  *   3. 350 ms `sleepUnlessAborted` between failed mirror attempts so a
  *      hung connection does not block the cycle.
  *   4. After every `await`, re-check `controller.signal.aborted` and
@@ -52,7 +52,7 @@ import { URLS } from '../config/urls';
 import { quantizeBbox } from '../util/bbox';
 import { ExpiringLruCache } from '../util/bounded-cache';
 import type { LayerActivation } from '../config/layers';
-import { fetchWithBudget, linkAbort, sleepUnlessAborted } from '../util/fetch';
+import { fetchBufferedWithBudget, linkAbort, sleepUnlessAborted } from '../util/fetch';
 import { registry } from '../state/registry';
 
 // ---------------------------------------------------------------------------
@@ -294,7 +294,7 @@ export function deactivate(map: maplibregl.Map): void {
  * collection to the GeoJSON source via `setData`.
  *
  * Mirror cycling. Tries `URLS.overpassMirrors` in order, with a 12-second
- * per-call timeout via `fetchWithBudget` and a 350 ms backoff between
+ * per-call timeout via `fetchBufferedWithBudget` and a 350 ms backoff between
  * failures (`sleepUnlessAborted`, so layer-off short-circuits the wait).
  * On HTTP non-OK or network error, advances to the next mirror; if the
  * abort signal fires at any point, returns an empty collection.
@@ -345,7 +345,7 @@ export async function fetchOSMWaterways(
     if (signal.aborted) return emptyFeatureCollection();
     const endpoint = mirrors[i];
     try {
-      const resp = await fetchWithBudget(
+      const resp = await fetchBufferedWithBudget(
         endpoint,
         {
           method: 'POST',

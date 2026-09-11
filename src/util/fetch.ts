@@ -23,6 +23,19 @@
  * Returns the Response. Throws an AbortError on either user-cancel
  * (master signal aborted) or timeout (per-call budget elapsed).
  *
+ * The budget ends when the HEADERS arrive (Codex 2026-09-10 finding S2).
+ * The timer is cleared and the master listener removed before the caller
+ * ever sees the Response, so a body read after this returns (`.json()`,
+ * `.text()`, `.arrayBuffer()`) has no timeout and no longer answers the
+ * owner's abort: a server that answers 200 and then stalls holds the caller
+ * open for as long as the stream stays silent. Since 2026-09-11 no caller
+ * under `src/` pairs this with a body read; the ones that did use
+ * `fetchBufferedWithBudget` (same signature, same Response shape, the budget
+ * spans the body) or `fetchJsonWithBudget`. `tests/fetch-budget.test.mjs`
+ * keeps it that way. This helper stays for a caller that genuinely wants
+ * headers only, or one that streams the body under its own controller (the
+ * shape `src/util/hydromet.ts` and `src/util/pmtiles-probe.ts` implement).
+ *
  * @param url          Target URL passed straight to `fetch`.
  * @param opts         Standard `RequestInit`, or `null` for a default GET.
  * @param masterSignal The owning operation's abort signal, or `null` to
@@ -134,6 +147,17 @@ export async function fetchJsonWithBudget(
  * Fetch a response and retain cancellation ownership until its exact body bytes
  * have arrived. Use this when callers need status and headers before parsing;
  * unlike `fetchWithBudget`, the timeout cannot expire between headers and body.
+ *
+ * The returned Response carries the original status, statusText and headers
+ * over an in-memory body, so `.ok` checks, `.json()`, `.text()` and
+ * `.arrayBuffer()` read exactly as they would on the network Response and a
+ * caller's error taxonomy (a 404 meaning "no data", a non-OK meaning
+ * "error", an AbortError meaning "superseded") is unchanged; only `.url`,
+ * `.type` and `.redirected` are not carried, and no caller reads them. An
+ * abort of the master signal, or the budget expiring, during the body read
+ * cancels the stream and rejects with an AbortError, as a header-time abort
+ * always did. A null-body status (101, 204, 205, 304) is reconstructed with a
+ * null body because the Response constructor refuses a body there.
  */
 export async function fetchBufferedWithBudget(
   url: string,
@@ -153,7 +177,12 @@ export async function fetchBufferedWithBudget(
     const response = await fetch(url, { ...(opts ?? {}), signal: ctrl.signal });
     const body = await readBodyBytes(response, ctrl.signal);
     if (ctrl.signal.aborted) throw new DOMException('Aborted', 'AbortError');
-    return new Response(body, {
+    const nullBodyStatus =
+      response.status === 101 ||
+      response.status === 204 ||
+      response.status === 205 ||
+      response.status === 304;
+    return new Response(nullBodyStatus ? null : body, {
       status: response.status,
       statusText: response.statusText,
       headers: response.headers

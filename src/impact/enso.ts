@@ -28,7 +28,7 @@
  */
 
 import { URLS } from '../config/urls';
-import { fetchWithBudget } from '../util/fetch';
+import { fetchBufferedWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
 import { oniLineSvg, ensoPlumeSvg, type OniPoint, type EnsoPlumePoint } from '../ui/charts';
 import { makeClaim } from './evidence';
@@ -948,7 +948,7 @@ function plumeHeadline(probabilities: EnsoProbabilities): string {
  * malformed, so the observed seasonal indices still render.
  */
 async function loadEnsoSnapshot(signal: AbortSignal): Promise<EnsoSnapshot> {
-  const resp = await fetchWithBudget(
+  const resp = await fetchBufferedWithBudget(
     URLS.ensoIndicesLocal,
     { headers: { Accept: 'application/json' } },
     signal,
