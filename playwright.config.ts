@@ -77,6 +77,16 @@ const INTERACTION_SPECS = [
   '**/s4-shell.spec.ts'
 ];
 
+// DDM-P14-T08: the mode-switch cost spec is a measurement, not an
+// assertion suite, and it writes committed files (docs/mode-switch-cost.json,
+// docs/MODE_SWITCH_COST.md) when run with DDM_MEASURE_LABEL set. It gets its
+// own project, run only by `npm run measure:mode-switch`, so it never joins
+// the `chromium` project's testIgnore-excluded default run and never joins
+// CI: browser-suite.yml:220 fans the workflow out over a fixed three-project
+// matrix (chromium, chromium-interaction, chromium-3d) that never names
+// `chromium-measure`, so a CI checkout is never dirtied by this spec.
+const MEASURE_SPECS = ['**/mode-switch-cost.spec.ts'];
+
 // MapLibre GL needs a WebGL2 context. Headless Chromium has no GPU, so force
 // ANGLE over SwiftShader (a pure-software GL implementation) and allow it
 // explicitly (recent Chromium gates the SwiftShader WebGL fallback behind
@@ -222,7 +232,7 @@ export default defineConfig({
       // collection and every worker, where they register zero Playwright
       // tests but do execute, so a module-scope throw in one would red a
       // shard as a collection error rather than fail its own runner.
-      testIgnore: [...FIRE3D_SPECS, ...INTERACTION_SPECS, '**/*.test.mjs'],
+      testIgnore: [...FIRE3D_SPECS, ...INTERACTION_SPECS, ...MEASURE_SPECS, '**/*.test.mjs'],
       use: CHROMIUM_USE
     },
     {
@@ -238,6 +248,14 @@ export default defineConfig({
       // per-test budgets above the 60 s default are declared in the specs.
       name: 'chromium-3d',
       testMatch: FIRE3D_SPECS,
+      testIgnore: ['**/*.test.mjs'],
+      use: CHROMIUM_USE
+    },
+    {
+      // The mode-switch cost measurement, alone: see MEASURE_SPECS above
+      // for why it is never part of the default run or the CI matrix.
+      name: 'chromium-measure',
+      testMatch: MEASURE_SPECS,
       testIgnore: ['**/*.test.mjs'],
       use: CHROMIUM_USE
     }
