@@ -560,7 +560,20 @@ test.describe('PS-BRIEF return hand-off', () => {
  * the briefing of the place you selected", the first case above) was broken
  * by a control that promised nothing about briefings. The two now live in
  * separate slots composed at exit, display command first, then briefing.
+ *
+ * These cases boot on `layers=states`, NOT the file's usual `layers=places`.
+ * City & Town Labels is a reference-role layer outside every cluster's
+ * composition, so a hazard chosen over it commits DEMOTED by design
+ * (src/state/cluster-service.ts applyCluster, handoff step 5): the recipe
+ * applies, the extra survives, and the URL keeps the granular `layers=`
+ * truth with no button pressed (D-0.7.0-044). That is what the same click
+ * does outside any studio from the same boot (verified 2026-09-11), so it is
+ * not the hand-off's doing and must not be what these cases assert against.
+ * State Boundaries is default-on and inside the composition, so the commit
+ * stays clean and `cluster=wildfire` is the honest claim.
  */
+const COMPOSABLE_BOOT_LAYERS = 'states';
+
 test.describe('PS-BRIEF return hand-off composes with a sidebar hazard', () => {
   test.use({ viewport: { width: 1280, height: 900 } });
 
@@ -579,7 +592,7 @@ test.describe('PS-BRIEF return hand-off composes with a sidebar hazard', () => {
   test('a sidebar hazard chosen after a selection leaves the studio on that hazard with the briefing open', async ({
     page
   }) => {
-    await gotoApp(page, '?view=brief&layers=places&studio=place');
+    await gotoApp(page, `?view=brief&layers=${COMPOSABLE_BOOT_LAYERS}&studio=place`);
     await selectWashington(page);
 
     const wildfire = page.locator('.shell-cluster-btn[data-cluster="wildfire"]');
@@ -605,7 +618,7 @@ test.describe('PS-BRIEF return hand-off composes with a sidebar hazard', () => {
   }) => {
     // The control: composing must not invent a briefing (D-0.7.0-041, never
     // an unsolicited briefing).
-    await gotoApp(page, '?view=brief&layers=places&studio=place');
+    await gotoApp(page, `?view=brief&layers=${COMPOSABLE_BOOT_LAYERS}&studio=place`);
     await page.locator('.shell-cluster-btn[data-cluster="wildfire"]').click();
 
     await expect(page.locator(PLACE_ROOT)).toHaveCount(0);
