@@ -1,6 +1,6 @@
 # Entering the 3D Fire scene: loading, staging, cancel
 
-Proposed 2026-09-11 (S28) from the owner's rulings of that date, revised the same night after the Codex adversary review (C:\dev\_reviews\dynamic-drought-module\2026-09-11_fire3d-entry-loading-screen.md). Nothing here is built yet. One decision is still open: the pulse cadence while terrain is present (decision A below).
+Proposed 2026-09-11 (S28) from the owner's rulings of that date, revised the same night after the Codex adversary review (C:\dev\_reviews\dynamic-drought-module\2026-09-11_fire3d-entry-loading-screen.md). The entry contract is not built yet. Decision A below, the pulse cadence while terrain is present, was approved by the owner at 02:45 PDT the same night (DR-087) and is built: 7fcfaa4.
 
 ## What the user sees today, and why it is not honest
 
@@ -67,6 +67,11 @@ Words: loading, live, live (partial), unavailable only; no warning, alert, forec
 `statusLine` (src/ui/island/fire3d-control.tsx): while `active` and not `settledOnce`, "Loading: terrain relief for this view."; then the existing Live and Live (partial) sentences; a later `streaming` keeps Live.
 
 ## Decision A: the pulse while terrain is present
+
+Approved by the owner 2026-09-11 02:45 PDT (DR-087) and built as 7fcfaa4: 60 ms on the flat
+map, 250 ms with terrain, 500 ms with terrain on a renderer the page classifies as software
+(an unknown renderer gets 250, never 500), one continuous clock, reduced motion unchanged.
+The proposal as written before the ruling follows.
 
 Proposed: the pulse controller in src/layers/nifc-fires.ts becomes terrain-aware. Its phase stays derived from elapsed time (it never pauses or restarts), but while `map.getTerrain()` is set it commits paint at 250 ms (4 Hz) instead of 60 ms, 500 ms on a known software renderer, and it caches the present target list instead of probing eight layers each tick. Restores 60 ms on the flat map. Numbers to be benchmarked on hardware before the constants are final. This needs the owner's yes because ruling 2 said "keeps running"; the director reads that as no pause, not as 17 terrain repaints per second, and Codex argued the same.
 

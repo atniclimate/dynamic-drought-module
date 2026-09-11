@@ -483,6 +483,14 @@ test.describe('the Conditions block attributes an alert only where it touches th
    * validator requires (a requested product name and an expiry that parses).
    * Placed inside NOTCH_BOUNDS so the concave fixture excludes it. */
   function redFlagAt(w: number, s: number, e: number, n: number): unknown {
+    // The window is relative to the run, because src/layers/nws-alerts.ts
+    // (activeFeaturesAt) drops an alert whose expiry has passed: fixed dates
+    // of 2026-09-10/11 made this block fail from 02:00 UTC on 2026-09-11
+    // onward, on every tree (found by the S28 decision-A worker, which saw
+    // it fail identically with its change stashed).
+    const hour = 3_600_000;
+    const onset = new Date(Date.now() - 6 * hour).toISOString();
+    const expiry = new Date(Date.now() + 6 * hour).toISOString();
     return {
       type: 'FeatureCollection',
       features: [
@@ -490,9 +498,9 @@ test.describe('the Conditions block attributes an alert only where it touches th
           type: 'Feature',
           properties: {
             prod_type: 'Red Flag Warning', // vocab-allow: verbatim NWS product name, quoted source data
-            onset: '2026-09-10T12:00:00Z',
-            ends: '2026-09-11T02:00:00Z',
-            expiration: '2026-09-11T02:00:00Z',
+            onset,
+            ends: expiry,
+            expiration: expiry,
             wfo: 'OTX'
           },
           geometry: {
