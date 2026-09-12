@@ -14,7 +14,8 @@ import {
   emptyRecord,
   mergeRun,
   compareRuns,
-  renderReport
+  renderReport,
+  writePolicy
 } from '../scripts/mode-switch-cost-report.mjs';
 
 /**
@@ -38,6 +39,13 @@ import {
  * `docs/` unless `DDM_MEASURE_LABEL` is `baseline` or `candidate`; a bare
  * run still prints its numbers and, when a baseline is already committed,
  * still checks that no switch's data-read count rose.
+ *
+ * The write decision runs through `writePolicy` (DDM-P14-T08 provenance
+ * guard): a `baseline` or `candidate` run on a clean tree (`git status
+ * --porcelain` empty) writes the committed record; the same run on a dirty
+ * tree throws instead, because the stamped commit would not contain the
+ * code that produced the numbers. A record that cites a commit it does not
+ * match is worse than no record.
  */
 
 const VIEWPORT = { width: 1280, height: 800 };
@@ -167,6 +175,8 @@ test.describe('mode-switch cost', () => {
     }
 
     const commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+    const dirtyOutput = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' });
+    const dirty = dirtyOutput.split('\n').filter((line) => line.trim().length > 0).length;
     const rawLabel = process.env['DDM_MEASURE_LABEL'];
     const label = rawLabel === 'baseline' ? 'baseline' : 'candidate';
     const run = {
@@ -174,6 +184,7 @@ test.describe('mode-switch cost', () => {
       commit,
       recordedAt: new Date().toISOString(),
       viewport: VIEWPORT,
+      dirty,
       switches: results
     };
 
@@ -183,11 +194,24 @@ test.describe('mode-switch cost', () => {
 
     const existingRecord = existsSync(jsonPath) ? JSON.parse(readFileSync(jsonPath, 'utf8')) : null;
 
-    if (rawLabel === 'baseline' || rawLabel === 'candidate') {
+    // The write decision is keyed on the RAW env label, not the defaulted
+    // `label` above: a bare run (DDM_MEASURE_LABEL unset or some other
+    // value) must always be 'skip', never 'write' or 'refuse', no matter
+    // how dirty the tree is (writePolicy's contract).
+    const policy = writePolicy({ label: rawLabel, dirty });
+    if (policy === 'write') {
       const record = existingRecord ?? emptyRecord();
       const merged = mergeRun(record, run);
       writeFileSync(jsonPath, `${JSON.stringify(merged, null, 2)}\n`);
       writeFileSync(mdPath, `${renderReport(merged)}\n`);
+    } else if (policy === 'refuse') {
+      throw new Error(
+        `mode-switch-cost: the working tree has ${dirty} dirty file${dirty === 1 ? '' : 's'} ` +
+          `(git status --porcelain), so commit \`${commit}\` does not contain the code that ` +
+          'produced these numbers. The artifact was NOT written: a record must cite a commit ' +
+          'that contains the code that produced it. Commit or stash the working tree, then ' +
+          're-run the measurement.'
+      );
     }
 
     const baselineRun = existingRecord?.runs?.baseline ?? null;

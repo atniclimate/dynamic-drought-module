@@ -11,6 +11,9 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   MODE_KEYS,
@@ -23,10 +26,12 @@ import {
   emptyRecord,
   mergeRun,
   compareRuns,
-  renderReport
+  renderReport,
+  writePolicy
 } from '../scripts/mode-switch-cost-report.mjs';
 
 const ORIGIN = 'https://ddm.example.org';
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 function makeSwitchEntry(pair, overrides = {}) {
   return {
@@ -403,6 +408,86 @@ test('strippedUrl truncates a long URL to 160 characters with a trailing ellipsi
   const result = strippedUrl(`${ORIGIN}${longPath}`, ORIGIN);
   assert.equal(result.length, 160);
   assert.ok(result.endsWith('...'));
+});
+
+// --- writePolicy ------------------------------------------------------
+
+test('writePolicy skips a bare run (not baseline or candidate) with dirty 0', () => {
+  assert.equal(writePolicy({ label: 'run', dirty: 0 }), 'skip');
+});
+
+test('writePolicy skips a bare run (not baseline or candidate) with dirty 3', () => {
+  assert.equal(writePolicy({ label: 'run', dirty: 3 }), 'skip');
+});
+
+test('writePolicy writes for label baseline with dirty 0', () => {
+  assert.equal(writePolicy({ label: 'baseline', dirty: 0 }), 'write');
+});
+
+test('writePolicy writes for label candidate with dirty 0', () => {
+  assert.equal(writePolicy({ label: 'candidate', dirty: 0 }), 'write');
+});
+
+test('writePolicy refuses for label baseline with dirty 1', () => {
+  assert.equal(writePolicy({ label: 'baseline', dirty: 1 }), 'refuse');
+});
+
+test('writePolicy refuses for label candidate with dirty 7', () => {
+  assert.equal(writePolicy({ label: 'candidate', dirty: 7 }), 'refuse');
+});
+
+test('writePolicy throws a TypeError naming "dirty" for a negative dirty count', () => {
+  assert.throws(
+    () => writePolicy({ label: 'baseline', dirty: -1 }),
+    (err) => err instanceof TypeError && /dirty/.test(err.message)
+  );
+});
+
+test('writePolicy throws a TypeError naming "dirty" for a non-integer dirty count', () => {
+  assert.throws(
+    () => writePolicy({ label: 'candidate', dirty: 1.5 }),
+    (err) => err instanceof TypeError && /dirty/.test(err.message)
+  );
+});
+
+// --- renderReport and compareRuns: dirty (present, missing, and legacy) --
+
+test('renderReport prints "dirty 0" beside a run recorded clean', () => {
+  const record = mergeRun(emptyRecord(), makeRun('baseline', { dirty: 0 }));
+  const markdown = renderReport(record);
+  assert.match(markdown, /dirty 0/);
+});
+
+test('renderReport prints "dirty N files" beside a run recorded dirty', () => {
+  const record = mergeRun(emptyRecord(), makeRun('baseline', { dirty: 2 }));
+  const markdown = renderReport(record);
+  assert.match(markdown, /dirty 2 files/);
+});
+
+test('renderReport prints "dirty unknown" for a run with no dirty field, and does not throw', () => {
+  const run = makeRun('baseline');
+  delete run.dirty;
+  const record = mergeRun(emptyRecord(), run);
+  assert.doesNotThrow(() => renderReport(record));
+  const markdown = renderReport(record);
+  assert.match(markdown, /dirty unknown/);
+});
+
+test('compareRuns does not throw when a run has no dirty field', () => {
+  const baseline = makeRun('baseline');
+  delete baseline.dirty;
+  const candidate = makeRun('candidate');
+  delete candidate.dirty;
+  assert.doesNotThrow(() => compareRuns(baseline, candidate));
+});
+
+test('renderReport renders the committed docs/mode-switch-cost.json unchanged, including its baseline run with no dirty field', () => {
+  const jsonPath = join(HERE, '..', 'docs', 'mode-switch-cost.json');
+  const record = JSON.parse(readFileSync(jsonPath, 'utf8'));
+  assert.equal('dirty' in record.runs.baseline, false);
+  assert.doesNotThrow(() => renderReport(record));
+  const markdown = renderReport(record);
+  assert.match(markdown, /dirty unknown/);
 });
 
 test('tallyUrls counts occurrences and sorts by descending count then ascending url', () => {

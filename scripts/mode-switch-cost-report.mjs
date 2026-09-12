@@ -20,12 +20,19 @@
  *
  *   { label: 'baseline' | 'candidate', commit: '<short sha>',
  *     recordedAt: '<ISO 8601>', viewport: { width: 1280, height: 800 },
+ *     dirty: <integer, count of `git status --porcelain` lines at
+ *             measurement time>,
  *     switches: [ { id, from, to, requests: <integer>,
  *                   dataRequests: <integer>, tileRequests: <integer>,
  *                   quiescentMs: <integer>,
  *                   pendingAtStart: [<layer key>, ...],
  *                   counted: [{ url, n }, ...],
  *                   tiles: [{ url, n }, ...] }, ... ] }
+ *
+ * `dirty` is absent on a run recorded before DDM-P14-T08's provenance guard
+ * (the committed baseline in docs/mode-switch-cost.json predates it);
+ * `renderReport` and `compareRuns` treat a missing `dirty` as unknown, never
+ * as zero and never as a reason to throw.
  *
  * `requests` is the raw total of `dataRequests` plus `tileRequests`, kept
  * because the milestone's acceptance sentence names "the request count".
@@ -244,6 +251,38 @@ export function mergeRun(record, run) {
 }
 
 /**
+ * Decides whether a measured run may be written to the committed record.
+ *
+ * `label` not `'baseline'` and not `'candidate'` (a bare run, the default
+ * when `DDM_MEASURE_LABEL` is unset) always returns `'skip'`, regardless of
+ * `dirty`: a bare run writes nothing today and that stays true.
+ *
+ * A real label (`'baseline'` or `'candidate'`) with `dirty === 0` returns
+ * `'write'`: the tree that produced the numbers is exactly the tree at the
+ * stamped commit.
+ *
+ * A real label with `dirty > 0` returns `'refuse'`: the stamped commit does
+ * not contain the code that produced the numbers, and a record that claims
+ * otherwise is worse than no record. The caller must fail loudly rather
+ * than write.
+ *
+ * Throws a TypeError naming `"dirty"` when `dirty` is not a non-negative
+ * integer (a negative count or a fractional count cannot be a line count
+ * from `git status --porcelain`), in the same style as `compareRuns`'s
+ * shape guard.
+ */
+export function writePolicy({ label, dirty }) {
+  if (!Number.isInteger(dirty) || dirty < 0) {
+    throw new TypeError(
+      `writePolicy: "dirty" must be a non-negative integer (a count of ` +
+        `"git status --porcelain" lines), got ${dirty}.`
+    );
+  }
+  if (label !== 'baseline' && label !== 'candidate') return 'skip';
+  return dirty === 0 ? 'write' : 'refuse';
+}
+
+/**
  * Throws a TypeError when `value` is not a RUN: refuses `undefined`, `null`,
  * a RECORD passed by mistake (a RECORD has no top-level `switches` array;
  * it has `switches` nested under `runs.baseline` or `runs.candidate`), and
@@ -323,6 +362,18 @@ export function compareRuns(baseline, candidate) {
   }
 
   return { rises, falls, unchanged, missing };
+}
+
+/**
+ * Renders a run's `dirty` field for the committed table: `'dirty unknown'`
+ * when the field is absent (a run recorded before DDM-P14-T08's provenance
+ * guard), `'dirty 0'` for a clean tree, and `'dirty N files'` otherwise.
+ * Never throws.
+ */
+function formatDirty(run) {
+  if (!Number.isInteger(run.dirty)) return 'dirty unknown';
+  if (run.dirty === 0) return 'dirty 0';
+  return `dirty ${run.dirty} files`;
 }
 
 function formatDelta(delta) {
@@ -468,7 +519,7 @@ export function renderReport(record) {
   for (const run of [baseline, candidate].filter(Boolean)) {
     lines.push(
       `Run \`${run.label}\`: commit \`${run.commit}\`, recorded ${run.recordedAt}, ` +
-        `viewport ${run.viewport.width}x${run.viewport.height}.`
+        `viewport ${run.viewport.width}x${run.viewport.height}, ${formatDirty(run)}.`
     );
   }
   lines.push('');
