@@ -544,7 +544,11 @@ export function pmtilesHeaderResponse(
   options: { readonly total?: number } = {}
 ): Response {
   const total = options.total ?? pmtilesObjectSize(shape);
-  return new Response(pmtilesV3Header(shape), {
+  // Wrapped in a fresh Uint8Array: `pmtilesV3Header` returns
+  // `Uint8Array<ArrayBufferLike>`, and `Response`'s BodyInit wants the
+  // narrower `Uint8Array<ArrayBuffer>`; copying into a new typed array
+  // backed by a real ArrayBuffer satisfies that honestly (same bytes).
+  return new Response(new Uint8Array(pmtilesV3Header(shape)), {
     status: 206,
     headers: { 'Content-Range': `bytes 0-126/${total}` }
   });

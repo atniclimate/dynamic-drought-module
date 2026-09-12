@@ -74,6 +74,7 @@ const CPC_SEASONAL_OUTLOOK: SourcedClaim = makeClaim({
   text: 'The CPC Seasonal Drought Outlook is the authoritative long-range drought tendency (drought persists, develops, improves, or is removed) over the coming season. In the Pacific Northwest the El Nino / Southern Oscillation phase shifts these odds; the long-range read is a probability tilt, not a forecast of outcomes.',
   source: 'NOAA CPC Seasonal Drought Outlook',
   sourceUrl: 'https://www.cpc.ncep.noaa.gov/products/expert_assessment/sdo_summary.php',
+  product: 'cpcSeasonal',
   evidence: 'outlook',
   dates: { retrieved: '2026-07-21' },
   // vocab-allow: honesty disclaimer, denies being a forecast

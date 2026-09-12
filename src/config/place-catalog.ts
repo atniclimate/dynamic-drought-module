@@ -1,8 +1,8 @@
 import { URLS } from './urls';
-import { gatedDisplayName, loadTribalRoster } from '../state/tribal-roster';
+import { TRUSTED_PROVENANCE, gatedDisplayName, loadTribalRoster } from '../state/tribal-roster';
 import type { TribalRosterArea } from '../state/tribal-roster';
 import type { TypedPlaceKind, TypedPlaceRef } from '../state/typed-place';
-import { fetchJsonWithBudget } from '../util/fetch';
+import { fetchJsonWithBudget, fetchSharedJsonWithBudget, US_STATES_SHARED_KEY } from '../util/fetch';
 
 export type PlaceTypeAvailability =
   | 'AVAILABLE'
@@ -172,10 +172,12 @@ export const PLACE_TYPE_ORDER: readonly TypedPlaceKind[] = [
 ];
 
 const CATALOG_TIMEOUT_MS = 8_000;
+// Guarded so a pure Node test can import this module without a Vite-served
+// page (the same idiom as src/config/urls-boot.ts:29, DDM-P2-T12).
 const TRIBAL_CROSSWALK_URL =
-  import.meta.env.BASE_URL + 'data/tribal-larname-crosswalk.json';
+  (import.meta.env?.BASE_URL ?? '/dynamic-drought-module/') + 'data/tribal-larname-crosswalk.json';
 const ECOREGION_CATALOG_URL =
-  import.meta.env.BASE_URL + 'data/ecoregions-pnw-catalog.json';
+  (import.meta.env?.BASE_URL ?? '/dynamic-drought-module/') + 'data/ecoregions-pnw-catalog.json';
 const STATE_CATALOG_STUSPS: ReadonlySet<string> = new Set([
   'AL',
   'AK',
@@ -304,8 +306,24 @@ async function loadTribeEntries(signal: AbortSignal): Promise<readonly PlaceCata
     fetchJson(TRIBAL_CROSSWALK_URL, signal)
   ]);
   abortIfNeeded(signal);
+  return buildTribeCatalogEntries(areas, rawCrosswalk as TribalCrosswalk);
+}
 
-  const crosswalk = rawCrosswalk as TribalCrosswalk;
+/**
+ * The pure loop body of `loadTribeEntries` (DDM-P2-T12), lifted out of the
+ * async fetch shell so the trust decision and the label choice are
+ * unit-testable on hand-built rows with no browser and no network. Trust is
+ * decided by testing the roster row's own `provenance` against
+ * `TRUSTED_PROVENANCE` (never by comparing the gated label string against
+ * `displayName`, which reads as trusted whenever an UNTRUSTED row's
+ * `displayName` happens to equal its `larName`); a trusted row is labelled
+ * with the gated roster value (`gated`), never with the crosswalk's own
+ * `tribe` string.
+ */
+export function buildTribeCatalogEntries(
+  areas: readonly TribalRosterArea[],
+  crosswalk: TribalCrosswalk
+): readonly PlaceCatalogEntry[] {
   const rosterSource =
     textValue(crosswalk.meta?.rosterSource) ?? PLACE_CATALOG.tribe.sourceLabels[0] ?? '';
   const landAreaSource =
@@ -341,16 +359,23 @@ async function loadTribeEntries(signal: AbortSignal): Promise<readonly PlaceCata
       continue;
     }
     const gated = gatedDisplayName(rosterArea);
-    if (gated === rosterArea.displayName) {
+    if (TRUSTED_PROVENANCE.has(rosterArea.provenance ?? '')) {
       // Trusted (DR-094, the shared gate in src/state/tribal-roster.ts):
-      // this representation is shown under the formal Nation name.
-      formalNames.add(name);
-      const ids = representationIds.get(name) ?? new Set<string>();
+      // this representation is shown under the gated roster value (the
+      // formal Nation name), never the crosswalk's own `tribe` string,
+      // which the trust decision does not depend on (DDM-P2-T12: trust is
+      // tested against TRUSTED_PROVENANCE directly, never inferred by
+      // comparing the gated label to displayName).
+      formalNames.add(gated);
+      const ids = representationIds.get(gated) ?? new Set<string>();
       ids.add(rosterArea.larName);
-      representationIds.set(name, ids);
+      representationIds.set(gated, ids);
     } else {
-      // Untrusted: the polygon stays selectable, honestly labeled with its
-      // own BIA land-area name instead of the unproven crosswalk name.
+      // Untrusted (DDM-P2-T12: decided against the provenance set, never by
+      // comparing the gated label to displayName, which is wrong whenever
+      // an untrusted row's displayName happens to equal its larName): the
+      // polygon stays selectable, honestly labeled with its own BIA
+      // land-area name instead of the unproven crosswalk name.
       gatedLarLabels.add(gated);
       const ids = representationIds.get(gated) ?? new Set<string>();
       ids.add(rosterArea.larName);
@@ -382,7 +407,18 @@ async function loadTribeEntries(signal: AbortSignal): Promise<readonly PlaceCata
 }
 
 async function loadStateEntries(signal: AbortSignal): Promise<readonly PlaceCatalogEntry[]> {
-  const raw = (await fetchJson(URLS.usStatesLocal, signal)) as {
+  // Shared, page-lifetime transport (DDM-P14-T06): joins whatever fetch the
+  // states layer, the deep link, the click-door fallback, or another Place
+  // studio reader already made for the same bundled file, rather than
+  // issuing its own. Only read below (`for...of` over `raw.features ?? []`,
+  // never sorted or written to), so sharing the reference is safe.
+  const raw = (await fetchSharedJsonWithBudget(
+    US_STATES_SHARED_KEY,
+    URLS.usStatesLocal,
+    null,
+    signal,
+    CATALOG_TIMEOUT_MS
+  )) as {
     readonly features?: readonly {
       readonly geometry?: unknown;
       readonly properties?: Readonly<Record<string, unknown>>;

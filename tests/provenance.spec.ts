@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { gotoApp, waitForLayerSettled } from './helpers';
 import { caveatFor } from '../src/impact/context';
+import { buildTribeCatalogEntries } from '../src/config/place-catalog';
 
 /**
  * Unit D acceptance (the umbrella build; design finding 5): the provenance
@@ -274,5 +275,137 @@ test.describe('DDM-P2-T10: the place catalog gates a formal Nation name the same
   // silently.
   test('the studio\'s tribal overlap caveat calls the polygon a representation', () => {
     expect(caveatFor('bia-reservation')).toContain('representation');
+  });
+});
+
+/**
+ * DDM-P2-T12: `loadTribeEntries` decides trust by testing a roster row's own
+ * `provenance` against `TRUSTED_PROVENANCE`, never by comparing the gated
+ * label string against `displayName` (wrong whenever an untrusted row's
+ * displayName happens to equal its larName); a trusted row is labelled with
+ * the gated roster value, never with the crosswalk's own `tribe` field.
+ *
+ * The acceptance's two cases run page-less against `buildTribeCatalogEntries`
+ * below (the pure helper). These two page-driven cases stay alongside them
+ * because they prove a distinct thing the pure cases cannot: that the SAME
+ * fixtures, routed through the real fetch-and-render pipeline and the place
+ * studio's `#place-studio-search` / `#place-list` door, produce the same
+ * labels a real user would see, exercising `loadTribeEntries`'s own fetch
+ * call and `buildTribeCatalogEntries` together, not the helper in isolation.
+ */
+test.describe('DDM-P2-T12: the place studio door shows the same labels the pure helper proves', () => {
+  async function stubSingleRowFixture(
+    page: Page,
+    area: { larName: string; displayName: string; provenance: string },
+    crosswalkTribe: string
+  ): Promise<void> {
+    await page.route('**/data/tribal-roster.json', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ areas: [area] })
+      })
+    );
+    await page.route('**/data/tribal-larname-crosswalk.json', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          meta: {
+            rosterSource: 'Synthetic fixture roster',
+            landAreaSource: 'Synthetic fixture land areas'
+          },
+          matched: [{ tribe: crosswalkTribe, larName: area.larName }],
+          rosterNoLar: []
+        })
+      })
+    );
+  }
+
+  test('an untrusted row whose displayName equals its larName is listed under its land-area name', async ({
+    page
+  }) => {
+    const larName = 'DDM-P2-T12 Untrusted Fixture Area';
+    const crosswalkTribe = 'DDM-P2-T12 Untrusted Fixture Crosswalk Tribe Name';
+    await stubSingleRowFixture(
+      page,
+      { larName, displayName: larName, provenance: 'unverified' },
+      crosswalkTribe
+    );
+    await gotoApp(page, '?view=brief&layers=places&studio=place');
+    await page.locator('#place-studio-search').fill('DDM-P2-T12 Untrusted Fixture');
+
+    const larOption = page.locator('#place-list .place-studio-option', { hasText: larName });
+    await expect(larOption).toBeVisible();
+    await expect(
+      page.locator('#place-list .place-studio-option', { hasText: crosswalkTribe })
+    ).toHaveCount(0);
+  });
+
+  test("a trusted row whose crosswalk tribe differs from its roster displayName is listed under the roster's name", async ({
+    page
+  }) => {
+    const larName = 'DDM-P2-T12 Trusted Fixture Area';
+    const displayName = 'DDM-P2-T12 Trusted Fixture Roster Display Name';
+    const crosswalkTribe = 'DDM-P2-T12 Trusted Fixture Different Crosswalk Tribe Name';
+    await stubSingleRowFixture(
+      page,
+      { larName, displayName, provenance: 'bia-authoritative' },
+      crosswalkTribe
+    );
+    await gotoApp(page, '?view=brief&layers=places&studio=place');
+    await page.locator('#place-studio-search').fill('DDM-P2-T12 Trusted Fixture');
+
+    const displayOption = page.locator('#place-list .place-studio-option', {
+      hasText: displayName
+    });
+    await expect(displayOption).toBeVisible();
+    await expect(
+      page.locator('#place-list .place-studio-option', { hasText: crosswalkTribe })
+    ).toHaveCount(0);
+  });
+});
+
+/**
+ * DDM-P2-T12 (browser-free): `buildTribeCatalogEntries` is the pure loop
+ * body of `loadTribeEntries` (src/config/place-catalog.ts), driven here with
+ * hand-built roster and crosswalk rows and no `page` or browser fixture.
+ * Playwright creates no browser context for a test that never destructures
+ * one (the same reason the page-less case at about :275 above needs none).
+ */
+test.describe('DDM-P2-T12: loadTribeEntries tests provenance directly and labels with the gated name', () => {
+  test('an untrusted row whose displayName equals its larName is listed under its land-area name', () => {
+    const larName = 'DDM-P2-T12 Pure Untrusted Fixture Area';
+    const crosswalkTribe = 'DDM-P2-T12 Pure Untrusted Fixture Crosswalk Tribe Name';
+    const entries = buildTribeCatalogEntries(
+      [{ larName, displayName: larName, provenance: 'unverified' }],
+      {
+        meta: { rosterSource: 'Fixture roster', landAreaSource: 'Fixture land areas' },
+        matched: [{ tribe: crosswalkTribe, larName }],
+        rosterNoLar: []
+      }
+    );
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.label).toBe(larName);
+    expect(entries.some((entry) => entry.label === crosswalkTribe)).toBe(false);
+  });
+
+  test("a trusted row whose crosswalk tribe differs from its roster displayName is listed under the roster's name", () => {
+    const larName = 'DDM-P2-T12 Pure Trusted Fixture Area';
+    const displayName = 'DDM-P2-T12 Pure Trusted Fixture Roster Display Name';
+    const crosswalkTribe = 'DDM-P2-T12 Pure Trusted Fixture Different Crosswalk Tribe Name';
+    const entries = buildTribeCatalogEntries(
+      [{ larName, displayName, provenance: 'bia-authoritative' }],
+      {
+        meta: { rosterSource: 'Fixture roster', landAreaSource: 'Fixture land areas' },
+        matched: [{ tribe: crosswalkTribe, larName }],
+        rosterNoLar: []
+      }
+    );
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.label).toBe(displayName);
+    expect(entries.some((entry) => entry.label === crosswalkTribe)).toBe(false);
+    // The crosswalk's own tribe string appears in no label at all.
+    expect(entries.map((entry) => entry.label)).not.toContain(crosswalkTribe);
   });
 });

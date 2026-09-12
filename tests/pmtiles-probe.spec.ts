@@ -104,7 +104,12 @@ test.describe('the PMTiles header probe', () => {
   });
 
   test('rejects a 206 that carries no Content-Range', async () => {
-    const restore = withFetch(async () => new Response(pmtilesV3Header(), { status: 206 }));
+    // Wrapped in a fresh Uint8Array: see map-harness.ts's pmtilesHeaderResponse
+    // for why `Response`'s BodyInit wants `Uint8Array<ArrayBuffer>`, not the
+    // `Uint8Array<ArrayBufferLike>` pmtilesV3Header returns.
+    const restore = withFetch(
+      async () => new Response(new Uint8Array(pmtilesV3Header()), { status: 206 })
+    );
     try {
       await expect(
         probeArchiveHeader(ARCHIVE_URL, new AbortController().signal)
@@ -115,7 +120,7 @@ test.describe('the PMTiles header probe', () => {
   });
 
   test('tolerates a server that ignored Range, checking Content-Length when it sends one', async () => {
-    const whole = pmtilesV3Header();
+    const whole = new Uint8Array(pmtilesV3Header());
     const restoreSized = withFetch(
       async () =>
         new Response(whole, {

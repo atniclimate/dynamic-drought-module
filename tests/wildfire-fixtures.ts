@@ -38,7 +38,16 @@ export const NIFC_STUB = {
       type: 'Feature',
       properties: {
         attr_IncidentTypeCategory: 'WF',
-        poly_IncidentName: 'Synthetic Ridge'
+        poly_IncidentName: 'Synthetic Ridge',
+        // DDM-P14-T07: the minimap's declared count filter
+        // (`MINIMAP_ACTIVE_WILDFIRE_FILTER`/`MINIMAP_WILDFIRE_WHERE`) is
+        // `attr_ActiveFireCandidate = 1`; both stub features are active so
+        // the briefing's and the minimap's collection-read fast paths have
+        // something real to count (the briefing's own rule counts every
+        // type regardless of this field; see nifc-query-scope.spec.ts's
+        // case-local addition of an inactive Prescribed-fire feature for
+        // that proof).
+        attr_ActiveFireCandidate: 1
       },
       geometry: PNW_POLYGON(-121.4, 44.6)
     },
@@ -46,7 +55,8 @@ export const NIFC_STUB = {
       type: 'Feature',
       properties: {
         attr_IncidentTypeCategory: 'WF',
-        poly_IncidentName: 'Synthetic Butte'
+        poly_IncidentName: 'Synthetic Butte',
+        attr_ActiveFireCandidate: 1
       },
       geometry: PNW_POLYGON(-119.9, 46.1)
     }

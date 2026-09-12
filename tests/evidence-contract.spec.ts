@@ -35,6 +35,7 @@ function claimOf(evidence: EvidenceClass) {
   return makeClaim({
     text: 'A test statement.',
     source: 'Test source',
+    product: 'usdm',
     evidence,
     dates: { retrieved: '2026-07-21' }
   });
@@ -91,6 +92,7 @@ test.describe('claim rendering honesty', () => {
       makeClaim({
         text: 't',
         source: 's',
+        product: 'usdm',
         evidence: 'outlook',
         dates: { retrieved: '2026-07-21' },
         uncertainty: { kind: 'categorical', text: 'tercile odds, not a deterministic value' }
@@ -103,6 +105,7 @@ test.describe('claim rendering honesty', () => {
       makeClaim({
         text: 't',
         source: 's',
+        product: 'usdm',
         evidence: 'outlook',
         dates: { retrieved: '2026-07-21' },
         uncertainty: { kind: 'not-quantified', text: 'the source publishes no uncertainty band' }
@@ -116,6 +119,7 @@ test.describe('claim rendering honesty', () => {
       makeClaim({
         text: 't',
         source: 's',
+        product: 'usdm',
         evidence: 'derived',
         dates: { retrieved: '2026-07-21' },
         lineage: ['input one', 'input two']
@@ -132,6 +136,7 @@ test.describe('claim rendering honesty', () => {
       makeClaim({
         text: 't',
         source: 's',
+        product: 'heatrisk',
         evidence: 'classified',
         dates: { valid: '2026-09-08', retrieved: '2026-09-08' },
         method: { basis: 'HeatRisk is calculated over a 24-hour period, not an instant.' },
@@ -168,6 +173,7 @@ test.describe('claim rendering honesty', () => {
       makeClaim({
         text: 't',
         source: 's',
+        product: 'heatrisk',
         evidence: 'classified',
         register: 'outlook',
         dates: { retrieved: '2026-09-08' }
@@ -189,6 +195,7 @@ test.describe('claim rendering honesty', () => {
       makeClaim({
         text: 't',
         source: 's',
+        product: 'usdm',
         evidence: 'observed',
         dates: { retrieved: '2026-07-21' },
         method: { baseline: '1991-2020 normal', version: '2.6', sourceVintage: '2025 release' }
@@ -202,6 +209,7 @@ test.describe('claim rendering honesty', () => {
       makeClaim({
         text: 't',
         source: 's',
+        product: 'usdm',
         evidence: 'derived',
         dates: { retrieved: '2026-09-03' },
         lineage: ['a plain-language input'],
@@ -218,26 +226,46 @@ test.describe('claim rendering honesty', () => {
 
 test.describe('factory runtime enforcement (specs are not typechecked)', () => {
   test('rejects a claim with no date', () => {
-    expect(() => makeClaim({ text: 't', source: 's', evidence: 'observed' })).toThrow(
-      /at least one date/
-    );
+    expect(() =>
+      makeClaim({ text: 't', source: 's', product: 'usdm', evidence: 'observed' })
+    ).toThrow(/at least one date/);
   });
 
   test('rejects empty text, empty source, unknown evidence, malformed dates', () => {
     const dates = { retrieved: '2026-07-21' } as const;
-    expect(() => makeClaim({ text: '', source: 's', evidence: 'observed', dates })).toThrow();
-    expect(() => makeClaim({ text: 't', source: '', evidence: 'observed', dates })).toThrow();
     expect(() =>
-      makeClaim({ text: 't', source: 's', evidence: 'guessed' as never, dates })
+      makeClaim({ text: '', source: 's', product: 'usdm', evidence: 'observed', dates })
+    ).toThrow();
+    expect(() =>
+      makeClaim({ text: 't', source: '', product: 'usdm', evidence: 'observed', dates })
+    ).toThrow();
+    expect(() =>
+      makeClaim({ text: 't', source: 's', product: 'usdm', evidence: 'guessed' as never, dates })
     ).toThrow(/unknown evidence class/);
     expect(() =>
-      makeClaim({ text: 't', source: 's', evidence: 'observed', dates: { retrieved: '07/21/2026' } })
+      makeClaim({
+        text: 't',
+        source: 's',
+        product: 'usdm',
+        evidence: 'observed',
+        dates: { retrieved: '07/21/2026' }
+      })
     ).toThrow(/ISO 8601/);
+  });
+
+  test('rejects a claim with no product and a claim with an unknown product key (DDM-P14-T05 microtask 2)', () => {
+    const dates = { retrieved: '2026-07-21' } as const;
+    expect(() =>
+      makeClaim({ text: 't', source: 's', evidence: 'observed', dates } as never)
+    ).toThrow(/unknown product key/);
+    expect(() =>
+      makeClaim({ text: 't', source: 's', product: 'not-a-product' as never, evidence: 'observed', dates })
+    ).toThrow(/unknown product key/);
   });
 });
 
 test.describe('date precedence (valid > issued > published > retrieved)', () => {
-  const base = { text: 't', source: 's', evidence: 'observed' } as const;
+  const base = { text: 't', source: 's', product: 'usdm', evidence: 'observed' } as const;
 
   test('valid wins over everything', () => {
     expect(
@@ -265,7 +293,7 @@ test.describe('date precedence (valid > issued > published > retrieved)', () => 
   test('a legacy undated object yields no line (the factory itself refuses one)', () => {
     // Constructed raw deliberately: makeClaim throws on a dateless claim, so
     // the null path exists only for defensive rendering of legacy objects.
-    expect(claimDateLine({ dates: undefined })).toBeNull();
+    expect(claimDateLine({})).toBeNull();
   });
 });
 
@@ -284,6 +312,7 @@ test.describe('day, not instant', () => {
       makeClaim({
         text: 'As of the Sep 2, 2026 map, statewide drought severity is 210.',
         source: 'U.S. Drought Monitor (NDMC / NOAA / USDA)',
+        product: 'usdm',
         evidence: 'analyzed',
         dates: { valid: '2026-09-02', retrieved: '2026-09-08' },
         support: { reporting: 'statewide (Test State)', legendKey: 'usdm' },
@@ -300,6 +329,7 @@ test.describe('day, not instant', () => {
       makeClaim({
         text: 'HeatRisk (Experimental) value 2, Moderate, at the selected point.',
         source: 'National Weather Service HeatRisk (Experimental)',
+        product: 'heatrisk',
         evidence: 'classified',
         dates: { valid: '2026-09-08', retrieved: '2026-09-08' },
         support: { native: 'National Weather Service HeatRisk raster cell', reporting: 'the cell at the selected point', legendKey: 'heatrisk' },
@@ -420,6 +450,7 @@ test.describe('rendered briefing under the contract', () => {
           makeClaim({
             text: `A ${evidence} statement.`,
             source: 'Test source',
+            product: 'usdm',
             evidence,
             dates: { retrieved: '2026-07-21' }
           })

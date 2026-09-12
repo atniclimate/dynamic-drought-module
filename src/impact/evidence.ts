@@ -23,6 +23,7 @@
  */
 
 import type { EvidenceClass, SourcedClaim } from './types';
+import { PRODUCT_KEYS } from '../config/products';
 
 /**
  * The presentation for one evidence class: visible label, CSS class token,
@@ -125,7 +126,8 @@ const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
  * The typed claim factory: the only sanctioned way to build a `SourcedClaim`,
  * in src/ and in specs alike. Because specs are excluded from typecheck, the
  * contract is enforced HERE at runtime, not only by the input type: text and
- * source must be non-empty, `evidence` must be one of the seven classes, and
+ * source must be non-empty, `evidence` must be one of the seven classes,
+ * `product` must be a `PRODUCT_KEYS` member (DDM-P14-T05 microtask 2), and
  * the claim must carry at least one ISO 8601 (`YYYY-MM-DD`) date (every claim
  * is dated; that is the contract, not a style preference). The legacy `kind`
  * is derived, never set independently. Construction sites sit inside their
@@ -142,6 +144,9 @@ export function makeClaim(input: SourcedClaimInput): SourcedClaim {
   const pres = EVIDENCE_PRESENTATION[input.evidence];
   if (!pres) {
     throw new Error(`makeClaim: unknown evidence class "${String(input.evidence)}"`);
+  }
+  if (!PRODUCT_KEYS.includes(input.product)) {
+    throw new Error(`makeClaim: unknown product key "${String(input.product)}"`);
   }
   const dates = input.dates ?? {};
   const dateValues = [dates.valid, dates.issued, dates.published, dates.retrieved].filter(

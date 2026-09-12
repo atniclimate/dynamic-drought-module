@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type * as maplibregl from 'maplibre-gl';
+import type { Polygon } from 'geojson';
 
 import { gotoApp } from './helpers';
 import { BIA_ROUTE, routeBoundary } from './tribal-fixtures';
@@ -75,7 +76,7 @@ test.describe('U3 stage-5: located-boundary clear seam (major 4)', () => {
     return { map, state };
   }
 
-  const GEOM = { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] } as const;
+  const GEOM: Polygon = { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] };
 
   let dispose: (() => void) | null = null;
   test.afterEach(() => {
@@ -247,9 +248,12 @@ test.describe('U3 stage-5: item-keyed keyboard highlight (minor 8)', () => {
   test('async Tribal results do not move the highlight off the chosen row', async ({ page }) => {
     // Hold the roster response until the highlight is placed, then release
     // it; the resolved Tribal group inserts ABOVE the Layers group.
-    let releaseRoster: (() => void) | null = null;
+    // A typed holder, not a bare `let`: the Promise executor's assignment
+    // happens inside a closure TypeScript cannot see from the read site
+    // below, which would otherwise narrow the binding to `null`.
+    const rosterRelease: { release: (() => void) | null } = { release: null };
     const gate = new Promise<void>((resolve) => {
-      releaseRoster = resolve;
+      rosterRelease.release = resolve;
     });
     await page.route('**/data/tribal-roster.json', async (route) => {
       await gate;
@@ -285,7 +289,7 @@ test.describe('U3 stage-5: item-keyed keyboard highlight (minor 8)', () => {
     await expect(layerRow).toHaveAttribute('aria-selected', 'true');
 
     // The roster lands; its group renders above Layers, shifting positions.
-    releaseRoster?.();
+    rosterRelease.release?.();
     await expect(
       page.locator('#catalog-search [data-search-kind="tribal"][data-search-id="Tribal Highlight Fixture"]')
     ).toBeVisible();

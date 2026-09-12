@@ -26,7 +26,6 @@
 import type * as maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection } from 'geojson';
 import type { BoundarySelectionContext, ContainingPlaces } from '../impact/types';
-import { placeRefFromBoundary } from '../config/entities';
 import { postalCodeFromProperties } from '../config/geography';
 import { isStateCode } from '../config/state-codes';
 
@@ -35,7 +34,7 @@ import { isStateCode } from '../config/state-codes';
 import { BOOT_URLS } from '../config/urls-boot';
 import { bboxCenter, bboxToContinuousBounds } from '../util/bbox';
 import { geometryBboxAcrossAntimeridian } from '../util/antimeridian';
-import { fetchBufferedWithBudget } from '../util/fetch';
+import { fetchSharedJsonWithBudget, US_STATES_SHARED_KEY } from '../util/fetch';
 import {
   isCurrentBriefingIntent,
   nextBriefingIntent,
@@ -175,16 +174,22 @@ export async function openStateBriefing(
 ): Promise<void> {
   let feature: Feature | undefined;
   try {
-    const response = await fetchBufferedWithBudget(
+    // Shared, page-lifetime transport (DDM-P14-T06): this opener never had a
+    // cancellation seam of its own (the prior call passed a `null` master
+    // signal, timeout-only), so a fresh controller stands in for it; nothing
+    // else ever aborts it, which reproduces that same "no external cancel"
+    // behavior while still letting this consumer's own wait be counted and
+    // released like every other. Joins whatever fetch the states layer, the
+    // Place studio, or another reader already made for the same bundled
+    // file. `fc.features.find` below is read-only, so sharing the reference
+    // is safe.
+    const fc = (await fetchSharedJsonWithBudget(
+      US_STATES_SHARED_KEY,
       BOOT_URLS.usStatesLocal,
       null,
-      null,
+      new AbortController().signal,
       FETCH_TIMEOUT_MS
-    );
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    }
-    const fc = (await response.json()) as FeatureCollection;
+    )) as FeatureCollection;
     const wanted = stusps.toUpperCase();
     feature = fc.features.find((f) => {
       const code = f.properties?.STUSPS;
@@ -232,8 +237,7 @@ export async function openStateBriefing(
         lngLat,
         ...(bbox ? { bbox, serviceBbox: bbox } : {}),
         regionKey: getCurrentRegion(),
-        containing,
-        place: placeRefFromBoundary('state', feature.properties ?? null)
+        containing
       };
       openImpactPanelUnavailable(context);
     }

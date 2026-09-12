@@ -292,6 +292,9 @@ async function setLayerChecked(
   checked: boolean
 ): Promise<void> {
   await layerCheckbox(page, key).evaluate((element, next) => {
+    if (!(element instanceof HTMLInputElement)) {
+      throw new Error('layerCheckbox did not resolve to an <input>');
+    }
     element.checked = next;
     element.dispatchEvent(new Event('change', { bubbles: true }));
   }, checked);
@@ -601,7 +604,12 @@ test.describe('review regressions for HeatRisk honesty and lifecycle', () => {
     await expect(day4).toBeAttached();
     // Keep this as a native, no-retry click. A redundant status event must
     // not replace the live cell before its delegated click reaches the host.
-    await day4.evaluate((element) => element.click());
+    await day4.evaluate((element) => {
+      if (!(element instanceof HTMLElement)) {
+        throw new Error('day4 sequence cell is not an HTMLElement');
+      }
+      element.click();
+    });
     await expect
       .poll(async () => new URLSearchParams(await search(page)).get('heatday'))
       .toBe('4');
@@ -766,6 +774,7 @@ test.describe('review regressions for HeatRisk honesty and lifecycle', () => {
         makeClaim({
           text: 'HeatRisk (Experimental) value 2, Moderate, at the selected point.',
           source: 'National Weather Service HeatRisk (Experimental)',
+          product: 'heatrisk',
           evidence: 'classified',
           dates: { valid: '2026-08-03' }
         })

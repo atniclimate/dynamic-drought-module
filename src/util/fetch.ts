@@ -193,6 +193,26 @@ export async function fetchBufferedWithBudget(
   }
 }
 
+/**
+ * Shared-transport key for the bundled US state boundaries (DDM-P14-T06).
+ * Seven readers across the codebase read `public/data/us-states.geojson`
+ * independently (the states layer's own activation, the click-door fallback
+ * in `location-identity.ts`, the `select=` deep link, the place catalog's
+ * state list, the Place studio's selection and overlap-candidate readers,
+ * and the emphasis-target resolver in `display-snapshot.ts`); this key
+ * collapses them to one page-lifetime fetch regardless of how many of them
+ * run in a session.
+ */
+export const US_STATES_SHARED_KEY = 'us-states-geojson';
+
+/**
+ * Shared-transport key for the bundled ENSO indices snapshot (DDM-P14-T06).
+ * The ENSO briefing claims (`fetchEnsoClaims`) and the ENSO minimap label
+ * (`readEnsoPhaseLabel`) each read `public/data/enso-indices.json`
+ * independently; this key collapses them to one fetch.
+ */
+export const ENSO_INDICES_SHARED_KEY = 'enso-indices-json';
+
 interface SharedJsonRequest {
   promise: Promise<unknown>;
   controller: AbortController | null;

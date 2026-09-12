@@ -10,8 +10,14 @@ test('the NWS point request aborts a response body held after headers', async ()
   const originalFetch = globalThis.fetch;
   let noteHeadersReturned: (() => void) | null = null;
   let noteBodyCancelled: (() => void) | null = null;
-  let bodyController: ReadableStreamDefaultController<Uint8Array> | null = null;
-  let heldFetchSignal: AbortSignal | null = null;
+  // Typed holders, not bare `let`s: both are assigned inside closures
+  // (the fetch override, the ReadableStream's `start`) that TypeScript
+  // cannot see from the top-level `finally` read sites below, which would
+  // otherwise narrow each binding to `never`.
+  const held: {
+    bodyController: ReadableStreamDefaultController<Uint8Array> | null;
+    fetchSignal: AbortSignal | null;
+  } = { bodyController: null, fetchSignal: null };
   const headersReturned = new Promise<void>((resolve) => {
     noteHeadersReturned = resolve;
   });
@@ -20,10 +26,10 @@ test('the NWS point request aborts a response body held after headers', async ()
   });
 
   globalThis.fetch = async (_input, init) => {
-    heldFetchSignal = init?.signal ?? null;
+    held.fetchSignal = init?.signal ?? null;
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
-        bodyController = controller;
+        held.bodyController = controller;
         controller.enqueue(new TextEncoder().encode('{"properties":'));
       },
       cancel() {
@@ -47,13 +53,13 @@ test('the NWS point request aborts a response body held after headers', async ()
     master.abort();
 
     await expect
-      .poll(() => heldFetchSignal?.aborted ?? false, { timeout: 500 })
+      .poll(() => held.fetchSignal?.aborted ?? false, { timeout: 500 })
       .toBe(true);
     await expect(bodyCancelled).resolves.toBeUndefined();
     await expect(request).rejects.toMatchObject({ name: 'AbortError' });
   } finally {
-    if (!(heldFetchSignal?.aborted ?? false)) {
-      bodyController?.error(new DOMException('Test cleanup', 'AbortError'));
+    if (!(held.fetchSignal?.aborted ?? false)) {
+      held.bodyController?.error(new DOMException('Test cleanup', 'AbortError'));
       await request.catch(() => undefined);
     }
     globalThis.fetch = originalFetch;

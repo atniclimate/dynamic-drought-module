@@ -330,9 +330,12 @@ test.describe('still-loading sources stay visible during live activation (W2-D6)
           body: JSON.stringify(fireFixture)
         })
     );
-    let releaseNifc: (() => void) | null = null;
+    // A typed holder, not a bare `let`: the assignment happens inside the
+    // Promise executor closure below, which TypeScript cannot see from the
+    // read site further down, and would otherwise narrow to `null`.
+    const nifc: { release: (() => void) | null } = { release: null };
     const nifcGate = new Promise<void>((resolve) => {
-      releaseNifc = resolve;
+      nifc.release = resolve;
     });
     await page.route(
       (url) => url.href.includes('WFIGS_Interagency_Perimeters_Current'),
@@ -377,7 +380,7 @@ test.describe('still-loading sources stay visible during live activation (W2-D6)
 
     // Release the held response: the placeholder resolves into the real
     // perimeter rows and the panel row leaves the loading state.
-    releaseNifc?.();
+    nifc.release?.();
     await expect(key.locator('[data-key-loading="nifc-fires"]')).toHaveCount(0, {
       timeout: 15_000
     });

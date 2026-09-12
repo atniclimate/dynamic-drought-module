@@ -241,6 +241,10 @@ test.describe('DDM-P8-T03: every rendered claim carries exactly one observed/out
       const claim = makeClaim({
         text: `A ${evidence} statement for the register-tag check.`,
         source: 'Test source',
+        // Generic stand-in exercising the register-tag mapping across every
+        // evidence class, not one lane; `usdm` is an arbitrary valid catalog
+        // key (DDM-P14-T05 microtask 2).
+        product: 'usdm',
         evidence,
         dates: { retrieved: '2026-09-07' }
       });

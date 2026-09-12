@@ -16,9 +16,13 @@
  * resource list (Tribe's-own slot first) applies to every briefing.
  *
  * Cancellation (the cancellation invariant): the bundled-file fetch goes
- * through `fetchBufferedWithBudget` with a per-call timeout and a master abort signal
- * that fires on `deactivate` or a superseding `activate`, matching the
- * hardened usdm / nifc-fires / bia-reservations pattern.
+ * through `fetchSharedJsonWithBudget` (DDM-P14-T06: the file is read by six
+ * other consumers this session, so the transport is page-lifetime shared
+ * under `US_STATES_SHARED_KEY`) with a per-call timeout and this module's own
+ * master abort signal that fires on `deactivate` or a superseding `activate`,
+ * matching the hardened usdm / nifc-fires / bia-reservations pattern; only
+ * this module's own wait is cancelled, never the shared transport while
+ * another consumer still needs it.
  */
 
 import type * as maplibregl from 'maplibre-gl';
@@ -30,7 +34,7 @@ import { buildStatePopupHtml } from '../ui/popups';
 import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
 import { buildBoundaryContext, resolveBoundaryTitle } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
-import { fetchBufferedWithBudget } from '../util/fetch';
+import { fetchSharedJsonWithBudget, US_STATES_SHARED_KEY } from '../util/fetch';
 import { registry } from '../state/registry';
 
 const LAYER_KEY = 'states';
@@ -107,16 +111,18 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   let geojson: FeatureCollection;
   try {
-    const response = await fetchBufferedWithBudget(
+    // Shared, page-lifetime: this call either starts the one transport this
+    // session, or joins one another consumer already started. The parsed
+    // value below is read-only here (handed straight to `map.addSource`,
+    // never sorted, pushed, or written to), so sharing the reference is
+    // safe.
+    geojson = (await fetchSharedJsonWithBudget(
+      US_STATES_SHARED_KEY,
       URLS.usStatesLocal,
       null,
       signal,
       FETCH_TIMEOUT_MS
-    );
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    }
-    geojson = (await response.json()) as FeatureCollection;
+    )) as FeatureCollection;
   } catch (err) {
     // Aborted means superseded or deactivated; drop silently per invariant 5.
     if (signal.aborted) return;

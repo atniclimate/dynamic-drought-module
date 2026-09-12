@@ -437,7 +437,6 @@ async function stubSstAnomaly(page: Page): Promise<void> {
 
 /** Assert the one shared SST scale renders in the on-map key (W2-D1). */
 async function expectSstKeyContent(
-  page: Page,
   root: ReturnType<Page['locator']>
 ): Promise<void> {
   await expect(root.locator('.map-key-label')).toHaveText('Ocean temperature');
@@ -478,7 +477,7 @@ test.describe('the ENSO ocean key reaches every surface (W2-D1)', () => {
 
     const key = page.locator('#map-key');
     await expect(key).toBeVisible();
-    await expectSstKeyContent(page, key);
+    await expectSstKeyContent(key);
     await expectMobileKeyClearance(page, '[data-sst-anomaly-key]');
   });
 
@@ -491,7 +490,7 @@ test.describe('the ENSO ocean key reaches every surface (W2-D1)', () => {
 
     const key = page.locator('#map-key');
     await expect(key).toBeVisible();
-    await expectSstKeyContent(page, key);
+    await expectSstKeyContent(key);
     const keyBox = await rect(key);
     expect(keyBox.left).toBeGreaterThanOrEqual(0);
     expect(keyBox.right).toBeLessThanOrEqual(200);
@@ -509,7 +508,7 @@ test.describe('the ENSO ocean key reaches every surface (W2-D1)', () => {
     await gotoApp(page, '?embed=true&layers=sst-anomaly');
     const key = page.locator('#map-key');
     await expect(key).toBeVisible();
-    await expectSstKeyContent(page, key);
+    await expectSstKeyContent(key);
   });
 
   test('the desktop shell renders the SST anomaly key in the control column', async ({
@@ -520,7 +519,7 @@ test.describe('the ENSO ocean key reaches every surface (W2-D1)', () => {
     await gotoApp(page, '?layers=sst-anomaly,aiannh');
     const key = page.locator('#map-key');
     await expect(key).toBeVisible();
-    await expectSstKeyContent(page, key);
+    await expectSstKeyContent(key);
   });
 });
 

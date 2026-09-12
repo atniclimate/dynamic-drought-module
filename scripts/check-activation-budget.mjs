@@ -108,8 +108,10 @@
  * nonempty marker; pass cases must be clean. The self-test runs before
  * every real scan; --self-test runs it alone.
  *
- * The two enforced bundle-size lines (45 kB entry / 100 kB eager app)
- * live in check-bundle-size.mjs and are deliberately untouched here.
+ * The two enforced bundle-size lines live in check-bundle-size.mjs and
+ * are deliberately untouched here; since DR-085 amendment_2026_09_12
+ * both follow the same ratified-measurement-plus-ACTIVATION_HEADROOM
+ * rule as this file's rows, stated independently there.
  * Portability: plain node:fs/os/path/zlib; no version-specific APIs.
  * Exit 0 = clean; exit 1 = any finding or self-test failure.
  */
@@ -177,6 +179,11 @@ const EAGER_FORBIDDEN = [
     name: 'landscape-artifact loader',
     pattern: /src\/impact\/landscape\.ts$/,
     reason: 'The T-M0-3 loader is lazy by contract (the import-graph assertion proves the loader stays out of the eager graph). Absent today; this guards it forward.',
+  },
+  {
+    name: 'product catalog',
+    pattern: /src\/config\/products\.ts$/,
+    reason: 'DDM-P14-T05 (2026-09-12): LayerDef and SourcedClaim read ProductKey as a type-only import, so this catalog must stay out of the initial static set; a value import would hoist it here.',
   },
   {
     name: 'impact briefing cluster panel runtime',

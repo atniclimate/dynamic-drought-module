@@ -33,9 +33,11 @@ than no number.
 | Script | What it runs | Duration |
 | --- | --- | --- |
 | `npm run verify:quick` | `typecheck`, `scan:emdash`, `check:vocabulary`, `check:coverage` | about 5 s |
-| `npm run verify:pure` | the twelve browser-free spec files under `playwright.pure.config.ts`, no build, no server | seconds |
-| `npm run verify:smoke` | `gate` plus the smoke specs named in `package.json` (25 on 2026-09-10; read the script, not this table, for the roster), `--workers=1` | about 11 min measured 2026-09-10 (10.7 and 10.8 min on the same tree) |
-| `npm run test:serial` | all tests, all three projects, one worker | 31.1 min measured 2026-09-03 with the boot-idle seam (894 tests; 23.9 min before the seam, which makes every boot wait for real idle) |
+| `npm run verify:pure` | the sixteen browser-free spec files under `playwright.pure.config.ts` (read its list, not this count, for the roster), no build, no server; since DDM-P15-T08 (2026-09-12) it also runs inside `check:all`, so a spec whose imported code reaches the DOM fails the gate, not just this manual command | seconds (2.6 s measured 2026-09-12) |
+| `npm test` | the three CI projects (`chromium`, `chromium-interaction`, `chromium-3d`), never `chromium-measure` (DDM-P15-T08, package.json's `test` script names them explicitly) | see `verify:smoke`/`test:serial` for the browser suite's own cost |
+| `npm run verify:smoke` | `gate` plus the smoke specs named in `package.json` (27 on 2026-09-12, after the two pure-lane files left the roster because `gate` now runs `verify:pure`; read the script, not this table, for the roster), `--workers=1` | about 11 min measured 2026-09-10 (10.7 and 10.8 min on the same tree); 10.5 min on 2026-09-12 |
+| `npm run test:serial` | all tests, the three CI projects (`chromium`, `chromium-interaction`, `chromium-3d`), one worker; `chromium-measure` (the mode-switch cost measurement) is excluded since DDM-P15-T08 (2026-09-12) and runs only via `npm run measure:mode-switch` | 31.1 min measured 2026-09-03 with the boot-idle seam, before the chromium-measure exclusion (894 tests; 23.9 min before the seam, which makes every boot wait for real idle) |
+| `npm run check:all` | the shared `node:test` suites and static checks, `verify:pure`, the new `test:lanes` config-level proof (DDM-P15-T08), then `typecheck:tests` last; read the script for the ordered list, not this table | about 21 s measured 2026-09-12 (verify:pure and test:lanes together added under 6 s) |
 
 `verify:quick` is the save-and-think loop. No build, no network, no browser.
 
@@ -89,6 +91,23 @@ cannot drift apart.
 `npm run check:links` exists but is wired into no gate and no workflow. It is
 not part of any tier above, and it may reach the network. Treat a green
 `check:links` as an unratified extra, not as coverage.
+
+### tests/ is typechecked too (`npm run typecheck:tests`)
+
+`tsconfig.tests.json` (repository root) typechecks every file under `tests/`
+plus `playwright.config.ts` and `playwright.pure.config.ts`, with the
+Playwright, `node:test`, and Cloudflare Workers types each spec needs; it
+never weakens a strict flag from the production `tsconfig.json`, and that
+file's own `include` (`src/**` only) is untouched. `npm run typecheck:tests`
+runs it and then proves the negative side of the acceptance sentence:
+`tests/types/context-literal-typo.ts`, a hand-built `BoundarySelectionContext`
+literal missing its required `containing` field, must FAIL to compile under
+its own `tsconfig.context-literal-typo.json`
+(`tests/types/check-context-literal-typo.mjs` asserts exactly that, the same
+inverted-pass/fail pattern `scripts/check-key-types.mjs` uses for
+`tests/types/key-typos.ts`). Both fixture files are excluded from
+`tsconfig.tests.json`'s own `include` on purpose. `typecheck:tests` is the
+last step in `check:all`.
 
 ### The evidence capture pass (`DDM_CAPTURE_EVIDENCE=1`)
 

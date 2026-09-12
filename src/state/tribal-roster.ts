@@ -48,7 +48,9 @@ export function gatedDisplayName(area: TribalRosterArea): string {
   return TRUSTED_PROVENANCE.has(area.provenance ?? '') ? area.displayName : area.larName;
 }
 
-const ROSTER_URL = import.meta.env.BASE_URL + 'data/tribal-roster.json';
+// Guarded so a pure Node test can import this module without a Vite-served
+// page (the same idiom as src/config/urls-boot.ts:29, DDM-P2-T12).
+const ROSTER_URL = (import.meta.env?.BASE_URL ?? '/dynamic-drought-module/') + 'data/tribal-roster.json';
 
 /**
  * Deadline for the roster load, milliseconds. The artifact is same-origin and
@@ -89,30 +91,4 @@ export function loadTribalRoster(): Promise<readonly TribalRosterArea[]> {
     }
   })();
   return rosterInFlight;
-}
-
-/**
- * The formal Tribal Nation name for a BIA land area, or null when the roster
- * has no TRUSTED row for it (the safe residue: never a guessed name). Pure
- * over the supplied rows so the gate is unit-testable without a fetch.
- *
- * Built on `gatedDisplayName` above (DDM-P2-T10): both live gate callers
- * (`src/ui/search-controller.ts` and `src/config/place-catalog.ts`, since
- * DR-094) now call `gatedDisplayName` directly rather than this function,
- * because each needs the honest larName fallback too, not only the trusted
- * formal name. Kept, not deleted, because it is the single readable
- * null-or-formal-name statement of D-0.7.0-026 for a consumer that wants
- * exactly that shape.
- */
-export function trustedNameFor(
-  larName: string,
-  areas: readonly TribalRosterArea[]
-): string | null {
-  const target = larName.trim().toLowerCase();
-  if (target === '') return null;
-  for (const area of areas) {
-    if (area.larName.trim().toLowerCase() !== target) continue;
-    return TRUSTED_PROVENANCE.has(area.provenance ?? '') ? gatedDisplayName(area) : null;
-  }
-  return null;
 }

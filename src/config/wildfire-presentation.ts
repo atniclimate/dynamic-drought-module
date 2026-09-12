@@ -256,6 +256,52 @@ export function nifcIncidentTypeLabel(value: unknown): string {
  * says so. Shared with `src/impact/sources.ts`, which sends it. */
 export const NIFC_AREA_QUERY_RECORD_CAP = 50;
 
+/**
+ * The North America minimap's declared count filter (DDM-P14-T07), and ONLY
+ * the minimap's: `src/state/minimap-wildfire.ts`'s per-region wildfire
+ * counts, whether answered by the minimap's own count-only WFIGS query or
+ * (when the perimeters layer already covers a framing) by filtering that
+ * layer's already-loaded collection client-side instead of asking again.
+ * Active wildfire and incident-complex records only
+ * (`attr_ActiveFireCandidate = 1`, restricted to the `WF`/`CX` codes
+ * `NIFC_INCIDENT_PRESENTATION.wildfire` already names, never Prescribed fire
+ * or an unclassified record); the perimeters LAYER keeps `1=1` and draws
+ * every incident regardless, this filter governs only what the minimap
+ * COUNTS.
+ *
+ * NOT the briefing's filter. `src/impact/sources.ts`'s `fetchNifcClaims`
+ * counts a different, wider set on both of its own paths (every mapped
+ * incident intersecting the selection's bounding box, deduplicated by
+ * `attr_UniqueFireIdentifier`, split by type through
+ * `buildNifcAreaPerimeterClaim`): a design amended after the C3 report's own
+ * review found the earlier version of this comment claiming a shared filter
+ * the two consumers did not actually share the same way. `where` is the
+ * identical Esri where-clause the minimap's own count-only query has sent
+ * since before DDM-P14-T07 (kept here as the one declaration, not restated
+ * in `src/state/minimap-wildfire.ts`); `matches` is the same predicate
+ * evaluated over one already-fetched feature's properties, for the
+ * minimap's collection-read fast path, which issues no request at all.
+ */
+export const MINIMAP_ACTIVE_WILDFIRE_FILTER: {
+  readonly where: string;
+  readonly matches: (
+    properties: Readonly<Record<string, unknown>> | null | undefined
+  ) => boolean;
+} = {
+  where: "attr_ActiveFireCandidate = 1 AND attr_IncidentTypeCategory IN ('WF','CX')",
+  matches(properties) {
+    if (properties === null || properties === undefined) return false;
+    if (Number(properties['attr_ActiveFireCandidate']) !== 1) return false;
+    const code = properties['attr_IncidentTypeCategory'];
+    return (
+      typeof code === 'string' &&
+      (NIFC_INCIDENT_PRESENTATION.wildfire.codes as readonly string[]).includes(
+        code.trim().toUpperCase()
+      )
+    );
+  }
+};
+
 /** What the perimeter query actually covered: a bounding box around the
  * selection, not its boundary. Named in the sentence (DR-024 b) because a
  * box is strictly wider than the boundary, so a positive count over the box
@@ -900,7 +946,15 @@ export const STRUCTURES_QUALIFICATION =
  * latitudes. Measured the same day with the field list: 1.83 MB in 4.5 s.
  * That is a change to what the map shows, not only to transport, so the
  * note below travels with the legend, the popup, and the map key. Viewport
- * or region scoping stays with roadmap task DDM-P1-T06.
+ * scoping is built (DDM-P1-T06, 2026-09-12): the layer now queries an
+ * overscanned envelope of the current view, aiannh.ts's precedent, and
+ * re-queries when the view leaves it, rather than the national `where=1=1`
+ * scan this list was first sized against.
+ *
+ * `attr_ActiveFireCandidate` was added by DDM-P1-T06 for DDM-P14-T07: the
+ * minimap's per-region wildfire counts apply that field's predicate
+ * client-side against the layer's already-loaded collection instead of
+ * issuing their own service query.
  */
 export const NIFC_OUT_FIELDS = [
   'attr_IncidentName',
@@ -911,7 +965,8 @@ export const NIFC_OUT_FIELDS = [
   'attr_IncidentSize',
   'poly_GISAcres',
   'attr_FireDiscoveryDateTime',
-  'attr_POOState'
+  'attr_POOState',
+  'attr_ActiveFireCandidate'
 ] as const;
 
 /** Degrees of EPSG:4326; see the note above for the metric equivalent. */

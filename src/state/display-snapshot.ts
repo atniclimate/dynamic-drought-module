@@ -4,7 +4,7 @@ import { URLS } from '../config/urls';
 import type { PlaceCatalogEntry } from '../config/place-catalog';
 import type { OceanKey } from '../config/oceans';
 import type { LayerStatus } from '../types/layer';
-import { fetchBufferedWithBudget } from '../util/fetch';
+import { fetchBufferedWithBudget, fetchSharedJsonWithBudget, US_STATES_SHARED_KEY } from '../util/fetch';
 import { isChecked, checkedSnapshot, onCheckedChange } from '../ui/island/bridge';
 import {
   requestLayerOff,
@@ -360,14 +360,17 @@ async function resolveEmphasisTargets(
   if (cached) return cached;
 
   if (place.kind === 'state') {
-    const response = await fetchBufferedWithBudget(
+    // Shared, page-lifetime transport (DDM-P14-T06): joins whatever fetch the
+    // states layer, the deep link, the click-door fallback, or the Place
+    // studio already made for the same bundled file. `findIndex` below is
+    // read-only, so sharing the reference is safe.
+    const collection = (await fetchSharedJsonWithBudget(
+      US_STATES_SHARED_KEY,
       URLS.usStatesLocal,
       null,
       signal,
       EMPHASIS_TIMEOUT_MS
-    );
-    if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    const collection = (await response.json()) as {
+    )) as {
       readonly features?: readonly {
         readonly properties?: Readonly<Record<string, unknown>>;
       }[];

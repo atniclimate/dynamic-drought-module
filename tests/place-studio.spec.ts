@@ -3,6 +3,13 @@ import { test, expect, type Page, type Response } from '@playwright/test';
 import { placeRefFromBoundary } from '../src/config/entities';
 import { parseStudioParam } from '../src/state/url';
 import { gotoApp, search, waitForLayerSettled } from './helpers';
+import {
+  AIANNH_ROUTE,
+  BIA_ROUTE,
+  emptyCollectionBody,
+  routeBoundary,
+  routeGeojson
+} from './tribal-fixtures';
 
 /**
  * Capture the WA feature's own properties from the bundled
@@ -450,6 +457,160 @@ test.describe('DDM-P2-T09: one canonical place reference', () => {
     const clickStamp = await stamp();
 
     expect(clickStamp).toBe(studioStamp);
+  });
+});
+
+test.describe('C3 housekeeping: newest intent wins the emphasis', () => {
+  // The same synthetic Nation the DDM-P2-T10 one-request fixture in
+  // tribal-live-layers.spec.ts uses (its NATION_NAME / LAR_NAME_ONE), so this
+  // case is recognizably the same fixture shape, not a new one. No real
+  // Nation's name ever touches a fabricated rectangle (the NO-REDISTRIBUTION
+  // guard tribal-fixtures.ts documents).
+  const NATION_NAME = 'Synthetic One-Request Fixture Nation';
+  const LAR_NAME = 'Synthetic One-Request Fixture Area One';
+  const LAR_ID = 88001;
+
+  function stamp(page: Page): Promise<string> {
+    return page.evaluate(() => document.documentElement.dataset['ddmEmphasis'] ?? '');
+  }
+
+  /**
+   * Stubs the roster/crosswalk so the studio's tribe catalog resolves the
+   * one synthetic Nation above, plus the AIAN-LAR (BIA_ROUTE) response for
+   * it. The BIA_ROUTE handler holds any LARNAME-scoped query open on
+   * `gate` while `armed` is true, so a spec can select the Nation, then flip
+   * a newer selection in before releasing the held response, isolating
+   * exactly the race the newest-intent check guards.
+   */
+  async function stubHeldTribeFixture(
+    page: Page,
+    gate: Promise<void>,
+    armed: () => boolean
+  ): Promise<void> {
+    await page.route('**/data/tribal-roster.json', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          areas: [
+            { larName: LAR_NAME, displayName: NATION_NAME, provenance: 'bia-authoritative' }
+          ]
+        })
+      })
+    );
+    await page.route('**/data/tribal-larname-crosswalk.json', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          meta: {
+            rosterSource: 'Synthetic fixture roster',
+            landAreaSource: 'Synthetic fixture land areas'
+          },
+          matched: [{ tribe: NATION_NAME, larName: LAR_NAME }],
+          rosterNoLar: []
+        })
+      })
+    );
+    await routeGeojson(page, AIANNH_ROUTE, emptyCollectionBody());
+    await routeBoundary(page, BIA_ROUTE, async (route) => {
+      const where = new URL(route.request().url()).searchParams.get('where') ?? '';
+      if (where.includes('LARNAME') && armed()) await gate;
+      try {
+        await route.fulfill({
+          contentType: 'application/geo+json',
+          body: JSON.stringify({
+            type: 'FeatureCollection',
+            features: [
+              {
+                type: 'Feature',
+                id: LAR_ID,
+                properties: {
+                  LARID: LAR_ID,
+                  LARNAME: LAR_NAME,
+                  CLASSIFICATION: 'Fixture Classification',
+                  GISACRES: 500,
+                  REGION: 'Fixture Region'
+                },
+                geometry: {
+                  type: 'Polygon',
+                  coordinates: [
+                    [
+                      [-123.4, 46.1],
+                      [-123.0, 46.1],
+                      [-123.0, 46.4],
+                      [-123.4, 46.4],
+                      [-123.4, 46.1]
+                    ]
+                  ]
+                }
+              }
+            ]
+          })
+        });
+      } catch {
+        // By the time the held gate above releases, the Washington
+        // selection's own effect cleanup has ordinarily already aborted this
+        // request client-side (masterAbort.abort() cancels the
+        // AbortController fetchJson was given); fulfilling a request the
+        // page itself already cancelled throws, and that throw is not this
+        // fixture's concern.
+      }
+    });
+  }
+
+  /**
+   * S30R errata I6: the geometry-resolution effect's emphasis continuation
+   * checked only the abort flag, not whether the durable typed place still
+   * matched what it was about to emphasize. A Tribal Nation selection whose
+   * AIAN-LAR response is still in flight when the user selects a DIFFERENT
+   * place must not have that late response's emphasis land over the newer
+   * selection's own. Proven on the production-observable `data-ddm-emphasis`
+   * stamp (place-emphasis.ts), the same idiom the DDM-P2-T09 cases above use.
+   */
+  test('a Nation selection whose AIAN-LAR response lands after a newer State selection never overwrites that State\'s emphasis', async ({
+    page
+  }) => {
+    let releaseBia!: () => void;
+    const biaGate = new Promise<void>((resolve) => {
+      releaseBia = resolve;
+    });
+    let biaGateArmed = false;
+    await stubHeldTribeFixture(page, biaGate, () => biaGateArmed);
+
+    await gotoApp(page, '?view=brief&layers=places,states&studio=place');
+    await page.locator('#place-type-tribe').click();
+    await page.locator('#place-studio-search').fill(NATION_NAME);
+    await expect(page.locator('#place-list .place-studio-option')).toHaveCount(1);
+
+    biaGateArmed = true;
+    await page.locator('#place-option-tribe-0').click();
+    await expect(page.locator('#place-selection-title')).toHaveText(NATION_NAME);
+
+    // The Nation's own AIAN-LAR resolution is now held open. Select
+    // Washington under States before releasing it: the newest intent is now
+    // Washington, not the Nation.
+    await page.locator('#place-type-state').click();
+    await page.locator('#place-studio-search').fill('Washington');
+    await page.locator('#place-option-state-0').click();
+    await expect(page.locator('#place-selection-title')).toHaveText('Washington');
+    await expect.poll(() => stamp(page), { timeout: 15_000 }).toMatch(/^us-states:\d+$/);
+    const washingtonStamp = await stamp(page);
+
+    // Releasing does not guarantee the held request still has anywhere to
+    // land: the Washington selection's own effect cleanup ordinarily aborts
+    // the Nation's in-flight fetch (masterAbort.abort() cancels the
+    // AbortController fetchJson was given), so `page.waitForResponse` on
+    // this request would hang, not fail honestly. Release and give whatever
+    // continuation CAN still run (the `.then`, if the abort truly lost the
+    // race; the `.catch`, if it won) a bounded beat to settle instead. The
+    // beat is a fixed wait on purpose: a poll that already matches returns
+    // at once and would prove nothing about a response released after it.
+    // What this proves is bounded (nothing landed within the beat), not
+    // that nothing could ever land later; the director's break-the-fix
+    // record in the run log carries the reachability finding.
+    releaseBia();
+    await page.waitForTimeout(1_000);
+    expect(await stamp(page)).toBe(washingtonStamp);
+    expect(await stamp(page)).not.toContain('bia-reservations');
   });
 });
 

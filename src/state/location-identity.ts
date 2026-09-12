@@ -26,9 +26,14 @@
  *     a fast-follow, never a per-click service; `county` already allows null.
  *
  * `resolveLocationIdentity` is async only because of the state point-in-polygon
- * fallback's one-time fetch of the bundled boundaries; the rendered-feature
- * queries are synchronous. The fetch honors the caller's abort signal and its
- * result is cached for the session.
+ * fallback's fetch of the bundled boundaries; the rendered-feature queries are
+ * synchronous. The fetch honors the caller's own abort signal (cancelling only
+ * this module's wait, never a fetch another consumer still needs) and its
+ * result is cached for the session. The transport itself is shared page-wide
+ * under `US_STATES_SHARED_KEY` (DDM-P14-T06): this fallback runs only when the
+ * `states` layer is not rendering the clicked point, but whenever it does run
+ * it reuses whatever the layer, the deep link, or the Place studio already
+ * fetched, rather than issuing a second request for the same file.
  *
  * Stewardship: no sovereign polygons are bundled or fetched here beyond the
  * public Census state boundaries; Tribal identity comes only from layers the
@@ -38,7 +43,7 @@
 import type * as maplibregl from 'maplibre-gl';
 import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
-import { fetchBufferedWithBudget } from '../util/fetch';
+import { fetchSharedJsonWithBudget, US_STATES_SHARED_KEY } from '../util/fetch';
 import { pointInPolygonGeometry } from '../util/point-in-polygon';
 
 /** Two-letter postal code plus display name for the containing state. */
@@ -176,9 +181,20 @@ function loadBundledStates(signal: AbortSignal): Promise<FeatureCollection | nul
   if (statesCachePromise) return statesCachePromise;
   statesCachePromise = (async () => {
     try {
-      const response = await fetchBufferedWithBudget(STATES_LOCAL_URL, null, signal, STATES_FETCH_TIMEOUT_MS);
-      if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
-      return (await response.json()) as FeatureCollection;
+      // Shared, page-lifetime transport (DDM-P14-T06): this module's own
+      // `statesCachePromise` still caches a session-lasting null after a real
+      // failure (unchanged below), but the successful path now reuses
+      // whatever fetch the states layer, the deep link, or the Place studio
+      // already made, rather than issuing its own. The collection is only
+      // ever read here (`for...of` plus point-in-polygon and property reads),
+      // never mutated, so sharing the reference is safe.
+      return (await fetchSharedJsonWithBudget(
+        US_STATES_SHARED_KEY,
+        STATES_LOCAL_URL,
+        null,
+        signal,
+        STATES_FETCH_TIMEOUT_MS
+      )) as FeatureCollection;
     } catch (err) {
       // An aborted fetch is a superseded click, not a real failure: do not
       // poison the cache, so a later click can try again.

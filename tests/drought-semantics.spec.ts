@@ -55,7 +55,10 @@ test('fire context does not infer no drought without an analyzed-area mask', () 
   } as unknown as maplibregl.Map;
   const lngLat = { lng: -120, lat: 46 } as maplibregl.LngLat;
 
-  const html = buildFireContextHtml(map, { x: 10, y: 10 }, lngLat);
+  // A tuple, not a bare `{x,y}` object: maplibre-gl's `PointLike` is
+  // `Point | [number, number]`, and a plain literal lacks the `Point`
+  // class's own methods (`clone`, `add`, ...).
+  const html = buildFireContextHtml(map, [10, 10], lngLat);
   expect(html).toContain('No D0-D4 polygon rendered here.');
   expect(html).toContain('no analyzed-area mask here');
   expect(html).toContain('does not confirm no drought');

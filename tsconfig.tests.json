@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client", "geojson", "node"],
+    // allowJs (checkJs left at its default false) lets tsc resolve the two
+    // .mjs modules two spec files import for real, inferred types instead
+    // of TS7016; it never diagnoses the .mjs files themselves. These are
+    // the only plain-JS modules any tests/**/*.ts file imports (every
+    // *.test.mjs file under tests/ is a node:test suite, excluded from this
+    // config's include and not a consumer of this option).
+    "allowJs": true
+  },
+  "include": ["tests/**/*.ts", "playwright.config.ts", "playwright.pure.config.ts"],
+  "exclude": ["tests/types/key-typos.ts", "tests/types/context-literal-typo.ts"]
+}

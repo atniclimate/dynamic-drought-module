@@ -317,6 +317,9 @@ function focusMarker(el: HTMLElement): string | null {
 }
 
 function render(): void {
+  // No document, nothing to render (the pure lane runs specs with no DOM
+  // runtime at all); `window` is guarded the same way above for mobileSheetMedia.
+  if (typeof document === 'undefined') return;
   armTimeBarHostSync();
   syncTimeBarHost();
   const el = container();

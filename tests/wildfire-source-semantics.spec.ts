@@ -1369,17 +1369,20 @@ test('Wildfire network layers synchronously cancel pending activation', async ()
       const fetchEntered = new Promise<void>((resolve) => {
         noteFetchEntered = resolve;
       });
-      let fetchSignal: AbortSignal | null = null;
+      // A typed holder, not a bare `let`: assigned inside the fetch override
+      // closure below, which TypeScript cannot see from the read site at the
+      // bottom of this loop body, and would otherwise narrow to `never`.
+      const held: { fetchSignal: AbortSignal | null } = { fetchSignal: null };
 
       globalThis.fetch = async (_input, init) => {
-        fetchSignal = init?.signal ?? null;
+        held.fetchSignal = init?.signal ?? null;
         noteFetchEntered?.();
 
         return await new Promise<Response>((_resolve, reject) => {
           const rejectAbort = (): void =>
             reject(new DOMException('Aborted', 'AbortError'));
-          if (fetchSignal?.aborted) rejectAbort();
-          else fetchSignal?.addEventListener('abort', rejectAbort, { once: true });
+          if (held.fetchSignal?.aborted) rejectAbort();
+          else held.fetchSignal?.addEventListener('abort', rejectAbort, { once: true });
         });
       };
 
@@ -1388,7 +1391,7 @@ test('Wildfire network layers synchronously cancel pending activation', async ()
       module.cancel();
 
       // This assertion occurs without yielding after the off intent.
-      expect(fetchSignal?.aborted, module.key).toBe(true);
+      expect(held.fetchSignal?.aborted, module.key).toBe(true);
 
       await activation;
       registry.deactivate(module.key);

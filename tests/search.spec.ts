@@ -119,10 +119,14 @@ test.describe('DDM-P2-T09: search resolves the same canonical place reference', 
   test('choosing the Washington place result resolves state:WA, matching the select= and click doors', async ({
     page
   }) => {
-    await gotoApp(page, '?view=console');
-
     const briefingBtn = page.locator('#region-briefing-btn');
+    // The boot sits inside the capture on purpose (DDM-P14-T06): the states
+    // layer is default-on and reads us-states.geojson once at boot through the
+    // shared budgeted fetch, and the search door's selection then reads that
+    // same parsed object, so there is no selection-time response to capture.
+    // The same idiom as tests/place-studio.spec.ts's click-door case.
     const waProperties = await captureWaProperties(page, async () => {
+      await gotoApp(page, '?view=console');
       await page.locator(searchInput).fill('washington');
       await page.locator('[data-search-kind="place"][data-search-id="WA"]').click();
       // Summary-first (D-0.7.0-070): the pick sets the place selection; the

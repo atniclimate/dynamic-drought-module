@@ -28,7 +28,7 @@
  */
 
 import { URLS } from '../config/urls';
-import { fetchBufferedWithBudget } from '../util/fetch';
+import { fetchSharedJsonWithBudget, ENSO_INDICES_SHARED_KEY } from '../util/fetch';
 import { isObject } from '../util/guards';
 import { oniLineSvg, ensoPlumeSvg, type OniPoint, type EnsoPlumePoint } from '../ui/charts';
 import { makeClaim } from './evidence';
@@ -948,14 +948,18 @@ function plumeHeadline(probabilities: EnsoProbabilities): string {
  * malformed, so the observed seasonal indices still render.
  */
 async function loadEnsoSnapshot(signal: AbortSignal): Promise<EnsoSnapshot> {
-  const resp = await fetchBufferedWithBudget(
+  // Shared, page-lifetime transport (DDM-P14-T06): the ENSO minimap label
+  // (`readEnsoPhaseLabel`) and the briefing claims (`fetchEnsoClaims`) below
+  // both call this loader independently; this collapses their two fetches
+  // into one. The blocks pulled off `json` below are read, not written, so
+  // sharing the parsed value is safe.
+  const json = await fetchSharedJsonWithBudget(
+    ENSO_INDICES_SHARED_KEY,
     URLS.ensoIndicesLocal,
     { headers: { Accept: 'application/json' } },
     signal,
     6000
   );
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  const json: unknown = await resp.json();
   if (
     !isObject(json) ||
     !isIsoDay(json.retrieved) ||
@@ -1070,6 +1074,7 @@ export async function fetchEnsoClaims(
             text: AUTHORITY_TEXT,
             source: 'NOAA CPC ENSO Diagnostic Discussion',
             sourceUrl: CPC_STATUS_URL,
+            product: 'ensoAuthority',
             evidence: 'analyzed',
             dates: { retrieved: CITATIONS_VERIFIED },
             // Where CPC states the status that holds now.
@@ -1088,6 +1093,7 @@ export async function fetchEnsoClaims(
             text: tendencyRead.text,
             source: tendencyRead.source,
             sourceUrl: tendencyRead.sourceUrl,
+            product: 'ensoTendency',
             evidence: 'derived',
             dates: { retrieved: CITATIONS_VERIFIED },
             lineage: tendencyRead.lineage,
@@ -1108,6 +1114,7 @@ export async function fetchEnsoClaims(
             text: nino34Text(snap.nino34, snap.retrieved),
             source: 'NOAA CPC analyzed monthly Nino 3.4 sea surface temperature anomaly',
             sourceUrl: snap.nino34.sourceUrl,
+            product: 'ensoNino34Monthly',
             evidence: 'analyzed',
             dates: claimDates(snap.retrieved, snap.nino34.published),
             uncertainty: {
@@ -1132,6 +1139,7 @@ export async function fetchEnsoClaims(
               text: nino34WeeklyText(snap.nino34Weekly),
               source: 'NOAA CPC weekly Nino 3.4 sea surface temperature anomaly',
               sourceUrl: snap.nino34Weekly.sourceUrl,
+              product: 'ensoNino34Weekly',
               evidence: 'analyzed',
               dates: claimDates(snap.retrieved, snap.nino34Weekly.published),
               lineage: [
@@ -1166,6 +1174,7 @@ export async function fetchEnsoClaims(
               `the categories are defined against the ${probabilities.baseline}.`,
             source: 'NOAA CPC official probabilistic ENSO outlook (CPC/IRI consensus)',
             sourceUrl: probabilities.sourceUrl,
+            product: 'ensoOutlook',
             evidence: 'outlook',
             dates: {
               retrieved: snap.retrieved,
@@ -1196,6 +1205,7 @@ export async function fetchEnsoClaims(
           // window this sentence rests on. The index file itself is named in
           // the lineage below (report 13, ENSOSCI-09).
           sourceUrl: RONI_PRODUCT_URL,
+          product: 'ensoIndex',
           evidence: 'derived',
           dates: claimDates(snap.retrieved, snap.roni.published),
           lineage,

@@ -645,9 +645,12 @@ test.describe('H2 critical-first surfaces', () => {
     page
   }) => {
     let pointsRequestCount = 0;
-    let releaseOldPoint: (() => void) | null = null;
+    // A typed holder, not a bare `let`: the assignment happens inside the
+    // Promise executor closure below, which TypeScript cannot see from the
+    // read sites further down, and would otherwise narrow to `null`.
+    const oldPoint: { release: (() => void) | null } = { release: null };
     const oldPointReleased = new Promise<void>((resolve) => {
-      releaseOldPoint = resolve;
+      oldPoint.release = resolve;
     });
     await page.route(NWS_PROXY_ROUTE, async (route) => {
       const url = new URL(nwsUpstreamUrl(route.request().url()));
@@ -740,14 +743,14 @@ test.describe('H2 critical-first surfaces', () => {
         'New Station'
       );
 
-      releaseOldPoint?.();
+      oldPoint.release?.();
       await page.waitForTimeout(100);
       await expect(page.locator('.point-heat-station')).not.toContainText(
         'Old Station'
       );
       await expect(page.locator('#impact-panel-title')).toHaveText('Oregon');
     } finally {
-      releaseOldPoint?.();
+      oldPoint.release?.();
     }
   });
 
@@ -912,6 +915,9 @@ test.describe('H2 near-term HeatRisk claim independent of the map layer (DR-014 
     checked: boolean
   ): Promise<void> {
     await layerCheckbox(page, key).evaluate((element, next) => {
+      if (!(element instanceof HTMLInputElement)) {
+        throw new Error('layerCheckbox did not resolve to an <input>');
+      }
       element.checked = next;
       element.dispatchEvent(new Event('change', { bubbles: true }));
     }, checked);
@@ -1167,9 +1173,10 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
   }) => {
     await stubBrowserNwsHeat(page);
     await stubHeatRiskCatalogShared(page);
-    let releaseOld: (() => void) | null = null;
+    // A typed holder, not a bare `let`: see oldPoint above.
+    const oldOutlook: { release: (() => void) | null } = { release: null };
     const holdFirst = new Promise<void>((resolve) => {
-      releaseOld = resolve;
+      oldOutlook.release = resolve;
     });
     await stubCpcSeasonalTempOutlook(page, {
       holdFirst,
@@ -1198,7 +1205,7 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
         'Mar-Apr-May 2027'
       );
 
-      releaseOld?.();
+      oldOutlook.release?.();
       await page.waitForTimeout(200);
       await expect(cell.locator('.impact-claim')).toHaveCount(1);
       await expect(cell.locator('.impact-claim')).not.toContainText(
@@ -1206,7 +1213,7 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
       );
       await expect(cell.locator('.impact-horizon-note')).toHaveCount(0);
     } finally {
-      releaseOld?.();
+      oldOutlook.release?.();
     }
   });
 
