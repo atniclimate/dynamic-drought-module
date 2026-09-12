@@ -28,6 +28,7 @@ import { URLS } from '../config/urls';
 import { fetchBufferedWithBudget } from '../util/fetch';
 import { makeClaim, todayIso } from './evidence';
 import { resolveStateCode } from './resources';
+import type { StateCode } from './resources';
 import type { BoundarySelectionContext, SourcedClaim } from './types';
 import type { SourceResult } from './sources';
 
@@ -43,10 +44,13 @@ const TIMEOUT_MS = 20_000;
 const FCST_PERIOD = 'APR-SEP';
 
 /**
- * Basin-representative forecast points, curated. Region framing wins over
- * the state fallback; every entry was confirmed present in the live file
- * on 2026-07-01. BONO3 (Columbia at Bonneville) is the basin-integrating
- * outlet used for state-level fallbacks.
+ * Basin-representative forecast points, curated; every entry was confirmed
+ * present in the live file on 2026-07-01. The place's own resolved state
+ * wins over the camera region whenever it is known (see
+ * `fetchWaterSupplyClaims` below); `REGION_POINTS` is consulted only when
+ * the place's own state cannot be resolved from the place itself. BONO3
+ * (Columbia at Bonneville) is the basin-integrating outlet used for
+ * state-level points.
  *
  * Keyed by `RegionKey` (partial: only the regions inside the NWRFC domain
  * appear) so a region rename fails at compile time instead of silently
@@ -155,6 +159,29 @@ function supplyTilt(pct: number): string {
 }
 
 /**
+ * The place's own state wins whenever it is known: `context.containing.basis`
+ * is 'none' only when the place's own state could not be resolved from the
+ * place itself (the `ContainingPlaces` invariant, src/impact/types.ts), so
+ * `STATE_POINTS[state]` is the honest point for every boundary kind that
+ * carries a known state, not only a state boundary itself. The
+ * camera-region fallback below fires ONLY in that one basis: 'none' case,
+ * where `resolveStateCode` itself already fell back to the region's
+ * primary state; consulting `REGION_POINTS` there still gives the click
+ * the basin's own outlook rather than nothing, on the same region the
+ * state guess itself already depended on. Exercised by
+ * tests/camera-region-fallbacks.spec.ts.
+ */
+export function resolveWaterSupplyPoint(
+  context: BoundarySelectionContext,
+  state: StateCode
+): string | undefined {
+  return context.containing.basis !== 'none'
+    ? STATE_POINTS[state]
+    : ((context.regionKey !== null ? REGION_POINTS[context.regionKey] : undefined) ??
+      STATE_POINTS[state]);
+}
+
+/**
  * Fetch the water-supply outlook claims for a selection. Returns ok with
  * no claims for selections outside the NWRFC domain; ok:false with an
  * honest note when the source (or the required proxy) is unavailable.
@@ -163,25 +190,21 @@ export async function fetchWaterSupplyClaims(
   context: BoundarySelectionContext,
   signal: AbortSignal
 ): Promise<SourceResult> {
-  // Domain gate keyed to the SELECTION's state, never the ambient region:
-  // the sidebar region is whatever framing the map opened with and can
-  // disagree with a deep-linked or clicked boundary (verified live: a New
-  // Mexico selection under the default washington_state framing must not
-  // inherit a Columbia Basin forecast point). Outside the NWRFC domain the
-  // source is not applicable, which is not a failure.
+  // In order: `resolveStateCode` first prefers the place's own containing
+  // state (src/impact/resources.ts) and falls back to the camera region's
+  // primary state only when the place's own state is unknown. That resolved
+  // state gates the domain: outside Washington, Oregon, and Idaho the
+  // source is not applicable, which is not a failure. Within the domain,
+  // the point selection below applies the same place-first order: the
+  // place's own state wins whenever it is known, and the camera region is
+  // consulted only in the one case where it is not (see `resolveWaterSupplyPoint`
+  // above).
   const state = resolveStateCode(context);
   if (state === null || STATE_POINTS[state] === undefined) {
     return { claims: [], ok: true };
   }
 
-  // Within the domain, a state-boundary selection uses its state's point
-  // directly; other boundary kinds (an ecoregion or Tribal boundary clicked
-  // inside a regional framing) let the region refine the basin point.
-  const point =
-    context.kind === 'state'
-      ? STATE_POINTS[state]
-      : ((context.regionKey !== null ? REGION_POINTS[context.regionKey] : undefined) ??
-        STATE_POINTS[state]);
+  const point = resolveWaterSupplyPoint(context, state);
   if (!point) {
     return { claims: [], ok: true };
   }

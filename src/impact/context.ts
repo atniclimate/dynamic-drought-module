@@ -17,12 +17,15 @@
 
 import type { GeoJsonProperties, Geometry, Position } from 'geojson';
 
+import { postalCodeFromProperties } from '../config/geography';
+import { placeRefFromBoundary } from '../config/entities';
+import { isStateCode } from './resources';
 import { getCurrentRegion } from '../state/region-store';
 import {
   geometryBboxAcrossAntimeridian,
   geometryLikelyCrossesAntimeridian
 } from '../util/antimeridian';
-import type { BoundaryKind, BoundarySelectionContext } from './types';
+import type { BoundaryKind, BoundarySelectionContext, ContainingPlaces } from './types';
 
 /**
  * The representation caveat carried for sovereign-jurisdiction boundaries.
@@ -59,6 +62,22 @@ function firstString(
     if (typeof v === 'number' && Number.isFinite(v)) return String(v);
   }
   return null;
+}
+
+/**
+ * What contains the clicked feature, read from its own properties only
+ * (STUSPS, STATE_ABBR, or stateCode, the same precedence `postalCodeOf`
+ * uses). A boundary layer's properties rarely carry one of these (Census
+ * AIANNH and BIA AIAN-LAR do not), so `'none'` is the ordinary, honest
+ * answer here; this deliberately never consults the active region, so a
+ * consumer's own region fallback (see `resolveStateCode`) stays visible at
+ * the consumer rather than pre-baked into this field.
+ */
+function containingFromProperties(properties: GeoJsonProperties): ContainingPlaces {
+  const code = postalCodeFromProperties(properties);
+  return code !== null && isStateCode(code)
+    ? { state: code, basis: 'feature-property' }
+    : { state: null, basis: 'none' };
 }
 
 /** Resolve the display title for a selection by boundary kind. */
@@ -172,7 +191,9 @@ export function buildBoundaryContext(
     ...(bbox ? { bbox } : {}),
     ...(serviceBbox ? { serviceBbox } : {}),
     ...(crossesAntimeridian ? { bboxCrossesAntimeridian: true } : {}),
-    regionKey: getCurrentRegion()
+    regionKey: getCurrentRegion(),
+    containing: containingFromProperties(properties),
+    place: placeRefFromBoundary(kind, properties)
   };
 }
 

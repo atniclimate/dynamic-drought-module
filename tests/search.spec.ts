@@ -1,6 +1,40 @@
 import { test, expect } from '@playwright/test';
+import type { Page, Response } from '@playwright/test';
 
+import { placeRefFromBoundary } from '../src/config/entities';
 import { gotoApp, layerCheckbox } from './helpers';
+
+/**
+ * Capture the WA feature's own properties from the bundled
+ * `us-states.geojson` response the search door's own `openStateBriefing`
+ * fetch retrieves (never a separate fetch of this test's own making), so
+ * the computed reference reflects exactly what that door read.
+ */
+async function captureWaProperties(
+  page: Page,
+  action: () => Promise<void>
+): Promise<Record<string, unknown> | null> {
+  let captured: Record<string, unknown> | null = null;
+  const listener = async (response: Response): Promise<void> => {
+    if (!response.url().includes('/data/us-states.geojson')) return;
+    try {
+      const body = (await response.json()) as {
+        features?: Array<{ properties?: Record<string, unknown> }>;
+      };
+      const match = body.features?.find((f) => f.properties?.['STUSPS'] === 'WA');
+      if (match?.properties) captured = match.properties;
+    } catch {
+      // A held or aborted response has no body; not this capture's concern.
+    }
+  };
+  page.on('response', listener);
+  try {
+    await action();
+  } finally {
+    page.off('response', listener);
+  }
+  return captured;
+}
 
 /**
  * U3c/U3d: the one search experience.
@@ -75,5 +109,31 @@ test.describe('U3 the one search', () => {
 
     // Wait for the Tribal load to settle so the empty line is the final state.
     await expect(page.locator('#catalog-search .ddm-search-empty')).toContainText('No matches for');
+  });
+});
+
+test.describe('DDM-P2-T09: search resolves the same canonical place reference', () => {
+  // Scoped to the console catalog's instance, matching the describe above.
+  const searchInput = '#catalog-search [data-ddm-search]';
+
+  test('choosing the Washington place result resolves state:WA, matching the select= and click doors', async ({
+    page
+  }) => {
+    await gotoApp(page, '?view=console');
+
+    const briefingBtn = page.locator('#region-briefing-btn');
+    const waProperties = await captureWaProperties(page, async () => {
+      await page.locator(searchInput).fill('washington');
+      await page.locator('[data-search-kind="place"][data-search-id="WA"]').click();
+      // Summary-first (D-0.7.0-070): the pick sets the place selection; the
+      // region-briefing trigger becomes this place's "See what this means"
+      // door (src/ui/sidebar.ts updateRegionBriefingTrigger).
+      await expect(briefingBtn).toHaveText('See what this means');
+      await briefingBtn.click();
+      await expect(page.locator('#impact-panel-title')).toHaveText('Washington');
+    });
+
+    expect(waProperties).not.toBeNull();
+    expect(placeRefFromBoundary('state', waProperties)).toEqual({ scheme: 'state', code: 'WA' });
   });
 });

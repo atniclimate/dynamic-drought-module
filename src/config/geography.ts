@@ -129,8 +129,15 @@ function geographyForPostalCode(code: string): CanonicalGeography | null {
   return null;
 }
 
-function postalCodeOf(context: BoundarySelectionContext): string | null {
-  const properties = context.properties;
+/**
+ * Extract a two-letter state postal code directly from a feature's raw
+ * properties (STUSPS, STATE_ABBR, or stateCode), independent of any resolved
+ * context. Shared with `buildBoundaryContext` (src/impact/context.ts), which
+ * needs the same precedence before the boundary context object exists.
+ */
+export function postalCodeFromProperties(
+  properties: Readonly<Record<string, unknown>> | null
+): string | null {
   if (!properties) return null;
   for (const key of ['STUSPS', 'STATE_ABBR', 'stateCode']) {
     const value = properties[key];
@@ -139,6 +146,20 @@ function postalCodeOf(context: BoundarySelectionContext): string | null {
     if (/^[A-Z]{2}$/.test(code)) return code;
   }
   return null;
+}
+
+/**
+ * Resolve a selection's two-letter state postal code. A feature property
+ * (STUSPS, STATE_ABBR, stateCode) always wins when present: it is what the
+ * clicked or resolved feature itself claims, and it predates the
+ * `containing` field (D-0.6.0-era boundary clicks already carried it).
+ * `context.containing.state`, resolved FROM THE PLACE and never the camera
+ * region, is consulted only when properties yield nothing.
+ */
+function postalCodeOf(context: BoundarySelectionContext): string | null {
+  const fromProperties = postalCodeFromProperties(context.properties);
+  if (fromProperties) return fromProperties;
+  return context.containing.state;
 }
 
 /**
@@ -238,5 +259,12 @@ export function resolveCanonicalGeography(
     const explicit = geographyForPostalCode(postalCode);
     if (explicit) return explicit;
   }
+  // THE camera-region fallback for canonical geography. It fires only when
+  // the place itself yields no postal code: properties carried none AND
+  // `context.containing.state` is null (the `basis: 'none'` case in
+  // `ContainingPlaces`, src/impact/types.ts). Its result is stamped
+  // `basis: 'region-framing'`, so every downstream reader can see the
+  // geography came from the camera, not the place. Exercised by
+  // tests/camera-region-fallbacks.spec.ts.
   return regionFallback(context.regionKey, context.kind);
 }

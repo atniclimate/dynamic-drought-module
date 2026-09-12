@@ -12,7 +12,11 @@ const CONTEXT: BoundarySelectionContext = {
   title: 'Kansas',
   properties: { STUSPS: 'KS' },
   lngLat: { lng: -97.5, lat: 38.5 },
-  regionKey: 'national'
+  regionKey: 'national',
+  // Kansas's own STUSPS: the honest containing answer for a state boundary's
+  // own postal code (see `containingFromProperties`, src/impact/context.ts).
+  containing: { state: 'KS', basis: 'feature-property' },
+  place: { scheme: 'state', code: 'KS' }
 };
 
 test.beforeEach(() => {

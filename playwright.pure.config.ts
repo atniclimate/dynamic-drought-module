@@ -29,13 +29,16 @@ import base from './playwright.config';
 
 /** The browser-free spec files, alphabetical. */
 export const PURE_SPECS = [
+  'tests/camera-region-fallbacks.spec.ts',
   'tests/capability-matrix.spec.ts',
+  'tests/config-key-authority.spec.ts',
   'tests/display-summary.spec.ts',
   'tests/gl-capability.spec.ts',
   'tests/location-identity.spec.ts',
   'tests/minimap-drought.spec.ts',
   'tests/minimap-wildfire.spec.ts',
   'tests/nadm-shared-payload.spec.ts',
+  'tests/place-ref.spec.ts',
   'tests/point-in-polygon.spec.ts',
   'tests/polygon-overlap.spec.ts',
   'tests/s1-substrate.spec.ts',

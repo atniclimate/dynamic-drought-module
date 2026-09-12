@@ -1,4 +1,5 @@
 import { HAZARD_CLUSTERS } from './clusters';
+import type { LayerKey } from './layers';
 
 /**
  * Question-first view presets (UX-2; ROADMAP "The UX track").
@@ -25,8 +26,34 @@ import { HAZARD_CLUSTERS } from './clusters';
  * stays out of presets.
  */
 
+/**
+ * The preset-key authority (DDM-P1-T05 microtask 2): every key
+ * `MOBILE_HAZARD_PRESETS` and `VIEW_PRESETS` define, in the order those two
+ * arrays declare them (mobile rail first, then the chip row). This is a
+ * VALUE list maintained by hand, the same shape `LAYER_KEYS` uses in
+ * src/config/layers.ts and for the same reason: a type derived from the
+ * array literals' own shape could not catch a typo in a preset's `key`
+ * field against itself. `ViewPreset.key` is typed from this list, so a
+ * typo there fails `tsc`. `tests/layer-key-authority.test.mjs` keeps this
+ * list in step with the two preset arrays at runtime.
+ */
+export const PRESET_KEYS = Object.freeze([
+  'hazard-enso',
+  'hazard-drought',
+  'hazard-heat',
+  'hazard-fire',
+  'right-now',
+  'this-week',
+  'season-ahead',
+  'fire-risk',
+  'whose-land'
+] as const);
+
+/** The union of every valid preset key, derived from `PRESET_KEYS`. */
+export type PresetKey = (typeof PRESET_KEYS)[number];
+
 export interface ViewPreset {
-  readonly key: string;
+  readonly key: PresetKey;
   /** Chip label. Short; the chip row must survive a 400 pixel embed. */
   readonly label: string;
   /** Tooltip / accessible description of the question the preset answers. */
@@ -34,7 +61,7 @@ export interface ViewPreset {
   /** Basemap requested only by an explicit click on this preset. */
   readonly preferredBasemap?: 'satellite';
   /** Layer keys to activate, in activation order. At most one surface. */
-  readonly layers: readonly string[];
+  readonly layers: readonly LayerKey[];
 }
 
 /**

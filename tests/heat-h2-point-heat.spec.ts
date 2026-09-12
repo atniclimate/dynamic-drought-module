@@ -1,7 +1,11 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
-import { resolveCanonicalGeography } from '../src/config/geography';
+import { placeRefFromBoundary } from '../src/config/entities';
+import {
+  postalCodeFromProperties,
+  resolveCanonicalGeography
+} from '../src/config/geography';
 import { URLS } from '../src/config/urls';
 import { ExpiringLruCache } from '../src/util/bounded-cache';
 import { createBriefingSkeleton } from '../src/impact/briefing';
@@ -12,6 +16,7 @@ import {
   createNwsRequestSession
 } from '../src/impact/nws-point';
 import { fetchPointHeat, parseNwsValidTime } from '../src/impact/point-heat';
+import { isStateCode } from '../src/impact/resources';
 import {
   formatDistanceKm,
   formatPointHeatInterval,
@@ -32,17 +37,36 @@ import {
   stubHeatRiskCatalog as stubHeatRiskCatalogShared
 } from './helpers';
 
+/**
+ * What the literal's own properties say about its containing state, derived
+ * exactly the way `buildBoundaryContext`'s `containingFromProperties` derives
+ * it in production (src/impact/context.ts): from the properties bag alone,
+ * never from `regionKey`. A code that is not a recognized `StateCode` (for
+ * example a territory postal code like `AS`) honestly resolves to `none`.
+ */
+function containingFromProperties(
+  properties: BoundarySelectionContext['properties']
+): BoundarySelectionContext['containing'] {
+  const code = postalCodeFromProperties(properties);
+  return code !== null && isStateCode(code)
+    ? { state: code, basis: 'feature-property' }
+    : { state: null, basis: 'none' };
+}
+
 function context(
   code: string | null,
   regionKey: BoundarySelectionContext['regionKey'] = 'national',
   kind: BoundarySelectionContext['kind'] = 'state'
 ): BoundarySelectionContext {
+  const properties = code ? { STUSPS: code } : null;
   return {
     kind,
     title: code ?? 'Selected place',
-    properties: code ? { STUSPS: code } : null,
+    properties,
     lngLat: { lng: -97.5, lat: 38.5 },
-    regionKey
+    regionKey,
+    containing: containingFromProperties(properties),
+    place: placeRefFromBoundary(kind, properties)
   };
 }
 
@@ -1213,9 +1237,25 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
     );
   });
 
-  test('(e) a United States selection outside the Pacific Northwest (Texas) renders the claim (DR-075 a director ruling: the gate follows the issuer service extent, not the drought-doctrine region)', async ({
+  test('(e) a United States selection outside the Pacific Northwest (Texas) reads the honest conus matrix note under any camera (DR-090 owner ruling; DR-075 a survives at the source gate)', async ({
     page
   }) => {
+    // History, so the change of assertion is not mistaken for a weakening.
+    // Until DDM-P2-T08 microtask 5 (DR-090), briefingSourcePolicy gated the
+    // whole horizon matrix on the CAMERA region, so a Texas selection under
+    // the default washington_state framing rendered the matrix, and this
+    // case proved the season-ahead heat cell inside it went live (DR-075 a,
+    // director ruling: the cell's coverage gate follows the issuer's service
+    // extent). The same Texas selection under the national camera never
+    // rendered the matrix at all (tests/m-breadth-honesty.spec.ts, the
+    // Kansas case). DR-090 reads the PLACE, so Texas now gets the conus
+    // family's honest note under every camera, and the matrix collapse in
+    // src/impact/hydrate.ts (matrixEnabled) takes the heat cell with it.
+    // DR-075 a itself is untouched: the Texas cpcSeasonalTemp source cell is
+    // still 'available' (proven browser-free in
+    // tests/camera-region-fallbacks.spec.ts); whether the matrix should
+    // render nationally available lanes under impactSynthesis 'none' is the
+    // owner's call (S30 owner card), not this spec's.
     await stubBrowserNwsHeat(page);
     await stubHeatRiskCatalogShared(page);
     await stubCpcSeasonalTempOutlook(page, {
@@ -1226,16 +1266,15 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
     });
     await gotoApp(page, '?embed=true&view=console&select=state:TX');
 
-    const cell = page.locator(CELL);
-    await expect(cell.locator('.impact-hazard-pill')).toHaveText('live');
-    const claim = cell.locator('.impact-claim');
-    await expect(claim).toHaveCount(1);
-    await expect(claim.locator('.impact-claim-register')).toHaveText(
-      'outlook'
+    const panel = page.locator('#impact-panel');
+    await expect(panel).toBeVisible();
+    const unavailable = panel.locator('.impact-capability-unavailable');
+    await expect(unavailable).toBeVisible();
+    await expect(unavailable.locator('.impact-horizon-note')).toHaveText(
+      'The briefing synthesis and resource routing are not validated outside the PNW.'
     );
-    await expect(claim).toContainText(
-      'for Jun-Jul-Aug 2027: 40% chance of below-normal temperature, at the selected point.'
-    );
+    await expect(panel.locator('.impact-hazard')).toHaveCount(0);
+    await expect(page.locator(CELL)).toHaveCount(0);
   });
 
   test('(g) an Equal Chances reading renders "Equal Chances (no favored tercile)" with no percent (the issuer\'s own EC semantics, not a forecast confidence)', async ({

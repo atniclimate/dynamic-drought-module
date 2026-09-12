@@ -4867,6 +4867,25 @@ button.telemetry-item {
   margin-top: 2px;
 }
 
+/* DDM-P2-T07: the one row matching the shell's committed hazard mode
+   (DR-092, never reordered, never a severity ranking between the four
+   hazards). An inset accent plus a faint ground shift, the same device
+   already used for the point-heat callout above (.impact-horizon
+   .point-heat): the generic UI accent, never a hazard's own palette
+   colour, so switching modes cannot read as "this hazard matters more".
+   Inset box-shadow and a background tint take no layout space, so the
+   row's own box (and every row after it) stays exactly where it was. */
+.impact-hazard-active {
+  box-shadow: inset 3px 0 0 var(--accent-strong);
+  background: color-mix(in srgb, var(--bg-2) 92%, var(--accent) 8%);
+  transition: background-color var(--dur-fast) var(--ease-standard),
+    box-shadow var(--dur-fast) var(--ease-standard);
+}
+.impact-hazard-active .impact-hazard-title {
+  font-weight: var(--fw-title);
+  color: var(--fg-0);
+}
+
 .impact-claim {
   padding: 8px 0;
 }
@@ -5111,6 +5130,7 @@ a.impact-resource-link::after {
      block gains every newly animated property the day it ships). This
      also covers the desktop sidebar width transition. */
   .sidebar { transition: none; }
+  .impact-hazard-active { transition: none; }
   .impact-spinner { animation: none; }
   /* The wave pulse falls back to the static three-stroke glyph. */
   .spinner-waves path { animation: none; }

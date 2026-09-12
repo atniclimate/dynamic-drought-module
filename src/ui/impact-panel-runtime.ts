@@ -26,6 +26,7 @@
  */
 
 import { createBriefingSkeleton } from '../impact/briefing';
+import { SHELL_HAZARD_KEY } from '../impact/horizon-chrome';
 import { hydrateBriefing } from '../impact/hydrate';
 import { HAZARD_KEYS, markHorizonCells } from '../impact/matrix';
 import {
@@ -44,6 +45,10 @@ import { renderLandscapeContext } from './landscape-context';
 import { getLegendSection } from './legend-registry';
 import { requestLayerOn } from './layer-toggle-command';
 import { loadFederalResources, resourcesForIdentity } from '../impact/resource-catalog';
+import {
+  getCommittedSnapshot,
+  onCommittedSnapshotChange
+} from '../state/cluster-service';
 import { resolveLocationIdentity } from '../state/location-identity';
 import { getMap } from '../state/map-store';
 import { getPlaceSelection, setPlaceSelection } from '../state/place-selection';
@@ -178,7 +183,49 @@ function ensurePanel(): HTMLElement {
   // innerHTML, so a listener on the child would be lost on every
   // hydration re-render, DDM-P13-T02 correction, clause 3).
   panelEl.addEventListener('click', handleLegendLinkClick);
+  // DDM-P2-T07: keep the matrix's active-row emphasis in step with the
+  // shell's committed hazard mode on a LIVE switch, not only on the next
+  // open. Registered once, alongside every other one-time wire-up in this
+  // block (the module is a page-lifetime singleton once loaded, same as
+  // view-shell's own subscription to this service).
+  onCommittedSnapshotChange(applyActiveHazardEmphasis);
   return shared.panel;
+}
+
+/**
+ * Mark the active hazard's cell in every horizon section (DR-092): a
+ * styling hook plus `aria-current` on each matching `.impact-hazard`
+ * section, and nothing else touched. `selectedHazard` (not `cluster`) is
+ * the field every other hazard-named briefing surface already reads
+ * (view-shell.ts's `selectedHazardTitle`): the user-facing hazard intent,
+ * which stays a real cluster key even once the exact layer set has
+ * drifted to 'custom'. This never reorders and never resizes a row: only
+ * a class and an attribute change on elements already in the DOM.
+ *
+ * There is no contiguous "hazard row" anywhere in the DOM: `renderBody`
+ * stacks three `<section class="impact-horizon">` blocks, and each one
+ * builds its own four `.impact-hazard` cells from `HAZARD_KEYS.map(...)`
+ * (`renderHorizon`). So the active hazard is matched by `data-hazard`
+ * alone, once inside each of the three horizon sections, not narrowed to
+ * `current`: an emphasis that vanished after Current Conditions would
+ * teach a scrolling reader that the cue is unreliable rather than telling
+ * them which row is theirs. `aria-current="true"` on all three is
+ * correct rather than redundant, because each horizon section is its own
+ * set of four hazard cells (DR-012 b) and `aria-current` marks the
+ * current item within A set; three sets, three marks.
+ */
+function applyActiveHazardEmphasis(): void {
+  if (!bodyEl) return;
+  const activeHazard = SHELL_HAZARD_KEY[getCommittedSnapshot().selectedHazard];
+  bodyEl.querySelectorAll<HTMLElement>('.impact-hazard').forEach((row) => {
+    const isActive = row.dataset['hazard'] === activeHazard;
+    row.classList.toggle('impact-hazard-active', isActive);
+    if (isActive) {
+      row.setAttribute('aria-current', 'true');
+    } else {
+      row.removeAttribute('aria-current');
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -644,6 +691,7 @@ function paint(
   if (bodyEl) {
     bodyEl.innerHTML = renderBody(briefing, impactUnavailableNote);
     discloseLegendAnchorTitles(bodyEl);
+    applyActiveHazardEmphasis();
   }
 }
 
@@ -857,6 +905,7 @@ export function refreshOpenBriefing(token: number): void {
     activeImpactUnavailableNote
   );
   discloseLegendAnchorTitles(bodyEl);
+  applyActiveHazardEmphasis();
   if (hadFocusInBody && panelEl && !panelEl.contains(document.activeElement)) {
     panelEl.querySelector<HTMLButtonElement>('.impact-panel-close')?.focus();
   }

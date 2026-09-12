@@ -1,7 +1,40 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Response } from '@playwright/test';
 
+import { placeRefFromBoundary } from '../src/config/entities';
 import { parseStudioParam } from '../src/state/url';
-import { gotoApp, search } from './helpers';
+import { gotoApp, search, waitForLayerSettled } from './helpers';
+
+/**
+ * Capture the WA feature's own properties from the bundled
+ * `us-states.geojson` response a door's own fetch retrieves (never a
+ * separate fetch of this test's own making), so the computed reference
+ * reflects exactly what that door read.
+ */
+async function captureWaProperties(
+  page: Page,
+  action: () => Promise<void>
+): Promise<Record<string, unknown> | null> {
+  let captured: Record<string, unknown> | null = null;
+  const listener = async (response: Response): Promise<void> => {
+    if (!response.url().includes('/data/us-states.geojson')) return;
+    try {
+      const body = (await response.json()) as {
+        features?: Array<{ properties?: Record<string, unknown> }>;
+      };
+      const match = body.features?.find((f) => f.properties?.['STUSPS'] === 'WA');
+      if (match?.properties) captured = match.properties;
+    } catch {
+      // A held or aborted response has no body; not this capture's concern.
+    }
+  };
+  page.on('response', listener);
+  try {
+    await action();
+  } finally {
+    page.off('response', listener);
+  }
+  return captured;
+}
 
 const PLACE_ROOT = '#place-studio-root';
 
@@ -307,6 +340,116 @@ test.describe('PS-CORE PLACE studio', () => {
     expect(layersHref.searchParams.get('studio')).toBe('layers');
     expect(placeHref.searchParams.has('embed')).toBe(false);
     expect(layersHref.searchParams.has('embed')).toBe(false);
+  });
+});
+
+test.describe('DDM-P2-T09: one canonical place reference', () => {
+  test('selecting Washington in the studio resolves the state:WA reference, and the full briefing opens on return to the map', async ({
+    page
+  }) => {
+    const waProperties = await captureWaProperties(page, async () => {
+      await gotoApp(page, '?view=brief&layers=places&studio=place');
+      await page.locator('#place-type-state').click();
+      await page.locator('#place-studio-search').fill('Washington');
+      await page.locator('#place-option-state-0').click();
+      await expect(page.locator('#place-selection-title')).toHaveText('Washington');
+      await page.locator('#place-studio-back').click();
+      await expect(page.locator(PLACE_ROOT)).toHaveCount(0);
+      await expect(page.locator('#impact-panel-title')).toHaveText('Washington');
+    });
+
+    expect(waProperties).not.toBeNull();
+    expect(placeRefFromBoundary('state', waProperties)).toEqual({ scheme: 'state', code: 'WA' });
+  });
+
+  /**
+   * Same feature ids (acceptance clause): a map click on Washington resolves
+   * the identical `state:WA` reference the studio door above resolves, read
+   * from the SAME bundled us-states.geojson feature's own STUSPS (the
+   * property every door reads, src/config/entities.ts placeRefFromBoundary).
+   * The click door does not refetch that file at click time (the `states`
+   * layer already holds it from its own activation), so this case captures
+   * THAT activation fetch instead of a selection-time fetch.
+   *
+   * This case proves the REFERENCE is the same. The feature-id half of the
+   * clause (the studio door and the click door emphasize the SAME MapLibre
+   * feature id through `feature-state`) is proven by the next case, through
+   * the production-observable `data-ddm-emphasis` stamp place-emphasis.ts
+   * writes, because the dev-only `window.__ddmMap` handle is
+   * dead-code-eliminated from the production build this spec's `webServer`
+   * serves (src/main.ts:267-277; tests/u3i.spec.ts:35-40 documents the gap).
+   */
+  test('a map click on Washington resolves the same state:WA reference as the studio door', async ({
+    page
+  }) => {
+    const waProperties = await captureWaProperties(page, async () => {
+      await gotoApp(page, '?layers=states');
+      await waitForLayerSettled(page, 'states');
+
+      const box = await page.locator('#map').boundingBox();
+      if (!box) throw new Error('map container has no box');
+      const trigger = page.locator('[data-ddm-impact-trigger]');
+      // DEFAULT_REGION is washington_state (src/config/regions.ts), so the
+      // default camera frames Washington under the viewport center.
+      await expect(async () => {
+        await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+        await expect(trigger).toBeVisible({ timeout: 1500 });
+      }).toPass({ timeout: 20_000 });
+      await trigger.click();
+      await expect(page.locator('#impact-panel-title')).toHaveText('Washington');
+    });
+
+    expect(waProperties).not.toBeNull();
+    expect(placeRefFromBoundary('state', waProperties)).toEqual({ scheme: 'state', code: 'WA' });
+  });
+
+  /**
+   * Same feature ids, the literal clause: the studio door (which resolves a
+   * state by array index into us-states.geojson, src/state/display-snapshot.ts)
+   * and the click door (which passes the rendered feature's own generated
+   * id, src/layers/states.ts) must light the SAME us-states feature id. Read
+   * from the `data-ddm-emphasis` truth stamp on the document root, written
+   * by place-emphasis.ts from what the map was told, in ONE page so the
+   * generated ids are comparable. The studio stamp is read before the studio
+   * closes, because closing the briefing clears the popup-scoped selection
+   * and with it the emphasis.
+   */
+  test('the studio door and the click door emphasize the same us-states feature id', async ({
+    page
+  }) => {
+    const stamp = (): Promise<string> =>
+      page.evaluate(() => document.documentElement.dataset['ddmEmphasis'] ?? '');
+
+    // `states` is in the boot set on purpose: the studio's display snapshot
+    // turns the reference layer on for its own emphasis and its restore on
+    // close turns it back off, so the click door below needs the layer to be
+    // the user's own, not the studio's.
+    await gotoApp(page, '?view=brief&layers=places,states&studio=place');
+    await page.locator('#place-type-state').click();
+    await page.locator('#place-studio-search').fill('Washington');
+    await page.locator('#place-option-state-0').click();
+    await expect(page.locator('#place-selection-title')).toHaveText('Washington');
+    await expect.poll(stamp, { timeout: 15_000 }).toMatch(/^us-states:\d+$/);
+    const studioStamp = await stamp();
+
+    await page.locator('#place-studio-back').click();
+    await expect(page.locator(PLACE_ROOT)).toHaveCount(0);
+    await expect(page.locator('#impact-panel-title')).toHaveText('Washington');
+    await page.locator('#impact-panel .impact-panel-close').click();
+    await expect(page.locator('#impact-panel')).toBeHidden();
+
+    await waitForLayerSettled(page, 'states');
+    const box = await page.locator('#map').boundingBox();
+    if (!box) throw new Error('map container has no box');
+    const trigger = page.locator('[data-ddm-impact-trigger]');
+    await expect(async () => {
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await expect(trigger).toBeVisible({ timeout: 1500 });
+    }).toPass({ timeout: 20_000 });
+    await expect.poll(stamp, { timeout: 15_000 }).toMatch(/^us-states:\d+$/);
+    const clickStamp = await stamp();
+
+    expect(clickStamp).toBe(studioStamp);
   });
 });
 

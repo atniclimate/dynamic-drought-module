@@ -255,7 +255,12 @@ test.describe('PS-BRIEF pure narrative selector', () => {
       title: 'Washington',
       properties: { STUSPS: 'WA' },
       lngLat: { lng: -120.5, lat: 47.5 },
-      regionKey: null
+      regionKey: null,
+      // Washington's own STUSPS: the honest containing answer for a state
+      // boundary's own postal code (see `containingFromProperties`,
+      // src/impact/context.ts).
+      containing: { state: 'WA', basis: 'feature-property' },
+      place: { scheme: 'state', code: 'WA' }
     };
     const briefing = createBriefingSkeleton(context);
     expect(selectBriefNarrativeLine(briefing)).toBeNull();

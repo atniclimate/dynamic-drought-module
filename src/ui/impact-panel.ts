@@ -48,6 +48,13 @@ interface PendingOpen {
   readonly token: number;
   delayId: number | null;
   loadingToken: number | null;
+  /**
+   * Owns the in-flight containing-state resolution, when this pending open
+   * needed one. Aborted whenever this pending open is superseded or closed,
+   * so a stale resolution never applies to a later panel (see
+   * `finishPendingOpen`).
+   */
+  abortController: AbortController | null;
 }
 
 export interface ImpactPanelShell {
@@ -305,16 +312,23 @@ export function isImpactPanelShellOpen(): boolean {
 function finishPendingOpen(token?: number): void {
   if (!pendingOpen || (token !== undefined && pendingOpen.token !== token)) return;
   if (pendingOpen.delayId !== null) window.clearTimeout(pendingOpen.delayId);
+  // A superseded or closed pending open cancels its own in-flight
+  // containing-state resolution (harmless no-op if it already settled).
+  pendingOpen.abortController?.abort();
   hideLoading(pendingOpen.loadingToken);
   pendingOpen = null;
 }
 
-function beginPendingOpen(token: number): void {
+function beginPendingOpen(
+  token: number,
+  abortController: AbortController | null = null
+): void {
   finishPendingOpen();
   const pending: PendingOpen = {
     token,
     delayId: null,
-    loadingToken: null
+    loadingToken: null,
+    abortController
   };
   pending.delayId = window.setTimeout(() => {
     if (pendingOpen !== pending) return;
@@ -527,17 +541,40 @@ export function openImpactPanel(context: BoundarySelectionContext): number {
   const intent = ++briefingIntentSeq;
   const token = ++openToken;
 
-  if (runtime) {
+  const needsStateEnrichment = context.containing.basis === 'none';
+
+  if (runtime && !needsStateEnrichment) {
     currentRuntimeToken = runtime.openImpactPanel(context, active);
     return token;
   }
 
-  beginPendingOpen(token);
-  void loadRuntime().then(
-    (loaded) => {
+  // Either the lazy runtime is still loading, or this context needs its
+  // containing state resolved from the point (or both); either way the
+  // runtime opens the panel from a `.then()` below instead of synchronously.
+  // The enrichment itself lives in a lazy module (`src/impact/containing-state.ts`,
+  // its own doc comment explains why), reached through a dynamic import here
+  // rather than a static one, exactly like the panel runtime below: a static
+  // import would hoist `location-identity.ts` (and its point-in-polygon
+  // fallback) into this eager facade's own bundle, which the activation gate
+  // forbids (DR-085 budgets; the impact briefing cluster is a first-use cost).
+  const abortController = needsStateEnrichment ? new AbortController() : null;
+  beginPendingOpen(token, abortController);
+
+  let contextReady: Promise<BoundarySelectionContext>;
+  if (abortController) {
+    const signal = abortController.signal;
+    contextReady = import('../impact/containing-state').then((mod) =>
+      mod.enrichContainingState(context, signal)
+    );
+  } else {
+    contextReady = Promise.resolve(context);
+  }
+
+  void Promise.all([loadRuntime(), contextReady]).then(
+    ([loaded, resolvedContext]) => {
       finishPendingOpen(token);
       if (intent !== briefingIntentSeq || token !== openToken) return;
-      currentRuntimeToken = loaded.openImpactPanel(context, active);
+      currentRuntimeToken = loaded.openImpactPanel(resolvedContext, active);
     },
     () => {
       finishPendingOpen(token);

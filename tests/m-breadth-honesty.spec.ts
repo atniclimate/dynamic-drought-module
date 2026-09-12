@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 
 import type { RegionKey } from '../src/config/regions';
+import { placeRefFromBoundary } from '../src/config/entities';
+import { postalCodeFromProperties } from '../src/config/geography';
 import { URLS } from '../src/config/urls';
 import {
   regionCapabilityLevel,
@@ -9,10 +11,22 @@ import {
 import { createBriefingSkeleton } from '../src/impact/briefing';
 import {
   buildResources,
+  isStateCode,
   resolveStateCode
 } from '../src/impact/resources';
 import type { BoundarySelectionContext } from '../src/impact/types';
 import { gotoApp } from './helpers';
+
+/** Mirrors `containingFromProperties` (src/impact/context.ts): derived from
+ * the literal's own properties only, never from `regionKey`. */
+function containingFromProperties(
+  properties: BoundarySelectionContext['properties']
+): BoundarySelectionContext['containing'] {
+  const code = postalCodeFromProperties(properties);
+  return code !== null && isStateCode(code)
+    ? { state: code, basis: 'feature-property' }
+    : { state: null, basis: 'none' };
+}
 
 function selectionContext(
   regionKey: RegionKey | null,
@@ -23,7 +37,9 @@ function selectionContext(
     title: 'Example place',
     properties,
     lngLat: { lng: -98, lat: 38 },
-    regionKey
+    regionKey,
+    containing: containingFromProperties(properties),
+    place: placeRefFromBoundary('bia-reservation', properties)
   };
 }
 
@@ -67,10 +83,12 @@ test.describe('M-BREADTH resource-routing honesty', () => {
   });
 
   test('an explicit state identity is not routed when the matrix lacks validation', () => {
+    const kansasProperties = { STUSPS: 'KS', NAME: 'Kansas' };
     const kansas = {
       ...selectionContext('national'),
       kind: 'state' as const,
-      properties: { STUSPS: 'KS', NAME: 'Kansas' }
+      properties: kansasProperties,
+      containing: containingFromProperties(kansasProperties)
     };
     expect(resolveStateCode(kansas)).toBe('KS');
     expect(createBriefingSkeleton(kansas).resources).toEqual([]);

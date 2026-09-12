@@ -37,7 +37,7 @@ import { openStateBriefing } from '../state/deep-link';
 import { showLocatedBoundary } from '../state/located-boundary';
 import { getViewMode } from '../state/view-mode';
 import { onPlaceSelectionChange, setPlaceSelection } from '../state/place-selection';
-import { loadTribalRoster, TRUSTED_PROVENANCE } from '../state/tribal-roster';
+import { loadTribalRoster, gatedDisplayName } from '../state/tribal-roster';
 import { fetchBufferedWithBudget } from '../util/fetch';
 import { isSheetActive } from './mobile-sheet';
 import { requestLayerOn } from './layer-toggle-command';
@@ -102,8 +102,10 @@ function loadTribal(): Promise<SearchItem[]> {
     try {
       const areas = await loadTribalRoster();
       const items: SearchItem[] = areas.map((a) => {
-        const trusted = TRUSTED_PROVENANCE.has(a.provenance ?? '');
-        const label = trusted ? a.displayName : a.larName;
+        // DDM-P2-T10 / DR-094: the shared gate helper (src/state/tribal-roster.ts),
+        // not an open-coded check, so this list and the place catalog's
+        // Tribal Nations list gate identically.
+        const label = gatedDisplayName(a);
         return {
           kind: 'tribal' as const,
           id: a.larName,

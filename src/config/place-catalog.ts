@@ -1,5 +1,6 @@
 import { URLS } from './urls';
-import { loadTribalRoster } from '../state/tribal-roster';
+import { gatedDisplayName, loadTribalRoster } from '../state/tribal-roster';
+import type { TribalRosterArea } from '../state/tribal-roster';
 import type { TypedPlaceKind, TypedPlaceRef } from '../state/typed-place';
 import { fetchJsonWithBudget } from '../util/fetch';
 
@@ -309,30 +310,62 @@ async function loadTribeEntries(signal: AbortSignal): Promise<readonly PlaceCata
     textValue(crosswalk.meta?.rosterSource) ?? PLACE_CATALOG.tribe.sourceLabels[0] ?? '';
   const landAreaSource =
     textValue(crosswalk.meta?.landAreaSource) ?? PLACE_CATALOG.tribe.sourceLabels[1] ?? '';
-  const shippedLarNames = new Map(
-    areas.map((area) => [area.larName.trim().toLocaleLowerCase(), area.larName] as const)
+  const rosterByLarName = new Map<string, TribalRosterArea>(
+    areas.map((area) => [area.larName.trim().toLocaleLowerCase(), area] as const)
   );
   const representationIds = new Map<string, Set<string>>();
+  // Entries whose label is a formal Nation name (a trusted crosswalk match,
+  // or a matched/rosterNoLar row with no land area to gate at all).
   const formalNames = new Set<string>();
+  // Entries whose label is a BIA land-area name (DR-094): a crosswalk row
+  // whose roster provenance is NOT trusted keeps its own honest label
+  // rather than borrowing the unproven formal name, with no visible marker
+  // distinguishing it from a formal-name entry (the title stays plain).
+  const gatedLarLabels = new Set<string>();
 
   for (const row of crosswalk.matched ?? []) {
     const name = textValue(row.tribe);
     const larName = textValue(row.larName);
     if (!name) continue;
-    formalNames.add(name);
-    if (!larName) continue;
-    const shipped = shippedLarNames.get(larName.toLocaleLowerCase());
-    if (!shipped) continue;
-    const ids = representationIds.get(name) ?? new Set<string>();
-    ids.add(shipped);
-    representationIds.set(name, ids);
+    if (!larName) {
+      // A roster-only match: no land area to gate, so it passes as the
+      // crosswalk's own name (nothing here can be gated against).
+      formalNames.add(name);
+      continue;
+    }
+    const rosterArea = rosterByLarName.get(larName.toLocaleLowerCase());
+    if (!rosterArea) {
+      // Matched to a larName the shipped roster does not carry: same
+      // no-land-area-to-gate case as above.
+      formalNames.add(name);
+      continue;
+    }
+    const gated = gatedDisplayName(rosterArea);
+    if (gated === rosterArea.displayName) {
+      // Trusted (DR-094, the shared gate in src/state/tribal-roster.ts):
+      // this representation is shown under the formal Nation name.
+      formalNames.add(name);
+      const ids = representationIds.get(name) ?? new Set<string>();
+      ids.add(rosterArea.larName);
+      representationIds.set(name, ids);
+    } else {
+      // Untrusted: the polygon stays selectable, honestly labeled with its
+      // own BIA land-area name instead of the unproven crosswalk name.
+      gatedLarLabels.add(gated);
+      const ids = representationIds.get(gated) ?? new Set<string>();
+      ids.add(rosterArea.larName);
+      representationIds.set(gated, ids);
+    }
   }
   for (const value of crosswalk.rosterNoLar ?? []) {
     const name = textValue(value);
+    // A roster row with no land area at all: nothing to gate, so it passes
+    // as the roster's own name (same rule as the no-larName branch above).
     if (name) formalNames.add(name);
   }
 
-  return [...formalNames]
+  const labels = new Set<string>([...formalNames, ...gatedLarLabels]);
+  return [...labels]
     .map((label): PlaceCatalogEntry => {
       const ids = [...(representationIds.get(label) ?? [])].sort();
       return {

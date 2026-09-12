@@ -50,8 +50,8 @@
  * Drought Outlook) keep the word; they live in claim text, not here.
  */
 
-import type { TemporalHorizonKey } from '../config/clusters';
-import type { HorizonKey } from './types';
+import type { HazardClusterKey, TemporalHorizonKey } from '../config/clusters';
+import type { HazardKey, HorizonKey } from './types';
 
 export interface HorizonChrome {
   /** The section heading. */
@@ -76,4 +76,21 @@ export const SHELL_HORIZON_KEY: Readonly<Record<TemporalHorizonKey, HorizonKey>>
   current: 'current',
   'weeks-ahead': 'nearTerm',
   'season-ahead': 'longRange'
+};
+
+/**
+ * The map shell's `HazardClusterKey` maps to this briefing's `HazardKey` one
+ * for one (DDM-P2-T07). Three of the four hazards share the same word in
+ * both places (drought, heat, enso); the fourth does not: the shell's
+ * cluster button says `wildfire`, the briefing's matrix row says `fire`.
+ * Same hazard, two names. That one word is the whole substance of this
+ * table, and this is the only place in the app that writes the
+ * equivalence; a mode-to-row lookup reads `SHELL_HAZARD_KEY[clusterKey]`
+ * rather than carrying its own copy of the rename.
+ */
+export const SHELL_HAZARD_KEY: Readonly<Record<HazardClusterKey, HazardKey>> = {
+  drought: 'drought',
+  wildfire: 'fire',
+  heat: 'heat',
+  enso: 'enso'
 };

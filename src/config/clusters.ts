@@ -29,9 +29,14 @@
  * table is the durable vocabulary.
  *
  * Consumers apply recipes through the layer controller only (the frozen
- * facade discipline); this module is pure config with no imports from
- * layer or UI code.
+ * facade discipline); this module has one type-only import, `LayerKey`
+ * from src/config/layers.ts (DDM-P1-T05 microtask 2), so a typo in a
+ * recipe's layer key fails typechecking instead of drifting silently; a
+ * type-only import is erased at build and adds no runtime edge, so this
+ * module still has no runtime imports from layer or UI code.
  */
+
+import type { LayerKey } from './layers';
 
 export type HazardClusterKey = 'drought' | 'wildfire' | 'heat' | 'enso';
 
@@ -86,7 +91,7 @@ export interface HazardClusterDef {
    * honest statement that no verified surface exists for that horizon
    * yet; the shell must not fake one.
    */
-  readonly recipes: Readonly<Record<TemporalHorizonKey, readonly string[]>>;
+  readonly recipes: Readonly<Record<TemporalHorizonKey, readonly LayerKey[]>>;
 }
 
 export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
