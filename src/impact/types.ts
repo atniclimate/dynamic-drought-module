@@ -23,6 +23,7 @@ import type { PlaceRef } from '../config/entities';
 import type { BriefingSourcePolicy } from './source-policy';
 import type { LayerStatus } from '../types/layer';
 import type { StateCode } from './resources';
+import type { ProductKey } from '../config/products';
 
 /**
  * What kind of knowledge a claim rests on (the 0.8.0 evidence/claim contract,
@@ -114,6 +115,14 @@ export interface SourcedClaim {
   readonly sourceUrl?: string;
   /** What kind of knowledge the statement rests on. Required; set truthfully. */
   readonly evidence: EvidenceClass;
+  /**
+   * The catalog product this claim reads (DDM-P14-T05 microtask 2), a key
+   * into `PRODUCTS` in `src/config/products.ts`. Required so every claim
+   * traces to the issuer, endpoint, layer and lane one catalog entry
+   * records; validated at runtime against `PRODUCT_KEYS` by `makeClaim`,
+   * never set independently of that catalog.
+   */
+  readonly product: ProductKey;
   /**
    * An explicit observed/outlook register that overrides `CLAIM_REGISTER_TAG`'s
    * per-evidence-class default (DR-070 amended 2026-09-08): HeatRisk is

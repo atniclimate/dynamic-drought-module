@@ -294,6 +294,7 @@ export async function fetchHeatRiskClaims(
     const shared = {
       source,
       sourceUrl,
+      product: 'heatrisk',
       evidence: 'classified',
       // DR-070 amended 2026-09-08, DR-071: HeatRisk stays 'classified'
       // evidence (the badge stays Classified), but the issuer's own words
@@ -453,6 +454,7 @@ export async function fetchUsdmClaims(
     const usdmShared = {
       source,
       sourceUrl,
+      product: 'usdm' as const,
       evidence: 'analyzed' as const,
       dates:
         mapDate === null
@@ -724,6 +726,7 @@ export async function fetchDsciTrendClaims(
             'the NDMC publishes no DSCI trend threshold and calls the index itself experimental.',
           source,
           sourceUrl,
+          product: 'dsci',
           evidence: 'analyzed',
           dates: { valid: calendarToIso(lastCal), retrieved: todayIso() },
           support: {
@@ -838,7 +841,7 @@ export async function fetchNifcClaims(
     return {
       ok: true,
       claims: [
-        makeClaim({ text, source, sourceUrl, evidence: 'observed', dates: { retrieved: todayIso() } })
+        makeClaim({ text, source, sourceUrl, product: 'nifc-fires', evidence: 'observed', dates: { retrieved: todayIso() } })
       ]
     };
   } catch (err) {
@@ -925,7 +928,7 @@ export async function fetchNwsAlertClaims(
         : 'NWS reports no active extreme-heat alert at the selected point.';
     // Whether an NWS alert is in effect at the point is a directly observed
     // fact (the alert names quoted are verbatim upstream product names).
-    const alertShared = { source, sourceUrl, evidence: 'observed', dates: { retrieved: todayIso() } } as const;
+    const alertShared = { source, sourceUrl, product: 'nws-alerts', evidence: 'observed', dates: { retrieved: todayIso() } } as const;
     const claims: SourcedClaim[] = [];
     if (fire.length > 0) {
       claims.push(
@@ -1161,6 +1164,7 @@ export async function fetchCpcOutlookClaims(
             text: `CPC ${label} outlook: ${parts.join(', ')}.${interp ? ' ' + interp : ''}${validity}`,
             source,
             sourceUrl,
+            product: 'cpcExtended',
             evidence: 'outlook',
             dates:
               issued === null
@@ -1322,6 +1326,7 @@ export async function fetchCpcSeasonalTempClaims(
           text,
           source,
           sourceUrl,
+          product: 'cpcSeasonalTemp',
           evidence: 'outlook',
           dates:
             issued === null
@@ -1511,6 +1516,7 @@ function spcCategoricalClaim(
       text: `${product}: no Elevated, Critical, or Extremely Critical area is drawn over this point for this day.`,
       source,
       sourceUrl: SPC_ABOUT_URL,
+      product: 'spc-fire-weather',
       evidence: 'outlook',
       dates: { retrieved: todayIso() }
     });
@@ -1530,6 +1536,7 @@ function spcCategoricalClaim(
     text: `${product}: ${categoryWord} risk from wind and relative humidity at this point${spcValidityClause(validMs, expireMs)}`,
     source,
     sourceUrl: SPC_ABOUT_URL,
+    product: 'spc-fire-weather',
     evidence: 'outlook',
     dates:
       validMs !== null
@@ -1629,6 +1636,7 @@ export async function fetchSpcFireOutlookClaims(
           text: `${product}: ${pct}% probability of critical fire weather and/or lightning-based ignition within 12 miles of this point${spcValidityClause(validMs, expireMs)}`,
           source,
           sourceUrl: SPC_PROBABILISTIC_INFO_URL,
+          product: 'spc-fire-weather',
           evidence: 'outlook',
           dates,
           uncertainty: {
@@ -1643,6 +1651,7 @@ export async function fetchSpcFireOutlookClaims(
           text: `${product}: this point returns "Probability Too Low", a service value with no public SPC definition found; treated here as below the 10% threshold SPC does map, not as no-data.`,
           source,
           sourceUrl: SPC_PROBABILISTIC_INFO_URL,
+          product: 'spc-fire-weather',
           evidence: 'outlook',
           dates,
           uncertainty: {
@@ -1669,6 +1678,7 @@ export async function fetchSpcFireOutlookClaims(
         text: `SPC Day 3-8 Fire Weather Outlook: no area is drawn over this point for ${joinDayList(noFeatureDays)}.`,
         source,
         sourceUrl: SPC_ABOUT_URL,
+        product: 'spc-fire-weather',
         evidence: 'outlook',
         dates: { retrieved: todayIso() }
       })
@@ -1757,6 +1767,7 @@ export async function fetchNwsForecastClaims(
           text,
           source,
           sourceUrl,
+          product: 'nwsForecast',
           evidence: 'outlook',
           dates: { retrieved: todayIso() },
           // vocab-allow: names the NWS point forecast, upstream product

@@ -32,7 +32,30 @@ import {
   type MatrixLaneResult
 } from '../src/impact/matrix';
 import type { HazardCell, Horizon, HorizonKey } from '../src/impact/types';
+import type { ProductKey } from '../src/config/products';
 import { gotoApp, stubSpcFireOutlook } from './helpers';
+
+/**
+ * The product each lane's generic test claim names (DDM-P14-T05 microtask 2):
+ * these fixtures have no real source, so each lane maps to the one catalog
+ * product `src/config/products.ts` records for that lane. `enso` reads six
+ * distinct products from one lane; `ensoIndex` (the current index-state read)
+ * stands in as representative here, matching the lane's own primary claim.
+ */
+const LANE_PRODUCT: Readonly<Record<MatrixLaneKey, ProductKey>> = {
+  usdm: 'usdm',
+  dsci: 'dsci',
+  nifc: 'nifc-fires',
+  nwsAlerts: 'nws-alerts',
+  heatRisk: 'heatrisk',
+  nwsForecast: 'nwsForecast',
+  cpcExtended: 'cpcExtended',
+  enso: 'ensoIndex',
+  waterSupply: 'waterSupply',
+  cpcSeasonal: 'cpcSeasonal',
+  cpcSeasonalTemp: 'cpcSeasonalTemp',
+  spcFireOutlook: 'spc-fire-weather'
+};
 
 function emptyHorizon(key: HorizonKey): Horizon {
   return {
@@ -61,6 +84,7 @@ function lanePayload(lane: MatrixLaneKey): MatrixLaneResult {
       makeClaim({
         text: `A sourced statement from ${lane}.`,
         source: lane,
+        product: LANE_PRODUCT[lane],
         evidence: 'analyzed',
         dates: { valid: '2026-09-03' }
       })
@@ -184,6 +208,7 @@ test('one query answering two hazards files each statement in its own row', () =
     // vocab-allow: reports the upstream NWS alert product in effect
     text: 'A fire-weather alert is in effect here.',
     source: 'nwsAlerts',
+    product: 'nws-alerts',
     evidence: 'observed',
     dates: { retrieved: '2026-09-03' },
     hazards: ['fire']
@@ -192,6 +217,7 @@ test('one query answering two hazards files each statement in its own row', () =
     // vocab-allow: reports the absence of upstream NWS alert products
     text: 'No active red-flag fire-weather or extreme-heat alerts here.',
     source: 'nwsAlerts',
+    product: 'nws-alerts',
     evidence: 'observed',
     dates: { retrieved: '2026-09-03' }
   });
@@ -210,6 +236,7 @@ test('one snapshot answering two horizons files each claim under its own clock',
   const stateNow = makeClaim({
     text: 'The observed index state.',
     source: 'enso',
+    product: 'ensoIndex',
     evidence: 'derived',
     dates: { retrieved: '2026-09-03' },
     horizon: 'current'
@@ -217,6 +244,7 @@ test('one snapshot answering two horizons files each claim under its own clock',
   const seasonAhead = makeClaim({
     text: 'The seasonal tendency.',
     source: 'enso',
+    product: 'ensoTendency',
     evidence: 'derived',
     dates: { retrieved: '2026-09-03' },
     horizon: 'longRange'

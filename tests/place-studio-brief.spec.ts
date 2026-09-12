@@ -269,12 +269,17 @@ test.describe('PS-BRIEF pure narrative selector', () => {
       makeClaim({
         text: 'Existing selected-place line.',
         source: 'Existing source',
+        // Generic stand-in for an already-settled current-horizon claim, not
+        // one real product; `usdm` is the current-horizon lane's own product
+        // (DDM-P14-T05 microtask 2).
+        product: 'usdm',
         evidence: 'observed',
         dates: { retrieved: '2026-07-21' }
       }),
       makeClaim({
         text: 'Later current claim.',
         source: 'Existing source',
+        product: 'usdm',
         evidence: 'observed',
         dates: { retrieved: '2026-07-21' }
       })

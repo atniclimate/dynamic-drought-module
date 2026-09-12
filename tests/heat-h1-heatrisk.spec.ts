@@ -774,6 +774,7 @@ test.describe('review regressions for HeatRisk honesty and lifecycle', () => {
         makeClaim({
           text: 'HeatRisk (Experimental) value 2, Moderate, at the selected point.',
           source: 'National Weather Service HeatRisk (Experimental)',
+          product: 'heatrisk',
           evidence: 'classified',
           dates: { valid: '2026-08-03' }
         })

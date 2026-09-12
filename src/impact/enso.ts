@@ -1070,6 +1070,7 @@ export async function fetchEnsoClaims(
             text: AUTHORITY_TEXT,
             source: 'NOAA CPC ENSO Diagnostic Discussion',
             sourceUrl: CPC_STATUS_URL,
+            product: 'ensoAuthority',
             evidence: 'analyzed',
             dates: { retrieved: CITATIONS_VERIFIED },
             // Where CPC states the status that holds now.
@@ -1088,6 +1089,7 @@ export async function fetchEnsoClaims(
             text: tendencyRead.text,
             source: tendencyRead.source,
             sourceUrl: tendencyRead.sourceUrl,
+            product: 'ensoTendency',
             evidence: 'derived',
             dates: { retrieved: CITATIONS_VERIFIED },
             lineage: tendencyRead.lineage,
@@ -1108,6 +1110,7 @@ export async function fetchEnsoClaims(
             text: nino34Text(snap.nino34, snap.retrieved),
             source: 'NOAA CPC analyzed monthly Nino 3.4 sea surface temperature anomaly',
             sourceUrl: snap.nino34.sourceUrl,
+            product: 'ensoNino34Monthly',
             evidence: 'analyzed',
             dates: claimDates(snap.retrieved, snap.nino34.published),
             uncertainty: {
@@ -1132,6 +1135,7 @@ export async function fetchEnsoClaims(
               text: nino34WeeklyText(snap.nino34Weekly),
               source: 'NOAA CPC weekly Nino 3.4 sea surface temperature anomaly',
               sourceUrl: snap.nino34Weekly.sourceUrl,
+              product: 'ensoNino34Weekly',
               evidence: 'analyzed',
               dates: claimDates(snap.retrieved, snap.nino34Weekly.published),
               lineage: [
@@ -1166,6 +1170,7 @@ export async function fetchEnsoClaims(
               `the categories are defined against the ${probabilities.baseline}.`,
             source: 'NOAA CPC official probabilistic ENSO outlook (CPC/IRI consensus)',
             sourceUrl: probabilities.sourceUrl,
+            product: 'ensoOutlook',
             evidence: 'outlook',
             dates: {
               retrieved: snap.retrieved,
@@ -1196,6 +1201,7 @@ export async function fetchEnsoClaims(
           // window this sentence rests on. The index file itself is named in
           // the lineage below (report 13, ENSOSCI-09).
           sourceUrl: RONI_PRODUCT_URL,
+          product: 'ensoIndex',
           evidence: 'derived',
           dates: claimDates(snap.retrieved, snap.roni.published),
           lineage,

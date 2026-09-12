@@ -255,6 +255,7 @@ export async function fetchWaterSupplyClaims(
   const wsShared = {
     source: 'NWRFC Water Supply Forecast', // vocab-allow: names the NWRFC Water Supply Forecast and its forecast points, upstream product
     sourceUrl: stationUrl,
+    product: 'waterSupply' as const,
     dates: { issued: row.fcstDate, retrieved: todayIso() },
     // vocab-allow: names the NWRFC Water Supply Forecast and its forecast points, upstream product
     support: { reporting: `the ${location} basin forecast point (${point})` },
