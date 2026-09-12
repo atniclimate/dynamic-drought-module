@@ -28,7 +28,7 @@
  */
 
 import { URLS } from '../config/urls';
-import { fetchBufferedWithBudget } from '../util/fetch';
+import { fetchSharedJsonWithBudget, ENSO_INDICES_SHARED_KEY } from '../util/fetch';
 import { isObject } from '../util/guards';
 import { oniLineSvg, ensoPlumeSvg, type OniPoint, type EnsoPlumePoint } from '../ui/charts';
 import { makeClaim } from './evidence';
@@ -948,14 +948,18 @@ function plumeHeadline(probabilities: EnsoProbabilities): string {
  * malformed, so the observed seasonal indices still render.
  */
 async function loadEnsoSnapshot(signal: AbortSignal): Promise<EnsoSnapshot> {
-  const resp = await fetchBufferedWithBudget(
+  // Shared, page-lifetime transport (DDM-P14-T06): the ENSO minimap label
+  // (`readEnsoPhaseLabel`) and the briefing claims (`fetchEnsoClaims`) below
+  // both call this loader independently; this collapses their two fetches
+  // into one. The blocks pulled off `json` below are read, not written, so
+  // sharing the parsed value is safe.
+  const json = await fetchSharedJsonWithBudget(
+    ENSO_INDICES_SHARED_KEY,
     URLS.ensoIndicesLocal,
     { headers: { Accept: 'application/json' } },
     signal,
     6000
   );
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  const json: unknown = await resp.json();
   if (
     !isObject(json) ||
     !isIsoDay(json.retrieved) ||

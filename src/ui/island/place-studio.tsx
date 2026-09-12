@@ -61,7 +61,7 @@ import {
   loadWatershedCandidates,
   loadWatershedSelectionGeometry
 } from '../../state/watershed-geometry';
-import { fetchJsonWithBudget } from '../../util/fetch';
+import { fetchJsonWithBudget, fetchSharedJsonWithBudget, US_STATES_SHARED_KEY } from '../../util/fetch';
 import { foldSearchText } from '../../util/search-fold';
 import { openImpactPanel } from '../impact-panel';
 import { applyStudioInertScope } from './studio-inert';
@@ -204,6 +204,25 @@ async function fetchJson(
   );
 }
 
+/**
+ * The bundled us-states.geojson read, shared page-lifetime (DDM-P14-T06)
+ * across this studio's two readers (a single-state selection, a bbox
+ * overlap-candidate scan) and every other reader of the same file (the
+ * states layer's own activation, the click-door fallback, the deep link, the
+ * place catalog's state list). Kept separate from `fetchJson` above, which
+ * also serves this studio's per-query ArcGIS ecoregion and watershed reads,
+ * none of which share a transport key.
+ */
+async function fetchSharedUsStates(signal: AbortSignal): Promise<unknown> {
+  return fetchSharedJsonWithBudget(
+    US_STATES_SHARED_KEY,
+    URLS.usStatesLocal,
+    null,
+    signal,
+    PLACE_DATA_TIMEOUT_MS
+  );
+}
+
 function assertFeatureCollection(raw: unknown): FeatureCollection {
   if (raw && typeof raw === 'object' && 'error' in raw) {
     throw new Error('ArcGIS returned an error response.');
@@ -313,7 +332,7 @@ async function resolveStateSelection(
   signal: AbortSignal
 ): Promise<ResolvedPlaceSelection | null> {
   const collection = assertFeatureCollection(
-    await fetchJson(URLS.usStatesLocal, signal)
+    await fetchSharedUsStates(signal)
   );
   abortIfNeeded(signal);
   const feature = collection.features.find(
@@ -474,7 +493,7 @@ async function loadStateCandidates(
   signal: AbortSignal
 ): Promise<FeatureCollection<ArealGeometry, PlaceOverlapProperties>> {
   const collection = assertFeatureCollection(
-    await fetchJson(URLS.usStatesLocal, signal)
+    await fetchSharedUsStates(signal)
   );
   abortIfNeeded(signal);
   const features: Array<Feature<ArealGeometry, PlaceOverlapProperties>> = [];

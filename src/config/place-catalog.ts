@@ -2,7 +2,7 @@ import { URLS } from './urls';
 import { TRUSTED_PROVENANCE, gatedDisplayName, loadTribalRoster } from '../state/tribal-roster';
 import type { TribalRosterArea } from '../state/tribal-roster';
 import type { TypedPlaceKind, TypedPlaceRef } from '../state/typed-place';
-import { fetchJsonWithBudget } from '../util/fetch';
+import { fetchJsonWithBudget, fetchSharedJsonWithBudget, US_STATES_SHARED_KEY } from '../util/fetch';
 
 export type PlaceTypeAvailability =
   | 'AVAILABLE'
@@ -407,7 +407,18 @@ export function buildTribeCatalogEntries(
 }
 
 async function loadStateEntries(signal: AbortSignal): Promise<readonly PlaceCatalogEntry[]> {
-  const raw = (await fetchJson(URLS.usStatesLocal, signal)) as {
+  // Shared, page-lifetime transport (DDM-P14-T06): joins whatever fetch the
+  // states layer, the deep link, the click-door fallback, or another Place
+  // studio reader already made for the same bundled file, rather than
+  // issuing its own. Only read below (`for...of` over `raw.features ?? []`,
+  // never sorted or written to), so sharing the reference is safe.
+  const raw = (await fetchSharedJsonWithBudget(
+    US_STATES_SHARED_KEY,
+    URLS.usStatesLocal,
+    null,
+    signal,
+    CATALOG_TIMEOUT_MS
+  )) as {
     readonly features?: readonly {
       readonly geometry?: unknown;
       readonly properties?: Readonly<Record<string, unknown>>;
