@@ -98,6 +98,78 @@ test.describe('URL as state', () => {
     await expect(layerCheckbox(page, 'telemetry')).not.toBeChecked();
   });
 
+  test('an unknown ?layers= key boots to a working shell with nothing active for it', async ({
+    page
+  }) => {
+    // DDM-P1-T05: parseUrlParams deliberately passes an unknown layer key
+    // through unfiltered (src/state/url.ts:253-258) and leaves rejection to
+    // the registry. The registry's rejection is `getLayerDef` returning
+    // `null` (src/config/layers.ts:389-391), which every caller (the boot
+    // seed loop at src/ui/sidebar.ts:1706-1708, and applyLayerSet at
+    // src/state/layer-controller.ts:502-509) treats as a silent no-op: the
+    // key never enters the checkbox bridge, so it is checked nowhere.
+    const pageErrors: Error[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error));
+
+    await gotoApp(page, '?layers=bogus-key-does-not-exist');
+
+    // No phantom row: the unknown key never gets a checkbox or a status
+    // pill in the DOM.
+    await expect(
+      page.locator('input[data-layer-key="bogus-key-does-not-exist"]')
+    ).toHaveCount(0);
+    await expect(
+      page.locator('[data-layer-status="bogus-key-does-not-exist"]')
+    ).toHaveCount(0);
+
+    // An explicit `?layers=` list overrides the default-on set (the same
+    // rule the deep-link test below relies on), and the named key matches
+    // no real layer, so every normally-default-on layer stays off too.
+    for (const key of DEFAULT_ON) {
+      await expect(layerCheckbox(page, key)).not.toBeChecked();
+    }
+
+    // The canonical post-boot rewrite drops the unknown key rather than
+    // carrying it forward: unknown keys never enter the checkbox bridge
+    // that `syncUrl` serializes from (src/ui/sidebar.ts:614-637).
+    await expect
+      .poll(async () => (await urlLayers(page)).has('bogus-key-does-not-exist'))
+      .toBe(false);
+    expect(await urlLayers(page)).toEqual(new Set());
+
+    expect(pageErrors).toEqual([]);
+  });
+
+  test('a mixed layers list activates the real key and ignores the bogus one', async ({
+    page
+  }) => {
+    const pageErrors: Error[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error));
+
+    // Places (City & Town Labels) is the same cheap, same-origin, bundled
+    // reference layer the round-trip test below drives; it is a
+    // `role: 'reference'` key, so it never collides with surface
+    // exclusivity handling in `resolveExclusiveSurface`.
+    await gotoApp(page, '?layers=places,bogus-key-does-not-exist');
+
+    await expect(layerCheckbox(page, 'places')).toBeChecked();
+    await waitForLayerSettled(page, 'places');
+    await expect(layerPill(page, 'places')).toHaveText('live');
+
+    await expect(
+      page.locator('input[data-layer-key="bogus-key-does-not-exist"]')
+    ).toHaveCount(0);
+    for (const key of DEFAULT_ON) {
+      await expect(layerCheckbox(page, key)).not.toBeChecked();
+    }
+
+    const layers = await urlLayers(page);
+    expect(layers.has('places')).toBe(true);
+    expect(layers.has('bogus-key-does-not-exist')).toBe(false);
+
+    expect(pageErrors).toEqual([]);
+  });
+
   test('toggling a layer round-trips through the URL', async ({ page }) => {
     // Console boot (E1 deliverable 1, 2026-07-16): this test drives a
     // catalog checkbox, and Brief mode now hides the catalog behind the

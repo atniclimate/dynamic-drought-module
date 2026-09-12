@@ -30,6 +30,7 @@ import base from './playwright.config';
 /** The browser-free spec files, alphabetical. */
 export const PURE_SPECS = [
   'tests/capability-matrix.spec.ts',
+  'tests/config-key-authority.spec.ts',
   'tests/display-summary.spec.ts',
   'tests/gl-capability.spec.ts',
   'tests/location-identity.spec.ts',

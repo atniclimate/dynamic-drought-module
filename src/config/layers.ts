@@ -16,6 +16,48 @@ export interface LayerActivation {
 }
 
 /**
+ * The layer-key authority (DDM-P1-T05 microtask 1): every key `LAYER_DEFS`
+ * defines, including the one `DROUGHT_CONDITIONS_DEF` contributes, in the
+ * order `LAYER_DEFS` produces them. This is a VALUE list, not a type
+ * derived from the `LAYER_DEFS` array literal, because `DROUGHT_CONDITIONS_DEF`
+ * is spliced into that array by reference rather than written inline (see
+ * below), so a type derived from the array's own shape could not see its
+ * key. `LayerDef.key` and `LayerDef.coActivateWith` are typed from this
+ * list, so a typo in either place fails `tsc`. `tests/layer-key-authority.test.mjs`
+ * is what keeps this list in step with `LAYER_DEFS`: it asserts the two
+ * hold exactly the same set, so an entry added to one and not the other
+ * fails the test rather than drifting silently.
+ */
+export const LAYER_KEYS = Object.freeze([
+  'hydrography',
+  'ecoregions',
+  'hillshade',
+  'drought',
+  'gridded-index',
+  'usdm',
+  'cdm-drought',
+  'nadm-drought',
+  'aiannh',
+  'tribal',
+  'treaty',
+  'bia-reservations',
+  'states',
+  'places',
+  'power-infrastructure',
+  'nifc-fires',
+  'nws-alerts',
+  'hms-smoke',
+  'heatrisk',
+  'spc-fire-weather',
+  'usfs-whp',
+  'sst-anomaly',
+  'telemetry'
+] as const);
+
+/** The union of every valid layer key, derived from `LAYER_KEYS`. */
+export type LayerKey = (typeof LAYER_KEYS)[number];
+
+/**
  * Layer module contract: every layer file under `src/layers/` exports
  * `activate`, `deactivate`, and (optionally) `bindPopups`; these names are
  * a frozen contract. The registry below pairs each module with the UI metadata
@@ -80,7 +122,7 @@ export interface LayerModule {
  * cluster tables remain eager by design, because first paint reads them.
  */
 export interface LayerDef {
-  readonly key: string;
+  readonly key: LayerKey;
   readonly name: string;
   readonly source: string;
   /** Optional discoverability terms that do not alter the source-honest
@@ -117,7 +159,7 @@ export interface LayerDef {
    * wildfire event pair (Current Mapped Fire Perimeters + Smoke Plumes,
    * D-0.7.0-018).
    */
-  readonly coActivateWith?: readonly string[];
+  readonly coActivateWith?: readonly LayerKey[];
   /**
    * Hidden from every default UI surface (no catalog row, no search result)
    * while OFF; the row appears only when the layer is on (a `?layers=` deep
