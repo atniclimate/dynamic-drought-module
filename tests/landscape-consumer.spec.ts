@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
 import type { Polygon } from 'geojson';
 
+import { placeRefFromBoundary } from '../src/config/entities';
 import { postalCodeFromProperties } from '../src/config/geography';
 import { resolveLandscapeContext } from '../src/impact/landscape-consumer';
 import { loadLandscapeSignature } from '../src/impact/landscape';
@@ -55,7 +56,8 @@ function context(
     properties,
     lngLat: { lng: -122, lat: 46 },
     regionKey: 'washington_state',
-    containing: containingFromProperties(properties)
+    containing: containingFromProperties(properties),
+    place: placeRefFromBoundary(kind, properties)
   };
 }
 

@@ -27,6 +27,7 @@ function context(
     title: 'Test selection',
     properties: null,
     lngLat: LNG_LAT,
+    place: null,
     ...overrides
   };
 }

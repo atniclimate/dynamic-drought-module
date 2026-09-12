@@ -92,6 +92,31 @@ export function emphasizePlaces(
   }
   for (const target of targets) applyState(map, target, true);
   current = [...targets];
+  stampEmphasis();
+}
+
+/**
+ * Production-observable truth stamp (DDM-P2-T09; the fire3d precedent in
+ * src/map/fire3d.ts): `data-ddm-emphasis` on the document root lists the
+ * feature identities currently lit, `source:id` (or `source/sourceLayer:id`
+ * for a vector source), space-joined and sorted, empty when nothing is lit.
+ * Written from `current` after the feature-state calls, so it says what the
+ * map was told, never intent. The dev-only `window.__ddmMap` handle is
+ * dead-code-eliminated from dist/, so this is how the verification suite
+ * proves the Place studio and a map click emphasize the SAME feature id.
+ * Read-only for the page; no other consumer under src/ reads it.
+ */
+function stampEmphasis(): void {
+  if (typeof document === 'undefined') return;
+  const stamp = current
+    .map((t) =>
+      t.sourceLayer === undefined
+        ? `${t.source}:${String(t.id)}`
+        : `${t.source}/${t.sourceLayer}:${String(t.id)}`
+    )
+    .sort()
+    .join(' ');
+  document.documentElement.dataset.ddmEmphasis = stamp;
 }
 
 /**
@@ -107,6 +132,7 @@ export function getEmphasisTargets(): readonly EmphasisTarget[] {
 export function clearEmphasis(map: maplibregl.Map): void {
   for (const target of current) applyState(map, target, false);
   current = [];
+  stampEmphasis();
 }
 
 /**

@@ -19,6 +19,7 @@
  */
 
 import type { RegionKey } from '../config/regions';
+import type { PlaceRef } from '../config/entities';
 import type { BriefingSourcePolicy } from './source-policy';
 import type { LayerStatus } from '../types/layer';
 import type { StateCode } from './resources';
@@ -468,6 +469,14 @@ export interface BoundarySelectionContext {
   readonly regionKey: RegionKey | null;
   /** What contains the selected place, resolved from the place, never the camera region. */
   readonly containing: ContainingPlaces;
+  /**
+   * The canonical `scheme:code` identity of the selected place (DDM-P2-T09),
+   * filled from the selected feature's OWN properties (`placeRefFromBoundary`,
+   * src/config/entities.ts), never from the camera or the active region. Null
+   * when the feature carries no stable code for its kind ('tribal', 'treaty',
+   * or a property miss); identity only, never a claim, and never URL state.
+   */
+  readonly place: PlaceRef | null;
 }
 
 /**

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
+import { placeRefFromBoundary } from '../src/config/entities';
 import {
   postalCodeFromProperties,
   resolveCanonicalGeography
@@ -64,7 +65,8 @@ function context(
     properties,
     lngLat: { lng: -97.5, lat: 38.5 },
     regionKey,
-    containing: containingFromProperties(properties)
+    containing: containingFromProperties(properties),
+    place: placeRefFromBoundary(kind, properties)
   };
 }
 

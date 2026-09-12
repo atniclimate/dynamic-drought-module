@@ -18,6 +18,7 @@
 import type { GeoJsonProperties, Geometry, Position } from 'geojson';
 
 import { postalCodeFromProperties } from '../config/geography';
+import { placeRefFromBoundary } from '../config/entities';
 import { isStateCode } from './resources';
 import { getCurrentRegion } from '../state/region-store';
 import {
@@ -191,7 +192,8 @@ export function buildBoundaryContext(
     ...(serviceBbox ? { serviceBbox } : {}),
     ...(crossesAntimeridian ? { bboxCrossesAntimeridian: true } : {}),
     regionKey: getCurrentRegion(),
-    containing: containingFromProperties(properties)
+    containing: containingFromProperties(properties),
+    place: placeRefFromBoundary(kind, properties)
   };
 }
 

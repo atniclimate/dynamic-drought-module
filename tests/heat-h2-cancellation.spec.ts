@@ -15,7 +15,8 @@ const CONTEXT: BoundarySelectionContext = {
   regionKey: 'national',
   // Kansas's own STUSPS: the honest containing answer for a state boundary's
   // own postal code (see `containingFromProperties`, src/impact/context.ts).
-  containing: { state: 'KS', basis: 'feature-property' }
+  containing: { state: 'KS', basis: 'feature-property' },
+  place: { scheme: 'state', code: 'KS' }
 };
 
 test.beforeEach(() => {

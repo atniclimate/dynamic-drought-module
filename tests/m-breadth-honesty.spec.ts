@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 import type { RegionKey } from '../src/config/regions';
+import { placeRefFromBoundary } from '../src/config/entities';
 import { postalCodeFromProperties } from '../src/config/geography';
 import { URLS } from '../src/config/urls';
 import {
@@ -37,7 +38,8 @@ function selectionContext(
     properties,
     lngLat: { lng: -98, lat: 38 },
     regionKey,
-    containing: containingFromProperties(properties)
+    containing: containingFromProperties(properties),
+    place: placeRefFromBoundary('bia-reservation', properties)
   };
 }
 

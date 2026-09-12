@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import type { Page, Response } from '@playwright/test';
+import { placeRefFromBoundary } from '../src/config/entities';
 import {
   gotoApp,
   layerCheckbox,
@@ -17,6 +19,64 @@ import {
   syntheticAiannhBody,
   syntheticBiaBody
 } from './tribal-fixtures';
+
+/**
+ * DDM-P2-T09: the recognized URL parameter vocabulary, read from its own
+ * documentation (src/state/url.ts:29-63 for the twelve documented keys,
+ * :349-374 for the one-shot `select`). A canonical place reference is
+ * identity only and is never URL state (src/config/entities.ts), so no key
+ * named here or below should ever be added by a selection.
+ */
+const RECOGNIZED_URL_KEYS: ReadonlySet<string> = new Set([
+  'region', 'layers', 'embed', 'view', 'week', 'dmode', 'sst', 'outlook',
+  'horizon', 'basemap', 'framing', 'cluster', 'ocean', 'studio', 'heatday',
+  'spi', 'select'
+]);
+
+/** Names a `PlaceRef` or a raw coordinate could plausibly take; none is ever a real URL key. */
+const FORBIDDEN_URL_KEYS = ['place', 'lng', 'lat', 'lon', 'x', 'y', 'coords'] as const;
+
+function assertNoNewUrlParam(rawSearch: string): void {
+  const params = new URLSearchParams(rawSearch);
+  for (const key of params.keys()) {
+    expect(RECOGNIZED_URL_KEYS.has(key), `unrecognized URL key: ${key}`).toBe(true);
+  }
+  for (const forbidden of FORBIDDEN_URL_KEYS) {
+    expect(params.has(forbidden), `forbidden URL key present: ${forbidden}`).toBe(false);
+  }
+}
+
+/**
+ * Capture the WA feature's own properties from the bundled
+ * `us-states.geojson` response a door's own fetch retrieves (never a
+ * separate fetch of this test's own making), so the computed reference
+ * reflects exactly what that door read.
+ */
+async function captureWaProperties(
+  page: Page,
+  action: () => Promise<void>
+): Promise<Record<string, unknown> | null> {
+  let captured: Record<string, unknown> | null = null;
+  const listener = async (response: Response): Promise<void> => {
+    if (!response.url().includes('/data/us-states.geojson')) return;
+    try {
+      const body = (await response.json()) as {
+        features?: Array<{ properties?: Record<string, unknown> }>;
+      };
+      const match = body.features?.find((f) => f.properties?.['STUSPS'] === 'WA');
+      if (match?.properties) captured = match.properties;
+    } catch {
+      // A held or aborted response has no body; not this capture's concern.
+    }
+  };
+  page.on('response', listener);
+  try {
+    await action();
+  } finally {
+    page.off('response', listener);
+  }
+  return captured;
+}
 
 /**
  * URL-as-state (a core project invariant): region selection, layer
@@ -274,5 +334,21 @@ test.describe('URL as state', () => {
       .poll(async () => (await urlLayers(page)).has('nadm-drought'), { timeout: 25_000 })
       .toBe(true);
     expect(await search(page)).toContain('embed=true');
+  });
+});
+
+test.describe('DDM-P2-T09: one canonical place reference, no new URL parameter', () => {
+  test('the select=state:WA deep link resolves the state:WA reference and adds no URL parameter', async ({
+    page
+  }) => {
+    const waProperties = await captureWaProperties(page, async () => {
+      await gotoApp(page, '?select=state:WA');
+      await expect(page.locator('#impact-panel-title')).toHaveText('Washington');
+    });
+
+    expect(waProperties).not.toBeNull();
+    expect(placeRefFromBoundary('state', waProperties)).toEqual({ scheme: 'state', code: 'WA' });
+
+    assertNoNewUrlParam(await search(page));
   });
 });
