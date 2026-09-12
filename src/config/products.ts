@@ -356,6 +356,7 @@ export const PRODUCTS: Readonly<Record<ProductKey, ProductDef>> = Object.freeze(
   },
   nwsForecast: {
     key: 'nwsForecast',
+    // vocab-allow: names the NWS point forecast, upstream product; the same allowance src/impact/sources.ts carries at its claim site
     issuer: 'NWS forecast',
     endpointKey: 'nwsApi',
     layerKey: null,
@@ -393,6 +394,7 @@ export const PRODUCTS: Readonly<Record<ProductKey, ProductDef>> = Object.freeze(
   },
   waterSupply: {
     key: 'waterSupply',
+    // vocab-allow: names the NWRFC Water Supply Forecast, upstream product; the same allowance src/impact/water-supply.ts carries at its claim site
     issuer: 'NWRFC Water Supply Forecast',
     endpointKey: 'nwrfcWsReportCsv',
     layerKey: null,
