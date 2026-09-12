@@ -181,6 +181,11 @@ const EAGER_FORBIDDEN = [
     reason: 'The T-M0-3 loader is lazy by contract (the import-graph assertion proves the loader stays out of the eager graph). Absent today; this guards it forward.',
   },
   {
+    name: 'product catalog',
+    pattern: /src\/config\/products\.ts$/,
+    reason: 'DDM-P14-T05 (2026-09-12): LayerDef and SourcedClaim read ProductKey as a type-only import, so this catalog must stay out of the initial static set; a value import would hoist it here.',
+  },
+  {
     name: 'impact briefing cluster panel runtime',
     pattern: /src\/ui\/impact-panel-runtime\.ts$/,
     reason: 'The impact briefing cluster is a first-use cost; its panel runtime must never ride the initial static set.',
