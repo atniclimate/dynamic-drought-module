@@ -475,8 +475,13 @@ export interface BoundarySelectionContext {
    * src/config/entities.ts), never from the camera or the active region. Null
    * when the feature carries no stable code for its kind ('tribal', 'treaty',
    * or a property miss); identity only, never a claim, and never URL state.
+   * Optional since the C3 housekeeping commit (2026-09-12): no reader exists
+   * yet, so the two boot doors (the interaction coordinator's condition door
+   * and the deep link's `select=` door) omit it and keep src/config/entities.ts
+   * out of the entry chunk, while `buildBoundaryContext` still fills it on
+   * the lazy path. DR-099 / DDM-P2-T13 (S31) is the first reader.
    */
-  readonly place: PlaceRef | null;
+  readonly place?: PlaceRef | null;
 }
 
 /**

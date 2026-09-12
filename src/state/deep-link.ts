@@ -26,7 +26,6 @@
 import type * as maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection } from 'geojson';
 import type { BoundarySelectionContext, ContainingPlaces } from '../impact/types';
-import { placeRefFromBoundary } from '../config/entities';
 import { postalCodeFromProperties } from '../config/geography';
 import { isStateCode } from '../config/state-codes';
 
@@ -232,8 +231,7 @@ export async function openStateBriefing(
         lngLat,
         ...(bbox ? { bbox, serviceBbox: bbox } : {}),
         regionKey: getCurrentRegion(),
-        containing,
-        place: placeRefFromBoundary('state', feature.properties ?? null)
+        containing
       };
       openImpactPanelUnavailable(context);
     }

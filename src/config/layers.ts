@@ -23,7 +23,7 @@ export interface LayerActivation {
  * is spliced into that array by reference rather than written inline (see
  * below), so a type derived from the array's own shape could not see its
  * key. `LayerDef.key` and `LayerDef.coActivateWith` are typed from this
- * list, so a typo in either place fails `tsc`. `tests/layer-key-authority.test.mjs`
+ * list, so a typo in either place fails `tsc`. `tests/config-key-authority.spec.ts`
  * is what keeps this list in step with `LAYER_DEFS`: it asserts the two
  * hold exactly the same set, so an entry added to one and not the other
  * fails the test rather than drifting silently.

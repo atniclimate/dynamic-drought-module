@@ -108,8 +108,10 @@
  * nonempty marker; pass cases must be clean. The self-test runs before
  * every real scan; --self-test runs it alone.
  *
- * The two enforced bundle-size lines (45 kB entry / 100 kB eager app)
- * live in check-bundle-size.mjs and are deliberately untouched here.
+ * The two enforced bundle-size lines live in check-bundle-size.mjs and
+ * are deliberately untouched here; since DR-085 amendment_2026_09_12
+ * both follow the same ratified-measurement-plus-ACTIVATION_HEADROOM
+ * rule as this file's rows, stated independently there.
  * Portability: plain node:fs/os/path/zlib; no version-specific APIs.
  * Exit 0 = clean; exit 1 = any finding or self-test failure.
  */

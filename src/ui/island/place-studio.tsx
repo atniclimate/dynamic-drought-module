@@ -980,6 +980,20 @@ function PlaceStudio() {
     const promise = resolvePlaceSelection(selectionEntry, masterAbort.signal);
     selectionPromiseRef.current = { key: selectionKey, value: promise };
 
+    // C3 housekeeping, S30R I6: newest intent wins. The abort flag alone is
+    // checked only when the cleanup has already run; a completion that lands
+    // between a newer durable typed place and this effect's deferred cleanup
+    // needs this predicate too, so it is hoisted once and reused at every
+    // site below that would otherwise apply a stale selection's emphasis.
+    const selectionStillCurrent = (): boolean => {
+      const place = getTypedPlace();
+      return (
+        place !== null &&
+        place.kind === selectionEntry.kind &&
+        place.id === selectionEntry.id
+      );
+    };
+
     // Wave A finding 2: register the return hand-off at resolution START,
     // not completion, so an immediate browser Back (which bypasses
     // handleBack's await) still delivers the promised briefing. The action
@@ -994,20 +1008,14 @@ function PlaceStudio() {
       coverage.briefable.state === 'available'
     ) {
       setPlaceStudioReturnAction(() => {
-        const stillCurrent = (): boolean => {
-          const place = getTypedPlace();
-          return (
-            place !== null &&
-            place.kind === selectionEntry.kind &&
-            place.id === selectionEntry.id
-          );
-        };
         void promise
           .catch(() =>
             resolvePlaceSelection(selectionEntry, new AbortController().signal)
           )
           .then((resolved) => {
-            if (resolved && stillCurrent()) openImpactPanel(resolved.context);
+            if (resolved && selectionStillCurrent()) {
+              openImpactPanel(resolved.context);
+            }
           })
           .catch(() => undefined);
       });
@@ -1021,7 +1029,9 @@ function PlaceStudio() {
           // resolution (the effect above); nothing resolved (no geometry, or
           // a geometry-less Nation), so emphasize now to clear any prior
           // subject's highlight rather than leaving it stale.
-          if (selectionEntry.kind === 'tribe') {
+          // C3 housekeeping, S30R I6: newest intent wins, the abort flag
+          // alone is checked only when the cleanup has already run.
+          if (selectionEntry.kind === 'tribe' && selectionStillCurrent()) {
             emphasizeTypedPlace(selection, selectionEntry);
           }
           setNarrativeStatus('unavailable');
@@ -1037,10 +1047,12 @@ function PlaceStudio() {
         }
 
         resolvedSelectionRef.current = { key: selectionKey, value: resolved };
-        if (selectionEntry.kind === 'tribe') {
+        if (selectionEntry.kind === 'tribe' && selectionStillCurrent()) {
           // The emphasis cache is warm here: resolveTribeSelection seeded it
           // from this SAME response before resolving, so this call reads the
           // cache rather than opening a second AIAN-LAR request.
+          // C3 housekeeping, S30R I6: newest intent wins, the abort flag
+          // alone is checked only when the cleanup has already run.
           emphasizeTypedPlace(selection, selectionEntry);
         }
         if (

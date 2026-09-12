@@ -34,7 +34,7 @@ import type { LayerKey } from './layers';
  * src/config/layers.ts and for the same reason: a type derived from the
  * array literals' own shape could not catch a typo in a preset's `key`
  * field against itself. `ViewPreset.key` is typed from this list, so a
- * typo there fails `tsc`. `tests/layer-key-authority.test.mjs` keeps this
+ * typo there fails `tsc`. `tests/config-key-authority.spec.ts` keeps this
  * list in step with the two preset arrays at runtime.
  */
 export const PRESET_KEYS = Object.freeze([

@@ -31,7 +31,6 @@ import * as maplibregl from 'maplibre-gl';
 
 import { interactionRank } from '../config/interaction-ranks';
 import type { InteractionTargetKind } from '../config/interaction-ranks';
-import { placeRefFromBoundary } from '../config/entities';
 import type { BoundaryKind, BoundarySelectionContext, ContainingPlaces } from '../impact/types';
 import { isStateCode } from '../config/state-codes';
 import { getEmphasisTargets, emphasizePlaces } from '../state/place-emphasis';
@@ -628,8 +627,7 @@ async function attachConditionDoor(
     properties: null,
     lngLat: { lng: click.lngLat.lng, lat: click.lngLat.lat },
     regionKey: getCurrentRegion(),
-    containing,
-    place: placeRefFromBoundary(subject.kind, null)
+    containing
   };
 
   const wrapper = document.createElement('div');
