@@ -551,6 +551,158 @@ test('the Days 3-8 probabilistic reads: 0.40, 0.70 and the live "Probability Too
   );
 });
 
+// ---------------------------------------------------------------------------
+// DDM-P2-T07: the active hazard mode is emphasized in every horizon
+// section (DR-092), never reordered, and never a severity ranking between
+// the four hazards. There is no contiguous "hazard row" in the DOM: each
+// of the three `.impact-horizon` sections builds its own four
+// `.impact-hazard` cells, so the active hazard is marked once inside EACH
+// section (three cells total), not once overall.
+// ---------------------------------------------------------------------------
+
+/** The shell's four hazard cluster buttons live in the always-mounted
+ * Brief-mode VIEW block (app.css's S4 shell section), so they are present
+ * and clickable while the impact briefing panel is open on top of the map;
+ * clicking one is a live in-page mode switch, no navigation. Every case
+ * below drives the switch this way, never via a boot-time `cluster=`
+ * param: a `cluster=` URL param races the panel's own `select=` deep-link
+ * paint against `initClusterService`'s URL seed (cluster-service.ts's own
+ * comment on why `selectedHazard` is re-seeded there), so the FIRST paint
+ * after a `cluster=` boot is not a reliable place to assert from. A live
+ * click has no such race: `requestCluster` commits and publishes in one
+ * synchronous transaction.) */
+function clusterBtn(page: Page, cluster: 'drought' | 'wildfire' | 'heat' | 'enso'): ReturnType<Page['locator']> {
+  return page.locator(`.shell-cluster-btn[data-cluster="${cluster}"]`);
+}
+
+/** Every `.impact-hazard` cell across all three horizons, in document order. */
+function allHazardRows(page: Page): ReturnType<Page['locator']> {
+  return page.locator('.impact-horizons .impact-hazard');
+}
+
+/** The `data-hazard` of every cell currently carrying `aria-current`, one
+ * per horizon section when the emphasis is correctly applied. */
+async function activeHazardValues(page: Page): Promise<string[]> {
+  return page
+    .locator('.impact-horizons .impact-hazard[aria-current="true"]')
+    .evaluateAll((rows) => rows.map((row) => row.getAttribute('data-hazard')));
+}
+
+async function orderedHazardValues(page: Page): Promise<(string | null)[]> {
+  return allHazardRows(page).evaluateAll((rows) => rows.map((row) => row.getAttribute('data-hazard')));
+}
+
+test('the default-boot Drought mode emphasizes the drought cell in all three horizons, and no other hazard', async ({
+  page
+}) => {
+  await stubBaselineBriefingHosts(page);
+  await stubSpcFireOutlook(page, {});
+  // No `cluster=` param: the app's default committed cluster is Drought
+  // (cluster-service.ts's own `!== 'drought'` baseline check), so this
+  // case needs no live click and is the fresh-open baseline the next test
+  // switches away from.
+  await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+
+  await expect(page.locator('.impact-hazard-active')).toHaveCount(3);
+  for (const horizon of HORIZON_KEYS) {
+    await expect(
+      page.locator(`.impact-hazard[data-horizon="${horizon}"][data-hazard="drought"]`)
+    ).toHaveClass(/impact-hazard-active/);
+    await expect(
+      page.locator(`.impact-hazard[data-horizon="${horizon}"][data-hazard="drought"]`)
+    ).toHaveAttribute('aria-current', 'true');
+  }
+  const active = await activeHazardValues(page);
+  expect(active).toHaveLength(3);
+  expect(new Set(active)).toEqual(new Set(['drought']));
+});
+
+test('a live switch to Wildfire mode emphasizes the fire cell in all three horizons (the crosswalk, not a naive key match)', async ({
+  page
+}) => {
+  await stubBaselineBriefingHosts(page);
+  await stubSpcFireOutlook(page, {});
+  await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+  expect(new Set(await activeHazardValues(page))).toEqual(new Set(['drought']));
+  const orderBefore = await orderedHazardValues(page);
+
+  // A naive implementation matching the shell's cluster key ('wildfire')
+  // directly against `data-hazard` would emphasize NOTHING once this
+  // fires, since the briefing's cells are named 'fire': this is the case
+  // that proves the crosswalk (SHELL_HAZARD_KEY) is actually read.
+  await clusterBtn(page, 'wildfire').click();
+
+  await expect(page.locator('.impact-hazard-active')).toHaveCount(3);
+  for (const horizon of HORIZON_KEYS) {
+    await expect(
+      page.locator(`.impact-hazard[data-horizon="${horizon}"][data-hazard="fire"]`)
+    ).toHaveClass(/impact-hazard-active/);
+    await expect(
+      page.locator(`.impact-hazard[data-horizon="${horizon}"][data-hazard="fire"]`)
+    ).toHaveAttribute('aria-current', 'true');
+    // No other hazard in this same horizon carries the emphasis.
+    for (const hazard of HAZARD_KEYS) {
+      if (hazard === 'fire') continue;
+      await expect(
+        page.locator(`.impact-hazard[data-horizon="${horizon}"][data-hazard="${hazard}"]`)
+      ).not.toHaveClass(/impact-hazard-active/);
+    }
+  }
+  const active = await activeHazardValues(page);
+  expect(active).toHaveLength(3);
+  expect(new Set(active)).toEqual(new Set(['fire']));
+  // The switch changed exactly the emphasis: row order is untouched
+  // (DR-092: never reordered).
+  expect(await orderedHazardValues(page)).toEqual(orderBefore);
+});
+
+test('the twelve cells keep HAZARD_KEYS order in every horizon regardless of which mode is active (DR-092: never reordered)', async ({
+  page
+}) => {
+  await stubBaselineBriefingHosts(page);
+  await stubSpcFireOutlook(page, {});
+  await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+  await clusterBtn(page, 'wildfire').click();
+  // SETUP GUARD, not this test's subject: without it a silently failed click
+  // would leave the page in Drought mode and the order check below would still
+  // pass, proving nothing about "while a mode is active". If this line is what
+  // fails, the defect is in the emphasis, not in row order; the emphasis itself
+  // is owned by the two cases above.
+  expect(
+    new Set(await activeHazardValues(page)),
+    'setup: the switch to Wildfire must land before row order is judged'
+  ).toEqual(new Set(['fire']));
+
+  const perHorizon = page.locator('.impact-horizons .impact-horizon');
+  await expect(perHorizon).toHaveCount(3);
+  for (let i = 0; i < 3; i++) {
+    const rows = perHorizon.nth(i).locator('.impact-hazard');
+    const hazards = await rows.evaluateAll((els) => els.map((el) => el.getAttribute('data-hazard')));
+    expect(hazards).toEqual([...HAZARD_KEYS]);
+  }
+});
+
+test('the emphasis moves on a live mode switch, not only on a fresh open, and stays three cells (one per horizon) throughout', async ({
+  page
+}) => {
+  await stubBaselineBriefingHosts(page);
+  await stubSpcFireOutlook(page, {});
+  await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+  expect(new Set(await activeHazardValues(page))).toEqual(new Set(['drought']));
+
+  await clusterBtn(page, 'wildfire').click();
+  await expect(page.locator('.impact-hazard-active')).toHaveCount(3);
+  const afterWildfire = await activeHazardValues(page);
+  expect(afterWildfire).toHaveLength(3);
+  expect(new Set(afterWildfire)).toEqual(new Set(['fire']));
+
+  await clusterBtn(page, 'drought').click();
+  await expect(page.locator('.impact-hazard-active')).toHaveCount(3);
+  const afterDrought = await activeHazardValues(page);
+  expect(afterDrought).toHaveLength(3);
+  expect(new Set(afterDrought)).toEqual(new Set(['drought']));
+});
+
 test('the long-range Fire cell renders the unavailable form naming the NIFC product, and neither fire cell names WHP', async ({
   page
 }) => {

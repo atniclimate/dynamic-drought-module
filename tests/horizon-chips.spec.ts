@@ -43,11 +43,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { CLAIM_REGISTER_TAG, makeClaim } from '../src/impact/evidence';
-import { HORIZON_CHROME, SHELL_HORIZON_KEY } from '../src/impact/horizon-chrome';
-import { CELL_ABSENCE } from '../src/impact/matrix';
+import { HORIZON_CHROME, SHELL_HAZARD_KEY, SHELL_HORIZON_KEY } from '../src/impact/horizon-chrome';
+import { CELL_ABSENCE, HAZARD_KEYS } from '../src/impact/matrix';
 import type { EvidenceClass } from '../src/impact/types';
 import { renderClaim } from '../src/ui/claim-render';
-import { TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
+import { HAZARD_CLUSTER_KEYS, TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
 import { gotoApp, search, stubHeatRiskCatalog, urlLayers } from './helpers';
 
 const SNAPSHOT_PATH = join(process.cwd(), 'public', 'data', 'enso-indices.json');
@@ -151,6 +151,55 @@ test.describe('DDM-P8-T03: the shell horizon chips read HORIZON_CHROME', () => {
       return /\bWeeks ahead\b|\bSeason ahead\b/.test(clone.textContent ?? '');
     });
     expect(stray, 'the retired chip wording still appears somewhere in the DOM').toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DDM-P2-T07: SHELL_HAZARD_KEY is a total bijection, cluster to briefing row
+// ---------------------------------------------------------------------------
+
+test.describe('DDM-P2-T07: SHELL_HAZARD_KEY maps every cluster to exactly one briefing row', () => {
+  test('every cluster key has a row, and that row is a real HazardKey', () => {
+    for (const cluster of HAZARD_CLUSTER_KEYS) {
+      const row = SHELL_HAZARD_KEY[cluster];
+      expect(row, `cluster "${cluster}" has no row in SHELL_HAZARD_KEY; add one`).not.toBeUndefined();
+      expect(
+        HAZARD_KEYS.includes(row),
+        `SHELL_HAZARD_KEY["${cluster}"] is "${row}", not a member of HAZARD_KEYS`
+      ).toBe(true);
+    }
+  });
+
+  test('every briefing row is the image of exactly one cluster: onto, and no two clusters collide', () => {
+    const rows = HAZARD_CLUSTER_KEYS.map((cluster) => SHELL_HAZARD_KEY[cluster]);
+    for (const hazard of HAZARD_KEYS) {
+      const matches = rows.filter((row) => row === hazard);
+      expect(
+        matches.length,
+        `briefing row "${hazard}" has ${matches.length} clusters mapped to it; it must have exactly one`
+      ).toBe(1);
+    }
+  });
+
+  test('HAZARD_CLUSTER_KEYS and HAZARD_KEYS are the same length', () => {
+    expect(
+      HAZARD_CLUSTER_KEYS.length,
+      'HAZARD_CLUSTER_KEYS and HAZARD_KEYS must be the same length for SHELL_HAZARD_KEY to be a bijection; a cluster has no row'
+    ).toBe(HAZARD_KEYS.length);
+    expect(
+      HAZARD_KEYS.length,
+      'HAZARD_CLUSTER_KEYS and HAZARD_KEYS must be the same length for SHELL_HAZARD_KEY to be a bijection; a row has no cluster'
+    ).toBe(HAZARD_CLUSTER_KEYS.length);
+  });
+
+  test('SHELL_HAZARD_KEY has no keys beyond HAZARD_CLUSTER_KEYS', () => {
+    const declaredKeys = Object.keys(SHELL_HAZARD_KEY);
+    for (const key of declaredKeys) {
+      expect(
+        (HAZARD_CLUSTER_KEYS as readonly string[]).includes(key),
+        `SHELL_HAZARD_KEY has an extra key "${key}" that is not in HAZARD_CLUSTER_KEYS; remove it`
+      ).toBe(true);
+    }
   });
 });
 
