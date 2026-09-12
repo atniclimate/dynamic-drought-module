@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
 import type { Polygon } from 'geojson';
 
+import { postalCodeFromProperties } from '../src/config/geography';
 import { resolveLandscapeContext } from '../src/impact/landscape-consumer';
 import { loadLandscapeSignature } from '../src/impact/landscape';
 import {
@@ -19,6 +20,7 @@ import {
   emptyCollectionBody,
   routeGeojson
 } from './tribal-fixtures';
+import { isStateCode } from '../src/impact/resources';
 
 const ARTIFACT = JSON.parse(
   readFileSync(
@@ -32,6 +34,17 @@ const ARTIFACT = JSON.parse(
   )
 ) as unknown;
 
+/** Mirrors `containingFromProperties` (src/impact/context.ts): derived from
+ * the literal's own properties only, never from `regionKey`. */
+function containingFromProperties(
+  properties: BoundarySelectionContext['properties']
+): BoundarySelectionContext['containing'] {
+  const code = postalCodeFromProperties(properties);
+  return code !== null && isStateCode(code)
+    ? { state: code, basis: 'feature-property' }
+    : { state: null, basis: 'none' };
+}
+
 function context(
   kind: BoundarySelectionContext['kind'],
   properties: BoundarySelectionContext['properties']
@@ -41,7 +54,8 @@ function context(
     title: 'Selected place',
     properties,
     lngLat: { lng: -122, lat: 46 },
-    regionKey: 'washington_state'
+    regionKey: 'washington_state',
+    containing: containingFromProperties(properties)
   };
 }
 

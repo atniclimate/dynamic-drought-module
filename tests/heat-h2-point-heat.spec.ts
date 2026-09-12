@@ -1,7 +1,10 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
-import { resolveCanonicalGeography } from '../src/config/geography';
+import {
+  postalCodeFromProperties,
+  resolveCanonicalGeography
+} from '../src/config/geography';
 import { URLS } from '../src/config/urls';
 import { ExpiringLruCache } from '../src/util/bounded-cache';
 import { createBriefingSkeleton } from '../src/impact/briefing';
@@ -12,6 +15,7 @@ import {
   createNwsRequestSession
 } from '../src/impact/nws-point';
 import { fetchPointHeat, parseNwsValidTime } from '../src/impact/point-heat';
+import { isStateCode } from '../src/impact/resources';
 import {
   formatDistanceKm,
   formatPointHeatInterval,
@@ -32,17 +36,35 @@ import {
   stubHeatRiskCatalog as stubHeatRiskCatalogShared
 } from './helpers';
 
+/**
+ * What the literal's own properties say about its containing state, derived
+ * exactly the way `buildBoundaryContext`'s `containingFromProperties` derives
+ * it in production (src/impact/context.ts): from the properties bag alone,
+ * never from `regionKey`. A code that is not a recognized `StateCode` (for
+ * example a territory postal code like `AS`) honestly resolves to `none`.
+ */
+function containingFromProperties(
+  properties: BoundarySelectionContext['properties']
+): BoundarySelectionContext['containing'] {
+  const code = postalCodeFromProperties(properties);
+  return code !== null && isStateCode(code)
+    ? { state: code, basis: 'feature-property' }
+    : { state: null, basis: 'none' };
+}
+
 function context(
   code: string | null,
   regionKey: BoundarySelectionContext['regionKey'] = 'national',
   kind: BoundarySelectionContext['kind'] = 'state'
 ): BoundarySelectionContext {
+  const properties = code ? { STUSPS: code } : null;
   return {
     kind,
     title: code ?? 'Selected place',
-    properties: code ? { STUSPS: code } : null,
+    properties,
     lngLat: { lng: -97.5, lat: 38.5 },
-    regionKey
+    regionKey,
+    containing: containingFromProperties(properties)
   };
 }
 
