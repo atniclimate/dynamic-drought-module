@@ -47,6 +47,7 @@ import {
   beginPlaceStudioDisplay,
   emphasizeTypedPlace,
   restoreDisplaySnapshot,
+  seedTribeEmphasisTargets,
   setPlaceStudioDisplayKind,
   setStudioWatershedBoundary
 } from '../../state/display-snapshot';
@@ -327,6 +328,17 @@ async function resolveStateSelection(
   );
 }
 
+/** Every LARID a query's response carried, in feature order, deduped later
+ * by `seedTribeEmphasisTargets`. */
+function larIdsFrom(features: readonly Feature[]): readonly (string | number)[] {
+  const ids: Array<string | number> = [];
+  for (const feature of features) {
+    const id = feature.properties?.['LARID'];
+    if (typeof id === 'string' || typeof id === 'number') ids.push(id);
+  }
+  return ids;
+}
+
 async function resolveTribeSelection(
   entry: PlaceCatalogEntry,
   signal: AbortSignal
@@ -353,6 +365,12 @@ async function resolveTribeSelection(
   abortIfNeeded(signal);
   const geometry = mergeArealGeometry(collection.features);
   if (!geometry) return null;
+  // DDM-P2-T10 / DR-094: this ONE no-store AIAN-LAR request already carries
+  // every LARID for this Nation's representations, so seed the emphasis
+  // cache from it here. display-snapshot's tribe branch of
+  // resolveEmphasisTargets then never opens its own second, LARID-only
+  // request for this same selection.
+  seedTribeEmphasisTargets(entry, larIdsFrom(collection.features));
   return resolvedSelection(
     'bia-reservation',
     entry.label,
@@ -852,6 +870,19 @@ function PlaceStudio() {
   }, [kind, selection]);
 
   useEffect(() => {
+    // DDM-P2-T10 / DR-094: a matched Tribal Nation selection's emphasis is
+    // driven from the geometry resolution effect below instead, which seeds
+    // the emphasis cache from the SAME AIAN-LAR response (one request serves
+    // both). Emphasizing here too, before that response lands, would open a
+    // second, redundant AIAN-LAR request racing the first one. Every other
+    // place kind (state, ecoregion, watershed), and a mismatched or null
+    // tribe selection (nothing pending to defer to), still emphasizes here,
+    // unchanged.
+    const deferToTribeResolution =
+      selection?.kind === 'tribe' &&
+      selectionEntry?.kind === 'tribe' &&
+      selection.id === selectionEntry.id;
+    if (deferToTribeResolution) return;
     emphasizeTypedPlace(selection, selectionEntry);
   }, [selection, selectionEntry]);
 
@@ -986,6 +1017,13 @@ function PlaceStudio() {
       .then((resolved) => {
         if (masterAbort.signal.aborted) return;
         if (!resolved) {
+          // DDM-P2-T10: a tribe selection deferred its emphasis to this
+          // resolution (the effect above); nothing resolved (no geometry, or
+          // a geometry-less Nation), so emphasize now to clear any prior
+          // subject's highlight rather than leaving it stale.
+          if (selectionEntry.kind === 'tribe') {
+            emphasizeTypedPlace(selection, selectionEntry);
+          }
           setNarrativeStatus('unavailable');
           setOverlapView({
             status: 'ready',
@@ -999,6 +1037,12 @@ function PlaceStudio() {
         }
 
         resolvedSelectionRef.current = { key: selectionKey, value: resolved };
+        if (selectionEntry.kind === 'tribe') {
+          // The emphasis cache is warm here: resolveTribeSelection seeded it
+          // from this SAME response before resolving, so this call reads the
+          // cache rather than opening a second AIAN-LAR request.
+          emphasizeTypedPlace(selection, selectionEntry);
+        }
         if (
           selectionEntry.kind === 'watershed' &&
           kindRef.current === 'watershed'
@@ -1073,6 +1117,12 @@ function PlaceStudio() {
       .catch((err: unknown) => {
         if (!masterAbort.signal.aborted) {
           console.warn('[place-studio] selected place geometry failed.', err);
+          // DDM-P2-T10: the deferred tribe emphasis falls back to
+          // display-snapshot's own (unseeded) resolution here, honestly
+          // attempting the live query rather than leaving a stale highlight.
+          if (selectionEntry.kind === 'tribe') {
+            emphasizeTypedPlace(selection, selectionEntry);
+          }
           setNarrativeStatus('unavailable');
           setOverlapView({
             status: 'ready',

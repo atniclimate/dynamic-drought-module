@@ -216,6 +216,34 @@ function applyCurrentEmphasis(): void {
 }
 
 /**
+ * Seed the tribe emphasis cache from a geometry response that already
+ * carries every LARID for a Nation's representations (DDM-P2-T10, DR-094):
+ * the Place studio's own AIAN-LAR geometry request (src/ui/island/place-studio.tsx
+ * resolveTribeSelection) calls this so that ONE no-store request serves both
+ * the geometry and the emphasis, and `resolveEmphasisTargets`'s own
+ * LARID-only fetch below is never reached for this selection. A call with no
+ * ids is a no-op: nothing is seeded, so a later `applyCurrentEmphasis` still
+ * falls back to that fetch, exactly as it does for a restore or any other
+ * re-emphasis where nothing was seeded.
+ */
+export function seedTribeEmphasisTargets(
+  entry: PlaceCatalogEntry,
+  larIds: readonly (string | number)[]
+): void {
+  if (larIds.length === 0) return;
+  const cacheKey = `${entry.kind}:${entry.id}:${entry.representationIds.join('|')}`;
+  const seen = new Set<string>();
+  const targets: EmphasisTarget[] = [];
+  for (const id of larIds) {
+    const dedupeKey = String(id);
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    targets.push({ source: 'bia-reservations', id });
+  }
+  featureIdCache.set(cacheKey, targets);
+}
+
+/**
  * Restore the exact captured intent. Status values are deliberately not
  * replayed: deactivated layers activate again through the controller and
  * publish loading plus their truthful terminal status from current data.
@@ -354,6 +382,12 @@ async function resolveEmphasisTargets(
   }
 
   if (place.kind === 'tribe') {
+    // The FALLBACK path (DDM-P2-T10): reached only when nothing was seeded
+    // by `seedTribeEmphasisTargets` above (the cache lookup at the top of
+    // this function missed), a restore, or a re-emphasis whose geometry
+    // request never ran in this session. The Place studio's own selection
+    // flow seeds the cache from its one AIAN-LAR geometry request instead,
+    // so this fetch is not the common path.
     const larNames = entry.representationIds.filter((name) => name !== '');
     if (larNames.length === 0) return [];
     const quoted = larNames

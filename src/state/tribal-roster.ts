@@ -2,9 +2,11 @@
  * The shared, names-only Tribal land-area roster
  * (`public/data/tribal-roster.json`, built by scripts/build-tribal-roster.mjs
  * from the Federal Register roster and the BIA AIAN-LAR LARNAME audit;
- * D-0.7.0-026). Two consumers: the search index (src/ui/search-controller.ts)
- * and other consumers that need trusted formal names. Extracted
- * with Unit I so the STRUCTURAL provenance gate lives in exactly one place.
+ * D-0.7.0-026). Three consumers share the one gate helper below: the search
+ * index (src/ui/search-controller.ts), the place catalog's Tribal Nations
+ * list (src/config/place-catalog.ts, since DR-094), and other consumers that
+ * need trusted formal names. Extracted with Unit I so the STRUCTURAL
+ * provenance gate lives in exactly one place.
  *
  * Stewardship: the roster carries NAMES ONLY (no geometry). A formal Tribal
  * Nation name may be used ONLY from a row whose provenance is trusted; any
@@ -32,6 +34,19 @@ export const TRUSTED_PROVENANCE: ReadonlySet<string> = new Set([
   'bia-authoritative',
   'safe-match'
 ]);
+
+/**
+ * The one gate helper (DR-094, DDM-P2-T10): a roster row's displayName is
+ * shown only from trusted provenance; any other row's own BIA land-area name
+ * (`larName`) is the honest fallback, with NO visible marker distinguishing
+ * the two (titles stay uniform per DR-094; any caveat lives in metadata or
+ * the Impact Briefing, never in a title). Both live callers of the gate
+ * (src/ui/search-controller.ts and src/config/place-catalog.ts) call this
+ * one function rather than re-deriving the rule.
+ */
+export function gatedDisplayName(area: TribalRosterArea): string {
+  return TRUSTED_PROVENANCE.has(area.provenance ?? '') ? area.displayName : area.larName;
+}
 
 const ROSTER_URL = import.meta.env.BASE_URL + 'data/tribal-roster.json';
 
@@ -81,14 +96,13 @@ export function loadTribalRoster(): Promise<readonly TribalRosterArea[]> {
  * has no TRUSTED row for it (the safe residue: never a guessed name). Pure
  * over the supplied rows so the gate is unit-testable without a fetch.
  *
- * Currently no caller invokes this (ARCH-12). The one live application of the
- * gate open-codes the same rule at `src/ui/search-controller.ts:105`, which
- * imports `TRUSTED_PROVENANCE` directly; `src/config/place-catalog.ts` takes
- * formal names from the crosswalk artifact instead and does not consult
- * provenance at all. Kept, not deleted, because it is the single readable
- * statement of D-0.7.0-026: the next consumer should call this rather than
- * re-derive the rule. Adopting it in `search-controller.ts` is a change in
- * that file's owner's hands.
+ * Built on `gatedDisplayName` above (DDM-P2-T10): both live gate callers
+ * (`src/ui/search-controller.ts` and `src/config/place-catalog.ts`, since
+ * DR-094) now call `gatedDisplayName` directly rather than this function,
+ * because each needs the honest larName fallback too, not only the trusted
+ * formal name. Kept, not deleted, because it is the single readable
+ * null-or-formal-name statement of D-0.7.0-026 for a consumer that wants
+ * exactly that shape.
  */
 export function trustedNameFor(
   larName: string,
@@ -98,7 +112,7 @@ export function trustedNameFor(
   if (target === '') return null;
   for (const area of areas) {
     if (area.larName.trim().toLowerCase() !== target) continue;
-    return TRUSTED_PROVENANCE.has(area.provenance ?? '') ? area.displayName : null;
+    return TRUSTED_PROVENANCE.has(area.provenance ?? '') ? gatedDisplayName(area) : null;
   }
   return null;
 }

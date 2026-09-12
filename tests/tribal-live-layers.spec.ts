@@ -470,6 +470,250 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
 });
 
 /**
+ * DDM-P2-T10 (DR-094): resolving a Tribal Nation's agency representations
+ * once. Selecting a Nation in the Place studio issues ONE no-store AIAN-LAR
+ * request that serves both its geometry and its emphasis, never a second,
+ * redundant LARID-only request racing it. Both fixtures below are hand-built
+ * and obviously synthetic (hard rule 1): no real polygon, roster row, or
+ * crosswalk entry enters this file.
+ */
+test.describe('DDM-P2-T10: one AIAN-LAR request serves a Nation\'s geometry and its emphasis', () => {
+  const NATION_NAME = 'Synthetic One-Request Fixture Nation';
+  const LAR_NAME_ONE = 'Synthetic One-Request Fixture Area One';
+  const LAR_NAME_TWO = 'Synthetic One-Request Fixture Area Two';
+  const LAR_ID_ONE = 88001;
+  const LAR_ID_TWO = 88002;
+
+  function twoAreaBiaCollection(): {
+    type: 'FeatureCollection';
+    features: Array<{
+      type: 'Feature';
+      id: number;
+      properties: Record<string, unknown>;
+      geometry: unknown;
+    }>;
+  } {
+    return {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          id: LAR_ID_ONE,
+          properties: {
+            LARID: LAR_ID_ONE,
+            LARNAME: LAR_NAME_ONE,
+            CLASSIFICATION: 'Fixture Classification',
+            GISACRES: 500,
+            REGION: 'Fixture Region'
+          },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-123.4, 46.1],
+                [-123.0, 46.1],
+                [-123.0, 46.4],
+                [-123.4, 46.4],
+                [-123.4, 46.1]
+              ]
+            ]
+          }
+        },
+        {
+          type: 'Feature',
+          id: LAR_ID_TWO,
+          properties: {
+            LARID: LAR_ID_TWO,
+            LARNAME: LAR_NAME_TWO,
+            CLASSIFICATION: 'Fixture Classification',
+            GISACRES: 400,
+            REGION: 'Fixture Region'
+          },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-121.5, 47.0],
+                [-121.1, 47.0],
+                [-121.1, 47.3],
+                [-121.5, 47.3],
+                [-121.5, 47.0]
+              ]
+            ]
+          }
+        }
+      ]
+    };
+  }
+
+  /** Answers BOTH request shapes the flow can make: the geojson geometry
+   * query (returnGeometry=true, f=geojson) and the ESRI-JSON attributes-only
+   * query (f=json) the pre-fix emphasis fetch used, exactly like the
+   * suite-wide stub in tests/tribal-fixtures.ts does for its own fixtures. */
+  async function stubOneRequestFixture(page: Page): Promise<void> {
+    await page.route('**/data/tribal-roster.json', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          areas: [
+            { larName: LAR_NAME_ONE, displayName: NATION_NAME, provenance: 'bia-authoritative' },
+            { larName: LAR_NAME_TWO, displayName: NATION_NAME, provenance: 'bia-authoritative' }
+          ]
+        })
+      })
+    );
+    await page.route('**/data/tribal-larname-crosswalk.json', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          meta: {
+            rosterSource: 'Synthetic fixture roster',
+            landAreaSource: 'Synthetic fixture land areas'
+          },
+          matched: [
+            { tribe: NATION_NAME, larName: LAR_NAME_ONE },
+            { tribe: NATION_NAME, larName: LAR_NAME_TWO }
+          ],
+          rosterNoLar: []
+        })
+      })
+    );
+    await routeBoundary(page, BIA_ROUTE, async (route) => {
+      const url = new URL(route.request().url());
+      const collection = twoAreaBiaCollection();
+      const wantsEsriJson = url.searchParams.get('f') === 'json';
+      await route.fulfill({
+        contentType: wantsEsriJson ? 'application/json' : 'application/geo+json',
+        body: JSON.stringify(
+          wantsEsriJson
+            ? { features: collection.features.map((f) => ({ attributes: f.properties })) }
+            : collection
+        )
+      });
+    });
+    await routeGeojson(page, AIANNH_ROUTE, emptyCollectionBody());
+  }
+
+  /** The fetch `cache` mode is invisible to Playwright's own Request object
+   * (it is a RequestInit option, not a header); this records it the same way
+   * tests/trio-hardening.spec.ts does, by wrapping window.fetch before boot. */
+  async function captureFetchCacheModes(page: Page): Promise<void> {
+    await page.addInitScript(() => {
+      const modes: Record<string, string> = {};
+      (window as unknown as { __ddmFetchCacheModes: Record<string, string> }).__ddmFetchCacheModes =
+        modes;
+      const orig = window.fetch.bind(window);
+      window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof Request
+              ? input.url
+              : String(input);
+        modes[url] = init?.cache ?? '(unset)';
+        return orig(input, init);
+      }) as typeof window.fetch;
+    });
+  }
+
+  async function fetchCacheMode(page: Page, url: string): Promise<string | undefined> {
+    return page.evaluate(
+      (u) =>
+        (window as unknown as { __ddmFetchCacheModes?: Record<string, string> })
+          .__ddmFetchCacheModes?.[u],
+      url
+    );
+  }
+
+  /** Only the LARNAME-scoped queries (the geometry request and, before the
+   * fix, the emphasis request); excludes the overlap listing's unrelated
+   * envelope query (`where=1=1`), which this task's acceptance does not
+   * govern. */
+  function larWhereRequests(urls: readonly string[]): string[] {
+    return urls.filter((url) => (new URL(url).searchParams.get('where') ?? '').includes('LARNAME'));
+  }
+
+  function emphasisStamp(page: Page): Promise<string> {
+    return page.evaluate(() => document.documentElement.dataset['ddmEmphasis'] ?? '');
+  }
+
+  test('selecting the Nation issues exactly one LARNAME-scoped, no-store AIAN-LAR request, and lights both representations', async ({
+    page
+  }) => {
+    await captureFetchCacheModes(page);
+    await stubOneRequestFixture(page);
+    await gotoApp(page, '?view=brief&layers=places&studio=place');
+
+    await page.locator('#place-studio-search').fill(NATION_NAME);
+    await expect(page.locator('#place-list .place-studio-option')).toHaveCount(1);
+
+    // Requests are counted from the selection onward: the studio's own
+    // bia-reservations reference layer (REFERENCE_KEYS for kind 'tribe')
+    // already made its own viewport query when the studio opened, before
+    // any Nation was chosen, and that query is a `where=1=1` envelope query
+    // the larWhereRequests filter above excludes anyway.
+    const biaRequestUrls: string[] = [];
+    page.on('request', (req) => {
+      if (req.url().includes('biamaps.geoplatform.gov')) biaRequestUrls.push(req.url());
+    });
+
+    await page.locator('#place-option-tribe-0').click();
+    await expect(page.locator('#place-selection-title')).toHaveText(NATION_NAME);
+
+    const expectedStamp = [`bia-reservations:${LAR_ID_ONE}`, `bia-reservations:${LAR_ID_TWO}`]
+      .sort()
+      .join(' ');
+    await expect.poll(() => emphasisStamp(page), { timeout: 15_000 }).toBe(expectedStamp);
+
+    const geometryRequestUrls = larWhereRequests(biaRequestUrls);
+    // TODAY (before the DDM-P2-T10 fix): this is 2, the studio's own
+    // geometry request AND display-snapshot's separate LARID-only emphasis
+    // request for the same selection.
+    expect(geometryRequestUrls).toHaveLength(1);
+
+    const geometryRequestUrl = geometryRequestUrls[0];
+    if (geometryRequestUrl === undefined) {
+      throw new Error('no LARNAME-scoped BIA request was captured');
+    }
+    const parsed = new URL(geometryRequestUrl);
+    expect(parsed.searchParams.get('returnGeometry')).toBe('true');
+    const where = parsed.searchParams.get('where') ?? '';
+    expect(where).toContain(LAR_NAME_ONE);
+    expect(where).toContain(LAR_NAME_TWO);
+
+    // no-store proof: recorded by the init-script wrapper above. The call
+    // site is also read directly (src/ui/island/place-studio.tsx
+    // resolveTribeSelection passes `{ cache: 'no-store' }`).
+    expect(await fetchCacheMode(page, geometryRequestUrl)).toBe('no-store');
+  });
+
+  test('no sovereign-boundary geometry lands in localStorage or sessionStorage after a Nation selection', async ({
+    page
+  }) => {
+    await stubOneRequestFixture(page);
+    await gotoApp(page, '?view=brief&layers=places&studio=place');
+    await page.locator('#place-studio-search').fill(NATION_NAME);
+    await page.locator('#place-option-tribe-0').click();
+    await expect(page.locator('#place-selection-title')).toHaveText(NATION_NAME);
+    await expect.poll(() => emphasisStamp(page), { timeout: 15_000 }).not.toBe('');
+
+    const offendingKeys = await page.evaluate(() => {
+      const hits: string[] = [];
+      for (const storage of [window.localStorage, window.sessionStorage]) {
+        for (let i = 0; i < storage.length; i += 1) {
+          const key = storage.key(i);
+          if (key === null) continue;
+          const value = storage.getItem(key) ?? '';
+          if (value.includes('coordinates') || value.includes('Polygon')) hits.push(key);
+        }
+      }
+      return hits;
+    });
+    expect(offendingKeys).toEqual([]);
+  });
+});
+
+/**
  * DDM-P9-T05: the RAWS station popup reads the served relative humidity,
  * wind, and fuel moisture, with their units and observation time, or says
  * the station reported none for a field the service affirmatively left

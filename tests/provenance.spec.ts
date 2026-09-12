@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { gotoApp, waitForLayerSettled } from './helpers';
+import { caveatFor } from '../src/impact/context';
 
 /**
  * Unit D acceptance (the umbrella build; design finding 5): the provenance
@@ -173,5 +174,105 @@ test.describe('Unit D: provenance survives the mobile shell (390x844)', () => {
     await sourcesToggle.scrollIntoViewIfNeeded();
     await sourcesToggle.click();
     await assertClauses(page, '[data-provenance="tribal-nations"]', GROUP_NOTE_CLAUSES);
+  });
+});
+
+const CONSOLE_SEARCH = '#catalog-search [data-ddm-search]';
+
+/**
+ * DDM-P2-T10 (DR-094): the shared structural provenance gate
+ * (`gatedDisplayName`, src/state/tribal-roster.ts) now runs in the place
+ * catalog too, not only in search. One trusted row and one untrusted row
+ * (missing or unverified provenance), both crosswalked to a formal name:
+ * both surfaces show the formal name ONLY for the trusted row, the BIA
+ * land-area name for the untrusted row, and NEITHER title carries a visible
+ * marker (titles stay uniform per DR-094; any caveat lives in metadata or
+ * the Impact Briefing, never in a title).
+ */
+const TRUSTED_LAR = 'Provenance Gate Trusted Fixture Area';
+const TRUSTED_NAME = 'Provenance Gate Trusted Fixture Nation';
+const UNTRUSTED_LAR = 'Provenance Gate Untrusted Fixture Area';
+const UNTRUSTED_NAME = 'Provenance Gate Unverified Fixture Nation Name';
+
+async function stubGateFixtures(page: Page): Promise<void> {
+  await page.route('**/data/tribal-roster.json', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        areas: [
+          { larName: TRUSTED_LAR, displayName: TRUSTED_NAME, provenance: 'bia-authoritative' },
+          { larName: UNTRUSTED_LAR, displayName: UNTRUSTED_NAME, provenance: 'unverified' }
+        ]
+      })
+    })
+  );
+  await page.route('**/data/tribal-larname-crosswalk.json', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        meta: {
+          rosterSource: 'Synthetic fixture roster',
+          landAreaSource: 'Synthetic fixture land areas'
+        },
+        matched: [
+          { tribe: TRUSTED_NAME, larName: TRUSTED_LAR },
+          { tribe: UNTRUSTED_NAME, larName: UNTRUSTED_LAR }
+        ],
+        rosterNoLar: []
+      })
+    })
+  );
+}
+
+test.describe('DDM-P2-T10: the place catalog gates a formal Nation name the same way search does (DR-094)', () => {
+  test('the studio\'s Tribal Nations list shows the formal name only for the trusted row, with no visible marker on either title', async ({
+    page
+  }) => {
+    await stubGateFixtures(page);
+    await gotoApp(page, '?view=brief&layers=places&studio=place');
+    await page.locator('#place-studio-search').fill('Provenance Gate');
+
+    const trustedOption = page.locator('#place-list .place-studio-option', {
+      hasText: TRUSTED_NAME
+    });
+    const untrustedOption = page.locator('#place-list .place-studio-option', {
+      hasText: UNTRUSTED_LAR
+    });
+    await expect(trustedOption).toBeVisible();
+    await expect(untrustedOption).toBeVisible();
+    // The untrusted crosswalk name never renders anywhere in the list.
+    await expect(
+      page.locator('#place-list .place-studio-option', { hasText: UNTRUSTED_NAME })
+    ).toHaveCount(0);
+    // DR-094: no marker distinguishes the two kinds of title.
+    await expect(trustedOption).not.toContainText('representation');
+    await expect(untrustedOption).not.toContainText('representation');
+  });
+
+  test('the search list and the studio list gate the same two rows identically', async ({
+    page
+  }) => {
+    await stubGateFixtures(page);
+    await gotoApp(page, '?view=console');
+    await page.locator(CONSOLE_SEARCH).fill('provenance gate');
+
+    const tribalGroup = page.locator('#catalog-search [data-search-group="tribal"]');
+    await expect(tribalGroup).toBeVisible();
+    await expect(tribalGroup).toContainText(TRUSTED_NAME);
+    await expect(tribalGroup).toContainText(UNTRUSTED_LAR);
+    await expect(tribalGroup).not.toContainText(UNTRUSTED_NAME);
+  });
+
+  // WORDING (DR-094): grepping src/ui/island/place-studio.tsx and
+  // src/config/place-catalog.ts (this task's owned files) for a string
+  // naming the Nation-to-polygon relation found none of their OWN making;
+  // the one place-studio.tsx surface that names it (the Tribal overlap
+  // row's caveat, `TRIBAL_OVERLAP_CAVEAT`) already reads it from
+  // `caveatFor('bia-reservation')` (src/impact/context.ts, not owned by
+  // this task), which already says "representation". This pins that
+  // inherited wording so a future change to either file cannot drop it
+  // silently.
+  test('the studio\'s tribal overlap caveat calls the polygon a representation', () => {
+    expect(caveatFor('bia-reservation')).toContain('representation');
   });
 });
