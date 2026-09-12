@@ -21,6 +21,7 @@
 import type { RegionKey } from '../config/regions';
 import type { BriefingSourcePolicy } from './source-policy';
 import type { LayerStatus } from '../types/layer';
+import type { StateCode } from './resources';
 
 /**
  * What kind of knowledge a claim rests on (the 0.8.0 evidence/claim contract,
@@ -413,11 +414,26 @@ export interface HeatSynthesis {
 export type BoundaryKind = 'ecoregion' | 'tribal' | 'aiannh' | 'treaty' | 'bia-reservation' | 'state' | 'watershed';
 
 /**
+ * What contains the selected place, resolved FROM THE PLACE. THE INVARIANT:
+ * the camera region is NEVER a basis here. `basis: 'none'` with `state: null`
+ * is the honest answer when the place's own state is unknown; it must never
+ * be filled in from `regionKey`. A consumer may still fall back to the
+ * region afterwards, but that fallback must be visible at the consumer
+ * (see `resolveStateCode`, src/impact/resources.ts), never hidden inside
+ * this field.
+ */
+export interface ContainingPlaces {
+  readonly state: StateCode | null;
+  readonly basis: 'feature-property' | 'point-in-polygon' | 'none';
+}
+
+/**
  * The context handed from a boundary click to the briefing composer. Carries
  * the clicked feature's identity (kind, title, raw properties), the click
  * location, an optional bounding box derived from the feature geometry (used
- * to clip live queries in Phase 3), and the active region key (for resource
- * framing).
+ * to clip live queries in Phase 3), the active region key (for resource
+ * framing), and what the place is known to be contained by, resolved from
+ * the place itself rather than the camera (see `ContainingPlaces`).
  */
 export interface BoundarySelectionContext {
   readonly kind: BoundaryKind;
@@ -450,6 +466,8 @@ export interface BoundarySelectionContext {
   readonly bboxCrossesAntimeridian?: boolean;
   /** Active region key, or null if no region is selected yet. */
   readonly regionKey: RegionKey | null;
+  /** What contains the selected place, resolved from the place, never the camera region. */
+  readonly containing: ContainingPlaces;
 }
 
 /**

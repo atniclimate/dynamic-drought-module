@@ -25,7 +25,9 @@
 
 import type * as maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection } from 'geojson';
-import type { BoundarySelectionContext } from '../impact/types';
+import type { BoundarySelectionContext, ContainingPlaces } from '../impact/types';
+import { postalCodeFromProperties } from '../config/geography';
+import { isStateCode } from '../impact/resources';
 
 // The boot slice of the URL catalog, not the catalog (DR-008a): this
 // resolver runs at boot and needs one bundled file.
@@ -209,6 +211,16 @@ export async function openStateBriefing(
   } catch {
     if (!opts.guard || opts.guard()) {
       const name = feature.properties?.NAME;
+      // This fallback fires only when the `../impact/context` module itself
+      // fails to load, not from a missing STUSPS: `feature` was just found
+      // BY matching its own STUSPS against `stusps` above, so its own
+      // property is exactly what this context already knows, honestly
+      // reported as 'feature-property' rather than left null.
+      const rawCode = postalCodeFromProperties(feature.properties ?? null);
+      const containing: ContainingPlaces =
+        rawCode !== null && isStateCode(rawCode)
+          ? { state: rawCode, basis: 'feature-property' }
+          : { state: null, basis: 'none' };
       const context: BoundarySelectionContext = {
         kind: 'state',
         title:
@@ -218,7 +230,8 @@ export async function openStateBriefing(
         properties: feature.properties ?? null,
         lngLat,
         ...(bbox ? { bbox, serviceBbox: bbox } : {}),
-        regionKey: getCurrentRegion()
+        regionKey: getCurrentRegion(),
+        containing
       };
       openImpactPanelUnavailable(context);
     }

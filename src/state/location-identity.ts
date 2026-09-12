@@ -285,6 +285,24 @@ function resolveContainingTribal(
 }
 
 /**
+ * Resolve only the containing state for a point, without the county,
+ * ecoregion or containing-Tribal identity `resolveLocationIdentity` also
+ * computes. For a consumer that only ever needs the state (the impact panel's
+ * containing-state enrichment, DDM-P2-T08 microtask 2b), this is the narrow
+ * tool: same `resolveState` implementation, same rendered-layer-first then
+ * bundled-boundary-fallback order, same session cache, so there is exactly
+ * one state-resolution codepath rather than two that could drift.
+ */
+export function resolveContainingState(
+  map: maplibregl.Map,
+  lngLat: { lng: number; lat: number },
+  signal: AbortSignal
+): Promise<StateIdentity | null> {
+  const point = map.project([lngLat.lng, lngLat.lat]);
+  return resolveState(map, point, lngLat, signal);
+}
+
+/**
  * Resolve the full location identity for a point. Rendered-feature queries are
  * synchronous; only the state fallback awaits (the one-time bundled-boundaries
  * fetch), so a click with the state layer on resolves without any network wait.

@@ -69,14 +69,23 @@ export const STATE_LABEL: Record<StateCode, string> = {
   DC: 'District of Columbia', PR: 'Puerto Rico'
 };
 
+/** Whether a raw uppercased string is a state, district, or territory code this catalog covers. */
+export function isStateCode(code: string): code is StateCode {
+  return code in STATE_FIPS;
+}
+
 /**
- * Resolve the state for a selection. A clicked state boundary carries its own
- * postal code (`STUSPS` from the Census file); every other boundary kind falls
- * back to the active region framing. The national explore framing has no
- * primary state, so a non-state selection there resolves to null and the
- * routing degrades honestly to the national federal set. (Point-in-state
- * resolution for non-state clicks under the national framing is a known
- * follow-up, not yet implemented.)
+ * Resolve the state for a selection, in order:
+ *   1. A clicked state boundary's own postal code (`STUSPS` from the Census
+ *      file), when the selection kind is `state`.
+ *   2. `context.containing.state`, resolved FROM THE PLACE (never the camera
+ *      region) by whichever door built this context; see `ContainingPlaces`
+ *      (src/impact/types.ts). Consulted for every selection kind, not only
+ *      `state`.
+ *   3. Last resort: `regionPrimaryState(context.regionKey)`, a guess from the
+ *      current camera region framing, used only when neither of the above
+ *      yields a place-derived state. Exercised by
+ *      tests/camera-region-fallbacks.spec.ts.
  */
 export function resolveStateCode(
   context: BoundarySelectionContext
@@ -85,9 +94,10 @@ export function resolveStateCode(
     const raw = context.properties?.['STUSPS'];
     if (typeof raw === 'string') {
       const code = raw.toUpperCase();
-      if (code in STATE_FIPS) return code as StateCode;
+      if (isStateCode(code)) return code;
     }
   }
+  if (context.containing.state !== null) return context.containing.state;
   return regionPrimaryState(context.regionKey);
 }
 

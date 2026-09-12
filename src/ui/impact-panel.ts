@@ -13,6 +13,7 @@ import {
   type SourceCapabilityCell
 } from '../config/source-capability';
 import { HORIZON_CHROME } from '../impact/horizon-chrome';
+import { isStateCode } from '../impact/resources';
 import type {
   BoundarySelectionContext,
   HazardCell,
@@ -21,6 +22,8 @@ import type {
   HorizonKey,
   ImpactBriefing
 } from '../impact/types';
+import { getMap } from '../state/map-store';
+import { resolveContainingState } from '../state/location-identity';
 import {
   getPlaceSelection,
   setPlaceSelection
@@ -48,6 +51,13 @@ interface PendingOpen {
   readonly token: number;
   delayId: number | null;
   loadingToken: number | null;
+  /**
+   * Owns the in-flight containing-state resolution, when this pending open
+   * needed one. Aborted whenever this pending open is superseded or closed,
+   * so a stale resolution never applies to a later panel (see
+   * `finishPendingOpen`).
+   */
+  abortController: AbortController | null;
 }
 
 export interface ImpactPanelShell {
@@ -305,16 +315,23 @@ export function isImpactPanelShellOpen(): boolean {
 function finishPendingOpen(token?: number): void {
   if (!pendingOpen || (token !== undefined && pendingOpen.token !== token)) return;
   if (pendingOpen.delayId !== null) window.clearTimeout(pendingOpen.delayId);
+  // A superseded or closed pending open cancels its own in-flight
+  // containing-state resolution (harmless no-op if it already settled).
+  pendingOpen.abortController?.abort();
   hideLoading(pendingOpen.loadingToken);
   pendingOpen = null;
 }
 
-function beginPendingOpen(token: number): void {
+function beginPendingOpen(
+  token: number,
+  abortController: AbortController | null = null
+): void {
   finishPendingOpen();
   const pending: PendingOpen = {
     token,
     delayId: null,
-    loadingToken: null
+    loadingToken: null,
+    abortController
   };
   pending.delayId = window.setTimeout(() => {
     if (pendingOpen !== pending) return;
@@ -509,6 +526,43 @@ function renderUnavailable(
 }
 
 /**
+ * Resolve `context`'s containing state when the context arrived without one
+ * (`containing.basis === 'none'`: a direct AIANNH, BIA-reservation or
+ * ecoregion click). This lives HERE, at the one function every briefing door
+ * composes through, rather than in those layer modules, because their click
+ * handler (`registerClickTarget`'s `respond` callback, see
+ * src/map/interaction-coordinator.ts) is synchronous and the reliable
+ * resolver (`resolveContainingState`, backed by the same point-in-polygon
+ * fallback `resolveLocationIdentity` uses) is not; filling `containing` inside
+ * a synchronous callback could only ever answer when the `states` layer
+ * happened to be on, which would make the fix silently conditional on an
+ * unrelated layer. A context that already knows its state is returned
+ * unchanged and pays nothing for this call. The invariant from
+ * `ContainingPlaces` stands here too: on no map, no result, or any failure or
+ * cancellation, this degrades to the original (still `'none'`) context, never
+ * to a camera-region guess.
+ */
+async function enrichContainingState(
+  context: BoundarySelectionContext,
+  signal: AbortSignal
+): Promise<BoundarySelectionContext> {
+  const map = getMap();
+  if (!map) return context;
+  try {
+    const state = await resolveContainingState(map, context.lngLat, signal);
+    if (signal.aborted || state === null || !isStateCode(state.code)) {
+      return context;
+    }
+    return {
+      ...context,
+      containing: { state: state.code, basis: 'point-in-polygon' }
+    };
+  } catch {
+    return context;
+  }
+}
+
+/**
  * Open the impact briefing. The returned token represents this facade-level
  * open even while the lazy runtime is still loading.
  */
@@ -527,17 +581,31 @@ export function openImpactPanel(context: BoundarySelectionContext): number {
   const intent = ++briefingIntentSeq;
   const token = ++openToken;
 
-  if (runtime) {
+  const needsStateEnrichment = context.containing.basis === 'none';
+
+  if (runtime && !needsStateEnrichment) {
     currentRuntimeToken = runtime.openImpactPanel(context, active);
     return token;
   }
 
-  beginPendingOpen(token);
-  void loadRuntime().then(
-    (loaded) => {
+  // Either the lazy runtime is still loading, or this context needs its
+  // containing state resolved from the point (or both); either way the
+  // runtime opens the panel from a `.then()` below instead of synchronously.
+  const abortController = needsStateEnrichment ? new AbortController() : null;
+  beginPendingOpen(token, abortController);
+
+  let contextReady: Promise<BoundarySelectionContext>;
+  if (abortController) {
+    contextReady = enrichContainingState(context, abortController.signal);
+  } else {
+    contextReady = Promise.resolve(context);
+  }
+
+  void Promise.all([loadRuntime(), contextReady]).then(
+    ([loaded, resolvedContext]) => {
       finishPendingOpen(token);
       if (intent !== briefingIntentSeq || token !== openToken) return;
-      currentRuntimeToken = loaded.openImpactPanel(context, active);
+      currentRuntimeToken = loaded.openImpactPanel(resolvedContext, active);
     },
     () => {
       finishPendingOpen(token);

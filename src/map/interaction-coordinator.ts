@@ -31,7 +31,8 @@ import * as maplibregl from 'maplibre-gl';
 
 import { interactionRank } from '../config/interaction-ranks';
 import type { InteractionTargetKind } from '../config/interaction-ranks';
-import type { BoundaryKind, BoundarySelectionContext } from '../impact/types';
+import type { BoundaryKind, BoundarySelectionContext, ContainingPlaces } from '../impact/types';
+import { isStateCode } from '../impact/resources';
 import { getEmphasisTargets, emphasizePlaces } from '../state/place-emphasis';
 import type { EmphasisTarget } from '../state/place-emphasis';
 import { getPlaceSelection, setPlaceSelection } from '../state/place-selection';
@@ -605,12 +606,28 @@ async function attachConditionDoor(
     import('../ui/popups')
   ]);
 
+  // `identity.state` came from `resolveState` (src/state/location-identity.ts
+  // :201-222), which never reads a postal code off the thing this click
+  // actually hit (there is none here; `properties` above is null): it
+  // either hit-tests the rendered `states` fill at the point or, failing
+  // that, walks the bundled Census polygons for the one containing it. Both
+  // branches are a point-containment test against a state's OWN boundary,
+  // never a property carried by the tapped feature, so this is
+  // 'point-in-polygon' rather than 'feature-property' even on the
+  // rendered-layer branch; `StateIdentity` (location-identity.ts) carries no
+  // field distinguishing the two branches for a finer basis than that.
+  const containing: ContainingPlaces =
+    identity.state && isStateCode(identity.state.code)
+      ? { state: identity.state.code, basis: 'point-in-polygon' }
+      : { state: null, basis: 'none' };
+
   const context: BoundarySelectionContext = {
     kind: subject.kind,
     title: subject.title,
     properties: null,
     lngLat: { lng: click.lngLat.lng, lat: click.lngLat.lat },
-    regionKey: getCurrentRegion()
+    regionKey: getCurrentRegion(),
+    containing
   };
 
   const wrapper = document.createElement('div');
