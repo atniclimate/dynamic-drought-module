@@ -6,6 +6,7 @@ import { join, relative } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { stripComments } from './pure-lane-inventory.test.mjs';
 import {
   ARCGIS_FIELD_PROBES,
   DRIFT_TIERS,
@@ -335,6 +336,35 @@ test('buildFieldProbeEntries throws on an unresolvable list instead of skipping 
   await rm(root, { recursive: true, force: true });
 });
 
+// Pinned, alphabetically sorted (DDM-P15-T08). An added or removed outFields
+// sender must name itself here, so the walk below fails on the exact file
+// rather than a floor number a coincidental new sender could satisfy
+// quietly. Derived 2026-09-12 by running the stripped walk once: 21 files,
+// the same 21 the raw-text grep found, none of them comment-only.
+const OUT_FIELDS_SENDERS = [
+  'src/config/place-catalog.ts',
+  'src/config/station-registry.ts',
+  'src/config/urls.ts',
+  'src/impact/sources.ts',
+  'src/layers/aiannh.ts',
+  'src/layers/bc-drought.ts',
+  'src/layers/bia-reservations.ts',
+  'src/layers/drought.ts',
+  'src/layers/heatrisk.ts',
+  'src/layers/hms-smoke.ts',
+  'src/layers/nifc-fires.ts',
+  'src/layers/nws-alerts.ts',
+  'src/layers/power-3d.ts',
+  'src/layers/spc-fire-weather.ts',
+  'src/layers/usdm.ts',
+  'src/map/satellite.ts',
+  'src/state/display-snapshot.ts',
+  'src/state/watershed-geometry.ts',
+  'src/ui/heatrisk-sequence.ts',
+  'src/ui/island/place-studio.tsx',
+  'src/ui/search-controller.ts',
+];
+
 test('every src file that sends outFields is probed or explicitly accounted for', async () => {
   const root = new URL('../', import.meta.url);
   const probed = new Set(ARCGIS_FIELD_PROBES.map((p) => p.file));
@@ -344,13 +374,21 @@ test('every src file that sends outFields is probed or explicitly accounted for'
     for (const entry of await readdir(dir, { withFileTypes: true })) {
       const path = join(dir, entry.name);
       if (entry.isDirectory()) await walk(path);
-      else if (/\.(ts|tsx)$/.test(entry.name) && /\boutFields\b/.test(await readFile(path, 'utf8'))) {
+      else if (
+        /\.(ts|tsx)$/.test(entry.name) &&
+        /\boutFields\b/.test(stripComments(await readFile(path, 'utf8')))
+      ) {
         senders.push(relative(fileURLToPath(root), path).replaceAll('\\', '/'));
       }
     }
   }
   await walk(fileURLToPath(new URL('src/', root)));
-  assert.ok(senders.length >= 15, `expected the runtime's outFields senders, found ${senders.length}`);
+  senders.sort();
+  assert.deepEqual(
+    senders,
+    OUT_FIELDS_SENDERS,
+    'the outFields sender set moved; name the added or removed file in OUT_FIELDS_SENDERS'
+  );
   const missing = senders.filter((file) => !accounted.has(file));
   assert.deepEqual(missing, [], 'outFields senders with neither a probe row nor a recorded reason');
   for (const file of Object.keys(OUT_FIELDS_SENDERS_COVERED_ELSEWHERE)) {

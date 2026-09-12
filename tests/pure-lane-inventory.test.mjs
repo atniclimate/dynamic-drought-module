@@ -14,9 +14,18 @@
  * `newContext`. Applied here per FILE, as a word-boundary scan over the
  * source with comments stripped, which is stricter than per case on
  * purpose: a mixed file belongs to the main config, not to this lane.
+ *
+ * This lexical rule guards fixture requests and boot helpers in the spec's
+ * OWN source; it cannot see a DOM API (`document.`/`window.`) reached
+ * transitively through an `import` from `src/`, and it does not try to
+ * (DDM-P15-T08). That gap is closed a different way: `verify:pure` now runs
+ * inside `check:all` (this file's own third test), so a spec whose imported
+ * code reaches the DOM fails loudly there, in the pure lane itself, the
+ * first time the gate runs it.
  */
 
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,7 +47,7 @@ const FIXTURE_REQUEST = new RegExp(
 );
 const BROWSER_HELPERS = ['gotoApp', 'newPage', 'newContext'];
 
-function stripComments(source) {
+export function stripComments(source) {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/(^|[^:])\/\/.*$/gm, '$1');
@@ -94,4 +103,28 @@ test('the pure lane is wired as verify:pure and the ladder documents it', async 
   );
   const readme = await readFile(join(ROOT, 'tests', 'README.md'), 'utf8');
   assert.match(readme, /`npm run verify:pure`/);
+});
+
+// Found while writing this assertion (2026-09-12, DDM-P15-T08): two files,
+// tests/camera-region-fallbacks.spec.ts and tests/config-key-authority.spec.ts,
+// sat in both PURE_SPECS and the verify:smoke roster. Since `verify:smoke`
+// runs `gate` (which now runs verify:pure inside check:all) and then its own
+// named roster, each ran twice inside one `verify:smoke` call. The director
+// removed both from the verify:smoke roster in the same commit; they still
+// run once per smoke, through the pure lane. No overlap is excused.
+test('every pure-lane spec exists on disk and none also sits in the smoke roster', async () => {
+  const files = await pureSpecsFromConfig();
+  for (const file of files) {
+    assert.ok(existsSync(join(ROOT, file)), `${file} is listed in PURE_SPECS but is not on disk`);
+  }
+  // A spec in both lanes runs twice per gate (once under verify:pure, once
+  // under verify:smoke's own named roster). Read the roster straight out of
+  // the verify:smoke script rather than duplicating it here, so the two
+  // lists cannot drift apart silently.
+  const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
+  const smokeScript = pkg.scripts['verify:smoke'];
+  assert.ok(smokeScript, 'verify:smoke script is missing from package.json');
+  const smokeRoster = new Set([...smokeScript.matchAll(/tests\/[\w.-]+\.spec\.ts/g)].map((m) => m[0]));
+  const overlap = files.filter((file) => smokeRoster.has(file));
+  assert.deepEqual(overlap, [], 'a pure-lane spec also appears in the verify:smoke roster and would run twice per gate');
 });
