@@ -37,6 +37,26 @@
  * properties never carry a `STUSPS` field for `resolveStateCode` to read
  * regardless.
  *
+ * DR-090 microtask 5 UPDATE (2026-09-11, this task's fifth and last
+ * microtask): the three leaks named above (DSCI, drought.gov, water-supply)
+ * were each fixed in turn by the place-before-camera work microtasks 2 to 4
+ * landed (`resolveStateCode`, `resolveCanonicalGeography`,
+ * `resolveWaterSupplyPoint`; see tests/camera-region-fallbacks.spec.ts). This
+ * microtask fixes the ENCLOSING gate those three leaks sit inside:
+ * `briefingSourcePolicy`'s `impactLevel` (src/impact/source-policy.ts) used
+ * to read `context.regionKey` (the camera) to decide whether drought impact
+ * synthesis runs AT ALL; now it reads the resolved PLACE's coverage family
+ * (`src/config/place-coverage.ts`). For a genuinely non-PNW place like this
+ * file's Alaska fixtures, that family is `ak-hi`, whose impactSynthesis
+ * level is `none` in the coverage matrix, so the WHOLE horizon matrix (and
+ * the resources it would have routed) now goes to the single honest
+ * `impact-capability-unavailable` state instead of ever composing a claim.
+ * That supersedes the four LEAK assertions the shared helper below used to
+ * make one at a time: once the matrix never renders for this place, none of
+ * the four can leak, so the helper now asserts the honest-unavailable state
+ * directly, and its former soft per-leak checks are redundant (a Washington
+ * word or a BONO3 id cannot appear in a matrix that never rendered).
+ *
  * THREE DOORS, in the three cases below, all under one boot recipe: the
  * camera is sent to Alaska with `?framing=alaska-northwest` (a camera-only
  * deep link; see src/state/framing-store.ts's own doc comment), while
@@ -261,56 +281,48 @@ async function clickMapCenterUntilPopup(page: Page): Promise<void> {
 }
 
 /**
- * The four assertions from the acceptance sentence, checked against
- * whatever door opened the panel. Kept as one function so the three cases
- * below read as "open this door" plus one shared judgment, not three
- * near-duplicate assertion blocks.
+ * DR-090 microtask 5's assertion: the honest, fully-disabled state a
+ * genuinely non-PNW place (Alaska here) must show once the impact-synthesis
+ * gate reads the PLACE instead of the camera. Kept as one function so the
+ * three door cases below read as "open this door" plus one shared judgment.
+ *
+ * Before this microtask, `impactLevel` read `context.regionKey` (the camera,
+ * seeded to `washington_state`, a PNW-family region), so the matrix rendered
+ * as ENABLED and each of the four assertions below would have had to catch
+ * one leaked Washington-flavored answer at a time (the shape this function
+ * had before this microtask; see the module doc comment). After the fix,
+ * the resolved place's `ak-hi` family is `none` for impactSynthesis, so the
+ * whole horizon matrix and its routed resources never render at all: there
+ * is nothing left to leak, and the honest unavailable state is the only
+ * thing to check.
  */
 async function assertNoWashingtonForAlaska(page: Page): Promise<void> {
   const panel = page.locator('#impact-panel');
   await expect(panel).toBeVisible();
 
-  // Assertion 1: no Washington statewide DSCI. The claim, once it renders,
-  // names the state its series belongs to; today that is always
-  // Washington, because `resolveStateCode` falls back to the ambient
-  // region for every selection kind but a state boundary's own STUSPS.
-  const droughtNow = page.locator(
-    '.impact-hazard[data-horizon="current"][data-hazard="drought"]'
-  );
-  await expect(droughtNow.locator('.impact-claim, .impact-horizon-note')).not.toHaveCount(0);
-  // The four LEAK assertions below are soft on purpose. They are four
-  // independent ways the same defect shows, fixed by four different
-  // microtasks, so one run has to report every leak that is still open
-  // rather than stopping at the first. The structural assertions around
-  // them stay hard: if the panel never opened, four soft failures would be
-  // noise about a page that does not exist.
-  await expect.soft(droughtNow).not.toContainText('for Washington');
+  // The matrix never renders: no per-hazard section exists at all (not
+  // "unavailable" cells, an absent section), so no claim, note, or resource
+  // link can carry a Washington-flavored answer.
+  await expect(panel.locator('.impact-hazard')).toHaveCount(0);
+  await expect(
+    panel.locator('.impact-resource-link', { hasText: 'Drought.gov' })
+  ).toHaveCount(0);
 
-  // Assertions 2 and 4: the one federal drought.gov anchor, read from two
-  // sides. Its href must not be Washington's page, and its own label (not
-  // the clicked feature's title) must name Alaska: this is the geography
-  // surface, keyed the same way the DSCI claim above is keyed
-  // (`resolveStateCode`), not an echo of the fixture's own name.
-  const droughtGovLink = page.locator('.impact-resource-link', {
-    hasText: 'Drought.gov'
-  });
-  await expect(droughtGovLink).toBeVisible();
-  const href = await droughtGovLink.getAttribute('href');
-  expect.soft(href, 'drought.gov href').not.toMatch(/washington/i);
-  await expect.soft(droughtGovLink).toContainText('Alaska');
-
-  // Assertion 3: no Columbia water-supply point. BONO3 is the Columbia's
-  // basin-integrating outlet (Bonneville); it must never answer, even in
-  // an honest "no forecast" note, for a click nowhere near the Columbia
-  // basin.
-  const droughtLongRange = page.locator(
-    '.impact-hazard[data-horizon="longRange"][data-hazard="drought"]'
+  // The honest unavailable block instead carries the coverage matrix's own
+  // ak-hi impactSynthesis note (CAPABILITY_MATRIX['ak-hi'].impactSynthesis.note,
+  // src/config/capability-matrix.ts), read through the place, never a
+  // Washington-scoped sentence.
+  const unavailable = panel.locator('.impact-capability-unavailable');
+  await expect(unavailable).toBeVisible();
+  await expect(unavailable.locator('.impact-horizon-note')).toHaveText(
+    'No briefing support for Alaska or Hawaii.'
   );
-  await expect.soft(droughtLongRange).not.toContainText('BONO3');
+  await expect(unavailable).not.toContainText('Washington');
+  await expect(panel).not.toContainText('BONO3');
 }
 
 test.describe('a briefing for an Alaska place under the default washington_state region', () => {
-  test('the condition door: a point-event click over Alaska still answers with Washington', async ({
+  test('the condition door: a point-event click over Alaska answers honestly, not with Washington (DR-090)', async ({
     page
   }) => {
     await stubBaselineBriefingHosts(page);
@@ -344,7 +356,7 @@ test.describe('a briefing for an Alaska place under the default washington_state
     await assertNoWashingtonForAlaska(page);
   });
 
-  test('an AIANNH click over Alaska still answers with Washington', async ({ page }) => {
+  test('an AIANNH click over Alaska answers honestly, not with Washington (DR-090)', async ({ page }) => {
     await stubBaselineBriefingHosts(page);
     await routeGeojson(page, AIANNH_ROUTE, syntheticAlaskaAiannhBody());
     await gotoApp(page, '?framing=alaska-northwest&layers=aiannh');
@@ -358,7 +370,7 @@ test.describe('a briefing for an Alaska place under the default washington_state
     await assertNoWashingtonForAlaska(page);
   });
 
-  test('a BIA click over Alaska still answers with Washington', async ({ page }) => {
+  test('a BIA click over Alaska answers honestly, not with Washington (DR-090)', async ({ page }) => {
     await stubBaselineBriefingHosts(page);
     await routeGeojson(page, BIA_ROUTE, syntheticAlaskaBiaBody());
     await gotoApp(page, '?framing=alaska-northwest&layers=bia-reservations');

@@ -10,6 +10,10 @@ import {
   type SourceCapabilityCell
 } from '../config/source-capability';
 import {
+  placeCapabilityLevel,
+  placeCapabilityNote
+} from '../config/place-coverage';
+import {
   regionCapabilityLevel,
   regionCapabilityNote
 } from '../config/region-capability';
@@ -39,23 +43,42 @@ function regionalCell(
 }
 
 /**
- * Resolve the complete per-source policy for one selection. Geography controls
- * nationally supported heat sources. The existing regional capability matrix
- * continues to control drought, fire, climate, water, and resource synthesis.
+ * Resolve the complete per-source policy for one selection. Geography
+ * controls nationally supported heat sources. The coverage/capability
+ * matrix, read through the resolved PLACE (DR-090), continues to control
+ * drought, fire, climate, water, and resource synthesis.
  */
 export function briefingSourcePolicy(
   context: BoundarySelectionContext
 ): BriefingSourcePolicy {
   const geography = resolveCanonicalGeography(context);
   const heat = NATIONAL_HEAT_SOURCE_CAPABILITY[geography.key];
-  const impactLevel = regionCapabilityLevel(
-    context.regionKey,
-    'impactSynthesis'
-  );
+  // DR-090: impact synthesis is gated by the resolved PLACE's coverage, not
+  // by `context.regionKey` (the camera). A geography with
+  // `basis: 'boundary-postal-code'` came from the place itself (a postal
+  // code in the feature's properties or `containing.state`), and only that
+  // basis does: the gate reads the place's coverage family through
+  // src/config/place-coverage.ts and the camera has no say.
+  //
+  // THE REMAINING FALLBACK TO THE CAMERA REGION, named here at its line:
+  // every other basis ('region-framing', 'boundary-source', 'unknown') is
+  // stamped by `regionFallback` (src/config/geography.ts), which fires only
+  // when the place is silent (no postal-code property AND
+  // `containing.basis === 'none'`). The place's coverage is then unknown, so
+  // the gate reads the camera region's family, exactly the answer it gave
+  // before DR-090 for a silent place; a null or unrecognized region still
+  // reads 'none'. Exercised in both directions by
+  // tests/camera-region-fallbacks.spec.ts.
+  const placeKnown = geography.basis === 'boundary-postal-code';
+  const impactLevel = placeKnown
+    ? placeCapabilityLevel(geography, 'impactSynthesis')
+    : regionCapabilityLevel(context.regionKey, 'impactSynthesis');
   const droughtEnabled = impactLevel !== 'none';
   const droughtNote = droughtEnabled
     ? null
-    : regionCapabilityNote(context.regionKey, 'impactSynthesis');
+    : placeKnown
+      ? placeCapabilityNote(geography, 'impactSynthesis')
+      : regionCapabilityNote(context.regionKey, 'impactSynthesis');
 
   const sources = {} as Record<BriefingSourceKey, SourceCapabilityCell>;
   for (const key of BRIEFING_SOURCE_KEYS) {
