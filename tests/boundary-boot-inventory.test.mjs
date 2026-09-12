@@ -193,10 +193,23 @@ const DIRECT_BOOT_REASONS = {
 };
 
 /**
- * Modules allowed to create a second Page, with the reason. Empty today, and
- * that is the point: the first one to appear fails this test.
+ * Modules allowed to create a second Page, with the reason. One entry today.
+ * The first one to appear failed this test, which is what it is for: the
+ * decision below was made deliberately, at the tripwire, and written down.
+ *
+ * A precision limit worth knowing before adding an entry: the SECOND_PAGE
+ * pattern matches the CALL textually and cannot tell a popup in an existing
+ * context (the shape this tripwire was built for, which arrives with its own
+ * unstubbed boot) from the first and only page of a brand new context (which
+ * is just an ordinary boot in a clean profile). Both read as a second Page
+ * here, so an entry has to say which shape it is.
  */
-const SECOND_PAGE_REASONS = {};
+const SECOND_PAGE_REASONS = {
+  'tests/mode-switch-cost.spec.ts': {
+    reason:
+      'the DDM-P14-T08 mode-switch measurement (DR-095): one page per FRESH browser.newContext(), not a popup in an existing context, because each of the twelve ordered switches has to be measured from cold caches or the previous switch pays for this one. Every one of those pages boots through gotoApp, so it installs the same satellite, sovereign-boundary and minimap stubs as any other boot in this suite; no page here reaches a live service. The spec runs only in its own chromium-measure project, which CI never invokes.'
+  }
+};
 
 /**
  * Modules allowed to call `page.screenshot()`, with the reason and the site
