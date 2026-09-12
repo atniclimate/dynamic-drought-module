@@ -900,7 +900,15 @@ export const STRUCTURES_QUALIFICATION =
  * latitudes. Measured the same day with the field list: 1.83 MB in 4.5 s.
  * That is a change to what the map shows, not only to transport, so the
  * note below travels with the legend, the popup, and the map key. Viewport
- * or region scoping stays with roadmap task DDM-P1-T06.
+ * scoping is built (DDM-P1-T06, 2026-09-12): the layer now queries an
+ * overscanned envelope of the current view, aiannh.ts's precedent, and
+ * re-queries when the view leaves it, rather than the national `where=1=1`
+ * scan this list was first sized against.
+ *
+ * `attr_ActiveFireCandidate` was added by DDM-P1-T06 for DDM-P14-T07: the
+ * minimap's per-region wildfire counts apply that field's predicate
+ * client-side against the layer's already-loaded collection instead of
+ * issuing their own service query.
  */
 export const NIFC_OUT_FIELDS = [
   'attr_IncidentName',
@@ -911,7 +919,8 @@ export const NIFC_OUT_FIELDS = [
   'attr_IncidentSize',
   'poly_GISAcres',
   'attr_FireDiscoveryDateTime',
-  'attr_POOState'
+  'attr_POOState',
+  'attr_ActiveFireCandidate'
 ] as const;
 
 /** Degrees of EPSG:4326; see the note above for the metric equivalent. */

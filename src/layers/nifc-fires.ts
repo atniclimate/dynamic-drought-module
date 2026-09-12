@@ -33,14 +33,30 @@
  * Query scope (FE-16, 2026-08-28). The shipped national query with
  * `outFields=*` and full-precision geometry measured 42.75 MB in 41.6 s for
  * 243 perimeters against this layer's 15 s budget, so the layer aborted and
- * read `unavailable` on every boot. The query now names the nine attributes
- * the layer, popup, map key, and conditions strip read (NIFC_OUT_FIELDS,
+ * read `unavailable` on every boot. The query now names the attributes the
+ * layer, popup, map key, and conditions strip read (NIFC_OUT_FIELDS,
  * schema-checked; a wrong name is an HTTP 400) and asks the service for
  * display generalization (`maxAllowableOffset` 0.0005 degree,
  * `geometryPrecision` 5): 1.83 MB in 4.5 s on the same day. The
  * generalization changes the drawn edge, so NIFC_GENERALIZATION_NOTE is
- * carried by the legend, the popup, and the map key. Viewport or region
- * scoping stays with roadmap task DDM-P1-T06.
+ * carried by the legend, the popup, and the map key.
+ *
+ * Viewport scope (DDM-P1-T06, 2026-09-12). The query is now ALSO clipped to
+ * an overscanned envelope of the current view, copying aiannh.ts's pattern:
+ * a request carries `geometry`/`geometryType=esriGeometryEnvelope`/`inSR`/
+ * `spatialRel`, the response's envelope (shrunk inward one grid quantum) is
+ * cached, an ordinary pan inside it reuses the cache with no request, and a
+ * `moveend` that leaves it re-queries. `where` stays `1=1`; only the spatial
+ * filter narrows the scan. Status honesty follows the coverage, not the
+ * fetch: leaving the covered envelope reports `loading` until the new
+ * response lands (never `no-data` on the strength of the old one), `no-data`
+ * is reported only when a response covering the current view is empty, and
+ * a re-query that fails keeps the last covering collection's honest status
+ * if it still covers the view, else reports `error`. Measured 2026-09-12:
+ * the national scan was 1,653,142 bytes for 194 perimeters; the default
+ * Washington view's overscanned envelope was 561,186 bytes for 58
+ * perimeters (see tests/nifc-query-scope.spec.ts and the task's closing
+ * figures for the exact requests).
  *
  * Render. WFIGS perimeters are polygons. Wildfire and incident-complex
  * records use a restrained orange pulse, Prescribed fire uses a neutral
@@ -321,8 +337,10 @@ const FETCH_TIMEOUT_MS = 15_000;
 
 /**
  * Master cancellation controller for the in-flight fetch. Aborted on
- * `deactivate` and replaced on each `activate` so a superseded request can
- * never render into a torn-down layer (the cancellation invariant).
+ * `deactivate` and replaced on each `activate` or re-query so a superseded
+ * request can never render into a torn-down layer (the cancellation
+ * invariant); DDM-P1-T06 extends this same controller to the viewport
+ * re-query, not only the initial activation.
  */
 let masterController: AbortController | null = null;
 
@@ -330,6 +348,138 @@ type NifcStatus = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
 
 function reportStatus(state: NifcStatus): void {
   registry.setStatus(LAYER_KEY, state);
+}
+
+// ---------------------------------------------------------------------------
+// Viewport scope (DDM-P1-T06): the overscanned envelope, the coverage cache,
+// and the while-active re-query. Copies aiannh.ts's precedent (its module
+// docblock and buildQueryEnvelope/envelopeCovers/toCoverageEnvelope), sized
+// down to a single cached response since this layer does not zoom-bucket its
+// generalization the way AIANNH's does.
+// ---------------------------------------------------------------------------
+
+/** `[west, south, east, north]`, EPSG:4326. */
+type QueryEnvelope = readonly [number, number, number, number];
+
+/**
+ * Overscan margin applied to the query envelope, as a fraction of the
+ * viewport's width and height on each side (aiannh.ts's OVERSCAN_FACTOR),
+ * so small pans render correctly at their edges and are more likely to hit
+ * the coverage cache.
+ */
+const OVERSCAN_FACTOR = 0.25;
+
+/**
+ * Inverse of the five-decimal precision the query URL serializes envelope
+ * coordinates at (aiannh.ts's ENVELOPE_QUANTUM): the envelope is quantized
+ * outward to this grid so the cached coverage envelope and the envelope
+ * actually sent to the service are the same numbers.
+ */
+const ENVELOPE_QUANTUM = 1e5;
+
+/** Debounce for the while-active viewport refresh (aiannh.ts's precedent). */
+const REFRESH_DEBOUNCE_MS = 400;
+
+/** The overscanned query envelope for the current viewport (aiannh.ts's buildQueryEnvelope). */
+function buildQueryEnvelope(map: maplibregl.Map): QueryEnvelope {
+  const b = map.getBounds();
+  const west = b.getWest();
+  const south = b.getSouth();
+  const east = b.getEast();
+  const north = b.getNorth();
+  const marginX = (east - west) * OVERSCAN_FACTOR;
+  const marginY = (north - south) * OVERSCAN_FACTOR;
+  return [
+    Math.floor((west - marginX) * ENVELOPE_QUANTUM) / ENVELOPE_QUANTUM,
+    Math.floor((south - marginY) * ENVELOPE_QUANTUM) / ENVELOPE_QUANTUM,
+    Math.ceil((east + marginX) * ENVELOPE_QUANTUM) / ENVELOPE_QUANTUM,
+    Math.ceil((north + marginY) * ENVELOPE_QUANTUM) / ENVELOPE_QUANTUM
+  ];
+}
+
+/**
+ * The current view's query envelope, or `null` for a map double without
+ * `getBounds` (a direct unit-test call on a bare fake map, the same
+ * allowance `mapHasTerrain` makes for `getTerrain`). A `null` envelope falls
+ * back to the pre-DDM-P1-T06 national `where=1=1` scan with no spatial
+ * filter and is never cached, so those callers see unchanged behavior.
+ */
+function resolveQueryEnvelope(map: maplibregl.Map): QueryEnvelope | null {
+  return typeof map.getBounds === 'function' ? buildQueryEnvelope(map) : null;
+}
+
+/** Whether a cached query envelope fully contains the current visible view (aiannh.ts's envelopeCovers). */
+function envelopeCovers(envelope: QueryEnvelope, map: maplibregl.Map): boolean {
+  const b = map.getBounds();
+  return (
+    envelope[0] <= b.getWest() &&
+    envelope[1] <= b.getSouth() &&
+    envelope[2] >= b.getEast() &&
+    envelope[3] >= b.getNorth()
+  );
+}
+
+/** Shrink a query envelope inward by one grid quantum for the coverage cache (aiannh.ts's toCoverageEnvelope). */
+function toCoverageEnvelope(envelope: QueryEnvelope): QueryEnvelope {
+  const q = 1 / ENVELOPE_QUANTUM;
+  return [envelope[0] + q, envelope[1] + q, envelope[2] - q, envelope[3] - q];
+}
+
+/**
+ * One cached response: the validated collection plus the COVERAGE envelope.
+ * A cache hit is conditional on `envelopeCovers` containing the current
+ * visible view (design clause 3); an ordinary pan inside the envelope reuses
+ * this and a view that leaves it re-queries. Unlike aiannh.ts's per-viewport
+ * map, this layer keeps only the most recent response: the acceptance
+ * clause is about honest status across a re-query, not about serving many
+ * distinct regions from memory at once.
+ */
+interface CachedResponse {
+  readonly envelope: QueryEnvelope;
+  readonly geojson: FeatureCollection;
+  readonly truncated: boolean;
+}
+let cache: CachedResponse | null = null;
+
+/** Request-identity token; a response is dropped if the module moved on, belt to the abort signal's braces. */
+let requestSeq = 0;
+
+/** The attached `moveend` refresh handler while the layer is active. */
+let moveendHandler: (() => void) | null = null;
+
+/** Pending debounce timer for the viewport refresh. */
+let refreshTimer: number | null = null;
+
+/**
+ * The status last applied for genuinely rendered data (`ready`, `degraded`,
+ * or `no-data`), so a re-query that fails can restore the honest status of
+ * whatever is still on the map (design clause 4) instead of stranding the
+ * pill at `loading` or overclaiming `error` over data that is still good for
+ * this view. Mirrors aiannh.ts's `lastAppliedStatus`.
+ */
+let lastAppliedStatus: Extract<NifcStatus, 'ready' | 'degraded' | 'no-data'> | null = null;
+
+/**
+ * The layer's most recently loaded collection and the envelope it covers,
+ * read-only (DDM-P1-T06). DDM-P14-T07's first reader: the minimap's
+ * per-region wildfire counts apply their declared `attr_ActiveFireCandidate`
+ * predicate client-side against this collection instead of issuing their
+ * own service query. A `null` envelope means the collection came from the
+ * unscoped national fallback (`resolveQueryEnvelope` found no `getBounds`)
+ * and therefore covers every view. Returns `null` before any successful load.
+ */
+let lastLoaded: {
+  readonly collection: FeatureCollection;
+  readonly envelope: QueryEnvelope | null;
+  readonly fetchedAt: number;
+} | null = null;
+
+export function loadedNifcCollection(): {
+  readonly collection: FeatureCollection;
+  readonly envelope: QueryEnvelope | null;
+  readonly fetchedAt: number;
+} | null {
+  return lastLoaded;
 }
 
 // ---------------------------------------------------------------------------
@@ -402,13 +552,16 @@ function resolveBeforeId(map: maplibregl.Map): string | undefined {
 }
 
 /**
- * Build the GeoJSON query URL. `where=1=1` returns every active perimeter
- * (national scope; viewport scoping is DDM-P1-T06), `outSR` pins EPSG:4326
- * so MapLibre receives lon/lat regardless of a server default change, and
- * the field list plus the generalization parameters keep the response
- * inside the 15 s budget (see the module header and NIFC_OUT_FIELDS).
+ * Build the GeoJSON query URL. `where=1=1` still names no attribute filter
+ * (every active perimeter within the spatial filter below matches), `outSR`
+ * pins EPSG:4326 so MapLibre receives lon/lat regardless of a server default
+ * change, and the field list plus the generalization parameters keep the
+ * response inside the 15 s budget (see the module header and
+ * NIFC_OUT_FIELDS). A non-null `envelope` (DDM-P1-T06) adds the ESRI
+ * envelope spatial filter that scopes the scan to the current view; `null`
+ * (a map double with no `getBounds`) keeps the pre-DDM-P1-T06 national scan.
  */
-function buildQueryUrl(): string {
+function buildQueryUrl(envelope: QueryEnvelope | null): string {
   const params = new URLSearchParams({
     where: '1=1',
     outFields: NIFC_OUT_FIELDS.join(','),
@@ -417,69 +570,25 @@ function buildQueryUrl(): string {
     maxAllowableOffset: String(NIFC_MAX_ALLOWABLE_OFFSET_DEG),
     f: 'geojson'
   });
+  if (envelope) {
+    params.set('geometry', envelope.map((n) => n.toFixed(5)).join(','));
+    params.set('geometryType', 'esriGeometryEnvelope');
+    params.set('inSR', '4326');
+    params.set('spatialRel', 'esriSpatialRelIntersects');
+  }
   return `${URLS.nifcFires}/query?${params.toString()}`;
 }
 
 /**
- * Add the NIFC fires source plus fill and outline layers. Idempotent: if
- * the source already exists this returns early after re-reporting status.
- * Empty FeatureCollection input is mapped to `'no-data'` rather than an
- * error since "no active fires anywhere" is a legitimate (if rare) result.
+ * Add the five fill/outline style layers, once. Unlike the pre-DDM-P1-T06
+ * layer, these are added even for a zero-feature response: the while-active
+ * viewport refresh swaps data into the EXISTING source with `setData`, so a
+ * view that starts empty (no fires in the default Washington view, say)
+ * must still have layers ready for the perimeters a later pan brings in
+ * (aiannh.ts's addSourceAndLayers carries the same reasoning).
  */
-export async function activate(map: maplibregl.Map): Promise<void> {
-  if (map.getSource(SOURCE_ID)) {
-    return;
-  }
-
-  // Supersede any prior in-flight fetch before starting a new one.
-  if (masterController) masterController.abort();
-  masterController = new AbortController();
-  const signal = masterController.signal;
-
-  reportStatus('loading');
-
-  let geojson: FeatureCollection;
-  let truncated = false;
-  try {
-    const parsed = parseArcGisPolygonFeatureCollection(
-      await fetchJsonWithBudget(
-        buildQueryUrl(),
-        null,
-        signal,
-        FETCH_TIMEOUT_MS
-      ),
-      'NIFC WFIGS'
-    );
-    geojson = parsed.collection;
-    truncated = parsed.truncated;
-  } catch (err) {
-    // Aborted means superseded or deactivated; drop silently per invariant 5.
-    if (signal.aborted) return;
-    console.warn('[nifc-fires] WFIGS perimeters fetch failed.', err);
-    reportStatus('error');
-    return;
-  }
-
-  // A late response to a torn-down activation must not render.
-  if (signal.aborted) return;
-
-  const features = geojson?.features ?? [];
-
-  map.addSource(SOURCE_ID, {
-    type: 'geojson',
-    data: geojson,
-    attribution: 'NIFC WFIGS'
-  });
-
-  // The source is on the map from here on, perimeters or none: the time
-  // statement stands for both (an empty current set is still the product).
-  armTimeBar();
-
-  if (features.length === 0) {
-    reportStatus(truncated ? 'degraded' : 'no-data');
-    return;
-  }
-
+function ensureLayersAdded(map: maplibregl.Map): void {
+  if (map.getLayer(FILL_LAYER_ID)) return;
   const beforeId = resolveBeforeId(map);
 
   map.addLayer(
@@ -536,6 +645,38 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     },
     beforeId
   );
+}
+
+/**
+ * Apply a validated FeatureCollection to the map: `setData` into the
+ * existing source (a cache hit or a re-query) or add the source and layers
+ * (first render). Empty features report `'no-data'` rather than an error
+ * since "no active fires in this view" is a legitimate (if rare) result;
+ * `truncated` reports `'degraded'` ("live (partial)") regardless of count.
+ * Starts or stops the wildfire pulse per the CURRENT batch, since a
+ * re-query can gain or lose every wildfire perimeter the prior one had.
+ */
+function applyFeatureCollection(
+  map: maplibregl.Map,
+  geojson: FeatureCollection,
+  opts: { truncated?: boolean } = {}
+): void {
+  const features = geojson.features ?? [];
+  const existing = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+  if (existing) {
+    existing.setData(geojson);
+  } else {
+    map.addSource(SOURCE_ID, {
+      type: 'geojson',
+      data: geojson,
+      attribution: 'NIFC WFIGS'
+    });
+    // The source is on the map from here on, perimeters or none: the time
+    // statement stands for both (an empty current set is still the product).
+    armTimeBar();
+  }
+
+  ensureLayersAdded(map);
 
   const hasWildfirePerimeter = features.some(
     (feature) =>
@@ -543,55 +684,195 @@ export async function activate(map: maplibregl.Map): Promise<void> {
         feature.properties?.[NIFC_INCIDENT_TYPE_PROPERTY]
       ) === 'wildfire'
   );
-  if (hasWildfirePerimeter) startWildfirePulse(map);
+  if (hasWildfirePerimeter) {
+    startWildfirePulse(map);
+  } else {
+    stopWildfirePulse();
+  }
 
-  showLegend(LAYER_KEY, {
-    order: LEGEND_ORDER.event + 1,
-    render: (body) =>
-      renderSwatchLegend(
-        body,
-        'Mapped fire perimeters',
-        [
-          {
-            color: NIFC_INCIDENT_PRESENTATION.wildfire.lineColor,
-            label: NIFC_INCIDENT_PRESENTATION.wildfire.legendLabel
-          },
-          {
-            color: NIFC_INCIDENT_PRESENTATION.prescribed.lineColor,
-            label: NIFC_INCIDENT_PRESENTATION.prescribed.legendLabel
-          },
-          {
-            color: NIFC_INCIDENT_PRESENTATION.other.lineColor,
-            label: NIFC_INCIDENT_PRESENTATION.other.legendLabel
-          }
-        ],
-        `NIFC WFIGS current interagency mapped perimeters. ${NIFC_GENERALIZATION_NOTE} Service cadence does not establish individual perimeter age. Not for evacuation, parcel, or tactical decisions; open NIFC for the source record.`
-      )
-  });
-  if (truncated) {
+  if (features.length > 0) {
+    showLegend(LAYER_KEY, {
+      order: LEGEND_ORDER.event + 1,
+      render: (body) =>
+        renderSwatchLegend(
+          body,
+          'Mapped fire perimeters',
+          [
+            {
+              color: NIFC_INCIDENT_PRESENTATION.wildfire.lineColor,
+              label: NIFC_INCIDENT_PRESENTATION.wildfire.legendLabel
+            },
+            {
+              color: NIFC_INCIDENT_PRESENTATION.prescribed.lineColor,
+              label: NIFC_INCIDENT_PRESENTATION.prescribed.legendLabel
+            },
+            {
+              color: NIFC_INCIDENT_PRESENTATION.other.lineColor,
+              label: NIFC_INCIDENT_PRESENTATION.other.legendLabel
+            }
+          ],
+          `NIFC WFIGS current interagency mapped perimeters. ${NIFC_GENERALIZATION_NOTE} Service cadence does not establish individual perimeter age. Not for evacuation, parcel, or tactical decisions; open NIFC for the source record.`
+        )
+    });
+  }
+
+  if (opts.truncated) {
     console.warn(
       '[nifc-fires] WFIGS response reached the ArcGIS transfer limit; rendering available perimeters as live (partial).'
     );
   }
-  reportStatus(truncated ? 'degraded' : 'ready');
+
+  lastAppliedStatus = opts.truncated ? 'degraded' : features.length === 0 ? 'no-data' : 'ready';
+  reportStatus(lastAppliedStatus);
 }
 
 /**
- * Abort any in-flight fetch and remove the fill, outline, and source. All
- * guards are defensive so callers can invoke `deactivate` without first
- * verifying activation state.
+ * Fetch the WFIGS perimeters for the current viewport envelope and apply
+ * them, or reuse the coverage cache with no network call (design clause 3).
+ * Shared by `activate` and the `moveend` refresh. A cache hit or a request
+ * failure over a still-covering cache never reports `'no-data'` on the
+ * strength of a response that never answered for this view (design clauses
+ * 1, 2, and 4).
+ */
+async function fetchAndApply(map: maplibregl.Map): Promise<void> {
+  // Supersede any prior in-flight fetch FIRST, before the cache lookup, so a
+  // cache hit also owns the newest request identity: an older network
+  // response must never land over a newer cached view (aiannh.ts:427-436's
+  // Codex Unit B finding 2, 2026-07-15; the same race resurfaced here in
+  // DDM-P1-T06 director review, 2026-09-12: a far jump's in-flight fetch
+  // could otherwise land after a pan back inside the still-cached prior
+  // envelope was already served from cache, painting the far view's data
+  // and status over the near one and replacing `cache`/`lastLoaded` with
+  // it; proven red then green by
+  // tests/nifc-query-scope.spec.ts's "a pan back inside the still-cached
+  // envelope..." case).
+  if (masterController) {
+    masterController.abort();
+    masterController = null;
+  }
+  const token = ++requestSeq;
+
+  const envelope = resolveQueryEnvelope(map);
+
+  if (envelope && cache && envelopeCovers(cache.envelope, map)) {
+    applyFeatureCollection(map, cache.geojson, { truncated: cache.truncated });
+    return;
+  }
+
+  masterController = new AbortController();
+  const signal = masterController.signal;
+
+  reportStatus('loading');
+
+  let geojson: FeatureCollection;
+  let truncated = false;
+  try {
+    const parsed = parseArcGisPolygonFeatureCollection(
+      await fetchJsonWithBudget(
+        buildQueryUrl(envelope),
+        null,
+        signal,
+        FETCH_TIMEOUT_MS
+      ),
+      'NIFC WFIGS'
+    );
+    geojson = parsed.collection;
+    truncated = parsed.truncated;
+  } catch (err) {
+    // Aborted or superseded means a newer request owns the view; drop it
+    // silently per invariant 5.
+    if (signal.aborted || token !== requestSeq) return;
+    console.warn('[nifc-fires] WFIGS perimeters fetch failed.', err);
+    if (envelope && cache && envelopeCovers(cache.envelope, map)) {
+      // The last covering collection is still honest for this view (design
+      // clause 4): restore its status rather than stranding the pill at
+      // 'loading' or overclaiming 'error' over data that is still good.
+      if (lastAppliedStatus) reportStatus(lastAppliedStatus);
+    } else {
+      reportStatus('error');
+    }
+    return;
+  }
+
+  // A late response to a superseded or torn-down request must not render.
+  if (signal.aborted || token !== requestSeq) return;
+
+  const coverageEnvelope = envelope ? toCoverageEnvelope(envelope) : null;
+  cache = coverageEnvelope ? { envelope: coverageEnvelope, geojson, truncated } : null;
+  lastLoaded = { collection: geojson, envelope: coverageEnvelope, fetchedAt: Date.now() };
+  applyFeatureCollection(map, geojson, { truncated });
+}
+
+/**
+ * Attach the debounced while-active viewport refresh (DDM-P1-T06,
+ * aiannh.ts's precedent). Guarded so repeated `activate` calls never stack
+ * handlers, and so a map double without `on` (a direct unit-test call) is
+ * left exactly as it behaved before this task (the same allowance
+ * `WildfirePulseController` makes for `map.on`/`map.off`).
+ */
+function attachRefresh(map: maplibregl.Map): void {
+  if (moveendHandler || typeof map.on !== 'function') return;
+  moveendHandler = () => {
+    if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+    refreshTimer = window.setTimeout(() => {
+      refreshTimer = null;
+      void fetchAndApply(map);
+    }, REFRESH_DEBOUNCE_MS);
+  };
+  map.on('moveend', moveendHandler);
+}
+
+/** Remove the refresh handler and cancel any pending debounced refetch. */
+function detachRefresh(map: maplibregl.Map): void {
+  if (refreshTimer !== null) {
+    window.clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }
+  if (moveendHandler) {
+    if (typeof map.off === 'function') map.off('moveend', moveendHandler);
+    moveendHandler = null;
+  }
+}
+
+/**
+ * Fetch the NIFC fires for the current viewport envelope, add the source
+ * and layers, and start the while-active viewport refresh (DDM-P1-T06).
+ * Idempotent: if the source already exists the call only (re)ensures the
+ * refresh handler, so the URL-restore path cannot stack duplicates.
+ */
+export async function activate(map: maplibregl.Map): Promise<void> {
+  attachRefresh(map);
+  if (map.getSource(SOURCE_ID)) {
+    return;
+  }
+  await fetchAndApply(map);
+}
+
+/**
+ * Synchronous cancellation seam: aborts any in-flight fetch immediately, the
+ * moment off intent is recorded, before the serialized teardown op reaches
+ * this module (the cancellation invariant). Map state (sources/layers)
+ * remains `deactivate`'s job; this hook can be followed by a rapid on
+ * intent that skips queued map teardown, so stopping animation here without
+ * a matching resume hook would strand an otherwise active layer, which is
+ * why that teardown stays in `deactivate`.
  */
 export function cancelActivation(): void {
-  // Keep animation teardown in deactivate(). This hook can be followed by a
-  // rapid on intent that skips queued map teardown, so stopping here without a
-  // matching resume hook would strand an otherwise active layer.
-  masterController?.abort();
+  if (masterController) {
+    masterController.abort();
+    masterController = null;
+  }
+  // Invalidate any response that already raced past its abort check.
+  requestSeq++;
 }
 
 export function deactivate(map: maplibregl.Map): void {
   stopWildfirePulse();
+  detachRefresh(map);
   cancelActivation();
-  masterController = null;
+  cache = null;
+  lastLoaded = null;
+  lastAppliedStatus = null;
   disarmTimeBar();
   for (const id of [
     OTHER_OUTLINE_LAYER_ID,
