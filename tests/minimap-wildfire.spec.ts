@@ -3,16 +3,20 @@ import { expect, test } from '@playwright/test';
 import { FRAMING_KEYS } from '../src/config/framings';
 import { MINIMAP_WHP } from '../src/config/minimap-whp';
 import { MINIMAP_WILDFIRE_COLORS } from '../src/config/palette';
+import { MINIMAP_ACTIVE_WILDFIRE_FILTER } from '../src/config/wildfire-presentation';
 import {
   buildMinimapWildfireQueryBody,
   deriveMinimapWildfireSummary,
+  framingGeometry,
   getMinimapWildfireSnapshot,
   MINIMAP_WILDFIRE_WHERE,
   parseMinimapWildfireCount,
   retainMinimapWildfire,
 } from '../src/state/minimap-wildfire';
+import { geometriesOverlap } from '../src/util/polygon-overlap';
 import type { MinimapWhpFramingSummary } from '../src/config/minimap-whp';
 import type { MinimapWildfireSnapshot } from '../src/state/minimap-wildfire';
+import type { Geometry } from 'geojson';
 import { captureWarnings, type CapturedWarnings } from './map-harness';
 
 function whp(
@@ -238,6 +242,121 @@ test.describe('minimap WFIGS count query', () => {
     expect(() =>
       parseMinimapWildfireCount({ error: { message: 'bad query' } }),
     ).toThrow(/ArcGIS error: bad query/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DDM-P14-T07: the minimap's OWN declared count filter, read here from
+// `src/config/wildfire-presentation.ts` (`MINIMAP_ACTIVE_WILDFIRE_FILTER`,
+// renamed after the C3 report's own review found the earlier
+// `NIFC_COUNT_FILTER` name and comment wrongly implied the briefing's NIFC
+// read shared it; the briefing counts a different, wider, undeclared-filter
+// set on both of its own paths, `src/impact/sources.ts`), which
+// `MINIMAP_WILDFIRE_WHERE` above now re-exports rather than restating.
+// ---------------------------------------------------------------------------
+test.describe('the minimap\'s declared active-wildfire filter (DDM-P14-T07)', () => {
+  test('the minimap where-clause export is the declared filter\'s where, unchanged', () => {
+    expect(MINIMAP_WILDFIRE_WHERE).toBe(MINIMAP_ACTIVE_WILDFIRE_FILTER.where);
+    expect(MINIMAP_ACTIVE_WILDFIRE_FILTER.where).toBe(
+      "attr_ActiveFireCandidate = 1 AND attr_IncidentTypeCategory IN ('WF','CX')",
+    );
+  });
+
+  test('matches() agrees with the where-clause on a small property table', () => {
+    const table: Array<[string, Record<string, unknown>, boolean]> = [
+      ['WF active', { attr_ActiveFireCandidate: 1, attr_IncidentTypeCategory: 'WF' }, true],
+      ['WF inactive', { attr_ActiveFireCandidate: 0, attr_IncidentTypeCategory: 'WF' }, false],
+      ['RX active', { attr_ActiveFireCandidate: 1, attr_IncidentTypeCategory: 'RX' }, false],
+      ['CX active', { attr_ActiveFireCandidate: 1, attr_IncidentTypeCategory: 'CX' }, true],
+    ];
+    for (const [label, properties, expected] of table) {
+      expect(MINIMAP_ACTIVE_WILDFIRE_FILTER.matches(properties), label).toBe(expected);
+    }
+    expect(MINIMAP_ACTIVE_WILDFIRE_FILTER.matches(null)).toBe(false);
+    expect(MINIMAP_ACTIVE_WILDFIRE_FILTER.matches(undefined)).toBe(false);
+  });
+
+  /**
+   * The collection-read fast path (DDM-P14-T07) filters an already-loaded
+   * feature collection with `MINIMAP_ACTIVE_WILDFIRE_FILTER.matches`
+   * client-side instead of asking the service to count under
+   * `MINIMAP_ACTIVE_WILDFIRE_FILTER.where`; this proves the two derivations
+   * agree on one small fixture (two active WF/CX records among four, the
+   * same fixture the matches() table above exercises), so
+   * `deriveMinimapWildfireSummary` cannot tell which path produced its
+   * count.
+   */
+  test('a collection-derived count and the same count declared synthetically drive identical summaries', () => {
+    const fixtureFeatures: ReadonlyArray<{ readonly properties: Record<string, unknown> }> = [
+      { properties: { attr_ActiveFireCandidate: 1, attr_IncidentTypeCategory: 'WF' } },
+      { properties: { attr_ActiveFireCandidate: 1, attr_IncidentTypeCategory: 'CX' } },
+      { properties: { attr_ActiveFireCandidate: 0, attr_IncidentTypeCategory: 'WF' } },
+      { properties: { attr_ActiveFireCandidate: 1, attr_IncidentTypeCategory: 'RX' } },
+    ];
+    const fromCollection = fixtureFeatures.filter((feature) =>
+      MINIMAP_ACTIVE_WILDFIRE_FILTER.matches(feature.properties),
+    ).length;
+    // Hand-derived from the fixture above: only the WF-active and CX-active
+    // rows pass; the inactive WF row and the active RX row do not.
+    const syntheticCount = 2;
+    expect(fromCollection).toBe(syntheticCount);
+
+    const whpFixture = whp(20, 40, 'live');
+    expect(
+      deriveMinimapWildfireSummary({ status: 'live', count: fromCollection }, whpFixture),
+    ).toEqual(
+      deriveMinimapWildfireSummary({ status: 'live', count: syntheticCount }, whpFixture),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DDM-P14-T07 fix (director review, C3 report): the collection-read fast
+// path's spatial test is an honest polygon-versus-polygon intersection
+// (`geometriesOverlap`, src/util/polygon-overlap.ts), not a bbox-versus-bbox
+// approximation, so a perimeter sitting in open water between two islands of
+// a multi-part framing (sharing the framing's overall bounding box without
+// touching any of its rings) is never miscounted.
+// ---------------------------------------------------------------------------
+test.describe('the minimap framing spatial test is polygon-versus-polygon, not bbox-versus-bbox (DDM-P14-T07)', () => {
+  /** A small box sitting in the open-water gap between Kauai and Oahu
+   * (HAWAII_ISLAND_SHAPES' first two rings): inside the 'hawaii' framing's
+   * OVERALL bounding box, outside every one of its four authored rings. */
+  const SEA_GAP_FEATURE: Geometry = {
+    type: 'Polygon',
+    coordinates: [
+      [
+        [-159.0, 21.5],
+        [-158.9, 21.5],
+        [-158.9, 21.6],
+        [-159.0, 21.6],
+        [-159.0, 21.5],
+      ],
+    ],
+  };
+
+  /** A small box straddling Oahu's western edge: one corner inside the
+   * ring, three outside, sharing an actual edge crossing rather than only a
+   * bounding-box overlap. */
+  const EDGE_STRADDLE_FEATURE: Geometry = {
+    type: 'Polygon',
+    coordinates: [
+      [
+        [-158.35, 21.5],
+        [-158.25, 21.5],
+        [-158.25, 21.6],
+        [-158.35, 21.6],
+        [-158.35, 21.5],
+      ],
+    ],
+  };
+
+  test('a feature inside the framing bbox but outside every ring is NOT counted', () => {
+    expect(geometriesOverlap(SEA_GAP_FEATURE, framingGeometry('hawaii'))).toBe(false);
+  });
+
+  test('a feature straddling an island edge IS counted', () => {
+    expect(geometriesOverlap(EDGE_STRADDLE_FEATURE, framingGeometry('hawaii'))).toBe(true);
   });
 });
 

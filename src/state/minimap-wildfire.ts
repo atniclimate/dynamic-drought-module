@@ -28,14 +28,25 @@ import { FRAMING_KEYS } from '../config/framings';
 import type { FramingKey } from '../config/framings';
 import { MINIMAP_WHP } from '../config/minimap-whp';
 import type { MinimapWhpFramingSummary } from '../config/minimap-whp';
+import { MINIMAP_ACTIVE_WILDFIRE_FILTER } from '../config/wildfire-presentation';
 import { URLS } from '../config/urls';
 import { fetchJsonWithBudget } from '../util/fetch';
+import { geometriesOverlap } from '../util/polygon-overlap';
+import { registry } from './registry';
+import type { Geometry } from 'geojson';
 
 const FETCH_TIMEOUT_MS = 15_000;
 const REFRESH_INTERVAL_MS = 5 * 60_000;
 
-export const MINIMAP_WILDFIRE_WHERE =
-  "attr_ActiveFireCandidate = 1 AND attr_IncidentTypeCategory IN ('WF','CX')";
+/**
+ * The declared count filter, this module's own
+ * (`MINIMAP_ACTIVE_WILDFIRE_FILTER` in `src/config/wildfire-presentation.ts`,
+ * the single source of truth for it; NOT shared with the briefing's NIFC
+ * read, which counts a wider, undeclared-filter set on both of its own
+ * paths, see `src/impact/sources.ts`); kept as its own export so the
+ * existing callers and the pure-lane spec below need no rename.
+ */
+export const MINIMAP_WILDFIRE_WHERE = MINIMAP_ACTIVE_WILDFIRE_FILTER.where;
 
 export type MinimapWildfireCondition =
   | 'mapped-wildfire'
@@ -172,6 +183,121 @@ export function buildMinimapWildfireQueryBody(
   });
 }
 
+/** A framing's own `[west, south, east, north]` bbox, walked from the exact
+ * authored rings `buildMinimapWildfireQueryBody` posts (DDM-P14-T07), or
+ * null for a framing with no points (never true for a real `FramingKey`). */
+function framingBbox(
+  key: FramingKey,
+): readonly [number, number, number, number] | null {
+  let west = Infinity;
+  let south = Infinity;
+  let east = -Infinity;
+  let north = -Infinity;
+  for (const shape of framingShapes(key)) {
+    for (const [lon, lat] of shape) {
+      if (lon < west) west = lon;
+      if (lon > east) east = lon;
+      if (lat < south) south = lat;
+      if (lat > north) north = lat;
+    }
+  }
+  if (!Number.isFinite(west) || !Number.isFinite(south) || !Number.isFinite(east) || !Number.isFinite(north)) {
+    return null;
+  }
+  return [west, south, east, north];
+}
+
+/** Coverage-envelope containment for a plain bbox: `src/layers/nifc-fires.ts`'s
+ * `envelopeCovers`, mirrored here for a framing's bbox rather than a live
+ * map's current bounds. A `null` outer envelope is that layer's unscoped
+ * national fallback and covers every bbox. */
+function bboxCoveredByEnvelope(
+  envelope: readonly [number, number, number, number] | null,
+  bbox: readonly [number, number, number, number],
+): boolean {
+  if (envelope === null) return true;
+  return (
+    envelope[0] <= bbox[0] &&
+    envelope[1] <= bbox[1] &&
+    envelope[2] >= bbox[2] &&
+    envelope[3] >= bbox[3]
+  );
+}
+
+/**
+ * A framing's authored rings (the exact shapes `buildMinimapWildfireQueryBody`
+ * posts) as a GeoJSON MultiPolygon geometry, one component per authored ring
+ * and no holes. Neither `pointInPolygonGeometry`'s ray cast nor
+ * `geometriesOverlap`'s edge walk (`src/util/point-in-polygon.ts`,
+ * `src/util/polygon-overlap.ts`) requires a ring's last point to repeat its
+ * first: both pair index `length - 1` back to index `0` themselves, so the
+ * unclosed authored rings below are valid input as they are. Exported so
+ * `tests/minimap-wildfire.spec.ts` can drive `geometriesOverlap` against the
+ * real Hawaii multi-island shape directly, rather than a second, drift-prone
+ * copy of it.
+ */
+export function framingGeometry(key: FramingKey): Geometry {
+  return {
+    type: 'MultiPolygon',
+    coordinates: framingShapes(key).map((ring) => [ring.map(([lng, lat]) => [lng, lat])])
+  };
+}
+
+/**
+ * DDM-P14-T07 (fixed after the C3 report's own review flagged the earlier
+ * bbox-vs-bbox spatial test: a perimeter sitting in the sea gap between two
+ * islands of a multi-part framing could share a bounding box with the
+ * framing while touching none of its actual rings): when the NIFC perimeters
+ * layer is on the map, loaded, and its already-fetched collection (DDM-P1-T06's
+ * `loadedNifcCollection`) fully covers this framing's own bbox (an
+ * axis-aligned test against the layer's own axis-aligned query envelope,
+ * which stays bbox-based on purpose), count under the declared
+ * `MINIMAP_ACTIVE_WILDFIRE_FILTER` AND an honest polygon-versus-polygon
+ * intersection against the framing's actual authored rings
+ * (`geometriesOverlap`, already written and pure-lane tested in
+ * `src/util/polygon-overlap.ts` for exactly this "vertex inside, or an edge
+ * crossing" test; reused rather than reimplemented) from that collection
+ * instead of this framing's usual count-only POST. Returns `null` (never a
+ * false zero) when the layer is off, not yet loaded, or does not cover this
+ * framing, so the caller keeps its normal network read for this framing (the
+ * T06 rule: never read the collection as zero for a place it does not
+ * cover). The layer module is reached only through a dynamic import, behind
+ * the registry-status guard: a static import would pull
+ * `src/layers/nifc-fires.ts` and its MapLibre/DOM dependency graph into this
+ * module's own import graph, which the browser-free pure lane
+ * (`tests/minimap-wildfire.spec.ts`, `playwright.pure.config.ts`) loads in
+ * plain Node with no `window` or `document`; that lane's synthetic-fetch
+ * runtime tests never activate the real layer, so
+ * `registry.getStatus('nifc-fires')` reads undefined there and this function
+ * returns before the dynamic import is ever reached.
+ */
+async function countFromLoadedNifcCollection(
+  key: FramingKey,
+): Promise<number | null> {
+  const bbox = framingBbox(key);
+  if (bbox === null || bbox[0] >= bbox[2] || bbox[1] >= bbox[3]) return null;
+  const status = registry.getStatus('nifc-fires');
+  if (status !== 'ready' && status !== 'degraded') return null;
+
+  const { loadedNifcCollection } = await import('../layers/nifc-fires');
+  const loaded = loadedNifcCollection();
+  if (loaded === null) return null;
+  if (!bboxCoveredByEnvelope(loaded.envelope, bbox)) return null;
+
+  const frame = framingGeometry(key);
+  let count = 0;
+  for (const feature of loaded.collection.features) {
+    if (typeof feature !== 'object' || feature === null) continue;
+    const properties = (feature as { properties?: unknown }).properties;
+    if (typeof properties !== 'object' || properties === null) continue;
+    if (!MINIMAP_ACTIVE_WILDFIRE_FILTER.matches(properties as Record<string, unknown>)) continue;
+    const geometry = (feature as { geometry?: Geometry | null }).geometry;
+    if (!geometriesOverlap(geometry, frame)) continue;
+    count += 1;
+  }
+  return count;
+}
+
 /**
  * Apply strict red, then orange, then yellow precedence to one framing.
  * Exact 50 and 30 percent values do not pass their respective thresholds.
@@ -230,6 +356,19 @@ async function queryFramingCount(
   key: FramingKey,
   signal: AbortSignal,
 ): Promise<FramingCountOutcome> {
+  // Synchronous guard BEFORE any `await`: when the layer is off (the
+  // pure-lane runtime tests never activate it, and every real boot the
+  // layer is off), this never touches a promise, so all nine framings'
+  // POSTs still fire in the SAME synchronous tick as before this task (the
+  // existing "shares nine concurrent POSTs" and "final release aborts all
+  // pending requests" cases depend on exactly that).
+  const nifcLayerStatus = registry.getStatus('nifc-fires');
+  if (nifcLayerStatus === 'ready' || nifcLayerStatus === 'degraded') {
+    const fromCollection = await countFromLoadedNifcCollection(key);
+    if (fromCollection !== null) {
+      return { key, result: { status: 'live', count: fromCollection } };
+    }
+  }
   try {
     const value = await fetchJsonWithBudget(
       `${URLS.nifcFires}/query`,

@@ -30,6 +30,7 @@ import {
   buildNifcAreaPerimeterClaim
 } from '../config/wildfire-presentation';
 import {
+  bboxIntersects,
   loadServiceEnvelopePieces,
   mergeByStableIdentifier
 } from '../util/bbox';
@@ -40,6 +41,7 @@ import { cpcOutlookBarsSvg, trendLineSvg, type TrendPoint } from '../ui/charts';
 import { categoryImpact } from './category-impacts';
 import { makeClaim, todayIso } from './evidence';
 import { contextStateFips, contextStateName } from './resources';
+import { registry } from '../state/registry';
 import {
   NWS_CACHE_TTL,
   createNwsRequestSession,
@@ -759,6 +761,158 @@ export async function fetchDsciTrendClaims(
 // Current: mapped NIFC fire perimeters near the selection
 // ---------------------------------------------------------------------------
 
+/** Shared claim identity for both the network read below and the
+ * collection-read fast path, so the two never drift into naming two
+ * different sources for the same NIFC observation. */
+const NIFC_AREA_CLAIM_SOURCE = 'NIFC current mapped fire perimeters (WFIGS)';
+const NIFC_AREA_CLAIM_SOURCE_URL = 'https://data-nifc.opendata.arcgis.com/';
+
+/** Local calendar day of an epoch instant, `evidence.ts`'s `todayIso()`
+ * convention applied to a past instant rather than the current moment: the
+ * collection-read path (DDM-P14-T07) reports the perimeters layer's own
+ * `fetchedAt`, not today, so a several-minutes-old collection is dated
+ * honestly (design clause 4) instead of claiming a fresher retrieval than
+ * actually happened. */
+function localDayFromEpoch(epochMs: number): string {
+  const d = new Date(epochMs);
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+/** Walk a GeoJSON geometry's coordinates into a `[west, south, east, north]`
+ * bounding box, or null for a geometry with no positional coordinates. A
+ * small local copy of `impact/context.ts`'s `geometryBbox` rather than an
+ * import: `src/layers/nifc-fires.ts` features never cross the antimeridian
+ * in practice (WFIGS perimeters are compact, single-country incidents), and
+ * this keeps the fast path independent of the boundary-context chunk rather
+ * than growing this file's own first-activation closure to reach it. */
+function polygonFeatureBbox(
+  geometry: { readonly coordinates?: unknown } | null | undefined
+): readonly [number, number, number, number] | null {
+  if (!geometry) return null;
+  let west = Infinity;
+  let south = Infinity;
+  let east = -Infinity;
+  let north = -Infinity;
+  const visit = (node: unknown): void => {
+    if (!Array.isArray(node)) return;
+    if (typeof node[0] === 'number' && typeof node[1] === 'number') {
+      const [lng, lat] = node as [number, number];
+      if (lng < west) west = lng;
+      if (lng > east) east = lng;
+      if (lat < south) south = lat;
+      if (lat > north) north = lat;
+      return;
+    }
+    for (const child of node) visit(child);
+  };
+  visit(geometry.coordinates);
+  if (!Number.isFinite(west) || !Number.isFinite(south) || !Number.isFinite(east) || !Number.isFinite(north)) {
+    return null;
+  }
+  return [west, south, east, north];
+}
+
+/** Coverage-envelope containment for a plain bbox: `src/layers/nifc-fires.ts`'s
+ * `envelopeCovers`, mirrored here for a place's request bbox rather than a
+ * live map's current bounds. A `null` outer envelope is that layer's
+ * unscoped national fallback and covers every bbox. */
+function bboxCoveredByEnvelope(
+  envelope: readonly [number, number, number, number] | null,
+  bbox: readonly [number, number, number, number]
+): boolean {
+  if (envelope === null) return true;
+  return (
+    envelope[0] <= bbox[0] &&
+    envelope[1] <= bbox[1] &&
+    envelope[2] >= bbox[2] &&
+    envelope[3] >= bbox[3]
+  );
+}
+
+/**
+ * DDM-P14-T07 (design amended by the director after the C3 report's review:
+ * the shipped version of this comment claimed the two read paths shared one
+ * declared filter, which was wrong): when the NIFC perimeters layer is on
+ * the map, loaded, and its already-fetched collection (DDM-P1-T06's
+ * `loadedNifcCollection`) fully covers this place's request bbox, count the
+ * SAME set the network read below would: every mapped incident whose
+ * geometry intersects the bbox, wildfire, Prescribed fire, or unclassified
+ * alike, deduplicated by `attr_UniqueFireIdentifier` exactly like
+ * `mergeByStableIdentifier` does for the network path's pages, then split by
+ * type through `buildNifcAreaPerimeterClaim`. The two paths therefore
+ * produce the identical sentence for the identical loaded set; the network
+ * path's 50-record cap and its resulting lower-bound sentence stay a
+ * NETWORK-PATH property only (this collection is not paginated, so there is
+ * nothing to report as a floor). The minimap's declared filter
+ * (`MINIMAP_ACTIVE_WILDFIRE_FILTER`, active WF/CX only) is NOT applied
+ * here; it belongs to the minimap's own narrower count, never this one.
+ * Returns `null` (never a false zero) when the layer is off, not yet
+ * loaded, or does not cover this bbox, so the caller falls through to the
+ * unchanged network read (the T06 rule: never read the collection as zero
+ * for a place it does not cover). The layer module is reached only through
+ * a dynamic import, behind the registry-status guard: a static import
+ * would pull `src/layers/nifc-fires.ts` and its MapLibre/DOM dependency
+ * graph into this already-lazy briefing chunk's first-activation closure
+ * even when the layer is off, which is the common case.
+ */
+async function nifcClaimFromLoadedCollection(
+  requestBbox: readonly [number, number, number, number]
+): Promise<SourceResult | null> {
+  if (requestBbox[0] >= requestBbox[2] || requestBbox[1] >= requestBbox[3]) return null;
+  const status = registry.getStatus('nifc-fires');
+  if (status !== 'ready' && status !== 'degraded') return null;
+
+  const { loadedNifcCollection } = await import('../layers/nifc-fires');
+  const loaded = loadedNifcCollection();
+  if (loaded === null) return null;
+  if (!bboxCoveredByEnvelope(loaded.envelope, requestBbox)) return null;
+
+  const candidates = loaded.collection.features.filter((feature) => {
+    if (!isObject(feature) || !isObject(feature.properties)) return false;
+    const featureBbox = polygonFeatureBbox(
+      feature.geometry as { readonly coordinates?: unknown } | null | undefined
+    );
+    return featureBbox !== null && bboxIntersects(featureBbox, requestBbox);
+  });
+  // Same dedupe rule as the network path's `mergeByStableIdentifier(pages,
+  // ...)` call below, applied to one "page" (the loaded collection has no
+  // pagination of its own).
+  const deduped = mergeByStableIdentifier([candidates], (feature) => {
+    if (!isObject(feature) || !isObject(feature.properties)) return null;
+    const id = feature.properties.attr_UniqueFireIdentifier;
+    return typeof id === 'string' || typeof id === 'number' ? id : null;
+  });
+  const text = buildNifcAreaPerimeterClaim(
+    deduped.map((feature) =>
+      isObject(feature) && isObject(feature.properties)
+        ? feature.properties.attr_IncidentTypeCategory
+        : undefined
+    )
+  );
+
+  return {
+    ok: true,
+    claims: [nifcAreaClaim(text, localDayFromEpoch(loaded.fetchedAt))]
+  };
+}
+
+/** The one `makeClaim` call site both the network read below and the
+ * collection-read fast path above share (`tests/product-catalog.spec.ts`'s
+ * pinned call-site count counts text occurrences, not code paths, so two
+ * separate calls here would move that count for no product reason). */
+function nifcAreaClaim(text: string, retrieved: string): SourcedClaim {
+  return makeClaim({
+    text,
+    source: NIFC_AREA_CLAIM_SOURCE,
+    sourceUrl: NIFC_AREA_CLAIM_SOURCE_URL,
+    product: 'nifc-fires',
+    evidence: 'observed',
+    dates: { retrieved }
+  });
+}
+
 /**
  * Query the National Interagency Fire Center (NIFC) current-perimeters
  * FeatureServer for current mapped fire perimeters intersecting the selection's
@@ -772,14 +926,18 @@ export async function fetchDsciTrendClaims(
  * polygon-exact query that would make the count a count over the place is
  * backed up on origin at feature/nifc-perimeter-evidence (905671d) and was
  * set aside by that ruling.
+ *
+ * DDM-P14-T07: when the perimeters layer is on the map and already covers
+ * this bbox, `nifcClaimFromLoadedCollection` answers from its loaded
+ * collection first, issuing no request at all; this function's network read
+ * runs only when that fast path declines (layer off, not loaded, or this
+ * bbox reaches outside what it has loaded).
  */
 export async function fetchNifcClaims(
   context: BoundarySelectionContext,
   signal: AbortSignal
 ): Promise<SourceResult> {
   const { lng, lat } = context.lngLat;
-  const source = 'NIFC current mapped fire perimeters (WFIGS)';
-  const sourceUrl = 'https://data-nifc.opendata.arcgis.com/';
   const incompleteCrossingEnvelope =
     !context.serviceBbox &&
     (context.bboxCrossesAntimeridian === true ||
@@ -796,6 +954,16 @@ export async function fetchNifcClaims(
     context.serviceBbox ??
     context.bbox ??
     ([lng - 0.5, lat - 0.5, lng + 0.5, lat + 0.5] as const);
+
+  // Synchronous guard BEFORE any `await`: when the layer is off (the common
+  // case, and every existing lane-timing assumption), this never touches a
+  // promise and falls straight into the unchanged network read below in the
+  // same tick, exactly as before this task.
+  const nifcLayerStatus = registry.getStatus('nifc-fires');
+  if (nifcLayerStatus === 'ready' || nifcLayerStatus === 'degraded') {
+    const fromCollection = await nifcClaimFromLoadedCollection(requestBbox);
+    if (fromCollection !== null) return fromCollection;
+  }
 
   try {
     const payloads = await loadServiceEnvelopePieces(
@@ -840,9 +1008,7 @@ export async function fetchNifcClaims(
     // Mapped incident perimeters and their count: directly observed.
     return {
       ok: true,
-      claims: [
-        makeClaim({ text, source, sourceUrl, product: 'nifc-fires', evidence: 'observed', dates: { retrieved: todayIso() } })
-      ]
+      claims: [nifcAreaClaim(text, todayIso())]
     };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
