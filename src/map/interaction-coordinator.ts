@@ -32,7 +32,7 @@ import * as maplibregl from 'maplibre-gl';
 import { interactionRank } from '../config/interaction-ranks';
 import type { InteractionTargetKind } from '../config/interaction-ranks';
 import type { BoundaryKind, BoundarySelectionContext, ContainingPlaces } from '../impact/types';
-import { isStateCode } from '../impact/resources';
+import { isStateCode } from '../config/state-codes';
 import { getEmphasisTargets, emphasizePlaces } from '../state/place-emphasis';
 import type { EmphasisTarget } from '../state/place-emphasis';
 import { getPlaceSelection, setPlaceSelection } from '../state/place-selection';

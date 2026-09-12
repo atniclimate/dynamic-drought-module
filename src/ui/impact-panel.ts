@@ -13,7 +13,6 @@ import {
   type SourceCapabilityCell
 } from '../config/source-capability';
 import { HORIZON_CHROME } from '../impact/horizon-chrome';
-import { isStateCode } from '../impact/resources';
 import type {
   BoundarySelectionContext,
   HazardCell,
@@ -22,8 +21,6 @@ import type {
   HorizonKey,
   ImpactBriefing
 } from '../impact/types';
-import { getMap } from '../state/map-store';
-import { resolveContainingState } from '../state/location-identity';
 import {
   getPlaceSelection,
   setPlaceSelection
@@ -526,43 +523,6 @@ function renderUnavailable(
 }
 
 /**
- * Resolve `context`'s containing state when the context arrived without one
- * (`containing.basis === 'none'`: a direct AIANNH, BIA-reservation or
- * ecoregion click). This lives HERE, at the one function every briefing door
- * composes through, rather than in those layer modules, because their click
- * handler (`registerClickTarget`'s `respond` callback, see
- * src/map/interaction-coordinator.ts) is synchronous and the reliable
- * resolver (`resolveContainingState`, backed by the same point-in-polygon
- * fallback `resolveLocationIdentity` uses) is not; filling `containing` inside
- * a synchronous callback could only ever answer when the `states` layer
- * happened to be on, which would make the fix silently conditional on an
- * unrelated layer. A context that already knows its state is returned
- * unchanged and pays nothing for this call. The invariant from
- * `ContainingPlaces` stands here too: on no map, no result, or any failure or
- * cancellation, this degrades to the original (still `'none'`) context, never
- * to a camera-region guess.
- */
-async function enrichContainingState(
-  context: BoundarySelectionContext,
-  signal: AbortSignal
-): Promise<BoundarySelectionContext> {
-  const map = getMap();
-  if (!map) return context;
-  try {
-    const state = await resolveContainingState(map, context.lngLat, signal);
-    if (signal.aborted || state === null || !isStateCode(state.code)) {
-      return context;
-    }
-    return {
-      ...context,
-      containing: { state: state.code, basis: 'point-in-polygon' }
-    };
-  } catch {
-    return context;
-  }
-}
-
-/**
  * Open the impact briefing. The returned token represents this facade-level
  * open even while the lazy runtime is still loading.
  */
@@ -591,12 +551,21 @@ export function openImpactPanel(context: BoundarySelectionContext): number {
   // Either the lazy runtime is still loading, or this context needs its
   // containing state resolved from the point (or both); either way the
   // runtime opens the panel from a `.then()` below instead of synchronously.
+  // The enrichment itself lives in a lazy module (`src/impact/containing-state.ts`,
+  // its own doc comment explains why), reached through a dynamic import here
+  // rather than a static one, exactly like the panel runtime below: a static
+  // import would hoist `location-identity.ts` (and its point-in-polygon
+  // fallback) into this eager facade's own bundle, which the activation gate
+  // forbids (DR-085 budgets; the impact briefing cluster is a first-use cost).
   const abortController = needsStateEnrichment ? new AbortController() : null;
   beginPendingOpen(token, abortController);
 
   let contextReady: Promise<BoundarySelectionContext>;
   if (abortController) {
-    contextReady = enrichContainingState(context, abortController.signal);
+    const signal = abortController.signal;
+    contextReady = import('../impact/containing-state').then((mod) =>
+      mod.enrichContainingState(context, signal)
+    );
   } else {
     contextReady = Promise.resolve(context);
   }

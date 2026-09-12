@@ -27,31 +27,18 @@
  */
 
 import type { RegionKey } from '../config/regions';
+import { STATE_FIPS, isStateCode } from '../config/state-codes';
+import type { StateCode } from '../config/state-codes';
 import type { BoundarySelectionContext, ResourceLink } from './types';
 
-/**
- * Two-letter state, district, or territory postal code used for resource
- * routing. Covers the 52 features in the bundled Census cartographic boundary
- * file (public/data/us-states.geojson): the 50 states, the District of
- * Columbia, and Puerto Rico.
- */
-export type StateCode =
-  | 'AL' | 'AK' | 'AZ' | 'AR' | 'CA' | 'CO' | 'CT' | 'DE' | 'FL' | 'GA'
-  | 'HI' | 'ID' | 'IL' | 'IN' | 'IA' | 'KS' | 'KY' | 'LA' | 'ME' | 'MD'
-  | 'MA' | 'MI' | 'MN' | 'MS' | 'MO' | 'MT' | 'NE' | 'NV' | 'NH' | 'NJ'
-  | 'NM' | 'NY' | 'NC' | 'ND' | 'OH' | 'OK' | 'OR' | 'PA' | 'RI' | 'SC'
-  | 'SD' | 'TN' | 'TX' | 'UT' | 'VT' | 'VA' | 'WA' | 'WV' | 'WI' | 'WY'
-  | 'DC' | 'PR';
-
-/** Federal Information Processing Standards (FIPS) state codes. */
-const STATE_FIPS: Record<StateCode, number> = {
-  AL: 1, AK: 2, AZ: 4, AR: 5, CA: 6, CO: 8, CT: 9, DE: 10, FL: 12, GA: 13,
-  HI: 15, ID: 16, IL: 17, IN: 18, IA: 19, KS: 20, KY: 21, LA: 22, ME: 23,
-  MD: 24, MA: 25, MI: 26, MN: 27, MS: 28, MO: 29, MT: 30, NE: 31, NV: 32,
-  NH: 33, NJ: 34, NM: 35, NY: 36, NC: 37, ND: 38, OH: 39, OK: 40, OR: 41,
-  PA: 42, RI: 44, SC: 45, SD: 46, TN: 47, TX: 48, UT: 49, VT: 50, VA: 51,
-  WA: 53, WV: 54, WI: 55, WY: 56, DC: 11, PR: 72
-};
+// Re-exported so every existing `import ... from './resources'` inside the
+// briefing cluster keeps compiling unchanged; the type and the guard now
+// live in the eager-safe `src/config/state-codes.ts` (activation-gate fix,
+// see that module's own doc comment), because an eager import of only the
+// guard (src/map/interaction-coordinator.ts, src/state/deep-link.ts) was
+// hoisting this whole cluster into the initial chunk.
+export type { StateCode } from '../config/state-codes';
+export { isStateCode } from '../config/state-codes';
 
 export const STATE_LABEL: Record<StateCode, string> = {
   AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
@@ -68,11 +55,6 @@ export const STATE_LABEL: Record<StateCode, string> = {
   WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
   DC: 'District of Columbia', PR: 'Puerto Rico'
 };
-
-/** Whether a raw uppercased string is a state, district, or territory code this catalog covers. */
-export function isStateCode(code: string): code is StateCode {
-  return code in STATE_FIPS;
-}
 
 /**
  * Resolve the state for a selection, in order:

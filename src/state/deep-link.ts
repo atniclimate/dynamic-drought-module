@@ -27,7 +27,7 @@ import type * as maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection } from 'geojson';
 import type { BoundarySelectionContext, ContainingPlaces } from '../impact/types';
 import { postalCodeFromProperties } from '../config/geography';
-import { isStateCode } from '../impact/resources';
+import { isStateCode } from '../config/state-codes';
 
 // The boot slice of the URL catalog, not the catalog (DR-008a): this
 // resolver runs at boot and needs one bundled file.
