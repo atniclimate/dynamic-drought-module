@@ -290,6 +290,26 @@ test.describe('briefingSourcePolicy: impact synthesis gated by the place, with o
     );
   });
 
+  test('a Texas place under the washington_state camera: synthesis is disabled by the place (DR-090) while the seasonal heat source stays available by issuer extent (DR-075 a)', () => {
+    const policy = briefingSourcePolicy(
+      context({
+        containing: { state: 'TX', basis: 'point-in-polygon' },
+        regionKey: 'washington_state'
+      })
+    );
+    expect(policy.geography.postalCode).toBe('TX');
+    expect(policy.droughtImpact.enabled).toBe(false);
+    expect(policy.droughtImpact.note).toBe(
+      'The briefing synthesis and resource routing are not validated outside the PNW.'
+    );
+    // DR-075 a's gate is a separate branch of the same policy (the national
+    // heat capability by geography key) and DR-090 does not reach it. That
+    // the matrix collapse in hydrate.ts hides this available lane is a
+    // rendering question on the S30 owner card, not a policy change here.
+    expect(policy.sources.cpcSeasonalTemp.state).toBe('available');
+    expect(policy.sources.pointHeat.state).toBe('available');
+  });
+
   test('a place with its own containing.state (OR) reads the place, not the national camera: synthesis stays enabled', () => {
     const policy = briefingSourcePolicy(
       context({
