@@ -13,7 +13,7 @@ import {
 import { FRAMING_KEYS } from '../src/config/framings';
 import { HAZARD_CLUSTER_KEYS, HAZARD_CLUSTERS } from '../src/config/clusters';
 import { OCEAN_KEYS } from '../src/config/oceans';
-import { LAYER_DEFS } from '../src/config/layers';
+import { LAYER_DEFS, type LayerKey } from '../src/config/layers';
 import { parseFramingParam } from '../src/state/framing-store';
 import { parseClusterParam, parseOceanParam } from '../src/state/cluster-store';
 // The boot composition moved to the S3 cluster service (the S2 interim
@@ -168,9 +168,7 @@ test.describe('S2 cluster boot composition (Node)', () => {
   });
 
   test('a hazard cluster is the untouched reference set plus its current recipe, one surface at most', () => {
-    const reference = (DEFAULT_ON as readonly string[]).filter(
-      (key) => !SURFACE_KEYS.has(key)
-    );
+    const reference = DEFAULT_ON.filter((key) => !SURFACE_KEYS.has(key));
     for (const cluster of HAZARD_CLUSTER_KEYS) {
       const composed = composeClusterIntent(cluster);
       // The default-on reference set is left alone (D-0.7.0-044).
@@ -181,8 +179,12 @@ test.describe('S2 cluster boot composition (Node)', () => {
       for (const key of HAZARD_CLUSTERS[cluster].recipes.current) {
         expect(composed, `${cluster}: recipe ${key} applied`).toContain(key);
       }
-      // The one-surface invariant (UX-1) holds by construction.
-      const surfaces = composed.filter((key) => SURFACE_KEYS.has(key));
+      // The one-surface invariant (UX-1) holds by construction. Cast: every
+      // member `composeClusterIntent` pushes comes from a LayerDef's own
+      // `key` (a LayerKey), but the function's own return type is the wider
+      // `readonly string[]` (src/state/cluster-service.ts:146); a src typing
+      // gap, worked around here rather than widened.
+      const surfaces = composed.filter((key) => SURFACE_KEYS.has(key as LayerKey));
       expect(surfaces.length, `${cluster}: at most one surface`).toBeLessThanOrEqual(1);
       // No duplicates.
       expect(new Set(composed).size).toBe(composed.length);

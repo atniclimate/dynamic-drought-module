@@ -25,7 +25,7 @@ test.describe('Wildfire recent-scene configuration', () => {
       VIEW_PRESETS.map((preset) => [preset.key, preset.preferredBasemap])
     );
     expect(quickPreferences.get('fire-risk')).toBe('satellite');
-    for (const key of ['right-now', 'this-week', 'season-ahead', 'whose-land']) {
+    for (const key of ['right-now', 'this-week', 'season-ahead', 'whose-land'] as const) {
       expect(quickPreferences.get(key)).toBeUndefined();
     }
   });

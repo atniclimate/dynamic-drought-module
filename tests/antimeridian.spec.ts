@@ -462,7 +462,11 @@ test.describe('consumer behavior on a crossing selection (N2-A)', () => {
   });
 
   test('a sibling failure after headers aborts the other response body', async () => {
-    let finishStalledBody: (() => void) | null = null;
+    // A typed holder, not a bare `let`: the assignment below happens inside
+    // the `createHttpServer` request callback, a closure TypeScript cannot
+    // see from the top-level read site in `finally` below, which would
+    // otherwise narrow the binding to `null`.
+    const stalledBody: { finish: (() => void) | null } = { finish: null };
     let noteBodyCancelled: (() => void) | null = null;
     const bodyCancelled = new Promise<void>((resolve) => {
       noteBodyCancelled = resolve;
@@ -471,7 +475,7 @@ test.describe('consumer behavior on a crossing selection (N2-A)', () => {
       if (request.url === '/stalled') {
         response.writeHead(200, { 'Content-Type': 'application/json' });
         response.write('{"type":"FeatureCollection","features":[');
-        finishStalledBody = () => {
+        stalledBody.finish = () => {
           if (!response.writableEnded) response.end(']}');
         };
         response.on('close', () => {
@@ -546,7 +550,7 @@ test.describe('consumer behavior on a crossing selection (N2-A)', () => {
     } finally {
       warnings.restore();
       globalThis.fetch = originalFetch;
-      finishStalledBody?.();
+      stalledBody.finish?.();
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }

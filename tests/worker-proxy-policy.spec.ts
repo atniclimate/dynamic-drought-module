@@ -619,15 +619,21 @@ test('a full proxy read preserves bytes and swallows cache.put rejection', async
   const originalCaches = Object.getOwnPropertyDescriptor(globalThis, 'caches');
   const bytes = new Uint8Array([137, 80, 78, 71, 0, 255, 10]);
   const background: Promise<unknown>[] = [];
-  let upstreamRequest: Request | null = null;
-  let cachedKey: Request | null = null;
-  let cachedResponse: Response | null = null;
+  // A typed holder, not bare `let`s: all three are assigned inside closures
+  // (the fake cache's `put`, the fetch override) that TypeScript cannot see
+  // from the top-level read sites further down, and would otherwise narrow
+  // each binding to `never`.
+  const seen: {
+    upstreamRequest: Request | null;
+    cachedKey: Request | null;
+    cachedResponse: Response | null;
+  } = { upstreamRequest: null, cachedKey: null, cachedResponse: null };
 
   const fakeCache = {
     match: async () => undefined,
     put: async (key: Request, response: Response) => {
-      cachedKey = key;
-      cachedResponse = response;
+      seen.cachedKey = key;
+      seen.cachedResponse = response;
       throw new Error('simulated cache rejection');
     }
   };
@@ -637,7 +643,7 @@ test('a full proxy read preserves bytes and swallows cache.put rejection', async
     value: { default: fakeCache }
   });
   globalThis.fetch = (async (request: Request) => {
-    upstreamRequest = request;
+    seen.upstreamRequest = request;
     return new Response(bytes, {
       status: 200,
       headers: {
@@ -676,13 +682,18 @@ test('a full proxy read preserves bytes and swallows cache.put rejection', async
     expect(Array.from(new Uint8Array(await response.arrayBuffer()))).toEqual(
       Array.from(bytes)
     );
-    expect(upstreamRequest).not.toBeNull();
-    expect([...(upstreamRequest as Request).headers.keys()].sort()).toEqual([
+    if (seen.upstreamRequest === null) {
+      throw new Error('the fetch override never saw an upstream request');
+    }
+    expect([...seen.upstreamRequest.headers.keys()].sort()).toEqual([
       'accept',
       'user-agent'
     ]);
-    expect(cachedKey?.headers.get('Accept')).toBe('image/png');
-    expect(cachedResponse?.headers.get('Cache-Control')).toBe(
+    if (seen.cachedKey === null || seen.cachedResponse === null) {
+      throw new Error('cache.put was never called');
+    }
+    expect(seen.cachedKey.headers.get('Accept')).toBe('image/png');
+    expect(seen.cachedResponse.headers.get('Cache-Control')).toBe(
       'public, max-age=60'
     );
     await expect(Promise.all(background)).resolves.toBeDefined();

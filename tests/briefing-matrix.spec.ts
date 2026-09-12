@@ -585,7 +585,15 @@ function allHazardRows(page: Page): ReturnType<Page['locator']> {
 async function activeHazardValues(page: Page): Promise<string[]> {
   return page
     .locator('.impact-horizons .impact-hazard[aria-current="true"]')
-    .evaluateAll((rows) => rows.map((row) => row.getAttribute('data-hazard')));
+    .evaluateAll((rows) =>
+      rows.map((row) => {
+        // Throw, never filter: an active row without a hazard attribute is
+        // a regression this helper must surface, not silently drop.
+        const hazard = row.getAttribute('data-hazard');
+        if (hazard === null) throw new Error('an active hazard row carries no data-hazard');
+        return hazard;
+      })
+    );
 }
 
 async function orderedHazardValues(page: Page): Promise<(string | null)[]> {

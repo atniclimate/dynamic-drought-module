@@ -265,7 +265,7 @@ test.describe('date precedence (valid > issued > published > retrieved)', () => 
   test('a legacy undated object yields no line (the factory itself refuses one)', () => {
     // Constructed raw deliberately: makeClaim throws on a dateless claim, so
     // the null path exists only for defensive rendering of legacy objects.
-    expect(claimDateLine({ dates: undefined })).toBeNull();
+    expect(claimDateLine({})).toBeNull();
   });
 });
 

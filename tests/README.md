@@ -90,6 +90,23 @@ cannot drift apart.
 not part of any tier above, and it may reach the network. Treat a green
 `check:links` as an unratified extra, not as coverage.
 
+### tests/ is typechecked too (`npm run typecheck:tests`)
+
+`tsconfig.tests.json` (repository root) typechecks every file under `tests/`
+plus `playwright.config.ts` and `playwright.pure.config.ts`, with the
+Playwright, `node:test`, and Cloudflare Workers types each spec needs; it
+never weakens a strict flag from the production `tsconfig.json`, and that
+file's own `include` (`src/**` only) is untouched. `npm run typecheck:tests`
+runs it and then proves the negative side of the acceptance sentence:
+`tests/types/context-literal-typo.ts`, a hand-built `BoundarySelectionContext`
+literal missing its required `containing` field, must FAIL to compile under
+its own `tsconfig.context-literal-typo.json`
+(`tests/types/check-context-literal-typo.mjs` asserts exactly that, the same
+inverted-pass/fail pattern `scripts/check-key-types.mjs` uses for
+`tests/types/key-typos.ts`). Both fixture files are excluded from
+`tsconfig.tests.json`'s own `include` on purpose. `typecheck:tests` is the
+last step in `check:all`.
+
 ### The evidence capture pass (`DDM_CAPTURE_EVIDENCE=1`)
 
 A routine local run now does exactly what CI does: fixture boundaries, no
