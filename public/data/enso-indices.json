@@ -1,5 +1,5 @@
 {
-  "retrieved": "2026-09-07",
+  "retrieved": "2026-09-14",
   "sourceQuotes": [
     {
       "text": "NOAA's Climate Prediction Center, which is part of the National Weather Service, declares the onset of an El Nino episode when the 3-month average sea-surface temperature departure exceeds 0.5 C in the east-central equatorial Pacific [between 5 N-5 S and 170 W-120 W].",
@@ -811,22 +811,15 @@
     "description": "Weekly Nino 3.4 sea surface temperature and anomaly on the 1991-2020 base period. Each date is the centre of its week, as the file states on its own first line. Retained as an observed trajectory read and never used as an ENSO phase declaration, which CPC makes from three-month averages.",
     "basePeriod": "1991-2020",
     "dateMeaning": "week centre",
-    "published": "2026-09-07",
+    "published": "2026-09-14",
     "latest": {
       "year": 2026,
       "month": 9,
-      "day": 2,
-      "total": 29.4,
-      "anom": 2.7
+      "day": 9,
+      "total": 29.6,
+      "anom": 2.9
     },
     "values": [
-      {
-        "year": 2025,
-        "month": 9,
-        "day": 10,
-        "total": 26.2,
-        "anom": -0.5
-      },
       {
         "year": 2025,
         "month": 9,
@@ -1183,6 +1176,13 @@
         "day": 2,
         "total": 29.4,
         "anom": 2.7
+      },
+      {
+        "year": 2026,
+        "month": 9,
+        "day": 9,
+        "total": 29.6,
+        "anom": 2.9
       }
     ]
   },
