@@ -37,6 +37,8 @@ test.describe('mobile map-information disclosure (390x844)', () => {
     const panel = page.locator('#map-info-panel');
     const canvasContainer = page.locator('#map .maplibregl-canvas-container');
     const bottomDock = page.locator('#map-bottom-dock');
+    const conditionIndicator = page.locator('#map-condition-indicator');
+    const mapKey = page.locator('#map-key');
     const originalUrl = page.url();
 
     // A focusable descendant proves the dock's inert contract independent of
@@ -55,7 +57,9 @@ test.describe('mobile map-information disclosure (390x844)', () => {
     });
     const dockFocusProbe = page.locator('#map-info-dock-focus-probe');
     await expect(dockFocusProbe).toBeFocused();
-    await expect(bottomDock.locator('#map-key-expand')).toHaveCount(1);
+    await expect(page.locator('#map-key-expand')).toHaveCount(0);
+    await expect(conditionIndicator).toHaveCount(1);
+    await expect(mapKey).toHaveCount(1);
 
     await expect(button).toBeVisible();
     await expect(button).toHaveAttribute('aria-controls', 'map-info-panel');
@@ -120,19 +124,19 @@ test.describe('mobile map-information disclosure (390x844)', () => {
 
     const stageBox = await page.locator('#map-container').boundingBox();
     const panelBox = await panel.boundingBox();
-    const footerBox = await page.locator('#mobile-footer-nav').boundingBox();
+    const railBox = await page.locator('#mobile-footer-nav').boundingBox();
     expect(stageBox).not.toBeNull();
     expect(panelBox).not.toBeNull();
-    expect(footerBox).not.toBeNull();
+    expect(railBox).not.toBeNull();
     const leftInset = panelBox!.x - stageBox!.x;
     const topInset = panelBox!.y - stageBox!.y;
     const rightInset = stageBox!.x + stageBox!.width - (panelBox!.x + panelBox!.width);
-    const footerGap = footerBox!.y - (panelBox!.y + panelBox!.height);
-    for (const inset of [leftInset, topInset, rightInset, footerGap]) {
+    const bottomInset = stageBox!.y + stageBox!.height - (panelBox!.y + panelBox!.height);
+    for (const inset of [leftInset, topInset, rightInset, bottomInset]) {
       expect(inset).toBeGreaterThanOrEqual(4);
       expect(inset).toBeLessThanOrEqual(16);
     }
-    expect(panelBox!.height).toBeGreaterThan((footerBox!.y - stageBox!.y) * 0.9);
+    expect(panelBox!.height).toBeGreaterThan(stageBox!.height * 0.9);
 
     const glass = await panel.evaluate((element) => {
       const root = getComputedStyle(document.documentElement);
@@ -173,6 +177,8 @@ test.describe('mobile map-information disclosure (390x844)', () => {
     await expect(button).toBeFocused();
     await expect(canvasContainer).not.toHaveAttribute('inert', '');
     await expect(bottomDock).not.toHaveAttribute('inert', '');
+    await expect(conditionIndicator).toHaveCount(1);
+    await expect(mapKey).toHaveCount(1);
     await expect.poll(() => page.url()).toBe(originalUrl);
     await page.evaluate(() => {
       document.getElementById('map-info-dock-focus-probe')?.focus();
@@ -358,6 +364,10 @@ test.describe('still-loading sources stay visible during live activation (W2-D6)
 
     // The Fire key renders the SPC scale AND names the still-loading NIFC
     // section as a placeholder row instead of omitting it (W2-D6).
+    const detailsToggle = page.locator('#map-key-details-toggle');
+    await expect(detailsToggle).toBeVisible();
+    await detailsToggle.click();
+    await expect(detailsToggle).toHaveAttribute('aria-expanded', 'true');
     const key = page.locator('#map-key');
     await expect(key.locator('[data-spc-fire-weather-key]')).toBeVisible();
     await expect(key.locator('[data-nifc-perimeter-key]')).toContainText(

@@ -44,6 +44,7 @@ const USDM_FILLS = ['usdm-frame-a-fill', 'usdm-frame-b-fill'] as const;
 // swaps the absolute categories for the 1-week / 4-week change view.
 const USDM_CHANGE_FILL = 'usdm-change-fill';
 const NADM_KEY = 'nadm-drought';
+const NADM_SOURCE = 'nadm-drought-areas';
 const NADM_FILL = 'nadm-drought-fill';
 
 const ALERTS_KEY = 'nws-alerts';
@@ -51,6 +52,16 @@ const ALERTS_FILL = 'nws-alerts-fill';
 
 const FIRES_KEY = 'nifc-fires';
 const FIRES_FILL = 'nifc-fires-fill';
+
+/** Only these sources can change the rendered readings in this strip. */
+export const CONDITIONS_METRIC_SOURCES: ReadonlySet<string> = new Set([
+  NADM_SOURCE,
+  'usdm-frame-a',
+  'usdm-frame-b',
+  'usdm-change',
+  ALERTS_KEY,
+  FIRES_KEY
+]);
 
 export interface Metric {
   /** Headline value: a category code, a count, or an em-dash-free placeholder. */
@@ -190,6 +201,14 @@ export function droughtMetric(
     }
     const features = map.queryRenderedFeatures({ layers: [NADM_FILL] });
     if (features.length === 0) {
+      // Registry ready means the source was installed, not that its worker
+      // tiles have rendered. An unfinished source cannot establish absence.
+      if (!map.isSourceLoaded(NADM_SOURCE)) {
+        return {
+          metric: { value: '-', sublabel: resolveStatusPillText('loading'), tone: 'loading' },
+          dateMs: null
+        };
+      }
       return {
         metric: {
           value: 'No polygon',

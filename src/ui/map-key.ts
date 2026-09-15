@@ -1,14 +1,8 @@
 /**
- * Compact on-map key (0.3.0 design pass; hazard-aware since the 2026-07-14
- * mobile shell, from the ratified 2026-07-11 mockup).
- *
- * The design critique's first-five-seconds finding: the opening view is a
- * striking drought surface with no visible statement of what the colors
- * mean; the full legend lives in the sidebar below the fold, and in embed
- * mode there is no sidebar at all. This strip answers that on the map
- * itself; on desktop and embed it sits in the bottom-left dock, and the
- * mobile shell lifts it to the top of the map (the mockup's "the reference
- * is always above the map").
+ * Compact on-map condition indicator. Its one disclosure opens the details
+ * and categorical key in a bounded, keyboard-scrollable glass card. The
+ * desktop Brief drought metric opens the same card; other surfaces use
+ * the key's own indicator button.
  *
  * Hazard-aware, reflect-the-map: visibility and content key off the
  * registry. The active condition surface picks the key (US Drought Monitor,
@@ -60,6 +54,8 @@ import {
 } from './heatrisk-sequence-loader';
 import { watchDesktopMapSeat } from './map-control-seat';
 import { getTimeBarSpec, onTimeBarSpecChange } from './time-bar';
+import { WHP_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION, WHP_SURFACE_OPACITY } from '../config/whp-shade';
+import { DRAPE_OPACITY } from '../config/wildfire-presentation';
 
 export interface KeySpec {
   readonly label: string;
@@ -118,6 +114,7 @@ const NWS_SNAPSHOT_EVENT = 'ddm:nws-products-snapshot';
 const SST_SNAPSHOT_EVENT = 'ddm:sst-snapshot';
 const MOBILE_MAP_KEY_QUERY = '(max-width: 720px)';
 const MOBILE_MAP_KEY_HEIGHT_PROPERTY = '--mobile-map-key-height';
+const DESKTOP_LOADING_TOP_PROPERTY = '--desktop-loading-top';
 
 let heatRiskFrames: readonly HeatRiskFrame[] = [];
 let heatRiskSelectedDay: number | null = null;
@@ -137,6 +134,8 @@ let disposeMapKeySeat: (() => void) | null = null;
 let disposeMapKeyTimeBarSpec: (() => void) | null = null;
 let disposeMapKeyFraming: (() => void) | null = null;
 let disposeMapKeyViewMode: (() => void) | null = null;
+let whpShadeActive = false;
+let flatWhpShadeActive = false;
 
 /**
  * Seat the on-map key beside the map controls on the desktop shell, and
@@ -171,7 +170,7 @@ interface MapKeyLayoutWatch {
 }
 
 /**
- * Keep the mobile loading chrome below the one live key.
+ * Keep loading chrome clear of the live key and desktop condition indicator.
  * Key content is status-derived and can wrap after a registry update, a font
  * swap, text scaling, or a viewport change, so a fixed pixel offset cannot be
  * honest. The measured height is presentation state only and never enters the
@@ -184,12 +183,46 @@ function watchMapKeyLayout(host: HTMLElement): MapKeyLayoutWatch {
   }
 
   const widthQuery = window.matchMedia(MOBILE_MAP_KEY_QUERY);
+  const indicator = document.getElementById('map-condition-indicator');
+  const loading = document.getElementById('loading-indicator');
+  const controls = document.querySelector<HTMLElement>('.map-overlay-controls');
+  const bottomDock = document.getElementById('map-bottom-dock');
   let frame: number | null = null;
   let disposed = false;
 
   const measure = (): void => {
     frame = null;
     if (disposed) return;
+    const content = host.querySelector<HTMLElement>('#map-key-content');
+    const mapBox = document.getElementById('map-container')?.getBoundingClientRect();
+    if (content && !content.hidden && mapBox) {
+      const contentBox = content.getBoundingClientRect();
+      let available = Math.min(window.innerHeight, mapBox.bottom) - contentBox.top - 16;
+      if (app.classList.contains('embed')) {
+        // Embeds keep the key in a bottom-anchored dock. Growing content
+        // raises its header and any preceding date stamp or notices, so
+        // reserve the whole dock prefix below the upper controls.
+        const keyBox = host.getBoundingClientRect();
+        const dockTop = bottomDock?.getBoundingClientRect().top ?? keyBox.top;
+        const controlsBox = controls?.getBoundingClientRect();
+        const overlapsControls = controlsBox && keyBox.left < controlsBox.right && keyBox.right > controlsBox.left;
+        const top = overlapsControls ? Math.max(mapBox.top, controlsBox.bottom) + 8 : mapBox.top + 8;
+        available = keyBox.bottom - top - (contentBox.top - dockTop);
+      }
+      host.style.setProperty('--map-key-available-height', `${Math.max(0, Math.floor(available))}px`);
+    } else host.style.removeProperty('--map-key-available-height');
+    // Compare horizontal ranges only: reading the top we set here would
+    // otherwise alternate between "overlap" and "clear" on every measure.
+    if (!widthQuery.matches && !app.classList.contains('embed') && indicator && loading && !loading.hidden) {
+      const indicatorBox = indicator.getBoundingClientRect();
+      const loadingBox = loading.getBoundingClientRect();
+      const containerBox = loading.offsetParent?.getBoundingClientRect();
+      const overlaps = indicatorBox.height > 0 && loadingBox.width > 0 &&
+        loadingBox.left < indicatorBox.right + 8 && loadingBox.right > indicatorBox.left - 8;
+      if (overlaps && containerBox) {
+        app.style.setProperty(DESKTOP_LOADING_TOP_PROPERTY, `${Math.ceil(indicatorBox.bottom - containerBox.top + 8)}px`);
+      } else app.style.removeProperty(DESKTOP_LOADING_TOP_PROPERTY);
+    } else app.style.removeProperty(DESKTOP_LOADING_TOP_PROPERTY);
     if (!widthQuery.matches || host.hidden || !host.isConnected) {
       app.style.removeProperty(MOBILE_MAP_KEY_HEIGHT_PROPERTY);
       return;
@@ -210,6 +243,12 @@ function watchMapKeyLayout(host: HTMLElement): MapKeyLayoutWatch {
   const observer =
     typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null;
   observer?.observe(host);
+  if (indicator) observer?.observe(indicator);
+  if (loading) observer?.observe(loading);
+  if (controls) observer?.observe(controls);
+  if (bottomDock) observer?.observe(bottomDock);
+  const loadingVisibility = new MutationObserver(schedule);
+  if (loading) loadingVisibility.observe(loading, { attributes: true, attributeFilter: ['hidden'] });
   widthQuery.addEventListener('change', schedule);
   window.addEventListener('resize', schedule);
   void document.fonts?.ready.then(schedule);
@@ -221,11 +260,14 @@ function watchMapKeyLayout(host: HTMLElement): MapKeyLayoutWatch {
       if (disposed) return;
       disposed = true;
       observer?.disconnect();
+      loadingVisibility.disconnect();
       widthQuery.removeEventListener('change', schedule);
       window.removeEventListener('resize', schedule);
       if (frame !== null) window.cancelAnimationFrame(frame);
       frame = null;
       app.style.removeProperty(MOBILE_MAP_KEY_HEIGHT_PROPERTY);
+      app.style.removeProperty(DESKTOP_LOADING_TOP_PROPERTY);
+      host.style.removeProperty('--map-key-available-height');
     }
   };
 }
@@ -623,18 +665,22 @@ export function buildFireKey(
 }
 
 export function buildWhpKey(): KeySpec {
+  const categories = flatWhpShadeActive
+    ? WHP_SHADE_CATEGORIES.map((category) => ({ ...category, color: `rgba(255,255,255,${category.opacity * WHP_SURFACE_OPACITY})` }))
+    : USFS_WHP_PRESENTATION.categories;
+  const qualification = flatWhpShadeActive ? WHP_SHADE_QUALIFICATION : USFS_WHP_PRESENTATION.qualification;
   return {
     label: 'Wildfire potential',
-    ariaLabel: USFS_WHP_PRESENTATION.qualification,
+    ariaLabel: qualification,
     itemsHtml:
       '<span class="map-key-scale" data-usfs-whp-key>' +
       '<strong class="map-key-scale-label">USFS Wildfire Hazard Potential</strong>' +
-      USFS_WHP_PRESENTATION.categories
+      categories
         .map((category) => swatchItem(category.color, category.label))
         .join('') +
       '</span>' +
       `<span class="map-key-qualification">${escapeHtml(
-        USFS_WHP_PRESENTATION.qualification
+        qualification
       )}</span>`
   };
 }
@@ -968,126 +1014,92 @@ export function initMapKey(): void {
   const content = document.createElement('div');
   content.id = 'map-key-content';
   content.className = 'map-key-content';
+  content.hidden = true;
+  content.tabIndex = 0;
+  content.setAttribute('role', 'region');
+  content.setAttribute('aria-label', 'Map details and key');
 
-  const expandButton = document.createElement('button');
-  expandButton.id = 'map-key-expand';
-  expandButton.className = 'map-key-expand';
-  expandButton.type = 'button';
-  expandButton.hidden = true;
-  expandButton.setAttribute('aria-label', 'Expand Fire map key');
-  expandButton.setAttribute('aria-controls', content.id);
-  expandButton.setAttribute('aria-expanded', 'false');
-  expandButton.innerHTML =
-    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"/></svg>';
+  const detailsButton = document.createElement('button');
+  detailsButton.id = 'map-key-details-toggle';
+  detailsButton.className = 'map-key-details-toggle';
+  detailsButton.type = 'button';
+  detailsButton.setAttribute('aria-controls', content.id);
+  detailsButton.setAttribute('aria-expanded', 'false');
 
-  host.replaceChildren(content, expandButton);
+  host.replaceChildren(detailsButton, content);
+  host.dataset.keyDetailsOpen = 'false';
 
   const widthQuery = window.matchMedia(MOBILE_MAP_KEY_QUERY);
   let rendered = '';
   let family: MapKeyFamily = 'other';
   let keyLabel = '';
-  let baseInteractive = false;
-  let canExpand = false;
-  let expanded = false;
-  let overflowFrame: number | null = null;
+  let detailsOpen = false;
+
+  const setDetailsOpen = (next: boolean): void => {
+    detailsOpen = next;
+    host.dataset.keyDetailsOpen = String(next);
+    content.hidden = !next;
+    detailsButton.setAttribute('aria-expanded', String(next));
+    detailsButton.setAttribute('aria-label', `${next ? 'Close' : 'Open'} ${keyLabel || 'map'} details and key`);
+    window.dispatchEvent(new CustomEvent('ddm:map-key-details-change', { detail: { open: next } }));
+    layout.schedule();
+  };
 
   const reflectInteraction = (): void => {
-    const interactive = baseInteractive || canExpand;
-    host.setAttribute('role', interactive ? 'group' : 'img');
-    host.style.pointerEvents = interactive ? 'auto' : '';
+    host.setAttribute('role', 'group');
+    host.style.pointerEvents = 'auto';
   };
 
-  const setExpanded = (next: boolean): void => {
-    expanded = canExpand && next;
-    host.dataset.keyExpanded = String(expanded);
-    expandButton.setAttribute('aria-expanded', String(expanded));
-    const name = keyLabel ? `${keyLabel} map key` : 'map key';
-    expandButton.setAttribute(
-      'aria-label',
-      expanded ? `Collapse ${name}` : `Expand ${name}`
-    );
-    layout.schedule();
-  };
-
-  const checkOverflow = (): void => {
-    overflowFrame = null;
-    // W2-D4: the measured-overflow disclosure is no longer Fire-only. Any
-    // key that genuinely overflows its collapsed capacity on a narrow
-    // viewport (the phone shell or a narrow embed) earns the chevron.
-    const eligible = widthQuery.matches && !host.hidden && host.isConnected;
-    let nextCanExpand = false;
-    if (eligible) {
-      const collapsedHeight = Number.parseFloat(
-        getComputedStyle(content).getPropertyValue(
-          '--mobile-map-key-collapsed-height'
-        )
-      );
-      const limit = Number.isFinite(collapsedHeight)
-        ? collapsedHeight
-        : content.clientHeight;
-      nextCanExpand = content.scrollHeight > limit + 1;
-    }
-
-    canExpand = nextCanExpand;
-    expandButton.hidden = !canExpand;
-    if (canExpand) host.dataset.keyOverflow = 'true';
-    else delete host.dataset.keyOverflow;
-    if (!canExpand) setExpanded(false);
-    reflectInteraction();
-    layout.schedule();
-  };
-
-  const scheduleOverflow = (): void => {
-    if (overflowFrame !== null) return;
-    overflowFrame = window.requestAnimationFrame(checkOverflow);
-  };
-
-  const overflowObserver =
-    typeof ResizeObserver === 'function'
-      ? new ResizeObserver(scheduleOverflow)
-      : null;
-  overflowObserver?.observe(content);
-  const mutationObserver = new MutationObserver(scheduleOverflow);
-  mutationObserver.observe(content, { childList: true, subtree: true });
+  const appPresentationObserver = new MutationObserver(() => update());
+  const app = document.getElementById('app');
+  if (app) appPresentationObserver.observe(app, { attributes: true, attributeFilter: ['class'] });
   // The terrain coverage entry is width-gated (see withTerrainCoverage), so
   // crossing the breakpoint has to RE-RENDER the strip, not only re-measure
   // it. `update` diffs against the last rendered html, so this is cheap.
   const onWidthChange = (): void => {
     update();
-    scheduleOverflow();
+    layout.schedule();
   };
   widthQuery.addEventListener('change', onWidthChange);
-  window.addEventListener('resize', scheduleOverflow);
-  void document.fonts?.ready.then(scheduleOverflow);
-  expandButton.addEventListener('click', () => setExpanded(!expanded));
+  const toggleDetails = (): void => setDetailsOpen(!detailsOpen);
+  const closeDetailsOnEscape = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape' || !detailsOpen) return;
+    setDetailsOpen(false);
+    const metric = document.querySelector<HTMLElement>('.conditions-metric[data-metric="drought"][data-layer-on="true"]');
+    (host.dataset.keyMetricTrigger === 'true' ? metric : detailsButton)?.focus();
+  };
+  detailsButton.addEventListener('click', toggleDetails);
+  window.addEventListener('ddm:toggle-map-key-details', toggleDetails);
+  host.addEventListener('keydown', closeDetailsOnEscape);
 
   disposeMapKeyOverflow = () => {
-    overflowObserver?.disconnect();
-    mutationObserver.disconnect();
+    appPresentationObserver.disconnect();
     widthQuery.removeEventListener('change', onWidthChange);
-    window.removeEventListener('resize', scheduleOverflow);
-    if (overflowFrame !== null) window.cancelAnimationFrame(overflowFrame);
-    overflowFrame = null;
+    window.removeEventListener('ddm:toggle-map-key-details', toggleDetails);
+    window.removeEventListener('ddm:whp-shade', onWhpShade);
+    host.removeEventListener('keydown', closeDetailsOnEscape);
   };
 
   const update = (): void => {
     const spec = activeKey();
     if (!spec) {
       host.hidden = true;
+      setDetailsOpen(false);
       delete host.dataset.keyFamily;
-      delete host.dataset.keyOverflow;
       delete host.dataset.register;
-      canExpand = false;
-      baseInteractive = false;
-      expandButton.hidden = true;
-      setExpanded(false);
       reflectInteraction();
       layout.schedule();
       return;
     }
     keyLabel = spec.label;
+    const shadeKey = whpShadeActive
+      ? '<span class="map-key-scale" data-whp-shade-key><strong>3D wildfire potential</strong>' +
+        WHP_SHADE_CATEGORIES.map((category) => swatchItem(
+          `rgba(255,255,255,${category.opacity * DRAPE_OPACITY})`, category.label
+        )).join('') + `<span class="map-key-qualification">${escapeHtml(WHP_SHADE_QUALIFICATION)}</span></span>`
+      : '';
     const html =
-      `<span class="map-key-label">${escapeHtml(spec.label)}</span>` + spec.itemsHtml;
+      `<span class="map-key-label">${escapeHtml(spec.label)}</span>` + spec.itemsHtml + shadeKey;
     if (html !== rendered) {
       // A re-render replaces every node in the strip, so anything the
       // person was operating loses focus. The HeatRisk valid-date select
@@ -1104,7 +1116,6 @@ export function initMapKey(): void {
       rendered = html;
       content.innerHTML = html;
       host.setAttribute('aria-label', spec.ariaLabel);
-      setExpanded(false);
       if (refocusDaySelect) {
         const restored = content.querySelector('[data-heatrisk-day]');
         if (restored instanceof HTMLElement) restored.focus();
@@ -1113,9 +1124,17 @@ export function initMapKey(): void {
     // The family follows what the strip acknowledges (active plus loading
     // placeholders), so a loading key seats under the same CSS its ready
     // form will use.
-    const { active, eligible } = keyEligibility();
-    family = resolveMapKeyFamily(eligible);
+    const { eligible } = keyEligibility();
+    const nextFamily = resolveMapKeyFamily(eligible);
+    if (nextFamily !== family) setDetailsOpen(false);
+    family = nextFamily;
     host.dataset.keyFamily = family;
+    host.dataset.keyMetricTrigger = String(
+      family === 'drought' && getViewMode() === 'brief' &&
+      !app?.classList.contains('embed') && !app?.classList.contains('sidebar-collapsed') && !widthQuery.matches
+    );
+    detailsButton.textContent = family === 'fire' ? 'FIRE' : family === 'heat' ? 'HEAT RISK' : family === 'enso' ? 'ENSO' : spec.label.toUpperCase();
+    detailsButton.setAttribute('aria-label', `${detailsOpen ? 'Close' : 'Open'} ${keyLabel} details and key`);
     // A MIRROR of the owning layer's own declared register (never
     // computed from the pressed horizon chip, never invented for a
     // layer, such as WHP, that declares none): src/ui/time-bar.ts is
@@ -1126,11 +1145,8 @@ export function initMapKey(): void {
     } else {
       delete host.dataset.register;
     }
-    baseInteractive =
-      active.has('heatrisk') || (active.has('cdm-drought') && cdmLicense !== null);
     reflectInteraction();
     host.hidden = false;
-    scheduleOverflow();
     layout.schedule();
   };
 
@@ -1148,6 +1164,14 @@ export function initMapKey(): void {
       new CustomEvent(HEATRISK_DAY_SELECT_EVENT, { detail: { day } })
     );
   });
+
+  const onWhpShade = (event: Event): void => {
+    const detail = (event as CustomEvent<{ layer?: string; active: boolean }>).detail;
+    if (detail?.layer === 'usfs-whp') flatWhpShadeActive = Boolean(detail.active);
+    else whpShadeActive = Boolean(detail?.active);
+    update();
+  };
+  window.addEventListener('ddm:whp-shade', onWhpShade);
 
   window.addEventListener(HEATRISK_FRAMES_EVENT, (event) => {
     const detail = (event as CustomEvent<HeatRiskFrameEventDetail>).detail;

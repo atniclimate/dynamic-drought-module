@@ -247,7 +247,7 @@ test.describe('Embed at 200x600 (minimum-width iframe floor)', () => {
     }
   });
 
-  test('an oversized Heat key collapses to its scale essentials behind the chevron (W2-D4)', async ({
+  test('an oversized Heat key opens once and scrolls within the narrow embed', async ({
     page
   }) => {
     await stubHeatRiskService(page);
@@ -284,20 +284,11 @@ test.describe('Embed at 200x600 (minimum-width iframe floor)', () => {
 
     const key = page.locator('#map-key');
     const content = page.locator('#map-key-content');
-    const expander = page.locator('#map-key-expand');
+    const indicator = page.locator('#map-key-details-toggle');
     await expect(key).toBeVisible();
-    await expect(key.locator('[data-heatrisk-scale]')).toBeVisible();
-    await expect(key.locator('[data-nws-products-key]')).toBeVisible();
-
-    // The measured overflow collapses the key to the shared collapsed
-    // capacity (190px at this short viewport) instead of letting it
-    // consume half the iframe, and the chevron discloses the rest.
-    await expect(expander).toBeVisible();
-    await expect(expander).toHaveAttribute('aria-expanded', 'false');
-    const collapsed = await content.evaluate(
-      (element) => element.getBoundingClientRect().height
-    );
-    expect(collapsed).toBeLessThanOrEqual(195);
+    await expect(content).toBeHidden();
+    await expect(page.locator('#map-key-expand')).toHaveCount(0);
+    await expect(indicator).toHaveAttribute('aria-expanded', 'false');
     const collapsedKey = await key.evaluate((element) => {
       const box = element.getBoundingClientRect();
       return { top: box.top, bottom: box.bottom, left: box.left, right: box.right };
@@ -318,16 +309,19 @@ test.describe('Embed at 200x600 (minimum-width iframe floor)', () => {
       sat.top < collapsedKey.bottom;
     expect(intersects, 'the collapsed key overlaps the SAT control').toBe(false);
 
-    // Bounded expansion: the expanded content grows but stays inside the
-    // viewport, and the chevron reports its state.
-    await expander.click();
-    await expect(expander).toHaveAttribute('aria-expanded', 'true');
-    await expect(key).toHaveAttribute('data-key-expanded', 'true');
+    // One disclosure reveals the full source key. Extra rows scroll within
+    // its map bounds and are reachable without a second expansion control.
+    await indicator.click();
+    await expect(indicator).toHaveAttribute('aria-expanded', 'true');
+    await expect(key.locator('[data-heatrisk-scale]')).toBeVisible();
+    await expect(key.locator('[data-nws-products-key]')).toBeVisible();
+    await content.focus();
+    await page.keyboard.press('End');
     await expect
       .poll(() =>
-        content.evaluate((element) => element.getBoundingClientRect().height)
+        content.evaluate((element) => element.scrollTop)
       )
-      .toBeGreaterThan(collapsed);
+      .toBeGreaterThan(0);
     const expandedKey = await key.evaluate((element) => {
       const box = element.getBoundingClientRect();
       return { top: box.top, bottom: box.bottom };
@@ -335,8 +329,9 @@ test.describe('Embed at 200x600 (minimum-width iframe floor)', () => {
     expect(expandedKey.top).toBeGreaterThanOrEqual(0);
     expect(expandedKey.bottom).toBeLessThanOrEqual(600);
 
-    await expander.click();
-    await expect(expander).toHaveAttribute('aria-expanded', 'false');
+    await indicator.click();
+    await expect(indicator).toHaveAttribute('aria-expanded', 'false');
+    await expect(content).toBeHidden();
   });
 
   test('an NWS alert popup fits the 200px embed with its agency and vintage legible', async ({

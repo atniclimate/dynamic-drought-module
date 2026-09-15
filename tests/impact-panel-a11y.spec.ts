@@ -67,6 +67,34 @@ test.describe('impact panel accessibility', () => {
     await expect(trigger).toBeFocused();
   });
 
+  test('Tab reaches Technical information after resources and wraps within the modal', async ({ page }) => {
+    await gotoApp(page, '?select=state:WA');
+    const panel = page.locator('#impact-panel');
+    await expect(panel).toHaveAttribute('aria-modal', 'true');
+    await expect(panel.locator('.impact-horizon-loading')).toHaveCount(0);
+    const lastResource = panel.locator('.impact-resources a[href]').last();
+    const technical = panel.locator('.impact-technical-information');
+    const summary = technical.locator('summary');
+    const close = panel.locator('.impact-panel-close');
+
+    // Resource-catalog hydration replaces the whole body independently of
+    // horizon hydration. Wait for the deterministic WA catalog row so that
+    // replacement cannot retire the focused last link between focus and Tab.
+    await expect(
+      panel.getByRole('link', { name: 'Agricultural drought relief information' })
+    ).toBeVisible();
+    await lastResource.focus();
+    await page.keyboard.press('Tab');
+    await expect(summary).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(technical).toHaveJSProperty('open', true);
+    await expect(technical.locator('#impact-technical-drought')).toBeVisible();
+    await page.keyboard.press('Tab');
+    await expect(close).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(summary).toBeFocused();
+  });
+
   test('a region spanning several states shows no briefing trigger (#9)', async ({ page }) => {
     // The national framing has no single briefable boundary, so no trigger.
     await gotoApp(page, '?region=national');

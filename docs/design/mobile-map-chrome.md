@@ -1,7 +1,7 @@
 # Mobile map chrome
 
 This note records the presentation contract for the map-first phone view. It
-applies only when the mobile sheet is active at 720 CSS pixels or narrower.
+applies only when the mobile panel shell is active at 720 CSS pixels or narrower.
 Desktop and embed placement remain owned by their existing shells.
 
 Implemented by
@@ -20,6 +20,22 @@ convergence doctrine are recorded in [`README.md`](README.md).
   gap to 6px. The touch target never falls below 44px.
 - Safe-area insets participate in every top, right, left, and bottom seat.
 
+## Panel rail
+
+Brief, Place, Layers, and Alerts form one vertical rail along the left edge.
+Each button remains at least 44px square and exposes `aria-controls` and
+`aria-expanded`. Pressing a closed door drops its glass panel from below the
+top indicators. Pressing the active door again, or pressing Escape, closes the
+panel. Escape restores focus to the active door.
+
+The panel is top-anchored and internally scrollable. It never becomes a bottom
+drawer, has no grabber, and does not add bottom camera padding. Existing legacy
+detent names remain internal compatibility values for report hosting and old
+callers. They do not define visible drawer heights.
+
+Embed mode has no rail. Exiting an embed restores the closed mobile shell.
+Phone views do not load or present the 3D Fire controls.
+
 ## Right control spine
 
 The upper utility zone is Share followed by Reset. The lower quick-view zone
@@ -28,16 +44,17 @@ view presets; Satellite remains the one `BasemapSwitcherControl` backed by the
 basemap store. Icon-only presentation never replaces accessible names,
 `aria-pressed`, or focus treatment.
 
-The lower zone is visible only at the existing closed and peek sheet detents.
-Half and full sheet behavior is unchanged.
+The lower zone remains reachable while a panel is open when the available width
+can preserve a readable panel. Very narrow phones yield those controls until
+the panel closes.
 
 ## Information surfaces
 
 The compact Fire key owns the upper-left column and reserves the right control
 column through relational width calculations. Its two source sections stack
 vertically. A disclosure is rendered only when the measured key content
-actually exceeds its collapsed capacity, and expansion is bounded above the
-sheet and footer.
+actually exceeds its collapsed capacity, and expansion is bounded within the
+visible map stage.
 
 The phone Fire quick view deliberately composes the SPC Day 1 fire-weather
 outlook alongside the current NIFC perimeters and HMS smoke plumes. The

@@ -144,8 +144,8 @@ test.describe('S4b minimap', () => {
       page.locator('.shell-minimap-map .shell-minimap-divider'),
     ).toBeVisible();
     await expect(
-      page.locator('.shell-minimap-map .shell-minimap-note'),
-    ).toHaveCount(0);
+      page.locator('#shell-framing-note'),
+    ).toHaveText('');
     // The compact minimap door, combined dropdown, then place refinement
     // follow the inline minimap and retain the detailed legacy cameras.
     await expect(page.locator('#shell-region-host > #panel-region')).toBeVisible();
@@ -185,23 +185,7 @@ test.describe('S4b minimap', () => {
     await expect(minimap.locator('.shell-minimap-scale')).toHaveText(
       'NIFC / WHP 2023',
     );
-    await expect(minimap.locator('.shell-minimap-metric-note')).toContainText(
-      'Red marks a current mapped wildfire perimeter',
-    );
-    await expect(minimap.locator('.shell-minimap-metric-note')).toContainText(
-      'a zero count does not establish no active wildfire',
-    );
-    await expect(minimap.locator('.shell-minimap-metric-note')).toContainText(
-      'light below both thresholds, and dark for no data',
-    );
-    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveAttribute(
-      'role',
-      'status',
-    );
-    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveAttribute(
-      'aria-atomic',
-      'true',
-    );
+    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
     await expect(minimap.locator('.shell-minimap-canvas')).toHaveAttribute(
       'data-metric-context',
       'wildfire',
@@ -253,12 +237,7 @@ test.describe('S4b minimap', () => {
       'data-metric-time',
       MINIMAP_WHP.source.edition.match(/^\d{4}/)?.[0] ?? '',
     );
-    await expect(
-      minimap.locator('.shell-minimap-metric-note'),
-    ).toContainText('desaturated and stippled');
-    await expect(
-      minimap.locator('.shell-minimap-metric-note'),
-    ).toContainText(MINIMAP_WHP.source.edition);
+    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
     await expect(
       minimap.locator('[data-framing="plains-prairies"]'),
     ).toHaveAttribute('data-wildfire-condition', 'below-threshold');
@@ -279,14 +258,10 @@ test.describe('S4b minimap', () => {
       '2026-07',
     );
 
-    // EF-3: the metric note renders for EVERY metric context, not wildfire
-    // only. On Heat and ENSO it states the honest absence of a framing
-    // metric (DDM-UI-004) instead of leaving the flat fills unexplained,
-    // so the former `toHaveCount(0)` is now the neutral sentence.
+    // Methodology is now at the briefing end. Neutral navigation labels
+    // remain on the controls, without a paragraph below the minimap.
     await page.locator('.shell-cluster-btn[data-cluster="heat"]').click();
-    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveText(
-      'Navigation only: no verified Extreme Heat framing metric applied.',
-    );
+    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
     // DR-040 c clause 1: the visible note AND every framing target's
     // accessible name say the same "navigation only" thing (both read
     // NEUTRAL_METRIC_NOTES), and the canvas carries no status word at all
@@ -299,9 +274,7 @@ test.describe('S4b minimap', () => {
       await minimap.locator('.shell-minimap-canvas').getAttribute('data-minimap-status'),
     ).toBeNull();
     await page.locator('.shell-cluster-btn[data-cluster="enso"]').click();
-    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveText(
-      'Navigation only: no verified ENSO framing metric applied.',
-    );
+    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
     await expect(
       minimap.locator('[data-framing="pacific-coast"]'),
     ).toHaveAttribute('aria-label', /Navigation only:/);
@@ -325,12 +298,22 @@ test.describe('S4b minimap', () => {
     const pacific = minimap.locator('[data-framing="pacific-coast"]');
     await expect(pacific).toHaveAttribute('data-drought-class', 'D2');
     await expect(pacific).toHaveCSS('fill', 'rgb(255, 170, 0)');
-    // EF-3: Drought's live NADM encoding used to be explained only in the
-    // scale slot's accessible name; the visible note now carries it in every
-    // status (loading, unavailable, live all name the source).
-    await expect(minimap.locator('.shell-minimap-metric-note')).toContainText(
-      'North American Drought Monitor',
-    );
+    // The source remains identified in the scale slot. Detailed encoding
+    // now belongs to the briefing's Technical information disclosure.
+    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
+  });
+
+  test('moves the drought navigation methodology to the end of the Impact Briefing', async ({ page }) => {
+    await gotoApp(page, '?view=brief&cluster=drought');
+    await expect(page.locator('.shell-minimap-map .shell-minimap-scale')).toHaveText('NADM · Jul 2026');
+    await expect(page.locator('.shell-minimap-metric-note')).toHaveCount(0);
+    await page.locator('#region-briefing-btn').click();
+    const technical = page.locator('.impact-technical-information');
+    await expect(technical).toBeVisible();
+    await technical.locator('summary').click();
+    await expect(technical.locator('#impact-technical-drought')).toContainText('approximate area-weighted mean category index');
+    await expect(technical.locator('#impact-technical-drought')).toContainText('not an NADM-issued regional category');
+    await expect(technical).toHaveJSProperty('nextElementSibling', null);
   });
 
   test('uses the legible Hawaii inset proportions from the desktop rail', async ({
@@ -423,7 +406,7 @@ test.describe('S4b minimap', () => {
     // and the key (whatever hazard is active; the default boot's US
     // Drought Monitor here) carries it instead.
     await expect(
-      page.locator('.shell-minimap-map .shell-minimap-note'),
+      page.locator('#shell-framing-note'),
     ).not.toContainText('North American Drought Monitor');
     await expect(page.locator('#map-key')).toContainText(
       'North American Drought Monitor informs the minimap across the border',
@@ -456,7 +439,7 @@ test.describe('S4b minimap', () => {
     // key, 2026-09-10) and never substitutes for the geometry provenance,
     // which the accessible name above still carries on its own.
     await expect(
-      page.locator('.shell-minimap-map .shell-minimap-note'),
+      page.locator('#shell-framing-note'),
     ).not.toContainText('North American Drought Monitor');
     await expect(page.locator('#map-key')).toContainText(
       'North American Drought Monitor informs the minimap across the border',
@@ -527,10 +510,10 @@ test.describe('S4b minimap', () => {
       });
     await expect(atlantic).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('input[data-layer-key="sst-anomaly"]')).toBeChecked();
-    await expect(minimap.locator('.shell-minimap-note')).toContainText(
+    await expect(page.locator('#shell-framing-note')).toContainText(
       'Ocean view: Atlantic Ocean',
     );
-    await expect(minimap.locator('.shell-minimap-note')).toContainText(
+    await expect(page.locator('#shell-framing-note')).toContainText(
       'Preserved land framing: Pacific Coast',
     );
     await expect(
@@ -567,7 +550,7 @@ test.describe('S4b minimap', () => {
     // place and briefing capability; it renders on the on-map key now
     // (2026-09-10), never in the caption, which names only the framing.
     await expect(
-      page.locator('.shell-minimap-map .shell-minimap-note'),
+      page.locator('#shell-framing-note'),
     ).not.toContainText('North American Drought Monitor');
     await expect(page.locator('#map-key')).toContainText(
       'North American Drought Monitor informs this minimap in Mexico',
@@ -584,8 +567,8 @@ test.describe('S4b minimap', () => {
       page.locator('.shell-minimap-map .shell-minimap-all'),
     ).toHaveAttribute('aria-label', 'All: fit North America');
     await expect(
-      page.locator('.shell-minimap-map .shell-minimap-note'),
-    ).toHaveCount(0);
+      page.locator('#shell-framing-note'),
+    ).toHaveText('');
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-divider'),
     ).toBeVisible();
@@ -664,9 +647,7 @@ test.describe('S4b minimap', () => {
       minimap.locator('#shell-minimap-partial-pacific-coast'),
     ).toHaveCount(0);
     expect(await pacific.getAttribute('data-metric-time')).toBeNull();
-    await expect(minimap.locator('.shell-minimap-metric-note')).toContainText(
-      'Static WHP is not substituted',
-    );
+    await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
   });
 });
 

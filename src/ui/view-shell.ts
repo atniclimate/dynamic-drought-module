@@ -326,15 +326,7 @@ function buildBriefHead(map: maplibregl.Map): void {
   const head = document.getElementById('brief-head');
   if (!head) return;
 
-  head.innerHTML = `
-    <p class="brief-head-lede" id="brief-head-lede"></p>
-    <p class="brief-place-context" id="brief-place-context" aria-live="polite" hidden>
-      <span>Selected place</span>
-      <strong id="brief-place-name"></strong>
-      <small>Search below to change.</small>
-    </p>
-    <div id="brief-search"></div>
-  `;
+  head.innerHTML = '<div id="brief-search"></div>';
   syncBriefingTitle();
   refreshLayersStudioEntry();
 
@@ -380,13 +372,6 @@ function syncBriefingTitle(): void {
   const title = selectedHazardTitle();
   const label = `${title} briefing`;
   head.setAttribute('aria-label', label);
-
-  const lede = document.getElementById('brief-head-lede');
-  if (lede) {
-    lede.textContent =
-      'Select a Tribal land area, reservation, state, or watershed to read ' +
-      `local conditions in the ${label}.`;
-  }
 
   const reportLink = document.getElementById('brief-full-report-link');
   if (reportLink) reportLink.textContent = `Open the full ${label}`;

@@ -42,6 +42,7 @@ import type { LandscapeEcoregionKey } from '../impact/landscape-resolution';
 import { getLayerDef } from '../config/layers';
 import { renderClaim } from './claim-render';
 import { renderLandscapeContext } from './landscape-context';
+import { renderMapTechnicalInformation } from './map-technical-information';
 import { getLegendSection } from './legend-registry';
 import { requestLayerOn } from './layer-toggle-command';
 import { loadFederalResources, resourcesForIdentity } from '../impact/resource-catalog';
@@ -677,6 +678,7 @@ function renderBody(
     ${renderLandscapeContext(briefing.landscape)}
     ${impact}
     ${renderResources(briefing.resources)}
+    ${renderMapTechnicalInformation()}
   `;
 }
 
@@ -900,10 +902,18 @@ export function getActiveBriefing(): ImpactBriefing | null {
 export function refreshOpenBriefing(token: number): void {
   if (!isCurrentBriefing(token) || !activeBriefing || !bodyEl) return;
   const hadFocusInBody = bodyEl.contains(document.activeElement);
+  const technical = bodyEl.querySelector<HTMLDetailsElement>('.impact-technical-information');
+  const technicalOpen = technical?.open ?? false;
+  const hadTechnicalFocus = technical?.contains(document.activeElement) ?? false;
   bodyEl.innerHTML = renderBody(
     activeBriefing,
     activeImpactUnavailableNote
   );
+  const updatedTechnical = bodyEl.querySelector<HTMLDetailsElement>('.impact-technical-information');
+  if (updatedTechnical) {
+    updatedTechnical.open = technicalOpen;
+    if (hadTechnicalFocus) updatedTechnical.querySelector('summary')?.focus({ preventScroll: true });
+  }
   discloseLegendAnchorTitles(bodyEl);
   applyActiveHazardEmphasis();
   if (hadFocusInBody && panelEl && !panelEl.contains(document.activeElement)) {

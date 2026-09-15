@@ -91,12 +91,24 @@ async function stubWildfireMapProducts(page: Page): Promise<void> {
   );
 }
 
+async function openMapKey(page: Page): Promise<void> {
+  const drought = page.locator('#conditions-strip-dock .conditions-metric[data-metric="drought"][data-layer-on="true"]');
+  if (await drought.isVisible() && await drought.getAttribute('aria-expanded') === 'false') {
+    await drought.click();
+  }
+  const toggle = page.locator('#map-key-details-toggle');
+  if (await toggle.isVisible() && await toggle.getAttribute('aria-expanded') === 'false') {
+    await toggle.click();
+  }
+}
+
 async function expectMobileKeyClearance(
   page: Page,
   contentSelector: string
 ): Promise<void> {
   const key = page.locator('#map-key');
   const controls = page.locator('.map-overlay-controls');
+  await openMapKey(page);
   await expect(key).toBeVisible();
   await expect(key.locator(contentSelector).first()).toBeVisible();
   await expect(controls).toBeVisible();
@@ -227,7 +239,7 @@ test.describe('the exact desktop and mobile boundary', () => {
 test.describe('mobile key growth at 390x844', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('the phone shell keeps the drought key; the desktop shell defers to the sidebar legend (W2-D2)', async ({
+  test('the drought key opens from the indicator and remains readable across the desktop breakpoint', async ({
     page
   }) => {
     await gotoApp(page);
@@ -235,16 +247,17 @@ test.describe('mobile key growth at 390x844', () => {
     // surface earns its on-map key exactly like Fire and Heat, seated by
     // the same measured-height machinery.
     const key = page.locator('#map-key');
+    await openMapKey(page);
     await expect(key).toBeVisible();
     await expect(key).toHaveAttribute('data-key-family', 'drought');
     await expect(key.locator('.map-key-label')).toHaveText('North America drought');
     await expectMobileKeyClearance(page, '.map-key-item');
 
-    // The desktop shell keeps the established suppression: the sidebar
-    // legend is the drought reference there and the on-map key would
-    // restate it.
+    // An explicitly opened key remains open when the viewport grows.
+    // The desktop drought metric becomes its trigger in the same map seat.
     await page.setViewportSize({ width: 1280, height: 800 });
-    await expect(key).toBeHidden();
+    await expect(key).toBeVisible();
+    await expect(page.locator('#conditions-strip-dock .conditions-metric[data-metric="drought"]')).toHaveAttribute('aria-expanded', 'true');
     await expect
       .poll(() =>
         page
@@ -262,6 +275,7 @@ test.describe('mobile key growth at 390x844', () => {
     await stubWildfireMapProducts(page);
     await gotoApp(page, '?cluster=wildfire&horizon=weeks-ahead');
     const key = page.locator('#map-key');
+    await openMapKey(page);
     await expect(key.locator('[data-spc-fire-weather-key]')).toBeVisible();
     await expect(key.locator('[data-nifc-perimeter-key]')).toBeVisible();
     await expect(key).toHaveAttribute('data-key-family', 'fire');
@@ -302,7 +316,7 @@ test.describe('mobile key growth at 390x844', () => {
         );
       }
     }
-    await expect(page.locator('#map-key-expand')).toBeHidden();
+    await expect(page.locator('#map-key-expand')).toHaveCount(0);
   });
 
   test('both source-calculated scale controls render as transparent dynamic rulers', async ({
@@ -356,13 +370,17 @@ test.describe('mobile key growth at 390x844', () => {
       .not.toEqual(before);
   });
 
-  test('the Fire disclosure appears only for real overflow and expands within the map stage', async ({
+  test('the opened Fire key scrolls within the map and closes through its one indicator', async ({
     page
   }) => {
     await stubWildfireMapProducts(page);
     await gotoApp(page, '?cluster=wildfire&horizon=weeks-ahead');
     const key = page.locator('#map-key');
-    const expander = page.locator('#map-key-expand');
+    const content = page.locator('#map-key-content');
+    await expect(content).toBeHidden();
+    await expect(page.locator('#map-key-details-toggle')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#map-key-details-toggle')).toHaveText('FIRE');
+    await openMapKey(page);
     await expect(key.locator('[data-nifc-perimeter-key]')).toBeVisible();
     // Wait for the READY key: during activation the sections render W2-D6
     // loading placeholders, and the ready re-render replaces the content
@@ -371,7 +389,7 @@ test.describe('mobile key growth at 390x844', () => {
     await expect(
       key.locator('[data-nifc-perimeter-key] .map-key-item')
     ).toHaveCount(3);
-    await expect(expander).toBeHidden();
+    await expect(page.locator('#map-key-expand')).toHaveCount(0);
 
     await key.locator('[data-nifc-perimeter-key]').evaluate((section) => {
       for (let index = 0; index < 12; index += 1) {
@@ -382,28 +400,29 @@ test.describe('mobile key growth at 390x844', () => {
       }
     });
 
-    await expect(expander).toBeVisible();
-    await expect(expander).toHaveAttribute('aria-expanded', 'false');
-    await expect(key).toHaveAttribute('role', 'group');
-    await expander.focus();
-    await expander.press('Enter');
-    await expect(expander).toHaveAttribute('aria-expanded', 'true');
-    await expect(key).toHaveAttribute('data-key-expanded', 'true');
+    await expect.poll(() => content.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+    await content.focus();
+    await content.press('End');
+    await expect.poll(() => content.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
 
-    const [keyBox, footerBox] = await Promise.all([
+    const [keyBox, mapBox] = await Promise.all([
       rect(key),
-      rect(page.locator('#mobile-footer-nav'))
+      rect(page.locator('#map'))
     ]);
-    expect(keyBox.bottom).toBeLessThanOrEqual(footerBox.top);
+    expect(keyBox.bottom).toBeLessThanOrEqual(mapBox.bottom - 8);
+
+    await page.locator('#map-key-details-toggle').click();
+    await expect(content).toBeHidden();
+    await expect(page.locator('#map-key-details-toggle')).toHaveAttribute('aria-expanded', 'false');
 
     await page.locator('#hazard-rail button[data-preset="hazard-drought"]').click();
+    await openMapKey(page);
     await expect(key).toBeVisible();
     await expect(key.locator('.map-key-label')).toHaveText(
       'North America drought'
     );
     await expect(key).toHaveAttribute('data-key-family', 'drought');
-    await expect(expander).toHaveAttribute('aria-expanded', 'false');
-    await expect(expander).toBeHidden();
+    await expect(page.locator('#map-key-expand')).toHaveCount(0);
   });
 });
 
@@ -476,6 +495,7 @@ test.describe('the ENSO ocean key reaches every surface (W2-D1)', () => {
     await gotoApp(page, '?layers=sst-anomaly,aiannh');
 
     const key = page.locator('#map-key');
+    await openMapKey(page);
     await expect(key).toBeVisible();
     await expectSstKeyContent(key);
     await expectMobileKeyClearance(page, '[data-sst-anomaly-key]');
@@ -489,6 +509,7 @@ test.describe('the ENSO ocean key reaches every surface (W2-D1)', () => {
     await gotoApp(page, '?embed=true&layers=sst-anomaly');
 
     const key = page.locator('#map-key');
+    await openMapKey(page);
     await expect(key).toBeVisible();
     await expectSstKeyContent(key);
     const keyBox = await rect(key);
@@ -507,6 +528,7 @@ test.describe('the ENSO ocean key reaches every surface (W2-D1)', () => {
     await stubSstAnomaly(page);
     await gotoApp(page, '?embed=true&layers=sst-anomaly');
     const key = page.locator('#map-key');
+    await openMapKey(page);
     await expect(key).toBeVisible();
     await expectSstKeyContent(key);
   });
@@ -518,6 +540,7 @@ test.describe('the ENSO ocean key reaches every surface (W2-D1)', () => {
     await stubSstAnomaly(page);
     await gotoApp(page, '?layers=sst-anomaly,aiannh');
     const key = page.locator('#map-key');
+    await openMapKey(page);
     await expect(key).toBeVisible();
     await expectSstKeyContent(key);
   });
@@ -671,6 +694,7 @@ for (const width of [400, 200]) {
     await expect(app).toHaveClass(/\bembed\b/);
     await expect(app).not.toHaveAttribute('data-sheet-detent', /.+/);
     await expect(page.locator('#mobile-footer-nav')).toBeHidden();
+    await openMapKey(page);
     await expect(page.locator('#map-key [data-spc-fire-weather-key]')).toBeVisible();
     await expect(page.locator('#map-key [data-nifc-perimeter-key]')).toBeVisible();
 

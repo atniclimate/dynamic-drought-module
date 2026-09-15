@@ -48,13 +48,12 @@ test.describe('E1 deliverable 1: Brief-mode progressive disclosure', () => {
     await expect(page.locator('.sidebar-footer')).toBeVisible();
   });
 
-  test('the Brief head is worded around map selection, and console mode is untouched', async ({
+  test('the Brief head keeps one clear search without repeating selection instructions', async ({
     page
   }) => {
     await gotoApp(page);
-    // The reworded lede leads with selecting on the map, not with an
-    // already-open report (review E1.2).
-    await expect(page.locator('.brief-head-lede')).toContainText('Select a Tribal land area');
+    await expect(page.locator('.brief-head-lede')).toHaveCount(0);
+    await expect(page.locator('#brief-search [data-ddm-search]')).toBeVisible();
 
     await gotoApp(page, '?view=console');
     await expect(page.locator('#panel-quick-views')).toBeVisible();

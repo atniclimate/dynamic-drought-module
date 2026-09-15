@@ -2,38 +2,35 @@ import { test, expect } from '@playwright/test';
 import { gotoApp, search } from './helpers';
 
 /**
- * U-UX-FIX-1 DEF-2: an explicit `?view=brief` is honored on a mobile cold
- * load (invariant 6.2, URL as state).
- *
- * The app stamps `view=` onto every URL after the first sync, so a shared
- * or reloaded Brief link used to boot the sheet CLOSED like a bare URL:
- * the sender's Brief surface never reproduced. The fix captures the RAW
- * explicitness at parse time (src/state/url.ts `explicitView`), threads it
- * through the sidebar's boot seeding (`setExplicitBriefBoot`) to the
- * mobile sheet, whose boot activation raises the Brief surface at the
- * half detent ONLY for that explicit ask. A bare boot keeps the ratified
- * map-first closed state (D-0.7.0-041), pinned again here as the guard.
+ * Owner direction: side panels start closed, including shared and reloaded
+ * Brief URLs. The URL preserves view mode; panel visibility is ephemeral.
  */
 
 test.describe('DEF-2 explicit view=brief on a mobile cold load (390x844)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('a shared ?view=brief URL boots the Brief sheet at half with its content', async ({
+  test('a shared ?view=brief URL starts closed and the Place door toggles its panel', async ({
     page
   }) => {
     await gotoApp(page, '?view=brief');
 
     const app = page.locator('#app');
     await expect(app).toHaveClass(/\bview-brief\b/);
-    // The explicit ask raises the Brief surface at its half detent; the
-    // grabber (hidden at closed) is visible, and the at-hand block shows
-    // its honest invitation (no unsolicited briefing, D-0.7.0-041: the
-    // link asked for the Brief DOOR, not for a place report).
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
+    await expect(page.locator('#sheet-grabber')).toBeHidden();
+    await expect(page.locator('#sidebar')).toBeHidden();
+    await expect(page.locator('#mobile-footer-nav')).toBeVisible();
+    const placeDoor = page.locator('#mobile-footer-nav button[data-tab="place"]');
+    await placeDoor.click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'half');
-    await expect(page.locator('#sheet-grabber')).toBeVisible();
+    await expect(placeDoor).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('.sheet-at-hand-title')).toBeVisible();
     await expect(page.locator('.sheet-at-hand-title')).toHaveText('Pick a place');
     await expect(page.locator('#sheet-report .impact-panel')).toHaveCount(0);
+    await placeDoor.click();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
+    await expect(placeDoor).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#sidebar')).toBeHidden();
 
     // Round-trip: the URL still claims the Brief door after the first
     // canonical write, and the ephemeral detent never enters it.
@@ -42,17 +39,15 @@ test.describe('DEF-2 explicit view=brief on a mobile cold load (390x844)', () =>
     expect(await search(page)).not.toMatch(/detent|sheet|tab/i);
   });
 
-  test('a RELOAD of the app-stamped URL still reproduces the Brief sheet', async ({
+  test('a RELOAD of the app-stamped URL closes an open side panel', async ({
     page
   }) => {
-    // The failure mode the triage caught: the app writes view=brief into
-    // the address bar on first load, so the URL a user copies IS the
-    // stamped one. Reloading it must reproduce the Brief surface.
     await gotoApp(page, '?view=brief');
+    await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
     await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.locator('#preset-chips .preset-chip')).not.toHaveCount(0);
-    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'closed');
   });
 
   test('GUARD: a bare boot stays map-first closed; the derived Brief mode earns no raise (D-0.7.0-041)', async ({
@@ -84,29 +79,42 @@ test.describe('DEF-2 explicit view=brief on a mobile cold load (390x844)', () =>
     await expect(page.locator('#mobile-footer-nav')).toBeHidden();
   });
 
-  test('GUARD: the embed-exit reveal opens at peek even when the boot URL carried view=brief (the ratified peek contract)', async ({
+  test('GUARD: exiting embed returns to the map-first mobile shell', async ({
     page
   }) => {
-    // This pins the PEEK CONTRACT of the embed-exit reveal (D-0.7.0-017):
-    // the expand control exits embed and reveals the sheet at peek, never
-    // the half-detent Brief raise. It is NOT a one-shot-consumption pin
-    // (DG-080-REVIEW r2 finding 3 named the earlier title honestly wrong
-    // about that): the production reveal path calls activate('peek')
-    // explicitly, and an explicit initial overrides any stale
-    // explicit-view flag, so this test stays green whether or not the
-    // flag was consumed. The one-shot mechanism itself is pinned by the
-    // desktop-to-mobile crossing spec at the bottom of this file.
+    // Embed remains free of the mobile rail. Its explicit exit restores
+    // the rail and map-first closed state; a panel opens only after the
+    // user chooses one of the side controls.
     await gotoApp(page, '?view=brief&embed=true');
     const app = page.locator('#app');
     await expect(app).toHaveClass(/\bembed\b/);
     await page.locator('#sidebar-expand').click();
     await expect(app).not.toHaveClass(/\bembed\b/);
-    await expect(app).toHaveAttribute('data-sheet-detent', 'peek');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
+    await expect(page.locator('#mobile-footer-nav')).toBeVisible();
+    await expect(page.locator('#sidebar')).toBeHidden();
   });
 });
 
 test.describe('DEF-2 one-shot consumption across a desktop-to-mobile crossing', () => {
   test.use({ viewport: { width: 1100, height: 800 } });
+
+  test('desktop sidebar starts closed and can open, close, and reopen', async ({ page }) => {
+    await gotoApp(page, '?view=brief');
+    const sidebar = page.locator('#sidebar');
+    const expand = page.locator('#sidebar-expand');
+    await expect(sidebar).toBeHidden();
+    await expand.click();
+    await expect(sidebar).toBeVisible();
+    await expect(page.locator('#place-studio-entry')).toBeVisible();
+    await page.locator('#sidebar-collapse').click();
+    await expect(sidebar).toBeHidden();
+    await expect(expand).toBeFocused();
+    await expand.click();
+    await expect(sidebar).toBeVisible();
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(sidebar).toBeHidden();
+  });
 
   test('a desktop ?view=brief boot spends the flag: a later crossing to mobile stays map-first closed', async ({
     page

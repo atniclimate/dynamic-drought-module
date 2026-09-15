@@ -33,6 +33,10 @@ import { installMinimapAnalysisStubs } from './minimap-fixtures';
 // --- deterministic upstream stubs (the temporal-axis spec's pattern) ---
 
 const LATEST_MS = Date.UTC(2026, 5, 30); // 2026-06-30
+const PNG_1PX = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64'
+);
 
 const PNW_RING = [
   [-125, 42],
@@ -98,10 +102,6 @@ async function stubOutlook(page: Page): Promise<void> {
 
 /** Stub the GIBS SST anomaly upstreams so the ENSO leg is deterministic. */
 async function stubSst(page: Page): Promise<void> {
-  const PNG_1PX = Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-    'base64'
-  );
   await page.route(
     (url) => url.href.includes('DescribeDomains'),
     (route) =>
@@ -123,12 +123,17 @@ async function stubSst(page: Page): Promise<void> {
 
 /**
  * Boot with the island chunk aborted: the whole session is the
- * pre-mount window. The boot signal is the region radiogroup, which
- * `buildSidebar` renders synchronously without the island; the count-0
- * checkbox assertion proves the window actually holds.
+ * pre-mount window. Map-control readiness proves the controller is wired;
+ * region options alone are only a DOM-ready signal. The count-0 checkbox
+ * assertion proves the pre-mount window still holds after map readiness.
  */
 async function gotoWithoutIsland(page: Page, query: string): Promise<void> {
   await stubRecentSatellite(page);
+  // This spec tests an island failure, so its initial map must not depend
+  // on a live basemap request completing before the controls can wire.
+  await page.route('https://tile.openstreetmap.org/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: PNG_1PX })
+  );
   // A raw boot (the island chunk is aborted, so gotoApp's catalog signal
   // cannot be used); the suite-wide boundary stub is installed by hand.
   await routeAllTribalFixtures(page);
@@ -139,6 +144,7 @@ async function gotoWithoutIsland(page: Page, query: string): Promise<void> {
   await page.route(/\/island-[^/?]*\.js(\?|$)/, (route) => route.abort());
   await page.goto(query, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#region-select option')).not.toHaveCount(0);
+  await expect(page.locator('html')).toHaveAttribute('data-ddm-controls', 'ready');
   await expect(page.locator('input[data-layer-key]')).toHaveCount(0);
   await expect(page.locator('#shell-panel')).toBeHidden();
   await expect(page.locator('#conditions-strip-home + #conditions-strip')).toHaveCount(1);

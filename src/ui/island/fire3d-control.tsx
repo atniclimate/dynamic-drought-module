@@ -1,6 +1,6 @@
 /**
  * The desktop 3D Fire view toggle (W3/W4), rendered in the shell island
- * directly under the hazard cluster buttons.
+ * in the view details below the persistent navigation controls.
  *
  * Visibility: only while the committed cluster is 'wildfire' AND the
  * device can enter the scene at all, which since DR-025a is the same three
@@ -74,6 +74,7 @@ import {
   setFire3DPreference
 } from '../../state/fire3d-store';
 import { registry } from '../../state/registry';
+import { setMapTechnicalNote } from '../map-technical-information';
 
 /** The catalog key whose emptiness the 3D control reports. */
 const HMS_SMOKE_LAYER_KEY = 'hms-smoke';
@@ -247,6 +248,9 @@ export function Fire3DControl({
     fireView: cluster === 'wildfire'
   });
   const visible = offer === 'control';
+  useEffect(() => {
+    setMapTechnicalNote('fire3d', coverageNote(status));
+  }, [status]);
 
   useEffect(() => {
     if (!visible) return;
@@ -301,6 +305,13 @@ export function Fire3DControl({
       >
         3D Fire view
       </button>
+      <details class="shell-fire3d-details">
+        <summary>
+          3D information
+          {status?.state === 'checking' ? ' · loading' :
+            status?.state === 'active' ? (status.smokeVolume ? ' · live' : ' · live (partial)') :
+              status?.state === 'unavailable' ? ' · unavailable' : ''}
+        </summary>
       {/* Persistently rendered live region (the shell summary pattern):
           only its text swaps, so screen readers announce it reliably. */}
       <p
@@ -322,12 +333,12 @@ export function Fire3DControl({
         </p>
       ) : null}
       <p class="shell-fire3d-note">{coverageNote(status)}</p>
-      {/* The non-prediction disclosure renders whenever the control does
-          (never a dismissible tooltip): viewers over-trust fire visuals,
-          so the boundary statement lives in the interface itself. */}
+      {/* Source limits remain available beside the control through the
+          technical disclosure requested by the owner. */}
       <p class="shell-fire3d-note" data-fire3d-disclosure>
         {FIRE3D_NON_PREDICTION_NOTE}
       </p>
+      </details>
     </div>
   );
 }

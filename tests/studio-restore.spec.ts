@@ -207,8 +207,9 @@ test('an immediate browser Back still delivers the promised briefing (wave A fin
   // The studio's own selection resolution is held open across the Back so
   // the hand-off must chase the pending resolution (or re-resolve
   // independently after the unmount abort) rather than assuming it
-  // settled. The FIRST us-states.geojson request is the boot layer; the
-  // gate holds every subsequent request until released.
+  // settled. State geometry is now a shared page-lifetime read, so this
+  // exercises the same contract through a watershed's per-selection WBD
+  // request, which can still be held independently of its catalog request.
   await routeGeojson(page, AIANNH_ROUTE, emptyCollectionBody());
   await routeGeojson(page, BIA_ROUTE, emptyCollectionBody());
   await page.route(NIFC_ROUTE, (route) =>
@@ -225,45 +226,91 @@ test('an immediate browser Back still delivers the promised briefing (wave A fin
       body: JSON.stringify(emptyCollectionBody())
     })
   );
-  let stateRequests = 0;
+  await page.route('**/data/us-states.geojson', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/geo+json',
+      body: JSON.stringify(OREGON_COLLECTION)
+    })
+  );
+
   let gateEngaged = false;
+  let selectionGeometryRequests = 0;
   let releaseGeometry!: () => void;
   const geometryGate = new Promise<void>((resolve) => {
     releaseGeometry = resolve;
   });
-  // The boot layer and any studio list enrichment flow freely; only the
-  // request that arrives AFTER the explicit option click (armed below) is
-  // held, so exactly the selection resolution rides the gate.
-  let armGate = false;
-  await page.route('**/data/us-states.geojson', async (route) => {
-    stateRequests += 1;
-    if (armGate) {
+  await page.route('**/wbd/MapServer/*/query?*', async (route) => {
+    const url = new URL(route.request().url());
+    const layer = url.pathname.split('/').at(-2) ?? '';
+    const params = url.searchParams;
+
+    if (params.get('returnGeometry') === 'false') {
+      const features =
+        layer === '1'
+          ? [{ attributes: { huc2: '17', name: 'Pacific Northwest' } }]
+          : [{ attributes: { huc4: '1703', name: 'Yakima' } }];
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ features })
+      });
+      return;
+    }
+
+    if (params.get('where') === "huc4='1703'") {
+      selectionGeometryRequests += 1;
       gateEngaged = true;
       await geometryGate;
     }
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/geo+json',
-      body: JSON.stringify(OREGON_COLLECTION)
-    });
+
+    const features =
+      params.get('where') === "huc4='1703'"
+        ? [{
+            type: 'Feature',
+            properties: { huc4: '1703', name: 'Yakima' },
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[
+                [-121, 46],
+                [-120, 46],
+                [-120, 47],
+                [-121, 47],
+                [-121, 46]
+              ]]
+            }
+          }]
+        : [];
+    try {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify({ type: 'FeatureCollection', features })
+      });
+    } catch {
+      // Browser Back aborts the studio-owned request while it is held. The
+      // return action issues the independent replacement under test.
+    }
   });
 
   await gotoApp(page, '?layers=states&view=brief');
   await waitForLayerSettled(page, 'states');
+  const priorUrl = await currentRepresentation(page);
 
   await page.locator('#studio-entry-pair #place-studio-entry').click();
   const studio = page.locator(PLACE_ROOT);
   await expect(studio).toBeVisible();
-  await studio.getByRole('button', { name: 'States', exact: true }).click();
-  await studio.locator('#place-studio-search').fill('Oregon');
-  armGate = true;
-  await studio.locator('[data-place-kind="state"][data-place-id="OR"]').click();
-  await expect(studio.locator('#place-selection-title')).toHaveText('Oregon');
+  await studio.locator('#place-type-watershed').click();
+  await expect(studio.locator('#place-list .place-studio-option')).toHaveCount(2);
+  await studio.locator('#place-studio-search').fill('Yakima');
+  await studio.locator('#place-list-panel .place-studio-option').click();
+  await expect(studio.locator('#place-selection-title')).toHaveText('Yakima (HUC 1703)');
   await expect.poll(() => gateEngaged).toBe(true);
 
   // Browser Back IMMEDIATELY, with the geometry resolution still pending.
   await page.goBack();
   await expect(studio).toHaveCount(0);
+  expect(await currentRepresentation(page)).toBe(priorUrl);
 
   releaseGeometry();
   // Same race as the parameterized restore above (:180): the return
@@ -276,7 +323,11 @@ test('an immediate browser Back still delivers the promised briefing (wave A fin
   // report left open) belongs to studio-restore:124, not this test.
   const panel = page.locator('#impact-panel');
   await expect(panel).toBeVisible({ timeout: 15_000 });
-  await expect(panel.locator('.impact-panel-title')).toHaveText('Oregon');
+  await expect(panel.locator('.impact-panel-title')).toHaveText('Yakima (HUC 1703)');
+  await expect(panel.locator('.impact-panel-kind')).toHaveText(
+    'Watershed (USGS Watershed Boundary Dataset)'
+  );
+  expect(selectionGeometryRequests).toBeGreaterThanOrEqual(2);
 });
 
 /**

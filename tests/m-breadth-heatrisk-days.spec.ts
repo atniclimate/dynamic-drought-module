@@ -134,6 +134,13 @@ function heatDaySelect(page: Page) {
   return page.locator('#map-key select[data-heatrisk-day]');
 }
 
+async function openHeatKey(page: Page): Promise<void> {
+  const toggle = page.locator('#map-key-details-toggle');
+  await expect(toggle).toBeVisible();
+  if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+  await expect(page.locator('#map-key-content')).toBeVisible();
+}
+
 async function visibleHeatRiskStrings(page: Page): Promise<readonly string[]> {
   return page.locator('body *').evaluateAll((elements) => {
     const strings = new Set<string>();
@@ -209,6 +216,7 @@ test.describe('U-HEATRISK-DAYS multi-day read', () => {
     await expect(heatRow(page)).toContainText('HeatRisk (Experimental)');
     await expect(heatRow(page)).not.toContainText('Today');
 
+    await openHeatKey(page);
     const select = heatDaySelect(page);
     await expect(select).toHaveValue('1');
     await expect(select.locator('option')).toHaveCount(TIMES.length);
@@ -247,6 +255,7 @@ test.describe('U-HEATRISK-DAYS multi-day read', () => {
       '?layers=heatrisk&heatday=4&embed=true&view=console'
     );
 
+    await openHeatKey(page);
     const select = heatDaySelect(page);
     await expect(select).toBeVisible();
     await expect(select).toHaveValue('4');
@@ -327,6 +336,7 @@ test.describe('U-HEATRISK-DAYS multi-day read', () => {
       .poll(() => exportedTimes.includes(TIMES[0]), { timeout: 15_000 })
       .toBe(true);
 
+    await openHeatKey(page);
     const select = heatDaySelect(page);
     await select.selectOption('2');
     await expect(select).toHaveValue('2');
@@ -354,6 +364,7 @@ test.describe('U-HEATRISK-DAYS multi-day read', () => {
     const exportedTimes: number[] = [];
     await routeHeatRisk(page, exportedTimes);
     await gotoApp(page, '?layers=heatrisk&view=console');
+    await openHeatKey(page);
     const box = await heatDaySelect(page).boundingBox();
     expect(box).not.toBeNull();
     expect(box!.height).toBeLessThanOrEqual(32);
@@ -370,6 +381,7 @@ test.describe('U-HEATRISK-DAYS multi-day read', () => {
       const exportedTimes: number[] = [];
       await routeHeatRisk(page, exportedTimes);
       await gotoApp(page, '?layers=heatrisk');
+      await openHeatKey(page);
 
       expect(
         await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches)
@@ -419,6 +431,7 @@ test.describe('U-HEATRISK-DAYS multi-day read', () => {
     });
 
     await gotoApp(page, '?layers=heatrisk&view=console');
+    await openHeatKey(page);
     const select = heatDaySelect(page);
     await expect(select).toHaveValue('1');
     await expect

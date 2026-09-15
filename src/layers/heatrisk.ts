@@ -418,6 +418,7 @@ function buildImageTileTemplate(timeMs: number): string {
     'size=256,256',
     'format=png32',
     'transparent=true',
+    'interpolation=RSP_NearestNeighbor',
     `time=${timeMs}`,
     'f=image'
   ].join('&');
@@ -474,6 +475,12 @@ function renderFrame(map: maplibregl.Map, day: number): void {
     type: 'raster',
     tiles: [buildImageTileTemplate(frame.validTime)],
     tileSize: 256,
+    // The NWS service advertises 2,539.703 m Web Mercator cells (verified
+    // 2026-09-13). z6 serves 2,445.98 m pixels. Requesting ever-finer
+    // exports only enlarges those class cells into hard square blocks.
+    // Overscale the colorized image with linear filtering instead. Raw
+    // category values and point-identify reads remain nearest-neighbor.
+    maxzoom: 6,
     attribution: 'NOAA NWS HeatRisk (experimental)'
   });
   map.addLayer({
@@ -481,7 +488,8 @@ function renderFrame(map: maplibregl.Map, day: number): void {
     type: 'raster',
     source: sourceId,
     paint: {
-      'raster-opacity': 0.55
+      'raster-opacity': 0.55,
+      'raster-resampling': 'linear'
     }
   });
 

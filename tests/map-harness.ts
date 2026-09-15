@@ -355,6 +355,7 @@ export function installFakeBrowser(
     search: options.search ?? ''
   };
   const widthListeners = new Set<() => void>();
+  const events = new EventTarget();
 
   const matchMedia = (query: string) => {
     const isWidth = query.includes('min-width');
@@ -384,7 +385,10 @@ export function installFakeBrowser(
         }
       },
       setTimeout: globalThis.setTimeout.bind(globalThis),
-      clearTimeout: globalThis.clearTimeout.bind(globalThis)
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      addEventListener: events.addEventListener.bind(events),
+      removeEventListener: events.removeEventListener.bind(events),
+      dispatchEvent: events.dispatchEvent.bind(events)
     }
   });
   Object.defineProperty(globalThis, 'document', {

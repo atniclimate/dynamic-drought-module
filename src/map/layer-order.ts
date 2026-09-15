@@ -49,6 +49,8 @@ export const CONDITION_SURFACE_IDS: readonly string[] = [
   'sst-anomaly',
   'nino34-box-line',
   'nino34-box-label',
+  'enso-flow-casing',
+  'enso-flow-arrows',
   'heatrisk',
   'usfs-whp',
   'drought-outlook-fill',

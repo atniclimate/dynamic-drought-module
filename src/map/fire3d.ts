@@ -645,13 +645,13 @@ async function resolveFire3DTerrainUrl(
     // the caller's own abort handling see it rather than spending a second
     // probe on a scene nobody is waiting for.
     if (signal.aborted) throw err;
-    console.info(
-      '[fire3d] the deep terrain archive is unreachable; falling back to the bundled archive.',
-      err
-    );
     const bundled = await resolveHillshadeArchive(signal);
     return { url: bundled.url, maxZoom: bundled.header.maxZoom };
   }
+}
+
+function warnComponent(component: string, error: unknown): void {
+  console.warn(`[fire3d] ${component} failed.`, error);
 }
 
 async function activateScene(map: maplibregl.Map): Promise<void> {
@@ -766,10 +766,7 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
     smokeModule = smokeModule ?? (await import('../layers/hms-smoke-volume'));
   } catch (err) {
     smokeModule = null;
-    console.warn(
-      '[fire3d] the smoke volume chunk failed to load; flat smoke stays.',
-      err
-    );
+    warnComponent('smoke import', err);
   }
   if (myGeneration !== generation || !active) return;
   if (smokeModule) {
@@ -777,10 +774,7 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
       smokeVolumeOn = smokeModule.activateSmokeVolume(map);
     } catch (err) {
       smokeVolumeOn = false;
-      console.warn(
-        '[fire3d] the smoke volume failed to activate; flat smoke stays.',
-        err
-      );
+      warnComponent('smoke activation', err);
     }
   }
 
@@ -792,10 +786,7 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
       ribbonModule ?? (await import('../layers/nifc-perimeter-ribbon'));
   } catch (err) {
     ribbonModule = null;
-    console.warn(
-      '[fire3d] the perimeter ribbon chunk failed to load; the flat perimeter stays.',
-      err
-    );
+    warnComponent('ribbon import', err);
   }
   if (myGeneration !== generation || !active) return;
   if (ribbonModule) {
@@ -803,10 +794,7 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
       ribbonOn = await ribbonModule.activatePerimeterRibbon(map, signal);
     } catch (err) {
       ribbonOn = false;
-      console.warn(
-        '[fire3d] the perimeter ribbon failed to activate; the flat perimeter stays.',
-        err
-      );
+      warnComponent('ribbon activation', err);
     }
   }
   if (myGeneration !== generation || !active) return;
@@ -817,10 +805,7 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
     contextModule = contextModule ?? (await import('./fire3d-context'));
   } catch (err) {
     contextModule = null;
-    console.warn(
-      '[fire3d] the context chunk failed to load; the scene keeps terrain and smoke.',
-      err
-    );
+    warnComponent('context import', err);
   }
   if (myGeneration !== generation || !active) return;
   if (contextModule) {
@@ -835,7 +820,7 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
         contextAbort.signal
       );
     } catch (err) {
-      console.warn('[fire3d] context layers failed to activate.', err);
+      warnComponent('context activation', err);
     }
     if (myGeneration !== generation || !active) return;
     contextKeys = activation.keys;
@@ -900,10 +885,7 @@ function reconcileSmokeVolume(map: maplibregl.Map): void {
       smokeVolumeOn = smokeModule.activateSmokeVolume(map);
     } catch (err) {
       smokeVolumeOn = false;
-      console.warn(
-        '[fire3d] the smoke volume failed to re-activate; flat smoke stays.',
-        err
-      );
+      warnComponent('smoke activation', err);
     }
     publishStatus('active', null);
   }
@@ -945,10 +927,7 @@ function reconcilePerimeterRibbon(map: maplibregl.Map): void {
       publishStatus('active', null);
     })
     .catch((err: unknown) => {
-      console.warn(
-        '[fire3d] the perimeter ribbon failed to re-activate; the flat perimeter stays.',
-        err
-      );
+      warnComponent('ribbon activation', err);
     });
 }
 

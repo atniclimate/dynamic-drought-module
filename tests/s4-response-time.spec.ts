@@ -63,7 +63,7 @@ test.describe('S4c panel-foot response', () => {
     ).toBeVisible();
     // The active-cluster-aware context line.
     await expect(card.locator('.panel-response-context')).toHaveText(
-      /view · Current$/
+      /view · Current Conditions$/
     );
     // The scrolling body exists as the one bounded scroll region.
     await expect(card.locator('.coordinated-response-body')).toBeAttached();

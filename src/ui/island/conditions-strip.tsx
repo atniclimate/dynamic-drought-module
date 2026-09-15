@@ -1,35 +1,16 @@
 /**
- * The conditions strip as a Preact island (ADR 0002, D-0.7.0-021): the
- * view half of the retired vanilla `src/ui/conditions-strip.ts`, whose
- * computation lives in `./strip-metrics`. Markup, strings, and data
- * attributes are contract: tests/conditions-strip.spec.ts asserts the
- * off-state wording, the tile order, the stale flags, and the button
- * semantics (see the conditions-strip-strings knowledge card). Since E1
- * (D-0.7.0-041 part 2, review E1.4) the Alerts and Fires tiles render only
- * while their layers are on; the drought tile and the date line are the
- * strip's permanent content.
+ * Live readings computed from the rendered map by `strip-metrics`.
+ * The active drought reading opens its details and key without changing the
+ * condition surface. This prevents a category readout from acting as an
+ * unexpected layer-off control. Off drought and event tiles in Console
+ * retain their explicit layer actions through the shared toggle command.
  *
- * U1 (D-0.7.0-008, the ratified tile guardrail spec): each tile is a
- * REAL `button` with stable semantics in every state (off, loading,
- * ready, zero, error). A tile is an answer followed by an immediate
- * action: it exposes `aria-pressed` from the layer's on-state, keeps
- * status and action distinct in the accessible name ("14 active
- * fire perimeters. Current Mapped Fire Perimeters (NIFC) layer on. Press to hide."), and
- * routes its action through the shared toggle command, never a naive
- * controller call. The drought tile additionally discloses that showing
- * the US Drought Monitor replaces the current condition surface (USDM
- * is an exclusive surface; a silent replacement is technically correct
- * but not a predictable interaction).
- *
- * The component renders the three tiles into #conditions-metrics; the
- * strip's heading and date span are static index.html chrome OUTSIDE
- * this render root, so the date line and the section's `hidden` flip are
- * applied in an after-render effect, mirroring the vanilla render()
- * exactly.
+ * The same strip node seats on the Brief map and in the Console sidebar.
+ * Source status, historical-week dates, and stale flags stay authoritative.
  */
 
 import type * as maplibregl from 'maplibre-gl';
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ReadonlySignal } from '@preact/signals';
 
 import { getLayerDef } from '../../config/layers';
@@ -97,9 +78,20 @@ function MetricTile({
   tile: { key: string; disclose: boolean };
 }) {
   const name = getLayerDef(tile.key)?.name ?? tile.key;
+  const showsDetails = id === 'drought' && isOn;
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  useEffect(() => {
+    const update = (event: Event): void => {
+      setDetailsOpen(Boolean((event as CustomEvent<{ open: boolean }>).detail?.open));
+    };
+    window.addEventListener('ddm:map-key-details-change', update);
+    return () => window.removeEventListener('ddm:map-key-details-change', update);
+  }, []);
 
   const onClick = (): void => {
-    if (isOn) {
+    if (showsDetails) {
+      window.dispatchEvent(new Event('ddm:toggle-map-key-details'));
+    } else if (isOn) {
       requestLayerOff(tile.key);
     } else {
       requestLayerOn(tile.key);
@@ -112,11 +104,18 @@ function MetricTile({
       class={m.tone === 'loading' ? 'conditions-metric skeleton-shimmer' : 'conditions-metric'}
       data-metric={id}
       data-tone={m.tone}
+      data-layer-on={String(isOn)}
       {...(m.stale ? { 'data-stale': 'true' } : {})}
-      aria-pressed={isOn}
-      aria-label={tileAriaLabel(name, m, isOn, tile.disclose)}
+      aria-pressed={showsDetails ? undefined : isOn}
+      aria-expanded={showsDetails ? detailsOpen : undefined}
+      aria-controls={showsDetails ? 'map-key-content' : undefined}
+      aria-label={showsDetails
+        ? `${m.value} ${m.sublabel}.${m.stale ? ' Reading is stale.' : ''} ${detailsOpen ? 'Close' : 'Open'} drought details and key.`
+        : tileAriaLabel(name, m, isOn, tile.disclose)}
       title={
-        isOn
+        showsDetails
+          ? 'Drought details and key'
+          : isOn
           ? `Hide ${name}`
           : tile.disclose
             ? `Show ${name} (replaces the current condition surface)`
@@ -135,17 +134,10 @@ function MetricTile({
         {m.stale ? <span class="conditions-stale-tag">stale</span> : null}
       </span>
       {!isOn && m.tone === 'off' ? <span class="conditions-action">Show</span> : null}
-      {/* Defect 3 (owner report, 2026-09-10): with a live value this tile
-          reads as a category readout (a D0-D4 swatch), especially once the
-          Brief dock capitalizes the sublabel beside a large code. Nothing
-          on screen said it was ALSO a button whose click hides the whole
-          surface; only the hover title and the screen-reader-only
-          aria-label carried that. This persistent "Hide" cue mirrors the
-          existing off-state "Show" cue at the same visual weight, so the
-          toggle affordance is visible before the click in every state,
-          not just discoverable by hover or a screen reader. */}
+      {/* Name the action visibly: active drought opens the key, while the
+          Console's event tiles retain their explicit Hide action. */}
       {isOn && m.tone !== 'loading' ? (
-        <span class="conditions-action conditions-action-hide">Hide</span>
+        <span class="conditions-action conditions-action-hide">{showsDetails ? 'Key' : 'Hide'}</span>
       ) : null}
     </button>
   );

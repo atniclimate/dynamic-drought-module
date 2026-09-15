@@ -25,16 +25,13 @@
  * browser exposes it, since mobile browser chrome, pinch zoom, and the
  * on-screen keyboard move it without any layout resize; the layout
  * viewport as the fallback), intersected with the map container rect,
- * minus the app's own occluding chrome, inset by a small margin. The
- * modeled occluders are exactly two, both read from their LIVE bounding
- * rects at every clamp: the active mobile sheet (the `#sidebar` element
- * exactly while the `#app[data-sheet-detent]` shell attribute is present;
- * on desktop the same element is a grid column beside the map and
- * occludes nothing) and the persistent mobile footer
- * (`#mobile-footer-nav`). Both are fixed, full-width, bottom-docked
- * surfaces, so occlusion is modeled as raising the region's bottom edge
- * to the topmost occluding edge; an occluder that is not bottom-docked
- * would need a richer model than this.
+ * minus the app's own bottom-docked chrome, inset by a small margin. The
+ * two candidates are read from their LIVE bounding rects at every clamp:
+ * the mobile panel (`#sidebar` while `#app[data-sheet-detent]` is present)
+ * and the mobile navigation (`#mobile-footer-nav`). A candidate only
+ * raises the region's bottom edge when its live rect touches that edge.
+ * The current side panel and side rail therefore leave the full vertical
+ * map region available.
  *
  * Three mechanisms compose to keep the card inside the region:
  *
@@ -69,15 +66,14 @@
  * the spec prose in tests/popup-viewport.spec.ts cite it rather than
  * restating limits of their own, and on any divergence the table wins.
  *
- * Overlap by chrome OTHER than the two modeled occluders is not detected
+ * Overlap by chrome that does not touch the bottom edge is not modeled
  * here. The body scroll window itself is CSS-side (the coordinated
  * head/body flex rules and the U-UX-FIX-1 section in app.css); the tier
  * table states exactly when that CSS can and cannot deliver it.
  *
  * Re-clamp triggers: popup insertion; MapLibre rewriting the container's
- * inline transform (map move or anchor flip; this also covers a sheet
- * detent change, whose settle re-pads the camera and so rewrites every
- * popup transform); content mutations (hydration); content box resizes
+ * inline transform (map move or anchor flip); content mutations
+ * (hydration); content box resizes
  * (font, image, or stylesheet reflow, via ResizeObserver); window resize;
  * visual-viewport resize and scroll.
  *
@@ -321,8 +317,8 @@ interface Bounds {
 
 /**
  * The reachable region for a popup: visual viewport intersected with the
- * map container rect, minus the two modeled bottom-docked occluders (the
- * module comment defines all four terms), inset by the edge margin. May
+ * map container rect, minus any candidate that actually touches its
+ * bottom edge, inset by the edge margin. May
  * be empty; `clampPopupToViewport` checks.
  */
 function containingBounds(popup: HTMLElement): Bounds {
@@ -341,12 +337,10 @@ function containingBounds(popup: HTMLElement): Bounds {
     right = Math.min(right, rect.right);
   }
 
-  // The occluding chrome, live rects only. The sheet qualifies exactly
-  // while the mobile shell attribute is present (on desktop the same
-  // element is the sidebar column beside the map); a hidden footer
-  // (desktop, embed) drops out via its zero-size rect. Occluders are
-  // processed bottom-most first so a stack (sheet riding above the
-  // footer) raises the region edge step by step.
+  // Candidate chrome, live rects only. The panel qualifies exactly while
+  // the mobile shell attribute is present; hidden or side-positioned
+  // candidates drop out through the rect filters and bottom-edge test.
+  // Bottom-docked stacks are processed from the viewport edge upward.
   const occluders: HTMLElement[] = [];
   const footer = document.getElementById('mobile-footer-nav');
   if (footer) occluders.push(footer);

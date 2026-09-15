@@ -199,7 +199,9 @@ test.describe('U7 British Columbia basin drought display', () => {
     await expect(page.locator('#time-bar')).toContainText(
       'No update means not measured right now'
     );
-    await expect(page.locator('#map-key')).toBeHidden();
+    await expect(page.locator('#map-key')).toBeVisible();
+    await expect(page.locator('#map-key-details-toggle')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#map-key-content')).toBeHidden();
     await page.locator('#map-info-btn').click();
     await expect(page.locator('#map-info-attribution')).toContainText(
       'Province of British Columbia'
@@ -379,7 +381,7 @@ test.describe('U7 British Columbia basin drought display', () => {
     await expect(
       page.locator('#legend-panel [data-legend="usdm"]')
     ).toContainText('Province of British Columbia');
-    await expect(page.locator('#map-key')).toBeHidden();
+    await expect(page.locator('#map-key-content')).toBeHidden();
   });
 
   test('no British Columbia source geometry is committed under public data', () => {

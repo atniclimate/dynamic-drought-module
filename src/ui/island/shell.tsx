@@ -2,16 +2,12 @@
  * The S4 main-screen shell island (the S4 design record sections 2-3;
  * D-0.7.0-042/052/074; ADR 0002: new UI surfaces are Preact islands).
  *
- * The left panel is a LAUNCH PAD, not a dashboard: one control per
- * decision, in the ruled order VIEW (which hazard) -> CONDITIONS IN VIEW
- * (the honest S3 DisplaySummary plus live metrics) -> CURRENT REGION ->
- * MAP CONTEXT (the S4b minimap) -> WHEN (the compact temporal row; detail
- * behind the S4c "More time" popover) -> SHARE -> REFINE. Depth lives in
- * the studios; the doors to them stay where E1 put them
- * (src/ui/view-shell.ts renders the capability-gated
- * PLACE/LAYERS pair against the real studio-route API, including the
- * embed link-out form, so this island deliberately does NOT duplicate
- * that surface).
+ * Shared desktop order: hazard, time horizon, regional navigation, and place
+ * search. Variable view details follow Place, Layers, and Tribal Nations.
+ * Share is the final sidebar control. The
+ * active condition readout lives in the map's top-left glass indicator;
+ * source details stay available through its key and the Impact Briefing.
+ * Place and Layers studios keep their existing route and restoration logic.
  *
  * The four cluster buttons render COMMITTED truth, never optimistic
  * click state: aria-pressed mirrors the CommittedShellSnapshot's
@@ -121,8 +117,8 @@ function shellRehostSeats(): readonly ShellRehostSeat[] | null {
 
 /**
  * Seat the existing region, share, and Brief-head nodes inside the ordered
- * desktop Brief shell, and its condition readout plus legend in the fixed
- * sidebar dock. No surface is cloned or rewired: moving each node preserves
+ * desktop Brief shell, its condition readout on the map, and its legend in
+ * the sidebar's collapsed legend disclosure. No surface is cloned or rewired: moving each node preserves
  * its island root, controls, listeners, and live state. Every ineligible
  * presentation returns all five nodes to static HTML homes.
  */
@@ -310,6 +306,7 @@ interface ShellProps {
   readonly snap: ReadonlySignal<CommittedShellSnapshot>;
   readonly framing: ReadonlySignal<FramingSelection>;
   readonly specTick: ReadonlySignal<number>;
+  readonly onMinimapNoteChange: (note: string) => void;
 }
 
 /**
@@ -367,7 +364,7 @@ function MinimapPopover({
   );
 }
 
-function Shell({ map, snap, framing, specTick }: ShellProps) {
+function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps) {
   useDesktopBriefRehost();
 
   const snapshot = snap.value;
@@ -466,47 +463,6 @@ function Shell({ map, snap, framing, specTick }: ShellProps) {
         })}
       </div>
 
-      <Fire3DControl cluster={snapshot.cluster} />
-
-      <section
-        class="shell-summary"
-        id="shell-conditions-summary"
-        aria-labelledby="shell-conditions-heading"
-      >
-        <h2 class="panel-title sr-only" id="shell-conditions-heading">Conditions in view</h2>
-        <p class="shell-summary-primary sr-only" id="shell-summary-primary">
-          {snapshot.summary.primary}
-        </p>
-        {/* The live region stays PERSISTENTLY rendered and visible; only
-            its text swaps. A region that is unhidden in the same render
-            that sets its text is unreliably announced across screen
-            readers (NVDA/Firefox drop it), so hidden/display toggling is
-            deliberately avoided; an empty paragraph renders nothing. */}
-        <p
-          class="shell-summary-caveat"
-          id="shell-summary-caveat"
-          aria-live="polite"
-        >
-          {snapshot.summary.caveat ?? ''}
-        </p>
-      </section>
-
-      <div class="shell-minimap-map">
-        <Minimap
-          map={map}
-          framing={framing}
-          idPrefix="shell-minimap"
-          metricContext={snapshot.selectedHazard}
-        />
-      </div>
-      <MinimapPopover
-        map={map}
-        framing={framing}
-        metricContext={snapshot.selectedHazard}
-      />
-      <div class="shell-rehost" id="shell-region-host" />
-      <div class="shell-rehost shell-search-host" id="shell-refine-host" />
-
       <div class="shell-when" role="group" aria-label="Time horizon">
         <div class="shell-horizons">
           {TEMPORAL_HORIZON_KEYS.map((key) => {
@@ -546,9 +502,45 @@ function Shell({ map, snap, framing, specTick }: ShellProps) {
         <TimeCompact specTick={specTick} />
       </div>
 
-      <div class="shell-rehost shell-share-host" id="shell-share-host" />
-
+      <div class="shell-minimap-map">
+        <Minimap
+          map={map}
+          framing={framing}
+          idPrefix="shell-minimap"
+          metricContext={snapshot.selectedHazard}
+          onNoteChange={onMinimapNoteChange}
+        />
+      </div>
+      <MinimapPopover
+        map={map}
+        framing={framing}
+        metricContext={snapshot.selectedHazard}
+      />
+      <div class="shell-rehost" id="shell-region-host" />
+      <div class="shell-rehost shell-search-host" id="shell-refine-host" />
     </div>
+  );
+}
+
+/** Variable claims and optional controls do not displace shared navigation. */
+function ShellDetails({ snap, framingNote }: {
+  readonly snap: ReadonlySignal<CommittedShellSnapshot>;
+  readonly framingNote: ReadonlySignal<string>;
+}) {
+  const snapshot = snap.value;
+  return (
+    <>
+      <Fire3DControl cluster={snapshot.cluster} />
+      <section class="shell-summary" id="shell-conditions-summary" aria-labelledby="shell-conditions-heading">
+        <h2 class="panel-title sr-only" id="shell-conditions-heading">Conditions in view</h2>
+        <p class="shell-summary-primary sr-only" id="shell-summary-primary">{snapshot.summary.primary}</p>
+        {/* Keep the live regions mounted as their text changes. */}
+        <p class="shell-summary-caveat" id="shell-summary-caveat" aria-live="polite">
+          {snapshot.summary.caveat ?? ''}
+        </p>
+      </section>
+      <p class="shell-minimap-note" id="shell-framing-note" aria-live="polite">{framingNote.value}</p>
+    </>
   );
 }
 
@@ -576,8 +568,12 @@ export function mountShell(host: HTMLElement, map: maplibregl.Map): void {
     specTick.value = specTick.value + 1;
   });
 
+  const framingNote = signal('');
+  const onMinimapNoteChange = (note: string): void => { framingNote.value = note; };
   render(
-    <Shell map={map} snap={snap} framing={framing} specTick={specTick} />,
+    <Shell map={map} snap={snap} framing={framing} specTick={specTick} onMinimapNoteChange={onMinimapNoteChange} />,
     host
   );
+  const detailsHost = document.getElementById('shell-details-island');
+  if (detailsHost) render(<ShellDetails snap={snap} framingNote={framingNote} />, detailsHost);
 }

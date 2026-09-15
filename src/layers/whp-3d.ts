@@ -1,45 +1,21 @@
 /**
- * Wildfire Hazard Potential drape for the desktop 3D Fire mode (the
- * landscape hazard context layer).
+ * The desktop 3D Fire scene's static USFS Wildfire Hazard Potential drape.
+ * The archive contains the published 2023 classes and stays unchanged.
+ * Requested tiles map those known classes to increasing white opacity,
+ * keeping the landscape visible and the orange fire perimeters legible.
+ * The companion legend carries the matching opacity scale and source limits.
  *
- * REPLACED THE FUEL-MODEL DRAPE on 2026-08-19, on owner direction. The
- * ask was "only the yellow through red colors to indicate risk", and the
- * LANDFIRE FBFM40 drape could not honestly answer it: FBFM40 is a
- * fuel-model classification, not a hazard scale, so recoloring its 44
- * classes into a risk ramp would have fabricated a claim its issuer never
- * made. (MapLibre also has no client-side raster recolor, so it was not
- * even mechanically available.) USFS Wildfire Hazard Potential IS a
- * published hazard scale, and its issuer palette already runs green
- * through yellow and orange to red. The answer was a different issuer,
- * not a repainted one.
- *
- * NOT a LAYER_DEFS entry and NOT a LayerModule: like hms-smoke-volume,
- * this module is a presentation companion owned by the fire3d context
- * orchestrator (src/map/fire3d-context.ts, reached only through the 3D
- * mode's dynamic import chain). It drapes the bundled WHP 2023 archive
- * (public/data/whp-2023-pnw.pmtiles) over the 3D terrain through
- * MapLibre's ordinary render-to-texture path.
- *
- * The same service backs the flat `usfs-whp` catalog layer, so the drape
- * and the 2D surface can never disagree about what WHP says.
- *
- * Meaning discipline: every pixel carries the issuer's own published
- * class color, rendered server-side at bake time; DDM chooses no colors
- * and computes nothing from the classes. The legend states the vintage,
- * the resolution reduction, and that the drape is a static hazard
- * classification, never current fire conditions and never a prediction.
- *
- * Failure posture: the caller treats a false return as a NON-fatal
- * partial degrade (terrain and smoke stay; the scene simply lacks the
- * drape).
+ * This presentation companion is owned by the lazy fire3d context module,
+ * not the layer catalog. It stands down whenever the flat WHP surface is
+ * active, so one product never draws twice. An unavailable archive leaves
+ * terrain and smoke available as a partial scene.
  */
 
 import type * as maplibregl from 'maplibre-gl';
 
-import {
-  DRAPE_OPACITY,
-  USFS_WHP_PRESENTATION
-} from '../config/wildfire-presentation';
+import { DRAPE_OPACITY } from '../config/wildfire-presentation';
+import { WHP_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION } from '../config/whp-shade';
+import { registerWhpShadeProtocol } from './whp-shade-protocol';
 import { URLS } from '../config/urls';
 import { reassertLabelOrder, reassertThematicOrder } from '../map/layer-order';
 import { registry } from '../state/registry';
@@ -92,28 +68,24 @@ export async function activateWhpDrape(
   map: maplibregl.Map,
   signal: AbortSignal
 ): Promise<boolean> {
-  if (flatWhpLayerIsOn()) {
-    console.info(
-      '[whp-3d] the flat USFS WHP layer is on; standing down so one issuer keeps one legend.'
-    );
-    return false;
-  }
+  if (flatWhpLayerIsOn()) return false;
 
   try {
     await probeArchiveHeader(URLS.whp2023PmtilesLocal, signal);
   } catch (err) {
     if (!signal.aborted) {
-      console.warn('[whp-3d] the hazard drape archive is unreachable or invalid.', err);
+      console.warn('[whp-3d] invalid or unavailable archive.', err);
     }
     return false;
   }
   if (signal.aborted) return false;
 
   try {
+    registerWhpShadeProtocol();
     if (!map.getSource(SOURCE_ID)) {
       map.addSource(SOURCE_ID, {
         type: 'raster',
-        url: 'pmtiles://' + URLS.whp2023PmtilesLocal,
+        url: `whp-shade://${URLS.whp2023PmtilesLocal}`,
         tileSize: 512,
         attribution: 'USFS Wildfire Hazard Potential 2023'
       });
@@ -172,13 +144,14 @@ export async function activateWhpDrape(
       renderSwatchLegend(
         body,
         'Wildfire hazard potential (3D view)',
-        USFS_WHP_PRESENTATION.categories.map((c) => ({
-          color: c.color,
+        WHP_SHADE_CATEGORIES.map((c) => ({
+          color: `rgba(255, 255, 255, ${c.opacity * DRAPE_OPACITY})`,
           label: c.label
         })),
-        USFS_WHP_PRESENTATION.qualification
+        WHP_SHADE_QUALIFICATION
       )
   });
+  window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_ID, active: true } }));
 
   // The flat layer can be switched on AFTER the scene is up (the
   // season-ahead horizon does exactly that). Watch for it and stand down
@@ -189,9 +162,6 @@ export async function activateWhpDrape(
   releaseFlatLayerWatch?.();
   releaseFlatLayerWatch = registry.on('change', () => {
     if (!flatWhpLayerIsOn()) return;
-    console.info(
-      '[whp-3d] the flat USFS WHP layer came on; removing the drape so one issuer keeps one legend.'
-    );
     deactivateWhpDrape(map);
   });
 
@@ -208,4 +178,5 @@ export function deactivateWhpDrape(map: maplibregl.Map): void {
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   hideLegend(LEGEND_KEY);
+  window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_ID, active: false } }));
 }

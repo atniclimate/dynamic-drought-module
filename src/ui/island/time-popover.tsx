@@ -21,10 +21,10 @@
  * "More time" button (the S4c focus-restoration contract).
  */
 
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import type { ReadonlySignal } from '@preact/signals';
 
-import { getTimeBarSpec, stampHorizonText } from '../time-bar';
+import { freshnessDate, freshnessLabel, getTimeBarSpec, stampHorizonText } from '../time-bar';
 import type { TimeBarSpec } from '../time-bar';
 import { wireShellPopover } from './popover-discipline';
 
@@ -189,19 +189,30 @@ export function TimeCompact({ specTick }: TimeCompactProps) {
   // Reading the signal subscribes this component to spec changes.
   void specTick.value;
   const spec = getTimeBarSpec();
+  const rowRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
+  // Read before Preact commits the native disabled property. Chromium moves
+  // focus to body at that commit, so the post-commit effect cannot recover
+  // whether the door had focus by inspecting document.activeElement then.
+  const doorHadFocus = document.activeElement === moreRef.current;
+
+  useLayoutEffect(() => {
+    if (spec === null && doorHadFocus) {
+      rowRef.current?.focus({ preventScroll: true });
+    }
+  }, [doorHadFocus, spec]);
 
   useEffect(() => {
     const pop = popRef.current;
     if (!pop) return;
     // The shared popover discipline: focus in on open, restore to the
     // door on close (falling back to the WHEN row itself when the door
-    // unmounted with its spec), and consume the light-dismissing pointer
+    // is disabled with no spec), and consume the light-dismissing pointer
     // gesture so it never clicks through to the map.
     return wireShellPopover(
       pop,
-      () => moreRef.current,
+      () => moreRef.current?.disabled ? null : moreRef.current,
       () => document.getElementById('shell-time')
     );
   }, []);
@@ -209,7 +220,7 @@ export function TimeCompact({ specTick }: TimeCompactProps) {
   // The owning surface can clear its spec WHILE the popover is open (a
   // cluster switch deactivates the layer, a terminal failure tears it
   // down). An open detail card over a spec that no longer exists would
-  // be a blank claim, and the door it would restore focus to is gone;
+  // be a blank claim, and its persistent door is temporarily disabled;
   // close it now, so the discipline above restores focus to the row's
   // honest "No dated product is displayed" state instead of dropping it.
   useEffect(() => {
@@ -220,11 +231,11 @@ export function TimeCompact({ specTick }: TimeCompactProps) {
   }, [spec]);
 
   // tabIndex -1 on the row: a programmatic focus target for the
-  // discipline's fallback when the More time door unmounts with its spec.
+  // discipline's fallback when the More time door has no current spec.
   return (
-    <div class="shell-time" id="shell-time" data-has-spec={spec !== null} tabIndex={-1}>
+    <div ref={rowRef} class="shell-time" id="shell-time" data-has-spec={spec !== null} tabIndex={-1}>
       {spec === null ? (
-        <span class="shell-time-empty">No dated product is displayed.</span>
+        <span class="shell-time-headline shell-time-empty">No dated product is displayed.</span>
       ) : (
         <>
           <span
@@ -235,26 +246,35 @@ export function TimeCompact({ specTick }: TimeCompactProps) {
             // this title carries the full, untruncated headline so that
             // backstop can never hide the issuer's date behind an ellipsis
             // with no way to read the rest.
-            title={spec.stamp.headline}
+            title={spec.stamp.freshness ? freshnessLabel(spec.stamp) : spec.stamp.headline}
           >
-            {spec.stamp.headline}
+            {spec.stamp.freshness ? (
+              <span class="feed-current" aria-label={freshnessLabel(spec.stamp)}>
+                <span>Current Conditions</span>
+                <span class="feed-freshness-dot" data-freshness={spec.stamp.freshness.state} aria-hidden="true" />
+                {spec.stamp.freshness.state === 'stale' && <span>{freshnessDate(spec.stamp)}</span>}
+                {spec.stamp.freshness.state === 'unavailable' && <span>Unavailable</span>}
+                {spec.stamp.freshness.state === 'loading' && <span class="sr-only">Checking</span>}
+              </span>
+            ) : spec.stamp.headline}
           </span>
-          <button
-            type="button"
-            id="shell-time-more"
-            class="shell-popover-door"
-            ref={moreRef}
-            popovertarget="shell-time-popover"
-            title={spec.stamp.detail}
-            // Derived from the live popover state so a spec-tick re-render
-            // while the card is open cannot clobber the discipline's toggle
-            // reflection (W2-D9).
-            aria-expanded={popRef.current?.matches(':popover-open') ?? false}
-          >
-            More time
-          </button>
         </>
       )}
+      <button
+        type="button"
+        id="shell-time-more"
+        class="shell-popover-door"
+        ref={moreRef}
+        popovertarget="shell-time-popover"
+        title={spec?.stamp.detail ?? 'No dated product is displayed.'}
+        disabled={spec === null}
+        // Derived from the live popover state so a spec-tick re-render
+        // while the card is open cannot clobber the discipline's toggle
+        // reflection (W2-D9).
+        aria-expanded={popRef.current?.matches(':popover-open') ?? false}
+      >
+        {spec?.stamp.freshness ? 'Details' : 'More time'}
+      </button>
       <div
         popover="auto"
         id="shell-time-popover"

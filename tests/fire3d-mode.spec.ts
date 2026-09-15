@@ -30,9 +30,9 @@ import {
   DRAPE_OPACITY,
   HMS_VOLUME_QUALIFICATION,
   STRUCTURES_QUALIFICATION,
-  USFS_WHP_PRESENTATION,
   WILDFIRE_STATIC_COLOR
 } from '../src/config/wildfire-presentation';
+import { WHP_SHADE_QUALIFICATION } from '../src/config/whp-shade';
 import { WILDFIRE_PULSE_PAINT_TARGETS } from '../src/layers/nifc-fires';
 import { PERIMETER_RIBBON_LAYER_IDS } from '../src/layers/nifc-perimeter-ribbon';
 import { EVENT_OVERLAY_IDS } from '../src/map/layer-order';
@@ -407,6 +407,10 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
   const restoreFetch = stubPmtilesFetch();
   const harness = fakeMapHarness({ pitch: 15, bearing: 30 });
   const { map } = harness;
+  const shadeEvents: { layer: string; active: boolean }[] = [];
+  window.addEventListener('ddm:whp-shade', (event) => {
+    shadeEvents.push((event as CustomEvent<{ layer: string; active: boolean }>).detail);
+  });
 
   // A live hms-smoke activation is already on the fake map.
   map.addSource('hms-smoke', { type: 'geojson' } as never);
@@ -471,10 +475,13 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     // layer now, off by default, and this orchestrator only reports it when
     // a person has turned it on (tests/power-layer.spec.ts owns its truth).
     expect(getFire3DStatus().contextLayers).toEqual(['whp', 'structures']);
+    expect(shadeEvents.at(-1)).toEqual({ layer: 'whp-2023', active: true });
     expect(harness.sources.get('whp-2023')).toMatchObject({
       type: 'raster',
+      url: `whp-shade://${URLS.whp2023PmtilesLocal}`,
       tileSize: 512
     });
+    expect(harness.sources.get('whp-2023')).not.toHaveProperty('tiles');
     expect(harness.layerSpecs.get('whp-2023')).toMatchObject({
       type: 'raster',
       source: 'whp-2023',
@@ -522,6 +529,7 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     setFire3DActive(map, false);
     expect(getFire3DStatus().state).toBe('inactive');
     expect(getFire3DStatus().contextLayers).toEqual([]);
+    expect(shadeEvents.at(-1)).toEqual({ layer: 'whp-2023', active: false });
     expect(harness.getTerrain()).toBeNull();
     expect(harness.sources.has('fire3d-terrain-dem')).toBe(false);
     expect(harness.sources.has('whp-2023')).toBe(false);
@@ -1365,7 +1373,7 @@ test('a corrupt hazard archive degrades only the drape; the scene stays active',
     expect(harness.layerSpecs.has('structures-3d')).toBe(true);
     // Only the drape warned; the scene itself raised nothing.
     expect(warnings.messages).toEqual([
-      expect.stringMatching(/^\[whp-3d\] the hazard drape archive is unreachable or invalid\./)
+      expect.stringMatching(/^\[whp-3d\] invalid or unavailable archive\./)
     ]);
   } finally {
     warnings.restore();
@@ -1403,7 +1411,7 @@ test('a corrupt structures archive degrades only the buildings; the rest stays',
     expect(harness.layerSpecs.has('structures-3d-est')).toBe(false);
     // Only the structures context warned; the scene itself raised nothing.
     expect(warnings.messages).toEqual([
-      expect.stringMatching(/^\[structures-3d\] the structures archive is unreachable or invalid\./)
+      expect.stringMatching(/^\[structures-3d\] invalid or unavailable archive\./)
     ]);
   } finally {
     warnings.restore();
@@ -1635,7 +1643,7 @@ test.describe('W3/W4 browser truth', () => {
     await expect(hazardLegend).toHaveCount(1);
     await expect
       .poll(() => hazardLegend.textContent())
-      .toContain(USFS_WHP_PRESENTATION.qualification);
+      .toContain(WHP_SHADE_QUALIFICATION);
     const powerLegend = page.locator(
       '.legend-section[data-legend="power-context"]'
     );
@@ -1660,7 +1668,7 @@ test.describe('W3/W4 browser truth', () => {
         path: 'fire3d-evidence/fire3d-active-desktop.png'
       });
       await page
-        .locator('#shell-panel')
+        .locator('#shell-details-panel')
         .screenshot({ path: 'fire3d-evidence/fire3d-control-coverage-note.png' });
     }
     console.log(
@@ -2109,6 +2117,8 @@ test.describe('W3/W4 browser truth', () => {
   // the extrusion is over it; there is simply nothing in it. Without the
   // line below, that reads as a broken feature rather than an answer.
   const empty = page.locator('[data-fire3d-empty-smoke]');
+  await expect(empty).toBeHidden();
+  await page.locator('.shell-fire3d-details > summary').click();
   await expect(empty).toBeVisible();
   await expect(empty).toContainText('No current smoke plumes in view');
   // The standing notes stay countable: the empty line carries its own
@@ -2158,7 +2168,7 @@ test('an embed without the flag never activates and never gains it', async ({
     await expect(page.locator('#shell-fire3d-refused')).toHaveCount(0);
   });
 
-  test('a landscape phone is told why it has no 3D control and never enters the scene', async ({
+  test('a short desktop window explains its 3D refusal and never enters the scene', async ({
     page
   }) => {
     await stubWildfireFeeds(page);
@@ -2193,6 +2203,19 @@ test('an embed without the flag never activates and never gains it', async ({
     await page.setViewportSize({ width: 1024, height: 768 });
     await expect(page.locator('#shell-fire3d')).toHaveCount(1);
     await expect(refusal).toHaveCount(0);
+  });
+
+  test.describe('landscape touch screens', () => {
+    test.use({ hasTouch: true });
+
+    test('a landscape phone shows no 3D control or refusal notice', async ({ page }) => {
+      await stubWildfireFeeds(page);
+      await page.setViewportSize({ width: 844, height: 390 });
+      await gotoApp(page, '?cluster=wildfire&fire3d=true');
+      await expect(page.locator('#shell-fire3d')).toHaveCount(0);
+      await expect(page.locator('#shell-fire3d-refused')).toBeHidden();
+      expect(await fire3dStamp(page)).not.toBe('active');
+    });
   });
 
   test('a corrupt archive reads unavailable in the control and drops the flag', async ({

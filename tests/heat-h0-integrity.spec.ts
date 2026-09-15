@@ -153,6 +153,9 @@ async function stubNwsSnapshot(
 async function expectCompactEmbedKey(page: Page): Promise<void> {
   const key = page.locator('#map-key');
   await expect(key).toBeVisible();
+  const toggle = key.locator('#map-key-details-toggle');
+  if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+  await expect(key.locator('#map-key-content')).toBeVisible();
   const metrics = await key.evaluate((element) => {
     const box = element.getBoundingClientRect();
     return {

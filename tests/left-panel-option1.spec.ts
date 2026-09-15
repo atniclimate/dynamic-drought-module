@@ -3,25 +3,26 @@ import { test, expect } from '@playwright/test';
 import { gotoApp } from './helpers';
 
 test.describe('D-0.7.0-067 contextual time rail', () => {
-  test('desktop reads place, time, display, then selection response', async ({ page }) => {
+  test('desktop reads hazard, time, place, then selection response with Share last', async ({ page }) => {
     await gotoApp(page, '?view=brief&layers=usdm');
 
     const shellOrder = await page.locator('#shell-panel .shell').evaluate((shell) => {
       const children = Array.from(shell.children);
       return [
         '.shell-view',
-        '#shell-conditions-summary',
+        '.shell-when',
         '.shell-minimap-map',
         '.shell-minimap-popover-wrap',
         '#shell-region-host',
-        '#shell-refine-host',
-        '.shell-when',
-        '#shell-share-host'
+        '#shell-refine-host'
       ].map((selector) => children.findIndex((child) => child.matches(selector)));
     });
     expect(shellOrder.every((index) => index >= 0)).toBe(true);
     expect(shellOrder).toEqual([...shellOrder].sort((a, b) => a - b));
+    await expect(page.locator('#sidebar > #shell-share-host > #share-btn')).toHaveCount(1);
     await expect(page.locator('#shell-panel + #time-bar + #brief-display')).toHaveCount(1);
+    await expect(page.locator('#brief-display + #shell-details-panel')).toHaveCount(1);
+    await expect(page.locator('#shell-details-island > #shell-conditions-summary')).toHaveCount(1);
 
     // S4 supersession (the 2026-07-18 design record, S4c): on the
     // desktop Brief shell the compact WHEN row plus the "More time"
@@ -41,6 +42,8 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     await search.fill('oregon');
     await page.locator('#brief-search [data-search-kind="place"][data-search-id="OR"]').click();
     await expect(page.locator('#brief-place-name')).toHaveText('Oregon');
+    await expect(page.locator('#brief-secondary-actions + #brief-selection-summary #brief-place-context')).toBeVisible();
+    await expect(page.locator('#brief-head #brief-place-context')).toHaveCount(0);
     await expect(page.locator('#brief-selection-summary')).toContainText('focused on Oregon');
     await expect(page.locator('#brief-full-report-link')).toHaveCount(1);
 
@@ -101,15 +104,15 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     await expect(page.locator('#time-bar')).toBeHidden();
   });
 
-  test('embed keeps only the mirrored date until its explicit exit', async ({ page }) => {
+  test('embed keeps the floating date hidden through its explicit exit', async ({ page }) => {
     await page.setViewportSize({ width: 400, height: 600 });
     await gotoApp(page, '?embed=true&view=brief&layers=usdm');
 
     await expect(page.locator('#time-bar')).toBeHidden();
-    await expect(page.locator('#embed-date-stamp')).toBeVisible();
+    await expect(page.locator('#embed-date-stamp')).toBeHidden();
     await page.locator('#sidebar-expand').click();
     await expect(page.locator('#app')).not.toHaveClass(/\bembed\b/);
-    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'peek');
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'closed');
     await expect(page.locator('#embed-date-stamp')).toBeHidden();
     await expect(page.locator('#time-bar')).toBeHidden();
 

@@ -15,8 +15,8 @@
  * the registry events, the timeline store, and the map's settle events;
  * zero imports from `src/layers/`, `src/impact/`, or any layer module.
  *
- * Like the vanilla builders it replaces, the island lives for the app
- * lifetime; listeners are not torn down.
+ * The island lives for the app lifetime; its map observers stop when the
+ * map is removed.
  */
 
 import { render } from 'preact';
@@ -31,6 +31,7 @@ import type { LayerController } from '../../state/layer-controller';
 import { checkedSnapshot, onCheckedChange } from './bridge';
 import { Catalog } from './catalog';
 import { ConditionsStrip } from './conditions-strip';
+import { CONDITIONS_METRIC_SOURCES } from './strip-metrics';
 import { Search } from './search';
 import type { SearchProps } from './search';
 import { mountShell } from './shell';
@@ -63,30 +64,55 @@ export function mountSidebarIsland(
 
   // rAF-coalesced strip recompute, mirroring the vanilla scheduleRender:
   // a burst of settle/registry/timeline events becomes one render.
-  let scheduled = false;
+  let scheduled: number | null = null;
+  let disposed = false;
   const scheduleTick = (): void => {
-    if (scheduled) return;
-    scheduled = true;
-    window.requestAnimationFrame(() => {
-      scheduled = false;
+    if (disposed || scheduled !== null) return;
+    scheduled = window.requestAnimationFrame(() => {
+      scheduled = null;
       tick.value = tick.value + 1;
     });
   };
 
-  onCheckedChange(() => {
-    checked.value = checkedSnapshot();
-  });
-  registry.on('status-change', () => {
-    statuses.value = statusSnapshot();
+  const unsubscribers = [
+    onCheckedChange(() => {
+      checked.value = checkedSnapshot();
+    }),
+    registry.on('status-change', () => {
+      statuses.value = statusSnapshot();
+      scheduleTick();
+    }),
+    registry.on('change', () => {
+      statuses.value = statusSnapshot();
+      scheduleTick();
+    }),
+    timeline.onChange(scheduleTick)
+  ];
+  // Global idle waits for every source, including unrelated imagery. A
+  // metric source's own data event requests a render; read after that frame
+  // so newly visible polygons update even while another tile is still pending.
+  let metricSourceDirty = true;
+  const sourceChanged = (event: maplibregl.MapSourceDataEvent): void => {
+    if (CONDITIONS_METRIC_SOURCES.has(event.sourceId)) metricSourceDirty = true;
+  };
+  const rendered = (): void => {
+    if (!metricSourceDirty) return;
+    metricSourceDirty = false;
     scheduleTick();
-  });
-  registry.on('change', () => {
-    statuses.value = statusSnapshot();
-    scheduleTick();
-  });
-  timeline.onChange(scheduleTick);
+  };
+  map.on('sourcedata', sourceChanged);
+  map.on('render', rendered);
   map.on('idle', scheduleTick);
   map.on('moveend', scheduleTick);
+  map.once('remove', () => {
+    disposed = true;
+    if (scheduled !== null) window.cancelAnimationFrame(scheduled);
+    for (const unsubscribe of unsubscribers) unsubscribe();
+    map.off('sourcedata', sourceChanged);
+    map.off('render', rendered);
+    map.off('idle', scheduleTick);
+    map.off('moveend', scheduleTick);
+  });
 
   const toggles = document.getElementById('layer-toggles');
   if (toggles) {

@@ -41,7 +41,7 @@ import {
   openImpactPanel,
   openImpactPanelUnavailable
 } from '../ui/impact-panel';
-import { getSheetDetent, isSheetActive } from '../ui/mobile-sheet';
+import { isSheetActive } from '../ui/mobile-sheet';
 import { setPlaceSelection } from './place-selection';
 import { getCurrentRegion } from './region-store';
 import { getViewMode } from './view-mode';
@@ -71,12 +71,8 @@ const FETCH_TIMEOUT_MS = 10_000;
  *   clamped to half the viewport so a small window can never be asked
  *   for more padding than it has pixels (MapLibre rejects that). With
  *   no panel coming, symmetric aesthetic margins only.
- * - Mobile with the U2 sheet active: the sheet's LIVE height is already
- *   the map's persistent transform padding (the one shared authority,
- *   written by the sheet on every detent settle; MapLibre's
- *   `cameraForBounds` composes transform padding with this option
- *   padding), so the fit passes only its aesthetic margins. Reading the
- *   sheet height here as well would double-count it.
+ * - Mobile with the panel shell active: the rail and top-anchored glass
+ *   panel do not create a bottom inset, so the fit uses symmetric margins.
  * - Mobile without the sheet (embed keeps today's hidden-chrome
  *   semantics; the no-JavaScript fallback stacks): the briefing overlay
  *   still covers the lower viewport, so the pre-U2 transient bottom pad
@@ -256,11 +252,9 @@ export async function openStateBriefing(
   const panelWillOpen =
     !opts.summaryFirst || (isSheetActive() && getViewMode() === 'brief');
 
-  // At the sheet's full detent the map has receded entirely; no camera
-  // call fires against a covered canvas (cartography lens). The report
-  // close restores the prior detent, whose settle re-pads the camera.
-  const mapCovered = getSheetDetent() === 'full';
-  if (opts.fit && bbox && !mapCovered) {
+  // Mobile full panels leave the map visible, so every requested fit still
+  // frames the selected geometry behind the glass surface.
+  if (opts.fit && bbox) {
     map.fitBounds(bboxToContinuousBounds(bbox), {
       padding: briefingCameraPadding(panelWillOpen)
     });

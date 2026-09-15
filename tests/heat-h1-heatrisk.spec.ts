@@ -19,6 +19,13 @@ import {
 
 const HEATRISK_PATH =
   '/experimental/rest/services/NWS_HeatRisk/ImageServer';
+
+async function openHeatKey(page: Page): Promise<void> {
+  const toggle = page.locator('#map-key-details-toggle');
+  await expect(toggle).toBeVisible();
+  if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+  await expect(page.locator('#map-key-content')).toBeVisible();
+}
 const WWA_PATH =
   '/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/1/query';
 const TIMES = [
@@ -435,7 +442,6 @@ test.describe('selected-place HeatRisk sequence and briefing', () => {
     }
 
     const productKey = page.locator('#map-key [data-nws-products-key]');
-    await expect(productKey).toBeVisible();
     for (const product of Object.keys(NWS_ALERT_COLORS)) {
       await expect(productKey).toContainText(product);
     }
@@ -479,11 +485,13 @@ test.describe('selected-place HeatRisk sequence and briefing', () => {
     const selector = page.locator(
       '#map-key select[data-heatrisk-day]'
     );
-    await selector.focus();
+    // The selected-point sequence and the key share the same day state.
+    // Exercise the sequence keyboard before inspecting the disclosed key.
+    await cells.nth(3).focus();
     await page.keyboard.press('End');
     await expect(selector).toHaveValue('7');
-    await selector.focus();
-    await page.keyboard.press('ArrowUp');
+    await cells.nth(6).focus();
+    await page.keyboard.press('ArrowLeft');
     await expect(selector).toHaveValue('6');
     await expect(selectedRead).toContainText('no data');
     await expect(selectedRead).toContainText(
@@ -493,6 +501,20 @@ test.describe('selected-place HeatRisk sequence and briefing', () => {
       'no data at the selected point for Washington for the selected frame'
     );
     expect(receipt.identifyCalls).toHaveLength(7);
+
+    // The key's native date selector remains independently operable after
+    // leaving the briefing, including End and ArrowUp keyboard selection.
+    await page.locator('#impact-panel .impact-panel-close').click();
+    await expect(page.locator('#impact-panel')).toBeHidden();
+    await openHeatKey(page);
+    await expect(productKey).toBeVisible();
+    await selector.focus();
+    await page.keyboard.press('End');
+    await expect(selector).toHaveValue('7');
+    await selector.focus();
+    await page.keyboard.press('ArrowUp');
+    await expect(selector).toHaveValue('6');
+    await expect.poll(async () => new URLSearchParams(await search(page)).get('heatday')).toBe('6');
   });
 
   test('rejects a non-null identify value whose returned catalog time differs', async ({
@@ -554,12 +576,24 @@ test.describe('review regressions for HeatRisk honesty and lifecycle', () => {
       'value 2, Moderate, at the selected point for Washington'
     );
 
-    await page
-      .locator('#map-key select[data-heatrisk-day]')
-      .selectOption('6');
+    // At this embed size the briefing covers the map controls. Read the
+    // no-data selection through its shared URL instead of clicking through
+    // the modal; the separate keyboard case covers in-place day changes.
+    await gotoApp(
+      page,
+      '?embed=true&view=console&layers=heatrisk&heatday=6&select=state:WA'
+    );
+    await expect(sequence.locator('.heatrisk-sequence-heading')).toContainText(
+      'HeatRisk at the selected point for Washington'
+    );
+    await expect(sequence.locator('[data-heatrisk-selected-read]')).toContainText('no data');
     await expect(heatClaim).toContainText(
       'no data at the selected point for Washington for the selected frame'
     );
+    await expect.poll(() => receipt.identifyCalls.length).toBe(14);
+    for (const call of receipt.identifyCalls) {
+      expect(call.geometry).toEqual(WA_BBOX_CENTER);
+    }
   });
 
   test('review regression: files the selected Day 7 classification under near-term', async ({
@@ -581,7 +615,12 @@ test.describe('review regressions for HeatRisk honesty and lifecycle', () => {
       'HeatRisk (Experimental) value 2, Moderate'
     );
     await expect(nearTerm).toContainText('Valid Aug 3, 2026, 12:00 UTC');
-    await expect(current).not.toContainText('HeatRisk (Experimental)');
+    // The current horizon also hosts the cross-source Heat synthesis. Its
+    // dated companion read may name HeatRisk; the current hazard claims
+    // must never refile the selected classification as a current product.
+    await expect(current.locator('.impact-hazard[data-hazard="heat"]')).not.toContainText(
+      'HeatRisk (Experimental)'
+    );
   });
 
   test('review regression: discards an initial HeatRisk read superseded while current hydration waits', async ({
@@ -811,6 +850,7 @@ for (const viewport of [
 
     const key = page.locator('#map-key');
     await expect(key).toBeVisible();
+    await openHeatKey(page);
     await expect(key.locator('[data-heatrisk-scale]')).toBeVisible();
     await expect(key.locator('[data-nws-products-key]')).toBeVisible();
     const metrics = await key.evaluate((element) => {
@@ -852,39 +892,18 @@ for (const viewport of [
       expect(item.fontSize).toBeGreaterThanOrEqual(9.5);
     }
 
-    // W2-D4: an oversized key collapses to the shared capacity behind the
-    // measured chevron instead of consuming the iframe. Without overflow
-    // the old full-containment contract holds unchanged; with it, every
-    // item is reachable through the bounded expansion's scroll.
-    const expander = page.locator('#map-key-expand');
-    if (await expander.isHidden()) {
-      for (const item of metrics.itemBoxes) {
-        expect(item.bottom).toBeLessThanOrEqual(metrics.bottom + 1);
-      }
-    } else {
-      const content = page.locator('#map-key-content');
-      const collapsedHeight = await content.evaluate(
-        (element) => element.getBoundingClientRect().height
-      );
-      expect(collapsedHeight).toBeLessThanOrEqual(225);
-      await expander.click();
-      await expect(expander).toHaveAttribute('aria-expanded', 'true');
-      const expandedBox = await key.boundingBox();
-      expect(expandedBox).not.toBeNull();
-      expect(expandedBox!.y).toBeGreaterThanOrEqual(0);
-      expect(expandedBox!.y + expandedBox!.height).toBeLessThanOrEqual(
-        viewport.height
-      );
-      const reachedEnd = await content.evaluate((element) => {
-        element.scrollTop = element.scrollHeight;
-        return element.scrollTop + element.clientHeight >= element.scrollHeight - 1;
-      });
-      expect(reachedEnd, 'the expanded key content cannot scroll to its end').toBe(
-        true
-      );
-      await expander.click();
-      await expect(expander).toHaveAttribute('aria-expanded', 'false');
-    }
+    // The one header opens a bounded scrolling key. Every item remains
+    // reachable without a second expansion control or growing the iframe.
+    const content = page.locator('#map-key-content');
+    const reachedEnd = await content.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+      return element.scrollTop + element.clientHeight >= element.scrollHeight - 1;
+    });
+    expect(reachedEnd, 'the opened key content cannot scroll to its end').toBe(true);
+    const toggle = key.locator('#map-key-details-toggle');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(content).toBeHidden();
 
     const keyBox = await key.boundingBox();
     const brandBox = await page.locator('.embed-brand').boundingBox();

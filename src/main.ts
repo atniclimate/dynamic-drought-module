@@ -1,5 +1,7 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './styles/app.css';
+import './styles/hazard-indicators.css';
+import './styles/mobile-panels.css';
 
 import type * as maplibregl from 'maplibre-gl';
 import { createMap } from './map/init';

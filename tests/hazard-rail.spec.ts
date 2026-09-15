@@ -13,8 +13,8 @@ import {
  * Satellite control seated directly below them.
  *
  * Contract under test:
- * - The rail exists in the map-led closed and peek detents, yields to the
- *   half and full sheet detents, and stays absent on desktop and in embed
+ * - The rail stays reachable beside the mobile side panel and stays
+ *   absent on desktop and in embed
  *   byte for byte (hard rule 8).
  * - A hazard tap routes through the ONE layer controller (applyPreset):
  *   the preset's layer set replaces the active set in the URL, so the
@@ -234,7 +234,7 @@ test.describe('the mobile hazard rail (390x844)', () => {
     ).toHaveAttribute('aria-pressed', 'false');
   });
 
-  test('the rail yields to the open sheet; a quick-view chip closes the sheet to the map', async ({
+  test('the rail stays reachable beside open panels; a quick-view chip closes the panel', async ({
     page
   }) => {
     await gotoApp(page);
@@ -248,16 +248,15 @@ test.describe('the mobile hazard rail (390x844)', () => {
     await expect(share).toBeVisible();
     await expect(reset).toBeVisible();
 
-    // The open sheet owns the rail's zone (the mockup's sheet covers its
-    // rail): at half and full the rail is gone; closing brings it back.
+    // The glass panel leaves the right-side map controls reachable.
     await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'half');
-    await expect(rail).toBeHidden();
-    await expect(satellite).toBeHidden();
+    await expect(rail).toBeVisible();
+    await expect(satellite).toBeVisible();
     await expect(share).toBeVisible();
     await expect(reset).toBeVisible();
     await satellite.evaluate((button) => (button as HTMLButtonElement).focus());
-    await expect(satellite).not.toBeFocused();
+    await expect(satellite).toBeFocused();
 
     // A quick-view chip applies its preset AND closes the sheet (the
     // mockup's rule 5: the map answers).
@@ -271,15 +270,16 @@ test.describe('the mobile hazard rail (390x844)', () => {
       .poll(async () => (await urlLayers(page)).has('spc-fire-weather'))
       .toBe(true);
 
-    // At full (Brief door) the map has receded and the rail stays gone.
+    // The Brief door uses the same side-panel geometry and leaves the map
+    // controls reachable.
     await page.locator('#mobile-footer-nav button[data-tab="brief"]').click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'full');
-    await expect(rail).toBeHidden();
-    await expect(satellite).toBeHidden();
-    await expect(share).toBeHidden();
-    await expect(reset).toBeHidden();
+    await expect(rail).toBeVisible();
+    await expect(satellite).toBeVisible();
+    await expect(share).toBeVisible();
+    await expect(reset).toBeVisible();
     await share.evaluate((button) => (button as HTMLButtonElement).focus());
-    await expect(share).not.toBeFocused();
+    await expect(share).toBeFocused();
     await page.locator('#mobile-footer-nav button[data-tab="brief"]').click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await expect(rail).toBeVisible();

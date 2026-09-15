@@ -5,7 +5,6 @@ import {
   MIN_USABLE_REGION_HEIGHT_PX,
   MIN_USABLE_REGION_WIDTH_PX
 } from '../src/ui/popup-viewport';
-import { SHEET_DETENT_SIZE } from '../src/ui/mobile-sheet';
 
 /**
  * U-UX-FIX-1 DEF-3 and DEF-4 (usability triage 2026-07-24): MapLibre
@@ -18,8 +17,8 @@ import { SHEET_DETENT_SIZE } from '../src/ui/mobile-sheet';
  * The fix (src/ui/popup-viewport.ts plus the app.css scroll-containment
  * and compact-presentation sections, and the responsive telemetry
  * maxWidth) clamps every popup CARD toward its reachable region (the
- * visual viewport intersected with the map container, minus the active
- * mobile sheet and footer rects) under THE CANONICAL TIER TABLE beside
+ * visual viewport intersected with the map container, minus any active
+ * bottom-docked chrome) under THE CANONICAL TIER TABLE beside
  * the boundary constants in popup-viewport.ts. That table is the one
  * authoritative statement of what each region size is and is not
  * promised; this header restates none of its limits, and on any
@@ -39,7 +38,7 @@ import { SHEET_DETENT_SIZE } from '../src/ui/mobile-sheet';
  * curated telemetry seed markers (no network needed to render), and
  * aborted telemetry data routes so hydration settles on its honest
  * fallback. Coverage per the DG-080-REVIEW r1, r2, and r3 findings: the
- * favorable sheetless geometries, an open half sheet plus footer, a
+ * favorable geometries, including the mobile side panel, a
  * small embed iframe, both size floors WITH body-scroll and link
  * assertions, the compact usable-body and containment-only bands (the
  * latter once per threshold axis), the sub-chrome tier, empty-region
@@ -54,7 +53,7 @@ import { SHEET_DETENT_SIZE } from '../src/ui/mobile-sheet';
  * Assert an element is genuinely hit-testable at its center: the element
  * under that point (elementFromPoint) is the element itself or shares its
  * subtree. A bounding box inside the viewport can still sit BEHIND the
- * fixed mobile footer or sheet (the finding-2 gap); this cannot.
+ * fixed occluding chrome (the finding-2 gap); this cannot.
  */
 async function expectHitTestReachable(
   target: ReturnType<Page['locator']>,
@@ -87,23 +86,27 @@ async function expectHitTestReachable(
 }
 
 /**
- * The top edge (viewport y) of the app's bottom-docked occluding chrome:
- * the persistent mobile footer, and the mobile sheet exactly while the
- * shell attribute is active. Infinity when neither is laid out (desktop,
- * embed), so callers can Math.min it against the viewport bottom.
+ * The top edge (viewport y) of bottom-docked occluding chrome. Side rails
+ * and side panels do not reduce the usable vertical map region. Infinity
+ * when no candidate touches the viewport bottom.
  */
 async function bottomChromeTop(page: Page): Promise<number> {
   return page.evaluate(() => {
-    let top = Infinity;
+    const viewportBottom = window.visualViewport
+      ? window.visualViewport.offsetTop + window.visualViewport.height
+      : document.documentElement.clientHeight;
+    let bottom = viewportBottom;
     const footer = document.getElementById('mobile-footer-nav');
     const sheetActive = document.getElementById('app')?.hasAttribute('data-sheet-detent');
-    const els = [footer, sheetActive ? document.getElementById('sidebar') : null];
-    for (const el of els) {
-      if (!el) continue;
-      const r = el.getBoundingClientRect();
-      if (r.width > 0 && r.height > 0) top = Math.min(top, r.top);
+    const rects = [footer, sheetActive ? document.getElementById('sidebar') : null]
+      .filter((el): el is HTMLElement => el !== null)
+      .map((el) => el.getBoundingClientRect())
+      .filter((rect) => rect.width > 0 && rect.height > 0)
+      .sort((a, b) => b.top - a.top);
+    for (const rect of rects) {
+      if (rect.top < bottom && rect.bottom >= bottom - 1) bottom = rect.top;
     }
-    return top;
+    return bottom === viewportBottom ? Infinity : bottom;
   });
 }
 
@@ -242,94 +245,43 @@ test.describe('DEF-3: the coordinated popup is contained and its tail reachable 
   });
 });
 
-test.describe('DEF-3 finding 1: half sheet plus footer occlusion (390x844, touch)', () => {
+test.describe('DEF-3 finding 1: mobile side panel geometry (390x844, touch)', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
-  test('the card stays inside the unobscured map strip above the sheet and touch scrolls the body', async ({
+  test('the side panel does not create a bottom inset and the popup remains touch-scrollable', async ({
     page
   }) => {
     await gotoApp(page, '?layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
-    // Bare mobile boot: the shell is active at the map-first closed
-    // detent. Raise the LAYERS door (console mode, where a boundary
-    // click yields the coordinated popup; on the Brief door a map click
-    // routes the briefing into the sheet instead) so the sheet sits at
-    // half OVER the lower map: exactly the occlusion the pre-fix bounds
-    // model ignored.
+    // The Layers door opens beside the map. It must not be treated as a
+    // bottom drawer by popup viewport calculations.
     const app = page.locator('#app');
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'half');
 
-    const sidebar = page.locator('#sidebar');
     const viewportHeight = await page.evaluate(() => window.innerHeight);
-    const detentSetAt = Date.now();
-    // The detent attribute changes synchronously, while the sheet height
-    // transitions for 250 ms, and mobile-sheet.ts's settle() (map.resize()
-    // then a 220 ms easeTo) does not even fire until its own ~320 ms
-    // fallback timer runs after that. Wait for the sheet to reach its
-    // half-detent height, then hold still across two reads 250 ms apart,
-    // then wait out the trailing settle window: on a loaded CI runner
-    // (FE-23) the camera can still be easing under an already-still sheet
-    // edge, and cx/cy measured too early land on the pre-settle strip.
-    await expect
-      .poll(async () => sidebar.evaluate((el) => el.getBoundingClientRect().height), {
-        message: 'the sheet never reached its half-detent height',
-        timeout: 3_000
-      })
-      .toBeCloseTo(viewportHeight * SHEET_DETENT_SIZE.halfFraction, 0);
-    let lastSheetRect: { top: number; height: number } | null = null;
-    await expect
-      .poll(
-        async () => {
-          const rect = await sidebar.evaluate((el) => {
-            const r = el.getBoundingClientRect();
-            return { top: r.top, height: r.height };
-          });
-          const stable =
-            lastSheetRect !== null &&
-            Math.abs(rect.top - lastSheetRect.top) < 0.5 &&
-            Math.abs(rect.height - lastSheetRect.height) < 0.5;
-          lastSheetRect = rect;
-          return stable;
-        },
-        {
-          message: 'the sheet rect never held still across two reads 250 ms apart',
-          timeout: 5_000,
-          intervals: [250]
-        }
-      )
-      .toBe(true);
-    // This wait is a budget, not a proof: nothing on the page signals
-    // that settle()'s 220 ms easeTo has actually finished without adding
-    // a src/ hook (onSheetDetentSettle in mobile-sheet.ts ~188 fires its
-    // listeners bundle-internally and is not reachable from a test), so
-    // 900 ms only gives the camera a head start. The retry loop below,
-    // not this wait, is what actually makes the test reliable.
-    const settleBudgetMs = 900;
-    const sinceDetent = Date.now() - detentSetAt;
-    if (sinceDetent < settleBudgetMs) {
-      await page.waitForTimeout(settleBudgetMs - sinceDetent);
-    }
+    const sidebar = page.locator('#sidebar');
+    const sidebarBox = await sidebar.boundingBox();
+    expect(sidebarBox).not.toBeNull();
+    expect(sidebarBox!.y).toBeGreaterThan(0);
+    expect(sidebarBox!.y + sidebarBox!.height).toBeLessThan(viewportHeight);
+    expect(await bottomChromeTop(page)).toBe(Number.POSITIVE_INFINITY);
 
-    // Open the coordinated popup at the center of the UNOBSCURED strip.
-    // #sidebar is `position: fixed` under a sheet detent (app.css ~3011),
-    // so this snapshot and the map's live rect below resolve to the same
-    // cx/cy on every retry; re-measuring the map box in targetPoint() is
-    // a safety, not the fix. What actually ends the FE-23 livelock is
-    // below: skip the click once a card is already open (re-clicking is
-    // what killed it) and give the build a 6 s budget that comfortably
-    // outlasts the camera's trailing easeTo.
-    const sheetTop = await sidebar.evaluate((el) => el.getBoundingClientRect().top);
+    // Close the Layers panel before opening the coordinated response. The
+    // popup now receives the map's full vertical region, with no stale
+    // drawer inset left behind.
+    await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
+    await expect(sidebar).toBeHidden();
+
     async function targetPoint(): Promise<{ cx: number; cy: number }> {
       const liveMapBox = await page.locator('#map').boundingBox();
       expect(liveMapBox, 'the map lost its bounding box').not.toBeNull();
       return {
         cx: liveMapBox!.x + liveMapBox!.width / 2,
-        cy:
-          (Math.max(liveMapBox!.y, 0) + Math.min(sheetTop, liveMapBox!.y + liveMapBox!.height)) /
-          2
+        cy: liveMapBox!.y + liveMapBox!.height / 2
       };
     }
 
@@ -348,22 +300,19 @@ test.describe('DEF-3 finding 1: half sheet plus footer occlusion (390x844, touch
       await expect(content).toBeVisible({ timeout: 6_000 });
     }).toPass({ timeout: 20_000 });
 
-    // THE FINDING-1 CONTRACT: the card ends above the sheet (with the
-    // clamp's 12px margin), not merely above the layout-viewport fold.
-    // Pre-fix the 70vh card anchored mid-strip ran on behind the sheet
-    // and footer.
+    // The card remains inside the viewport with the clamp's 12px margin.
     await expect
       .poll(
         async () => {
           const cbox = await content.boundingBox();
           return cbox ? cbox.y + cbox.height : Number.POSITIVE_INFINITY;
         },
-        { message: 'the card never came back inside the strip above the sheet', timeout: 10_000 }
+        { message: 'the card never came back inside the viewport', timeout: 10_000 }
       )
-      .toBeLessThanOrEqual(sheetTop - 12 + 1);
+      .toBeLessThanOrEqual(viewportHeight - 12 + 1);
 
     // The body really scrolls, and the caveat tail's links plus the close
-    // control are hit-testable (not behind the sheet or footer).
+    // control are hit-testable.
     const body = popup.locator('.coordinated-response-body');
     const scrollable = await body.evaluate((el) => el.scrollHeight - el.clientHeight);
     expect(scrollable, 'the clamped body does not overflow (nothing to scroll)').toBeGreaterThan(0);
@@ -376,11 +325,11 @@ test.describe('DEF-3 finding 1: half sheet plus footer occlusion (390x844, touch
       await link.evaluate((element) =>
         element.scrollIntoView({ block: 'nearest', inline: 'nearest' })
       );
-      await expectHitTestReachable(link, 'popup source link above the sheet');
+      await expectHitTestReachable(link, 'popup source link inside the viewport');
     }
     await expectHitTestReachable(
       popup.locator('.maplibregl-popup-close-button'),
-      'popup close control above the sheet'
+      'popup close control inside the viewport'
     );
 
     // Genuine TOUCH scrolling (recommendation 3; the runner allows it via

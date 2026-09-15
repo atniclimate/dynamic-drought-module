@@ -289,6 +289,20 @@ async function domText(page: Page, selector: string): Promise<string> {
 async function readStamp(page: Page): Promise<StampRead> {
   const bar = page.locator('#time-bar');
   await expect(bar).toBeVisible();
+  const feed = bar.locator('.time-bar-feed-details');
+  if (await feed.count()) {
+    await expect(feed.locator('summary')).toContainText('Current Conditions');
+    if (!(await feed.evaluate((element) => (element as HTMLDetailsElement).open))) {
+      await feed.locator('summary').click();
+    }
+    const headline = await feed.locator('p').nth(0).textContent() ?? '';
+    const detail = await feed.locator('p').nth(1).textContent() ?? '';
+    return {
+      register: (await bar.getAttribute('data-register')) ?? '',
+      horizonKey: 'current', horizon: 'Current Conditions', headline, detail,
+      text: `Current Conditions ${headline} ${detail}`
+    };
+  }
   const horizonEl = bar.locator('.time-bar-stamp-horizon');
   const horizon = await domText(page, '#time-bar .time-bar-stamp-horizon');
   const headline = await domText(page, '#time-bar .time-bar-stamp-headline');
@@ -307,7 +321,9 @@ async function readStamp(page: Page): Promise<StampRead> {
 function expectHorizonLine(stamp: StampRead, key: HorizonKey): void {
   const chrome = HORIZON_CHROME[key];
   expect(stamp.horizonKey, 'stamp data-horizon').toBe(key);
-  expect(stamp.horizon, 'stamp horizon line').toBe(`${chrome.title} · ${chrome.subtitle}`);
+  expect(stamp.horizon, 'stamp horizon line').toBe(
+    stamp.horizon === 'Current Conditions' ? chrome.title : `${chrome.title} · ${chrome.subtitle}`
+  );
 }
 
 /**
@@ -387,11 +403,56 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
     expect(stamp.detail).toContain('states no product date');
     expect(stamp.detail).toContain('each perimeter carries its own discovery date');
     expect(stamp.headline).not.toMatch(/\d{4}/);
+    await expect(page.locator('#time-bar .feed-freshness-dot')).toHaveAttribute('data-freshness', 'current');
+    expect(stamp.detail).toContain('Last successful browser check:');
     // An authored current set: no Play, no rail.
     await expect(page.locator('#time-bar [data-play]')).toHaveCount(0);
     await expect(page.locator('#time-bar .time-bar-rail')).toHaveCount(0);
 
     await expectChipsStillHonest(page);
+  });
+
+  test('a successful fire check expires from green to red and retains its last successful date', async ({ page }) => {
+    await page.clock.install({ time: new Date('2026-09-13T18:00:00Z') });
+    await stubCommon(page);
+    await stubFire(page, { spc: 'outlined' });
+    await gotoApp(page, '?view=console&cluster=wildfire');
+    const dot = page.locator('#time-bar .feed-freshness-dot');
+    const summary = page.locator('#time-bar .feed-current');
+    await expect(dot).toHaveAttribute('data-freshness', 'current');
+    await expect(dot).toHaveCSS('background-color', 'rgb(74, 222, 128)');
+    await expect(summary).toHaveText('Current Conditions');
+    const initialStamp = await readStamp(page);
+    const feed = page.locator('#time-bar .time-bar-feed-details');
+    await expect(feed).toHaveJSProperty('open', true);
+    await summary.focus();
+    await expect(summary).toBeFocused();
+    const checkedDate = await page.evaluate(() => new Intl.DateTimeFormat('en-US', {
+      month: 'numeric', day: 'numeric', year: '2-digit'
+    }).format(new Date()));
+
+    // Source freshness belongs to the successful browser check. Its green
+    // indicator stays current inside the five-minute check window.
+    await page.clock.fastForward(4 * 60_000);
+    await expect(dot).toHaveAttribute('data-freshness', 'current');
+    await page.clock.fastForward(70_000);
+    await expect(dot).toHaveAttribute('data-freshness', 'stale');
+    await expect(dot).toHaveCSS('background-color', 'rgb(248, 113, 113)');
+    await expect(dot).toHaveAttribute('aria-label', `Last successful feed check ${checkedDate}`);
+    await expect(summary).toHaveText(`Current Conditions${checkedDate}`);
+    // Expiry updates the visible source state without closing details or
+    // dropping a keyboard reader's focus as the stamp markup is refreshed.
+    await expect(feed).toHaveJSProperty('open', true);
+    await expect(summary).toBeFocused();
+
+    // Advancing into the next day must not relabel that old check as today,
+    // or turn it into an invented NIFC product issuance date.
+    await page.clock.fastForward(24 * 60 * 60_000);
+    await expect(summary).toContainText(checkedDate);
+    const expiredStamp = await readStamp(page);
+    expect(expiredStamp.headline).toBe('Current perimeters · no single valid time');
+    expect(expiredStamp.detail).toBe(initialStamp.detail);
+    expect(expiredStamp.detail).toContain('Last successful browser check:');
   });
 
   test('near term: the SPC Day 1 outlook stamp is an outlook with the issuance window, and the current recipe takes the bar back', async ({
@@ -419,10 +480,8 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
     // recipe takes the outlook off, the perimeters' statement returns rather
     // than leaving the screen with no time control.
     await page.locator('.shell-horizon-btn[data-horizon="current"]').click();
-    await expect(page.locator('#time-bar .time-bar-stamp-headline')).toHaveText(
-      'Current perimeters · no single valid time',
-      { timeout: 25_000 }
-    );
+    await expect(page.locator('#time-bar .feed-current')).toContainText('Current Conditions');
+    expect((await readStamp(page)).headline).toBe('Current perimeters · no single valid time');
     await expect(page.locator('#time-bar')).toHaveAttribute('data-register', 'observed');
   });
 
@@ -648,8 +707,58 @@ test.describe('DDM-P8-T02: the Extreme Heat screen has a seven-day time control'
     await expect(page.locator('#shell-time .shell-time-empty')).toHaveText(
       'No dated product is displayed.'
     );
+    const detailsDoor = page.locator('#shell-time-more');
+    await expect(detailsDoor).toBeVisible();
+    await expect(detailsDoor).toBeDisabled();
+    await expect(detailsDoor).toHaveAttribute('title', 'No dated product is displayed.');
+    await expect(detailsDoor).toHaveAttribute('aria-expanded', 'false');
     await expect(page.locator('#time-bar')).toBeHidden();
     await expect(layerPill(page, 'heatrisk')).toHaveText('');
+  });
+
+  test('a closed focused time door hands focus to its stable row when the owning surface stands down', async ({
+    page
+  }) => {
+    await stubCommon(page);
+    await stubFire(page, { spc: 'outlined' });
+    await gotoApp(page, '?view=brief&cluster=wildfire&horizon=season-ahead');
+
+    const row = page.locator('#shell-time');
+    const door = page.locator('#shell-time-more');
+    await expect(row).toBeVisible({ timeout: 25_000 });
+    await expect(row).toHaveAttribute('data-has-spec', 'true');
+    await expect(door).toBeEnabled();
+    await expect(door).toHaveAttribute('aria-expanded', 'false');
+    await door.focus();
+    await expect(door).toBeFocused();
+    const before = await row.boundingBox();
+    expect(before).not.toBeNull();
+
+    // Activate the real hazard door without a pointer gesture, so focus stays
+    // on More time while the layer controller's queued fade and teardown clear
+    // WHP's TimeBarSpec asynchronously. This isolates the component contract:
+    // no intervening control receives focus before the owner stands down.
+    await page
+      .locator('.shell-cluster-btn[data-cluster="heat"]')
+      .evaluate((button) => (button as HTMLButtonElement).click());
+
+    await expect(row).toHaveAttribute('data-has-spec', 'false');
+    await expect(door).toBeDisabled();
+    await expect(door).toHaveAttribute('aria-expanded', 'false');
+    await expect(row).toBeFocused();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('cluster'))
+      .toBe('heat');
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('horizon'))
+      .toBe('season-ahead');
+
+    const after = await row.boundingBox();
+    expect(after).not.toBeNull();
+    expect(after?.x).toBeCloseTo(before?.x ?? 0, 0);
+    expect(after?.y).toBeCloseTo(before?.y ?? 0, 0);
+    expect(after?.width).toBeCloseTo(before?.width ?? 0, 0);
+    expect(after?.height).toBeCloseTo(before?.height ?? 0, 0);
   });
 });
 

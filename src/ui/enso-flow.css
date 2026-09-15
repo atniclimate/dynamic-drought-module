@@ -1,0 +1,99 @@
+#enso-flow-controls:empty {
+  display: none;
+}
+
+.sidebar-scroll > #enso-flow-controls {
+  margin-inline: 18px;
+}
+
+.enso-flow {
+  --enso-flow-line: var(--border, #334155);
+  --enso-flow-ink: var(--text, #e2e8f0);
+  color: var(--enso-flow-ink);
+  padding: 12px 0;
+  border-top: 1px solid var(--enso-flow-line);
+  font-size: 12px;
+}
+
+.enso-flow h3 {
+  font: inherit;
+  font-weight: 650;
+  margin: 0 0 8px;
+}
+
+.enso-flow-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.enso-flow button,
+.enso-flow select {
+  color: inherit;
+  font: inherit;
+  background: var(--surface, #142137);
+  border: 1px solid var(--enso-flow-line);
+  border-radius: 6px;
+  min-height: 36px;
+  padding: 6px 8px;
+}
+
+.enso-flow button[aria-pressed="true"] {
+  border-color: var(--accent, #22d3ee);
+  background: color-mix(in srgb, var(--accent, #22d3ee) 14%, transparent);
+}
+
+.enso-flow button:focus-visible,
+.enso-flow select:focus-visible,
+.enso-flow summary:focus-visible {
+  outline: 2px solid var(--accent, #22d3ee);
+  outline-offset: 2px;
+}
+
+.enso-flow-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.enso-flow-toolbar label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.enso-flow-status {
+  margin: 8px 0 4px;
+  line-height: 1.45;
+}
+
+.enso-flow details {
+  margin-top: 6px;
+  color: var(--text-muted, #a7b4c8);
+  line-height: 1.5;
+}
+
+.enso-flow summary {
+  cursor: pointer;
+  align-content: center;
+}
+
+.enso-flow details p {
+  margin: 6px 0;
+}
+
+.enso-flow a {
+  color: var(--accent, #67e8f9);
+}
+
+@media (pointer: coarse), (max-width: 720px) {
+  .enso-flow button,
+  .enso-flow select,
+  .enso-flow summary {
+    min-height: 44px;
+  }
+}

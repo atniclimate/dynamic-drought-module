@@ -131,17 +131,16 @@ test.describe('0.5.0b temporal axis', () => {
     await expect(page.locator('#conditions-date')).not.toHaveAttribute('data-stale', 'true');
   });
 
-  test('an embed keeps the honest valid-date stamp on the map and the embed flag survives (E2, D-0.7.0-058)', async ({
+  test('an embed hides the floating date while retaining date state and the embed flag', async ({
     page
   }) => {
     await stubUsdm(page);
-    // A shared historical week INSIDE an embed: the sidebar (and so the
-    // full time bar) does not exist there, so the on-map stamp is the
-    // honest temporal statement, mirrored from the same spec.
+    // The floating date is temporarily hidden by owner direction.
+    // Its mirrored state and the dated key remain available.
     await gotoApp(page, '?region=washington_state&layers=usdm&week=20260623&embed=true');
 
     const stamp = page.locator('#embed-date-stamp');
-    await expect(stamp).toBeVisible();
+    await expect(stamp).toBeHidden();
     await expect(stamp).toHaveText('Valid Jun 23, 2026');
     await expect(stamp).toHaveAttribute('data-register', 'observed');
 
@@ -508,6 +507,7 @@ test.describe('DDM-P8-T05 surface continuity across a time change', () => {
     await expect(layerPill(page, 'heatrisk')).toHaveText(PILL.live, {
       timeout: 25_000
     });
+    await page.locator('#map-key-details-toggle').click();
     const select = page.locator('#map-key select[data-heatrisk-day]');
     await expect(select).toHaveValue('1');
 

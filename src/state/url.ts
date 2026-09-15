@@ -6,6 +6,7 @@ import { HAZARD_CLUSTERS } from '../config/clusters';
 import type { HazardClusterKey } from '../config/clusters';
 import type { OceanKey } from '../config/oceans';
 import { deriveViewMode } from './view-mode';
+import { parseEnsoFlowParams, writeEnsoFlowParams } from './enso-flow';
 import type { ViewMode } from './view-mode';
 import { parseBasemapParam } from './basemap-store';
 import type { BasemapMode } from './basemap-store';
@@ -42,6 +43,8 @@ import type { TemporalHorizonKey } from '../config/clusters';
  *   dmode    'chg1' | 'chg4', the USDM change-map view mode
  *   sst      YYYY-MM-DD selected SST anomaly frame (always paused on load;
  *            playback state is deliberately never serialized)
+ *   flow     currents | wind | waves, optional ENSO model direction samples
+ *   flowink  dark, optional high-contrast dark arrows (default light)
  *   heatday  one-based HeatRisk frame position; the layer resolves that
  *            position only against the service's advertised granule list
  *   spi      gridded-index accumulation window in days (30/60/180/365);
@@ -441,6 +444,7 @@ export function syncUrl(state: UrlSyncState): void {
     new URLSearchParams(window.location.search)
   );
   const params = new URLSearchParams();
+  const flow = parseEnsoFlowParams(new URLSearchParams(window.location.search));
 
   if (state.region) {
     params.set('region', state.region);
@@ -509,6 +513,9 @@ export function syncUrl(state: UrlSyncState): void {
   }
   if (state.studio === 'layers' || state.studio === 'place') {
     params.set('studio', state.studio);
+  }
+  if (state.layers.has('sst-anomaly') || state.cluster === 'enso') {
+    writeEnsoFlowParams(params, flow);
   }
 
   const url = window.location.pathname + '?' + params.toString();

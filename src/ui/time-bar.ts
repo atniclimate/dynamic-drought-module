@@ -69,6 +69,11 @@ export interface TimeBarJump {
 export type StampRegister = 'observed' | 'outlook';
 
 export interface TimeBarStamp {
+  /** Feed-check freshness, distinct from a product's observation time. */
+  readonly freshness?: {
+    readonly state: 'current' | 'stale' | 'loading' | 'unavailable';
+    readonly checkedAt: string | null;
+  };
   /**
    * The horizon the displayed product answers, rendered as the
    * `HORIZON_CHROME` title and subtitle above the headline. Declared by the
@@ -94,6 +99,23 @@ export interface TimeBarStamp {
 export function stampHorizonText(horizon: HorizonKey): string {
   const chrome = HORIZON_CHROME[horizon];
   return `${chrome.title} · ${chrome.subtitle}`;
+}
+
+export function freshnessDate(stamp: TimeBarStamp): string {
+  const date = stamp.freshness?.checkedAt;
+  if (!date || !Number.isFinite(Date.parse(date))) return '';
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'numeric', day: 'numeric', year: '2-digit'
+  }).format(new Date(date));
+}
+
+export function freshnessLabel(stamp: TimeBarStamp): string {
+  const freshness = stamp.freshness;
+  if (!freshness) return '';
+  if (freshness.state === 'current') return 'Current feed check';
+  if (freshness.state === 'loading') return 'Checking current conditions';
+  const date = freshnessDate(stamp);
+  return date ? `Last successful feed check ${date}` : 'Current feed check unavailable';
 }
 
 export interface TimeBarSpec {
@@ -268,7 +290,8 @@ function syncEmbedStamp(spec: TimeBarSpec | null): void {
     stamp.textContent = '';
     return;
   }
-  stamp.hidden = false;
+  // Temporarily retire the floating date chip; dates remain in the time controls.
+  stamp.hidden = true;
   stamp.dataset.register = spec.stamp.register;
   stamp.textContent = spec.stamp.headline;
 }
@@ -280,9 +303,10 @@ function syncEmbedStamp(spec: TimeBarSpec | null): void {
  * bar a newly activated surface just installed.
  */
 export function setTimeBar(owner: string, spec: TimeBarSpec): void {
+  const sameOwner = currentOwner === owner;
   currentOwner = owner;
   currentSpec = spec;
-  render();
+  render(sameOwner);
   notifySpecChange();
 }
 
@@ -310,13 +334,14 @@ function focusMarker(el: HTMLElement): string | null {
   if (!(active instanceof HTMLElement) || !el.contains(active)) return null;
   if (active.matches('[data-play]')) return '[data-play]';
   if (active.matches('.time-bar-rail')) return '.time-bar-rail';
+  if (active.matches('.time-bar-feed-details > summary')) return '.time-bar-feed-details > summary';
   if (active.dataset.step) return `[data-step="${active.dataset.step}"]`;
   if (active.dataset.mode) return `[data-mode="${active.dataset.mode}"]`;
   if (active.dataset.jump) return `[data-jump="${active.dataset.jump}"]`;
   return null;
 }
 
-function render(): void {
+function render(preserveFeedDisclosure = false): void {
   // No document, nothing to render (the pure lane runs specs with no DOM
   // runtime at all); `window` is guarded the same way above for mobileSheetMedia.
   if (typeof document === 'undefined') return;
@@ -335,6 +360,8 @@ function render(): void {
   }
 
   const restoreFocus = focusMarker(el);
+  const feedOpen = preserveFeedDisclosure &&
+    el.querySelector<HTMLDetailsElement>('.time-bar-feed-details')?.open;
 
   const spec = currentSpec;
   el.hidden = false;
@@ -392,7 +419,19 @@ function render(): void {
   // --- stamp: the register indicator ---
   // The horizon line comes first and reads HORIZON_CHROME (one grammar);
   // `data-horizon` carries the key so a test can pin the words to the table.
-  parts.push(
+  if (spec.stamp.freshness) {
+    const freshness = spec.stamp.freshness;
+    const lastCheck = freshness.state === 'stale' ? freshnessDate(spec.stamp) : '';
+    parts.push(
+      '<details class="time-bar-feed-details"><summary class="feed-current">' +
+        '<span>Current Conditions</span>' +
+        `<span class="feed-freshness-dot" data-freshness="${freshness.state}" role="img" aria-label="${escapeHtml(freshnessLabel(spec.stamp))}"></span>` +
+        (lastCheck ? `<span>${escapeHtml(lastCheck)}</span>` : '') +
+        (freshness.state === 'unavailable' ? '<span>Unavailable</span>' : '') +
+        '</summary>' +
+        `<p>${escapeHtml(spec.stamp.headline)}</p><p>${escapeHtml(spec.stamp.detail)}</p></details>`
+    );
+  } else parts.push(
     '<div class="time-bar-stamp" aria-live="polite" aria-atomic="true">' +
       `<span class="time-bar-stamp-horizon" data-horizon="${escapeHtml(spec.stamp.horizon)}">${escapeHtml(stampHorizonText(spec.stamp.horizon))}</span>` +
       `<span class="time-bar-stamp-headline">${escapeHtml(spec.stamp.headline)}</span>` +
@@ -450,6 +489,12 @@ function render(): void {
   }
   el.innerHTML = html;
   lastRenderedHtml = html;
+  // A feed check may finish or expire while its source details are being
+  // read. Keep that disclosure open across updates from the same owner.
+  if (feedOpen) {
+    const feed = el.querySelector<HTMLDetailsElement>('.time-bar-feed-details');
+    if (feed) feed.open = true;
+  }
 
   // --- wiring ---
   // Every handler reads `currentSpec` at EVENT time (never the `spec` this

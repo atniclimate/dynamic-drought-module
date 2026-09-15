@@ -64,8 +64,9 @@
  *
  * Render. Raster source at 0.55 opacity so the basemap and
  * the USDM/Treaty/Tribal overlays remain legible underneath. The palette
- * is encoded server-side in the `WHP_CLS_2023_8bit` raster function, so
- * we do not recolor on the client; we only choose the layer opacity.
+ * is encoded server-side in the `WHP_CLS_2023_8bit` raster function.
+ * Terrain views map those exact classes to increasing white opacity;
+ * leaving terrain restores the issuer palette.
  *
  * The legend lives in `USFS_WHP_PRESENTATION`
  * (src/config/wildfire-presentation.ts), and it was CORRECTED on
@@ -86,9 +87,11 @@
 import type * as maplibregl from 'maplibre-gl';
 
 import { URLS } from '../config/urls';
+import { WHP_SURFACE_OPACITY } from '../config/whp-shade';
 import { registry } from '../state/registry';
 import { clearTimeBar, setTimeBar } from '../ui/time-bar';
 import { watchRasterTiles, type RasterTileWatch } from '../util/raster-status';
+import { registerWhpImageShadeProtocol } from './whp-image-shade-protocol';
 
 const LAYER_KEY = 'usfs-whp';
 const SOURCE_ID = 'usfs-whp';
@@ -100,6 +103,36 @@ export const fadeLayerIds = [LAYER_ID] as const;
 
 /** The tile-load honesty watcher (util/raster-status.ts); null when inactive. */
 let tileWatch: RasterTileWatch | null = null;
+let releaseTerrainWatch: (() => void) | null = null;
+let shadeOn = false;
+
+function hasTerrain(map: maplibregl.Map): boolean {
+  return typeof map.getTerrain === 'function' && map.getTerrain() !== null;
+}
+
+function publishShadeState(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_KEY, active: shadeOn } }));
+  }
+}
+
+/** Repaint the same source on terrain entry and restore issuer colors on exit. */
+function watchTerrainPresentation(map: maplibregl.Map): void {
+  releaseTerrainWatch?.();
+  const sync = (): void => {
+    const next = hasTerrain(map);
+    if (next === shadeOn) return;
+    const source = map.getSource(SOURCE_ID) as maplibregl.RasterTileSource | undefined;
+    if (!source) return;
+    if (next) registerWhpImageShadeProtocol();
+    shadeOn = next;
+    source.setTiles([`${next ? 'whp-image-shade://' : ''}${buildImageTileTemplate()}`]);
+    map.setPaintProperty(LAYER_ID, 'raster-resampling', next ? 'nearest' : 'linear');
+    publishShadeState();
+  };
+  map.on('terrain', sync);
+  releaseTerrainWatch = () => map.off('terrain', sync);
+}
 
 type WhpStatus = 'loading' | 'ready' | 'degraded' | 'error';
 
@@ -155,7 +188,8 @@ function buildImageTileTemplate(): string {
     'size=256,256',
     'format=png',
     'transparent=true',
-    'f=image'
+    'f=image',
+    'interpolation=RSP_NearestNeighbor'
   ].join('&');
   const upstream = `${URLS.usfsWhp}/exportImage?${params}`;
   const encoded = encodeURIComponent(upstream).replace(
@@ -192,10 +226,12 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   }
 
   try {
+    shadeOn = hasTerrain(map);
+    if (shadeOn) registerWhpImageShadeProtocol();
     if (!map.getSource(SOURCE_ID)) {
       map.addSource(SOURCE_ID, {
         type: 'raster',
-        tiles: [buildImageTileTemplate()],
+        tiles: [`${shadeOn ? 'whp-image-shade://' : ''}${buildImageTileTemplate()}`],
         tileSize: 256,
         attribution: 'USDA Forest Service - Wildfire Hazard Potential'
       });
@@ -209,7 +245,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
         paint: {
           // 0.55 opacity preserves basemap topography and lets the USDM /
           // NIFC overlays read clearly when stacked above WHP.
-          'raster-opacity': 0.55
+          'raster-opacity': WHP_SURFACE_OPACITY,
+          'raster-resampling': shadeOn ? 'nearest' : 'linear'
         }
       });
     }
@@ -219,6 +256,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       reportInitialSuccess: true,
       requestCompletenessDeadlineMs: TILE_SUCCESS_DEADLINE_MS
     });
+    watchTerrainPresentation(map);
+    publishShadeState();
     // The raster is the displayed surface from here on; its time statement
     // stands while it is, and the controller's terminal-error cleanup
     // (deactivate below) withdraws it if no tile ever paints.
@@ -234,6 +273,10 @@ export async function activate(map: maplibregl.Map): Promise<void> {
  * `activate`; safe to call when the layer was never activated.
  */
 export function deactivate(map: maplibregl.Map): void {
+  releaseTerrainWatch?.();
+  releaseTerrainWatch = null;
+  shadeOn = false;
+  publishShadeState();
   tileWatch?.detach();
   tileWatch = null;
   if (map.getLayer(LAYER_ID)) {

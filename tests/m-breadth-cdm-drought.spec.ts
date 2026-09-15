@@ -223,7 +223,9 @@ test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
       'bare map means no polygon coverage in this artifact, not class zero'
     );
     await expect(page.locator('#time-bar')).toContainText('Month June 2026');
-    await expect(page.locator('#map-key')).toBeHidden();
+    await expect(page.locator('#map-key')).toBeVisible();
+    await expect(page.locator('#map-key-details-toggle')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#map-key-content')).toBeHidden();
     const legendLicense = legend.getByRole('link', { name: LICENSE_TITLE });
     await expect(legendLicense).toHaveAttribute('href', LICENSE_URL);
     await page.locator('#map-info-btn').click();
@@ -240,7 +242,7 @@ test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
     await expect(legendLicense).toBeVisible();
     await expect(legendLicense).toHaveText(LICENSE_TITLE);
     await expect(legendLicense).toHaveAttribute('href', LICENSE_URL);
-    await expect(page.locator('#map-key')).toBeHidden();
+    await expect(page.locator('#map-key-content')).toBeHidden();
   });
 
   test('embed on-map key renders the exact licence title and link', async ({
@@ -255,6 +257,7 @@ test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
 
     const key = page.locator('#map-key');
     await expect(key).toBeVisible();
+    await key.locator('#map-key-details-toggle').click();
     const keyLicense = key.getByRole('link', { name: LICENSE_TITLE });
     await expect(keyLicense).toBeVisible();
     await expect(keyLicense).toHaveText(LICENSE_TITLE);

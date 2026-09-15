@@ -82,6 +82,7 @@ test.describe('NIFC WFIGS query scope', () => {
     await expect(legend).toContainText('0.0005 degree');
     await expect(legend).toContainText('not the full-resolution source geometry');
 
+    await page.locator('#map-key-details-toggle').click();
     const key = page.locator('#map-key [data-nifc-perimeter-key]');
     await expect(key).toBeVisible();
     await expect(key.locator('[data-nifc-generalization]')).toContainText('0.0005 degree');

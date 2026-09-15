@@ -7,6 +7,8 @@ import {
   waitForLayerSettled,
   PILL
 } from './helpers';
+import { stubRecentSatellite } from './satellite-fixture';
+import { SATELLITE_PROBE_BBOX } from '../src/map/satellite';
 
 /**
  * UX-3 conditions strip: a dated at-a-glance summary of the rendered map.
@@ -20,6 +22,63 @@ import {
  * ddm-ui-verifier lane, not this gate.
  */
 test.describe('UX-3 conditions strip', () => {
+  test('the drought indicator updates after its polygons render while unrelated satellite tiles remain pending', async ({ page }) => {
+    // Satellite is installed after the base map loads. Hold its rendered
+    // tiles, but let its probe succeed, so map controls work while global
+    // idle cannot fire. The independently held NADM source resolves later.
+    await stubRecentSatellite(page);
+    let releaseSatellite!: () => void;
+    let releaseDrought!: () => void;
+    const satelliteGate = new Promise<void>((resolve) => { releaseSatellite = resolve; });
+    const droughtGate = new Promise<void>((resolve) => { releaseDrought = resolve; });
+    let heldSatelliteTiles = 0;
+    let droughtRequested = false;
+    await page.route('**/MERGEDGC_Last_24hr/ImageServer/exportImage?**', async (route) => {
+      if (new URL(route.request().url()).searchParams.get('bbox') !== SATELLITE_PROBE_BBOX) {
+        heldSatelliteTiles += 1;
+        await satelliteGate;
+      }
+      await route.fallback();
+    });
+    await page.route('**/NADM-current.geojson', async (route) => {
+      droughtRequested = true;
+      await droughtGate;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify({
+          type: 'FeatureCollection',
+          features: [{
+            type: 'Feature',
+            properties: { DROUGHTCAT: 'd3', YEAR_MONTH: '202607' },
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[[-140, 20], [-50, 20], [-50, 75], [-140, 75], [-140, 20]]]
+            }
+          }]
+        })
+      });
+    });
+
+    try {
+      await gotoApp(page, '?view=brief&layers=nadm-drought&basemap=satellite', { bootIdle: false });
+      await expect.poll(() => droughtRequested).toBe(true);
+      await expect.poll(() => heldSatelliteTiles).toBeGreaterThan(0);
+      const drought = page.locator('#map-condition-indicator .conditions-metric[data-metric="drought"]');
+      await expect(drought).toHaveAttribute('data-tone', 'loading');
+      releaseDrought();
+      await expect(drought).toHaveAttribute('data-tone', 'data');
+      await expect(drought.locator('.conditions-value')).toHaveText('D3');
+      await expect(drought.locator('.conditions-sublabel')).toContainText('Extreme drought');
+      // No satellite response has been released: this read must follow the
+      // drought source's render, rather than depend on whole-map idle.
+      await expect(drought).not.toContainText('No polygon');
+    } finally {
+      releaseDrought();
+      releaseSatellite();
+    }
+  });
+
   test('renders the drought tile at the top; off-state event tiles retire (E1 deliverable 6)', async ({
     page
   }) => {
@@ -34,10 +93,11 @@ test.describe('UX-3 conditions strip', () => {
     await expect(tiles).toHaveCount(1);
     await expect(tiles.nth(0)).toHaveAttribute('data-metric', 'drought');
 
-    // Desktop Brief moves the original strip into the frozen sidebar foot.
+    // Desktop Brief moves the original strip to the top-left map indicator.
     // Its old visual title stands down, while the valid-date slot and the one
     // metric root stay on the same node.
     await expect(page.locator('#conditions-strip-dock > #conditions-strip')).toHaveCount(1);
+    await expect(page.locator('#map-condition-indicator #conditions-strip')).toHaveCount(1);
     await expect(page.locator('#shell-conditions-heading')).toHaveText('Conditions in view');
     await expect(strip.locator('.conditions-title')).toBeHidden();
     await expect(strip.locator('#conditions-date')).toBeAttached();
@@ -87,12 +147,12 @@ test.describe('UX-3 conditions strip', () => {
       .not.toBe('US Drought Monitor');
   });
 
-  test('desktop Brief keeps the full categorical legend behind the frozen receipt Key', async ({
+  test('desktop Brief keeps the full categorical legend behind Layer legends', async ({
     page
   }) => {
     await gotoApp(page);
     await waitForLayerSettled(page, 'nadm-drought');
-    const key = page.locator('.sidebar-key-disclosure > summary');
+    const key = page.locator('.sidebar-legend-disclosure > summary');
     await expect(key).toBeVisible();
     await expect(page.locator('#sidebar-key-host > #legend-panel')).toBeHidden();
     await key.click();
@@ -216,17 +276,17 @@ test.describe('UX-3 conditions strip', () => {
     // so the pressed/off wording contract is asserted on the drought tile
     // (its off state is exercised by the release-blocker spec below).
     await expect(drought).toHaveJSProperty('tagName', 'BUTTON');
-    await expect(drought).toHaveAttribute('aria-pressed', 'true');
+    await expect(drought).toHaveAttribute('aria-expanded', 'false');
     await expect(alerts).toHaveCount(0);
     await expect(fires).toHaveCount(0);
 
     // Status and action stay distinct in the accessible name.
     const droughtLabel = (await drought.getAttribute('aria-label')) ?? '';
-    expect(droughtLabel).toContain('layer on');
-    expect(droughtLabel).toContain('Press to hide');
+    expect(droughtLabel).toContain('drought details and key');
+    expect(droughtLabel).not.toContain('Press to hide');
   });
 
-  test('RELEASE BLOCKER (D-0.7.0-008): the drought tile label, announcement, and catalog sync move together', async ({
+  test('clicking the drought reading opens its key without removing the polygon or changing URL state', async ({
     page
   }) => {
     await gotoApp(page, '?region=washington_state');
@@ -241,35 +301,22 @@ test.describe('UX-3 conditions strip', () => {
     }
 
     const tile = page.locator('.conditions-metric[data-metric="drought"]');
-    const live = page.locator('#layer-status-live');
-
-    // ON: pressed, and the accessible name pairs the reading with the action.
-    await expect(tile).toHaveAttribute('aria-pressed', 'true');
-    expect(await tile.getAttribute('aria-label')).toContain('layer on. Press to hide.');
-
-    // Press to hide: the layer leaves the URL, the catalog checkbox
-    // unchecks, the live region announces the off transition, and the tile
-    // relabels to the off wording WITH the surface-replacement disclosure
-    // (the guardrail spec's named risk: USDM replaces the active surface).
+    const beforeUrl = page.url();
+    const beforeReading = await tile.locator('.conditions-value').textContent();
+    await expect(tile).toHaveAttribute('aria-expanded', 'false');
     await tile.click();
-    await expect.poll(async () => !(await urlLayers(page)).has('nadm-drought')).toBe(true);
-    await expect(layerCheckbox(page, 'nadm-drought')).not.toBeChecked();
-    await expect(live).toHaveText('North American Drought Monitor: off');
-    await expect(tile).toHaveAttribute('aria-pressed', 'false');
-    await expect(tile.locator('.conditions-value')).toHaveText('Layer off');
-    const offLabel = (await tile.getAttribute('aria-label')) ?? '';
-    expect(offLabel).toContain('North American Drought Monitor layer off');
-    expect(offLabel).toContain('replaces the current condition surface');
-
-    // Press to show: the surface returns through the shared toggle command,
-    // so the URL, the checkbox, the pill, and the announcement move as one.
-    await tile.click();
-    await expect.poll(async () => (await urlLayers(page)).has('nadm-drought')).toBe(true);
+    await expect(tile).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('#map-key-content')).toBeVisible();
+    await expect(page.locator('#map-key-content')).toContainText('D3');
+    expect(page.url()).toBe(beforeUrl);
+    expect((await urlLayers(page)).has('nadm-drought')).toBe(true);
     await expect(layerCheckbox(page, 'nadm-drought')).toBeChecked();
-    await waitForLayerSettled(page, 'nadm-drought');
+    await expect(tile.locator('.conditions-value')).toHaveText(beforeReading ?? '');
+    await tile.click();
+    await expect(tile).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#map-key-content')).toBeHidden();
+    await expect(layerCheckbox(page, 'nadm-drought')).toBeChecked();
     await expect(layerPill(page, 'nadm-drought')).toHaveText(PILL.live);
-    await expect(live).toHaveText('North American Drought Monitor: live');
-    await expect(tile).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('a non-drought view leads with its own tiles; the off drought anchor renders last (W2-D10)', async ({
@@ -352,18 +399,19 @@ test.describe('UX-3 conditions strip', () => {
     await droughtTile.click();
     await waitForLayerSettled(page, 'nadm-drought');
     await expect(tiles.nth(0)).toHaveAttribute('data-metric', 'drought');
-    await expect(tiles.nth(0)).toHaveAttribute('aria-pressed', 'true');
+    await expect(tiles.nth(0)).toHaveAttribute('aria-expanded', 'false');
   });
 
-  test('the full app relies on the sidebar drought key', async ({ page }) => {
+  test('Console retains a compact on-map drought disclosure alongside the layer legend', async ({ page }) => {
     // Console boot: the uncheck below drives the catalog checkbox, and E1
     // deliverable 1 hides the Brief-mode catalog behind the console door.
     await gotoApp(page, '?view=console');
 
-    // The default NADM surface is explained in the sidebar and the redundant
-    // full-app map key stays hidden. Embed mode retains the compact key.
+    // The default NADM surface keeps a compact trigger while its full key
+    // stays behind the disclosure.
     const key = page.locator('#map-key');
-    await expect(key).toBeHidden();
+    await expect(key).toBeVisible();
+    await expect(key.locator('#map-key-content')).toBeHidden();
     await expect(page.locator('#legend-panel [data-legend="nadm-drought"]')).toBeVisible();
 
     // Turning the USDM surface off hides the key: it never claims a surface

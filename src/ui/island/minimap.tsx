@@ -99,6 +99,7 @@ import type {
 } from '../../state/minimap-wildfire';
 import type { EnsoPhaseLabel } from '../../impact/enso';
 import { prefersReducedMotion } from '../../util/motion';
+import { setMapTechnicalNote } from '../map-technical-information';
 
 /** The kit's ratified equirectangular drawing plane. The final 8 units
  * leave the small lower gutter carried by the production-candidate SVG. */
@@ -521,23 +522,6 @@ function droughtMetricNote(snapshot: MinimapDroughtSnapshot): string {
   );
 }
 
-/**
- * The visible metric note for whichever metric context is showing (EF-3).
- * It used to render on Wildfire alone, so Drought's live NADM encoding was
- * explained only to a screen reader and Heat, ENSO, and custom displays said
- * nothing at all about their flat fills. Neutral contexts keep the neutral
- * sentence verbatim: naming the absence of a framing metric is the honest
- * statement (design record DDM-UI-004), not a defect to paper over.
- */
-function metricNote(
-  context: MinimapMetricContext,
-  drought: MinimapDroughtSnapshot,
-  wildfire: MinimapWildfireSnapshot,
-): string {
-  if (context === 'drought') return droughtMetricNote(drought);
-  if (context === 'wildfire') return wildfireMetricNote(wildfire);
-  return NEUTRAL_METRIC_NOTES[context];
-}
 
 function metricFill(
   droughtSummary: FramingDroughtSummary | undefined,
@@ -735,13 +719,17 @@ export interface MinimapProps {
   readonly idPrefix: string;
   /** Drought and Wildfire have source-qualified framing metrics. */
   readonly metricContext: MinimapMetricContext;
+  /** Receives the inline instance's framing or ocean note when another
+   * shell surface owns its presentation. */
+  readonly onNoteChange?: (note: string) => void;
 }
 
 export function Minimap({
   map,
   framing,
   idPrefix,
-  metricContext
+  metricContext,
+  onNoteChange
 }: MinimapProps) {
   const active = framing.value === 'all' ? null : framing.value;
   const [oceanFraming, setOceanFramingState] = useState(getOceanFraming);
@@ -829,6 +817,15 @@ export function Minimap({
     if (!showWildfireMetric || !desktopMinimap || viewMode === 'console') return;
     return retainMinimapWildfire(setWildfire);
   }, [showWildfireMetric, desktopMinimap, viewMode]);
+
+  useEffect(() => {
+    if (metricContext === 'drought' && drought.status !== 'idle') {
+      setMapTechnicalNote('drought', droughtMetricNote(drought));
+    }
+    if (metricContext === 'wildfire' && wildfire.status !== 'idle') {
+      setMapTechnicalNote('wildfire', wildfireMetricNote(wildfire));
+    }
+  }, [metricContext, drought, wildfire]);
 
   // EF-6: name the current ENSO phase in the scale slot instead of the bare
   // "Navigation only". Label only, from the SAME bundled snapshot and the
@@ -978,6 +975,17 @@ export function Minimap({
       : activeWildfire?.status === 'no-data'
         ? ' WHP 2023 does not cover this framing.'
         : '';
+  const framingNote =
+    activeDef !== null
+      ? activeOcean !== null
+        ? `Ocean view: ${OCEANS[activeOcean].label}. ${OCEANS[activeOcean].provenance} Preserved land framing: ${activeDef.label}.`
+        : `Framing: ${activeDef.label}.${activePartialNote}${activeWildfireNote}`
+      : activeOcean !== null
+        ? `Ocean view: ${OCEANS[activeOcean].label}. ${OCEANS[activeOcean].provenance}`
+        : '';
+  useEffect(() => {
+    onNoteChange?.(framingNote);
+  }, [framingNote, onNoteChange]);
   const viewportRect = geometryVisible
     ? viewportFootprintRect(viewportBounds)
     : null;
@@ -1484,25 +1492,10 @@ export function Minimap({
           sentence already in the on-map key, so the key is now its one
           home (src/ui/map-key.ts). ALL uses the divider alone so the
           default state does not repeat itself. */}
-      {activeDef !== null ? (
-        <p class="shell-minimap-note" aria-live="polite">
-          {activeOcean !== null
-            ? `Ocean view: ${OCEANS[activeOcean].label}. ${OCEANS[activeOcean].provenance} Preserved land framing: ${activeDef.label}.`
-            : `Framing: ${activeDef.label}.${activePartialNote}${activeWildfireNote}`}
-        </p>
-      ) : activeOcean !== null ? (
-        <p class="shell-minimap-note" aria-live="polite">
-          Ocean view: {OCEANS[activeOcean].label}. {OCEANS[activeOcean].provenance}
-        </p>
+      {onNoteChange === undefined && framingNote !== '' ? (
+        <p class="shell-minimap-note" aria-live="polite">{framingNote}</p>
       ) : null}
-      <p
-        class="shell-minimap-metric-note"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        {metricNote(metricContext, drought, wildfire)}
-      </p>
+
     </div>
   );
 }

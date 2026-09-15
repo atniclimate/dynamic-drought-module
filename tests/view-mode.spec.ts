@@ -98,26 +98,34 @@ test.describe('U1 the two doors (view mode)', () => {
   }) => {
     // Regression for the U1 adversarial-review major, re-anchored on the
     // select= deep link (the boot answer it originally raced is retired,
-    // D-0.7.0-041): two async briefing opens whose boundary fetches
-    // resolve out of order must resolve to the LAST-DECLARED intent,
-    // never to whichever fetch lands first. Setup: the FIRST us-states
-    // fetch (the deep link's Washington) is held for 1.5 seconds; the
-    // user picks Oregon in that window; the held deep-link fetch then
-    // resolves and must YIELD.
+    // D-0.7.0-041): the deep link and picker share the boundary transport,
+    // but only the LAST-DECLARED intent may act when it resolves. Hold it
+    // until the user has picked Oregon, then prove Washington yields.
     let first = true;
+    let releaseBoundary!: () => void;
+    const boundaryGate = new Promise<void>((resolve) => {
+      releaseBoundary = resolve;
+    });
     await page.route('**/data/us-states.geojson', async (route) => {
       if (first) {
         first = false;
-        await new Promise((r) => setTimeout(r, 1500));
+        await boundaryGate;
       }
       await route.continue();
     });
 
-    await gotoApp(page, '?select=state:WA');
-    // Pick Oregon in the Brief head search (U3) while the deep link's
-    // boundary fetch is still held.
-    await page.locator('#brief-search [data-ddm-search]').fill('oregon');
-    await page.locator('#brief-search [data-search-kind="place"][data-search-id="OR"]').click();
+    try {
+      // A settled boot waits for shared transport; waiting for boot-idle
+      // here would finish the deep link before the competing picker intent.
+      await gotoApp(page, '?select=state:WA', { bootIdle: false });
+      await expect.poll(() => first).toBe(false);
+      await expect(page.locator('#impact-panel.open')).toHaveCount(0);
+      await page.locator('#brief-search [data-ddm-search]').fill('oregon');
+      await page.locator('#brief-search [data-search-kind="place"][data-search-id="OR"]').click();
+      await expect(page.locator('#impact-panel.open')).toHaveCount(0);
+    } finally {
+      releaseBoundary();
+    }
 
     // Summary-first (D-0.7.0-070): the pick sets the SELECTION (the
     // briefing opens only through the panel link), so the newest-intent
@@ -126,11 +134,7 @@ test.describe('U1 the two doors (view mode)', () => {
     await expect(page.locator('#brief-place-name')).toHaveText('Oregon', {
       timeout: 15_000
     });
-    await expect(page.locator('#impact-panel.open')).toHaveCount(0);
-
-    // Give the held deep-link fetch time to resolve, then confirm it
-    // yielded: still the user's pick, still no panel.
-    await page.waitForTimeout(2_000);
+    await expect(page.locator('html')).toHaveAttribute('data-ddm-boot', 'idle');
     await expect(page.locator('#impact-panel.open')).toHaveCount(0);
     await expect(page.locator('#brief-place-name')).toHaveText('Oregon');
   });

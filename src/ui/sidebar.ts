@@ -1223,6 +1223,7 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
     collapseBtn.addEventListener('click', () => {
       const app = document.getElementById('app');
       if (app) app.classList.add('sidebar-collapsed');
+      document.getElementById('sidebar-expand')?.focus();
       // Allow the CSS grid transition to settle before resizing the
       // map. The 220 ms delay matches the vanilla baseline.
       window.setTimeout(() => {
@@ -1236,6 +1237,7 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
     expandBtn.addEventListener('click', () => {
       const app = document.getElementById('app');
       if (app) app.classList.remove('sidebar-collapsed', 'embed');
+      if (!window.matchMedia('(max-width: 720px)').matches) collapseBtn?.focus();
       // Expanding always exits embed mode so the user gets the full
       // chrome back. Persist that to the URL so a refresh holds. A brief
       // embed deferred the catalog island (headroom C1); the full chrome

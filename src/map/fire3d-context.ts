@@ -26,6 +26,7 @@
  */
 
 import type * as maplibregl from 'maplibre-gl';
+import { WHP_SHADE_QUALIFICATION } from '../config/whp-shade';
 
 import { activateWhpDrape, deactivateWhpDrape } from '../layers/whp-3d';
 import { getPowerContextState } from '../state/power-context';
@@ -46,11 +47,11 @@ export interface Fire3DContextActivation {
 }
 
 const WHP_EMBED_LINE =
-  'Hazard colors: USFS Wildfire Hazard Potential 2023, the issuer\'s published classes, a translucent static snapshot at reduced resolution; not current fire conditions.';
+  `${WHP_SHADE_QUALIFICATION} Pacific Northwest; reduced resolution.`;
 
 /** Exported for the disclosure cross-gate test beside the archive. */
 export const STRUCTURES_EMBED_LINE =
-  'Buildings: Overture footprints (ODbL), central Oregon pilot bake only, drawn from zoom 13; dimmer buildings draw at a disclosed placeholder height.';
+  'Buildings: Overture footprints (ODbL), central Oregon pilot, zoom 13+; dimmer buildings use placeholder heights.';
 
 /** Compose the power embed line from the surfaces actually in the scene. */
 export function buildPowerEmbedLine(state: PowerContextState): string {
@@ -89,7 +90,7 @@ export async function activateContextLayers(
       embedLines.push(WHP_EMBED_LINE);
     }
   } catch (err) {
-    console.warn('[fire3d-context] the hazard drape failed to activate.', err);
+    console.warn('[fire3d-context] WHP activation failed.', err);
   }
 
   // Power infrastructure is a CATALOG layer since 2026-08-19 (owner
@@ -109,7 +110,7 @@ export async function activateContextLayers(
       embedLines.push(STRUCTURES_EMBED_LINE);
     }
   } catch (err) {
-    console.warn('[fire3d-context] the structures context failed to activate.', err);
+    console.warn('[fire3d-context] structures activation failed.', err);
   }
 
   if (signal.aborted) {

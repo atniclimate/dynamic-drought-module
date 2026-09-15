@@ -1,51 +1,15 @@
 /**
- * The mobile bottom sheet (0.7.0 U2; ratified detent model D-0.7.0-017).
+ * Mobile side-panel controller.
  *
- * Below 720 pixels the sidebar element becomes ONE bottom sheet over a
- * full-viewport map, with three detents that are information depths, not
- * arbitrary heights: peek (the conditions strip and the date register),
- * half (the at-hand answer in Brief; the compact controls in console),
- * and full (the standalone report in Brief; the whole catalog stack in
- * console). Which sections show at which detent is stylesheet work keyed
- * off `#app[data-sheet-detent]` plus the existing `view-brief` and
- * `view-console` mode classes; this module owns the detent itself.
+ * Below 720 pixels the existing footer doors become a side rail. Each door
+ * opens one glass panel below the map's top chrome, and pressing the active
+ * door again closes it. The legacy detent names stay as internal adapters so
+ * report hosting, deep links, and existing sidebar actions keep one contract.
+ * They no longer describe drawer heights or add bottom camera padding.
  *
- * Contract points, all from the ratified detent model:
- *
- * - The detent is EPHEMERAL presentation state: never written to the URL,
- *   never a second state machine. The only persisted flags remain `embed`,
- *   `view`, and the layer/region/temporal params through the existing
- *   `pushUrl()` machinery (headroom R3).
- * - The sheet moves ONLY via the grabber (drag with pointer capture, tap
- *   to cycle, Enter/Space cycles, arrow keys step) and explicit buttons.
- *   Content regions scroll internally only at full (guardrail 1:
- *   grabber-owned movement; WCAG 2.2 dragging-movements).
- * - In `?embed=true` the sheet does not exist (today's hidden-chrome
- *   semantics byte for byte); the existing expand control exits embed and
- *   reveals the sheet at peek (`revealSheetAtPeek`, called by the
- *   sidebar's expand handler).
- * - Brief opens at half (the answer over the map); console opens at peek
- *   (map-first). A mode switch while the sheet is active re-seats the
- *   detent the same way.
- * - Every detent settle calls `map.resize()` (the map-resize
- *   invariant) and reports through `onSheetDetentSettle` so the camera
- *   padding path can react without this module importing camera code.
- *
- * The at-hand block (the half detent's Brief content) renders from the
- * active briefing PUSHED here by the impact panel's internals
- * (`setSheetBriefing`); this module never reaches into the briefing
- * lifecycle, so the frozen `openImpactPanel` facade stays the one owner
- * of hydration. The place picker is the ONE shared search (U3), mounted
- * lazily on first sheet activation via `search-controller`; keeping that
- * import lazy (and off the boot path) is what keeps this module free of
- * static `deep-link`/`impact-panel` imports (no import cycle) and honors
- * the C1 rule (an embed, which never activates the sheet, never downloads
- * the search chunk).
- *
- * Stewardship: the at-hand block renders only what the briefing model
- * carries (title, kind, the current-horizon claim text); nothing is
- * invented, and an unhydrated briefing reads as an honest invitation to
- * open the full report, never a fabricated reading.
+ * The panel state is ephemeral and never enters the URL. Embed mode keeps its
+ * hidden-chrome behavior. The search chunk still mounts only when the mobile
+ * shell activates, and report content remains owned by the impact panel.
  */
 
 import type * as maplibregl from 'maplibre-gl';
@@ -56,11 +20,9 @@ import {
   getViewMode,
   onViewModeChange,
   setViewMode,
-  isExplicitBriefBoot,
   clearExplicitBriefBoot
 } from '../state/view-mode';
 import { escapeHtml } from '../util/escape';
-import { prefersReducedMotion } from '../util/motion';
 import { TRIBAL_NATIONS_GROUP } from '../config/layer-groups';
 import { enterPlaceStudio } from '../state/studio-route';
 import { activateTribalNationsGroup, wireTribalNationsHealth } from './tribal-nations-action';
@@ -71,52 +33,31 @@ import { loadSearchController } from './search-chunk';
 // ---------------------------------------------------------------------------
 
 /**
- * The four detents (mobile shell, 2026-07-14, from the ratified 2026-07-11
- * mockup): `closed` is the edgeless map-first state (no sheet edge, no
- * grabber; the footer nav is the only chrome), and the three information
- * depths above it are unchanged from D-0.7.0-017. `closed` is an ACTIVE
- * shell state: null still means desktop or embed (no shell at all).
+ * Legacy depth names retained for existing callers. `closed` hides the panel,
+ * `half` opens an ordinary door, and `full` exposes report or catalog content.
+ * `peek` is accepted for compatibility and renders as an ordinary open panel.
  */
 export type SheetDetent = 'closed' | 'peek' | 'half' | 'full';
 
-/** The footer nav's four doors. Ephemeral like the detent; never in the URL. */
+/** The side rail's four doors. Ephemeral like the detent; never in the URL. */
 export type SheetTab = 'brief' | 'place' | 'layers' | 'alerts';
 
-/**
- * Nominal detent heights. The peek height and the half fraction are the
- * ONE shared lookup (cartography lens): the stylesheet's
- * `--sheet-height` values are written from this table at activation, and
- * the camera-padding path reads the LIVE rendered height via
- * `currentSheetInsetPx()`, so the two surfaces cannot drift apart.
- */
+/** Legacy values retained for consumers that import the old sheet contract. */
 export const SHEET_DETENT_SIZE = {
-  /** Peek: the grabber, the compacted conditions strip, the date register.
-   * 132 clears the three tiles with their sublabels (124 clipped the tile
-   * feet by ~10px; screenshot-matrix finding, 2026-07-10). */
   peekPx: 132,
-  /** Half: fraction of the dynamic viewport (the mockup's 46 percent). */
   halfFraction: 0.46,
-  /** The footer nav's bar height (safe-area inset rides on top in CSS). */
   footerPx: 56,
-  /** Full leaves this gap at the top so the key bar and a map edge stay
-   * visible (the mockup's context strip). */
   fullTopGapPx: 72
 } as const;
 
-const HINT_STORAGE_KEY = 'ddm-sheet-hint-dismissed';
-/** A pointer move beyond this many pixels is a drag, not a tap. */
-const DRAG_THRESHOLD_PX = 6;
-/** The sheet may not be dragged shorter than this (the grabber stays reachable). */
-const MIN_DRAG_HEIGHT_PX = 72;
-/** Height-transition settle fallback when `transitionend` never fires. */
-const SETTLE_FALLBACK_MS = 320;
+/** Transform and opacity transition settle fallback. */
+const SETTLE_FALLBACK_MS = 220;
 const PLACE_STUDIO_OPENER_EVENT = 'ddm:place-studio-opener';
 
 let mapRef: maplibregl.Map | null = null;
 
 let appEl: HTMLElement | null = null;
 let sidebarEl: HTMLElement | null = null;
-let grabberEl: HTMLButtonElement | null = null;
 /** The dynamic read region rebuilt on every briefing push (the search and
  * the report door are stable siblings, so an innerHTML rebuild never wipes
  * the mounted Preact search). */
@@ -124,7 +65,6 @@ let atHandBodyEl: HTMLElement | null = null;
 /** Guard so the shared search mounts at most once (idempotent activation). */
 let searchMounted = false;
 let liveRegionEl: HTMLElement | null = null;
-let hintEl: HTMLElement | null = null;
 
 /** The active detent, or null when the sheet is inactive (desktop or embed). */
 let detent: SheetDetent | null = null;
@@ -156,7 +96,7 @@ const mql: MediaQueryList | null =
 // Public read surface
 // ---------------------------------------------------------------------------
 
-/** Whether the bottom sheet currently exists (mobile viewport, not embed). */
+/** Whether the mobile panel shell currently exists (mobile viewport, not embed). */
 export function isSheetActive(): boolean {
   return detent !== null;
 }
@@ -171,18 +111,9 @@ export function sheetAllowsAutoRaise(): boolean {
   return userInteracted || deepLinkRaise;
 }
 
-/**
- * The LIVE bottom obstruction in pixels, for camera padding: the sheet's
- * measured rect PLUS the footer nav's (the sheet rides above the footer in
- * the mobile shell, so the map's covered strip is their sum), never a
- * parallel constant (the shared-lookup rule). Zero when the shell is
- * inactive. At full the map is covered and no camera call should fire;
- * callers check `getSheetDetent()` first.
- */
+/** Side panels do not create a bottom obstruction for camera padding. */
 export function currentSheetInsetPx(): number {
-  if (detent === null || !sidebarEl) return 0;
-  const sheet = detent === 'closed' ? 0 : Math.round(sidebarEl.getBoundingClientRect().height);
-  return sheet + footerInsetPx();
+  return 0;
 }
 
 /** Subscribe to detent settles (after the height transition and map.resize). */
@@ -197,62 +128,30 @@ export function onSheetDetentSettle(fn: (active: SheetDetent | null) => void): (
 // Detent mechanics
 // ---------------------------------------------------------------------------
 
-/** The footer nav's LIVE rendered height (bar plus safe-area inset). */
-function footerInsetPx(): number {
-  const footer = document.getElementById('mobile-footer-nav');
-  if (!footer || detent === null) return 0;
-  return Math.round(footer.getBoundingClientRect().height);
-}
-
-/** Pixel height a detent resolves to against the current viewport. */
-function detentHeightPx(d: SheetDetent): number {
-  const vh = window.innerHeight;
-  if (d === 'closed') return 0;
-  if (d === 'peek') return Math.min(SHEET_DETENT_SIZE.peekPx, vh);
-  if (d === 'half') return Math.round(vh * SHEET_DETENT_SIZE.halfFraction);
-  return Math.max(0, vh - SHEET_DETENT_SIZE.footerPx - SHEET_DETENT_SIZE.fullTopGapPx);
-}
-
 const DETENT_ANNOUNCE: Record<SheetDetent, string> = {
-  closed: 'Sheet closed: the map leads. The footer buttons reopen it.',
-  peek: 'Sheet at peek: conditions in view.',
-  half: 'Sheet at half: the at-hand answer.',
-  full: 'Sheet at full height.'
+  closed: 'Panel closed. The map is in view.',
+  peek: 'Panel open.',
+  half: 'Panel open.',
+  full: 'Full panel open.'
 };
 
 function announce(text: string): void {
   if (liveRegionEl) liveRegionEl.textContent = text;
 }
 
-function updateGrabberState(): void {
-  if (!grabberEl || detent === null) return;
-  grabberEl.setAttribute(
-    'aria-label',
-    `Resize the briefing sheet (now at ${detent}). Enter cycles; arrow keys step.`
-  );
-}
-
 /**
- * Move the sheet to a detent. The stylesheet owns the height values
- * (keyed off the attribute this sets); this module owns the settle:
- * after the height transition, `map.resize()` runs (invariant 7) and
- * the settle listeners fire so camera padding can follow.
+ * Move the panel to a legacy depth. CSS maps each open depth to the same
+ * anchored glass surface while keeping the existing visibility matrix.
  */
 export function setSheetDetent(next: SheetDetent, opts: { announce?: boolean } = {}): void {
   if (detent === null || !appEl) return;
-  dismissHint();
   if (next === detent) return;
   detent = next;
   appEl.setAttribute('data-sheet-detent', next);
-  // Closing by ANY road (a footer re-tap, a grabber drag to the bottom, a
-  // hazard-rail quick select) clears the footer door: the closed state has
-  // no active tab, exactly as the mockup's closeSheet ruled.
+  // Closing by any road clears the active side-rail door.
   if (next === 'closed') syncFooterTab(null);
-  updateGrabberState();
   if (opts.announce !== false) announce(DETENT_ANNOUNCE[next]);
-  // Full opens at its top (the report's place title and caveat, or the
-  // catalog's first group), never wherever the half detent left off
-  // (product lens).
+  // Full content always opens at its top.
   if (next === 'full') {
     const scroll = sidebarEl?.querySelector<HTMLElement>('.sidebar-scroll');
     if (scroll) scroll.scrollTop = 0;
@@ -262,36 +161,20 @@ export function setSheetDetent(next: SheetDetent, opts: { announce?: boolean } =
 
 function scheduleSettle(): void {
   if (settleTimer !== null) window.clearTimeout(settleTimer);
-  const delay = prefersReducedMotion() ? 0 : SETTLE_FALLBACK_MS;
   settleTimer = window.setTimeout(() => {
     settleTimer = null;
     settle();
-  }, delay);
+  }, SETTLE_FALLBACK_MS);
 }
 
 /**
- * Detent settle: `map.resize()` (invariant 7), then the persistent-padding
- * write. The transform padding is the ONE camera authority for the sheet
- * inset (MapLibre's `cameraForBounds` composes it with any per-fit option
- * padding, verified in the installed v5 source), so the briefing fit path
- * passes only its aesthetic margins and can never double-count the sheet.
- * At full the map has receded: no camera call fires (cartography lens),
- * and the last peek/half padding simply persists until the sheet returns.
+ * Resize MapLibre after a panel transition and clear the retired bottom
+ * padding for every state, including the first run after an old session.
  */
 function settle(): void {
   if (!mapRef) return;
   mapRef.resize();
-  if (detent === null) {
-    // Shell gone (desktop crossing, embed): the inset authority resets.
-    mapRef.jumpTo({ padding: { top: 0, left: 0, right: 0, bottom: 0 } });
-  } else if (detent !== 'full') {
-    // Closed, peek, and half all pad by the live obstruction (sheet rect
-    // plus the footer bar); at closed that is just the footer.
-    mapRef.easeTo({
-      padding: { top: 0, left: 0, right: 0, bottom: currentSheetInsetPx() },
-      duration: prefersReducedMotion() ? 0 : 220
-    });
-  }
+  mapRef.jumpTo({ padding: { top: 0, left: 0, right: 0, bottom: 0 } });
   for (const fn of [...settleListeners]) {
     try {
       fn(detent);
@@ -299,173 +182,6 @@ function settle(): void {
       console.error('[mobile-sheet] settle listener threw:', err);
     }
   }
-}
-
-/** The detent whose height is nearest to a dragged pixel height. */
-function nearestDetent(heightPx: number): SheetDetent {
-  const candidates: SheetDetent[] = ['closed', 'peek', 'half', 'full'];
-  let best: SheetDetent = 'peek';
-  let bestDist = Infinity;
-  for (const d of candidates) {
-    const dist = Math.abs(detentHeightPx(d) - heightPx);
-    if (dist < bestDist) {
-      bestDist = dist;
-      best = d;
-    }
-  }
-  return best;
-}
-
-function stepDetent(direction: 1 | -1): void {
-  if (detent === null) return;
-  const order: SheetDetent[] = ['closed', 'peek', 'half', 'full'];
-  const idx = order.indexOf(detent);
-  const next = order[Math.min(order.length - 1, Math.max(0, idx + direction))];
-  if (next && next !== detent) {
-    setSheetDetent(next);
-    // First-use hint (W2-D11): a MANUAL arrival at peek is the moment the
-    // grabber affordance is in hand; the once-ever guard still applies.
-    if (next === 'peek') showHintOnce();
-  }
-}
-
-function cycleDetent(): void {
-  if (detent === null) return;
-  // The cycle covers the OPEN depths; closed is reachable by stepping or
-  // dragging down (the grabber is invisible at closed, so a cycle that
-  // landed there would strand keyboard users with nothing focusable).
-  const order: SheetDetent[] = ['peek', 'half', 'full'];
-  const idx = order.indexOf(detent);
-  const next = order[(idx + 1) % order.length]!;
-  setSheetDetent(next);
-  // First-use hint on a manual arrival at peek (W2-D11); once-ever.
-  if (next === 'peek') showHintOnce();
-}
-
-// ---------------------------------------------------------------------------
-// Grabber wiring (drag, tap, keyboard)
-// ---------------------------------------------------------------------------
-
-function wireGrabber(): void {
-  if (!grabberEl) return;
-  const grabber = grabberEl;
-
-  let dragging = false;
-  let moved = false;
-  let startY = 0;
-  let startHeight = 0;
-
-  grabber.addEventListener('pointerdown', (e) => {
-    if (detent === null || !sidebarEl || !appEl) return;
-    dragging = true;
-    moved = false;
-    startY = e.clientY;
-    startHeight = sidebarEl.getBoundingClientRect().height;
-    grabber.setPointerCapture(e.pointerId);
-    appEl.classList.add('sheet-dragging');
-  });
-
-  grabber.addEventListener('pointermove', (e) => {
-    if (!dragging || !appEl) return;
-    const dy = startY - e.clientY;
-    if (Math.abs(dy) > DRAG_THRESHOLD_PX) moved = true;
-    const h = Math.max(
-      MIN_DRAG_HEIGHT_PX,
-      Math.min(window.innerHeight, Math.round(startHeight + dy))
-    );
-    appEl.style.setProperty('--sheet-height', `${h}px`);
-  });
-
-  const endDrag = (e: PointerEvent): void => {
-    if (!dragging || !appEl) return;
-    dragging = false;
-    if (grabber.hasPointerCapture(e.pointerId)) grabber.releasePointerCapture(e.pointerId);
-    appEl.classList.remove('sheet-dragging');
-    const inline = appEl.style.getPropertyValue('--sheet-height');
-    appEl.style.removeProperty('--sheet-height');
-    if (moved && inline) {
-      const target = nearestDetent(parseFloat(inline));
-      if (target === detent) {
-        // Same detent: the CSS height snaps back; still settle (resize).
-        scheduleSettle();
-      } else {
-        setSheetDetent(target);
-        // First-use hint on a manual drag to peek (W2-D11); once-ever.
-        if (target === 'peek') showHintOnce();
-      }
-    }
-  };
-  grabber.addEventListener('pointerup', endDrag);
-  grabber.addEventListener('pointercancel', endDrag);
-
-  grabber.addEventListener('click', () => {
-    // A click that concluded a real drag is not a tap; the drag chose.
-    if (moved) {
-      moved = false;
-      return;
-    }
-    cycleDetent();
-  });
-
-  grabber.addEventListener('keydown', (e) => {
-    if (detent === null) return;
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      stepDetent(1);
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      stepDetent(-1);
-    }
-    // Enter and Space fall through to the native button click (cycle).
-  });
-}
-
-// ---------------------------------------------------------------------------
-// First-use hint (product lens: one-time, dismissible, localStorage-gated)
-// ---------------------------------------------------------------------------
-
-function hintDismissed(): boolean {
-  try {
-    return window.localStorage.getItem(HINT_STORAGE_KEY) === '1';
-  } catch {
-    // Storage unavailable (privacy mode): show at most once per session.
-    return sessionHintShown;
-  }
-}
-
-let sessionHintShown = false;
-
-function markHintDismissed(): void {
-  sessionHintShown = true;
-  try {
-    window.localStorage.setItem(HINT_STORAGE_KEY, '1');
-  } catch {
-    // Honest no-op: the session flag above still prevents repeats.
-  }
-}
-
-function showHintOnce(): void {
-  if (hintDismissed() || hintEl || !grabberEl?.parentElement) return;
-  sessionHintShown = true;
-  const hint = document.createElement('div');
-  hint.className = 'sheet-hint';
-  hint.innerHTML = `
-    <span>Drag up for the full briefing</span>
-    <button type="button" class="sheet-hint-dismiss" aria-label="Dismiss hint">&times;</button>
-  `;
-  hint.querySelector('button')?.addEventListener('click', () => {
-    markHintDismissed();
-    dismissHint();
-  });
-  grabberEl.parentElement.appendChild(hint);
-  hintEl = hint;
-}
-
-function dismissHint(): void {
-  if (!hintEl) return;
-  markHintDismissed();
-  hintEl.remove();
-  hintEl = null;
 }
 
 // ---------------------------------------------------------------------------
@@ -601,21 +317,20 @@ export function driveSheetForReport(target: SheetDetent): void {
 /** Restore the pre-report detent (the ratified close behavior). */
 export function restoreSheetDetent(): void {
   if (detent === null) return;
-  const target = restoreDetent ?? (getViewMode() === 'brief' ? 'half' : 'peek');
+  const target = restoreDetent ?? 'half';
   restoreDetent = null;
   setSheetDetent(target);
 }
 
 // ---------------------------------------------------------------------------
-// The footer nav (mobile shell, 2026-07-14; the mockup's four doors)
+// The mobile side rail
 // ---------------------------------------------------------------------------
 
 /**
- * Reflect the active door on the footer buttons (and the `data-sheet-tab`
+ * Reflect the active door on the rail buttons (and the `data-sheet-tab`
  * attribute the alerts pane's stylesheet gate reads). Null clears all four:
  * the closed sheet has no active door, and a sheet raised by something other
- * than the footer (a briefing open, the embed-exit reveal) shows content
- * without claiming a door, exactly as the mockup's map popup did.
+ * than the rail shows content without claiming a door.
  */
 function syncFooterTab(tab: SheetTab | null): void {
   if (appEl) {
@@ -624,15 +339,17 @@ function syncFooterTab(tab: SheetTab | null): void {
   }
   const footer = document.getElementById('mobile-footer-nav');
   if (!footer) return;
+  footer.setAttribute('aria-label', 'Mobile panels');
   for (const btn of footer.querySelectorAll<HTMLButtonElement>('button[data-tab]')) {
     const active = btn.dataset['tab'] === tab;
     btn.classList.toggle('active', active);
+    btn.setAttribute('aria-controls', 'sidebar');
     btn.setAttribute('aria-expanded', String(active));
   }
 }
 
 /**
- * Open a footer door (the mockup's openTab): Brief IS the full report and
+ * Open a side-rail door: Brief is the full report and
  * opens at full; Place (the at-hand answer with the one search), Layers
  * (the console controls), and Alerts open at half. Brief and Place ride
  * the Brief view mode, Layers rides console; the mode is real URL state
@@ -684,52 +401,24 @@ function wireFooterNav(): void {
 // Activation
 // ---------------------------------------------------------------------------
 
-/** The mode's opening detent when a surface is explicitly requested
- * (Brief at half, console at peek); the BOOT is map-first at closed. */
+/** Every ordinary side-panel door uses the compact legacy `half` depth. */
 function openingDetent(): SheetDetent {
-  return getViewMode() === 'brief' ? 'half' : 'peek';
+  return 'half';
 }
 
 function activate(initial?: SheetDetent): void {
   if (!appEl || detent !== null) return;
-  // Map-first boot (mobile shell, from the ratified mockup): the shell
-  // activates CLOSED, an edgeless map with the footer nav. Content raises
-  // the sheet only on an explicit ask: a footer door, a briefing open
-  // (the impact panel's mobile host), or the embed-exit reveal at peek.
-  // The ONE boot-time exception (U-UX-FIX-1 DEF-2, the same family as the
-  // `?select=` deep link): an INBOUND URL that literally carried
-  // `view=brief` is itself the ask, so the boot activation opens the
-  // Brief surface at its half detent; the URL-as-state invariant means a
-  // shared or reloaded link reproduces what the sender saw. Only the raw
-  // parse-time flag qualifies (the app stamps `view=` onto every URL
-  // after the first sync, so the current mode alone can never earn the
-  // raise); initMobileSheet clears it after the boot evaluation.
-  detent =
-    initial ??
-    (isExplicitBriefBoot() && getViewMode() === 'brief' ? 'half' : 'closed');
+  // Panel visibility is ephemeral: even an app-stamped view=brief URL
+  // reloads with the map clear. Explicit doors and place selections open it.
+  detent = initial ?? 'closed';
   appEl.setAttribute('data-sheet-detent', detent);
-  updateGrabberState();
+  // Stamp the static navigation with its side-panel semantics on the first
+  // mobile activation, before any door has been pressed.
+  syncFooterTab(null);
   renderAtHand();
   // Mount the shared search now (never at boot): the sheet is active only on
   // a mobile, non-embed viewport, so the C1 rule holds and the chunk is free.
   mountSheetSearch();
-  if (detent === 'peek') showHintOnce();
-  // Seed the padding authority immediately from the detent table (the
-  // rect is mid-transition here; the settle refines with the measured
-  // value) so a boot-time briefing fit composes the sheet inset instead
-  // of racing the settle timer.
-  if (detent !== 'full') {
-    mapRef?.jumpTo({
-      padding: {
-        top: 0,
-        left: 0,
-        right: 0,
-        // The footer bar is part of the obstruction; the settle refines
-        // with the measured rects (including the safe-area inset).
-        bottom: detentHeightPx(detent) + SHEET_DETENT_SIZE.footerPx
-      }
-    });
-  }
   // Activation settles SYNCHRONOUSLY (adversarial-review finding 3):
   // the settle listeners rehost an open briefing panel, and a delayed
   // settle leaves it in the wrong host (invisible) for the delay.
@@ -743,9 +432,6 @@ function deactivate(): void {
   appEl.removeAttribute('data-sheet-detent');
   appEl.removeAttribute('data-sheet-tab');
   syncFooterTab(null);
-  appEl.style.removeProperty('--sheet-height');
-  appEl.classList.remove('sheet-dragging');
-  dismissHint();
   // Synchronous for the same reason as activate(): an open report must
   // return to its document.body host in the same frame the sheet goes
   // away, not after the settle fallback delay.
@@ -766,18 +452,16 @@ function evaluate(): void {
 }
 
 /**
- * The embed-exit path (ratified): the expand control exits embed and
- * reveals the sheet at peek. Called by the sidebar's expand handler after
- * it removes the `embed` class; a desktop expand is a no-op here.
+ * Compatibility entry used by the embed expand control. Exiting embed
+ * restores the mobile rail with its panels closed.
  */
 export function revealSheetAtPeek(): void {
   if (!shouldBeActive()) return;
   if (detent === null) {
-    activate('peek');
+    activate('closed');
   } else {
-    setSheetDetent('peek');
+    setSheetDetent('closed');
   }
-  showHintOnce();
 }
 
 /**
@@ -801,37 +485,8 @@ export function initMobileSheet(
   document.addEventListener('keydown', markInteracted, { once: true, capture: true });
   appEl = document.getElementById('app');
   sidebarEl = document.getElementById('sidebar');
-  grabberEl = document.getElementById('sheet-grabber') as HTMLButtonElement | null;
   atHandBodyEl = document.getElementById('sheet-at-hand-body');
-  if (!appEl || !sidebarEl || !grabberEl) return;
-
-  // The height transition's real end. The fallback timer alone can read a
-  // frame-frozen rect: when a long task (a multi-megabyte GeoJSON parse,
-  // the minimap analysis) stalls the renderer across the 250 ms ease, the
-  // timer fires after the stall while the animation clock still sits
-  // mid-ease, so the measured inset is a fraction of the detent and the
-  // camera stays padded short until some later settle. `transitionend`
-  // re-measures at the rendered end state; the timer stays for reduced
-  // motion (no transition, no event) and for a lost event. Guarded to the
-  // sheet's own `height` transition: `visibility` ends here too on close,
-  // and descendants' transitions bubble.
-  sidebarEl.addEventListener('transitionend', (event) => {
-    if (event.target !== sidebarEl || event.propertyName !== 'height') return;
-    if (detent === null) return;
-    if (settleTimer !== null) {
-      window.clearTimeout(settleTimer);
-      settleTimer = null;
-    }
-    settle();
-  });
-
-  // Publish the shared detent sizes to the stylesheet (the one lookup:
-  // this table is also what the drag-snap math reads, and the camera
-  // padding path measures the live rect, so no surface can drift).
-  appEl.style.setProperty('--sheet-peek', `${SHEET_DETENT_SIZE.peekPx}px`);
-  appEl.style.setProperty('--sheet-half', String(SHEET_DETENT_SIZE.halfFraction));
-  appEl.style.setProperty('--sheet-footer', `${SHEET_DETENT_SIZE.footerPx}px`);
-  appEl.style.setProperty('--sheet-full-gap', `${SHEET_DETENT_SIZE.fullTopGapPx}px`);
+  if (!appEl || !sidebarEl) return;
 
   // Module-local polite live region for detent announcements.
   const region = document.createElement('div');
@@ -839,8 +494,6 @@ export function initMobileSheet(
   region.setAttribute('aria-live', 'polite');
   document.body.appendChild(region);
   liveRegionEl = region;
-
-  wireGrabber();
 
   // The console half detent's one door to the full catalog stack.
   document.getElementById('sheet-all-layers-btn')?.addEventListener('click', () => {
@@ -871,11 +524,10 @@ export function initMobileSheet(
     setSheetDetent('full');
   });
 
-  // A mode switch while the sheet is OPEN re-seats the detent the way
-  // the mode would have opened (Brief: half; console: peek), unless the
+  // A mode switch while the panel is open re-seats the ordinary depth unless the
   // report is up (the impact panel's mobile host owns that transition).
   // A closed sheet stays closed: the map-first state does not pop open
-  // because state changed underneath it; the footer doors own opening.
+  // because state changed underneath it; the rail doors own opening.
   onViewModeChange(() => {
     if (detent === null || detent === 'full' || detent === 'closed') return;
     setSheetDetent(openingDetent(), { announce: false });
@@ -883,15 +535,30 @@ export function initMobileSheet(
 
   wireFooterNav();
 
+  document.addEventListener('keydown', (event) => {
+    if (
+      event.key !== 'Escape' ||
+      event.defaultPrevented ||
+      detent === null ||
+      detent === 'closed'
+    ) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    // Nested surfaces own their first Escape. In particular, the search
+    // clears its query and the briefing returns from the report to the
+    // at-hand panel; neither action should also dismiss the side panel.
+    if (target.closest('#impact-panel, #map-key, #map-info-panel')) return;
+    if (!sidebarEl?.contains(target) && !target.closest('#mobile-footer-nav')) return;
+    const active = document.querySelector<HTMLButtonElement>(
+      '#mobile-footer-nav button.active[data-tab]'
+    );
+    setSheetDetent('closed');
+    active?.focus();
+  });
+
   mql?.addEventListener('change', evaluate);
 
-  // Mobile browser chrome (the address bar, the keyboard) changes the
-  // visual viewport without a layout-intent event; the half detent's
-  // dvh-derived height moves with it while the camera padding was measured
-  // against the old height. A debounced re-settle keeps map.resize() and
-  // the padding authority honest (invariant 7; Codex design pass,
-  // 2026-07-14). Guarded to the active sheet: on desktop and in embed the
-  // detent is null and MapLibre's own container observer already resizes.
+  // Browser chrome and the keyboard can resize the map behind an open panel.
   const vv = window.visualViewport;
   if (vv) {
     let vvTimer: number | null = null;
@@ -909,7 +576,7 @@ export function initMobileSheet(
   // The explicit-view ask is a BOOT-ONLY raise (DEF-2): whether or not the
   // boot viewport activated the sheet (a desktop boot does not), the flag
   // is spent now. Later activations (a desktop-to-mobile crossing, the
-  // embed-exit reveal at peek) keep their ratified map-first or peek
-  // behavior; the app's own `view=` stamp never re-raises the sheet.
+  // embed exit) keep their map-first behavior; the app's own `view=` stamp
+  // never reopens the panel.
   clearExplicitBriefBoot();
 }

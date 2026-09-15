@@ -492,6 +492,9 @@ export function loadedNifcCollection(): {
 let timeBarEligible = false;
 /** Disposer for the vacancy subscription; armed on activate. */
 let unsubscribeTimeBar: (() => void) | null = null;
+let freshnessState: 'current' | 'stale' | 'loading' | 'unavailable' = 'loading';
+let freshnessTimer: ReturnType<typeof setTimeout> | null = null;
+const CURRENT_CHECK_WINDOW_MS = 5 * 60 * 1000;
 
 /**
  * The perimeter stamp, the Wildfire screen's time statement at the current
@@ -520,8 +523,13 @@ function installPerimeterTimeBar(): void {
       horizon: 'current',
       headline: 'Current perimeters · no single valid time',
       detail:
-        'NIFC WFIGS current interagency perimeters · checked for updates about every five minutes; the service states no product date and each perimeter carries its own discovery date',
-      register: 'observed'
+        'NIFC WFIGS current interagency perimeters · the service states no product date and each perimeter carries its own discovery date.' +
+        (lastLoaded ? ` Last successful browser check: ${new Date(lastLoaded.fetchedAt).toLocaleString()}. The current indicator describes this feed check, not the age of every perimeter.` : ''),
+      register: 'observed',
+      freshness: {
+        state: freshnessState,
+        checkedAt: lastLoaded ? new Date(lastLoaded.fetchedAt).toISOString() : null
+      }
     }
   });
 }
@@ -539,6 +547,9 @@ function armTimeBar(): void {
 }
 
 function disarmTimeBar(): void {
+  if (freshnessTimer !== null) clearTimeout(freshnessTimer);
+  freshnessTimer = null;
+  freshnessState = 'loading';
   timeBarEligible = false;
   if (unsubscribeTimeBar) {
     unsubscribeTimeBar();
@@ -754,7 +765,9 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
 
   const envelope = resolveQueryEnvelope(map);
 
-  if (envelope && cache && envelopeCovers(cache.envelope, map)) {
+  if (envelope && cache && envelopeCovers(cache.envelope, map) &&
+    lastLoaded && Date.now() - lastLoaded.fetchedAt < CURRENT_CHECK_WINDOW_MS) {
+    freshnessState = 'current';
     applyFeatureCollection(map, cache.geojson, { truncated: cache.truncated });
     return;
   }
@@ -763,6 +776,8 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
   const signal = masterController.signal;
 
   reportStatus('loading');
+  freshnessState = 'loading';
+  armTimeBar();
 
   let geojson: FeatureCollection;
   let truncated = false;
@@ -783,6 +798,8 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
     // silently per invariant 5.
     if (signal.aborted || token !== requestSeq) return;
     console.warn('[nifc-fires] WFIGS perimeters fetch failed.', err);
+    freshnessState = lastLoaded ? 'stale' : 'unavailable';
+    installPerimeterTimeBar();
     if (envelope && cache && envelopeCovers(cache.envelope, map)) {
       // The last covering collection is still honest for this view (design
       // clause 4): restore its status rather than stranding the pill at
@@ -800,7 +817,15 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
   const coverageEnvelope = envelope ? toCoverageEnvelope(envelope) : null;
   cache = coverageEnvelope ? { envelope: coverageEnvelope, geojson, truncated } : null;
   lastLoaded = { collection: geojson, envelope: coverageEnvelope, fetchedAt: Date.now() };
+  freshnessState = 'current';
+  if (freshnessTimer !== null) clearTimeout(freshnessTimer);
+  freshnessTimer = setTimeout(() => {
+    freshnessTimer = null;
+    freshnessState = 'stale';
+    installPerimeterTimeBar();
+  }, CURRENT_CHECK_WINDOW_MS);
   applyFeatureCollection(map, geojson, { truncated });
+  installPerimeterTimeBar();
 }
 
 /**

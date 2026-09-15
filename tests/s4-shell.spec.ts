@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { gotoApp, layerCheckbox, search, urlLayers } from './helpers';
+import { gotoApp, layerCheckbox, layerPill, search, stubHeatRiskCatalog, urlLayers } from './helpers';
 
 /**
  * S4a: the main-screen shell boot state (the 2026-07-18 design record
@@ -13,6 +13,122 @@ import { gotoApp, layerCheckbox, search, urlLayers } from './helpers';
  */
 
 const CLUSTER_TITLES = ['Drought', 'Wildfire', 'Extreme Heat', 'ENSO'];
+
+for (const viewport of [{ width: 1440, height: 1000 }, { width: 958, height: 935 }, { width: 900, height: 675 }]) {
+  test(`upper navigation stays in place across hazard work and selection at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize(viewport);
+    const empty = JSON.stringify({ type: 'FeatureCollection', features: [] });
+    const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+    const gates = new Map<string, { promise: Promise<void>; release: () => void }>();
+    for (const key of ['wildfire', 'heat', 'enso']) {
+      let release!: () => void;
+      const promise = new Promise<void>((resolve) => { release = resolve; });
+      gates.set(key, { promise, release });
+    }
+    let sstModuleRequests = 0;
+    await page.route(/\/assets\/sst-anomaly-[^/?]+\.js(?:\?|$)/, async (route) => {
+      // SST reports its latest surface ready before its date axis resolves.
+      // The layer controller's module load is the observable pending phase.
+      sstModuleRequests += 1;
+      await gates.get('enso')!.promise;
+      await route.continue();
+    });
+    await page.route('https://tile.openstreetmap.org/**', (route) =>
+      route.fulfill({ status: 200, contentType: 'image/png', body: pixel }));
+    await page.route((url) => url.href.includes('NOAA_Satellite_Smoke_Detection') ||
+      url.hostname === 'api.weather.gov' || url.pathname.endsWith('/WWA/watch_warn_adv/MapServer/1/query'),
+    (route) => route.fulfill({ status: 200, contentType: 'application/geo+json', body: empty }));
+    await page.route('**/WFIGS_Interagency_Perimeters_Current/**', async (route) => {
+      await gates.get('wildfire')!.promise;
+      await route.fulfill({ status: 200, contentType: 'application/geo+json', body: JSON.stringify({
+        type: 'FeatureCollection', features: [{
+          type: 'Feature',
+          properties: { attr_UniqueFireIdentifier: 'navigation-fixture', attr_IncidentName: 'Navigation Fixture', attr_IncidentTypeCategory: 'WF' },
+          geometry: { type: 'Polygon', coordinates: [[[-125, 42], [-116, 42], [-116, 49], [-125, 49], [-125, 42]]] }
+        }]
+      }) });
+    });
+    await stubHeatRiskCatalog(page);
+    await page.route((url) => url.pathname.endsWith('/NWS_HeatRisk/ImageServer'), async (route) => {
+      await gates.get('heat')!.promise;
+      await route.fallback();
+    });
+    await page.route((url) => url.href.includes('DescribeDomains'), async (route) => {
+      await gates.get('enso')!.promise;
+      await route.fulfill({
+        status: 200, contentType: 'text/xml',
+        body: "<Domains xmlns:ows='http://www.opengis.net/ows/1.1'><DimensionDomain>" +
+          '<ows:Identifier>time</ows:Identifier><Domain>2026-07-01/2026-07-07/P1D</Domain>' +
+          '<Size>1</Size></DimensionDomain></Domains>'
+      });
+    });
+    await page.route((url) => url.href.includes('GHRSST_L4_MUR') && url.pathname.endsWith('.png'),
+      async (route) => {
+        // Serve both latest and dated frames from the deterministic fixture.
+        await gates.get('enso')!.promise;
+        await route.fulfill({ status: 200, contentType: 'image/png', body: pixel });
+      });
+
+    await gotoApp(page);
+    const minimap = viewport.height < 700 ? '.shell-minimap-popover-wrap' : '.shell-minimap-map';
+    const selectors = ['#shell-panel', '.shell-view', '.shell-when', minimap,
+      '#shell-region-host', '#brief-search', '#layers-studio-entry-host'];
+    const readings: Array<{ phase: string; bounds: Array<{ selector: string; x: number; y: number; width: number; height: number }> }> = [];
+    const sample = async (phase: string): Promise<void> => {
+      // Read consecutive painted frames, including the held loading state,
+      // rather than treating a settled final rectangle as proof of stability.
+      for (let frame = 0; frame < 3; frame += 1) {
+        const bounds = await page.evaluate(async (items) => {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+          return items.map((selector) => {
+            const element = document.querySelector(selector);
+            if (!element) throw new Error(`Missing navigation control: ${selector}`);
+            const { x, y, width, height } = element.getBoundingClientRect();
+            return { selector, x, y, width, height };
+          });
+        }, selectors);
+        readings.push({ phase: `${phase}, frame ${frame + 1}`, bounds });
+      }
+    };
+    try {
+      await sample('Drought settled');
+      for (const [key, source] of [['wildfire', 'nifc-fires'], ['heat', 'heatrisk'], ['enso', 'sst-anomaly']] as const) {
+        const button = page.locator(`.shell-cluster-btn[data-cluster="${key}"]`);
+        await button.click();
+        await expect(button).toHaveAttribute('aria-pressed', 'true');
+        if (key === 'enso') await expect.poll(() => sstModuleRequests).toBeGreaterThan(0);
+        await expect(button).toHaveAttribute('data-pending', 'true');
+        await sample(`${key} loading`);
+        gates.get(key)!.release();
+        await expect(button).toHaveAttribute('data-pending', 'false', { timeout: 25_000 });
+        await expect(layerPill(page, source)).toHaveText(/^live(?: \(partial\))?$/);
+        if (key === 'enso') {
+          await expect(page.locator('.shell-time-headline')).toHaveText('Observed Jul 7, 2026');
+        }
+        await sample(`${key} settled`);
+      }
+      await page.locator('.shell-cluster-btn[data-cluster="drought"]').click();
+      await expect(page.locator('.shell-cluster-btn[data-cluster="drought"]')).toHaveAttribute('data-pending', 'false');
+      await page.locator('#brief-search [data-ddm-search]').fill('oregon');
+      await page.locator('#brief-search [data-search-kind="place"][data-search-id="OR"]').click();
+      await expect(page.locator('#brief-place-name')).toHaveText('Oregon');
+      await sample('Drought with Oregon selected');
+    } finally {
+      for (const gate of gates.values()) gate.release();
+    }
+
+    const baseline = readings[0]!.bounds;
+    const shifts = readings.flatMap(({ phase, bounds }) => bounds.flatMap((box, index) => {
+      const before = baseline[index]!;
+      return (['x', 'y', 'width', 'height'] as const).flatMap((dimension) =>
+        Math.abs(box[dimension] - before[dimension]) > 1
+          ? [{ phase, selector: box.selector, dimension, before: before[dimension], after: box[dimension] }]
+          : []);
+    }));
+    expect(shifts, 'Source work and selected-place context must not move upper navigation controls').toEqual([]);
+  });
+}
 
 test.describe('S4a desktop shell boot', () => {
   test('bare boot renders the four cluster buttons with Drought committed', async ({
@@ -167,17 +283,18 @@ test.describe('S4a desktop shell boot', () => {
         children.findIndex((child) => child.matches(selector));
       return [
         '.shell-view',
-        '#shell-conditions-summary',
+        '.shell-when',
         '.shell-minimap-map',
         '.shell-minimap-popover-wrap',
         '#shell-region-host',
-        '#shell-refine-host',
-        '.shell-when',
-        '#shell-share-host'
+        '#shell-refine-host'
       ].map(indexOf);
     });
     expect(shellOrder).toEqual([...shellOrder].sort((a, b) => a - b));
     expect(shellOrder.every((index) => index >= 0)).toBe(true);
+    await expect(page.locator('#brief-display + #shell-details-panel')).toHaveCount(1);
+    await expect(page.locator('#shell-details-island > #shell-conditions-summary')).toHaveCount(1);
+    await expect(page.locator('#shell-panel #shell-conditions-summary')).toHaveCount(0);
 
     for (const id of ['conditions-strip', 'legend-panel', 'panel-region', 'share-btn', 'brief-head']) {
       await expect(page.locator(`#${id}`)).toHaveCount(1);
@@ -185,7 +302,9 @@ test.describe('S4a desktop shell boot', () => {
     await expect(page.locator('#conditions-strip-dock > #conditions-strip')).toHaveCount(1);
     await expect(page.locator('#sidebar-key-host > #legend-panel')).toHaveCount(1);
     await expect(page.locator('#shell-region-host > #panel-region')).toHaveCount(1);
-    await expect(page.locator('#shell-share-host > #share-btn')).toHaveCount(1);
+    await expect(page.locator('#sidebar > #shell-share-host > #share-btn')).toHaveCount(1);
+    await expect(page.locator('#map-condition-indicator #conditions-strip')).toHaveCount(1);
+    await expect(page.locator('#brief-head-lede')).toHaveCount(0);
     await expect(page.locator('#shell-refine-host > #brief-head')).toHaveCount(1);
     await expect(page.locator('#shell-conditions-heading')).toHaveText('Conditions in view');
     await expect(page.locator('#conditions-strip-dock .conditions-title')).toBeHidden();
@@ -346,8 +465,7 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
     // pre-fix, wrapped the headline to a second line with no reserved
     // height, pushing every control below it down. app.css's
     // .shell-time-headline now reserves a fixed two-line box, so this
-    // switch must not move anything seated after it (#shell-share-host,
-    // the next sibling of .shell-when in the shell panel).
+    // switch must not move the regional navigation seated after it.
     await routeCpcOutlook(page);
     await gotoApp(page);
 
@@ -355,15 +473,15 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
     await expect(headline).toBeVisible();
     await expect(headline).toContainText('Consensus month');
 
-    const shareHost = page.locator('#shell-share-host');
-    const before = await shareHost.boundingBox();
+    const navigation = page.locator('#shell-minimap-heading');
+    const before = await navigation.boundingBox();
     expect(before).not.toBeNull();
 
     await page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]').click();
     await expect(headline).toContainText('Issued', { timeout: 45_000 });
     await expect(headline).toContainText('through Jul 2026');
 
-    const after = await shareHost.boundingBox();
+    const after = await navigation.boundingBox();
     expect(after).not.toBeNull();
     expect(Math.abs(after!.y - before!.y)).toBeLessThanOrEqual(1);
   });
@@ -760,6 +878,7 @@ test.describe('S4 r4: off intent during activation reaches the abort path (DG-08
     // studio id is the unambiguous handle (the shared data-layer-key
     // locator matches both the panel and the studio input once open).
     await page.locator('#layers-studio-entry').click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('studio')).toBe('layers');
     const studioDrought = page.locator('#studio-layer-toggle-drought');
     await expect(studioDrought).toBeVisible();
     await expect(studioDrought).toBeChecked();

@@ -59,6 +59,7 @@ import { watchRasterTiles, type RasterTileWatch } from '../util/raster-status';
 import { setTimeBar, clearTimeBar } from '../ui/time-bar';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
 import { showToast } from '../ui/overlay';
+import { activateEnsoFlow, cancelEnsoFlowLoad, deactivateEnsoFlow } from './enso-flow';
 
 const LAYER_KEY = 'sst-anomaly';
 /**
@@ -553,6 +554,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
     tileWatch?.detach();
     tileWatch = watchRasterTiles(map, SOURCE_ID, reportStatus);
+    activateEnsoFlow(map);
 
     showLegend(LAYER_KEY, {
       order: LEGEND_ORDER.surface,
@@ -633,12 +635,19 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   }
 }
 
+/** Stop activation requests immediately; the layer controller serializes teardown. */
+export function cancelActivation(): void {
+  masterController?.abort();
+  cancelEnsoFlowLoad();
+}
+
 /**
  * Stop the loop, abort in-flight work, and remove the SST raster, every
  * dated frame, the Nino 3.4 box, and the legend. Resets the URL's `sst=`
  * so a paused historical frame never outlives the surface.
  */
 export function deactivate(map: maplibregl.Map): void {
+  deactivateEnsoFlow();
   playing = false;
   buffering = false;
   stepEpoch++;

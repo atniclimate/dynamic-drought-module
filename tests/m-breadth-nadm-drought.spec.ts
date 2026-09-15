@@ -107,7 +107,9 @@ test.describe('North American Drought Monitor continental context', () => {
     await expect(page.locator('#time-bar')).toContainText(
       'Consensus month June 2026'
     );
-    await expect(page.locator('#map-key')).toBeHidden();
+    await expect(page.locator('#map-key')).toBeVisible();
+    await expect(page.locator('#map-key-details-toggle')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#map-key-content')).toBeHidden();
 
     await page.emulateMedia({ media: 'print' });
     await expect(page.locator('#time-bar')).toContainText(

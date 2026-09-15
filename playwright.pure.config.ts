@@ -33,6 +33,7 @@ export const PURE_SPECS = [
   'tests/capability-matrix.spec.ts',
   'tests/config-key-authority.spec.ts',
   'tests/display-summary.spec.ts',
+  'tests/enso-flow-data.spec.ts',
   'tests/gl-capability.spec.ts',
   'tests/location-identity.spec.ts',
   'tests/minimap-drought.spec.ts',

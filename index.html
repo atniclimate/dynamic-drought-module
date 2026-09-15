@@ -15,7 +15,7 @@
        declarations live in src/styles/app.css. No third-party font request. -->
 </head>
 <body class="app-body">
-  <div id="app" class="app-shell">
+  <div id="app" class="app-shell sidebar-collapsed">
 
     <aside id="sidebar" class="sidebar" aria-label="Map controls">
       <!-- The mobile bottom-sheet grabber (0.7.0 U2, D-0.7.0-017). Display
@@ -46,7 +46,7 @@
       <div class="sidebar-scroll">
 
         <!-- Stable fallback seat for the one conditions strip. Desktop Brief
-             moves the SAME section into the fixed sidebar dock below; every
+             moves the SAME section into the top-left map indicator; every
              other surface and the island pre-mount fallback retain this seat. -->
         <span id="conditions-strip-home" hidden></span>
         <section class="panel conditions-strip" id="conditions-strip" aria-label="Conditions in view" hidden>
@@ -61,7 +61,7 @@
              desktop Brief shell moves the SAME section below its minimap;
              console, mobile, embed, collapse, and pre-mount retain this seat. -->
         <span id="brief-head-home" hidden></span>
-        <!-- Brief head (U1, the two doors): the concise lede and the one place
+        <!-- Brief head: the selected-place context and the one place
              entry surface. Filled by src/ui/view-shell.ts and visible only in
              Brief mode. Regenerated markup never owns any shell host. -->
         <section class="panel brief-head" id="brief-head" aria-label="Drought briefing" hidden></section>
@@ -97,10 +97,19 @@
           <div id="layers-studio-entry-host"></div>
           <div id="brief-secondary-actions"></div>
           <div class="brief-selection-summary" id="brief-selection-summary" hidden>
+            <p class="brief-place-context" id="brief-place-context" aria-live="polite" hidden>
+              <span>Selected place</span>
+              <strong id="brief-place-name"></strong>
+            </p>
             <p id="brief-selection-read"></p>
             <button type="button" class="brief-full-report-link" id="brief-full-report-link">Open the full briefing</button>
           </div>
         </section>
+        <!-- Variable view details follow the persistent navigation controls. -->
+        <section id="shell-details-panel" class="shell-details-panel" aria-label="View details">
+          <div id="shell-details-island"></div>
+        </section>
+        <div id="enso-flow-controls"></div>
 
         <!-- The sheet's at-hand block (U2/U3): the half detent's Brief content
              (place title, the current-horizon read, the ONE search, the one
@@ -150,6 +159,11 @@
           <h2 class="panel-title">Quick views</h2>
           <div id="preset-chips" class="preset-chips" role="group" aria-label="Quick view presets"></div>
         </section>
+
+        <!-- Mobile seat for the same ENSO flow controls used by the desktop
+             Brief display. The controller rehosts its single node here only
+             at the phone breakpoint; no duplicate state or controls. -->
+        <section class="panel sheet-enso-flow" id="sheet-enso-flow-host" aria-label="ENSO flow overlays"></section>
 
         <!-- The sheet's "All layers" door (U2): the half detent's console
              content ends with the one entry that expands to the full catalog.
@@ -207,6 +221,11 @@
              overlay. Display is stylesheet-gated. -->
         <div class="sheet-report" id="sheet-report"></div>
 
+        <details class="sidebar-legend-disclosure">
+          <summary>Layer legends</summary>
+          <div id="sidebar-key-host"></div>
+        </details>
+
       </div>
 
       <!-- The S4c panel-foot response: place-bearing map clicks rehost their
@@ -218,18 +237,7 @@
            own scroll region cannot fight. -->
       <div id="panel-response" class="panel-response"></div>
 
-      <!-- Desktop Brief keeps the current rendered-condition readout pinned
-           below the scrolling controls. The shell rehosts the existing
-           #conditions-strip here, preserving its listeners and status. Its
-           full categorical legend remains available through the compact Key
-           disclosure; Console and mobile return both nodes to their homes. -->
-      <div id="sidebar-bottom-dock" class="sidebar-bottom-dock">
-        <div id="conditions-strip-dock" class="conditions-strip-dock"></div>
-        <details class="sidebar-key-disclosure">
-          <summary>Key</summary>
-          <div id="sidebar-key-host" class="sidebar-key-host"></div>
-        </details>
-      </div>
+      <div class="shell-rehost shell-share-host sidebar-share-host" id="shell-share-host"></div>
 
       <footer class="sidebar-footer">
         <p>A project of ATNI Climate (Affiliated Tribes of Northwest Indians)</p>
@@ -247,6 +255,11 @@
 
     <main id="map-container" class="map-container">
       <div id="map" role="application" aria-label="Interactive regional map"></div>
+
+      <div id="map-condition-indicator" class="map-condition-indicator">
+        <div id="conditions-strip-dock" class="conditions-strip-dock"></div>
+        <div id="map-key-overlay-host" class="map-overlay-seat"></div>
+      </div>
 
       <div id="hover-inspector" class="hover-inspector" aria-hidden="true" hidden></div>
 
@@ -293,15 +306,6 @@
              describes. Phones and embeds keep the bottom-right seat their
              layouts were designed around. -->
         <div id="basemap-switcher-overlay-host" class="map-overlay-seat"></div>
-
-        <!-- Desktop seat for the on-map key (owner direction, 2026-08-19).
-             The key's static home stays in the bottom dock below; the
-             desktop shell moves the SAME node here so phones and embeds
-             keep the dock layout they were designed around. The satellite
-             control is inserted just above this host at runtime
-             (src/map/init.ts), so the desktop column reads Share, Reset,
-             Satellite, then the key for the committed hazard view. -->
-        <div id="map-key-overlay-host" class="map-overlay-seat"></div>
       </div>
 
       <!-- The mobile hazard rail (0.7.0 mobile shell): the quick hazard

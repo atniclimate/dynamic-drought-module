@@ -60,7 +60,7 @@ export async function activateStructures(
     await probeArchiveHeader(URLS.structuresPmtilesLocal, signal);
   } catch (err) {
     if (!signal.aborted) {
-      console.warn('[structures-3d] the structures archive is unreachable or invalid.', err);
+      console.warn('[structures-3d] invalid or unavailable archive.', err);
     }
     return false;
   }

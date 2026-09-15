@@ -90,7 +90,7 @@ let hostSyncArmed = false;
 /** Visible, keyboard-focusable descendants of the panel, in DOM order. */
 function getFocusable(container: HTMLElement): HTMLElement[] {
   const selector =
-    'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
   return Array.from(container.querySelectorAll<HTMLElement>(selector)).filter(
     (el) => el.offsetParent !== null || el === document.activeElement
   );
