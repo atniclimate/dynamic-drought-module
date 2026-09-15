@@ -22,7 +22,8 @@ convergence doctrine are recorded in [`README.md`](README.md).
 
 ## Panel rail
 
-Brief, Place, Layers, and Alerts form one vertical rail along the left edge.
+Brief, Place, Layers, and Alerts form one vertical rail along the right edge,
+aligned with the Share, Reset, and hazard controls. Open panels sit to its left.
 Each button remains at least 44px square and exposes `aria-controls` and
 `aria-expanded`. Pressing a closed door drops its glass panel from below the
 top indicators. Pressing the active door again, or pressing Escape, closes the

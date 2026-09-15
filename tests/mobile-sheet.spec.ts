@@ -32,6 +32,10 @@ test.describe('mobile side rail and glass panels', () => {
     );
     expect(boxes.every((box) => Math.abs(box.x - boxes[0]!.x) < 1)).toBe(true);
     expect(boxes.every((box) => box.width >= 44 && box.height >= 44)).toBe(true);
+    const resetBox = await rect(page.locator('#reset-btn'));
+    expect(boxes.every((box) =>
+      Math.abs(box.x + box.width - resetBox.x - resetBox.width) < 1
+    )).toBe(true);
     for (let index = 1; index < boxes.length; index += 1) {
       expect(boxes[index]!.y).toBeGreaterThan(boxes[index - 1]!.y);
     }
@@ -55,7 +59,7 @@ test.describe('mobile side rail and glass panels', () => {
     const railBox = await rect(page.locator('#mobile-footer-nav'));
     const panelBox = await rect(page.locator('#sidebar'));
     expect(panelBox.y).toBeGreaterThan(40);
-    expect(panelBox.x).toBeGreaterThanOrEqual(railBox.x + railBox.width);
+    expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(railBox.x);
     expect(panelBox.y + panelBox.height).toBeLessThanOrEqual(844);
     const panelStyle = await page.locator('#sidebar').evaluate((element) => {
       const style = getComputedStyle(element);
