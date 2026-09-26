@@ -19,6 +19,7 @@ import {
   syntheticAiannhBody,
   syntheticBiaBody
 } from './tribal-fixtures';
+import { HAZARD_CLUSTER_KEYS, HAZARD_CLUSTERS } from '../src/config/clusters';
 
 /**
  * DDM-P2-T09: the recognized URL parameter vocabulary, read from its own
@@ -334,6 +335,130 @@ test.describe('URL as state', () => {
       .poll(async () => (await urlLayers(page)).has('nadm-drought'), { timeout: 25_000 })
       .toBe(true);
     expect(await search(page)).toContain('embed=true');
+  });
+
+  test('a desktop bare boot is open while the embed stays closed', async ({ page }) => {
+    // DDM-P10-T07 part 1: the stable-position rule (2026-09-13) covers
+    // where the sidebar sits, not whether it starts open; at 721 CSS px and
+    // wider, index.html no longer ships the collapsed class, so a bare boot
+    // (and every hazard cluster's own boot) opens with the sidebar expanded.
+    // The embed exit is untouched: an embed boot forces the column closed
+    // regardless of this default (app.css :377-382, :398-402).
+    const app = page.locator('#app');
+    const sidebar = page.locator('#sidebar');
+    const collapseBtn = page.locator('#sidebar-collapse');
+    const expandBtn = page.locator('#sidebar-expand');
+
+    // The four desktop/tablet viewports named in the launch prompt. Looping
+    // every cluster boot at every viewport would push this well past a
+    // sane runtime, so the full open/collapse/reopen assertion set runs at
+    // all four viewports on a bare boot, and the per-cluster leg below runs
+    // at one representative viewport (1280x720).
+    const viewports = [
+      { width: 1280, height: 720 },
+      { width: 1440, height: 900 },
+      { width: 1920, height: 1080 },
+      { width: 900, height: 675 }
+    ];
+
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport);
+      await gotoApp(page);
+
+      await expect(app).not.toHaveClass(/\bsidebar-collapsed\b/);
+
+      // The sidebar's rendered width must match the app-shell's own
+      // computed grid column (var(--sidebar-w) resolved for this
+      // viewport, 340px above 1024 and a clamp() as low as 334px in the
+      // 721-1024 band), not a literal constant.
+      const [sidebarBox, gridColumns] = await Promise.all([
+        sidebar.boundingBox(),
+        page.evaluate(() => {
+          const el = document.getElementById('app');
+          return el ? getComputedStyle(el).gridTemplateColumns : '';
+        })
+      ]);
+      expect(sidebarBox, `${viewport.width}x${viewport.height}: #sidebar has no box`).not.toBeNull();
+      const expectedWidth = parseFloat(gridColumns.split(' ')[0] ?? '');
+      expect(
+        Number.isNaN(expectedWidth),
+        `${viewport.width}x${viewport.height}: could not read the grid column width`
+      ).toBe(false);
+      expect(
+        Math.abs(sidebarBox!.width - expectedWidth),
+        `${viewport.width}x${viewport.height}: sidebar width ${sidebarBox!.width} vs grid column ${expectedWidth}`
+      ).toBeLessThanOrEqual(1);
+
+      await expect(expandBtn, `${viewport.width}x${viewport.height}: expand hidden on open`).toBeHidden();
+      await expect(collapseBtn, `${viewport.width}x${viewport.height}: collapse visible on open`).toBeVisible();
+
+      // Collapse: the column drops to zero width and focus moves to expand.
+      await collapseBtn.click();
+      await expect(app, `${viewport.width}x${viewport.height}: collapsed class after collapse`).toHaveClass(
+        /\bsidebar-collapsed\b/
+      );
+      const collapsedBox = await sidebar.boundingBox();
+      expect(
+        collapsedBox === null || collapsedBox.width <= 1,
+        `${viewport.width}x${viewport.height}: sidebar did not collapse to zero width`
+      ).toBe(true);
+      await expect(expandBtn, `${viewport.width}x${viewport.height}: expand focused after collapse`).toBeFocused();
+
+      // Reopen: the column returns and focus moves back to collapse.
+      await expandBtn.click();
+      await expect(app, `${viewport.width}x${viewport.height}: collapsed class cleared after reopen`).not.toHaveClass(
+        /\bsidebar-collapsed\b/
+      );
+      await expect(collapseBtn, `${viewport.width}x${viewport.height}: collapse focused after reopen`).toBeFocused();
+    }
+
+    // Every hazard cluster's own bare boot opens the same way (N modes,
+    // never four literals): one representative viewport, looped over
+    // HAZARD_CLUSTER_KEYS rather than hard-coded cluster names.
+    await page.setViewportSize({ width: 1280, height: 720 });
+    for (const cluster of HAZARD_CLUSTER_KEYS) {
+      const token = HAZARD_CLUSTERS[cluster].urlToken;
+      const query = token === null ? '' : `?cluster=${token}`;
+      await gotoApp(page, query);
+      await expect(app, `cluster "${cluster}" bare boot is collapsed`).not.toHaveClass(/\bsidebar-collapsed\b/);
+      await expect(sidebar, `cluster "${cluster}" sidebar is hidden`).toBeVisible();
+    }
+
+    // The embed leg stays closed regardless of the flipped default.
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await gotoApp(page, '?embed=true');
+    await expect(app).toHaveClass(/\bembed\b/);
+    const embedBox = await sidebar.boundingBox();
+    expect(embedBox === null || embedBox.width <= 1, 'embed sidebar did not stay collapsed').toBe(true);
+    await expect(expandBtn).toBeVisible();
+  });
+
+  test('an embed boot keeps the zero-width sidebar out of the tab order', async ({ page }) => {
+    // Guard for the M1 flip: an embed boot must never let Tab land inside
+    // the zero-width `#sidebar` column. Before the flip this was green for
+    // free, because index.html always shipped `sidebar-collapsed`
+    // alongside `embed`, and the desktop rule at app.css :404-408 hides
+    // `.sidebar-collapsed .sidebar` (visibility:hidden, no pointer-events).
+    // On the flipped tree (index.html no longer ships that class at boot)
+    // an embed-only boot is left with only the width:0 rule at app.css
+    // :398-402, which does not remove the sidebar from the tab order, so
+    // this case is expected to fail here until a CSS rule is added beside
+    // :404-408 to also hide `.app-shell.embed .sidebar` (owned by the
+    // director, not this file, per the launch prompt).
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await gotoApp(page, '?embed=true');
+    await page.evaluate(() => document.body.focus());
+
+    const maxPresses = 60;
+    for (let i = 0; i < maxPresses; i++) {
+      await page.keyboard.press('Tab');
+      const insideSidebar = await page.evaluate(() => {
+        const active = document.activeElement;
+        const el = document.getElementById('sidebar');
+        return !!(active && el && el.contains(active));
+      });
+      expect(insideSidebar, `tab press ${i + 1} landed inside #sidebar`).toBe(false);
+    }
   });
 });
 

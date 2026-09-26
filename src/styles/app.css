@@ -402,7 +402,8 @@ a:hover {
 }
 
 @media (min-width: 721px) {
-  .app-shell.sidebar-collapsed .sidebar {
+  .app-shell.sidebar-collapsed .sidebar,
+  .app-shell.embed .sidebar {
     visibility: hidden;
     pointer-events: none;
   }
