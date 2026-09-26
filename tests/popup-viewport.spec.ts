@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
-import { gotoApp, waitForLayerSettled } from './helpers';
+import { awaitQuiescence, gotoApp, waitForLayerSettled } from './helpers';
 import {
   MIN_COMPACT_BODY_REGION_HEIGHT_PX,
   MIN_USABLE_REGION_HEIGHT_PX,
@@ -1396,10 +1396,13 @@ test.describe('DDM-P11-T02 clause 3, DR-042 option a: the condition-surface door
       await expect(popup).toBeVisible({ timeout: 1500 });
     }).toPass({ timeout: 20_000 });
 
-    // Give identity resolution the same budget as the positive case above,
-    // then assert the door never arrived: British Columbia is outside
-    // every US state and no Tribal boundary layer is active.
-    await page.waitForTimeout(3_000);
+    // No `states` layer is active, so `resolveLocationIdentity`'s state
+    // fallback always issues the shared `us-states-geojson` fetch
+    // (US_STATES_SHARED_KEY, src/util/fetch.ts) for this click; wait for the
+    // seam to prove that fetch (and everything else pending) has settled,
+    // then assert the door never arrived: British Columbia is outside every
+    // US state and no Tribal boundary layer is active.
+    await awaitQuiescence(page);
     await expect(popup.locator('[data-ddm-impact-trigger]')).toHaveCount(0);
   });
 });
