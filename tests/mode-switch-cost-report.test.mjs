@@ -21,6 +21,7 @@ import {
   switchId,
   isCountedRequest,
   classifyRequest,
+  PROXY_ORIGIN,
   strippedUrl,
   tallyUrls,
   emptyRecord,
@@ -175,6 +176,53 @@ test('classifyRequest returns tile for a z/x/y path with no extension', () => {
     classifyRequest('https://tiles.example.com/layer/7/22/45', ORIGIN),
     'tile'
   );
+});
+
+// --- classifyRequest: the Worker proxy nests an upstream URL (DDM-P14-T08, C4 part) ---
+
+test('classifyRequest returns tile for a WHP exportImage tile fetched through the Worker proxy', () => {
+  const upstream =
+    'https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer/exportImage?bbox=-13692297.4,5311971.8,-13682513.5,5321755.8&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=true&f=image';
+  const url = `${PROXY_ORIGIN}/proxy?url=${encodeURIComponent(upstream)}`;
+  assert.equal(classifyRequest(url, ORIGIN), 'tile');
+});
+
+test('classifyRequest keeps today\'s classification for a url= parameter on a non-proxy host', () => {
+  const upstream =
+    'https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer/exportImage?bbox=1,2,3,4&f=image';
+  const url = `https://example.com/proxy?url=${encodeURIComponent(upstream)}`;
+  assert.equal(classifyRequest(url, ORIGIN), 'data');
+});
+
+test('classifyRequest returns data for a non-tile read fetched through the Worker proxy', () => {
+  const upstream = 'https://api.weather.gov/points/45.52,-122.68';
+  const url = `${PROXY_ORIGIN}/proxy?url=${encodeURIComponent(upstream)}`;
+  assert.equal(classifyRequest(url, ORIGIN), 'data');
+});
+
+test('classifyRequest returns data for proxied ImageServer metadata, not tile', () => {
+  const upstream =
+    'https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer?f=json';
+  const url = `${PROXY_ORIGIN}/proxy?url=${encodeURIComponent(upstream)}`;
+  assert.equal(classifyRequest(url, ORIGIN), 'data');
+});
+
+test('classifyRequest returns data for a proxied DescribeDomains request, not tile', () => {
+  const upstream =
+    'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/wmts.cgi?SERVICE=WMTS&REQUEST=DescribeDomains&VERSION=1.0.0';
+  const url = `${PROXY_ORIGIN}/proxy?url=${encodeURIComponent(upstream)}`;
+  assert.equal(classifyRequest(url, ORIGIN), 'data');
+});
+
+test('classifyRequest falls back to the outer proxy URL, and never throws, when the nested url= is malformed', () => {
+  const url = `${PROXY_ORIGIN}/proxy?url=${encodeURIComponent('not a valid url')}`;
+  assert.doesNotThrow(() => classifyRequest(url, ORIGIN));
+  assert.equal(classifyRequest(url, ORIGIN), 'data');
+});
+
+test('the script\'s Worker proxy origin literal matches src/config/urls.ts workerProxy', () => {
+  const urlsSource = readFileSync(join(HERE, '..', 'src', 'config', 'urls.ts'), 'utf8');
+  assert.ok(urlsSource.includes(PROXY_ORIGIN), `${PROXY_ORIGIN} is not in src/config/urls.ts`);
 });
 
 // --- renderReport --------------------------------------------------------

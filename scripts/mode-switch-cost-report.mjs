@@ -146,20 +146,21 @@ const XYZ_TRIPLE = /\/\d+\/\d+\/\d+(\.[a-z0-9]+)?$/;
  *
  * Matching is case-insensitive on the pathname and query string and
  * ignores the hash.
+ *
+ * A request whose outer URL is the Worker proxy (`${PROXY_ORIGIN}/proxy`,
+ * DDM-P14-T08 scope_note_2026_09_12) is reclassified by its nested `url=`
+ * parameter: rules 1-7 above run against the decoded upstream address
+ * instead of the proxy path, so a proxied WHP `exportImage` tile reads
+ * `'tile'` (src/layers/usfs-whp.ts:194-199) while proxied metadata (an
+ * ImageServer info request, a query, a DescribeDomains call) keeps reading
+ * `'data'`. A request whose `url=` parameter names a host other than the
+ * proxy is unaffected and keeps its outer-URL classification. A missing or
+ * unparseable nested address falls back to classifying the outer proxy URL,
+ * the same as before this rule existed.
  */
-export function classifyRequest(url, appOrigin) {
-  if (!isCountedRequest(url, appOrigin)) return 'ignored';
+export const PROXY_ORIGIN = 'https://ddm-proxy.atniclimate.workers.dev';
 
-  let parsed;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return 'ignored';
-  }
-
-  const pathname = parsed.pathname.toLowerCase();
-  const search = parsed.search.toLowerCase();
-
+function classifyPathAndSearch(pathname, search) {
   if (search.includes('request=describedomains') || search.includes('request=getcapabilities')) {
     return 'data';
   }
@@ -170,6 +171,32 @@ export function classifyRequest(url, appOrigin) {
   if (pathname.includes('/imageserver/') && search.includes('bbox=')) return 'tile';
   if (pathname.includes('/tile/') || pathname.includes('/tiles/')) return 'tile';
   return 'data';
+}
+
+export function classifyRequest(url, appOrigin) {
+  if (!isCountedRequest(url, appOrigin)) return 'ignored';
+
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return 'ignored';
+  }
+
+  if (parsed.origin === PROXY_ORIGIN && parsed.pathname === '/proxy') {
+    const nestedRaw = parsed.searchParams.get('url');
+    if (nestedRaw !== null) {
+      try {
+        const nested = new URL(nestedRaw);
+        return classifyPathAndSearch(nested.pathname.toLowerCase(), nested.search.toLowerCase());
+      } catch {
+        // Malformed nested address: fall through and classify the outer
+        // proxy URL instead, never throw.
+      }
+    }
+  }
+
+  return classifyPathAndSearch(parsed.pathname.toLowerCase(), parsed.search.toLowerCase());
 }
 
 const STRIPPED_MAX_LENGTH = 160;
