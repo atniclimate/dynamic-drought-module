@@ -60,6 +60,54 @@ const fetchUtil = await import('../src/util/fetch.ts');
 
 const seamFunctions = ['pendingLayerKeys', 'pendingTransportCount', 'snapshot', 'whenQuiescent'];
 
+const encoder = new TextEncoder();
+
+/**
+ * A fetch stub whose settlement is entirely under the test's control, and
+ * which honors the caller's `signal` the way a real `fetch` does: an abort
+ * while the promise is still pending rejects it with `AbortError`, which is
+ * what lets `invalidateSharedJsonRequest`'s internal `controller.abort()`
+ * actually settle a held stub rather than hang forever.
+ */
+function deferredFetchStub(bodyText) {
+  let settled = false;
+  let resolveFn;
+  let rejectFn;
+  const promise = new Promise((resolve, reject) => {
+    resolveFn = resolve;
+    rejectFn = reject;
+  });
+  const fetchImpl = (_url, init) => {
+    if (init?.signal) {
+      if (init.signal.aborted) {
+        settled = true;
+        return Promise.reject(new DOMException('Aborted', 'AbortError'));
+      }
+      init.signal.addEventListener(
+        'abort',
+        () => {
+          if (settled) return;
+          settled = true;
+          rejectFn(new DOMException('Aborted', 'AbortError'));
+        },
+        { once: true }
+      );
+    }
+    return promise;
+  };
+  const release = () => {
+    if (settled) return;
+    settled = true;
+    resolveFn(
+      new Response(bodyText, {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+  };
+  return { fetchImpl, release };
+}
+
 test('markBooting installs the seam next to the ready promise', () => {
   bootIdle.markBooting();
   const seam = globalThis.window.__ddm;
@@ -88,7 +136,8 @@ test('a checked layer without a terminal status is a pending key, and a terminal
   assert.deepEqual(seam.snapshot(), {
     phase: 'booting',
     pendingLayerKeys: [],
-    pendingTransportCount: 0
+    pendingTransportCount: 0,
+    pendingTransportKeys: {}
   });
 });
 
@@ -186,6 +235,293 @@ test('a rejected shared request settles the count too', async () => {
     await assert.rejects(transport, /network down/);
     const snapshot = await seam.whenQuiescent(2_000);
     assert.equal(snapshot.pendingTransportCount, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('a budget miss names each pending shared transport key with its count', async () => {
+  const seam = globalThis.window.__ddm;
+  const originalFetch = globalThis.fetch;
+  const held = deferredFetchStub('{"keyed":true}');
+  globalThis.fetch = held.fetchImpl;
+  try {
+    const consumer = new AbortController();
+    const transport = fetchUtil.fetchSharedJsonWithBudget(
+      'seam-keyed',
+      'https://example.invalid/keyed.json',
+      null,
+      consumer.signal,
+      60_000
+    );
+    assert.deepEqual(seam.snapshot().pendingTransportKeys, { 'seam-keyed': 1 });
+    assert.deepEqual(fetchUtil.pendingSharedTransportKeys(), { 'seam-keyed': 1 });
+    await assert.rejects(seam.whenQuiescent(30), (error) => {
+      assert.match(error.message, /seam-keyed\D{0,4}1/);
+      return true;
+    });
+    held.release();
+    await transport;
+    assert.deepEqual(seam.snapshot().pendingTransportKeys, {});
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('a timed-out shared request settles the count exactly once', async () => {
+  const seam = globalThis.window.__ddm;
+  const originalFetch = globalThis.fetch;
+  const held = deferredFetchStub('{"held":true}');
+  globalThis.fetch = (url, init) => {
+    if (String(url).includes('timeout-target')) {
+      const body = new ReadableStream({
+        start(controller) {
+          // Headers arrive; the body stalls forever (models a server that
+          // answered 200 and went silent), so only the budget timer ends it.
+          controller.enqueue(encoder.encode('{"partial":'));
+        }
+      });
+      return Promise.resolve(
+        new Response(body, {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        })
+      );
+    }
+    return held.fetchImpl(url, init);
+  };
+  try {
+    const consumerA = new AbortController();
+    const timedOut = fetchUtil.fetchSharedJsonWithBudget(
+      'seam-timeout',
+      'https://example.invalid/timeout-target.json',
+      null,
+      consumerA.signal,
+      20
+    );
+    const consumerB = new AbortController();
+    const heldTransport = fetchUtil.fetchSharedJsonWithBudget(
+      'seam-timeout-held',
+      'https://example.invalid/held-target.json',
+      null,
+      consumerB.signal,
+      60_000
+    );
+    assert.deepEqual(fetchUtil.pendingSharedTransportKeys(), {
+      'seam-timeout': 1,
+      'seam-timeout-held': 1
+    });
+
+    await assert.rejects(timedOut, { name: 'AbortError' });
+    assert.equal(seam.pendingTransportCount(), 1, 'the timed-out entry settled exactly once');
+    assert.deepEqual(fetchUtil.pendingSharedTransportKeys(), { 'seam-timeout-held': 1 });
+
+    held.release();
+    assert.deepEqual(await heldTransport, { held: true });
+    assert.equal(seam.pendingTransportCount(), 0);
+    assert.deepEqual(fetchUtil.pendingSharedTransportKeys(), {});
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('an invalidated shared request settles once, and its same-key re-request is a separate pending entry with no stale key left behind', async () => {
+  const seam = globalThis.window.__ddm;
+  const originalFetch = globalThis.fetch;
+  const gen1 = deferredFetchStub('{"gen":1}');
+  const gen2 = deferredFetchStub('{"gen":2}');
+  let call = 0;
+  globalThis.fetch = (url, init) => {
+    call += 1;
+    return (call === 1 ? gen1 : gen2).fetchImpl(url, init);
+  };
+  try {
+    const consumer1 = new AbortController();
+    const first = fetchUtil.fetchSharedJsonWithBudget(
+      'seam-invalidate',
+      'https://example.invalid/invalidate.json',
+      null,
+      consumer1.signal,
+      60_000
+    );
+    assert.deepEqual(seam.snapshot().pendingTransportKeys, { 'seam-invalidate': 1 });
+
+    fetchUtil.invalidateSharedJsonRequest('seam-invalidate');
+    const consumer2 = new AbortController();
+    const second = fetchUtil.fetchSharedJsonWithBudget(
+      'seam-invalidate',
+      'https://example.invalid/invalidate.json',
+      null,
+      consumer2.signal,
+      60_000
+    );
+    // The invalidated entry has not settled yet (its rejection is async): two
+    // in-flight entries for one key is exactly the case a string-keyed map
+    // would under-count.
+    assert.equal(seam.pendingTransportCount(), 2);
+    assert.deepEqual(seam.snapshot().pendingTransportKeys, { 'seam-invalidate': 2 });
+
+    await assert.rejects(first, { name: 'AbortError' });
+    assert.equal(seam.pendingTransportCount(), 1, 'the invalidated entry settled exactly once');
+    assert.deepEqual(seam.snapshot().pendingTransportKeys, { 'seam-invalidate': 1 });
+
+    gen2.release();
+    assert.deepEqual(await second, { gen: 2 });
+    assert.equal(seam.pendingTransportCount(), 0);
+    assert.deepEqual(seam.snapshot().pendingTransportKeys, {}, 'no stale key remains');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('the shared transport key stays pending until the response body completes, not just the headers', async () => {
+  const seam = globalThis.window.__ddm;
+  const originalFetch = globalThis.fetch;
+  let bodyController;
+  globalThis.fetch = () => {
+    const body = new ReadableStream({
+      start(controller) {
+        bodyController = controller;
+        controller.enqueue(encoder.encode('{"body":'));
+      }
+    });
+    return Promise.resolve(
+      new Response(body, {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+  };
+  try {
+    const consumer = new AbortController();
+    const transport = fetchUtil.fetchSharedJsonWithBudget(
+      'seam-body-held',
+      'https://example.invalid/body-held.json',
+      null,
+      consumer.signal,
+      60_000
+    );
+    // Let the mocked fetch's Response resolve and the first chunk get read;
+    // a settle keyed on header arrival rather than the body would already
+    // have cleared the key by this point.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(
+      seam.pendingTransportCount(),
+      1,
+      'still pending after headers arrive, before the body completes'
+    );
+    assert.deepEqual(seam.snapshot().pendingTransportKeys, { 'seam-body-held': 1 });
+
+    bodyController.enqueue(encoder.encode('true}'));
+    bodyController.close();
+    assert.deepEqual(await transport, { body: true });
+    assert.equal(seam.pendingTransportCount(), 0);
+    assert.deepEqual(seam.snapshot().pendingTransportKeys, {});
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('a sole consumer\'s abort settles its shared key exactly once', async () => {
+  const originalFetch = globalThis.fetch;
+  const held = deferredFetchStub('{"solo":true}');
+  const other = deferredFetchStub('{"other":true}');
+  let call = 0;
+  globalThis.fetch = (url, init) => {
+    call += 1;
+    return (call === 1 ? held : other).fetchImpl(url, init);
+  };
+  try {
+    const before = fetchUtil.pendingSharedTransportCount();
+    const consumer = new AbortController();
+    const transport = fetchUtil.fetchSharedJsonWithBudget(
+      'seam-abort-sole',
+      'https://example.invalid/abort-sole.json',
+      null,
+      consumer.signal,
+      60_000
+    );
+    assert.equal(fetchUtil.pendingSharedTransportCount(), before + 1);
+    assert.deepEqual(fetchUtil.pendingSharedTransportKeys()['seam-abort-sole'], 1);
+
+    // A second, unrelated held key is pending AT THE SAME TIME as the one
+    // about to be aborted, so a settle that decrements a shared count rather
+    // than removing its own entry would wrongly clear this one too.
+    const otherConsumer = new AbortController();
+    const otherTransport = fetchUtil.fetchSharedJsonWithBudget(
+      'seam-abort-other',
+      'https://example.invalid/abort-other.json',
+      null,
+      otherConsumer.signal,
+      60_000
+    );
+    assert.equal(fetchUtil.pendingSharedTransportCount(), before + 2);
+
+    consumer.abort();
+    await assert.rejects(transport, { name: 'AbortError' });
+    // Let any further settle-chain hops (a natural settle racing the abort
+    // path) finish before reading the count, so a double settle is caught
+    // regardless of which microtask tick it lands on.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(
+      fetchUtil.pendingSharedTransportCount(),
+      before + 1,
+      'the abort settled only its own key, never a neighbor, exactly once'
+    );
+    assert.equal(fetchUtil.pendingSharedTransportKeys()['seam-abort-sole'], undefined);
+    assert.equal(fetchUtil.pendingSharedTransportKeys()['seam-abort-other'], 1, 'the unrelated key is still pending');
+
+    other.release();
+    assert.deepEqual(await otherTransport, { other: true });
+    assert.equal(fetchUtil.pendingSharedTransportCount(), before);
+
+    // A later settle of the already-aborted stub (a late response arriving
+    // after supersession) must not decrement the count a second time.
+    held.release();
+    assert.equal(
+      fetchUtil.pendingSharedTransportCount(),
+      before,
+      'a late settle after abort does not double-decrement'
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('one consumer aborting while another still waits keeps the key pending', async () => {
+  const originalFetch = globalThis.fetch;
+  const held = deferredFetchStub('{"shared":true}');
+  globalThis.fetch = held.fetchImpl;
+  try {
+    const consumerA = new AbortController();
+    const consumerB = new AbortController();
+    const transportA = fetchUtil.fetchSharedJsonWithBudget(
+      'seam-abort-shared',
+      'https://example.invalid/abort-shared.json',
+      null,
+      consumerA.signal,
+      60_000
+    );
+    const transportB = fetchUtil.fetchSharedJsonWithBudget(
+      'seam-abort-shared',
+      'https://example.invalid/abort-shared.json',
+      null,
+      consumerB.signal,
+      60_000
+    );
+    assert.equal(fetchUtil.pendingSharedTransportKeys()['seam-abort-shared'], 1);
+
+    consumerA.abort();
+    await assert.rejects(transportA, { name: 'AbortError' });
+    assert.equal(
+      fetchUtil.pendingSharedTransportKeys()['seam-abort-shared'],
+      1,
+      'the second consumer still waiting keeps the shared entry pending'
+    );
+
+    held.release();
+    assert.deepEqual(await transportB, { shared: true });
+    assert.equal(fetchUtil.pendingSharedTransportKeys()['seam-abort-shared'], undefined);
   } finally {
     globalThis.fetch = originalFetch;
   }

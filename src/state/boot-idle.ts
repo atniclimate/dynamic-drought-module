@@ -37,21 +37,28 @@ import { registry } from './registry';
 import { checkedSnapshot, onCheckedChange } from '../ui/island/bridge';
 import {
   onSharedTransportSettled,
-  pendingSharedTransportCount
+  pendingSharedTransportCount,
+  pendingSharedTransportKeys
 } from '../util/fetch';
 
 export type BootPhase = 'booting' | 'idle';
 
 /**
- * One read of what holds a wait open (DDM-P1-T09 step 1, 2026-09-10).
- * `pendingLayerKeys` is the same computation the boot-idle tracker
- * evaluates; `pendingTransportCount` is `pendingSharedTransportCount()`
- * from src/util/fetch.ts, which until this seam existed no test could read.
+ * One read of what holds a wait open (DDM-P1-T09 step 1, 2026-09-10;
+ * step 2 parts a and c, 2026-09-26). `pendingLayerKeys` is the same
+ * computation the boot-idle tracker evaluates; `pendingTransportCount` is
+ * `pendingSharedTransportCount()` and `pendingTransportKeys` is
+ * `pendingSharedTransportKeys()`, both from src/util/fetch.ts, which until
+ * this seam existed no test could read. `pendingTransportKeys` names each
+ * pending shared-transport key with its in-flight entry count (normally 1),
+ * so a boot-idle failure can say which key holds the boot rather than only
+ * how many are held.
  */
 export interface DdmSeamSnapshot {
   readonly phase: BootPhase | null;
   readonly pendingLayerKeys: readonly string[];
   readonly pendingTransportCount: number;
+  readonly pendingTransportKeys: Readonly<Record<string, number>>;
 }
 
 /**
@@ -107,14 +114,16 @@ function snapshotSeam(): DdmSeamSnapshot {
   return {
     phase,
     pendingLayerKeys: [...pendingBootLayers()],
-    pendingTransportCount: pendingSharedTransportCount()
+    pendingTransportCount: pendingSharedTransportCount(),
+    pendingTransportKeys: pendingSharedTransportKeys()
   };
 }
 
 function describeSnapshot(snapshot: DdmSeamSnapshot): string {
   return (
     `pending layer keys = ${JSON.stringify(snapshot.pendingLayerKeys)}; ` +
-    `pending shared transports = ${snapshot.pendingTransportCount}`
+    `pending shared transports = ${snapshot.pendingTransportCount} ` +
+    `(by key: ${JSON.stringify(snapshot.pendingTransportKeys)})`
   );
 }
 

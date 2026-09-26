@@ -870,6 +870,7 @@ export interface DdmSeamRead {
   readonly phase: 'booting' | 'idle' | null;
   readonly pendingLayerKeys: readonly string[];
   readonly pendingTransportCount: number;
+  readonly pendingTransportKeys: Readonly<Record<string, number>>;
 }
 
 type DdmSeamWindow = Window & {
