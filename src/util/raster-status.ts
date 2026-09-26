@@ -42,6 +42,15 @@ const WINDOW_MS = 10_000;
  */
 const ERROR_THRESHOLD = 3;
 
+/**
+ * The completeness deadline every tile-proven raster row shares
+ * (DDM-P14-T04: sst-anomaly, gridded-index, hillshade). It sits strictly
+ * below the 10 s boot-idle budget (src/state/boot-idle.ts), so a row that
+ * never proves a tile still reaches a terminal state inside a settled boot.
+ * tests/raster-readiness-contract.test.mjs reads it from here.
+ */
+export const RASTER_PROOF_DEADLINE_MS = 8_000;
+
 export interface RasterTileWatch {
   /** Detach both listeners and forget all evidence. Call from deactivate. */
   detach(): void;
@@ -64,13 +73,23 @@ export interface RasterTileWatchOptions {
   /**
    * Outcome for an idle cycle with no selected-frame tile evidence. The
    * default remains `ready` for existing bounded-coverage consumers. Shared
-   * ground sets `error` because it must prove at least one visible tile.
+   * ground, gridded-index and the SST anomaly set `error` because they must
+   * prove at least one visible tile (DR-050 a names those two). `no-data` is
+   * hillshade's and does not come from DR-050: a view outside a bounded
+   * archive's own declared extent requests no tile at all, a verified
+   * absence. Only for `no-data` does the deadline read an empty cycle the
+   * same way, and only once the source has loaded (a map that never idles
+   * still ends the cycle; a stalled or failed archive read has not loaded,
+   * and stays `error`).
    */
-  readonly emptyIdleOutcome?: 'ready' | 'error';
+  readonly emptyIdleOutcome?: 'ready' | 'error' | 'no-data';
 }
 
-type RasterTileOutcome = 'ready' | 'degraded' | 'error';
+export type RasterTileOutcome = 'ready' | 'degraded' | 'error';
 type BasicRasterTileOutcome = Exclude<RasterTileOutcome, 'degraded'>;
+type CompletenessOptions = RasterTileWatchOptions & {
+  readonly requestCompletenessDeadlineMs: number;
+};
 
 type RasterTileEvent = {
   readonly sourceId?: string;
@@ -108,10 +127,14 @@ function tileEventKey(event: RasterTileEvent): unknown | null {
 export function watchRasterTiles(
   map: maplibregl.Map,
   sourceId: string,
+  report: (state: RasterTileOutcome | 'no-data') => void,
+  options: CompletenessOptions & { readonly emptyIdleOutcome: 'no-data' }
+): RasterTileWatch;
+export function watchRasterTiles(
+  map: maplibregl.Map,
+  sourceId: string,
   report: (state: RasterTileOutcome) => void,
-  options: RasterTileWatchOptions & {
-    readonly requestCompletenessDeadlineMs: number;
-  }
+  options: CompletenessOptions & { readonly emptyIdleOutcome?: 'ready' | 'error' }
 ): RasterTileWatch;
 export function watchRasterTiles(
   map: maplibregl.Map,
@@ -123,13 +146,16 @@ export function watchRasterTiles(
   map: maplibregl.Map,
   sourceId: string,
   report:
+    | ((state: RasterTileOutcome | 'no-data') => void)
     | ((state: RasterTileOutcome) => void)
     | ((state: BasicRasterTileOutcome) => void),
   options: RasterTileWatchOptions = {}
 ): RasterTileWatch {
-  const reportOutcome = report as (state: RasterTileOutcome) => void;
+  const reportOutcome = report as (state: RasterTileOutcome | 'no-data') => void;
   let errorTimes: number[] = [];
   let degraded = false;
+  // found-042: a tile of this source has rendered since attach or reset.
+  let rendered = false;
   let initialSuccessReported = options.reportInitialSuccess !== true;
   const deadlineMs =
     typeof options.requestCompletenessDeadlineMs === 'number' &&
@@ -141,7 +167,7 @@ export function watchRasterTiles(
   let successfulTiles = new Set<unknown>();
   let requestCycleActive = deadlineMs !== null;
   let deadlineTimer: ReturnType<typeof setTimeout> | null = null;
-  let lastCompletenessOutcome: RasterTileOutcome | null = null;
+  let lastCompletenessOutcome: RasterTileOutcome | 'no-data' | null = null;
 
   const clearDeadline = (): void => {
     if (deadlineTimer !== null) clearTimeout(deadlineTimer);
@@ -149,9 +175,10 @@ export function watchRasterTiles(
   };
 
   const reportCompleteness = (
-    emptyCycleOutcome: RasterTileOutcome = 'error'
+    emptyCycleOutcome: RasterTileOutcome | 'no-data' = 'error',
+    floorAtPartial = false
   ): void => {
-    const outcome: RasterTileOutcome =
+    let outcome: RasterTileOutcome | 'no-data' =
       requestedTiles.size === 0
         ? emptyCycleOutcome
         : successfulTiles.size === 0
@@ -159,6 +186,10 @@ export function watchRasterTiles(
           : successfulTiles.size < requestedTiles.size
             ? 'degraded'
             : 'ready';
+    // found-042: after a rendered frame, a later cycle's deadline alone never
+    // reads below live (partial); only a finished cycle's evidence can. The
+    // deadline passes `rendered` here; a finished cycle passes nothing.
+    if (floorAtPartial && outcome === 'error') outcome = 'degraded';
     if (outcome === lastCompletenessOutcome) return;
     lastCompletenessOutcome = outcome;
     if (outcome === 'error') {
@@ -179,25 +210,45 @@ export function watchRasterTiles(
     deadlineTimer = setTimeout(() => {
       deadlineTimer = null;
       if (!requestCycleActive) return;
-      reportCompleteness();
+      reportCompleteness(
+        options.emptyIdleOutcome === 'no-data' && map.isSourceLoaded(sourceId)
+          ? 'no-data'
+          : 'error',
+        rendered
+      );
     }, deadlineMs);
   };
 
+  // A cycle's verdict covers the view, not only the tiles it requested
+  // (DDM-P14-T04). MapLibre fires nothing for a 404 tile while it stays on
+  // the map, and may request its fallback parent a frame after the source
+  // settled and the cycle closed. So a closed cycle with holes carries into
+  // the next one: whole while the camera is still (every tile stays), holes
+  // only after a move (`onMove`: a loaded tile leaves silently, cached; a
+  // hole leaves with `sourcedataabort`). A cycle without holes starts fresh.
   const beginRequestCycle = (): void => {
     if (requestCycleActive) return;
     requestCycleActive = true;
-    requestedTiles = new Set();
-    successfulTiles = new Set();
+    if (successfulTiles.size === requestedTiles.size) {
+      requestedTiles = new Set();
+      successfulTiles = new Set();
+    }
     lastCompletenessOutcome = null;
     scheduleDeadline();
   };
 
   const finishRequestCycle = (
-    emptyCycleOutcome: RasterTileOutcome = 'error'
+    emptyCycleOutcome: RasterTileOutcome | 'no-data' = 'error'
   ): void => {
     clearDeadline();
     reportCompleteness(emptyCycleOutcome);
     requestCycleActive = false;
+  };
+
+  const onMove = (): void => {
+    if (requestCycleActive) return;
+    for (const key of successfulTiles) requestedTiles.delete(key);
+    successfulTiles.clear();
   };
 
   const onError = (e: maplibregl.ErrorEvent): void => {
@@ -237,6 +288,7 @@ export function watchRasterTiles(
           beginRequestCycle();
           requestedTiles.add(key);
           successfulTiles.add(key);
+          rendered = true;
         }
       } else if (degraded || !initialSuccessReported) {
         degraded = false;
@@ -274,6 +326,7 @@ export function watchRasterTiles(
   map.on('sourcedata', onSourceData);
   map.on('sourcedataabort', onSourceAbort);
   map.on('idle', onIdle);
+  map.on('move', onMove);
   if (requestCycleActive) scheduleDeadline();
 
   return {
@@ -283,6 +336,7 @@ export function watchRasterTiles(
       map.off('sourcedata', onSourceData);
       map.off('sourcedataabort', onSourceAbort);
       map.off('idle', onIdle);
+      map.off('move', onMove);
       clearDeadline();
       errorTimes = [];
       degraded = false;
@@ -294,6 +348,7 @@ export function watchRasterTiles(
       clearDeadline();
       errorTimes = [];
       degraded = false;
+      rendered = false;
       initialSuccessReported = options.reportInitialSuccess !== true;
       requestedTiles = new Set();
       successfulTiles = new Set();

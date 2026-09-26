@@ -55,7 +55,12 @@ import { timeline } from '../state/timeline';
 import { fetchBufferedWithBudget, sleepUnlessAborted } from '../util/fetch';
 import { prefersReducedMotion } from '../util/motion';
 import { prefetchAllowed, crossfadeFrames, FRAME_FADE_MS } from '../util/frame-stepper';
-import { watchRasterTiles, type RasterTileWatch } from '../util/raster-status';
+import {
+  watchRasterTiles,
+  type RasterTileOutcome,
+  type RasterTileWatch
+} from '../util/raster-status';
+import { TILE_PROOF_WATCH, waitForRasterTileProof } from '../util/raster-proof';
 import { setTimeBar, clearTimeBar } from '../ui/time-bar';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
 import { showToast } from '../ui/overlay';
@@ -89,12 +94,15 @@ const RASTER_OPACITY = 0.78;
 const LOOP_DAYS = 30;
 /** Fixed loop cadence (the steady clock); the crossfade rides inside it. */
 const STEP_MS = 900;
-/** How long a frame may buffer before we advance anyway (pill shows it). */
+/** How long a frame may buffer before the loop advances anyway. The pill
+ * never follows it: the frame's own tile proof decides live (DDM-P14-T04). */
 const BUFFER_TIMEOUT_MS = 6_000;
 const DOMAINS_TIMEOUT_MS = 15_000;
 
 let masterController: AbortController | null = null;
 let tileWatch: RasterTileWatch | null = null;
+/** The default frame watcher's latest verdict; null until a cycle ends. */
+let tileVerdict: RasterTileOutcome | null = null;
 let pacificHintShown = false;
 
 /** Available dates (ascending YYYY-MM-DD), enumerated from DescribeDomains. */
@@ -110,12 +118,18 @@ let mountedFrames: string[] = [];
 let displayedFrame: string | null = null;
 /** The frame mounted purely as lookahead (opacity 0), or null. */
 let prefetchedFrame: string | null = null;
+/** Each dated frame is its own source, so each proves its own tiles, from the
+ * moment it is mounted (DDM-P14-T04): a lookahead frame that loaded while
+ * hidden is already proven when it is stepped to. Keyed by date. */
+const frameWatches = new Map<string, RasterTileWatch>();
+/** Each mounted frame's latest tile verdict; absent until its first cycle ends. */
+const frameVerdicts = new Map<string, RasterTileOutcome>();
 let playing = false;
 let buffering = false;
 /** Supersede counter (invariant 5). */
 let stepEpoch = 0;
 
-type SstStatus = 'loading' | 'ready' | 'error';
+type SstStatus = 'loading' | RasterTileOutcome;
 
 function reportStatus(state: SstStatus): void {
   registry.setStatus(LAYER_KEY, state);
@@ -219,6 +233,23 @@ function frameTileTemplate(date: string): string {
 function mountFrame(map: maplibregl.Map, date: string, opacity: number): void {
   const id = frameSourceId(date);
   if (!map.getSource(id)) {
+    // The frame's own tile proof, attached before the add so no tile of it
+    // can load unseen. It speaks for the surface only while it is the
+    // displayed frame; a lookahead frame records its verdict silently.
+    frameWatches.get(date)?.detach();
+    frameVerdicts.delete(date);
+    frameWatches.set(
+      date,
+      watchRasterTiles(
+        map,
+        id,
+        (state) => {
+          frameVerdicts.set(date, state);
+          if (displayedFrame === date) reportStatus(state);
+        },
+        TILE_PROOF_WATCH
+      )
+    );
     map.addSource(id, {
       type: 'raster',
       tiles: [frameTileTemplate(date)],
@@ -252,36 +283,12 @@ function mountFrame(map: maplibregl.Map, date: string, opacity: number): void {
 
 function unmountFrame(map: maplibregl.Map, date: string): void {
   const id = frameSourceId(date);
+  frameWatches.get(date)?.detach();
+  frameWatches.delete(date);
+  frameVerdicts.delete(date);
   if (map.getLayer(id)) map.removeLayer(id);
   if (map.getSource(id)) map.removeSource(id);
   mountedFrames = mountedFrames.filter((d) => d !== date);
-}
-
-/** Wait until a source's visible tiles are loaded, bounded by a timeout. */
-async function waitForSourceTiles(
-  map: maplibregl.Map,
-  sourceId: string,
-  signal: AbortSignal
-): Promise<void> {
-  if (map.isSourceLoaded(sourceId)) return;
-  await new Promise<void>((resolve) => {
-    let settled = false;
-    const finish = (): void => {
-      if (settled) return;
-      settled = true;
-      map.off('sourcedata', onData);
-      window.clearTimeout(timer);
-      resolve();
-    };
-    const onData = (): void => {
-      if (signal.aborted || map.isSourceLoaded(sourceId)) finish();
-    };
-    // The timeout keeps a dead tile edge from hanging the loop; the tile
-    // watcher's status pill carries the honest loading/error state.
-    const timer = window.setTimeout(finish, BUFFER_TIMEOUT_MS);
-    map.on('sourcedata', onData);
-    onData();
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -307,21 +314,32 @@ async function showFrame(map: maplibregl.Map, index: number): Promise<void> {
   if (previous === date && dateIndex === clamped) return;
 
   // Already mounted when this frame was the lookahead: mountFrame no-ops
-  // on the source and the buffer wait below resolves immediately.
+  // on the source, the frame's own watcher already holds its verdict, and
+  // the buffer wait below resolves at once.
   mountFrame(map, date, 0);
   displayedFrame = date;
   if (prefetchedFrame === date) prefetchedFrame = null;
 
+  // The pill is this frame's own tile verdict, never the frame it fades
+  // from: loading until the frame's watcher has one. The shared wait below
+  // only paces the loop; it writes no status, so an unproven wait (a dead
+  // tile edge, a timeout) never reads live.
+  const verdict = frameVerdicts.get(date);
   buffering = true;
-  reportStatus('loading');
+  reportStatus(verdict ?? 'loading');
   dateIndex = clamped;
   installTimeBar(map);
-  await waitForSourceTiles(map, frameSourceId(date), signal);
+  await waitForRasterTileProof(
+    map,
+    frameSourceId(date),
+    signal,
+    BUFFER_TIMEOUT_MS,
+    verdict === 'ready' || verdict === 'degraded'
+  );
   if (signal.aborted || myEpoch !== stepEpoch) return;
   buffering = false;
 
   timeline.setSstDate(clamped === dates.length - 1 ? null : date);
-  reportStatus('ready');
 
   const incoming = [
     { layerId: frameSourceId(date), prop: 'raster-opacity', target: RASTER_OPACITY }
@@ -483,6 +501,9 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   const signal = masterController.signal;
 
   try {
+    // A re-activation over the source its watcher has been proving (no
+    // deactivate between) keeps both; see the watcher below.
+    const kept = tileWatch !== null && map.getSource(SOURCE_ID) !== undefined;
     if (!map.getSource(SOURCE_ID)) {
       map.addSource(SOURCE_ID, {
         type: 'raster',
@@ -552,8 +573,27 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       });
     }
 
-    tileWatch?.detach();
-    tileWatch = watchRasterTiles(map, SOURCE_ID, reportStatus);
+    // Tile proof for the boot-time `default` (latest) frame: live only once
+    // the view's tiles load, live (partial) when some fail, unavailable when
+    // none load or none were requested (DR-050 a). It speaks for the surface
+    // only until a dated frame is displayed; that frame's own watcher
+    // (mountFrame) speaks from then on. A kept source keeps its watcher and
+    // evidence: a rendered source whose tiles are cached emits no new tile
+    // event, so a fresh watcher would read unavailable on its deadline alone.
+    // A source this call adds is proven afresh.
+    if (!kept) {
+      tileWatch?.detach();
+      tileVerdict = null;
+      tileWatch = watchRasterTiles(
+        map,
+        SOURCE_ID,
+        (state) => {
+          tileVerdict = state;
+          if (displayedFrame === null) reportStatus(state);
+        },
+        TILE_PROOF_WATCH
+      );
+    }
     activateEnsoFlow(map);
 
     showLegend(LAYER_KEY, {
@@ -574,9 +614,14 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       showToast('Ocean temperature anomaly is global; zoom out toward the equatorial Pacific to see the ENSO signal.');
     }
 
-    reportStatus('ready');
-    // The key can state the surface before the TIME axis resolves; the
-    // observed date follows once installTimeBar runs with real dates.
+    // No `ready` here (DDM-P14-T04, found-001): the status stays `loading`
+    // until a watcher proves the view's tiles. A re-activation over sources
+    // left on the map re-reports the verdict the displayed frame's watcher
+    // already holds (a dated frame stays mounted until deactivate). The key
+    // can state the surface before the TIME axis resolves; the observed date
+    // follows once installTimeBar runs with real dates.
+    const held = displayedFrame === null ? tileVerdict : frameVerdicts.get(displayedFrame);
+    if (held) reportStatus(held);
     emitSstSnapshot('ready', null);
   } catch (err) {
     console.warn('[sst-anomaly] activation failed.', err);
