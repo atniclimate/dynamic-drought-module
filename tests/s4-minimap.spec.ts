@@ -87,9 +87,20 @@ test.describe('S4b minimap', () => {
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-title'),
     ).toHaveText('Jump to region');
+    // The spec's own beforeEach route (page-level, registered before
+    // gotoApp's context-level NADM backstop) always wins over that backstop
+    // regardless of registration order, so this boot reads NADM_FIXTURE's
+    // own YEAR_MONTH ('202607', July) rather than the backstop's fixture
+    // month. Before the backstop moved to context level (DDM-P1-T09 step 2
+    // part d), gotoApp's own page-level default installed AFTER this route
+    // for a query naming neither layers= nor cluster= (exactly this bare
+    // `gotoApp(page)` boot) and, as the LAST-registered page route, won
+    // instead: this assertion used to read the shadowing default's month
+    // ('202606', June), never this file's own fixture. Legitimately changed
+    // to the fixture this file actually authors, now that it is honored.
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-scale'),
-    ).toHaveText('NADM · Jun 2026');
+    ).toHaveText('NADM · Jul 2026');
     await expect(
       page.locator('.shell-minimap-map [role="radiogroup"]'),
     ).toHaveAttribute(

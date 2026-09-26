@@ -493,18 +493,23 @@ polygons (NADM, USDM, CDM), NOAA weather alerts, HMS smoke, EPA ecoregions,
 watersheds, station telemetry. OpenStreetMap raster tile bodies from the live
 basemap.
 
-One of those is not hypothetical, and it is worth naming with its evidence.
-`gotoApp` stubs `NADM-current.geojson` only when the query carries neither
-`layers=` nor `cluster=`, so a boot that names either fetches it live, and the
-minimap fetches it live on the same boots. Inspecting the first real CI trace
-artifacts (Validate run 33250251205) found a **2.5 MB live NADM body from
-`ncei.noaa.gov`** stored in `playwright-traces-chromium-3-of-4`. That is
-public-domain NOAA drought data, not sovereign geometry, so it breaks no hard
-rule and it sits inside the accepted list above. It does mean the sentence
-"no live external geometry reaches a retained trace" is **not** true today,
-only "no live SOVEREIGN geometry" is. Making the NADM stub context-level the
-way the boundary and minimap stubs are would close it, and is deliberately
-left as follow-up rather than folded into the retention change. Request and response headers, cookies, request URLs with their
+One of those is not hypothetical, and it is worth naming with its evidence,
+as history. `gotoApp` used to stub `NADM-current.geojson` only when the
+query carried neither `layers=` nor `cluster=`, so a boot that named either
+fetched it live, and the minimap fetched it live on the same boots.
+Inspecting the first real CI trace artifacts (Validate run 33250251205)
+found a **2.5 MB live NADM body from `ncei.noaa.gov`** stored in
+`playwright-traces-chromium-3-of-4`. That is public-domain NOAA drought
+data, not sovereign geometry, so it broke no hard rule and it sat inside the
+accepted list above. It did mean the sentence "no live external geometry
+reaches a retained trace" was not true then, only "no live SOVEREIGN
+geometry" was. The NADM stub is now a CONTEXT-level backstop (DDM-P1-T09
+step 2 part d), claimed unconditionally on every boot the way the boundary
+and minimap stubs already are; a spec's own page-level `page.route` for the
+same pattern still overrides it (Playwright checks page routes before
+context routes, whatever order the two were registered in), but no boot is
+left to reach the live agency by default the way one used to, so this hole
+is closed. Request and response headers, cookies, request URLs with their
 coordinates and place names, DOM snapshots including any Tribal Nation name
 from the committed `public/data/tribal-roster.json`, and console output.
 Nothing there is sovereign geometry, and nothing there is undisclosed by a

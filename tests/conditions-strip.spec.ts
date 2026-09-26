@@ -359,8 +359,9 @@ test.describe('UX-3 conditions strip', () => {
         body: JSON.stringify(alertFixture)
       })
     );
-    // Deterministic NADM for the show-again leg (gotoApp skips its default
-    // stub when the query names layers).
+    // A different deterministic NADM body for the show-again leg. Page-level
+    // routes are checked before gotoApp's own context-level NADM backstop, so
+    // this one wins regardless of when either was registered.
     await page.route('**/NADM-current.geojson', (route) =>
       route.fulfill({
         status: 200,

@@ -711,7 +711,8 @@ test.describe('DEF-3 r2 finding 1: compact tier, empty-region recovery, sub-chro
     // topmost element (unmodeled chrome, which the module explicitly does
     // not dodge, may cover part of the strip), then really click it.
     const rr = await embedRegion(page);
-    const closeBox = await popup.locator('.maplibregl-popup-close-button').boundingBox();
+    const closeButton = popup.locator('.maplibregl-popup-close-button');
+    const closeBox = await closeButton.boundingBox();
     expect(closeBox).not.toBeNull();
     const probeY = Math.min(rr.top + Math.max(1, rr.h / 2), closeBox!.y + closeBox!.height - 1);
     const candidates: { x: number; y: number }[] = [];
@@ -726,7 +727,21 @@ test.describe('DEF-3 r2 finding 1: compact tier, empty-region recovery, sub-chro
       return null;
     }, candidates);
     expect(probe, 'no reachable pixel found on the close control in the region strip').not.toBeNull();
-    await page.mouse.click(probe!.x, probe!.y);
+    // Click through the LOCATOR, at the probe pixel expressed relative to
+    // the button's own box, rather than a raw `page.mouse.click` at an
+    // absolute page coordinate resolved one JS turn earlier: any consumer
+    // still settling asynchronously on this boot (the always-mounted
+    // minimap's independent NADM read among them; DDM-P1-T09 step 2 part d
+    // made that read a deterministic, near-instant context-level fixture
+    // instead of a query-dependent live fetch, changing the timing of
+    // whatever runs after it settles) can shift the popup between the
+    // `elementFromPoint` scan and a since-stale `mouse.click`. `.click()`
+    // re-resolves the target's box and re-checks hit-testability at THE
+    // MOMENT of dispatch, so it finds the close control's own pixel
+    // whatever else is in flight.
+    await closeButton.click({
+      position: { x: probe!.x - closeBox!.x, y: probe!.y - closeBox!.y }
+    });
     await expect(popup).toHaveCount(0);
   });
 });
@@ -1305,7 +1320,7 @@ test.describe('DDM-P11-T02 clause 3: the door names the place it opens a briefin
  * place) that resolves a place through `resolveLocationIdentity` gains
  * the SAME place-specific door in its already-painted head; one that
  * resolves nothing gets none. The default NADM drought polygon
- * (tests/helpers.ts `stubDefaultNadm`) is replaced here by an equally
+ * (tests/helpers.ts `installDefaultNadmStub`) is replaced here by an equally
  * broad hand-authored polygon so `nadm-drought` can be the ONLY active
  * layer (no `states` boundary competing for the same click, which would
  * out-rank the condition surface under the precedence table and defeat

@@ -14,8 +14,6 @@ import { stubRecentSatellite } from './satellite-fixture';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
 import { installBoundaryStubs, type BoundaryStubMode } from './tribal-fixtures';
 
-const nadmStubbedPages = new WeakSet<Page>();
-
 const TEST_NADM_SNAPSHOT = {
   type: 'FeatureCollection',
   features: [
@@ -30,16 +28,46 @@ const TEST_NADM_SNAPSHOT = {
   ]
 } as const;
 
-async function stubDefaultNadm(page: Page): Promise<void> {
-  if (nadmStubbedPages.has(page)) return;
-  nadmStubbedPages.add(page);
-  await page.route('**/NADM-current.geojson', (route) =>
-    route.fulfill({
+/** How a boot answers the North American Drought Monitor's continental snapshot query. */
+export type NadmStubMode = 'fixture' | 'live';
+
+interface NadmStubState {
+  mode: NadmStubMode;
+}
+
+const nadmStubStates = new WeakMap<BrowserContext, NadmStubState>();
+
+/**
+ * Route `NADM-current.geojson` on the browser CONTEXT (DDM-P1-T09 step 2
+ * part d), for the same two reasons `installBoundaryStubs` and
+ * `installMinimapAnalysisStubs` already do: a context handler covers a Page
+ * this suite never routed by hand, and Playwright checks Page routes before
+ * Context routes, so a spec that registers its own `page.route` for this
+ * pattern (a custom body, a delay, a held request, a failure status) wins
+ * over this backstop whatever order the two were registered in. `fixture`
+ * is fail-closed: it answers the same deterministic single-feature snapshot
+ * every routine boot claims. `live` installs no route at all, the explicit
+ * opt-out for a spec, or the daily source-health probe (which boots outside
+ * this helper entirely and never reaches this function), that wants the
+ * unstubbed request to reach whatever it or a page-level route provides.
+ */
+async function installDefaultNadmStub(page: Page, mode: NadmStubMode): Promise<void> {
+  const context = page.context();
+  const existing = nadmStubStates.get(context);
+  if (existing) {
+    existing.mode = mode;
+    return;
+  }
+  const state: NadmStubState = { mode };
+  nadmStubStates.set(context, state);
+  await context.route('**/NADM-current.geojson', (route) => {
+    if (state.mode === 'live') return route.fallback();
+    return route.fulfill({
       status: 200,
       contentType: 'application/geo+json',
       body: JSON.stringify(TEST_NADM_SNAPSHOT)
-    })
-  );
+    });
+  });
 }
 
 const coveredContexts = new WeakSet<BrowserContext>();
@@ -47,15 +75,16 @@ const coveredContexts = new WeakSet<BrowserContext>();
 /**
  * Carry the PAGE-level stubs onto any Page this context opens later.
  *
- * The two stubs that matter most for a retained artifact, the sovereign
- * boundaries and the minimap's continental analysis inputs, are registered on
- * the CONTEXT, so a popup or a `context.newPage()` inherits them with no help
- * from here. The satellite and NADM stubs are still page-level, and a Page
- * this helper never navigated would reach those services live. Nothing in
- * this suite opens a second Page today (`tests/boundary-boot-inventory.test.mjs`
- * fails the gate on the first `newPage(` or popup wait that is not recorded),
- * so this hook is defense in depth for the day one appears: it closes the
- * page-level half of the same hole context routing already closed.
+ * The three stubs that matter most for a retained artifact, the sovereign
+ * boundaries, the minimap's continental analysis inputs, and the NADM
+ * continental snapshot (DDM-P1-T09 step 2 part d), are registered on the
+ * CONTEXT, so a popup or a `context.newPage()` inherits them with no help
+ * from here. The satellite stub is still page-level, and a Page this helper
+ * never navigated would reach that service live. Nothing in this suite opens
+ * a second Page today (`tests/boundary-boot-inventory.test.mjs` fails the
+ * gate on the first `newPage(` or popup wait that is not recorded), so this
+ * hook is defense in depth for the day one appears: it closes the page-level
+ * half of the same hole context routing already closed.
  */
 export function coverFuturePages(page: Page): void {
   const context = page.context();
@@ -66,7 +95,6 @@ export function coverFuturePages(page: Page): void {
     // the test that opened it, because the guarantee that matters is already
     // held by the context-level routes above.
     void stubRecentSatellite(opened).catch(() => undefined);
-    void stubDefaultNadm(opened).catch(() => undefined);
   });
 }
 
@@ -209,6 +237,23 @@ export interface GotoAppOptions {
    */
   readonly boundaries?: BoundaryStubMode;
   /**
+   * How this boot answers the North American Drought Monitor's continental
+   * snapshot query (DDM-P1-T09 step 2 part d). Defaults to `fixture`, the
+   * deterministic single-feature body in this file (`TEST_NADM_SNAPSHOT`),
+   * claimed unconditionally so every routine boot is offline and
+   * reproducible regardless of what the query string names. `live` is the
+   * explicit opt-out: it installs no context-level route at all, for a
+   * spec that wants the request to reach whatever its own page-level
+   * `page.route` provides (a delay, a failure status, a malformed body) or,
+   * unstubbed entirely, the live agency. A spec that registers its own
+   * `page.route('**\/NADM-current.geojson', ...)` before or after this call
+   * needs neither option: Playwright checks Page routes before Context
+   * routes, so that handler always wins over this backstop
+   * (`tests/tribal-fixtures.ts`'s ordering rule, the same one this stub
+   * now follows).
+   */
+  readonly nadm?: NadmStubMode;
+  /**
    * Wait for the boot-idle seam (`<html data-ddm-boot="idle">`, DR-052
    * follow-up): the map has loaded, every layer the URL asked for has left
    * `loading`, and no shared transport is in flight. Defaults to true, so
@@ -266,10 +311,16 @@ export async function gotoApp(
   // briefing sends these eight new queries to the live agency (see
   // `stubSpcFireOutlook`'s own comment; S17's lesson, missed in round 1).
   await stubSpcFireOutlook(page);
+  // DDM-P1-T09 step 2 part d: every routine boot claims the deterministic
+  // NADM fixture unconditionally, whatever the query string names. The
+  // continental snapshot used to be skipped for `layers=`/`cluster=` boots
+  // on the theory that those specs always claim it themselves, which left
+  // every OTHER such boot (activation, ENSO, embed, studio, and more) free
+  // to reach the live NCEI endpoint through the always-mounted minimap. See
+  // `installDefaultNadmStub`'s own comment for the opt-out and why a spec's
+  // own `page.route` for this pattern is unaffected either way.
+  await installDefaultNadmStub(page, options.nadm ?? 'fixture');
   coverFuturePages(page);
-  if (!/[?&](?:layers|cluster)=/.test(query)) {
-    await stubDefaultNadm(page);
-  }
   await page.goto(query, { waitUntil: 'domcontentloaded' });
   // DOM READY, and no longer a proxy for a finished boot. The generated
   // sidebar controls are built from the static registry tables before the
@@ -307,15 +358,15 @@ export async function gotoApp(
   //
   // `expect.poll` at the same default timeout `toHaveAttribute` used
   // (`playwright.config.ts`'s `expect.timeout`, 10s; never lengthened here):
-  // on a miss it names which layers are still owed, read from the DOM the
-  // same way `pendingBootLayers()` (src/state/boot-idle.ts:80-102) computes
-  // it (checked-but-not-terminal, or a live `loading...` pill), because that
-  // function's own module state is private to the running page's closure
-  // and unreachable from a production bundle without a product-code change
-  // outside this file. `pendingSharedTransportCount()` (src/util/fetch.ts:193)
-  // is the same kind of private counter with no DOM reflection at all, so a
-  // miss says plainly that it could not be read from this seam rather than
-  // guess at it. The read itself is wrapped in its own try/catch: a page
+  // on a miss the diagnostic reads `window.__ddm.snapshot()` (DDM-P1-T09
+  // step 2 parts a, b and c; src/state/boot-idle.ts's `DdmSeam`, mirrored
+  // here as `DdmSeamRead`, `:901-906`) instead of inferring from pills and
+  // checkboxes. That seam names the pending layer keys
+  // (`pendingBootLayers()`, boot-idle.ts:213) AND, since M3, each pending
+  // shared-transport key with its in-flight count
+  // (`pendingSharedTransportKeys()`, src/util/fetch.ts:259), so a miss says
+  // exactly what holds the boot rather than only that a layer is still
+  // loading. The read itself is wrapped in its own try/catch: a page
   // teardown race during the evaluate must not replace the original
   // boot-idle failure with an unrelated one, so the fallback is a literal
   // clause and the original error survives as `cause`, never flattened.
@@ -325,38 +376,19 @@ export async function gotoApp(
     } catch (err) {
       let diagnostic: string;
       try {
-        const read = await page.evaluate(
-          ({ loadingText, terminalPills }) => {
-            const inputs = Array.from(
-              document.querySelectorAll<HTMLInputElement>('input[data-layer-key]')
-            );
-            if (inputs.length === 0) return { noToggles: true as const, pending: [] };
-            const pending = inputs
-              .filter((input) => {
-                const key = input.dataset['layerKey'];
-                const pill = document.querySelector(`[data-layer-status="${key}"]`);
-                const text = (pill?.textContent ?? '').trim();
-                if (text === loadingText) return true;
-                return input.checked && !terminalPills.includes(text);
-              })
-              .map((input) => input.dataset['layerKey']);
-            return { noToggles: false as const, pending };
-          },
-          { loadingText: PILL.loading, terminalPills: TERMINAL_PILLS }
-        );
-        // A brief-embed boot defers the catalog island (src/ui/sidebar.ts:
-        // 1702-1703), so no `input[data-layer-key]` exists yet; an empty
-        // pending list there would misread as "everything settled".
-        diagnostic = read.noToggles
-          ? 'the layer toggles are not in the DOM (a brief-embed boot defers the catalog island, src/ui/sidebar.ts:1702-1703)'
-          : `pending layers (checked and not yet terminal) = ${JSON.stringify(read.pending)}`;
+        const seam = await readDdmSeam(page);
+        diagnostic =
+          seam === null
+            ? 'window.__ddm is not installed (markBooting has not run; a pre-boot ' +
+              'navigation or a page that is not the app)'
+            : `pending layer keys = ${JSON.stringify(seam.pendingLayerKeys)}; ` +
+              `pending shared transports = ${seam.pendingTransportCount} ` +
+              `(by key: ${JSON.stringify(seam.pendingTransportKeys)})`;
       } catch (evalErr) {
-        diagnostic = `the pending-layer proxy could not be read (${(evalErr as Error).message})`;
+        diagnostic = `the boot-idle seam could not be read (${(evalErr as Error).message})`;
       }
       throw new Error(
-        `boot-idle never reached "idle" within the default expect timeout; ${diagnostic}; ` +
-          'pending shared transport count is not observable from this seam (a private counter ' +
-          'in src/util/fetch.ts with no DOM reflection).',
+        `boot-idle never reached "idle" within the default expect timeout; ${diagnostic}.`,
         { cause: err }
       );
     }
