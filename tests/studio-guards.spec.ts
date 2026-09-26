@@ -132,9 +132,12 @@ test.describe('studio route guards', () => {
       page
     }) => {
       // Abort only the FIRST network attempt: Chromium caches the failed
-      // dynamic import in the module map, so the in-page re-entry below
-      // fails from the cache without a second request; the reload is what
-      // refetches (attempt 2), and it must succeed.
+      // dynamic import in the module map, so a second import() of the SAME
+      // url would replay the same rejection. The studio's loader
+      // (createChunkLoader, src/util/chunk-retry.ts) records the chunk's
+      // url on that rejection, so the in-page re-entry below imports it
+      // again under a `retry=` query, a cache key the module map has never
+      // marked failed, and this route lets that second request through.
       let chunkAttempts = 0;
       await page.route(studio.chunk, async (route) => {
         chunkAttempts += 1;
@@ -163,13 +166,11 @@ test.describe('studio route guards', () => {
       expect(new URLSearchParams(await search(page)).has('studio')).toBe(false);
 
       await page.locator(`#${studio.route}-studio-entry`).click();
-      await expect(root.getByRole('alert')).toBeVisible();
-      // Try again is a full reload: Chromium caches a failed dynamic
-      // import in the module map, so an in-page re-import can never
-      // recover; the studio route is URL state and survives the reload.
-      await failure.getByRole('button', { name: 'Try again' }).click();
-      await page.waitForLoadState('domcontentloaded');
+      // The re-entry succeeds directly, with no failure surface and no
+      // reload: the retry under `retry=` is a real new request, and this
+      // route lets attempt 2 through.
       await expect(root.getByRole('heading', { name: studio.loadedHeading })).toBeVisible();
+      await expect(root.getByRole('alert')).toHaveCount(0);
       expect(chunkAttempts).toBeGreaterThanOrEqual(2);
 
       await root.getByRole('button', { name: 'Back to map' }).click();

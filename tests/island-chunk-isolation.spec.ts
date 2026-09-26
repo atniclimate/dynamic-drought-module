@@ -142,6 +142,62 @@ test.describe('island and search chunk isolation (DDM-P1-T04)', () => {
     expect(islandRequestUrls.some((url) => new URL(url).searchParams.has('retry'))).toBe(true);
   });
 
+  test('the Layers studio retries after its chunk fails once, under a retry= URL', async ({
+    page
+  }) => {
+    const urls: string[] = [];
+    let attempts = 0;
+    await page.route(/\/layers-studio-[^/?]*\.js(\?|$)/, (route) => {
+      attempts += 1;
+      urls.push(route.request().url());
+      if (attempts === 1) {
+        void route.abort('failed');
+      } else {
+        void route.continue();
+      }
+    });
+
+    await gotoApp(page, '?view=brief&layers=places&studio=layers');
+    await expect(page.locator('#layers-studio-failure-heading')).toBeVisible();
+
+    await page.locator('.layers-studio-back', { hasText: 'Back to map' }).click();
+    await page.locator('#layers-studio-entry').click();
+
+    await expect(
+      page.locator('#layers-studio-root').getByRole('heading', { name: 'Layer studio' })
+    ).toBeVisible();
+    await expect(page.locator('#layers-studio-failure-heading')).toHaveCount(0);
+    expect(urls.some((url) => new URL(url).searchParams.has('retry'))).toBe(true);
+  });
+
+  test('the Place studio retries after its chunk fails once, under a retry= URL', async ({
+    page
+  }) => {
+    const urls: string[] = [];
+    let attempts = 0;
+    await page.route(/\/place-studio-[^/?]*\.js(\?|$)/, (route) => {
+      attempts += 1;
+      urls.push(route.request().url());
+      if (attempts === 1) {
+        void route.abort('failed');
+      } else {
+        void route.continue();
+      }
+    });
+
+    await gotoApp(page, '?view=brief&layers=places&studio=place');
+    await expect(page.locator('#place-studio-failure-heading')).toBeVisible();
+
+    await page.locator('.layers-studio-back', { hasText: 'Back to map' }).click();
+    await page.locator('#place-studio-entry').click();
+
+    await expect(
+      page.locator('#place-studio-root').getByRole('heading', { name: 'Place studio' })
+    ).toBeVisible();
+    await expect(page.locator('#place-studio-failure-heading')).toHaveCount(0);
+    expect(urls.some((url) => new URL(url).searchParams.has('retry'))).toBe(true);
+  });
+
   test('a failed search chunk raises no unhandled rejection from any search host', async ({
     page
   }) => {

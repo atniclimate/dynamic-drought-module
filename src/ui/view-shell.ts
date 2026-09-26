@@ -41,6 +41,7 @@ import type { ViewMode } from '../state/view-mode';
 import { closeImpactPanel, openImpactPanel } from './impact-panel';
 import { buildTribalNationsBriefAction } from './tribal-nations-action';
 import { loadSearchController } from './search-chunk';
+import { createChunkLoader } from '../util/chunk-retry';
 import { prefersReducedMotion } from '../util/motion';
 import {
   backToMap,
@@ -77,6 +78,16 @@ let placeStudioModule: typeof import('./island/place-studio') | null = null;
 let placeStudioPromise: Promise<typeof import('./island/place-studio')> | null = null;
 let placeStudioOpener: HTMLElement | null = null;
 
+// DDM-P1-T10: a second `import()` of the SAME failed chunk URL replays the
+// SAME rejection (Chromium's module map, no new request), so a retry after
+// a failure only works under a NEW url. `createChunkLoader`
+// (src/util/chunk-retry.ts) keeps that URL memory across every call the
+// same way sidebar.ts's `loadIsland` does for the core island.
+const loadPlaceStudioChunk = createChunkLoader(
+  () => import('./island/place-studio'),
+  import.meta.url
+);
+
 function restorePlaceStudioFocus(opener: HTMLElement | null): void {
   if (opener?.isConnected) {
     opener.focus({ preventScroll: true });
@@ -96,13 +107,20 @@ function capturePlaceStudioOpener(event: Event): void {
 /**
  * Render the shared accessible failure surface inside a studio route root.
  *
- * The retry is a full page reload rather than a re-import: Chromium caches
- * a FAILED dynamic-import in the document's module map, so re-running
- * import() with the same static specifier returns the same rejection for
- * the life of the page (observed at this fix's integration gate; the
- * lane's promise-reset alone could not recover). The studio route is URL
- * state, so the reload restores the studio honestly and refetches the
- * chunk.
+ * "Try again" reloads the page: Chromium caches a FAILED dynamic import in
+ * the document's module map, so a fresh `import()` of the SAME url within
+ * the SAME page would replay the SAME rejection. The studio route is URL
+ * state, so the reload restores the studio honestly and starts every
+ * import fresh.
+ *
+ * The studio chunk itself also self-heals without a reload: `loadPlaceStudio`
+ * below and `loadStudio` (src/ui/sidebar.ts) route their import through
+ * `createChunkLoader` (src/util/chunk-retry.ts), which remembers the
+ * chunk's URL once a call rejects and retries a LATER call under a
+ * `retry=<n>` query, a cache key the module map has never marked failed.
+ * Leaving the studio (Back to map) and reopening it is such a later call,
+ * so a studio that failed once can recover on its own re-entry, with no
+ * reload at all.
  */
 export function renderStudioLoadFailure(
   root: HTMLElement,
@@ -149,7 +167,7 @@ export function renderStudioLoadFailure(
 }
 
 function loadPlaceStudio(root: HTMLElement): void {
-  const promise = placeStudioPromise ?? import('./island/place-studio');
+  const promise = placeStudioPromise ?? loadPlaceStudioChunk();
   placeStudioPromise = promise;
   void promise
     .then((module) => {

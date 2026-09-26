@@ -1546,6 +1546,13 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
   let studioModule: typeof import('./island/layers-studio') | null = null;
   let studioPromise: Promise<typeof import('./island/layers-studio')> | null = null;
   let studioOpener: HTMLElement | null = null;
+  // DDM-P1-T10: the same createChunkLoader pattern loadIsland uses above,
+  // so a studio chunk that failed once retries a LATER call under a new
+  // `retry=<n>` url instead of replaying the same cached rejection.
+  const loadLayersStudioChunk = createChunkLoader(
+    () => import('./island/layers-studio'),
+    import.meta.url
+  );
 
   const restoreLayersStudioFocus = (opener: HTMLElement | null): void => {
     if (opener?.isConnected) {
@@ -1559,7 +1566,7 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
   };
 
   const loadStudio = (root: HTMLElement): void => {
-    const promise = studioPromise ?? import('./island/layers-studio');
+    const promise = studioPromise ?? loadLayersStudioChunk();
     studioPromise = promise;
     // The search half is loaded and caught on its own (DDM-P1-T04), so the
     // failure panel below is reached only by the studio chunk's own
