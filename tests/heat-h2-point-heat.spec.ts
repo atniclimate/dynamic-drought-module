@@ -185,9 +185,16 @@ const OBSERVATION_PAYLOAD = {
 
 const FORECAST_PAYLOAD = {
   properties: {
+    // Real api.weather.gov gridpoint forecast fields (DDM-P2-T11 M2b): the
+    // product's own issue time and each period's own span, so a claim built
+    // from this fixture can state a product date rather than only a fetch
+    // date.
+    updateTime: '2026-07-29T11:00:00+00:00',
     periods: [
       {
         name: 'This Afternoon',
+        startTime: '2026-07-29T12:00:00-06:00',
+        endTime: '2026-07-29T18:00:00-06:00',
         temperature: 91,
         temperatureUnit: 'F',
         shortForecast: 'Sunny'
@@ -1095,6 +1102,48 @@ test.describe('H2 near-term HeatRisk claim independent of the map layer (DR-014 
     expect(receipt.identifyCalls.length).toBe(CATALOG_TIMES.length + 1);
   });
 
+  test('with HeatRisk on day 4, every heat claim states the product and valid time it read', async ({
+    page
+  }) => {
+    await stubBrowserNwsHeat(page);
+    await stubHeatRiskCatalog(page);
+    await gotoApp(
+      page,
+      '?embed=true&view=console&layers=heatrisk&heatday=4&select=state:WA'
+    );
+    await expect(layerPill(page, 'heatrisk')).toHaveText('live');
+
+    const heatClaim = page.locator(
+      '#impact-panel .impact-claim-classified',
+      { hasText: 'HeatRisk (Experimental)' }
+    );
+    await expect(heatClaim).toContainText(
+      'value 3, Major, at the selected point for Washington'
+    );
+    await expect(heatClaim).toContainText(
+      'Valid Jul 31, 2026, 12:00 UTC to Aug 1, 2026, 12:00 UTC'
+    );
+
+    // DR-091 (DDM-P2-T11 M2b): every claim in the Heat nearTerm cell (the
+    // only cell HeatRisk and the NWS point forecast may fill, matrix.ts
+    // LANE_PLACEMENT) states the product date it read, through the ONE
+    // shared date line every claim carries (claimDateLine,
+    // src/impact/evidence.ts). A retrieval date alone ("Retrieved ...") only
+    // proves DDM fetched something at some moment; it is not a claim about
+    // when the product it read was itself valid, issued or published, so a
+    // claim that reads a product must show one of those, not Retrieved alone.
+    const cell = page.locator(
+      '.impact-hazard[data-horizon="nearTerm"][data-hazard="heat"]'
+    );
+    const claims = cell.locator('.impact-claim');
+    const claimCount = await claims.count();
+    expect(claimCount).toBeGreaterThan(0);
+    for (let i = 0; i < claimCount; i += 1) {
+      await expect(claims.nth(i).locator('.impact-claim-date')).toHaveText(
+        /^(Valid|Issued|Published) /
+      );
+    }
+  });
 });
 
 test.describe('DDM-P7-T07: the season-ahead heat cell', () => {

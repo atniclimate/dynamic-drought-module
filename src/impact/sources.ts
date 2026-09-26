@@ -206,6 +206,17 @@ function isoDayUtc(time: number): string {
 }
 
 /**
+ * An upstream ISO 8601 timestamp field, read as its UTC calendar day for a
+ * claim's `dates`, or `undefined` when the field is missing or unparseable
+ * (never invented; the caller keeps `retrieved` as the honest fallback).
+ */
+function isoDayFromUpstream(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const t = Date.parse(value);
+  return Number.isFinite(t) ? isoDayUtc(t) : undefined;
+}
+
+/**
  * "Aug 25, 2026" for prose. Upstream Date fields on these services are UTC
  * midnights, so the day is read in UTC; a local read would show the previous
  * day for every viewer west of Greenwich.
@@ -1910,10 +1921,8 @@ export async function fetchNwsForecastClaims(
     );
     if (signal.aborted) return { claims: [], ok: false };
 
-    const periods =
-      isObject(fJson) && isObject(fJson.properties) && Array.isArray(fJson.properties.periods)
-        ? fJson.properties.periods
-        : [];
+    const properties = isObject(fJson) && isObject(fJson.properties) ? fJson.properties : null;
+    const periods = properties && Array.isArray(properties.periods) ? properties.periods : [];
     const first = periods.find(isObject);
     if (!first) throw new Error('no forecast periods');
 
@@ -1925,6 +1934,14 @@ export async function fetchNwsForecastClaims(
     // vocab-allow: renders the upstream NWS point forecast product
     const text = `${name}: ${short || 'forecast available'}, near ${tempStr}. Watch this against the heat outlook; hot, dry spells deepen near-term dryness and fire danger.`;
 
+    // The forecast product's own date: the period's own start (the day the
+    // read period covers) as `valid`, and the product's own `updateTime` (when
+    // NWS issued this forecast) as `issued`, each read straight off the
+    // upstream response and never invented when absent (Rule: never broaden
+    // certainty). `retrieved` still records the fetch day regardless.
+    const validDay = isoDayFromUpstream(first.startTime);
+    const issuedDay = isoDayFromUpstream(properties?.updateTime);
+
     return {
       ok: true,
       claims: [
@@ -1935,7 +1952,11 @@ export async function fetchNwsForecastClaims(
           sourceUrl,
           product: 'nwsForecast',
           evidence: 'outlook',
-          dates: { retrieved: todayIso() },
+          dates: {
+            ...(validDay ? { valid: validDay } : {}),
+            ...(issuedDay ? { issued: issuedDay } : {}),
+            retrieved: todayIso()
+          },
           // vocab-allow: names the NWS point forecast, upstream product
           uncertainty: { kind: 'not-quantified', text: 'a point weather forecast stated as a tendency; the NWS product publishes no uncertainty band here' }
         })

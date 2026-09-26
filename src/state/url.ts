@@ -427,12 +427,21 @@ export interface UrlSyncState {
  * polluted by every layer toggle.
  */
 export function syncUrl(state: UrlSyncState): void {
-  // HeatRisk owns its additive day position. Preserve it across every
-  // ordinary state write so layer toggles and embed changes cannot erase
-  // the selected frame.
-  const heatRiskDay = parseHeatRiskDayParam(
-    new URLSearchParams(window.location.search)
-  );
+  // HeatRisk owns its additive day position, but only while the HeatRisk
+  // layer is on (the heatday rule): preserve it across every ordinary state
+  // write so embed changes and OTHER layers' toggles cannot erase the
+  // selected frame, but drop it the moment HeatRisk itself goes off (a mode
+  // switch away from Heat, a horizon with no heat surface, or the layer
+  // toggled off directly), so the URL never claims a HeatRisk day the map
+  // is not honoring. `state.layers` is the checkbox-intent set (the same
+  // synchronous truth the durable-truth cluster composition reads), so this
+  // reads correctly the instant a mode switch flips it, before the layer
+  // module's own async activate/deactivate settles. HeatRisk's own
+  // `activate()` re-applies its remembered day (src/layers/heatrisk.ts) and
+  // re-emits `heatday=` through this same function on the next activation.
+  const heatRiskDay = state.layers.has('heatrisk')
+    ? parseHeatRiskDayParam(new URLSearchParams(window.location.search))
+    : null;
   // The 3D Fire mode likewise owns its additive flag (its store writes it
   // through syncFire3dParam); read it fresh here so ordinary state writes
   // preserve an active mode instead of erasing it.
