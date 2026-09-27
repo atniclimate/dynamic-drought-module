@@ -598,13 +598,48 @@ function normalizeCallText(text) {
 }
 
 /**
+ * Words after which a following `/` opens a regexp literal rather than
+ * dividing (the previous emitted token cannot end an expression).
+ */
+const REGEX_PRECEDING_KEYWORDS = new Set([
+  'return', 'typeof', 'case', 'do', 'else', 'in', 'of', 'new', 'delete',
+  'void', 'throw', 'instanceof', 'yield', 'await'
+]);
+
+/**
+ * Decides whether the `/` at `masked[i]` can open a regexp literal: true
+ * unless the nearest previous non-whitespace character already emitted
+ * (in `out`, so prior masking is respected) ends an expression, which
+ * means an identifier/number that is not one of `REGEX_PRECEDING_KEYWORDS`,
+ * a `)`, a `]`, or a closing string/template quote.
+ */
+function regexCanOpen(out, i) {
+  let p = i - 1;
+  while (p >= 0 && (out[p] === ' ' || out[p] === '\t' || out[p] === '\r' || out[p] === '\n')) p--;
+  if (p < 0) return true;
+  const prevChar = out[p];
+  if (/[$\w]/.test(prevChar)) {
+    let s = p;
+    while (s >= 0 && /[$\w]/.test(out[s])) s--;
+    const word = out.slice(s + 1, p + 1).join('');
+    return REGEX_PRECEDING_KEYWORDS.has(word);
+  }
+  if (prevChar === ')' || prevChar === ']' || prevChar === '"' || prevChar === "'" || prevChar === '`') {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Returns a same-length string where every character inside a `//` line
- * comment, a `/* *\/` block comment, a single/double-quoted string, or the
- * static (non `${...}`) portion of a template literal is replaced by a
- * space, so a downstream scan for identifiers, parentheses and keywords
- * never sees comment or string content, while every remaining column and
- * line number still lines up with the ORIGINAL source. Code nested inside a
- * template-literal `${...}` interpolation is left unmasked.
+ * comment, a `/* *\/` block comment, a regexp literal, a single/double-quoted
+ * string, or the static (non `${...}`) portion of a template literal is
+ * replaced by a space, so a downstream scan for identifiers, parentheses and
+ * keywords never sees comment, regexp or string content, while every
+ * remaining column and line number still lines up with the ORIGINAL source.
+ * Code nested inside a template-literal `${...}` interpolation is left
+ * unmasked. A regexp literal's body (including any quote or `//` it holds)
+ * is recognised by context, not mistaken for a comment or a string.
  */
 function maskNonCode(source) {
   const out = source.split('');
@@ -635,6 +670,43 @@ function maskNonCode(source) {
         out[j] = ' ';
         out[j + 1] = ' ';
         j += 2;
+      }
+      i = j;
+      continue;
+    }
+    if (c === '/' && next !== '/' && next !== '*' && regexCanOpen(out, i)) {
+      let j = i;
+      out[j] = ' ';
+      j++;
+      let inClass = false;
+      while (j < n && source[j] !== '\n') {
+        const cj = source[j];
+        if (cj === '\\') {
+          out[j] = ' ';
+          j++;
+          if (j < n && source[j] !== '\n') out[j] = ' ';
+          if (j < n) j++;
+          continue;
+        }
+        if (cj === '[') {
+          inClass = true;
+          out[j] = ' ';
+          j++;
+          continue;
+        }
+        if (cj === ']') {
+          inClass = false;
+          out[j] = ' ';
+          j++;
+          continue;
+        }
+        if (cj === '/' && !inClass) {
+          out[j] = ' ';
+          j++;
+          break;
+        }
+        out[j] = ' ';
+        j++;
       }
       i = j;
       continue;
@@ -775,7 +847,9 @@ function findWaitForTimeoutCalls(original, masked) {
  * Finds every `test(...)` / `test.only(...)` / `test.skip(...)` /
  * `test.step(...)` / `test.describe(...)` call (by its own first
  * string-literal argument) and every named `function name(...) {...}`
- * declaration, each as a `{start, end, title}` span.
+ * declaration, each as a `{start, end, title, kind}` span. `kind` is
+ * `'step'`, `'function'`, or the bare/only/skip/describe test call's own
+ * label ('test', 'only', 'skip', 'describe').
  */
 function findScopes(original, masked) {
   const scopes = [];
@@ -803,7 +877,8 @@ function findScopes(original, masked) {
       title = original.slice(p + 1, q).replace(/\\(['"`])/g, '$1');
     }
     if (title !== null) {
-      scopes.push({ start: nameStart, end: callEnd, title });
+      const kind = m[2] ?? 'test';
+      scopes.push({ start: nameStart, end: callEnd, title, kind });
     }
   }
   const fnRe = /\bfunction\s+([$\w]+)\s*\(/g;
@@ -827,17 +902,29 @@ function findScopes(original, masked) {
         }
       }
     }
-    scopes.push({ start: nameStart, end, title: fnName });
+    scopes.push({ start: nameStart, end, title: fnName, kind: 'function' });
   }
   return scopes;
 }
 
-/** The title of the smallest scope span containing `pos`, or '(module scope)'. */
+/**
+ * The title of the smallest scope span containing `pos`, or '(module
+ * scope)'. When the smallest containing scope is a `test.step(...)`, the
+ * identity is prefixed with the next-smallest containing scope's title
+ * (`outer > step`), so two steps sharing a title under different tests (or
+ * the same step moved between tests) never collapse onto one key. No
+ * currently declared SITES entry sits inside a step, so this never rekeys
+ * an existing site.
+ */
 function enclosingIdentity(scopes, pos) {
   const containing = scopes.filter((s) => s.start <= pos && pos < s.end);
   if (containing.length === 0) return '(module scope)';
   containing.sort((a, b) => a.end - a.start - (b.end - b.start));
-  return containing[0].title;
+  const innermost = containing[0];
+  if (innermost.kind === 'step' && containing.length > 1) {
+    return `${containing[1].title} > ${innermost.title}`;
+  }
+  return innermost.title;
 }
 
 /**
@@ -1012,4 +1099,58 @@ test('self-test: a call inside a shared helper function is keyed by the function
   const found = scanSource(fixture);
   assert.equal(found.length, 1);
   assert.equal(found[0].test, 'helperFn');
+});
+
+test('self-test: a quote inside a regexp literal does not hide a later real call', () => {
+  const apostropheFixture =
+    "test('t', async ({ page }) => {\n  const apostrophe = /'/;\n  await page.waitForTimeout(500);\n});\n";
+  const foundApostrophe = scanSource(apostropheFixture);
+  assert.equal(
+    foundApostrophe.length,
+    1,
+    'the real call after a regexp literal holding an apostrophe must still be discovered'
+  );
+  assert.equal(foundApostrophe[0].test, 't');
+  assert.equal(foundApostrophe[0].text, 'await page.waitForTimeout(500);');
+
+  const backtickFixture =
+    "test('t', async ({ page }) => {\n  const backtick = /`/;\n  await page.waitForTimeout(500);\n});\n";
+  const foundBacktick = scanSource(backtickFixture);
+  assert.equal(
+    foundBacktick.length,
+    1,
+    'the real call after a regexp literal holding a backtick must still be discovered'
+  );
+  assert.equal(foundBacktick[0].test, 't');
+  assert.equal(foundBacktick[0].text, 'await page.waitForTimeout(500);');
+});
+
+test('self-test: a regexp ending in an escaped slash pair is not a line comment', () => {
+  const fixture = String.raw`test('A', () => {
+  expect(String(x)).toMatch(/^pmtiles:\/\//);
+});
+await page.waitForTimeout(500);
+`;
+  const found = scanSource(fixture);
+  assert.equal(found.length, 1, 'the module-scope call after the regexp must still be discovered');
+  assert.equal(found[0].test, '(module scope)');
+  assert.equal(found[0].text, 'await page.waitForTimeout(500);');
+});
+
+test('self-test: a call inside a test.step is keyed by its enclosing test title, not the step title alone', () => {
+  const fixtureA =
+    "test('A', async ({ page }) => {\n  await test.step('s', async () => {\n    await page.waitForTimeout(500);\n  });\n});\n";
+  const fixtureB =
+    "test('B', async ({ page }) => {\n  await test.step('s', async () => {\n    await page.waitForTimeout(500);\n  });\n});\n";
+  const foundA = scanSource(fixtureA);
+  const foundB = scanSource(fixtureB);
+  assert.equal(foundA.length, 1);
+  assert.equal(foundB.length, 1);
+  assert.equal(foundA[0].test, 'A > s');
+  assert.equal(foundB[0].test, 'B > s');
+  assert.notEqual(
+    `${foundA[0].test}::${foundA[0].text}::${foundA[0].occurrence}`,
+    `${foundB[0].test}::${foundB[0].text}::${foundB[0].occurrence}`,
+    'moving the same call from one test’s step into another’s step must change its key'
+  );
 });
