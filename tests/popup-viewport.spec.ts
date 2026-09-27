@@ -1501,6 +1501,11 @@ test.describe('DDM-P11-T02 clause 3, DR-042 option a: the condition-surface door
     await stubBroadCondition(page);
     await gotoApp(page, '?view=console&layers=nadm-drought&region=british_columbia');
     await waitForLayerSettled(page, 'nadm-drought');
+    // Registered after the boot and before the click: nothing else in this
+    // test reads the bundled states file (no `states` layer, no `select=`, no
+    // Place studio), so the click's state fallback is this request's only
+    // trigger.
+    const usStatesRequested = page.waitForRequest('**/us-states.geojson');
 
     const mapBox = await page.locator('#map').boundingBox();
     expect(mapBox).not.toBeNull();
@@ -1515,7 +1520,11 @@ test.describe('DDM-P11-T02 clause 3, DR-042 option a: the condition-surface door
     // (US_STATES_SHARED_KEY, src/util/fetch.ts) for this click; wait for the
     // seam to prove that fetch (and everything else pending) has settled,
     // then assert the door never arrived: British Columbia is outside every
-    // US state and no Tribal boundary layer is active.
+    // US state and no Tribal boundary layer is active. The wait starts only
+    // once that fetch has left the page: the J7 receipt
+    // (I:/claude-temp/ddm-s30d/gates/j7.log, at 7a2b48d) showed the bare
+    // wait passing in 1.1 s with the request held, before the fetch began.
+    await usStatesRequested;
     await awaitQuiescence(page);
     await expect(popup.locator('[data-ddm-impact-trigger]')).toHaveCount(0);
   });
