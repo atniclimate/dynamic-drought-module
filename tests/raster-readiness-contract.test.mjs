@@ -1,6 +1,19 @@
 import assert from 'node:assert/strict';
-import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  readSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs';
 import { registerHooks } from 'node:module';
+import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -120,12 +133,13 @@ function stripComments(source) {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
-function listTs(dir) {
+/** Every `.ts` and `.tsx` file under `dir` (finding C9: a `.tsx` source used to be invisible to this scan). */
+function listSourceFiles(dir) {
   const out = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...listTs(full));
-    else if (entry.name.endsWith('.ts')) out.push(full);
+    if (entry.isDirectory()) out.push(...listSourceFiles(full));
+    else if (entry.name.endsWith('.ts') || entry.name.endsWith('.tsx')) out.push(full);
   }
   return out;
 }
@@ -202,13 +216,24 @@ function topLevelArgs(argText) {
 }
 
 /**
- * Every raster or raster-dem SOURCE declaration under src/: an object
- * literal typed raster or raster-dem that carries `tiles` or `url` and no
- * `source` key (a layer spec names its `source`; a source spec does not).
+ * Every raster or raster-dem SOURCE declaration under `dir` (default `src/`):
+ * an object literal typed raster or raster-dem that carries `tiles` or `url`
+ * and no `source` key (a layer spec names its `source`; a source spec does
+ * not). `.ts` and `.tsx` are both scanned (finding C9).
+ *
+ * Each row's `identity` is the name this activation path is known by: the
+ * `map.addSource(<id>, ...)` argument when the call is present (matching
+ * `sourceIdExpr`, which the tile-proven rows below still key on), or the
+ * object's own property key for a literal style source (`style.ts`'s
+ * `basemap:`). `EXCEPTIONS` below is keyed by `${file}#${identity}`, not by
+ * file alone, so a second, undispositioned raster source added to an already
+ * exempt file has no identity to match and fails the contract (finding C9:
+ * "a new unproved raster source in an already-exempt file inherits the
+ * existing paragraph and passes").
  */
-function scanRasterSources() {
+function scanRasterSources(dir = join(ROOT, 'src'), baseDir = ROOT) {
   const found = [];
-  for (const file of listTs(join(ROOT, 'src'))) {
+  for (const file of listSourceFiles(dir)) {
     const text = stripComments(readFileSync(file, 'utf8'));
     const re = /\btype\s*:\s*['"`](raster|raster-dem)['"`]/g;
     let match;
@@ -221,14 +246,41 @@ function scanRasterSources() {
       if (!isSource) continue;
       const before = text.slice(Math.max(0, object.start - 200), object.start);
       const add = /addSource\(\s*([^,()]+(?:\([^()]*\))?)\s*,\s*$/.exec(before);
+      const key = add ? null : /([$\w]+)\s*:\s*$/.exec(before);
       found.push({
-        file: posix(relative(ROOT, file)),
+        file: posix(relative(baseDir, file)),
         kind: match[1],
-        sourceIdExpr: add ? add[1].trim() : null
+        sourceIdExpr: add ? add[1].trim() : null,
+        identity: add ? add[1].trim() : key ? key[1] : null
       });
     }
   }
   return found;
+}
+
+/**
+ * The exception half of the contract, isolated so a self-test can drive it
+ * against a synthetic fixture: every source's `${file}#${identity}` must
+ * name its own exception (an unnamed identity, `(unnamed)`, never matches
+ * one), and every declared exception must still name a source that exists
+ * and a reason with real content.
+ */
+function exceptionProblems(sources, exceptions) {
+  const problems = [];
+  const found = new Set(sources.map((s) => `${s.file}#${s.identity ?? '(unnamed)'}`));
+  for (const source of sources) {
+    const identityKey = `${source.file}#${source.identity ?? '(unnamed)'}`;
+    if (!exceptions.has(identityKey)) {
+      problems.push(
+        `${identityKey}: adds a raster source but is neither a tile-proven row nor a declared exception naming this identity`
+      );
+    }
+  }
+  for (const [identityKey, reason] of exceptions) {
+    if (!found.has(identityKey)) problems.push(`${identityKey}: declared, but adds no raster source; remove the row`);
+    if (reason.trim().length <= 20) problems.push(`${identityKey}: an exception must name its reason`);
+  }
+  return problems;
 }
 
 /** The boot-idle budget, read where the product defines it. */
@@ -261,34 +313,40 @@ const TILE_PROVEN = new Map([
   ['src/layers/sst-anomaly.ts', 'C1 SST anomaly (GIBS GHRSST MUR, default and every dated frame), DDM-P14-T04']
 ]);
 
-/** Declared exceptions: raster sources that do not reach a pill through this rule, and why. */
+/**
+ * Declared exceptions: named source/activation identities that do not reach a
+ * pill through this rule, and why. Keyed by `${file}#${identity}` (finding
+ * C9), not by file: a new raster source added to one of these files, under a
+ * different identity, has no row here and fails the contract until it gets
+ * its own disposition.
+ */
 const EXCEPTIONS = new Map([
   [
-    'src/layers/hillshade.ts',
+    'src/layers/hillshade.ts#SOURCE_ID',
     'C2 hillshade (bundled PNW raster-dem PMTiles): a director\'s-ruling exception at DDM-P14-T04, decided on a measured build-time profile. With the shared completeness watcher wired here, the Fire 3D pair (fire3d-mode.spec.ts, view-contracts.spec.ts) fell from 57/59 to 47/59 (I:/claude-temp/ddm-s30d/gates/c4-bisect-fire3d.log): the 3D scene\'s own animation suppresses map idle, so every 3D boot waited out the tile-proof deadline. Restoring the probe-then-add design with no tile wait (c4-hillshade-probe.log) returned the pair to 58/59. The archive is bundled, same-origin and deterministic, so the residual risk a tile proof would catch is small next to the 3D cost it imposes'
   ],
   [
-    'src/layers/heatrisk.ts',
+    'src/layers/heatrisk.ts#sourceId',
     'tile-proven already (completeness watch, reportInitialSuccess), but its TILE_SUCCESS_DEADLINE_MS is 10,000 ms, equal to the boot-idle budget, and an empty idle cycle reads ready behind its own map-centre coverage gate. The file is owned by M2 and D2, so the mismatch is declared here rather than edited'
   ],
   [
-    'src/layers/usfs-whp.ts',
+    'src/layers/usfs-whp.ts#SOURCE_ID',
     'tile-proven already (the precedent: completeness watch with reportInitialSuccess), but its TILE_SUCCESS_DEADLINE_MS is 10,000 ms, equal to the boot-idle budget, with the default empty-idle ready; outside this task\'s files, declared rather than edited'
   ],
   [
-    'src/layers/whp-3d.ts',
+    'src/layers/whp-3d.ts#SOURCE_ID',
     'the Fire 3D hazard drape: it writes no registry status and no pill; activation probes the archive header and returns a boolean to the 3D scene'
   ],
   [
-    'src/map/satellite.ts',
+    'src/map/satellite.ts#SOURCE_ID',
     'the satellite basemap chip, not a registry layer: frame-pinned completeness with a 30 s deadline drives the chip text, never a layer pill'
   ],
   [
-    'src/map/fire3d.ts',
+    'src/map/fire3d.ts#TERRAIN_SOURCE_ID',
     'the Fire 3D terrain source, not a registry layer: its watcher only fails the scene on error and writes no layer status'
   ],
   [
-    'src/map/style.ts',
+    'src/map/style.ts#basemap',
     'the base style\'s basemap raster, declared in the style JSON rather than added by a layer module; it has no pill'
   ]
 ]);
@@ -300,18 +358,15 @@ test('every raster activation path under src/ reaches ready only through tile pr
   // names each row that fails, not only the first.
   const problems = [];
 
-  // Enumeration, both ways: nothing undeclared, nothing stale.
-  for (const file of files) {
-    if (!TILE_PROVEN.has(file) && !EXCEPTIONS.has(file)) {
-      problems.push(`${file}: adds a raster source but is neither a tile-proven row nor a declared exception`);
-    }
-  }
-  for (const file of [...TILE_PROVEN.keys(), ...EXCEPTIONS.keys()]) {
+  // Enumeration, both ways: nothing undeclared, nothing stale. Tile-proven
+  // rows are files (each source inside one is checked below, by identity,
+  // against its own watcher); every other source must carry its own named
+  // exception (finding C9: exceptions are identities, not whole files).
+  for (const file of TILE_PROVEN.keys()) {
     if (!files.has(file)) problems.push(`${file}: declared, but adds no raster source; remove the row`);
   }
-  for (const [file, reason] of EXCEPTIONS) {
-    if (reason.trim().length <= 20) problems.push(`${file}: an exception must name its reason`);
-  }
+  const exemptSources = sources.filter((s) => !TILE_PROVEN.has(s.file));
+  problems.push(...exceptionProblems(exemptSources, EXCEPTIONS));
 
   // The shared deadline sits strictly below the boot-idle budget.
   const budget = bootIdleBudgetMs();
@@ -361,6 +416,160 @@ test('every raster activation path under src/ reaches ready only through tile pr
   }
 
   assert.deepEqual(problems, []);
+});
+
+// ---------------------------------------------------------------------------
+// Self-tests: the scanner and the exception check, on synthetic fixtures
+// (finding C9). These prove the scoping and the .tsx reach of the contract
+// test itself, without touching src/.
+// ---------------------------------------------------------------------------
+
+/** A scratch directory outside the checkout, torn down after the case. */
+function withFixtureDir(t, files) {
+  const dir = mkdtempSync(join(tmpdir(), 'ddm-raster-contract-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  for (const [name, contents] of Object.entries(files)) {
+    const full = join(dir, name);
+    mkdirSync(join(full, '..'), { recursive: true });
+    writeFileSync(full, contents);
+  }
+  return dir;
+}
+
+test('C9 self-test: a new raster source in an already-exempt file has no identity to match, and fails', (t) => {
+  const dir = withFixtureDir(t, {
+    'exempt-file.ts': [
+      "export function activate(map) {",
+      "  map.addSource(KNOWN_ID, { type: 'raster', tiles: ['https://example.test/{z}/{x}/{y}.png'] });",
+      "  map.addSource(NEW_ID, { type: 'raster', tiles: ['https://example.test/other/{z}/{x}/{y}.png'] });",
+      "}"
+    ].join('\n')
+  });
+  const sources = scanRasterSources(dir, dir);
+  assert.equal(sources.length, 2, 'the fixture should yield exactly two raster sources');
+  const fixtureExceptions = new Map([
+    ['exempt-file.ts#KNOWN_ID', 'a synthetic exception with a real reason, long enough to pass the length check']
+  ]);
+  const problems = exceptionProblems(sources, fixtureExceptions);
+  assert.ok(
+    problems.some((p) => p.startsWith('exempt-file.ts#NEW_ID:')),
+    `expected a problem naming exempt-file.ts#NEW_ID, got ${JSON.stringify(problems)}`
+  );
+  assert.ok(
+    !problems.some((p) => p.startsWith('exempt-file.ts#KNOWN_ID:')),
+    `the already-dispositioned identity should not fail: ${JSON.stringify(problems)}`
+  );
+});
+
+test('C9 self-test: a same-count replacement of an exempt source is not covered by its old exception', (t) => {
+  const dir = withFixtureDir(t, {
+    'exempt-file.ts': [
+      "export function activate(map) {",
+      "  map.addSource(OLD_ID, { type: 'raster', tiles: ['https://example.test/{z}/{x}/{y}.png'] });",
+      "}"
+    ].join('\n')
+  });
+  const exceptions = new Map([
+    ['exempt-file.ts#OLD_ID', 'a synthetic exception with a real reason, long enough to pass the length check']
+  ]);
+
+  // Control: the original identity is named by its exception, no problems.
+  let sources = scanRasterSources(dir, dir);
+  assert.equal(sources.length, 1, 'the fixture should yield exactly one raster source');
+  assert.deepEqual(exceptionProblems(sources, exceptions), []);
+
+  // The Codex round-3 amendment's scenario (channel line 858): the file's
+  // single raster source is REPLACED (a new addSource identity) while the
+  // file's raster-source count stays 1 to 1. This is distinct from the
+  // addition case above, where the count grows.
+  writeFileSync(
+    join(dir, 'exempt-file.ts'),
+    [
+      "export function activate(map) {",
+      "  map.addSource(NEW_ID, { type: 'raster', tiles: ['https://example.test/other/{z}/{x}/{y}.png'] });",
+      "}"
+    ].join('\n')
+  );
+  sources = scanRasterSources(dir, dir);
+  assert.equal(sources.length, 1, 'the replacement should still yield exactly one raster source (1 to 1)');
+  const problems = exceptionProblems(sources, exceptions);
+  assert.ok(
+    problems.some((p) => p.startsWith('exempt-file.ts#NEW_ID:')),
+    `expected a problem naming the new, unmatched identity, got ${JSON.stringify(problems)}`
+  );
+  assert.ok(
+    problems.some((p) => p.startsWith('exempt-file.ts#OLD_ID:')),
+    `expected a problem naming the now-stale old exception row, got ${JSON.stringify(problems)}`
+  );
+  assert.equal(problems.length, 2, `expected exactly the two problems above, got ${JSON.stringify(problems)}`);
+
+  // Once the exception is updated to name the new identity, the check clears.
+  exceptions.delete('exempt-file.ts#OLD_ID');
+  exceptions.set(
+    'exempt-file.ts#NEW_ID',
+    'a synthetic exception with a real reason, long enough to pass the length check'
+  );
+  assert.deepEqual(exceptionProblems(sources, exceptions), []);
+});
+
+/**
+ * Finding (this task): two `addSource` calls that share one literal identity
+ * text inside the same exempt file collapse to a single `${file}#${identity}`
+ * key. `exceptionProblems`'s `found` set is built with `sources.map(...)`
+ * fed into a `Set`, so the duplicate key de-duplicates there; more directly,
+ * its per-source loop checks `exceptions.has(identityKey)` for each entry
+ * independently, and an identical identityKey text means an exception that
+ * disposes the first also, silently, disposes the second. A second raster
+ * source in an already-exempt file is only caught when it carries an
+ * identity the scan has not already seen once. This case is filed `todo`
+ * (Node's `{ todo: true }` runs it and reports a failure without failing the
+ * suite, node --test todo-probe): it names the gap without turning a lane
+ * this brief does not own (`exceptionProblems`, `scanRasterSources`) red for
+ * everyone. Fixing the collapse is a handoff, not a new self-test case.
+ */
+test(
+  'C9 self-test: two addSource calls sharing one literal identity in an exempt file collapse to one key and the second is silently exempted',
+  { todo: true },
+  (t) => {
+    const dir = withFixtureDir(t, {
+      'exempt-file.ts': [
+        "export function activate(map) {",
+        "  map.addSource(SOURCE_ID, { type: 'raster', tiles: ['https://example.test/first/{z}/{x}/{y}.png'] });",
+        "}",
+        "export function activateAlternate(map) {",
+        "  map.addSource(SOURCE_ID, { type: 'raster', tiles: ['https://example.test/second/{z}/{x}/{y}.png'] });",
+        "}"
+      ].join('\n')
+    });
+    const sources = scanRasterSources(dir, dir);
+    assert.equal(sources.length, 2, 'the fixture should yield two raster-source declarations');
+    const exceptions = new Map([
+      ['exempt-file.ts#SOURCE_ID', 'a synthetic exception with a real reason, long enough to pass the length check']
+    ]);
+    const problems = exceptionProblems(sources, exceptions);
+    // The desired behaviour: a second, distinct raster addition under a
+    // reused identity text should still surface as its own problem, not
+    // vanish because the first occurrence's exception matched the same key.
+    assert.ok(
+      problems.length > 0,
+      'two distinct raster sources sharing one identity text should not both clear silently under one exception'
+    );
+  }
+);
+
+test('C9 self-test: a raster source in a .tsx file is discovered by the scanner', (t) => {
+  const dir = withFixtureDir(t, {
+    'exempt-file.tsx': [
+      "export function activate(map) {",
+      "  map.addSource(TSX_ID, { type: 'raster', tiles: ['https://example.test/{z}/{x}/{y}.png'] });",
+      "}"
+    ].join('\n')
+  });
+  const sources = scanRasterSources(dir, dir);
+  assert.deepEqual(
+    sources.map((s) => `${s.file}#${s.identity}`),
+    ['exempt-file.tsx#TSX_ID']
+  );
 });
 
 // ---------------------------------------------------------------------------
