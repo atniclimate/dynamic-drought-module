@@ -122,11 +122,56 @@ export async function resolveHillshadeArchive(
 }
 
 /**
+ * Add the hillshade layer over an already-present source, in the bottom
+ * stack (layer-order.ts): under every data layer, over the basemap and
+ * satellite, in any activation order. Factored out so the fresh-activation
+ * path and the "source survived, layer did not" repair path add the exact
+ * same layer definition; the two must never diverge.
+ */
+function addHillshadeLayer(map: maplibregl.Map): void {
+  map.addLayer(
+    {
+      id: LAYER_ID,
+      type: 'hillshade',
+      source: SOURCE_ID,
+      paint: {
+        'hillshade-exaggeration': HILLSHADE_EXAGGERATION,
+        'hillshade-shadow-color': HILLSHADE_SHADOW,
+        'hillshade-highlight-color': HILLSHADE_HIGHLIGHT
+      }
+    },
+    firstLayerIdAbove(map, BOTTOM_STACK_IDS)
+  );
+}
+
+/**
  * Probe the archive, then add the raster-dem source and the hillshade
- * layer. Idempotent: a second call with the source present is a no-op.
+ * layer. Idempotent: a second call with the source already present skips
+ * the probe and the source setup, but still reports the layer's terminal
+ * status, and restores the layer itself if only the layer (not the
+ * source) is missing. A caller may set `loading` and then reuse an
+ * existing source (an activation the layer controller does not always
+ * skip, since it only checks its own active-key set, not this module's
+ * source state); without the checks below that `loading` was never
+ * resolved, and the pill (and anything reading the registry) never
+ * learns the retained source is actually `ready` -- and a style that
+ * dropped just the layer (removeLayer without removeSource, or a style
+ * reset that MapLibre repopulates sources for but not custom layers)
+ * stayed invisible on the map while the pill still read `ready`
+ * (review finding C6).
  */
 export async function activate(map: maplibregl.Map): Promise<void> {
   if (map.getSource(SOURCE_ID)) {
+    if (!map.getLayer(LAYER_ID)) {
+      try {
+        addHillshadeLayer(map);
+      } catch (err) {
+        console.warn('[hillshade] layer restore over an existing source failed.', err);
+        reportStatus('error');
+        return;
+      }
+    }
+    reportStatus('ready');
     return;
   }
 
@@ -155,21 +200,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       encoding: 'terrarium',
       tileSize: 512
     });
-    // Into the bottom stack (layer-order.ts): under every data layer, over
-    // the basemap and satellite, in any activation order.
-    map.addLayer(
-      {
-        id: LAYER_ID,
-        type: 'hillshade',
-        source: SOURCE_ID,
-        paint: {
-          'hillshade-exaggeration': HILLSHADE_EXAGGERATION,
-          'hillshade-shadow-color': HILLSHADE_SHADOW,
-          'hillshade-highlight-color': HILLSHADE_HIGHLIGHT
-        }
-      },
-      firstLayerIdAbove(map, BOTTOM_STACK_IDS)
-    );
+    addHillshadeLayer(map);
   } catch (err) {
     // Transactional rollback: a half-built setup must not make the next
     // toggle a silent no-op.

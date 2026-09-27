@@ -743,4 +743,31 @@ test.describe('tile-proven raster readiness in the browser (DDM-P14-T04, found-0
     await expect(layerPill(page, 'hillshade')).toHaveText(PILL.live);
     gate.release();
   });
+
+  // Same exception, straddling the archive: region=national's view spans a
+  // box far larger than the bundled PNW archive's own coverage
+  // (-125,41.5,-110.5,49.5), so the raster-dem source may ask for few or
+  // zero leaf-directory or tile-data reads at this framing. The guarantee
+  // under test is unchanged: the pill reaches live from the archive header
+  // probe alone, never waiting on a tile, so it must still pass with every
+  // tile and leaf-directory read held open (there may be none to hold).
+  test('hillshade reads live from its archive probe alone under region=national too, where the view straddles the bundled archive (declared DDM-P14-T04 exception)', async ({
+    page
+  }) => {
+    const gate = routeGate();
+    await page.route('**/data/hillshade-dem-pnw.pmtiles*', async (route) => {
+      // Same gate as the washington_state case above: only the combined
+      // header-and-root-directory read (a Range starting at byte 0) passes
+      // through; every leaf-directory or tile-data read (a Range starting
+      // elsewhere) is held.
+      const range = route.request().headers()['range'] ?? '';
+      if (!range.startsWith('bytes=0-')) await gate.held;
+      await route.continue().catch(() => undefined);
+    });
+    await gotoApp(page, '?view=console&layers=hillshade&region=national', {
+      bootIdle: false
+    });
+    await expect(layerPill(page, 'hillshade')).toHaveText(PILL.live);
+    gate.release();
+  });
 });
