@@ -477,3 +477,15 @@ test.describe('DDM-P2-T09: one canonical place reference, no new URL parameter',
     assertNoNewUrlParam(await search(page));
   });
 });
+
+test.describe('D1 M4, found-026: unique Jump to region labels', () => {
+  test('every Jump to region option label is unique', async ({ page }) => {
+    await gotoApp(page);
+    const labels = await page.locator('#region-select option').allTextContents();
+    // Hawaii is the one framing drawn to match its detailed region 1:1
+    // (framings.ts's comment at :299-302); both options must still read
+    // differently in the one combined list (D1 M4, found-026, was 'Hawaii'
+    // twice: option 9 the overview camera, option 18 the detailed region).
+    expect(new Set(labels).size, labels.join(', ')).toBe(labels.length);
+  });
+});

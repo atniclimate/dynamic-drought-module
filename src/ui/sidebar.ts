@@ -710,10 +710,19 @@ function buildRegionSelect(): void {
   allOption.value = 'framing:all';
   allOption.textContent = 'All of North America';
   overviewGroup.appendChild(allOption);
+  // Every Jump to region option label must be unique (D1 M4, found-026): an
+  // editorial framing (Hawaii) can share its label with the detailed region
+  // it was drawn to match (regions.ts's comment at :299-302). Disambiguate
+  // only the overview option text here, never the config label itself or the
+  // detail option at REGIONS[key].label below, which u3i.spec.ts pins 1:1.
+  const regionLabels = new Set(
+    (Object.values(REGIONS) as Region[]).map((region) => region.label)
+  );
   for (const key of FRAMING_KEYS) {
     const option = document.createElement('option');
     option.value = `framing:${key}`;
-    option.textContent = FRAMINGS[key].label;
+    const label = FRAMINGS[key].label;
+    option.textContent = regionLabels.has(label) ? `${label} (overview)` : label;
     overviewGroup.appendChild(option);
   }
 
@@ -790,6 +799,21 @@ function buildRegionSelect(): void {
     });
   });
   select.insertAdjacentElement('afterend', briefingBtn);
+
+  // The door's plain-text alternate (D1 M4 repair, found-024): the second
+  // shell row is never empty, so when the door has nothing to show, this
+  // statement takes its place instead of a reserved but empty band. It is
+  // not a button (no click handler, no URL state) and is not a live region
+  // (no per-change announcement); updateRegionBriefingTrigger keeps it the
+  // exact inverse of the door's own hidden state, so exactly one of the two
+  // occupies the row.
+  const briefingNote = document.createElement('span');
+  briefingNote.id = 'region-briefing-note';
+  briefingNote.className = 'region-briefing-note';
+  briefingNote.textContent = 'Pick a place to open its briefing.';
+  briefingNote.hidden = true;
+  briefingBtn.insertAdjacentElement('afterend', briefingNote);
+
   // Reflect the region active at build time (boot applies it again via selectRegion).
   syncRegionSelect();
   updateRegionBriefingTrigger(STATE.currentRegion);
@@ -799,11 +823,18 @@ function buildRegionSelect(): void {
  * Show, label, or hide the region-briefing trigger for the active region (#9).
  * A region with a briefing anchor shows an explicit trigger naming the boundary
  * the briefing describes; a region that spans several states (or the national
- * framing) has no anchor and hides the trigger.
+ * framing) has no anchor and hides the trigger. So does an active minimap
+ * framing camera (D1 M4, found-025): the door never names a place the camera
+ * has left, so it hides under a framing and returns once a region is chosen
+ * again (selectRegion clears the framing before relabeling, :585-586, :623).
  */
 function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): void {
   const btn = document.getElementById('region-briefing-btn');
   if (!(btn instanceof HTMLButtonElement)) return;
+  // The plain-text alternate (D1 M4 repair, found-024) is optional only for
+  // callers that run before buildRegionSelect has inserted it; every real
+  // path keeps it the exact inverse of the door below.
+  const note = document.getElementById('region-briefing-note');
   // A selected map place takes precedence over the region anchor (F3, the
   // answer-first front door): the button becomes "See what this means" for the
   // place the user just clicked.
@@ -812,16 +843,24 @@ function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): v
     btn.hidden = false;
     btn.textContent = 'See what this means';
     btn.setAttribute('aria-label', `See what the drought means for ${place.label}`);
+    if (note) note.hidden = true;
+    return;
+  }
+  if (getFraming() !== null) {
+    btn.hidden = true;
+    if (note) note.hidden = false;
     return;
   }
   const anchor = regionKey ? REGIONS[regionKey]?.briefing : undefined;
   if (!anchor) {
     btn.hidden = true;
+    if (note) note.hidden = false;
     return;
   }
   btn.hidden = false;
   btn.textContent = `Impact briefing: ${anchor.label}`;
   btn.setAttribute('aria-label', `Open the impact briefing for ${anchor.label}`);
+  if (note) note.hidden = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -1693,6 +1732,9 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
   // `layers=` list (D-0.7.0-044).
   onFramingChange(() => {
     syncRegionSelect();
+    // The door follows the camera (D1 M4, found-025): hide it the instant a
+    // framing takes over, and let a later region choice bring it back.
+    updateRegionBriefingTrigger(STATE.currentRegion);
     pushUrl();
   });
   onHazardClusterChange(pushUrl);

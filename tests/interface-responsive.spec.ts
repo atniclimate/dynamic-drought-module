@@ -682,6 +682,66 @@ test.describe('short landscape coarse-pointer shell', () => {
   });
 });
 
+test.describe('desktop Brief region band', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test('at region=national the region panel leaves no empty band where the hidden briefing door was', async ({
+    page
+  }) => {
+    // A bare boot resolves to the national default and Brief mode (DR-109,
+    // 60c3a66), where the region panel is rehosted inside the desktop shell
+    // and its briefing door has no anchor to show (D1 M4, found-024). The
+    // repair (D1 M4 repair) keeps the row occupied by a plain-text
+    // alternate rather than collapsing it: this must be RED against the
+    // original pre-M4 code (an empty reserved band, no statement anywhere)
+    // because #region-briefing-note would not exist there at all.
+    await gotoApp(page);
+    const panel = page.locator('#shell-region-host > #panel-region');
+    await expect(panel).toBeVisible();
+    await expect(page.locator('#region-briefing-btn')).toBeHidden();
+    const note = page.locator('#shell-region-host #region-briefing-note');
+    await expect(note).toBeVisible();
+    await expect(note).toHaveText('Pick a place to open its briefing.');
+
+    // The statement's own box must sit inside the second row with no blank
+    // gap above or below it beyond the row's own 8px gap token (measured,
+    // not assumed): top gap is select-bottom to note-top, bottom gap is
+    // note-bottom to panel-bottom (panel padding is zeroed by .shell-rehost
+    // while seated here, so panel-bottom is the row's own edge).
+    const selectBox = await rect(page.locator('#shell-region-host #region-select'));
+    const noteBox = await rect(note);
+    const panelBox = await rect(panel);
+    expect(
+      noteBox.top - selectBox.bottom,
+      'a blank gap sits above the statement beyond the row gap token'
+    ).toBeLessThanOrEqual(9);
+    expect(
+      panelBox.bottom - noteBox.bottom,
+      'a blank gap sits below the statement inside the reserved row'
+    ).toBeLessThanOrEqual(1);
+  });
+
+  test('the region row keeps its height when a place selection shows the door', async ({
+    page
+  }) => {
+    // Red on the collapse design (D1 M4): collapsing the second row to 0px
+    // when the door is hidden, then expanding it once a place selection
+    // shows the door, moves every fixed-position control below it,
+    // including #brief-search, which the 2026-09-13 stable-position rule
+    // pins in place across selection changes.
+    await gotoApp(page);
+    const searchBoxBefore = await rect(page.locator('#brief-search'));
+    await page.locator('#brief-search [data-ddm-search]').fill('oregon');
+    await page.locator('#brief-search [data-search-kind="place"][data-search-id="OR"]').click();
+    await expect(page.locator('#region-briefing-btn')).toBeVisible();
+    const searchBoxAfter = await rect(page.locator('#brief-search'));
+    expect(
+      Math.abs(searchBoxAfter.top - searchBoxBefore.top),
+      '#brief-search moved when the region row gained the visible door'
+    ).toBeLessThanOrEqual(1);
+  });
+});
+
 for (const width of [400, 200]) {
   test(`the ${width}x600 embed contains dense Wildfire chrome and compact attribution`, async ({
     page

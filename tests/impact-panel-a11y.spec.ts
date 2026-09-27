@@ -100,4 +100,26 @@ test.describe('impact panel accessibility', () => {
     await gotoApp(page, '?region=national');
     await expect(page.locator('#region-briefing-btn')).toBeHidden();
   });
+
+  test('after a minimap framing click elsewhere the briefing door says it opens the last selected place, or hides', async ({
+    page
+  }) => {
+    // Start anchored to Washington in Brief, where the inline minimap is
+    // visible (the region panel is console-only for the door's OWN click
+    // per the test above; the minimap itself renders only in Brief).
+    await gotoApp(page, '?region=washington_state&view=brief');
+    const trigger = page.locator('#region-briefing-btn');
+    await expect(trigger).toBeVisible();
+    await expect(trigger).toContainText('Washington');
+
+    // A framing camera takes the view away from Washington without any
+    // region= choice (S2 camera exclusivity).
+    await page.locator('.shell-minimap-map [data-framing="southeast-gulf"]').click();
+    await page.waitForFunction(() => window.location.search.includes('framing=southeast-gulf'));
+
+    // The door never keeps naming a place the camera has left (D1 M4,
+    // found-025): it hides rather than keep reading "Impact briefing:
+    // Washington" under the Southeast & Gulf Coast camera.
+    await expect(trigger).toBeHidden();
+  });
 });
