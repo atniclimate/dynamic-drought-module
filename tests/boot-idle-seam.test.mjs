@@ -633,8 +633,11 @@ test('a sole consumer\'s abort settles its shared key exactly once', async () =>
     // is a same-stub no-op, not a genuine late completion racing the
     // abort (Codex round-1 review, finding C14). It still guards a
     // regression where releasing an already-superseded stub disturbs an
-    // unrelated pending count. The next test builds the actual race this
-    // comment used to claim.
+    // unrelated pending count. The seam-late-race leg of the test titled
+    // "a post-abort count read waits on onSharedTransportSettled: a stub
+    // whose abort rejection lands one macrotask late fools a setTimeout(0)
+    // hop and not the settlement callback", below, builds the actual race
+    // this comment used to claim.
     held.release();
     assert.equal(
       fetchUtil.pendingSharedTransportCount(),
@@ -646,7 +649,7 @@ test('a sole consumer\'s abort settles its shared key exactly once', async () =>
   }
 });
 
-test('a naive per-listener settle counter double-decrements under a genuine late completion racing abort; the real shared-transport tracker settles exactly once', async () => {
+test('a naive per-listener settle counter double-decrements under a duplicate resolution of an already-settled promise; the real shared-transport tracker settles exactly once', async () => {
   // First, a local reproduction of the "counter-clamp" shape the shared
   // transport tracker replaced (fetch.ts:243's comment): a naive tracker
   // decrements once from the CONSUMER's own abort listener, and
@@ -732,11 +735,21 @@ test('a naive per-listener settle counter double-decrements under a genuine late
     assert.equal(settlements.events(), 1, 'one settlement event for one logical request');
 
     // The genuine late completion: `realStub`'s underlying promise already
-    // rejected via the abort listener above; this call still reaches its
-    // executor's `resolve` (no `settled` guard), modeling a body that
-    // finishes after the network layer's own cancellation. A promise
-    // settles at most once, so `next.promise`'s single `.then` in
-    // `fetchSharedJsonWithBudget` cannot run a second time for it.
+    // rejected via the abort listener above, so this call reaches an
+    // already-rejected promise's executor and enqueues no job (no `settled`
+    // guard needed). This proves immunity to a DUPLICATE RESOLUTION of an
+    // already-settled promise, not a post-abort race: the stub's own
+    // promise is already settled before `release()` runs, so there is no
+    // live race between abort and completion here (the delayed-stub
+    // seam-late-race leg of the test titled "a post-abort count read waits
+    // on onSharedTransportSettled: a stub whose abort rejection lands one
+    // macrotask late fools a setTimeout(0) hop and not the settlement
+    // callback", below (currently :829-868, re-read if this comment moves),
+    // is the proof of the genuine post-abort race, where the body can still
+    // arrive before the stub's own late rejection). A promise settles at
+    // most once, so
+    // `next.promise`'s single `.then` in `fetchSharedJsonWithBudget` cannot
+    // run a second time for it.
     //
     // Pinned microtask depth, zero: the only route to `settleSharedTransport`
     // is that single `.then(onFulfilled, onRejected)` at fetch.ts:321-333,
@@ -750,9 +763,9 @@ test('a naive per-listener settle counter double-decrements under a genuine late
     assert.equal(
       fetchUtil.pendingSharedTransportCount(),
       before,
-      'a genuine late completion racing the abort does not double-decrement the real tracker'
+      'a duplicate resolution of the already-rejected promise does not double-decrement the real tracker'
     );
-    assert.equal(settlements.events(), 1, 'the late completion fired no second settlement');
+    assert.equal(settlements.events(), 1, 'the duplicate resolution fired no second settlement');
   } finally {
     settlements.dispose();
     globalThis.fetch = originalFetch;

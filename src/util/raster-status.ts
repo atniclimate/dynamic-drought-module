@@ -11,11 +11,14 @@
  * without it. The no-deadline policy (the debounced tile-error rule of
  * 2026-07-02: a rolling error window that degrades to `error` on repeated
  * tile failures and heals to `ready` on a loaded tile) lives only in
- * raster-error-watch.ts, which the Fire 3D terrain watch imports directly.
- * This module does not import it, so no consumer's activation closure here
- * carries that chunk, and the Fire 3D activation closure carries neither
- * module (DR-085, DR-142; tests/raster-readiness-contract.test.mjs holds
- * both lines).
+ * raster-error-watch.ts, which the Fire 3D terrain watch imports directly
+ * (fire3d.ts:79, a value import of `watchRasterTiles`). This module does
+ * not import it, so no consumer's activation closure built on this
+ * module's own runtime carries that chunk; Fire 3D's activation closure
+ * carries raster-error-watch.ts instead, not neither module (fire3d.ts:80's
+ * import of this module's `RasterTileWatch` type is type-only and
+ * contributes no runtime code) (DR-085, DR-142;
+ * tests/raster-readiness-contract.test.mjs holds both lines).
  *
  * The verdict is the CURRENT view's, read from the tiles of the source on
  * the map now (the tile manager's ideal tiles and the fallbacks retained for
@@ -27,10 +30,15 @@
  * found-042 floor holds while a tile of the view is still in flight. Known
  * limit (DDM-P14-T04 C1, carried OPEN to D2 under DR-143, DDM-P1-T11): the
  * deadline reads once and leaves its cycle open, so on a map that does not
- * idle (the 3D scene) a later return to cached tiles, or a held view whose
- * tiles all fail after the deadline, is not read again until the next idle
- * or settle; the ordinary 2D map idles after both and recovers there. Without a tile manager the verdict falls back to the cycle's
- * request sets, which cannot see a cache restore.
+ * idle (the 3D scene) a later return to cached tiles is not read again
+ * until the next idle or settle; the ordinary 2D map does recover there. A
+ * held view whose tiles all fail after the deadline is a different case:
+ * MapLibre fires no event for a 404 and no idle follows an all-404 view
+ * (:192-193 below; tests/raster-current-view.spec.ts:193-195), so the 2D
+ * map gets no idle either, and a live (partial) verdict can persist over
+ * the all-failed view until the next interaction on any map. Without a
+ * tile manager the verdict falls back to the cycle's request sets, which
+ * cannot see a cache restore.
  *
  * Known tradeoff, documented rather than hidden: a viewport entirely outside
  * a service's tile coverage (for example a fully off-coverage pan under the

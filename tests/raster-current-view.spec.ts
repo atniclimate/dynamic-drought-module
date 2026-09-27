@@ -22,7 +22,8 @@ import { gotoApp, layerPill, PILL, selectRegion } from './helpers';
  *         from live (partial) to live once every tile of this view has
  *         loaded, so the whole view is cached when it leaves.
  *   B1    Hawaii, every tile answers 404 (NIDIS's own answer outside CONUS):
- *         the cycle ends at map idle with nothing loaded, unavailable.
+ *         no idle follows an all-404 view, so the verdict is a deadline read
+ *         of the settled, all-errored view: unavailable.
  *   A2    Central Oregon again, the same fit as A1, so every tile comes back
  *         from the cache. The route records any tile request and answers it
  *         404, so no response can prove a tile; the pill must read live, and
