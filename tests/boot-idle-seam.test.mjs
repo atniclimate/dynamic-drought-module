@@ -108,6 +108,148 @@ function deferredFetchStub(bodyText) {
   return { fetchImpl, release };
 }
 
+/**
+ * Like `deferredFetchStub`, but `release()` carries no `settled` guard of
+ * its own: it always calls the underlying `resolve`, exactly what a
+ * network body finishing after the fetch layer's own `AbortController`
+ * already rejected the same promise would look like. `deferredFetchStub`'s
+ * guard makes a post-abort `release()` a same-file no-op before it ever
+ * reaches the executor; this variant lets that call genuinely race the
+ * abort so a test can prove safety comes from the Promise settling once,
+ * not from stub bookkeeping (Codex round-1 review, finding C14).
+ */
+function racingFetchStub(bodyText) {
+  let resolveFn;
+  let rejectFn;
+  const promise = new Promise((resolve, reject) => {
+    resolveFn = resolve;
+    rejectFn = reject;
+  });
+  const fetchImpl = (_url, init) => {
+    if (init?.signal) {
+      if (init.signal.aborted) {
+        return Promise.reject(new DOMException('Aborted', 'AbortError'));
+      }
+      init.signal.addEventListener(
+        'abort',
+        () => rejectFn(new DOMException('Aborted', 'AbortError')),
+        { once: true }
+      );
+    }
+    return promise;
+  };
+  const release = () =>
+    resolveFn(
+      new Response(bodyText, {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+  return { fetchImpl, release };
+}
+
+/**
+ * Like `racingFetchStub`, but the abort listener does not reject at once:
+ * it rejects through a chain of `hops` `setTimeout(..., 0)` macrotasks, the
+ * way a real network stack may surface its cancellation a task or more
+ * after `abort()` returns (Codex round-3 review, finding C14).
+ *
+ * One hop is NOT late enough to expose a `setTimeout(resolve, 0)` wait: the
+ * listener's timer is queued synchronously inside `abort()`, ahead of the
+ * test's own timer, and Node drains the microtask queue (the whole
+ * `fetch.ts:321-333` settle chain) between timer callbacks, so the entry is
+ * already settled when the test's timer fires. Two hops land exactly one
+ * macrotask AFTER the test's timer, which is the smallest delay that makes
+ * the old wait read the count before settlement (measured 2026-09-26: one
+ * hop read 0, two hops read 1 against an expected 0).
+ *
+ * `rejectAttempted` resolves right after the stub calls its `reject`, so a
+ * test that let `release()` win the race can wait for the losing rejection
+ * to have actually been attempted instead of guessing a delay.
+ */
+function delayedRacingFetchStub(bodyText, hops) {
+  let resolveFn;
+  let rejectFn;
+  let markRejectAttempted;
+  const rejectAttempted = new Promise((resolve) => {
+    markRejectAttempted = resolve;
+  });
+  const promise = new Promise((resolve, reject) => {
+    resolveFn = resolve;
+    rejectFn = reject;
+  });
+  const deferReject = (remaining) => {
+    setTimeout(() => {
+      if (remaining > 1) {
+        deferReject(remaining - 1);
+        return;
+      }
+      rejectFn(new DOMException('Aborted', 'AbortError'));
+      markRejectAttempted();
+    }, 0);
+  };
+  const fetchImpl = (_url, init) => {
+    if (init?.signal) {
+      if (init.signal.aborted) {
+        return Promise.reject(new DOMException('Aborted', 'AbortError'));
+      }
+      init.signal.addEventListener('abort', () => deferReject(hops), { once: true });
+    }
+    return promise;
+  };
+  const release = () =>
+    resolveFn(
+      new Response(bodyText, {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+  return { fetchImpl, release, rejectAttempted };
+}
+
+/**
+ * Wait on REAL shared-transport settlement through the module's own
+ * `onSharedTransportSettled` callback (fetch.ts:272), which
+ * `settleSharedTransport` (fetch.ts:243-246) fires only after it removed an
+ * entry, never on a no-op second settle. Subscribe BEFORE the action that
+ * settles, so a settlement that lands inside the action's own microtasks is
+ * counted rather than missed.
+ *
+ * `until(predicate, label)` resolves at the first moment `predicate()` holds,
+ * checked at call time and after every settlement event; the predicate should
+ * require at least one event, so the wait is gated on a settlement that
+ * really happened. The timer is a failure bound only (it rejects with the
+ * event count), never the thing the wait relies on.
+ */
+function watchSharedSettlements() {
+  let events = 0;
+  let wake = null;
+  const unsubscribe = fetchUtil.onSharedTransportSettled(() => {
+    events += 1;
+    wake?.();
+  });
+  const until = (predicate, label, budgetMs = 2_000) =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        wake = null;
+        reject(
+          new Error(
+            `no shared-transport settlement satisfied "${label}" within ${budgetMs} ms (settlement events seen: ${events})`
+          )
+        );
+      }, budgetMs);
+      const check = () => {
+        if (!predicate()) return;
+        clearTimeout(timer);
+        wake = null;
+        resolve();
+      };
+      wake = check;
+      check();
+    });
+  return { events: () => events, until, dispose: unsubscribe };
+}
+
 test('markBooting installs the seam next to the ready promise', () => {
   bootIdle.markBooting();
   const seam = globalThis.window.__ddm;
@@ -457,12 +599,22 @@ test('a sole consumer\'s abort settles its shared key exactly once', async () =>
     );
     assert.equal(fetchUtil.pendingSharedTransportCount(), before + 2);
 
-    consumer.abort();
-    await assert.rejects(transport, { name: 'AbortError' });
-    // Let any further settle-chain hops (a natural settle racing the abort
-    // path) finish before reading the count, so a double settle is caught
-    // regardless of which microtask tick it lands on.
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    // Read the count only once the module reports the aborted key's entry
+    // settled (not after a guessed macrotask hop, Codex round-3 C14).
+    const settlements = watchSharedSettlements();
+    try {
+      consumer.abort();
+      await assert.rejects(transport, { name: 'AbortError' });
+      await settlements.until(
+        () =>
+          settlements.events() >= 1 &&
+          fetchUtil.pendingSharedTransportKeys()['seam-abort-sole'] === undefined,
+        'seam-abort-sole settled'
+      );
+      assert.equal(settlements.events(), 1, 'exactly one settlement for the aborted key');
+    } finally {
+      settlements.dispose();
+    }
     assert.equal(
       fetchUtil.pendingSharedTransportCount(),
       before + 1,
@@ -475,14 +627,233 @@ test('a sole consumer\'s abort settles its shared key exactly once', async () =>
     assert.deepEqual(await otherTransport, { other: true });
     assert.equal(fetchUtil.pendingSharedTransportCount(), before);
 
-    // A later settle of the already-aborted stub (a late response arriving
-    // after supersession) must not decrement the count a second time.
+    // `held`'s underlying stub already settled (rejected) when `consumer`
+    // aborted above; `deferredFetchStub.release()` guards on its own
+    // `settled` flag and returns before ever calling the executor, so this
+    // is a same-stub no-op, not a genuine late completion racing the
+    // abort (Codex round-1 review, finding C14). It still guards a
+    // regression where releasing an already-superseded stub disturbs an
+    // unrelated pending count. The next test builds the actual race this
+    // comment used to claim.
     held.release();
     assert.equal(
       fetchUtil.pendingSharedTransportCount(),
       before,
-      'a late settle after abort does not double-decrement'
+      'releasing an already-settled stub is a no-op and leaves the count untouched'
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('a naive per-listener settle counter double-decrements under a genuine late completion racing abort; the real shared-transport tracker settles exactly once', async () => {
+  // First, a local reproduction of the "counter-clamp" shape the shared
+  // transport tracker replaced (fetch.ts:243's comment): a naive tracker
+  // decrements once from the CONSUMER's own abort listener, and
+  // independently decrements again from the underlying fetch promise's
+  // own settle reaction. Both listeners are attached to `racingFetchStub`,
+  // whose `release()` has no `settled` guard, so a subsequent late
+  // completion attempt genuinely reaches the same, already-rejected
+  // promise executor rather than being skipped by stub bookkeeping. This
+  // proves the racing construction here is capable of exposing a real
+  // double-decrement before checking that the real tracker resists it.
+  function naiveTracker() {
+    let count = 1;
+    return {
+      onConsumerAbort: () => {
+        count -= 1;
+      },
+      onUnderlyingSettle: () => {
+        count -= 1;
+      },
+      count: () => count
+    };
+  }
+
+  const naive = naiveTracker();
+  const naiveStub = racingFetchStub('{"solo":true}');
+  const naiveConsumer = new AbortController();
+  const naivePromise = naiveStub
+    .fetchImpl('https://example.invalid/naive.json', { signal: naiveConsumer.signal })
+    .catch(() => undefined);
+  naiveConsumer.signal.addEventListener('abort', naive.onConsumerAbort, { once: true });
+  void naivePromise.finally(naive.onUnderlyingSettle);
+
+  naiveConsumer.abort();
+  await naivePromise;
+  // The late completion: `naiveStub`'s promise already rejected above, so
+  // this reaches an already-settled executor, same as the real check
+  // below. A naive tracker with no dedup already went to -1 from the two
+  // independent listeners on the single abort event; this call proves it
+  // does not fall further, because a promise's reactions run only once.
+  naiveStub.release();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(
+    naive.count(),
+    -1,
+    'the naive per-listener tracker double-decremented for one logical request: the consumer-abort listener and the settled promise both fired'
+  );
+
+  // Now the real transport under the identical forced completion order:
+  // one sole consumer aborts, then the SAME already-rejected stub promise
+  // is genuinely resolved (not skipped by a stub-side guard).
+  const originalFetch = globalThis.fetch;
+  const realStub = racingFetchStub('{"solo":true}');
+  globalThis.fetch = realStub.fetchImpl;
+  const settlements = watchSharedSettlements();
+  try {
+    const before = fetchUtil.pendingSharedTransportCount();
+    const consumer = new AbortController();
+    const transport = fetchUtil.fetchSharedJsonWithBudget(
+      'seam-race-real',
+      'https://example.invalid/race-real.json',
+      null,
+      consumer.signal,
+      60_000
+    );
+    assert.equal(fetchUtil.pendingSharedTransportCount(), before + 1);
+
+    consumer.abort();
+    await assert.rejects(transport, { name: 'AbortError' });
+    // Gate the read on the module's own settlement callback, not on a
+    // guessed `setTimeout(0)` hop (Codex round-3 C14; the next test proves
+    // a hop can read the count before settlement).
+    await settlements.until(
+      () =>
+        settlements.events() >= 1 &&
+        fetchUtil.pendingSharedTransportKeys()['seam-race-real'] === undefined,
+      'seam-race-real settled'
+    );
+    assert.equal(
+      fetchUtil.pendingSharedTransportCount(),
+      before,
+      'the abort settled the shared entry exactly once'
+    );
+    assert.equal(settlements.events(), 1, 'one settlement event for one logical request');
+
+    // The genuine late completion: `realStub`'s underlying promise already
+    // rejected via the abort listener above; this call still reaches its
+    // executor's `resolve` (no `settled` guard), modeling a body that
+    // finishes after the network layer's own cancellation. A promise
+    // settles at most once, so `next.promise`'s single `.then` in
+    // `fetchSharedJsonWithBudget` cannot run a second time for it.
+    //
+    // Pinned microtask depth, zero: the only route to `settleSharedTransport`
+    // is that single `.then(onFulfilled, onRejected)` at fetch.ts:321-333,
+    // reached only through the stub promise. That promise is already
+    // rejected, so its resolve function returns at once on its
+    // [[AlreadyResolved]] flag (ECMA-262 CreateResolvingFunctions) and
+    // enqueues NO job. Nothing is pending after `release()` returns, so the
+    // synchronous read below IS the settled read; a guessed hop would add no
+    // information. The event count proves no second settlement fired.
+    realStub.release();
+    assert.equal(
+      fetchUtil.pendingSharedTransportCount(),
+      before,
+      'a genuine late completion racing the abort does not double-decrement the real tracker'
+    );
+    assert.equal(settlements.events(), 1, 'the late completion fired no second settlement');
+  } finally {
+    settlements.dispose();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('a post-abort count read waits on onSharedTransportSettled: a stub whose abort rejection lands one macrotask late fools a setTimeout(0) hop and not the settlement callback', async () => {
+  const originalFetch = globalThis.fetch;
+  const lateStub = delayedRacingFetchStub('{"late":true}', 2);
+  const raceStub = delayedRacingFetchStub('{"race":true}', 2);
+  let call = 0;
+  globalThis.fetch = (url, init) => {
+    call += 1;
+    return (call === 1 ? lateStub : raceStub).fetchImpl(url, init);
+  };
+  try {
+    const before = fetchUtil.pendingSharedTransportCount();
+
+    // NEGATIVE CONTROL: the old wait. The consumer's own promise rejects at
+    // once on abort (fetch.ts:357-358), but the shared entry settles only
+    // when the underlying fetch rejects, here one macrotask after the
+    // test's own `setTimeout(0)` hop fires. The hop therefore reads the
+    // count BEFORE settlement: the stale reading is asserted, so this line
+    // fails the day the stub stops being late enough to prove anything.
+    const late = watchSharedSettlements();
+    try {
+      const consumer = new AbortController();
+      const transport = fetchUtil.fetchSharedJsonWithBudget(
+        'seam-late-abort',
+        'https://example.invalid/late-abort.json',
+        null,
+        consumer.signal,
+        60_000
+      );
+      consumer.abort();
+      await assert.rejects(transport, { name: 'AbortError' });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert.equal(
+        fetchUtil.pendingSharedTransportCount(),
+        before + 1,
+        'negative control: the setTimeout(0) hop reads the count before the late rejection settles the entry'
+      );
+      assert.equal(late.events(), 0, 'negative control: no settlement has fired yet');
+
+      // The new wait: the module's own settlement callback.
+      await late.until(
+        () =>
+          late.events() >= 1 &&
+          fetchUtil.pendingSharedTransportKeys()['seam-late-abort'] === undefined,
+        'seam-late-abort settled'
+      );
+      assert.equal(
+        fetchUtil.pendingSharedTransportCount(),
+        before,
+        'gated on onSharedTransportSettled, the read sees the settled count'
+      );
+      assert.equal(late.events(), 1, 'exactly one settlement for the late-aborted entry');
+    } finally {
+      late.dispose();
+    }
+
+    // The genuine race the delayed stub makes possible: the body arrives
+    // (`release()`) AFTER the abort but BEFORE the stub's late rejection.
+    // The resolve wins the stub promise; `fetchJsonWithBudget` then finds
+    // its signal aborted in `readBodyBytes` (fetch.ts:91-93) and rejects, so
+    // the entry settles once through the rejection branch (fetch.ts:327-333).
+    const race = watchSharedSettlements();
+    try {
+      const consumer = new AbortController();
+      const transport = fetchUtil.fetchSharedJsonWithBudget(
+        'seam-late-race',
+        'https://example.invalid/late-race.json',
+        null,
+        consumer.signal,
+        60_000
+      );
+      consumer.abort();
+      raceStub.release();
+      await assert.rejects(transport, { name: 'AbortError' });
+      await race.until(
+        () =>
+          race.events() >= 1 &&
+          fetchUtil.pendingSharedTransportKeys()['seam-late-race'] === undefined,
+        'seam-late-race settled'
+      );
+      assert.equal(fetchUtil.pendingSharedTransportCount(), before);
+
+      // Wait for the losing rejection to have really been attempted (the
+      // stub's own signal, not a guessed delay). It hit an already-resolved
+      // promise, which enqueues no job (the zero-depth pin in the previous
+      // test), so the read right after it is the settled read.
+      await raceStub.rejectAttempted;
+      assert.equal(
+        fetchUtil.pendingSharedTransportCount(),
+        before,
+        'the losing late rejection does not double-decrement'
+      );
+      assert.equal(race.events(), 1, 'one settlement for one logical request');
+    } finally {
+      race.dispose();
+    }
   } finally {
     globalThis.fetch = originalFetch;
   }
