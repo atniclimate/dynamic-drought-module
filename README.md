@@ -154,7 +154,7 @@ current URL.
 
 | Param | Values | Default |
 | ----- | ------ | ------- |
-| `region` | `washington_state`, `columbia_snake_basin`, `cascades`, `central_oregon`, `southwest_washington`, `south_puget_sound`, `national`, `alaska`, `hawaii`, `british_columbia` | `washington_state` |
+| `region` | `washington_state`, `columbia_snake_basin`, `cascades`, `central_oregon`, `southwest_washington`, `south_puget_sound`, `national`, `alaska`, `hawaii`, `british_columbia` | `national` (add `region=washington_state&view=brief` to keep the prior Washington framing and the Brief door) |
 | `layers` | comma-separated keys from the table below | `hillshade,nadm-drought,aiannh,bia-reservations,states` |
 | `framing` | one of the nine ATNI-authored editorial framing keys, or `all` | none; `region` remains in control |
 | `cluster` | `wildfire`, `heat`, or `enso`; an explicit `layers` list outranks it | Drought, encoded by absence |

@@ -59,9 +59,10 @@
  *
  * THREE DOORS, in the three cases below, all under one boot recipe: the
  * camera is sent to Alaska with `?framing=alaska-northwest` (a camera-only
- * deep link; see src/state/framing-store.ts's own doc comment), while
- * `region=` is left unset so `selectRegion` seeds the STATE.currentRegion
- * default (`washington_state`) exactly as a bare boot would.
+ * deep link; see src/state/framing-store.ts's own doc comment), with
+ * `region=washington_state` pinned explicitly so `selectRegion` seeds the
+ * STATE.currentRegion to `washington_state`, the same value a bare boot's
+ * default would seed.
  *
  *   - the condition door: no Tribal boundary layer is active, so a
  *     non-place point-event (a stubbed NWS alert polygon, the same
@@ -321,7 +322,7 @@ async function assertNoWashingtonForAlaska(page: Page): Promise<void> {
   await expect(panel).not.toContainText('BONO3');
 }
 
-test.describe('a briefing for an Alaska place under the default washington_state region', () => {
+test.describe('a briefing for an Alaska place with region=washington_state pinned', () => {
   test('the condition door: a point-event click over Alaska answers honestly, not with Washington (DR-090)', async ({
     page
   }) => {
@@ -340,7 +341,7 @@ test.describe('a briefing for an Alaska place under the default washington_state
     // alert (a `point-event`, the top-ranked kind) is the only registered
     // hit at the click point, which is what leaves `selection` unset and
     // routes through `attachConditionDoor`.
-    await gotoApp(page, '?framing=alaska-northwest&layers=nws-alerts');
+    await gotoApp(page, '?region=washington_state&framing=alaska-northwest&layers=nws-alerts');
     await waitForLayerSettled(page, 'nws-alerts');
 
     await clickMapCenterUntilPopup(page);
@@ -359,7 +360,7 @@ test.describe('a briefing for an Alaska place under the default washington_state
   test('an AIANNH click over Alaska answers honestly, not with Washington (DR-090)', async ({ page }) => {
     await stubBaselineBriefingHosts(page);
     await routeGeojson(page, AIANNH_ROUTE, syntheticAlaskaAiannhBody());
-    await gotoApp(page, '?framing=alaska-northwest&layers=aiannh');
+    await gotoApp(page, '?region=washington_state&framing=alaska-northwest&layers=aiannh');
     await waitForLayerSettled(page, 'aiannh');
 
     await clickMapCenterUntilPopup(page);
@@ -373,7 +374,7 @@ test.describe('a briefing for an Alaska place under the default washington_state
   test('a BIA click over Alaska answers honestly, not with Washington (DR-090)', async ({ page }) => {
     await stubBaselineBriefingHosts(page);
     await routeGeojson(page, BIA_ROUTE, syntheticAlaskaBiaBody());
-    await gotoApp(page, '?framing=alaska-northwest&layers=bia-reservations');
+    await gotoApp(page, '?region=washington_state&framing=alaska-northwest&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
     await clickMapCenterUntilPopup(page);

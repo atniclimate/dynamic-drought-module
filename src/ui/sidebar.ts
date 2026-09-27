@@ -559,7 +559,21 @@ function selectRegion(
   // from the prior region. The matrix is authoritative: closing here aborts
   // hydration, clears the panel-owned place selection, and drops the mobile
   // at-hand briefing before the new region is presented or printed.
-  if (regionCapabilityLevel(key, 'impactSynthesis') === 'none') {
+  //
+  // DR-109 precedence D2 / Q6: this must fire only on an EXPLICIT change
+  // into a none-synthesis region, never on the silent boot fit (`silent`)
+  // or a same-region Reset (`key === priorRegion`). Without both guards,
+  // Reset under the national default (impactSynthesis 'none',
+  // src/config/capability-matrix.ts:124-127) would close a briefing it just
+  // opened, because the check used to fire on every selectRegion call for
+  // such a region regardless of whether the region actually changed or the
+  // call was the boot's own silent fit.
+  const priorRegion = STATE.currentRegion;
+  if (
+    !silent &&
+    key !== priorRegion &&
+    regionCapabilityLevel(key, 'impactSynthesis') === 'none'
+  ) {
     closeImpactPanel();
   }
 

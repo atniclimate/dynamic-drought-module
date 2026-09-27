@@ -27,10 +27,12 @@ import type { TemporalHorizonKey } from '../config/clusters';
 /**
  * URL parameterization for the Dynamic Drought Module (DDM).
  *
- * The application encodes its restorable view in three query parameters:
+ * The application encodes its restorable view in a growing family of query
+ * parameters, starting with three:
  *
  *   region   active region key (validated against REGIONS, falls back
- *            to DEFAULT_REGION on unknown or missing values)
+ *            to DEFAULT_REGION on unknown or missing values; DEFAULT_REGION
+ *            is `national` since DR-109, S30D D1)
  *   layers   comma-separated active layer keys; an explicit empty value
  *            (`?layers=`) yields the empty set, while a missing parameter
  *            yields the default-on set

@@ -46,8 +46,9 @@ const nadmStubStates = new WeakMap<BrowserContext, NadmStubState>();
  * pattern (a custom body, a delay, a held request, a failure status) wins
  * over this backstop whatever order the two were registered in. `fixture`
  * is fail-closed: it answers the same deterministic single-feature snapshot
- * every routine boot claims. `live` installs no route at all, the explicit
- * opt-out for a spec, or the daily source-health probe (which boots outside
+ * every routine boot claims. `live` installs a pass-through context route
+ * (the handler calls `route.fallback()`), the explicit opt-out for a spec,
+ * or the daily source-health probe (which boots outside
  * this helper entirely and never reaches this function), that wants the
  * unstubbed request to reach whatever it or a page-level route provides.
  */
@@ -207,7 +208,7 @@ export function stationValues(page: Page, id: string): Locator {
 
 /**
  * Navigate to the app (optionally with a query string like
- * `?region=central_oregon&layers=usdm,tribal`) and wait for boot to finish.
+ * `?region=washington_state&layers=usdm,tribal`) and wait for boot to finish.
  *
  * Boot completes only after the map fires `load`, at which point `buildSidebar`
  * synchronously renders the preset chips and the region radios. Waiting on
@@ -242,7 +243,7 @@ export interface GotoAppOptions {
    * deterministic single-feature body in this file (`TEST_NADM_SNAPSHOT`),
    * claimed unconditionally so every routine boot is offline and
    * reproducible regardless of what the query string names. `live` is the
-   * explicit opt-out: it installs no context-level route at all, for a
+   * explicit opt-out: it installs a pass-through context route, for a
    * spec that wants the request to reach whatever its own page-level
    * `page.route` provides (a delay, a failure status, a malformed body) or,
    * unstubbed entirely, the live agency. A spec that registers its own

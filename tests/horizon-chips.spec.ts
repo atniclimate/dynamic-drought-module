@@ -270,7 +270,11 @@ test.describe('DDM-P8-T03: every rendered claim carries exactly one observed/out
 
     // current: the index-state read (derived -> observed) and the
     // authority + monthly-companion reads (analyzed -> observed).
+    // Each ENSO cell's lane settles after boot-idle (the precedent at
+    // tests/enso-horizons.spec.ts, c8680ce): read a cell only once its pill
+    // has left loading, or the read races the lane.
     const current = page.locator('.impact-hazard[data-horizon="current"][data-hazard="enso"]');
+    await expect(current.locator('.impact-hazard-pill')).not.toHaveText('loading...');
     const currentTags = await current.locator('.impact-claim-register').allInnerTexts();
     expect(currentTags.length, 'enso current claim count').toBeGreaterThan(0);
     for (const tag of currentTags) expect(tag.trim()).toBe('observed');
@@ -278,6 +282,7 @@ test.describe('DDM-P8-T03: every rendered claim carries exactly one observed/out
     // nearTerm: the weekly Nino 3.4 observation (analyzed -> observed),
     // exactly the DR-031 claim this ruling was made for.
     const nearTerm = page.locator('.impact-hazard[data-horizon="nearTerm"][data-hazard="enso"]');
+    await expect(nearTerm.locator('.impact-hazard-pill')).not.toHaveText('loading...');
     const nearTermTags = await nearTerm.locator('.impact-claim-register').allInnerTexts();
     expect(nearTermTags.length, 'enso nearTerm claim count').toBeGreaterThan(0);
     for (const tag of nearTermTags) expect(tag.trim()).toBe('observed');
@@ -288,6 +293,7 @@ test.describe('DDM-P8-T03: every rendered claim carries exactly one observed/out
     // side) does not activate here; 'outlook' is proven by the model-level
     // test above instead, against every evidence class the app builds.
     const longRange = page.locator('.impact-hazard[data-horizon="longRange"][data-hazard="enso"]');
+    await expect(longRange.locator('.impact-hazard-pill')).not.toHaveText('loading...');
     const longRangeTags = await longRange.locator('.impact-claim-register').allInnerTexts();
     expect(longRangeTags.map((t) => t.trim())).toEqual(['observed']);
 

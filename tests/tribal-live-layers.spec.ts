@@ -228,7 +228,7 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
         })
       );
       await routeGeojson(page, BIA_ROUTE, emptyCollectionBody());
-      await gotoApp(page, '?view=console&layers=aiannh');
+      await gotoApp(page, '?region=washington_state&view=console&layers=aiannh');
       await waitForLayerSettled(page, 'aiannh');
       await clickMapForPopup(page);
 
@@ -277,7 +277,7 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
       });
     });
     await routeGeojson(page, BIA_ROUTE, syntheticBiaBody());
-    await gotoApp(page, '?view=console&layers=aiannh');
+    await gotoApp(page, '?region=washington_state&view=console&layers=aiannh');
     await waitForLayerSettled(page, 'aiannh');
     await expect(layerPill(page, 'aiannh')).toHaveText('live');
 
@@ -309,7 +309,7 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
       });
     });
     await routeGeojson(page, BIA_ROUTE, syntheticBiaBody());
-    await gotoApp(page, '?view=console&layers=aiannh');
+    await gotoApp(page, '?region=washington_state&view=console&layers=aiannh');
     await waitForLayerSettled(page, 'aiannh');
     await expect(layerPill(page, 'aiannh')).toHaveText('live');
 
@@ -347,7 +347,7 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
         )
       });
     });
-    await gotoApp(page, '?view=console&layers=aiannh');
+    await gotoApp(page, '?region=washington_state&view=console&layers=aiannh');
     await waitForLayerSettled(page, 'aiannh');
     await expect(layerPill(page, 'aiannh')).toHaveText('live');
 
@@ -384,7 +384,7 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
         )
       });
     });
-    await gotoApp(page, '?view=console&layers=bia-reservations');
+    await gotoApp(page, '?region=washington_state&view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
     await expect(layerPill(page, 'bia-reservations')).toHaveText('live');
 

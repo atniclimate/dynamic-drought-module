@@ -51,7 +51,9 @@ test.describe('boot', () => {
     }
 
     // The default detailed camera is selected in the combined dropdown.
-    await expect(regionSelect(page)).toHaveValue('region:washington_state');
+    // DR-109 (S30D D1): the default region frames the contiguous United
+    // States, not Washington.
+    await expect(regionSelect(page)).toHaveValue('region:national');
 
     // UX-3 framing pass: the sidebar carries domain vocabulary, not GIS jargon.
     const titles = page.locator('.sidebar-scroll .panel-title');

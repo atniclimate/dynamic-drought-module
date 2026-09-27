@@ -146,7 +146,7 @@ test.describe('mobile side rail and glass panels', () => {
 
   test('an open desktop report rehosts when the viewport becomes a phone', async ({ page }) => {
     await page.setViewportSize({ width: 1100, height: 800 });
-    await gotoApp(page, '?view=console');
+    await gotoApp(page, '?region=washington_state&view=console');
     await page.locator('.region-briefing-btn').click();
     await expect(page.locator('#impact-panel')).toHaveClass(/\bopen\b/);
 

@@ -92,7 +92,7 @@ test.describe('U4c: state boundaries as chrome keep the click surface', () => {
     // click surface at all. Before the suite-wide stub existed this case
     // depended on the live services happening to return nothing at the
     // default Washington camera center, which was luck, not a contract.
-    await gotoApp(page, '?view=console', { boundaries: 'empty' });
+    await gotoApp(page, '?region=washington_state&view=console', { boundaries: 'empty' });
 
     // States is default-on since U4c; the bundled GeoJSON settles fast.
     await waitForLayerSettled(page, 'states');

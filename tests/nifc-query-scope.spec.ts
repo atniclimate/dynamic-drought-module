@@ -257,7 +257,7 @@ test.describe('NIFC WFIGS query scope', () => {
         { delayFarEastMs: 500 }
       );
 
-      await gotoApp(page, '?cluster=wildfire&view=console');
+      await gotoApp(page, '?region=washington_state&cluster=wildfire&view=console');
       await waitForLayerSettled(page, 'nifc-fires');
       expect(queries).toHaveLength(1);
 
@@ -394,7 +394,7 @@ test.describe('NIFC WFIGS query scope', () => {
         { holdFarEast: true }
       );
 
-      await gotoApp(page, '?cluster=wildfire&view=console');
+      await gotoApp(page, '?region=washington_state&cluster=wildfire&view=console');
       await waitForLayerSettled(page, 'nifc-fires');
       expect(queries, 'the initial Washington-view request').toHaveLength(1);
       expect(await popupTitleAtMapCenter(page)).toBe('Synthetic Center Fire');
@@ -616,7 +616,7 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
       }
     );
 
-    await gotoApp(page, '?view=brief&layers=nifc-fires,places');
+    await gotoApp(page, '?region=washington_state&view=brief&layers=nifc-fires,places');
     await waitForLayerSettled(page, 'nifc-fires');
     expect(geojsonQueries, "the layer's own boot query").toHaveLength(1);
 
@@ -772,7 +772,7 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
     // `registry.getStatus('nifc-fires')` reads `undefined` and the
     // briefing's collection-read guard never fires (design clause 2's
     // "layer off" arm).
-    await gotoApp(page, '?view=brief&layers=places');
+    await gotoApp(page, '?region=washington_state&view=brief&layers=places');
     await page.locator('#region-briefing-btn').click();
 
     await expect.poll(() => geojsonQueries.length).toBe(1);
@@ -864,7 +864,12 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
     // case's outside-the-envelope outcome does not depend on whichever of
     // the layer's boot activation or the deep link wins their own race
     // (only case (a) above needs the layer settled first for that reason).
-    await gotoApp(page, '?view=brief&layers=nifc-fires,places&select=state:OR');
+    // `region=washington_state` pins the loaded envelope to Washington (the
+    // framing this case was written for, DR-109): under the national default
+    // the layer's boot envelope covers Oregon too, so the briefing would
+    // rightly read the collection and this case would prove nothing about
+    // an OUTSIDE place.
+    await gotoApp(page, '?region=washington_state&view=brief&layers=nifc-fires,places&select=state:OR');
 
     const expectedText = buildNifcAreaPerimeterClaim(
       OREGON_BRIEFING_STUB.features.map((feature) => feature.properties.attr_IncidentTypeCategory)

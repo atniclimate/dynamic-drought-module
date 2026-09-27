@@ -137,7 +137,7 @@ test.describe('DEF-3: the coordinated popup is contained and its tail reachable 
   test('the box stays inside the viewport, the body scrolls, and both source links are reachable', async ({
     page
   }) => {
-    await gotoApp(page, '?view=console&layers=bia-reservations');
+    await gotoApp(page, '?region=washington_state&view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
     // Click the map center until the fixture fill has painted and the
@@ -251,7 +251,7 @@ test.describe('DEF-3 finding 1: mobile side panel geometry (390x844, touch)', ()
   test('the side panel does not create a bottom inset and the popup remains touch-scrollable', async ({
     page
   }) => {
-    await gotoApp(page, '?layers=bia-reservations');
+    await gotoApp(page, '?region=washington_state&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
     // The Layers door opens beside the map. It must not be treated as a
@@ -394,7 +394,7 @@ test.describe('DEF-3 finding 1: a small embed iframe and both size floors', () =
   test('the card follows an embed viewport down through the width and height floors', async ({
     page
   }) => {
-    await gotoApp(page, '?embed=true&view=console&layers=bia-reservations');
+    await gotoApp(page, '?region=washington_state&embed=true&view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
     const popup = page.locator('.maplibregl-popup');
@@ -528,7 +528,7 @@ test.describe('DEF-3 r2 finding 1: compact tier, empty-region recovery, sub-chro
   test('the tiered contract holds through compact, empty, recovery, and sub-chrome regions', async ({
     page
   }) => {
-    await gotoApp(page, '?embed=true&view=console&layers=bia-reservations');
+    await gotoApp(page, '?region=washington_state&embed=true&view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
     const popup = page.locator('.maplibregl-popup');
@@ -866,7 +866,7 @@ test.describe('r2 finding 2: a visual viewport diverging from the layout viewpor
   test('the clamp follows an offset visual-viewport band, not the layout viewport', async ({
     page
   }) => {
-    await gotoApp(page, '?embed=true&view=console&layers=bia-reservations');
+    await gotoApp(page, '?region=washington_state&embed=true&view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
     const popup = page.locator('.maplibregl-popup');
@@ -938,7 +938,12 @@ test.describe('DEF-4 finding 1: viewport resize while telemetry hydration is in 
     // hydrate LIVE and the honest fallback would never render.
     await page.route('**/cwms-data.usace.army.mil/**', delayedAbort);
 
-    await gotoApp(page, '?layers=telemetry');
+    // `region=washington_state` pins the camera this case was measured under
+    // (DR-109): the 'ihr' station sits in Washington, and its popup geometry
+    // at 390x844 and after the resize assumes the Washington framing, not
+    // the national one. `layers=` already routes this boot to the console,
+    // so the raw region= changes no door.
+    await gotoApp(page, '?region=washington_state&layers=telemetry');
     await waitForLayerSettled(page, 'telemetry');
 
     const marker = page.locator('.telemetry-marker[data-telemetry-station-id="ihr"]');
@@ -1120,7 +1125,7 @@ test.describe('DEF-4: the telemetry popup fits a 390px viewport (390x844)', () =
  * (session-ruled 2026-09-09) is cited where it bears on a clause.
  *
  * Clause 1 (pointer tolerance) is proved with a hand-authored perimeter
- * fixture placed well inside the default Washington State region fit
+ * fixture placed well inside the pinned Washington State region fit
  * (src/config/regions.ts `washington_state`), so the polygon's on-screen
  * position never depends on the raw boot camera constants (which a region
  * fit moves away from) or on guessing MapLibre's Web Mercator math: the
@@ -1177,7 +1182,7 @@ async function stubToleranceFixture(page: Page): Promise<void> {
 
 async function bootToleranceFixture(page: Page): Promise<{ x: number; y: number; width: number; height: number }> {
   await stubToleranceFixture(page);
-  await gotoApp(page, '?view=console&layers=nifc-fires');
+  await gotoApp(page, '?region=washington_state&view=console&layers=nifc-fires');
   await waitForLayerSettled(page, 'nifc-fires');
   const box = await page.locator('#map').boundingBox();
   if (!box) throw new Error('map container has no box');
@@ -1321,7 +1326,7 @@ test.describe('DDM-P11-T02 clause 2: the popup is dismissable and keyboard-trave
   test('Tab reaches the door and the body links; Escape dismisses; focus does not stay in the removed popup', async ({
     page
   }) => {
-    await gotoApp(page, '?view=console&layers=bia-reservations');
+    await gotoApp(page, '?region=washington_state&view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
     const mapBox = await page.locator('#map').boundingBox();
@@ -1387,7 +1392,7 @@ test.describe('DDM-P11-T02 clause 3: the door names the place it opens a briefin
   test('the door sits after the title in the frozen head, names the place, and opens its own briefing', async ({
     page
   }) => {
-    await gotoApp(page, '?view=console&layers=bia-reservations');
+    await gotoApp(page, '?region=washington_state&view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
     const mapBox = await page.locator('#map').boundingBox();
@@ -1470,10 +1475,10 @@ async function stubBroadCondition(page: Page): Promise<void> {
 test.describe('DDM-P11-T02 clause 3, DR-042 option a: the condition-surface door', () => {
   test('a condition tap that resolves a place gains a place-specific door', async ({ page }) => {
     await stubBroadCondition(page);
-    // washington_state is DEFAULT_REGION (src/config/regions.ts); no
-    // `region=` needed. Only `nadm-drought` is active, so `states` never
+    // region=washington_state is pinned (src/config/regions.ts's
+    // DEFAULT_REGION). Only `nadm-drought` is active, so `states` never
     // competes for the click.
-    await gotoApp(page, '?view=console&layers=nadm-drought');
+    await gotoApp(page, '?region=washington_state&view=console&layers=nadm-drought');
     await waitForLayerSettled(page, 'nadm-drought');
 
     const mapBox = await page.locator('#map').boundingBox();

@@ -68,7 +68,7 @@ test.describe('S4b minimap', () => {
   test('renders the nine framings plus ALL, with the ALL radio checked at boot', async ({
     page,
   }) => {
-    await gotoApp(page);
+    await gotoApp(page, '?region=washington_state&view=brief');
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-region'),
     ).toHaveCount(9);
@@ -315,7 +315,7 @@ test.describe('S4b minimap', () => {
   });
 
   test('moves the drought navigation methodology to the end of the Impact Briefing', async ({ page }) => {
-    await gotoApp(page, '?view=brief&cluster=drought');
+    await gotoApp(page, '?region=washington_state&view=brief&cluster=drought');
     await expect(page.locator('.shell-minimap-map .shell-minimap-scale')).toHaveText('NADM · Jul 2026');
     await expect(page.locator('.shell-minimap-metric-note')).toHaveCount(0);
     await page.locator('#region-briefing-btn').click();

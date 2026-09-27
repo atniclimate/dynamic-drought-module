@@ -111,7 +111,7 @@ test.describe('lazy impact briefing cluster', () => {
     });
     await page.route(PANEL_RUNTIME_PRIMARY, (route) => route.abort('failed'));
 
-    await gotoApp(page, '?view=console');
+    await gotoApp(page, '?region=washington_state&view=console');
     const trigger = page.locator('#region-briefing-btn');
     await trigger.focus();
     await page.keyboard.press('Enter');

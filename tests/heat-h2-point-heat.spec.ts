@@ -771,7 +771,7 @@ test.describe('H2 critical-first surfaces', () => {
       }
     });
     await stubBrowserNwsHeat(page);
-    await gotoApp(page, '?view=console');
+    await gotoApp(page, '?region=washington_state&view=console');
 
     const trigger = page.locator('#region-briefing-btn');
     await trigger.click();

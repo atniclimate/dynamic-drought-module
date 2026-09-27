@@ -40,11 +40,11 @@ test.describe('impact panel accessibility', () => {
   test('the region briefing trigger opens the state briefing and restores focus (#9, #16)', async ({
     page
   }) => {
-    // Default region washington_state is anchored to the WA state briefing.
+    // Pins region=washington_state, anchored to the WA state briefing.
     // The region briefing trigger lives in the region panel, which is a
     // console-only "where" control since U3e (D-0.7.0-009: Brief leads with
     // the place search), so exercise the trigger in console mode.
-    await gotoApp(page, '?view=console');
+    await gotoApp(page, '?region=washington_state&view=console');
 
     const trigger = page.locator('#region-briefing-btn');
     await expect(trigger).toBeVisible();
