@@ -706,43 +706,157 @@ test.describe('DEF-3 r2 finding 1: compact tier, empty-region recovery, sub-chro
         { message: 'the card top edge is not pinned at the region top', timeout: 10_000 }
       )
       .toBeLessThanOrEqual(1.5);
-    // Dismissal receipt: scan the intersection of the close control's box
-    // and the region strip for a point where the close control is the
-    // topmost element (unmodeled chrome, which the module explicitly does
-    // not dodge, may cover part of the strip), then really click it.
-    const rr = await embedRegion(page);
+    // Dismissal receipt, in two parts.
+    //
+    // PART 1, the probe (it only PICKS the point; it proves nothing about
+    // reachability at click time). One Locator.evaluate on THIS popup's
+    // close control reads, in a single synchronous browser turn, the
+    // region rectangle (viewport intersected with #map, inset 12px, the
+    // same rule as embedRegion), the close control's box, and then scans
+    // elementFromPoint along one row for a pixel whose topmost element is
+    // inside that control (unmodeled chrome, which the module explicitly
+    // does not dodge, may cover part of the strip). The row and the scan
+    // span are the intersection of the close control's box with the
+    // region, so the picked point lies inside the region on BOTH bounds
+    // of each axis, never just below its bottom edge. expect.poll re-runs
+    // the whole read until a point exists or the timeout proves none ever
+    // does.
+    type SubChromeRegion = { top: number; bottom: number; left: number; right: number };
+    type SubChromeProbe =
+      | { kind: 'point'; x: number; y: number; region: SubChromeRegion }
+      | { kind: 'none'; why: string };
     const closeButton = popup.locator('.maplibregl-popup-close-button');
-    const closeBox = await closeButton.boundingBox();
-    expect(closeBox).not.toBeNull();
-    const probeY = Math.min(rr.top + Math.max(1, rr.h / 2), closeBox!.y + closeBox!.height - 1);
-    const candidates: { x: number; y: number }[] = [];
-    for (let x = closeBox!.x + 3; x <= closeBox!.x + closeBox!.width - 3; x += 4) {
-      candidates.push({ x, y: probeY });
-    }
-    const probe = await page.evaluate((pts) => {
-      for (const pt of pts) {
-        const el = document.elementFromPoint(pt.x, pt.y);
-        if (el && el.closest('.maplibregl-popup-close-button')) return pt;
+    const readSubChromeProbe = async (): Promise<SubChromeProbe> => {
+      try {
+        return await closeButton.evaluate(
+          (closeEl): SubChromeProbe => {
+            const mapEl = document.getElementById('map');
+            if (!mapEl) return { kind: 'none', why: 'no #map' };
+            const m = mapEl.getBoundingClientRect();
+            const region = {
+              top: Math.max(0, m.top) + 12,
+              bottom: Math.min(window.innerHeight, m.bottom) - 12,
+              left: Math.max(0, m.left) + 12,
+              right: Math.min(window.innerWidth, m.right) - 12
+            };
+            const c = closeEl.getBoundingClientRect();
+            const yLo = Math.max(region.top, c.top);
+            const yHi = Math.min(region.bottom, c.bottom);
+            const xLo = Math.max(region.left, c.left);
+            const xHi = Math.min(region.right, c.right);
+            if (yHi - yLo < 1 || xHi - xLo < 1) {
+              return { kind: 'none', why: 'the close control does not overlap the region' };
+            }
+            const y = (yLo + yHi) / 2;
+            for (let x = xLo + 0.5; x <= xHi - 0.5; x += 2) {
+              const hit = document.elementFromPoint(x, y);
+              if (hit && closeEl.contains(hit)) return { kind: 'point', x, y, region };
+            }
+            return { kind: 'none', why: 'every scanned pixel is covered' };
+          },
+          undefined,
+          { timeout: 1_000 }
+        );
+      } catch {
+        return { kind: 'none', why: 'the popup close control did not resolve' };
       }
-      return null;
-    }, candidates);
-    expect(probe, 'no reachable pixel found on the close control in the region strip').not.toBeNull();
-    // Click through the LOCATOR, at the probe pixel expressed relative to
-    // the button's own box, rather than a raw `page.mouse.click` at an
-    // absolute page coordinate resolved one JS turn earlier: any consumer
-    // still settling asynchronously on this boot (the always-mounted
-    // minimap's independent NADM read among them; DDM-P1-T09 step 2 part d
-    // made that read a deterministic, near-instant context-level fixture
-    // instead of a query-dependent live fetch, changing the timing of
-    // whatever runs after it settles) can shift the popup between the
-    // `elementFromPoint` scan and a since-stale `mouse.click`. `.click()`
-    // re-resolves the target's box and re-checks hit-testability at THE
-    // MOMENT of dispatch, so it finds the close control's own pixel
-    // whatever else is in flight.
-    await closeButton.click({
-      position: { x: probe!.x - closeBox!.x, y: probe!.y - closeBox!.y }
+    };
+
+    // Declared through a cast so control flow does not narrow it to the
+    // initializer: the poll callback below reassigns it.
+    let lastProbe = { kind: 'none', why: 'not read' } as SubChromeProbe;
+    await expect
+      .poll(
+        async () => {
+          lastProbe = await readSubChromeProbe();
+          return lastProbe.kind === 'point' ? 'ok' : lastProbe.why;
+        },
+        {
+          message: 'probe: no reachable pixel found on the close control inside the region strip',
+          timeout: 10_000
+        }
+      )
+      .toBe('ok');
+    const probe = lastProbe;
+    if (probe.kind !== 'point') throw new Error('unreachable: the poll above only passes on a point');
+
+    // PART 2, the reachability proof. A capture-phase pointerdown listener
+    // on document, attached through the same popup-scoped locator before
+    // any input, records AT THE MOMENT the real pointerdown fires: its
+    // client coordinates, whether it is trusted input, whether its target
+    // (or an ancestor of it) is this popup's close control, and the region
+    // rectangle measured in that same turn. page.mouse.click then sends
+    // real input at the probe pixel. The page can still move between the
+    // probe and that dispatch; the record, not the probe, says what the
+    // click actually hit and where the region was when it did.
+    type PointerdownRecord = {
+      clientX: number;
+      clientY: number;
+      isTrusted: boolean;
+      hitClose: boolean;
+      targetDesc: string;
+      region: SubChromeRegion;
+    };
+    type RecordHost = { __ddmSubChromePointerdown?: PointerdownRecord | null };
+    await closeButton.evaluate((closeEl) => {
+      const host = window as unknown as RecordHost;
+      host.__ddmSubChromePointerdown = null;
+      document.addEventListener(
+        'pointerdown',
+        (event: PointerEvent) => {
+          const mapEl = document.getElementById('map');
+          const m = mapEl
+            ? mapEl.getBoundingClientRect()
+            : { top: NaN, bottom: NaN, left: NaN, right: NaN };
+          const target = event.target instanceof Element ? event.target : null;
+          host.__ddmSubChromePointerdown = {
+            clientX: event.clientX,
+            clientY: event.clientY,
+            isTrusted: event.isTrusted,
+            hitClose:
+              target !== null &&
+              closeEl.isConnected &&
+              target.closest('.maplibregl-popup-close-button') === closeEl,
+            targetDesc: target
+              ? `${target.tagName.toLowerCase()}.${String(target.className)}`
+              : String(event.target),
+            region: {
+              top: Math.max(0, m.top) + 12,
+              bottom: Math.min(window.innerHeight, m.bottom) - 12,
+              left: Math.max(0, m.left) + 12,
+              right: Math.min(window.innerWidth, m.right) - 12
+            }
+          };
+        },
+        { capture: true, once: true }
+      );
     });
-    await expect(popup).toHaveCount(0);
+    await page.mouse.click(probe.x, probe.y);
+    const pd = await page.evaluate(
+      () => (window as unknown as RecordHost).__ddmSubChromePointerdown ?? null
+    );
+    expect(pd, 'click: no pointerdown reached document after the real click').not.toBeNull();
+    expect(pd!.isTrusted, 'click: the recorded pointerdown was not real (trusted) input').toBe(
+      true
+    );
+    expect(
+      pd!.hitClose,
+      `click: the real pointerdown hit ${pd!.targetDesc}, not the popup close control`
+    ).toBe(true);
+    const inRegion =
+      pd!.clientY >= pd!.region.top &&
+      pd!.clientY <= pd!.region.bottom &&
+      pd!.clientX >= pd!.region.left &&
+      pd!.clientX <= pd!.region.right;
+    expect(
+      inRegion,
+      `click: the pointerdown at (${pd!.clientX}, ${pd!.clientY}) lies outside the region ` +
+        `measured at that moment ${JSON.stringify(pd!.region)}`
+    ).toBe(true);
+    await expect(
+      popup,
+      'post-click: the close control received the real pointerdown but the popup did not close'
+    ).toHaveCount(0);
   });
 });
 
