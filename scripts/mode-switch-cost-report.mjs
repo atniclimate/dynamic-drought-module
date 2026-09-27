@@ -418,15 +418,19 @@ export function fingerprintFrom({ head, porcelain }) {
 }
 
 /**
- * The label a profile's run records under, with a write-once baseline: a
- * `baseline` request fills the profile's baseline slot only while it is
- * empty; once a baseline is committed, the run records as that profile's
- * candidate (and is compared against it), so the measurement flow never
- * overwrites a committed baseline, the historical Washington one included.
- * Any other request (`candidate`, or a bare run) is a candidate.
+ * The label a profile's run records under, with a write-once baseline and
+ * never a candidate without one. A real label (`baseline` or `candidate`)
+ * fills the profile's baseline slot while it is empty, so a first
+ * `candidate` run becomes that profile's first baseline (Codex C4R F2: a
+ * lone candidate rendered every summary cell as n/a, and a later baseline
+ * would have been newer than its candidate). Once a baseline is committed,
+ * a real label records as that profile's candidate (and is compared
+ * against it), so the measurement flow never overwrites a committed
+ * baseline, the historical Washington one included. A bare run (no real
+ * label) is a candidate: it writes nothing and only feeds the no-rise check.
  */
 function resolveRunLabel(record, profile, rawLabel) {
-  if (rawLabel !== 'baseline') return 'candidate';
+  if (rawLabel !== 'baseline' && rawLabel !== 'candidate') return 'candidate';
   return record.runs[runKey(profile, 'baseline')] ? 'candidate' : 'baseline';
 }
 
@@ -690,6 +694,23 @@ function renderTileDetail(run, key) {
 const LOWER_BOUND_MARK = '†'; // dagger footnote marker
 
 /**
+ * The one evidenced cause of an empty `pendingAtStart`, attached to the run
+ * it explains by that run's commit: at 0c27ab1 (the historical Washington
+ * baseline) src/layers/sst-anomaly.ts:575 was `reportStatus('ready')` inside
+ * activate, before any tile was fetched, so the boot-idle seam declared
+ * quiescence immediately. Later code reports `'loading'` until its time axis
+ * answers (Codex C4R F6c), so no other run inherits this cause; a run at any
+ * other commit gets the observation with its cause unproved, never this
+ * sentence.
+ */
+const LOWER_BOUND_CAUSES = Object.freeze({
+  '0c27ab1':
+    'at this commit the SST anomaly layer reported `\'ready\'` at activation, before any tile ' +
+    'was fetched (src/layers/sst-anomaly.ts:575 at 0c27ab1), which explains its empty ' +
+    '`->enso` rows'
+});
+
+/**
  * Throws a TypeError when the run stored under `key` belongs to a profile
  * other than `profile` (a run with no `profile` field is Washington, see
  * `normalizeProfile`), so a hand-edited or misfiled record can never put one
@@ -776,11 +797,17 @@ function renderProfileSection(record, profile) {
   if (lowerBoundIds.length > 0) {
     lines.push(
       `${LOWER_BOUND_MARK} ${lowerBoundIds.map((id) => `\`${id}\``).join(', ')}: recorded with no ` +
-        'layer pending at the start of the switch, because the SST anomaly layer ' +
-        '(src/layers/sst-anomaly.ts:575) reports `\'ready\'` at activation, ' +
-        'before any tile is fetched, so the boot-idle seam declared quiescence ' +
-        'immediately; the recorded time is a lower bound, not a measured settle time.'
+        'layer pending at the start of the switch, so the boot-idle seam declared quiescence ' +
+        'immediately; the recorded time is a lower bound, not a measured settle time. ' +
+        'The run records that nothing was pending, not why.'
     );
+    for (const [key, run] of [[baselineKey, baseline], [candidateKey, candidate]]) {
+      const cause = run && LOWER_BOUND_CAUSES[run.commit];
+      if (cause && run.switches.some((s) => s.pendingAtStart.length === 0)) {
+        lines.push('');
+        lines.push(`Run \`${key}\` (commit \`${run.commit}\`): ${cause}.`);
+      }
+    }
     lines.push('');
   }
 

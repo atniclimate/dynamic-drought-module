@@ -69,9 +69,11 @@ import {
  * (`planMeasurementWrite`). The dirty guard exempts nothing, its own two
  * artifacts included, so two single-profile invocations cannot both write
  * (the first write dirties the tree); one `both` invocation records both
- * on one clean fingerprint. A committed baseline is never overwritten: a
- * `baseline`-labelled run of a profile that already has one records as
- * that profile's candidate (`planMeasurementWrite`'s write-once rule).
+ * on one clean fingerprint. A committed baseline is never overwritten, and
+ * no candidate exists without a baseline: a real-labelled run (`baseline` or
+ * `candidate`) of a profile with no baseline records as its first baseline,
+ * and one of a profile that already has one records as that profile's
+ * candidate (`planMeasurementWrite`'s write-once rule).
  */
 
 const VIEWPORT = { width: 1280, height: 800 };
@@ -263,6 +265,11 @@ test.describe('mode-switch cost', () => {
         console.log(
           `mode-switch-cost: the ${run.profile} profile already has a committed baseline; this ` +
             'run records as its candidate, and the committed baseline is never overwritten.'
+        );
+      } else if (rawLabel === 'candidate' && run.label === 'baseline') {
+        console.log(
+          `mode-switch-cost: the ${run.profile} profile has no committed baseline yet; this ` +
+            'candidate-labelled run records as its first baseline, so no candidate exists without one.'
         );
       }
     }

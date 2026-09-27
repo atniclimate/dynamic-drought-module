@@ -405,9 +405,8 @@ test('renderReport renders a CONUS-only record without a Washington table and wi
   assert.equal(markdown.includes('Delta'), false, 'a lone baseline has nothing to be compared against');
 });
 
-test('renderReport keeps the committed Washington-only record to one table and says no CONUS run is recorded', () => {
-  const jsonPath = join(HERE, '..', 'docs', 'mode-switch-cost.json');
-  const record = JSON.parse(readFileSync(jsonPath, 'utf8'));
+test('renderReport keeps the frozen historical Washington-only record to one table and says no CONUS run is recorded', () => {
+  const record = historicalRecord();
   const markdown = renderReport(record);
   assert.equal(tableRows(sectionOf(markdown, /Washington/)).length, SWITCHES.length);
   assert.equal(tableRows(sectionOf(markdown, /CONUS/)).length, 0);
@@ -419,6 +418,31 @@ test('renderReport refuses a record whose slot holds the other profile\'s run, s
   assert.throws(() => renderReport(conusUnderWaKey), (err) => err instanceof TypeError && /candidate/.test(err.message));
   const waUnderConusKey = { ...emptyRecord(), runs: { conusBaseline: makeRun('baseline') } };
   assert.throws(() => renderReport(waUnderConusKey), (err) => err instanceof TypeError && /conusBaseline/.test(err.message));
+});
+
+// --- F6c: the lower-bound footnote names its one evidenced cause only for
+// the run it explains (keyed by commit), never as a claim about code that no
+// longer matches it (Codex C4R F6c) ----------------------------------------
+
+test('the lower-bound footnote states an empty pendingAtStart without a cause, and the SST cause stays with the 0c27ab1 run', () => {
+  const record = mergeRun(
+    emptyRecord(),
+    makeRun('baseline', {
+      profile: 'conus',
+      commit: 'cn00000',
+      switches: SWITCHES.map((pair) =>
+        makeSwitchEntry(pair, switchId(pair) === 'heat->drought' ? { pendingAtStart: [] } : {})
+      )
+    })
+  );
+  const conusText = sectionOf(renderReport(record), /CONUS/).join('\n');
+  assert.match(conusText, /heat->drought/);
+  assert.equal(/sst-anomaly\.ts:575/.test(conusText), false, 'a run at commit cn00000 must not be blamed on the SST layer');
+  assert.equal(/SST anomaly layer/.test(conusText), false, 'a run at commit cn00000 must not name the SST cause at all');
+
+  const waText = sectionOf(renderReport(historicalRecord()), /Washington/).join('\n');
+  assert.match(waText, /Run `baseline` \(commit `0c27ab1`\)/, 'the historical baseline run keeps its evidenced SST cause line');
+  assert.match(waText, /SST anomaly layer/);
 });
 
 // --- compareRuns: shape guards -------------------------------------------
@@ -595,8 +619,13 @@ function measuredProfiles(profiles) {
   return profiles.map((profile) => ({ profile, switches: SWITCHES.map((pair) => makeSwitchEntry(pair)) }));
 }
 
-function committedRecord() {
-  return JSON.parse(readFileSync(join(HERE, '..', 'docs', 'mode-switch-cost.json'), 'utf8'));
+// The historical Washington-only record, frozen as committed before D1 M3
+// (docs/mode-switch-cost.json at 0634a0d, blob cd915393): the shape every
+// test below that plans or renders against the historical baseline was
+// written for. The live artifact changes at M3; only the shape-agnostic
+// test further below reads it directly.
+function historicalRecord() {
+  return JSON.parse(readFileSync(join(HERE, 'fixtures', 'mode-switch-cost-wa-only.json'), 'utf8'));
 }
 
 test('measurementProfiles: "both" measures every profile in PROFILES order; anything else measures one, defaulting to wa', () => {
@@ -629,7 +658,7 @@ test('fingerprintFrom counts every porcelain line, including the two artifacts t
 });
 
 test('planMeasurementWrite records both profiles on one clean fingerprint in a single record, and the historical wa baseline is untouched', () => {
-  const record = committedRecord();
+  const record = historicalRecord();
   const historical = structuredClone(record.runs.baseline);
   const plan = planMeasurementWrite({
     record,
@@ -688,7 +717,7 @@ test('planMeasurementWrite: a later candidate run of both profiles fills the two
 });
 
 test('planMeasurementWrite: a single wa baseline run on the committed record never overwrites the historical baseline', () => {
-  const record = committedRecord();
+  const record = historicalRecord();
   const plan = planMeasurementWrite({
     record,
     measured: measuredProfiles(['wa']),
@@ -719,9 +748,93 @@ test('planMeasurementWrite: an empty slot takes a baseline-labelled run as its f
   assert.equal(plan.record.runs.candidate, undefined);
 });
 
+// --- F2: a candidate-labelled run of a profile with no baseline is that
+// profile's first baseline, never a lone candidate (Codex C4R F2) ---------
+
+test("planMeasurementWrite: a candidate-labelled run of a profile with no baseline records as that profile's first baseline, never a lone candidate", () => {
+  const record = mergeRun(emptyRecord(), makeRun('baseline', { commit: 'wa00000' }));
+  const plan = planMeasurementWrite({
+    record,
+    measured: measuredProfiles(['wa', 'conus']),
+    rawLabel: 'candidate',
+    before: CLEAN,
+    after: CLEAN,
+    recordedAt: 'T',
+    viewport: { width: 1280, height: 800 }
+  });
+  assert.equal(plan.policy, 'write');
+  // wa already has a baseline, so its candidate-labelled run is its candidate.
+  // conus has none yet, so its candidate-labelled run becomes its first baseline.
+  assert.deepEqual(plan.runs.map((r) => [r.profile, r.label]), [
+    ['wa', 'candidate'],
+    ['conus', 'baseline']
+  ]);
+  assert.equal(plan.record.runs.conusBaseline.commit, 'fff0000');
+  assert.equal(plan.record.runs.conusCandidate, undefined);
+  assert.equal(plan.record.runs.baseline, record.runs.baseline);
+
+  // The single-profile path (conus measured alone) takes the same branch.
+  const single = planMeasurementWrite({
+    record,
+    measured: measuredProfiles(['conus']),
+    rawLabel: 'candidate',
+    before: CLEAN,
+    after: CLEAN,
+    recordedAt: 'T',
+    viewport: { width: 1280, height: 800 }
+  });
+  assert.equal(single.policy, 'write');
+  assert.deepEqual(single.runs.map((r) => [r.profile, r.label]), [['conus', 'baseline']]);
+  assert.equal(single.record.runs.conusBaseline.commit, 'fff0000');
+  assert.equal(single.record.runs.conusCandidate, undefined);
+});
+
+test('renderReport shows the measured values of the first CONUS run however it was labelled', () => {
+  const record = mergeRun(emptyRecord(), makeRun('baseline', { commit: 'wa00000' }));
+  const plan = planMeasurementWrite({
+    record,
+    measured: [{ profile: 'conus', switches: makeConusSwitches((i) => 900 + i, 12345) }],
+    rawLabel: 'candidate',
+    before: CLEAN,
+    after: CLEAN,
+    recordedAt: 'T',
+    viewport: { width: 1280, height: 800 }
+  });
+  assert.equal(plan.policy, 'write');
+  const markdown = renderReport(plan.record);
+  const conusRows = tableRows(sectionOf(markdown, /CONUS/));
+  assert.equal(conusRows.length, SWITCHES.length);
+  for (const row of conusRows) {
+    const cells = row.split('|').map((cell) => cell.trim());
+    assert.notDeepEqual(
+      cells.slice(3, 7),
+      ['n/a', 'n/a', 'n/a', 'n/a'],
+      `row rendered n/a for the only recorded run: ${row}`
+    );
+  }
+  assert.match(markdown, /12345/);
+});
+
+// The bare-run case pins that an unlabelled run never fills an empty
+// baseline slot (it stays a candidate that writes nothing at all); this is
+// the F2 fix's other edge and must never regress.
+test('planMeasurementWrite: a bare run never fills an empty baseline slot (it stays a candidate that writes nothing)', () => {
+  const plan = planMeasurementWrite({
+    record: null,
+    measured: measuredProfiles(['conus']),
+    rawLabel: undefined,
+    before: CLEAN,
+    after: CLEAN,
+    recordedAt: 'T',
+    viewport: { width: 1280, height: 800 }
+  });
+  assert.equal(plan.policy, 'skip');
+  assert.deepEqual(plan.runs.map((r) => [r.profile, r.label]), [['conus', 'candidate']]);
+});
+
 test('planMeasurementWrite refuses a genuinely dirty tree: an uncommitted source edit writes nothing', () => {
   const plan = planMeasurementWrite({
-    record: committedRecord(),
+    record: historicalRecord(),
     measured: measuredProfiles(['wa', 'conus']),
     rawLabel: 'candidate',
     before: fingerprintFrom({ head: 'fff0000', porcelain: ' M src/main.ts\n' }),
@@ -740,7 +853,7 @@ test('planMeasurementWrite refuses a tree dirtied only by its own artifacts: the
     porcelain: ' M docs/mode-switch-cost.json\n M docs/MODE_SWITCH_COST.md\n'
   });
   const plan = planMeasurementWrite({
-    record: committedRecord(),
+    record: historicalRecord(),
     measured: measuredProfiles(['conus']),
     rawLabel: 'baseline',
     before: afterOneProfileWrite,
@@ -754,7 +867,7 @@ test('planMeasurementWrite refuses a tree dirtied only by its own artifacts: the
 
 test('planMeasurementWrite refuses when the fingerprint moved during measurement: dirty at the start, or HEAD changed', () => {
   const base = {
-    record: committedRecord(),
+    record: historicalRecord(),
     measured: measuredProfiles(['wa', 'conus']),
     rawLabel: 'candidate',
     recordedAt: 'T',
@@ -772,7 +885,7 @@ test('planMeasurementWrite refuses when the fingerprint moved during measurement
 
 test('planMeasurementWrite skips a bare run on any tree but still returns its runs for the no-rise check', () => {
   const plan = planMeasurementWrite({
-    record: committedRecord(),
+    record: historicalRecord(),
     measured: measuredProfiles(['wa', 'conus']),
     rawLabel: undefined,
     before: { commit: 'fff0000', dirty: 3 },
@@ -933,13 +1046,71 @@ test('compareRuns does not throw when a run has no dirty field', () => {
   assert.doesNotThrow(() => compareRuns(baseline, candidate));
 });
 
-test('renderReport renders the committed docs/mode-switch-cost.json unchanged, including its baseline run with no dirty field', () => {
-  const jsonPath = join(HERE, '..', 'docs', 'mode-switch-cost.json');
-  const record = JSON.parse(readFileSync(jsonPath, 'utf8'));
+test('renderReport renders the frozen historical record unchanged, including its baseline run with no dirty field', () => {
+  const record = historicalRecord();
   assert.equal('dirty' in record.runs.baseline, false);
   assert.doesNotThrow(() => renderReport(record));
   const markdown = renderReport(record);
   assert.match(markdown, /dirty unknown/);
+});
+
+// --- the live docs/mode-switch-cost.json: shape-agnostic invariants only ---
+// (F3: the historical-shape tests above pin the frozen fixture; this test
+// pins nothing about how many profiles the live artifact carries, so it
+// stays green whether the live record holds one profile's runs or several.)
+//
+// The fixture (tests/fixtures/mode-switch-cost-wa-only.json) is blob-identical
+// to 0634a0d:docs/mode-switch-cost.json (git hash-object
+// cd915393af6cb0cf5bb6b776558513b24232612e) and JSON-equal to it; the
+// working-tree copy of docs/mode-switch-cost.json is CRLF on this machine, so
+// the raw files differ in line endings. The assertions below compare parsed
+// JSON, not raw bytes.
+
+/**
+ * The invariants both tests below prove: the historical Washington baseline
+ * is JSON-equal to the frozen fixture's, every run key encodes its own
+ * profile and label, no profile has a candidate without a baseline, and each
+ * rendered table has either zero rows or one row per switch. Shared so the
+ * live-artifact test and the built-record test below prove the same thing.
+ */
+function assertMeasurementRecordInvariants(record, historical) {
+  assert.deepEqual(record.runs.baseline, historical.runs.baseline, 'the write-once Washington baseline changed');
+  for (const [key, run] of Object.entries(record.runs)) {
+    assert.equal(runKey(run.profile, run.label), key, `slot ${key} holds a ${run.profile ?? 'wa'} ${run.label} run`);
+  }
+  for (const profile of PROFILES) {
+    if (record.runs[runKey(profile, 'candidate')]) {
+      assert.ok(record.runs[runKey(profile, 'baseline')], `${profile} has a candidate without a baseline`);
+    }
+  }
+  const markdown = renderReport(record);
+  for (const heading of [/Washington/, /CONUS/]) {
+    const rows = tableRows(sectionOf(markdown, heading)).length;
+    assert.ok(rows === 0 || rows === SWITCHES.length, `${heading} table has ${rows} rows`);
+  }
+}
+
+test('the live docs/mode-switch-cost.json renders under any profile shape and keeps the historical Washington baseline unchanged (JSON-equal to the frozen fixture)', () => {
+  const live = JSON.parse(readFileSync(join(HERE, '..', 'docs', 'mode-switch-cost.json'), 'utf8'));
+  assertMeasurementRecordInvariants(live, historicalRecord());
+});
+
+// The same invariant function proved against a built two-profile record (no
+// network, no browser): planMeasurementWrite from the historical fixture,
+// measuring both profiles on one clean fingerprint, so F3's live-artifact
+// test is proved to hold on tomorrow's shape too, not only today's.
+test('the live-artifact invariants also hold on a two-profile record built with planMeasurementWrite', () => {
+  const plan = planMeasurementWrite({
+    record: historicalRecord(),
+    measured: measuredProfiles(['wa', 'conus']),
+    rawLabel: 'baseline',
+    before: CLEAN,
+    after: CLEAN,
+    recordedAt: 'T',
+    viewport: { width: 1280, height: 800 }
+  });
+  assert.equal(plan.policy, 'write');
+  assertMeasurementRecordInvariants(plan.record, historicalRecord());
 });
 
 test('tallyUrls counts occurrences and sorts by descending count then ascending url', () => {
