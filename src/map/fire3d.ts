@@ -76,7 +76,7 @@ import {
 import { registry } from '../state/registry';
 import { showToast } from '../ui/overlay';
 import { prefersReducedMotion } from '../util/motion';
-import { watchRasterTiles } from '../util/raster-status';
+import { watchRasterTiles } from '../util/raster-error-watch';
 import type { RasterTileWatch } from '../util/raster-status';
 
 /** Own terrain source; never the hillshade layer's 'hillshade-dem'. */

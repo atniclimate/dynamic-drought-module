@@ -1123,6 +1123,639 @@ test('gridded-index leaves no listener or timer behind after deactivate, and a l
   });
 });
 
+// -- the current view (review finding C1, DDM-P14-T04) -----------------------
+//
+// The verdict covers the tiles on the map NOW, not the requests a cycle saw.
+// MapLibre 6.6 (node_modules/maplibre-gl/src/tile/tile_manager.ts) restores a
+// tile from its out-of-view cache with no event at all (`_addTile`), caches a
+// loaded tile that leaves the view with no event (`_removeTile`), fires
+// nothing for a 404 (`_loadTile`), and fires `dataabort` only when a tile
+// without data leaves. `trackView` models that tile manager on the fake map
+// (`map.style.tileManagers`, the internal the watcher reads behind a guard);
+// the cases above run without it and pin the request-set fallback. A camera
+// change follows MapLibre's order: `move` and `moveend` fire first, the next
+// frame updates the tile manager (requests, removals, cache restores), and
+// only then does `render` fire.
+
+function trackView(map, sourceId) {
+  const tiles = new Map();
+  const tile = (state) => ({
+    state,
+    hasData() {
+      return this.state === 'loaded';
+    }
+  });
+  map.style = {
+    tileManagers: {
+      [sourceId]: { getIds: () => [...tiles.keys()], getTileByID: (id) => tiles.get(id) }
+    }
+  };
+  return {
+    /** A tile the view needs and the cache lacks: fetched, with `dataloading`. */
+    request(key) {
+      tiles.set(key, tile('loading'));
+      map.requestTile(sourceId, key);
+    },
+    /** It loaded (`data`); `settled` marks the source's last pending tile. */
+    load(key, settled = false) {
+      tiles.get(key).state = 'loaded';
+      map.loadTile(sourceId, key, settled);
+    },
+    /** It answered 404: errored in place, with no event. */
+    fail(key) {
+      tiles.get(key).state = 'errored';
+    },
+    /** It left the view: a loaded tile goes to the cache silently; any other aborts. */
+    leave(key) {
+      const left = tiles.get(key);
+      tiles.delete(key);
+      if (left.state !== 'loaded') map.abortTile(sourceId, key);
+    },
+    /** A cached tile came back into view: no event at all. */
+    restore(key) {
+      tiles.set(key, tile('loaded'));
+    },
+    /** The camera changed: `move` then `moveend`, before the manager updates. */
+    move() {
+      map.move();
+      map.emit('moveend', {});
+    },
+    /** The next frame, after the manager updated for the new camera. */
+    frame() {
+      map.emit('render', {});
+    }
+  };
+}
+
+test('current view S1: a return to a covered view restored from the tile cache reads live again after an off-coverage failure', async () => {
+  await withLayer('gridded-index', GRIDDED, async ({ mod, map, status }) => {
+    const view = trackView(map, 'gridded-index');
+    await mod.activate(map);
+    view.request('a');
+    view.load('a', true);
+    map.idle();
+    assert.equal(registry.getStatus('gridded-index'), 'ready');
+    // A pan wholly off coverage: the new tile and its fallback parent answer
+    // 404, and the loaded tile leaves silently into the cache.
+    view.move();
+    view.request('b');
+    view.leave('a');
+    view.frame();
+    view.fail('b');
+    view.request('b-parent');
+    view.fail('b-parent');
+    map.idle();
+    assert.equal(registry.getStatus('gridded-index'), 'error', 'off coverage reads unavailable (DR-050 a)');
+    // The pan back: `a` comes back from the cache with no event, the failed
+    // tiles leave with `sourcedataabort`, and nothing is requested.
+    view.move();
+    view.restore('a');
+    view.leave('b');
+    view.leave('b-parent');
+    view.frame(); // a map that never idles (the 3D scene) reads the view here
+    assert.equal(
+      registry.getStatus('gridded-index'),
+      'ready',
+      `the first frame over the cached view read ${status.seen.join(' -> ')}`
+    );
+    map.idle();
+    assert.equal(registry.getStatus('gridded-index'), 'ready', `the cached view read ${status.seen.join(' -> ')}`);
+    const mark = status.seen.length;
+    map.idle();
+    view.move();
+    view.frame();
+    assert.equal(status.seen.length, mark, `an unchanged view reported again: ${status.seen.slice(mark).join(', ')}`);
+  });
+});
+
+test('current view S1 at idle: a layer shown again over cached covered tiles, with no camera move, reads live again when the map idles', async () => {
+  await withLayer('gridded-index', GRIDDED, async ({ mod, map, status }) => {
+    const view = trackView(map, 'gridded-index');
+    await mod.activate(map);
+    view.request('a');
+    view.load('a', true);
+    map.idle();
+    view.move(); // off coverage: the new tile answers 404, `a` goes to the cache
+    view.request('b');
+    view.leave('a');
+    view.frame();
+    view.fail('b');
+    map.idle();
+    assert.equal(registry.getStatus('gridded-index'), 'error', 'off coverage reads unavailable (DR-050 a)');
+    // Hidden: MapLibre drops every tile of an unused source; the verdict stays.
+    view.leave('b');
+    view.move(); // back over the covered view while hidden
+    view.frame();
+    map.idle();
+    assert.equal(registry.getStatus('gridded-index'), 'error', `a hidden view spoke: read ${status.seen.join(' -> ')}`);
+    // Shown again: `a` comes back from the cache with no event and no move.
+    view.restore('a');
+    map.idle();
+    assert.equal(registry.getStatus('gridded-index'), 'ready', `the cached view read ${status.seen.join(' -> ')}`);
+  });
+});
+
+test('current view S2: a success that left the view during an active cycle never makes a destination whose own tiles all failed read live (partial)', async () => {
+  await withLayer('gridded-index', GRIDDED, async ({ mod, map, status }) => {
+    const view = trackView(map, 'gridded-index');
+    await mod.activate(map);
+    view.request('a1');
+    view.request('a2');
+    view.load('a1'); // a2 is still pending, so the cycle stays open
+    // A pan mid-cycle: a1 leaves silently into the cache, a2 aborts, and every
+    // destination tile (and its fallback parent) answers 404.
+    const mark = status.seen.length;
+    view.move();
+    view.request('b1');
+    view.request('b2');
+    view.leave('a1');
+    view.leave('a2');
+    view.frame();
+    assert.equal(
+      status.seen.length,
+      mark,
+      `a frame read tiles still loading as a verdict: ${status.seen.slice(mark).join(', ')}`
+    );
+    view.fail('b1');
+    view.fail('b2');
+    view.request('b-parent');
+    view.fail('b-parent');
+    map.idle();
+    assert.equal(
+      registry.getStatus('gridded-index'),
+      'error',
+      `a tile that left the view spoke for the destination: read ${status.seen.join(' -> ')}`
+    );
+    assert.ok(!status.seen.includes('degraded'), `read ${status.seen.join(' -> ')}`);
+  });
+});
+
+test('current view S3: a small pan after a partial view keeps the success still in view, so a failing new tile reads live (partial), not unavailable', async () => {
+  await withLayer('gridded-index', GRIDDED, async ({ mod, map, status }) => {
+    const view = trackView(map, 'gridded-index');
+    await mod.activate(map);
+    view.request('inside');
+    view.request('outside');
+    view.fail('outside');
+    view.load('inside', true);
+    map.idle();
+    assert.equal(registry.getStatus('gridded-index'), 'degraded');
+    const mark = status.seen.length;
+    // A small pan: one new tile comes in and answers 404; both old tiles stay.
+    view.move();
+    view.request('east');
+    view.frame();
+    view.fail('east');
+    map.idle();
+    assert.equal(
+      registry.getStatus('gridded-index'),
+      'degraded',
+      `the success still in view was forgotten: read ${status.seen.slice(mark).join(' -> ')}`
+    );
+    assert.ok(!status.seen.slice(mark).includes('error'), `read ${status.seen.slice(mark).join(' -> ')}`);
+  });
+});
+
+test('current view F: a frame proven from cached tiles alone keeps the found-042 floor, and a finished view may still read unavailable', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  await withLayer('gridded-index', GRIDDED, async ({ mod, map, status }) => {
+    const view = trackView(map, 'gridded-index');
+    // The source's tile is already on the map when the watch attaches, so no
+    // tile event ever proves it; only the view does.
+    view.restore('a');
+    await mod.activate(map);
+    map.idle();
+    const provenFromCache = registry.getStatus('gridded-index');
+    // A pan to a view whose one tile never answers before the deadline (a map
+    // that never idles, so no finished cycle intervenes).
+    view.move();
+    view.request('b');
+    view.leave('a');
+    view.frame();
+    const mark = status.seen.length;
+    t.mock.timers.tick(deadlineMs);
+    assert.equal(
+      registry.getStatus('gridded-index'),
+      'degraded',
+      `the deadline alone read ${status.seen.slice(mark).join(' -> ')} after a rendered frame (found-042)`
+    );
+    assert.ok(!status.seen.slice(mark).includes('error'), `read ${status.seen.slice(mark).join(' -> ')}`);
+    assert.equal(provenFromCache, 'ready', 'the cached frame was not proven at idle');
+    // The view finishes with its one tile failed: evidence may cross the floor.
+    view.fail('b');
+    map.idle();
+    assert.equal(registry.getStatus('gridded-index'), 'error', `read ${status.seen.join(' -> ')}`);
+  });
+});
+
+test('current view F settled: on a map that never idles, a deadline over a view whose every tile has errored reads unavailable, since settled evidence crosses the found-042 floor', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  await withLayer('gridded-index', GRIDDED, async ({ mod, map, status }) => {
+    const view = trackView(map, 'gridded-index');
+    await mod.activate(map);
+    view.request('a');
+    view.load('a', true);
+    assert.equal(registry.getStatus('gridded-index'), 'ready', `the proven frame read ${status.seen.join(' -> ')}`);
+    // A pan wholly off coverage on a map that never idles: the new tile and its
+    // fallback parent answer 404 (errored in place, no event, and no idle
+    // follows in the browser: tests/raster-current-view.spec.ts step B1), and
+    // the loaded tile leaves silently into the cache. Only the deadline reads
+    // the view, and every tile in it has settled.
+    view.move();
+    view.request('b');
+    view.leave('a');
+    view.frame();
+    view.fail('b');
+    view.request('b-parent');
+    view.fail('b-parent');
+    const mark = status.seen.length;
+    t.mock.timers.tick(deadlineMs);
+    assert.equal(
+      registry.getStatus('gridded-index'),
+      'error',
+      `a settled all-errored view read ${status.seen.slice(mark).join(' -> ')} at the deadline (DR-050 a)`
+    );
+  });
+});
+
+test('current view guard: a settled source whose view empties (its layer hidden) keeps its verdict, silently', async () => {
+  for (const [key, modulePath] of [
+    ['gridded-index', GRIDDED],
+    ['sst-anomaly', '../src/layers/sst-anomaly.ts']
+  ]) {
+    await withLayer(key, modulePath, async ({ mod, map, status }) => {
+      const view = trackView(map, key);
+      await mod.activate(map);
+      view.request('inside');
+      view.request('outside');
+      view.fail('outside');
+      view.load('inside', true);
+      map.idle();
+      assert.equal(registry.getStatus(key), 'degraded');
+      const mark = status.seen.length;
+      const warnings = [];
+      const warn = console.warn;
+      console.warn = (...args) => warnings.push(args);
+      try {
+        map.idle(); // an unchanged partial view neither reports nor warns again
+        // Hidden: MapLibre drops every tile of an unused source.
+        view.leave('inside');
+        view.leave('outside');
+        map.idle();
+        view.move();
+        view.frame();
+        map.idle();
+        assert.equal(registry.getStatus(key), 'degraded');
+        assert.equal(status.seen.length, mark, `${key} reported ${status.seen.slice(mark).join(', ')}`);
+        assert.equal(warnings.length, 0, `${key} warned ${warnings.length} time(s)`);
+      } finally {
+        console.warn = warn;
+      }
+    });
+  }
+});
+
+test('current view guard: a watch without a deadline (the Fire 3D terrain path) reports nothing from the view, and detaches whole', async () => {
+  // The no-deadline watch is raster-error-watch.ts's alone (DR-142).
+  const { watchRasterTiles } = await import('../src/util/raster-error-watch.ts');
+  const map = new FakeMap();
+  const view = trackView(map, 'terrain');
+  view.request('t1');
+  view.fail('t1'); // a failed tile already on the map when the watch attaches
+  const reports = [];
+  const watch = watchRasterTiles(map, 'terrain', (state) => reports.push(state));
+  map.idle();
+  view.move();
+  view.frame();
+  map.idle();
+  assert.deepEqual(reports, [], 'the legacy watch read a verdict off the view');
+  watch.detach();
+  assert.equal(map.listenerCount(), 0, 'a map listener outlived detach');
+});
+
+// -- the no-deadline error watch (DR-142: the Fire 3D activation closure) ----
+//
+// fire3d.ts's terrain watch passes no completeness deadline, so all it needs
+// is the rolling-window degrade and the heal on a loaded tile. That policy
+// lives alone in src/util/raster-error-watch.ts, and raster-status.ts has no
+// no-deadline mode and does not import it, so the policy is written once,
+// the Fire 3D activation closure (scripts/check-activation-budget.mjs, the
+// fire3d-mode row) carries none of the completeness mode, and no
+// raster-status closure (the heatrisk-days row among them) carries the error
+// watch. A statement-level `import type` is erased at build and does not
+// count as reaching a module.
+
+const RASTER_STATUS = 'src/util/raster-status.ts';
+const ERROR_WATCH = 'src/util/raster-error-watch.ts';
+
+/** The root-relative source file a relative specifier in `file` names, or null for a package. */
+function resolveSourceSpecifier(file, specifier, root) {
+  if (!specifier.startsWith('.')) return null;
+  const base = join(root, file, '..', specifier);
+  const candidates = /\.tsx?$/.test(specifier) ? [base] : [`${base}.ts`, `${base}.tsx`, join(base, 'index.ts')];
+  return posix(relative(root, candidates.find((c) => existsSync(c)) ?? candidates[0]));
+}
+
+/**
+ * Every source file `file` reaches as a VALUE: `import`/`export ... from`, a
+ * bare `import '...'`, and a dynamic `import('...')`. A statement-level
+ * `import type`/`export type` is erased and skipped, and so is a
+ * `typeof import('...')` type query; an inline `{ type X }` is not skipped,
+ * because the statement itself survives.
+ */
+function valueImportsOf(file, root = ROOT) {
+  const text = stripComments(readFileSync(join(root, file), 'utf8'));
+  const specifiers = [];
+  for (const m of text.matchAll(/\b(?:import|export)\s+(type\s+)?[\w$*{},\s]*?\bfrom\s*['"]([^'"]+)['"]/g)) {
+    if (!m[1]) specifiers.push(m[2]);
+  }
+  for (const m of text.matchAll(/\bimport\s*['"]([^'"]+)['"]/g)) specifiers.push(m[1]);
+  for (const m of text.matchAll(/(?<!\btypeof\s+)\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) specifiers.push(m[1]);
+  return specifiers.map((s) => resolveSourceSpecifier(file, s, root)).filter((s) => s !== null);
+}
+
+/** Every problem with `entry` reaching `target` as a value, following `start`'s value imports transitively. */
+function valueReachProblems(entry, start, target, root = ROOT) {
+  const problems = [];
+  const direct = valueImportsOf(entry, root);
+  if (direct.includes(target)) problems.push(`${entry} imports ${target} as a value`);
+  if (!direct.includes(start)) problems.push(`${entry} does not take its watch from ${start}`);
+  const seen = new Set([start]);
+  const stack = [start];
+  while (stack.length > 0) {
+    const file = stack.pop();
+    if (!existsSync(join(root, file))) {
+      problems.push(`${file} does not exist`);
+      continue;
+    }
+    for (const dep of valueImportsOf(file, root)) {
+      if (dep === target) problems.push(`${file} imports ${target} as a value`);
+      else if (!seen.has(dep)) {
+        seen.add(dep);
+        stack.push(dep);
+      }
+    }
+  }
+  return problems;
+}
+
+test("fire3d's no-deadline watch reaches no raster-status value code", () => {
+  assert.deepEqual(valueReachProblems('src/map/fire3d.ts', ERROR_WATCH, RASTER_STATUS), []);
+});
+
+test('value-import self-test: a type-only import is allowed, and every value route to the target is named', (t) => {
+  const dir = withFixtureDir(t, {
+    'util/target.ts': 'export const X = 1;\n',
+    'util/guard.ts': 'export const G = 2;\n',
+    'util/watch.ts': "import type { T } from './target';\nimport { G } from './guard';\nexport const W = G;\n",
+    'map/clean.ts':
+      "import { W } from '../util/watch';\nimport type { T } from '../util/target';\n" +
+      "let m: typeof import('../util/target') | null = null;\n",
+    'map/direct.ts': "import { W } from '../util/watch';\nimport { X } from '../util/target';\n",
+    'map/inline.ts': "import { W } from '../util/watch';\nimport { type T } from '../util/target';\n",
+    'map/dynamic.ts': "import { W } from '../util/watch';\nconst lazy = () => import('../util/target');\n",
+    'map/elsewhere.ts': "import { G } from '../util/guard';\n"
+  });
+  const reach = (entry) => valueReachProblems(entry, 'util/watch.ts', 'util/target.ts', dir);
+  assert.deepEqual(reach('map/clean.ts'), []);
+  assert.deepEqual(reach('map/direct.ts'), ['map/direct.ts imports util/target.ts as a value']);
+  assert.deepEqual(reach('map/inline.ts'), ['map/inline.ts imports util/target.ts as a value']);
+  assert.deepEqual(reach('map/dynamic.ts'), ['map/dynamic.ts imports util/target.ts as a value']);
+  assert.deepEqual(reach('map/elsewhere.ts'), ['map/elsewhere.ts does not take its watch from util/watch.ts']);
+  // A value route through the watch module itself is found transitively.
+  const leaky = withFixtureDir(t, {
+    'util/target.ts': 'export const X = 1;\n',
+    'util/bridge.ts': "export { X } from './target';\n",
+    'util/watch.ts': "import { X } from './bridge';\nexport const W = X;\n",
+    'map/entry.ts': "import { W } from '../util/watch';\n"
+  });
+  assert.deepEqual(valueReachProblems('map/entry.ts', 'util/watch.ts', 'util/target.ts', leaky), [
+    'util/bridge.ts imports util/target.ts as a value'
+  ]);
+});
+
+/** A module-private constant of the error watch, read where it is declared. */
+function errorWatchConstant(name) {
+  const text = readFileSync(join(ROOT, ERROR_WATCH), 'utf8');
+  const match = new RegExp(`const ${name} = ([\\d_]+);`).exec(text);
+  assert.ok(match, `${ERROR_WATCH} no longer declares ${name}`);
+  return Number(match[1].replace(/_/g, ''));
+}
+
+/** A MapLibre tile error for `sourceId` (the id rides the event's data). */
+function tileError(sourceId) {
+  return { sourceId, error: new Error('synthetic tile failure') };
+}
+
+/** The events the fake map has a live listener for, sorted. */
+function listenedEvents(map) {
+  return [...map.listeners]
+    .filter(([, handlers]) => handlers.size > 0)
+    .map(([event]) => event)
+    .sort();
+}
+
+/** Capture console.warn for the case, as the text a console would print. */
+function captureWarn(t) {
+  const warnings = [];
+  const warn = console.warn;
+  console.warn = (...args) => warnings.push(args.map(String).join(' '));
+  t.after(() => {
+    console.warn = warn;
+  });
+  return warnings;
+}
+
+const REPEATED_FAILURES = (sourceId) =>
+  `[${sourceId}] repeated tile-load failures; reporting unavailable. Error: synthetic tile failure`;
+
+test('the no-deadline error watch degrades once, after ERROR_THRESHOLD tile errors of its own source inside WINDOW_MS', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 0 });
+  const { watchRasterTiles } = await import('../src/util/raster-error-watch.ts');
+  const threshold = errorWatchConstant('ERROR_THRESHOLD');
+  const windowMs = errorWatchConstant('WINDOW_MS');
+  const warnings = captureWarn(t);
+  const map = new FakeMap();
+  const reports = [];
+  watchRasterTiles(map, 'terrain', (state) => reports.push(state));
+  for (let i = 0; i < threshold; i += 1) {
+    map.emit('error', tileError('other-source')); // another source's failure is not this one's
+    map.emit('error', { error: new Error('a map error with no source') });
+  }
+  assert.deepEqual(reports, [], 'errors of no source or another source counted');
+  // Spread across the window, never reaching its end.
+  for (let i = 1; i < threshold; i += 1) {
+    map.emit('error', tileError('terrain'));
+    t.mock.timers.tick(Math.floor((windowMs - 1) / threshold));
+  }
+  assert.deepEqual(reports, [], 'degraded below the threshold');
+  map.emit('error', tileError('terrain'));
+  assert.deepEqual(reports, ['error']);
+  map.emit('error', tileError('terrain'));
+  assert.deepEqual(reports, ['error'], 'a degraded watch reported again');
+  assert.deepEqual(warnings, [REPEATED_FAILURES('terrain')]);
+});
+
+test('the no-deadline error watch does not degrade when its errors fall outside WINDOW_MS, or when a tile loads between them', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 0 });
+  const { watchRasterTiles } = await import('../src/util/raster-error-watch.ts');
+  const threshold = errorWatchConstant('ERROR_THRESHOLD');
+  const windowMs = errorWatchConstant('WINDOW_MS');
+  const warnings = captureWarn(t);
+  const map = new FakeMap();
+  const reports = [];
+  const watch = watchRasterTiles(map, 'terrain', (state) => reports.push(state));
+  // Each error a full window after the last: only one ever counts.
+  for (let i = 0; i < threshold * 2; i += 1) {
+    map.emit('error', tileError('terrain'));
+    t.mock.timers.tick(windowMs);
+  }
+  assert.deepEqual(reports, [], 'errors outside the window degraded the watch');
+  // One short of the threshold, a tile that loads, then one more.
+  for (let i = 1; i < threshold; i += 1) map.emit('error', tileError('terrain'));
+  map.loadTile('terrain', 't1');
+  map.emit('error', tileError('terrain'));
+  assert.deepEqual(reports, [], 'a loaded tile did not clear the window');
+  // One short of the threshold, a reset, then one more.
+  watch.reset();
+  for (let i = 1; i < threshold; i += 1) map.emit('error', tileError('terrain'));
+  assert.deepEqual(reports, [], 'reset did not forget the accumulated errors');
+  // With nothing between them the same errors do degrade: the window and the
+  // loaded tile were the reasons above, not a watch that never degrades.
+  map.emit('error', tileError('terrain'));
+  assert.deepEqual(reports, ['error']);
+  assert.deepEqual(warnings, [REPEATED_FAILURES('terrain')]);
+});
+
+test('the no-deadline error watch heals on a loaded tile of its own source, and reportInitialSuccess reports the first tile once per reset', async (t) => {
+  const { watchRasterTiles } = await import('../src/util/raster-error-watch.ts');
+  const threshold = errorWatchConstant('ERROR_THRESHOLD');
+  captureWarn(t);
+  const map = new FakeMap();
+  const reports = [];
+  watchRasterTiles(map, 'terrain', (state) => reports.push(state));
+  map.loadTile('terrain', 't0');
+  assert.deepEqual(reports, [], 'a success before any failure reported by default');
+  for (let i = 0; i < threshold; i += 1) map.emit('error', tileError('terrain'));
+  assert.deepEqual(reports, ['error']);
+  map.loadTile('other-source', 'x1');
+  map.emit('sourcedata', { sourceId: 'terrain', dataType: 'metadata', tile: { tileID: { key: 'm' } } });
+  map.emit('sourcedata', { sourceId: 'terrain', dataType: 'source', isSourceLoaded: true });
+  assert.deepEqual(reports, ['error'], 'healed on something other than a loaded tile of its own source');
+  map.loadTile('terrain', 't1');
+  assert.deepEqual(reports, ['error', 'ready']);
+  map.loadTile('terrain', 't2');
+  assert.deepEqual(reports, ['error', 'ready'], 'a healed watch reported ready again');
+
+  const initial = [];
+  const watch = watchRasterTiles(map, 'frame', (state) => initial.push(state), { reportInitialSuccess: true });
+  map.loadTile('frame', 'f1');
+  map.loadTile('frame', 'f2');
+  assert.deepEqual(initial, ['ready']);
+  watch.reset();
+  map.loadTile('frame', 'f3');
+  assert.deepEqual(initial, ['ready', 'ready']);
+});
+
+test('the no-deadline error watch listens to error and sourcedata only, reads nothing off the view, and detach removes every listener', async (t) => {
+  const { watchRasterTiles } = await import('../src/util/raster-error-watch.ts');
+  const threshold = errorWatchConstant('ERROR_THRESHOLD');
+  captureWarn(t);
+  const map = new FakeMap();
+  const view = trackView(map, 'terrain');
+  view.request('t1');
+  view.fail('t1'); // a failed tile already on the map when the watch attaches
+  const reports = [];
+  const watch = watchRasterTiles(map, 'terrain', (state) => reports.push(state));
+  assert.deepEqual(listenedEvents(map), ['error', 'sourcedata']);
+  map.idle();
+  view.move();
+  view.frame();
+  map.idle();
+  assert.deepEqual(reports, [], 'the error watch read a verdict off the view');
+  watch.detach();
+  assert.equal(map.listenerCount(), 0, 'a map listener outlived detach');
+  for (let i = 0; i < threshold; i += 1) map.emit('error', tileError('terrain'));
+  map.loadTile('terrain', 't2');
+  assert.deepEqual(reports, [], 'a detached watch reported');
+});
+
+/**
+ * Every problem with raster-status.ts keeping a no-deadline mode: a value
+ * import of the error watch (whose chunk would then ride every raster-status
+ * closure, heatrisk-days among them), more than one `watchRasterTiles`
+ * signature, an optional or defaulted options parameter, or an options type
+ * whose completeness deadline is optional.
+ */
+function noDeadlineModeProblems(file = RASTER_STATUS, root = ROOT) {
+  const problems = [];
+  if (valueImportsOf(file, root).includes(ERROR_WATCH)) problems.push(`${file} imports ${ERROR_WATCH} as a value`);
+  const text = stripComments(readFileSync(join(root, file), 'utf8'));
+  const signatures = callArguments(text, 'function\\s+watchRasterTiles');
+  if (signatures.length !== 1) {
+    problems.push(`${file} declares watchRasterTiles ${signatures.length} times; one signature, deadline required, is the whole API`);
+  }
+  for (const params of signatures.map(topLevelArgs)) {
+    const options = params[3] ?? '';
+    if (!/^[\w$]+\s*:/.test(options) || /=(?!>)/.test(options)) {
+      problems.push(`${file}: watchRasterTiles's options parameter is optional or defaulted: "${options}"`);
+    }
+    const typeName = /^[\w$]+\s*\??\s*:\s*([\w$]+)/.exec(options)?.[1];
+    const declaration = typeName ? new RegExp(`\\binterface\\s+${typeName}\\b[^{]*\\{`).exec(text) : null;
+    const body = declaration ? enclosingObject(text, declaration.index + declaration[0].length)?.body ?? '' : '';
+    if (!/\brequestCompletenessDeadlineMs\s*:\s*number\b/.test(body)) {
+      problems.push(`${file}: watchRasterTiles's options type does not require requestCompletenessDeadlineMs: "${options}"`);
+    }
+  }
+  return problems;
+}
+
+test('raster-status.ts has no no-deadline mode and no value import of raster-error-watch.ts', () => {
+  assert.deepEqual(noDeadlineModeProblems(), []);
+});
+
+test('no-deadline self-test: the delegating shape is named in every part, and a deadline-only module with a type import passes', (t) => {
+  const signature = (options) => `export function watchRasterTiles(map: M, id: string, report: (s: O) => void, ${options}): W`;
+  const fixture = (lines) =>
+    withFixtureDir(t, {
+      [ERROR_WATCH]: 'export function watchRasterTiles() {}\n',
+      [RASTER_STATUS]: lines.join('\n')
+    });
+  const clean = fixture([
+    "import type { W } from './raster-error-watch';",
+    'export interface Opts {',
+    '  readonly requestCompletenessDeadlineMs: number;',
+    '}',
+    `${signature('options: Opts')} {`,
+    '  return start(map, id, report, options.requestCompletenessDeadlineMs);',
+    '}'
+  ]);
+  assert.deepEqual(noDeadlineModeProblems(RASTER_STATUS, clean), []);
+  const delegating = fixture([
+    "import { watchRasterTiles as errorWatch } from './raster-error-watch';",
+    'export interface Opts {',
+    '  readonly requestCompletenessDeadlineMs?: number;',
+    '}',
+    `${signature('options?: Opts')};`,
+    `${signature('options: Opts = {}')} {`,
+    '  return errorWatch(map, id, report);',
+    '}'
+  ]);
+  assert.deepEqual(noDeadlineModeProblems(RASTER_STATUS, delegating), [
+    `${RASTER_STATUS} imports ${ERROR_WATCH} as a value`,
+    `${RASTER_STATUS} declares watchRasterTiles 2 times; one signature, deadline required, is the whole API`,
+    `${RASTER_STATUS}: watchRasterTiles's options parameter is optional or defaulted: "options?: Opts"`,
+    `${RASTER_STATUS}: watchRasterTiles's options type does not require requestCompletenessDeadlineMs: "options?: Opts"`,
+    `${RASTER_STATUS}: watchRasterTiles's options parameter is optional or defaulted: "options: Opts = {}"`,
+    `${RASTER_STATUS}: watchRasterTiles's options type does not require requestCompletenessDeadlineMs: "options: Opts = {}"`
+  ]);
+});
+
+test('raster-status.ts reads no watcher-level no-data: an empty view reads by emptyIdleOutcome, ready or error', () => {
+  const text = stripComments(readFileSync(join(ROOT, RASTER_STATUS), 'utf8'));
+  assert.deepEqual(text.match(/['"`]no-data['"`]/g) ?? [], [], `${RASTER_STATUS} still carries a no-data outcome`);
+});
+
 // -- hillshade (row C2, a declared tile-proof exception) --------------------
 //
 // DDM-P14-T04 director's ruling: hillshade does not wait for tile proof

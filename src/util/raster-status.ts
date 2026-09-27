@@ -1,58 +1,62 @@
 /**
- * Shared tile-load watcher for raster layers: the debounced tile-error
- * honesty policy (designed 2026-07-02).
+ * Shared tile-load watcher for raster layers, in one mode: completeness
+ * against a deadline (DDM-P14-T04).
  *
  * The gap it closes: a raster layer registers its XYZ or WMS tile template
  * and reports `ready`, but MapLibre fetches tiles lazily, so a tile-load
  * failure after activation surfaced as blank tiles under a stale "live"
- * pill. The watcher listens to the map's `error` and `sourcedata` events
- * for one source and keeps the status pill honest both ways:
+ * pill. The watcher follows one source's tile events.
  *
- * - Degrade on evidence, not on a blip. Tile errors accumulate in a rolling
- *   window; only when ERROR_THRESHOLD errors land inside WINDOW_MS with no
- *   successful tile load in between does the layer report `error`. A single
- *   transient tile failure (one dropped request on a working service) never
- *   flips a working layer to "unavailable".
- * - Self-heal on evidence. Any successfully loaded tile clears the error
- *   window, and if the layer had degraded it reports `ready` again. Panning
- *   or zooming naturally issues fresh tile requests, so recovery follows the
- *   same pan-to-retry behavior the hydrography layer set as precedent.
+ * Every consumer passes `requestCompletenessDeadlineMs`; there is no mode
+ * without it. The no-deadline policy (the debounced tile-error rule of
+ * 2026-07-02: a rolling error window that degrades to `error` on repeated
+ * tile failures and heals to `ready` on a loaded tile) lives only in
+ * raster-error-watch.ts, which the Fire 3D terrain watch imports directly.
+ * This module does not import it, so no consumer's activation closure here
+ * carries that chunk, and the Fire 3D activation closure carries neither
+ * module (DR-085, DR-142; tests/raster-readiness-contract.test.mjs holds
+ * both lines).
+ *
+ * The verdict is the CURRENT view's, read from the tiles of the source on
+ * the map now (the tile manager's ideal tiles and the fallbacks retained for
+ * them, fetched or restored from the cache): all loaded reads `ready`, some
+ * `degraded` (live, partial), none `error`. A tile request opens a cycle and
+ * arms the deadline (the first cycle is open from attach). The view is
+ * read when the map idles, when the source settles, on the first frame after
+ * a camera move while no cycle is open (so a map that never idles, like the
+ * 3D scene, still re-reads a return to cached tiles), and at the deadline,
+ * where the found-042 floor holds while a tile of the view is still in
+ * flight. Without a tile manager the verdict falls back to the cycle's
+ * request sets, which cannot see a cache restore.
  *
  * Known tradeoff, documented rather than hidden: a viewport entirely outside
  * a service's tile coverage (for example a fully off-coverage pan under the
  * national framing) can 404 every request and read as "unavailable" even
- * though the service is healthy elsewhere. The self-heal restores the pill
- * as soon as the viewport returns to coverage; distinguishing "service down"
- * from "no tiles here" would need per-status-code policy and is deferred
- * until a real case shows up.
+ * though the service is healthy elsewhere (DR-050 a keeps that reading for
+ * the tile-proven rows). The same holds for a view that any error fails
+ * whole, a transient 5xx included: once every tile of it has settled as
+ * errored, the deadline reads "unavailable" even after a rendered frame.
+ * Distinguishing "service down" from "no tiles here" would need
+ * per-status-code policy and is deferred until a real case shows up.
  */
 
 import type * as maplibregl from 'maplibre-gl';
 
 import { isObject } from './guards';
 
-/** Tile errors older than this rolling window no longer count. */
-const WINDOW_MS = 10_000;
-
-/**
- * Errors inside the window required before the layer degrades. A viewport
- * at the zooms this module serves loads roughly six to twelve tiles, so a
- * real outage crosses three failures within a second or two, while a single
- * dropped request stays safely under the threshold.
- */
-const ERROR_THRESHOLD = 3;
-
 /**
  * The completeness deadline every tile-proven raster row shares
- * (DDM-P14-T04: sst-anomaly, gridded-index, hillshade). It sits strictly
- * below the 10 s boot-idle budget (src/state/boot-idle.ts), so a row that
- * never proves a tile still reaches a terminal state inside a settled boot.
+ * (DDM-P14-T04: sst-anomaly and gridded-index, through TILE_PROOF_WATCH in
+ * raster-proof.ts; hillshade is a documented tile-proof exception and
+ * attaches no watch). It sits strictly below the 10 s boot-idle budget
+ * (src/state/boot-idle.ts), so a row that never proves a tile still reaches
+ * a terminal state inside a settled boot.
  * tests/raster-readiness-contract.test.mjs reads it from here.
  */
 export const RASTER_PROOF_DEADLINE_MS = 8_000;
 
 export interface RasterTileWatch {
-  /** Detach both listeners and forget all evidence. Call from deactivate. */
+  /** Detach every listener and forget all evidence. Call from deactivate. */
   detach(): void;
   /** Forget accumulated evidence (call after a product swap re-adds the source). */
   reset(): void;
@@ -60,36 +64,33 @@ export interface RasterTileWatch {
 
 export interface RasterTileWatchOptions {
   /**
-   * Report the first successful tile. Existing consumers omit this and keep
-   * the original heal-after-error behavior.
+   * The completeness deadline in milliseconds, positive and finite (every
+   * consumer passes a named constant). It starts with the watcher, so even a
+   * source that emits no tile events reaches a terminal state, and it is
+   * required: this module has no mode without it.
+   */
+  readonly requestCompletenessDeadlineMs: number;
+  /**
+   * Read by nothing here: the current-view verdict already reports the first
+   * proven tile. It stays so the consumers that set it keep type-checking;
+   * only the no-deadline watch (raster-error-watch.ts) acts on it.
    */
   readonly reportInitialSuccess?: boolean;
   /**
-   * Opt in to selected-frame request accounting. The deadline starts with
-   * the watcher, so even a source that emits no tile events reaches a
-   * terminal state.
+   * Outcome for an open cycle whose view holds no tile of the selected
+   * frame, when the map idles or the source settles. The default remains
+   * `ready` for the bounded-coverage consumers (HeatRisk, WHP, satellite).
+   * gridded-index and the SST anomaly set `error` through TILE_PROOF_WATCH
+   * because they must prove at least one visible tile (DR-050 a). The
+   * deadline reads an empty open cycle as `error` whichever is set (with the
+   * found-042 floor after a rendered frame).
    */
-  readonly requestCompletenessDeadlineMs?: number;
-  /**
-   * Outcome for an idle cycle with no selected-frame tile evidence. The
-   * default remains `ready` for existing bounded-coverage consumers. Shared
-   * ground, gridded-index and the SST anomaly set `error` because they must
-   * prove at least one visible tile (DR-050 a names those two). `no-data` is
-   * hillshade's and does not come from DR-050: a view outside a bounded
-   * archive's own declared extent requests no tile at all, a verified
-   * absence. Only for `no-data` does the deadline read an empty cycle the
-   * same way, and only once the source has loaded (a map that never idles
-   * still ends the cycle; a stalled or failed archive read has not loaded,
-   * and stays `error`).
-   */
-  readonly emptyIdleOutcome?: 'ready' | 'error' | 'no-data';
+  readonly emptyIdleOutcome?: 'ready' | 'error';
 }
 
 export type RasterTileOutcome = 'ready' | 'degraded' | 'error';
-type BasicRasterTileOutcome = Exclude<RasterTileOutcome, 'degraded'>;
-type CompletenessOptions = RasterTileWatchOptions & {
-  readonly requestCompletenessDeadlineMs: number;
-};
+/** The outcomes an empty view can read: `degraded` needs a loaded tile. */
+type EmptyCycleOutcome = Exclude<RasterTileOutcome, 'degraded'>;
 
 type RasterTileEvent = {
   readonly sourceId?: string;
@@ -97,17 +98,6 @@ type RasterTileEvent = {
   readonly isSourceLoaded?: boolean;
   readonly tile?: unknown;
 };
-
-/**
- * Read the source id off an error event. MapLibre attaches the failing
- * source's id through the style's evented-parent data, but the v6
- * `ErrorEvent` type declares only `error`, so the id is read through a
- * guard rather than an assertion. A generic map error carries no id and is
- * ignored, exactly as before.
- */
-function errorSourceId(e: maplibregl.ErrorEvent): string | null {
-  return isObject(e) && typeof e.sourceId === 'string' ? e.sourceId : null;
-}
 
 function tileEventKey(event: RasterTileEvent): unknown | null {
   if (event.tile === undefined || event.tile === null) return null;
@@ -119,55 +109,27 @@ function tileEventKey(event: RasterTileEvent): unknown | null {
 }
 
 /**
- * Watch one raster source's tile loads and report honest status changes.
- * `report` receives `error` when the degrade threshold is crossed and
- * `ready` when a later successful tile load heals it; it is never called
- * after `detach()`.
+ * Watch one raster source's tile loads against a completeness deadline.
+ * `report` receives the current view's verdict each time that verdict
+ * changes (the module header says when the view is read); it is never called
+ * after `detach()`. A watch with no deadline is not a mode of this function:
+ * it is raster-error-watch.ts's `watchRasterTiles`.
  */
 export function watchRasterTiles(
   map: maplibregl.Map,
   sourceId: string,
-  report: (state: RasterTileOutcome | 'no-data') => void,
-  options: CompletenessOptions & { readonly emptyIdleOutcome: 'no-data' }
-): RasterTileWatch;
-export function watchRasterTiles(
-  map: maplibregl.Map,
-  sourceId: string,
   report: (state: RasterTileOutcome) => void,
-  options: CompletenessOptions & { readonly emptyIdleOutcome?: 'ready' | 'error' }
-): RasterTileWatch;
-export function watchRasterTiles(
-  map: maplibregl.Map,
-  sourceId: string,
-  report: (state: BasicRasterTileOutcome) => void,
-  options?: RasterTileWatchOptions
-): RasterTileWatch;
-export function watchRasterTiles(
-  map: maplibregl.Map,
-  sourceId: string,
-  report:
-    | ((state: RasterTileOutcome | 'no-data') => void)
-    | ((state: RasterTileOutcome) => void)
-    | ((state: BasicRasterTileOutcome) => void),
-  options: RasterTileWatchOptions = {}
+  options: RasterTileWatchOptions
 ): RasterTileWatch {
-  const reportOutcome = report as (state: RasterTileOutcome | 'no-data') => void;
-  let errorTimes: number[] = [];
-  let degraded = false;
+  const deadlineMs = options.requestCompletenessDeadlineMs;
   // found-042: a tile of this source has rendered since attach or reset.
   let rendered = false;
-  let initialSuccessReported = options.reportInitialSuccess !== true;
-  const deadlineMs =
-    typeof options.requestCompletenessDeadlineMs === 'number' &&
-    Number.isFinite(options.requestCompletenessDeadlineMs) &&
-    options.requestCompletenessDeadlineMs > 0
-      ? options.requestCompletenessDeadlineMs
-      : null;
   let requestedTiles = new Set<unknown>();
   let successfulTiles = new Set<unknown>();
-  let requestCycleActive = deadlineMs !== null;
+  // The deadline starts with the watcher, so the first cycle is open at once.
+  let requestCycleActive = true;
   let deadlineTimer: ReturnType<typeof setTimeout> | null = null;
-  let lastCompletenessOutcome: RasterTileOutcome | 'no-data' | null = null;
+  let lastCompletenessOutcome: RasterTileOutcome | null = null;
 
   const clearDeadline = (): void => {
     if (deadlineTimer !== null) clearTimeout(deadlineTimer);
@@ -175,21 +137,52 @@ export function watchRasterTiles(
   };
 
   const reportCompleteness = (
-    emptyCycleOutcome: RasterTileOutcome | 'no-data' = 'error',
+    emptyCycleOutcome: EmptyCycleOutcome = 'error',
     floorAtPartial = false
   ): void => {
-    let outcome: RasterTileOutcome | 'no-data' =
-      requestedTiles.size === 0
+    // [tiles, loaded] for this source on the map now. MapLibre INTERNAL, read
+    // behind a guard: `map.style.tileManagers` (MapLibre 6.6,
+    // node_modules/maplibre-gl/src/tile/tile_manager.ts). Its ids are the
+    // view's ideal tiles and the fallbacks retained for them, whether fetched
+    // or restored from the out-of-view cache, which fires no event; a loaded
+    // tile that leaves goes to that cache silently.
+    let view: [number, number] | undefined;
+    // Tiles of the view still in flight: neither loaded nor errored.
+    let inFlight = 0;
+    try {
+      const manager = map.style.tileManagers[sourceId];
+      const ids = manager.getIds();
+      view = [ids.length, ids.filter((id) => manager.getTileByID(id)?.hasData()).length];
+      inFlight = ids.filter((id) => {
+        const state = manager.getTileByID(id)?.state;
+        return state !== 'loaded' && state !== 'errored';
+      }).length;
+    } catch {
+      // No style, a removed source, a test double, or a MapLibre that moved
+      // any of it: the request sets decide, as before the view was read.
+    }
+    // Outside a cycle, an empty view (a hidden source) keeps its verdict.
+    if (!requestCycleActive && !view?.[0]) return;
+    const [total, loaded] = view ?? [requestedTiles.size, successfulTiles.size];
+    // A frame the view proves has rendered, cache restores included.
+    if (loaded) rendered = true;
+    let outcome: RasterTileOutcome =
+      total === 0
         ? emptyCycleOutcome
-        : successfulTiles.size === 0
+        : loaded === 0
           ? 'error'
-          : successfulTiles.size < requestedTiles.size
+          : loaded < total
             ? 'degraded'
             : 'ready';
     // found-042: after a rendered frame, a later cycle's deadline alone never
-    // reads below live (partial); only a finished cycle's evidence can. The
-    // deadline passes `rendered` here; a finished cycle passes nothing.
-    if (floorAtPartial && outcome === 'error') outcome = 'degraded';
+    // reads below live (partial); only settled evidence can. The deadline
+    // passes `rendered` here; a finished cycle, idle and the post-move read
+    // (whose view has no pending tile) pass nothing. A view whose every tile
+    // has settled IS that evidence: MapLibre fires no event for a 404 and no
+    // idle follows an all-404 view, so the deadline is its only read. The
+    // floor therefore lifts only a view with a tile still in flight, or a
+    // verdict read from the request sets without a tile manager.
+    if (floorAtPartial && outcome === 'error' && (view === undefined || inFlight > 0)) outcome = 'degraded';
     if (outcome === lastCompletenessOutcome) return;
     lastCompletenessOutcome = outcome;
     if (outcome === 'error') {
@@ -201,31 +194,29 @@ export function watchRasterTiles(
         `[${sourceId}] selected-frame tile requests completed with known holes; reporting live (partial).`
       );
     }
-    reportOutcome(outcome);
+    report(outcome);
   };
 
   const scheduleDeadline = (): void => {
     clearDeadline();
-    if (deadlineMs === null) return;
     deadlineTimer = setTimeout(() => {
       deadlineTimer = null;
       if (!requestCycleActive) return;
-      reportCompleteness(
-        options.emptyIdleOutcome === 'no-data' && map.isSourceLoaded(sourceId)
-          ? 'no-data'
-          : 'error',
-        rendered
-      );
+      // An open cycle at its deadline: an empty view reads `error`, never the
+      // idle outcome, and the found-042 floor holds after a rendered frame.
+      reportCompleteness('error', rendered);
     }, deadlineMs);
   };
 
-  // A cycle's verdict covers the view, not only the tiles it requested
-  // (DDM-P14-T04). MapLibre fires nothing for a 404 tile while it stays on
-  // the map, and may request its fallback parent a frame after the source
-  // settled and the cycle closed. So a closed cycle with holes carries into
-  // the next one: whole while the camera is still (every tile stays), holes
-  // only after a move (`onMove`: a loaded tile leaves silently, cached; a
-  // hole leaves with `sourcedataabort`). A cycle without holes starts fresh.
+  // A tile event opens a cycle and arms its deadline. The request sets below
+  // decide the verdict ONLY when `reportCompleteness` has no tile manager to
+  // read; they are request history, blind to a cache restore and to a loaded
+  // tile leaving. For that fallback, a closed cycle with holes carries into
+  // the next one (MapLibre fires nothing for a 404 tile while it stays on the
+  // map, and may request its fallback parent a frame after the cycle
+  // closed): whole while the camera is still, holes only after a move
+  // (`onMove` drops every success; a hole leaves with `sourcedataabort`). A
+  // cycle without holes starts fresh.
   const beginRequestCycle = (): void => {
     if (requestCycleActive) return;
     requestCycleActive = true;
@@ -237,9 +228,7 @@ export function watchRasterTiles(
     scheduleDeadline();
   };
 
-  const finishRequestCycle = (
-    emptyCycleOutcome: RasterTileOutcome | 'no-data' = 'error'
-  ): void => {
+  const finishRequestCycle = (emptyCycleOutcome: EmptyCycleOutcome = 'error'): void => {
     clearDeadline();
     reportCompleteness(emptyCycleOutcome);
     requestCycleActive = false;
@@ -251,24 +240,31 @@ export function watchRasterTiles(
     successfulTiles.clear();
   };
 
-  const onError = (e: maplibregl.ErrorEvent): void => {
-    if (errorSourceId(e) !== sourceId) return;
-    // Completeness-aware consumers need the whole request cycle before they
-    // can distinguish total failure from usable partial coverage. The
-    // sourcedataloading set already records each failed request, so idle or
-    // the deadline will report `error` when none succeeded and `degraded`
-    // when at least one did. Keep the three-error shortcut only for legacy
-    // consumers that do not opt in to request accounting.
-    if (deadlineMs !== null) return;
-    const now = Date.now();
-    errorTimes = errorTimes.filter((t) => now - t < WINDOW_MS);
-    errorTimes.push(now);
-    if (!degraded && errorTimes.length >= ERROR_THRESHOLD) {
-      degraded = true;
-      console.warn(`[${sourceId}] repeated tile-load failures; reporting unavailable.`, e.error);
-      reportOutcome('error');
-    }
+  // A camera move that requests nothing (every tile of the new view cached)
+  // opens no cycle, so read the view once it is current: at `moveend` the
+  // manager still holds the old view (a jump fires `moveend` before the next
+  // frame updates the tile managers), so read on that frame's `render`. A
+  // move that requested tiles opened a cycle, and its end decides.
+  const onRender = (): void => {
+    map.off('render', onRender);
+    if (!requestCycleActive) reportCompleteness();
   };
+
+  const onMoveEnd = (): void => {
+    map.on('render', onRender);
+  };
+
+  // The completeness verdict needs the whole view before it can distinguish
+  // total failure from usable partial coverage: a failed tile stays in the
+  // view (or, without a tile manager, in the request set), so idle or the
+  // deadline reports `error` when nothing loaded and `degraded` when
+  // something did. The three-error shortcut is the no-deadline watch's
+  // (raster-error-watch.ts), so a tile error changes nothing here. The
+  // listener stays registered, doing nothing, exactly as the completeness
+  // watch's always did: MapLibre prints an error event that no listener
+  // hears (`Evented.fire`), so removing it could change what the console
+  // shows.
+  const onError = (): void => {};
 
   const onSourceLoading = (e: RasterTileEvent): void => {
     if (e.sourceId !== sourceId || e.dataType !== 'source') return;
@@ -281,29 +277,17 @@ export function watchRasterTiles(
   const onSourceData = (e: RasterTileEvent): void => {
     if (e.sourceId !== sourceId || e.dataType !== 'source') return;
     if (e.tile) {
-      errorTimes = [];
-      if (deadlineMs !== null) {
-        const key = tileEventKey(e);
-        if (key !== null) {
-          beginRequestCycle();
-          requestedTiles.add(key);
-          successfulTiles.add(key);
-          rendered = true;
-        }
-      } else if (degraded || !initialSuccessReported) {
-        degraded = false;
-        initialSuccessReported = true;
-        reportOutcome('ready');
+      const key = tileEventKey(e);
+      if (key !== null) {
+        beginRequestCycle();
+        requestedTiles.add(key);
+        successfulTiles.add(key);
+        rendered = true;
       }
     }
     // A source-loaded metadata event can precede viewport tile requests.
     // Require tile evidence before completing independently of map idle.
-    if (
-      deadlineMs !== null &&
-      requestCycleActive &&
-      requestedTiles.size > 0 &&
-      e.isSourceLoaded === true
-    ) {
+    if (requestCycleActive && requestedTiles.size > 0 && e.isSourceLoaded === true) {
       finishRequestCycle(options.emptyIdleOutcome ?? 'ready');
     }
   };
@@ -316,8 +300,9 @@ export function watchRasterTiles(
     successfulTiles.delete(key);
   };
 
+  // Idle reads the view even with no cycle open: a return to cached tiles
+  // opens none. With no manager and no cycle, `reportCompleteness` returns.
   const onIdle = (): void => {
-    if (deadlineMs === null || !requestCycleActive) return;
     finishRequestCycle(options.emptyIdleOutcome ?? 'ready');
   };
 
@@ -327,7 +312,8 @@ export function watchRasterTiles(
   map.on('sourcedataabort', onSourceAbort);
   map.on('idle', onIdle);
   map.on('move', onMove);
-  if (requestCycleActive) scheduleDeadline();
+  map.on('moveend', onMoveEnd);
+  scheduleDeadline();
 
   return {
     detach(): void {
@@ -337,24 +323,21 @@ export function watchRasterTiles(
       map.off('sourcedataabort', onSourceAbort);
       map.off('idle', onIdle);
       map.off('move', onMove);
+      map.off('moveend', onMoveEnd);
+      map.off('render', onRender);
       clearDeadline();
-      errorTimes = [];
-      degraded = false;
       requestCycleActive = false;
       requestedTiles.clear();
       successfulTiles.clear();
     },
     reset(): void {
       clearDeadline();
-      errorTimes = [];
-      degraded = false;
       rendered = false;
-      initialSuccessReported = options.reportInitialSuccess !== true;
       requestedTiles = new Set();
       successfulTiles = new Set();
       lastCompletenessOutcome = null;
-      requestCycleActive = deadlineMs !== null;
-      if (requestCycleActive) scheduleDeadline();
+      requestCycleActive = true;
+      scheduleDeadline();
     }
   };
 }

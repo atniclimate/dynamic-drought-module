@@ -3,6 +3,7 @@ import type * as maplibregl from 'maplibre-gl';
 import { readFileSync } from 'node:fs';
 
 import { pointHasHeatRiskCoverage } from '../src/layers/heatrisk-coverage';
+import { watchRasterTiles as watchRasterTileErrors } from '../src/util/raster-error-watch';
 import { RASTER_PROOF_DEADLINE_MS, watchRasterTiles } from '../src/util/raster-status';
 import { awaitQuiescence, gotoApp, layerPill, PILL, search } from './helpers';
 import { captureWarnings, type CapturedWarnings } from './map-harness';
@@ -47,12 +48,6 @@ function visitVertices(
 
 class FakeMap {
   private readonly handlers = new Map<string, Handler[]>();
-  /** Sources MapLibre would call settled (`isSourceLoaded`). */
-  readonly loadedSources = new Set<string>();
-
-  isSourceLoaded(id: string): boolean {
-    return this.loadedSources.has(id);
-  }
 
   on(name: string, handler: Handler): void {
     const current = this.handlers.get(name) ?? [];
@@ -109,9 +104,11 @@ test('the raster watcher keeps its existing heal-only success behavior by defaul
   expectWarnings([
     UNAVAILABLE_AFTER_REPEATED_FAILURES('shared-raster', 'synthetic tile failure')
   ]);
+  // The no-deadline watch lives in raster-error-watch.ts alone (DR-142);
+  // raster-status.ts's watch always takes a completeness deadline.
   const map = new FakeMap();
   const reports: string[] = [];
-  watchRasterTiles(
+  watchRasterTileErrors(
     map as unknown as maplibregl.Map,
     'shared-raster',
     (status) => reports.push(status)
@@ -141,9 +138,11 @@ test('the raster watcher keeps its existing heal-only success behavior by defaul
 });
 
 test('the HeatRisk opt-in reports its first successful tile once', () => {
+  // With no deadline this is the error watch's reportInitialSuccess
+  // (raster-error-watch.ts); raster-status.ts's watch always takes one.
   const map = new FakeMap();
   const reports: string[] = [];
-  const watcher = watchRasterTiles(
+  const watcher = watchRasterTileErrors(
     map as unknown as maplibregl.Map,
     'heatrisk-frame',
     (status) => reports.push(status),
@@ -485,46 +484,6 @@ test('after a rendered frame, a finished cycle with no tile loaded still reads u
   map.fire('sourcedataloading', { sourceId: 'proven-frame', dataType: 'source', tile: { tileID: { key: 'off-1' } } });
   map.fire('idle', {});
   expect(reports).toEqual(['ready', 'error']);
-});
-
-test('a bounded archive reads an empty cycle as no data, at idle or at a deadline once the source has loaded', async () => {
-  // A view wholly outside the archive's declared extent requests no tile.
-  const idleMap = new FakeMap();
-  const idleReports: string[] = [];
-  watchRasterTiles(
-    idleMap as unknown as maplibregl.Map,
-    'bounded-archive',
-    (status) => idleReports.push(status),
-    { requestCompletenessDeadlineMs: 1_000, emptyIdleOutcome: 'no-data' }
-  );
-  idleMap.fire('idle', {});
-  expect(idleReports).toEqual(['no-data']);
-
-  // A map that never idles (a pulse animation) still ends the cycle.
-  const busyMap = new FakeMap();
-  busyMap.loadedSources.add('bounded-archive');
-  const busyReports: string[] = [];
-  watchRasterTiles(
-    busyMap as unknown as maplibregl.Map,
-    'bounded-archive',
-    (status) => busyReports.push(status),
-    { requestCompletenessDeadlineMs: 30, emptyIdleOutcome: 'no-data' }
-  );
-  await new Promise((resolve) => setTimeout(resolve, 60));
-  expect(busyReports).toEqual(['no-data']);
-
-  // An archive that never loaded is a failure, not an absence.
-  expectWarnings([UNAVAILABLE_AT_DEADLINE('bounded-archive')]);
-  const stalledMap = new FakeMap();
-  const stalledReports: string[] = [];
-  watchRasterTiles(
-    stalledMap as unknown as maplibregl.Map,
-    'bounded-archive',
-    (status) => stalledReports.push(status),
-    { requestCompletenessDeadlineMs: 30, emptyIdleOutcome: 'no-data' }
-  );
-  await new Promise((resolve) => setTimeout(resolve, 60));
-  expect(stalledReports).toEqual(['error']);
 });
 
 test('the HeatRisk coverage gate has no runtime state-geometry request', () => {

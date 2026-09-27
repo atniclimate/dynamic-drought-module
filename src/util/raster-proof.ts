@@ -10,11 +10,14 @@
  * waits on the shared first-tile proof below instead of a private wait that
  * could not tell a proven frame from a timeout.
  *
- * Kept apart from `raster-status.ts` on purpose: that module sits in the
- * Fire 3D activation closure (src/map/fire3d.ts imports it, and
- * src/layers/hillshade.ts, which it also imports, uses it too), whose
- * activation budget has almost no headroom (DR-085). Only the layers that
- * need this wait import it.
+ * Kept apart from `raster-status.ts` on purpose: that module also serves
+ * raster consumers that need neither the tile-proof configuration nor this
+ * wait (HeatRisk, WHP, the satellite basemap), whose activation closures
+ * stay free of this one. Neither module is in the Fire 3D activation closure
+ * (DR-085, DR-142): src/map/fire3d.ts takes its terrain watch from
+ * raster-error-watch.ts, and hillshade, which fire3d also imports, is a
+ * documented tile-proof exception that imports neither. Only the layers
+ * that need this wait import it.
  */
 
 import type * as maplibregl from 'maplibre-gl';
@@ -23,10 +26,14 @@ import { RASTER_PROOF_DEADLINE_MS } from './raster-status';
 
 /**
  * The completeness watch every tile-proven raster row passes to
- * `watchRasterTiles`. `ready` needs the view's selected-frame tiles; a mixed
- * cycle reads `degraded` (live, partial); a cycle with no tile evidence at
- * all reads `error` (unavailable), never `ready` (DR-050 a: off coverage is
- * not live). The deadline sits below the boot-idle budget.
+ * `watchRasterTiles`. The verdict is the current view's (the tiles of the
+ * selected frame on the map now, cache restores included): every tile loaded
+ * reads `ready`; some loaded reads `degraded` (live, partial); none loaded
+ * reads `error` (unavailable), and so does an open cycle whose view holds no
+ * tile at all, never `ready` (DR-050 a: off coverage is not live). The
+ * deadline sits below the boot-idle budget; once a frame has rendered, the
+ * deadline alone never reads below `degraded` (found-042), while a finished
+ * view with nothing loaded still reads `error`.
  */
 export const TILE_PROOF_WATCH = {
   reportInitialSuccess: true,
