@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 
 import { pointHasHeatRiskCoverage } from '../src/layers/heatrisk-coverage';
 import { RASTER_PROOF_DEADLINE_MS, watchRasterTiles } from '../src/util/raster-status';
-import { awaitQuiescence, gotoApp, layerPill, PILL } from './helpers';
+import { awaitQuiescence, gotoApp, layerPill, PILL, search } from './helpers';
 import { captureWarnings, type CapturedWarnings } from './map-harness';
 
 type Handler = (event: Record<string, unknown>) => void;
@@ -628,19 +628,67 @@ async function stubGriddedInfo(page: Page): Promise<void> {
 const isSstTile = (url: URL): boolean =>
   url.href.includes('GHRSST_L4_MUR') && url.pathname.endsWith('.png');
 
+/** The provider's `default` (latest) frame, which the layer mounts for instant paint. */
+const isSstLatestTile = (url: URL): boolean =>
+  isSstTile(url) && url.pathname.includes('/default/default/');
+
+/** One dated frame's own tiles (`URLS.gibsSstAnomalyWmtsTime`). */
+const isSstFrameTile = (url: URL, date: string): boolean =>
+  isSstTile(url) && url.pathname.includes(`/default/${date}/`);
+
+const isSstDomains = (url: URL): boolean => url.href.includes('REQUEST=DescribeDomains');
+
+/** Five published days, the newest 2026-09-24 (the SST time axis the cases below enumerate). */
+const SST_DOMAINS_XML =
+  "<Domains xmlns:ows='http://www.opengis.net/ows/1.1'><DimensionDomain>" +
+  '<ows:Identifier>time</ows:Identifier>' +
+  '<Domain>2026-09-20/2026-09-24/P1D</Domain>' +
+  '<Size>1</Size></DimensionDomain></Domains>';
+
 async function stubSstDomains(page: Page): Promise<void> {
-  await page.route(
-    (url) => url.href.includes('REQUEST=DescribeDomains'),
-    (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'text/xml',
-        body:
-          "<Domains xmlns:ows='http://www.opengis.net/ows/1.1'><DimensionDomain>" +
-          '<ows:Identifier>time</ows:Identifier>' +
-          '<Domain>2026-09-20/2026-09-24/P1D</Domain>' +
-          '<Size>1</Size></DimensionDomain></Domains>'
-      })
+  await page.route(isSstDomains, (route) =>
+    route.fulfill({ status: 200, contentType: 'text/xml', body: SST_DOMAINS_XML })
+  );
+}
+
+/** One SST pill reading, with the `sst=` the URL carried at that instant. */
+interface SstPillSample {
+  readonly text: string;
+  readonly sst: string | null;
+}
+
+/**
+ * Record, from before the first script runs, every text the SST pill shows
+ * together with the `sst=` date the URL carried when it showed it. The pill
+ * is rendered on an animation frame after the status write, so each sample
+ * pairs what the pill said with what the link asked for at that moment:
+ * the reading "live while sst= names another date" is one such pair.
+ */
+async function recordSstPill(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const log: Array<{ text: string; sst: string | null }> = [];
+    (window as unknown as { __sstPillLog?: typeof log }).__sstPillLog = log;
+    let last: string | null = null;
+    new MutationObserver(() => {
+      const pill = document.querySelector('[data-layer-status="sst-anomaly"]');
+      const text = pill?.textContent?.trim() ?? '';
+      if (text === last) return;
+      last = text;
+      log.push({ text, sst: new URLSearchParams(location.search).get('sst') });
+    }).observe(document, { subtree: true, childList: true, characterData: true });
+  });
+}
+
+async function sstPillLog(page: Page): Promise<SstPillSample[]> {
+  return page.evaluate(
+    () => (window as unknown as { __sstPillLog?: SstPillSample[] }).__sstPillLog ?? []
+  );
+}
+
+/** The samples that read live or live (partial) while the URL still named a frame date. */
+function liveUnderLinkedDate(samples: readonly SstPillSample[]): SstPillSample[] {
+  return samples.filter(
+    (sample) => (sample.text === PILL.live || sample.text === PILL.degraded) && sample.sst !== null
   );
 }
 
@@ -713,6 +761,121 @@ test.describe('tile-proven raster readiness in the browser (DDM-P14-T04, found-0
     );
     await gotoApp(page, '?view=console&layers=sst-anomaly', { bootIdle: false });
     await expect(layerPill(page, 'sst-anomaly')).toHaveText(PILL.unavailable, { timeout: 20_000 });
+  });
+
+  // Review finding C2 (DDM-P14-T04; C4-notes :78-79 and the M1 row at :320):
+  // the SST frame proof is DescribeDomains, and it precedes ready. The latest
+  // frame is mounted for instant paint before the time axis answers, so its
+  // tiles are served at once in the cases below while the axis is held.
+  test('sst-anomaly reads loading while DescribeDomains is held, even with the latest frame served, and live once the axis answers', async ({
+    page
+  }) => {
+    const domains = routeGate();
+    await page.route(isSstDomains, async (route) => {
+      await domains.held;
+      await route
+        .fulfill({ status: 200, contentType: 'text/xml', body: SST_DOMAINS_XML })
+        .catch(() => undefined);
+    });
+    let latestServed = 0;
+    await page.route(isSstTile, async (route) => {
+      await fulfillPng(route);
+      if (isSstLatestTile(new URL(route.request().url()))) latestServed += 1;
+    });
+    await gotoApp(page, '?view=console&layers=sst-anomaly', { bootIdle: false });
+    await expect.poll(() => latestServed).toBeGreaterThan(0);
+    // At 7a2b48d the latest frame's watcher reported live here, before the
+    // time axis had answered, so the seam went quiet with DescribeDomains held.
+    await expect(awaitQuiescence(page, HOLD_PROBE_MS)).rejects.toThrow(/sst-anomaly/);
+    await expect(layerPill(page, 'sst-anomaly')).toHaveText(PILL.loading);
+    domains.release();
+    await awaitQuiescence(page);
+    await expect(layerPill(page, 'sst-anomaly')).toHaveText(PILL.live);
+    await expect(page.locator('#time-bar .time-bar-stamp-headline')).toHaveText('Observed Sep 24, 2026');
+  });
+
+  test('a historical sst= link reads loading through a held DescribeDomains and its own held frame, never live from the latest frame', async ({
+    page
+  }) => {
+    await recordSstPill(page);
+    const domains = routeGate();
+    const linkedFrame = routeGate();
+    await page.route(isSstDomains, async (route) => {
+      await domains.held;
+      await route
+        .fulfill({ status: 200, contentType: 'text/xml', body: SST_DOMAINS_XML })
+        .catch(() => undefined);
+    });
+    let latestServed = 0;
+    let linkedRequested = 0;
+    await page.route(isSstTile, async (route) => {
+      const url = new URL(route.request().url());
+      if (isSstFrameTile(url, '2026-09-21')) {
+        linkedRequested += 1;
+        await linkedFrame.held;
+      }
+      await fulfillPng(route);
+      if (isSstLatestTile(url)) latestServed += 1;
+    });
+    await gotoApp(page, '?view=console&layers=sst-anomaly&sst=2026-09-21', { bootIdle: false });
+
+    // The axis is held and the latest frame is served: at 7a2b48d the pill
+    // read live here, for imagery the link did not ask for.
+    await expect.poll(() => latestServed).toBeGreaterThan(0);
+    await expect(awaitQuiescence(page, HOLD_PROBE_MS)).rejects.toThrow(/sst-anomaly/);
+    await expect(layerPill(page, 'sst-anomaly')).toHaveText(PILL.loading);
+
+    // The axis answers and lists the linked date: that frame is requested
+    // and named, and the pill waits for its own tiles.
+    domains.release();
+    await expect.poll(() => linkedRequested).toBeGreaterThan(0);
+    await expect(page.locator('#time-bar .time-bar-stamp-headline')).toHaveText('Observed Sep 21, 2026');
+    await expect(awaitQuiescence(page, HOLD_PROBE_MS)).rejects.toThrow(/sst-anomaly/);
+    await expect(layerPill(page, 'sst-anomaly')).toHaveText(PILL.loading);
+    const beforeProof = (await sstPillLog(page)).map((sample) => sample.text);
+    expect(beforeProof).not.toContain(PILL.live);
+    expect(beforeProof).not.toContain(PILL.degraded);
+
+    linkedFrame.release();
+    await awaitQuiescence(page);
+    await expect(layerPill(page, 'sst-anomaly')).toHaveText(PILL.live);
+    await expect(page.locator('#time-bar .time-bar-stamp-headline')).toHaveText('Observed Sep 21, 2026');
+    expect(new URLSearchParams(await search(page)).get('sst')).toBe('2026-09-21');
+  });
+
+  test('a DescribeDomains failure under a historical sst= link clears the date and states the fallback, never live while sst= names it', async ({
+    page
+  }) => {
+    await recordSstPill(page);
+    await page.route(isSstDomains, (route) =>
+      route
+        .fulfill({ status: 500, contentType: 'text/plain', body: 'Synthetic outage' })
+        .catch(() => undefined)
+    );
+    await page.route(isSstTile, fulfillPng);
+    await gotoApp(page, '?view=console&layers=sst-anomaly&sst=2026-09-21');
+    // The stated fallback: the latest frame on its own tile verdict, the link
+    // healed so it no longer names a date the layer could not show, and the
+    // stamp saying which date that was. At 7a2b48d sst= stayed in the URL,
+    // the stamp named no date, and the pill read live under it.
+    await expect.poll(async () => new URLSearchParams(await search(page)).get('sst')).toBeNull();
+    await expect(page.locator('#time-bar .time-bar-stamp-headline')).toContainText('date unavailable');
+    await expect(page.locator('#time-bar .time-bar-stamp-detail')).toContainText('Sep 21, 2026');
+    await expect(layerPill(page, 'sst-anomaly')).toHaveText(PILL.live);
+    expect(liveUnderLinkedDate(await sstPillLog(page))).toEqual([]);
+  });
+
+  test('an sst= date outside the enumerated window clears the date and states the fallback', async ({ page }) => {
+    await recordSstPill(page);
+    await stubSstDomains(page);
+    await page.route(isSstTile, fulfillPng);
+    await gotoApp(page, '?view=console&layers=sst-anomaly&sst=2026-08-01');
+    await expect.poll(async () => new URLSearchParams(await search(page)).get('sst')).toBeNull();
+    await expect(page.locator('#time-bar .time-bar-stamp-headline')).toHaveText('Observed Sep 24, 2026');
+    // At 7a2b48d the fallback was silent: the stamp read as if no date had been asked for.
+    await expect(page.locator('#time-bar .time-bar-stamp-detail')).toContainText('Aug 1, 2026');
+    await expect(layerPill(page, 'sst-anomaly')).toHaveText(PILL.live);
+    expect(liveUnderLinkedDate(await sstPillLog(page))).toEqual([]);
   });
 
   // Unlike gridded-index and sst-anomaly above, hillshade is a declared
