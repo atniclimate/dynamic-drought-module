@@ -504,9 +504,28 @@ function togglePlay(map: maplibregl.Map): void {
  *
  * `linked` is the `sst=` date the link asked for and the layer could not
  * resolve without an axis; the detail names it, so the fallback is stated
- * rather than silent (review finding C2).
+ * rather than silent (review finding C2). `shown` is the date of a dated
+ * frame already on the map: a prior activation restored or stepped to it
+ * and this activation's own TIME axis (the one that just failed) never ran
+ * before that frame was displayed, so a re-activation is the only way a
+ * frame can already be shown when this call's axis fails. That frame's own
+ * date IS known, so the bar stays dated and stepping alone is disabled,
+ * rather than reading the frame back as undated.
  */
-function installStampOnlyTimeBar(linked: string | null = null): void {
+function installStampOnlyTimeBar(linked: string | null = null, shown: string | null = null): void {
+  if (shown !== null) {
+    setTimeBar(LAYER_KEY, {
+      ariaLabel: 'Sea surface temperature anomaly date',
+      stamp: {
+        horizon: 'current',
+        headline: `Observed ${dateLabel(shown)}`,
+        detail:
+          "GHRSST MUR daily SST anomaly · the provider's time axis could not be read this session, so stepping stays off",
+        register: 'observed'
+      }
+    });
+    return;
+  }
   setTimeBar(LAYER_KEY, {
     ariaLabel: 'Sea surface temperature anomaly date',
     stamp: {
@@ -767,13 +786,21 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     dates = [];
   }
 
-  // A failed, empty or unreadable enumeration is one user-visible situation:
-  // the provider's latest frame is painted with no date to state. A linked
-  // date cannot be resolved without an axis, so the link heals and the
-  // stamp names the date it could not show; a dated frame already on the
-  // map (a re-activation) keeps its own date.
+  // A failed, empty or unreadable enumeration is one user-visible situation
+  // so long as no dated frame is on screen: the provider's latest frame is
+  // painted with no date to state, and a linked date cannot be resolved
+  // without an axis, so the link heals and the stamp names the date it
+  // could not show. A dated frame already on the map (kept from a prior
+  // activation; this activation's own axis just failed, before any restore
+  // of its own could run) keeps its own date and its sst=; only the stamp
+  // changes, to say the axis could not be re-read this time.
   if (dates.length === 0) {
-    const plan = planSstRestore(displayedFrame === null ? timeline.sstDate : null, dates);
+    if (displayedFrame !== null) {
+      installStampOnlyTimeBar(null, displayedFrame);
+      releaseLatestVerdict();
+      return;
+    }
+    const plan = planSstRestore(timeline.sstDate, dates);
     const linked = plan.kind === 'fallback' ? plan.requested : null;
     if (linked !== null) timeline.setSstDate(null);
     installStampOnlyTimeBar(linked);
@@ -792,6 +819,28 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     axisPending = false;
     await restoring;
     return; // showFrame installed the bar
+  }
+  if (plan.kind === 'fallback' && displayedFrame !== null) {
+    // A changed axis no longer lists the date this activation kept on
+    // screen (only a prior, re-activated call can have put it there: this
+    // activation's own plan is either 'restore' or this 'fallback', never
+    // both, so its own restore branch above cannot have run first): step
+    // to the newest frame it does list, since the retained frame is no
+    // longer a real position on the new rail. showFrame clears restoreNote
+    // and sst= (the last index) itself, so the fallback note is written
+    // only after it resolves, and the bar is re-installed to pick it up.
+    const stepping = showFrame(map, dates.length - 1);
+    const stepGuardEpoch = stepEpoch;
+    axisPending = false;
+    await stepping;
+    // showFrame's own guard (line 408) governs everything it wrote; this
+    // activation still owns the write below, so it re-checks the same way
+    // before making it: a superseding deactivate, or a newer activate or
+    // showFrame call, must leave neither restoreNote nor the bar changed.
+    if (signal.aborted || stepGuardEpoch !== stepEpoch) return;
+    restoreNote = outsideWindowNote(plan.requested);
+    installTimeBar(map);
+    return;
   }
   // The newest date is the latest frame already up (the URL canonicalizes to
   // no date). A date the axis does not list (outside the window, or a gap

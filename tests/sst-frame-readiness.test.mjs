@@ -38,7 +38,12 @@ import { fileURLToPath } from 'node:url';
 // ---------------------------------------------------------------------------
 
 const timeBars = new Map();
-globalThis.__rasterReadinessTest = { timeBars, prefetch: false };
+// `crossfadeGate`, when set to a promise, is awaited by the crossfadeFrames
+// stand-in below; a test that needs a deterministic window inside showFrame's
+// second await (after tile proof, before the frame is shown) sets it, then
+// releases it on its own schedule. `null` preserves the instant no-op every
+// other case in this file relies on.
+globalThis.__rasterReadinessTest = { timeBars, prefetch: false, crossfadeGate: null };
 globalThis.window = globalThis;
 globalThis.document = {
   documentElement: { dataset: {} },
@@ -62,7 +67,7 @@ const STAND_INS = new Map([
     '/src/util/frame-stepper.ts',
     'export const FRAME_FADE_MS = 0;\n' +
       'export function prefetchAllowed() { return globalThis.__rasterReadinessTest.prefetch === true; }\n' +
-      'export async function crossfadeFrames() {}\n'
+      'export async function crossfadeFrames() { const g = globalThis.__rasterReadinessTest.crossfadeGate; if (g) await g; }\n'
   ],
   [
     '/src/layers/enso-flow.ts',
@@ -355,6 +360,7 @@ async function withSst({ sst = null, answer }, body) {
     timeline.setSstDate(null);
     timeBars.clear();
     globalThis.__rasterReadinessTest.prefetch = false;
+    globalThis.__rasterReadinessTest.crossfadeGate = null;
   }
 }
 
@@ -465,6 +471,183 @@ test('a re-activation over a displayed dated frame (no deactivate between) never
       assert.equal(registry.getStatus(KEY), 'ready', `read ${describe(log.seen)}`);
       assert.equal(timeline.sstDate, '2026-09-21', 'the re-activation lost the link date');
       assert.equal(timeBars.get(KEY)?.stamp.headline, 'Observed Sep 21, 2026');
+    }
+  );
+});
+
+test('a re-activation over a dated frame whose DescribeDomains fails keeps a dated stamp for the frame on screen', async () => {
+  const first = gate();
+  await withSst(
+    {
+      sst: '2026-09-21',
+      answer: async (call) =>
+        call === 1
+          ? (await first.held, domainsOk())
+          : new Response('Synthetic outage', { status: 500, statusText: 'Internal Server Error' })
+    },
+    async ({ map, log }) => {
+      // Drive the linked frame to ready, as the historical-link case does.
+      const activation = mod.activate(map);
+      await settle();
+      proveLatestFrame(map);
+      first.release();
+      await settle();
+      map.requestTile(frameSource('2026-09-21'), 'dated-1');
+      map.loadTile(frameSource('2026-09-21'), 'dated-1', true);
+      await activation;
+      assert.equal(registry.getStatus(KEY), 'ready', `read ${describe(log.seen)}`);
+      assert.equal(timeline.sstDate, '2026-09-21');
+
+      // The same surface activated again with no deactivate between, this
+      // time DescribeDomains answers with a synthetic outage.
+      const reactivation = mod.activate(map);
+      await settle();
+      await reactivation;
+
+      assert.equal(
+        timeBars.get(KEY)?.stamp.headline,
+        'Observed Sep 21, 2026',
+        `the dated frame on screen lost its own stamp when the axis failed to re-read: read ${describe(log.seen)}`
+      );
+      assert.equal(timeline.sstDate, '2026-09-21', 'the re-activation lost the link date');
+      assert.equal(
+        map.visibilityOf(DEFAULT_LAYER),
+        'none',
+        'the latest frame was shown beneath the dated frame while the axis could not be re-read'
+      );
+      assert.equal(registry.getStatus(KEY), 'ready', `read ${describe(log.seen)}`);
+    }
+  );
+});
+
+test('a re-activation whose axis no longer lists the retained date steps to the newest frame and states the fallback', async () => {
+  const first = gate();
+  const changedXml =
+    "<Domains xmlns:ows='http://www.opengis.net/ows/1.1'><DimensionDomain>" +
+    '<ows:Identifier>time</ows:Identifier>' +
+    '<Domain>2026-09-22/2026-09-26/P1D</Domain>' +
+    '<Size>1</Size></DimensionDomain></Domains>';
+  await withSst(
+    {
+      sst: '2026-09-21',
+      answer: async (call) => (call === 1 ? (await first.held, domainsOk()) : domainsOk(changedXml))
+    },
+    async ({ map, log }) => {
+      // Drive the linked frame to ready, as the historical-link case does.
+      const activation = mod.activate(map);
+      await settle();
+      proveLatestFrame(map);
+      first.release();
+      await settle();
+      map.requestTile(frameSource('2026-09-21'), 'dated-1');
+      map.loadTile(frameSource('2026-09-21'), 'dated-1', true);
+      await activation;
+      assert.equal(registry.getStatus(KEY), 'ready', `read ${describe(log.seen)}`);
+
+      // Re-activated with no deactivate between: the axis now lists a
+      // window that no longer includes the retained date.
+      const reactivation = mod.activate(map);
+      await settle();
+      map.requestTile(frameSource('2026-09-26'), 'newest-1');
+      map.loadTile(frameSource('2026-09-26'), 'newest-1', true);
+      await reactivation;
+
+      assert.equal(
+        timeBars.get(KEY)?.stamp.headline,
+        'Observed Sep 26, 2026',
+        `the newest listed frame was not shown after the axis dropped the retained date: read ${describe(log.seen)}`
+      );
+      assert.equal(timeline.sstDate, null, 'sst= still names the date the new axis does not list');
+      assert.match(
+        timeBars.get(KEY)?.stamp.detail ?? '',
+        /Sep 21, 2026/,
+        `the stamp does not state the fallback: ${timeBars.get(KEY)?.stamp.detail}`
+      );
+      assert.equal(registry.getStatus(KEY), 'ready', `read ${describe(log.seen)}`);
+    }
+  );
+});
+
+test('a changed-axis fallback step, superseded while it awaits its own crossfade (tile proof already in, so showFrame\'s sibling guard already let it through clean), writes neither restoreNote nor a re-installed bar', async () => {
+  const first = gate();
+  const fade = gate();
+  const changedXml =
+    "<Domains xmlns:ows='http://www.opengis.net/ows/1.1'><DimensionDomain>" +
+    '<ows:Identifier>time</ows:Identifier>' +
+    '<Domain>2026-09-22/2026-09-26/P1D</Domain>' +
+    '<Size>1</Size></DimensionDomain></Domains>';
+  await withSst(
+    {
+      sst: '2026-09-21',
+      // call 1: the plain boot's axis (20-24, gated). call 2: the
+      // re-activation whose axis drops 2026-09-21 (22-26, immediate). call
+      // 3: a third activation whose own DescribeDomains never answers here;
+      // it exists only to supersede call 2 (activate() aborts the previous
+      // controller as its very first act, before any await of its own).
+      answer: async (call) => {
+        if (call === 1) {
+          await first.held;
+          return domainsOk();
+        }
+        if (call === 2) return domainsOk(changedXml);
+        return new Promise(() => {}); // never answers; only its abort matters
+      }
+    },
+    async ({ map, log }) => {
+      // Drive the linked frame to ready, as the sibling case does.
+      const activation = mod.activate(map);
+      await settle();
+      proveLatestFrame(map);
+      first.release();
+      await settle();
+      map.requestTile(frameSource('2026-09-21'), 'dated-1');
+      map.loadTile(frameSource('2026-09-21'), 'dated-1', true);
+      await activation;
+      assert.equal(registry.getStatus(KEY), 'ready', `read ${describe(log.seen)}`);
+
+      // Re-activated with no deactivate between: the axis drops the
+      // retained date, so the changed-axis branch starts its own step to
+      // the newest frame. Its tile proof is given at once (so showFrame's
+      // own first guard, line 408, is already satisfied and `buffering`
+      // already flips false, same as a real step that reached the fade),
+      // but the crossfade itself is held open by `fade`, so the step is
+      // left suspended in showFrame's SECOND await when superseded below.
+      globalThis.__rasterReadinessTest.crossfadeGate = fade.held;
+      const reactivation = mod.activate(map);
+      await settle();
+      map.requestTile(frameSource('2026-09-26'), 'newest-1');
+      map.loadTile(frameSource('2026-09-26'), 'newest-1', true);
+      await settle();
+
+      // Supersede outright: this activation's own `masterController.abort()`
+      // fires before its own DescribeDomains is even sent.
+      const third = mod.activate(map);
+      await settle();
+
+      // Now let the superseded step's held crossfade resolve: showFrame's
+      // own second guard (line 431) sees the abort and returns; the write
+      // this repair guards runs only after that, in the caller.
+      fade.release();
+      await settle();
+      await reactivation;
+      await settle();
+
+      const stamp = timeBars.get(KEY)?.stamp;
+      const detail = stamp?.detail ?? '';
+      assert.doesNotMatch(
+        detail,
+        /buffering tiles/,
+        `the superseded step's own crossfade wait was still open when it wrote: ${detail} (read ${describe(log.seen)})`
+      );
+      assert.doesNotMatch(
+        detail,
+        /Sep 21, 2026/,
+        `the superseded fallback step wrote its stale note after being aborted: ${detail} (read ${describe(log.seen)})`
+      );
+
+      // Tear down the still-pending third activation cleanly.
+      mod.deactivate(map);
+      await third;
     }
   );
 });
