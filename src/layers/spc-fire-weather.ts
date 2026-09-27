@@ -16,7 +16,9 @@
  * Source: `URLS.spcFireWeatherOutlookMapServer` layer 1 ("Day 1 Outlook");
  * verified 2026-07-01 (see urls.ts). An empty FeatureCollection is the
  * common good-news case (no elevated fire weather anywhere today) and
- * renders as `'no-data'`, never as an error. Updated up to five times daily.
+ * renders as `'no-data'`, never as an error; so does the issuer's own
+ * "no area outlined" answer, one null-geometry feature with `dn` 0
+ * (`readNoAreaAnswer`, D1 M5). Updated up to five times daily.
  *
  * Cancellation (the cancellation invariant): master abort controller
  * superseded on each `activate`, aborted on `deactivate`, fetch through
@@ -128,16 +130,57 @@ function spcMomentUtc(value: unknown): string | null {
 }
 
 /**
+ * The issuer's "no area outlined" answer (D1 M5, 2026-09-27; found-002,
+ * DDM-P1-T11). The SPC MapServer answers an issuance with no fire-weather
+ * area as a FeatureCollection whose ONLY feature has a null geometry and
+ * `dn` 0 (recorded 2026-09-26, REGISTER found-002), while still stating the
+ * issuance's `valid` and `expire`. `dn` 0 is none of the outlook categories
+ * (`SPC_FIREWX_CATEGORIES` holds 5, 8 and 10), so this is a verified
+ * absence, `no-data`, not a failed read.
+ *
+ * Exactly that shape and nothing wider: no ArcGIS error envelope, no
+ * transfer-limit flag, one feature, a `Feature` whose geometry is `null`
+ * and whose properties carry the number 0 as `dn`. Anything else (a second
+ * feature, a category with no geometry, an empty geometry object) returns
+ * null here and goes to the shared parser, which reads it as unavailable.
+ * Returns the answer's properties, whose `valid` and `expire` the stamp
+ * then states.
+ */
+function readNoAreaAnswer(value: unknown): Readonly<Record<string, unknown>> | null {
+  if (!isRecord(value) || Object.hasOwn(value, 'error')) return null;
+  if (value['type'] !== 'FeatureCollection') return null;
+  const flag = value['exceededTransferLimit'];
+  if (flag !== undefined && flag !== false) return null;
+  const features = value['features'];
+  if (!Array.isArray(features) || features.length !== 1) return null;
+  const feature: unknown = features[0];
+  if (!isRecord(feature) || feature['type'] !== 'Feature') return null;
+  if (!Object.hasOwn(feature, 'geometry') || feature['geometry'] !== null) return null;
+  const properties = feature['properties'];
+  if (!isRecord(properties) || properties['dn'] !== 0) return null;
+  return properties;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
  * The Day 1 outlook stamp, the Wildfire screen's time statement at the
  * near-term horizon. The period is the issuer's own `valid` and `expire`
- * on the outlined areas (clause 3); an issuance with no outlined area is
- * the common good-news case, and its empty response carries no window, so
- * the stamp says the period is not stated (clause 4) rather than inventing
+ * on the outlined areas (clause 3). An issuance with no outlined area is
+ * the common good-news case: when the response is the issuer's no-area
+ * answer (`readNoAreaAnswer`) the stamp states the period that answer
+ * carries; when it is an empty collection it carries no window, so the
+ * stamp says the period is not stated (clause 4) rather than inventing
  * one from the calendar. The register is outlook, and the text says so in
  * the issuer's product name.
  */
-function installTimeBar(features: FeatureCollection['features']): void {
-  const first = features[0]?.properties ?? null;
+function installTimeBar(
+  features: FeatureCollection['features'],
+  noArea: Readonly<Record<string, unknown>> | null
+): void {
+  const first = features[0]?.properties ?? noArea ?? null;
   const from = spcMomentUtc(first?.['valid']);
   const until = spcMomentUtc(first?.['expire']);
   const headline =
@@ -147,9 +190,11 @@ function installTimeBar(features: FeatureCollection['features']): void {
         ? `Outlook valid from ${from}`
         : 'Outlook · valid period not stated by the response';
   const detail =
-    features.length === 0
-      ? 'NOAA SPC Day 1 Fire Weather Outlook · no fire-weather area is outlined in the current issuance; an empty response states no valid period'
-      : 'NOAA SPC Day 1 Fire Weather Outlook · an outlook of fire-weather conditions favorable for fire spread, not a fire danger rating and not an active fire';
+    features.length > 0
+      ? 'NOAA SPC Day 1 Fire Weather Outlook · an outlook of fire-weather conditions favorable for fire spread, not a fire danger rating and not an active fire'
+      : noArea !== null
+        ? 'NOAA SPC Day 1 Fire Weather Outlook · no fire-weather area is outlined in the current issuance'
+        : 'NOAA SPC Day 1 Fire Weather Outlook · no fire-weather area is outlined in the current issuance; an empty response states no valid period';
   setTimeBar(LAYER_KEY, {
     ariaLabel: 'SPC Day 1 Fire Weather Outlook valid period',
     stamp: {
@@ -164,7 +209,8 @@ function installTimeBar(features: FeatureCollection['features']): void {
 /**
  * Fetch today's outlook and add the source plus fill and outline layers.
  * Idempotent. Empty FeatureCollection renders as `'no-data'` (no elevated
- * fire weather anywhere today; common and legitimate).
+ * fire weather anywhere today; common and legitimate), and so does the
+ * issuer's no-area answer (`readNoAreaAnswer`), which draws nothing.
  */
 export async function activate(map: maplibregl.Map): Promise<void> {
   if (map.getSource(SOURCE_ID)) {
@@ -180,18 +226,28 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   let geojson: FeatureCollection;
   let truncated = false;
+  let noArea: Readonly<Record<string, unknown>> | null = null;
   try {
-    const parsed = parseArcGisPolygonFeatureCollection(
-      await fetchJsonWithBudget(
-        buildQueryUrl(),
-        null,
-        signal,
-        FETCH_TIMEOUT_MS
-      ),
-      'NOAA SPC fire-weather outlook'
+    const body = await fetchJsonWithBudget(
+      buildQueryUrl(),
+      null,
+      signal,
+      FETCH_TIMEOUT_MS
     );
-    geojson = parsed.collection;
-    truncated = parsed.truncated;
+    // The issuer's own "no area outlined" answer is read here, at the call
+    // site, before the shared parser (which keeps rejecting every null
+    // geometry for NIFC, HMS, and every other SPC body).
+    noArea = readNoAreaAnswer(body);
+    if (noArea !== null) {
+      geojson = { type: 'FeatureCollection', features: [] };
+    } else {
+      const parsed = parseArcGisPolygonFeatureCollection(
+        body,
+        'NOAA SPC fire-weather outlook'
+      );
+      geojson = parsed.collection;
+      truncated = parsed.truncated;
+    }
   } catch (err) {
     // Aborted means superseded or deactivated; drop silently per invariant 5.
     if (signal.aborted) return;
@@ -213,7 +269,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   // The outlook is the displayed surface from here on, outlined areas or
   // none; its time statement stands for both.
-  installTimeBar(features);
+  installTimeBar(features, noArea);
 
   if (features.length === 0) {
     reportStatus(truncated ? 'degraded' : 'no-data');

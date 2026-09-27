@@ -74,7 +74,7 @@ import {
 import { getFraming, onFramingChange } from './framing-store';
 import { registry } from './registry';
 import { timeline } from './timeline';
-import { checkedSnapshot } from '../ui/island/bridge';
+import { checkedSnapshot, isChecked } from '../ui/island/bridge';
 import { requestLayerOff, requestLayerOnExact } from '../ui/layer-toggle-command';
 
 /**
@@ -87,7 +87,9 @@ export interface CommittedShellSnapshot {
   /** Monotonic publish counter; a re-derivation bumps it. */
   readonly revision: number;
   /** The hazard view the user most recently chose. This remains stable when
-   * a failed surface honestly demotes the exact displayed set to `custom`. */
+   * the exact displayed set demotes to `custom` (a user customization, or a
+   * failed layer outside the committed recipe; a failed RECIPE layer no
+   * longer demotes, D1 M5, see `isCommittedRecipeKey`). */
   readonly selectedHazard: HazardClusterKey;
   /** The committed cluster, or 'custom' once the granular intent has
    * diverged from any cluster's composition (D-0.7.0-044). */
@@ -266,6 +268,34 @@ export function onCommittedSnapshotChange(fn: () => void): () => void {
   };
 }
 
+/**
+ * Whether a layer key is a RECIPE member of the committed cluster: the
+ * cluster's recipe at the horizon its intent was resolved at, with any
+ * `coActivateWith` pair expanded as `composeClusterIntent` expands it. The
+ * persistent reference set is NOT a recipe member, and a 'custom' display
+ * has no recipe.
+ *
+ * The layer controller reads this when an activation fails (D1 M5,
+ * 2026-09-27; found-002 and found-003, the director's Tier 1 scope): a
+ * failed recipe member of the committed cluster keeps its checkbox, so the
+ * checked set still equals the committed composition, no demotion runs, the
+ * hazard stays pressed, `cluster=` stays in the URL, and Current Conditions
+ * stays enabled as the way back; the layer reads unavailable (its registry
+ * status stays 'error'). Any other failure (a custom `layers=` set, a
+ * reference layer) keeps the uncheck-and-leave cleanup.
+ */
+export function isCommittedRecipeKey(key: string): boolean {
+  const { cluster, horizon } = resolveCommitted();
+  if (cluster === 'custom') return false;
+  for (const recipeKey of HAZARD_CLUSTERS[cluster].recipes[horizon]) {
+    if (recipeKey === key) return true;
+    for (const partner of getLayerDef(recipeKey)?.coActivateWith ?? []) {
+      if (partner === key) return true;
+    }
+  }
+  return false;
+}
+
 /** Every key currently "on": checked intent union registered active
  * (the checkbox leads the registry while an activation is in flight). */
 function onKeys(): Set<string> {
@@ -291,9 +321,11 @@ function onKeys(): Set<string> {
  *      door. Reference-role keys are NEVER deactivated here.
  *   4. Activate the new recipe through requestLayerOnExact (intent
  *      first, no cascade; the controller's per-key generation guard
- *      absorbs rapid re-flips). The caller is not await-blocked; the
- *      snapshot's coherence comes from step 6, not from activation
- *      settling.
+ *      absorbs rapid re-flips). A recipe member left checked by a failed
+ *      activation is re-requested (D1 M5), so pressing the committed
+ *      hazard again re-applies its recipe. The caller is not
+ *      await-blocked; the snapshot's coherence comes from step 6, not
+ *      from activation settling.
  *   5. Commit the claim to the store/URL. When the display after step 3
  *      IS exactly the composition, the claim is the clean cluster:
  *      setHazardCluster(key) (Drought serializes as absence per the
@@ -338,7 +370,26 @@ function applyCluster(
       }
       requestLayerOff(onKey);
     }
+    // A recipe member whose activation failed stays checked (D1 M5; see
+    // isCommittedRecipeKey), so requestLayerOnExact alone would skip it as
+    // already on and a press of the committed hazard would do nothing
+    // (found-003's "clicking Wildfire again does nothing"). Such a key is
+    // checked, not registered active, and holds the terminal 'error'
+    // status; it is withdrawn and re-requested through the same door, so
+    // the press re-applies the whole recipe. The controller's intent guard
+    // drops the queued teardown (the newer on-intent owns the key), and
+    // the apply lock keeps the two intermediate checkbox flips from
+    // demoting anything. A key that failed late (still registered active)
+    // is not re-requested here: its module owns its own retry.
+    const active = registry.getActiveKeys();
     for (const wanted of intent) {
+      if (
+        isChecked(wanted) &&
+        !active.has(wanted) &&
+        registry.getStatus(wanted) === 'error'
+      ) {
+        requestLayerOff(wanted);
+      }
       requestLayerOnExact(wanted);
     }
     if (extras.length === 0) {
@@ -418,9 +469,15 @@ export function requestHorizon(next: TemporalHorizonKey): void {
  * matches the committed composition (D-0.7.0-044: the moment the user
  * customizes, `cluster=` comes off and `layers=` goes on; the URL never
  * claims a cluster the display is not). Called by the sidebar on every
- * checkbox-intent flip; a terminal activation failure that unchecks a
- * recipe member also lands here, which is deliberate honesty (a
- * wildfire display missing its perimeters is not the Wildfire cluster).
+ * checkbox-intent flip. A terminal activation failure of a RECIPE member
+ * of the committed cluster no longer lands here (D1 M5, 2026-09-27;
+ * found-003): the controller keeps that box checked
+ * (`isCommittedRecipeKey`), the view stays committed, and the failed layer
+ * reads unavailable in the pill and in the summary caveat, which names it
+ * because it stays in the committed intendedKeys. A failure the
+ * controller does uncheck (a reference layer, or any layer of a custom
+ * set) still lands here, and so does a user's own uncheck of a recipe
+ * member: that display is no longer the cluster.
  * Stands down while the service itself is applying a cluster, so the
  * transaction's own intermediate flips can never demote the cluster it
  * is committing (the S2-mechanics defect this service retires).

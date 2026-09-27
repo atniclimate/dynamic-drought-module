@@ -48,7 +48,7 @@ import { CELL_ABSENCE, HAZARD_KEYS } from '../src/impact/matrix';
 import type { EvidenceClass } from '../src/impact/types';
 import { renderClaim } from '../src/ui/claim-render';
 import { HAZARD_CLUSTER_KEYS, TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
-import { gotoApp, search, stubHeatRiskCatalog, urlLayers } from './helpers';
+import { gotoApp, PILL, search, stubHeatRiskCatalog, urlLayers } from './helpers';
 
 const SNAPSHOT_PATH = join(process.cwd(), 'public', 'data', 'enso-indices.json');
 
@@ -478,6 +478,73 @@ test.describe('DDM-P8-T03 clause 1: every horizon chip either changes the map or
     await page.locator('.shell-cluster-btn[data-cluster="drought"]').click();
     const droughtWeeks = page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]');
     expect(await droughtWeeks.getAttribute('aria-disabled')).toBeNull();
+  });
+
+  // D1 M5 (2026-09-27; found-003, DDM-P10-T09): the census evidence says
+  // "clicking Wildfire again does nothing". A failed recipe layer now stays
+  // checked, so the committed hazard's button is the way to ask again, and
+  // pressing it must re-request the failed layer rather than skip a key
+  // whose box is already checked.
+  test('pressing the committed hazard again after a layer failure re-applies its recipe', async ({
+    page
+  }) => {
+    await stubWildfireProducts(page);
+    // The Day 1 outlook fails until the test lets the agency recover.
+    let recovered = false;
+    let spcRequests = 0;
+    await page.route(
+      (url) => url.href.includes('/SPC_firewx/MapServer/1/query'),
+      (route) => {
+        spcRequests += 1;
+        if (!recovered) {
+          return route.fulfill({ status: 503, contentType: 'text/plain', body: 'fixture outage' });
+        }
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/geo+json',
+          body: JSON.stringify({
+            type: 'FeatureCollection',
+            features: [
+              {
+                type: 'Feature',
+                properties: { dn: 8, valid: '202609081200', expire: '202609091200' },
+                geometry: {
+                  type: 'Polygon',
+                  coordinates: [
+                    [
+                      [-125, 42],
+                      [-116, 42],
+                      [-116, 49],
+                      [-125, 49],
+                      [-125, 42]
+                    ]
+                  ]
+                }
+              }
+            ]
+          })
+        });
+      }
+    );
+    await gotoApp(page, '?view=console&cluster=wildfire&horizon=weeks-ahead');
+    const wildfire = page.locator('.shell-cluster-btn[data-cluster="wildfire"]');
+    const spcPill = page.locator('[data-layer-status="spc-fire-weather"]');
+    const spcBox = page.locator('input[data-layer-key="spc-fire-weather"]');
+    await expect(spcPill).toHaveText(PILL.unavailable, { timeout: 25_000 });
+    await expect(spcBox).toBeChecked();
+    await expect(wildfire).toHaveAttribute('aria-pressed', 'true');
+    const failedRequests = spcRequests;
+    expect(failedRequests).toBeGreaterThan(0);
+
+    recovered = true;
+    await wildfire.click();
+    await expect.poll(() => spcRequests).toBeGreaterThan(failedRequests);
+    await expect(spcPill).toHaveText(PILL.live, { timeout: 25_000 });
+    await expect(spcBox).toBeChecked();
+    await expect(wildfire).toHaveAttribute('aria-pressed', 'true');
+    const params = new URLSearchParams(await search(page));
+    expect(params.get('cluster')).toBe('wildfire');
+    expect(params.get('horizon')).toBe('weeks-ahead');
   });
 });
 

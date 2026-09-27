@@ -3,6 +3,7 @@ import { TRIBAL_NATIONS_PROVENANCE_NOTE } from '../config/provenance';
 import { getBasemapMode, onBasemapChange } from '../state/basemap-store';
 import { getMap } from '../state/map-store';
 import { registry } from '../state/registry';
+import { isChecked } from './island/bridge';
 import { resolveStatusPillText } from './island/pill-text';
 import { onSheetDetentSettle } from './mobile-sheet';
 
@@ -65,22 +66,32 @@ export function initMapInformation(): void {
     // W2-D6: a source whose activation is still in flight is listed with
     // its loading status instead of being dropped; a deactivated source
     // (including a failed activation the controller unchecked) keeps its
-    // honest absence.
-    const definitions = LAYER_DEFS.filter(
-      (definition) =>
+    // honest absence. A failed activation that stays checked (a recipe
+    // member of the committed cluster, D1 M5, 2026-09-27) is listed with
+    // its unavailable status: the view asks for it and could not read it.
+    const definitions = LAYER_DEFS.filter((definition) => {
+      const status = registry.getStatus(definition.key);
+      return (
         active.has(definition.key) ||
-        registry.getStatus(definition.key) === 'loading'
-    );
+        status === 'loading' ||
+        (status === 'error' && isChecked(definition.key))
+      );
+    });
     const vintage = document.getElementById('basemap-vintage')?.textContent?.trim() ?? '';
 
     // W2-D8: the opening line leads with what this panel uniquely adds
     // (the active view and the basemap state with its observation window)
     // instead of restating the on-map key's aria text verbatim while that
     // key is visible directly beneath the panel.
+    // The fallback names a surface still loading, never one that failed.
     const surface =
       definitions.find(
         (definition) => definition.role === 'surface' && active.has(definition.key)
-      ) ?? definitions.find((definition) => definition.role === 'surface');
+      ) ??
+      definitions.find(
+        (definition) =>
+          definition.role === 'surface' && registry.getStatus(definition.key) === 'loading'
+      );
     const contextParts = [
       surface ? `Active view: ${surface.name}.` : 'No condition surface is on.',
       getBasemapMode() === 'satellite'

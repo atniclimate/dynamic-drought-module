@@ -1,6 +1,21 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { gotoApp, layerCheckbox, layerPill, urlLayers, waitForLayerSettled, PILL } from './helpers';
+import {
+  HAZARD_CLUSTERS,
+  HAZARD_CLUSTER_KEYS,
+  TEMPORAL_HORIZON_KEYS,
+  type HazardClusterKey,
+  type TemporalHorizonKey
+} from '../src/config/clusters';
+import {
+  gotoApp,
+  layerCheckbox,
+  layerPill,
+  search,
+  urlLayers,
+  waitForLayerSettled,
+  PILL
+} from './helpers';
 
 /**
  * DDM-P1-T03 (`docs/ROADMAP.yaml:180`): "A thrown and a non-thrown activation
@@ -121,6 +136,101 @@ test.describe('DDM-P1-T03: activation failure, thrown and non-thrown, self-corre
     // own status-change announces "unavailable": exactly once.
     const seen = await recordedAnnouncements(page);
     expect(seen.filter((text) => text.includes(PILL.unavailable)).length).toBe(1);
+  });
+
+  // D1 M5 (2026-09-27; found-003, DDM-P10-T09; the director's Tier 1 scope):
+  // a failure of a RECIPE layer of the COMMITTED cluster keeps the layer
+  // checked, so the view stays committed. The two cases above are custom
+  // `layers=` sets and keep their uncheck-and-leave behaviour.
+  test('a recipe layer that fails to activate keeps its hazard pressed, cluster= in the URL and Current Conditions enabled, in every HAZARD_CLUSTER_KEYS mode', async ({
+    page
+  }) => {
+    // One case per distinct non-empty recipe, enumerated from config (DR-113):
+    // a horizon whose recipe repeats an earlier one's layers is the same
+    // failure and is reached only through that earlier chip; an empty recipe
+    // (Extreme Heat at season-ahead) has no layer to fail.
+    const cases: Array<{
+      readonly cluster: HazardClusterKey;
+      readonly horizon: TemporalHorizonKey;
+      readonly failing: string;
+    }> = [];
+    for (const cluster of HAZARD_CLUSTER_KEYS) {
+      const seen = new Set<string>();
+      for (const horizon of TEMPORAL_HORIZON_KEYS) {
+        const recipe = HAZARD_CLUSTERS[cluster].recipes[horizon];
+        const failing = recipe[0];
+        const signature = recipe.join(',');
+        if (failing === undefined || seen.has(signature)) continue;
+        seen.add(signature);
+        cases.push({ cluster, horizon, failing });
+      }
+    }
+    expect(new Set(cases.map((c) => c.cluster))).toEqual(new Set(HAZARD_CLUSTER_KEYS));
+    test.setTimeout(60_000 + cases.length * 45_000);
+
+    // The other recipe members answer an empty, valid collection, so the one
+    // forced failure is the only failure and no case reaches a live agency.
+    await page.route(
+      (url) =>
+        url.href.includes('WFIGS_Interagency_Perimeters_Current') ||
+        url.href.includes('NOAA_Satellite_Smoke_Detection') ||
+        url.href.includes('/SPC_firewx/MapServer/1/query') ||
+        url.pathname.endsWith('/watch_warn_adv/MapServer/1/query'),
+      (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/geo+json',
+          body: JSON.stringify({ type: 'FeatureCollection', features: [] })
+        })
+    );
+
+    // The thrown shape: the failing layer's own chunk (Vite names it after
+    // the module, plus an eight-character hash) never loads, so
+    // `loadLayerModule` rejects inside the controller's activation. One
+    // route, pointed at each case's chunk in turn; a fresh navigation per
+    // case, so no module is cached.
+    let failingChunk: RegExp | null = null;
+    await page.route(
+      (url) => failingChunk !== null && failingChunk.test(url.pathname),
+      (route) => route.abort()
+    );
+
+    for (const { cluster, horizon, failing } of cases) {
+      await test.step(`${cluster} at ${horizon}: ${failing} fails`, async () => {
+        failingChunk = new RegExp(`/${failing}-[A-Za-z0-9_-]{8}\\.js$`);
+        await gotoApp(page, '?view=console');
+        const clusterButton = page.locator(`.shell-cluster-btn[data-cluster="${cluster}"]`);
+        await clusterButton.click();
+        if (horizon !== 'current') {
+          await page.locator(`.shell-horizon-btn[data-horizon="${horizon}"]`).click();
+        }
+        await waitForLayerSettled(page, failing);
+
+        await expect(layerPill(page, failing)).toHaveText(PILL.unavailable);
+        await expect(layerCheckbox(page, failing)).toBeChecked();
+        await expect(clusterButton).toHaveAttribute('aria-pressed', 'true');
+        await expect(
+          page.locator(`.shell-horizon-btn[data-horizon="${horizon}"]`)
+        ).toHaveAttribute('aria-pressed', 'true');
+        const params = new URLSearchParams(await search(page));
+        const token = HAZARD_CLUSTERS[cluster].urlToken;
+        if (token !== null) {
+          expect(params.get('cluster')).toBe(token);
+          expect(params.has('layers')).toBe(false);
+        } else {
+          // The default view serializes as absence of cluster= and its
+          // layer list (src/state/url.ts), so the claim is that list.
+          expect(params.has('cluster')).toBe(false);
+          expect((await urlLayers(page)).has(failing)).toBe(true);
+        }
+        // Current Conditions stays enabled as the way back.
+        expect(
+          await page
+            .locator(`.shell-horizon-btn[data-horizon="${TEMPORAL_HORIZON_KEYS[0]}"]`)
+            .getAttribute('aria-disabled')
+        ).toBeNull();
+      });
+    }
   });
 
   // A third shape -- a module that self-reports 'error' and THEN throws

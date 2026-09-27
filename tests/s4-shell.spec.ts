@@ -753,8 +753,17 @@ test.describe('S4 r3: an initial-load horizon supersession stays owned (DG-080 r
 
     // The activation promise followed the replacement (the latest-owner
     // settle), so the controller observed the terminal error and its
-    // cleanup ran: the checkbox clears...
-    await expect(layerCheckbox(page, 'drought')).not.toBeChecked({ timeout: 30_000 });
+    // cleanup ran. FLIPPED 2026-09-27 (D1 M5, found-003; the director's
+    // Tier 1 scope: a failed RECIPE layer of the COMMITTED cluster keeps
+    // its checkbox, so the committed view never demotes to a custom set).
+    // The Season chip committed Drought, and `drought` is its season-ahead
+    // recipe, so the checkbox now STAYS checked, the layer stays in the
+    // Drought `layers=` claim, and the Drought button stays pressed; the
+    // registry cleanup (no registration, no time-bar spec, no summary
+    // claim) still runs. The title's "checkbox ... and URL claim all
+    // withdraw" predates M5; it is kept because the sleep inventory keys
+    // this test's wait by its exact title. The checkbox stays...
+    await expect(layerCheckbox(page, 'drought')).toBeChecked({ timeout: 30_000 });
     // ...the pill carries the honest terminal error, not a live claim...
     await expect
       .poll(async () => {
@@ -763,29 +772,33 @@ test.describe('S4 r3: an initial-load horizon supersession stays owned (DG-080 r
         return cls.split(/\s+/).includes('error');
       })
       .toBe(true);
-    // ...the URL claim is withdrawn: the failed surface leaves layers=
-    // and the outlook token carries no residue...
+    // ...the committed Drought claim keeps the failed surface in layers=
+    // (FLIPPED, D1 M5: it read "withdrawn") and the outlook token carries
+    // no residue...
     await page.waitForFunction(() => {
       const raw = new URLSearchParams(window.location.search).get('layers');
-      return raw !== null && !raw.split(',').includes('drought');
+      return raw !== null && raw.split(',').includes('drought');
     });
-    expect((await urlLayers(page)).has('drought')).toBe(false);
+    expect((await urlLayers(page)).has('drought')).toBe(true);
     expect(await search(page)).not.toContain('outlook=');
-    // ...no cluster button claims the failed display...
+    // ...the committed hazard stays pressed (FLIPPED, D1 M5: it read
+    // "no cluster button claims the failed display")...
     await expect(
       page.locator('.shell-cluster-btn[data-cluster="drought"]')
-    ).toHaveAttribute('aria-pressed', 'false');
+    ).toHaveAttribute('aria-pressed', 'true');
     // ...and no empty Drought surface remains registered: no time-bar
     // spec installed, no summary claim.
     await expect(page.locator('#shell-time')).toHaveAttribute('data-has-spec', 'false');
     await expect(page.locator('#shell-summary-primary')).not.toContainText('Drought Outlook');
 
     // Release the held, aborted first request LAST: a late stale
-    // response must not resurrect the withdrawn surface.
+    // response must not resurrect the failed surface (no time-bar spec),
+    // and the committed claim stays as it was (FLIPPED, D1 M5: the
+    // checkbox and the layers= entry stay).
     for (const release of heldMonthly.splice(0, heldMonthly.length)) release();
     await page.waitForTimeout(500);
-    await expect(layerCheckbox(page, 'drought')).not.toBeChecked();
-    expect((await urlLayers(page)).has('drought')).toBe(false);
+    await expect(layerCheckbox(page, 'drought')).toBeChecked();
+    expect((await urlLayers(page)).has('drought')).toBe(true);
     await expect(page.locator('#shell-time')).toHaveAttribute('data-has-spec', 'false');
   });
 });

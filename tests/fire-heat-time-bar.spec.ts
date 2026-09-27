@@ -31,13 +31,18 @@
  * window the service has not advanced (every period ended).
  */
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-import { TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
+import { HAZARD_CLUSTERS, TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
 import { LIVE_NO_FEATURES_LABEL } from '../src/config/layers';
 import { HORIZON_CHROME, SHELL_HORIZON_KEY } from '../src/impact/horizon-chrome';
 import type { HorizonKey } from '../src/impact/types';
 import { expectNoForecastLanguage } from './enso-forecast-language';
-import { gotoApp, layerPill, PILL, search } from './helpers';
+import { gotoApp, layerCheckbox, layerPill, PILL, search } from './helpers';
+
+/** The SPC Day 1 "no area outlined" answer (D1 M5, found-002). */
+const SPC_NO_AREA_FIXTURE = join(process.cwd(), 'tests', 'fixtures', 'spc-firewx-day1-no-area.json');
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -507,6 +512,132 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
     expect(stamp.headline).toBe('Outlook · valid period not stated by the response');
     expect(stamp.detail).toContain('an empty response states no valid period');
     expect(stamp.headline).not.toMatch(/\d{4}/);
+  });
+
+  // D1 M5 (2026-09-27; found-002, DDM-P1-T11). The SPC MapServer answers an
+  // issuance with no outlined area as ONE feature whose `dn` is 0 and whose
+  // geometry is null (REGISTER found-002's recorded body; the fixture below
+  // carries that shape, with `valid` and `expire` as strings because the
+  // layer's own field list types them esriFieldTypeString). Before M5 the
+  // shared ArcGIS parser rejected the null geometry, the layer read
+  // unavailable, and the controller's failure cleanup unchecked it, which
+  // demoted the committed Wildfire view to a custom set (found-003).
+  test('an SPC Day 1 answer whose only feature has dn 0 and a null geometry reads no data and keeps the layer checked and in layers=', async ({
+    page
+  }) => {
+    const body = readFileSync(SPC_NO_AREA_FIXTURE, 'utf8');
+    await stubCommon(page);
+    await stubFire(page, { spc: 'empty' });
+    // Registered after stubFire, so this route answers the Day 1 query.
+    await page.route((url) => url.href.includes('SPC_firewx/MapServer/1/query'), (route) =>
+      route.fulfill({ status: 200, contentType: 'application/geo+json', body })
+    );
+    await gotoApp(page, '?view=console&cluster=wildfire&horizon=weeks-ahead');
+
+    // One of the six states: the layer's own no-features label, never
+    // unavailable.
+    await expect(layerPill(page, 'spc-fire-weather')).toHaveText(LIVE_NO_FEATURES_LABEL, {
+      timeout: 25_000
+    });
+    await expect(layerCheckbox(page, 'spc-fire-weather')).toBeChecked();
+
+    // A committed Wildfire display serializes as the one-word cluster=
+    // token, not a layers= list (src/state/url.ts): the share URL carries
+    // the layer through the recipe that token composes at this horizon.
+    // A demotion would have replaced the token with a layers= list.
+    expect(HAZARD_CLUSTERS.wildfire.recipes['weeks-ahead']).toContain('spc-fire-weather');
+    const params = new URLSearchParams(await search(page));
+    expect(params.get('cluster')).toBe('wildfire');
+    expect(params.get('horizon')).toBe('weeks-ahead');
+    expect(params.has('layers')).toBe(false);
+    await expect(page.locator('.shell-cluster-btn[data-cluster="wildfire"]')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+
+    // The issuer stated its period on the no-area answer, so the stamp
+    // keeps it rather than saying the response states none.
+    const stamp = await readStamp(page);
+    expectStampContract('SPC Day 1 (no area outlined)', stamp, {
+      horizon: 'nearTerm',
+      register: 'outlook',
+      issuer: 'NOAA SPC Day 1 Fire Weather Outlook'
+    });
+    expect(stamp.headline).toBe(
+      'Outlook valid Sep 26, 2026, 12:00 UTC to Sep 27, 2026, 12:00 UTC'
+    );
+    expect(stamp.detail).toContain('no fire-weather area is outlined in the current issuance');
+    expect(stamp.detail).not.toContain('states no valid period');
+  });
+
+  test('a malformed SPC polygon still reads unavailable', async ({ page }) => {
+    // The no-area reading is exactly the recorded shape. Every near miss
+    // stays a failed read (the adapter matrix's M2, corrupt body): the
+    // shared parser keeps throwing and the layer reads unavailable. The
+    // layer is a recipe member of the committed Wildfire view, so after
+    // D1 M5 it stays checked and the view stays committed (found-003).
+    const noAreaFeature = {
+      type: 'Feature',
+      geometry: null,
+      properties: { dn: 0, valid: '202609261200', expire: '202609271200' }
+    };
+    const outlined = {
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: [PNW_RING] },
+      properties: { dn: 8, valid: '202609261200', expire: '202609271200' }
+    };
+    const malformed: ReadonlyArray<{ readonly name: string; readonly body: unknown }> = [
+      {
+        name: 'a Critical category with a null geometry',
+        body: {
+          type: 'FeatureCollection',
+          features: [{ ...noAreaFeature, properties: { ...noAreaFeature.properties, dn: 8 } }]
+        }
+      },
+      {
+        name: 'the no-area feature beside an outlined polygon',
+        body: { type: 'FeatureCollection', features: [noAreaFeature, outlined] }
+      },
+      {
+        name: 'dn 0 with an empty geometry object',
+        body: { type: 'FeatureCollection', features: [{ ...noAreaFeature, geometry: {} }] }
+      },
+      {
+        name: 'an open polygon ring',
+        body: {
+          type: 'FeatureCollection',
+          features: [
+            { ...outlined, geometry: { type: 'Polygon', coordinates: [PNW_RING.slice(0, 3)] } }
+          ]
+        }
+      },
+      {
+        name: 'a feature with no fields at all',
+        body: { type: 'FeatureCollection', features: [{}] }
+      }
+    ];
+
+    let current: unknown = null;
+    await stubCommon(page);
+    await stubFire(page, { spc: 'outlined' });
+    await page.route((url) => url.href.includes('SPC_firewx/MapServer/1/query'), (route) =>
+      fulfilJson(route, current)
+    );
+    for (const { name, body } of malformed) {
+      current = body;
+      await test.step(name, async () => {
+        await gotoApp(page, '?view=console&cluster=wildfire&horizon=weeks-ahead');
+        await expect(layerPill(page, 'spc-fire-weather'), name).toHaveText(PILL.unavailable, {
+          timeout: 25_000
+        });
+        await expect(layerCheckbox(page, 'spc-fire-weather'), name).toBeChecked();
+        await expect(
+          page.locator('.shell-cluster-btn[data-cluster="wildfire"]'),
+          name
+        ).toHaveAttribute('aria-pressed', 'true');
+        expect(new URLSearchParams(await search(page)).get('cluster'), name).toBe('wildfire');
+      });
+    }
   });
 
   test('long range: the Wildfire Hazard Potential stamp names a static edition, not a dated condition', async ({

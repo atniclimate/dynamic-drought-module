@@ -24,6 +24,7 @@ import type * as maplibregl from 'maplibre-gl';
 
 import { NWS_ALERT_COLORS, NWS_ALERT_DEFAULT_COLOR } from '../config/palette';
 import { registry } from '../state/registry';
+import { isChecked } from './island/bridge';
 import { requestLayerOn } from './layer-toggle-command';
 import { escapeHtml } from '../util/escape';
 
@@ -108,7 +109,14 @@ function render(): void {
     return;
   }
 
-  if (!active || status === 'loading') {
+  // A failed activation that stays checked (a recipe member of the committed
+  // cluster, D1 M5, 2026-09-27) is not registered active, so the failure is
+  // read before the not-yet-active case, which would otherwise say
+  // "Checking" for good. A failed key the controller unchecked is re-asked
+  // by the pane's own requestLayerOn, and its 'loading' status-change
+  // (subscribed below) replaces the stale failure before the next paint.
+  const failedButChecked = status === 'error' && !active && isChecked(LAYER_KEY);
+  if (!failedButChecked && (!active || status === 'loading')) {
     // vocab-allow: describes the NWS alert products and feed, upstream data
     body.innerHTML = '<p class="sheet-alerts-note">Checking the National Weather Service alert feed for the current view.</p>';
     return;
@@ -135,6 +143,9 @@ export function openSheetAlerts(map: maplibregl.Map): void {
   if (armed) return;
   armed = true;
   registry.on('change', render);
+  registry.on('status-change', (key) => {
+    if (key === LAYER_KEY) render();
+  });
   map.on('sourcedata', (e) => {
     if (e.sourceId === SOURCE_ID) render();
   });
