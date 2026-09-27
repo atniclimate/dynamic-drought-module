@@ -45,8 +45,50 @@
  * tallied the same way.
  *
  * A RECORD is `{ schema: 1, note: <string>, runs: { baseline?: RUN,
- * candidate?: RUN } }`, the shape written to and read from the committed
- * doc.
+ * candidate?: RUN, conusBaseline?: RUN, conusCandidate?: RUN } }`, the shape
+ * written to and read from the committed doc.
+ *
+ * Two measurement PROFILEs (DDM-P14-T08 review finding C4, ratified before
+ * D1's default-region flip): `'wa'` (the default) pins every switch's boot
+ * to `region=washington_state` (drought also carries `&view=brief`, because
+ * `region=` alone would otherwise flip drought's boot to the console view,
+ * src/state/view-mode.ts:45-52) and is the exact query this module measured
+ * before any profile existed; it compares against the committed
+ * `runs.baseline` exactly as before. `'conus'` pins `region=national` and
+ * records under its own `runs.conusBaseline` / `runs.conusCandidate` keys,
+ * so a national-default run never overwrites, and is never compared
+ * against, the Washington baseline: national geography changes the read
+ * and tile workload (a different viewport-bound query scope, not a code
+ * change), so a "rise" there would be a false regression. `normalizeProfile`
+ * treats anything other than the literal string `'conus'` as `'wa'`, so an
+ * absent or misspelled `DDM_MEASURE_PROFILE` measures Washington, the safe
+ * default.
+ *
+ * The one-fingerprint two-profile protocol (C4R U10 follow-up, Codex J6 and
+ * M1). `DDM_MEASURE_PROFILE=both` measures every profile in PROFILES order
+ * inside ONE invocation, reads the tree's fingerprint (`fingerprintFrom`:
+ * the short HEAD and the count of `git status --porcelain` lines) before the
+ * first switch and after the last, and `planMeasurementWrite` merges every
+ * profile's run into ONE record that the spec writes once. The dirty guard
+ * keeps its full meaning: every porcelain line counts, the two artifacts
+ * this flow writes included, so a genuinely dirty tree is refused, and so is
+ * a second single-profile invocation after a first one wrote (record both
+ * profiles with `both` instead). Chosen over "ignore exactly our two
+ * artifacts" because that would let an uncommitted edit to the committed
+ * record itself pass the guard, and would still need a cross-invocation
+ * commit check to prove both profiles share one fingerprint; one invocation
+ * gives both by construction. A baseline slot is write-once
+ * (`resolveRunLabel`): a `baseline`-labelled run of a profile whose baseline
+ * is already committed records as that profile's candidate, so the flow
+ * never overwrites the historical Washington baseline; re-baselining is a
+ * reviewed commit that deletes the slot first.
+ *
+ * `renderReport` renders one table per profile (`runs.baseline` /
+ * `runs.candidate` for Washington, `runs.conusBaseline` /
+ * `runs.conusCandidate` for CONUS); a table's Delta column and rise summary
+ * compare a candidate only against its own profile's baseline, and a slot
+ * holding the other profile's run is refused, so no number is ever compared
+ * across profiles.
  */
 
 /** The four hazard cluster keys, in the fixed order used everywhere below. */
@@ -264,17 +306,210 @@ export function emptyRecord() {
 }
 
 /**
- * Returns a NEW record with `run` stored under its label, leaving every
- * other run and the input record untouched.
+ * Normalizes a measurement profile: the literal string `'conus'` stays
+ * `'conus'`; anything else (`'wa'`, `undefined`, `null`, a typo) becomes
+ * `'wa'`, the default (DDM-P14-T08 review finding C4). Never throws.
+ */
+export function normalizeProfile(rawProfile) {
+  return rawProfile === 'conus' ? 'conus' : 'wa';
+}
+
+/**
+ * The committed record key a run is stored under, keyed on its (normalized)
+ * profile and its label. The `'wa'` profile keeps today's keys (`baseline`
+ * / `candidate`) unchanged; the `'conus'` profile uses its own,
+ * non-overlapping keys (`conusBaseline` / `conusCandidate`) so a
+ * national-default run can never overwrite, or be confused with, the
+ * Washington comparator. A `label` that is not `'baseline'` normalizes to
+ * the candidate slot, matching `mergeRun`'s caller (`writePolicy` only ever
+ * allows `'baseline'` or `'candidate'` through to a write).
+ */
+export function runKey(profile, label) {
+  const isBaseline = label === 'baseline';
+  return normalizeProfile(profile) === 'conus'
+    ? isBaseline
+      ? 'conusBaseline'
+      : 'conusCandidate'
+    : isBaseline
+      ? 'baseline'
+      : 'candidate';
+}
+
+/**
+ * Returns a NEW record with `run` stored under `runKey(run.profile,
+ * run.label)`, leaving every other run and the input record untouched. A
+ * `run` with no `profile` field is treated as `'wa'` (see
+ * `normalizeProfile`), so every RUN recorded before DDM-P14-T08 review
+ * finding C4 (none of which carried a `profile` field) keeps merging into
+ * `runs.baseline` / `runs.candidate` exactly as before.
  */
 export function mergeRun(record, run) {
   return {
     ...record,
     runs: {
       ...record.runs,
-      [run.label]: run
+      [runKey(run.profile, run.label)]: run
     }
   };
+}
+
+/**
+ * True when a measured run should be checked for a data-read rise against
+ * the committed Washington baseline: only the `'wa'` profile is ever
+ * compared, and only when the run is not itself the baseline (a `baseline`
+ * label run is never compared against itself). A `'conus'` run is always
+ * `false`, regardless of label: national geography changes the read and
+ * tile workload by itself, so comparing it against the Washington baseline
+ * would report geography as a regression (DDM-P14-T08 review finding C4).
+ */
+export function shouldCompareToBaseline({ profile, label }) {
+  return normalizeProfile(profile) === 'wa' && label !== 'baseline';
+}
+
+/** The measurement profiles, in the fixed order a `both` run measures and renders them. */
+export const PROFILES = Object.freeze(['wa', 'conus']);
+
+/** The region every switch boots at under each profile. */
+export const PROFILE_REGIONS = Object.freeze({ wa: 'washington_state', conus: 'national' });
+
+const PROFILE_TITLES = Object.freeze({ wa: 'Washington', conus: 'CONUS' });
+
+/**
+ * The profiles one measurement invocation measures: the literal string
+ * `'both'` measures every entry of PROFILES, in order; anything else
+ * measures the single profile `normalizeProfile` picks (so an absent or
+ * misspelled value measures Washington only). Never throws.
+ */
+export function measurementProfiles(rawProfile) {
+  return rawProfile === 'both' ? [...PROFILES] : [normalizeProfile(rawProfile)];
+}
+
+/**
+ * The boot query for one side of a switch under a profile. `urlToken` is
+ * the cluster's `urlToken` from src/config/clusters.ts (`null` for the
+ * default display, reached with no `cluster=` parameter at all). Every boot
+ * pins `region=` to the profile's region. A null-token boot also carries
+ * `view=brief`: the bare URL booted the brief view, and `region=` alone
+ * would flip it to the console view (src/state/view-mode.ts
+ * `deriveViewMode`), so both profiles keep the default mode's boot view the
+ * bare URL had. A token boot already carried `cluster=`, which flips to the
+ * console view by itself, so adding `region=` changes no view.
+ */
+export function bootQuery({ urlToken, profile }) {
+  const region = PROFILE_REGIONS[normalizeProfile(profile)];
+  if (urlToken === null) return `?region=${region}&view=brief`;
+  return `?cluster=${urlToken}&region=${region}`;
+}
+
+/**
+ * The tree's code fingerprint from the raw output of `git rev-parse --short
+ * HEAD` (`head`) and `git status --porcelain` (`porcelain`): `{ commit,
+ * dirty }`, where `dirty` counts every non-blank porcelain line. No path is
+ * exempt, the artifacts this flow writes included: the guard's meaning is
+ * "the stamped commit is exactly the tree that was measured".
+ */
+export function fingerprintFrom({ head, porcelain }) {
+  return {
+    commit: String(head).trim(),
+    dirty: String(porcelain)
+      .split('\n')
+      .filter((line) => line.trim().length > 0).length
+  };
+}
+
+/**
+ * The label a profile's run records under, with a write-once baseline: a
+ * `baseline` request fills the profile's baseline slot only while it is
+ * empty; once a baseline is committed, the run records as that profile's
+ * candidate (and is compared against it), so the measurement flow never
+ * overwrites a committed baseline, the historical Washington one included.
+ * Any other request (`candidate`, or a bare run) is a candidate.
+ */
+function resolveRunLabel(record, profile, rawLabel) {
+  if (rawLabel !== 'baseline') return 'candidate';
+  return record.runs[runKey(profile, 'baseline')] ? 'candidate' : 'baseline';
+}
+
+/**
+ * Plans one measurement invocation's single write. `measured` is one
+ * `{ profile, switches }` per measured profile (at most one per profile);
+ * `before` and `after` are `fingerprintFrom` reads taken before the first
+ * switch and after the last; `rawLabel` is `DDM_MEASURE_LABEL` as given.
+ *
+ * Returns `{ policy, reason, runs, record }`. `runs` is always every
+ * measured profile's RUN, stamped with `after`'s commit and dirty count,
+ * `recordedAt` and `viewport` (so a bare run can still be checked for a
+ * rise). `policy` is `writePolicy`'s verdict at both reads: `'skip'` for a
+ * bare run on any tree; `'refuse'` (with a `reason`) when either read is
+ * dirty or HEAD moved between them, since then no single clean fingerprint
+ * produced every run; otherwise `'write'`, and `record` is the input record
+ * (or a fresh one) with every run merged in, every committed baseline slot
+ * the same object it was. `record` is null unless `policy` is `'write'`.
+ * Never mutates its input. Throws a TypeError for an unknown or repeated
+ * profile.
+ */
+export function planMeasurementWrite({ record, measured, rawLabel, before, after, recordedAt, viewport }) {
+  const base = record ?? emptyRecord();
+  const seen = new Set();
+  for (const { profile } of measured) {
+    if (!PROFILES.includes(profile)) {
+      throw new TypeError(`planMeasurementWrite: unknown profile ${JSON.stringify(profile)}.`);
+    }
+    if (seen.has(profile)) {
+      throw new TypeError(
+        `planMeasurementWrite: profile "${profile}" was measured twice; one invocation records one run per profile.`
+      );
+    }
+    seen.add(profile);
+  }
+
+  const runs = measured.map(({ profile, switches }) => ({
+    label: resolveRunLabel(base, profile, rawLabel),
+    profile,
+    commit: after.commit,
+    recordedAt,
+    viewport,
+    dirty: after.dirty,
+    switches
+  }));
+
+  const atStart = writePolicy({ label: rawLabel, dirty: before.dirty });
+  const atEnd = writePolicy({ label: rawLabel, dirty: after.dirty });
+  if (atEnd === 'skip') return { policy: 'skip', reason: null, runs, record: null };
+  if (atEnd === 'refuse') {
+    return {
+      policy: 'refuse',
+      reason: `the working tree has ${after.dirty} dirty file${after.dirty === 1 ? '' : 's'} (git status --porcelain)`,
+      runs,
+      record: null
+    };
+  }
+  if (atStart === 'refuse') {
+    return {
+      policy: 'refuse',
+      reason: `the working tree had ${before.dirty} dirty file${before.dirty === 1 ? '' : 's'} when measurement began`,
+      runs,
+      record: null
+    };
+  }
+  if (before.commit !== after.commit) {
+    return {
+      policy: 'refuse',
+      reason: `HEAD moved from \`${before.commit}\` to \`${after.commit}\` during measurement`,
+      runs,
+      record: null
+    };
+  }
+
+  let merged = base;
+  for (const run of runs) merged = mergeRun(merged, run);
+  for (const profile of PROFILES) {
+    const key = runKey(profile, 'baseline');
+    if (base.runs[key] && merged.runs[key] !== base.runs[key]) {
+      throw new Error(`planMeasurementWrite: the committed "${key}" run would be overwritten; baselines are write-once.`);
+    }
+  }
+  return { policy: 'write', reason: null, runs, record: merged };
 }
 
 /**
@@ -408,10 +643,15 @@ function formatDelta(delta) {
   return `${delta}`;
 }
 
-function renderUrlDetail(run, { title, field, emptyLabel }) {
+/**
+ * `key` is the record key the run is stored under (`runKey`), so a
+ * Washington run reads `(baseline, <commit>)` exactly as before profiles
+ * existed and a CONUS run reads `(conusBaseline, <commit>)`.
+ */
+function renderUrlDetail(run, key, { title, field, emptyLabel }) {
   const lines = [];
   lines.push('<details>');
-  lines.push(`<summary>${title} (${run.label}, ${run.commit})</summary>`);
+  lines.push(`<summary>${title} (${key}, ${run.commit})</summary>`);
   lines.push('');
   for (const pair of SWITCHES) {
     const id = switchId(pair);
@@ -431,16 +671,16 @@ function renderUrlDetail(run, { title, field, emptyLabel }) {
   return lines.join('\n');
 }
 
-function renderCountedDetail(run) {
-  return renderUrlDetail(run, {
+function renderCountedDetail(run, key) {
+  return renderUrlDetail(run, key, {
     title: 'Counted data reads per switch',
     field: 'counted',
     emptyLabel: 'no data reads recorded'
   });
 }
 
-function renderTileDetail(run) {
-  return renderUrlDetail(run, {
+function renderTileDetail(run, key) {
+  return renderUrlDetail(run, key, {
     title: 'Tile requests per switch',
     field: 'tiles',
     emptyLabel: 'no tile requests recorded'
@@ -450,46 +690,47 @@ function renderTileDetail(run) {
 const LOWER_BOUND_MARK = '†'; // dagger footnote marker
 
 /**
- * Renders the committed markdown table for `record`. With only a baseline
- * run, the table has From, To, Data reads, Tiles, Requests, and Time to
- * quiescence columns; with both runs, it adds Candidate data reads,
- * Candidate tiles, Candidate requests, Candidate ms, and a Delta column
- * computed on data reads (candidate minus baseline, written with a leading
- * + when positive and 0 when equal). A row whose recorded `pendingAtStart`
- * was empty carries a footnote mark: the boot-idle seam reported
- * quiescence immediately for that switch, so its time is a lower bound.
+ * Throws a TypeError when the run stored under `key` belongs to a profile
+ * other than `profile` (a run with no `profile` field is Washington, see
+ * `normalizeProfile`), so a hand-edited or misfiled record can never put one
+ * profile's run into another profile's table and comparison.
  */
-export function renderReport(record) {
-  const baseline = record.runs.baseline ?? null;
-  const candidate = record.runs.candidate ?? null;
+function assertSlotProfile(run, key, profile) {
+  if (run && normalizeProfile(run.profile) !== profile) {
+    throw new TypeError(
+      `renderReport: record key "${key}" holds a run of profile ` +
+        `${JSON.stringify(run.profile ?? 'wa')}, not "${profile}"; a table never ` +
+        'renders or compares another profile\'s run.'
+    );
+  }
+}
+
+/**
+ * The lines of one profile's section: a heading naming the profile and its
+ * region, then (when the profile has a run) the table, its lower-bound
+ * footnote, each run's provenance, each run's per-switch detail, and, when
+ * both runs exist, the rise summary. Every value in the section comes from
+ * this profile's own two slots; the Delta column and the rise summary
+ * compare its candidate only against its own baseline.
+ */
+function renderProfileSection(record, profile) {
+  const baselineKey = runKey(profile, 'baseline');
+  const candidateKey = runKey(profile, 'candidate');
+  const baseline = record.runs[baselineKey] ?? null;
+  const candidate = record.runs[candidateKey] ?? null;
+  assertSlotProfile(baseline, baselineKey, profile);
+  assertSlotProfile(candidate, candidateKey, profile);
   const hasCandidate = Boolean(baseline && candidate);
+  const title = PROFILE_TITLES[profile];
 
   const lines = [];
-  lines.push('# Mode-switch cost report');
+  lines.push(`## ${title} profile (\`region=${PROFILE_REGIONS[profile]}\`)`);
   lines.push('');
-  lines.push(
-    '<!-- GENERATED FILE. Do not edit by hand: this table is produced by ' +
-      'scripts/mode-switch-cost-report.mjs from the mode-switch cost spec ' +
-      '(tests/mode-switch-cost.spec.ts, run via `npm run measure:mode-switch`); ' +
-      'run that to regenerate it. -->'
-  );
-  lines.push('');
-  lines.push(
-    'Data reads, tile requests, and time to quiescence (read from `window.__ddm`) ' +
-      'for each of the twelve ordered switches among Drought, Heat, Wildfire, and ' +
-      'ENSO, at one desktop viewport with stubbed upstreams (DDM-P14-T08).'
-  );
-  lines.push('');
-  lines.push(
-    'The regression gate below compares data reads, not the raw request count: ' +
-      'almost all of a switch\'s traffic is raster map tiles, and a tile count ' +
-      'depends on viewport timing and on how much of the previous mode\'s tile ' +
-      'streaming was still in flight, not on what the app did differently. ' +
-      'Measured evidence: on one unchanged commit, `enso->drought` counted 42 ' +
-      'requests on one run and 14 on the next, entirely from tile-timing variance. ' +
-      'Data reads and tile requests are both recorded below; only data reads gate.'
-  );
-  lines.push('');
+  if (!baseline && !candidate) {
+    lines.push(`No ${title}-profile run is recorded yet.`);
+    lines.push('');
+    return lines;
+  }
 
   const header = ['From', 'To', 'Data reads', 'Tiles', 'Requests', 'Time to quiescence (ms)'];
   if (hasCandidate) {
@@ -543,32 +784,96 @@ export function renderReport(record) {
     lines.push('');
   }
 
-  for (const run of [baseline, candidate].filter(Boolean)) {
+  const present = [
+    [baselineKey, baseline],
+    [candidateKey, candidate]
+  ].filter(([, run]) => run);
+
+  for (const [key, run] of present) {
     lines.push(
-      `Run \`${run.label}\`: commit \`${run.commit}\`, recorded ${run.recordedAt}, ` +
+      `Run \`${key}\`: commit \`${run.commit}\`, recorded ${run.recordedAt}, ` +
         `viewport ${run.viewport.width}x${run.viewport.height}, ${formatDirty(run)}.`
     );
   }
   lines.push('');
 
-  for (const run of [baseline, candidate].filter(Boolean)) {
-    lines.push(renderCountedDetail(run));
+  for (const [key, run] of present) {
+    lines.push(renderCountedDetail(run, key));
     lines.push('');
-    lines.push(renderTileDetail(run));
+    lines.push(renderTileDetail(run, key));
     lines.push('');
   }
 
   if (hasCandidate) {
+    const scope = `${title} profile, \`${candidateKey}\` against \`${baselineKey}\``;
     const { rises } = compareRuns(baseline, candidate);
     if (rises.length > 0) {
       const names = rises
-        .map((r) => `\`${r.id}\` (baseline ${r.baselineData} to candidate ${r.candidateData})`)
+        .map((r) => `\`${r.id}\` (${baselineKey} ${r.baselineData} to ${candidateKey} ${r.candidateData})`)
         .join(', ');
-      lines.push(`Data-read count rose for: ${names}.`);
+      lines.push(`${scope}: data-read count rose for ${names}.`);
     } else {
-      lines.push("No switch's data-read count rose.");
+      lines.push(`${scope}: no switch's data-read count rose.`);
     }
+    lines.push('');
   }
 
+  return lines;
+}
+
+/**
+ * Renders the committed markdown report for `record`: the shared
+ * introduction, then one section per entry of PROFILES, in order (see
+ * `renderProfileSection`). Within a section, with only a baseline run, the
+ * table has From, To, Data reads, Tiles, Requests, and Time to quiescence
+ * columns; with both runs, it adds Candidate data reads, Candidate tiles,
+ * Candidate requests, Candidate ms, and a Delta column computed on data
+ * reads (the profile's candidate minus the same profile's baseline, written
+ * with a leading + when positive and 0 when equal). A row whose recorded
+ * `pendingAtStart` was empty carries a footnote mark: the boot-idle seam
+ * reported quiescence immediately for that switch, so its time is a lower
+ * bound. No value is ever compared across profiles.
+ */
+export function renderReport(record) {
+  const lines = [];
+  lines.push('# Mode-switch cost report');
+  lines.push('');
+  lines.push(
+    '<!-- GENERATED FILE. Do not edit by hand: this table is produced by ' +
+      'scripts/mode-switch-cost-report.mjs from the mode-switch cost spec ' +
+      '(tests/mode-switch-cost.spec.ts, run via `npm run measure:mode-switch`); ' +
+      'run that to regenerate it. -->'
+  );
+  lines.push('');
+  lines.push(
+    'Data reads, tile requests, and time to quiescence (read from `window.__ddm`) ' +
+      'for each of the twelve ordered switches among Drought, Heat, Wildfire, and ' +
+      'ENSO, at one desktop viewport with stubbed upstreams (DDM-P14-T08).'
+  );
+  lines.push('');
+  lines.push(
+    'The regression gate below compares data reads, not the raw request count: ' +
+      'almost all of a switch\'s traffic is raster map tiles, and a tile count ' +
+      'depends on viewport timing and on how much of the previous mode\'s tile ' +
+      'streaming was still in flight, not on what the app did differently. ' +
+      'Measured evidence: on one unchanged commit, `enso->drought` counted 42 ' +
+      'requests on one run and 14 on the next, entirely from tile-timing variance. ' +
+      'Data reads and tile requests are both recorded below; only data reads gate.'
+  );
+  lines.push('');
+  lines.push(
+    'Each measurement profile has its own section below, and every switch in a profile ' +
+      `boots at that profile's region (${PROFILES.map(
+        (profile) => `${PROFILE_TITLES[profile]}: \`region=${PROFILE_REGIONS[profile]}\``
+      ).join('; ')}). A profile's candidate is compared only against the same profile's ` +
+      'baseline, never across profiles, because the profiles frame different regions.'
+  );
+  lines.push('');
+
+  for (const profile of PROFILES) {
+    lines.push(...renderProfileSection(record, profile));
+  }
+
+  while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
   return lines.join('\n');
 }
