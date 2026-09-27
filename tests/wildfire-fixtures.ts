@@ -15,7 +15,7 @@
  * stylized volume heights.
  */
 
-import type { Page, Route } from '@playwright/test';
+import type { BrowserContext, Page, Route } from '@playwright/test';
 
 /** A small axis-aligned polygon seated in the PNW envelope. */
 export const PNW_POLYGON = (west: number, south: number) => ({
@@ -125,6 +125,165 @@ export async function stubWildfireFeeds(page: Page): Promise<void> {
     (url) => url.href.includes('Power_Plants_in_the_US'),
     (route) => fulfillJson(route, PLANTS_STUB_FC)
   );
+}
+
+// ---------------------------------------------------------------------------
+// The suite-wide WFIGS default (DDM-P10-T13, S30D D1 item J12)
+// ---------------------------------------------------------------------------
+
+/** How a `gotoApp` boot answers the NIFC WFIGS current-perimeters service. */
+export type NifcStubMode = 'fixture' | 'live';
+
+/** The name every WFIGS current-perimeters URL the app builds carries (`URLS.nifcFires`). */
+const NIFC_SERVICE_NAME = 'WFIGS_Interagency_Perimeters_Current';
+
+/**
+ * True for a request to the WFIGS current-perimeters service, and for no
+ * other service of the same ArcGIS organisation (the RAWS registry and the
+ * perimeter history share its host, so a host match would be too wide).
+ */
+export function isNifcRequestUrl(url: string): boolean {
+  return url.includes(`/${NIFC_SERVICE_NAME}/`);
+}
+
+/** What the default stub served for one WFIGS request. */
+export type NifcStubAnswer = 'features' | 'count' | 'rejected';
+
+/** One WFIGS request the default stub answered. */
+export interface NifcStubEntry {
+  readonly method: string;
+  readonly url: string;
+  readonly answer: NifcStubAnswer;
+}
+
+interface NifcStubState {
+  mode: NifcStubMode;
+  /** Every WFIGS request the default stub answered in this context, in order. */
+  readonly fulfilled: NifcStubEntry[];
+}
+
+const nifcStubStates = new WeakMap<BrowserContext, NifcStubState>();
+
+/**
+ * Sort one WFIGS request into the three kinds the app issues, or none.
+ *
+ * - `features`: a GET `/query?...f=geojson`. The perimeter layer's
+ *   viewport read (src/layers/nifc-fires.ts `buildQueryUrl`) and the
+ *   briefing's bounded area read (src/impact/sources.ts `fetchNifcClaims`)
+ *   both have this shape; both are answered with `NIFC_STUB`, so a briefing
+ *   reads the same two synthetic perimeters whether it took the layer's
+ *   loaded-collection fast path or its own request.
+ * - `count`: a POST `/query` whose form body asks `returnCountOnly=true`,
+ *   the minimap's per-framing count (src/state/minimap-wildfire.ts
+ *   `buildMinimapWildfireQueryBody`), answered `{ count: 0 }`: a SUCCESSFUL
+ *   zero (DR-041 b), not an unavailable read.
+ * - `rejected`: anything else, which the app does not issue today.
+ */
+function classifyNifcRequest(route: Route): NifcStubAnswer {
+  const request = route.request();
+  const url = new URL(request.url());
+  if (!url.pathname.endsWith('/query')) return 'rejected';
+  if (request.method() === 'GET' && url.searchParams.get('f') === 'geojson') {
+    return 'features';
+  }
+  if (request.method() === 'POST') {
+    const form = new URLSearchParams(request.postData() ?? '');
+    if (form.get('returnCountOnly') === 'true') return 'count';
+  }
+  return 'rejected';
+}
+
+/**
+ * Route the NIFC WFIGS current-perimeters service on the browser CONTEXT,
+ * the suite-wide default `gotoApp` installs on every boot (J12). Since the
+ * national region became the default camera (60c3a66), a Wildfire boot with
+ * no WFIGS route of its own asked the live service for every current
+ * perimeter in the contiguous United States, and the boot-idle seam waited
+ * on that payload.
+ *
+ * Why the CONTEXT, for the same reasons as the NADM default in
+ * `tests/helpers.ts` and `installBoundaryStubs` in `tests/tribal-fixtures.ts`:
+ * a context handler covers a Page this suite never routed by hand, and
+ * Playwright checks Page routes before Context routes, so a spec that
+ * registers its own `page.route` for WFIGS (`stubWildfireFeeds` above, a
+ * held request, a failure status, a per-framing count) wins over this
+ * backstop whatever order the two were registered in. One consequence to
+ * know: a page route that calls `route.fallback()` for a WFIGS request used
+ * to put that request on the wire when no earlier page route claimed it;
+ * it now reaches this stub instead. (`route.continue()` still goes straight
+ * to the network.)
+ *
+ * `fixture` is FAIL-CLOSED: every WFIGS request is answered here and never
+ * reaches the network. The three kinds are in `classifyNifcRequest`; an
+ * unrecognised WFIGS request gets a 400 ArcGIS-style error envelope,
+ * `Unknown test WFIGS request`, rather than a live answer. Every answered
+ * request is appended to the log `nifcStubLog` reads.
+ *
+ * `live` is the explicit opt-out: the same context route stays installed
+ * and passes every request through (`route.fallback()`), so it reaches a
+ * context route the spec registered earlier or, unrouted, the live
+ * service. `tests/mode-switch-cost.spec.ts` opts out, because its recorded
+ * baseline measured the live WFIGS reads.
+ *
+ * Idempotent per context: a second call only updates the mode, so a spec
+ * that boots twice keeps one handler and one log.
+ */
+export async function installDefaultNifcStub(page: Page, mode: NifcStubMode): Promise<void> {
+  const context = page.context();
+  const existing = nifcStubStates.get(context);
+  if (existing) {
+    existing.mode = mode;
+    return;
+  }
+  const state: NifcStubState = { mode, fulfilled: [] };
+  nifcStubStates.set(context, state);
+  await context.route(
+    (url) => isNifcRequestUrl(url.href),
+    async (route) => {
+      if (state.mode === 'live') {
+        await route.fallback();
+        return;
+      }
+      const answer = classifyNifcRequest(route);
+      state.fulfilled.push({
+        method: route.request().method(),
+        url: route.request().url(),
+        answer
+      });
+      if (answer === 'features') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/geo+json',
+          body: JSON.stringify(NIFC_STUB)
+        });
+        return;
+      }
+      if (answer === 'count') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ count: 0 })
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 400, message: 'Unknown test WFIGS request' } })
+      });
+    }
+  );
+}
+
+/**
+ * Every WFIGS request the suite-wide default answered in this page's
+ * context, in order. The proof in `tests/boundary-stubs.spec.ts` compares it
+ * with the page's own request stream, request by request (every minimap
+ * count POST shares one URL, so a set of URLs would let one answered POST
+ * hide an escaped one).
+ */
+export function nifcStubLog(page: Page): readonly NifcStubEntry[] {
+  return nifcStubStates.get(page.context())?.fulfilled ?? [];
 }
 
 /**

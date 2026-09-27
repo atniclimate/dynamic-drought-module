@@ -125,7 +125,9 @@ test.describe('mode-switch cost', () => {
         const page = await context.newPage();
 
         const fromQuery = bootQuery({ urlToken: urlTokenFor(sw.from), profile });
-        await gotoApp(page, fromQuery);
+        // J12 opt-out: the recorded baseline (0c27ab1) measured the live WFIGS
+        // and NADM reads; the NADM fixture default (b872c7e) came after it.
+        await gotoApp(page, fromQuery, { nifc: 'live', nadm: 'live' });
         const fromBtn = page.locator(`.shell-cluster-btn[data-cluster="${sw.from}"]`);
         await expect(
           fromBtn,

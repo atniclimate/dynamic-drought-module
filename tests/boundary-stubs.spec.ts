@@ -1,7 +1,8 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Route } from '@playwright/test';
 
 import { gotoApp, layerPill, waitForLayerSettled } from './helpers';
 import { BOUNDARY_HOSTS, boundaryStubLog, isBoundaryRequestUrl } from './tribal-fixtures';
+import { NIFC_STUB, isNifcRequestUrl, nifcStubLog } from './wildfire-fixtures';
 
 /**
  * DDM-P1-T08 acceptance, part one: no boot this suite drives through
@@ -180,5 +181,147 @@ test.describe('the documented escape hatch stays explicit', () => {
       'no features returned for this view (AIAN-LAR does not cover every Tribal Nation)'
     );
     await expectNothingEscaped(page, seen);
+  });
+});
+
+/**
+ * J12 (DDM-P10-T13): the NIFC WFIGS current-perimeters default.
+ *
+ * Since the national region became the default camera (60c3a66), a Wildfire
+ * boot with no WFIGS route of its own asked the live service for every
+ * current perimeter in the contiguous United States. `gotoApp` now answers
+ * WFIGS from a fail-closed CONTEXT stub (`installDefaultNifcStub`,
+ * tests/wildfire-fixtures.ts) unless the call passes `nifc: 'live'`.
+ *
+ * The proof is the same comparison as the boundary proof above, made per
+ * REQUEST rather than per URL: every minimap count POST shares the one URL
+ * `.../query`, so a set of URLs would let one answered POST cover an escaped
+ * one. Each request the page issued (`METHOD url`) must be matched by its
+ * own entry in `nifcStubLog`. It polls for the same reason: the `request`
+ * event fires before the context handler appends to the log.
+ */
+
+/** Start recording every WFIGS request this page issues, as `METHOD url`. */
+function watchNifcRequests(page: Page): string[] {
+  const seen: string[] = [];
+  page.on('request', (request) => {
+    const url = request.url();
+    if (isNifcRequestUrl(url)) seen.push(`${request.method()} ${url}`);
+  });
+  return seen;
+}
+
+/** The requests in `seen` that no entry of the default stub's log answered. */
+function unansweredNifcRequests(page: Page, seen: readonly string[]): string[] {
+  const answered = new Map<string, number>();
+  for (const entry of nifcStubLog(page)) {
+    const key = `${entry.method} ${entry.url}`;
+    answered.set(key, (answered.get(key) ?? 0) + 1);
+  }
+  const escaped: string[] = [];
+  for (const key of seen) {
+    const left = answered.get(key) ?? 0;
+    if (left > 0) {
+      answered.set(key, left - 1);
+    } else {
+      escaped.push(key);
+    }
+  }
+  return escaped;
+}
+
+/** The boot sent WFIGS requests, and the default stub answered every one of them. */
+async function expectNoWfigsEscaped(page: Page, seen: readonly string[]): Promise<void> {
+  await expect
+    .poll(() => seen.length, {
+      message: 'this boot sent no WFIGS request, so the default stub proved nothing',
+      timeout: 15_000
+    })
+    .toBeGreaterThan(0);
+  await expect
+    .poll(() => unansweredNifcRequests(page, seen), {
+      message:
+        'these WFIGS requests were not answered by the suite-wide default stub and reached the live service',
+      timeout: 15_000
+    })
+    .toEqual([]);
+}
+
+test.describe('every suite boot answers the NIFC WFIGS service from a deterministic fixture', () => {
+  test('a bare national Wildfire boot issues no live WFIGS request', async ({ page }) => {
+    const seen = watchNifcRequests(page);
+    // No page route for WFIGS and no region pin: the national default camera.
+    await gotoApp(page, '?cluster=wildfire');
+
+    // The perimeter layer parsed the fixture body (two synthetic polygons),
+    // which only a `features` answer of the right shape can produce.
+    await waitForLayerSettled(page, 'nifc-fires');
+    await expect(layerPill(page, 'nifc-fires')).toHaveText('live');
+    await expectNoWfigsEscaped(page, seen);
+    expect(
+      nifcStubLog(page).some((entry) => entry.method === 'GET' && entry.answer === 'features'),
+      'the default stub never answered the perimeter layer GET'
+    ).toBe(true);
+    expect(
+      nifcStubLog(page).filter((entry) => entry.answer === 'rejected'),
+      'the default stub rejected a WFIGS request the app issues'
+    ).toEqual([]);
+  });
+
+  test('a Brief-door Wildfire commit answers the layer and any minimap counts from the fixture', async ({
+    page
+  }) => {
+    const seen = watchNifcRequests(page);
+    // The desktop Brief door keeps the minimap outside the console view, so
+    // committing Wildfire can send the minimap's per-framing count POSTs as
+    // well as the layer GET. How many POSTs go out depends on whether the
+    // layer settled first (its loaded collection answers a covered framing
+    // with no request), so this asserts no count, only that none escaped.
+    await gotoApp(page);
+    const wildfire = page.locator('.shell-cluster-btn[data-cluster="wildfire"]');
+    await wildfire.click();
+    await expect(wildfire).toHaveAttribute('aria-pressed', 'true');
+    await expectNoWfigsEscaped(page, seen);
+    expect(
+      nifcStubLog(page).filter((entry) => entry.answer === 'rejected'),
+      'the default stub rejected a WFIGS request the app issues'
+    ).toEqual([]);
+  });
+
+  test('nifc: live passes WFIGS through to a route the spec registered, and the default never does', async ({
+    page
+  }) => {
+    // A CONTEXT route registered BEFORE any `gotoApp` call, the stand-in for
+    // the live agency. While the default is active it never answers (a
+    // context route registered later is checked first); once the boot opts
+    // out, the default's pass-through hands every request to it, so this
+    // test never puts a WFIGS request on the wire either way.
+    let sentinelAnswers = 0;
+    await page.context().route(
+      (url) => isNifcRequestUrl(url.href),
+      (route: Route) => {
+        sentinelAnswers += 1;
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/geo+json',
+          body: JSON.stringify(NIFC_STUB)
+        });
+      }
+    );
+
+    await gotoApp(page, '?cluster=wildfire');
+    await expect
+      .poll(() => nifcStubLog(page).length, {
+        message: 'the default stub answered no WFIGS request on the routine boot'
+      })
+      .toBeGreaterThan(0);
+    expect(sentinelAnswers, 'the spec route answered while the default was active').toBe(0);
+
+    await gotoApp(page, '?cluster=wildfire', { nifc: 'live' });
+    await expect
+      .poll(() => sentinelAnswers, {
+        message: 'the opted-out boot never reached the route the spec registered'
+      })
+      .toBeGreaterThan(0);
   });
 });

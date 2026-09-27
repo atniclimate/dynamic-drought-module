@@ -207,7 +207,7 @@ const DIRECT_BOOT_REASONS = {
 const SECOND_PAGE_REASONS = {
   'tests/mode-switch-cost.spec.ts': {
     reason:
-      'the DDM-P14-T08 mode-switch measurement (DR-095): one page per FRESH browser.newContext(), not a popup in an existing context, because each of the twelve ordered switches has to be measured from cold caches or the previous switch pays for this one. Every one of those pages boots through gotoApp, so it installs the same satellite, sovereign-boundary and minimap stubs as any other boot in this suite; no page here reaches a live service. The spec runs only in its own chromium-measure project, which CI never invokes.'
+      'the DDM-P14-T08 mode-switch measurement (DR-095): one page per FRESH browser.newContext(), not a popup in an existing context, because each of the twelve ordered switches has to be measured from cold caches or the previous switch pays for this one. Every one of those pages boots through gotoApp, so it installs the same satellite, sovereign-boundary and minimap stubs as any other boot in this suite, and no page here reaches a live sovereign-geography service. It passes nifc: live to gotoApp by design (J12), because its recorded baseline measured the live WFIGS reads, so WFIGS (and HMS smoke, which no default stubs) stay live here. The spec runs only in its own chromium-measure project, which CI never invokes.'
   }
 };
 
@@ -455,6 +455,25 @@ test('the suite-wide stubs route the browser context, so a Page nobody opened is
   assert.match(fixtures, /await context\.route\(BOUNDARY_PATTERNS\[service\]/);
   assert.match(minimap, /await context\.route\(NA_LAND_BASE_ROUTE/);
   assert.match(minimap, /await context\.route\(NUNAVUT_ANALYSIS_ROUTE/);
+});
+
+test('the shared boot helper installs the WFIGS default on the context before it navigates (J12)', async () => {
+  const helpers = await readFile(join(TESTS_DIR, 'helpers.ts'), 'utf8');
+  const wildfire = await readFile(join(TESTS_DIR, 'wildfire-fixtures.ts'), 'utf8');
+  const urls = await readFile(join(ROOT, 'src/config/urls.ts'), 'utf8');
+  const gotoApp = helpers.slice(helpers.indexOf('export async function gotoApp'));
+  const body = gotoApp.slice(0, gotoApp.indexOf('page.goto('));
+  assert.match(
+    body,
+    /await installDefaultNifcStub\(page, options\.nifc \?\? 'fixture'\);/,
+    'gotoApp must install the WFIGS default stub before it navigates'
+  );
+  // Context routing, so a Page nobody opened is covered and a spec's own
+  // page route still wins; and the service name the stub matches is still
+  // the one the runtime's URL carries.
+  assert.match(wildfire, /await context\.route\(\s*\(url\) => isNifcRequestUrl\(url\.href\)/);
+  assert.match(wildfire, /const NIFC_SERVICE_NAME = 'WFIGS_Interagency_Perimeters_Current';/);
+  assert.match(urls, /\/WFIGS_Interagency_Perimeters_Current\/FeatureServer\/0'/);
 });
 
 test('the fixture route patterns still match the URLs the runtime builds', async () => {

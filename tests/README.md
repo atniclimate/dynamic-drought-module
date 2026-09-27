@@ -443,7 +443,12 @@ and no agency ever sends a body. Where the catalog
 mounts it also asserts both boundary pills reach `live`, which can only come
 from the fixture body. It does not observe the boots that navigate
 themselves: those answer from their own `routeAllTribalFixtures` handlers, so
-their requests never enter the suite-wide stub's log.
+their requests never enter the suite-wide stub's log. The same file also
+proves the NIFC WFIGS default (J12, below): a bare national Wildfire boot and
+a Brief-door Wildfire commit each send WFIGS requests, and every one of them,
+matched request by request as `METHOD url` against `nifcStubLog`, was
+answered by the default stub; a third case proves `nifc: 'live'` passes
+through to a route the spec registered.
 
 `tests/boundary-boot-inventory.test.mjs` covers those STATICALLY, and guards
 the seams. It runs in the gate with the other `node:test` files
@@ -516,6 +521,23 @@ Nothing there is sovereign geometry, and nothing there is undisclosed by a
 `git clone` of this public repository, but a licensing and redistribution
 review of the agency and raster content has **not** been done and is open
 work.
+
+The NIFC WFIGS current-perimeters service followed the NADM path for a
+different reason (J12, DDM-P10-T13). Once the national region became the
+default camera, a Wildfire boot with no WFIGS route of its own asked the live
+service for every current perimeter in the contiguous United States, and the
+boot-idle seam waited on that payload. `gotoApp` now installs
+`installDefaultNifcStub` (`tests/wildfire-fixtures.ts`) on the CONTEXT for
+every boot. It is fail-closed: a GET `/query?...f=geojson` (the perimeter
+layer's read and the briefing's area read) gets `NIFC_STUB`, a minimap count
+POST (`returnCountOnly=true`) gets a successful `{ count: 0 }`, and any other
+WFIGS request gets a 400, never the network. A spec's own `page.route` for
+WFIGS still wins, whatever the order; a page route that calls
+`route.fallback()` now reaches this stub rather than the network. The opt-out
+is `gotoApp(page, query, { nifc: 'live' })`, a pass-through; only the
+mode-switch measurement uses it, because its recorded baseline measured the
+live reads. After this change a WFIGS body can reach a trace only from a
+`nifc: 'live'` boot or a boot that navigates itself outside `gotoApp`.
 
 **Deferred, deliberately.** A synthetic or blank basemap for artifact-bearing
 runs, which is the precondition for turning pixels back on: it is what would

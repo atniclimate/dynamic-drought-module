@@ -13,6 +13,7 @@ import { expect, type BrowserContext, type Page, type Locator, type Route } from
 import { stubRecentSatellite } from './satellite-fixture';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
 import { installBoundaryStubs, type BoundaryStubMode } from './tribal-fixtures';
+import { installDefaultNifcStub, type NifcStubMode } from './wildfire-fixtures';
 
 const TEST_NADM_SNAPSHOT = {
   type: 'FeatureCollection',
@@ -76,9 +77,11 @@ const coveredContexts = new WeakSet<BrowserContext>();
 /**
  * Carry the PAGE-level stubs onto any Page this context opens later.
  *
- * The three stubs that matter most for a retained artifact, the sovereign
- * boundaries, the minimap's continental analysis inputs, and the NADM
- * continental snapshot (DDM-P1-T09 step 2 part d), are registered on the
+ * The four stubs that matter most for a retained artifact, the sovereign
+ * boundaries, the minimap's continental analysis inputs, the NADM
+ * continental snapshot (DDM-P1-T09 step 2 part d), and the NIFC WFIGS
+ * current perimeters (J12, `installDefaultNifcStub` in
+ * `tests/wildfire-fixtures.ts`), are registered on the
  * CONTEXT, so a popup or a `context.newPage()` inherits them with no help
  * from here. The satellite stub is still page-level, and a Page this helper
  * never navigated would reach that service live. Nothing in this suite opens
@@ -255,6 +258,28 @@ export interface GotoAppOptions {
    */
   readonly nadm?: NadmStubMode;
   /**
+   * How this boot answers the NIFC WFIGS current-perimeters service (J12,
+   * DDM-P10-T13). Defaults to `fixture`: a fail-closed CONTEXT route in
+   * `tests/wildfire-fixtures.ts` (`installDefaultNifcStub`) answers the
+   * perimeter layer's and the briefing's GET queries with `NIFC_STUB`, the
+   * minimap's count POSTs with a successful `{ count: 0 }`, and any other
+   * WFIGS request with a 400, so no boot reaches the live service by
+   * default. The reason is the national default region (60c3a66): an
+   * unrouted Wildfire boot asked for every current perimeter in the
+   * contiguous United States and the boot-idle seam waited on it. `live`
+   * is the explicit opt-out: the context route passes every request
+   * through, to whatever a spec's own earlier context route provides or,
+   * unrouted, the live agency; the mode-switch measurement
+   * (`tests/mode-switch-cost.spec.ts`) uses it because its recorded
+   * baseline measured the live reads. A spec that registers its own
+   * `page.route` for WFIGS (`stubWildfireFeeds`, a held or failed request)
+   * needs neither option: Playwright checks Page routes before Context
+   * routes, so that handler always wins, whatever the order. A page route
+   * that calls `route.fallback()` now falls through to this stub rather
+   * than to the network.
+   */
+  readonly nifc?: NifcStubMode;
+  /**
    * Wait for the boot-idle seam (`<html data-ddm-boot="idle">`, DR-052
    * follow-up): the map has loaded, every layer the URL asked for has left
    * `loading`, and no shared transport is in flight. Defaults to true, so
@@ -321,6 +346,13 @@ export async function gotoApp(
   // `installDefaultNadmStub`'s own comment for the opt-out and why a spec's
   // own `page.route` for this pattern is unaffected either way.
   await installDefaultNadmStub(page, options.nadm ?? 'fixture');
+  // J12 (DDM-P10-T13): every routine boot answers the NIFC WFIGS
+  // current-perimeters service from the deterministic fixture, whatever the
+  // query string names. Under the national default region an unrouted
+  // Wildfire boot used to wait on the live national payload. See
+  // `installDefaultNifcStub`'s own comment for the three request kinds, the
+  // opt-out, and why a spec's own `page.route` for WFIGS still wins.
+  await installDefaultNifcStub(page, options.nifc ?? 'fixture');
   coverFuturePages(page);
   await page.goto(query, { waitUntil: 'domcontentloaded' });
   // DOM READY, and no longer a proxy for a finished boot. The generated
