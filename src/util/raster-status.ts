@@ -23,10 +23,13 @@
  * `degraded` (live, partial), none `error`. A tile request opens a cycle and
  * arms the deadline (the first cycle is open from attach). The view is
  * read when the map idles, when the source settles, on the first frame after
- * a camera move while no cycle is open (so a map that never idles, like the
- * 3D scene, still re-reads a return to cached tiles), and at the deadline,
- * where the found-042 floor holds while a tile of the view is still in
- * flight. Without a tile manager the verdict falls back to the cycle's
+ * a camera move while no cycle is open, and at the deadline, where the
+ * found-042 floor holds while a tile of the view is still in flight. Known
+ * limit (DDM-P14-T04 C1, carried OPEN to D2 under DR-143, DDM-P1-T11): the
+ * deadline reads once and leaves its cycle open, so on a map that does not
+ * idle (the 3D scene) a later return to cached tiles, or a held view whose
+ * tiles all fail after the deadline, is not read again until the next idle
+ * or settle; the ordinary 2D map idles after both and recovers there. Without a tile manager the verdict falls back to the cycle's
  * request sets, which cannot see a cache restore.
  *
  * Known tradeoff, documented rather than hidden: a viewport entirely outside
