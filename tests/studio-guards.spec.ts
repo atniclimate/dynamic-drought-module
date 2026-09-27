@@ -179,6 +179,72 @@ test.describe('studio route guards', () => {
     });
   }
 
+  // C10 (2026-09-26 adversarial review): the re-entry legs above prove
+  // createChunkLoader's in-page retry=, but that fix legitimately replaced
+  // the ONLY remaining coverage of the OTHER recovery path the failure
+  // surface still ships: "Try again" (src/ui/view-shell.ts,
+  // renderStudioLoadFailure) does a full `window.location.reload()`, never
+  // an in-page re-import. These legs restore that coverage on its own,
+  // without going through Back to map/re-entry at all.
+  for (const studio of [
+    {
+      route: 'place',
+      root: PLACE_ROOT,
+      chunk: /\/place-studio-[^/]+\.js(?:\?.*)?$/,
+      loadedHeading: 'Place studio'
+    },
+    {
+      route: 'layers',
+      root: LAYERS_ROOT,
+      chunk: /\/layers-studio-[^/]+\.js(?:\?.*)?$/,
+      loadedHeading: 'Layer studio'
+    }
+  ] as const) {
+    test(`${studio.route} chunk failure surface's Try again reloads and restores the studio route`, async ({
+      page
+    }) => {
+      // Only a real reload can produce a genuine second network request for
+      // this chunk: Chromium caches the failed dynamic import in the
+      // document's module map, so an in-page re-import of the SAME url
+      // would replay the SAME rejection with no new request. A reload
+      // starts a fresh module map in a fresh document, so this route lets
+      // the SECOND attempt through, proving the reload (not a retry=
+      // re-entry) is what recovered it.
+      let chunkAttempts = 0;
+      await page.route(studio.chunk, async (route) => {
+        chunkAttempts += 1;
+        if (chunkAttempts <= 1) {
+          await route.abort('failed');
+        } else {
+          await route.continue();
+        }
+      });
+
+      await gotoApp(
+        page,
+        `?view=brief&layers=places&studio=${studio.route}`
+      );
+      const root = page.locator(studio.root);
+      const failure = root.getByRole('alert');
+      await expect(failure.getByRole('heading', { name: 'Studio unavailable' })).toBeVisible();
+
+      // A "Try again" that regressed to a no-op leaves this same document in
+      // place forever: no `load` event ever fires, so this race hangs to
+      // the action timeout instead of resolving. That hang, not a
+      // subsequent assertion, is the red signal this leg is written to
+      // catch.
+      await Promise.all([
+        page.waitForEvent('load'),
+        failure.getByRole('button', { name: 'Try again' }).click()
+      ]);
+
+      expect(new URLSearchParams(await search(page)).get('studio')).toBe(studio.route);
+      await expect(root.getByRole('heading', { name: studio.loadedHeading })).toBeVisible();
+      await expect(root.getByRole('alert')).toHaveCount(0);
+      expect(chunkAttempts).toBeGreaterThanOrEqual(2);
+    });
+  }
+
   test('a newer select navigation replaces the command held behind LAYERS', async ({
     page
   }) => {
