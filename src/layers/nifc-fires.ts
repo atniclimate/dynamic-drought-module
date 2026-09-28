@@ -89,6 +89,7 @@ import { registerClickTarget } from '../map/interaction-coordinator';
 import { escapeHtml } from '../util/escape';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { prefersReducedMotion } from '../util/motion';
+import { dateTok } from '../util/text-tokens';
 import { registry } from '../state/registry';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
 import {
@@ -524,7 +525,11 @@ function installPerimeterTimeBar(): void {
       headline: 'Current perimeters · no single valid time',
       detail:
         'NIFC WFIGS current interagency perimeters · the service states no product date and each perimeter carries its own discovery date.' +
-        (lastLoaded ? ` Last successful browser check: ${new Date(lastLoaded.fetchedAt).toLocaleString()}. The current indicator describes this feed check, not the age of every perimeter.` : ''),
+        // M12 repair (found-015, R5 a): the browser-check date reads through
+        // `dateTok` (month-name form) instead of `toLocaleString`'s locale-
+        // and numeric-format date, the same token the time door's own dates
+        // use.
+        (lastLoaded ? ` Last successful browser check: ${dateTok(lastLoaded.fetchedAt)}. The current indicator describes this feed check, not the age of every perimeter.` : ''),
       register: 'observed',
       freshness: {
         state: freshnessState,

@@ -7761,6 +7761,11 @@ a.impact-resource-link::after {
   width: 64px;
 }
 .shell-time > .shell-popover-door:disabled { opacity: 0.45; cursor: default; }
+/* found-015 (M12 repair): a single-period spec's door keeps its 64px seat
+   (the row's box never moves) but is hidden as well as disabled, never
+   just dimmed like the no-spec-at-all state above; visibility (not
+   display) so the flex layout is untouched. */
+.shell-time > .shell-popover-door[data-controls='none'] { visibility: hidden; }
 
 .shell-popover-door {
   appearance: none;
@@ -7787,6 +7792,24 @@ a.impact-resource-link::after {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 .shell-popover::backdrop { background: rgba(0, 0, 0, 0.35); }
+
+/* The time door anchors to its trigger (found-015): a native [popover]'s
+   UA default (inset: 0; margin: auto) centres it in the viewport, which is
+   the "about 300 px from its 64x17 button" defect. CSS anchor positioning
+   overrides that default for THIS popover only (id selectors; the shared
+   .shell-popover class, including the minimap's card, is untouched).
+   Unsupported browsers keep today's centred UA default, never a blank or
+   off-screen card. */
+#shell-time-more { anchor-name: --shell-time-door; }
+@supports (anchor-name: --shell-time-door) {
+  #shell-time-popover:popover-open {
+    position: fixed;
+    position-anchor: --shell-time-door;
+    inset: auto;
+    position-area: bottom span-left;
+    margin: 8px 0 0;
+  }
+}
 
 .shell-time-detail { display: grid; gap: 10px; }
 .shell-time-detail-stamp { display: grid; gap: 2px; }

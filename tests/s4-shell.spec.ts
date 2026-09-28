@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
+import { TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
+import { HORIZON_CHROME, SHELL_HORIZON_KEY } from '../src/impact/horizon-chrome';
 import {
   gotoApp,
   layerCheckbox,
@@ -113,7 +115,13 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 958, height: 935
         await expect(button).toHaveAttribute('data-pending', 'false', { timeout: 25_000 });
         await expect(layerPill(page, source)).toHaveText(/^live(?: \(partial\))?$/);
         if (key === 'enso') {
-          await expect(page.locator('.shell-time-headline')).toHaveText('Observed Jul 7, 2026');
+          // Value-only migration (found-014): the heading now leads with the
+          // pressed horizon chip's own HORIZON_CHROME title ('Current
+          // Conditions', the boot default here), so the stamp's own words
+          // follow it rather than standing alone.
+          await expect(page.locator('.shell-time-headline')).toHaveText(
+            'Current Conditions · Observed Jul 7, 2026'
+          );
         }
         await sample(`${key} settled`);
       }
@@ -509,6 +517,75 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
     const after = await navigation.boundingBox();
     expect(after).not.toBeNull();
     expect(Math.abs(after!.y - before!.y)).toBeLessThanOrEqual(1);
+  });
+
+  test('the time card heading names the pressed horizon chip in HORIZON_CHROME\'s own words at every Drought horizon, and the door opens anchored to its trigger (found-014, found-015)', async ({
+    page
+  }) => {
+    await routeCpcOutlook(page);
+    await gotoApp(page);
+
+    // found-014: the heading is not a literal per-surface guess; it is
+    // read straight from HORIZON_CHROME for whichever chip is pressed, at
+    // every enabled horizon this cluster offers (TEMPORAL_HORIZON_KEYS,
+    // never a hard-coded list, DR-113).
+    //
+    // found-015 (M12 repair, the director's door rule): NADM (Drought,
+    // Current) is one period (`periodCount`, time-popover.tsx: no rail,
+    // no modes), so its door keeps its 64px seat but goes disabled AND
+    // hidden rather than opening on nothing; the CPC outlook at Weeks
+    // ahead and Season ahead has `modes` (Monthly / Seasonal,
+    // `periodCount` = 2), so those two stay enabled and openable. Read
+    // the door's own visibility live rather than assuming which horizon
+    // is which, so a future recipe change cannot go stale here.
+    for (const key of TEMPORAL_HORIZON_KEYS) {
+      const chip = page.locator(`.shell-horizon-btn[data-horizon="${key}"]`);
+      if ((await chip.getAttribute('aria-disabled')) === 'true') continue;
+      await chip.click();
+      await expect(chip).toHaveAttribute('aria-pressed', 'true', { timeout: 45_000 });
+      const chrome = HORIZON_CHROME[SHELL_HORIZON_KEY[key]];
+      await expect(page.locator('.shell-time-headline-horizon')).toHaveText(chrome.title, {
+        timeout: 45_000
+      });
+      await expect(page.locator('#shell-time')).toHaveAttribute('data-has-spec', 'true', {
+        timeout: 45_000
+      });
+
+      const door = page.locator('#shell-time-more');
+      if (await door.isVisible()) {
+        // The popover's own heading agrees (DetailControls reads the same
+        // pressed horizon, not the surface's own declared stamp.horizon).
+        await door.click();
+        await expect(page.locator('.shell-time-detail-horizon')).toHaveText(
+          `${chrome.title} · ${chrome.subtitle}`
+        );
+        await door.click();
+        await expect(page.locator('#shell-time-popover')).toBeHidden();
+      } else {
+        await expect(door, `${key}: a one-period door stays disabled, not just hidden`).toBeDisabled();
+      }
+    }
+
+    // found-015: the door opens anchored to its trigger (a measured
+    // rectangle), not centred in the viewport, about 300 px away (the
+    // native [popover] UA default of inset: 0; margin: auto). Season
+    // ahead (the CPC Seasonal Drought Outlook, `periodCount` = 2 via its
+    // two modes) is the loop's last horizon and is still pressed here, so
+    // its door is the enabled, multi-period one this check needs.
+    const seasonChip = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
+    await expect(seasonChip).toHaveAttribute('aria-pressed', 'true');
+    const door = page.locator('#shell-time-more');
+    await expect(door).toBeEnabled();
+    const doorBox = await door.boundingBox();
+    expect(doorBox).not.toBeNull();
+    await door.click();
+    const popover = page.locator('#shell-time-popover');
+    await expect(popover).toBeVisible();
+    const popoverBox = await popover.boundingBox();
+    expect(popoverBox).not.toBeNull();
+    expect(
+      Math.abs(popoverBox!.y - (doorBox!.y + doorBox!.height))
+    ).toBeLessThan(60);
   });
 });
 

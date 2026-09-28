@@ -24,13 +24,44 @@
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import type { ReadonlySignal } from '@preact/signals';
 
-import { freshnessDate, freshnessLabel, getTimeBarSpec, stampHorizonText } from '../time-bar';
-import type { TimeBarSpec } from '../time-bar';
+import type { TemporalHorizonKey } from '../../config/clusters';
+import { HORIZON_CHROME, SHELL_HORIZON_KEY } from '../../impact/horizon-chrome';
+import { dateTok } from '../../util/text-tokens';
+import { getTimeBarSpec, stampHorizonText } from '../time-bar';
+import type { TimeBarSpec, TimeBarStamp } from '../time-bar';
 import { wireShellPopover } from './popover-discipline';
 
 export interface TimeCompactProps {
   /** Bumped by the shell on every onTimeBarSpecChange notification. */
   readonly specTick: ReadonlySignal<number>;
+  /**
+   * The shell's committed (pressed) horizon chip, from `shell.tsx`'s own
+   * snapshot (found-014, DDM-P10-T11): the heading names THIS horizon, in
+   * `HORIZON_CHROME`'s words, not the surface's own declared `stamp.horizon`
+   * (a HeatRisk day not yet begun answers Near Term even while Current
+   * Conditions is pressed, by design, `src/layers/heatrisk.ts`). Naming the
+   * pressed chip here keeps chip and card agreeing; the surface's own
+   * outlook day still states itself in the headline and detail lines below,
+   * so nothing honest is lost, only which fact is the HEADING.
+   */
+  readonly pressedHorizon: TemporalHorizonKey;
+}
+
+/**
+ * The feed-freshness words (found-015): built locally from the stamp's own
+ * `checkedAt` ISO instant with `dateTok` (R5 a, month-name dates) rather
+ * than importing `time-bar.ts`'s `freshnessLabel`/`freshnessDate`, whose
+ * non-month-name format (`time-bar.ts:104-119`) is `#time-bar`'s (the Brief
+ * sidebar bar's) own choice, not owned here.
+ */
+function freshnessText(stamp: TimeBarStamp): string {
+  const freshness = stamp.freshness;
+  if (!freshness) return '';
+  if (freshness.state === 'current') return 'Current feed check';
+  if (freshness.state === 'loading') return 'Checking current conditions';
+  const checkedAt = freshness.checkedAt;
+  const date = checkedAt && Number.isFinite(Date.parse(checkedAt)) ? dateTok(checkedAt) : null;
+  return date ? `Last successful feed check ${date}` : 'Current feed check unavailable';
 }
 
 /**
@@ -58,13 +89,41 @@ function StepChevron({ direction }: { direction: 'prev' | 'next' }) {
   );
 }
 
-function DetailControls({ spec }: { spec: TimeBarSpec }) {
+/**
+ * How many periods a spec lets you browse, read from the same fields
+ * `time-bar.ts`'s own `TimeBarSpec` type already carries (M12 repair,
+ * found-015, the director's door rule: "a time door appears only where the
+ * product has more than one period"): the rail's own stop count when the
+ * spec has one (HeatRisk's seven days, SST's daily frames, USDM's weeks),
+ * or the outlook register's own mode count when it has modes instead of a
+ * rail (drought.ts's monthly/seasonal CPC outlook, the `TimeBarSpec.rail`
+ * comment's own "jump-only bars"). A spec with neither (NIFC's rolling
+ * perimeters, the SPC Day 1 outlook, WHP's static edition, NADM's single
+ * consensus month) is one period: nothing to browse, so the door has
+ * nothing honest to open.
+ */
+function periodCount(spec: TimeBarSpec): number {
+  if (spec.rail) return spec.rail.count;
+  if (spec.modes) return spec.modes.options.length;
+  return 1;
+}
+
+function DetailControls({
+  spec,
+  pressedHorizon
+}: {
+  spec: TimeBarSpec;
+  pressedHorizon: TemporalHorizonKey;
+}) {
   const rail = spec.rail;
+  // The heading names the PRESSED chip (found-014), never the surface's own
+  // stamp.horizon; see the TimeCompactProps.pressedHorizon comment above.
+  const horizonKey = SHELL_HORIZON_KEY[pressedHorizon];
   return (
     <div class="shell-time-detail">
       <div class="shell-time-detail-stamp" data-register={spec.stamp.register}>
-        <span class="shell-time-detail-horizon" data-horizon={spec.stamp.horizon}>
-          {stampHorizonText(spec.stamp.horizon)}
+        <span class="shell-time-detail-horizon" data-horizon={horizonKey}>
+          {stampHorizonText(horizonKey)}
         </span>
         <span class="shell-time-detail-headline">{spec.stamp.headline}</span>
         <span class="shell-time-detail-line">{spec.stamp.detail}</span>
@@ -185,10 +244,22 @@ function DetailControls({ spec }: { spec: TimeBarSpec }) {
   );
 }
 
-export function TimeCompact({ specTick }: TimeCompactProps) {
+export function TimeCompact({ specTick, pressedHorizon }: TimeCompactProps) {
   // Reading the signal subscribes this component to spec changes.
   void specTick.value;
   const spec = getTimeBarSpec();
+  const pressedChrome = HORIZON_CHROME[SHELL_HORIZON_KEY[pressedHorizon]];
+  // found-015's door rule (M12 repair): a spec with only one period keeps
+  // its seat in the row (the door's fixed 64px flex box, app.css
+  // `.shell-time > .shell-popover-door`) but goes disabled AND hidden,
+  // exactly the "keep the seat" pattern this row's own commit history
+  // already uses for the top-right column (Reset/SAT/Help keeping their
+  // seat when Share leaves): removing the button outright would still
+  // leave the row's own outer box alone (the headline's `flex: 1` absorbs
+  // the freed width), but a hidden, always-present door is one fewer
+  // moving part for the popover-discipline focus fallback and CSS anchor
+  // positioning to reason about, and matches the precedent already landed.
+  const hasControls = spec !== null && periodCount(spec) > 1;
   const rowRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -237,28 +308,36 @@ export function TimeCompact({ specTick }: TimeCompactProps) {
       {spec === null ? (
         <span class="shell-time-headline shell-time-empty">No dated product is displayed.</span>
       ) : (
-        <>
-          <span
-            class="shell-time-headline"
-            data-register={spec.stamp.register}
-            // The CSS reserves a fixed two-line box and clamps beyond it
-            // only as a defensive backstop (app.css .shell-time-headline);
-            // this title carries the full, untruncated headline so that
-            // backstop can never hide the issuer's date behind an ellipsis
-            // with no way to read the rest.
-            title={spec.stamp.freshness ? freshnessLabel(spec.stamp) : spec.stamp.headline}
-          >
-            {spec.stamp.freshness ? (
-              <span class="feed-current" aria-label={freshnessLabel(spec.stamp)}>
-                <span>Current Conditions</span>
-                <span class="feed-freshness-dot" data-freshness={spec.stamp.freshness.state} aria-hidden="true" />
-                {spec.stamp.freshness.state === 'stale' && <span>{freshnessDate(spec.stamp)}</span>}
-                {spec.stamp.freshness.state === 'unavailable' && <span>Unavailable</span>}
-                {spec.stamp.freshness.state === 'loading' && <span class="sr-only">Checking</span>}
-              </span>
-            ) : spec.stamp.headline}
-          </span>
-        </>
+        <span
+          class="shell-time-headline"
+          data-register={spec.stamp.register}
+          // The CSS reserves a fixed two-line box and clamps beyond it
+          // only as a defensive backstop (app.css .shell-time-headline);
+          // this title carries the full, untruncated text so that backstop
+          // can never hide the issuer's date behind an ellipsis with no way
+          // to read the rest.
+          title={
+            spec.stamp.freshness
+              ? freshnessText(spec.stamp)
+              : `${pressedChrome.title} · ${spec.stamp.headline}`
+          }
+        >
+          {/* found-014: the heading names the PRESSED horizon chip, in
+              HORIZON_CHROME's own words, in every mode; the surface's own
+              headline/detail (Heat's "Outlook valid ... Day 1 of 7") still
+              states what issuer day it shows, right beside it. */}
+          <span class="shell-time-headline-horizon">{pressedChrome.title}</span>
+          {spec.stamp.freshness ? (
+            <span class="feed-current" aria-label={freshnessText(spec.stamp)}>
+              <span class="feed-freshness-dot" data-freshness={spec.stamp.freshness.state} aria-hidden="true" />
+              {spec.stamp.freshness.state === 'stale' && <span> · {dateTok(spec.stamp.freshness.checkedAt ?? '')}</span>}
+              {spec.stamp.freshness.state === 'unavailable' && <span> · Unavailable</span>}
+              {spec.stamp.freshness.state === 'loading' && <span class="sr-only">Checking</span>}
+            </span>
+          ) : (
+            <span class="shell-time-headline-detail"> · {spec.stamp.headline}</span>
+          )}
+        </span>
       )}
       <button
         type="button"
@@ -266,8 +345,19 @@ export function TimeCompact({ specTick }: TimeCompactProps) {
         class="shell-popover-door"
         ref={moreRef}
         popovertarget="shell-time-popover"
-        title={spec?.stamp.detail ?? 'No dated product is displayed.'}
-        disabled={spec === null}
+        title={
+          spec === null
+            ? 'No dated product is displayed.'
+            : hasControls
+              ? spec.stamp.detail
+              : 'No other dates to browse for this product.'
+        }
+        disabled={spec === null || !hasControls}
+        // found-015: a single-period spec keeps the door's seat (the row's
+        // box stays put, `periodCount` above) but it goes hidden as well as
+        // disabled, never just dimmed, so a sighted reader is not shown an
+        // affordance that opens nothing.
+        data-controls={spec === null ? undefined : hasControls ? 'multi' : 'none'}
         // Derived from the live popover state so a spec-tick re-render
         // while the card is open cannot clobber the discipline's toggle
         // reflection (W2-D9).
@@ -282,7 +372,7 @@ export function TimeCompact({ specTick }: TimeCompactProps) {
         ref={popRef}
         aria-label="Temporal controls"
       >
-        {spec !== null && <DetailControls spec={spec} />}
+        {spec !== null && <DetailControls spec={spec} pressedHorizon={pressedHorizon} />}
       </div>
     </div>
   );

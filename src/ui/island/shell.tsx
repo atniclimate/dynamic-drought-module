@@ -499,7 +499,7 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
             );
           })}
         </div>
-        <TimeCompact specTick={specTick} />
+        <TimeCompact specTick={specTick} pressedHorizon={snapshot.horizon} />
       </div>
 
       <div class="shell-minimap-map">
