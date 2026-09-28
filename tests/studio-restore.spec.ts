@@ -456,9 +456,9 @@ test.describe('the exposed sidebar commands survive the Place studio', () => {
  * `createChunkLoader` exists to work around, but only for three UI chunks:
  * search, the Place studio route entry, and island/layers-studio;
  * `loadLayerModule`'s per-layer `def.load()` is a bare `import()`, not
- * wrapped in it). The case below is corrected to assert what the round
- * trip actually does: one request, ever, for a layer whose module chunk
- * has already failed once in the session.
+ * wrapped in it). REGISTER found-087 then routed every layer chunk through
+ * createChunkLoader, so the recipe case below asserts the second request
+ * (under `?retry=1`) and an honest unavailable read when it fails again.
  */
 test.describe('found-076: a failed checked composition member through the Place studio', () => {
   test('a composition reference layer already failed and checked before the studio opens is never re-requested through the round trip', async ({
@@ -502,11 +502,13 @@ test.describe('found-076: a failed checked composition member through the Place 
     expect((await urlLayers(page)).has('states')).toBe(true);
   });
 
-  test('a recipe layer already failed and checked before the studio opens is set aside like any other, and the restore re-checks it back into the same unresolved failure without a second request', async ({
+  test('a recipe layer already failed and checked before the studio opens is set aside like any other, and the restore re-checks it into one genuine retry of its chunk', async ({
     page
   }) => {
     let nadmRequests = 0;
-    await page.route(/\/nadm-drought-[A-Za-z0-9_-]{8}\.js$/, (route) => {
+    // The query allowance catches found-087's retry URL (`.js?retry=1`):
+    // Playwright tests a RegExp route against the full URL, query included.
+    await page.route(/\/nadm-drought-[A-Za-z0-9_-]{8}\.js(\?.*)?$/, (route) => {
       nadmRequests += 1;
       void route.abort();
     });
@@ -530,15 +532,13 @@ test.describe('found-076: a failed checked composition member through the Place 
     await studio.getByRole('button', { name: 'Back to map' }).click();
     await expect(studio).toHaveCount(0);
     await waitForLayerSettled(page, 'nadm-drought');
-    // The restore re-checks the captured intent, and the ordinary
-    // controller path genuinely re-attempts it (loadLayerModule calls
-    // def.load() fresh, unmanaged by this ledger), but that second
-    // import() names the chunk URL the browser already rejected once this
-    // session, so no second network request ever reaches the server (see
-    // the block comment above this describe). One request stands. This
-    // pins today's behaviour, REGISTER found-087: when layer chunks retry
-    // under a fresh URL, this count becomes 2 in the same commit.
-    expect(nadmRequests).toBe(1);
+    // The restore re-checks the captured intent, and the controller
+    // re-attempts it once. Since found-087, loadLayerModule
+    // (src/config/layers.ts) retries a failed chunk through
+    // createChunkLoader (src/util/chunk-retry.ts) under a fresh `?retry=1`
+    // URL the engine has never marked failed, so a second request is made.
+    // This route aborts it too, so the layer honestly reads unavailable.
+    expect(nadmRequests).toBe(2);
     await expect(layerCheckbox(page, 'nadm-drought')).toBeChecked();
     await expect(layerPill(page, 'nadm-drought')).toHaveText(PILL.unavailable);
     await expect(

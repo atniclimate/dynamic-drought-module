@@ -451,3 +451,65 @@ test.describe('found-073 and found-074: a failed reference layer and a persisted
     }
   });
 });
+
+/**
+ * found-087 (register; DDM-P1-T10): before this fix `loadLayerModule`
+ * (`src/config/layers.ts`) called `def.load()` bare. A failed dynamic
+ * `import()` is cached by the engine per URL, so a bare replay after a
+ * rejection names the SAME url and rejects again with NO new network
+ * request: a layer whose chunk failed to load once could never load again
+ * this session, however many later explicit re-checks a reader made. The
+ * fix routes every layer's `load` through one per-key
+ * `createChunkLoader(def.load, import.meta.url)` (`src/util/chunk-retry.ts`),
+ * memoised lazily on first load, so a LATER call imports the chunk under a
+ * fresh `retry=<n>` query, a cache key the engine has never marked failed.
+ *
+ * Ecoregions (off by default, a pure chunk-load case with no other network
+ * dependency once its module resolves: `tests/activation-failure.spec.ts`'s
+ * own "thrown" case above already uses this exact chunk for the same
+ * reason) is not in the default composition, so a fresh boot with
+ * `?layers=` starts it off and this test drives its own single toggle
+ * in and out, matching the brief's "not in a default composition" option.
+ */
+test.describe('found-087: a layer whose chunk failed once loads on a later re-check', () => {
+  test('a layer whose chunk failed once loads on a later re-check, through a retry URL', async ({
+    page
+  }) => {
+    const chunkRequests: string[] = [];
+    await page.route(/ecoregions-[^/]*\.js(\?.*)?$/, (route) => {
+      chunkRequests.push(route.request().url());
+      // Abort only the FIRST request; every later one (the retry) is let
+      // through to prove it reaches the network under a new url rather
+      // than never being requested at all.
+      if (chunkRequests.length === 1) {
+        void route.abort();
+      } else {
+        void route.continue();
+      }
+    });
+    await gotoApp(page, '?layers=');
+
+    await layerCheckbox(page, 'ecoregions').click();
+    await waitForLayerSettled(page, 'ecoregions');
+    await expect(layerCheckbox(page, 'ecoregions')).not.toBeChecked();
+    await expect(layerPill(page, 'ecoregions')).toHaveText(PILL.unavailable);
+    // Predicted red on the base source: `loadLayerModule` replayed the SAME
+    // cached-failed url, which the engine rejects without ever reaching the
+    // network, so `chunkRequests.length` stays 1 forever, never 2 -- no
+    // amount of re-checking would grow it. This assertion passes already
+    // (both before and after the fix); the growth to 2 below is the one
+    // that reds on the base source.
+    expect(chunkRequests.length).toBe(1);
+
+    // A later, explicit re-check: no timer, no automatic retry, just the
+    // reader unchecking and checking the box again, exactly the action this
+    // unit's scope names.
+    await layerCheckbox(page, 'ecoregions').click();
+    await waitForLayerSettled(page, 'ecoregions');
+
+    expect(chunkRequests.length).toBe(2);
+    expect(new URL(chunkRequests[1]).searchParams.get('retry')).toBe('1');
+    await expect(layerCheckbox(page, 'ecoregions')).toBeChecked();
+    await expect(layerPill(page, 'ecoregions')).toHaveText(PILL.live);
+  });
+});

@@ -2,6 +2,7 @@ import type * as maplibregl from 'maplibre-gl';
 
 import type { ProductKey } from './products';
 import type { LayerRole } from '../types/layer';
+import { createChunkLoader } from '../util/chunk-retry';
 
 /**
  * What one activation attempt hands a layer module (DDM-P1-T02). The layer
@@ -418,13 +419,42 @@ const moduleCache = new Map<string, LayerModule>();
  */
 const moduleInFlight = new Map<string, Promise<LayerModule>>();
 
+/**
+ * Per-key chunk loaders (found-087, DDM-P1-T10). A failed dynamic `import()`
+ * is cached by the engine per URL, so a bare `def.load()` replayed after a
+ * rejection (once `moduleInFlight` has cleared it) rejects again with no new
+ * network request: a layer whose chunk failed once could never load again
+ * this session. Each key gets one `createChunkLoader` wrapper
+ * (`src/util/chunk-retry.ts`), created lazily on that key's first call and
+ * reused for every later one, so a LATER explicit request (a re-check, a
+ * hazard press, a studio restore) imports the chunk under a fresh
+ * `retry=<n>` URL instead of replaying the same cached rejection. `base` is
+ * this module's own `import.meta.url`, exactly how `sidebar.ts`'s
+ * `loadIsland`/`loadLayersStudioChunk` and `view-shell.ts`'s
+ * `loadPlaceStudioChunk` pass their own file's `import.meta.url`: every
+ * `def.load` here is written inline in `LAYER_DEFS`, in this same file, so
+ * this file's own URL is the correct base to resolve each `load`'s relative
+ * specifier against, the same relationship those three call sites rely on
+ * for their own inline importers.
+ */
+const chunkLoaders = new Map<string, () => Promise<LayerModule>>();
+
+function getChunkLoader(def: LayerDef): () => Promise<LayerModule> {
+  let loader = chunkLoaders.get(def.key);
+  if (!loader) {
+    loader = createChunkLoader(def.load, import.meta.url);
+    chunkLoaders.set(def.key, loader);
+  }
+  return loader;
+}
+
 /** Load (and cache) a layer's module, fetching its chunk on first call. */
 export function loadLayerModule(def: LayerDef): Promise<LayerModule> {
   const cached = moduleCache.get(def.key);
   if (cached) return Promise.resolve(cached);
   let pending = moduleInFlight.get(def.key);
   if (!pending) {
-    pending = def.load().then(
+    pending = getChunkLoader(def)().then(
       (mod) => {
         moduleCache.set(def.key, mod);
         moduleInFlight.delete(def.key);
