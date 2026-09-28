@@ -47,12 +47,7 @@ import type * as maplibregl from 'maplibre-gl';
 import type { ReadonlySignal } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
 
-import {
-  ALL_FRAMING_BOUNDS,
-  FRAMINGS,
-  FRAMING_KEYS,
-  framingFitBounds,
-} from '../../config/framings';
+import { FRAMINGS, FRAMING_KEYS } from '../../config/framings';
 import type { FramingKey, FramingSelection } from '../../config/framings';
 import type { HazardClusterKey } from '../../config/clusters';
 import { OCEANS, OCEAN_KEYS } from '../../config/oceans';
@@ -98,7 +93,7 @@ import type {
   MinimapWildfireSummary,
 } from '../../state/minimap-wildfire';
 import type { EnsoPhaseLabel } from '../../impact/enso';
-import { prefersReducedMotion } from '../../util/motion';
+import { fitAll, fitFraming, fitOcean } from '../../map/camera-fit';
 import { setMapTechnicalNote } from '../map-technical-information';
 
 /** The kit's ratified equirectangular drawing plane. The final 8 units
@@ -223,30 +218,6 @@ const LAKE_PATHS: readonly string[] = Object.values(MINIMAP_LAKE_PATHS);
 const HAWAII_PATHS: readonly string[] = HAWAII_ISLAND_SHAPES.map((shape) =>
   shapePath(shape, projectHawaii),
 );
-
-/** Fit the camera to a framing, mirroring the boot path's fit. */
-function fitFraming(map: maplibregl.Map, key: FramingKey): void {
-  const def = FRAMINGS[key];
-  map.fitBounds(
-    framingFitBounds(def),
-    { padding: 20, animate: !prefersReducedMotion() },
-  );
-}
-
-/** Fit ALL to the full North American minimap extent. */
-function fitAll(map: maplibregl.Map): void {
-  map.fitBounds(
-    framingFitBounds({ bounds: ALL_FRAMING_BOUNDS, padding: 0 }),
-    { padding: 20, animate: !prefersReducedMotion() },
-  );
-}
-
-function fitOcean(map: maplibregl.Map, key: OceanKey): void {
-  map.fitBounds(
-    framingFitBounds(OCEANS[key]),
-    { padding: 20, animate: !prefersReducedMotion() },
-  );
-}
 
 /** The roving order follows the drawing: nine framings, then ALL. */
 const ROVING_ORDER: ReadonlyArray<FramingKey | null> = [...FRAMING_KEYS, null];
@@ -1291,6 +1262,16 @@ export function Minimap({
                 id={`${idPrefix}-viewport`}
                 class="shell-minimap-viewport"
                 data-viewport="true"
+                data-bounds={viewportBounds
+                  ? [
+                      viewportBounds.getWest(),
+                      viewportBounds.getSouth(),
+                      viewportBounds.getEast(),
+                      viewportBounds.getNorth(),
+                    ]
+                      .map((value) => value.toFixed(4))
+                      .join(',')
+                  : undefined}
                 x={viewportRect.x}
                 y={viewportRect.y}
                 width={viewportRect.width}

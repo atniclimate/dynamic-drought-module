@@ -62,11 +62,7 @@ import {
 } from '../config/layers';
 import { MOBILE_HAZARD_PRESETS, VIEW_PRESETS, isPresetShowing } from '../config/presets';
 import type { ViewPreset } from '../config/presets';
-import {
-  REGIONS,
-  DEFAULT_REGION,
-  regionToMapLibreBounds
-} from '../config/regions';
+import { REGIONS, DEFAULT_REGION } from '../config/regions';
 import type { RegionKey, Region } from '../config/regions';
 import { regionCapabilityLevel } from '../config/region-capability';
 // The featured-station table (`src/config/telemetry.ts`) is imported
@@ -146,6 +142,15 @@ import {
 import type { FramingKey } from '../config/framings';
 import { OCEANS } from '../config/oceans';
 import { applyBasemapMode, requestBasemapMode } from '../map/basemap-switcher';
+import {
+  cameraMatchesTarget,
+  cameraStateUnchanged,
+  committedCameraTarget,
+  fitCameraTarget,
+  fitRegion,
+  readCameraState
+} from '../map/camera-fit';
+import type { CameraState, CameraTarget } from '../map/camera-fit';
 import { timeline } from '../state/timeline';
 import { resolveStatusPillText } from './island/pill-text';
 import {
@@ -643,19 +648,9 @@ function selectRegion(
   // layer signature. See src/state/region-store.ts.
   setCurrentRegion(key);
 
-  const [west, south, east, north] = regionToMapLibreBounds(region);
-  const pad = region.padding;
-  map.fitBounds(
-    [
-      [west - pad, south - pad],
-      [east + pad, north + pad]
-    ],
-    {
-      padding: 20,
-      // Suppress the fit animation for reduced-motion users (WCAG 2.3.3, #7).
-      animate: !silent && !prefersReducedMotion()
-    }
-  );
+  // The region math lives once, in src/map/camera-fit.ts (D1 M8). Suppress
+  // the fit animation for reduced-motion users (WCAG 2.3.3, #7).
+  fitRegion(map, key, !silent && !prefersReducedMotion());
 
   syncRegionSelect();
 
@@ -1361,9 +1356,55 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
     });
   }
 
+  // The refit on a sidebar toggle (D1 M8, found-029, DDM-P10-T07). Opening or
+  // closing the desktop column changes the map's width; when the camera still
+  // shows the committed target (the ocean, framing or region last committed),
+  // it is refitted to the new canvas, and otherwise (a pan, zoom, pitch or
+  // rotation) the camera keeps its live centre and zoom, the plain resize.
+  // The snapshot is taken synchronously in the click, before the column moves
+  // or the canvas resizes; the refit is camera-only and writes no store and no
+  // URL (the camera is not URL state). Below the desktop breakpoint (the phone
+  // embed exit) the toggle keeps the plain resize.
+  interface SidebarCameraSnapshot {
+    /** The committed target, kept only when the live camera showed it. */
+    readonly target: CameraTarget | null;
+    /** The live camera at the click. */
+    readonly camera: CameraState;
+  }
+  const snapshotSidebarCamera = (): SidebarCameraSnapshot => {
+    const committed = window.matchMedia(SIDEBAR_DESKTOP_QUERY).matches
+      ? committedCameraTarget()
+      : null;
+    const showsCommitted = committed !== null && cameraMatchesTarget(map, committed);
+    return {
+      target: showsCommitted ? committed : null,
+      camera: readCameraState(map)
+    };
+  };
+  // ONE pending timer for both controls: a re-toggle inside the delay clears
+  // it, and its own snapshot decides (the resizeTimer pattern below).
+  let sidebarRefitTimer: number | null = null;
+  const resizeAfterSidebarToggle = (snapshot: SidebarCameraSnapshot): void => {
+    if (sidebarRefitTimer !== null) window.clearTimeout(sidebarRefitTimer);
+    // Allow the CSS grid transition to settle before resizing the map. The
+    // 220 ms delay matches the vanilla baseline; it is kept under reduced
+    // motion too, where the transition itself is instant (a known mismatch,
+    // left as it is by M8).
+    sidebarRefitTimer = window.setTimeout(() => {
+      sidebarRefitTimer = null;
+      map.resize();
+      const { target, camera } = snapshot;
+      // A pan, zoom or pitch during the transition cancels the refit.
+      if (target !== null && cameraStateUnchanged(map, camera)) {
+        fitCameraTarget(map, target, !prefersReducedMotion());
+      }
+    }, 220);
+  };
+
   const collapseBtn = document.getElementById('sidebar-collapse');
   if (collapseBtn) {
     collapseBtn.addEventListener('click', () => {
+      const snapshot = snapshotSidebarCamera();
       const app = document.getElementById('app');
       if (app) app.classList.add('sidebar-collapsed');
       // An explicit desktop choice (DR-139): the live preference first, then
@@ -1371,17 +1412,14 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
       STATE.desktopSidebarClosed = true;
       pushUrl();
       document.getElementById('sidebar-expand')?.focus();
-      // Allow the CSS grid transition to settle before resizing the
-      // map. The 220 ms delay matches the vanilla baseline.
-      window.setTimeout(() => {
-        map.resize();
-      }, 220);
+      resizeAfterSidebarToggle(snapshot);
     });
   }
 
   const expandBtn = document.getElementById('sidebar-expand');
   if (expandBtn) {
     expandBtn.addEventListener('click', () => {
+      const snapshot = snapshotSidebarCamera();
       const app = document.getElementById('app');
       if (app) app.classList.remove('sidebar-collapsed', 'embed');
       if (!window.matchMedia('(max-width: 720px)').matches) collapseBtn?.focus();
@@ -1410,9 +1448,7 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
       // at peek (the ratified embed-exit path, D-0.7.0-017); a desktop
       // expand is a no-op inside the helper.
       revealSheetAtPeek();
-      window.setTimeout(() => {
-        map.resize();
-      }, 220);
+      resizeAfterSidebarToggle(snapshot);
     });
   }
 

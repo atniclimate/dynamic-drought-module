@@ -960,3 +960,314 @@ test.describe('S4 r4: off intent during activation reaches the abort path (DG-08
     await expect(page.locator('#shell-time')).toHaveAttribute('data-has-spec', 'false');
   });
 });
+
+// D1 M8 imports. Import declarations are hoisted, so appending them beside the
+// describe that uses them keeps the cases above byte-identical (append only).
+import type { Page } from '@playwright/test';
+import { REGIONS, regionToMapLibreBounds } from '../src/config/regions';
+import type { RegionKey } from '../src/config/regions';
+
+test.describe('M8: the refit on a sidebar toggle (found-029, DDM-P10-T07)', () => {
+  // Collapsing or expanding the desktop column changes only the canvas WIDTH
+  // at this size, so a bare resize keeps the vertical span and the centre,
+  // while a refit changes the zoom and with it the vertical span.
+  test.use({ viewport: { width: 1280, height: 720 } });
+
+  interface Bounds {
+    readonly west: number;
+    readonly south: number;
+    readonly east: number;
+    readonly north: number;
+  }
+
+  // The production build has no map handle: the camera is read from the
+  // minimap's live viewport footprint, `data-bounds` = west,south,east,north
+  // rounded to 4 decimals (src/ui/island/minimap.tsx). It keeps updating on
+  // the map's moveend while the collapsed sidebar hides it.
+  const FOOTPRINT = '#shell-minimap-viewport';
+  // Equality with the fresh-boot oracle, per edge, in degrees: about 0.1 CSS
+  // px at the Washington State fit, far under the roughly 0.2 degree the
+  // Washington refit moves each latitude edge.
+  const ORACLE_TOLERANCE_DEG = 0.001;
+  // No-refit proofs: the Mercator vertical span of data-bounds is fixed by
+  // the canvas height and the zoom alone (a pan moves it by nothing), so a
+  // bare width resize holds it and a refit moves it. The smallest refit here
+  // (Washington State, zoom 6.28 on the 940 px open canvas to 6.43 on the
+  // 1280 px closed one) moves it by about 11 percent; the tolerance is 0.2
+  // percent.
+  const SPAN_TOLERANCE = 0.002;
+  const CENTRE_TOLERANCE_DEG = 0.001;
+  // The settle floor: the handler's 220 ms delay plus the longest refit
+  // flight in these cases (under 200 ms by MapLibre's flyTo arithmetic),
+  // with margin. It only decides WHEN reading may start; the proof is the
+  // assertion on the settled value, which must also hold for two reads.
+  const SETTLE_FLOOR_MS = 900;
+  const PIXEL = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    'base64'
+  );
+
+  test.beforeEach(async ({ page }) => {
+    // The OSM tile stub from the top of this file: no live tile decides a case.
+    await page.route('https://tile.openstreetmap.org/**', (route) =>
+      route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
+  });
+
+  const parseBounds = (raw: string): Bounds => {
+    const [west, south, east, north] = raw.split(',').map(Number);
+    if (
+      west === undefined || south === undefined || east === undefined || north === undefined ||
+      ![west, south, east, north].every(Number.isFinite)
+    ) {
+      throw new Error(`data-bounds is not west,south,east,north: ${raw}`);
+    }
+    return { west, south, east, north };
+  };
+
+  const mercatorY = (lat: number): number =>
+    Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+  const verticalSpan = (bounds: Bounds): number =>
+    mercatorY(bounds.north) - mercatorY(bounds.south);
+  const spanChange = (after: Bounds, before: Bounds): number =>
+    Math.abs(verticalSpan(after) - verticalSpan(before)) / verticalSpan(before);
+  const centre = (bounds: Bounds): { lng: number; lat: number } => ({
+    lng: (bounds.west + bounds.east) / 2,
+    lat: (bounds.south + bounds.north) / 2
+  });
+
+  const pageNow = (page: Page): Promise<number> => page.evaluate(() => performance.now());
+
+  /** Poll until the footprint reads the same value twice in a row, no earlier
+   * than SETTLE_FLOOR_MS after `since` (page clock). */
+  async function settledBounds(page: Page, since: number): Promise<Bounds> {
+    const reads: { previous: string | null; settled: string | null } = {
+      previous: null,
+      settled: null
+    };
+    await expect
+      .poll(
+        async () => {
+          const [now, raw] = await page.evaluate(
+            (selector) =>
+              [
+                performance.now(),
+                document.querySelector(selector)?.getAttribute('data-bounds') ?? null
+              ] as const,
+            FOOTPRINT
+          );
+          const stable = raw !== null && raw === reads.previous && now - since >= SETTLE_FLOOR_MS;
+          reads.previous = raw;
+          if (stable) reads.settled = raw;
+          return stable;
+        },
+        { intervals: [250], timeout: 15_000, message: 'the viewport footprint settles' }
+      )
+      .toBe(true);
+    return parseBounds(reads.settled!);
+  }
+
+  async function boot(page: Page, query: string): Promise<Bounds> {
+    await gotoApp(page, query);
+    await expect(page.locator(FOOTPRINT)).toHaveAttribute('data-bounds', /\S/);
+    return settledBounds(page, 0);
+  }
+
+  async function toggleSidebar(page: Page, to: 'closed' | 'open'): Promise<Bounds> {
+    const since = await pageNow(page);
+    await page.locator(to === 'closed' ? '#sidebar-collapse' : '#sidebar-expand').click();
+    if (to === 'closed') {
+      await expect(page.locator('#app')).toHaveClass(/\bsidebar-collapsed\b/);
+    } else {
+      await expect(page.locator('#app')).not.toHaveClass(/\bsidebar-collapsed\b/);
+    }
+    return settledBounds(page, since);
+  }
+
+  function expectSameCamera(actual: Bounds, oracle: Bounds, label: string): void {
+    for (const edge of ['west', 'south', 'east', 'north'] as const) {
+      expect(
+        Math.abs(actual[edge] - oracle[edge]),
+        `${label}: ${edge} ${actual[edge]} against the fresh boot's ${oracle[edge]}`
+      ).toBeLessThanOrEqual(ORACLE_TOLERANCE_DEG);
+    }
+  }
+
+  function regionBox(key: RegionKey): Bounds {
+    const region = REGIONS[key];
+    const [west, south, east, north] = regionToMapLibreBounds(region);
+    const pad = region.padding;
+    return { west: west - pad, south: south - pad, east: east + pad, north: north + pad };
+  }
+
+  function expectInside(inner: Bounds, outer: Bounds, label: string): void {
+    expect(inner.west, `${label}: west edge inside`).toBeGreaterThanOrEqual(outer.west);
+    expect(inner.east, `${label}: east edge inside`).toBeLessThanOrEqual(outer.east);
+    expect(inner.south, `${label}: south edge inside`).toBeGreaterThanOrEqual(outer.south);
+    expect(inner.north, `${label}: north edge inside`).toBeLessThanOrEqual(outer.north);
+  }
+
+  async function mapPoint(page: Page): Promise<{ x: number; y: number }> {
+    const box = await page.locator('#map canvas.maplibregl-canvas').boundingBox();
+    if (!box) throw new Error('the map canvas has no box');
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  }
+
+  async function drag(page: Page, from: { x: number; y: number }, dx: number, dy: number): Promise<void> {
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + dx, from.y + dy, { steps: 6 });
+    await page.mouse.up();
+  }
+
+  test('opening or closing the sidebar keeps the committed region inside the remaining map area', async ({
+    page
+  }) => {
+    test.setTimeout(180_000);
+    for (const key of ['washington_state', 'national'] as const) {
+      const box = regionBox(key);
+      const openOracle = await boot(page, `?region=${key}`);
+      const closedOracle = await boot(page, `?region=${key}&sidebar=closed`);
+
+      // From a closed boot: expanding narrows the canvas. Before M8 the
+      // resize kept the closed zoom, so the region's west and east edges fell
+      // outside the remaining map area.
+      const expanded = await toggleSidebar(page, 'open');
+      expectSameCamera(expanded, openOracle, `${key}: expand from a closed boot`);
+      expectInside(box, expanded, `${key}: expand from a closed boot`);
+      const collapsedAgain = await toggleSidebar(page, 'closed');
+      expectSameCamera(collapsedAgain, closedOracle, `${key}: collapse after the expand`);
+      expectInside(box, collapsedAgain, `${key}: collapse after the expand`);
+
+      // From an open boot: collapsing widens the canvas; the refit fills the
+      // wider area exactly as a closed boot frames it.
+      await boot(page, `?region=${key}`);
+      const collapsed = await toggleSidebar(page, 'closed');
+      expectSameCamera(collapsed, closedOracle, `${key}: collapse from an open boot`);
+      expectInside(box, collapsed, `${key}: collapse from an open boot`);
+      const reopened = await toggleSidebar(page, 'open');
+      expectSameCamera(reopened, openOracle, `${key}: expand after the collapse`);
+      expectInside(box, reopened, `${key}: expand after the collapse`);
+    }
+  });
+
+  test('toggle refits committed framing without URL or briefing side effects', async ({ page }) => {
+    test.setTimeout(240_000);
+    const withoutSidebar = async (): Promise<string[]> => {
+      const params = new URLSearchParams(await search(page));
+      params.delete('sidebar');
+      return [...params.entries()].map(([name, value]) => `${name}=${value}`).sort();
+    };
+    const sidebarTokens = async (): Promise<string[]> =>
+      new URLSearchParams(await search(page)).getAll('sidebar');
+    const panelState = (): Promise<string> =>
+      page.evaluate(() => {
+        const panel = document.getElementById('impact-panel');
+        if (!panel) return 'absent';
+        return `${panel.hidden ? 'hidden' : 'shown'}/${panel.classList.contains('open') ? 'open' : 'closed'}`;
+      });
+
+    for (const query of ['?region=national', '?region=washington_state', '?framing=all', '?framing=arid-west']) {
+      const closedOracle = await boot(page, `${query}&sidebar=closed`);
+      const openOracle = await boot(page, query);
+      const keysBefore = await withoutSidebar();
+      const panelBefore = await panelState();
+      expect(await sidebarTokens(), `${query}: an open boot carries no sidebar=`).toEqual([]);
+
+      const collapsed = await toggleSidebar(page, 'closed');
+      expect(await withoutSidebar(), `${query}: collapse writes nothing but sidebar=`).toEqual(keysBefore);
+      expect(await sidebarTokens(), `${query}: collapse writes sidebar=closed`).toEqual(['closed']);
+      expect(await panelState(), `${query}: collapse leaves the briefing alone`).toBe(panelBefore);
+      expectSameCamera(collapsed, closedOracle, `${query}: collapse`);
+
+      const expanded = await toggleSidebar(page, 'open');
+      expect(await withoutSidebar(), `${query}: expand writes nothing but sidebar=`).toEqual(keysBefore);
+      expect(await sidebarTokens(), `${query}: expand drops sidebar=`).toEqual([]);
+      expect(await panelState(), `${query}: expand leaves the briefing alone`).toBe(panelBefore);
+      expectSameCamera(expanded, openOracle, `${query}: expand`);
+    }
+  });
+
+  test('a panned camera keeps its visible centre across a sidebar toggle', async ({ page }) => {
+    await boot(page, '?region=washington_state');
+    const dragSince = await pageNow(page);
+    await drag(page, await mapPoint(page), -180, -90);
+    const panned = await settledBounds(page, dragSince);
+
+    const collapsed = await toggleSidebar(page, 'closed');
+    expect(
+      Math.abs(centre(collapsed).lng - centre(panned).lng),
+      'the panned centre longitude holds'
+    ).toBeLessThanOrEqual(CENTRE_TOLERANCE_DEG);
+    expect(
+      Math.abs(centre(collapsed).lat - centre(panned).lat),
+      'the panned centre latitude holds'
+    ).toBeLessThanOrEqual(CENTRE_TOLERANCE_DEG);
+    expect(spanChange(collapsed, panned), 'no refit: the vertical span holds').toBeLessThanOrEqual(
+      SPAN_TOLERANCE
+    );
+  });
+
+  test('a pan during the transition cancels refit', async ({ page }) => {
+    const before = await boot(page, '?region=washington_state');
+    const point = await mapPoint(page);
+    // The page's own clock times the collapse click and the first dragging
+    // move, so a slow run fails on the timing it could not meet rather than
+    // passing or failing on the product.
+    const timings = page.evaluate(
+      () =>
+        new Promise<{ click: number; move: number }>((resolve) => {
+          let click = -1;
+          document.getElementById('sidebar-collapse')?.addEventListener(
+            'click',
+            () => {
+              click = performance.now();
+            },
+            { capture: true, once: true }
+          );
+          const onMove = (event: MouseEvent): void => {
+            if (click < 0 || event.buttons === 0) return;
+            window.removeEventListener('mousemove', onMove, true);
+            resolve({ click, move: performance.now() });
+          };
+          window.addEventListener('mousemove', onMove, true);
+        })
+    );
+    const since = await pageNow(page);
+    await page.locator('#sidebar-collapse').click();
+    await drag(page, point, -160, 80);
+    const { click, move } = await timings;
+    expect(move - click, 'the drag began inside the 220 ms transition').toBeLessThan(180);
+    await expect(page.locator('#app')).toHaveClass(/\bsidebar-collapsed\b/);
+
+    const after = await settledBounds(page, since);
+    expect(spanChange(after, before), 'no refit: the vertical span keeps the pre-toggle zoom').toBeLessThanOrEqual(
+      SPAN_TOLERANCE
+    );
+  });
+
+  test('a pitched camera keeps its live camera across a sidebar toggle', async ({ page }) => {
+    test.setTimeout(120_000);
+    const flat = await boot(page, '?region=washington_state');
+    const canvas = page.locator('#map canvas.maplibregl-canvas');
+    await canvas.focus();
+    const pitchSince = await pageNow(page);
+    await page.keyboard.press('Shift+ArrowUp');
+    await page.keyboard.press('Shift+ArrowUp');
+    const pitched = await settledBounds(page, pitchSince);
+    // The pitch landed: a tilted view reaches further north on screen.
+    expect(spanChange(pitched, flat), 'the keyboard pitch changed the view').toBeGreaterThan(SPAN_TOLERANCE);
+
+    const collapsed = await toggleSidebar(page, 'closed');
+    expect(spanChange(collapsed, pitched), 'no refit: the pitched vertical span holds').toBeLessThanOrEqual(
+      SPAN_TOLERANCE
+    );
+
+    // Reduced motion changes only HOW a flat committed camera refits (a jump),
+    // never WHETHER it does.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const closedOracle = await boot(page, '?region=washington_state&sidebar=closed');
+    await boot(page, '?region=washington_state');
+    const jumped = await toggleSidebar(page, 'closed');
+    expectSameCamera(jumped, closedOracle, 'reduced motion: collapse');
+  });
+});
