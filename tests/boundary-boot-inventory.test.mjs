@@ -156,6 +156,11 @@ const DIRECT_BOOT_REASONS = {
     reason:
       'boots the production artifact from the GitHub Pages subpath mount, which gotoApp does not model'
   },
+  'tests/precedence.spec.ts': {
+    sites: 1,
+    reason:
+      'D1 M7: the one rawNavigate site serves the held-entry boot (S1, at the root and the Pages-like subpath mount), which never reaches DOMContentLoaded; the F7, F8 and S6 cases and the copied-Share recipients, which frame the app in a synthesized same-origin host; and the real bfcache case, which leaves a gotoApp-booted page for a synthesized same-origin away page. installRawBootStubs installs the boundary, minimap, NADM, NIFC, CPC and SPC stubs by hand before every raw app boot'
+  },
   'tests/embed-viewport.spec.ts': {
     sites: 1,
     reason:

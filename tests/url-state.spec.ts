@@ -23,15 +23,20 @@ import { HAZARD_CLUSTER_KEYS, HAZARD_CLUSTERS } from '../src/config/clusters';
 
 /**
  * DDM-P2-T09: the recognized URL parameter vocabulary, read from its own
- * documentation (src/state/url.ts:29-63 for the twelve documented keys,
- * :349-374 for the one-shot `select`). A canonical place reference is
- * identity only and is never URL state (src/config/entities.ts), so no key
+ * documentation (the key list in src/state/url.ts's module comment and the
+ * one-shot `select` beside `parseSelectParam`). A canonical place reference
+ * is identity only and is never URL state (src/config/entities.ts), so no key
  * named here or below should ever be added by a selection.
+ *
+ * 2026-09-27, D1 M7 (precedence.md row G2): `fire3d`, `flow`, `flowink` and
+ * the new `sidebar` join the set; the first three were already written by
+ * the app and missing here. Additive: the one assertion that reads the set
+ * (the select=state:WA case below) carries none of the four.
  */
 const RECOGNIZED_URL_KEYS: ReadonlySet<string> = new Set([
   'region', 'layers', 'embed', 'view', 'week', 'dmode', 'sst', 'outlook',
   'horizon', 'basemap', 'framing', 'cluster', 'ocean', 'studio', 'heatday',
-  'spi', 'select'
+  'spi', 'fire3d', 'flow', 'flowink', 'sidebar', 'select'
 ]);
 
 /** Names a `PlaceRef` or a raw coordinate could plausibly take; none is ever a real URL key. */
@@ -488,4 +493,307 @@ test.describe('D1 M4, found-026: unique Jump to region labels', () => {
     // twice: option 9 the overview camera, option 18 the detailed region).
     expect(new Set(labels).size, labels.join(', ')).toBe(labels.length);
   });
+});
+
+// ---------------------------------------------------------------------------
+// D1 M7 (DDM-P10-T07, DR-139): the sidebar= key against every URL writer
+// (the Codex Tier 2 disposition, record S3 and decision 1: invalid or
+// duplicate values are dropped on the next write of ANY writer), and the
+// reload restoration of every recognized durable key (precedence row H4).
+// ---------------------------------------------------------------------------
+
+import {
+  syncFire3dParam,
+  syncHeatRiskDayParam,
+  syncSpiWindowParam,
+  syncUrl
+} from '../src/state/url';
+import { syncEnsoFlowParams } from '../src/state/enso-flow';
+import { fullSiteLayersStudioUrl, fullSitePlaceStudioUrl } from '../src/state/studio-route';
+import { FRAMINGS } from '../src/config/framings';
+import { installFakeBrowser } from './map-harness';
+import { stubHeatRiskCatalog } from './helpers';
+import type { Route } from '@playwright/test';
+
+/** Inbound sidebar= forms and whether the one emitted form survives a write. */
+const SIDEBAR_INBOUND: ReadonlyArray<{ readonly query: string; readonly kept: boolean }> = [
+  { query: 'sidebar=closed', kept: true },
+  { query: 'sidebar=closed&sidebar=closed', kept: false },
+  { query: 'sidebar=open', kept: false },
+  { query: 'sidebar=', kept: false },
+  { query: 'sidebar=CLOSED', kept: false },
+  { query: 'embed=true&sidebar=closed', kept: false },
+  { query: 'embed=1&sidebar=closed', kept: false },
+  { query: 'embed=false&sidebar=closed', kept: true }
+];
+
+/** The additive writers: each clones the current query and changes one key. */
+const ADDITIVE_WRITERS: ReadonlyArray<{
+  readonly name: string;
+  readonly key: string;
+  readonly value: string;
+  readonly write: () => void;
+}> = [
+  { name: 'syncHeatRiskDayParam', key: 'heatday', value: '3', write: () => syncHeatRiskDayParam(3) },
+  { name: 'syncSpiWindowParam', key: 'spi', value: '30', write: () => syncSpiWindowParam(30) },
+  { name: 'syncFire3dParam', key: 'fire3d', value: 'true', write: () => syncFire3dParam(true) },
+  {
+    name: 'syncEnsoFlowParams',
+    key: 'flow',
+    value: 'wind',
+    write: () => syncEnsoFlowParams({ kind: 'wind', ink: 'light' })
+  }
+];
+
+/** A fake `window` carrying only `location.href`, for the link-out builders. */
+function withLocationHref<T>(href: string, run: () => T): T {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { location: { href } }
+  });
+  try {
+    return run();
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'window', descriptor);
+    else Reflect.deleteProperty(globalThis, 'window');
+  }
+}
+
+test.describe('D1 M7: every URL writer normalizes sidebar= (S3)', () => {
+  test('the heatday, spi, fire3d and flow writers preserve one sidebar=closed and drop every other form', () => {
+    for (const writer of ADDITIVE_WRITERS) {
+      for (const inbound of SIDEBAR_INBOUND) {
+        const label = `${writer.name} over ?cluster=wildfire&${inbound.query}`;
+        const browser = installFakeBrowser({ search: `?cluster=wildfire&${inbound.query}` });
+        try {
+          writer.write();
+          const params = new URLSearchParams(browser.search());
+          expect(params.getAll('sidebar'), label).toEqual(inbound.kept ? ['closed'] : []);
+          expect(params.get(writer.key), `${label}: its own key`).toBe(writer.value);
+          expect(params.get('cluster'), `${label}: a neighbour`).toBe('wildfire');
+          expect(params.getAll('embed'), `${label}: embed untouched`).toEqual(
+            new URLSearchParams(inbound.query).getAll('embed')
+          );
+        } finally {
+          browser.restore();
+        }
+      }
+    }
+  });
+
+  test('the canonical write emits sidebar=closed only from the live preference, never in an embed', () => {
+    const cases: ReadonlyArray<{
+      readonly inbound: string;
+      readonly sidebarClosed: boolean | undefined;
+      readonly embed: boolean;
+      readonly expected: readonly string[];
+    }> = [
+      // The canonical write rebuilds from state: the inbound token is irrelevant.
+      { inbound: '?sidebar=closed', sidebarClosed: true, embed: false, expected: ['closed'] },
+      { inbound: '?sidebar=closed', sidebarClosed: false, embed: false, expected: [] },
+      { inbound: '?sidebar=closed&sidebar=closed', sidebarClosed: undefined, embed: false, expected: [] },
+      { inbound: '', sidebarClosed: true, embed: false, expected: ['closed'] },
+      { inbound: '?sidebar=closed', sidebarClosed: true, embed: true, expected: [] }
+    ];
+    for (const { inbound, sidebarClosed, embed, expected } of cases) {
+      const label = `${inbound || '(bare)'} sidebarClosed=${String(sidebarClosed)} embed=${embed}`;
+      const browser = installFakeBrowser({ search: inbound });
+      try {
+        syncUrl({
+          region: 'national',
+          layers: new Set(['places']),
+          embed,
+          view: 'brief',
+          ...(sidebarClosed === undefined ? {} : { sidebarClosed })
+        });
+        const params = new URLSearchParams(browser.search());
+        expect(params.getAll('sidebar'), label).toEqual([...expected]);
+        expect(params.get('embed'), label).toBe(embed ? 'true' : null);
+      } finally {
+        browser.restore();
+      }
+    }
+  });
+
+  test('the full-site link-outs normalize sidebar= before they drop embed', () => {
+    const origin = 'http://127.0.0.1:4173/';
+    for (const build of [fullSiteLayersStudioUrl, fullSitePlaceStudioUrl]) {
+      for (const inbound of SIDEBAR_INBOUND) {
+        const href = withLocationHref(`${origin}?view=brief&${inbound.query}`, build);
+        const params = new URL(href).searchParams;
+        expect(params.getAll('sidebar'), `${build.name} ${inbound.query}`).toEqual(
+          inbound.kept ? ['closed'] : []
+        );
+        expect(params.has('embed'), `${build.name} ${inbound.query}: embed dropped`).toBe(false);
+        expect(params.get('view'), `${build.name} ${inbound.query}: a neighbour`).toBe('brief');
+      }
+    }
+  });
+});
+
+const RELOAD_DESKTOP = { width: 1280, height: 720 } as const;
+const RELOAD_PHONE = { width: 390, height: 844 } as const;
+const RELOAD_FRAMING = Object.keys(FRAMINGS)[0] ?? '';
+const RELOAD_PIXEL = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64'
+);
+const RELOAD_FLOW_ROUTE = /^https:\/\/(?:marine-api|api)\.open-meteo\.com\/v1\//;
+
+/** The SST tile service and the ENSO direction overlay (tests/enso-flow.spec.ts's stubs). */
+async function stubEnsoForReload(page: Page): Promise<void> {
+  await page.route((url) => url.href.includes('DescribeDomains'), (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'text/xml',
+      body:
+        "<Domains xmlns:ows='http://www.opengis.net/ows/1.1'><DimensionDomain><ows:Identifier>time</ows:Identifier>" +
+        '<Domain>2026-09-01/2026-09-07/P1D</Domain><Size>1</Size></DimensionDomain></Domains>'
+    })
+  );
+  await page.route(
+    (url) => url.href.includes('GHRSST_L4_MUR') && url.pathname.endsWith('.png'),
+    (route) => route.fulfill({ status: 200, contentType: 'image/png', body: RELOAD_PIXEL })
+  );
+  await page.route(RELOAD_FLOW_ROUTE, (route: Route) => {
+    const url = new URL(route.request().url());
+    const latitudes = (url.searchParams.get('latitude') ?? '').split(',').map(Number);
+    const longitudes = (url.searchParams.get('longitude') ?? '').split(',').map(Number);
+    const [valueKey = 'value', directionKey = 'direction'] = (
+      url.searchParams.get('current') ?? ''
+    ).split(',');
+    const time = Math.floor(Date.now() / 900_000) * 900;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        latitudes.map((latitude, i) => ({
+          latitude,
+          longitude: longitudes[i],
+          current_units: { time: 'unixtime', [valueKey]: 'm/s', [directionKey]: '°' },
+          current: { time, interval: 900, [valueKey]: 2, [directionKey]: 90 }
+        }))
+      )
+    });
+  });
+}
+
+interface ReloadGroup {
+  readonly name: string;
+  readonly query: string;
+  readonly viewport?: { readonly width: number; readonly height: number };
+  readonly stubs?: (page: Page) => Promise<unknown>;
+  readonly ready?: (page: Page) => Promise<void>;
+  /** Every key this boot claims, with the value a reload must keep. */
+  readonly expected: Readonly<Record<string, string>>;
+}
+
+/**
+ * One boot per composable group, because no single URL can carry every key:
+ * `layers=` outranks `cluster=`, `ocean=` needs cluster=enso, flow is written
+ * only beside ENSO, heatday only while HeatRisk is on, an embed drops
+ * sidebar=, and region= yields to framing=. The coverage case below checks
+ * the table against RECOGNIZED_URL_KEYS, so a new key fails there first.
+ */
+const RELOAD_GROUPS: readonly ReloadGroup[] = [
+  {
+    name: 'camera, display, door, time, imagery, window and sidebar',
+    query:
+      '?region=central_oregon&layers=places&view=console&week=20240702&dmode=chg1' +
+      '&sst=2024-07-01&outlook=monthly&basemap=default&spi=30&sidebar=closed',
+    expected: {
+      region: 'central_oregon',
+      layers: 'places',
+      view: 'console',
+      week: '20240702',
+      dmode: 'chg1',
+      sst: '2024-07-01',
+      outlook: 'monthly',
+      basemap: 'default',
+      spi: '30',
+      sidebar: 'closed'
+    }
+  },
+  { name: 'horizon', query: '?horizon=weeks-ahead', expected: { horizon: 'weeks-ahead' } },
+  {
+    name: 'framing',
+    query: `?framing=${encodeURIComponent(RELOAD_FRAMING)}&layers=places`,
+    expected: { framing: RELOAD_FRAMING, layers: 'places' }
+  },
+  {
+    name: 'studio',
+    query: '?layers=places&view=brief&studio=layers',
+    ready: async (page) => {
+      await expect(page.locator('#layers-studio-root')).toBeVisible();
+    },
+    expected: { studio: 'layers' }
+  },
+  { name: 'embed', query: '?embed=true&layers=places&view=console', expected: { embed: 'true' } },
+  {
+    name: 'ENSO cluster, ocean and direction overlay',
+    query: '?cluster=enso&ocean=pacific&view=brief&basemap=default&flow=currents&flowink=dark',
+    stubs: stubEnsoForReload,
+    expected: { cluster: 'enso', ocean: 'pacific', flow: 'currents', flowink: 'dark' }
+  },
+  {
+    name: 'HeatRisk day',
+    query: '?view=console&layers=heatrisk&heatday=3',
+    stubs: (page) => stubHeatRiskCatalog(page),
+    expected: { heatday: '3' }
+  },
+  {
+    // The Fire 3D chunk is desktop-only and can honestly demote the mode on a
+    // renderer that cannot hold it, so the flag's URL restoration is proven
+    // at phone width, where nothing but the store reads it. The desktop scene
+    // restore is tests/view-contracts.yaml:261-279.
+    name: 'Fire 3D preference',
+    query: '?layers=places&fire3d=true',
+    viewport: RELOAD_PHONE,
+    expected: { fire3d: 'true' }
+  }
+];
+
+async function expectReloadKeys(page: Page, group: ReloadGroup, phase: string): Promise<void> {
+  for (const [key, value] of Object.entries(group.expected)) {
+    await expect
+      .poll(async () => new URLSearchParams(await search(page)).getAll(key), {
+        message: `${group.name}, ${phase}: ${key}`
+      })
+      .toEqual([value]);
+  }
+}
+
+test.describe('D1 M7: reload restores every recognized durable key (precedence H4)', () => {
+  test('reload restores every recognized durable key: the table covers RECOGNIZED_URL_KEYS minus select', () => {
+    const covered = new Set(RELOAD_GROUPS.flatMap((group) => Object.keys(group.expected)));
+    const durable = [...RECOGNIZED_URL_KEYS].filter((key) => key !== 'select');
+    expect(durable.filter((key) => !covered.has(key)), 'durable keys with no reload case').toEqual([]);
+    expect(
+      [...covered].filter((key) => !RECOGNIZED_URL_KEYS.has(key)),
+      'reload cases for keys the vocabulary does not recognize'
+    ).toEqual([]);
+  });
+
+  for (const group of RELOAD_GROUPS) {
+    test(`reload restores every recognized durable key: ${group.name}`, async ({ page }) => {
+      await page.setViewportSize(group.viewport ?? RELOAD_DESKTOP);
+      await page.route('**/gibs.earthdata.nasa.gov/**', (route) =>
+        route.fulfill({ status: 503, contentType: 'text/plain', body: 'Synthetic offline response' })
+      );
+      await group.stubs?.(page);
+      await gotoApp(page, group.query);
+      await group.ready?.(page);
+      await expectReloadKeys(page, group, 'boot');
+
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await expect(page.locator('html')).toHaveAttribute('data-ddm-controls', 'ready');
+      await expect.poll(() => page.locator('html').getAttribute('data-ddm-boot')).toBe('idle');
+      await group.ready?.(page);
+      await expectReloadKeys(page, group, 'reload');
+      if (group.expected['sidebar'] === 'closed') {
+        await expect(page.locator('#app')).toHaveClass(/\bsidebar-collapsed\b/);
+      }
+    });
+  }
 });

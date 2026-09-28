@@ -16,6 +16,39 @@
 </head>
 <body class="app-body">
   <div id="app" class="app-shell">
+    <script id="ddm-sidebar-boot">
+      /* D1 M7 (DDM-P10-T07, DR-139): apply the URL's chrome before the
+         sidebar below is parsed, so an embed or a desktop sidebar=closed boot
+         never paints an open column while the application module loads. A
+         classic inline script on purpose: a module script is deferred to
+         after parsing, which is the very frame this has to beat. The grammar
+         mirrors src/state/url.ts (parseEmbedParam, parseSidebarParam,
+         SIDEBAR_DESKTOP_QUERY); tests/precedence.spec.ts pins the two
+         together. The runtime (src/ui/sidebar.ts) applies the same state
+         again at boot, so a failure here only costs the early frame. */
+      (function () {
+        try {
+          var app = document.getElementById('app');
+          if (!app) return;
+          var params = new URLSearchParams(window.location.search);
+          var embed = params.get('embed');
+          if (embed === 'true' || embed === '1') {
+            app.classList.add('embed');
+            return;
+          }
+          var sidebar = params.getAll('sidebar');
+          if (
+            sidebar.length === 1 &&
+            sidebar[0] === 'closed' &&
+            window.matchMedia('(min-width: 721px)').matches
+          ) {
+            app.classList.add('sidebar-collapsed');
+          }
+        } catch (err) {
+          /* The runtime applies the same state once it boots. */
+        }
+      })();
+    </script>
 
     <aside id="sidebar" class="sidebar" aria-label="Map controls">
       <!-- The mobile bottom-sheet grabber (0.7.0 U2, D-0.7.0-017). Display

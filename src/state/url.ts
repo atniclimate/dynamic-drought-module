@@ -68,6 +68,15 @@ import type { TemporalHorizonKey } from '../config/clusters';
  *            mounted map; it composes with every other durable state
  *            parameter
  *
+ * plus the desktop sidebar preference (D1 M7, DDM-P10-T07, DR-139):
+ *
+ *   sidebar  `closed` only, and only as one exact token; anything else is
+ *            the open default and is dropped on the next write of every
+ *            writer (`normalizeSidebarParam`). Applied only at desktop
+ *            width, preserved on a phone, ignored and dropped by an embed.
+ *            An inline bootstrap in index.html applies it before the
+ *            sidebar paints, with the same grammar.
+ *
  * This module is a direct port of the vanilla `app.js` parseUrlParams and
  * syncUrl functions (~lines 342-378 of the v0.1.x baseline). The named
  * exports are a frozen cross-module contract; do not rename them.
@@ -77,6 +86,11 @@ export interface ParsedUrlParams {
   readonly region: RegionKey;
   readonly layers: Set<string>;
   readonly embed: boolean;
+  /** The desktop sidebar preference from `sidebar=` (DR-139): true only for
+   * one exact `sidebar=closed` outside an embed, because an embed ignores
+   * the key (precedence 2.2). Whether it applies also depends on the
+   * viewport, which is the runtime's call, not the parser's. */
+  readonly sidebarClosed: boolean;
   /** Brief/console mode from `view=`, or derived by the legacy-URL rule
    * (D-0.7.0-017; see `deriveViewMode` in `./view-mode`). */
   readonly view: ViewMode;
@@ -126,6 +140,58 @@ export function parseStudioParam(raw: string | null): 'layers' | 'place' | null 
   return raw === 'layers' || raw === 'place' ? raw : null;
 }
 
+/**
+ * The desktop breakpoint the sidebar column uses (app.css's
+ * `@media (min-width: 721px)` rules). The sidebar preference is applied only
+ * while this matches. The inline bootstrap in index.html carries the same
+ * literal, and tests/precedence.spec.ts ("inline and runtime sidebar grammar
+ * agree") pins the two together.
+ */
+export const SIDEBAR_DESKTOP_QUERY = '(min-width: 721px)';
+
+/** The only value `sidebar=` is ever emitted with (DR-139). */
+const SIDEBAR_CLOSED_TOKEN = 'closed';
+
+/**
+ * The embed flag's grammar, unchanged since the vanilla baseline: FIRST
+ * occurrence wins, and only `true` or `1` turn it on (precedence G1 keeps
+ * today's rule for existing keys).
+ */
+export function parseEmbedParam(params: URLSearchParams): boolean {
+  const raw = params.get('embed');
+  return raw === 'true' || raw === '1';
+}
+
+/**
+ * Parse the desktop sidebar preference (`sidebar=`, precedence 2.2). Only
+ * the exact single token `closed` closes; absence, any other value and a
+ * duplicated parameter all read as the open default (the parseFire3dParam
+ * discipline: ambiguity is rejected, never resolved by position). This is
+ * the raw grammar; `ParsedUrlParams.sidebarClosed` also applies the embed
+ * rule.
+ */
+export function parseSidebarParam(params = new URLSearchParams(window.location.search)): boolean {
+  const values = params.getAll('sidebar');
+  return values.length === 1 && values[0] === SIDEBAR_CLOSED_TOKEN;
+}
+
+/**
+ * The one shared next-write normalizer for `sidebar=` (the Codex Tier 2
+ * disposition, S3 and decision 1). Every writer that clones the current
+ * query instead of rebuilding it (the additive writers below,
+ * src/state/enso-flow.ts, the studio route and its full-site link-out) runs
+ * it on the params it is about to write, so an invalid, duplicated or
+ * embed-ignored value is dropped on the next write of ANY writer, not only
+ * the canonical one. A single valid `sidebar=closed` is left exactly where
+ * it is; an untouched query is never re-serialized.
+ */
+export function normalizeSidebarParam(params: URLSearchParams): void {
+  const values = params.getAll('sidebar');
+  if (values.length === 0) return;
+  if (parseSidebarParam(params) && !parseEmbedParam(params)) return;
+  params.delete('sidebar');
+}
+
 /** Parse the additive HeatRisk day position. Unknown or duplicate input is ignored. */
 export function parseHeatRiskDayParam(params = new URLSearchParams(window.location.search)): number | null {
   const values = params.getAll('heatday');
@@ -145,6 +211,7 @@ export function syncHeatRiskDayParam(day: number | null): void {
   } else {
     params.delete('heatday');
   }
+  normalizeSidebarParam(params);
   const query = params.toString();
   const url = window.location.pathname + (query === '' ? '' : `?${query}`);
   window.history.replaceState(window.history.state, '', url);
@@ -195,6 +262,7 @@ export function syncSpiWindowParam(days: number | null): void {
   } else {
     params.delete('spi');
   }
+  normalizeSidebarParam(params);
   const query = params.toString();
   const url = window.location.pathname + (query === '' ? '' : `?${query}`);
   window.history.replaceState(window.history.state, '', url);
@@ -223,6 +291,7 @@ export function syncFire3dParam(enabled: boolean): void {
   } else {
     params.delete('fire3d');
   }
+  normalizeSidebarParam(params);
   const query = params.toString();
   const url = window.location.pathname + (query === '' ? '' : `?${query}`);
   window.history.replaceState(window.history.state, '', url);
@@ -351,8 +420,7 @@ export function parseUrlParams(): ParsedUrlParams {
     layers = new Set(DEFAULT_ON_KEYS);
   }
 
-  const rawEmbed = params.get('embed');
-  const embed = rawEmbed === 'true' || rawEmbed === '1';
+  const embed = parseEmbedParam(params);
 
   // Raw explicitness (DEF-2): only the two valid tokens count. An invalid
   // `view=` value falls through the legacy-URL derivation and is NOT an
@@ -364,6 +432,9 @@ export function parseUrlParams(): ParsedUrlParams {
     region,
     layers,
     embed,
+    // An embed ignores sidebar= (precedence rule 5 and 2.2): the embed
+    // always hides the column, and its exit opens the sidebar.
+    sidebarClosed: !embed && parseSidebarParam(params),
     view: deriveViewMode(params),
     explicitView,
     usdmWeek: parseUsdmWeek(params.get('week')),
@@ -427,6 +498,11 @@ export interface UrlSyncState {
   readonly region: RegionKey | null;
   readonly layers: ReadonlySet<string>;
   readonly embed: boolean;
+  /** The live desktop sidebar preference (DR-139); emitted as
+   * `sidebar=closed` only when true and not in an embed. The canonical write
+   * rebuilds the query from scratch, so the key survives only by being
+   * threaded here. */
+  readonly sidebarClosed?: boolean;
   /** Brief/console mode; always emitted so a shared URL restores the
    * exact door the sharer was looking through (the legacy-URL rule
    * derives a mode only for URLs authored before `view=` existed). */
@@ -466,9 +542,11 @@ export interface UrlSyncState {
  *   layers   always emitted, even when the active set is empty
  *            (preserves the explicit-empty signal across reloads)
  *   embed    only emitted when truthy, as `embed=true`
+ *   sidebar  only emitted as `sidebar=closed`, from the live preference,
+ *            and never beside embed (an embed drops it on this write)
  *
  * Uses `history.replaceState` (not pushState) so the back button is not
- * polluted by every layer toggle.
+ * polluted by every layer toggle, or by a sidebar toggle (ruling R5 a).
  */
 export function syncUrl(state: UrlSyncState): void {
   // HeatRisk owns its additive day position, but only while the HeatRisk
@@ -529,6 +607,8 @@ export function syncUrl(state: UrlSyncState): void {
 
   if (state.embed) {
     params.set('embed', 'true');
+  } else if (state.sidebarClosed === true) {
+    params.set('sidebar', SIDEBAR_CLOSED_TOKEN);
   }
 
   params.set('view', state.view);

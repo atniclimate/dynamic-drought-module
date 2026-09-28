@@ -102,7 +102,7 @@ import { prefersReducedMotion } from '../util/motion';
 import type { StationValue, TelemetryStation } from '../types/station';
 import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
-import { parseUrlParams, syncUrl } from '../state/url';
+import { SIDEBAR_DESKTOP_QUERY, parseUrlParams, syncUrl } from '../state/url';
 import type { ParsedUrlParams } from '../state/url';
 import {
   getStudioRoute,
@@ -173,18 +173,46 @@ import { loadSearchController } from './search-chunk';
  * selection (after a click) and for the embed flag (after the user
  * expands the sidebar in embed mode).
  *
- * Reset and URL sync read this object; keep mutations restricted to
- * `selectRegion` and the expand-button handler.
+ * Reset and URL sync read this object. `currentRegion` changes only in
+ * `selectRegion`; `embed` only at the boot seed and in the expand-button
+ * handler; `desktopSidebarClosed` only at the boot seed and in the collapse
+ * and expand handlers (the two explicit controls).
  */
 interface SidebarState {
   currentRegion: RegionKey | null;
   embed: boolean;
+  /**
+   * The ONE live desktop sidebar preference (D1 M7, DDM-P10-T07, DR-139;
+   * the Codex Tier 2 disposition, S2). Seeded from `sidebar=` at the start
+   * of `applyUrlStateSync`, set synchronously by collapse and expand before
+   * they serialize, and read by every canonical write through `pushUrl`. It
+   * is independent of the DOM class and of the mobile sheet's detents: a
+   * phone preserves it without applying it, and it is applied to the
+   * `sidebar-collapsed` class only at desktop width and never in an embed.
+   */
+  desktopSidebarClosed: boolean;
 }
 
 const STATE: SidebarState = {
   currentRegion: null,
-  embed: false
+  embed: false,
+  desktopSidebarClosed: false
 };
+
+/**
+ * Apply the live desktop preference to the column, and nothing else: no URL
+ * write, no focus move. A no-op in an embed (the embed class governs) and
+ * below the desktop breakpoint (the mobile shell governs, F5), so a phone
+ * boot never shows the expand control over the rail. Called at the boot
+ * seed, on the first widening of a phone boot, and on a bfcache restore.
+ */
+function applyDesktopSidebarPreference(): void {
+  if (STATE.embed) return;
+  if (!window.matchMedia(SIDEBAR_DESKTOP_QUERY).matches) return;
+  document
+    .getElementById('app')
+    ?.classList.toggle('sidebar-collapsed', STATE.desktopSidebarClosed);
+}
 
 /**
  * Cached reference to the MapLibre map. Stored at `buildSidebar` time so
@@ -414,6 +442,13 @@ function enableMapDependentControls(): void {
  * is withheld until `<html data-ddm-controls="ready">`, which is where it
  * became reachable before this change too, because the embed class itself
  * did not exist until then.
+ *
+ * Since D1 M7 (DR-139; the Codex Tier 2 disposition, S1) an inline classic
+ * bootstrap in index.html applies the embed class, and a desktop
+ * `sidebar=closed`, even earlier, before `#sidebar` is parsed, so neither
+ * boot paints an open column while this module graph loads. The toggle
+ * below agrees with it (the same first-wins `true`/`1` grammar); the same
+ * stylesheet rule withholds the expand control either way.
  */
 export function buildSidebarShell(): void {
   if (shellBuilt) return;
@@ -670,6 +705,9 @@ function pushUrl(): void {
     region: framing !== null ? null : STATE.currentRegion,
     layers: checkedLayerKeys(),
     embed: STATE.embed,
+    // syncUrl rebuilds the query from scratch, so the preference survives
+    // only by riding here (DR-139); an embed drops it inside syncUrl.
+    sidebarClosed: STATE.desktopSidebarClosed,
     view: getViewMode(),
     usdmWeek: timeline.usdmWeek,
     usdmMode: timeline.usdmMode,
@@ -1328,6 +1366,10 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
     collapseBtn.addEventListener('click', () => {
       const app = document.getElementById('app');
       if (app) app.classList.add('sidebar-collapsed');
+      // An explicit desktop choice (DR-139): the live preference first, then
+      // the write, so the URL carries `sidebar=closed` (replaceState, R5 a).
+      STATE.desktopSidebarClosed = true;
+      pushUrl();
       document.getElementById('sidebar-expand')?.focus();
       // Allow the CSS grid transition to settle before resizing the
       // map. The 220 ms delay matches the vanilla baseline.
@@ -1358,6 +1400,9 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
       // the full chrome's host is the Brief head. Idempotent (Codex
       // S2/E1 integration finding 2).
       ensureBriefHeadTribalAction();
+      // Expanding also opens the desktop preference, so the write below
+      // drops `sidebar=` (DR-139); the embed exit opens with the key absent.
+      STATE.desktopSidebarClosed = false;
       pushUrl();
       refreshLayersStudioEntry();
       onStudioRouteNeeded?.(getStudioRoute(), 'push');
@@ -1381,6 +1426,27 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
       resizeTimer = null;
     }, 150);
   });
+
+  // The desktop sidebar preference across the breakpoint (D1 M7, S2; F5).
+  // A boot below it preserves `sidebar=` without applying it; the FIRST
+  // widening applies the live preference once (the one-shot widen precedent
+  // at main.ts's Fire 3D gate). After that the column follows only explicit
+  // choices, so they survive repeated crossings. Applying writes nothing.
+  const desktopSidebar = window.matchMedia(SIDEBAR_DESKTOP_QUERY);
+  if (!desktopSidebar.matches) {
+    const onWiden = (): void => {
+      if (!desktopSidebar.matches) return;
+      desktopSidebar.removeEventListener('change', onWiden);
+      applyDesktopSidebarPreference();
+    };
+    desktopSidebar.addEventListener('change', onWiden);
+  }
+  // A document restored from the back-forward cache may have missed a
+  // widening while it was frozen: reconcile the column with the LIVE
+  // preference (never with the restored URL, and never with a write).
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) applyDesktopSidebarPreference();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1402,6 +1468,14 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
 function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   const params = parseUrlParams();
   STATE.embed = params.embed;
+  // Seed the desktop sidebar preference FIRST (D1 M7, S2): the store seeds
+  // below can each fire a canonical write through listeners registered
+  // before this function runs, and every write must carry the preference.
+  // An embed has already folded it to open. The inline bootstrap in
+  // index.html applied the same state before first paint; this re-applies
+  // it idempotently at desktop width and leaves a phone untouched.
+  STATE.desktopSidebarClosed = params.sidebarClosed;
+  applyDesktopSidebarPreference();
 
   // Seed the view mode BEFORE the first pushUrl below (selectRegion syncs
   // the URL, and the URL must carry the derived mode from its first write).

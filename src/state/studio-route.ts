@@ -4,7 +4,7 @@ import {
   setPlaceReturnDisplayCommand,
   takePlaceReturn
 } from './place-return';
-import { parseStudioParam } from './url';
+import { normalizeSidebarParam, parseStudioParam } from './url';
 
 /** The bounded query-state route vocabulary for the two studios. */
 export type StudioRoute = 'layers' | 'place' | null;
@@ -61,6 +61,10 @@ function locationWithStudio(
   if (next === null) url.searchParams.delete('studio');
   else url.searchParams.set('studio', next);
   if (options?.dropOneShotSelect) url.searchParams.delete('select');
+  // A clone of the current URL: on a direct studio boot this is the FIRST
+  // URL mutation, ahead of the canonical write, so it drops an invalid,
+  // duplicated or embed-ignored sidebar= itself (D1 M7, S3).
+  normalizeSidebarParam(url.searchParams);
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
@@ -208,6 +212,10 @@ export function takePlaceStudioReturnAction(): (() => void) | null {
 /** Build an embed link-out from the latest current URL state. */
 function fullSiteStudioUrl(next: Exclude<StudioRoute, null>): string {
   const url = new URL(window.location.href);
+  // Normalize BEFORE embed is dropped: an embed ignores sidebar=, so the
+  // link-out out of an embed never carries it, while a full-chrome frame's
+  // valid key travels (D1 M7, S3 and S6).
+  normalizeSidebarParam(url.searchParams);
   url.searchParams.delete('embed');
   url.searchParams.set('studio', next);
   return url.href;
