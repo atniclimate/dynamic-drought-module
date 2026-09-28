@@ -60,7 +60,7 @@ import {
   resetDroughtSurfacePresentation,
   setDroughtSurfacePresentation
 } from '../config/layers';
-import { MOBILE_HAZARD_PRESETS, VIEW_PRESETS } from '../config/presets';
+import { MOBILE_HAZARD_PRESETS, VIEW_PRESETS, isPresetShowing } from '../config/presets';
 import type { ViewPreset } from '../config/presets';
 import {
   REGIONS,
@@ -131,7 +131,12 @@ import {
   onHazardClusterChange,
   setHazardCluster
 } from '../state/cluster-store';
-import { reconcileClusterWithLayerIntent } from '../state/cluster-service';
+import {
+  getCommittedSnapshot,
+  onCommittedSnapshotChange,
+  reconcileClusterWithLayerIntent,
+  requestHorizon
+} from '../state/cluster-service';
 import {
   ALL_FRAMING_BOUNDS,
   FRAMING_KEYS,
@@ -881,22 +886,58 @@ function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): v
 // ---------------------------------------------------------------------------
 
 /**
- * Build the question-first preset chip row from `VIEW_PRESETS`. Each chip
- * is a plain button (not a toggle: presets set state without locking it,
- * so no chip carries a pressed state) whose click applies the preset's
- * layer-set and any explicit preferred basemap. The tooltip carries the
- * question the preset answers.
+ * Apply one preset (a quick-view chip or a hazard-rail button), in a fixed
+ * order (D1 M6, 2026-09-27; found-005):
+ *
+ *   1. The layer set, through the controller (`applyPreset`). Every
+ *      checkbox flip it makes reconciles the cluster claim synchronously
+ *      (the checked-change subscription in `wireSidebar`; the bridge
+ *      notifies in the same turn), and no preset set equals a hazard's
+ *      clean composition, so the display is a custom set when this returns.
+ *   2. The preset's declared `horizon`, if any, through the cluster
+ *      service's `requestHorizon`. On a custom set that write only
+ *      republishes the set at the new horizon. The reverse order would
+ *      re-run a committed hazard's own recipe at the new horizon (the
+ *      service's timeline subscription) and fetch layers step 1 then
+ *      removes.
+ *   3. The explicit preferred basemap, if any.
  */
 function applyViewPreset(preset: ViewPreset): void {
   const map = mapRef;
   if (!map || !controllerRef) return;
   controllerRef.applyPreset(preset);
+  if (preset.horizon !== undefined) {
+    requestHorizon(preset.horizon);
+  }
   if (preset.preferredBasemap) {
     requestBasemapMode(map, preset.preferredBasemap);
   }
 }
 
+/** The one pressed-state subscription the chip row holds (a rebuild
+ * replaces it rather than stacking a second). */
+let presetChipsPressedUnsubscribe: (() => void) | null = null;
+
 /**
+ * Build the question-first preset chip row from `VIEW_PRESETS`. Each chip
+ * is a toggle-button in its markup (`aria-pressed`) but never a lock: its
+ * click applies the preset's layer set, its declared horizon, and any
+ * explicit preferred basemap (`applyViewPreset`), and the visitor stays
+ * free to adjust afterward. The tooltip carries the question the preset
+ * answers.
+ *
+ * Pressed state (D1 M6, 2026-09-27; found-005): every chip always carries
+ * `aria-pressed`, "true" exactly while `isPresetShowing` holds for the
+ * committed shell snapshot (its intended keys equal the preset's layers as
+ * a set, and its horizon equals the preset's declared horizon when it
+ * declares one), "false" otherwise, refreshed on every snapshot publish.
+ * The chips are built at DOM ready, before the URL state is applied and
+ * before the lazy island initializes the cluster service, so they start at
+ * "false" and reflect from the service's first publish: reading the
+ * snapshot here would capture and cache a pre-boot derivation. A publish
+ * sets the snapshot before it notifies, so the read inside the listener
+ * derives nothing extra.
+ *
  * Map-free (2026-09-03 launch ruling section 4): the chips are generated
  * from the static `VIEW_PRESETS` table at DOM ready and stay disabled with
  * a stated reason until the map is wired.
@@ -906,12 +947,15 @@ function buildPresetChips(): void {
   if (!container) return;
   container.innerHTML = '';
 
+  const chips: Array<{ btn: HTMLButtonElement; preset: ViewPreset }> = [];
   for (const preset of VIEW_PRESETS) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'preset-chip';
     btn.textContent = preset.label;
     btn.title = preset.description;
+    btn.setAttribute('aria-pressed', 'false');
+    chips.push({ btn, preset });
     // Preset application (deactivate the non-wanted, activate the wanted,
     // preserving the at-most-one-surface invariant) now lives in the
     // controller; the chip is a thin trigger.
@@ -928,6 +972,14 @@ function buildPresetChips(): void {
     });
     container.appendChild(btn);
   }
+
+  presetChipsPressedUnsubscribe?.();
+  presetChipsPressedUnsubscribe = onCommittedSnapshotChange(() => {
+    const snapshot = getCommittedSnapshot();
+    for (const { btn, preset } of chips) {
+      btn.setAttribute('aria-pressed', String(isPresetShowing(preset, snapshot)));
+    }
+  });
 }
 
 /**

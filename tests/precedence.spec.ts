@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { gotoApp, regionSelect, search, waitForLayerSettled } from './helpers';
+import {
+  gotoApp,
+  regionSelect,
+  search,
+  stubHeatRiskCatalog,
+  waitForLayerSettled
+} from './helpers';
 
 /**
  * S30D D1's precedence spec (DDM-P10-T13, DR-109; the "precedence spec" named
@@ -154,5 +160,45 @@ test.describe('precedence: boot, Reset and embed defaults (DR-109)', () => {
       await gotoApp(page, '?spi=30&spi=60');
       expect(new URLSearchParams(await search(page)).get('spi')).toBeNull();
     });
+  });
+
+  // A6 (D1 M6, 2026-09-27; found-009, DDM-P10-T09): a deep link to a horizon
+  // the mode cannot show boots on Current Conditions. Outside G1 on purpose:
+  // G1 pins behaviour that passes before and after, and this row is red
+  // before its fix. Extreme Heat's season-ahead recipe is empty
+  // (src/config/clusters.ts: no verified surface exists yet), so the deep
+  // link used to commit that empty horizon anyway and press the very chip
+  // `horizonDisabledReason` (src/ui/island/shell.tsx) disables. The parser
+  // now boots it on `current` (src/state/url.ts's resolveHorizonForCluster).
+  test('a deep link to a horizon the mode cannot show boots on Current Conditions', async ({
+    page
+  }) => {
+    // The redirected boot shows Extreme Heat's current recipe (HeatRisk and
+    // the WWA notices): both answered locally.
+    await stubHeatRiskCatalog(page);
+    await page.route(
+      (url) => url.pathname.endsWith('/watch_warn_adv/MapServer/1/query'),
+      (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/geo+json',
+          body: JSON.stringify({ type: 'FeatureCollection', features: [] })
+        })
+    );
+    await gotoApp(page, '?view=console&cluster=heat&horizon=season-ahead');
+
+    const current = page.locator('.shell-horizon-btn[data-horizon="current"]');
+    const season = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
+    await expect(current).toHaveAttribute('aria-pressed', 'true');
+    expect(await current.getAttribute('aria-disabled')).toBeNull();
+    // The unshowable horizon stays unpressed AND disabled with its reason.
+    expect(await season.getAttribute('aria-pressed')).toBe('false');
+    expect(await season.getAttribute('aria-disabled')).toBe('true');
+    // horizon=current is absence in the canonical URL; the mode survives.
+    const params = new URLSearchParams(await search(page));
+    expect(params.get('horizon')).toBeNull();
+    expect(params.get('cluster')).toBe('heat');
+    // The redirect lands on a real surface, not a reference-only read.
+    await expect(page.locator('input[data-layer-key="heatrisk"]')).toBeChecked();
   });
 });

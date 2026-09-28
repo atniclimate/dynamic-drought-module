@@ -29,12 +29,14 @@ import type {
   BoundarySelectionContext,
   PointHeatBriefing
 } from '../src/impact/types';
+import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
 import {
   gotoApp,
   layerCheckbox,
   layerPill,
   stubCpcSeasonalTempOutlook,
-  stubHeatRiskCatalog as stubHeatRiskCatalogShared
+  stubHeatRiskCatalog as stubHeatRiskCatalogShared,
+  waitForLayerSettled
 } from './helpers';
 
 /**
@@ -1270,7 +1272,25 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
     page
   }) => {
     await stubBrowserNwsHeat(page);
-    await gotoApp(page, '?view=console&cluster=heat&horizon=season-ahead');
+    // FLIPPED 2026-09-27 (D1 M6, found-009): the deep link this case used,
+    // `?view=console&cluster=heat&horizon=season-ahead`, now boots on
+    // Current Conditions (src/state/url.ts's resolveHorizonForCluster;
+    // pinned by tests/precedence.spec.ts row A6), where HeatRisk is dated
+    // and the time bar shows. The one route left to Extreme Heat at Long
+    // Range is in session: Drought at Long Range, then Extreme Heat, which
+    // keeps the committed horizon (the designed empty-recipe caveat). Every
+    // assertion below is unchanged; only the route in is new. The CPC
+    // Drought Outlook the Long Range step shows is answered locally.
+    await stubCpcDroughtOutlook(page);
+    await gotoApp(page, '?view=console');
+    const longRange = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
+    await longRange.click();
+    await expect(longRange).toHaveAttribute('aria-pressed', 'true');
+    await waitForLayerSettled(page, 'drought');
+    await page.locator('.shell-cluster-btn[data-cluster="heat"]').click();
+    await expect(
+      page.locator('.shell-cluster-btn[data-cluster="heat"]')
+    ).toHaveAttribute('aria-pressed', 'true');
 
     // The map recipe for heat/season-ahead stays empty (clusters.ts is
     // untouched by this task): no dated product is displayed, and the chip

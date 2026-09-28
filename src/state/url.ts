@@ -2,7 +2,7 @@ import { REGIONS, DEFAULT_REGION } from '../config/regions';
 import type { RegionKey } from '../config/regions';
 import { DEFAULT_ON_KEYS, resolveExclusiveSurface } from '../config/layers';
 import type { FramingSelection } from '../config/framings';
-import { HAZARD_CLUSTERS } from '../config/clusters';
+import { HAZARD_CLUSTERS, TEMPORAL_HORIZON_KEYS } from '../config/clusters';
 import type { HazardClusterKey } from '../config/clusters';
 import type { OceanKey } from '../config/oceans';
 import { deriveViewMode } from './view-mode';
@@ -19,6 +19,7 @@ import {
   parseSstDate,
   parseOutlookRange,
   parseHorizonParam,
+  horizonSurfaceSignature,
   type UsdmViewMode,
   type OutlookRange
 } from './timeline';
@@ -256,6 +257,41 @@ export function parseShellParams(params: URLSearchParams): {
 }
 
 /**
+ * The horizon a cluster boot actually commits (D1 M6, 2026-09-27; found-009:
+ * "a deep link to a horizon the mode cannot show boots on Current
+ * Conditions"). A URL horizon whose recipe is empty for this cluster, or
+ * whose recipe repeats an EARLIER horizon's (`horizonSurfaceSignature`, the
+ * same capability read the shell's horizon chips use, src/state/timeline.ts),
+ * is not a horizon this cluster can show: booting there would press the
+ * chip `horizonDisabledReason` disables, so the boot falls back to
+ * `current`. `current` always stands: every cluster's current recipe is
+ * non-empty and, being first, repeats no earlier horizon.
+ *
+ * `parseUrlParams` calls this ONLY when the URL carries no `layers=`
+ * parameter, because only then does the boot commit a cluster recipe (the
+ * `cluster=` recipe composed at this horizon, or the Drought default when
+ * no `cluster=` token is present). Under `layers=` the boot is the granular
+ * set the link names, `parseShellParams` forces the cluster to Drought, and
+ * the URL horizon is kept as written.
+ */
+function resolveHorizonForCluster(
+  cluster: HazardClusterKey,
+  horizon: TemporalHorizonKey
+): TemporalHorizonKey {
+  if (horizon === 'current') return 'current';
+  const signature = horizonSurfaceSignature(cluster, horizon);
+  if (signature === null) return 'current';
+  const idx = TEMPORAL_HORIZON_KEYS.indexOf(horizon);
+  for (let i = 0; i < idx; i++) {
+    const earlier = TEMPORAL_HORIZON_KEYS[i];
+    if (earlier !== undefined && horizonSurfaceSignature(cluster, earlier) === signature) {
+      return 'current';
+    }
+  }
+  return horizon;
+}
+
+/**
  * Read the current `window.location.search` and resolve the application's
  * restorable view. Unknown region keys silently fall back to
  * `DEFAULT_REGION`. Unknown layer keys are passed through unfiltered: the
@@ -283,7 +319,13 @@ export function parseUrlParams(): ParsedUrlParams {
       : DEFAULT_REGION;
 
   const shell = parseShellParams(params);
-  const horizon = parseHorizonParam(params.get('horizon'));
+  // A cluster boot never commits a horizon its cluster cannot show
+  // (found-009); a `layers=` boot keeps the URL horizon as written (see
+  // resolveHorizonForCluster).
+  const urlHorizon = parseHorizonParam(params.get('horizon'));
+  const horizon = params.has('layers')
+    ? urlHorizon
+    : resolveHorizonForCluster(shell.cluster, urlHorizon);
 
   let layers: Set<string>;
   if (params.has('layers')) {

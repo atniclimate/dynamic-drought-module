@@ -38,8 +38,9 @@ import { HAZARD_CLUSTERS, TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
 import { LIVE_NO_FEATURES_LABEL } from '../src/config/layers';
 import { HORIZON_CHROME, SHELL_HORIZON_KEY } from '../src/impact/horizon-chrome';
 import type { HorizonKey } from '../src/impact/types';
+import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
 import { expectNoForecastLanguage } from './enso-forecast-language';
-import { gotoApp, layerCheckbox, layerPill, PILL, search } from './helpers';
+import { gotoApp, layerCheckbox, layerPill, PILL, search, waitForLayerSettled } from './helpers';
 
 /** The SPC Day 1 "no area outlined" answer (D1 M5, found-002). */
 const SPC_NO_AREA_FIXTURE = join(process.cwd(), 'tests', 'fixtures', 'spc-firewx-day1-no-area.json');
@@ -830,7 +831,28 @@ test.describe('DDM-P8-T02: the Extreme Heat screen has a seven-day time control'
     await page.clock.setFixedTime(CLOCK_IN_WINDOW);
     await stubCommon(page);
     await stubHeat(page);
-    await gotoApp(page, '?view=console&cluster=heat&horizon=season-ahead');
+    // FLIPPED 2026-09-27 (D1 M6, found-009): the deep link this case used,
+    // `?view=console&cluster=heat&horizon=season-ahead`, now boots on
+    // Current Conditions (src/state/url.ts's resolveHorizonForCluster;
+    // pinned by tests/precedence.spec.ts row A6), where HeatRisk is dated.
+    // The one route left to Extreme Heat at Long Range is in session:
+    // Drought at Long Range, then Extreme Heat, which keeps the committed
+    // horizon (the designed empty-recipe caveat). Every assertion below is
+    // unchanged; only the route in is new. The CPC Drought Outlook the Long
+    // Range step shows is answered locally.
+    await stubCpcDroughtOutlook(page);
+    await gotoApp(page, '?view=console');
+    const season = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
+    await season.click();
+    await expect(season).toHaveAttribute('aria-pressed', 'true');
+    await waitForLayerSettled(page, 'drought');
+    await page.locator('.shell-cluster-btn[data-cluster="heat"]').click();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('cluster'))
+      .toBe('heat');
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('horizon'))
+      .toBe('season-ahead');
 
     // The season-ahead heat recipe is deliberately empty
     // (src/config/clusters.ts): nothing is displayed, so no stamp may claim
@@ -946,17 +968,29 @@ test.describe('DDM-P8-T02: the Drought and ENSO screens state their horizon in t
     await expect.poll(() => page.locator('html').getAttribute('data-ddm-boot')).toBe('idle');
     await expect(layerPill(page, 'sst-anomaly')).toHaveText(PILL.live, { timeout: 25_000 });
     const stamp = await readStamp(page);
-    // The pressed chip says Long Range; the surface is a measured daily
-    // field, and the stamp says what the surface is.
+    // The surface is a measured daily field, and the stamp says what the
+    // surface is, whatever horizon the link asked for.
     expectStampContract('SST', stamp, {
       horizon: 'current',
       register: 'observed',
       issuer: 'GHRSST MUR'
     });
     expect(stamp.headline).toBe('Observed Jul 3, 2026');
-    await expect(page.locator('.shell-horizon-btn[data-horizon="season-ahead"]')).toHaveAttribute(
+    // FLIPPED 2026-09-27 (D1 M6, found-009): this case used to end on the
+    // Long Range chip pressed over the Current Conditions stamp. ENSO's
+    // season-ahead recipe repeats its current one (horizonSurfaceSignature,
+    // src/state/timeline.ts), so the Long Range chip is disabled, and a
+    // deep link naming it now boots on Current Conditions
+    // (src/state/url.ts's resolveHorizonForCluster) instead of pressing a
+    // disabled chip. The stamp assertions above are unchanged: the stamp
+    // still says Current Conditions.
+    await expect(page.locator('.shell-horizon-btn[data-horizon="current"]')).toHaveAttribute(
       'aria-pressed',
       'true'
+    );
+    await expect(page.locator('.shell-horizon-btn[data-horizon="season-ahead"]')).toHaveAttribute(
+      'aria-pressed',
+      'false'
     );
   });
 });

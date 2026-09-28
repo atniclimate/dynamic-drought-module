@@ -1,5 +1,14 @@
 import { test, expect } from '@playwright/test';
-import { gotoApp, layerCheckbox, layerPill, search, stubHeatRiskCatalog, urlLayers } from './helpers';
+import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
+import {
+  gotoApp,
+  layerCheckbox,
+  layerPill,
+  search,
+  stubHeatRiskCatalog,
+  urlLayers,
+  waitForLayerSettled
+} from './helpers';
 
 /**
  * S4a: the main-screen shell boot state (the 2026-07-18 design record
@@ -205,12 +214,28 @@ test.describe('S4a desktop shell boot', () => {
   test('the empty heat/season-ahead recipe is disabled with its reason and yields the honest no-surface primary', async ({
     page
   }) => {
-    // DDM-P8-T03 (DR-017 a): the season-ahead chip is now disabled for an
-    // empty recipe, so a click no longer reaches it; the deep link
-    // (already used at tests/fire-heat-time-bar.spec.ts:641) is the
-    // honest way to land here.
-    await gotoApp(page, '?cluster=heat&horizon=season-ahead');
+    // DDM-P8-T03 (DR-017 a): the season-ahead chip is disabled for an
+    // empty recipe, so a click on it never lands here.
+    // FLIPPED 2026-09-27 (D1 M6, found-009): the deep link this case used,
+    // `?cluster=heat&horizon=season-ahead`, now boots on Current Conditions
+    // (src/state/url.ts's resolveHorizonForCluster; pinned by
+    // tests/precedence.spec.ts row A6), so it no longer reaches this state.
+    // The one route left is in session: Drought at Long Range, then
+    // Extreme Heat, which keeps the committed horizon (the designed
+    // empty-recipe caveat, tests/cluster-service.spec.ts's "the empty
+    // recipe" case). Every assertion below is unchanged; only the route in
+    // is new. The CPC Drought Outlook the Long Range step shows is answered
+    // locally.
+    await stubCpcDroughtOutlook(page);
+    await gotoApp(page, '?view=console');
     const season = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
+    await season.click();
+    await expect(season).toHaveAttribute('aria-pressed', 'true');
+    await waitForLayerSettled(page, 'drought');
+    await page.locator('.shell-cluster-btn[data-cluster="heat"]').click();
+    await expect(
+      page.locator('.shell-cluster-btn[data-cluster="heat"]')
+    ).toHaveAttribute('aria-pressed', 'true');
     await expect(season).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#shell-summary-primary')).toHaveText(
       'No verified Extreme Heat surface is available at this horizon; showing reference layers only.'

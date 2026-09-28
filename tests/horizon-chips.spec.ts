@@ -47,7 +47,8 @@ import { HORIZON_CHROME, SHELL_HAZARD_KEY, SHELL_HORIZON_KEY } from '../src/impa
 import { CELL_ABSENCE, HAZARD_KEYS } from '../src/impact/matrix';
 import type { EvidenceClass } from '../src/impact/types';
 import { renderClaim } from '../src/ui/claim-render';
-import { HAZARD_CLUSTER_KEYS, TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
+import { HAZARD_CLUSTER_KEYS, HAZARD_CLUSTERS, TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
+import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
 import { gotoApp, PILL, search, stubHeatRiskCatalog, urlLayers } from './helpers';
 
 const SNAPSHOT_PATH = join(process.cwd(), 'public', 'data', 'enso-indices.json');
@@ -548,6 +549,67 @@ test.describe('DDM-P8-T03 clause 1: every horizon chip either changes the map or
   });
 });
 
+/**
+ * D1 M6 (2026-09-27; found-009, DDM-P10-T09): a `cluster=`/`horizon=` deep
+ * link naming a horizon the mode cannot show (an empty recipe, or one whose
+ * signature repeats an earlier horizon's, `horizonSurfaceSignature` in
+ * src/state/timeline.ts) used to seed that horizon as committed anyway, so
+ * the shell pressed the very chip `horizonDisabledReason` disables: a chip
+ * reading `aria-pressed="true"` and `aria-disabled="true"` at once. The URL
+ * parser (src/state/url.ts's resolveHorizonForCluster) now boots such a link
+ * on Current Conditions, which every mode can show.
+ *
+ * Every mode and every horizon come from the tables (HAZARD_CLUSTER_KEYS,
+ * TEMPORAL_HORIZON_KEYS), and every product any of those boots can reach is
+ * answered locally: the wildfire products and the WHP tile behind the proxy,
+ * the ocean anomaly surface, the HeatRisk catalog and the WWA notices, and
+ * the CPC Drought Outlook.
+ */
+test.describe('D1 M6: no horizon chip is ever pressed and disabled at once', () => {
+  test('no horizon chip is ever both aria-pressed and aria-disabled over every HAZARD_CLUSTER_KEYS x horizon deep link', async ({
+    page
+  }) => {
+    const boots = HAZARD_CLUSTER_KEYS.length * TEMPORAL_HORIZON_KEYS.length;
+    test.setTimeout(60_000 + boots * 30_000);
+    await stubWildfireProducts(page);
+    await stubSstFixture(page);
+    await stubHeatRiskCatalog(page);
+    await page.route(
+      (url) => url.pathname.endsWith('/watch_warn_adv/MapServer/1/query'),
+      (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/geo+json',
+          body: JSON.stringify({ type: 'FeatureCollection', features: [] })
+        })
+    );
+    await stubCpcDroughtOutlook(page);
+    for (const cluster of HAZARD_CLUSTER_KEYS) {
+      const token = HAZARD_CLUSTERS[cluster].urlToken;
+      for (const horizon of TEMPORAL_HORIZON_KEYS) {
+        const clusterQuery = token !== null ? `cluster=${token}&` : '';
+        const path = `?view=console&${clusterQuery}horizon=${horizon}`;
+        await gotoApp(page, path);
+        // Exactly one chip is pressed once the shell has rendered the boot
+        // snapshot; the sweep reads after that.
+        await expect(
+          page.locator('.shell-horizon-btn[aria-pressed="true"]'),
+          `${path}: one pressed horizon chip`
+        ).toHaveCount(1);
+        for (const key of TEMPORAL_HORIZON_KEYS) {
+          const btn = page.locator(`.shell-horizon-btn[data-horizon="${key}"]`);
+          const pressed = await btn.getAttribute('aria-pressed');
+          const disabled = await btn.getAttribute('aria-disabled');
+          expect(
+            pressed === 'true' && disabled === 'true',
+            `${path} left the ${key} chip both pressed and disabled`
+          ).toBe(false);
+        }
+      }
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Clauses 2 and 3: one grammar, product-specific registers
 // ---------------------------------------------------------------------------
@@ -651,6 +713,16 @@ test.describe('DDM-P8-T03 clauses 2 and 3: one grammar, product-specific registe
     page
   }) => {
     await stubSstFixture(page);
+    // FLIPPED 2026-09-27 (D1 M6, found-009): this deep link names a horizon
+    // ENSO cannot distinctly show (its season-ahead signature repeats
+    // current's, horizonSurfaceSignature in src/state/timeline.ts), so the
+    // URL parser now boots it on Current Conditions
+    // (src/state/url.ts's resolveHorizonForCluster) instead of committing
+    // Long Range pressed AND disabled at once (the pair this file's "no
+    // horizon chip is ever both aria-pressed and aria-disabled" case pins
+    // for every mode). The one-grammar intent is unchanged: the chip's
+    // static title, the stamp and the briefing heading still read the same
+    // HORIZON_CHROME table whether or not the chip is the pressed one.
     await gotoApp(
       page,
       '?view=console&cluster=enso&horizon=season-ahead&sst=2026-07-03'
@@ -661,20 +733,24 @@ test.describe('DDM-P8-T03 clauses 2 and 3: one grammar, product-specific registe
         .innerText()
     ).trim();
     expect(chipTitle).toBe(HORIZON_CHROME.longRange.title);
-    // The stamp still says what the surface is (Current Conditions): the
-    // pressed chip's horizon and the stamp's own horizon are allowed to
-    // diverge and this divergence is PRESERVED, never reconciled (pinned
-    // at tests/fire-heat-time-bar.spec.ts:676-694). The SST layer installs
-    // its stamp once the ImageServer domain answers; wait for it rather
-    // than reading a pre-boot placeholder.
+    // The stamp says what the surface is (Current Conditions). The SST
+    // layer installs its stamp once the ImageServer domain answers; wait
+    // for it rather than reading a pre-boot placeholder.
     const stampHorizonEl = page.locator('.time-bar-stamp-horizon');
     // The rendered text is "<title> · <subtitle>" (stampHorizonText,
     // src/ui/time-bar.ts:94-97), not the bare title.
     const expectedStampHorizon = `${HORIZON_CHROME.current.title} · ${HORIZON_CHROME.current.subtitle}`;
     await expect(stampHorizonEl).toHaveText(expectedStampHorizon, { timeout: 25_000 });
     expect(expectedStampHorizon).not.toBe(chipTitle);
+    // The redirect lands on an enabled horizon: Current Conditions is
+    // pressed, and the Long Range chip stays unpressed and disabled (ENSO
+    // shows one surface at every horizon).
     await expect(
-      page.locator('.shell-horizon-btn[data-horizon="season-ahead"]')
+      page.locator('.shell-horizon-btn[data-horizon="current"]')
     ).toHaveAttribute('aria-pressed', 'true');
+    const seasonChip = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
+    expect(await seasonChip.getAttribute('aria-pressed')).toBe('false');
+    expect(await seasonChip.getAttribute('aria-disabled')).toBe('true');
+    expect(await search(page)).not.toContain('horizon=');
   });
 });

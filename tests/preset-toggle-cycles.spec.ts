@@ -1,7 +1,9 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 
+import { TEMPORAL_HORIZON_KEYS, type TemporalHorizonKey } from '../src/config/clusters';
 import { VIEW_PRESETS, type ViewPreset } from '../src/config/presets';
-import { gotoApp, layerCheckbox, urlLayers, waitForLayerSettled } from './helpers';
+import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
+import { gotoApp, layerCheckbox, search, urlLayers, waitForLayerSettled } from './helpers';
 import { emptyCollectionBody } from './tribal-fixtures';
 
 /**
@@ -282,5 +284,212 @@ test.describe('DR-065 mode 1: repeated toggling returns the interface to its pre
     // interface must leave controls as responsive as a freshly booted one.
     await toggleRound(page, ['nifc-fires', 'hms-smoke']);
     await expectPresetAtRest(page, fireRisk, 'after the toggle round that follows the return');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// D1 M6 (2026-09-27; found-005, DDM-P10-T09): a quick view that names a time
+// ---------------------------------------------------------------------------
+
+/**
+ * The live station-value sources the "Right now" quick view's telemetry
+ * layer reaches (the sidebar's station-value hydration, and the viewport
+ * discovery a zoomed camera would run), answered with a local network
+ * failure so no case here reaches a live agency. The telemetry layer reads
+ * a source failure as "live (partial)", never as a failed activation, so the
+ * layer stays checked (src/layers/telemetry.ts's aggregate status). The same
+ * idiom as tests/tribal-live-layers.spec.ts's `abortOtherDiscoverySources`.
+ * Registered BEFORE `gotoApp`, so every boot stub `gotoApp` installs (the
+ * NADM fixture among them) still wins over this blanket answer.
+ */
+async function stubStationValueSources(page: Page): Promise<void> {
+  const abort = (route: Route): Promise<void> => route.abort('failed');
+  for (const pattern of [
+    '**/waterservices.usgs.gov/**',
+    '**/wcc.sc.egov.usda.gov/**',
+    '**/cwms-data.usace.army.mil/**',
+    '**/www.usbr.gov/**',
+    '**/www.nwrfc.noaa.gov/**',
+    '**/api.tidesandcurrents.noaa.gov/**',
+    '**/mesonet.agron.iastate.edu/**',
+    '**/ddm-proxy.atniclimate.workers.dev/**'
+  ]) {
+    await page.route(pattern, abort);
+  }
+}
+
+/** The same chip `tapPreset` taps. */
+function presetChip(page: Page, preset: ViewPreset): Locator {
+  return page.locator('#preset-chips .preset-chip', { hasText: preset.label });
+}
+
+function horizonChip(page: Page, key: TemporalHorizonKey): Locator {
+  return page.locator(`.shell-horizon-btn[data-horizon="${key}"]`);
+}
+
+/**
+ * No horizon chip may read pressed AND disabled at once (the found-009
+ * pair): a pressed chip the visitor cannot press is a claim with no way to
+ * make it. Read after the caller has waited on a state only the settled
+ * display can reach, so the shell has rendered that state.
+ */
+async function expectNoChipPressedAndDisabled(page: Page, moment: string): Promise<void> {
+  for (const key of TEMPORAL_HORIZON_KEYS) {
+    const chip = horizonChip(page, key);
+    const pressed = await chip.getAttribute('aria-pressed');
+    const disabled = await chip.getAttribute('aria-disabled');
+    expect(
+      pressed === 'true' && disabled === 'true',
+      `${moment}: the ${key} horizon chip is both aria-pressed and aria-disabled`
+    ).toBe(false);
+  }
+}
+
+/** Every VIEW_PRESETS chip other than `pressed` reads aria-pressed "false". */
+async function expectOnlyPresetPressed(page: Page, pressed: ViewPreset, moment: string): Promise<void> {
+  await expect(presetChip(page, pressed), `${moment}: ${pressed.label}`).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  for (const other of VIEW_PRESETS) {
+    if (other.key === pressed.key) continue;
+    await expect(presetChip(page, other), `${moment}: ${other.label}`).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+  }
+}
+
+/** The `horizon=` URL value a committed horizon writes: `current` is
+ * absence in the canonical URL (src/state/url.ts serializes only the two
+ * outlook horizons). */
+function horizonParamFor(key: TemporalHorizonKey): string | null {
+  return key === 'current' ? null : key;
+}
+
+test.describe('D1 M6: a quick view that names a time commits it and reads pressed (found-005)', () => {
+  test('Season ahead then Right now sets horizon=current, presses Right now alone, and leaves no horizon chip pressed and disabled', async ({
+    page
+  }) => {
+    await stubCpcDroughtOutlook(page);
+    await stubStationValueSources(page);
+    // Console: the Quick views chip row is hidden in Brief behind the
+    // console door, and the horizon row sits beside it there.
+    await gotoApp(page, '?view=console');
+    await waitForLayerSettled(page, 'nadm-drought');
+
+    const seasonAhead = presetNamed('season-ahead');
+    const rightNow = presetNamed('right-now');
+
+    await tapPreset(page, seasonAhead, 'the Season ahead chip');
+    // Season ahead alone: a custom set with the CPC Drought Outlook
+    // displayed at the Long Range horizon it declares.
+    await expect(horizonChip(page, 'season-ahead')).toHaveAttribute('aria-pressed', 'true', {
+      timeout: 25_000
+    });
+    await expectOnlyPresetPressed(page, seasonAhead, 'after Season ahead');
+    // Current would need a surface switch a custom set cannot take:
+    // disabled by the custom-set rule (src/ui/island/shell.tsx,
+    // horizonDisabledReason's custom branch).
+    await expect(horizonChip(page, 'current')).toHaveAttribute('aria-disabled', 'true');
+    await expect(horizonChip(page, 'current')).toHaveAttribute('aria-pressed', 'false');
+    // Near Term stays ENABLED: the outlook-pair exception (the mounted
+    // outlook follows its own register; the same state
+    // tests/s4-shell.spec.ts's "a custom composition WITH the outlook
+    // displayed keeps the honest outlook flip and disables Current" pins).
+    expect(await horizonChip(page, 'weeks-ahead').getAttribute('aria-disabled')).toBeNull();
+    await expectNoChipPressedAndDisabled(page, 'after Season ahead');
+
+    await tapPreset(page, rightNow, 'the Right now chip');
+
+    // horizon=current is absence in the canonical URL.
+    await expect
+      .poll(async () => new URLSearchParams(await search(page)).get('horizon'))
+      .toBeNull();
+    await expect(horizonChip(page, 'current')).toHaveAttribute('aria-pressed', 'true');
+    expect(await horizonChip(page, 'current').getAttribute('aria-disabled')).toBeNull();
+    await expectOnlyPresetPressed(page, rightNow, 'after Right now');
+    // Visibly pressed, not only announced (the director's completion,
+    // 2026-09-27): the pressed quick view's border takes the accent of the
+    // pressed horizon chip (app.css .preset-chip[aria-pressed='true']). The
+    // mouse leaves first so no hover colour stands in for the pressed one.
+    await page.mouse.move(0, 0);
+    const accentBorder = await horizonChip(page, 'current').evaluate(
+      (el) => getComputedStyle(el).borderTopColor
+    );
+    await expect
+      .poll(() =>
+        presetChip(page, rightNow).evaluate((el) => getComputedStyle(el).borderTopColor)
+      )
+      .toBe(accentBorder);
+    // The two outlook horizons are unpressed and disabled by the custom-set
+    // rule: the NADM surface Right now shows has no outlook register to
+    // follow. The director carded the owner's choice on this rule
+    // (RUN-LOG 2026-09-27 16:55); this case pins today's rule, not a
+    // ruling on it.
+    for (const key of TEMPORAL_HORIZON_KEYS) {
+      if (key === 'current') continue;
+      await expect(horizonChip(page, key), `${key} after Right now`).toHaveAttribute(
+        'aria-disabled',
+        'true'
+      );
+      await expect(horizonChip(page, key), `${key} after Right now`).toHaveAttribute(
+        'aria-pressed',
+        'false'
+      );
+    }
+    await expectNoChipPressedAndDisabled(page, 'after Right now');
+  });
+
+  test('a quick view that declares a horizon commits it from each other horizon and reads pressed', async ({
+    page
+  }) => {
+    // Every walk is derived from the tables: each VIEW_PRESETS entry that
+    // declares a horizon, from each OTHER horizon in TEMPORAL_HORIZON_KEYS.
+    const walks = VIEW_PRESETS.flatMap((preset) => {
+      const declared = preset.horizon;
+      if (declared === undefined) return [];
+      return TEMPORAL_HORIZON_KEYS.filter((start) => start !== declared).map((start) => ({
+        preset,
+        declared,
+        start
+      }));
+    });
+    expect(walks.length, 'no VIEW_PRESETS entry declares a horizon').toBeGreaterThan(0);
+    test.setTimeout(60_000 + walks.length * 45_000);
+
+    await stubCpcDroughtOutlook(page);
+    await stubStationValueSources(page);
+
+    for (const { preset, declared, start } of walks) {
+      const moment = `${preset.label} from ${start}`;
+      await gotoApp(page, '?view=console');
+      await waitForLayerSettled(page, 'nadm-drought');
+      // Reach the start horizon through the Drought hazard: a bare boot's
+      // derived Drought view commits the chip's own recipe.
+      const startChip = horizonChip(page, start);
+      await startChip.click();
+      await expect(startChip, `${moment}: the start chip`).toHaveAttribute('aria-pressed', 'true');
+      if (start !== 'current') await waitForLayerSettled(page, 'drought');
+
+      await tapPreset(page, preset, moment);
+
+      await expect(horizonChip(page, declared), `${moment}: the declared chip`).toHaveAttribute(
+        'aria-pressed',
+        'true',
+        { timeout: 25_000 }
+      );
+      await expect(presetChip(page, preset), `${moment}: the quick view`).toHaveAttribute(
+        'aria-pressed',
+        'true'
+      );
+      await expect
+        .poll(async () => new URLSearchParams(await search(page)).get('horizon'), {
+          message: `${moment}: the URL horizon`
+        })
+        .toBe(horizonParamFor(declared));
+      await expect(page.locator('.shell-horizon-btn[aria-pressed="true"]')).toHaveCount(1);
+      await expectNoChipPressedAndDisabled(page, moment);
+    }
   });
 });

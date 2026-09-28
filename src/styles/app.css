@@ -1089,6 +1089,15 @@ button.conditions-metric:hover .conditions-action-hide {
   border-color: var(--accent-strong);
   color: var(--fg-0);
 }
+/* D1 M6 (2026-09-27; found-005): the quick view whose view is showing
+   reads pressed with the accent the pressed hazard and horizon buttons use
+   (.shell-cluster-btn, .shell-horizon-btn). It follows :hover and :active
+   so a hovered pressed chip still reads pressed. */
+.preset-chip[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 /* ----------------------------------------------------------------------------
    Layer toggles
