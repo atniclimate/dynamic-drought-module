@@ -16,6 +16,7 @@ import {
   syntheticBiaBody
 } from './tribal-fixtures';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
+import { installDefaultNifcStub, nifcStubLog } from './wildfire-fixtures';
 
 /**
  * The Tribal Nations umbrella UI (Unit F, D-0.7.0-033): the featured group
@@ -370,6 +371,9 @@ test.describe('partial-outage visibility (the final-pass finding 2)', () => {
     });
     await oneAgencyDown(page);
     await installMinimapAnalysisStubs(page);
+    // A raw boot misses gotoApp's WFIGS default, and the WA briefing sends
+    // its bounded WFIGS read: answer it from the fixture (found-078, J12).
+    await installDefaultNifcStub(page, 'fixture');
     // select= opens the briefing (the boot-time explicit opener since
     // S2, D-0.7.0-041); select= keeps the brief door, so the embed still
     // never mounts the island.
@@ -381,6 +385,9 @@ test.describe('partial-outage visibility (the final-pass finding 2)', () => {
       timeout: 25_000
     });
     expect(islandRequests).toEqual([]);
+    // The briefing's WFIGS read was answered by the fixture, not the live
+    // service (found-078).
+    await expect.poll(() => nifcStubLog(page).length).toBeGreaterThan(0);
   });
 });
 
@@ -488,6 +495,9 @@ test.describe('the Brief-door action at 400px (mobile and embed)', () => {
     await routeAllTribalFixtures(page);
     await installMinimapAnalysisStubs(page);
     await stubRecentSatellite(page);
+    // A raw boot misses gotoApp's WFIGS default, and the WA briefing sends
+    // its bounded WFIGS read: answer it from the fixture (found-078, J12).
+    await installDefaultNifcStub(page, 'fixture');
     const islandRequests: string[] = [];
     page.on('request', (req) => {
       if (/island-[^/]*\.js/.test(req.url())) islandRequests.push(req.url());
@@ -504,6 +514,8 @@ test.describe('the Brief-door action at 400px (mobile and embed)', () => {
     await expect(page.locator('#app')).toHaveClass(/\bembed\b/);
     await expect(page.locator('#app')).toHaveClass(/\bview-brief\b/);
     await expect(page.locator('#impact-panel')).toBeVisible({ timeout: 15_000 });
+    // The briefing's WFIGS read was answered by the fixture (found-078).
+    await expect.poll(() => nifcStubLog(page).length).toBeGreaterThan(0);
 
     const action = page.locator('#tribal-nations-brief-action');
     await expect(action).toBeVisible();
