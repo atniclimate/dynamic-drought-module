@@ -434,9 +434,10 @@ a:hover {
     visibility: hidden;
     pointer-events: none;
   }
-  #app.sidebar-collapsed:not(.embed) #sidebar-expand {
-    top: 76px;
-  }
+  /* TL-0 (S30D D1 M10): stays at (12, 12) while collapsed too; the old
+     top: 76px re-seat here fought the .sidebar-expand-btn top: 12px rule
+     at equal-or-higher specificity and is removed rather than kept as a
+     second source of truth for the same seat. */
 }
 
 .sidebar-header {
@@ -573,6 +574,23 @@ a:hover {
 .app-shell.sidebar-collapsed .sidebar-expand-btn,
 .app-shell.embed .sidebar-expand-btn {
   display: inline-flex;
+}
+
+/* TL-0 (S30D D1 M10; interface-chrome-popups-text.md section 2.2): on the
+   desktop shell, outside an embed, the seat is 40 x 40 (44 on a coarse
+   pointer, the touch floor the coarse-pointer rule below already applies
+   at 721px and up). Phones and embeds keep the smaller .icon-btn base. */
+@media (min-width: 721px) {
+  .app-shell:not(.embed) .sidebar-expand-btn {
+    width: 40px;
+    height: 40px;
+  }
+}
+@media (min-width: 721px) and (pointer: coarse) {
+  .app-shell:not(.embed) .sidebar-expand-btn {
+    width: 44px;
+    height: 44px;
+  }
 }
 
 /* The expand control is withheld until the map-dependent half is wired
@@ -2334,6 +2352,49 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 .map-bottom-dock > * { pointer-events: auto; }
 .map-notices { display: contents; }
+
+/* S30D D1 M10 (register owner-1h; design record interface-chrome-popups-text
+   section 2.5): on the desktop shell, outside an embed, the dock carries
+   only notices and the embed stamp (the HeatRisk sequence's own move to
+   the Key drawer is M11's) and its insets are symmetric at --dock-inset
+   (196px, src/config/map-chrome.ts), not the phone-derived 12px
+   --map-dock-inset. The "Panel-inset awareness" rule right below still
+   wins on `right` when the impact panel is open: its selector carries one
+   more type-level point of specificity (`body:has(...)` against
+   `.app-shell:not(.embed)`), so it overrides regardless of source order.
+
+   Repair round on M10: scoped to 1025px and up, the same band edge
+   DR-153 and MAP_CHROME_TABLET_BAND use (src/config/map-chrome.ts). At
+   721px the symmetric 196px insets left no dock at all under an open
+   briefing (interface-responsive.spec.ts "keeps the dock clear of the
+   briefing", the 2026-09-07 DR-036 failure A this would have
+   reintroduced): the 721 to 1024px tablet band keeps its pre-M10 dock
+   (the base rule above, --map-dock-inset, 12px), which the "Panel-inset
+   awareness" rule already knows how to shrink without going to zero. */
+@media (min-width: 1025px) {
+  .app-shell:not(.embed) .map-bottom-dock {
+    left: var(--dock-inset);
+    right: var(--dock-inset);
+  }
+}
+@media (min-width: 721px) {
+  /* The copy toast's dock treatment (found-018; src/ui/overlay.ts moves
+     the node here). In flow with the other notices rather than its old
+     fixed top-centre spot, which competed with the pill and the hover
+     inspector for the same seat; opacity keeps carrying the show/hide
+     animation, position and transform no longer fight the dock's layout.
+     Unlike the inset rule above, this is not chip-arithmetic and stays in
+     force across the whole desktop-and-tablet shell (721px and up). */
+  .app-shell:not(.embed) #map-notices > .copy-toast {
+    position: relative;
+    top: auto;
+    left: auto;
+    transform: translateY(-4px);
+  }
+  .app-shell:not(.embed) #map-notices > .copy-toast.visible {
+    transform: translateY(0);
+  }
+}
 .map-dock-foot {
   display: flex;
   justify-content: space-between;
@@ -5920,14 +5981,32 @@ a.impact-resource-link::after {
    rgba(15, 23, 42, 0.85) face and its accent ring. Embeds keep that corner
    and its circle (the FE-18 rules below), and phones keep their rail.
 
-   The preview badge sits bottom center (owner direction, 2026-08-31). It
+   The preview badge sits left, clear of the scale bars (S30D D1 M10,
+   found-019; owner direction 2026-08-31 centred it, which put it over the
+   scale bar between about 721px and 985px of map width; interface-chrome
+   section 2.2 has no seat for it, so this keeps it out of every other
+   seat's way instead). Its left offset is the scale bars' own maximum
+   extent (MapLibre's default 10px margin, its own maxWidth of
+   SCALE_MAX_WIDTH_PX 160px, src/map/init.ts:84, plus this file's border
+   and padding, about 172px total, the same estimate
+   src/config/map-chrome.ts's dockInset comment uses) plus the required
+   8px clearance: 180px. --map-container-left tracks the map container's
+   own left edge in viewport px (the sidebar's rendered width, 0 when it
+   is collapsed), so the badge stays clear of the scale bar at every
+   desktop width, sidebar open or collapsed, from 960x540 to 2560x1440. It
    stays pointer-events: none, so it can never intercept a map click.
    ---------------------------------------------------------------------------- */
 @media (min-width: 721px) {
+  .app-shell:not(.embed) {
+    --map-container-left: var(--sidebar-w);
+  }
+  .app-shell.sidebar-collapsed:not(.embed) {
+    --map-container-left: 0px;
+  }
   .app-shell:not(.embed) .test-preview-badge {
     position: fixed;
-    left: 50%;
-    transform: translateX(-50%);
+    left: calc(var(--map-container-left, 0px) + 180px);
+    transform: none;
     bottom: 12px;
     z-index: calc(var(--z-map-control) + 20);
   }
@@ -7815,6 +7894,24 @@ a.impact-resource-link::after {
   align-items: baseline;
   gap: 7px;
   padding: 8px 10px;
+  /* Repair round on M10 (map-chrome-seats.spec.ts "the chip holds its
+     seat"): the docked tile shares the TL-1 seat with the key toggle
+     (interface-chrome-popups-text.md section 2.4, "The chip is 288 x 40
+     in every mode"), so its box has to match the toggle's 40px height
+     exactly, not whatever its text happens to need. */
+  box-sizing: border-box;
+  min-height: 40px;
+}
+/* DR-153: the 721 to 1024 px tablet band is touch-first on every pointer
+   (RATIFICATION-6 Q2/Q2b), the same rule THE DESKTOP COLUMN's cell size
+   and chipSeatRect (src/config/map-chrome.ts) apply; repair round on M10
+   (interface-responsive.spec.ts "touch floor": this tile measured 288x40
+   with the briefing open, under the 44px floor). Declared after the base
+   rule above so it wins at equal specificity. */
+@media (min-width: 721px) and (max-width: 1024px) {
+  #conditions-strip-dock .conditions-metric[data-tone='data'] {
+    min-height: 44px;
+  }
 }
 #conditions-strip-dock .conditions-metric[data-tone='data'] .conditions-value {
   flex: 0 0 auto;

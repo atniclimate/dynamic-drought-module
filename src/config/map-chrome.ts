@@ -250,3 +250,89 @@ export function mapCellIconCentreX(
   const { edge, paddingInline, iconColumn } = MAP_CELL_ANATOMY;
   return containerWidth - chromeInset - mapCellW + edge + paddingInline + iconColumn / 2;
 }
+
+/*
+ * ----------------------------------------------------------------------
+ * M10: TL-0, the chip, the pill and the dock (interface-chrome-popups-
+ * text.md sections 2.2, 2.4 and 2.5). Left-anchored, so unlike the
+ * right-anchored column above, these seats DO move in viewport px when
+ * the sidebar opens or closes; what stays fixed is the `#map-container`
+ * relative rect this module computes.
+ * ----------------------------------------------------------------------
+ */
+
+/** TL-0's seat (`#sidebar-expand`), present only while the sidebar is
+ * collapsed: (12, 12), 40 x 40 (44 x 44 on a coarse pointer). */
+export function tl0SeatRect(coarse = false): MapChromeRect {
+  const { chromeInset } = MAP_CHROME_TOKENS;
+  const side = coarse ? MAP_CELL_H_COARSE : 40;
+  return { x: chromeInset, y: chromeInset, width: side, height: side };
+}
+
+/**
+ * The chip's seat (TL-1: the key toggle, or the docked drought tile,
+ * exactly one visible). Open: (12, 12), chipW x 40 (44 coarse). Collapsed:
+ * x 60 (64 coarse), so it clears TL-0's box; height takes the coarse
+ * floor when the pointer is coarse (found-016) OR the viewport sits in
+ * the 721 to 1024 px tablet band (DR-153: touch-first on every pointer
+ * there, the same rule `mapChromeCellSize` applies to THE DESKTOP
+ * COLUMN; repair round on M10, interface-responsive.spec.ts "touch
+ * floor"). `viewportWidth` defaults to a desktop width so existing
+ * fine-pointer desktop callers are unaffected.
+ */
+export function chipSeatRect(
+  collapsed: boolean,
+  coarse = false,
+  viewportWidth = 1440
+): MapChromeRect {
+  const { chromeInset, chipW, mapCellH } = MAP_CHROME_TOKENS;
+  const tall = coarse || isTabletBand(viewportWidth);
+  const height = tall ? MAP_CELL_H_COARSE : mapCellH;
+  const x = collapsed ? (tall ? 64 : 60) : chromeInset;
+  return { x, y: chromeInset, width: chipW, height };
+}
+
+/**
+ * The pill's max-width formula (section 2.2): `calc(100% - 2 * (chip x +
+ * chip width + 8px))`, so it stays clear of the chip on both sides
+ * whichever side the chip is narrower against. `chipX` is the chip's
+ * current left offset (12 open, 60/64 collapsed, `chipSeatRect`'s `x`).
+ */
+export function pillMaxWidth(containerWidth: number, chipX: number): number {
+  return containerWidth - 2 * (chipX + MAP_CHROME_TOKENS.chipW + 8);
+}
+
+/** The pill's own seat: centred at the container's horizontal middle,
+ * top 18 (20 on a coarse pointer per 2.2's "Coarse pointer" column),
+ * height 28 so its centre y is 32, matching the chip's centre y. */
+export function pillSeatRect(
+  containerWidth: number,
+  chipX: number,
+  coarse = false
+): MapChromeRect {
+  const width = Math.max(0, pillMaxWidth(containerWidth, chipX));
+  return {
+    x: (containerWidth - width) / 2,
+    y: coarse ? 20 : 18,
+    width,
+    height: 28
+  };
+}
+
+/** The dock's symmetric insets on the desktop shell: `var(--dock-inset)`
+ * both sides (`MAP_CHROME_TOKENS.dockInset`), bottom 34 (60 coarse). The
+ * open impact panel's own inset still wins on the right (app.css). */
+export function dockSeatRect(
+  containerWidth: number,
+  containerHeight: number,
+  coarse = false
+): MapChromeRect {
+  const { dockInset } = MAP_CHROME_TOKENS;
+  const bottom = coarse ? 60 : 34;
+  return {
+    x: dockInset,
+    y: containerHeight - bottom,
+    width: Math.max(0, containerWidth - 2 * dockInset),
+    height: bottom
+  };
+}

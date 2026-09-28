@@ -123,7 +123,14 @@ function MetricTile({
       }
       onClick={onClick}
     >
-      <span class="conditions-value" style={m.color ? `color:${m.color}` : undefined}>
+      <span class="conditions-value">
+        {m.color ? (
+          <span
+            class="conditions-swatch"
+            aria-hidden="true"
+            style={`background:${m.color}`}
+          />
+        ) : null}
         {m.value}
       </span>
       <span class="conditions-sublabel">

@@ -1,8 +1,16 @@
-/* Compact map readings share one glass treatment and disclose their key. */
+/* Compact map readings share one glass treatment and disclose their key.
+   S30D D1 M10 (register owner-1h, found-016; design record
+   interface-chrome-popups-text.md sections 2.1 and 2.4): the glass is
+   --glass-read (the D1 token block, app.css :root), the owner's
+   "semitransparent blurred glass" (CONTINUATION:42), not a local color.
+   On the desktop shell TL-0 (#sidebar-expand) takes the (12, 12) corner
+   while the sidebar is collapsed, so the chip moves to x 60 (64 on a
+   coarse pointer) there; that is also the found-016 fix, since at x 12
+   the chip's open detail used to sit directly under TL-0's hit box. */
 #map-condition-indicator {
-  --indicator-glass: rgba(20, 31, 47, 0.66);
+  --indicator-glass: var(--glass-read, rgba(1, 11, 19, 0.72));
   --indicator-border: rgba(220, 231, 240, 0.2);
-  --indicator-width: 288px;
+  --indicator-width: var(--chip-w, 288px);
   position: absolute;
   top: 12px;
   left: 12px;
@@ -11,8 +19,35 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
-  max-width: calc(100% - 110px);
   pointer-events: none;
+}
+/* Repair round on M10 (director's review): design record section 2.1
+   scopes its whole token list, including "The indicator's max-width ...
+   goes", under "@media (min-width: 721px) and .app-shell:not(.embed)"
+   -- the desktop and tablet shell, never phones or an embed. The wrapper's
+   percentage max-width is a phone-and-embed safety margin only, clearing
+   --map-ctrl-w's right-side control column (104px plus gap, about 110px);
+   the desktop shell instead holds the chip to the fixed --chip-w token
+   (:132 below, #map-key's own width rule), never a percentage of the
+   container. Scoped here rather than removed outright, so phones and an
+   embed at any width keep today's geometry exactly (M10 scope). */
+@media (max-width: 720px) {
+  #map-condition-indicator {
+    max-width: calc(100% - 110px);
+  }
+}
+.app-shell.embed #map-condition-indicator {
+  max-width: calc(100% - 110px);
+}
+@media (min-width: 721px) {
+  .app-shell.sidebar-collapsed:not(.embed) #map-condition-indicator {
+    left: 60px;
+  }
+}
+@media (min-width: 721px) and (pointer: coarse) {
+  .app-shell.sidebar-collapsed:not(.embed) #map-condition-indicator {
+    left: 64px;
+  }
 }
 #map-condition-indicator > * { pointer-events: auto; }
 #map-condition-indicator .conditions-metric,
@@ -20,9 +55,28 @@
   background: var(--indicator-glass);
   border: 1px solid var(--indicator-border);
   border-radius: var(--radius-md);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(var(--rich-black-blur, 15px));
+  -webkit-backdrop-filter: blur(var(--rich-black-blur, 15px));
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+}
+/* The docked drought tile's own single-reading swatch (palette-tokens.md,
+   "Swatches and value text"): the class colour leaves the text (it used to
+   be conditions-strip.tsx's inline `color:${m.color}`, D1.md M10 Notes)
+   and becomes a 10px keylined square beside the value instead. Scoped to
+   this indicator only: the same tile also renders in the Console sidebar
+   through src/ui/island/shell.tsx's rehost, and that copy is D3's file. */
+#map-condition-indicator .conditions-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+#map-condition-indicator .conditions-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border: 1px solid var(--keyline, #C6CBD4);
+  border-radius: 2px;
 }
 #map-condition-indicator #conditions-strip {
   background: transparent;
@@ -41,6 +95,14 @@
 #map-condition-indicator #conditions-strip-dock:not(:has(.conditions-metric[data-metric='drought'][data-layer-on='true'])) {
   display: none;
 }
+/* The chip's grammar (S30D D1 M10; interface-chrome-popups-text.md section
+   2.4): a swatch, one label line, the six-state glyph, and an SVG
+   plus/minus disclosure, in that order. The phone and embed toggle keeps
+   today's flex row with the label reading uppercase; the desktop shell
+   (721px and up, outside an embed) becomes the four-column grid the
+   design record specifies, and drops the class-colour text (DR-101: the
+   Fire label's #ff8a56 goes) and the CSS ::after glyph (replaced by the
+   measurable SVG paths below). */
 #map-key .map-key-details-toggle {
   display: flex;
   align-items: center;
@@ -59,26 +121,118 @@
   text-align: left;
   cursor: pointer;
 }
-#map-key .map-key-details-toggle::after {
-  content: '+';
-  font-size: 18px;
-  line-height: 1;
+.map-key-chip-swatch {
+  display: none;
+}
+.map-key-chip-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.map-key-chip-state {
+  display: none;
+}
+.map-key-chip-disclosure {
+  flex: 0 0 auto;
   color: var(--fg-2);
 }
-#map-key .map-key-details-toggle[aria-expanded='true']::after {
-  content: '−';
+.map-key-chip-disclosure-vert {
+  transition: none;
 }
-#map-key[data-key-family='fire'] .map-key-details-toggle {
-  color: #ff8a56;
+#map-key .map-key-details-toggle[aria-expanded='true'] .map-key-chip-disclosure-vert {
+  display: none;
 }
 #map-key {
   padding: 0;
   width: var(--indicator-width, 288px);
   max-width: 100%;
-  background: var(--indicator-glass, rgba(20, 31, 47, 0.66));
+  background: var(--indicator-glass, var(--glass-read, rgba(1, 11, 19, 0.72)));
   border-color: var(--indicator-border, rgba(220, 231, 240, 0.2));
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(var(--rich-black-blur, 15px));
+  -webkit-backdrop-filter: blur(var(--rich-black-blur, 15px));
+}
+@media (min-width: 721px) {
+  .app-shell:not(.embed) #map-key .map-key-details-toggle {
+    padding: 0 12px;
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) 8px 16px;
+    align-items: center;
+    gap: 8px;
+    /* Repair round on M10 (map-chrome-seats.spec.ts "chip height"): the
+       seat's total height is set on the PARENT below (border included,
+       box-sizing: border-box), not here, so the toggle just fills it;
+       a min-height here used to add its own 40px on top of the parent's
+       border, landing the measured box at 42 instead of 40. */
+    height: 100%;
+    text-transform: none;
+    font-size: 13px;
+    font-weight: var(--fw-strong, 700);
+  }
+  .app-shell:not(.embed) .map-key-chip-swatch {
+    display: block;
+    width: 10px;
+    height: 10px;
+    border: 1px solid var(--keyline, #C6CBD4);
+    border-radius: 2px;
+    background: transparent;
+  }
+  .app-shell:not(.embed) .map-key-chip-state {
+    display: block;
+    width: 8px;
+    height: 8px;
+    justify-self: center;
+    box-sizing: border-box;
+    border: 1px solid var(--ink-soft, #C6CBD4);
+  }
+  .app-shell:not(.embed) .map-key-chip-state[data-chip-state='live'] {
+    background: var(--ink, #E8ECF0);
+  }
+  .app-shell:not(.embed) .map-key-chip-state[data-chip-state='live-partial'] {
+    background: linear-gradient(to right, var(--ink, #E8ECF0) 50%, transparent 50%);
+  }
+  .app-shell:not(.embed) .map-key-chip-state[data-chip-state='unavailable'] {
+    border-color: var(--ink-strong, #FFFFFF);
+    background:
+      linear-gradient(to top right, transparent calc(50% - 0.5px), var(--ink-strong, #FFFFFF) calc(50% - 0.5px), var(--ink-strong, #FFFFFF) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+  }
+  .app-shell:not(.embed) .map-key-chip-state[data-chip-state='no-data'] {
+    background:
+      linear-gradient(to right, transparent calc(50% - 0.5px), var(--ink-soft, #C6CBD4) calc(50% - 0.5px), var(--ink-soft, #C6CBD4) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+  }
+  .app-shell:not(.embed) .map-key-chip-state[data-chip-state='zoom-in'] {
+    background:
+      linear-gradient(to right, transparent calc(50% - 0.5px), var(--ink-soft, #C6CBD4) calc(50% - 0.5px), var(--ink-soft, #C6CBD4) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+      linear-gradient(to bottom, transparent calc(50% - 0.5px), var(--ink-soft, #C6CBD4) calc(50% - 0.5px), var(--ink-soft, #C6CBD4) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+  }
+  .app-shell:not(.embed) .map-key-chip-state[data-chip-state='loading'] {
+    background: transparent;
+  }
+}
+/* The seat's height, border included (box-sizing: border-box, the
+   universal reset; the border itself lives on #map-key at :53-61 above).
+   Scoped to the CLOSED state only: open, the drawer's content needs the
+   host free to grow, which the generic `#app #map-key .map-key-content`
+   rules below already handle. 40 on a fine pointer above the tablet band;
+   44 on a coarse pointer, or anywhere in the 721 to 1024 px tablet band
+   regardless of pointer (DR-153, "touch-first on every pointer"; mirrors
+   chipSeatRect's viewportWidth-aware height in
+   src/config/map-chrome.ts). */
+@media (min-width: 721px) {
+  .app-shell:not(.embed) #map-key[data-key-details-open='false'] {
+    height: 40px;
+  }
+}
+@media (min-width: 721px) and (pointer: coarse) {
+  .app-shell:not(.embed) #map-key[data-key-details-open='false'] {
+    height: 44px;
+  }
+}
+@media (min-width: 721px) and (max-width: 1024px) {
+  .app-shell:not(.embed) #map-key[data-key-details-open='false'] {
+    height: 44px;
+  }
 }
 #app #map-key .map-key-content:not([hidden]) {
   display: flex;
@@ -98,9 +252,28 @@
   display: none !important;
 }
 #app #map-key[data-key-details-open='false'] {
+  padding: 0;
+}
+/* Repair round on M10 (director's review): unscoped, this rule's
+   `width: fit-content` (2 IDs plus an attribute, hazard-indicators.css
+   :132's `#map-key { width: var(--indicator-width) }` is one ID) wins at
+   EVERY width, so the closed chip sized to its label's content instead
+   of holding the fixed 288 x 40 seat "whatever its label"
+   (interface-chrome-popups-text.md section 2.2's TL-1 chip row) -- the
+   defect tests/map-chrome-seats.spec.ts's own predicted-red comment
+   already named. Section 2.1 scopes the whole token list this way (see
+   the wrapper's max-width above); the desktop and tablet shell keep the
+   fixed token width from :132; phones and an embed at any width keep
+   today's fit-content sizing exactly (M10 scope). */
+@media (max-width: 720px) {
+  #app #map-key[data-key-details-open='false'] {
+    width: fit-content;
+    max-width: min(288px, calc(100vw - 96px));
+  }
+}
+.app-shell.embed #map-key[data-key-details-open='false'] {
   width: fit-content;
   max-width: min(288px, calc(100vw - 96px));
-  padding: 0;
 }
 @media (max-width: 720px) {
   #app[data-sheet-detent] #map-key[data-key-details-open='false'] {
@@ -161,8 +334,28 @@
   }
 }
 
+/* The pill (S30D D1 M10; interface-chrome-popups-text.md section 2.5): one
+   line, centred at the top, centre y 32 (top 18 plus half its 28px
+   height, matching the chip's own centre y). The max-width formula keeps
+   it clear of the chip on both sides (2 * (chip x + chip width + 8px)),
+   so the JS re-seat below (src/ui/map-key.ts, the DESKTOP_LOADING_TOP
+   measurement) is a narrow-width fallback that by construction never
+   fires from 1280 to 2560 wide; --desktop-loading-top stays unset there.
+   --chip-x mirrors the chip's own collapsed shift (this file, above). */
 @media (min-width: 721px) {
   #app:not(.embed) .loading-indicator {
-    top: var(--desktop-loading-top, 12px);
+    top: var(--desktop-loading-top, 18px);
+    height: 28px;
+    box-sizing: border-box;
+    overflow: hidden;
+    max-width: calc(100% - 2 * (var(--chip-x, 12px) + var(--chip-w, 288px) + 8px));
+  }
+  .app-shell.sidebar-collapsed:not(.embed) .loading-indicator {
+    --chip-x: 60px;
+  }
+  #app:not(.embed) #loading-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }

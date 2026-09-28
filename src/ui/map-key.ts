@@ -44,10 +44,12 @@ import {
 } from '../config/wildfire-presentation';
 import { FRAMINGS } from '../config/framings';
 import { getFraming, onFramingChange } from '../state/framing-store';
-import { getOceanFraming } from '../state/cluster-store';
+import { getHazardCluster, getOceanFraming, onHazardClusterChange } from '../state/cluster-store';
 import { getViewMode, onViewModeChange } from '../state/view-mode';
 import { isUsScopeCautionLayer } from '../state/display-summary';
 import { escapeHtml } from '../util/escape';
+import { KEY_ELIGIBLE_LABELS, chipFallbackLabel } from '../config/chip-labels';
+import { CHIP_STATE_WORDS, chipStateFromStatuses, type ChipState } from '../config/chip-state';
 import {
   createHeatRiskSequenceLoader,
   type HeatRiskFrameEventDetail
@@ -134,6 +136,7 @@ let disposeMapKeySeat: (() => void) | null = null;
 let disposeMapKeyTimeBarSpec: (() => void) | null = null;
 let disposeMapKeyFraming: (() => void) | null = null;
 let disposeMapKeyViewMode: (() => void) | null = null;
+let disposeMapKeyHazardCluster: (() => void) | null = null;
 let whpShadeActive = false;
 let flatWhpShadeActive = false;
 
@@ -685,19 +688,9 @@ export function buildWhpKey(): KeySpec {
   };
 }
 
-/** The layer keys that can earn (or contribute to) the on-map key, with
- * the label a whole-key loading placeholder renders under (W2-D6). */
-const KEY_ELIGIBLE_LABELS: Readonly<Record<string, string>> = {
-  heatrisk: 'HeatRisk',
-  'spc-fire-weather': 'Fire',
-  'usfs-whp': 'Wildfire potential',
-  'cdm-drought': 'Canada drought',
-  'nadm-drought': 'North America drought',
-  usdm: 'Drought',
-  'sst-anomaly': 'Ocean temperature',
-  'nifc-fires': 'Fire',
-  'nws-alerts': 'Products'
-};
+// KEY_ELIGIBLE_LABELS moved to src/config/chip-labels.ts (S30D D1 M10): the
+// same table now serves the runtime and tests/chrome-n-modes.test.mjs's
+// plain-Node N-mode contract, so the two can never drift.
 
 interface KeyEligibility {
   /** Registered-active keys (the registry's post-activation truth). */
@@ -922,38 +915,78 @@ function withFrameCoverage(spec: KeySpec | null, coverage: string): KeySpec | nu
   };
 }
 
+/**
+ * A KeySpec together with the registry key(s) its chip glyph state is
+ * read from (repair round on M10: `chipStateFromStatuses` in
+ * src/config/chip-state.ts reads `registry.getStatus` for exactly these
+ * keys, never the spec's own rendered text). Empty when the spec was
+ * synthesized with no backing product (the frame-coverage-only "Map
+ * coverage" spec `withFrameCoverage` builds from nothing) -- see `update`,
+ * which also treats the committed mode's own no-key fallback as empty.
+ */
+interface HazardKeyResult {
+  readonly spec: KeySpec;
+  readonly productKeys: readonly string[];
+}
+
 /** The key the active layer set earns, or null to hide the strip. */
-function activeKey(): KeySpec | null {
+function activeKey(): HazardKeyResult | null {
   const active = registry.getActiveKeys();
-  return withFrameCoverage(
-    withTerrainCoverage(hazardKey(), active),
+  const hazard = hazardKey();
+  const spec = withFrameCoverage(
+    withTerrainCoverage(hazard?.spec ?? null, active),
     frameCoverageNote()
   );
+  if (!spec) return null;
+  return { spec, productKeys: hazard?.productKeys ?? [] };
+}
+
+/** The two fire-family product keys, filtered to the ones actually eligible
+ * right now (buildFireKey itself reads `active` and `loading` the same
+ * way): a solo NIFC fallback names only 'nifc-fires', never a
+ * spc-fire-weather status that is not part of what is drawn. */
+function fireProductKeys(eligible: ReadonlySet<string>): readonly string[] {
+  return (['spc-fire-weather', 'nifc-fires'] as const).filter((key) => eligible.has(key));
 }
 
 /** The condition-surface key, before shared reference qualifications. */
-function hazardKey(): KeySpec | null {
+function hazardKey(): HazardKeyResult | null {
   const { active, loading, eligible } = keyEligibility();
   let spec: KeySpec | null = null;
+  let productKeys: readonly string[] = [];
   if (eligible.has('heatrisk')) {
     spec = active.has('heatrisk') ? heatKey() : loadingKeySpec('heatrisk');
+    productKeys = ['heatrisk'];
   } else if (eligible.has('spc-fire-weather')) {
     spec = buildFireKey(active, loading);
+    productKeys = fireProductKeys(eligible);
   } else if (eligible.has('usfs-whp')) {
     spec = active.has('usfs-whp') ? buildWhpKey() : loadingKeySpec('usfs-whp');
+    productKeys = ['usfs-whp'];
   } else if (eligible.has('cdm-drought')) {
     spec = active.has('cdm-drought') ? cdmKey() : loadingKeySpec('cdm-drought');
+    productKeys = ['cdm-drought'];
   } else if (eligible.has('nadm-drought')) {
     spec = active.has('nadm-drought') ? nadmKey() : loadingKeySpec('nadm-drought');
+    productKeys = ['nadm-drought'];
   } else if (eligible.has('usdm')) {
     spec = active.has('usdm') ? droughtKey() : loadingKeySpec('usdm');
+    productKeys = ['usdm'];
   } else if (eligible.has('sst-anomaly')) {
     spec = active.has('sst-anomaly') ? sstKey() : loadingKeySpec('sst-anomaly');
+    productKeys = ['sst-anomaly'];
   } else if (eligible.has('nifc-fires')) {
     spec = buildFireKey(active, loading);
+    productKeys = fireProductKeys(eligible);
   }
 
-  if (!eligible.has('nws-alerts')) return spec;
+  // NWS alerts is an EVENT layer stacked over whichever surface above (or
+  // none), a qualification appended to the spec's text. It never joins
+  // productKeys: the chip glyph states the SURFACE's status, and an event
+  // overlay's own loading/ready state has no six-state glyph slot of its
+  // own here (map-key.ts:1180's no-key fallback already covers "no
+  // surface, nothing to grade").
+  if (!eligible.has('nws-alerts')) return spec ? { spec, productKeys } : null;
   if (loading.has('nws-alerts')) {
     // Activation in flight: a named placeholder row (W2-D6), not the full
     // product scale, which would claim a surface not yet on the map.
@@ -963,32 +996,107 @@ function hazardKey(): KeySpec | null {
     const loadingAria = 'National Weather Service event products loading.';
     if (spec) {
       return {
-        ...spec,
-        ariaLabel: `${spec.ariaLabel} ${loadingAria}`,
-        itemsHtml: spec.itemsHtml + loadingHtml
+        spec: {
+          ...spec,
+          ariaLabel: `${spec.ariaLabel} ${loadingAria}`,
+          itemsHtml: spec.itemsHtml + loadingHtml
+        },
+        productKeys
       };
     }
     return {
-      label: 'Products',
-      ariaLabel: loadingAria,
-      itemsHtml: loadingHtml
+      spec: {
+        label: KEY_ELIGIBLE_LABELS['nws-alerts']!,
+        ariaLabel: loadingAria,
+        itemsHtml: loadingHtml
+      },
+      productKeys: []
     };
   }
   const snapshot = nwsSnapshotQualification();
   const products = nwsProductKey();
   if (spec) {
     return {
-      ...spec,
-      ariaLabel:
-        `${spec.ariaLabel} ${products.ariaLabel} ${snapshot.ariaLabel}`,
-      itemsHtml: spec.itemsHtml + products.html + snapshot.html
+      spec: {
+        ...spec,
+        ariaLabel:
+          `${spec.ariaLabel} ${products.ariaLabel} ${snapshot.ariaLabel}`,
+        itemsHtml: spec.itemsHtml + products.html + snapshot.html
+      },
+      productKeys
     };
   }
   return {
-    label: 'Products',
-    ariaLabel: `${products.ariaLabel} ${snapshot.ariaLabel}`,
-    itemsHtml: products.html + snapshot.html
+    spec: {
+      label: KEY_ELIGIBLE_LABELS['nws-alerts']!,
+      ariaLabel: `${products.ariaLabel} ${snapshot.ariaLabel}`,
+      itemsHtml: products.html + snapshot.html
+    },
+    productKeys: []
   };
+}
+
+/**
+ * The chip's six-state glyph, read from the layer REGISTRY's own recorded
+ * status for the product key(s) `productKeys` names, never from a spec's
+ * rendered text (repair round on M10: the old `chipStateFromSpec`
+ * substring-matched `ariaLabel`/`itemsHtml`, which the hillshade coverage
+ * note and a partially-loading multi-layer key could both falsify). An
+ * empty `productKeys` (no key backs the spec) returns undefined: see
+ * `aggregateChipState` in src/config/chip-state.ts for the six-state
+ * doctrine this defers to, and the caller below for what "no glyph state"
+ * renders as.
+ */
+function chipStateFromKeys(productKeys: readonly string[]): ChipState | undefined {
+  return chipStateFromStatuses(productKeys.map((key) => registry.getStatus(key)));
+}
+
+/**
+ * The chip's four grammar slots (interface-chrome-popups-text.md section
+ * 2.4): a swatch (empty, no classed reading, since the chip names a
+ * PRODUCT rather than one current value; the docked drought tile in
+ * conditions-strip.tsx carries the single-reading swatch), one label line,
+ * the six-state glyph, and an SVG plus/minus disclosure replacing the CSS
+ * `::after` character so its centring can be measured (D1.md M10 Notes).
+ */
+function buildChipGrammar(button: HTMLButtonElement): {
+  readonly swatch: HTMLSpanElement;
+  readonly label: HTMLSpanElement;
+  readonly state: HTMLSpanElement;
+} {
+  const swatch = document.createElement('span');
+  swatch.className = 'map-key-chip-swatch';
+  swatch.setAttribute('aria-hidden', 'true');
+
+  const label = document.createElement('span');
+  label.className = 'map-key-chip-label';
+
+  const state = document.createElement('span');
+  state.className = 'map-key-chip-state';
+  state.setAttribute('aria-hidden', 'true');
+
+  const disclosure = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  disclosure.setAttribute('class', 'map-key-chip-disclosure');
+  disclosure.setAttribute('viewBox', '0 0 16 16');
+  disclosure.setAttribute('width', '16');
+  disclosure.setAttribute('height', '16');
+  disclosure.setAttribute('aria-hidden', 'true');
+  disclosure.setAttribute('focusable', 'false');
+  const horizontal = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  horizontal.setAttribute('d', 'M2 8h12');
+  horizontal.setAttribute('stroke', 'currentColor');
+  horizontal.setAttribute('stroke-width', '2');
+  horizontal.setAttribute('stroke-linecap', 'round');
+  const vertical = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  vertical.setAttribute('class', 'map-key-chip-disclosure-vert');
+  vertical.setAttribute('d', 'M8 2v12');
+  vertical.setAttribute('stroke', 'currentColor');
+  vertical.setAttribute('stroke-width', '2');
+  vertical.setAttribute('stroke-linecap', 'round');
+  disclosure.append(horizontal, vertical);
+
+  button.replaceChildren(swatch, label, state, disclosure);
+  return { swatch, label, state };
 }
 
 /** Build the swatch strip once and keep it synced to the registry. */
@@ -1001,6 +1109,7 @@ export function initMapKey(): void {
   disposeMapKeyTimeBarSpec?.();
   disposeMapKeyFraming?.();
   disposeMapKeyViewMode?.();
+  disposeMapKeyHazardCluster?.();
   const layout = watchMapKeyLayout(host);
   disposeMapKeyLayout = layout.dispose;
   disposeMapKeySeat = watchMapKeySeat(host);
@@ -1025,6 +1134,7 @@ export function initMapKey(): void {
   detailsButton.type = 'button';
   detailsButton.setAttribute('aria-controls', content.id);
   detailsButton.setAttribute('aria-expanded', 'false');
+  const chipGrammar = buildChipGrammar(detailsButton);
 
   host.replaceChildren(detailsButton, content);
   host.dataset.keyDetailsOpen = 'false';
@@ -1081,8 +1191,14 @@ export function initMapKey(): void {
   };
 
   const update = (): void => {
-    const spec = activeKey();
-    if (!spec) {
+    const active = activeKey();
+    // THE CHIP NEVER HIDES, but only where it IS the chip: the desktop
+    // TL-1 seat, outside an embed (interface-chrome-popups-text.md
+    // sections 2.4 and 2.8). Phones and embeds keep today's seats exactly
+    // (D1.md M10 scope), which includes hiding when nothing is eligible;
+    // only there does the pre-M10 `host.hidden = true` path survive.
+    const isDesktopChip = !widthQuery.matches && !app?.classList.contains('embed');
+    if (!active && !isDesktopChip) {
       host.hidden = true;
       setDetailsOpen(false);
       delete host.dataset.keyFamily;
@@ -1091,6 +1207,16 @@ export function initMapKey(): void {
       layout.schedule();
       return;
     }
+    const spec: KeySpec = active?.spec ?? {
+      label: chipFallbackLabel(getHazardCluster()),
+      ariaLabel: `${chipFallbackLabel(getHazardCluster())}. No classed layer is drawn.`,
+      itemsHtml: ''
+    };
+    // The committed mode's no-key fallback above names no product (its
+    // drawer already says "the view draws no classed layer"), so it earns
+    // no productKeys either: `chipStateFromKeys` below returns undefined
+    // for it, same as `active`'s own coverage-only synthetic spec.
+    const productKeys: readonly string[] = active?.productKeys ?? [];
     keyLabel = spec.label;
     const shadeKey = whpShadeActive
       ? '<span class="map-key-scale" data-whp-shade-key><strong>3D wildfire potential</strong>' +
@@ -1133,7 +1259,24 @@ export function initMapKey(): void {
       family === 'drought' && getViewMode() === 'brief' &&
       !app?.classList.contains('embed') && !app?.classList.contains('sidebar-collapsed') && !widthQuery.matches
     );
-    detailsButton.textContent = family === 'fire' ? 'FIRE' : family === 'heat' ? 'HEAT RISK' : family === 'enso' ? 'ENSO' : spec.label.toUpperCase();
+    // The four chip grammar slots (section 2.4): an empty, keylined swatch
+    // (the chip names a product, not one reading; the docked drought tile
+    // carries the single-reading swatch), the label in the issuer's own
+    // words with no text-transform (replacing the family ternary that used
+    // to hardcode 'FIRE' / 'HEAT RISK' / 'ENSO', a cluster literal DR-113
+    // forbids), and the six-state glyph.
+    chipGrammar.label.textContent = spec.label;
+    const chipState = chipStateFromKeys(productKeys);
+    if (chipState) {
+      chipGrammar.state.dataset.chipState = chipState;
+      chipGrammar.state.title = CHIP_STATE_WORDS[chipState];
+    } else {
+      // No product key backs this spec (the no-key fallback, or a
+      // coverage-only synthetic spec): no glyph state, never an invented
+      // seventh state (interface-chrome-popups-text.md section 7).
+      delete chipGrammar.state.dataset.chipState;
+      chipGrammar.state.title = '';
+    }
     detailsButton.setAttribute('aria-label', `${detailsOpen ? 'Close' : 'Open'} ${keyLabel} details and key`);
     // A MIRROR of the owning layer's own declared register (never
     // computed from the pressed horizon chip, never invented for a
@@ -1221,6 +1364,11 @@ export function initMapKey(): void {
   // provenance clause has a referent at all (finding 5). Without this the
   // sentence would linger into Console until some unrelated key change.
   disposeMapKeyViewMode = onViewModeChange(update);
+  // The chip never hides (section 2.4): with no key eligible it falls back
+  // to the committed mode's own word, so a mode switch with no layer
+  // change (an empty season-ahead recipe, D-0.7.0-043) still has to
+  // re-render the fallback label.
+  disposeMapKeyHazardCluster = onHazardClusterChange(update);
 
   registry.on('change', update);
   // Every status transition can change the strip now that a loading key

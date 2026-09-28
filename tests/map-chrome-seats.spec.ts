@@ -5,10 +5,12 @@ import {
   MAP_CHROME_TOKENS,
   isTabletBand,
   mapChromeSeatRect,
+  tl0SeatRect,
+  chipSeatRect,
   type MapChromeRect,
   type MapChromeSlot
 } from '../src/config/map-chrome';
-import { gotoApp } from './helpers';
+import { gotoApp, layerCheckbox, waitForLayerSettled } from './helpers';
 
 /**
  * The desktop map chrome holds its seats to 1 px (S30D D1 M9; register
@@ -544,6 +546,401 @@ test.describe('the desktop column holds its four seats (D1 M9)', () => {
       // The word-less home disclosure keeps its name; only the desktop
       // seat, which shows the word Help, leads with it.
       await expect(page.locator('#map-info-btn')).toHaveAttribute('aria-label', 'Map information');
+    }
+  });
+});
+
+/**
+ * S30D D1 M10 (register owner-1h, found-016, found-018, found-019; task
+ * DDM-P10-T11; design record interface-chrome-popups-text.md sections 2.2,
+ * 2.4 and 2.5): the chip (TL-1), TL-0, the pill and the dock hold their
+ * seats the same way the column does above, plus the chip's "never hides"
+ * and hand-off rules.
+ *
+ * SAMPLING NARROWED, NAMED: the column's own suite above already proves
+ * the 1 px stability method at all four desktop viewports; this block
+ * samples the chip's mode x horizon x loading matrix at 1440x900 only
+ * (one representative desktop width) to keep run time sane, and separately
+ * checks the four-viewport geometry (chip open/collapsed, TL-0, the pill's
+ * unset --desktop-loading-top, the dock insets) without the mode/horizon
+ * cross. This is a named narrowing, not a silent one.
+ *
+ * Predicted red on the pre-M10 tree: the chip is 0x0 (hidden) in Drought
+ * Near Term and Long Range and Heat season-ahead (no key: `host.hidden =
+ * true`); its width varies with content because `#app
+ * #map-key[data-key-details-open='false']` is `width: fit-content`; it is
+ * absent 170 to 270ms into a mode switch (map-chrome-contract's held
+ * loading window); TL-0 is 28x28, not 40x40; the pill sits at top 12, not
+ * 18, and has no max-width clear of the chip; the dock's insets are 12px,
+ * not --dock-inset (196px).
+ */
+interface TransientBox {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * The three top-centre-band transients found-018 governs: the loading
+ * pill, the hover inspector, and (pre-M10) the copy toast. A hidden or
+ * zero-size element reads as `null` (interface-chrome-popups-text.md
+ * section 2.5's "found-018" note: "a hidden element counts as not
+ * overlapping").
+ */
+async function transientRects(page: Page): Promise<{
+  pill: TransientBox | null;
+  inspector: TransientBox | null;
+  toast: TransientBox | null;
+}> {
+  return page.evaluate(() => {
+    const rectOf = (id: string): { x: number; y: number; width: number; height: number } | null => {
+      const el = document.getElementById(id);
+      if (!el || el.hidden) return null;
+      const style = getComputedStyle(el);
+      if (style.visibility === 'hidden' || style.display === 'none') return null;
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return null;
+      return { x: r.left, y: r.top, width: r.width, height: r.height };
+    };
+    return {
+      pill: rectOf('loading-indicator'),
+      inspector: rectOf('hover-inspector'),
+      toast: rectOf('copy-toast')
+    };
+  });
+}
+
+function rectsOverlap(a: TransientBox, b: TransientBox): boolean {
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+}
+
+/** Pairwise non-intersection of whichever of the three transients are
+ * currently visible (found-018: "the pill yields to nothing, the hover
+ * inspector yields while the pill shows, and the copy toast moves to the
+ * dock"). */
+function assertNoTransientOverlap(
+  rects: { pill: TransientBox | null; inspector: TransientBox | null; toast: TransientBox | null },
+  phase: string
+): void {
+  const entries = (Object.entries(rects) as Array<[string, TransientBox | null]>).filter(
+    (entry): entry is [string, TransientBox] => entry[1] !== null
+  );
+  for (let i = 0; i < entries.length; i += 1) {
+    for (let j = i + 1; j < entries.length; j += 1) {
+      const [nameA, boxA] = entries[i]!;
+      const [nameB, boxB] = entries[j]!;
+      expect(rectsOverlap(boxA, boxB), `${phase}: ${nameA} overlaps ${nameB}`).toBe(false);
+    }
+  }
+}
+
+test.describe('the chip, TL-0, the pill and the dock hold their D1 M10 seats', () => {
+  const MODE_VIEWPORT = { width: 1440, height: 900 } as const;
+
+  /** The chip's box relative to #map-container, or null if it has no
+   * rendered box (the pre-M10 hidden state). The TL-1 seat is shared by
+   * two nodes with exactly one visible (interface-chrome-popups-text.md
+   * section 2.4): `#map-key` (the toggle, closed) in every mode but
+   * desktop Brief-with-the-sidebar-open Drought, and the docked drought
+   * tile there. Repair round on M10: measure whichever one is actually
+   * rendering, not `#map-key` unconditionally. */
+  async function chipBox(page: Page): Promise<{ x: number; y: number; width: number; height: number } | null> {
+    return page.evaluate(() => {
+      const container = document.getElementById('map-container');
+      if (!container) return null;
+      const c = container.getBoundingClientRect();
+      const visibleBox = (el: Element | null): DOMRect | null => {
+        if (!el) return null;
+        const style = getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden') return null;
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) return null;
+        return r;
+      };
+      const r =
+        visibleBox(document.getElementById('map-key')) ??
+        visibleBox(document.querySelector('.conditions-metric[data-metric="drought"]'));
+      if (!r) return null;
+      return { x: r.left - c.left, y: r.top - c.top, width: r.width, height: r.height };
+    });
+  }
+
+  test('the chip holds its seat in every mode and horizon, held through a loading phase, at 1440x900', async ({
+    page
+  }) => {
+    test.setTimeout(180_000);
+    await page.setViewportSize(MODE_VIEWPORT);
+    const gate = await installLoadingGate(page);
+    try {
+      await gotoApp(page);
+      await settleLayout(page);
+
+      const check = async (phase: string): Promise<void> => {
+        const box = await chipBox(page);
+        expect(box, `${phase}: the chip has no box`).not.toBeNull();
+        const expected = chipSeatRect(false, false, MODE_VIEWPORT.width);
+        expect(box!.x, `${phase}: chip x`).toBeCloseTo(expected.x, 0);
+        expect(box!.y, `${phase}: chip y`).toBeCloseTo(expected.y, 0);
+        expect(box!.width, `${phase}: chip width`).toBeCloseTo(expected.width, 0);
+        expect(box!.height, `${phase}: chip height`).toBeCloseTo(expected.height, 0);
+      };
+
+      await check('settled boot');
+
+      const modes = await page
+        .locator('.shell-cluster-btn[data-cluster]')
+        .evaluateAll((buttons) => buttons.map((b) => b.getAttribute('data-cluster') ?? ''));
+      expect(modes.length).toBeGreaterThan(0);
+      for (const key of modes) {
+        const button = page.locator(`.shell-cluster-btn[data-cluster="${key}"]`);
+        gate.hold();
+        try {
+          await button.click();
+          await check(`${key}, held loading`);
+        } finally {
+          gate.release();
+        }
+        await expect(button).toHaveAttribute('data-pending', 'false', { timeout: 30_000 });
+        await settleLayout(page);
+        await check(`${key}, settled`);
+
+        const horizons = await page
+          .locator('.shell-horizon-btn')
+          .evaluateAll((buttons) => buttons.map((b) => b.getAttribute('data-horizon') ?? ''));
+        for (const horizon of horizons) {
+          const chip = page.locator(`.shell-horizon-btn[data-horizon="${horizon}"]`);
+          const disabled = (await chip.getAttribute('aria-disabled')) === 'true';
+          if (!disabled) {
+            await chip.click();
+            await expect(page.locator('.shell-cluster-btn[aria-pressed="true"]')).toHaveAttribute(
+              'data-pending',
+              'false',
+              { timeout: 30_000 }
+            );
+          }
+          await settleLayout(page);
+          await check(`${key}, horizon ${horizon}${disabled ? ' (disabled)' : ''}`);
+        }
+      }
+    } finally {
+      gate.release();
+    }
+  });
+
+  test('TL-0 sits at (12, 12) 40x40 (44 coarse) and the chip moves to x 60 (64 coarse) while the sidebar is collapsed', async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await gotoApp(page);
+    await settleLayout(page);
+    await setSidebar(page, 'collapsed');
+
+    const tl0 = await page.locator('#sidebar-expand').boundingBox();
+    const container = await page.locator('#map-container').boundingBox();
+    expect(tl0, 'TL-0 has no box while collapsed').not.toBeNull();
+    expect(container).not.toBeNull();
+    const expectedTl0 = tl0SeatRect(false);
+    expect(tl0!.x - container!.x).toBeCloseTo(expectedTl0.x, 0);
+    expect(tl0!.y - container!.y).toBeCloseTo(expectedTl0.y, 0);
+    expect(tl0!.width).toBeCloseTo(expectedTl0.width, 0);
+    expect(tl0!.height).toBeCloseTo(expectedTl0.height, 0);
+
+    const box = await chipBox(page);
+    expect(box, 'the chip has no box while collapsed').not.toBeNull();
+    const expectedChip = chipSeatRect(true, false, 1440);
+    expect(box!.x).toBeCloseTo(expectedChip.x, 0);
+
+    // found-016: with the sidebar collapsed, elementFromPoint over every
+    // line of the open key detail returns the detail, not TL-0's svg.
+    await page.locator('#map-key-details-toggle').click();
+    const lines = await page.evaluate(() => {
+      const content = document.getElementById('map-key-content');
+      if (!content) return [];
+      const items = Array.from(content.querySelectorAll<HTMLElement>('.map-key-item, .map-key-label'));
+      return items.slice(0, 5).map((el) => {
+        const r = el.getBoundingClientRect();
+        const x = r.left + Math.min(4, r.width / 2);
+        const y = r.top + r.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return { insideDetail: Boolean(hit && content.contains(hit)) };
+      });
+    });
+    expect(lines.length, 'the open key detail rendered no lines to sample').toBeGreaterThan(0);
+    for (const line of lines) expect(line.insideDetail).toBe(true);
+  });
+
+  test('the pill keeps --desktop-loading-top unset from 1280 to 2560 wide', async ({ page }) => {
+    for (const viewport of DESKTOP_VIEWPORTS) {
+      await page.setViewportSize(viewport);
+      await gotoApp(page);
+      await settleLayout(page);
+      const top = await page.evaluate(() =>
+        document.getElementById('app')?.style.getPropertyValue('--desktop-loading-top') ?? ''
+      );
+      expect(top, `${viewport.width}x${viewport.height}: --desktop-loading-top`).toBe('');
+    }
+  });
+
+  test('the dock carries symmetric --dock-inset insets on the desktop shell', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await gotoApp(page);
+    await settleLayout(page);
+    const insets = await page.evaluate(() => {
+      const container = document.getElementById('map-container')?.getBoundingClientRect();
+      const dock = document.getElementById('map-bottom-dock')?.getBoundingClientRect();
+      const token = getComputedStyle(document.querySelector('.app-shell')!).getPropertyValue('--dock-inset');
+      if (!container || !dock) return null;
+      return { left: dock.left - container.left, right: container.right - dock.right, token: parseFloat(token) };
+    });
+    expect(insets).not.toBeNull();
+    expect(insets!.left).toBeCloseTo(insets!.token, 0);
+    expect(insets!.right).toBeCloseTo(insets!.token, 0);
+    expect(insets!.token).toBeCloseTo(MAP_CHROME_TOKENS.dockInset, 0);
+  });
+
+  /**
+   * found-018 (D1.md M10 TEST FIRST list): the top-centre band holds one
+   * transient at a time. The pill yields to nothing; the hover inspector
+   * yields while the pill shows (src/ui/hover-inspector.ts's `pillShowing`
+   * plus its MutationObserver on `#loading-indicator`'s `hidden`
+   * attribute); the copy toast moved into the bottom dock as a notice
+   * (src/ui/overlay.ts's `watchToastSeat`, app.css :2369-2382) so it no
+   * longer competes for the top-centre seat at all.
+   *
+   * Predicted red on the pre-M10 tree: `.loading-indicator` and
+   * `.hover-inspector` share byte-identical `position: absolute; top:
+   * 12px; left: 50%; transform: translateX(-50%)` rules (app.css
+   * :2422-2427, :3620-3624) with no yield code between them, so the pill
+   * paints directly over the inspector's "State Kansas" reading; and
+   * `.copy-toast`'s un-dock-treated rule (app.css :3592-3596) puts it at
+   * that same `top: 12px; left: 50%` seat, so a share click during the
+   * hover reading paints the toast over the inspector too.
+   */
+  test('the loading pill, the hover inspector and the copy toast never overlap (found-018)', async ({
+    page
+  }) => {
+    test.setTimeout(60_000);
+    await page.setViewportSize(MODE_VIEWPORT);
+    const gate = await installLoadingGate(page);
+    try {
+      // Console view: the layer catalog checkboxes (states) sit behind the
+      // console door in Brief (E1 deliverable 1), the same reason
+      // tests/hover-inspector.spec.ts boots to console.
+      await gotoApp(page, '?view=console');
+      await settleLayout(page);
+
+      // Give the hover inspector something to read: the bundled state
+      // boundaries (synchronous, no agency fetch), the same fixture
+      // tests/hover-inspector.spec.ts uses.
+      await layerCheckbox(page, 'states').check();
+      await waitForLayerSettled(page, 'states');
+
+      const mapBox = await page.locator('#map').boundingBox();
+      if (!mapBox) throw new Error('no map box');
+      const cx = mapBox.x + mapBox.width * 0.5;
+      const cy = mapBox.y + mapBox.height * 0.5;
+      const inspector = page.locator('#hover-inspector');
+
+      const hover = async (): Promise<void> => {
+        await expect(async () => {
+          await page.mouse.move(cx - 4, cy - 4);
+          await page.mouse.move(cx, cy);
+          await expect(inspector, 'hover readout never appeared over the state fill').toBeVisible({
+            timeout: 1000
+          });
+        }).toPass({ timeout: 8000 });
+      };
+
+      // Phase 1: idle. Only the inspector is up.
+      await hover();
+      await expect(inspector.locator('.hover-item', { hasText: 'Kansas' })).toHaveCount(1);
+      let rects = await transientRects(page);
+      expect(rects.inspector, 'idle phase: the inspector has no box').not.toBeNull();
+      expect(rects.pill, 'idle phase: the pill should not be up yet').toBeNull();
+      expect(rects.toast, 'idle phase: the toast should not be up yet').toBeNull();
+      assertNoTransientOverlap(rects, 'idle phase');
+
+      // Phase 2: loading. Hold a mode switch in flight (the s4-shell
+      // technique the chip case above already uses) so the pill shows.
+      const modes = await page
+        .locator('.shell-cluster-btn[data-cluster]')
+        .evaluateAll((buttons) =>
+          buttons.map((b) => ({
+            cluster: b.getAttribute('data-cluster') ?? '',
+            pressed: b.getAttribute('aria-pressed') === 'true'
+          }))
+        );
+      const target = modes.find((m) => !m.pressed) ?? modes[0];
+      expect(target, 'no cluster mode button found').toBeTruthy();
+      gate.hold();
+      try {
+        await page.locator(`.shell-cluster-btn[data-cluster="${target!.cluster}"]`).click();
+        await expect(page.locator('#loading-indicator')).toBeVisible({ timeout: 10_000 });
+        // The pointer never moved, so only the MutationObserver on the
+        // pill's `hidden` attribute (not a fresh mousemove) can be what
+        // clears the inspector here.
+        rects = await transientRects(page);
+        expect(rects.pill, 'loading phase: the pill has no box').not.toBeNull();
+        expect(rects.inspector, 'loading phase: the inspector should yield while the pill shows').toBeNull();
+        assertNoTransientOverlap(rects, 'loading phase');
+      } finally {
+        gate.release();
+      }
+      await expect(
+        page.locator(`.shell-cluster-btn[data-cluster="${target!.cluster}"]`)
+      ).toHaveAttribute('data-pending', 'false', { timeout: 30_000 });
+      await expect(page.locator('#loading-indicator')).toBeHidden({ timeout: 15_000 });
+
+      // Phase 3: released. The inspector may show again.
+      await hover();
+      rects = await transientRects(page);
+      expect(rects.inspector, 'released phase: the inspector never came back').not.toBeNull();
+      expect(rects.pill, 'released phase: the pill should be down again').toBeNull();
+      assertNoTransientOverlap(rects, 'released phase');
+
+      // Phase 4: the copy toast (found-018's dock move). Share sits in
+      // whichever seat the shell currently homes it to; `#share-btn` is
+      // the one DOM node regardless (tests/s4-shell.spec.ts's pattern).
+      await page.locator('#share-btn').click();
+      await expect(page.locator('#copy-toast')).toBeVisible();
+      // `toBeVisible` only asks whether the toast has a box; it says
+      // nothing about whether the 0.2s opacity/transform entrance
+      // (app.css ":3606-3628", the design record's "settle, not appear in
+      // a single frame") has finished. Reading geometry mid-transition
+      // caught the toast a few px into its translateY interpolation, a
+      // few px above the dock it had already, correctly, moved into.
+      await expect
+        .poll(() =>
+          page.locator('#copy-toast').evaluate((el) => getComputedStyle(el).transform)
+        )
+        .toBe('matrix(1, 0, 0, 1, 0, 0)');
+      rects = await transientRects(page);
+      expect(rects.toast, 'toast phase: the toast has no box').not.toBeNull();
+      assertNoTransientOverlap(rects, 'toast phase');
+
+      // The toast's OWN seat, not merely its lack of a collision (nothing
+      // else may be up at this instant to collide with): found-018 moved
+      // it into the bottom dock (src/ui/overlay.ts's `watchToastSeat`),
+      // so it must sit inside `#map-bottom-dock`'s box, never back at the
+      // pill/inspector's old top-centre spot (app.css :3592-3596).
+      const dockSeat = await page.evaluate(() => {
+        const dock = document.getElementById('map-bottom-dock')?.getBoundingClientRect();
+        const toast = document.getElementById('copy-toast')?.getBoundingClientRect();
+        if (!dock || !toast) return null;
+        return { toastTop: toast.top, toastBottom: toast.bottom, dockTop: dock.top, dockBottom: dock.bottom };
+      });
+      expect(dockSeat, 'toast phase: could not read the dock or toast box').not.toBeNull();
+      expect(
+        dockSeat!.toastTop,
+        'toast phase: the toast sits above the dock (found-018 seat regression)'
+      ).toBeGreaterThanOrEqual(dockSeat!.dockTop - 1);
+      expect(
+        dockSeat!.toastBottom,
+        'toast phase: the toast sits below the dock (found-018 seat regression)'
+      ).toBeLessThanOrEqual(dockSeat!.dockBottom + 1);
+    } finally {
+      gate.release();
     }
   });
 });
