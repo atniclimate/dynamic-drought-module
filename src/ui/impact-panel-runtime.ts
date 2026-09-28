@@ -464,13 +464,10 @@ function renderObservation(pointHeat: PointHeatBriefing): string {
   `;
 }
 
-function renderGridMetric(
-  metric: PointHeatMetricSeries,
-  open: boolean
-): string {
+function renderGridMetric(metric: PointHeatMetricSeries): string {
   const shown = metric.values.slice(0, 8);
   return `
-    <details class="point-heat-series"${open ? ' open' : ''}>
+    <details class="point-heat-series" data-metric-key="${escapeHtml(metric.key)}">
       <summary>${escapeHtml(metric.label)}</summary>
       <table>
         <thead><tr><th scope="col">Issuer value</th><th scope="col">Valid interval</th></tr></thead>
@@ -506,16 +503,31 @@ function renderGrid(pointHeat: PointHeatBriefing): string {
       grid.note ?? SOURCE_PILL_TEXT[grid.status]
     )}</p>`;
   }
-  const preferred =
-    grid.metrics.find((metric) => metric.key === 'heatIndex')?.key ??
-    grid.metrics.find((metric) => metric.key === 'apparentTemperature')?.key ??
-    grid.metrics[0]?.key;
-  const identity = [grid.office, grid.gridId].filter(Boolean).join(' / ');
+  // Every NWS grid guidance disclosure starts closed (found-023, DDM-P7-T10
+  // M19): no metric is opened by a "preferred" guess, in any
+  // HAZARD_CLUSTER_KEYS mode. A reader's own open or closed choice still
+  // survives a later refresh; see refreshOpenBriefing's disclosure-state
+  // preservation below.
+  // The grid names its cell as the points response gives it (gridX,
+  // gridY), and its office id only when that differs from the forecast
+  // office; the id alone repeats the office ('PDT / PDT', found-023).
+  const gridOffice =
+    grid.gridId && grid.gridId !== grid.office ? grid.gridId : null;
+  const gridCell =
+    grid.gridX !== undefined && grid.gridY !== undefined
+      ? `${grid.gridX},${grid.gridY}`
+      : null;
+  const gridWords = [gridOffice, gridCell].filter(
+    (part): part is string => part !== null
+  );
+  const identityParts = [
+    grid.office ? `NWS office ${grid.office}` : null,
+    gridWords.length > 0 ? `grid ${gridWords.join(' ')}` : null
+  ].filter((part): part is string => part !== null);
+  const identity = identityParts.join(', ');
   return `
     ${identity ? `<p class="point-heat-meta">${escapeHtml(identity)}</p>` : ''}
-    ${grid.metrics
-      .map((metric) => renderGridMetric(metric, metric.key === preferred))
-      .join('')}
+    ${grid.metrics.map((metric) => renderGridMetric(metric)).join('')}
   `;
 }
 
@@ -888,6 +900,25 @@ export function getActiveBriefing(): ImpactBriefing | null {
 }
 
 /**
+ * The `<details>` disclosures whose reader-chosen open or closed state
+ * `refreshOpenBriefing` carries across its own re-render (M19, generalizing
+ * the Technical information-only list): `.impact-technical-information` is a
+ * singleton, and each NWS grid metric disclosure carries its own stable
+ * `data-metric-key` (renderGridMetric). M22 appends the acknowledgements
+ * section's own selector here when it lands.
+ */
+const PRESERVED_DISCLOSURE_SELECTOR =
+  '.impact-technical-information, .point-heat-series[data-metric-key]';
+
+/** A stable identity for one preserved disclosure, survives the re-render
+ * that replaces the DOM node itself. */
+function preservedDisclosureKey(details: HTMLDetailsElement): string {
+  return details.classList.contains('impact-technical-information')
+    ? 'technical-information'
+    : `point-heat-series:${details.dataset['metricKey'] ?? ''}`;
+}
+
+/**
  * Re-render the active briefing in place after its horizons or resources were
  * mutated (async hydration and the F3 resource rehydrate both call this).
  *
@@ -902,18 +933,29 @@ export function getActiveBriefing(): ImpactBriefing | null {
 export function refreshOpenBriefing(token: number): void {
   if (!isCurrentBriefing(token) || !activeBriefing || !bodyEl) return;
   const hadFocusInBody = bodyEl.contains(document.activeElement);
-  const technical = bodyEl.querySelector<HTMLDetailsElement>('.impact-technical-information');
-  const technicalOpen = technical?.open ?? false;
-  const hadTechnicalFocus = technical?.contains(document.activeElement) ?? false;
+  const preservedOpen = new Map<string, boolean>();
+  let focusedDisclosureKey: string | null = null;
+  bodyEl
+    .querySelectorAll<HTMLDetailsElement>(PRESERVED_DISCLOSURE_SELECTOR)
+    .forEach((details) => {
+      const key = preservedDisclosureKey(details);
+      preservedOpen.set(key, details.open);
+      if (details.contains(document.activeElement)) focusedDisclosureKey = key;
+    });
   bodyEl.innerHTML = renderBody(
     activeBriefing,
     activeImpactUnavailableNote
   );
-  const updatedTechnical = bodyEl.querySelector<HTMLDetailsElement>('.impact-technical-information');
-  if (updatedTechnical) {
-    updatedTechnical.open = technicalOpen;
-    if (hadTechnicalFocus) updatedTechnical.querySelector('summary')?.focus({ preventScroll: true });
-  }
+  bodyEl
+    .querySelectorAll<HTMLDetailsElement>(PRESERVED_DISCLOSURE_SELECTOR)
+    .forEach((details) => {
+      const key = preservedDisclosureKey(details);
+      const wasOpen = preservedOpen.get(key);
+      if (wasOpen !== undefined) details.open = wasOpen;
+      if (key === focusedDisclosureKey) {
+        details.querySelector('summary')?.focus({ preventScroll: true });
+      }
+    });
   discloseLegendAnchorTitles(bodyEl);
   applyActiveHazardEmphasis();
   if (hadFocusInBody && panelEl && !panelEl.contains(document.activeElement)) {

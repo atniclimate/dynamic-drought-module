@@ -107,7 +107,9 @@ const POINT_PAYLOAD = {
     observationStations: STATIONS_URL,
     forecast: FORECAST_URL,
     cwa: 'TOP',
-    gridId: 'TOP'
+    gridId: 'TOP',
+    gridX: 31,
+    gridY: 80
   }
 };
 
@@ -614,9 +616,15 @@ test.describe('H2 critical-first surfaces', () => {
     await expect(pointHeat.locator('.point-heat-station')).toContainText(
       'Near Station'
     );
-    const openInterval = pointHeat
-      .locator('.point-heat-series[open] time')
-      .first();
+    // M19: every NWS grid guidance disclosure starts closed, so the series
+    // this case reads from must be opened first (a reader action) rather
+    // than assumed to be the panel's own default-open choice.
+    const heatIndexSeries = pointHeat.locator('.point-heat-series', {
+      hasText: 'Heat index'
+    });
+    await heatIndexSeries.locator('summary').click();
+    await expect(heatIndexSeries).toHaveAttribute('open', '');
+    const openInterval = heatIndexSeries.locator('time').first();
     await expect(openInterval).toHaveAttribute(
       'title',
       '2026-07-30T12:00:00+00:00/PT3H'
@@ -626,6 +634,27 @@ test.describe('H2 critical-first surfaces', () => {
     await expect(
       page.locator('#sheet-report .impact-capability-unavailable')
     ).toHaveCount(0);
+  });
+
+  test('the grid identity line names the NWS office and grid in words', async ({
+    page
+  }) => {
+    await page.clock.setFixedTime('2026-07-29T12:30:00+00:00');
+    await stubBrowserNwsHeat(page);
+    await gotoApp(page, '?select=state:WA');
+
+    const pointHeat = page.locator(
+      '#impact-panel .point-heat[aria-label="Heat at selected point"]'
+    );
+    await expect(pointHeat).toBeVisible();
+    const identity = pointHeat.locator(
+      '.point-heat-card[aria-label="NWS grid guidance"] .point-heat-meta'
+    );
+    // found-023: the office and grid are named in words, never joined by a
+    // bare slash that a reader could mistake for a time zone ('TOP / TOP');
+    // the grid is its cell (the points gridX, gridY), not the office again.
+    await expect(identity).toHaveText('NWS office TOP, grid 31,80');
+    await expect(identity).not.toHaveText(/^[A-Z]+ \/ [A-Z]+$/);
   });
 
   test('embed report exposes the same point heat model without adding URL state', async ({

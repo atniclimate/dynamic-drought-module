@@ -360,6 +360,8 @@ export interface PointHeatGridGuidance {
   note?: string;
   office?: string;
   gridId?: string;
+  gridX?: number;
+  gridY?: number;
   generatedAt?: string;
   metrics: readonly PointHeatMetricSeries[];
 }
