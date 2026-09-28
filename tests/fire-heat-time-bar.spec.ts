@@ -491,7 +491,12 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
     await expect(page.locator('#time-bar')).toHaveAttribute('data-register', 'observed');
   });
 
-  test('near term with no area outlined: the outlook stamp says the response states no valid period', async ({
+  // Retitled 2026-09-27 (found-079): the old title quoted the old detail's
+  // exact words ("the response states no valid period"); a genuinely empty
+  // FeatureCollection is a different case from the issuer's no-area answer
+  // (dn 0, null geometry, covered by the M5 case below), so the detail no
+  // longer borrows that answer's words either.
+  test('near term with a genuinely empty response: the outlook stamp says the response contains no outlook area', async ({
     page
   }) => {
     await stubCommon(page);
@@ -511,7 +516,11 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
     });
     // Clause 4: no window is invented from the calendar.
     expect(stamp.headline).toBe('Outlook · valid period not stated by the response');
-    expect(stamp.detail).toContain('an empty response states no valid period');
+    expect(stamp.detail).toBe(
+      'NOAA SPC Day 1 Fire Weather Outlook · the response contains no outlook area'
+    );
+    expect(stamp.detail).not.toContain('states no valid period');
+    expect(stamp.detail).not.toContain('no fire-weather area is outlined');
     expect(stamp.headline).not.toMatch(/\d{4}/);
   });
 
@@ -567,7 +576,10 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
     expect(stamp.headline).toBe(
       'Outlook valid Sep 26, 2026, 12:00 UTC to Sep 27, 2026, 12:00 UTC'
     );
-    expect(stamp.detail).toContain('no fire-weather area is outlined in the current issuance');
+    expect(stamp.detail).toContain(
+      "No Risk Areas Forecast (DDM's reading of the service's no-area response, using SPC's own term for this state from its Day 1 Fire Weather Outlook page)"
+    );
+    expect(stamp.detail).not.toContain('no fire-weather area is outlined');
     expect(stamp.detail).not.toContain('states no valid period');
   });
 

@@ -171,10 +171,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * on the outlined areas (clause 3). An issuance with no outlined area is
  * the common good-news case: when the response is the issuer's no-area
  * answer (`readNoAreaAnswer`) the stamp states the period that answer
- * carries; when it is an empty collection it carries no window, so the
- * stamp says the period is not stated (clause 4) rather than inventing
- * one from the calendar. The register is outlook, and the text says so in
- * the issuer's product name.
+ * carries, and its detail borrows SPC's own phrase for that state, "No
+ * Risk Areas Forecast" (from the Day 1 Fire Weather Outlook product page,
+ * not from the MapServer's undocumented dn=0), rather than presenting the
+ * service itself as defining that value (2026-09-27, found-079); when it
+ * is a genuinely empty collection it carries no window, so the stamp says
+ * the period is not stated (clause 4) and its detail says only that the
+ * response carries no outlook area, not the no-area answer's own words.
+ * The register is outlook, and the text says so in the issuer's product
+ * name.
  */
 function installTimeBar(
   features: FeatureCollection['features'],
@@ -193,8 +198,9 @@ function installTimeBar(
     features.length > 0
       ? 'NOAA SPC Day 1 Fire Weather Outlook · an outlook of fire-weather conditions favorable for fire spread, not a fire danger rating and not an active fire'
       : noArea !== null
-        ? 'NOAA SPC Day 1 Fire Weather Outlook · no fire-weather area is outlined in the current issuance'
-        : 'NOAA SPC Day 1 Fire Weather Outlook · no fire-weather area is outlined in the current issuance; an empty response states no valid period';
+        ? // vocab-allow: verbatim SPC term for this state, from its Day 1 Fire Weather Outlook product page (2026-09-27, found-079)
+          'NOAA SPC Day 1 Fire Weather Outlook · No Risk Areas Forecast (DDM\'s reading of the service\'s no-area response, using SPC\'s own term for this state from its Day 1 Fire Weather Outlook page)'
+        : 'NOAA SPC Day 1 Fire Weather Outlook · the response contains no outlook area';
   setTimeBar(LAYER_KEY, {
     ariaLabel: 'SPC Day 1 Fire Weather Outlook valid period',
     stamp: {
