@@ -42,7 +42,7 @@ import {
 } from '../config/layers';
 import type { LayerActivation, LayerDef, LayerModule } from '../config/layers';
 import type { ViewPreset } from '../config/presets';
-import { isCommittedRecipeKey } from './cluster-service';
+import { isCommittedCompositionKey } from './cluster-service';
 import { registry } from './registry';
 import { reassertLabelOrder, reassertThematicOrder } from '../map/layer-order';
 import { fadeInLayers, fadeOutLayers } from '../util/layer-fade';
@@ -188,9 +188,10 @@ export function createLayerController(
    * DOM snapshot synchronously off the registry's `change` event
    * (`checkedLayerKeys` in src/ui/sidebar.ts), not the registry's active set;
    * a share URL booted from a failed key must self-correct on this same
-   * tick. Since D1 M5 (2026-09-27) the uncheck is scoped: a recipe member of
-   * the committed cluster (`isCommittedRecipeKey`) stays checked and in the
-   * share URL, so its failure never demotes the committed view; the
+   * tick. Since D1 M5 (2026-09-27) the uncheck is scoped: a member of the
+   * committed cluster's composition, recipe or persistent reference
+   * (`isCommittedCompositionKey`; widened for found-073) stays checked and in
+   * the share URL, so its failure never demotes the committed view; the
    * registry steps below run for every failure.
    *
    * Then read `registry.getStatus(key)` BEFORE deactivating, to tell the two
@@ -218,8 +219,10 @@ export function createLayerController(
    */
   function failActivation(key: string): void {
     // Scope of the uncheck (D1 M5, 2026-09-27; found-002 and found-003,
-    // the director's Tier 1 scope): a RECIPE member of the committed
-    // cluster keeps its checkbox and its on-intent. Unchecking it made the
+    // the director's Tier 1 scope; found-073 widened it from the recipe to
+    // the whole composition, so hillshade and the boundaries count too): a
+    // member of the committed composition keeps its checkbox and its
+    // on-intent. Unchecking it made the
     // checked set diverge from the committed composition, so the cluster
     // service demoted the view to a custom set: no hazard pressed,
     // `cluster=` gone from the URL, and the horizon chips locked. Kept
@@ -227,10 +230,10 @@ export function createLayerController(
     // token, or Drought's `layers=` list), reads unavailable from its
     // 'error' status, and a press of the committed hazard re-requests it
     // (cluster-service.ts applyCluster). Every other failure (a custom
-    // `layers=` set, a reference layer) self-corrects out of the URL
-    // exactly as before. The predicate is read BEFORE anything changes,
-    // while the checked set still describes the display.
-    if (!isCommittedRecipeKey(key)) {
+    // `layers=` set) self-corrects out of the URL exactly as before. The
+    // predicate is read BEFORE anything changes, while the checked set
+    // still describes the display.
+    if (!isCommittedCompositionKey(key)) {
       view.setCheckbox(key, false);
       desiredOn.set(key, false);
     }
@@ -268,8 +271,8 @@ export function createLayerController(
   /**
    * Activate a layer with a loading-indicator token around the call. Updates
    * the registry on success; on failure runs `failActivation`, which
-   * unchecks the checkbox unless the key is a recipe member of the
-   * committed cluster (D1 M5).
+   * unchecks the checkbox unless the key is a member of the committed
+   * cluster's composition (D1 M5, found-073).
    *
    * The registry is set to `loading` before the activation so the status pill
    * updates immediately; the layer module is responsible for setting its own
@@ -330,10 +333,10 @@ export function createLayerController(
         // no-data, or zoom-in). This protects the URL-as-state invariant
         // (critical-review finding #2, 2026-07-07). Scope since D1 M5
         // (2026-09-27): the key never registers active either way, but a
-        // recipe member of the committed cluster keeps its checkbox and its
+        // member of the committed composition keeps its checkbox and its
         // place in the share URL, because the URL then claims the committed
         // view the user chose, whose summary names the layer unavailable;
-        // only a custom set's or a reference layer's failure leaves the URL.
+        // only a custom set's failure leaves the URL (found-073).
         if (registry.getStatus(def.key) === 'error') {
           endAttempt(def.key, activation);
           try {

@@ -88,8 +88,9 @@ export interface CommittedShellSnapshot {
   readonly revision: number;
   /** The hazard view the user most recently chose. This remains stable when
    * the exact displayed set demotes to `custom` (a user customization, or a
-   * failed layer outside the committed recipe; a failed RECIPE layer no
-   * longer demotes, D1 M5, see `isCommittedRecipeKey`). */
+   * failed layer of a custom set; a failed layer of the committed
+   * composition no longer demotes, D1 M5 and found-073, see
+   * `isCommittedCompositionKey`). */
   readonly selectedHazard: HazardClusterKey;
   /** The committed cluster, or 'custom' once the granular intent has
    * diverged from any cluster's composition (D-0.7.0-044). */
@@ -269,31 +270,27 @@ export function onCommittedSnapshotChange(fn: () => void): () => void {
 }
 
 /**
- * Whether a layer key is a RECIPE member of the committed cluster: the
- * cluster's recipe at the horizon its intent was resolved at, with any
- * `coActivateWith` pair expanded as `composeClusterIntent` expands it. The
- * persistent reference set is NOT a recipe member, and a 'custom' display
- * has no recipe.
+ * Whether a layer key is a member of the committed cluster's COMPOSITION:
+ * the intent `composeClusterIntent` resolved for it, which is the persistent
+ * reference set (hillshade, the boundaries, the state hairlines) plus the
+ * recipe at the resolved horizon with any `coActivateWith` pair expanded. A
+ * 'custom' display (including a switch demoted by a reference extra) has no
+ * composition.
  *
  * The layer controller reads this when an activation fails (D1 M5,
- * 2026-09-27; found-002 and found-003, the director's Tier 1 scope): a
- * failed recipe member of the committed cluster keeps its checkbox, so the
- * checked set still equals the committed composition, no demotion runs, the
- * hazard stays pressed, `cluster=` stays in the URL, and Current Conditions
- * stays enabled as the way back; the layer reads unavailable (its registry
- * status stays 'error'). Any other failure (a custom `layers=` set, a
- * reference layer) keeps the uncheck-and-leave cleanup.
+ * 2026-09-27; found-002 and found-003, the director's Tier 1 scope; widened
+ * from the recipe to the whole composition for found-073, the director's
+ * ruling of 2026-09-27): a failed member of the committed composition keeps
+ * its checkbox, so the checked set still equals the committed composition,
+ * no demotion runs, the hazard stays pressed, `cluster=` (or Drought's
+ * `layers=` list) stays in the URL unchanged, and Current Conditions stays
+ * enabled as the way back; the layer reads unavailable (its registry status
+ * stays 'error'). A failure outside the composition (a custom `layers=`
+ * set) keeps the uncheck-and-leave cleanup.
  */
-export function isCommittedRecipeKey(key: string): boolean {
-  const { cluster, horizon } = resolveCommitted();
-  if (cluster === 'custom') return false;
-  for (const recipeKey of HAZARD_CLUSTERS[cluster].recipes[horizon]) {
-    if (recipeKey === key) return true;
-    for (const partner of getLayerDef(recipeKey)?.coActivateWith ?? []) {
-      if (partner === key) return true;
-    }
-  }
-  return false;
+export function isCommittedCompositionKey(key: string): boolean {
+  const { cluster, intent } = resolveCommitted();
+  return cluster !== 'custom' && intent.has(key);
 }
 
 /** Every key currently "on": checked intent union registered active
@@ -370,8 +367,9 @@ function applyCluster(
       }
       requestLayerOff(onKey);
     }
-    // A recipe member whose activation failed stays checked (D1 M5; see
-    // isCommittedRecipeKey), so requestLayerOnExact alone would skip it as
+    // A composition member whose activation failed stays checked (D1 M5,
+    // found-073; see isCommittedCompositionKey), so requestLayerOnExact
+    // alone would skip it as
     // already on and a press of the committed hazard would do nothing
     // (found-003's "clicking Wildfire again does nothing"). Such a key is
     // checked, not registered active, and holds the terminal 'error'
@@ -469,15 +467,15 @@ export function requestHorizon(next: TemporalHorizonKey): void {
  * matches the committed composition (D-0.7.0-044: the moment the user
  * customizes, `cluster=` comes off and `layers=` goes on; the URL never
  * claims a cluster the display is not). Called by the sidebar on every
- * checkbox-intent flip. A terminal activation failure of a RECIPE member
- * of the committed cluster no longer lands here (D1 M5, 2026-09-27;
- * found-003): the controller keeps that box checked
- * (`isCommittedRecipeKey`), the view stays committed, and the failed layer
- * reads unavailable in the pill and in the summary caveat, which names it
- * because it stays in the committed intendedKeys. A failure the
- * controller does uncheck (a reference layer, or any layer of a custom
- * set) still lands here, and so does a user's own uncheck of a recipe
- * member: that display is no longer the cluster.
+ * checkbox-intent flip. A terminal activation failure of a member of the
+ * committed composition, recipe or reference, no longer lands here (D1 M5,
+ * 2026-09-27, found-003; found-073): the controller keeps that box checked
+ * (`isCommittedCompositionKey`), the view stays committed, and the failed
+ * layer reads unavailable in the pill and in the summary caveat, which
+ * names it because it stays in the committed intendedKeys. A failure the
+ * controller does uncheck (any layer of a custom set) still lands here,
+ * and so does a user's own uncheck of a composition member: that display
+ * is no longer the cluster.
  * Stands down while the service itself is applying a cluster, so the
  * transaction's own intermediate flips can never demote the cluster it
  * is committing (the S2-mechanics defect this service retires).

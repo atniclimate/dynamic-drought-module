@@ -52,7 +52,8 @@ export function formatGroupHealth(
  * Aggregate health of the group's action set, from the eager bridge
  * (intent) plus the eager registry (outcome). A member counts unavailable
  * ONLY on registry status 'error': a terminally failed boot activation
- * keeps its re-asserted error status after the controller unchecks it, and
+ * keeps its re-asserted error status (in a custom set the controller
+ * unchecks it; in a committed view it stays checked, found-073), and
  * a failed live refresh reports error while staying checked. A valid empty
  * response ('no-data') is an ANSWER, never a failure (the Unit C wording
  * owns its presentation), so it stays out of the unavailable count.

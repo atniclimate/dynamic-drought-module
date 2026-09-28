@@ -331,9 +331,12 @@ test.describe('URL intent durability (the final-pass finding 1 pair)', () => {
 });
 
 test.describe('partial-outage visibility (the final-pass finding 2)', () => {
-  // The Unit I default boot selects the two present-day layers; the BIA
-  // outage unchecks one, leaving one selected and one unavailable.
-  const HEALTH_DEGRADED = '1 of 2 selected · 1 unavailable';
+  // The Unit I default boot selects the two present-day layers. Since
+  // found-073 (2026-09-27) a failed layer of the committed composition stays
+  // checked (M5's rule, extended from the recipe to the composition), so the
+  // BIA outage leaves both selected and one unavailable; it used to uncheck
+  // BIA and demote the Drought view to a custom set.
+  const HEALTH_DEGRADED = '2 of 2 selected · 1 unavailable';
   const BRIEF_HEALTH =
     '.tribal-nations-brief-row:not(.tribal-nations-at-hand-row) .tribal-nations-health';
 
@@ -406,8 +409,9 @@ test.describe('partial-outage visibility on mobile (390x844)', () => {
 
     await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
     await expect(page.locator('#sheet-at-hand')).toBeVisible();
+    // found-073: the failed BIA layer stays checked in the committed view.
     await expect(page.locator('#tribal-nations-at-hand-health')).toHaveText(
-      '1 of 2 selected · 1 unavailable',
+      '2 of 2 selected · 1 unavailable',
       { timeout: 25_000 }
     );
   });
