@@ -11,3 +11,10 @@ declare const __DDM_BUILD_SHA__: string;
  * commit are distinguishable.
  */
 declare const __DDM_BUILD_NONCE__: string;
+
+/**
+ * package.json's `version` field (vite.config.ts `define`; found-028 /
+ * DDM-P0-T14), the way the build SHA above is embedded, so the sidebar
+ * footer never carries a hand-maintained literal.
+ */
+declare const __DDM_VERSION__: string;

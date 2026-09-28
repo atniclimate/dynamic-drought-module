@@ -233,6 +233,11 @@ async function boot(): Promise<void> {
   // build (the nonce distinguishes two servers on the same commit).
   document.documentElement.dataset.ddmBuildSha = __DDM_BUILD_SHA__;
   document.documentElement.dataset.ddmBuildNonce = __DDM_BUILD_NONCE__;
+  // found-028 / DDM-P0-T14: the footer version is stamped from the same
+  // build-time constant, never a runtime fetch of package.json and never a
+  // hand-maintained literal in index.html.
+  const footerVersionEl = document.getElementById('footer-version');
+  if (footerVersionEl) footerVersionEl.textContent = `v${__DDM_VERSION__}`;
   // The third stamp: `data-ddm-boot` reads `booting` from here and `idle`
   // once the map has loaded, every URL-named layer has left `loading`, and
   // no shared transport is in flight (src/state/boot-idle.ts, DR-052).
