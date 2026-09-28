@@ -414,7 +414,8 @@ test.describe('map information reaches the desktop and stays out of embeds', () 
 
     const button = page.locator('#map-info-btn');
     await expect(button).toBeVisible();
-    await expect(button).toHaveAttribute('aria-label', 'Map information');
+    // 2026-09-27, S30D D1 M9: the desktop seat shows the word Help, so its name leads with it (WCAG 2.5.3).
+    await expect(button).toHaveAttribute('aria-label', 'Help and map information');
     await expect(button).toHaveAttribute('aria-expanded', 'false');
     await expect(page.locator('#map-info-panel')).toBeHidden();
 

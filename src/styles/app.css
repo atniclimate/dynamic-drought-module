@@ -161,7 +161,9 @@
   --mobile-map-control-radius: var(--radius-sm);
   --mobile-map-key-collapsed-height: 224px;
   /* The one map-control family width (E2, D-0.7.0-058 ruling 2): Share
-     view, Reset, and the Satellite switcher all render at this width. */
+     view, Reset, and the Satellite switcher all render at this width on
+     phones and in embeds. The desktop shell's column reads --map-cell-w
+     instead (S30D D1 M9, THE DESKTOP COLUMN). */
   --map-ctrl-w: 104px;
   /* Impact-panel geometry (UI-02). The panel's width and the bottom
      dock's inset were two independent literals (440px and 452px) that
@@ -192,7 +194,8 @@
   --map-dock-bottom: 34px;
   /* The round map-information disclosure. Its diameter drove three
      literals that must move together: the button box and the top edge
-     of the panel it opens, in both the desktop and the embed corner. */
+     of the panel it opens, in the embed corner. (The desktop shell's help
+     is a column cell since S30D D1 M9 and does not read this.) */
   --map-info-size: 28px;
 
   /* Stacking order (UI-12). Every z-index in this file below was a bare
@@ -239,6 +242,30 @@
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-enter: cubic-bezier(0, 0, 0, 1);
   --ease-exit: cubic-bezier(0.3, 0, 1, 1);
+
+  /* D1 CHROME TOKENS (S30D D1 M9, DR-101; the one labelled D1 block).
+     Only the names D1's map-chrome faces need, with the names and values
+     of the D3 palette record (run folder design/palette-tokens.md section
+     2; each line cites its row). They are NEW names: today's --bg-*,
+     --fg-* and --line* above are untouched, so nothing else moves. D1 code
+     reads these names and never a hex literal outside this block. D3
+     later makes today's names aliases of these without changing a value
+     twice. tests/contrast-contract.test.mjs pins every ratio D1 relies on,
+     computed from these values. */
+  --surface-raised: #141414;             /* S1, "Surfaces": the opaque map-cell face */
+  --surface-overlay: #1E242C;            /* S2, "Surfaces": cell hover, the Map information drawer */
+  --surface-hover: #2A3138;              /* S3, "Surfaces": the pressed (selected) plate */
+  --ink-strong: #FFFFFF;                 /* T0, "Ink": pressed label, pressed edge and bar */
+  --ink: #E8ECF0;                        /* T1, "Ink": cell glyph and label at rest and hover */
+  --ink-soft: #C6CBD4;                   /* T2, "Ink": secondary text in the drawer */
+  --ink-muted: #98A1B4;                  /* T3, "Ink": opaque surfaces only */
+  --ink-faint: #8A94A6;                  /* T4, "Ink": S0 to S2 only */
+  --keyline: #C6CBD4;                    /* "Swatches and value text": the 1 px cell edge */
+  --rule-strong: #636363;                /* "Rules and control boundaries": divider only */
+  --focus-inner: #FFFFFF;                /* "Focus": the 2 px ring */
+  --focus-outer: #010B13;                /* "Focus": the 4 px casing */
+  --glass-read: rgba(1, 11, 19, 0.72);   /* "Glass": desktop glass that carries text */
+  --link-on-dark: #F26B5E;               /* "Buttons and links": opaque S0 to S2 only */
 }
 
 * {
@@ -1687,7 +1714,10 @@ button.conditions-metric:hover .conditions-action-hide {
    slate, and the shared family width, relabeled "Satellite" so it reads
    with the Share view / Reset stack. The pressed (satellite) state lights
    with the accent tokens. One button, real semantics; aria-pressed is set
-   by the control. */
+   by the control. Since S30D D1 M9 these faces hold where the control sits
+   in MapLibre's corner (phones, embeds) and in the LAYERS studio header;
+   in the desktop column's slot 2 the cell faces of THE DESKTOP COLUMN
+   replace them, the cyan on-state included. */
 .basemap-switcher-btn {
   width: var(--map-ctrl-w) !important;
   padding: 0 7px;
@@ -2387,7 +2417,13 @@ button.conditions-metric:hover .conditions-action-hide {
    design model (sharp rectangles, background transparency): Share view and
    Reset stack vertically at ONE uniform width, and the basemap switcher
    below carries the same width and chrome so the three buttons read as one
-   family. The width token is shared with .basemap-switcher-btn. */
+   family. The width token is shared with .basemap-switcher-btn.
+
+   Since S30D D1 M9 this base rule and the E2 faces hold for phones (720px
+   and below, re-seated by the sheet rules) and embeds only. The desktop
+   shell outside an embed turns the same element into the four-slot column
+   of "THE DESKTOP COLUMN" below: one family still, now opaque, square,
+   labelled cells (owner rulings R1 a and R2 a). */
 .map-overlay-controls {
   position: absolute;
   top: 12px;
@@ -2406,6 +2442,13 @@ button.conditions-metric:hover .conditions-action-hide {
    column and the existing child rules keep meaning what they say. */
 .map-overlay-seat {
   display: contents;
+}
+
+/* Slot 4's reserved box (S30D D1 M9) exists on the desktop shell only. An
+   empty flex item would still take a gap in the phone and embed stacks,
+   so everywhere else it generates no box at all. */
+.map-spine-reserve {
+  display: none;
 }
 
 /* The key in the control column is bounded by the column, not by the
@@ -2475,6 +2518,241 @@ button.conditions-metric:hover .conditions-action-hide {
 .overlay-btn:hover {
   background: rgba(27, 41, 66, 0.9);
   color: var(--fg-0);
+}
+
+/* ----------------------------------------------------------------------------
+   THE DESKTOP COLUMN (S30D D1 M9; register owner-1f, DDM-P10-T11; design
+   record interface-chrome-popups-text.md sections 2.1 to 2.3 and 2.6;
+   owner rulings R1 a, square-edged labelled cells, and R2 a, Share in a
+   reserved slot 4).
+
+   Four fixed slots, top to bottom: 1 Reset, 2 SAT (MapLibre's control,
+   moved in by src/map/init.ts), 3 Help with its Map information drawer
+   (moved in by src/ui/map-information.ts), 4 Share view, reserved. The
+   grid rows are explicit, so a slot's box exists whether or not its
+   control is there: the Brief shell's Share rehost empties slot 4 and
+   nothing else moves (the 2026-09-13 stable-position rule, measured to
+   1px by tests/map-chrome-seats.spec.ts). The seat table lives in
+   src/config/map-chrome.ts and tests/map-chrome-contract.test.mjs keeps
+   these tokens equal to it.
+
+   Faces (DR-101; the D1 token block in :root): opaque S1 with a 1px
+   keyline edge at rest, S2 on hover, the S3 plate with a white edge and a
+   2px leading bar when pressed (SAT on, Help open). Opaque because SAT and
+   the words are text and need 4.5:1, which no glass gives over white
+   imagery. No red, no blur, no radius, no shadow. The `!important` marks
+   answer the base .basemap-switcher-btn rule and MapLibre's control-group
+   rules, which the phone and embed seats still use.
+
+   Every rule is desktop-only and outside an embed: phones and embeds keep
+   today's seats and faces, and --map-ctrl-w stays theirs.
+   ---------------------------------------------------------------------------- */
+@media (min-width: 721px) {
+  /* The chrome geometry tokens, mirrored in MAP_CHROME_TOKENS. The chip,
+     drawer, popup and dock tokens are declared here for M10, M11 and M23
+     and read by nothing yet. --popup-measure is the sidebar foot's content
+     width at the 340px sidebar (340 minus two 18px paddings), provisional
+     until M23 measures it.
+     --map-cell-w is the design record's 124px raised to the measured need
+     (D1.md :295, one token). The director's probe, 2026-09-27, in the
+     built app at 1280x900 and 1440x900, ?view=console, Lexend: the
+     "Share view" word is about 78.4px wide and at 124px its ink ended at
+     x 1260.42 in a cell whose right edge is 1268, about 2.4px into the
+     1px edge plus 9px padding. The need is 1 + 9 + 20 + 8 + 78.4 + 9 + 1
+     = 126.4px; 128px is the next 4px step. */
+  .app-shell:not(.embed) {
+    --chrome-inset: 12px;
+    --map-cell-w: 128px;
+    --map-cell-h: 40px;
+    --map-cell-gap: 4px;
+    --chip-w: 288px;
+    --key-drawer-w: 336px;
+    --info-drawer-w: 360px;
+    --popup-measure: 304px;
+    --dock-inset: 196px;
+  }
+}
+@media (min-width: 721px) and (pointer: coarse) {
+  /* A hand gets the 44px floor (DR-036 a) in the cell's height; the slot
+     formula follows, so slot 2 sits at y 60, slot 3 at 108, slot 4 at 156. */
+  .app-shell:not(.embed) {
+    --map-cell-h: var(--touch-target);
+  }
+}
+@media (min-width: 721px) {
+  .app-shell:not(.embed) .map-overlay-controls {
+    top: var(--chrome-inset);
+    right: var(--chrome-inset);
+    display: grid;
+    grid-template-columns: var(--map-cell-w);
+    grid-template-rows: repeat(4, var(--map-cell-h));
+    grid-auto-rows: auto;
+    gap: var(--map-cell-gap);
+    align-items: stretch;
+    justify-items: stretch;
+    width: var(--map-cell-w);
+    /* The empty reserved slot and the gaps never swallow a map click. */
+    pointer-events: none;
+  }
+  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='1'] { grid-area: 1 / 1; }
+  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='2'] { grid-area: 2 / 1; }
+  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='3'] { grid-area: 3 / 1; }
+  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='4'],
+  .app-shell:not(.embed) .map-overlay-controls > #share-btn { grid-area: 4 / 1; }
+  /* Slots 2 and 3 stop being `display: contents` and become their own
+     boxes: the moved control fills its slot, and slot 3 anchors the
+     drawer. Slot 4's box is the reserve span, under Share when Share is
+     home. */
+  .app-shell:not(.embed) .map-overlay-controls > .map-spine-slot {
+    display: block;
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+  }
+  .app-shell:not(.embed) .map-overlay-controls > .map-spine-reserve {
+    display: block;
+  }
+  /* A physically framed page that is not an embed still gets the full-site
+     link-outs (src/ui/view-shell.ts); they follow the grid, never take a
+     slot. */
+  .app-shell:not(.embed) .map-overlay-controls > .studio-linkout-pair {
+    grid-column: 1;
+    grid-row: 5;
+    justify-self: end;
+    pointer-events: auto;
+  }
+
+  /* MapLibre's control group, borrowed into slot 2, loses its white card
+     and rounded corners and fills the slot. */
+  .app-shell:not(.embed) #basemap-switcher-overlay-host > .basemap-switcher-control {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    float: none;
+    background: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /* The cell (R1 a): a fixed 20px icon column, an 8px gap, then the word.
+     The 1px edge plus 9px padding puts every icon centre 20px in from the
+     cell's left edge: one x for the whole column, W - 12 - --map-cell-w
+     + 20 (W - 120 at 128px). */
+  .app-shell:not(.embed) .map-overlay-controls .map-cell {
+    box-sizing: border-box;
+    display: grid !important;
+    grid-template-columns: 20px 1fr;
+    column-gap: 8px;
+    align-items: center;
+    justify-content: start;
+    width: 100% !important;
+    height: 100%;
+    margin: 0;
+    padding: 0 9px;
+    border: 1px solid var(--keyline);
+    border-radius: 0;
+    background: var(--surface-raised) !important;
+    color: var(--ink) !important;
+    box-shadow: none;
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1;
+    text-align: left;
+    text-transform: none;
+    white-space: nowrap;
+    cursor: pointer;
+    pointer-events: auto;
+    transition:
+      background-color var(--dur-micro) var(--ease-standard),
+      border-color var(--dur-micro) var(--ease-standard),
+      color var(--dur-micro) var(--ease-standard);
+  }
+  /* Every glyph is inline SVG in a 24 box, drawn at 20px with a 2px
+     stroke (SAT's markup says 22px at 1.8 for its phone and embed seats). */
+  .app-shell:not(.embed) .map-overlay-controls .map-cell > svg {
+    display: block;
+    flex: none;
+    width: 20px;
+    height: 20px;
+    justify-self: center;
+    stroke-width: 2;
+  }
+  /* The word. Trimmed to cap height and baseline so it centres in the
+     cell by its capitals, not by its line box. Never an ellipsis. */
+  .app-shell:not(.embed) .map-overlay-controls .map-cell > span {
+    display: block;
+    justify-self: start;
+    min-width: 0;
+    text-box: trim-both cap alphabetic;
+  }
+  .app-shell:not(.embed) .map-overlay-controls .map-cell:hover {
+    background: var(--surface-overlay) !important;
+    color: var(--ink) !important;
+  }
+  /* Pressed: SAT on (aria-pressed) or Help's drawer open (aria-expanded). */
+  .app-shell:not(.embed) .map-overlay-controls .map-cell:is([aria-pressed='true'], [aria-expanded='true']) {
+    background: var(--surface-hover) !important;
+    color: var(--ink-strong) !important;
+    border-color: var(--ink-strong);
+    box-shadow: inset 2px 0 0 var(--ink-strong);
+  }
+  /* One ring for all chrome (palette-tokens.md section 2, "Focus"): the
+     better of the pair is at least 4.45:1 against any backdrop. */
+  .app-shell:not(.embed) .map-overlay-controls .map-cell:focus-visible {
+    outline: 2px solid var(--focus-inner);
+    outline-offset: 0;
+    box-shadow: 0 0 0 4px var(--focus-outer);
+  }
+  .app-shell:not(.embed) .map-overlay-controls .map-cell:is([aria-pressed='true'], [aria-expanded='true']):focus-visible {
+    box-shadow:
+      inset 2px 0 0 var(--ink-strong),
+      0 0 0 4px var(--focus-outer);
+  }
+}
+@media (min-width: 721px) and (prefers-reduced-motion: reduce) {
+  .app-shell:not(.embed) .map-overlay-controls .map-cell {
+    transition: none;
+  }
+}
+/* THE TABLET BAND (owner ruling DR-153, 2026-09-28, RATIFICATION-6 Q2 and
+   Q2b: "For tablet/narrow view, we can use the same icon buttons as mobile
+   view", for the whole band). The app's own tablet query (721 to 1024px,
+   DDM-P10-T01; the same text as the band's --sidebar-w rule near the top
+   of this file), sidebar open or collapsed, with no chip arithmetic: the
+   family is icon squares at the band's 44px touch floor on every pointer
+   (DR-036 a, "tablet is touch-first"), the word visually hidden with the
+   .sr-only pattern and every accessible name and `title` kept (DR-154).
+   Slots, the 4px gap, faces, edges and the focus ring are unchanged; the
+   drawer's seat and width already read --map-cell-w. Declared after the
+   desktop cell rules so it wins at equal specificity. Mirrored by
+   MAP_CHROME_TABLET_BAND in src/config/map-chrome.ts and pinned by
+   tests/map-chrome-contract.test.mjs. Above 1024px the labelled cells of
+   ruling R1 a stand; phones and embeds never see any of this. */
+@media (min-width: 721px) and (max-width: 1024px) {
+  .app-shell:not(.embed) {
+    --map-cell-w: var(--touch-target);
+    --map-cell-h: var(--touch-target);
+  }
+  .app-shell:not(.embed) .map-overlay-controls .map-cell {
+    grid-template-columns: 20px;
+    justify-content: center;
+    place-items: center;
+    padding: 0;
+  }
+  /* The project's visually-hidden pattern (.sr-only). */
+  .app-shell:not(.embed) .map-overlay-controls .map-cell > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
 }
 
 .layers-studio-linkout {
@@ -5615,52 +5893,37 @@ a.impact-resource-link::after {
 }
 .map-info-attribution a { color: var(--fg-1); }
 
-/* ----------------------------------------------------------------------------
-   The desktop bottom-right corner (owner direction, 2026-08-31,
-   superseding 2026-08-19).
+/* Help's visible word exists for the desktop column's labelled cell only;
+   the phone and embed seats are the round question-mark button, named by
+   its aria-label, so the word stays out of their layout. */
+.map-info-btn > .map-cell-label {
+  display: none;
+}
 
-   One round question-mark button in the corner; the pre-1.0 preview
-   badge sits bottom center. The 2026-08-19 ruling seated MapLibre's
-   compact attribution circle beside the question mark; the 2026-08-31
-   direction removed that circle in every shell and moved the license
-   credits into the question-mark panel, which now answers both "what am
-   I looking at?" and "who says so?". The credits stay one click away
-   (the license obligation), never absorbed into silence.
+/* ----------------------------------------------------------------------------
+   Help and the Map information drawer on the desktop shell (S30D D1 M9;
+   design record interface-chrome-popups-text.md sections 2.2, 2.3 and 2.6;
+   superseding the 2026-08-31 bottom-right corner).
+
+   Help is slot 3 of the desktop column, a labelled cell like its
+   neighbours (THE DESKTOP COLUMN, above), and its panel is the right-hand
+   drawer: it docks against the column, its top on the help slot's top and
+   its right edge 8px left of the column (container right 12 +
+   --map-cell-w + 8, so 148 at 128px), and it slides out from behind the
+   column. The panel still answers
+   "what am I looking at?" and "who says so?": the license credits stay
+   one click away, never absorbed into silence. It is ephemeral (no URL
+   key), Escape closes it and returns focus to Help, and a map click does
+   not close it (src/ui/map-information.ts, unchanged).
+
+   The retired corner treatment went with the move: the 28px circle, its
+   rgba(15, 23, 42, 0.85) face and its accent ring. Embeds keep that corner
+   and its circle (the FE-18 rules below), and phones keep their rail.
+
+   The preview badge sits bottom center (owner direction, 2026-08-31). It
+   stays pointer-events: none, so it can never intercept a map click.
    ---------------------------------------------------------------------------- */
 @media (min-width: 721px) {
-  /* Scoped :not(.embed) (FE-18, 2026-08-28): embeds keep the pre-2026-08-19
-     seats (index.html, map-control-seat.ts, interface-responsive.spec.ts), so
-     none of this corner treatment may leak into an iframe. */
-  .app-shell:not(.embed) .map-info-btn {
-    appearance: none;
-    position: absolute;
-    right: 10px;
-    bottom: 8px;
-    z-index: calc(var(--z-map-control) + 20);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: var(--map-info-size);
-    height: var(--map-info-size);
-    padding: 0;
-    color: var(--fg-1);
-    background: rgba(15, 23, 42, 0.85);
-    border: 1px solid var(--line-strong);
-    border-radius: 50%;
-    cursor: pointer;
-  }
-  .app-shell:not(.embed) .map-info-btn:hover {
-    background: rgba(27, 41, 66, 0.9);
-    color: var(--fg-0);
-  }
-  .app-shell:not(.embed) .map-info-btn[aria-expanded='true'] {
-    color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent-strong);
-  }
-
-  /* The preview badge sits bottom center (owner direction, 2026-08-31),
-     clear of the corner controls. It stays pointer-events: none, so it
-     can never intercept a map click. */
   .app-shell:not(.embed) .test-preview-badge {
     position: fixed;
     left: 50%;
@@ -5668,24 +5931,64 @@ a.impact-resource-link::after {
     bottom: 12px;
     z-index: calc(var(--z-map-control) + 20);
   }
-  .app-shell:not(.embed) .map-info-panel:not([hidden]) {
+  .app-shell:not(.embed) .map-overlay-controls .map-info-panel:not([hidden]) {
     position: absolute;
-    right: 10px;
-    /* The button's own seat (bottom: 8px) plus its diameter plus the
-       same 8px again, so the panel keeps one gap above a button that
-       grows to the touch floor on a coarse pointer. 44px today. */
-    bottom: calc(var(--map-info-size) + 16px);
-    z-index: calc(var(--z-map-control) + 20);
+    top: 0;
+    right: calc(100% + 8px);
+    z-index: 1;
     display: block;
-    width: min(360px, calc(100% - 24px));
-    max-height: min(60vh, 520px);
+    box-sizing: border-box;
+    /* The room left of the drawer is the map container's width less the
+       column, its gap and both insets; the container is the viewport less
+       the sidebar column while the sidebar is open. */
+    width: min(
+      var(--info-drawer-w),
+      calc(100vw - var(--sidebar-w) - 2 * var(--chrome-inset) - var(--map-cell-w) - 8px)
+    );
+    /* The container is the full shell height (100dvh, 100vh where dvh is
+       unknown); 170px keeps the drawer's foot above the bottom seats. */
+    max-height: min(520px, calc(100vh - 170px));
+    max-height: min(520px, calc(100dvh - 170px));
     overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 12px 14px;
-    background: rgba(8, 13, 25, 0.96);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-md);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-    color: var(--fg-1);
+    background: var(--surface-overlay);
+    border: 1px solid var(--keyline);
+    border-radius: 0;
+    box-shadow: none;
+    color: var(--ink-soft);
+    text-align: left;
+    white-space: normal;
+    pointer-events: auto;
+    animation: map-info-drawer-in var(--dur-fast) var(--ease-enter);
+  }
+  .app-shell.sidebar-collapsed:not(.embed) .map-overlay-controls .map-info-panel:not([hidden]) {
+    width: min(
+      var(--info-drawer-w),
+      calc(100vw - 2 * var(--chrome-inset) - var(--map-cell-w) - 8px)
+    );
+  }
+  /* Links on the opaque S2 drawer: Red on Dark, underlined (5.24:1). */
+  .app-shell:not(.embed) .map-overlay-controls .map-info-panel a {
+    color: var(--link-on-dark);
+    text-decoration: underline;
+  }
+}
+@keyframes map-info-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (min-width: 721px) and (prefers-reduced-motion: reduce) {
+  /* No slide and no fade: aria-expanded and the pressed Help cell carry
+     the meaning. */
+  .app-shell:not(.embed) .map-overlay-controls .map-info-panel:not([hidden]) {
+    animation: none;
   }
 }
 
@@ -7894,7 +8197,10 @@ a.impact-resource-link::after {
   /* The map's own controls: Share view and Reset (34px), the basemap
      switcher (29px), and the round map-information disclosure (28px),
      which grows through its token so the panel it opens and the bottom
-     dock both step out of its way rather than meeting it. */
+     dock both step out of its way rather than meeting it. On the desktop
+     shell outside an embed the column's cells take the floor through
+     --map-cell-h instead (S30D D1 M9); these floors then agree with it,
+     and the round disclosure is the embed's alone. */
   .overlay-btn,
   .basemap-switcher-btn {
     min-height: var(--touch-target);

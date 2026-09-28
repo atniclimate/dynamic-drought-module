@@ -74,8 +74,14 @@ export class BasemapSwitcherControl implements maplibregl.IControl {
 
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'basemap-switcher-btn';
-    btn.setAttribute('aria-label', 'Satellite imagery');
+    // `map-cell` is the desktop column's labelled-cell anatomy (S30D D1 M9);
+    // the stylesheet applies it only while this node sits in slot 2, so the
+    // phone thumb-zone seat, the embed corner and the LAYERS studio header
+    // keep their own faces. The name leads with the visible word, so the
+    // word a sighted voice-control user reads is the word that operates it
+    // (WCAG 2.5.3; the design record's name table, section 2.3).
+    btn.className = 'basemap-switcher-btn map-cell';
+    btn.setAttribute('aria-label', 'SAT: satellite imagery');
     btn.setAttribute('aria-describedby', 'basemap-vintage');
     btn.title = 'Toggle satellite imagery';
     // The inline currentColor glyph avoids an icon dependency. The legacy

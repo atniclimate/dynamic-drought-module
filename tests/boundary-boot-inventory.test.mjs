@@ -233,6 +233,11 @@ const SCREENSHOT_REASONS = {
     sites: 1,
     reason:
       'reads the map canvas back as a buffer to assert rendered colour bands in the test itself, and never attaches it'
+  },
+  'tests/map-chrome-icons.spec.ts': {
+    sites: 1,
+    reason:
+      'decodes crops of the desktop column icons in the test itself to measure their optical centring (S30D D1 M9), and never attaches them'
   }
 };
 

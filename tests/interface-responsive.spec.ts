@@ -558,7 +558,7 @@ test.describe('the ENSO ocean key reaches every surface (W2-D1)', () => {
  * the embed were designed around the old seats and keep them.
  */
 test.describe('the 2026-08-19 map chrome seats', () => {
-  test('the desktop column holds the satellite control and the key, and the corner reads badge, attribution, question mark', async ({
+  test('the desktop column holds the satellite control, help and the key, and the preview badge stays clear of help', async ({
     page
   }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -576,11 +576,16 @@ test.describe('the 2026-08-19 map chrome seats', () => {
     expect(satellite.top).toBeGreaterThanOrEqual(reset.bottom - 1);
     expect(Math.abs(satellite.right - reset.right)).toBeLessThanOrEqual(2);
 
-    // The corner holds the question mark alone (owner direction
-    // 2026-08-31: the attribution circle is gone and its credits render
-    // inside the question-mark panel); the preview badge sits bottom
+    // Help sits under SAT in the same column since D1 M9 (2026-09-27;
+    // interface-chrome section 2.2, slot 3; it left the bottom-right corner,
+    // which the old wording here described). Its credits still render inside
+    // its panel (owner direction 2026-08-31); the preview badge sits bottom
     // center. No overlap.
     const info = await rect(page.locator('.map-info-btn'));
+    expect(info.top).toBeGreaterThanOrEqual(satellite.bottom - 1);
+    expect(Math.abs(info.right - reset.right)).toBeLessThanOrEqual(2);
+    // The column's top band, never the old bottom-right corner (800 / 3).
+    expect(info.bottom).toBeLessThan(800 / 3);
     const badge = await rect(page.locator('.test-preview-badge'));
     await expect(page.locator('.map-info-btn')).toBeVisible();
     const viewport = page.viewportSize();
