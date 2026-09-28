@@ -214,6 +214,13 @@ let mapFreeChromeBooted = false;
 function bootMapFreeChrome(): void {
   if (mapFreeChromeBooted) return;
   mapFreeChromeBooted = true;
+  // found-084: the column is the only surface a map-free boot has, and its
+  // expand control is withheld until the controls are ready (app.css), which
+  // this boot never reaches. So a closed desktop preference (sidebar=closed,
+  // DR-139, applied by the inline bootstrap in index.html) is not applied
+  // here. Presentation only: the URL keeps the key for a browser that can
+  // render the map, as a phone boot preserves it without applying it.
+  document.getElementById('app')?.classList.remove('sidebar-collapsed');
   loadMapKey();
   initMapInformation();
 }
