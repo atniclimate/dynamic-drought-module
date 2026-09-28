@@ -1702,3 +1702,121 @@ async function sampleClosedBootFrames(
     expect((await sidebarChrome(page)).exposed, `${path}: settled`).toBe(false);
   }
 }
+
+test.describe('found-083: the desktop expand control stays on desktop', () => {
+  // REGISTER found-083 (Codex's M7 review, F4; DDM-P10-T07). The collapsed
+  // class carries the retained desktop preference across a crossing (M7), so
+  // it can be on at phone width; the desktop expand control must not show
+  // over the phone rail there, the rail must keep working, and a widening
+  // must find the closed desktop column again. A phone embed keeps its exit.
+  // Measured 2026-09-27 (gates/f083-measure.log): these held at a828605
+  // before any change, because src/styles/mobile-panels.css:8 hides the
+  // control whenever the phone sheet is active, and the sheet is active at
+  // phone width on every non-embed page once the controls are ready
+  // (mobile-sheet.ts shouldBeActive). The register's app.css reading was
+  // right about app.css alone and not about the page. These cases guard it.
+
+  /** The phone rail works: the Place door opens a painted panel and closes it. */
+  async function expectPhoneRailWorks(page: Page, label: string): Promise<void> {
+    const app = page.locator('#app');
+    const rail = page.locator('#mobile-footer-nav');
+    const place = rail.locator('button[data-tab="place"]');
+    await expect(app, `${label}: the phone shell is active`).toHaveAttribute(
+      'data-sheet-detent',
+      'closed'
+    );
+    await expect(rail, `${label}: the rail`).toBeVisible();
+    await place.click();
+    await expect(app, `${label}: Place opens the panel`).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(page.locator('#sidebar'), `${label}: the panel`).toBeVisible();
+    const panelWidth = await page
+      .locator('#sidebar')
+      .evaluate((element) => element.getBoundingClientRect().width);
+    expect(panelWidth, `${label}: the panel is painted wider than the collapsed column`).toBeGreaterThan(
+      100
+    );
+    await place.click();
+    await expect(app, `${label}: a second press closes it`).toHaveAttribute(
+      'data-sheet-detent',
+      'closed'
+    );
+  }
+
+  async function expectClosedDesktopRetained(page: Page, label: string): Promise<void> {
+    const app = page.locator('#app');
+    await expect(app, `${label}: the closed desktop preference is retained`).toHaveClass(
+      /\bsidebar-collapsed\b/
+    );
+    expect(await sidebarTokens(page), `${label}: sidebar=closed kept`).toEqual(['closed']);
+    await expect(page.locator('#sidebar-expand'), `${label}: the desktop expand control`).toBeVisible();
+    expect((await sidebarChrome(page)).exposed, `${label}: the column stays closed`).toBe(false);
+  }
+
+  test('a desktop collapse then a narrowing hides the desktop expand control and keeps the rail', async ({
+    page
+  }) => {
+    await page.setViewportSize(M7_DESKTOP);
+    await gotoApp(page);
+    const app = page.locator('#app');
+    await page.locator('#sidebar-collapse').click();
+    await expect(app).toHaveClass(/\bsidebar-collapsed\b/);
+    await expect.poll(() => sidebarTokens(page)).toEqual(['closed']);
+    await expect(page.locator('#sidebar-expand')).toBeVisible();
+
+    await page.setViewportSize(M7_PHONE);
+    await afterFrames(page);
+    // The class stays on (it carries the preference); only its desktop
+    // control leaves.
+    await expect(app).toHaveClass(/\bsidebar-collapsed\b/);
+    await expect(page.locator('#sidebar-expand'), 'phone: no desktop expand control').toBeHidden();
+    await expectPhoneRailWorks(page, 'desktop collapse, narrowed');
+    await expect(page.locator('#sidebar-expand'), 'phone, after the rail').toBeHidden();
+
+    await page.setViewportSize(M7_DESKTOP);
+    await afterFrames(page);
+    await expectClosedDesktopRetained(page, 'widened again');
+  });
+
+  test('a phone sidebar=closed boot, widened then narrowed, hides the desktop expand control and keeps the rail', async ({
+    page
+  }) => {
+    await page.setViewportSize(M7_PHONE);
+    await gotoApp(page, '?sidebar=closed');
+    const app = page.locator('#app');
+    await expect(app).not.toHaveClass(/\bsidebar-collapsed\b/);
+    await expect(page.locator('#sidebar-expand')).toBeHidden();
+
+    await page.setViewportSize(M7_DESKTOP);
+    await afterFrames(page);
+    await expectClosedDesktopRetained(page, 'first widening');
+
+    await page.setViewportSize(M7_PHONE);
+    await afterFrames(page);
+    await expect(app).toHaveClass(/\bsidebar-collapsed\b/);
+    await expect(page.locator('#sidebar-expand'), 'phone: no desktop expand control').toBeHidden();
+    await expectPhoneRailWorks(page, 'phone boot, widened, narrowed');
+    await expect(page.locator('#sidebar-expand'), 'phone, after the rail').toBeHidden();
+
+    await page.setViewportSize(M7_DESKTOP);
+    await afterFrames(page);
+    await expectClosedDesktopRetained(page, 'widened again');
+  });
+
+  test('a phone embed still shows its exit', async ({ page }) => {
+    await page.setViewportSize(M7_PHONE);
+    await gotoApp(page, '?embed=true');
+    const app = page.locator('#app');
+    await expect(page.locator('html')).toHaveAttribute('data-ddm-controls', 'ready');
+    await expect(app).toHaveClass(/\bembed\b/);
+    const expand = page.locator('#sidebar-expand');
+    await expect(expand, 'the phone embed exit').toBeVisible();
+
+    await expand.click();
+    await expect(app).not.toHaveClass(/\bembed\b/);
+    await expect(app).not.toHaveClass(/\bsidebar-collapsed\b/);
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
+    await expect(page.locator('#mobile-footer-nav')).toBeVisible();
+    await expect(expand).toBeHidden();
+    await expect.poll(async () => new URLSearchParams(await search(page)).has('embed')).toBe(false);
+  });
+});
