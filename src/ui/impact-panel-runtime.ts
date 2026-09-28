@@ -196,7 +196,14 @@ function ensurePanel(): HTMLElement {
 /**
  * Mark the active hazard's cell in every horizon section (DR-092): a
  * styling hook plus `aria-current` on each matching `.impact-hazard`
- * section, and nothing else touched. `selectedHazard` (not `cluster`) is
+ * section, plus (M20, DR-123) revealing that row's own `.impact-hazard-you`
+ * marker, a small "your mode" word rendered hidden in every cell's markup
+ * (`renderCell`) and shown only on the active one. The marker sits outside
+ * `.impact-hazard-title` (the element the section's `aria-labelledby`
+ * names), so neither the title's nor the section's accessible name gains
+ * the word: a screen reader hears "your mode" once, as ordinary row text,
+ * never as part of the heading or region name, and never doubled against
+ * `aria-current`. `selectedHazard` (not `cluster`) is
  * the field every other hazard-named briefing surface already reads
  * (view-shell.ts's `selectedHazardTitle`): the user-facing hazard intent,
  * which stays a real cluster key even once the exact layer set has
@@ -226,6 +233,11 @@ function applyActiveHazardEmphasis(): void {
     } else {
       row.removeAttribute('aria-current');
     }
+    // M20 (DR-123): the "your mode" word rides the same class/attribute
+    // toggle, never a re-render; `hidden` keeps it out of layout and out
+    // of every accessible-name computation on every other row.
+    const youMarker = row.querySelector<HTMLElement>('.impact-hazard-you');
+    if (youMarker) youMarker.hidden = !isActive;
   });
 }
 
@@ -375,10 +387,18 @@ function renderCell(cell: HazardCell): string {
   }
 
   const titleId = `impact-hazard-title-${cell.horizon}-${cell.hazard}`;
+  // The "your mode" marker (M20, DR-123) always renders, hidden; only
+  // `applyActiveHazardEmphasis` shows it, on the one cell whose hazard
+  // matches the committed mode. It sits outside the `<h4>` so the section's
+  // `aria-labelledby="${titleId}"` name never grows the word: see that
+  // function's own comment for how a screen reader hears it.
   return `
     <section class="impact-hazard" data-horizon="${escapeHtml(cell.horizon)}" data-hazard="${escapeHtml(cell.hazard)}" aria-labelledby="${titleId}">
       <div class="impact-hazard-head">
-        <h4 class="impact-hazard-title" id="${titleId}">${escapeHtml(cell.label)}</h4>
+        <div class="impact-hazard-title-wrap">
+          <h4 class="impact-hazard-title" id="${titleId}">${escapeHtml(cell.label)}</h4>
+          <span class="impact-hazard-you" hidden>your mode</span>
+        </div>
         <span class="impact-hazard-pill impact-hazard-pill-${cell.status}">${escapeHtml(HORIZON_PILL_TEXT[cell.status])}</span>
       </div>
       <div class="impact-hazard-claims">${inner}</div>

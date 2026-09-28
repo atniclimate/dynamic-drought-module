@@ -5179,23 +5179,27 @@ button.telemetry-item {
 
 /* The four hazard rows inside one horizon section (DR-012 b). Each row is a
    cell of the matrix and owns its own status pill; the rule that separates
-   them is what keeps one hazard's claims from reading as the next one's. */
+   them is what keeps one hazard's claims from reading as the next one's.
+   M20 (DDM-P7-T10, interface-chrome-popups-text.md T8): every row computes
+   the SAME border, padding and box-shadow, active or not, first or last, so
+   parity is a computed fact rather than a visual coincidence, and the left
+   gutter (12px) keeps the text off the row's edge. No :first-child or
+   :last-child exception. */
 .impact-hazard {
-  padding: 10px 0;
+  padding: 10px 12px;
   border-top: 1px solid var(--line);
-}
-.impact-hazard:first-child {
-  padding-top: 2px;
-  border-top: 0;
-}
-.impact-hazard:last-child {
-  padding-bottom: 0;
 }
 .impact-hazard-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+.impact-hazard-title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
 }
 .impact-hazard-title {
   margin: 0;
@@ -5205,6 +5209,20 @@ button.telemetry-item {
   letter-spacing: var(--track-caps-sm);
   text-transform: uppercase;
   color: var(--fg-1);
+}
+/* M20 (DR-123): the committed mode's own word, not part of the title's text
+   and never doubled into an aria-label. `applyActiveHazardEmphasis` toggles
+   `hidden`; hidden in the DOM contributes nothing to any element's
+   accessible name, so a screen reader hears it once, as ordinary text
+   after the heading, only on the row that carries `aria-current`. The color
+   is a D1 ink token (never a hazard colour: DR-092's reason stands). */
+.impact-hazard-you {
+  font-family: var(--font-body);
+  font-size: 8.5px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.03em;
+  color: var(--ink-muted);
+  white-space: nowrap;
 }
 .impact-hazard-pill {
   flex-shrink: 0;
@@ -5228,17 +5246,18 @@ button.telemetry-item {
 
 /* DDM-P2-T07: the one row matching the shell's committed hazard mode
    (DR-092, never reordered, never a severity ranking between the four
-   hazards). An inset accent plus a faint ground shift, the same device
-   already used for the point-heat callout above (.impact-horizon
-   .point-heat): the generic UI accent, never a hazard's own palette
-   colour, so switching modes cannot read as "this hazard matters more".
-   Inset box-shadow and a background tint take no layout space, so the
-   row's own box (and every row after it) stays exactly where it was. */
+   hazards). A faint ground shift, the same device already used for the
+   point-heat callout above (.impact-horizon .point-heat): the generic UI
+   accent, never a hazard's own palette colour, so switching modes cannot
+   read as "this hazard matters more". M20 (DR-123, RATIFICATION-4 Q9 a,
+   2026-09-26): the inset 3px accent bar this rule used to carry is
+   removed; the tint stays as the sole edge-free emphasis, alongside the
+   bolded title and the `.impact-hazard-you` word (DDM-P7-T10). A
+   background tint takes no layout space, so the row's own box (and every
+   row after it) stays exactly where it was. */
 .impact-hazard-active {
-  box-shadow: inset 3px 0 0 var(--accent-strong);
   background: color-mix(in srgb, var(--bg-2) 92%, var(--accent) 8%);
-  transition: background-color var(--dur-fast) var(--ease-standard),
-    box-shadow var(--dur-fast) var(--ease-standard);
+  transition: background-color var(--dur-fast) var(--ease-standard);
 }
 .impact-hazard-active .impact-hazard-title {
   font-weight: var(--fw-title);
