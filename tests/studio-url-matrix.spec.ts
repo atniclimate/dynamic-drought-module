@@ -1,8 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { FRAMINGS, type FramingKey } from '../src/config/framings';
+import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 import { parseShellParams, parseStudioParam } from '../src/state/url';
-import { gotoApp, waitForLayerSettled } from './helpers';
+import { gotoApp, search, stubHeatRiskCatalog, urlLayers, waitForLayerSettled } from './helpers';
 import { stubRecentSatellite } from './satellite-fixture';
 import { AIANNH_ROUTE, BIA_ROUTE, emptyCollectionBody, routeGeojson } from './tribal-fixtures';
 
@@ -500,5 +501,64 @@ test.describe('studio URL precedence matrix', () => {
     await expect(app, 'Back').toHaveClass(/\bsidebar-collapsed\b/);
     expect(await studioMarker(), 'Back: the map entry is unmarked').toBe(false);
     expect(await historyLength(), 'Back').toBe(lengthAtMap + 1);
+  });
+
+  // found-011 (register; CODEMAP:1749; D1 M16): the Place studio's clean
+  // display sets the committed hazard surface aside (a recipe member is a
+  // surface or event role), and restoring the exact captured intent
+  // afterward re-checks it, but the outer commitment (src/state/cluster-
+  // service.ts) had already demoted to 'custom' the moment the studio set
+  // it aside, and the raw store write display-snapshot.ts used to restore
+  // it was a silent no-op whenever the captured cluster equalled the
+  // store's value the whole time (Drought, the store's ever-present
+  // default: the store itself never actually left 'drought', even though
+  // the service's own committed claim had). Wildfire and ENSO restored
+  // correctly before the fix because their token differs from the store's
+  // default, so the raw write DID change the store's value and notify.
+  // Every HAZARD_CLUSTER_KEYS mode is exercised here (DR-113), Drought
+  // included, so the fix is proven where the raw write alone could not
+  // reach it.
+  test('opening and closing the Place studio keeps the committed hazard pressed and its surface in layers= in every HAZARD_CLUSTER_KEYS mode', async ({
+    page
+  }) => {
+    test.setTimeout(30_000 + HAZARD_CLUSTER_KEYS.length * 30_000);
+    await stubMatrixDependencies(page);
+    await stubHeatRiskCatalog(page);
+
+    for (const cluster of HAZARD_CLUSTER_KEYS) {
+      await test.step(cluster, async () => {
+        const token = HAZARD_CLUSTERS[cluster].urlToken;
+        const query = token === null ? '?view=brief' : `?view=brief&cluster=${token}`;
+        await gotoApp(page, query);
+        const settleKey = HAZARD_CLUSTERS[cluster].recipes.current[0];
+        if (settleKey) await waitForLayerSettled(page, settleKey);
+        const button = page.locator(`.shell-cluster-btn[data-cluster="${cluster}"]`);
+        await expect(button, `${cluster}: pressed before the studio`).toHaveAttribute(
+          'aria-pressed',
+          'true'
+        );
+        const before = await urlLayers(page);
+
+        await page.locator('#studio-entry-pair #place-studio-entry').click();
+        const studio = page.locator('#place-studio-root');
+        await expect(studio, `${cluster}: studio opens`).toBeVisible();
+        await studio.getByRole('button', { name: 'Back to map' }).click();
+        await expect(studio, `${cluster}: studio closes`).toHaveCount(0);
+        if (settleKey) await waitForLayerSettled(page, settleKey);
+
+        await expect(button, `${cluster}: pressed after Back`).toHaveAttribute(
+          'aria-pressed',
+          'true',
+          { timeout: 10_000 }
+        );
+        const params = new URLSearchParams(await search(page));
+        if (token !== null) {
+          expect(params.get('cluster'), `${cluster}: cluster= after Back`).toBe(token);
+        } else {
+          expect(params.has('cluster'), `${cluster}: cluster= absent after Back`).toBe(false);
+          expect(await urlLayers(page), `${cluster}: layers= after Back`).toEqual(before);
+        }
+      });
+    }
   });
 });

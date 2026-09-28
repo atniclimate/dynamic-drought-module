@@ -1,6 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { gotoApp, waitForLayerSettled } from './helpers';
+import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
+import {
+  gotoApp,
+  layerCheckbox,
+  layerPill,
+  PILL,
+  search,
+  stubHeatRiskCatalog,
+  urlLayers,
+  waitForLayerSettled
+} from './helpers';
 import {
   AIANNH_ROUTE,
   BIA_ROUTE,
@@ -391,4 +401,205 @@ test.describe('the exposed sidebar commands survive the Place studio', () => {
     await expect(wildfire).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
     await expect(page).toHaveURL(/cluster=wildfire/);
   });
+});
+
+/**
+ * found-076 (register; CODEMAP:1749, "1d buttons has two inferred defects";
+ * D1 M16). The clean-display failure ledger (`failedKeys`,
+ * src/state/display-snapshot.ts `enforceCleanIntent`) only ever recorded a
+ * failure when the controller UNCHECKED the layer. found-073 (commit
+ * 4aabfec) now keeps a failed COMMITTED COMPOSITION member checked, recipe
+ * or reference, so the ledger's `!isChecked` guard can never see one, and
+ * the register asks whether the omission is harmful or harmless. Read
+ * (traced for the report): harmless by construction for both kinds it
+ * names.
+ *
+ *   - A recipe layer (surface/event role, e.g. nadm-drought) is excluded
+ *     from the studio's own "wanted" set by ROLE alone
+ *     (`cleanIntent`'s SET_ASIDE_ROLES filter), checked, unchecked,
+ *     working or failed: the ledger loop never evaluates it. Its
+ *     set-aside uncheck on studio entry and its syncIntent recheck on
+ *     restore run through the ordinary controller path (M5/found-073),
+ *     never this ledger, and a still-failing layer simply fails again on
+ *     that recheck, exactly like any other activation-failure case.
+ *   - A composition reference layer (e.g. states, which the register
+ *     names and which overlaps `REFERENCE_KEYS.state`) DOES enter
+ *     "wanted", but stays checked throughout (found-073), so
+ *     `syncIntent`'s own `if (!isChecked(key)) requestLayerOnExact(key)`
+ *     guard alone already prevents any re-request while it stays
+ *     checked: the ledger's miss changes nothing observable. Proof note
+ *     (M16 repair round, 2026-09-28): flipping the ledger's own guard
+ *     (`enforceCleanIntent`'s `if (!isChecked(key) && ...)`) does NOT red
+ *     this case, because `states` never gets unchecked either way, so the
+ *     guard's body never runs for it; that mutation is base code the
+ *     ledger's own omission is being read against, not a fix under test.
+ *     The case is proved instead by making the round trip actually drop
+ *     `states` from the checked set, independent of the ledger: after
+ *     `const wanted = new Set(cleanIntent(activeSnapshot, activeKind));`
+ *     in `enforceCleanIntent`, adding `wanted.delete('states');` forces a
+ *     real uncheck on studio entry (the same `syncIntent` path a set-aside
+ *     recipe layer already takes) and reds this case's own
+ *     "stays checked" assertion right after the place type is selected,
+ *     not found-011's cluster-pressed assertion.
+ *
+ * Both cases below are coverage tests (their red-first proof is
+ * break-to-prove, the `tests/studio-options.spec.ts` M18 precedent). The
+ * reference case is green as written. The recipe case's original assertion
+ * (a second network request on restore) was FALSE, proved red on the fixed
+ * tree with no break applied (the M16 repair round's director gate, CMD9,
+ * 2026-09-28): `loadLayerModule` (src/config/layers.ts:422) does call
+ * `def.load()` again once `moduleInFlight` clears after the first failure
+ * (src/config/layers.ts:433-434), but that second `import()` names the
+ * exact same built chunk URL as the first, and Chromium caches a failed
+ * dynamic import per URL, rejecting the repeat with no new network request
+ * (the measured fact `src/util/chunk-retry.ts:4-9` records and that
+ * `createChunkLoader` exists to work around, but only for three UI chunks:
+ * search, the Place studio route entry, and island/layers-studio;
+ * `loadLayerModule`'s per-layer `def.load()` is a bare `import()`, not
+ * wrapped in it). The case below is corrected to assert what the round
+ * trip actually does: one request, ever, for a layer whose module chunk
+ * has already failed once in the session.
+ */
+test.describe('found-076: a failed checked composition member through the Place studio', () => {
+  test('a composition reference layer already failed and checked before the studio opens is never re-requested through the round trip', async ({
+    page
+  }) => {
+    let statesRequests = 0;
+    await page.route(/\/states-[A-Za-z0-9_-]{8}\.js$/, (route) => {
+      statesRequests += 1;
+      void route.abort();
+    });
+    await routeGeojson(page, AIANNH_ROUTE, emptyCollectionBody());
+    await routeGeojson(page, BIA_ROUTE, emptyCollectionBody());
+
+    await gotoApp(page, '?view=brief');
+    await waitForLayerSettled(page, 'states');
+    expect(statesRequests).toBe(1);
+    await expect(layerCheckbox(page, 'states')).toBeChecked();
+    await expect(layerPill(page, 'states')).toHaveText(PILL.unavailable);
+    await expect(
+      page.locator('.shell-cluster-btn[data-cluster="drought"]')
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    await page.locator('#studio-entry-pair #place-studio-entry').click();
+    const studio = page.locator(PLACE_ROOT);
+    await expect(studio).toBeVisible();
+    await studio.locator('#place-type-state').click();
+    await expect(studio.locator('#place-type-state')).toHaveAttribute('aria-pressed', 'true');
+    // The rail's own reference key overlaps the failed layer directly
+    // (REFERENCE_KEYS.state = ['states']); still checked, still no retry.
+    expect(statesRequests).toBe(1);
+    await expect(layerCheckbox(page, 'states')).toBeChecked();
+
+    await studio.getByRole('button', { name: 'Back to map' }).click();
+    await expect(studio).toHaveCount(0);
+    expect(statesRequests).toBe(1);
+    await expect(layerCheckbox(page, 'states')).toBeChecked();
+    await expect(layerPill(page, 'states')).toHaveText(PILL.unavailable);
+    await expect(
+      page.locator('.shell-cluster-btn[data-cluster="drought"]')
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect((await urlLayers(page)).has('states')).toBe(true);
+  });
+
+  test('a recipe layer already failed and checked before the studio opens is set aside like any other, and the restore re-checks it back into the same unresolved failure without a second request', async ({
+    page
+  }) => {
+    let nadmRequests = 0;
+    await page.route(/\/nadm-drought-[A-Za-z0-9_-]{8}\.js$/, (route) => {
+      nadmRequests += 1;
+      void route.abort();
+    });
+    await routeGeojson(page, AIANNH_ROUTE, emptyCollectionBody());
+    await routeGeojson(page, BIA_ROUTE, emptyCollectionBody());
+
+    await gotoApp(page, '?view=brief');
+    await waitForLayerSettled(page, 'nadm-drought');
+    expect(nadmRequests).toBe(1);
+    await expect(layerCheckbox(page, 'nadm-drought')).toBeChecked();
+    await expect(layerPill(page, 'nadm-drought')).toHaveText(PILL.unavailable);
+
+    await page.locator('#studio-entry-pair #place-studio-entry').click();
+    const studio = page.locator(PLACE_ROOT);
+    await expect(studio).toBeVisible();
+    // The clean display sets a failed recipe layer aside exactly like a
+    // working one, by role alone: no ledger entry needed.
+    await expect(layerCheckbox(page, 'nadm-drought')).not.toBeChecked();
+    expect(nadmRequests).toBe(1);
+
+    await studio.getByRole('button', { name: 'Back to map' }).click();
+    await expect(studio).toHaveCount(0);
+    await waitForLayerSettled(page, 'nadm-drought');
+    // The restore re-checks the captured intent, and the ordinary
+    // controller path genuinely re-attempts it (loadLayerModule calls
+    // def.load() fresh, unmanaged by this ledger), but that second
+    // import() names the chunk URL the browser already rejected once this
+    // session, so no second network request ever reaches the server (see
+    // the block comment above this describe). One request stands. This
+    // pins today's behaviour, REGISTER found-087: when layer chunks retry
+    // under a fresh URL, this count becomes 2 in the same commit.
+    expect(nadmRequests).toBe(1);
+    await expect(layerCheckbox(page, 'nadm-drought')).toBeChecked();
+    await expect(layerPill(page, 'nadm-drought')).toHaveText(PILL.unavailable);
+    await expect(
+      page.locator('.shell-cluster-btn[data-cluster="drought"]')
+    ).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+/**
+ * D1 M16, found-011: a direct `studio=place` boot exercises
+ * `initializeStudioRoute`'s history synthesis rather than the button-click
+ * `enterStudio` path the tests above cover, so it is proven separately, in
+ * every HAZARD_CLUSTER_KEYS mode (DR-113).
+ */
+async function stubClusterBootDependencies(
+  page: Page,
+  cluster: (typeof HAZARD_CLUSTER_KEYS)[number]
+): Promise<void> {
+  await routeGeojson(page, AIANNH_ROUTE, emptyCollectionBody());
+  await routeGeojson(page, BIA_ROUTE, emptyCollectionBody());
+  if (cluster === 'wildfire') {
+    await page.route('**/NOAA_Satellite_Smoke_Detection*/**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify(emptyCollectionBody())
+      })
+    );
+  }
+  if (cluster === 'heat') {
+    await stubHeatRiskCatalog(page);
+  }
+}
+
+test.describe('a fresh studio=place URL then Back lands on its mode with its hazard surface (found-011)', () => {
+  for (const cluster of HAZARD_CLUSTER_KEYS) {
+    test(cluster, async ({ page }) => {
+      await stubClusterBootDependencies(page, cluster);
+      const token = HAZARD_CLUSTERS[cluster].urlToken;
+      const query = token === null ? '?studio=place' : `?cluster=${token}&studio=place`;
+      await gotoApp(page, query);
+      const studio = page.locator(PLACE_ROOT);
+      await expect(studio, `${cluster}: direct boot opens the studio`).toBeVisible();
+
+      await studio.getByRole('button', { name: 'Back to map' }).click();
+      await expect(studio, `${cluster}: Back closes the studio`).toHaveCount(0);
+
+      const settleKey = HAZARD_CLUSTERS[cluster].recipes.current[0];
+      if (settleKey) await waitForLayerSettled(page, settleKey);
+      await expect(
+        page.locator(`.shell-cluster-btn[data-cluster="${cluster}"]`),
+        `${cluster}: pressed after Back`
+      ).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
+      const params = new URLSearchParams(await search(page));
+      expect(params.has('studio'), `${cluster}: studio= dropped`).toBe(false);
+      if (token !== null) {
+        expect(params.get('cluster'), `${cluster}: cluster= after Back`).toBe(token);
+      } else {
+        expect(params.has('cluster'), `${cluster}: cluster= absent after Back`).toBe(false);
+        if (settleKey) expect((await urlLayers(page)).has(settleKey)).toBe(true);
+      }
+    });
+  }
 });

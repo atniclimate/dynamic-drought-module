@@ -412,6 +412,48 @@ export function requestCluster(key: HazardClusterKey): void {
   applyCluster(key, key === 'enso' ? getOceanFraming() : null);
 }
 
+/** Discard any explicit commitment and re-derive from the store (the
+ * `onHazardClusterChange` listener's body, shared with
+ * `restoreCommittedCluster` below so a same-value store write can still
+ * force the exact same re-derivation). */
+function resyncFromStore(): void {
+  selectedHazard = getHazardCluster();
+  committedCluster = null;
+  committedIntent = null;
+  committedHorizon = null;
+  publish();
+}
+
+/**
+ * Restore a previously captured committed cluster (found-011, CODEMAP:1749;
+ * D1 M16): the Place studio's clean-display enforcement unchecks a
+ * committed composition member the studio sets aside (a hazard surface),
+ * which `reconcileClusterWithLayerIntent` reads as a customization and
+ * demotes the commitment to 'custom'; restoring the original checked
+ * intent afterward does not undo that demotion on its own, because
+ * `cluster-store`'s `setHazardCluster` only notifies on a VALUE change,
+ * and the cluster being restored to (commonly Drought, the ever-present
+ * store default) never actually left the store. This door restores the
+ * store claim, then unconditionally forces the exact re-derivation an
+ * actual store change would have triggered, so the studio round trip
+ * re-presses the hazard it captured even when the store value never
+ * moved. Suppresses the store's own notification while writing it (the
+ * `applying` guard already used by `requestHorizon`) so the resync below
+ * is the only one that runs, never a redundant second.
+ */
+export function restoreCommittedCluster(
+  cluster: HazardClusterKey,
+  ocean: OceanKey | null
+): void {
+  applying = true;
+  try {
+    setHazardCluster(cluster, ocean);
+  } finally {
+    applying = false;
+  }
+  resyncFromStore();
+}
+
 /**
  * Enter the ENSO display with one explicit schematic ocean camera claim.
  * This shares the exact cluster transaction above, so the layer recipe,
@@ -563,14 +605,13 @@ export function initClusterService(): () => void {
       if (!applying) publish();
     }),
     onHazardClusterChange(() => {
-      if (applying) return;
-      // An external store write (the boot seed, the Place studio
-      // restore) is a new committed claim: re-derive from the store.
-      selectedHazard = getHazardCluster();
-      committedCluster = null;
-      committedIntent = null;
-      committedHorizon = null;
-      publish();
+      // An external store write (the boot seed) is a new committed
+      // claim: re-derive from the store. Stands down while applying
+      // (see requestCluster) so the transaction's own intermediate
+      // writes never race this resync; restoreCommittedCluster shares
+      // this same body under its own `applying` guard, not this event
+      // (a same-value store write emits nothing to react to).
+      if (!applying) resyncFromStore();
     })
   ];
   disposer = () => {
