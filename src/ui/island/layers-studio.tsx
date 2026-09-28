@@ -69,7 +69,25 @@ function LayersStudio({ controller, checked, statuses, search }: LayersStudioPro
 
     backRef.current?.focus();
 
+    // found-013: the rehosted Water & Snow list's own click handler
+    // (src/ui/sidebar.ts buildTelemetryList) still flies the camera and
+    // opens the station's popup underneath this full-screen overlay, so a
+    // press produced no visible response. A capturing listener on the
+    // rehost wrapper (ancestor of the moved #panel-telemetry, so it fires
+    // BEFORE the item's own bubble-phase click handler) closes the studio
+    // the same way "Back to map" does, revealing the map underneath before
+    // the camera moves and the popup opens.
+    const telemetryHost = telemetryHostRef.current;
+    const onStationPress = (event: Event): void => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('.telemetry-item')) {
+        backToMap();
+      }
+    };
+    telemetryHost?.addEventListener('click', onStationPress, true);
+
     return () => {
+      telemetryHost?.removeEventListener('click', onStationPress, true);
       restore(basemap);
       restore(telemetry);
       releaseInertScope();
