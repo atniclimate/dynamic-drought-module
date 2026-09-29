@@ -89,6 +89,7 @@ import {
   renderStudioLoadFailure
 } from './view-shell';
 import { prefersReducedMotion } from '../util/motion';
+import { bindStudioEscape, trapStudioTabFocus } from './island/studio-inert';
 // The four telemetry network adapters (NRCS AWDB, USACE CWMS, USBR
 // Hydromet, USGS Instantaneous Values) are imported dynamically inside
 // `fetchPrimaryStationValue` below, not here (DR-008a). They were about
@@ -101,6 +102,7 @@ import type { LayerStatus } from '../types/layer';
 import { SIDEBAR_DESKTOP_QUERY, parseUrlParams, syncUrl } from '../state/url';
 import type { ParsedUrlParams } from '../state/url';
 import {
+  backToMap,
   getStudioRoute,
   initializeStudioRoute,
   isPhysicallyFramed,
@@ -1761,6 +1763,8 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
   let studioModule: typeof import('./island/layers-studio') | null = null;
   let studioPromise: Promise<typeof import('./island/layers-studio')> | null = null;
   let studioOpener: HTMLElement | null = null;
+  let releaseStudioTabTrap: (() => void) | null = null;
+  let releaseStudioEscape: (() => void) | null = null;
   // DDM-P1-T10: the same createChunkLoader pattern loadIsland uses above,
   // so a studio chunk that failed once retries a LATER call under a new
   // `retry=<n>` url instead of replaying the same cached rejection.
@@ -1778,6 +1782,42 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
     if (!mapContainer) return;
     mapContainer.tabIndex = -1;
     mapContainer.focus({ preventScroll: true });
+  };
+
+  // found-012: the LAYERS entry's held-chunk feedback. Set synchronously
+  // from `syncStudioRoute`, itself called synchronously from
+  // `enterStudio`'s `notify('push')`, so it paints within one frame of the
+  // press instead of the 2.4 to 3.6 s of recorded silence. Mirrors
+  // view-shell.ts's PLACE equivalent; kept separate (not shared) because
+  // the two doors already keep independent open paths throughout this file
+  // and view-shell.ts.
+  const markLayersStudioEntryPending = (el: HTMLElement | null): void => {
+    if (!el) return;
+    el.setAttribute('aria-busy', 'true');
+    el.classList.add('studio-entry-pending');
+    if (!el.querySelector('.studio-entry-pending-spinner')) {
+      const spinner = document.createElement('span');
+      spinner.className = 'impact-spinner studio-entry-pending-spinner';
+      spinner.setAttribute('aria-hidden', 'true');
+      el.appendChild(spinner);
+    }
+    let status = document.getElementById('layers-studio-entry-status');
+    if (!status) {
+      status = document.createElement('p');
+      status.id = 'layers-studio-entry-status';
+      status.className = 'sr-only';
+      status.setAttribute('role', 'status');
+      status.setAttribute('aria-live', 'polite');
+      document.body.appendChild(status);
+    }
+    status.textContent = 'Opening the LAYERS studio.';
+  };
+
+  const clearLayersStudioEntryPending = (el: HTMLElement | null): void => {
+    if (!el) return;
+    el.removeAttribute('aria-busy');
+    el.classList.remove('studio-entry-pending');
+    el.querySelector('.studio-entry-pending-spinner')?.remove();
   };
 
   const loadStudio = (root: HTMLElement): void => {
@@ -1806,6 +1846,7 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
         ) {
           return;
         }
+        clearLayersStudioEntryPending(studioOpener);
         const search = searchModule?.buildSearchWiring(map, {
           permittedKinds: ['layer'],
           placeholder: 'Search layers'
@@ -1821,6 +1862,7 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
           !isPhysicallyFramed() &&
           studioRoot === root
         ) {
+          clearLayersStudioEntryPending(studioOpener);
           renderStudioLoadFailure(root, 'layers-studio-failure-heading');
         }
       });
@@ -1849,6 +1891,15 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
       if (studioRoot) {
         const opener = studioOpener;
         studioOpener = null;
+        clearLayersStudioEntryPending(opener);
+        if (releaseStudioTabTrap) {
+          releaseStudioTabTrap();
+          releaseStudioTabTrap = null;
+        }
+        if (releaseStudioEscape) {
+          releaseStudioEscape();
+          releaseStudioEscape = null;
+        }
         if (studioModule) studioModule.unmountLayersStudio(studioRoot);
         studioRoot.remove();
         studioRoot = null;
@@ -1861,6 +1912,9 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
       studioRoot = document.createElement('div');
       studioRoot.id = 'layers-studio-root';
       document.body.appendChild(studioRoot);
+      releaseStudioTabTrap = trapStudioTabFocus(studioRoot);
+      releaseStudioEscape = bindStudioEscape(studioRoot, '.layers-studio-back', backToMap);
+      markLayersStudioEntryPending(studioOpener);
     }
     const root = studioRoot;
     loadStudio(root);

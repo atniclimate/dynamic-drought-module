@@ -999,6 +999,19 @@ button.conditions-metric:hover .conditions-action-hide {
   color: var(--fg-0);
 }
 
+/* found-012: the held-chunk entry feedback (view-shell.ts, sidebar.ts). Not
+   scoped to .brief-console-door alone: the mobile PLACE opener
+   (#sheet-place-studio-entry, .sheet-report-door) gets the same class from
+   the same shared marking helper. The spinner glyph itself reuses
+   .impact-spinner (its border and animation tokens, and its
+   prefers-reduced-motion fallback) unchanged. */
+.studio-entry-pending {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
 /* ----------------------------------------------------------------------------
    Region selector
    ---------------------------------------------------------------------------- */

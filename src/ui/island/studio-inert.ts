@@ -75,3 +75,97 @@ export function applyStudioInertScope(): () => void {
     release();
   };
 }
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), ' +
+  'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Trap Tab and Shift+Tab inside `root` (found-004): at the last focusable
+ * descendant Tab wraps to the first, and at the first Shift+Tab wraps to
+ * the last, so an open studio can never hand focus to the live app behind
+ * it (the sidebar stays live at desktop widths, `applyStudioInertScope`
+ * above, so it is reachable only through this trap, never left implicitly).
+ *
+ * Bound on `document` in the CAPTURE phase rather than on `root` itself:
+ * `root` is a plain DOM node this module's caller creates and removes
+ * directly (view-shell.ts, sidebar.ts), outside the Preact tree that
+ * later rehosts controls (the telemetry panel, the basemap switcher) into
+ * it, so a listener attached once at mount time on `root` would still see
+ * every later Tab whose target is a `root` descendant; capturing at the
+ * document is only to run ahead of any other document-level key handling,
+ * with no side effect on calls not inside `root`. Elements are re-queried on every Tab rather than
+ * cached, so newly rehosted or removed controls are always current.
+ */
+export function trapStudioTabFocus(root: HTMLElement): () => void {
+  function focusable(): readonly HTMLElement[] {
+    return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+      (el) => el.offsetParent !== null || el === document.activeElement
+    );
+  }
+
+  function onKeyDown(event: KeyboardEvent): void {
+    if (event.key !== 'Tab') return;
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !root.contains(active)) return;
+    const items = focusable();
+    if (items.length === 0) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  document.addEventListener('keydown', onKeyDown, true);
+  return () => document.removeEventListener('keydown', onKeyDown, true);
+}
+
+/**
+ * Escape does exactly what "Back to map" does (found-004): close `root`'s
+ * studio the same way its own rendered Back button would, so the Place
+ * studio's pending-selection wait (`handleBack`) is honored identically
+ * whether the user presses Escape or clicks the button by hand.
+ *
+ * Bound on `document` at ROOT-CREATION time (view-shell.ts, sidebar.ts),
+ * in the SAME place and lifetime as `trapStudioTabFocus` above, rather
+ * than inside the lazily loaded studio component's own effect: `root` is
+ * a plain DOM node those callers create and append synchronously on the
+ * press, well before the studio's chunk has loaded, mounted and painted a
+ * component effect of its own. An Escape pressed in that window used to
+ * meet no listener at all and was silently lost (found-012's held-chunk
+ * race; the M15 repair round moved this handler here for exactly that
+ * reason). `backSelector` names the studio's own rendered Back button
+ * ('#place-studio-back', '.layers-studio-back'); while it has not yet
+ * mounted (the chunk is still held, or failed and the failure panel's own
+ * Back button has not painted either) `root.querySelector` finds nothing
+ * and `fallback` runs instead, ending in the exact same route exit the
+ * Back button (rendered or failure-panel) would have used.
+ *
+ * Bubble phase, NOT capture, and skipped whenever `event.defaultPrevented`
+ * is already true: an Escape a control inside the studio has already
+ * consumed for its own purpose (the shared Search component clears its
+ * query on Escape rather than leaving the studio) must never ALSO close
+ * the studio underneath it.
+ */
+export function bindStudioEscape(
+  root: HTMLElement,
+  backSelector: string,
+  fallback: () => void
+): () => void {
+  function onKeyDown(event: KeyboardEvent): void {
+    if (event.key !== 'Escape') return;
+    if (event.defaultPrevented) return;
+    event.preventDefault();
+    const back = root.querySelector<HTMLButtonElement>(backSelector);
+    if (back) back.click();
+    else fallback();
+  }
+
+  document.addEventListener('keydown', onKeyDown);
+  return () => document.removeEventListener('keydown', onKeyDown);
+}

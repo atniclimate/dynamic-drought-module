@@ -198,6 +198,38 @@ test.describe('island and search chunk isolation (DDM-P1-T04)', () => {
     expect(urls.some((url) => new URL(url).searchParams.has('retry'))).toBe(true);
   });
 
+  test("a held studio chunk shows the entry's pending state within one frame of the press", async ({
+    page
+  }) => {
+    // found-012: on a slow network the studio chunk can take 2.4 to 3.6 s
+    // to mount with nothing visible in the meantime. Hold it indefinitely
+    // (release only once the assertions below have run) so the pending
+    // state must appear BEFORE the chunk ever settles, not once the studio
+    // mounts.
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(/\/layers-studio-[^/?]*\.js(\?|$)/, async (route) => {
+      await gate;
+      await route.continue();
+    });
+
+    await gotoApp(page, '?view=brief&layers=places');
+    const opener = page.locator('#layers-studio-entry');
+    await opener.click();
+
+    await expect(opener).toHaveAttribute('aria-busy', 'true', { timeout: 500 });
+    await expect(opener).toHaveClass(/studio-entry-pending/);
+    await expect(page.locator('#layers-studio-entry-status')).toHaveText(
+      'Opening the LAYERS studio.'
+    );
+
+    release();
+    await expect(page.locator('#layers-studio-root')).toBeVisible();
+    await expect(opener).not.toHaveAttribute('aria-busy', 'true');
+  });
+
   test('a failed search chunk raises no unhandled rejection from any search host', async ({
     page
   }) => {

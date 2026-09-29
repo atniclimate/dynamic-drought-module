@@ -134,4 +134,99 @@ test.describe('studio focus and geometry', () => {
     await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
     await expect(page.locator(LAYERS_ROOT)).toHaveCount(0);
   });
+
+  test('Escape in either studio removes studio= and returns focus to its entry button', async ({
+    page
+  }) => {
+    // found-004: no Escape handler existed anywhere in the open path, so
+    // before the fix this presses Escape and nothing happens (studio=
+    // stays, the root stays mounted, focus stays put).
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await gotoApp(page, '?view=brief&layers=places');
+
+    const placeOpener = page.locator('#place-studio-entry');
+    await placeOpener.click();
+    await expect(page.locator(PLACE_ROOT)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator(PLACE_ROOT)).toHaveCount(0);
+    await expect(page).not.toHaveURL(/[?&]studio=/);
+    await expect(placeOpener).toBeFocused();
+
+    const layersOpener = page.locator('#layers-studio-entry');
+    await layersOpener.click();
+    await expect(page.locator(LAYERS_ROOT)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator(LAYERS_ROOT)).toHaveCount(0);
+    await expect(page).not.toHaveURL(/[?&]studio=/);
+    await expect(layersOpener).toBeFocused();
+  });
+
+  test('Escape during a held Place studio chunk closes it and never lets a late chunk reopen it', async ({
+    page
+  }) => {
+    // found-012 / found-004 together, the M15 repair round's diagnosis: the
+    // studio root and its pending-entry feedback are created synchronously
+    // on the press, but Escape used to be handled only inside the lazily
+    // loaded chunk's own Preact effect. Before the fix: pressing Escape
+    // while the chunk is held does nothing (the root stays mounted, the
+    // opener's aria-busy state never clears), because no listener exists
+    // yet to catch it.
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const chunkPattern = /\/place-studio-[^/?]*\.js(\?|$)/;
+    await page.route(chunkPattern, async (route) => {
+      await gate;
+      await route.continue();
+    });
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await gotoApp(page, '?view=brief&layers=places');
+
+    const opener = page.locator('#place-studio-entry');
+    await opener.click();
+    await expect(opener).toHaveAttribute('aria-busy', 'true', { timeout: 500 });
+    await expect(opener).toHaveClass(/studio-entry-pending/);
+    await expect(page.locator(PLACE_ROOT)).toBeVisible();
+    // The chunk is still held: no #place-studio-back has ever mounted.
+    await expect(page.locator(`${PLACE_ROOT} #place-studio-back`)).toHaveCount(0);
+
+    await page.keyboard.press('Escape');
+
+    await expect(page).not.toHaveURL(/[?&]studio=/);
+    await expect(page.locator(PLACE_ROOT)).toHaveCount(0);
+    await expect(opener).toBeFocused();
+    await expect(opener).not.toHaveAttribute('aria-busy', 'true');
+    await expect(opener).not.toHaveClass(/studio-entry-pending/);
+
+    // Release the held chunk and let it finish resolving; the late arrival
+    // must never reopen anything the Escape already closed.
+    const chunkResponse = page.waitForResponse(chunkPattern);
+    release();
+    await chunkResponse;
+    await expect(page.locator(PLACE_ROOT)).toHaveCount(0);
+    await expect(page).not.toHaveURL(/[?&]studio=/);
+  });
+
+  test('Shift+Tab from Back never leaves an open studio', async ({ page }) => {
+    // found-004: with #sidebar deliberately kept live (not inert) beside a
+    // docked studio, nothing before this fix stopped Tab from walking out
+    // of the studio root into it, or into the map chrome's #share-btn
+    // (rehosted into the live shell), the exact reachability the register
+    // recorded.
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await gotoApp(page, '?view=brief&layers=places');
+    await page.locator('#layers-studio-entry').click();
+    const root = page.locator(LAYERS_ROOT);
+    await expect(root).toBeVisible();
+    const back = root.locator('.layers-studio-back', { hasText: 'Back to map' });
+    await expect(back).toBeFocused();
+
+    await page.keyboard.press('Shift+Tab');
+
+    const focusedInRoot = await root.evaluate((el) => el.contains(document.activeElement));
+    expect(focusedInRoot).toBe(true);
+    await expect(page.locator('#share-btn')).not.toBeFocused();
+  });
 });

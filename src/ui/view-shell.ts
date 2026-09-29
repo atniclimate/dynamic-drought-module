@@ -62,11 +62,13 @@ import {
   getCommittedSnapshot,
   onCommittedSnapshotChange
 } from '../state/cluster-service';
+import { bindStudioEscape, trapStudioTabFocus } from './island/studio-inert';
 
 const LAYERS_STUDIO_ENTRY_ID = 'layers-studio-entry';
 const PLACE_STUDIO_ENTRY_ID = 'place-studio-entry';
 const STUDIO_ENTRY_PAIR_ID = 'studio-entry-pair';
 const STUDIO_LINKOUT_PAIR_ID = 'studio-linkout-pair';
+const PLACE_STUDIO_ENTRY_STATUS_ID = 'place-studio-entry-status';
 const PLACE_STUDIO_OPENER_EVENT = 'ddm:place-studio-opener';
 const LAYERS_STUDIO_ENTRY_TITLE =
   'Open the LAYERS studio: layer search, toggles, and sources';
@@ -77,6 +79,46 @@ let placeStudioRoot: HTMLElement | null = null;
 let placeStudioModule: typeof import('./island/place-studio') | null = null;
 let placeStudioPromise: Promise<typeof import('./island/place-studio')> | null = null;
 let placeStudioOpener: HTMLElement | null = null;
+let releasePlaceStudioTabTrap: (() => void) | null = null;
+let releasePlaceStudioEscape: (() => void) | null = null;
+
+/**
+ * Mark the PLACE entry button pending (found-012): an `aria-busy` state
+ * plus a reused `.impact-spinner` glyph, set the SAME task as the press
+ * (called synchronously from `syncPlaceStudioRoute`, itself called
+ * synchronously from `enterStudio`'s `notify('push')`), so a held chunk
+ * shows within one frame instead of the 2.4 to 3.6 s of silence the
+ * register recorded. The one-time status paragraph is the "announced
+ * once" half: its text is set once per press, not on every render.
+ */
+function markPlaceStudioEntryPending(el: HTMLElement | null): void {
+  if (!el) return;
+  el.setAttribute('aria-busy', 'true');
+  el.classList.add('studio-entry-pending');
+  if (!el.querySelector('.studio-entry-pending-spinner')) {
+    const spinner = document.createElement('span');
+    spinner.className = 'impact-spinner studio-entry-pending-spinner';
+    spinner.setAttribute('aria-hidden', 'true');
+    el.appendChild(spinner);
+  }
+  let status = document.getElementById(PLACE_STUDIO_ENTRY_STATUS_ID);
+  if (!status) {
+    status = document.createElement('p');
+    status.id = PLACE_STUDIO_ENTRY_STATUS_ID;
+    status.className = 'sr-only';
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    document.body.appendChild(status);
+  }
+  status.textContent = 'Opening the PLACE studio.';
+}
+
+function clearPlaceStudioEntryPending(el: HTMLElement | null): void {
+  if (!el) return;
+  el.removeAttribute('aria-busy');
+  el.classList.remove('studio-entry-pending');
+  el.querySelector('.studio-entry-pending-spinner')?.remove();
+}
 
 // DDM-P1-T10: a second `import()` of the SAME failed chunk URL replays the
 // SAME rejection (Chromium's module map, no new request), so a retry after
@@ -181,6 +223,7 @@ function loadPlaceStudio(root: HTMLElement): void {
       ) {
         return;
       }
+      clearPlaceStudioEntryPending(placeStudioOpener);
       module.mountPlaceStudio(root);
     })
     .catch((err: unknown) => {
@@ -193,6 +236,7 @@ function loadPlaceStudio(root: HTMLElement): void {
         !isPhysicallyFramed() &&
         placeStudioRoot === root
       ) {
+        clearPlaceStudioEntryPending(placeStudioOpener);
         renderStudioLoadFailure(root, 'place-studio-failure-heading');
       }
     });
@@ -216,6 +260,15 @@ function syncPlaceStudioRoute(
     if (placeStudioRoot) {
       const opener = placeStudioOpener;
       placeStudioOpener = null;
+      clearPlaceStudioEntryPending(opener);
+      if (releasePlaceStudioTabTrap) {
+        releasePlaceStudioTabTrap();
+        releasePlaceStudioTabTrap = null;
+      }
+      if (releasePlaceStudioEscape) {
+        releasePlaceStudioEscape();
+        releasePlaceStudioEscape = null;
+      }
       if (placeStudioModule) placeStudioModule.unmountPlaceStudio(placeStudioRoot);
       placeStudioRoot.remove();
       placeStudioRoot = null;
@@ -228,6 +281,13 @@ function syncPlaceStudioRoute(
     placeStudioRoot = document.createElement('div');
     placeStudioRoot.id = 'place-studio-root';
     document.body.appendChild(placeStudioRoot);
+    releasePlaceStudioTabTrap = trapStudioTabFocus(placeStudioRoot);
+    releasePlaceStudioEscape = bindStudioEscape(
+      placeStudioRoot,
+      '#place-studio-back',
+      backToMap
+    );
+    markPlaceStudioEntryPending(placeStudioOpener);
   }
   const root = placeStudioRoot;
   loadPlaceStudio(root);
