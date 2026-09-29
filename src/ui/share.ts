@@ -1,5 +1,22 @@
 import { copyToClipboard } from '../util/clipboard';
 import { showToast } from './overlay';
+import type { SelectParam } from '../state/url';
+
+/**
+ * Build the shareable link for the current view: `window.location.href`,
+ * optionally carrying the one-shot `select=<kind>:<id>` deep-link parameter
+ * (`SelectParam`, src/state/url.ts). The only kind ever passed is 'state':
+ * the typed briefing place is never durable URL state (src/state/typed-place.ts),
+ * so a state's `select=` token is the sole shareable place. The Share button
+ * below and the Impact Briefing's Email control (D1 M21) both build their
+ * link here, so there is one URL builder, not two.
+ */
+export function buildShareLink(selectParam?: SelectParam): string {
+  if (!selectParam) return window.location.href;
+  const url = new URL(window.location.href);
+  url.searchParams.set('select', `${selectParam.kind}:${selectParam.id}`);
+  return url.toString();
+}
 
 /**
  * Wire the "Share view" button to copy the current location URL to the
@@ -31,7 +48,7 @@ export function wireShareButton(buttonId: string): void {
   if (!btn) return;
 
   btn.addEventListener('click', async () => {
-    const ok = await copyToClipboard(window.location.href);
+    const ok = await copyToClipboard(buildShareLink());
     showToast(
       ok
         ? 'Link copied. It restores region or framing, layers, mode and horizon, not the map position or an open briefing.'

@@ -73,7 +73,8 @@ import {
   closeImpactPanelShell,
   ensureImpactPanelShell,
   isImpactPanelShellOpen,
-  openImpactPanelShell
+  openImpactPanelShell,
+  refreshBriefingActions
 } from './impact-panel';
 
 // ---------------------------------------------------------------------------
@@ -168,6 +169,85 @@ const TIER_HEADING: Record<ResourceTier, string> = {
 const TIER_ORDER: readonly ResourceTier[] = ['tribe-own', 'federal', 'state', 'bia-regional'];
 
 // ---------------------------------------------------------------------------
+// Print (owner-1o, D1 M21)
+// ---------------------------------------------------------------------------
+
+/** Details the last `openAllDisclosuresForPrint` call opened, restored (and
+ * only these) on `afterprint`. Reassigned on every call (`handleBeforePrint`
+ * and, mid-print, `refreshOpenBriefing`'s post-render step) because a
+ * hydration refresh replaces every `details` node in the body, detaching
+ * whatever this held before. */
+let openedForPrint: HTMLDetailsElement[] = [];
+
+/** True between `beforeprint` and `afterprint`. Read by `refreshOpenBriefing`
+ * so a refresh landing mid-print re-opens every disclosure for the printed
+ * page instead of leaving a freshly rendered one in its default state. */
+let printing = false;
+
+/**
+ * `preservedDisclosureKey` values that were CLOSED when print began (or at
+ * the start of a later mid-print refresh): `openAllDisclosuresForPrint`
+ * force-opens them for the page, but that open is print's, not the
+ * reader's. Read by `refreshOpenBriefing`'s post-render step so a
+ * same-key node reborn by a mid-print refresh is restored to the reader's
+ * true CLOSED state rather than the live, print-forced `.open` its capture
+ * (outside this step) saw. Reset at `beforeprint`, cleared at `afterprint`;
+ * stable across any number of refreshes within one print pass because nothing
+ * can toggle a disclosure by hand while the page is printing.
+ */
+let printForcedPreservedKeys = new Set<string>();
+
+/**
+ * Force every currently closed disclosure under the briefing body open for
+ * print, recording which nodes (`openedForPrint`, closed back by
+ * `handleAfterPrint`) and which PRESERVED keys (`printForcedPreservedKeys`)
+ * were closed. Called once from `handleBeforePrint`, and again, only while
+ * `printing`, from `refreshOpenBriefing`'s post-render step whenever a
+ * hydration refresh replaces the body mid-print: the previous call's
+ * element references are now detached, so each call re-derives the CURRENT
+ * closed set from the live DOM rather than reusing stale ones.
+ */
+function openAllDisclosuresForPrint(): void {
+  if (!bodyEl) return;
+  const closed = Array.from(
+    bodyEl.querySelectorAll<HTMLDetailsElement>('details:not([open])')
+  );
+  closed.forEach((details) => {
+    details.open = true;
+    if (details.matches(PRESERVED_DISCLOSURE_SELECTOR)) {
+      printForcedPreservedKeys.add(preservedDisclosureKey(details));
+    }
+  });
+  openedForPrint = closed;
+}
+
+/**
+ * Every closed briefing disclosure prints open, whichever door started the
+ * print: the panel's own Print control calls `window.print()` once
+ * (impact-panel.ts), and the browser's own Print reaches this same
+ * `beforeprint` event, so one listener covers both.
+ */
+function handleBeforePrint(): void {
+  if (!bodyEl) return;
+  printing = true;
+  printForcedPreservedKeys = new Set();
+  openAllDisclosuresForPrint();
+}
+
+/** Restore exactly the disclosures the last `openAllDisclosuresForPrint`
+ * call opened; a reader's own open disclosure was never in that list, so it
+ * is left alone. Covers a body reborn mid-print because that call always
+ * re-derives `openedForPrint` from the live DOM (see its own comment). */
+function handleAfterPrint(): void {
+  printing = false;
+  openedForPrint.forEach((details) => {
+    details.open = false;
+  });
+  openedForPrint = [];
+  printForcedPreservedKeys = new Set();
+}
+
+// ---------------------------------------------------------------------------
 // Panel construction (once)
 // ---------------------------------------------------------------------------
 
@@ -190,6 +270,10 @@ function ensurePanel(): HTMLElement {
   // block (the module is a page-lifetime singleton once loaded, same as
   // view-shell's own subscription to this service).
   onCommittedSnapshotChange(applyActiveHazardEmphasis);
+  // Print listeners (owner-1o): registered once, here, so they exist by the
+  // time any disclosure this module renders could need opening for print.
+  window.addEventListener('beforeprint', handleBeforePrint);
+  window.addEventListener('afterprint', handleAfterPrint);
   return shared.panel;
 }
 
@@ -722,6 +806,7 @@ function paint(
   ensurePanel();
   if (titleEl) titleEl.textContent = briefing.landTitle;
   if (kindEl) kindEl.textContent = briefing.landKind;
+  refreshBriefingActions(briefing.landTitle, briefing.context);
   if (bodyEl) {
     bodyEl.innerHTML = renderBody(briefing, impactUnavailableNote);
     discloseLegendAnchorTitles(bodyEl);
@@ -952,6 +1037,7 @@ function preservedDisclosureKey(details: HTMLDetailsElement): string {
  */
 export function refreshOpenBriefing(token: number): void {
   if (!isCurrentBriefing(token) || !activeBriefing || !bodyEl) return;
+  refreshBriefingActions(activeBriefing.landTitle, activeBriefing.context);
   const hadFocusInBody = bodyEl.contains(document.activeElement);
   const preservedOpen = new Map<string, boolean>();
   let focusedDisclosureKey: string | null = null;
@@ -970,12 +1056,26 @@ export function refreshOpenBriefing(token: number): void {
     .querySelectorAll<HTMLDetailsElement>(PRESERVED_DISCLOSURE_SELECTOR)
     .forEach((details) => {
       const key = preservedDisclosureKey(details);
-      const wasOpen = preservedOpen.get(key);
+      const captured = preservedOpen.get(key);
+      // A refresh mid-print must not let print's own forced opens pass as
+      // the reader's choice: `captured` was read from the live DOM, which
+      // while printing can hold `.open` that `openAllDisclosuresForPrint`
+      // set, not the reader's. Correct it here, in this post-render step,
+      // from the closed keys that call recorded before this render started.
+      const wasOpen =
+        printing && printForcedPreservedKeys.has(key) ? false : captured;
       if (wasOpen !== undefined) details.open = wasOpen;
       if (key === focusedDisclosureKey) {
         details.querySelector('summary')?.focus({ preventScroll: true });
       }
     });
+  // A refresh landing between beforeprint and afterprint must still show
+  // every disclosure open for print. Re-derive the closed set from the
+  // just-rendered DOM: the previous `openedForPrint` references are now
+  // detached, and any preserved disclosure the loop above just restored to
+  // its true closed state needs re-opening for the page, same as a plain
+  // keyless one born closed by this render.
+  if (printing) openAllDisclosuresForPrint();
   discloseLegendAnchorTitles(bodyEl);
   applyActiveHazardEmphasis();
   if (hadFocusInBody && panelEl && !panelEl.contains(document.activeElement)) {

@@ -1444,3 +1444,322 @@ test.describe('the preview badge and the scale bar (found-019)', () => {
     expect(intersects(badgeRect, scaleRect)).toBe(false);
   });
 });
+
+/**
+ * S30D D1 M29 (register found-020; task DDM-P17-T07; WCAG 2.2 SC 2.5.8
+ * Target Size (Minimum)): the fine-pointer floor for the DESKTOP shell,
+ * 24 x 24 CSS px, at 1280 to 2560 wide. This is a SEPARATE contract from
+ * the tablet band above: those cases run with `hasTouch` and a coarse
+ * pointer, and their 44px floor (`--touch-target`, DR-153) is unchanged
+ * here. These cases run with the suite's default fine pointer (no
+ * `hasTouch`), which is what a mouse-driven desktop actually is.
+ *
+ * Collector: NOT `reachableTargets` above. That collector is reused for
+ * its reachability idea (visible, non-zero box, centre-hit-tests to the
+ * element) but deliberately keeps a disabled control in view, because the
+ * tablet touch floor is about occupied space a thumb lands on regardless
+ * of state. DDM-P17-T07's acceptance says "every ENABLED... control", so
+ * a disabled control (native `disabled` or `aria-disabled="true"`) is
+ * filtered out here instead, and the selector list is the brief's own
+ * (no `[role="tab"]`, which `reachableTargets` added for the horizon
+ * chips). A second, narrower collector is the honest way to keep both
+ * contracts legible rather than overloading one function with a flag.
+ *
+ * One SC 2.5.8 exception is recognized, computed rather than asserted:
+ *  - Inline: "The target is in a sentence or block of text." Narrowed in
+ *    M29 repair round 2 (director's measurement against the ratified
+ *    acceptance): an `<a>` whose computed `display` is the browser
+ *    default `inline` is exempt ONLY when its parent also carries real
+ *    running text outside the link itself (a sibling node whose trimmed
+ *    text content contains a run of two or more letters), which is the
+ *    computable stand-in for "in a sentence." The sidebar footer's
+ *    repository link (`.sidebar-footer a`) is `display: inline` but its
+ *    only siblings are a middle-dot separator and the version stamp
+ *    (`#footer-version`, no letter run), so it fails this test and is a
+ *    real finding, exactly as the ratified acceptance names it
+ *    ("the footer repository link 200x15").
+ *
+ * The Spacing exception ("the target offset is at least 24 CSS pixels to
+ * every adjacent target") was REMOVED in M29 repair round 2: the ratified
+ * acceptance for DDM-P17-T07 names controls that only clear the floor
+ * because Spacing excused them (Brief/Console at 43.4x17/64.8x17 with
+ * centres 56px apart; the quick-view chips at 21.3px tall, 30px row
+ * pitch) as "today's failures," so this census's floor is the target's
+ * own box, never a spacing-derived excuse. `circleIntersectsBox` went
+ * with it (`git diff` confirms nothing else called it).
+ *
+ * A checkbox or radio `<input>` counts by its associated `<label>`'s box
+ * (`input.labels[0]`, falling back to an ancestor `<label>`) when that
+ * label clears the floor: the label is what a mouse actually lands on to
+ * activate the control (native forms-association semantics; e.g. the
+ * layer toggles measured 295x40 to 295x65 by their label rows).
+ *
+ * Coverage: the collector used to read only what the current scroll
+ * position already had inside the viewport, so a control further down
+ * the scrolling sidebar was never measured at all (silently absent from
+ * `found`, never a finding). For every candidate under the floor (after
+ * any label substitution above), `pointerTargets` now calls
+ * `scrollIntoView({ block: 'center', inline: 'nearest' })` on it before
+ * the reachability (`elementFromPoint`) read, and re-reads its box after
+ * the scroll, so a genuinely undersized control cannot hide below the
+ * fold. A control that already clears the floor is never scrolled: it
+ * cannot be a finding either way, and scrolling it would only disturb
+ * the page for no measurement gain.
+ *
+ * Equivalent (a same-function larger control elsewhere) and
+ * Essential/User agent control are NOT invoked: neither applies to any
+ * element this shell authors.
+ *
+ * Case shape (M29 repair round 1, register found-020): the first cut
+ * boots the app once per (width, view, cluster) combination -- 4 widths x
+ * 2 views x every rendered cluster, plus the collapsed-sidebar case, about
+ * 33 full `gotoApp` boots in one 60s test -- and the gate could not finish
+ * even one boot's worth of assertions at 2560x1440 before the default
+ * test timeout landed mid-`gotoApp` (`I:/claude-temp/ddm-s30d/gates/m29-wt.log`).
+ * Restructured here into one test per (width, view): `gotoApp` runs ONCE
+ * for that case's default cluster, then the remaining clusters are
+ * reached by clicking `.shell-cluster-btn[data-cluster]` in place (never
+ * a second `gotoApp`), which is strictly cheaper than a reboot per
+ * cluster and lets each case report on its own rather than share one
+ * shared 60s clock across all of them.
+ */
+interface PointerTarget {
+  readonly sel: string;
+  readonly label: string;
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+  readonly cx: number;
+  readonly cy: number;
+}
+
+const POINTER_FLOOR = 24;
+
+/** Every visible, ENABLED, reachable interactive element, scoped to the
+ * sidebar and the DDM-authored map chrome. MapLibre's own furniture
+ * (zoom, geolocate, attribution, its native scale bar) is excluded: it
+ * is library-rendered chrome this module never restyles, and every
+ * control DDM authors lives outside a `maplibregl-ctrl-*` container, so
+ * the exclusion drops nothing DDM owns. */
+async function pointerTargets(page: Page): Promise<PointerTarget[]> {
+  return page.evaluate((floor) => {
+    const selector =
+      'button, a[href], input, select, summary, [role="button"], [tabindex]:not([tabindex="-1"])';
+    const found: {
+      sel: string;
+      label: string;
+      left: number;
+      top: number;
+      width: number;
+      height: number;
+      cx: number;
+      cy: number;
+    }[] = [];
+    for (const node of Array.from(document.querySelectorAll(selector))) {
+      const element = node as HTMLElement;
+      if (element.closest('[class*="maplibregl-ctrl"]')) continue;
+      const style = getComputedStyle(element);
+      if (style.visibility === 'hidden' || style.display === 'none') continue;
+      // SC 2.5.8 Inline exception, narrowed (M29 repair round 2): exempt
+      // only when the parent also carries real running text outside the
+      // link (a sibling node with a two-or-more-letter run), the
+      // computable stand-in for "in a sentence." A separator and a
+      // version stamp do not qualify: see the module doc comment.
+      if (element.tagName === 'A' && style.display === 'inline') {
+        const parent = element.parentElement;
+        const hasRunningText = parent
+          ? Array.from(parent.childNodes).some((sibling) => {
+              if (sibling === element) return false;
+              return /[A-Za-z]{2,}/.test((sibling.textContent ?? '').trim());
+            })
+          : false;
+        if (hasRunningText) continue;
+      }
+      // "Enabled" per the acceptance text, unlike the tablet collector.
+      if ((element as HTMLButtonElement).disabled) continue;
+      if (element.getAttribute('aria-disabled') === 'true') continue;
+
+      // A checkbox/radio counts by its label's box: the label is the real
+      // activation target (native forms-association), so an undersized
+      // input with a floor-clearing label is not a finding.
+      let target = element;
+      if (
+        element.tagName === 'INPUT' &&
+        (element as HTMLInputElement).labels &&
+        ((element as HTMLInputElement).type === 'checkbox' ||
+          (element as HTMLInputElement).type === 'radio')
+      ) {
+        const inputBox = element.getBoundingClientRect();
+        if (inputBox.width < floor || inputBox.height < floor) {
+          const label =
+            (element as HTMLInputElement).labels?.[0] ??
+            (element.closest('label') as HTMLElement | null);
+          if (label) {
+            const labelBox = label.getBoundingClientRect();
+            if (labelBox.width >= floor && labelBox.height >= floor) target = label;
+          }
+        }
+      }
+
+      let box = target.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue;
+      // Coverage: a candidate under the floor is scrolled into view before
+      // its reachability read, so a control further down the scrolling
+      // sidebar cannot hide below the fold. A control that already clears
+      // the floor is left exactly where it is: it cannot be a finding.
+      if (box.width < floor || box.height < floor) {
+        target.scrollIntoView({ block: 'center', inline: 'nearest' });
+        box = target.getBoundingClientRect();
+      }
+      const cx = box.left + box.width / 2;
+      const cy = box.top + box.height / 2;
+      if (cx < 0 || cy < 0 || cx >= window.innerWidth || cy >= window.innerHeight) continue;
+      const atCentre = document.elementFromPoint(cx, cy);
+      if (!atCentre) continue;
+      if (!(atCentre === target || target.contains(atCentre) || atCentre.contains(target))) {
+        continue;
+      }
+      const id = element.id ? `#${element.id}` : '';
+      const classes =
+        typeof element.className === 'string' && element.className.trim()
+          ? `.${element.className.trim().split(/\s+/).slice(0, 2).join('.')}`
+          : '';
+      found.push({
+        sel: `${element.tagName.toLowerCase()}${id}${classes}`,
+        label: (element.getAttribute('aria-label') ?? element.textContent ?? '').trim().slice(0, 40),
+        left: Number(box.left.toFixed(1)),
+        top: Number(box.top.toFixed(1)),
+        width: Number(box.width.toFixed(1)),
+        height: Number(box.height.toFixed(1)),
+        cx: Number(cx.toFixed(1)),
+        cy: Number(cy.toFixed(1))
+      });
+    }
+    return found;
+  }, POINTER_FLOOR);
+}
+
+function meetsFloor(target: PointerTarget): boolean {
+  return target.width >= POINTER_FLOOR && target.height >= POINTER_FLOOR;
+}
+
+function undersizedPointerTargets(targets: readonly PointerTarget[]): string[] {
+  return targets
+    .filter((target) => !meetsFloor(target))
+    .map((target) => `${target.sel} ${target.width}x${target.height} "${target.label}"`);
+}
+
+const POINTER_CENSUS_WIDTHS: Readonly<Record<number, number>> = {
+  1280: 720,
+  1440: 900,
+  1920: 1080,
+  2560: 1440
+};
+
+/** Click every cluster the boot did not already commit, in place (never a
+ * second `gotoApp`), waiting each time for the same settle signal
+ * `tests/s4-shell.spec.ts` waits for after a cluster press: the button's
+ * own `aria-pressed`, then its `data-pending` seam dropping to `false`
+ * (the 45s ceiling matches the one that file already uses for a real
+ * layer settle, e.g. `tests/s4-shell.spec.ts:115`), then a settled paint.
+ * Collects and labels the failures for every cluster, including the one
+ * already committed at boot. */
+async function censusEveryCluster(
+  page: Page,
+  width: number,
+  height: number,
+  view: 'brief' | 'console'
+): Promise<string[]> {
+  const clusters = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('.shell-cluster-btn[data-cluster]'))
+      .map((el) => ({
+        key: el.getAttribute('data-cluster'),
+        pressed: el.getAttribute('aria-pressed') === 'true'
+      }))
+      .filter((entry): entry is { key: string; pressed: boolean } => Boolean(entry.key))
+  );
+  expect(
+    clusters.length,
+    'DR-113: at least one hazard mode must be enumerable from the rendered switch'
+  ).toBeGreaterThan(0);
+
+  const failures: string[] = [];
+  for (const { key, pressed } of clusters) {
+    if (!pressed) {
+      // Click only the one mode being measured; SAT and every other
+      // control on the shell stay untouched.
+      const button = page.locator(`.shell-cluster-btn[data-cluster="${key}"]`);
+      await button.click();
+      await expect(button).toHaveAttribute('aria-pressed', 'true');
+      await expect(button).toHaveAttribute('data-pending', 'false', { timeout: 45_000 });
+      await settledLayout(page);
+    }
+    const targets = await pointerTargets(page);
+    for (const failure of undersizedPointerTargets(targets)) {
+      failures.push(`${width}x${height} view=${view} cluster=${key}: ${failure}`);
+    }
+  }
+  return failures;
+}
+
+for (const width of Object.keys(POINTER_CENSUS_WIDTHS).map(Number)) {
+  const height = POINTER_CENSUS_WIDTHS[width]!;
+  for (const view of ['brief', 'console'] as const) {
+    test.describe(`desktop pointer-target floor ${width}x${height} view=${view} (DDM-P17-T07, found-020)`, () => {
+      test.use({ viewport: { width, height } });
+
+      // 2560x1440 is the named-slowest boot in the gate log
+      // (I:/claude-temp/ddm-s30d/gates/m29-wt.log): the old 33-boot census
+      // exhausted its shared 60s clock inside a boot at this width. This
+      // case still does one boot plus up to three in-place cluster
+      // switches; each of the four steps is bounded by the 45s
+      // data-pending settle ceiling this suite already uses for a mode
+      // swap (see `censusEveryCluster` above), so 4 x 45_000ms = 180_000ms
+      // is the derived worst-case budget, not a round guess. The other
+      // three widths keep the framework default (60_000ms): they are
+      // cheaper (smaller canvas) and this shape (1 boot + <=3 in-place
+      // switches) is lighter than the sibling multi-boot describes
+      // elsewhere in this file that already pass at 60s.
+      if (width === 2560) {
+        test.setTimeout(180_000);
+      }
+
+      test('every enabled sidebar and chrome control is at least 24 x 24 CSS px', async ({
+        page
+      }) => {
+        await gotoApp(page, `?view=${view}`);
+        await expect(page.locator('.sidebar')).toBeVisible();
+        await settledLayout(page);
+
+        const failures = await censusEveryCluster(page, width, height, view);
+
+        expect(
+          failures,
+          `pointer targets under 24x24 CSS px with no SC 2.5.8 exception:\n${failures.join('\n')}`
+        ).toEqual([]);
+      });
+    });
+  }
+}
+
+test.describe('desktop pointer-target floor, sidebar collapsed 1440x900 (DDM-P17-T07, found-020)', () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test('every enabled sidebar and chrome control is at least 24 x 24 CSS px', async ({ page }) => {
+    // The brief's own extra case: the collapsed rail, not the cluster walk.
+    await gotoApp(page, '?view=console');
+    await page.locator('#sidebar-collapse').click();
+    await expect(page.locator('#app')).toHaveClass(/sidebar-collapsed/);
+    await settledLayout(page);
+    const collapsedTargets = await pointerTargets(page);
+    const failures = undersizedPointerTargets(collapsedTargets).map(
+      (failure) => `1440x900 sidebar collapsed: ${failure}`
+    );
+
+    expect(
+      failures,
+      `pointer targets under 24x24 CSS px with no SC 2.5.8 exception:\n${failures.join('\n')}`
+    ).toEqual([]);
+  });
+});
