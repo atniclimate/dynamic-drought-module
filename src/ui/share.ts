@@ -17,6 +17,14 @@ import { showToast } from './overlay';
  * If the button id is not present in the DOM the function silently
  * no-ops; this lets `wireShareButton` be called unconditionally during
  * boot without needing the caller to reach into the DOM.
+ *
+ * S30D D1 M13 (register found-010, found-017; precedence.md row H4): the
+ * copied link carries every durable URL key (region or framing, layers,
+ * mode, horizon and the rest of RECOGNIZED_URL_KEYS) and never the panned
+ * camera or the open briefing place, because neither is ever URL state
+ * (src/state/typed-place.ts). The success toast says so, plainly, so the
+ * confirmation states the same contract as the button's own name and
+ * title in index.html.
  */
 export function wireShareButton(buttonId: string): void {
   const btn = document.getElementById(buttonId);
@@ -26,7 +34,7 @@ export function wireShareButton(buttonId: string): void {
     const ok = await copyToClipboard(window.location.href);
     showToast(
       ok
-        ? 'Link copied to clipboard'
+        ? 'Link copied. It restores region or framing, layers, mode and horizon, not the map position or an open briefing.'
         : 'Copy blocked. Use the address bar to copy this view.'
     );
   });

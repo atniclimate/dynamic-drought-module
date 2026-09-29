@@ -519,6 +519,54 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
     expect(Math.abs(after!.y - before!.y)).toBeLessThanOrEqual(1);
   });
 
+  // S30D D1 M13 (found-010, found-017; DDM-P8-T07): a STRENGTHENED
+  // assertion over the case above, not an edit to make a test pass. The
+  // case above reads only #shell-minimap-heading at the suite's default
+  // viewport; this extension adds #shell-share-host (the Share control's
+  // sidebar seat, S4's rehosted `#share-btn`) at the four desktop widths
+  // the design record's acceptance names, where --sidebar-w is the
+  // unclamped 340px constant (app.css:394-398's tablet clamp band ends at
+  // 1024px, below every width here). Red only if either element moves;
+  // green on base counts as the acceptance's own measurement, named so in
+  // the report.
+  for (const viewport of [
+    { width: 1280, height: 720 },
+    { width: 1440, height: 900 },
+    { width: 1920, height: 1080 },
+    { width: 2560, height: 1440 }
+  ]) {
+    test(`a horizon switch to a longer outlook headline moves neither #shell-minimap-heading nor #shell-share-host by more than 1 px at ${viewport.width}x${viewport.height} (found-010, found-017)`, async ({
+      page
+    }) => {
+      await page.setViewportSize(viewport);
+      await routeCpcOutlook(page);
+      await gotoApp(page);
+
+      const headline = page.locator('.shell-time-headline');
+      await expect(headline).toBeVisible();
+      await expect(headline).toContainText('Consensus month');
+
+      const navigation = page.locator('#shell-minimap-heading');
+      const shareHost = page.locator('#shell-share-host');
+      const navBefore = await navigation.boundingBox();
+      const shareBefore = await shareHost.boundingBox();
+      expect(navBefore).not.toBeNull();
+      expect(shareBefore).not.toBeNull();
+
+      await page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]').click();
+      await expect(headline).toContainText('Issued', { timeout: 45_000 });
+      await expect(headline).toContainText('through Jul 2026');
+
+      const navAfter = await navigation.boundingBox();
+      const shareAfter = await shareHost.boundingBox();
+      expect(navAfter).not.toBeNull();
+      expect(shareAfter).not.toBeNull();
+      expect(Math.abs(navAfter!.y - navBefore!.y)).toBeLessThanOrEqual(1);
+      expect(Math.abs(shareAfter!.y - shareBefore!.y)).toBeLessThanOrEqual(1);
+      expect(Math.abs(shareAfter!.x - shareBefore!.x)).toBeLessThanOrEqual(1);
+    });
+  }
+
   test('the time card heading names the pressed horizon chip in HORIZON_CHROME\'s own words at every Drought horizon, and the door opens anchored to its trigger (found-014, found-015)', async ({
     page
   }) => {

@@ -173,7 +173,7 @@ test.describe('the mobile hazard rail (390x844)', () => {
     // counterexamples): Share and Reset describe their action targets.
     await expect(page.locator('#share-btn')).toHaveAttribute(
       'title',
-      'Copy embed-ready link to clipboard'
+      'The link restores region or framing, layers, mode and horizon, not the map position or an open briefing'
     );
     await expect(page.locator('#reset-btn')).toHaveAttribute(
       'title',

@@ -109,6 +109,26 @@ export function hideLoading(token: number | null | undefined): void {
 }
 
 /**
+ * The toast's announcement (S30D D1 M13 repair; register found-017): a
+ * dedicated visually hidden status region (`#copy-toast-status`, class
+ * `sr-only`, index.html near :421) exists in the DOM from boot and is
+ * never hidden, so a screen reader has already found it before the first
+ * Share press. `#copy-toast` itself carries no `role` or `aria-live`; the
+ * region is cleared first, then the message is written on the next
+ * microtask, so a repeated identical message (Share pressed twice in a
+ * row) is still a text mutation and still announced. One announcement per
+ * toast, never two.
+ */
+function announceToastStatus(message: string): void {
+  const status = document.getElementById('copy-toast-status');
+  if (!status) return;
+  status.textContent = '';
+  queueMicrotask(() => {
+    status.textContent = message;
+  });
+}
+
+/**
  * Show the toast element with `message` for ~1700 ms, then fade out over
  * 250 ms and set `hidden = true`. Forces a reflow before adding the
  * `.visible` class so the CSS transition runs from the hidden state on
@@ -122,6 +142,7 @@ export function showToast(message: string): void {
   watchToastSeat();
   const el = document.getElementById('copy-toast');
   if (!el) return;
+  announceToastStatus(message);
   el.textContent = message;
   el.hidden = false;
   // Force reflow so the class transition runs from the hidden state.

@@ -797,3 +797,145 @@ test.describe('D1 M7: reload restores every recognized durable key (precedence H
     });
   }
 });
+
+// ---------------------------------------------------------------------------
+// D1 M13 (register found-010, found-017; precedence H4): the Share control
+// states its own restore contract, and a copied link reloaded after a pan
+// and an open briefing restores exactly that contract, not the camera and
+// not the briefing place (neither is ever URL state,
+// src/state/typed-place.ts:13-18).
+// ---------------------------------------------------------------------------
+
+/**
+ * Record every clipboard write on `page` (src/ui/share.ts copies
+ * `window.location.href` through src/util/clipboard.ts's
+ * navigator.clipboard path). Mirrors the recorder in
+ * tests/precedence.spec.ts (D1 M7); duplicated here because that helper is
+ * local to its own file and not exported, and the brief's own pattern
+ * ("read how existing Share tests read the copied URL") is this one.
+ */
+async function installClipboardRecorder(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const copies: string[] = [];
+    (window as unknown as { __ddmM13Copies: string[] }).__ddmM13Copies = copies;
+    Object.defineProperty(Navigator.prototype, 'clipboard', {
+      configurable: true,
+      get: () => ({
+        writeText: async (text: string): Promise<void> => {
+          copies.push(text);
+        }
+      })
+    });
+  });
+}
+
+/** Click Share and return the exact text it copied. */
+async function copiedShareHref(page: Page): Promise<string> {
+  const before = await page.evaluate(
+    () => (window as unknown as { __ddmM13Copies: string[] }).__ddmM13Copies.length
+  );
+  await page.evaluate(() => {
+    (document.getElementById('share-btn') as HTMLElement | null)?.click();
+  });
+  let copied: string | undefined;
+  await expect
+    .poll(async () => {
+      copied = await page.evaluate(
+        (count: number) =>
+          (window as unknown as { __ddmM13Copies: string[] }).__ddmM13Copies[count],
+        before
+      );
+      return copied !== undefined;
+    })
+    .toBe(true);
+  return copied!;
+}
+
+test.describe('D1 M13: the Share control states its own restore contract (found-010, found-017)', () => {
+  test('a copied Share link reloaded after a pan and an open briefing restores exactly what the Share control says it restores', async ({
+    page
+  }) => {
+    await installClipboardRecorder(page);
+    await gotoApp(
+      page,
+      '?select=state:WA&region=washington_state&layers=places&horizon=weeks-ahead&sidebar=closed'
+    );
+
+    // The accessible name and the title state the contract in words (red on
+    // base: aria-label is the bare "Share view", title is "Copy
+    // embed-ready link to clipboard"; neither names a single restored or
+    // dropped key).
+    const shareBtn = page.locator('#share-btn');
+    const contract =
+      /restores region or framing, layers, mode and horizon.*not the map position or an open briefing/;
+    await expect(shareBtn).toHaveAttribute('aria-label', contract);
+    await expect(shareBtn).toHaveAttribute('title', contract);
+
+    // The deep link opened the briefing at boot; the one-shot `select=` has
+    // not necessarily cleared the instant boot-idle stamps (found-010: "drops
+    // select= within 700 ms"), so wait for it explicitly before treating the
+    // URL as settled.
+    const panel = page.locator('#impact-panel');
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+    await expect(panel.locator('#impact-panel-title')).toHaveText('Washington');
+    await expect
+      .poll(async () => new URLSearchParams(await search(page)).has('select'), {
+        message: 'select= clears after the one-shot boot open'
+      })
+      .toBe(false);
+
+    const beforeSearch = await search(page);
+
+    // Pan the camera by dragging the map. Panning is not tracked by any URL
+    // key (only the nine editorial `framing=` presets are), so this changes
+    // nothing about to be asserted below except by NOT changing it.
+    const canvas = page.locator('#map canvas.maplibregl-canvas').first();
+    const box = await canvas.boundingBox();
+    expect(box).not.toBeNull();
+    const cx = box!.x + box!.width / 2;
+    const cy = box!.y + box!.height / 2;
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx - 180, cy - 140, { steps: 12 });
+    await page.mouse.up();
+    await expect(panel).toBeVisible();
+
+    // The pan and the open briefing are byte-identical to the URL before
+    // them (found-010's own reproduction evidence).
+    expect(await search(page)).toBe(beforeSearch);
+
+    const copied = await copiedShareHref(page);
+    const copiedUrl = new URL(copied);
+    expect(copiedUrl.search).toBe(beforeSearch);
+    expect(copiedUrl.searchParams.has('select')).toBe(false);
+
+    // The confirmation states the same contract: the visual toast shows it
+    // and the boot-present polite live region found-017 asks for
+    // (#copy-toast-status; tests/impact-panel-a11y.spec.ts proves the
+    // announcement mechanics; this proves the wording matches).
+    await expect(page.locator('#copy-toast')).toContainText(contract);
+    const status = page.locator('#copy-toast-status');
+    await expect(status).toHaveAttribute('role', 'status');
+    await expect(status).toHaveAttribute('aria-live', 'polite');
+    await expect(status).toContainText(contract);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.locator('html')).toHaveAttribute('data-ddm-controls', 'ready');
+    await expect.poll(() => page.locator('html').getAttribute('data-ddm-boot')).toBe('idle');
+
+    // Restored: region, layers, mode/horizon, sidebar.
+    await expect(regionSelect(page)).toHaveValue('region:washington_state');
+    await expect
+      .poll(async () => (await urlLayers(page)).has('places'))
+      .toBe(true);
+    await expect(
+      page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]')
+    ).toHaveAttribute('aria-pressed', 'true', { timeout: 45_000 });
+    await expect(page.locator('#app')).toHaveClass(/\bsidebar-collapsed\b/);
+
+    // NOT restored: the panned camera left no URL trace to restore (proven
+    // above), and the briefing place does not reopen (select= was already
+    // gone from the copied link).
+    await expect(page.locator('#impact-panel')).toBeHidden();
+  });
+});

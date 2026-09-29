@@ -471,7 +471,8 @@ test.describe('the desktop column holds its four seats (D1 M9)', () => {
       '#reset-btn': 'Reset map view',
       '#basemap-switcher-overlay-host .basemap-switcher-btn': 'SAT: satellite imagery',
       '#map-info-seat > #map-info-btn': 'Help and map information',
-      '.map-overlay-controls > #share-btn': 'Share view'
+      '.map-overlay-controls > #share-btn':
+        'Share view: the link restores region or framing, layers, mode and horizon, not the map position or an open briefing'
     };
     const SCENARIOS = [
       { width: 820, height: 1180, sidebar: 'open' },

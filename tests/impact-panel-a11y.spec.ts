@@ -279,3 +279,41 @@ test.describe('impact panel accessibility', () => {
     await expect(heatIndexSeries).toHaveAttribute('open', '');
   });
 });
+
+/**
+ * D1 M13 repair (register found-017): the copy confirmation is announced
+ * through a dedicated status region that exists from boot, so assistive
+ * tech has already found it before the first Share press (the first
+ * build's lazily-role'd `#copy-toast` attached its live-region attributes
+ * in the same tick as its first text change, and was `hidden` between
+ * toasts, which screen readers announce unreliably).
+ */
+test.describe('D1 M13: the Share confirmation is announced (found-017)', () => {
+  test('a boot-present status region announces the Share confirmation; the toast itself carries no role', async ({
+    page
+  }) => {
+    await gotoApp(page);
+
+    // Before any Share press: the status region already exists, already
+    // wired for assistive tech, and is never hidden.
+    const status = page.locator('#copy-toast-status');
+    await expect(status).toHaveAttribute('role', 'status');
+    await expect(status).toHaveAttribute('aria-live', 'polite');
+    await expect(status).toHaveAttribute('aria-atomic', 'true');
+    await expect(status).not.toHaveAttribute('hidden', '');
+
+    // #copy-toast carries neither: nothing double-announces.
+    const toast = page.locator('#copy-toast');
+    await expect(toast).not.toHaveAttribute('role', /.+/);
+    await expect(toast).not.toHaveAttribute('aria-live', /.+/);
+
+    await page.locator('#share-btn').click();
+
+    // After Share: the status region holds the success message, and stays
+    // present (never hidden), while the toast still carries no role.
+    await expect(status).toContainText(/Link copied|Copy blocked/);
+    await expect(status).not.toHaveAttribute('hidden', '');
+    await expect(toast).not.toHaveAttribute('role', /.+/);
+    await expect(toast).toContainText(/Link copied|Copy blocked/);
+  });
+});
