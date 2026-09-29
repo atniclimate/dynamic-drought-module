@@ -472,9 +472,19 @@ export function createLayerController(
       for (const partnerKey of def.coActivateWith) {
         const partner = getLayerDef(partnerKey);
         if (!partner) continue;
-        const isOn =
-          registry.getActiveKeys().has(partnerKey) || view.isCheckboxChecked(partnerKey);
-        if (isOn) continue;
+        // Read INTENT, never the registry (found-092, 2026-09-28). A manual
+        // uncheck bumps `desiredOn` to false synchronously (deactivateInternal,
+        // above), but `registry.deactivate` only runs inside that key's queued
+        // teardown op, AFTER any fade completes. Between those two moments the
+        // registry still reports the partner active, so checking it here would
+        // skip re-cascading a partner the user just turned off and is now
+        // turning back on through the OTHER member of the pair (unchecking
+        // both, then rechecking either, never brought the first back). The
+        // intent map is exactly right for "is this partner already on":
+        // activateWithIndicator, applyLayerSet, and applyPreset each bump it
+        // to true before the key can ever become active, so `desiredOn` is
+        // never a false negative here, only the registry read was.
+        if (desiredOn.get(partnerKey) === true) continue;
         view.setCheckbox(partnerKey, true);
         void activate(partnerKey, false);
       }

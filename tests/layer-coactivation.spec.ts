@@ -102,13 +102,8 @@ test.describe('U3f1 the wildfire event pair co-activates', () => {
    * specifically: checking either member brings both into layers=;
    * unchecking either drops only itself.
    *
-   * FIXME REGISTER found-092: action 3 (check hms-smoke after both were
-   * unchecked by hand) never brings nifc-fires back into layers=, on base
-   * code too (DR-155 A/B gates/ab-lc105.log: 19 of 20 red, tree and base
-   * alike), against the co-activation contract in layer-controller.ts
-   * (D-0.7.0-018). Un-fixme with the found-092 fix; do not weaken it.
    */
-  test.fixme('layers= reflects the pair asymmetrically after each of the four coupling actions', async ({
+  test('layers= reflects the pair asymmetrically after each of the four coupling actions', async ({
     page
   }) => {
     await gotoApp(page, '?view=console');
