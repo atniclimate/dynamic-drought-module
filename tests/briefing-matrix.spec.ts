@@ -752,6 +752,12 @@ test('the emphasis moves on a live mode switch, not only on a fresh open, and st
   await stubBaselineBriefingHosts(page);
   await stubSpcFireOutlook(page, {});
   await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+  // found-094: the same boot-paint race found-089 fixed above (:672), at
+  // this case's first read; red about 1 run in 15 on base and changed code
+  // alike (gates/ab-bm755.log). Settle per horizon before reading.
+  for (const horizon of HORIZON_KEYS) {
+    await waitForSettledHazardRow(page, 'drought', horizon, SHELL_HAZARD_KEY.drought);
+  }
   expect(new Set(await activeHazardValues(page))).toEqual(new Set(['drought']));
 
   await clusterBtn(page, 'wildfire').click();
