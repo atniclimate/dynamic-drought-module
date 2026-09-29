@@ -48,14 +48,17 @@ test.describe('studio focus and geometry', () => {
     });
   }
 
-  test('desktop PLACE and LAYERS dock beside the sidebar, which stays live', async ({
+  test('desktop PLACE and LAYERS dock beside the sidebar, which stays visible but inert (DR-169)', async ({
     page
   }) => {
-    // Screen-filling studios now start at the sidebar's inner edge and
-    // fill the rest of the viewport instead of painting over the
-    // sidebar, so #map-container (which they cover completely) goes
-    // inert while #sidebar stays a live, focusable, screen-reader-visible
-    // column (the owner's slide-out-beside-the-side-card direction).
+    // Screen-filling studios start at the sidebar's inner edge and fill
+    // the rest of the viewport instead of painting over the sidebar (the
+    // owner's slide-out-beside-the-side-card direction, unchanged by
+    // DR-169). What DR-169 changes (ratified 2026-09-29, RATIFICATION-8,
+    // "Desktop sidebar inert"): the sidebar column stays on screen but is
+    // no longer live while a studio is open; #app itself (sidebar
+    // included) goes inert, reversing this test's pre-DR-169 title and
+    // its "#app is no longer blanket-inerted" assertion below.
     await page.setViewportSize({ width: 1280, height: 900 });
     await gotoApp(page, '?view=brief&layers=places');
     const sidebarWidth = await page.locator('#sidebar').evaluate((el) => el.getBoundingClientRect().width);
@@ -67,32 +70,31 @@ test.describe('studio focus and geometry', () => {
     expect(placeBox?.width).toBe(1280 - sidebarWidth);
     expect(placeBox?.height).toBe(900);
 
-    // #map-container is what the studio actually covers: inert and
-    // hidden from assistive tech.
-    await expect(page.locator('#map-container')).toHaveAttribute('aria-hidden', 'true');
-    expect(await page.locator('#map-container').evaluate((el) => (el as HTMLElement).inert)).toBe(
-      true
-    );
-    // #app itself is no longer blanket-inerted; only what the studio
-    // actually covers is.
+    // #app itself is inert (DR-169), which reaches every descendant:
+    // #map-container (what the studio visually covers) and #sidebar
+    // (what it does not) alike.
+    await expect(page.locator('#app')).toHaveAttribute('aria-hidden', 'true');
+    expect(await page.locator('#app').evaluate((el) => (el as HTMLElement).inert)).toBe(true);
+    // The sidebar stays visible on screen (still where it always sits,
+    // sidebarWidth unchanged) but is reachable through neither a click
+    // nor script focus while the veil is up.
+    await expect(page.locator('#sidebar')).toBeVisible();
+    await page.locator('#sidebar-collapse').focus();
+    await expect(page.locator('#sidebar-collapse')).not.toBeFocused();
+
+    await page.locator(`${PLACE_ROOT} #place-studio-back`).click();
+    // Closed: the veil lifts and the sidebar is reachable again.
     expect(await page.locator('#app').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
-    // The sidebar is NOT covered, so it must stay reachable and visible
-    // to assistive tech: no aria-hidden, not inert, and a real control
-    // inside it can still take focus.
-    await expect(page.locator('#sidebar')).not.toHaveAttribute('aria-hidden', 'true');
-    expect(await page.locator('#sidebar').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
     await page.locator('#sidebar-collapse').focus();
     await expect(page.locator('#sidebar-collapse')).toBeFocused();
 
-    await page.locator(`${PLACE_ROOT} #place-studio-back`).click();
     await page.locator('#layers-studio-entry').click();
     const layersBox = await page.locator(LAYERS_ROOT).boundingBox();
     expect(layersBox?.x).toBe(sidebarWidth);
     expect(layersBox?.width).toBe(1280 - sidebarWidth);
     expect(layersBox?.height).toBe(900);
-    await expect(page.locator('#map-container')).toHaveAttribute('aria-hidden', 'true');
-    await expect(page.locator('#sidebar')).not.toHaveAttribute('aria-hidden', 'true');
-    expect(await page.locator('#sidebar').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
+    await expect(page.locator('#app')).toHaveAttribute('aria-hidden', 'true');
+    expect(await page.locator('#app').evaluate((el) => (el as HTMLElement).inert)).toBe(true);
   });
 
   test('mobile PLACE remains full-screen and restores its sheet opener', async ({ page }) => {
@@ -210,11 +212,14 @@ test.describe('studio focus and geometry', () => {
   });
 
   test('Shift+Tab from Back never leaves an open studio', async ({ page }) => {
-    // found-004: with #sidebar deliberately kept live (not inert) beside a
-    // docked studio, nothing before this fix stopped Tab from walking out
-    // of the studio root into it, or into the map chrome's #share-btn
-    // (rehosted into the live shell), the exact reachability the register
-    // recorded.
+    // found-004: nothing before this fix stopped Tab from walking out of
+    // the studio root into the live app behind it, or into the map
+    // chrome's #share-btn (rehosted into the shell), the exact
+    // reachability the register recorded. The trap (src/ui/island/
+    // studio-inert.ts, trapStudioTabFocus) still matters after DR-169
+    // made #app inert too: inert removes #sidebar and #share-btn from
+    // the tab order themselves, but this proves the studio's OWN focus
+    // ring never depends on that veil to hold.
     await page.setViewportSize({ width: 1280, height: 900 });
     await gotoApp(page, '?view=brief&layers=places');
     await page.locator('#layers-studio-entry').click();

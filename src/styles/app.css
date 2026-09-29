@@ -332,16 +332,19 @@ a:hover {
 }
 
 /* Feeds --studio-inset-start (declared on :root above) for the
-   screen-filling studios below. Scoped to the desktop breakpoint: below
-   721px the sidebar is a bottom sheet OVER the map, not a column beside
-   it, so a studio there stays full-viewport regardless of this rule.
+   screen-filling studios below. Scoped to the DESKTOP breakpoint only
+   (DR-169, ratified 2026-09-29: "Desktop sidebar inert" moved this gate
+   from 721px to 1025px, so the tablet band 721-1024px, DR-153, now gets
+   the full-viewport studio like the phone shell below it, and only
+   1025px and wider keeps the dock beside the sidebar column). Below
+   1025px a studio there stays full-viewport regardless of this rule.
    :not(.sidebar-collapsed):not(.embed) is exactly "the sidebar column is
    actually rendered at its --sidebar-w width right now"; either class
    collapses it to 0, and the fallback above already reads 0 in that
    case. Progressive enhancement: a browser without :has() never sets
    this, so --studio-inset-start stays 0 and a studio there simply keeps
    painting full-viewport, same as before this change. */
-@media (min-width: 721px) {
+@media (min-width: 1025px) {
   body:has(#app.app-shell:not(.sidebar-collapsed):not(.embed)) {
     --studio-inset-start: var(--sidebar-w);
   }
@@ -2859,7 +2862,7 @@ button.conditions-metric:hover .conditions-action-hide {
   container-type: inline-size;
 }
 
-@media (min-width: 721px) {
+@media (min-width: 1025px) {
   #layers-studio-root {
     inset: 0 0 0 var(--studio-inset-start);
   }
@@ -2927,7 +2930,21 @@ button.conditions-metric:hover .conditions-action-hide {
   gap: 16px;
   flex: 0 0 auto;
   min-height: 64px;
-  padding: 10px 18px;
+  /* Registers Back / the heading / the end group with the content
+     column below (.layers-studio-grid, .place-studio-layout: both
+     `width: min(1080px, 100%); margin: 0 auto` inside
+     .layers-studio-scroll's own 18px padding) instead of the header's
+     own full-bleed edge (D1 M17, DR-169 item 2: at 2560x1440 the two
+     used to sit about 1080px apart). --studio-header-max defaults to
+     that same 1080px cap; the Place studio's own @container widening to
+     a 1400px column (near :3585) overrides it there so the two stay in
+     step. Below the cap the 18px floor matches .layers-studio-scroll's
+     own padding exactly (the header has no scroller inset of its own to
+     subtract, so the two arithmetics agree without one). The header
+     itself stays full width (its background and border-bottom are
+     chrome, not content); only its padding narrows to line the content
+     up. */
+  padding: 10px max(18px, calc((100% - var(--studio-header-max, 1080px)) / 2));
   background: var(--bg-1);
   border-bottom: 1px solid var(--line-strong);
 }
@@ -3281,14 +3298,20 @@ button.conditions-metric:hover .conditions-action-hide {
   margin-left: 2px;
 }
 
+/* No max-height and no overflow here at rest (D1 M17, DR-169 item 2:
+   "one scroll container"). Before this change every width capped this
+   list's own height and gave IT a second `overflow: auto`, nested
+   inside .layers-studio-scroll's own scroller (near :3009); at 1280x720
+   that cut the last row mid-line inside its own tiny scrollbar instead
+   of the single outer one. The phone shell (@media max-width: 720px,
+   below) is the one exception that keeps its own cap and its own
+   overflow, named there. */
 .place-studio-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: calc(100dvh - 250px);
   margin: 0;
   padding: 0;
-  overflow: auto;
   list-style: none;
 }
 
@@ -3512,15 +3535,18 @@ button.conditions-metric:hover .conditions-action-hide {
   background: transparent;
 }
 
-@media (min-width: 721px) {
-  /* Screen-filling geometry (owner direction): starts at the sidebar's
-     inner edge (--studio-inset-start, 0 unless a live sidebar column is
-     on screen) and fills the rest of the viewport, so the studio slides
-     out BESIDE the nav side-card rather than over it. This is exactly
-     the box #map-container occupies at these widths, which is why the
-     inert scope in place-studio.tsx targets #map-container instead of
-     the whole #app: the sidebar is never covered here, so it must stay
-     reachable. */
+@media (min-width: 1025px) {
+  /* Screen-filling geometry (owner direction, DR-169's "Desktop sidebar
+     inert" ruling): starts at the sidebar's inner edge (--studio-inset-
+     start, 0 unless a live sidebar column is on screen) and fills the
+     rest of the viewport, so the studio slides out BESIDE the nav
+     side-card rather than over it. This is exactly the box
+     #map-container occupies at these widths. The sidebar sits beside
+     this box, visible but inert (applyStudioInertScope veils the whole
+     #app now, sidebar included; src/ui/island/studio-inert.ts). Below
+     1025px (the tablet band, DR-153, and the phone shell) this whole
+     block does not apply and the studio stays the full-viewport default
+     declared above. */
   #place-studio-root {
     inset: 0 0 0 var(--studio-inset-start);
   }
@@ -3539,10 +3565,6 @@ button.conditions-metric:hover .conditions-action-hide {
     gap: 10px;
     width: 100%;
   }
-
-  .place-studio-list {
-    max-height: min(34dvh, 320px);
-  }
 }
 
 /* Rebalances the single column above once the ROOT is actually wide
@@ -3553,9 +3575,18 @@ button.conditions-metric:hover .conditions-action-hide {
    does not read as one sparse column. 760px mirrors the threshold
    .layers-studio-grid uses for the same reason and the same judgment
    call: comfortably above the 300px second-column floor plus a workable
-   first column and the gap. Below it (the 721 to roughly 1100px viewport
-   band with the sidebar docked) the single column above stands. */
+   first column and the gap. Below it (the 1025px and wider dock's own
+   viewport band with the sidebar docked, or the sub-1025px full-viewport
+   studio before the root is this wide) the single column above stands.
+   --studio-header-max here keeps .layers-studio-header's own padding
+   (near :2923) registered with the WIDENED 1400px content column below,
+   instead of the 1080px default the Layers studio and the narrower Place
+   studio both use (D1 M17, DR-169 item 2). */
 @container (min-width: 760px) {
+  .place-studio-header {
+    --studio-header-max: 1400px;
+  }
+
   .place-studio-type-rail {
     width: min(1400px, 100%);
     margin: 0 auto 14px;
@@ -3565,17 +3596,6 @@ button.conditions-metric:hover .conditions-action-hide {
     grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
     gap: 20px;
     width: min(1400px, 100%);
-  }
-
-  .place-studio-list {
-    /* Item 14, 2026-09-10: at 1440x900 the old min(50dvh, 560px) stopped the
-       list about two thirds of the way down and left the whole lower right of
-       the studio empty, which is what the owner saw. The rail, the type
-       status and the search field above it cost about 210px, so 68dvh leaves
-       a comfortable bottom margin while giving the list roughly a third more
-       rows. The absolute cap stays so a very tall monitor does not stretch
-       one column into a ribbon. */
-    max-height: min(68dvh, 760px);
   }
 }
 
@@ -3600,7 +3620,11 @@ button.conditions-metric:hover .conditions-action-hide {
     overflow-x: auto;
   }
   .place-studio-layout { grid-template-columns: 1fr; gap: 10px; }
-  .place-studio-list { max-height: 38dvh; }
+  /* The phone shell keeps its own cap and its own scroller (unchanged by
+     D1 M17's "one scroll container" fix above, which targets the
+     1025px-and-wider desktop dock and the 721-1024px tablet band; the
+     phone route is out of this microtask's scope, DR-169 note). */
+  .place-studio-list { max-height: 38dvh; overflow: auto; }
   .place-studio-type-status { align-items: flex-start; flex-direction: column; gap: 3px; }
   .place-overlap-grid { overflow-x: auto; }
   .place-overlap-column { min-width: 120px; }

@@ -1,35 +1,29 @@
 /**
- * Scope a screen-filling studio's inert / aria-hidden veil to what it
- * actually covers, instead of blanketing the whole #app.
+ * Veil the whole #app behind an open studio: inert and aria-hidden, at
+ * every width (DR-169, ratified 2026-09-29, RATIFICATION-8, overriding
+ * this module's 2026-09-13 desktop-dock design below).
  *
- * At desktop widths (>= 721px, the same breakpoint the studio's own CSS
- * geometry and src/ui/mobile-sheet.ts both key off) a studio slides out
- * BESIDE the nav sidebar rather than over it: the sidebar stays a live,
- * focusable, screen-reader-visible column, and the studio's box exactly
- * matches #map-container's. So everything in #app except the sidebar
- * itself goes inert there: #map-container (the map and its chrome) and
- * any sibling that can end up visually under the studio, such as the
- * #sidebar-expand corner button when the sidebar is collapsed or embed
- * (the studio then paints edge-to-edge and covers that corner too).
- *
- * Below 721px the sidebar is not a column at all: it becomes a bottom
- * sheet OVER the map (mobile-sheet.ts), and the same full-viewport
- * studio covers that sheet along with everything else. There the whole
- * #app must go inert, matching the behaviour shipped before this change
- * byte for byte.
- *
- * The breakpoint is re-checked live (a MediaQueryList change listener),
- * so a studio that stays open across a resize or orientation change
- * (desktop window resize, an embedding page reflowing its iframe) keeps
- * the correct element inert rather than the one true at mount time.
+ * Before DR-169, a desktop studio (>= 721px) docked beside the nav
+ * sidebar and left it live, so only #map-container and its siblings went
+ * inert; below 721px, where the sidebar is a bottom sheet OVER the map
+ * (mobile-sheet.ts), the whole #app went inert. The owner's read-back
+ * ruling ("Desktop sidebar inert") keeps the desktop dock geometry
+ * (src/styles/app.css, --studio-inset-start, now gated at 1025px) but
+ * removes the live-sidebar carve-out everywhere: from 721 to 1024px and
+ * below 721px a studio already covers the whole viewport, and at 1025px
+ * and wider it covers only the map area while the sidebar stays VISUALLY
+ * present beside it, no longer usable. Marking #app itself inert (rather
+ * than #map-container alone) reaches the sidebar too, since inert and
+ * aria-hidden both cascade to every descendant in the flat tree; the
+ * sidebar is not additionally hidden or moved, so it stays on screen
+ * exactly where the desktop dock geometry puts it (interface-chrome's
+ * "inert on it or an ancestor" reading, D1 M17).
  *
  * Call once from a studio's mount effect; call the returned cleanup from
  * that effect's teardown.
  */
 export function applyStudioInertScope(): () => void {
-  const mql = window.matchMedia('(min-width: 721px)');
   const appEl = document.getElementById('app');
-  const sidebarEl = document.getElementById('sidebar');
 
   let current: readonly HTMLElement[] = [];
   const priorAriaHidden = new Map<HTMLElement, string | null>();
@@ -45,21 +39,10 @@ export function applyStudioInertScope(): () => void {
     priorAriaHidden.clear();
   }
 
-  function desiredTargets(): readonly HTMLElement[] {
-    if (!appEl) return [];
-    if (!mql.matches) return [appEl];
-    // Desktop: the sidebar stays live; inert every other direct child of
-    // #app (today that is #sidebar-expand and #map-container). Walking
-    // the children rather than naming #map-container alone keeps any
-    // future sibling of the sidebar correctly covered too.
-    return Array.from(appEl.children).filter(
-      (el): el is HTMLElement => el instanceof HTMLElement && el !== sidebarEl
-    );
-  }
-
   function apply(): void {
     release();
-    current = desiredTargets();
+    if (!appEl) return;
+    current = [appEl];
     for (const el of current) {
       priorAriaHidden.set(el, el.getAttribute('aria-hidden'));
       el.inert = true;
@@ -68,10 +51,8 @@ export function applyStudioInertScope(): () => void {
   }
 
   apply();
-  mql.addEventListener('change', apply);
 
   return () => {
-    mql.removeEventListener('change', apply);
     release();
   };
 }
@@ -83,9 +64,12 @@ const FOCUSABLE_SELECTOR =
 /**
  * Trap Tab and Shift+Tab inside `root` (found-004): at the last focusable
  * descendant Tab wraps to the first, and at the first Shift+Tab wraps to
- * the last, so an open studio can never hand focus to the live app behind
- * it (the sidebar stays live at desktop widths, `applyStudioInertScope`
- * above, so it is reachable only through this trap, never left implicitly).
+ * the last, so an open studio can never hand focus to the app behind it.
+ * Since DR-169 the whole #app, sidebar included, is inert while a studio
+ * is open (`applyStudioInertScope` above), so this trap is no longer the
+ * sidebar's only defense against a leaked Tab; it stays regardless,
+ * because the studio's own focusable descendants must still cycle among
+ * themselves rather than reaching #app's DOM (inert or not) at all.
  *
  * Bound on `document` in the CAPTURE phase rather than on `root` itself:
  * `root` is a plain DOM node this module's caller creates and removes

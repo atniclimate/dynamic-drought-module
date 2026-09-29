@@ -341,26 +341,30 @@ test('an immediate browser Back still delivers the promised briefing (wave A fin
 });
 
 /**
- * A sidebar display command taken from inside the Place studio survives
- * (Codex adversarial review 2026-09-10, finding 6).
+ * A sidebar hazard control is unreachable while the Place studio is open,
+ * and unaffected once it is not (D1 M17, DR-169, ratified 2026-09-29,
+ * RATIFICATION-8: the owner's read-back "Desktop sidebar inert").
  *
- * The sidebar became reachable from inside a studio on 2026-09-10, a real
- * accessibility fix: a keyboard or screen-reader user can now reach these
- * controls while a studio is open. But focusable is not the same as
- * operative. Place studio captures the display on entry, reasserts that
- * capture on every intent change (`enforceCleanIntent`), and restores it
- * again on exit, so a cluster requested from the newly-live sidebar was
- * stripped within a microtask and then overwritten a second time on the way
- * out. The control looked like it worked and did not.
- *
- * The fix sequences the command behind the studio's own exit rather than
- * suppressing it, so the assertion is on the OUTCOME a user would expect:
- * click Wildfire, end up on Wildfire, with the studio closed.
+ * Before DR-169 the sidebar became reachable from inside a studio (Codex
+ * adversarial review 2026-09-10, finding 6): a keyboard or screen-reader
+ * user could reach these controls while a studio was open, and Place
+ * studio sequenced a command taken there behind its own exit rather than
+ * suppress it (`enforceCleanIntent` otherwise stripped it within a
+ * microtask). This test used to pin that reachability, titled "the
+ * exposed sidebar commands survive the Place studio", with the comment
+ * "the fix is allowed to change what the click DOES, never to put the
+ * control back behind an inert scope." DR-169 reverses exactly that: the
+ * owner's ruling trades the reachability for a plainer contract that the
+ * whole #app, sidebar included, is inert while ANY studio is open at
+ * EVERY width (src/ui/island/studio-inert.ts, applyStudioInertScope), so
+ * a hazard button behind an open studio is visible (the sidebar column
+ * is never covered or moved) but cannot be reached by any input method
+ * until the studio is closed, with Escape or Back to map.
  */
-test.describe('the exposed sidebar commands survive the Place studio', () => {
+test.describe('a sidebar hazard command while the Place studio is open (DR-169)', () => {
   test.use({ viewport: { width: 1280, height: 900 } });
 
-  test('choosing a hazard from inside Place studio leaves the studio and lands on that hazard', async ({
+  test('the hazard button stays visible but inert while the studio is open, then lands on Wildfire once Back closes it', async ({
     page
   }) => {
     await gotoApp(page, '?layers=states&view=brief');
@@ -373,27 +377,34 @@ test.describe('the exposed sidebar commands survive the Place studio', () => {
     const studio = page.locator(PLACE_ROOT);
     await expect(studio).toBeVisible();
 
-    // The control is genuinely reachable, which is the 2026-09-10 a11y win
-    // this test must not undo: the fix is allowed to change what the click
-    // DOES, never to put the control back behind an inert scope.
+    // DR-169: the button stays on screen (the sidebar column is never
+    // covered or moved at this width) but the whole #app is now inert
+    // (found on the ancestor, not the button itself), so a real click at
+    // its coordinates lands on nothing that can act on it.
     await expect(wildfire).toBeVisible();
-    await expect(wildfire).toBeEnabled();
+    expect(await page.locator('#app').evaluate((el) => (el as HTMLElement).inert)).toBe(true);
+    await wildfire.click({ force: true });
+    await expect(wildfire).toHaveAttribute('aria-pressed', 'false');
+    await expect(page).not.toHaveURL(/cluster=wildfire/);
+    await expect(studio).toBeVisible();
 
-    await wildfire.click();
-
-    // The studio yields, rather than silently reverting the choice.
+    await page.locator(`${PLACE_ROOT} #place-studio-back`).click();
     await expect(studio).toHaveCount(0);
-    // And the choice is the one that stands, after the exit restore rather
-    // than in a race with it.
+    expect(await page.locator('#app').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
+
+    // With the studio closed the button works exactly as it always has
+    // (the companion case below proves the same thing with no studio
+    // ever opened).
+    await wildfire.click();
     await expect(wildfire).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
     await expect(page).toHaveURL(/cluster=wildfire/);
-    // The studio really is gone from the URL too, not merely unmounted.
     await expect(page).not.toHaveURL(/studio=place/);
   });
 
   test('the same command outside any studio is unchanged', async ({ page }) => {
-    // The control: the deferral must apply ONLY inside Place studio, or the
-    // fix would have made every hazard click depend on a history pop.
+    // The control: DR-169's veil applies ONLY while a studio is open, so a
+    // hazard click with no studio ever opened must behave exactly as it
+    // always has.
     await gotoApp(page, '?layers=states&view=brief');
     await waitForLayerSettled(page, 'states');
     const wildfire = page.locator('.shell-cluster-btn[data-cluster="wildfire"]');
