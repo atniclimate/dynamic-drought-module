@@ -379,7 +379,13 @@ test.describe('mobile key growth at 390x844', () => {
     const content = page.locator('#map-key-content');
     await expect(content).toBeHidden();
     await expect(page.locator('#map-key-details-toggle')).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.locator('#map-key-details-toggle')).toHaveText('FIRE');
+    // Value-only migration (S30D D1 M10; interface-chrome-popups-text.md
+    // section 2.4): the toggle's visible text now comes straight from the
+    // KeySpec's own label ('Fire', buildFireKey) with no family-ternary
+    // uppercasing; CSS keeps the visual capitals (text-transform:
+    // uppercase on the phone rule, unchanged), but toHaveText reads the
+    // DOM text content, not the rendered case.
+    await expect(page.locator('#map-key-details-toggle')).toHaveText('Fire');
     await openMapKey(page);
     await expect(key.locator('[data-nifc-perimeter-key]')).toBeVisible();
     // Wait for the READY key: during activation the sections render W2-D6
@@ -558,7 +564,7 @@ test.describe('the ENSO ocean key reaches every surface (W2-D1)', () => {
  * the embed were designed around the old seats and keep them.
  */
 test.describe('the 2026-08-19 map chrome seats', () => {
-  test('the desktop column holds the satellite control and the key, and the corner reads badge, attribution, question mark', async ({
+  test('the desktop column holds the satellite control, help and the key, and the preview badge stays clear of help', async ({
     page
   }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -576,17 +582,32 @@ test.describe('the 2026-08-19 map chrome seats', () => {
     expect(satellite.top).toBeGreaterThanOrEqual(reset.bottom - 1);
     expect(Math.abs(satellite.right - reset.right)).toBeLessThanOrEqual(2);
 
-    // The corner holds the question mark alone (owner direction
-    // 2026-08-31: the attribution circle is gone and its credits render
-    // inside the question-mark panel); the preview badge sits bottom
-    // center. No overlap.
+    // Help sits under SAT in the same column since D1 M9 (2026-09-27;
+    // interface-chrome section 2.2, slot 3; it left the bottom-right corner,
+    // which the old wording here described). Its credits still render inside
+    // its panel (owner direction 2026-08-31); the preview badge sits clear
+    // of the scale bars since D1 M10 (found-019), no longer bottom centre.
+    // No overlap.
     const info = await rect(page.locator('.map-info-btn'));
+    expect(info.top).toBeGreaterThanOrEqual(satellite.bottom - 1);
+    expect(Math.abs(info.right - reset.right)).toBeLessThanOrEqual(2);
+    // The column's top band, never the old bottom-right corner (800 / 3).
+    expect(info.bottom).toBeLessThan(800 / 3);
     const badge = await rect(page.locator('.test-preview-badge'));
     await expect(page.locator('.map-info-btn')).toBeVisible();
-    const viewport = page.viewportSize();
-    if (!viewport) throw new Error('viewport size is unavailable');
-    const badgeCenter = (badge.left + badge.right) / 2;
-    expect(Math.abs(badgeCenter - viewport.width / 2)).toBeLessThanOrEqual(2);
+    // Value-only migration (S30D D1 M10, found-019): the badge no longer
+    // centres on the viewport (that put it over the scale bar between
+    // about 721px and 985px of map width); it now sits clear of the scale
+    // bars' own extent instead (app.css ":5984-6010"; the full contract is
+    // "the preview badge and the scale bar (found-019)" below). Before:
+    // asserted the badge centred within 2px of viewport.width / 2. After:
+    // asserts it clears the scale bar's right edge by the required 8px.
+    const scale = page.locator('.maplibregl-ctrl-bottom-left .maplibregl-ctrl-scale').first();
+    await expect(scale).toBeVisible();
+    const scaleRect = await rect(scale);
+    expect(badge.left, 'the badge sits right of the scale bars, not centred').toBeGreaterThanOrEqual(
+      scaleRect.right + 8 - 1
+    );
     expect(badge.right).toBeLessThanOrEqual(info.left);
     expect(intersects(badge, info)).toBe(false);
     expect(info.bottom).toBeLessThanOrEqual(800);
@@ -679,6 +700,66 @@ test.describe('short landscape coarse-pointer shell', () => {
     }
 
     await expectNoHorizontalOverflow(page, 844);
+  });
+});
+
+test.describe('desktop Brief region band', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test('at region=national the region panel leaves no empty band where the hidden briefing door was', async ({
+    page
+  }) => {
+    // A bare boot resolves to the national default and Brief mode (DR-109,
+    // 60c3a66), where the region panel is rehosted inside the desktop shell
+    // and its briefing door has no anchor to show (D1 M4, found-024). The
+    // repair (D1 M4 repair) keeps the row occupied by a plain-text
+    // alternate rather than collapsing it: this must be RED against the
+    // original pre-M4 code (an empty reserved band, no statement anywhere)
+    // because #region-briefing-note would not exist there at all.
+    await gotoApp(page);
+    const panel = page.locator('#shell-region-host > #panel-region');
+    await expect(panel).toBeVisible();
+    await expect(page.locator('#region-briefing-btn')).toBeHidden();
+    const note = page.locator('#shell-region-host #region-briefing-note');
+    await expect(note).toBeVisible();
+    await expect(note).toHaveText('Pick a place to open its briefing.');
+
+    // The statement's own box must sit inside the second row with no blank
+    // gap above or below it beyond the row's own 8px gap token (measured,
+    // not assumed): top gap is select-bottom to note-top, bottom gap is
+    // note-bottom to panel-bottom (panel padding is zeroed by .shell-rehost
+    // while seated here, so panel-bottom is the row's own edge).
+    const selectBox = await rect(page.locator('#shell-region-host #region-select'));
+    const noteBox = await rect(note);
+    const panelBox = await rect(panel);
+    expect(
+      noteBox.top - selectBox.bottom,
+      'a blank gap sits above the statement beyond the row gap token'
+    ).toBeLessThanOrEqual(9);
+    expect(
+      panelBox.bottom - noteBox.bottom,
+      'a blank gap sits below the statement inside the reserved row'
+    ).toBeLessThanOrEqual(1);
+  });
+
+  test('the region row keeps its height when a place selection shows the door', async ({
+    page
+  }) => {
+    // Red on the collapse design (D1 M4): collapsing the second row to 0px
+    // when the door is hidden, then expanding it once a place selection
+    // shows the door, moves every fixed-position control below it,
+    // including #brief-search, which the 2026-09-13 stable-position rule
+    // pins in place across selection changes.
+    await gotoApp(page);
+    const searchBoxBefore = await rect(page.locator('#brief-search'));
+    await page.locator('#brief-search [data-ddm-search]').fill('oregon');
+    await page.locator('#brief-search [data-search-kind="place"][data-search-id="OR"]').click();
+    await expect(page.locator('#region-briefing-btn')).toBeVisible();
+    const searchBoxAfter = await rect(page.locator('#brief-search'));
+    expect(
+      Math.abs(searchBoxAfter.top - searchBoxBefore.top),
+      '#brief-search moved when the region row gained the visible door'
+    ).toBeLessThanOrEqual(1);
   });
 });
 
@@ -1306,5 +1387,60 @@ test.describe('short desktop coarse-pointer Brief response', () => {
       (el) => getComputedStyle(el).overflowY
     );
     expect(bodyScrolls).toBe('auto');
+  });
+});
+
+/**
+ * S30D D1 M10 (register found-019; task DDM-P10-T11; design record
+ * interface-chrome-popups-text.md section 2.2's clearance list): the
+ * preview badge sits right of the scale bars' maximum extent plus 8px,
+ * never intersecting the scale bar.
+ *
+ * Predicted red on the pre-M10 tree: at 960x540 the badge (position:
+ * fixed, left: 50%, transform: translateX(-50%), centred on the whole
+ * viewport including the sidebar) intersects the scale bar, which sits at
+ * the map container's own left edge.
+ */
+test.describe('the preview badge and the scale bar (found-019)', () => {
+  const WIDTHS = [960, 1280, 1440, 1920, 2560] as const;
+  const HEIGHTS: Readonly<Record<number, number>> = {
+    960: 540,
+    1280: 720,
+    1440: 900,
+    1920: 1080,
+    2560: 1440
+  };
+
+  test('the preview badge never intersects the scale bar from 960x540 to 2560x1440', async ({ page }) => {
+    for (const width of WIDTHS) {
+      const height = HEIGHTS[width]!;
+      await page.setViewportSize({ width, height });
+      await gotoApp(page);
+      const badge = page.locator('.test-preview-badge');
+      const scale = page.locator('.maplibregl-ctrl-bottom-left .maplibregl-ctrl-scale').first();
+      await expect(badge).toBeVisible();
+      await expect(scale).toBeVisible();
+      const badgeRect = await rect(badge);
+      const scaleRect = await rect(scale);
+      expect(
+        intersects(badgeRect, scaleRect),
+        `${width}x${height}: badge ${JSON.stringify(badgeRect)} vs scale ${JSON.stringify(scaleRect)}`
+      ).toBe(false);
+      expect(badgeRect.left, `${width}x${height}: badge left is at least 8px past the scale bar's right edge`).toBeGreaterThanOrEqual(
+        scaleRect.right + 8 - 1
+      );
+    }
+  });
+
+  test('the preview badge stays clear of the scale bar with the sidebar collapsed too', async ({ page }) => {
+    await page.setViewportSize({ width: 960, height: 540 });
+    await gotoApp(page);
+    await page.locator('#sidebar-collapse').click();
+    await expect(page.locator('#app')).toHaveClass(/sidebar-collapsed/);
+    const badge = page.locator('.test-preview-badge');
+    const scale = page.locator('.maplibregl-ctrl-bottom-left .maplibregl-ctrl-scale').first();
+    const badgeRect = await rect(badge);
+    const scaleRect = await rect(scale);
+    expect(intersects(badgeRect, scaleRect)).toBe(false);
   });
 });

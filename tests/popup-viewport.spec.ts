@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
-import { gotoApp, waitForLayerSettled } from './helpers';
+import { awaitQuiescence, gotoApp, waitForLayerSettled } from './helpers';
 import {
   MIN_COMPACT_BODY_REGION_HEIGHT_PX,
   MIN_USABLE_REGION_HEIGHT_PX,
@@ -137,7 +137,7 @@ test.describe('DEF-3: the coordinated popup is contained and its tail reachable 
   test('the box stays inside the viewport, the body scrolls, and both source links are reachable', async ({
     page
   }) => {
-    await gotoApp(page, '?view=console&layers=bia-reservations');
+    await gotoApp(page, '?region=washington_state&view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
     // Click the map center until the fixture fill has painted and the
@@ -251,7 +251,7 @@ test.describe('DEF-3 finding 1: mobile side panel geometry (390x844, touch)', ()
   test('the side panel does not create a bottom inset and the popup remains touch-scrollable', async ({
     page
   }) => {
-    await gotoApp(page, '?layers=bia-reservations');
+    await gotoApp(page, '?region=washington_state&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
     // The Layers door opens beside the map. It must not be treated as a
@@ -394,7 +394,7 @@ test.describe('DEF-3 finding 1: a small embed iframe and both size floors', () =
   test('the card follows an embed viewport down through the width and height floors', async ({
     page
   }) => {
-    await gotoApp(page, '?embed=true&view=console&layers=bia-reservations');
+    await gotoApp(page, '?region=washington_state&embed=true&view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
     const popup = page.locator('.maplibregl-popup');
@@ -528,7 +528,7 @@ test.describe('DEF-3 r2 finding 1: compact tier, empty-region recovery, sub-chro
   test('the tiered contract holds through compact, empty, recovery, and sub-chrome regions', async ({
     page
   }) => {
-    await gotoApp(page, '?embed=true&view=console&layers=bia-reservations');
+    await gotoApp(page, '?region=washington_state&embed=true&view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
     const popup = page.locator('.maplibregl-popup');
@@ -706,28 +706,157 @@ test.describe('DEF-3 r2 finding 1: compact tier, empty-region recovery, sub-chro
         { message: 'the card top edge is not pinned at the region top', timeout: 10_000 }
       )
       .toBeLessThanOrEqual(1.5);
-    // Dismissal receipt: scan the intersection of the close control's box
-    // and the region strip for a point where the close control is the
-    // topmost element (unmodeled chrome, which the module explicitly does
-    // not dodge, may cover part of the strip), then really click it.
-    const rr = await embedRegion(page);
-    const closeBox = await popup.locator('.maplibregl-popup-close-button').boundingBox();
-    expect(closeBox).not.toBeNull();
-    const probeY = Math.min(rr.top + Math.max(1, rr.h / 2), closeBox!.y + closeBox!.height - 1);
-    const candidates: { x: number; y: number }[] = [];
-    for (let x = closeBox!.x + 3; x <= closeBox!.x + closeBox!.width - 3; x += 4) {
-      candidates.push({ x, y: probeY });
-    }
-    const probe = await page.evaluate((pts) => {
-      for (const pt of pts) {
-        const el = document.elementFromPoint(pt.x, pt.y);
-        if (el && el.closest('.maplibregl-popup-close-button')) return pt;
+    // Dismissal receipt, in two parts.
+    //
+    // PART 1, the probe (it only PICKS the point; it proves nothing about
+    // reachability at click time). One Locator.evaluate on THIS popup's
+    // close control reads, in a single synchronous browser turn, the
+    // region rectangle (viewport intersected with #map, inset 12px, the
+    // same rule as embedRegion), the close control's box, and then scans
+    // elementFromPoint along one row for a pixel whose topmost element is
+    // inside that control (unmodeled chrome, which the module explicitly
+    // does not dodge, may cover part of the strip). The row and the scan
+    // span are the intersection of the close control's box with the
+    // region, so the picked point lies inside the region on BOTH bounds
+    // of each axis, never just below its bottom edge. expect.poll re-runs
+    // the whole read until a point exists or the timeout proves none ever
+    // does.
+    type SubChromeRegion = { top: number; bottom: number; left: number; right: number };
+    type SubChromeProbe =
+      | { kind: 'point'; x: number; y: number; region: SubChromeRegion }
+      | { kind: 'none'; why: string };
+    const closeButton = popup.locator('.maplibregl-popup-close-button');
+    const readSubChromeProbe = async (): Promise<SubChromeProbe> => {
+      try {
+        return await closeButton.evaluate(
+          (closeEl): SubChromeProbe => {
+            const mapEl = document.getElementById('map');
+            if (!mapEl) return { kind: 'none', why: 'no #map' };
+            const m = mapEl.getBoundingClientRect();
+            const region = {
+              top: Math.max(0, m.top) + 12,
+              bottom: Math.min(window.innerHeight, m.bottom) - 12,
+              left: Math.max(0, m.left) + 12,
+              right: Math.min(window.innerWidth, m.right) - 12
+            };
+            const c = closeEl.getBoundingClientRect();
+            const yLo = Math.max(region.top, c.top);
+            const yHi = Math.min(region.bottom, c.bottom);
+            const xLo = Math.max(region.left, c.left);
+            const xHi = Math.min(region.right, c.right);
+            if (yHi - yLo < 1 || xHi - xLo < 1) {
+              return { kind: 'none', why: 'the close control does not overlap the region' };
+            }
+            const y = (yLo + yHi) / 2;
+            for (let x = xLo + 0.5; x <= xHi - 0.5; x += 2) {
+              const hit = document.elementFromPoint(x, y);
+              if (hit && closeEl.contains(hit)) return { kind: 'point', x, y, region };
+            }
+            return { kind: 'none', why: 'every scanned pixel is covered' };
+          },
+          undefined,
+          { timeout: 1_000 }
+        );
+      } catch {
+        return { kind: 'none', why: 'the popup close control did not resolve' };
       }
-      return null;
-    }, candidates);
-    expect(probe, 'no reachable pixel found on the close control in the region strip').not.toBeNull();
-    await page.mouse.click(probe!.x, probe!.y);
-    await expect(popup).toHaveCount(0);
+    };
+
+    // Declared through a cast so control flow does not narrow it to the
+    // initializer: the poll callback below reassigns it.
+    let lastProbe = { kind: 'none', why: 'not read' } as SubChromeProbe;
+    await expect
+      .poll(
+        async () => {
+          lastProbe = await readSubChromeProbe();
+          return lastProbe.kind === 'point' ? 'ok' : lastProbe.why;
+        },
+        {
+          message: 'probe: no reachable pixel found on the close control inside the region strip',
+          timeout: 10_000
+        }
+      )
+      .toBe('ok');
+    const probe = lastProbe;
+    if (probe.kind !== 'point') throw new Error('unreachable: the poll above only passes on a point');
+
+    // PART 2, the reachability proof. A capture-phase pointerdown listener
+    // on document, attached through the same popup-scoped locator before
+    // any input, records AT THE MOMENT the real pointerdown fires: its
+    // client coordinates, whether it is trusted input, whether its target
+    // (or an ancestor of it) is this popup's close control, and the region
+    // rectangle measured in that same turn. page.mouse.click then sends
+    // real input at the probe pixel. The page can still move between the
+    // probe and that dispatch; the record, not the probe, says what the
+    // click actually hit and where the region was when it did.
+    type PointerdownRecord = {
+      clientX: number;
+      clientY: number;
+      isTrusted: boolean;
+      hitClose: boolean;
+      targetDesc: string;
+      region: SubChromeRegion;
+    };
+    type RecordHost = { __ddmSubChromePointerdown?: PointerdownRecord | null };
+    await closeButton.evaluate((closeEl) => {
+      const host = window as unknown as RecordHost;
+      host.__ddmSubChromePointerdown = null;
+      document.addEventListener(
+        'pointerdown',
+        (event: PointerEvent) => {
+          const mapEl = document.getElementById('map');
+          const m = mapEl
+            ? mapEl.getBoundingClientRect()
+            : { top: NaN, bottom: NaN, left: NaN, right: NaN };
+          const target = event.target instanceof Element ? event.target : null;
+          host.__ddmSubChromePointerdown = {
+            clientX: event.clientX,
+            clientY: event.clientY,
+            isTrusted: event.isTrusted,
+            hitClose:
+              target !== null &&
+              closeEl.isConnected &&
+              target.closest('.maplibregl-popup-close-button') === closeEl,
+            targetDesc: target
+              ? `${target.tagName.toLowerCase()}.${String(target.className)}`
+              : String(event.target),
+            region: {
+              top: Math.max(0, m.top) + 12,
+              bottom: Math.min(window.innerHeight, m.bottom) - 12,
+              left: Math.max(0, m.left) + 12,
+              right: Math.min(window.innerWidth, m.right) - 12
+            }
+          };
+        },
+        { capture: true, once: true }
+      );
+    });
+    await page.mouse.click(probe.x, probe.y);
+    const pd = await page.evaluate(
+      () => (window as unknown as RecordHost).__ddmSubChromePointerdown ?? null
+    );
+    expect(pd, 'click: no pointerdown reached document after the real click').not.toBeNull();
+    expect(pd!.isTrusted, 'click: the recorded pointerdown was not real (trusted) input').toBe(
+      true
+    );
+    expect(
+      pd!.hitClose,
+      `click: the real pointerdown hit ${pd!.targetDesc}, not the popup close control`
+    ).toBe(true);
+    const inRegion =
+      pd!.clientY >= pd!.region.top &&
+      pd!.clientY <= pd!.region.bottom &&
+      pd!.clientX >= pd!.region.left &&
+      pd!.clientX <= pd!.region.right;
+    expect(
+      inRegion,
+      `click: the pointerdown at (${pd!.clientX}, ${pd!.clientY}) lies outside the region ` +
+        `measured at that moment ${JSON.stringify(pd!.region)}`
+    ).toBe(true);
+    await expect(
+      popup,
+      'post-click: the close control received the real pointerdown but the popup did not close'
+    ).toHaveCount(0);
   });
 });
 
@@ -737,7 +866,7 @@ test.describe('r2 finding 2: a visual viewport diverging from the layout viewpor
   test('the clamp follows an offset visual-viewport band, not the layout viewport', async ({
     page
   }) => {
-    await gotoApp(page, '?embed=true&view=console&layers=bia-reservations');
+    await gotoApp(page, '?region=washington_state&embed=true&view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
     const popup = page.locator('.maplibregl-popup');
@@ -809,7 +938,12 @@ test.describe('DEF-4 finding 1: viewport resize while telemetry hydration is in 
     // hydrate LIVE and the honest fallback would never render.
     await page.route('**/cwms-data.usace.army.mil/**', delayedAbort);
 
-    await gotoApp(page, '?layers=telemetry');
+    // `region=washington_state` pins the camera this case was measured under
+    // (DR-109): the 'ihr' station sits in Washington, and its popup geometry
+    // at 390x844 and after the resize assumes the Washington framing, not
+    // the national one. `layers=` already routes this boot to the console,
+    // so the raw region= changes no door.
+    await gotoApp(page, '?region=washington_state&layers=telemetry');
     await waitForLayerSettled(page, 'telemetry');
 
     const marker = page.locator('.telemetry-marker[data-telemetry-station-id="ihr"]');
@@ -991,7 +1125,7 @@ test.describe('DEF-4: the telemetry popup fits a 390px viewport (390x844)', () =
  * (session-ruled 2026-09-09) is cited where it bears on a clause.
  *
  * Clause 1 (pointer tolerance) is proved with a hand-authored perimeter
- * fixture placed well inside the default Washington State region fit
+ * fixture placed well inside the pinned Washington State region fit
  * (src/config/regions.ts `washington_state`), so the polygon's on-screen
  * position never depends on the raw boot camera constants (which a region
  * fit moves away from) or on guessing MapLibre's Web Mercator math: the
@@ -1048,7 +1182,7 @@ async function stubToleranceFixture(page: Page): Promise<void> {
 
 async function bootToleranceFixture(page: Page): Promise<{ x: number; y: number; width: number; height: number }> {
   await stubToleranceFixture(page);
-  await gotoApp(page, '?view=console&layers=nifc-fires');
+  await gotoApp(page, '?region=washington_state&view=console&layers=nifc-fires');
   await waitForLayerSettled(page, 'nifc-fires');
   const box = await page.locator('#map').boundingBox();
   if (!box) throw new Error('map container has no box');
@@ -1192,7 +1326,7 @@ test.describe('DDM-P11-T02 clause 2: the popup is dismissable and keyboard-trave
   test('Tab reaches the door and the body links; Escape dismisses; focus does not stay in the removed popup', async ({
     page
   }) => {
-    await gotoApp(page, '?view=console&layers=bia-reservations');
+    await gotoApp(page, '?region=washington_state&view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
     const mapBox = await page.locator('#map').boundingBox();
@@ -1258,7 +1392,7 @@ test.describe('DDM-P11-T02 clause 3: the door names the place it opens a briefin
   test('the door sits after the title in the frozen head, names the place, and opens its own briefing', async ({
     page
   }) => {
-    await gotoApp(page, '?view=console&layers=bia-reservations');
+    await gotoApp(page, '?region=washington_state&view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
     const mapBox = await page.locator('#map').boundingBox();
@@ -1305,7 +1439,7 @@ test.describe('DDM-P11-T02 clause 3: the door names the place it opens a briefin
  * place) that resolves a place through `resolveLocationIdentity` gains
  * the SAME place-specific door in its already-painted head; one that
  * resolves nothing gets none. The default NADM drought polygon
- * (tests/helpers.ts `stubDefaultNadm`) is replaced here by an equally
+ * (tests/helpers.ts `installDefaultNadmStub`) is replaced here by an equally
  * broad hand-authored polygon so `nadm-drought` can be the ONLY active
  * layer (no `states` boundary competing for the same click, which would
  * out-rank the condition surface under the precedence table and defeat
@@ -1341,10 +1475,10 @@ async function stubBroadCondition(page: Page): Promise<void> {
 test.describe('DDM-P11-T02 clause 3, DR-042 option a: the condition-surface door', () => {
   test('a condition tap that resolves a place gains a place-specific door', async ({ page }) => {
     await stubBroadCondition(page);
-    // washington_state is DEFAULT_REGION (src/config/regions.ts); no
-    // `region=` needed. Only `nadm-drought` is active, so `states` never
+    // region=washington_state is pinned (src/config/regions.ts's
+    // DEFAULT_REGION). Only `nadm-drought` is active, so `states` never
     // competes for the click.
-    await gotoApp(page, '?view=console&layers=nadm-drought');
+    await gotoApp(page, '?region=washington_state&view=console&layers=nadm-drought');
     await waitForLayerSettled(page, 'nadm-drought');
 
     const mapBox = await page.locator('#map').boundingBox();
@@ -1372,6 +1506,11 @@ test.describe('DDM-P11-T02 clause 3, DR-042 option a: the condition-surface door
     await stubBroadCondition(page);
     await gotoApp(page, '?view=console&layers=nadm-drought&region=british_columbia');
     await waitForLayerSettled(page, 'nadm-drought');
+    // Registered after the boot and before the click: nothing else in this
+    // test reads the bundled states file (no `states` layer, no `select=`, no
+    // Place studio), so the click's state fallback is this request's only
+    // trigger.
+    const usStatesRequested = page.waitForRequest('**/us-states.geojson');
 
     const mapBox = await page.locator('#map').boundingBox();
     expect(mapBox).not.toBeNull();
@@ -1381,10 +1520,17 @@ test.describe('DDM-P11-T02 clause 3, DR-042 option a: the condition-surface door
       await expect(popup).toBeVisible({ timeout: 1500 });
     }).toPass({ timeout: 20_000 });
 
-    // Give identity resolution the same budget as the positive case above,
-    // then assert the door never arrived: British Columbia is outside
-    // every US state and no Tribal boundary layer is active.
-    await page.waitForTimeout(3_000);
+    // No `states` layer is active, so `resolveLocationIdentity`'s state
+    // fallback always issues the shared `us-states-geojson` fetch
+    // (US_STATES_SHARED_KEY, src/util/fetch.ts) for this click; wait for the
+    // seam to prove that fetch (and everything else pending) has settled,
+    // then assert the door never arrived: British Columbia is outside every
+    // US state and no Tribal boundary layer is active. The wait starts only
+    // once that fetch has left the page: the J7 receipt
+    // (I:/claude-temp/ddm-s30d/gates/j7.log, at 7a2b48d) showed the bare
+    // wait passing in 1.1 s with the request held, before the fetch began.
+    await usStatesRequested;
+    await awaitQuiescence(page);
     await expect(popup.locator('[data-ddm-impact-trigger]')).toHaveCount(0);
   });
 });

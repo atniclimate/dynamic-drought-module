@@ -559,17 +559,35 @@ test.describe('PS-BRIEF return hand-off', () => {
 });
 
 /**
- * A sidebar hazard chosen AFTER a selection keeps the promised briefing
- * (/code-review, 2026-09-10).
+ * Before DR-169, a sidebar hazard click reached the studio's deferred
+ * hand-off (src/ui/island/shell.tsx runDisplayCommand,
+ * setPlaceStudioReturnDisplayCommand) while the Place studio stayed open,
+ * and this describe pinned that the display command composed with the
+ * return hand-off's briefing rather than replacing it (/code-review,
+ * 2026-09-10: the exposed-sidebar fix, Codex finding 6,
+ * tests/studio-restore.spec.ts, first wrote the click into the single slot
+ * the studio uses for the selected place's briefing, so selecting
+ * Washington and then clicking Wildfire landed on Wildfire with no
+ * briefing; the two now live in separate slots composed at exit, display
+ * command first, then briefing).
  *
- * The exposed-sidebar fix (Codex finding 6, tests/studio-restore.spec.ts)
- * defers a cluster click behind the studio's exit. Its first cut wrote that
- * command into the single hand-off slot the studio uses for the briefing of
- * its selected place, so selecting Washington and then clicking Wildfire
- * landed on Wildfire with no briefing: the studio's contract ("Back opens
- * the briefing of the place you selected", the first case above) was broken
- * by a control that promised nothing about briefings. The two now live in
- * separate slots composed at exit, display command first, then briefing.
+ * DR-169 (ratified 2026-09-29, RATIFICATION-8) makes the whole #app,
+ * sidebar included, inert while ANY studio is open
+ * (src/ui/island/studio-inert.ts, applyStudioInertScope), so that click can
+ * no longer arrive while the studio is open at all: the button stays
+ * visible (the sidebar column is never covered) but is unreachable by any
+ * real input until the studio closes. These two cases now pin that
+ * unreachability (a forced click on the visible, inert button changes
+ * nothing and the studio stays open) and then prove the return hand-off
+ * still composes exactly as before once the studio is closed by hand: Back
+ * opens the briefing the selection promised (unchanged, see "PS-BRIEF
+ * return hand-off" above), and a plain click on Wildfire after that lands
+ * on Wildfire without touching that briefing (no code path closes the
+ * impact panel on a hazard-cluster change: src/state/cluster-service.ts's
+ * requestCluster/applyCluster write only the hazard-cluster store;
+ * src/ui/view-shell.ts's closeImpactPanel fires only on a switch to console
+ * mode). With no selection, Back opens nothing (D-0.7.0-041) and the later
+ * Wildfire click still briefs nothing.
  *
  * These cases boot on `layers=states`, NOT the file's usual `layers=places`.
  * City & Town Labels is a reference-role layer outside every cluster's
@@ -584,7 +602,7 @@ test.describe('PS-BRIEF return hand-off', () => {
  */
 const COMPOSABLE_BOOT_LAYERS = 'states';
 
-test.describe('PS-BRIEF return hand-off composes with a sidebar hazard', () => {
+test.describe('PS-BRIEF return hand-off composes with a sidebar hazard closed by hand (DR-169)', () => {
   test.use({ viewport: { width: 1280, height: 900 } });
 
   test.beforeEach(async ({ page }) => {
@@ -599,7 +617,7 @@ test.describe('PS-BRIEF return hand-off composes with a sidebar hazard', () => {
     );
   });
 
-  test('a sidebar hazard chosen after a selection leaves the studio on that hazard with the briefing open', async ({
+  test('a sidebar hazard chosen after a selection is inert while the studio is open, then lands on Wildfire with the briefing still open once the studio closes', async ({
     page
   }) => {
     await gotoApp(page, `?view=brief&layers=${COMPOSABLE_BOOT_LAYERS}&studio=place`);
@@ -608,30 +626,61 @@ test.describe('PS-BRIEF return hand-off composes with a sidebar hazard', () => {
     const wildfire = page.locator('.shell-cluster-btn[data-cluster="wildfire"]');
     await expect(wildfire).toBeVisible();
     await expect(wildfire).toHaveAttribute('aria-pressed', 'false');
-    await wildfire.click();
 
-    // The studio yields (finding 6 still holds)...
+    // DR-169: the button stays on screen (the sidebar column is never
+    // covered at this width) but the whole #app is now inert, so a real
+    // click at its coordinates lands on nothing that can act on it; only a
+    // forced click proves it changes nothing.
+    expect(await page.locator('#app').evaluate((el) => (el as HTMLElement).inert)).toBe(true);
+    await wildfire.click({ force: true });
+    await expect(wildfire).toHaveAttribute('aria-pressed', 'false');
+    await expect(page).not.toHaveURL(/cluster=wildfire/);
+    await expect(page.locator(PLACE_ROOT)).toBeVisible();
+
+    await page.locator('#place-studio-back').click();
     await expect(page.locator(PLACE_ROOT)).toHaveCount(0);
+    expect(await page.locator('#app').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
     await expect(page).not.toHaveURL(/studio=place/);
-    // ...the hazard the user chose is the one that stands...
+
+    // The return hand-off, unchanged: Back opens the briefing the selection
+    // promised.
+    const panel = page.locator('#impact-panel');
+    await expect(panel).toBeVisible();
+    await expect(panel.locator('.impact-panel-title')).toHaveText('Washington');
+
+    // With the sidebar live again, a plain click lands on Wildfire exactly
+    // as it always has, and leaves the briefing exactly as it was: no code
+    // path closes the impact panel on a hazard-cluster change.
+    await wildfire.click();
     await expect(wildfire).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
     await expect(page).toHaveURL(/cluster=wildfire/);
-    // ...AND the briefing the selection promised opens. Before the fix the
-    // panel never mounted: the cluster command had replaced the briefing.
-    const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible();
     await expect(panel.locator('.impact-panel-title')).toHaveText('Washington');
   });
 
-  test('a sidebar hazard chosen with no selection lands on the hazard and briefs nothing', async ({
+  test('a sidebar hazard chosen with no selection is inert while the studio is open, then lands on Wildfire and briefs nothing once the studio closes', async ({
     page
   }) => {
     // The control: composing must not invent a briefing (D-0.7.0-041, never
     // an unsolicited briefing).
     await gotoApp(page, `?view=brief&layers=${COMPOSABLE_BOOT_LAYERS}&studio=place`);
-    await page.locator('.shell-cluster-btn[data-cluster="wildfire"]').click();
+    await expect(page.locator(PLACE_ROOT)).toBeVisible();
 
+    const wildfire = page.locator('.shell-cluster-btn[data-cluster="wildfire"]');
+    await expect(wildfire).toBeVisible();
+    expect(await page.locator('#app').evaluate((el) => (el as HTMLElement).inert)).toBe(true);
+    await wildfire.click({ force: true });
+    await expect(wildfire).toHaveAttribute('aria-pressed', 'false');
+    await expect(page).not.toHaveURL(/cluster=wildfire/);
+    await expect(page.locator(PLACE_ROOT)).toBeVisible();
+
+    await page.locator('#place-studio-back').click();
     await expect(page.locator(PLACE_ROOT)).toHaveCount(0);
+    expect(await page.locator('#app').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
+    await expect(page.locator('#impact-panel')).toHaveCount(0);
+
+    await wildfire.click();
+    await expect(wildfire).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
     await expect(page).toHaveURL(/cluster=wildfire/);
     await expect(page.locator('#impact-panel')).toHaveCount(0);
   });

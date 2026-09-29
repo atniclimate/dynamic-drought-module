@@ -214,6 +214,13 @@ let mapFreeChromeBooted = false;
 function bootMapFreeChrome(): void {
   if (mapFreeChromeBooted) return;
   mapFreeChromeBooted = true;
+  // found-084: the column is the only surface a map-free boot has, and its
+  // expand control is withheld until the controls are ready (app.css), which
+  // this boot never reaches. So a closed desktop preference (sidebar=closed,
+  // DR-139, applied by the inline bootstrap in index.html) is not applied
+  // here. Presentation only: the URL keeps the key for a browser that can
+  // render the map, as a phone boot preserves it without applying it.
+  document.getElementById('app')?.classList.remove('sidebar-collapsed');
   loadMapKey();
   initMapInformation();
 }
@@ -226,6 +233,11 @@ async function boot(): Promise<void> {
   // build (the nonce distinguishes two servers on the same commit).
   document.documentElement.dataset.ddmBuildSha = __DDM_BUILD_SHA__;
   document.documentElement.dataset.ddmBuildNonce = __DDM_BUILD_NONCE__;
+  // found-028 / DDM-P0-T14: the footer version is stamped from the same
+  // build-time constant, never a runtime fetch of package.json and never a
+  // hand-maintained literal in index.html.
+  const footerVersionEl = document.getElementById('footer-version');
+  if (footerVersionEl) footerVersionEl.textContent = `v${__DDM_VERSION__}`;
   // The third stamp: `data-ddm-boot` reads `booting` from here and `idle`
   // once the map has loaded, every URL-named layer has left `loading`, and
   // no shared transport is in flight (src/state/boot-idle.ts, DR-052).

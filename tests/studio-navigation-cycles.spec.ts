@@ -17,14 +17,12 @@ import { gotoApp } from './helpers';
  * spec ran that, and no spec ran studio entry and exit on a phone at all.
  *
  * What a repeated cycle can catch that a single cycle cannot is state that
- * survives a close: the map (or, at phone width, the whole app) left
- * wrongly inert so it stops responding, the sidebar wrongly caught in that
- * same veil at desktop width where it was never covered, a focus anchor
- * stranded on a torn-down opener, a `studio=` token left in a URL that no
- * longer has a studio, or a second open that lands somewhere other than
- * where the first one did. Every one of those reads to a user as
- * "inconsistent navigation", and every one is asserted below on EACH pass,
- * not only on the first.
+ * survives a close: the whole app (DR-169) left wrongly inert so it stops
+ * responding, a focus anchor stranded on a torn-down opener, a `studio=`
+ * token left in a URL that no longer has a studio, or a second open that
+ * lands somewhere other than where the first one did. Every one of those
+ * reads to a user as "inconsistent navigation", and every one is
+ * asserted below on EACH pass, not only on the first.
  *
  * The oracle for "the same place" is the URL the first cycle produced. Both
  * cases capture the map URL at rest and the studio URL on the first open,
@@ -35,47 +33,40 @@ const PLACE_ROOT = '#place-studio-root';
 const LAYERS_ROOT = '#layers-studio-root';
 
 /**
- * A studio takes out of the accessibility tree exactly what it covers, no
- * more: the whole `#app` at phone width, where the sidebar is a bottom
- * sheet sharing the screen with the (also full-viewport) studio, or just
- * `#map-container` at desktop width, where the studio docks beside the
- * sidebar and covers only the map. Either way the breakpoint is the same
- * 721px the CSS geometry and src/ui/mobile-sheet.ts both key off.
+ * A studio veils the whole `#app`, at every width (D1 M17, DR-169,
+ * ratified 2026-09-29, RATIFICATION-8, "Desktop sidebar inert").
+ *
+ * Before DR-169 this covered exactly what a studio visually painted over:
+ * the whole `#app` at phone width, where the sidebar is a bottom sheet
+ * sharing the screen with the (also full-viewport) studio, or just
+ * `#map-container` at desktop width, where the studio docked beside a
+ * LIVE sidebar and covered only the map. The owner's read-back ruling
+ * keeps the desktop dock geometry (now gated at 1025px, DR-153's tablet
+ * band in between gets the full-viewport studio too) but removes the
+ * live-sidebar carve-out: the sidebar stays visually on screen beside a
+ * docked studio, unusable until the studio closes, exactly as it already
+ * was covered by a full-viewport one.
  */
 async function expectStudioSealed(page: Page, moment: string): Promise<void> {
-  const isDesktop = await page.evaluate(() => window.matchMedia('(min-width: 721px)').matches);
-  const covered = isDesktop ? '#map-container' : '#app';
-  await expect(page.locator(covered), `${moment}: ${covered} is not hidden behind the studio`)
-    .toHaveAttribute('aria-hidden', 'true');
+  await expect(page.locator('#app'), `${moment}: #app is not hidden behind the studio`).toHaveAttribute(
+    'aria-hidden',
+    'true'
+  );
   expect(
-    await page.locator(covered).evaluate((el) => (el as HTMLElement).inert),
-    `${moment}: ${covered} is not inert behind the studio`
+    await page.locator('#app').evaluate((el) => (el as HTMLElement).inert),
+    `${moment}: #app is not inert behind the studio`
   ).toBe(true);
-  if (isDesktop) {
-    // The whole point of docking beside the sidebar instead of over it:
-    // the sidebar must stay live, focusable and screen-reader-visible.
-    await expect(
-      page.locator('#sidebar'),
-      `${moment}: the sidebar is wrongly hidden behind the studio`
-    ).not.toHaveAttribute('aria-hidden', 'true');
-    expect(
-      await page.locator('#sidebar').evaluate((el) => (el as HTMLElement).inert),
-      `${moment}: the sidebar is wrongly inert behind the studio`
-    ).toBe(false);
-  }
 }
 
 /** And must hand it back, every time, not only the first time. */
 async function expectStudioReleased(page: Page, moment: string): Promise<void> {
-  const isDesktop = await page.evaluate(() => window.matchMedia('(min-width: 721px)').matches);
-  const covered = isDesktop ? '#map-container' : '#app';
   await expect(
-    page.locator(covered),
-    `${moment}: ${covered} is still hidden after the studio closed`
+    page.locator('#app'),
+    `${moment}: #app is still hidden after the studio closed`
   ).not.toHaveAttribute('aria-hidden', 'true');
   expect(
-    await page.locator(covered).evaluate((el) => (el as HTMLElement).inert),
-    `${moment}: ${covered} is still inert after the studio closed`
+    await page.locator('#app').evaluate((el) => (el as HTMLElement).inert),
+    `${moment}: #app is still inert after the studio closed`
   ).toBe(false);
 }
 

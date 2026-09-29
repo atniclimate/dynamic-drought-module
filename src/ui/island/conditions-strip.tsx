@@ -16,6 +16,9 @@ import type { ReadonlySignal } from '@preact/signals';
 import { getLayerDef } from '../../config/layers';
 import { timeline } from '../../state/timeline';
 import { requestLayerOff, requestLayerOn } from '../layer-toggle-command';
+import { HAZARD_CLUSTERS } from '../../config/clusters';
+import type { HazardClusterKey } from '../../config/clusters';
+import { getHazardCluster, onHazardClusterChange } from '../../state/cluster-store';
 import {
   droughtMetric,
   alertsMetric,
@@ -34,6 +37,24 @@ const TILE_LAYER: Record<string, { key: string; disclose: boolean }> = {
   alerts: { key: 'nws-alerts', disclose: false },
   fires: { key: 'nifc-fires', disclose: false }
 };
+
+/**
+ * found-008: whether the active mode's own recipe (enumerated from
+ * HAZARD_CLUSTERS, never a hard-coded mode name, DR-113) names any of the
+ * drought current-conditions family. The recipe table names the shipped
+ * tri-national default (`nadm-drought`) and the CPC outlook (`drought`);
+ * `usdm` is the same tile's interchangeable domestic alternate (the strip
+ * already treats the two as one reading via `lastDroughtLayer`), so it
+ * counts too even though no recipe names it directly.
+ */
+const DROUGHT_FAMILY_KEYS: readonly string[] = ['nadm-drought', 'drought', 'usdm'];
+
+function clusterOffersDroughtFamily(clusterKey: HazardClusterKey): boolean {
+  const recipes = HAZARD_CLUSTERS[clusterKey].recipes;
+  return Object.values(recipes).some((recipe) =>
+    recipe.some((key) => DROUGHT_FAMILY_KEYS.includes(key))
+  );
+}
 
 /**
  * The accessible name: the status reading first, then the layer state
@@ -123,7 +144,14 @@ function MetricTile({
       }
       onClick={onClick}
     >
-      <span class="conditions-value" style={m.color ? `color:${m.color}` : undefined}>
+      <span class="conditions-value">
+        {m.color ? (
+          <span
+            class="conditions-swatch"
+            aria-hidden="true"
+            style={`background:${m.color}`}
+          />
+        ) : null}
         {m.value}
       </span>
       <span class="conditions-sublabel">
@@ -155,6 +183,13 @@ export function ConditionsStrip({ map, tick, checked }: StripProps) {
   // Subscribe to the tick: every bump recomputes the metrics from what
   // the map is actually rendering (the reflect-the-map contract).
   void tick.value;
+
+  // found-008: the active mode, kept live so a cluster switch that leaves
+  // the checked set unchanged (rare, but possible via a reference-role
+  // extra surviving the switch) still re-evaluates which surfaces this
+  // mode actually offers.
+  const [cluster, setCluster] = useState<HazardClusterKey>(() => getHazardCluster());
+  useEffect(() => onHazardClusterChange(() => setCluster(getHazardCluster())), []);
 
   const lastDroughtLayer = useRef<'usdm' | 'nadm-drought'>('nadm-drought');
   if (checked.value.get('usdm')) lastDroughtLayer.current = 'usdm';
@@ -230,9 +265,17 @@ export function ConditionsStrip({ map, tick, checked }: StripProps) {
   // LAST rather than fronting another hazard's read. The drought view
   // itself is unchanged: with its layer on, the drought tile still leads.
   const droughtOn = isOn('drought');
-  const droughtTileNode = (
+  // found-008: an OFF drought anchor is an invitation ("Layer off. Press to
+  // show.") to activate a SURFACE this mode does not offer; in a mode whose
+  // own recipe never names the drought family, that invitation both names
+  // the wrong mode's layer and, once pressed, silently replaces the mode's
+  // own surface (surface exclusivity). An ON drought reading still renders
+  // regardless of mode: the strip reflects the map honestly either way, and
+  // never hides a layer that is actually drawing.
+  const droughtInMode = droughtOn || clusterOffersDroughtFamily(cluster);
+  const droughtTileNode = droughtInMode ? (
     <MetricTile id="drought" m={droughtTile} isOn={droughtOn} tile={droughtLayer} />
-  );
+  ) : null;
   return (
     <>
       {droughtOn ? droughtTileNode : null}

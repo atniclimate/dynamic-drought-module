@@ -20,7 +20,9 @@
  *   - Activation is EXACT (no co-activation cascade): recipes list
  *     their pairs explicitly (both wildfire recipes name nifc-fires and
  *     hms-smoke); the composition below also expands `coActivateWith`
- *     defensively so the committed intent can never under-claim a pair.
+ *     defensively so the committed intent could never under-claim a pair.
+ *     Since the owner's ruling of 2026-09-28 (found-007) no layer declares
+ *     partners, so that expansion is a no-op kept for any future pair.
  *   - The committed temporal horizon lives in the timeline store
  *     (timeline.horizon, added by S3) and persists across cluster
  *     flips: a switch compares the same time.
@@ -74,7 +76,7 @@ import {
 import { getFraming, onFramingChange } from './framing-store';
 import { registry } from './registry';
 import { timeline } from './timeline';
-import { checkedSnapshot } from '../ui/island/bridge';
+import { checkedSnapshot, isChecked } from '../ui/island/bridge';
 import { requestLayerOff, requestLayerOnExact } from '../ui/layer-toggle-command';
 
 /**
@@ -87,7 +89,10 @@ export interface CommittedShellSnapshot {
   /** Monotonic publish counter; a re-derivation bumps it. */
   readonly revision: number;
   /** The hazard view the user most recently chose. This remains stable when
-   * a failed surface honestly demotes the exact displayed set to `custom`. */
+   * the exact displayed set demotes to `custom` (a user customization, or a
+   * failed layer of a custom set; a failed layer of the committed
+   * composition no longer demotes, D1 M5 and found-073, see
+   * `isCommittedCompositionKey`). */
   readonly selectedHazard: HazardClusterKey;
   /** The committed cluster, or 'custom' once the granular intent has
    * diverged from any cluster's composition (D-0.7.0-044). */
@@ -135,7 +140,8 @@ const listeners = new Set<() => void>();
  * hazard recipe for the horizon in activation order, with any
  * `coActivateWith` pair expanded defensively (recipes already list
  * their pairs explicitly; the controller cascade is never relied on
- * along this path). For 'drought' at 'current' this composes back to
+ * along this path; no layer declares partners since the owner's ruling
+ * of 2026-09-28, found-007, so the expansion adds nothing today). For 'drought' at 'current' this composes back to
  * exactly the default-on set, so the bare boot and the absent-cluster
  * boot are the same set by construction. An EMPTY recipe (Extreme Heat
  * at season-ahead) honestly yields the reference set alone.
@@ -266,6 +272,31 @@ export function onCommittedSnapshotChange(fn: () => void): () => void {
   };
 }
 
+/**
+ * Whether a layer key is a member of the committed cluster's COMPOSITION:
+ * the intent `composeClusterIntent` resolved for it, which is the persistent
+ * reference set (hillshade, the boundaries, the state hairlines) plus the
+ * recipe at the resolved horizon with any `coActivateWith` pair expanded
+ * (none today: no layer declares partners since found-007, 2026-09-28). A
+ * 'custom' display (including a switch demoted by a reference extra) has no
+ * composition.
+ *
+ * The layer controller reads this when an activation fails (D1 M5,
+ * 2026-09-27; found-002 and found-003, the director's Tier 1 scope; widened
+ * from the recipe to the whole composition for found-073, the director's
+ * ruling of 2026-09-27): a failed member of the committed composition keeps
+ * its checkbox, so the checked set still equals the committed composition,
+ * no demotion runs, the hazard stays pressed, `cluster=` (or Drought's
+ * `layers=` list) stays in the URL unchanged, and Current Conditions stays
+ * enabled as the way back; the layer reads unavailable (its registry status
+ * stays 'error'). A failure outside the composition (a custom `layers=`
+ * set) keeps the uncheck-and-leave cleanup.
+ */
+export function isCommittedCompositionKey(key: string): boolean {
+  const { cluster, intent } = resolveCommitted();
+  return cluster !== 'custom' && intent.has(key);
+}
+
 /** Every key currently "on": checked intent union registered active
  * (the checkbox leads the registry while an activation is in flight). */
 function onKeys(): Set<string> {
@@ -291,9 +322,11 @@ function onKeys(): Set<string> {
  *      door. Reference-role keys are NEVER deactivated here.
  *   4. Activate the new recipe through requestLayerOnExact (intent
  *      first, no cascade; the controller's per-key generation guard
- *      absorbs rapid re-flips). The caller is not await-blocked; the
- *      snapshot's coherence comes from step 6, not from activation
- *      settling.
+ *      absorbs rapid re-flips). A recipe member left checked by a failed
+ *      activation is re-requested (D1 M5), so pressing the committed
+ *      hazard again re-applies its recipe. The caller is not
+ *      await-blocked; the snapshot's coherence comes from step 6, not
+ *      from activation settling.
  *   5. Commit the claim to the store/URL. When the display after step 3
  *      IS exactly the composition, the claim is the clean cluster:
  *      setHazardCluster(key) (Drought serializes as absence per the
@@ -338,7 +371,27 @@ function applyCluster(
       }
       requestLayerOff(onKey);
     }
+    // A composition member whose activation failed stays checked (D1 M5,
+    // found-073; see isCommittedCompositionKey), so requestLayerOnExact
+    // alone would skip it as
+    // already on and a press of the committed hazard would do nothing
+    // (found-003's "clicking Wildfire again does nothing"). Such a key is
+    // checked, not registered active, and holds the terminal 'error'
+    // status; it is withdrawn and re-requested through the same door, so
+    // the press re-applies the whole recipe. The controller's intent guard
+    // drops the queued teardown (the newer on-intent owns the key), and
+    // the apply lock keeps the two intermediate checkbox flips from
+    // demoting anything. A key that failed late (still registered active)
+    // is not re-requested here: its module owns its own retry.
+    const active = registry.getActiveKeys();
     for (const wanted of intent) {
+      if (
+        isChecked(wanted) &&
+        !active.has(wanted) &&
+        registry.getStatus(wanted) === 'error'
+      ) {
+        requestLayerOff(wanted);
+      }
       requestLayerOnExact(wanted);
     }
     if (extras.length === 0) {
@@ -361,6 +414,48 @@ function applyCluster(
 
 export function requestCluster(key: HazardClusterKey): void {
   applyCluster(key, key === 'enso' ? getOceanFraming() : null);
+}
+
+/** Discard any explicit commitment and re-derive from the store (the
+ * `onHazardClusterChange` listener's body, shared with
+ * `restoreCommittedCluster` below so a same-value store write can still
+ * force the exact same re-derivation). */
+function resyncFromStore(): void {
+  selectedHazard = getHazardCluster();
+  committedCluster = null;
+  committedIntent = null;
+  committedHorizon = null;
+  publish();
+}
+
+/**
+ * Restore a previously captured committed cluster (found-011, CODEMAP:1749;
+ * D1 M16): the Place studio's clean-display enforcement unchecks a
+ * committed composition member the studio sets aside (a hazard surface),
+ * which `reconcileClusterWithLayerIntent` reads as a customization and
+ * demotes the commitment to 'custom'; restoring the original checked
+ * intent afterward does not undo that demotion on its own, because
+ * `cluster-store`'s `setHazardCluster` only notifies on a VALUE change,
+ * and the cluster being restored to (commonly Drought, the ever-present
+ * store default) never actually left the store. This door restores the
+ * store claim, then unconditionally forces the exact re-derivation an
+ * actual store change would have triggered, so the studio round trip
+ * re-presses the hazard it captured even when the store value never
+ * moved. Suppresses the store's own notification while writing it (the
+ * `applying` guard already used by `requestHorizon`) so the resync below
+ * is the only one that runs, never a redundant second.
+ */
+export function restoreCommittedCluster(
+  cluster: HazardClusterKey,
+  ocean: OceanKey | null
+): void {
+  applying = true;
+  try {
+    setHazardCluster(cluster, ocean);
+  } finally {
+    applying = false;
+  }
+  resyncFromStore();
 }
 
 /**
@@ -418,9 +513,15 @@ export function requestHorizon(next: TemporalHorizonKey): void {
  * matches the committed composition (D-0.7.0-044: the moment the user
  * customizes, `cluster=` comes off and `layers=` goes on; the URL never
  * claims a cluster the display is not). Called by the sidebar on every
- * checkbox-intent flip; a terminal activation failure that unchecks a
- * recipe member also lands here, which is deliberate honesty (a
- * wildfire display missing its perimeters is not the Wildfire cluster).
+ * checkbox-intent flip. A terminal activation failure of a member of the
+ * committed composition, recipe or reference, no longer lands here (D1 M5,
+ * 2026-09-27, found-003; found-073): the controller keeps that box checked
+ * (`isCommittedCompositionKey`), the view stays committed, and the failed
+ * layer reads unavailable in the pill and in the summary caveat, which
+ * names it because it stays in the committed intendedKeys. A failure the
+ * controller does uncheck (any layer of a custom set) still lands here,
+ * and so does a user's own uncheck of a composition member: that display
+ * is no longer the cluster.
  * Stands down while the service itself is applying a cluster, so the
  * transaction's own intermediate flips can never demote the cluster it
  * is committing (the S2-mechanics defect this service retires).
@@ -508,14 +609,13 @@ export function initClusterService(): () => void {
       if (!applying) publish();
     }),
     onHazardClusterChange(() => {
-      if (applying) return;
-      // An external store write (the boot seed, the Place studio
-      // restore) is a new committed claim: re-derive from the store.
-      selectedHazard = getHazardCluster();
-      committedCluster = null;
-      committedIntent = null;
-      committedHorizon = null;
-      publish();
+      // An external store write (the boot seed) is a new committed
+      // claim: re-derive from the store. Stands down while applying
+      // (see requestCluster) so the transaction's own intermediate
+      // writes never race this resync; restoreCommittedCluster shares
+      // this same body under its own `applying` guard, not this event
+      // (a same-value store write emits nothing to react to).
+      if (!applying) resyncFromStore();
     })
   ];
   disposer = () => {

@@ -139,11 +139,28 @@ function ensoCell(page: Page, horizon: string) {
   );
 }
 
+/**
+ * `openBriefing`'s `gotoApp` returns after boot-idle, not after the briefing
+ * panel's own hydration lanes settle (`src/impact/hydrate.ts` runs them
+ * asynchronously off the briefing lane, which is not part of the boot-idle
+ * seam). Every ENSO cell is fed by exactly one lane (`matrix.ts`
+ * `LANE_PLACEMENT.enso`), so its status pill leaves `loading` in one shot the
+ * instant that lane settles, whatever the cell's final state (ready,
+ * partial, or the named absence). Reading the cell before that leaves this
+ * assertion racing the fetch and seeing the skeleton's "Reading sources..."
+ * placeholder instead of the settled claim.
+ */
+async function waitForSettled(page: Page, horizon: string): Promise<void> {
+  const pill = ensoCell(page, horizon).locator('.impact-hazard-pill');
+  await expect(pill).not.toHaveText('loading...');
+}
+
 async function ensoTexts(page: Page): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   for (const horizon of ENSO_HORIZONS) {
     const cell = ensoCell(page, horizon);
     await expect(cell).toHaveCount(1);
+    await waitForSettled(page, horizon);
     out[horizon] = (await cell.innerText()).replace(/\s+/g, ' ').trim();
   }
   return out;

@@ -84,7 +84,7 @@ async function bootCollision(page: Page): Promise<void> {
   // a rank-blind implementation would answer with the first-registered
   // layer. The assertions below then prove the table, not the order,
   // decides the primary.
-  await gotoApp(page, '?view=console&layers=aiannh,bia-reservations');
+  await gotoApp(page, '?region=washington_state&view=console&layers=aiannh,bia-reservations');
   await waitForLayerSettled(page, 'aiannh');
   await waitForLayerSettled(page, 'bia-reservations');
 }
@@ -214,7 +214,7 @@ test.describe('InteractionCoordinator: one click, one response', () => {
     // markers render deterministically offline (the honest catch path).
     await page.route('**/ddm-proxy.atniclimate.workers.dev/**', (route) => route.abort('failed'));
     await page.route('**/waterservices.usgs.gov/**', (route) => route.abort('failed'));
-    await gotoApp(page, '?view=console&layers=aiannh,bia-reservations,telemetry');
+    await gotoApp(page, '?region=washington_state&view=console&layers=aiannh,bia-reservations,telemetry');
     await waitForLayerSettled(page, 'bia-reservations');
     await waitForLayerSettled(page, 'telemetry');
 
@@ -261,7 +261,7 @@ test.describe('InteractionCoordinator: one click, one response', () => {
         })
       })
     );
-    await gotoApp(page, '?view=console&layers=aiannh,bia-reservations,spc-fire-weather');
+    await gotoApp(page, '?region=washington_state&view=console&layers=aiannh,bia-reservations,spc-fire-weather');
     // Settle ALL THREE hit layers before the click: the disclosure-count
     // assertion needs every fixture rendered, and under full-suite load a
     // late activation can lag past the first successful click (the
@@ -355,7 +355,7 @@ test.describe('InteractionCoordinator: one click, one response', () => {
   });
 
   test('entering a studio dismisses the open response', async ({ page }) => {
-    await gotoApp(page, '?view=brief&layers=aiannh,bia-reservations');
+    await gotoApp(page, '?region=washington_state&view=brief&layers=aiannh,bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
     // S4: in desktop Brief the place-bearing response rehosts at the
     // panel foot (the coordinator's swappable sink); the dismissal seam
@@ -401,7 +401,7 @@ test.describe('the Conditions block never claims an absence it did not read', ()
     fulfil: (route: import('@playwright/test').Route) => Promise<void> | void
   ): Promise<void> {
     await page.route((url) => url.pathname.endsWith(WWA_QUERY), fulfil);
-    await gotoApp(page, '?view=console&layers=aiannh,bia-reservations,nws-alerts');
+    await gotoApp(page, '?region=washington_state&view=console&layers=aiannh,bia-reservations,nws-alerts');
     await waitForLayerSettled(page, 'aiannh');
     await waitForLayerSettled(page, 'bia-reservations');
     await clickCenterUntilPrimary(page, 'Synthetic Reservation Fixture', 1);
@@ -541,7 +541,7 @@ test.describe('the Conditions block attributes an alert only where it touches th
     if (shape === 'concave') {
       await routeGeojson(page, BIA_ROUTE, concaveBiaBody());
     }
-    await gotoApp(page, '?view=console&layers=bia-reservations,nws-alerts');
+    await gotoApp(page, '?region=washington_state&view=console&layers=bia-reservations,nws-alerts');
     await waitForLayerSettled(page, 'bia-reservations');
     await waitForLayerSettled(page, 'nws-alerts');
     await clickCenterUntilPrimary(page, 'Synthetic Reservation Fixture');

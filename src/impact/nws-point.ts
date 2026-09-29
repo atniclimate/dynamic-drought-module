@@ -25,6 +25,9 @@ export interface NwsPointMetadata {
   readonly forecastUrl: string | null;
   readonly office: string | null;
   readonly gridId: string | null;
+  /** The grid cell's column and row on that office's grid (points gridX, gridY). */
+  readonly gridX: number | null;
+  readonly gridY: number | null;
 }
 
 export interface NwsRequestSession {
@@ -101,6 +104,16 @@ function stringProperty(
     : null;
 }
 
+function integerProperty(
+  properties: Readonly<Record<string, unknown>>,
+  key: string
+): number | null {
+  const value = properties[key];
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0
+    ? value
+    : null;
+}
+
 export function parseNwsPointMetadata(
   pointUrl: string,
   payload: unknown
@@ -117,7 +130,9 @@ export function parseNwsPointMetadata(
     office:
       stringProperty(properties, 'cwa') ??
       stringProperty(properties, 'forecastOffice'),
-    gridId: stringProperty(properties, 'gridId')
+    gridId: stringProperty(properties, 'gridId'),
+    gridX: integerProperty(properties, 'gridX'),
+    gridY: integerProperty(properties, 'gridY')
   };
 }
 

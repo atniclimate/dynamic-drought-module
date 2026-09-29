@@ -1,5 +1,94 @@
 import { test, expect } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
+import { URLS } from '../src/config/urls';
 import { gotoApp } from './helpers';
+
+/**
+ * A minimal NWS point-heat stub (mirrors `stubBrowserNwsHeat` in
+ * `tests/heat-h2-point-heat.spec.ts`, kept local rather than shared across
+ * spec files): answers the Worker-wrapped NWS proxy route with a fixed
+ * office/grid and three populated grid metrics, so the M19 disclosure-state
+ * cases below never depend on a live network. Coordinates in the fixture
+ * URLs are fixed and not read from the request: the NWS `/points/` response
+ * always claims the same downstream gridpoints path.
+ */
+const NWS_PROXY_ROUTE_A11Y = new RegExp(
+  `^${URLS.workerProxy.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/proxy\\?url=${encodeURIComponent(
+    `${URLS.nwsApi}/`
+  )}`
+);
+
+function nwsA11yUpstreamUrl(requestUrl: string): string {
+  const request = new URL(requestUrl);
+  const worker = new URL(URLS.workerProxy);
+  const upstream = request.searchParams.get('url');
+  if (
+    request.origin !== worker.origin ||
+    request.pathname !== '/proxy' ||
+    upstream === null ||
+    !upstream.startsWith(`${URLS.nwsApi}/`)
+  ) {
+    throw new Error(`Expected a Worker-wrapped NWS URL, received ${requestUrl}`);
+  }
+  return upstream;
+}
+
+async function stubGridGuidance(page: Page): Promise<void> {
+  await page.route(NWS_PROXY_ROUTE_A11Y, (route) => {
+    const url = new URL(nwsA11yUpstreamUrl(route.request().url()));
+    let body: unknown;
+    if (url.pathname.startsWith('/points/')) {
+      body = {
+        properties: {
+          forecastGridData: 'https://api.weather.gov/gridpoints/TOP/31,80',
+          observationStations:
+            'https://api.weather.gov/gridpoints/TOP/31,80/stations',
+          forecast: 'https://api.weather.gov/gridpoints/TOP/31,80/forecast',
+          cwa: 'TOP',
+          gridId: 'TOP'
+        }
+      };
+    } else if (url.pathname === '/gridpoints/TOP/31,80/stations') {
+      body = { type: 'FeatureCollection', features: [] };
+    } else if (url.pathname === '/gridpoints/TOP/31,80/forecast') {
+      body = {
+        properties: { updateTime: '2026-07-29T11:00:00+00:00', periods: [] }
+      };
+    } else if (url.pathname === '/gridpoints/TOP/31,80') {
+      body = {
+        properties: {
+          updateTime: '2026-07-29T10:00:00+00:00',
+          temperature: {
+            uom: 'wmoUnit:degC',
+            values: [{ validTime: '2026-07-29T00:00:00+00:00/P2D', value: 31 }]
+          },
+          apparentTemperature: {
+            uom: 'wmoUnit:degC',
+            values: [
+              { validTime: '2026-07-30T12:00:00+00:00/PT3H', value: 34 }
+            ]
+          },
+          heatIndex: {
+            uom: 'wmoUnit:degC',
+            values: [
+              { validTime: '2026-07-30T12:00:00+00:00/PT3H', value: 36 }
+            ]
+          }
+        }
+      };
+    } else if (url.pathname === '/alerts/active') {
+      body = { type: 'FeatureCollection', features: [] };
+    } else {
+      return route.abort();
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/geo+json',
+      body: JSON.stringify(body)
+    });
+  });
+}
 
 /**
  * Impact briefing panel accessibility (critical-review #16, WCAG 2.4.3 / 2.1.2).
@@ -40,11 +129,11 @@ test.describe('impact panel accessibility', () => {
   test('the region briefing trigger opens the state briefing and restores focus (#9, #16)', async ({
     page
   }) => {
-    // Default region washington_state is anchored to the WA state briefing.
+    // Pins region=washington_state, anchored to the WA state briefing.
     // The region briefing trigger lives in the region panel, which is a
     // console-only "where" control since U3e (D-0.7.0-009: Brief leads with
     // the place search), so exercise the trigger in console mode.
-    await gotoApp(page, '?view=console');
+    await gotoApp(page, '?region=washington_state&view=console');
 
     const trigger = page.locator('#region-briefing-btn');
     await expect(trigger).toBeVisible();
@@ -99,5 +188,132 @@ test.describe('impact panel accessibility', () => {
     // The national framing has no single briefable boundary, so no trigger.
     await gotoApp(page, '?region=national');
     await expect(page.locator('#region-briefing-btn')).toBeHidden();
+  });
+
+  test('after a minimap framing click elsewhere the briefing door says it opens the last selected place, or hides', async ({
+    page
+  }) => {
+    // Start anchored to Washington in Brief, where the inline minimap is
+    // visible (the region panel is console-only for the door's OWN click
+    // per the test above; the minimap itself renders only in Brief).
+    await gotoApp(page, '?region=washington_state&view=brief');
+    const trigger = page.locator('#region-briefing-btn');
+    await expect(trigger).toBeVisible();
+    await expect(trigger).toContainText('Washington');
+
+    // A framing camera takes the view away from Washington without any
+    // region= choice (S2 camera exclusivity).
+    await page.locator('.shell-minimap-map [data-framing="southeast-gulf"]').click();
+    await page.waitForFunction(() => window.location.search.includes('framing=southeast-gulf'));
+
+    // The door never keeps naming a place the camera has left (D1 M4,
+    // found-025): it hides rather than keep reading "Impact briefing:
+    // Washington" under the Southeast & Gulf Coast camera.
+    await expect(trigger).toBeHidden();
+  });
+
+  test('every NWS grid guidance disclosure starts closed in every HAZARD_CLUSTER_KEYS mode', async ({
+    page
+  }) => {
+    await page.clock.setFixedTime('2026-07-29T12:30:00+00:00');
+    // Registered once: page.route persists across the repeated gotoApp
+    // navigations in the loop below (DR-113: every mode is enumerated from
+    // HAZARD_CLUSTER_KEYS, never a literal four-item list).
+    await stubGridGuidance(page);
+
+    for (const key of HAZARD_CLUSTER_KEYS) {
+      const token = HAZARD_CLUSTERS[key].urlToken;
+      const clusterQuery = token ? `&cluster=${token}` : '';
+      await gotoApp(page, `?select=state:WA${clusterQuery}`);
+
+      const panel = page.locator('#impact-panel');
+      await expect(panel).toBeVisible({ timeout: 15_000 });
+      const series = panel.locator('.point-heat-series');
+      await expect(series.first(), `${key}: grid guidance renders`).toBeVisible();
+      expect(
+        await series.count(),
+        `${key}: at least one NWS grid disclosure renders`
+      ).toBeGreaterThan(0);
+      await expect(
+        panel.locator('.point-heat-series[open]'),
+        `${key}: no NWS grid disclosure starts open`
+      ).toHaveCount(0);
+    }
+  });
+
+  test("a reader's open or closed briefing disclosure survives a briefing refresh", async ({
+    page
+  }) => {
+    await page.clock.setFixedTime('2026-07-29T12:30:00+00:00');
+    await stubGridGuidance(page);
+    // Delay the independent F3 resource-catalog rehydrate so its own,
+    // LATER refreshOpenBriefing call is guaranteed to land after this
+    // test's toggle below, rather than racing it.
+    await page.route(/\/data\/resources\//, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await route.continue();
+    });
+    await gotoApp(page, '?select=state:WA');
+
+    const panel = page.locator('#impact-panel');
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+    const series = panel.locator('.point-heat-series');
+    await expect(series.first()).toBeVisible();
+    await expect(panel.locator('.point-heat-series[open]')).toHaveCount(0);
+
+    const heatIndexSeries = panel.locator('.point-heat-series', {
+      hasText: 'Heat index'
+    });
+    await heatIndexSeries.locator('summary').click();
+    await expect(heatIndexSeries).toHaveAttribute('open', '');
+    await expect(panel.locator('.point-heat-series[open]')).toHaveCount(1);
+
+    // The F3 resource rehydrate lands later and calls refreshOpenBriefing a
+    // second time: waiting for its known WA fixture row proves a refresh
+    // happened, not just the panel's first paint.
+    await expect(
+      panel.getByRole('link', { name: 'Agricultural drought relief information' })
+    ).toBeVisible();
+
+    await expect(panel.locator('.point-heat-series[open]')).toHaveCount(1);
+    await expect(heatIndexSeries).toHaveAttribute('open', '');
+  });
+});
+
+/**
+ * D1 M13 repair (register found-017): the copy confirmation is announced
+ * through a dedicated status region that exists from boot, so assistive
+ * tech has already found it before the first Share press (the first
+ * build's lazily-role'd `#copy-toast` attached its live-region attributes
+ * in the same tick as its first text change, and was `hidden` between
+ * toasts, which screen readers announce unreliably).
+ */
+test.describe('D1 M13: the Share confirmation is announced (found-017)', () => {
+  test('a boot-present status region announces the Share confirmation; the toast itself carries no role', async ({
+    page
+  }) => {
+    await gotoApp(page);
+
+    // Before any Share press: the status region already exists, already
+    // wired for assistive tech, and is never hidden.
+    const status = page.locator('#copy-toast-status');
+    await expect(status).toHaveAttribute('role', 'status');
+    await expect(status).toHaveAttribute('aria-live', 'polite');
+    await expect(status).toHaveAttribute('aria-atomic', 'true');
+    await expect(status).not.toHaveAttribute('hidden', '');
+
+    // #copy-toast carries neither: nothing double-announces.
+    const toast = page.locator('#copy-toast');
+    await expect(toast).not.toHaveAttribute('role', /.+/);
+    await expect(toast).not.toHaveAttribute('aria-live', /.+/);
+
+    await page.locator('#share-btn').click();
+
+    // After Share: the status region holds the success message, and stays
+    // present (never hidden), while the toast still carries no role.
+    await expect(status).toContainText(/Link copied|Copy blocked/);
+    await expect(status).not.toHaveAttribute('hidden', '');
+    await expect(toast).not.toHaveAttribute('role', /.+/);
+    await expect(toast).toContainText(/Link copied|Copy blocked/);
   });
 });

@@ -650,3 +650,139 @@ test.describe('DDM-P8-T05 surface continuity across a time change', () => {
     });
   });
 });
+
+test.describe('DDM-P2-T11 time anchors across a mode switch (the heatday rule)', () => {
+  /** An empty answer for the North American Drought Monitor tile source's
+   * vector companion, reached the moment the display switches to Drought. */
+  async function stubNadmEmpty(page: Page): Promise<void> {
+    await page.route('**/NADM-current.geojson', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify({ type: 'FeatureCollection', features: [] })
+      })
+    );
+  }
+
+  /** An empty answer for the Heat cluster's companion alerts layer. */
+  async function stubWwaEmpty(page: Page): Promise<void> {
+    await page.route(
+      (url) =>
+        url.pathname.endsWith(
+          '/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/1/query'
+        ),
+      (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/geo+json',
+          body: JSON.stringify({ type: 'FeatureCollection', features: [] })
+        })
+    );
+  }
+
+  test('Day 7 survives a valid mode and time restoration', async ({ page }) => {
+    // Well inside the seven-day catalog window, so every phase assertion
+    // below is deterministic regardless of the day the suite runs.
+    await page.clock.setFixedTime(Date.UTC(2026, 6, 29, 18, 0, 0));
+    await stubHeatRisk(page, async (_time, route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'image/png',
+        body: TRANSPARENT_PNG
+      });
+    });
+    await stubWwaEmpty(page);
+    await stubNadmEmpty(page);
+
+    await gotoApp(page, '?view=console&cluster=heat&heatday=7');
+    await expect(layerPill(page, 'heatrisk')).toHaveText(PILL.live, {
+      timeout: 25_000
+    });
+    await expect(
+      page.locator('#time-bar .time-bar-stamp-detail')
+    ).toContainText('Day 7 of 7');
+    expect(new URLSearchParams(await search(page)).get('heatday')).toBe('7');
+
+    // The mode leg: away from Heat drops the URL's claim to a HeatRisk day
+    // it is no longer honoring (the heatday rule); back to Heat restores it
+    // from the day remembered in src/layers/heatrisk.ts, not from the URL
+    // (which by then carries none).
+    await page.locator('.shell-cluster-btn[data-cluster="drought"]').click();
+    await expect
+      .poll(async () => new URLSearchParams(await search(page)).get('heatday'))
+      .toBeNull();
+
+    await page.locator('.shell-cluster-btn[data-cluster="heat"]').click();
+    await expect(layerPill(page, 'heatrisk')).toHaveText(PILL.live, {
+      timeout: 25_000
+    });
+    await expect
+      .poll(async () => new URLSearchParams(await search(page)).get('heatday'))
+      .toBe('7');
+    await expect(
+      page.locator('#time-bar .time-bar-stamp-detail')
+    ).toContainText('Day 7 of 7');
+
+    // The time leg: in Heat, neither other horizon offers an enabled
+    // alternative to click. season-ahead carries no heat surface at all
+    // (src/config/clusters.ts, heat.recipes['season-ahead'] === []) and its
+    // shell button is aria-disabled with the title "No verified season-ahead
+    // Extreme Heat map surface exists yet." weeks-ahead repeats the exact
+    // same recipe as current (['heatrisk', 'nws-alerts']), so
+    // horizonDisabledReason (src/ui/island/shell.tsx) disables it too, with
+    // the title "Near Term shows the same map as Current Conditions here
+    // ..." That no-surface deactivation path is already proven above by the
+    // mode-switch leg (where HeatRisk leaves with the cluster). With no
+    // in-app horizon click reachable from Heat under this stub
+    // configuration, the time half of the rule is proven instead by a
+    // restoration on reload: the URL still carries heatday=7, and a reload
+    // must restore Day 7 from that URL rather than losing it.
+    await page.reload();
+    await expect(layerPill(page, 'heatrisk')).toHaveText(PILL.live, {
+      timeout: 25_000
+    });
+    expect(new URLSearchParams(await search(page)).get('heatday')).toBe('7');
+    await expect(
+      page.locator('#time-bar .time-bar-stamp-detail')
+    ).toContainText('Day 7 of 7');
+  });
+
+  test('with USDM on a past week, every drought claim states the week it read, and a mode switch does not change it silently', async ({
+    page
+  }) => {
+    await stubUsdm(page);
+    await stubHeatRisk(page, async (_time, route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'image/png',
+        body: TRANSPARENT_PNG
+      });
+    });
+    await stubWwaEmpty(page);
+    await stubNadmEmpty(page);
+
+    // week= scrubs the MAP's USDM surface to the prior Tuesday (PRIOR_MS);
+    // the point-click claim reads the issuer's latest map regardless
+    // (DR-091), which this fixture serves at LATEST_MS through the SAME
+    // USDM_current endpoint the map's own current recipe would read.
+    await gotoApp(
+      page,
+      '?view=console&cluster=drought&week=20260623&select=state:WA'
+    );
+
+    const droughtClaim = page.locator('#impact-panel .impact-claim', {
+      hasText: 'U.S. Drought Monitor map dated'
+    });
+    await expect(droughtClaim).toContainText(
+      'the U.S. Drought Monitor map dated Jun 30, 2026'
+    );
+
+    // A round trip through another mode must not silently move the stated
+    // date: the claim is not derived from anything the mode switch touches.
+    await page.locator('.shell-cluster-btn[data-cluster="heat"]').click();
+    await page.locator('.shell-cluster-btn[data-cluster="drought"]').click();
+    await expect(droughtClaim).toContainText(
+      'the U.S. Drought Monitor map dated Jun 30, 2026'
+    );
+  });
+});

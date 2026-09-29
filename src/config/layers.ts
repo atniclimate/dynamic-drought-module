@@ -2,6 +2,7 @@ import type * as maplibregl from 'maplibre-gl';
 
 import type { ProductKey } from './products';
 import type { LayerRole } from '../types/layer';
+import { createChunkLoader } from '../util/chunk-retry';
 
 /**
  * What one activation attempt hands a layer module (DDM-P1-T02). The layer
@@ -164,9 +165,13 @@ export interface LayerDef {
    * afterward). Applied ONLY on the user-toggle path (`activate`), never on the
    * URL / deep-link restore path (`applyLayerSet`), so a shared link stays
    * authoritative about exactly which layers were on. Cascades one level: a
-   * co-activated partner does not re-trigger co-activation. Used by the
-   * wildfire event pair (Current Mapped Fire Perimeters + Smoke Plumes,
-   * D-0.7.0-018).
+   * co-activated partner does not re-trigger co-activation. No layer declares
+   * partners today: the wildfire event pair (Current Mapped Fire Perimeters +
+   * Smoke Plumes) co-activated under D-0.7.0-018 until the owner's ruling of
+   * 2026-09-28 (found-007) made the two checkboxes independent, each turning
+   * on or off exactly its own layer. The Wildfire mode still shows both
+   * because its recipes and preset name both. The mechanism stays as a typed,
+   * tested no-op.
    */
   readonly coActivateWith?: readonly LayerKey[];
   /**
@@ -317,10 +322,10 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   // BOTH surfaces because they have different vintages and different
   // failure modes, and either can be live without the other.
   { key: 'power-infrastructure', product: 'power-infrastructure', name: 'Power Lines & Plants', source: 'HIFLD archive (2024-09-30) · EIA (live)', searchTerms: ['transmission', 'electric', 'grid', 'power plant', 'utility'], role: 'reference', defaultOn: false, load: () => import('../layers/power-3d') },
-  { key: 'nifc-fires', product: 'nifc-fires', name: 'Current Mapped Fire Perimeters (NIFC)', source: 'NIFC WFIGS · FeatureServer', searchTerms: ['wildfire', 'Prescribed fire', 'fire perimeter'], role: 'event', defaultOn: false, coActivateWith: ['hms-smoke'], noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nifc-fires') },
+  { key: 'nifc-fires', product: 'nifc-fires', name: 'Current Mapped Fire Perimeters (NIFC)', source: 'NIFC WFIGS · FeatureServer', searchTerms: ['wildfire', 'Prescribed fire', 'fire perimeter'], role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nifc-fires') },
   // vocab-allow: names the NWS alert products layer, upstream data
   { key: 'nws-alerts', product: 'nws-alerts', name: 'Heat & Fire Weather Alerts', source: 'NOAA NWS · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nws-alerts') },
-  { key: 'hms-smoke', product: 'hms-smoke', name: 'Smoke Plumes (HMS)', source: 'NOAA OSPO · FeatureServer', role: 'event', defaultOn: false, coActivateWith: ['nifc-fires'], noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/hms-smoke') },
+  { key: 'hms-smoke', product: 'hms-smoke', name: 'Smoke Plumes (HMS)', source: 'NOAA OSPO · FeatureServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/hms-smoke') },
   { key: 'heatrisk', product: 'heatrisk', name: 'HeatRisk (Experimental)', source: 'NOAA NWS/WPC · ImageServer', role: 'surface', defaultOn: false, load: () => import('../layers/heatrisk') },
   { key: 'spc-fire-weather', product: 'spc-fire-weather', name: 'Fire Weather Outlook (Day 1)', source: 'NOAA SPC · MapServer', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/spc-fire-weather') },
   { key: 'usfs-whp', product: 'usfs-whp', name: 'Wildfire Hazard Potential', source: 'USFS · GeoPlatform', role: 'surface', defaultOn: false, load: () => import('../layers/usfs-whp') },
@@ -418,13 +423,42 @@ const moduleCache = new Map<string, LayerModule>();
  */
 const moduleInFlight = new Map<string, Promise<LayerModule>>();
 
+/**
+ * Per-key chunk loaders (found-087, DDM-P1-T10). A failed dynamic `import()`
+ * is cached by the engine per URL, so a bare `def.load()` replayed after a
+ * rejection (once `moduleInFlight` has cleared it) rejects again with no new
+ * network request: a layer whose chunk failed once could never load again
+ * this session. Each key gets one `createChunkLoader` wrapper
+ * (`src/util/chunk-retry.ts`), created lazily on that key's first call and
+ * reused for every later one, so a LATER explicit request (a re-check, a
+ * hazard press, a studio restore) imports the chunk under a fresh
+ * `retry=<n>` URL instead of replaying the same cached rejection. `base` is
+ * this module's own `import.meta.url`, exactly how `sidebar.ts`'s
+ * `loadIsland`/`loadLayersStudioChunk` and `view-shell.ts`'s
+ * `loadPlaceStudioChunk` pass their own file's `import.meta.url`: every
+ * `def.load` here is written inline in `LAYER_DEFS`, in this same file, so
+ * this file's own URL is the correct base to resolve each `load`'s relative
+ * specifier against, the same relationship those three call sites rely on
+ * for their own inline importers.
+ */
+const chunkLoaders = new Map<string, () => Promise<LayerModule>>();
+
+function getChunkLoader(def: LayerDef): () => Promise<LayerModule> {
+  let loader = chunkLoaders.get(def.key);
+  if (!loader) {
+    loader = createChunkLoader(def.load, import.meta.url);
+    chunkLoaders.set(def.key, loader);
+  }
+  return loader;
+}
+
 /** Load (and cache) a layer's module, fetching its chunk on first call. */
 export function loadLayerModule(def: LayerDef): Promise<LayerModule> {
   const cached = moduleCache.get(def.key);
   if (cached) return Promise.resolve(cached);
   let pending = moduleInFlight.get(def.key);
   if (!pending) {
-    pending = def.load().then(
+    pending = getChunkLoader(def)().then(
       (mod) => {
         moduleCache.set(def.key, mod);
         moduleInFlight.delete(def.key);

@@ -443,7 +443,12 @@ and no agency ever sends a body. Where the catalog
 mounts it also asserts both boundary pills reach `live`, which can only come
 from the fixture body. It does not observe the boots that navigate
 themselves: those answer from their own `routeAllTribalFixtures` handlers, so
-their requests never enter the suite-wide stub's log.
+their requests never enter the suite-wide stub's log. The same file also
+proves the NIFC WFIGS default (J12, below): a bare national Wildfire boot and
+a Brief-door Wildfire commit each send WFIGS requests, and every one of them,
+matched request by request as `METHOD url` against `nifcStubLog`, was
+answered by the default stub; a third case proves `nifc: 'live'` passes
+through to a route the spec registered.
 
 `tests/boundary-boot-inventory.test.mjs` covers those STATICALLY, and guards
 the seams. It runs in the gate with the other `node:test` files
@@ -493,24 +498,46 @@ polygons (NADM, USDM, CDM), NOAA weather alerts, HMS smoke, EPA ecoregions,
 watersheds, station telemetry. OpenStreetMap raster tile bodies from the live
 basemap.
 
-One of those is not hypothetical, and it is worth naming with its evidence.
-`gotoApp` stubs `NADM-current.geojson` only when the query carries neither
-`layers=` nor `cluster=`, so a boot that names either fetches it live, and the
-minimap fetches it live on the same boots. Inspecting the first real CI trace
-artifacts (Validate run 33250251205) found a **2.5 MB live NADM body from
-`ncei.noaa.gov`** stored in `playwright-traces-chromium-3-of-4`. That is
-public-domain NOAA drought data, not sovereign geometry, so it breaks no hard
-rule and it sits inside the accepted list above. It does mean the sentence
-"no live external geometry reaches a retained trace" is **not** true today,
-only "no live SOVEREIGN geometry" is. Making the NADM stub context-level the
-way the boundary and minimap stubs are would close it, and is deliberately
-left as follow-up rather than folded into the retention change. Request and response headers, cookies, request URLs with their
+One of those is not hypothetical, and it is worth naming with its evidence,
+as history. `gotoApp` used to stub `NADM-current.geojson` only when the
+query carried neither `layers=` nor `cluster=`, so a boot that named either
+fetched it live, and the minimap fetched it live on the same boots.
+Inspecting the first real CI trace artifacts (Validate run 33250251205)
+found a **2.5 MB live NADM body from `ncei.noaa.gov`** stored in
+`playwright-traces-chromium-3-of-4`. That is public-domain NOAA drought
+data, not sovereign geometry, so it broke no hard rule and it sat inside the
+accepted list above. It did mean the sentence "no live external geometry
+reaches a retained trace" was not true then, only "no live SOVEREIGN
+geometry" was. The NADM stub is now a CONTEXT-level backstop (DDM-P1-T09
+step 2 part d), claimed unconditionally on every boot the way the boundary
+and minimap stubs already are; a spec's own page-level `page.route` for the
+same pattern still overrides it (Playwright checks page routes before
+context routes, whatever order the two were registered in), but no boot is
+left to reach the live agency by default the way one used to, so this hole
+is closed. Request and response headers, cookies, request URLs with their
 coordinates and place names, DOM snapshots including any Tribal Nation name
 from the committed `public/data/tribal-roster.json`, and console output.
 Nothing there is sovereign geometry, and nothing there is undisclosed by a
 `git clone` of this public repository, but a licensing and redistribution
 review of the agency and raster content has **not** been done and is open
 work.
+
+The NIFC WFIGS current-perimeters service followed the NADM path for a
+different reason (J12, DDM-P10-T13). Once the national region became the
+default camera, a Wildfire boot with no WFIGS route of its own asked the live
+service for every current perimeter in the contiguous United States, and the
+boot-idle seam waited on that payload. `gotoApp` now installs
+`installDefaultNifcStub` (`tests/wildfire-fixtures.ts`) on the CONTEXT for
+every boot. It is fail-closed: a GET `/query?...f=geojson` (the perimeter
+layer's read and the briefing's area read) gets `NIFC_STUB`, a minimap count
+POST (`returnCountOnly=true`) gets a successful `{ count: 0 }`, and any other
+WFIGS request gets a 400, never the network. A spec's own `page.route` for
+WFIGS still wins, whatever the order; a page route that calls
+`route.fallback()` now reaches this stub rather than the network. The opt-out
+is `gotoApp(page, query, { nifc: 'live' })`, a pass-through; only the
+mode-switch measurement uses it, because its recorded baseline measured the
+live reads. After this change a WFIGS body can reach a trace only from a
+`nifc: 'live'` boot or a boot that navigates itself outside `gotoApp`.
 
 **Deferred, deliberately.** A synthetic or blank basemap for artifact-bearing
 runs, which is the precondition for turning pixels back on: it is what would

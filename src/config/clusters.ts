@@ -37,6 +37,7 @@
  */
 
 import type { LayerKey } from './layers';
+import type { DetailSectionKey } from './detail-sections';
 
 export type HazardClusterKey = 'drought' | 'wildfire' | 'heat' | 'enso';
 
@@ -92,6 +93,14 @@ export interface HazardClusterDef {
    * yet; the shell must not fake one.
    */
   readonly recipes: Readonly<Record<TemporalHorizonKey, readonly LayerKey[]>>;
+  /**
+   * The Key drawer's sections for this cluster, in order (S30D D1 M11;
+   * DR-113; src/config/detail-sections.ts). Omitted or empty means the
+   * drawer holds only the legend, qualifications and the map-information
+   * pointer (design record section 2.6, items 1, 2, 4 and 5) with no
+   * section host revealed.
+   */
+  readonly detailSections?: readonly DetailSectionKey[];
 }
 
 export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
@@ -151,7 +160,10 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       // briefing carries seasonal temperature context in prose. An
       // empty recipe is deliberate honesty, not an omission.
       'season-ahead': []
-    }
+    },
+    // HeatRisk first (S30D D1 M11): the seven-day point sequence is
+    // Heat's one Key drawer section.
+    detailSections: ['heatrisk-sequence']
   },
   enso: {
     title: 'ENSO',

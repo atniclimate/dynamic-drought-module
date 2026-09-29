@@ -1591,7 +1591,7 @@ test.describe('W3/W4 browser truth', () => {
       }
     });
 
-    await gotoApp(page, '?cluster=wildfire', { boundaries: EVIDENCE_BOUNDARIES });
+    await gotoApp(page, '?region=washington_state&cluster=wildfire', { boundaries: EVIDENCE_BOUNDARIES });
     await waitForLayerSettled(page, 'hms-smoke');
 
     const toggle = page.locator(TOGGLE);
@@ -1812,7 +1812,7 @@ test.describe('W3/W4 browser truth', () => {
     // scene stays up regardless, so activating fire3d FIRST and only then
     // checking the telemetry box keeps the scene alive for the rest of
     // this test.
-    await gotoApp(page, '?cluster=wildfire&fire3d=true');
+    await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
     await expect
       .poll(() => fire3dStamp(page), { timeout: 30_000 })
       .toBe('active');
@@ -1928,7 +1928,7 @@ test.describe('W3/W4 browser truth', () => {
     test.setTimeout(180_000);
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
-    await gotoApp(page, '?cluster=wildfire&fire3d=true');
+    await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
 
     await expect
       .poll(() => fire3dStamp(page), { timeout: 30_000 })
@@ -1981,7 +1981,7 @@ test.describe('W3/W4 browser truth', () => {
   }) => {
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
-    await gotoApp(page, '?cluster=wildfire&fire3d=true', {
+    await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true', {
       boundaries: EVIDENCE_BOUNDARIES
     });
 
@@ -2015,7 +2015,7 @@ test.describe('W3/W4 browser truth', () => {
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await gotoApp(page, '?cluster=wildfire&fire3d=true');
+    await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
 
     await expect
       .poll(() => fire3dStamp(page), { timeout: 30_000 })
@@ -2051,7 +2051,7 @@ test.describe('W3/W4 browser truth', () => {
     test.setTimeout(180_000);
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
-    await gotoApp(page, '?cluster=wildfire&fire3d=true&embed=true', {
+    await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true&embed=true', {
       boundaries: EVIDENCE_BOUNDARIES
     });
 
@@ -2107,7 +2107,7 @@ test.describe('W3/W4 browser truth', () => {
         body: JSON.stringify({ type: 'FeatureCollection', features: [] })
       })
   );
-  await gotoApp(page, '?cluster=wildfire&fire3d=true');
+  await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
 
   await expect
     .poll(() => fire3dStamp(page), { timeout: 60_000 })
@@ -2130,7 +2130,7 @@ test('an embed without the flag never activates and never gains it', async ({
     page
   }) => {
     await stubWildfireFeeds(page);
-    await gotoApp(page, '?cluster=wildfire&embed=true');
+    await gotoApp(page, '?region=washington_state&cluster=wildfire&embed=true');
 
     await page.waitForTimeout(3_000);
     expect(await fire3dStamp(page)).not.toBe('active');
@@ -2157,7 +2157,7 @@ test('an embed without the flag never activates and never gains it', async ({
     });
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await gotoApp(page, '?cluster=wildfire&fire3d=true');
+    await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
     await page.waitForTimeout(3_000);
 
     expect(chunkRequests).toEqual([]);
@@ -2178,7 +2178,7 @@ test('an embed without the flag never activates and never gains it', async ({
     // withdraw rather than offer a button whose scene cannot come. The
     // width-only control was the last place the old rule survived.
     await page.setViewportSize({ width: 844, height: 390 });
-    await gotoApp(page, '?cluster=wildfire&fire3d=true');
+    await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
     await page.waitForTimeout(3_000);
 
     await expect(page.locator('#shell-fire3d')).toHaveCount(0);
@@ -2211,7 +2211,7 @@ test('an embed without the flag never activates and never gains it', async ({
     test('a landscape phone shows no 3D control or refusal notice', async ({ page }) => {
       await stubWildfireFeeds(page);
       await page.setViewportSize({ width: 844, height: 390 });
-      await gotoApp(page, '?cluster=wildfire&fire3d=true');
+      await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
       await expect(page.locator('#shell-fire3d')).toHaveCount(0);
       await expect(page.locator('#shell-fire3d-refused')).toBeHidden();
       expect(await fire3dStamp(page)).not.toBe('active');
@@ -2231,7 +2231,7 @@ test('an embed without the flag never activates and never gains it', async ({
     // fail hillshade, honestly demote the cluster to custom, and hide
     // this control before the click. Only the fire3d probe sees the
     // corruption.
-    await gotoApp(page, '?cluster=wildfire');
+    await gotoApp(page, '?region=washington_state&cluster=wildfire');
     await waitForLayerSettled(page, 'hillshade');
 
     // One glob covers the bundled path AND the ATNI fallback copy (both
@@ -2276,7 +2276,7 @@ test('an embed without the flag never activates and never gains it', async ({
     test.setTimeout(180_000);
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
-    await gotoApp(page, '?cluster=wildfire&view=console&fire3d=true');
+    await gotoApp(page, '?region=washington_state&cluster=wildfire&view=console&fire3d=true');
 
     await expect
       .poll(() => fire3dStamp(page), { timeout: 30_000 })
@@ -2321,7 +2321,7 @@ test('an embed without the flag never activates and never gains it', async ({
     test.setTimeout(150_000);
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
-    await gotoApp(page, '?cluster=wildfire&fire3d=true');
+    await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
     await expect
       .poll(() => fire3dStamp(page), { timeout: 30_000 })
       .toBe('active');

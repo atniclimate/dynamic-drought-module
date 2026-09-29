@@ -31,13 +31,19 @@
  * window the service has not advanced (every period ended).
  */
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-import { TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
+import { HAZARD_CLUSTER_KEYS, HAZARD_CLUSTERS, TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
 import { LIVE_NO_FEATURES_LABEL } from '../src/config/layers';
 import { HORIZON_CHROME, SHELL_HORIZON_KEY } from '../src/impact/horizon-chrome';
 import type { HorizonKey } from '../src/impact/types';
+import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
 import { expectNoForecastLanguage } from './enso-forecast-language';
-import { gotoApp, layerPill, PILL, search } from './helpers';
+import { gotoApp, layerCheckbox, layerPill, PILL, search, waitForLayerSettled } from './helpers';
+
+/** The SPC Day 1 "no area outlined" answer (D1 M5, found-002). */
+const SPC_NO_AREA_FIXTURE = join(process.cwd(), 'tests', 'fixtures', 'spc-firewx-day1-no-area.json');
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -453,6 +459,14 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
     expect(expiredStamp.headline).toBe('Current perimeters · no single valid time');
     expect(expiredStamp.detail).toBe(initialStamp.detail);
     expect(expiredStamp.detail).toContain('Last successful browser check:');
+
+    // M12 repair (found-015, R5 a): the browser-check date reads through
+    // `dateTok` (month-name form, U+00A0-tied), never `toLocaleString`'s
+    // locale-numeric form (the pre-fix red was a literal
+    // '9/13/2026, ...'-shaped string here).
+    expect(initialStamp.detail).not.toMatch(/\b\d{1,2}\/\d{1,2}\/\d{4}\b/);
+    expect(expiredStamp.detail).not.toMatch(/\b\d{1,2}\/\d{1,2}\/\d{4}\b/);
+    expect(expiredStamp.detail).toMatch(/[A-Z][a-z]{2} \d{1,2}, \d{4}, \d{2}:\d{2} \S+/);
   });
 
   test('near term: the SPC Day 1 outlook stamp is an outlook with the issuance window, and the current recipe takes the bar back', async ({
@@ -485,7 +499,12 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
     await expect(page.locator('#time-bar')).toHaveAttribute('data-register', 'observed');
   });
 
-  test('near term with no area outlined: the outlook stamp says the response states no valid period', async ({
+  // Retitled 2026-09-27 (found-079): the old title quoted the old detail's
+  // exact words ("the response states no valid period"); a genuinely empty
+  // FeatureCollection is a different case from the issuer's no-area answer
+  // (dn 0, null geometry, covered by the M5 case below), so the detail no
+  // longer borrows that answer's words either.
+  test('near term with a genuinely empty response: the outlook stamp says the response contains no outlook area', async ({
     page
   }) => {
     await stubCommon(page);
@@ -505,8 +524,141 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
     });
     // Clause 4: no window is invented from the calendar.
     expect(stamp.headline).toBe('Outlook · valid period not stated by the response');
-    expect(stamp.detail).toContain('an empty response states no valid period');
+    expect(stamp.detail).toBe(
+      'NOAA SPC Day 1 Fire Weather Outlook · the response contains no outlook area'
+    );
+    expect(stamp.detail).not.toContain('states no valid period');
+    expect(stamp.detail).not.toContain('no fire-weather area is outlined');
     expect(stamp.headline).not.toMatch(/\d{4}/);
+  });
+
+  // D1 M5 (2026-09-27; found-002, DDM-P1-T11). The SPC MapServer answers an
+  // issuance with no outlined area as ONE feature whose `dn` is 0 and whose
+  // geometry is null (REGISTER found-002's recorded body; the fixture below
+  // carries that shape, with `valid` and `expire` as strings because the
+  // layer's own field list types them esriFieldTypeString). Before M5 the
+  // shared ArcGIS parser rejected the null geometry, the layer read
+  // unavailable, and the controller's failure cleanup unchecked it, which
+  // demoted the committed Wildfire view to a custom set (found-003).
+  test('an SPC Day 1 answer whose only feature has dn 0 and a null geometry reads no data and keeps the layer checked and in layers=', async ({
+    page
+  }) => {
+    const body = readFileSync(SPC_NO_AREA_FIXTURE, 'utf8');
+    await stubCommon(page);
+    await stubFire(page, { spc: 'empty' });
+    // Registered after stubFire, so this route answers the Day 1 query.
+    await page.route((url) => url.href.includes('SPC_firewx/MapServer/1/query'), (route) =>
+      route.fulfill({ status: 200, contentType: 'application/geo+json', body })
+    );
+    await gotoApp(page, '?view=console&cluster=wildfire&horizon=weeks-ahead');
+
+    // One of the six states: the layer's own no-features label, never
+    // unavailable.
+    await expect(layerPill(page, 'spc-fire-weather')).toHaveText(LIVE_NO_FEATURES_LABEL, {
+      timeout: 25_000
+    });
+    await expect(layerCheckbox(page, 'spc-fire-weather')).toBeChecked();
+
+    // A committed Wildfire display serializes as the one-word cluster=
+    // token, not a layers= list (src/state/url.ts): the share URL carries
+    // the layer through the recipe that token composes at this horizon.
+    // A demotion would have replaced the token with a layers= list.
+    expect(HAZARD_CLUSTERS.wildfire.recipes['weeks-ahead']).toContain('spc-fire-weather');
+    const params = new URLSearchParams(await search(page));
+    expect(params.get('cluster')).toBe('wildfire');
+    expect(params.get('horizon')).toBe('weeks-ahead');
+    expect(params.has('layers')).toBe(false);
+    await expect(page.locator('.shell-cluster-btn[data-cluster="wildfire"]')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+
+    // The issuer stated its period on the no-area answer, so the stamp
+    // keeps it rather than saying the response states none.
+    const stamp = await readStamp(page);
+    expectStampContract('SPC Day 1 (no area outlined)', stamp, {
+      horizon: 'nearTerm',
+      register: 'outlook',
+      issuer: 'NOAA SPC Day 1 Fire Weather Outlook'
+    });
+    expect(stamp.headline).toBe(
+      'Outlook valid Sep 26, 2026, 12:00 UTC to Sep 27, 2026, 12:00 UTC'
+    );
+    expect(stamp.detail).toContain(
+      "No Risk Areas Forecast (DDM's reading of the service's no-area response, using SPC's own term for this state from its Day 1 Fire Weather Outlook page)"
+    );
+    expect(stamp.detail).not.toContain('no fire-weather area is outlined');
+    expect(stamp.detail).not.toContain('states no valid period');
+  });
+
+  test('a malformed SPC polygon still reads unavailable', async ({ page }) => {
+    // The no-area reading is exactly the recorded shape. Every near miss
+    // stays a failed read (the adapter matrix's M2, corrupt body): the
+    // shared parser keeps throwing and the layer reads unavailable. The
+    // layer is a recipe member of the committed Wildfire view, so after
+    // D1 M5 it stays checked and the view stays committed (found-003).
+    const noAreaFeature = {
+      type: 'Feature',
+      geometry: null,
+      properties: { dn: 0, valid: '202609261200', expire: '202609271200' }
+    };
+    const outlined = {
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: [PNW_RING] },
+      properties: { dn: 8, valid: '202609261200', expire: '202609271200' }
+    };
+    const malformed: ReadonlyArray<{ readonly name: string; readonly body: unknown }> = [
+      {
+        name: 'a Critical category with a null geometry',
+        body: {
+          type: 'FeatureCollection',
+          features: [{ ...noAreaFeature, properties: { ...noAreaFeature.properties, dn: 8 } }]
+        }
+      },
+      {
+        name: 'the no-area feature beside an outlined polygon',
+        body: { type: 'FeatureCollection', features: [noAreaFeature, outlined] }
+      },
+      {
+        name: 'dn 0 with an empty geometry object',
+        body: { type: 'FeatureCollection', features: [{ ...noAreaFeature, geometry: {} }] }
+      },
+      {
+        name: 'an open polygon ring',
+        body: {
+          type: 'FeatureCollection',
+          features: [
+            { ...outlined, geometry: { type: 'Polygon', coordinates: [PNW_RING.slice(0, 3)] } }
+          ]
+        }
+      },
+      {
+        name: 'a feature with no fields at all',
+        body: { type: 'FeatureCollection', features: [{}] }
+      }
+    ];
+
+    let current: unknown = null;
+    await stubCommon(page);
+    await stubFire(page, { spc: 'outlined' });
+    await page.route((url) => url.href.includes('SPC_firewx/MapServer/1/query'), (route) =>
+      fulfilJson(route, current)
+    );
+    for (const { name, body } of malformed) {
+      current = body;
+      await test.step(name, async () => {
+        await gotoApp(page, '?view=console&cluster=wildfire&horizon=weeks-ahead');
+        await expect(layerPill(page, 'spc-fire-weather'), name).toHaveText(PILL.unavailable, {
+          timeout: 25_000
+        });
+        await expect(layerCheckbox(page, 'spc-fire-weather'), name).toBeChecked();
+        await expect(
+          page.locator('.shell-cluster-btn[data-cluster="wildfire"]'),
+          name
+        ).toHaveAttribute('aria-pressed', 'true');
+        expect(new URLSearchParams(await search(page)).get('cluster'), name).toBe('wildfire');
+      });
+    }
   });
 
   test('long range: the Wildfire Hazard Potential stamp names a static edition, not a dated condition', async ({
@@ -623,6 +775,53 @@ test.describe('DDM-P8-T02: the Extreme Heat screen has a seven-day time control'
     await expectChipsStillHonest(page);
   });
 
+  test('the console time card names Current Conditions while HeatRisk still states its own outlook day (found-014, DDM-P10-T11)', async ({
+    page
+  }) => {
+    await page.clock.setFixedTime(CLOCK_IN_WINDOW);
+    await stubCommon(page);
+    await stubHeat(page);
+    await gotoApp(page, '?view=console&cluster=heat&heatday=3');
+    await expect(layerPill(page, 'heatrisk')).toHaveText(PILL.live, { timeout: 25_000 });
+
+    // The pressed chip is Current Conditions (the default horizon; a
+    // HeatRisk day answers Near Term by design, src/layers/heatrisk.ts,
+    // but nothing in this session asked for a different horizon).
+    await expect(
+      page.locator('.shell-horizon-btn[data-horizon="current"]')
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    // The compact card's heading names the PRESSED chip, in HORIZON_CHROME's
+    // own words, not HeatRisk's own declared Near Term (the pre-fix red:
+    // 'NEAR TERM · DAYS TO WEEKS' under Current Conditions).
+    await expect(page.locator('.shell-time-headline-horizon')).toHaveText('Current Conditions');
+    // The surface's own outlook day still states itself, right beside it,
+    // so nothing honest is lost (the OUTCOME's second clause).
+    await expect(page.locator('.shell-time-headline-detail')).toContainText('Outlook valid');
+    await expect(page.locator('#shell-time-more')).toHaveText('More time');
+
+    // The door agrees with the pressed chip too, in the SAME pressed
+    // horizon's HORIZON_CHROME words ('Current Conditions · now'), never
+    // HeatRisk's own declared stamp.horizon ('nearTerm', which would read
+    // 'Near Term · days to weeks' here): the one place Drought's own
+    // per-horizon case (tests/s4-shell.spec.ts) cannot tell apart, because
+    // every Drought surface's stamp.horizon already equals whichever chip
+    // is pressed. This is the case that reds the break
+    // `stampHorizonText(horizonKey)` -> `stampHorizonText(spec.stamp.horizon)`
+    // in DetailControls (src/ui/island/time-popover.tsx), because HeatRisk's
+    // stamp.horizon and the pressed chip genuinely disagree here (M12
+    // repair, director gate CMD10/CMD12). HeatRisk's own headline and
+    // 'Day 3 of 7' detail keep stating the day inside it.
+    await page.locator('#shell-time-more').click();
+    const popover = page.locator('#shell-time-popover');
+    await expect(popover).toBeVisible();
+    await expect(popover.locator('.shell-time-detail-horizon')).toHaveText(
+      `${HORIZON_CHROME.current.title} · ${HORIZON_CHROME.current.subtitle}`
+    );
+    await expect(popover.locator('.shell-time-detail-headline')).toContainText('Outlook valid');
+    await expect(popover.locator('.shell-time-detail-line')).toContainText('Day 3 of 7');
+  });
+
   test('an unavailable day: the stamp keeps the issuer and the period and says no tile loaded', async ({
     page
   }) => {
@@ -699,7 +898,28 @@ test.describe('DDM-P8-T02: the Extreme Heat screen has a seven-day time control'
     await page.clock.setFixedTime(CLOCK_IN_WINDOW);
     await stubCommon(page);
     await stubHeat(page);
-    await gotoApp(page, '?view=console&cluster=heat&horizon=season-ahead');
+    // FLIPPED 2026-09-27 (D1 M6, found-009): the deep link this case used,
+    // `?view=console&cluster=heat&horizon=season-ahead`, now boots on
+    // Current Conditions (src/state/url.ts's resolveHorizonForCluster;
+    // pinned by tests/precedence.spec.ts row A6), where HeatRisk is dated.
+    // The one route left to Extreme Heat at Long Range is in session:
+    // Drought at Long Range, then Extreme Heat, which keeps the committed
+    // horizon (the designed empty-recipe caveat). Every assertion below is
+    // unchanged; only the route in is new. The CPC Drought Outlook the Long
+    // Range step shows is answered locally.
+    await stubCpcDroughtOutlook(page);
+    await gotoApp(page, '?view=console');
+    const season = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
+    await season.click();
+    await expect(season).toHaveAttribute('aria-pressed', 'true');
+    await waitForLayerSettled(page, 'drought');
+    await page.locator('.shell-cluster-btn[data-cluster="heat"]').click();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('cluster'))
+      .toBe('heat');
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('horizon'))
+      .toBe('season-ahead');
 
     // The season-ahead heat recipe is deliberately empty
     // (src/config/clusters.ts): nothing is displayed, so no stamp may claim
@@ -719,14 +939,78 @@ test.describe('DDM-P8-T02: the Extreme Heat screen has a seven-day time control'
   test('a closed focused time door hands focus to its stable row when the owning surface stands down', async ({
     page
   }) => {
+    // Value-migrated 2026-09-28 (M12 repair, the director's door rule):
+    // WHP (Wildfire, Season ahead) used to own this door, but WHP is a
+    // static single-period edition (`periodCount`, time-popover.tsx: no
+    // rail, no modes) and found-015's rule now hides that kind of door
+    // instead of leaving it enabled and focusable, so it can no longer
+    // host this case. This test is a FOCUS contract, not a WHP contract
+    // (the comment two lines below always said so): any door that starts
+    // enabled and stands down still needs to hand focus back to its row.
+    //
+    // RE-MIGRATED 2026-09-28 (director gate CMD10, the same day): the
+    // first migration picked ENSO's SST anomaly at Season ahead, but
+    // ENSO's three recipes are the identical single layer at every horizon
+    // (`HAZARD_CLUSTERS.enso.recipes`, src/config/clusters.ts:163-170), so
+    // `horizonSurfaceSignature('enso','season-ahead')` equals the 'current'
+    // signature (src/state/timeline.ts:266-276, the "same recipe, no
+    // `drought` layer" case) and BOTH `resolveHorizonForCluster` at boot
+    // (src/state/url.ts:346-361) and the chip's own
+    // `horizonDisabledReason` (src/ui/island/shell.tsx:272-302) collapse
+    // it to Current Conditions: the URL never actually carried
+    // `horizon=season-ahead` for ENSO, so it read back null after the
+    // Heat press. Drought's CPC outlook does not have this problem: its
+    // `season-ahead` recipe is the same `['drought']` array as
+    // `weeks-ahead`'s, but `horizonSurfaceSignature` folds in
+    // `outlookRangeForHorizon` for any recipe naming the `drought` layer
+    // (timeline.ts:271-274, "the one register-sensitive surface"), so
+    // `weeks-ahead` ('drought|monthly'), `season-ahead` ('drought|seasonal')
+    // and `current` ('nadm-drought') are three genuinely distinct
+    // signatures: none collapses, and the outlook's `modes` (Monthly /
+    // Seasonal, `periodCount` = 2) gives it a real door the same way SST's
+    // rail did.
+    //
+    // RE-MIGRATED AGAIN 2026-09-28 (director gate CMD6, the delta run): a
+    // direct `?cluster=drought&horizon=season-ahead` boot still lands one
+    // period (NADM, no rail/modes), a SEPARATE bug from the ENSO one, and
+    // NOT this test's to fix: it is REGISTER found-030 (P1, owned by D2;
+    // when D2 fixes it, this case may boot the outlook directly again).
+    // Trace: `src/state/url.ts:413-420` composes
+    // the boot's SEEDED CHECKBOX set (`parseUrlParams().layers`, read by
+    // `src/ui/sidebar.ts:1930-1934` BEFORE `applyUrlStateSync` runs) at the
+    // URL's horizon for every cluster EXCEPT Drought (`shell.cluster !==
+    // 'drought'`); for Drought (the url-token-less default) it always
+    // seeds `DEFAULT_ON_KEYS` (the CURRENT-horizon composition, NADM)
+    // regardless of `horizon=`. That seeded set then disagrees with
+    // `composeClusterIntent('drought','season-ahead')` (the outlook
+    // layer), so `reconcileClusterWithLayerIntent`
+    // (src/state/cluster-service.ts:483-515) reads the mismatch as a
+    // customization and demotes the display to 'custom' before the
+    // outlook layer ever activates; only NADM (one period) ends up
+    // mounted. The RUNTIME path does not share this bug:
+    // `requestHorizon`'s `committedCluster === null` branch
+    // (cluster-service.ts:438-459) drives `timeline.setHorizon` THEN
+    // `requestCluster`, which composes and activates the outlook layer
+    // correctly at the new horizon (the same path the already-passing
+    // case "the current NADM view switches to the monthly outlook in one
+    // gesture" at :435 already proves). So this case now boots plainly
+    // (Drought, Current, the product default) and reaches Season ahead by
+    // pressing the real chip, the way a visitor would. The stand-down
+    // target is unchanged (Extreme Heat at Season ahead is still the
+    // deliberately empty recipe). Every assertion below the horizon
+    // press is unchanged.
     await stubCommon(page);
-    await stubFire(page, { spc: 'outlined' });
-    await gotoApp(page, '?view=brief&cluster=wildfire&horizon=season-ahead');
+    await stubCpcDroughtOutlook(page);
+    await gotoApp(page, '?view=brief');
+    await page.locator('.shell-horizon-btn[data-horizon="season-ahead"]').click();
+    await expect(
+      page.locator('.shell-horizon-btn[data-horizon="season-ahead"]')
+    ).toHaveAttribute('aria-pressed', 'true', { timeout: 25_000 });
 
     const row = page.locator('#shell-time');
     const door = page.locator('#shell-time-more');
     await expect(row).toBeVisible({ timeout: 25_000 });
-    await expect(row).toHaveAttribute('data-has-spec', 'true');
+    await expect(row).toHaveAttribute('data-has-spec', 'true', { timeout: 25_000 });
     await expect(door).toBeEnabled();
     await expect(door).toHaveAttribute('aria-expanded', 'false');
     await door.focus();
@@ -735,9 +1019,10 @@ test.describe('DDM-P8-T02: the Extreme Heat screen has a seven-day time control'
     expect(before).not.toBeNull();
 
     // Activate the real hazard door without a pointer gesture, so focus stays
-    // on More time while the layer controller's queued fade and teardown clear
-    // WHP's TimeBarSpec asynchronously. This isolates the component contract:
-    // no intervening control receives focus before the owner stands down.
+    // on More time while the layer controller's queued fade and teardown
+    // clear the CPC outlook's TimeBarSpec asynchronously. This isolates the
+    // component contract: no intervening control receives focus before the
+    // owner stands down.
     await page
       .locator('.shell-cluster-btn[data-cluster="heat"]')
       .evaluate((button) => (button as HTMLButtonElement).click());
@@ -815,17 +1100,105 @@ test.describe('DDM-P8-T02: the Drought and ENSO screens state their horizon in t
     await expect.poll(() => page.locator('html').getAttribute('data-ddm-boot')).toBe('idle');
     await expect(layerPill(page, 'sst-anomaly')).toHaveText(PILL.live, { timeout: 25_000 });
     const stamp = await readStamp(page);
-    // The pressed chip says Long Range; the surface is a measured daily
-    // field, and the stamp says what the surface is.
+    // The surface is a measured daily field, and the stamp says what the
+    // surface is, whatever horizon the link asked for.
     expectStampContract('SST', stamp, {
       horizon: 'current',
       register: 'observed',
       issuer: 'GHRSST MUR'
     });
     expect(stamp.headline).toBe('Observed Jul 3, 2026');
-    await expect(page.locator('.shell-horizon-btn[data-horizon="season-ahead"]')).toHaveAttribute(
+    // FLIPPED 2026-09-27 (D1 M6, found-009): this case used to end on the
+    // Long Range chip pressed over the Current Conditions stamp. ENSO's
+    // season-ahead recipe repeats its current one (horizonSurfaceSignature,
+    // src/state/timeline.ts), so the Long Range chip is disabled, and a
+    // deep link naming it now boots on Current Conditions
+    // (src/state/url.ts's resolveHorizonForCluster) instead of pressing a
+    // disabled chip. The stamp assertions above are unchanged: the stamp
+    // still says Current Conditions.
+    await expect(page.locator('.shell-horizon-btn[data-horizon="current"]')).toHaveAttribute(
       'aria-pressed',
       'true'
     );
+    await expect(page.locator('.shell-horizon-btn[data-horizon="season-ahead"]')).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M12 repair: a test per mode (the director's rule 2, DR-113). Every
+// HAZARD_CLUSTER_KEYS mode at every enabled horizon: the heading names the
+// pressed chip in HORIZON_CHROME's own words, and the time door is either
+// absent/hidden (found-015: a single-period spec) or opens with more than
+// zero real controls (buttons, inputs or selects), never a door that opens
+// on nothing. Never a literal cluster/horizon list (DR-113): both keys come
+// from src/config/clusters.ts, and a horizon's own aria-disabled state
+// (read live, the way the rendered chip declares it) decides whether this
+// case visits it, exactly like the existing per-Drought-horizon case in
+// tests/s4-shell.spec.ts.
+// ---------------------------------------------------------------------------
+
+test.describe('DDM-P10-T11: every mode names its pressed horizon, and the door matches its periods (found-014, found-015, DR-113)', () => {
+  test('the time card heading equals HORIZON_CHROME at every enabled cluster x horizon, and the door is absent/hidden or opens with real controls', async ({
+    page
+  }) => {
+    test.setTimeout(150_000);
+    await stubCommon(page);
+    await stubFire(page, { spc: 'outlined' });
+    await stubHeat(page);
+    await stubSst(page);
+    await stubCpcDroughtOutlook(page);
+    await gotoApp(page, '?view=console');
+
+    for (const clusterKey of HAZARD_CLUSTER_KEYS) {
+      const clusterBtn = page.locator(`.shell-cluster-btn[data-cluster="${clusterKey}"]`);
+      await clusterBtn.click();
+      await expect(clusterBtn).toHaveAttribute('aria-pressed', 'true');
+      await expect(clusterBtn).toHaveAttribute('data-pending', 'false', { timeout: 25_000 });
+
+      for (const horizonKey of TEMPORAL_HORIZON_KEYS) {
+        const chip = page.locator(`.shell-horizon-btn[data-horizon="${horizonKey}"]`);
+        // DR-157: a hazard with nothing at a horizon stays greyed with its
+        // own explanation (heat's deliberately empty season-ahead recipe);
+        // this case reads that live rather than hard-coding which combos
+        // are empty, so a future recipe change cannot silently go stale
+        // here.
+        if ((await chip.getAttribute('aria-disabled')) === 'true') continue;
+        await chip.click();
+        await expect(chip).toHaveAttribute('aria-pressed', 'true', { timeout: 45_000 });
+        await expect(clusterBtn).toHaveAttribute('data-pending', 'false', { timeout: 25_000 });
+
+        const chrome = HORIZON_CHROME[SHELL_HORIZON_KEY[horizonKey]];
+        await expect(
+          page.locator('.shell-time-headline-horizon'),
+          `${clusterKey} at ${horizonKey}`
+        ).toHaveText(chrome.title, { timeout: 45_000 });
+        // The heading names the pressed chip even before the surface's own
+        // spec installs (found-014 reads `pressedHorizon`, not the spec), so
+        // wait for the row's own truth (`data-has-spec`) before reading the
+        // door: an enabled, non-empty recipe always settles to `true`.
+        await expect(page.locator('#shell-time')).toHaveAttribute('data-has-spec', 'true', {
+          timeout: 45_000
+        });
+
+        const door = page.locator('#shell-time-more');
+        if (await door.isVisible()) {
+          await door.click();
+          const popover = page.locator('#shell-time-popover');
+          await expect(popover, `${clusterKey} at ${horizonKey}: door opened`).toBeVisible();
+          await expect(
+            popover.locator('button, input, select'),
+            `${clusterKey} at ${horizonKey}: a visible door must open on real controls`
+          ).not.toHaveCount(0);
+          await page.keyboard.press('Escape');
+          await expect(popover).toBeHidden();
+        }
+        // A hidden door needs no further proof here: found-015's rule is
+        // that a single-period spec's door is absent/hidden, which
+        // `door.isVisible()` above already read straight off the DOM.
+      }
+    }
   });
 });

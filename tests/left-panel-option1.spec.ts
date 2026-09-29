@@ -78,12 +78,25 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
         .evaluate((button) => button.nextElementSibling?.getAttribute('data-tab'))
     ).toBe('layers');
 
+    // found-091: the footer place-tab press sets the detent attribute at
+    // once, but #sidebar's own open transition (mobile-panels.css, 180ms)
+    // is still running under it; a rect read here can land mid-animation.
+    // Wait for that transition to settle before measuring, on a fresh
+    // computed style each poll (never a fixed sleep).
+    await expect
+      .poll(async () =>
+        page.locator('#sidebar').evaluate((el) => getComputedStyle(el).transform)
+      )
+      .toMatch(/^(none|matrix\(1,\s*0,\s*0,\s*1,\s*0,\s*0\))$/);
+
     const targets = bar.locator(
       '.time-bar-step, .time-bar-play, .time-bar-jump, .time-bar-modes button'
     );
-    for (let i = 0; i < (await targets.count()); i += 1) {
-      const box = await targets.nth(i).boundingBox();
-      expect(box?.height).toBeGreaterThanOrEqual(44);
+    const targetHeights = await targets.evaluateAll((elements) =>
+      elements.map((el) => el.getBoundingClientRect().height)
+    );
+    for (const height of targetHeights) {
+      expect(height).toBeGreaterThanOrEqual(44);
     }
 
     const previous = bar.locator('[data-step="-1"]');

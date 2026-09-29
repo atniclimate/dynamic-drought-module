@@ -196,7 +196,14 @@ function ensurePanel(): HTMLElement {
 /**
  * Mark the active hazard's cell in every horizon section (DR-092): a
  * styling hook plus `aria-current` on each matching `.impact-hazard`
- * section, and nothing else touched. `selectedHazard` (not `cluster`) is
+ * section, plus (M20, DR-123) revealing that row's own `.impact-hazard-you`
+ * marker, a small "your mode" word rendered hidden in every cell's markup
+ * (`renderCell`) and shown only on the active one. The marker sits outside
+ * `.impact-hazard-title` (the element the section's `aria-labelledby`
+ * names), so neither the title's nor the section's accessible name gains
+ * the word: a screen reader hears "your mode" once, as ordinary row text,
+ * never as part of the heading or region name, and never doubled against
+ * `aria-current`. `selectedHazard` (not `cluster`) is
  * the field every other hazard-named briefing surface already reads
  * (view-shell.ts's `selectedHazardTitle`): the user-facing hazard intent,
  * which stays a real cluster key even once the exact layer set has
@@ -226,6 +233,11 @@ function applyActiveHazardEmphasis(): void {
     } else {
       row.removeAttribute('aria-current');
     }
+    // M20 (DR-123): the "your mode" word rides the same class/attribute
+    // toggle, never a re-render; `hidden` keeps it out of layout and out
+    // of every accessible-name computation on every other row.
+    const youMarker = row.querySelector<HTMLElement>('.impact-hazard-you');
+    if (youMarker) youMarker.hidden = !isActive;
   });
 }
 
@@ -375,10 +387,18 @@ function renderCell(cell: HazardCell): string {
   }
 
   const titleId = `impact-hazard-title-${cell.horizon}-${cell.hazard}`;
+  // The "your mode" marker (M20, DR-123) always renders, hidden; only
+  // `applyActiveHazardEmphasis` shows it, on the one cell whose hazard
+  // matches the committed mode. It sits outside the `<h4>` so the section's
+  // `aria-labelledby="${titleId}"` name never grows the word: see that
+  // function's own comment for how a screen reader hears it.
   return `
     <section class="impact-hazard" data-horizon="${escapeHtml(cell.horizon)}" data-hazard="${escapeHtml(cell.hazard)}" aria-labelledby="${titleId}">
       <div class="impact-hazard-head">
-        <h4 class="impact-hazard-title" id="${titleId}">${escapeHtml(cell.label)}</h4>
+        <div class="impact-hazard-title-wrap">
+          <h4 class="impact-hazard-title" id="${titleId}">${escapeHtml(cell.label)}</h4>
+          <span class="impact-hazard-you" hidden>your mode</span>
+        </div>
         <span class="impact-hazard-pill impact-hazard-pill-${cell.status}">${escapeHtml(HORIZON_PILL_TEXT[cell.status])}</span>
       </div>
       <div class="impact-hazard-claims">${inner}</div>
@@ -464,13 +484,10 @@ function renderObservation(pointHeat: PointHeatBriefing): string {
   `;
 }
 
-function renderGridMetric(
-  metric: PointHeatMetricSeries,
-  open: boolean
-): string {
+function renderGridMetric(metric: PointHeatMetricSeries): string {
   const shown = metric.values.slice(0, 8);
   return `
-    <details class="point-heat-series"${open ? ' open' : ''}>
+    <details class="point-heat-series" data-metric-key="${escapeHtml(metric.key)}">
       <summary>${escapeHtml(metric.label)}</summary>
       <table>
         <thead><tr><th scope="col">Issuer value</th><th scope="col">Valid interval</th></tr></thead>
@@ -506,16 +523,31 @@ function renderGrid(pointHeat: PointHeatBriefing): string {
       grid.note ?? SOURCE_PILL_TEXT[grid.status]
     )}</p>`;
   }
-  const preferred =
-    grid.metrics.find((metric) => metric.key === 'heatIndex')?.key ??
-    grid.metrics.find((metric) => metric.key === 'apparentTemperature')?.key ??
-    grid.metrics[0]?.key;
-  const identity = [grid.office, grid.gridId].filter(Boolean).join(' / ');
+  // Every NWS grid guidance disclosure starts closed (found-023, DDM-P7-T10
+  // M19): no metric is opened by a "preferred" guess, in any
+  // HAZARD_CLUSTER_KEYS mode. A reader's own open or closed choice still
+  // survives a later refresh; see refreshOpenBriefing's disclosure-state
+  // preservation below.
+  // The grid names its cell as the points response gives it (gridX,
+  // gridY), and its office id only when that differs from the forecast
+  // office; the id alone repeats the office ('PDT / PDT', found-023).
+  const gridOffice =
+    grid.gridId && grid.gridId !== grid.office ? grid.gridId : null;
+  const gridCell =
+    grid.gridX !== undefined && grid.gridY !== undefined
+      ? `${grid.gridX},${grid.gridY}`
+      : null;
+  const gridWords = [gridOffice, gridCell].filter(
+    (part): part is string => part !== null
+  );
+  const identityParts = [
+    grid.office ? `NWS office ${grid.office}` : null,
+    gridWords.length > 0 ? `grid ${gridWords.join(' ')}` : null
+  ].filter((part): part is string => part !== null);
+  const identity = identityParts.join(', ');
   return `
     ${identity ? `<p class="point-heat-meta">${escapeHtml(identity)}</p>` : ''}
-    ${grid.metrics
-      .map((metric) => renderGridMetric(metric, metric.key === preferred))
-      .join('')}
+    ${grid.metrics.map((metric) => renderGridMetric(metric)).join('')}
   `;
 }
 
@@ -888,6 +920,25 @@ export function getActiveBriefing(): ImpactBriefing | null {
 }
 
 /**
+ * The `<details>` disclosures whose reader-chosen open or closed state
+ * `refreshOpenBriefing` carries across its own re-render (M19, generalizing
+ * the Technical information-only list): `.impact-technical-information` is a
+ * singleton, and each NWS grid metric disclosure carries its own stable
+ * `data-metric-key` (renderGridMetric). M22 appends the acknowledgements
+ * section's own selector here when it lands.
+ */
+const PRESERVED_DISCLOSURE_SELECTOR =
+  '.impact-technical-information, .point-heat-series[data-metric-key]';
+
+/** A stable identity for one preserved disclosure, survives the re-render
+ * that replaces the DOM node itself. */
+function preservedDisclosureKey(details: HTMLDetailsElement): string {
+  return details.classList.contains('impact-technical-information')
+    ? 'technical-information'
+    : `point-heat-series:${details.dataset['metricKey'] ?? ''}`;
+}
+
+/**
  * Re-render the active briefing in place after its horizons or resources were
  * mutated (async hydration and the F3 resource rehydrate both call this).
  *
@@ -902,18 +953,29 @@ export function getActiveBriefing(): ImpactBriefing | null {
 export function refreshOpenBriefing(token: number): void {
   if (!isCurrentBriefing(token) || !activeBriefing || !bodyEl) return;
   const hadFocusInBody = bodyEl.contains(document.activeElement);
-  const technical = bodyEl.querySelector<HTMLDetailsElement>('.impact-technical-information');
-  const technicalOpen = technical?.open ?? false;
-  const hadTechnicalFocus = technical?.contains(document.activeElement) ?? false;
+  const preservedOpen = new Map<string, boolean>();
+  let focusedDisclosureKey: string | null = null;
+  bodyEl
+    .querySelectorAll<HTMLDetailsElement>(PRESERVED_DISCLOSURE_SELECTOR)
+    .forEach((details) => {
+      const key = preservedDisclosureKey(details);
+      preservedOpen.set(key, details.open);
+      if (details.contains(document.activeElement)) focusedDisclosureKey = key;
+    });
   bodyEl.innerHTML = renderBody(
     activeBriefing,
     activeImpactUnavailableNote
   );
-  const updatedTechnical = bodyEl.querySelector<HTMLDetailsElement>('.impact-technical-information');
-  if (updatedTechnical) {
-    updatedTechnical.open = technicalOpen;
-    if (hadTechnicalFocus) updatedTechnical.querySelector('summary')?.focus({ preventScroll: true });
-  }
+  bodyEl
+    .querySelectorAll<HTMLDetailsElement>(PRESERVED_DISCLOSURE_SELECTOR)
+    .forEach((details) => {
+      const key = preservedDisclosureKey(details);
+      const wasOpen = preservedOpen.get(key);
+      if (wasOpen !== undefined) details.open = wasOpen;
+      if (key === focusedDisclosureKey) {
+        details.querySelector('summary')?.focus({ preventScroll: true });
+      }
+    });
   discloseLegendAnchorTitles(bodyEl);
   applyActiveHazardEmphasis();
   if (hadFocusInBody && panelEl && !panelEl.contains(document.activeElement)) {

@@ -9,6 +9,7 @@ import {
 } from './helpers';
 import { stubRecentSatellite } from './satellite-fixture';
 import { SATELLITE_PROBE_BBOX } from '../src/map/satellite';
+import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 
 /**
  * UX-3 conditions strip: a dated at-a-glance summary of the rendered map.
@@ -359,8 +360,9 @@ test.describe('UX-3 conditions strip', () => {
         body: JSON.stringify(alertFixture)
       })
     );
-    // Deterministic NADM for the show-again leg (gotoApp skips its default
-    // stub when the query names layers).
+    // A different deterministic NADM body for the show-again leg. Page-level
+    // routes are checked before gotoApp's own context-level NADM backstop, so
+    // this one wins regardless of when either was registered.
     await page.route('**/NADM-current.geojson', (route) =>
       route.fulfill({
         status: 200,
@@ -414,10 +416,74 @@ test.describe('UX-3 conditions strip', () => {
     await expect(key.locator('#map-key-content')).toBeHidden();
     await expect(page.locator('#legend-panel [data-legend="nadm-drought"]')).toBeVisible();
 
-    // Turning the USDM surface off hides the key: it never claims a surface
-    // that is not on the map.
+    // Turning the USDM surface off no longer hides the key (value-only
+    // migration, S30D D1 M10; interface-chrome-popups-text.md section 2.4,
+    // "the chip never hides"): it falls back to the committed mode's own
+    // word instead of claiming a surface that is not on the map, and the
+    // seat stays present. Before this change the key went `hidden`.
     await waitForLayerSettled(page, 'nadm-drought');
     await layerCheckbox(page, 'nadm-drought').uncheck();
-    await expect(key).toBeHidden();
+    await expect(key).toBeVisible();
+    await expect(key.locator('.map-key-chip-label')).toHaveText('Drought');
   });
+});
+
+/**
+ * S30D D1 M10 (register owner-1h; design record interface-chrome-popups-
+ * text.md, "Swatches and value text"): the class colour leaves the
+ * conditions-strip drought tile's text and becomes a 10px keylined swatch
+ * beside the value instead (the old inline `color:${m.color}` on
+ * `.conditions-value`, `conditions-strip.tsx:126` at D0).
+ *
+ * Predicted red on the pre-M10 tree: `.conditions-swatch` does not exist,
+ * and `.conditions-value`'s own computed `color` (not
+ * `background-color`) carries the category colour.
+ */
+test.describe('the drought tile swatch (D1 M10)', () => {
+  test('a live drought reading shows a keylined swatch beside the value, and the value text itself is not classed', async ({
+    page
+  }) => {
+    // `region=` and `layers=` alone derive CONSOLE (src/state/view-mode.ts,
+    // the legacy-URL rule): the swatch this test checks is scoped to the
+    // desktop Brief rehost (`#map-condition-indicator`, hazard-indicators.css
+    // ":62-67"), which never applies in Console. `view=brief` is explicit so
+    // the docked tile, not the sidebar's own copy, is what gets measured
+    // (repair round on M10; predicted red without it: "element(s) not
+    // found", since the node never moves into `#map-condition-indicator`).
+    await gotoApp(page, '?region=washington_state&layers=usdm&view=brief');
+    await waitForLayerSettled(page, 'usdm');
+    const drought = page.locator('#map-condition-indicator .conditions-metric[data-metric="drought"]');
+    await expect(drought.locator('.conditions-value')).toHaveText('D3');
+    const swatch = drought.locator('.conditions-swatch');
+    await expect(swatch).toBeVisible();
+    const bg = await swatch.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(bg, 'the swatch carries the class colour as a fill').not.toBe('rgba(0, 0, 0, 0)');
+    const valueColor = await drought
+      .locator('.conditions-value')
+      .evaluate((el) => getComputedStyle(el).color);
+    expect(valueColor, 'the value text itself is no longer classed').not.toBe(bg);
+  });
+});
+
+/**
+ * found-008 (D1 M14): "Conditions in view" offers only the current mode's
+ * surfaces, enumerated from HAZARD_CLUSTER_KEYS (DR-113) rather than a
+ * literal Heat/ENSO/Wildfire list. Before the fix, the drought anchor tile
+ * (a "North American Drought Monitor layer off. Press to show." chip in
+ * every non-drought mode) rendered unconditionally regardless of mode.
+ */
+test.describe('found-008: Conditions in view offers only the current mode\'s surfaces', () => {
+  for (const key of HAZARD_CLUSTER_KEYS) {
+    if (key === 'drought') continue;
+    const token = HAZARD_CLUSTERS[key].urlToken;
+
+    test(`Conditions in view offers no other mode's layer chip in ${key}`, async ({ page }) => {
+      await gotoApp(page, `?cluster=${token}`);
+
+      // The drought family (nadm-drought / usdm / the CPC drought outlook)
+      // is not this mode's own recipe: no "Layer off. Press to show." drought
+      // chip is offered here.
+      await expect(page.locator('.conditions-metric[data-metric="drought"]')).toHaveCount(0);
+    });
+  }
 });

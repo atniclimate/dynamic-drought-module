@@ -5,7 +5,7 @@
  * NO-REDISTRIBUTION GUARD (a project hard rule; the plan-attack standing guard):
  * nothing in this file is, or resembles, a real AIANNH or AIAN-LAR
  * polygon. Every geometry is a hand-authored rectangle placed inside the
- * default Washington State viewport purely so a map click can hit it, and
+ * pinned Washington State viewport purely so a map click can hit it, and
  * every name is an obviously synthetic fixture label. Route interception
  * replaces the live agency responses with these bodies so the specs are
  * deterministic offline and no real sovereign-boundary polygon ever enters
@@ -107,8 +107,8 @@ interface FixtureCollection {
 
 /**
  * A rectangle ring, `[w, s, e, n]` in WGS 84. The fixtures cover the middle
- * of the Washington State region (`regions.ts` bounds roughly -124.8..-116.9
- * by 45.5..49.0) so a map-center click lands inside them.
+ * of the pinned Washington State region (`regions.ts` bounds roughly
+ * -124.8..-116.9 by 45.5..49.0) so a map-center click lands inside them.
  */
 function rectRing(w: number, s: number, e: number, n: number): number[][][] {
   return [
@@ -197,7 +197,7 @@ export function syntheticBiaBody(): FixtureCollection {
  *
  * NO-REDISTRIBUTION GUARD, restated because this file's rule is absolute: this
  * is a hand-authored rectangle with a rectangular bite taken out of it, placed
- * to sit under the default Washington viewport. It is not, and does not
+ * to sit under the pinned Washington viewport. It is not, and does not
  * resemble, any real AIAN-LAR polygon.
  */
 export function concaveBiaBody(): FixtureCollection {

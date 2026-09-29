@@ -46,7 +46,7 @@ test.describe('S4c panel-foot response', () => {
   test('a place-bearing click lands at the panel foot, frozen head over scrolling body, no popup', async ({
     page
   }) => {
-    await gotoApp(page);
+    await gotoApp(page, '?region=washington_state&view=brief');
     // The sink registers with the island; the fixture layers must paint.
     await expect(page.locator('.shell-cluster-btn')).toHaveCount(4);
     await waitForLayerSettled(page, 'aiannh');

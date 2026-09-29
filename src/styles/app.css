@@ -161,7 +161,9 @@
   --mobile-map-control-radius: var(--radius-sm);
   --mobile-map-key-collapsed-height: 224px;
   /* The one map-control family width (E2, D-0.7.0-058 ruling 2): Share
-     view, Reset, and the Satellite switcher all render at this width. */
+     view, Reset, and the Satellite switcher all render at this width on
+     phones and in embeds. The desktop shell's column reads --map-cell-w
+     instead (S30D D1 M9, THE DESKTOP COLUMN). */
   --map-ctrl-w: 104px;
   /* Impact-panel geometry (UI-02). The panel's width and the bottom
      dock's inset were two independent literals (440px and 452px) that
@@ -192,7 +194,8 @@
   --map-dock-bottom: 34px;
   /* The round map-information disclosure. Its diameter drove three
      literals that must move together: the button box and the top edge
-     of the panel it opens, in both the desktop and the embed corner. */
+     of the panel it opens, in the embed corner. (The desktop shell's help
+     is a column cell since S30D D1 M9 and does not read this.) */
   --map-info-size: 28px;
 
   /* Stacking order (UI-12). Every z-index in this file below was a bare
@@ -239,6 +242,30 @@
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-enter: cubic-bezier(0, 0, 0, 1);
   --ease-exit: cubic-bezier(0.3, 0, 1, 1);
+
+  /* D1 CHROME TOKENS (S30D D1 M9, DR-101; the one labelled D1 block).
+     Only the names D1's map-chrome faces need, with the names and values
+     of the D3 palette record (run folder design/palette-tokens.md section
+     2; each line cites its row). They are NEW names: today's --bg-*,
+     --fg-* and --line* above are untouched, so nothing else moves. D1 code
+     reads these names and never a hex literal outside this block. D3
+     later makes today's names aliases of these without changing a value
+     twice. tests/contrast-contract.test.mjs pins every ratio D1 relies on,
+     computed from these values. */
+  --surface-raised: #141414;             /* S1, "Surfaces": the opaque map-cell face */
+  --surface-overlay: #1E242C;            /* S2, "Surfaces": cell hover, the Map information drawer */
+  --surface-hover: #2A3138;              /* S3, "Surfaces": the pressed (selected) plate */
+  --ink-strong: #FFFFFF;                 /* T0, "Ink": pressed label, pressed edge and bar */
+  --ink: #E8ECF0;                        /* T1, "Ink": cell glyph and label at rest and hover */
+  --ink-soft: #C6CBD4;                   /* T2, "Ink": secondary text in the drawer */
+  --ink-muted: #98A1B4;                  /* T3, "Ink": opaque surfaces only */
+  --ink-faint: #8A94A6;                  /* T4, "Ink": S0 to S2 only */
+  --keyline: #C6CBD4;                    /* "Swatches and value text": the 1 px cell edge */
+  --rule-strong: #636363;                /* "Rules and control boundaries": divider only */
+  --focus-inner: #FFFFFF;                /* "Focus": the 2 px ring */
+  --focus-outer: #010B13;                /* "Focus": the 4 px casing */
+  --glass-read: rgba(1, 11, 19, 0.72);   /* "Glass": desktop glass that carries text */
+  --link-on-dark: #F26B5E;               /* "Buttons and links": opaque S0 to S2 only */
 }
 
 * {
@@ -305,16 +332,19 @@ a:hover {
 }
 
 /* Feeds --studio-inset-start (declared on :root above) for the
-   screen-filling studios below. Scoped to the desktop breakpoint: below
-   721px the sidebar is a bottom sheet OVER the map, not a column beside
-   it, so a studio there stays full-viewport regardless of this rule.
+   screen-filling studios below. Scoped to the DESKTOP breakpoint only
+   (DR-169, ratified 2026-09-29: "Desktop sidebar inert" moved this gate
+   from 721px to 1025px, so the tablet band 721-1024px, DR-153, now gets
+   the full-viewport studio like the phone shell below it, and only
+   1025px and wider keeps the dock beside the sidebar column). Below
+   1025px a studio there stays full-viewport regardless of this rule.
    :not(.sidebar-collapsed):not(.embed) is exactly "the sidebar column is
    actually rendered at its --sidebar-w width right now"; either class
    collapses it to 0, and the fallback above already reads 0 in that
    case. Progressive enhancement: a browser without :has() never sets
    this, so --studio-inset-start stays 0 and a studio there simply keeps
    painting full-viewport, same as before this change. */
-@media (min-width: 721px) {
+@media (min-width: 1025px) {
   body:has(#app.app-shell:not(.sidebar-collapsed):not(.embed)) {
     --studio-inset-start: var(--sidebar-w);
   }
@@ -402,13 +432,15 @@ a:hover {
 }
 
 @media (min-width: 721px) {
-  .app-shell.sidebar-collapsed .sidebar {
+  .app-shell.sidebar-collapsed .sidebar,
+  .app-shell.embed .sidebar {
     visibility: hidden;
     pointer-events: none;
   }
-  #app.sidebar-collapsed:not(.embed) #sidebar-expand {
-    top: 76px;
-  }
+  /* TL-0 (S30D D1 M10): stays at (12, 12) while collapsed too; the old
+     top: 76px re-seat here fought the .sidebar-expand-btn top: 12px rule
+     at equal-or-higher specificity and is removed rather than kept as a
+     second source of truth for the same seat. */
 }
 
 .sidebar-header {
@@ -545,6 +577,23 @@ a:hover {
 .app-shell.sidebar-collapsed .sidebar-expand-btn,
 .app-shell.embed .sidebar-expand-btn {
   display: inline-flex;
+}
+
+/* TL-0 (S30D D1 M10; interface-chrome-popups-text.md section 2.2): on the
+   desktop shell, outside an embed, the seat is 40 x 40 (44 on a coarse
+   pointer, the touch floor the coarse-pointer rule below already applies
+   at 721px and up). Phones and embeds keep the smaller .icon-btn base. */
+@media (min-width: 721px) {
+  .app-shell:not(.embed) .sidebar-expand-btn {
+    width: 40px;
+    height: 40px;
+  }
+}
+@media (min-width: 721px) and (pointer: coarse) {
+  .app-shell:not(.embed) .sidebar-expand-btn {
+    width: 44px;
+    height: 44px;
+  }
 }
 
 /* The expand control is withheld until the map-dependent half is wired
@@ -953,6 +1002,19 @@ button.conditions-metric:hover .conditions-action-hide {
   color: var(--fg-0);
 }
 
+/* found-012: the held-chunk entry feedback (view-shell.ts, sidebar.ts). Not
+   scoped to .brief-console-door alone: the mobile PLACE opener
+   (#sheet-place-studio-entry, .sheet-report-door) gets the same class from
+   the same shared marking helper. The spinner glyph itself reuses
+   .impact-spinner (its border and animation tokens, and its
+   prefers-reduced-motion fallback) unchanged. */
+.studio-entry-pending {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
 /* ----------------------------------------------------------------------------
    Region selector
    ---------------------------------------------------------------------------- */
@@ -1087,6 +1149,15 @@ button.conditions-metric:hover .conditions-action-hide {
   background: var(--accent-soft);
   border-color: var(--accent-strong);
   color: var(--fg-0);
+}
+/* D1 M6 (2026-09-27; found-005): the quick view whose view is showing
+   reads pressed with the accent the pressed hazard and horizon buttons use
+   (.shell-cluster-btn, .shell-horizon-btn). It follows :hover and :active
+   so a hovered pressed chip still reads pressed. */
+.preset-chip[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* ----------------------------------------------------------------------------
@@ -1308,6 +1379,13 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 .tribal-nations-brief-action:hover { border-color: var(--accent); background: rgba(6, 182, 212, 0.22); }
 .tribal-nations-brief-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* found-006: the Brief-door control is now a real toggle; its pressed
+   state (both layers on) needs a sighted-user cue to match aria-pressed,
+   the same accent-fill pattern the cluster buttons use. */
+.tribal-nations-brief-action[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--bg-0);
+}
 @media (max-width: 720px) {
   .tribal-nations-brief-action { min-height: 44px; }
 }
@@ -1677,7 +1755,10 @@ button.conditions-metric:hover .conditions-action-hide {
    slate, and the shared family width, relabeled "Satellite" so it reads
    with the Share view / Reset stack. The pressed (satellite) state lights
    with the accent tokens. One button, real semantics; aria-pressed is set
-   by the control. */
+   by the control. Since S30D D1 M9 these faces hold where the control sits
+   in MapLibre's corner (phones, embeds) and in the LAYERS studio header;
+   in the desktop column's slot 2 the cell faces of THE DESKTOP COLUMN
+   replace them, the cyan on-state included. */
 .basemap-switcher-btn {
   width: var(--map-ctrl-w) !important;
   padding: 0 7px;
@@ -2294,6 +2375,49 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 .map-bottom-dock > * { pointer-events: auto; }
 .map-notices { display: contents; }
+
+/* S30D D1 M10 (register owner-1h; design record interface-chrome-popups-text
+   section 2.5): on the desktop shell, outside an embed, the dock carries
+   only notices and the embed stamp (the HeatRisk sequence's own move to
+   the Key drawer is M11's) and its insets are symmetric at --dock-inset
+   (196px, src/config/map-chrome.ts), not the phone-derived 12px
+   --map-dock-inset. The "Panel-inset awareness" rule right below still
+   wins on `right` when the impact panel is open: its selector carries one
+   more type-level point of specificity (`body:has(...)` against
+   `.app-shell:not(.embed)`), so it overrides regardless of source order.
+
+   Repair round on M10: scoped to 1025px and up, the same band edge
+   DR-153 and MAP_CHROME_TABLET_BAND use (src/config/map-chrome.ts). At
+   721px the symmetric 196px insets left no dock at all under an open
+   briefing (interface-responsive.spec.ts "keeps the dock clear of the
+   briefing", the 2026-09-07 DR-036 failure A this would have
+   reintroduced): the 721 to 1024px tablet band keeps its pre-M10 dock
+   (the base rule above, --map-dock-inset, 12px), which the "Panel-inset
+   awareness" rule already knows how to shrink without going to zero. */
+@media (min-width: 1025px) {
+  .app-shell:not(.embed) .map-bottom-dock {
+    left: var(--dock-inset);
+    right: var(--dock-inset);
+  }
+}
+@media (min-width: 721px) {
+  /* The copy toast's dock treatment (found-018; src/ui/overlay.ts moves
+     the node here). In flow with the other notices rather than its old
+     fixed top-centre spot, which competed with the pill and the hover
+     inspector for the same seat; opacity keeps carrying the show/hide
+     animation, position and transform no longer fight the dock's layout.
+     Unlike the inset rule above, this is not chip-arithmetic and stays in
+     force across the whole desktop-and-tablet shell (721px and up). */
+  .app-shell:not(.embed) #map-notices > .copy-toast {
+    position: relative;
+    top: auto;
+    left: auto;
+    transform: translateY(-4px);
+  }
+  .app-shell:not(.embed) #map-notices > .copy-toast.visible {
+    transform: translateY(0);
+  }
+}
 .map-dock-foot {
   display: flex;
   justify-content: space-between;
@@ -2377,7 +2501,13 @@ button.conditions-metric:hover .conditions-action-hide {
    design model (sharp rectangles, background transparency): Share view and
    Reset stack vertically at ONE uniform width, and the basemap switcher
    below carries the same width and chrome so the three buttons read as one
-   family. The width token is shared with .basemap-switcher-btn. */
+   family. The width token is shared with .basemap-switcher-btn.
+
+   Since S30D D1 M9 this base rule and the E2 faces hold for phones (720px
+   and below, re-seated by the sheet rules) and embeds only. The desktop
+   shell outside an embed turns the same element into the four-slot column
+   of "THE DESKTOP COLUMN" below: one family still, now opaque, square,
+   labelled cells (owner rulings R1 a and R2 a). */
 .map-overlay-controls {
   position: absolute;
   top: 12px;
@@ -2396,6 +2526,13 @@ button.conditions-metric:hover .conditions-action-hide {
    column and the existing child rules keep meaning what they say. */
 .map-overlay-seat {
   display: contents;
+}
+
+/* Slot 4's reserved box (S30D D1 M9) exists on the desktop shell only. An
+   empty flex item would still take a gap in the phone and embed stacks,
+   so everywhere else it generates no box at all. */
+.map-spine-reserve {
+  display: none;
 }
 
 /* The key in the control column is bounded by the column, not by the
@@ -2467,6 +2604,241 @@ button.conditions-metric:hover .conditions-action-hide {
   color: var(--fg-0);
 }
 
+/* ----------------------------------------------------------------------------
+   THE DESKTOP COLUMN (S30D D1 M9; register owner-1f, DDM-P10-T11; design
+   record interface-chrome-popups-text.md sections 2.1 to 2.3 and 2.6;
+   owner rulings R1 a, square-edged labelled cells, and R2 a, Share in a
+   reserved slot 4).
+
+   Four fixed slots, top to bottom: 1 Reset, 2 SAT (MapLibre's control,
+   moved in by src/map/init.ts), 3 Help with its Map information drawer
+   (moved in by src/ui/map-information.ts), 4 Share view, reserved. The
+   grid rows are explicit, so a slot's box exists whether or not its
+   control is there: the Brief shell's Share rehost empties slot 4 and
+   nothing else moves (the 2026-09-13 stable-position rule, measured to
+   1px by tests/map-chrome-seats.spec.ts). The seat table lives in
+   src/config/map-chrome.ts and tests/map-chrome-contract.test.mjs keeps
+   these tokens equal to it.
+
+   Faces (DR-101; the D1 token block in :root): opaque S1 with a 1px
+   keyline edge at rest, S2 on hover, the S3 plate with a white edge and a
+   2px leading bar when pressed (SAT on, Help open). Opaque because SAT and
+   the words are text and need 4.5:1, which no glass gives over white
+   imagery. No red, no blur, no radius, no shadow. The `!important` marks
+   answer the base .basemap-switcher-btn rule and MapLibre's control-group
+   rules, which the phone and embed seats still use.
+
+   Every rule is desktop-only and outside an embed: phones and embeds keep
+   today's seats and faces, and --map-ctrl-w stays theirs.
+   ---------------------------------------------------------------------------- */
+@media (min-width: 721px) {
+  /* The chrome geometry tokens, mirrored in MAP_CHROME_TOKENS. The chip,
+     drawer, popup and dock tokens are declared here for M10, M11 and M23
+     and read by nothing yet. --popup-measure is the sidebar foot's content
+     width at the 340px sidebar (340 minus two 18px paddings), provisional
+     until M23 measures it.
+     --map-cell-w is the design record's 124px raised to the measured need
+     (D1.md :295, one token). The director's probe, 2026-09-27, in the
+     built app at 1280x900 and 1440x900, ?view=console, Lexend: the
+     "Share view" word is about 78.4px wide and at 124px its ink ended at
+     x 1260.42 in a cell whose right edge is 1268, about 2.4px into the
+     1px edge plus 9px padding. The need is 1 + 9 + 20 + 8 + 78.4 + 9 + 1
+     = 126.4px; 128px is the next 4px step. */
+  .app-shell:not(.embed) {
+    --chrome-inset: 12px;
+    --map-cell-w: 128px;
+    --map-cell-h: 40px;
+    --map-cell-gap: 4px;
+    --chip-w: 288px;
+    --key-drawer-w: 336px;
+    --info-drawer-w: 360px;
+    --popup-measure: 304px;
+    --dock-inset: 196px;
+  }
+}
+@media (min-width: 721px) and (pointer: coarse) {
+  /* A hand gets the 44px floor (DR-036 a) in the cell's height; the slot
+     formula follows, so slot 2 sits at y 60, slot 3 at 108, slot 4 at 156. */
+  .app-shell:not(.embed) {
+    --map-cell-h: var(--touch-target);
+  }
+}
+@media (min-width: 721px) {
+  .app-shell:not(.embed) .map-overlay-controls {
+    top: var(--chrome-inset);
+    right: var(--chrome-inset);
+    display: grid;
+    grid-template-columns: var(--map-cell-w);
+    grid-template-rows: repeat(4, var(--map-cell-h));
+    grid-auto-rows: auto;
+    gap: var(--map-cell-gap);
+    align-items: stretch;
+    justify-items: stretch;
+    width: var(--map-cell-w);
+    /* The empty reserved slot and the gaps never swallow a map click. */
+    pointer-events: none;
+  }
+  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='1'] { grid-area: 1 / 1; }
+  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='2'] { grid-area: 2 / 1; }
+  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='3'] { grid-area: 3 / 1; }
+  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='4'],
+  .app-shell:not(.embed) .map-overlay-controls > #share-btn { grid-area: 4 / 1; }
+  /* Slots 2 and 3 stop being `display: contents` and become their own
+     boxes: the moved control fills its slot, and slot 3 anchors the
+     drawer. Slot 4's box is the reserve span, under Share when Share is
+     home. */
+  .app-shell:not(.embed) .map-overlay-controls > .map-spine-slot {
+    display: block;
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+  }
+  .app-shell:not(.embed) .map-overlay-controls > .map-spine-reserve {
+    display: block;
+  }
+  /* A physically framed page that is not an embed still gets the full-site
+     link-outs (src/ui/view-shell.ts); they follow the grid, never take a
+     slot. */
+  .app-shell:not(.embed) .map-overlay-controls > .studio-linkout-pair {
+    grid-column: 1;
+    grid-row: 5;
+    justify-self: end;
+    pointer-events: auto;
+  }
+
+  /* MapLibre's control group, borrowed into slot 2, loses its white card
+     and rounded corners and fills the slot. */
+  .app-shell:not(.embed) #basemap-switcher-overlay-host > .basemap-switcher-control {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    float: none;
+    background: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /* The cell (R1 a): a fixed 20px icon column, an 8px gap, then the word.
+     The 1px edge plus 9px padding puts every icon centre 20px in from the
+     cell's left edge: one x for the whole column, W - 12 - --map-cell-w
+     + 20 (W - 120 at 128px). */
+  .app-shell:not(.embed) .map-overlay-controls .map-cell {
+    box-sizing: border-box;
+    display: grid !important;
+    grid-template-columns: 20px 1fr;
+    column-gap: 8px;
+    align-items: center;
+    justify-content: start;
+    width: 100% !important;
+    height: 100%;
+    margin: 0;
+    padding: 0 9px;
+    border: 1px solid var(--keyline);
+    border-radius: 0;
+    background: var(--surface-raised) !important;
+    color: var(--ink) !important;
+    box-shadow: none;
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1;
+    text-align: left;
+    text-transform: none;
+    white-space: nowrap;
+    cursor: pointer;
+    pointer-events: auto;
+    transition:
+      background-color var(--dur-micro) var(--ease-standard),
+      border-color var(--dur-micro) var(--ease-standard),
+      color var(--dur-micro) var(--ease-standard);
+  }
+  /* Every glyph is inline SVG in a 24 box, drawn at 20px with a 2px
+     stroke (SAT's markup says 22px at 1.8 for its phone and embed seats). */
+  .app-shell:not(.embed) .map-overlay-controls .map-cell > svg {
+    display: block;
+    flex: none;
+    width: 20px;
+    height: 20px;
+    justify-self: center;
+    stroke-width: 2;
+  }
+  /* The word. Trimmed to cap height and baseline so it centres in the
+     cell by its capitals, not by its line box. Never an ellipsis. */
+  .app-shell:not(.embed) .map-overlay-controls .map-cell > span {
+    display: block;
+    justify-self: start;
+    min-width: 0;
+    text-box: trim-both cap alphabetic;
+  }
+  .app-shell:not(.embed) .map-overlay-controls .map-cell:hover {
+    background: var(--surface-overlay) !important;
+    color: var(--ink) !important;
+  }
+  /* Pressed: SAT on (aria-pressed) or Help's drawer open (aria-expanded). */
+  .app-shell:not(.embed) .map-overlay-controls .map-cell:is([aria-pressed='true'], [aria-expanded='true']) {
+    background: var(--surface-hover) !important;
+    color: var(--ink-strong) !important;
+    border-color: var(--ink-strong);
+    box-shadow: inset 2px 0 0 var(--ink-strong);
+  }
+  /* One ring for all chrome (palette-tokens.md section 2, "Focus"): the
+     better of the pair is at least 4.45:1 against any backdrop. */
+  .app-shell:not(.embed) .map-overlay-controls .map-cell:focus-visible {
+    outline: 2px solid var(--focus-inner);
+    outline-offset: 0;
+    box-shadow: 0 0 0 4px var(--focus-outer);
+  }
+  .app-shell:not(.embed) .map-overlay-controls .map-cell:is([aria-pressed='true'], [aria-expanded='true']):focus-visible {
+    box-shadow:
+      inset 2px 0 0 var(--ink-strong),
+      0 0 0 4px var(--focus-outer);
+  }
+}
+@media (min-width: 721px) and (prefers-reduced-motion: reduce) {
+  .app-shell:not(.embed) .map-overlay-controls .map-cell {
+    transition: none;
+  }
+}
+/* THE TABLET BAND (owner ruling DR-153, 2026-09-28, RATIFICATION-6 Q2 and
+   Q2b: "For tablet/narrow view, we can use the same icon buttons as mobile
+   view", for the whole band). The app's own tablet query (721 to 1024px,
+   DDM-P10-T01; the same text as the band's --sidebar-w rule near the top
+   of this file), sidebar open or collapsed, with no chip arithmetic: the
+   family is icon squares at the band's 44px touch floor on every pointer
+   (DR-036 a, "tablet is touch-first"), the word visually hidden with the
+   .sr-only pattern and every accessible name and `title` kept (DR-154).
+   Slots, the 4px gap, faces, edges and the focus ring are unchanged; the
+   drawer's seat and width already read --map-cell-w. Declared after the
+   desktop cell rules so it wins at equal specificity. Mirrored by
+   MAP_CHROME_TABLET_BAND in src/config/map-chrome.ts and pinned by
+   tests/map-chrome-contract.test.mjs. Above 1024px the labelled cells of
+   ruling R1 a stand; phones and embeds never see any of this. */
+@media (min-width: 721px) and (max-width: 1024px) {
+  .app-shell:not(.embed) {
+    --map-cell-w: var(--touch-target);
+    --map-cell-h: var(--touch-target);
+  }
+  .app-shell:not(.embed) .map-overlay-controls .map-cell {
+    grid-template-columns: 20px;
+    justify-content: center;
+    place-items: center;
+    padding: 0;
+  }
+  /* The project's visually-hidden pattern (.sr-only). */
+  .app-shell:not(.embed) .map-overlay-controls .map-cell > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
 .layers-studio-linkout {
   width: auto;
   max-width: 240px;
@@ -2490,7 +2862,7 @@ button.conditions-metric:hover .conditions-action-hide {
   container-type: inline-size;
 }
 
-@media (min-width: 721px) {
+@media (min-width: 1025px) {
   #layers-studio-root {
     inset: 0 0 0 var(--studio-inset-start);
   }
@@ -2558,7 +2930,21 @@ button.conditions-metric:hover .conditions-action-hide {
   gap: 16px;
   flex: 0 0 auto;
   min-height: 64px;
-  padding: 10px 18px;
+  /* Registers Back / the heading / the end group with the content
+     column below (.layers-studio-grid, .place-studio-layout: both
+     `width: min(1080px, 100%); margin: 0 auto` inside
+     .layers-studio-scroll's own 18px padding) instead of the header's
+     own full-bleed edge (D1 M17, DR-169 item 2: at 2560x1440 the two
+     used to sit about 1080px apart). --studio-header-max defaults to
+     that same 1080px cap; the Place studio's own @container widening to
+     a 1400px column (near :3585) overrides it there so the two stay in
+     step. Below the cap the 18px floor matches .layers-studio-scroll's
+     own padding exactly (the header has no scroller inset of its own to
+     subtract, so the two arithmetics agree without one). The header
+     itself stays full width (its background and border-bottom are
+     chrome, not content); only its padding narrows to line the content
+     up. */
+  padding: 10px max(18px, calc((100% - var(--studio-header-max, 1080px)) / 2));
   background: var(--bg-1);
   border-bottom: 1px solid var(--line-strong);
 }
@@ -2912,14 +3298,20 @@ button.conditions-metric:hover .conditions-action-hide {
   margin-left: 2px;
 }
 
+/* No max-height and no overflow here at rest (D1 M17, DR-169 item 2:
+   "one scroll container"). Before this change every width capped this
+   list's own height and gave IT a second `overflow: auto`, nested
+   inside .layers-studio-scroll's own scroller (near :3009); at 1280x720
+   that cut the last row mid-line inside its own tiny scrollbar instead
+   of the single outer one. The phone shell (@media max-width: 720px,
+   below) is the one exception that keeps its own cap and its own
+   overflow, named there. */
 .place-studio-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: calc(100dvh - 250px);
   margin: 0;
   padding: 0;
-  overflow: auto;
   list-style: none;
 }
 
@@ -3143,15 +3535,18 @@ button.conditions-metric:hover .conditions-action-hide {
   background: transparent;
 }
 
-@media (min-width: 721px) {
-  /* Screen-filling geometry (owner direction): starts at the sidebar's
-     inner edge (--studio-inset-start, 0 unless a live sidebar column is
-     on screen) and fills the rest of the viewport, so the studio slides
-     out BESIDE the nav side-card rather than over it. This is exactly
-     the box #map-container occupies at these widths, which is why the
-     inert scope in place-studio.tsx targets #map-container instead of
-     the whole #app: the sidebar is never covered here, so it must stay
-     reachable. */
+@media (min-width: 1025px) {
+  /* Screen-filling geometry (owner direction, DR-169's "Desktop sidebar
+     inert" ruling): starts at the sidebar's inner edge (--studio-inset-
+     start, 0 unless a live sidebar column is on screen) and fills the
+     rest of the viewport, so the studio slides out BESIDE the nav
+     side-card rather than over it. This is exactly the box
+     #map-container occupies at these widths. The sidebar sits beside
+     this box, visible but inert (applyStudioInertScope veils the whole
+     #app now, sidebar included; src/ui/island/studio-inert.ts). Below
+     1025px (the tablet band, DR-153, and the phone shell) this whole
+     block does not apply and the studio stays the full-viewport default
+     declared above. */
   #place-studio-root {
     inset: 0 0 0 var(--studio-inset-start);
   }
@@ -3170,10 +3565,6 @@ button.conditions-metric:hover .conditions-action-hide {
     gap: 10px;
     width: 100%;
   }
-
-  .place-studio-list {
-    max-height: min(34dvh, 320px);
-  }
 }
 
 /* Rebalances the single column above once the ROOT is actually wide
@@ -3184,9 +3575,18 @@ button.conditions-metric:hover .conditions-action-hide {
    does not read as one sparse column. 760px mirrors the threshold
    .layers-studio-grid uses for the same reason and the same judgment
    call: comfortably above the 300px second-column floor plus a workable
-   first column and the gap. Below it (the 721 to roughly 1100px viewport
-   band with the sidebar docked) the single column above stands. */
+   first column and the gap. Below it (the 1025px and wider dock's own
+   viewport band with the sidebar docked, or the sub-1025px full-viewport
+   studio before the root is this wide) the single column above stands.
+   --studio-header-max here keeps .layers-studio-header's own padding
+   (near :2923) registered with the WIDENED 1400px content column below,
+   instead of the 1080px default the Layers studio and the narrower Place
+   studio both use (D1 M17, DR-169 item 2). */
 @container (min-width: 760px) {
+  .place-studio-header {
+    --studio-header-max: 1400px;
+  }
+
   .place-studio-type-rail {
     width: min(1400px, 100%);
     margin: 0 auto 14px;
@@ -3196,17 +3596,6 @@ button.conditions-metric:hover .conditions-action-hide {
     grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
     gap: 20px;
     width: min(1400px, 100%);
-  }
-
-  .place-studio-list {
-    /* Item 14, 2026-09-10: at 1440x900 the old min(50dvh, 560px) stopped the
-       list about two thirds of the way down and left the whole lower right of
-       the studio empty, which is what the owner saw. The rail, the type
-       status and the search field above it cost about 210px, so 68dvh leaves
-       a comfortable bottom margin while giving the list roughly a third more
-       rows. The absolute cap stays so a very tall monitor does not stretch
-       one column into a ribbon. */
-    max-height: min(68dvh, 760px);
   }
 }
 
@@ -3231,7 +3620,11 @@ button.conditions-metric:hover .conditions-action-hide {
     overflow-x: auto;
   }
   .place-studio-layout { grid-template-columns: 1fr; gap: 10px; }
-  .place-studio-list { max-height: 38dvh; }
+  /* The phone shell keeps its own cap and its own scroller (unchanged by
+     D1 M17's "one scroll container" fix above, which targets the
+     1025px-and-wider desktop dock and the 721-1024px tablet band; the
+     phone route is out of this microtask's scope, DR-169 note). */
+  .place-studio-list { max-height: 38dvh; overflow: auto; }
   .place-studio-type-status { align-items: flex-start; flex-direction: column; gap: 3px; }
   .place-overlap-grid { overflow-x: auto; }
   .place-overlap-column { min-width: 120px; }
@@ -4830,23 +5223,27 @@ button.telemetry-item {
 
 /* The four hazard rows inside one horizon section (DR-012 b). Each row is a
    cell of the matrix and owns its own status pill; the rule that separates
-   them is what keeps one hazard's claims from reading as the next one's. */
+   them is what keeps one hazard's claims from reading as the next one's.
+   M20 (DDM-P7-T10, interface-chrome-popups-text.md T8): every row computes
+   the SAME border, padding and box-shadow, active or not, first or last, so
+   parity is a computed fact rather than a visual coincidence, and the left
+   gutter (12px) keeps the text off the row's edge. No :first-child or
+   :last-child exception. */
 .impact-hazard {
-  padding: 10px 0;
+  padding: 10px 12px;
   border-top: 1px solid var(--line);
-}
-.impact-hazard:first-child {
-  padding-top: 2px;
-  border-top: 0;
-}
-.impact-hazard:last-child {
-  padding-bottom: 0;
 }
 .impact-hazard-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+.impact-hazard-title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
 }
 .impact-hazard-title {
   margin: 0;
@@ -4856,6 +5253,20 @@ button.telemetry-item {
   letter-spacing: var(--track-caps-sm);
   text-transform: uppercase;
   color: var(--fg-1);
+}
+/* M20 (DR-123): the committed mode's own word, not part of the title's text
+   and never doubled into an aria-label. `applyActiveHazardEmphasis` toggles
+   `hidden`; hidden in the DOM contributes nothing to any element's
+   accessible name, so a screen reader hears it once, as ordinary text
+   after the heading, only on the row that carries `aria-current`. The color
+   is a D1 ink token (never a hazard colour: DR-092's reason stands). */
+.impact-hazard-you {
+  font-family: var(--font-body);
+  font-size: 8.5px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.03em;
+  color: var(--ink-muted);
+  white-space: nowrap;
 }
 .impact-hazard-pill {
   flex-shrink: 0;
@@ -4879,17 +5290,18 @@ button.telemetry-item {
 
 /* DDM-P2-T07: the one row matching the shell's committed hazard mode
    (DR-092, never reordered, never a severity ranking between the four
-   hazards). An inset accent plus a faint ground shift, the same device
-   already used for the point-heat callout above (.impact-horizon
-   .point-heat): the generic UI accent, never a hazard's own palette
-   colour, so switching modes cannot read as "this hazard matters more".
-   Inset box-shadow and a background tint take no layout space, so the
-   row's own box (and every row after it) stays exactly where it was. */
+   hazards). A faint ground shift, the same device already used for the
+   point-heat callout above (.impact-horizon .point-heat): the generic UI
+   accent, never a hazard's own palette colour, so switching modes cannot
+   read as "this hazard matters more". M20 (DR-123, RATIFICATION-4 Q9 a,
+   2026-09-26): the inset 3px accent bar this rule used to carry is
+   removed; the tint stays as the sole edge-free emphasis, alongside the
+   bolded title and the `.impact-hazard-you` word (DDM-P7-T10). A
+   background tint takes no layout space, so the row's own box (and every
+   row after it) stays exactly where it was. */
 .impact-hazard-active {
-  box-shadow: inset 3px 0 0 var(--accent-strong);
   background: color-mix(in srgb, var(--bg-2) 92%, var(--accent) 8%);
-  transition: background-color var(--dur-fast) var(--ease-standard),
-    box-shadow var(--dur-fast) var(--ease-standard);
+  transition: background-color var(--dur-fast) var(--ease-standard);
 }
 .impact-hazard-active .impact-hazard-title {
   font-weight: var(--fw-title);
@@ -5605,78 +6017,206 @@ a.impact-resource-link::after {
 }
 .map-info-attribution a { color: var(--fg-1); }
 
-/* ----------------------------------------------------------------------------
-   The desktop bottom-right corner (owner direction, 2026-08-31,
-   superseding 2026-08-19).
+/* Help's visible word exists for the desktop column's labelled cell only;
+   the phone and embed seats are the round question-mark button, named by
+   its aria-label, so the word stays out of their layout. */
+.map-info-btn > .map-cell-label {
+  display: none;
+}
 
-   One round question-mark button in the corner; the pre-1.0 preview
-   badge sits bottom center. The 2026-08-19 ruling seated MapLibre's
-   compact attribution circle beside the question mark; the 2026-08-31
-   direction removed that circle in every shell and moved the license
-   credits into the question-mark panel, which now answers both "what am
-   I looking at?" and "who says so?". The credits stay one click away
-   (the license obligation), never absorbed into silence.
+/* ----------------------------------------------------------------------------
+   Help and the Map information drawer on the desktop shell (S30D D1 M9;
+   design record interface-chrome-popups-text.md sections 2.2, 2.3 and 2.6;
+   superseding the 2026-08-31 bottom-right corner).
+
+   Help is slot 3 of the desktop column, a labelled cell like its
+   neighbours (THE DESKTOP COLUMN, above), and its panel is the right-hand
+   drawer: it docks against the column, its top on the help slot's top and
+   its right edge 8px left of the column (container right 12 +
+   --map-cell-w + 8, so 148 at 128px), and it slides out from behind the
+   column. The panel still answers
+   "what am I looking at?" and "who says so?": the license credits stay
+   one click away, never absorbed into silence. It is ephemeral (no URL
+   key), Escape closes it and returns focus to Help, and a map click does
+   not close it (src/ui/map-information.ts, unchanged).
+
+   The retired corner treatment went with the move: the 28px circle, its
+   rgba(15, 23, 42, 0.85) face and its accent ring. Embeds keep that corner
+   and its circle (the FE-18 rules below), and phones keep their rail.
+
+   The preview badge sits left, clear of the scale bars (S30D D1 M10,
+   found-019; owner direction 2026-08-31 centred it, which put it over the
+   scale bar between about 721px and 985px of map width; interface-chrome
+   section 2.2 has no seat for it, so this keeps it out of every other
+   seat's way instead). Its left offset is the scale bars' own maximum
+   extent (MapLibre's default 10px margin, its own maxWidth of
+   SCALE_MAX_WIDTH_PX 160px, src/map/init.ts:84, plus this file's border
+   and padding, about 172px total, the same estimate
+   src/config/map-chrome.ts's dockInset comment uses) plus the required
+   8px clearance: 180px. --map-container-left tracks the map container's
+   own left edge in viewport px (the sidebar's rendered width, 0 when it
+   is collapsed), so the badge stays clear of the scale bar at every
+   desktop width, sidebar open or collapsed, from 960x540 to 2560x1440. It
+   stays pointer-events: none, so it can never intercept a map click.
    ---------------------------------------------------------------------------- */
 @media (min-width: 721px) {
-  /* Scoped :not(.embed) (FE-18, 2026-08-28): embeds keep the pre-2026-08-19
-     seats (index.html, map-control-seat.ts, interface-responsive.spec.ts), so
-     none of this corner treatment may leak into an iframe. */
-  .app-shell:not(.embed) .map-info-btn {
-    appearance: none;
-    position: absolute;
-    right: 10px;
-    bottom: 8px;
-    z-index: calc(var(--z-map-control) + 20);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: var(--map-info-size);
-    height: var(--map-info-size);
-    padding: 0;
-    color: var(--fg-1);
-    background: rgba(15, 23, 42, 0.85);
-    border: 1px solid var(--line-strong);
-    border-radius: 50%;
-    cursor: pointer;
+  .app-shell:not(.embed) {
+    --map-container-left: var(--sidebar-w);
   }
-  .app-shell:not(.embed) .map-info-btn:hover {
-    background: rgba(27, 41, 66, 0.9);
-    color: var(--fg-0);
+  .app-shell.sidebar-collapsed:not(.embed) {
+    --map-container-left: 0px;
   }
-  .app-shell:not(.embed) .map-info-btn[aria-expanded='true'] {
-    color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent-strong);
-  }
-
-  /* The preview badge sits bottom center (owner direction, 2026-08-31),
-     clear of the corner controls. It stays pointer-events: none, so it
-     can never intercept a map click. */
   .app-shell:not(.embed) .test-preview-badge {
     position: fixed;
-    left: 50%;
-    transform: translateX(-50%);
+    left: calc(var(--map-container-left, 0px) + 180px);
+    transform: none;
     bottom: 12px;
     z-index: calc(var(--z-map-control) + 20);
   }
-  .app-shell:not(.embed) .map-info-panel:not([hidden]) {
+  .app-shell:not(.embed) .map-overlay-controls .map-info-panel:not([hidden]) {
     position: absolute;
-    right: 10px;
-    /* The button's own seat (bottom: 8px) plus its diameter plus the
-       same 8px again, so the panel keeps one gap above a button that
-       grows to the touch floor on a coarse pointer. 44px today. */
-    bottom: calc(var(--map-info-size) + 16px);
-    z-index: calc(var(--z-map-control) + 20);
+    top: 0;
+    right: calc(100% + 8px);
+    z-index: 1;
     display: block;
-    width: min(360px, calc(100% - 24px));
-    max-height: min(60vh, 520px);
+    box-sizing: border-box;
+    /* The room left of the drawer is the map container's width less the
+       column, its gap and both insets; the container is the viewport less
+       the sidebar column while the sidebar is open. */
+    width: min(
+      var(--info-drawer-w),
+      calc(100vw - var(--sidebar-w) - 2 * var(--chrome-inset) - var(--map-cell-w) - 8px)
+    );
+    /* The container is the full shell height (100dvh, 100vh where dvh is
+       unknown); 170px keeps the drawer's foot above the bottom seats. */
+    max-height: min(520px, calc(100vh - 170px));
+    max-height: min(520px, calc(100dvh - 170px));
     overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 12px 14px;
-    background: rgba(8, 13, 25, 0.96);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-md);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-    color: var(--fg-1);
+    background: var(--surface-overlay);
+    border: 1px solid var(--keyline);
+    border-radius: 0;
+    box-shadow: none;
+    color: var(--ink-soft);
+    text-align: left;
+    white-space: normal;
+    pointer-events: auto;
+    animation: map-info-drawer-in var(--dur-fast) var(--ease-enter);
   }
+  .app-shell.sidebar-collapsed:not(.embed) .map-overlay-controls .map-info-panel:not([hidden]) {
+    width: min(
+      var(--info-drawer-w),
+      calc(100vw - 2 * var(--chrome-inset) - var(--map-cell-w) - 8px)
+    );
+  }
+  /* Links on the opaque S2 drawer: Red on Dark, underlined (5.24:1). */
+  .app-shell:not(.embed) .map-overlay-controls .map-info-panel a {
+    color: var(--link-on-dark);
+    text-decoration: underline;
+  }
+}
+@keyframes map-info-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (min-width: 721px) and (prefers-reduced-motion: reduce) {
+  /* No slide and no fade: aria-expanded and the pressed Help cell carry
+     the meaning. */
+  .app-shell:not(.embed) .map-overlay-controls .map-info-panel:not([hidden]) {
+    animation: none;
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   The Key drawer (left; S30D D1 M11; design record
+   interface-chrome-popups-text.md section 2.6 "Drawers"; DR-113).
+
+   The chip's existing disclosure (#map-key-content) IS the Key drawer: a
+   non-modal region with aria-expanded/aria-controls, Escape-to-trigger
+   and no URL key already (src/ui/map-key.ts), opening beside its own
+   fixed control (the chip) and never covering or moving a persistent
+   seat, so no new positioning is introduced here. This block adds only
+   the entrance motion the right drawer above already uses, mirrored to
+   the left edge with the same --dur-fast/--ease-enter tokens (no new
+   duration or easing value), and the static per-cluster section hosts
+   (src/config/detail-sections.ts) map-key.ts relocates into
+   #map-key-legend's sibling, #map-key-drawer-sections, so they survive
+   every legend re-render.
+   ---------------------------------------------------------------------------- */
+.map-key-legend {
+  display: contents;
+}
+/* hazard-indicators.css ":283" caps every DIRECT child of
+   #map-key .map-key-content at the drawer's own width; #map-key-legend's
+   `display: contents` (above) makes its own children the drawer's real
+   flex items now, so this restates the same cap for them (and for the
+   section wrapper, itself `display: contents` below) at equal
+   specificity, never overriding the original rule, which still holds
+   for any content that is not the legend or the sections. */
+#map-key .map-key-legend > *,
+#map-key .map-key-drawer-sections > * {
+  max-width: 100%;
+}
+@media (min-width: 721px) {
+  .app-shell:not(.embed) #map-key .map-key-content:not([hidden]) {
+    animation: map-key-drawer-in var(--dur-fast) var(--ease-enter);
+  }
+}
+@keyframes map-key-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (min-width: 721px) and (prefers-reduced-motion: reduce) {
+  /* No slide and no fade: aria-expanded and the disclosure glyph carry
+     the meaning (design record section 2.6, "Motion"). */
+  .app-shell:not(.embed) #map-key .map-key-content:not([hidden]) {
+    animation: none;
+  }
+}
+
+.map-key-drawer-sections {
+  display: contents;
+}
+/* Off the desktop shell (phones, the mobile sheet, an embed) a section
+   never renders: every rule below it is desktop-scoped (design record
+   section 2.6, "Persistence" and 2.8), and HeatRisk's own node keeps its
+   dock seat there regardless of this attribute. */
+.map-key-drawer-section {
+  display: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+@media (min-width: 721px) {
+  .app-shell:not(.embed) .map-key-drawer-section[data-detail-section]:not([hidden]) {
+    display: block;
+    padding-top: 7px;
+    border-top: 1px solid var(--line);
+  }
+}
+.map-key-section-fallback {
+  margin: 0;
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+/* The fallback sentence shows exactly while the moved node is absent or
+   hidden (no place selected, or the layer inactive); HeatRisk is the one
+   declared section today. */
+.map-key-drawer-section:has(#heatrisk-sequence:not([hidden])) .map-key-section-fallback {
+  display: none;
 }
 
 /* ----------------------------------------------------------------------------
@@ -6648,14 +7188,26 @@ a.impact-resource-link::after {
   padding: 0;
   border-bottom: 0;
 }
-/* A briefable region uses the second row; other regions retain its space. */
+/* A briefable region uses the second row; every other region shows the
+   plain-text alternate there instead (D1 M4 repair, found-024): the row
+   keeps var(--shell-region-row) in every state, so it is never an empty
+   reserved band and #brief-search below never moves when the door appears
+   or disappears (the 2026-09-13 stable-position rule). */
 #shell-region-host > #panel-region {
   --shell-region-row: 38px;
   display: grid;
   grid-template-rows: repeat(2, minmax(var(--shell-region-row), auto));
   gap: 8px;
 }
-#shell-region-host .region-briefing-btn { margin-top: 0; }
+#shell-region-host .region-briefing-btn,
+#shell-region-host .region-briefing-note { margin-top: 0; }
+#shell-region-host .region-briefing-note {
+  display: flex;
+  align-items: center;
+  font-size: 11.5px;
+  color: var(--fg-2);
+}
+#shell-region-host .region-briefing-note[hidden] { display: none; }
 
 /* Optional controls and live explanations expand below the shared doors. */
 .shell-details-panel { display: none; }
@@ -7357,6 +7909,11 @@ a.impact-resource-link::after {
   width: 64px;
 }
 .shell-time > .shell-popover-door:disabled { opacity: 0.45; cursor: default; }
+/* found-015 (M12 repair): a single-period spec's door keeps its 64px seat
+   (the row's box never moves) but is hidden as well as disabled, never
+   just dimmed like the no-spec-at-all state above; visibility (not
+   display) so the flex layout is untouched. */
+.shell-time > .shell-popover-door[data-controls='none'] { visibility: hidden; }
 
 .shell-popover-door {
   appearance: none;
@@ -7383,6 +7940,24 @@ a.impact-resource-link::after {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 .shell-popover::backdrop { background: rgba(0, 0, 0, 0.35); }
+
+/* The time door anchors to its trigger (found-015): a native [popover]'s
+   UA default (inset: 0; margin: auto) centres it in the viewport, which is
+   the "about 300 px from its 64x17 button" defect. CSS anchor positioning
+   overrides that default for THIS popover only (id selectors; the shared
+   .shell-popover class, including the minimap's card, is untouched).
+   Unsupported browsers keep today's centred UA default, never a blank or
+   off-screen card. */
+#shell-time-more { anchor-name: --shell-time-door; }
+@supports (anchor-name: --shell-time-door) {
+  #shell-time-popover:popover-open {
+    position: fixed;
+    position-anchor: --shell-time-door;
+    inset: auto;
+    position-area: bottom span-left;
+    margin: 8px 0 0;
+  }
+}
 
 .shell-time-detail { display: grid; gap: 10px; }
 .shell-time-detail-stamp { display: grid; gap: 2px; }
@@ -7490,6 +8065,24 @@ a.impact-resource-link::after {
   align-items: baseline;
   gap: 7px;
   padding: 8px 10px;
+  /* Repair round on M10 (map-chrome-seats.spec.ts "the chip holds its
+     seat"): the docked tile shares the TL-1 seat with the key toggle
+     (interface-chrome-popups-text.md section 2.4, "The chip is 288 x 40
+     in every mode"), so its box has to match the toggle's 40px height
+     exactly, not whatever its text happens to need. */
+  box-sizing: border-box;
+  min-height: 40px;
+}
+/* DR-153: the 721 to 1024 px tablet band is touch-first on every pointer
+   (RATIFICATION-6 Q2/Q2b), the same rule THE DESKTOP COLUMN's cell size
+   and chipSeatRect (src/config/map-chrome.ts) apply; repair round on M10
+   (interface-responsive.spec.ts "touch floor": this tile measured 288x40
+   with the briefing open, under the 44px floor). Declared after the base
+   rule above so it wins at equal specificity. */
+@media (min-width: 721px) and (max-width: 1024px) {
+  #conditions-strip-dock .conditions-metric[data-tone='data'] {
+    min-height: 44px;
+  }
 }
 #conditions-strip-dock .conditions-metric[data-tone='data'] .conditions-value {
   flex: 0 0 auto;
@@ -7872,7 +8465,10 @@ a.impact-resource-link::after {
   /* The map's own controls: Share view and Reset (34px), the basemap
      switcher (29px), and the round map-information disclosure (28px),
      which grows through its token so the panel it opens and the bottom
-     dock both step out of its way rather than meeting it. */
+     dock both step out of its way rather than meeting it. On the desktop
+     shell outside an embed the column's cells take the floor through
+     --map-cell-h instead (S30D D1 M9); these floors then agree with it,
+     and the round disclosure is the embed's alone. */
   .overlay-btn,
   .basemap-switcher-btn {
     min-height: var(--touch-target);

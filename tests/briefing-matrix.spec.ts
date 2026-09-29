@@ -34,6 +34,16 @@ import {
 import type { HazardCell, Horizon, HorizonKey } from '../src/impact/types';
 import type { ProductKey } from '../src/config/products';
 import { gotoApp, stubSpcFireOutlook } from './helpers';
+// M20 (DDM-P7-T10, DR-113): the mode loop below reads HAZARD_CLUSTER_KEYS
+// itself rather than a hardcoded four, and the horizon loop reads the
+// rendered `.shell-horizon-btn` chips through the same crosswalk the shell
+// uses, rather than importing HORIZON_KEYS as a second, parallel source.
+import {
+  HAZARD_CLUSTER_KEYS,
+  type HazardClusterKey,
+  type TemporalHorizonKey
+} from '../src/config/clusters';
+import { SHELL_HAZARD_KEY, SHELL_HORIZON_KEY } from '../src/impact/horizon-chrome';
 
 /**
  * The product each lane's generic test claim names (DDM-P14-T05 microtask 2):
@@ -659,6 +669,15 @@ test('a live switch to Wildfire mode emphasizes the fire cell in all three horiz
   await stubBaselineBriefingHosts(page);
   await stubSpcFireOutlook(page, {});
   await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+  // found-089: the default-boot paint can still be mid-repaint the instant
+  // `gotoApp` resolves (`applyActiveHazardEmphasis` re-toggles on every
+  // paint, including the loading paint), so a bare `activeHazardValues`
+  // read right here raced an empty set about 1 run in 8 on base code too.
+  // Settle first, per horizon, on the M20 pattern (waitForSettledHazardRow
+  // above), before reading anything.
+  for (const horizon of HORIZON_KEYS) {
+    await waitForSettledHazardRow(page, 'drought', horizon, SHELL_HAZARD_KEY.drought);
+  }
   expect(new Set(await activeHazardValues(page))).toEqual(new Set(['drought']));
   const orderBefore = await orderedHazardValues(page);
 
@@ -670,6 +689,7 @@ test('a live switch to Wildfire mode emphasizes the fire cell in all three horiz
 
   await expect(page.locator('.impact-hazard-active')).toHaveCount(3);
   for (const horizon of HORIZON_KEYS) {
+    await waitForSettledHazardRow(page, 'wildfire', horizon, SHELL_HAZARD_KEY.wildfire);
     await expect(
       page.locator(`.impact-hazard[data-horizon="${horizon}"][data-hazard="fire"]`)
     ).toHaveClass(/impact-hazard-active/);
@@ -683,6 +703,14 @@ test('a live switch to Wildfire mode emphasizes the fire cell in all three horiz
         page.locator(`.impact-hazard[data-horizon="${horizon}"][data-hazard="${hazard}"]`)
       ).not.toHaveClass(/impact-hazard-active/);
     }
+  }
+  // Re-settle before the fresh, one-round-trip read below: the per-horizon
+  // web-first assertions above already retried to a stable state, but
+  // `applyActiveHazardEmphasis` can still repaint again between the last of
+  // them passing and this `evaluateAll` running, so read only after every
+  // horizon is confirmed settled on 'fire' again.
+  for (const horizon of HORIZON_KEYS) {
+    await waitForSettledHazardRow(page, 'wildfire', horizon, SHELL_HAZARD_KEY.wildfire);
   }
   const active = await activeHazardValues(page);
   expect(active).toHaveLength(3);
@@ -761,5 +789,245 @@ test('the long-range Fire cell renders the unavailable form naming the NIFC prod
   for (const cell of [nearTerm, longRange]) {
     await expect(cell).not.toContainText('Wildfire Hazard Potential');
     await expect(cell).not.toContainText('WHP');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// M20 (DDM-P7-T10, register item owner-1n, DR-123, RATIFICATION-4 Q9 'a'):
+// the four hazard boxes in every horizon compute equal border, padding and
+// box-shadow, active or not, first or last; the committed mode keeps its
+// tint and a small "your mode" word but draws no edge line.
+// ---------------------------------------------------------------------------
+
+/** The horizon keys the shell itself renders, read from its own chips
+ * (`.shell-horizon-btn[data-horizon]`) through the same `SHELL_HORIZON_KEY`
+ * crosswalk `shell.tsx` reads, rather than a second hardcoded copy of the
+ * three horizon keys (DR-113: enumerate what is rendered, never assume a
+ * fixed count). */
+async function renderedHorizonKeys(page: Page): Promise<HorizonKey[]> {
+  const chipKeys = await page
+    .locator('.shell-horizon-btn')
+    .evaluateAll((buttons) =>
+      buttons.map((btn) => {
+        const key = btn.getAttribute('data-horizon');
+        if (key === null) throw new Error('a horizon chip carries no data-horizon');
+        return key;
+      })
+    );
+  expect(chipKeys.length, 'setup: at least one horizon chip must render').toBeGreaterThan(0);
+  return chipKeys.map((key) => SHELL_HORIZON_KEY[key as TemporalHorizonKey]);
+}
+
+interface HazardRowSnapshot {
+  readonly hazard: string | null;
+  readonly ariaCurrent: string | null;
+  readonly activeClass: boolean;
+  readonly borderTop: string;
+  readonly paddingTop: number;
+  readonly paddingRight: number;
+  readonly paddingBottom: number;
+  readonly paddingLeft: number;
+  readonly boxShadow: string;
+  readonly titleId: string | null;
+  readonly labelledBy: string | null;
+  readonly titleText: string;
+  readonly markerVisible: boolean;
+  readonly markerText: string;
+}
+
+/**
+ * Waits until this horizon's rows have settled on the pressed mode, read
+ * fresh each poll (never a handle carried across polls): all
+ * `HAZARD_KEYS.length` `.impact-hazard` rows for this horizon are in the
+ * document, and exactly one of them, matching `expectedHazard`, carries
+ * `aria-current="true"`. `applyActiveHazardEmphasis` re-toggles this on every
+ * paint, including the loading paint, so this also proves the panel is not
+ * mid-repaint at the moment the settled read below happens.
+ */
+async function waitForSettledHazardRow(
+  page: Page,
+  cluster: HazardClusterKey,
+  horizon: HorizonKey,
+  expectedHazard: string
+): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          ({ horizon, count }) => {
+            const rows = Array.from(
+              document.querySelectorAll<HTMLElement>(`.impact-hazard[data-horizon="${horizon}"]`)
+            );
+            if (rows.length !== count) return null;
+            const active = rows.filter((row) => row.getAttribute('aria-current') === 'true');
+            if (active.length !== 1) return null;
+            return active[0]!.getAttribute('data-hazard');
+          },
+          { horizon, count: HAZARD_KEYS.length }
+        ),
+      { message: `${cluster}/${horizon}: settle on ${expectedHazard}` }
+    )
+    .toBe(expectedHazard);
+}
+
+/**
+ * A fresh, single-round-trip read of every `.impact-hazard` row for one
+ * horizon: computed border, padding, box-shadow, class/attribute state, and
+ * the "your mode" marker's visibility and text. Querying and reading happen
+ * inside ONE `page.evaluate` call, so no node can be replaced between a
+ * selector resolving and the read running: `paint()`
+ * (`impact-panel-runtime.ts`) replaces `bodyEl.innerHTML` wholesale on every
+ * hydration step, and a `Locator.evaluate()`/`evaluateAll()` call resolves
+ * its element(s) in one round trip and reads them in a second, a window in
+ * which a repaint can detach the very node about to be read, computing an
+ * empty box-shadow and an unparsable NaN padding (the failure this
+ * replaces).
+ */
+async function readHazardRows(page: Page, horizon: HorizonKey): Promise<HazardRowSnapshot[]> {
+  return page.evaluate((horizon) => {
+    const rows = Array.from(
+      document.querySelectorAll<HTMLElement>(`.impact-hazard[data-horizon="${horizon}"]`)
+    );
+    const isVisible = (el: HTMLElement): boolean => {
+      if (el.hidden) return false;
+      if (el.getClientRects().length === 0) return false;
+      const cs = getComputedStyle(el);
+      if (cs.visibility === 'hidden' || cs.visibility === 'collapse') return false;
+      if (cs.display === 'none') return false;
+      if (parseFloat(cs.opacity) === 0) return false;
+      return true;
+    };
+    return rows.map((el) => {
+      const cs = getComputedStyle(el);
+      const title = el.querySelector<HTMLElement>('.impact-hazard-title');
+      const marker = el.querySelector<HTMLElement>('.impact-hazard-you');
+      return {
+        hazard: el.getAttribute('data-hazard'),
+        ariaCurrent: el.getAttribute('aria-current'),
+        activeClass: el.classList.contains('impact-hazard-active'),
+        borderTop: `${cs.borderTopWidth} ${cs.borderTopStyle} ${cs.borderTopColor}`,
+        paddingTop: parseFloat(cs.paddingTop),
+        paddingRight: parseFloat(cs.paddingRight),
+        paddingBottom: parseFloat(cs.paddingBottom),
+        paddingLeft: parseFloat(cs.paddingLeft),
+        boxShadow: cs.boxShadow,
+        titleId: title ? title.id : null,
+        labelledBy: el.getAttribute('aria-labelledby'),
+        titleText: title ? title.innerText : '',
+        markerVisible: marker ? isVisible(marker) : false,
+        markerText: marker ? (marker.textContent ?? '') : ''
+      };
+    });
+  }, horizon);
+}
+
+test("the four hazard boxes in every horizon compute equal border, padding and box-shadow, and their text starts at least 12 px from the row's left edge", async ({
+  page
+}) => {
+  await stubBaselineBriefingHosts(page);
+  await stubSpcFireOutlook(page, {});
+  await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+
+  const horizons = await renderedHorizonKeys(page);
+
+  // Every HAZARD_CLUSTER_KEYS mode (DR-113), not just the default boot: the
+  // default Drought boot puts the active row FIRST in each horizon
+  // (HAZARD_KEYS[0] === 'drought'), exactly where the pre-fix
+  // `.impact-hazard:first-child` override and the active box-shadow used to
+  // collide, so a check limited to that one mode would not prove parity for
+  // a middle or last active row.
+  for (const cluster of HAZARD_CLUSTER_KEYS) {
+    await clusterBtn(page, cluster).click();
+    const expectedHazard = SHELL_HAZARD_KEY[cluster];
+    for (const horizon of horizons) {
+      await waitForSettledHazardRow(page, cluster, horizon, expectedHazard);
+      const rows = await readHazardRows(page, horizon);
+      if (rows.length !== HAZARD_KEYS.length) {
+        throw new Error(
+          `${cluster}/${horizon}: expected ${HAZARD_KEYS.length} hazard rows, found ${rows.length}`
+        );
+      }
+      const [first, ...rest] = rows;
+      for (const row of rest) {
+        expect(row.borderTop, `${cluster}/${horizon}: border-top parity`).toBe(first!.borderTop);
+        expect(
+          {
+            top: row.paddingTop,
+            right: row.paddingRight,
+            bottom: row.paddingBottom,
+            left: row.paddingLeft
+          },
+          `${cluster}/${horizon}: padding parity`
+        ).toEqual({
+          top: first!.paddingTop,
+          right: first!.paddingRight,
+          bottom: first!.paddingBottom,
+          left: first!.paddingLeft
+        });
+        expect(row.boxShadow, `${cluster}/${horizon}: box-shadow parity`).toBe(first!.boxShadow);
+      }
+      for (const row of rows) {
+        expect(row.paddingLeft, `${cluster}/${horizon}: left gutter`).toBeGreaterThanOrEqual(12);
+      }
+    }
+  }
+});
+
+test('the committed-mode row names itself in words and draws no edge line', async ({ page }) => {
+  await stubBaselineBriefingHosts(page);
+  await stubSpcFireOutlook(page, {});
+  await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+
+  const horizons = await renderedHorizonKeys(page);
+
+  for (const cluster of HAZARD_CLUSTER_KEYS) {
+    await clusterBtn(page, cluster).click();
+    const expectedHazard = SHELL_HAZARD_KEY[cluster];
+    for (const horizon of horizons) {
+      await waitForSettledHazardRow(page, cluster, horizon, expectedHazard);
+      const rows = await readHazardRows(page, horizon);
+      if (rows.length !== HAZARD_KEYS.length) {
+        throw new Error(
+          `${cluster}/${horizon}: expected ${HAZARD_KEYS.length} hazard rows, found ${rows.length}`
+        );
+      }
+
+      const activeRows = rows.filter((row) => row.activeClass);
+      if (activeRows.length !== 1) {
+        throw new Error(
+          `${cluster}/${horizon}: expected exactly one .impact-hazard-active row, found ${activeRows.length}`
+        );
+      }
+      const active = activeRows[0]!;
+
+      // Draws no edge line: DR-123 removes the inset box-shadow RULINGS.md
+      // B2 (a) named ("the inset accent line is removed").
+      expect(active.boxShadow, `${cluster}/${horizon}: no inset accent`).toBe('none');
+
+      // Names itself in words: the row's own marker is visible text, once,
+      // on this row only.
+      expect(active.markerVisible, `${cluster}/${horizon}: marker visible`).toBe(true);
+      expect(active.markerText, `${cluster}/${horizon}: marker text`).toBe('your mode');
+
+      // The section's accessible name (aria-labelledby -> the <h4>) still
+      // reads just the hazard label: the marker lives outside that
+      // element, so the word never doubles into the name a screen reader
+      // announces for the row's heading or region.
+      expect(active.labelledBy, `${cluster}/${horizon}: labelledby`).toBe(active.titleId);
+      expect(active.titleText, `${cluster}/${horizon}: title text`).not.toContain('your mode');
+
+      // Exactly one row per horizon carries the marker and the emphasis;
+      // the other three show neither (DR-092: one mode-to-row lookup).
+      const others = rows.filter((row) => !row.activeClass);
+      expect(others.length, `${cluster}/${horizon}: other row count`).toBe(HAZARD_KEYS.length - 1);
+      for (const other of others) {
+        expect(other.ariaCurrent, `${cluster}/${horizon}: ${other.hazard} aria-current`).not.toBe(
+          'true'
+        );
+        expect(other.markerVisible, `${cluster}/${horizon}: ${other.hazard} marker hidden`).toBe(
+          false
+        );
+      }
+    }
   }
 });

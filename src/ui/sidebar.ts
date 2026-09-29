@@ -60,13 +60,9 @@ import {
   resetDroughtSurfacePresentation,
   setDroughtSurfacePresentation
 } from '../config/layers';
-import { MOBILE_HAZARD_PRESETS, VIEW_PRESETS } from '../config/presets';
+import { MOBILE_HAZARD_PRESETS, VIEW_PRESETS, isPresetShowing } from '../config/presets';
 import type { ViewPreset } from '../config/presets';
-import {
-  REGIONS,
-  DEFAULT_REGION,
-  regionToMapLibreBounds
-} from '../config/regions';
+import { REGIONS, DEFAULT_REGION } from '../config/regions';
 import type { RegionKey, Region } from '../config/regions';
 import { regionCapabilityLevel } from '../config/region-capability';
 // The featured-station table (`src/config/telemetry.ts`) is imported
@@ -93,6 +89,7 @@ import {
   renderStudioLoadFailure
 } from './view-shell';
 import { prefersReducedMotion } from '../util/motion';
+import { bindStudioEscape, trapStudioTabFocus } from './island/studio-inert';
 // The four telemetry network adapters (NRCS AWDB, USACE CWMS, USBR
 // Hydromet, USGS Instantaneous Values) are imported dynamically inside
 // `fetchPrimaryStationValue` below, not here (DR-008a). They were about
@@ -102,9 +99,10 @@ import { prefersReducedMotion } from '../util/motion';
 import type { StationValue, TelemetryStation } from '../types/station';
 import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
-import { parseUrlParams, syncUrl } from '../state/url';
+import { SIDEBAR_DESKTOP_QUERY, parseUrlParams, syncUrl } from '../state/url';
 import type { ParsedUrlParams } from '../state/url';
 import {
+  backToMap,
   getStudioRoute,
   initializeStudioRoute,
   isPhysicallyFramed,
@@ -131,7 +129,12 @@ import {
   onHazardClusterChange,
   setHazardCluster
 } from '../state/cluster-store';
-import { reconcileClusterWithLayerIntent } from '../state/cluster-service';
+import {
+  getCommittedSnapshot,
+  onCommittedSnapshotChange,
+  reconcileClusterWithLayerIntent,
+  requestHorizon
+} from '../state/cluster-service';
 import {
   ALL_FRAMING_BOUNDS,
   FRAMING_KEYS,
@@ -141,6 +144,15 @@ import {
 import type { FramingKey } from '../config/framings';
 import { OCEANS } from '../config/oceans';
 import { applyBasemapMode, requestBasemapMode } from '../map/basemap-switcher';
+import {
+  cameraMatchesTarget,
+  cameraStateUnchanged,
+  committedCameraTarget,
+  fitCameraTarget,
+  fitRegion,
+  readCameraState
+} from '../map/camera-fit';
+import type { CameraState, CameraTarget } from '../map/camera-fit';
 import { timeline } from '../state/timeline';
 import { resolveStatusPillText } from './island/pill-text';
 import {
@@ -168,18 +180,46 @@ import { loadSearchController } from './search-chunk';
  * selection (after a click) and for the embed flag (after the user
  * expands the sidebar in embed mode).
  *
- * Reset and URL sync read this object; keep mutations restricted to
- * `selectRegion` and the expand-button handler.
+ * Reset and URL sync read this object. `currentRegion` changes only in
+ * `selectRegion`; `embed` only at the boot seed and in the expand-button
+ * handler; `desktopSidebarClosed` only at the boot seed and in the collapse
+ * and expand handlers (the two explicit controls).
  */
 interface SidebarState {
   currentRegion: RegionKey | null;
   embed: boolean;
+  /**
+   * The ONE live desktop sidebar preference (D1 M7, DDM-P10-T07, DR-139;
+   * the Codex Tier 2 disposition, S2). Seeded from `sidebar=` at the start
+   * of `applyUrlStateSync`, set synchronously by collapse and expand before
+   * they serialize, and read by every canonical write through `pushUrl`. It
+   * is independent of the DOM class and of the mobile sheet's detents: a
+   * phone preserves it without applying it, and it is applied to the
+   * `sidebar-collapsed` class only at desktop width and never in an embed.
+   */
+  desktopSidebarClosed: boolean;
 }
 
 const STATE: SidebarState = {
   currentRegion: null,
-  embed: false
+  embed: false,
+  desktopSidebarClosed: false
 };
+
+/**
+ * Apply the live desktop preference to the column, and nothing else: no URL
+ * write, no focus move. A no-op in an embed (the embed class governs) and
+ * below the desktop breakpoint (the mobile shell governs, F5), so a phone
+ * boot never shows the expand control over the rail. Called at the boot
+ * seed, on the first widening of a phone boot, and on a bfcache restore.
+ */
+function applyDesktopSidebarPreference(): void {
+  if (STATE.embed) return;
+  if (!window.matchMedia(SIDEBAR_DESKTOP_QUERY).matches) return;
+  document
+    .getElementById('app')
+    ?.classList.toggle('sidebar-collapsed', STATE.desktopSidebarClosed);
+}
 
 /**
  * Cached reference to the MapLibre map. Stored at `buildSidebar` time so
@@ -409,6 +449,13 @@ function enableMapDependentControls(): void {
  * is withheld until `<html data-ddm-controls="ready">`, which is where it
  * became reachable before this change too, because the embed class itself
  * did not exist until then.
+ *
+ * Since D1 M7 (DR-139; the Codex Tier 2 disposition, S1) an inline classic
+ * bootstrap in index.html applies the embed class, and a desktop
+ * `sidebar=closed`, even earlier, before `#sidebar` is parsed, so neither
+ * boot paints an open column while this module graph loads. The toggle
+ * below agrees with it (the same first-wins `true`/`1` grammar); the same
+ * stylesheet rule withholds the expand control either way.
  */
 export function buildSidebarShell(): void {
   if (shellBuilt) return;
@@ -559,7 +606,21 @@ function selectRegion(
   // from the prior region. The matrix is authoritative: closing here aborts
   // hydration, clears the panel-owned place selection, and drops the mobile
   // at-hand briefing before the new region is presented or printed.
-  if (regionCapabilityLevel(key, 'impactSynthesis') === 'none') {
+  //
+  // DR-109 precedence D2 / Q6: this must fire only on an EXPLICIT change
+  // into a none-synthesis region, never on the silent boot fit (`silent`)
+  // or a same-region Reset (`key === priorRegion`). Without both guards,
+  // Reset under the national default (impactSynthesis 'none',
+  // src/config/capability-matrix.ts:124-127) would close a briefing it just
+  // opened, because the check used to fire on every selectRegion call for
+  // such a region regardless of whether the region actually changed or the
+  // call was the boot's own silent fit.
+  const priorRegion = STATE.currentRegion;
+  if (
+    !silent &&
+    key !== priorRegion &&
+    regionCapabilityLevel(key, 'impactSynthesis') === 'none'
+  ) {
     closeImpactPanel();
   }
 
@@ -589,19 +650,9 @@ function selectRegion(
   // layer signature. See src/state/region-store.ts.
   setCurrentRegion(key);
 
-  const [west, south, east, north] = regionToMapLibreBounds(region);
-  const pad = region.padding;
-  map.fitBounds(
-    [
-      [west - pad, south - pad],
-      [east + pad, north + pad]
-    ],
-    {
-      padding: 20,
-      // Suppress the fit animation for reduced-motion users (WCAG 2.3.3, #7).
-      animate: !silent && !prefersReducedMotion()
-    }
-  );
+  // The region math lives once, in src/map/camera-fit.ts (D1 M8). Suppress
+  // the fit animation for reduced-motion users (WCAG 2.3.3, #7).
+  fitRegion(map, key, !silent && !prefersReducedMotion());
 
   syncRegionSelect();
 
@@ -651,6 +702,9 @@ function pushUrl(): void {
     region: framing !== null ? null : STATE.currentRegion,
     layers: checkedLayerKeys(),
     embed: STATE.embed,
+    // syncUrl rebuilds the query from scratch, so the preference survives
+    // only by riding here (DR-139); an embed drops it inside syncUrl.
+    sidebarClosed: STATE.desktopSidebarClosed,
     view: getViewMode(),
     usdmWeek: timeline.usdmWeek,
     usdmMode: timeline.usdmMode,
@@ -696,10 +750,19 @@ function buildRegionSelect(): void {
   allOption.value = 'framing:all';
   allOption.textContent = 'All of North America';
   overviewGroup.appendChild(allOption);
+  // Every Jump to region option label must be unique (D1 M4, found-026): an
+  // editorial framing (Hawaii) can share its label with the detailed region
+  // it was drawn to match (regions.ts's comment at :299-302). Disambiguate
+  // only the overview option text here, never the config label itself or the
+  // detail option at REGIONS[key].label below, which u3i.spec.ts pins 1:1.
+  const regionLabels = new Set(
+    (Object.values(REGIONS) as Region[]).map((region) => region.label)
+  );
   for (const key of FRAMING_KEYS) {
     const option = document.createElement('option');
     option.value = `framing:${key}`;
-    option.textContent = FRAMINGS[key].label;
+    const label = FRAMINGS[key].label;
+    option.textContent = regionLabels.has(label) ? `${label} (overview)` : label;
     overviewGroup.appendChild(option);
   }
 
@@ -776,6 +839,21 @@ function buildRegionSelect(): void {
     });
   });
   select.insertAdjacentElement('afterend', briefingBtn);
+
+  // The door's plain-text alternate (D1 M4 repair, found-024): the second
+  // shell row is never empty, so when the door has nothing to show, this
+  // statement takes its place instead of a reserved but empty band. It is
+  // not a button (no click handler, no URL state) and is not a live region
+  // (no per-change announcement); updateRegionBriefingTrigger keeps it the
+  // exact inverse of the door's own hidden state, so exactly one of the two
+  // occupies the row.
+  const briefingNote = document.createElement('span');
+  briefingNote.id = 'region-briefing-note';
+  briefingNote.className = 'region-briefing-note';
+  briefingNote.textContent = 'Pick a place to open its briefing.';
+  briefingNote.hidden = true;
+  briefingBtn.insertAdjacentElement('afterend', briefingNote);
+
   // Reflect the region active at build time (boot applies it again via selectRegion).
   syncRegionSelect();
   updateRegionBriefingTrigger(STATE.currentRegion);
@@ -785,11 +863,18 @@ function buildRegionSelect(): void {
  * Show, label, or hide the region-briefing trigger for the active region (#9).
  * A region with a briefing anchor shows an explicit trigger naming the boundary
  * the briefing describes; a region that spans several states (or the national
- * framing) has no anchor and hides the trigger.
+ * framing) has no anchor and hides the trigger. So does an active minimap
+ * framing camera (D1 M4, found-025): the door never names a place the camera
+ * has left, so it hides under a framing and returns once a region is chosen
+ * again (selectRegion clears the framing before relabeling, :585-586, :623).
  */
 function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): void {
   const btn = document.getElementById('region-briefing-btn');
   if (!(btn instanceof HTMLButtonElement)) return;
+  // The plain-text alternate (D1 M4 repair, found-024) is optional only for
+  // callers that run before buildRegionSelect has inserted it; every real
+  // path keeps it the exact inverse of the door below.
+  const note = document.getElementById('region-briefing-note');
   // A selected map place takes precedence over the region anchor (F3, the
   // answer-first front door): the button becomes "See what this means" for the
   // place the user just clicked.
@@ -798,16 +883,24 @@ function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): v
     btn.hidden = false;
     btn.textContent = 'See what this means';
     btn.setAttribute('aria-label', `See what the drought means for ${place.label}`);
+    if (note) note.hidden = true;
+    return;
+  }
+  if (getFraming() !== null) {
+    btn.hidden = true;
+    if (note) note.hidden = false;
     return;
   }
   const anchor = regionKey ? REGIONS[regionKey]?.briefing : undefined;
   if (!anchor) {
     btn.hidden = true;
+    if (note) note.hidden = false;
     return;
   }
   btn.hidden = false;
   btn.textContent = `Impact briefing: ${anchor.label}`;
   btn.setAttribute('aria-label', `Open the impact briefing for ${anchor.label}`);
+  if (note) note.hidden = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -828,22 +921,58 @@ function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): v
 // ---------------------------------------------------------------------------
 
 /**
- * Build the question-first preset chip row from `VIEW_PRESETS`. Each chip
- * is a plain button (not a toggle: presets set state without locking it,
- * so no chip carries a pressed state) whose click applies the preset's
- * layer-set and any explicit preferred basemap. The tooltip carries the
- * question the preset answers.
+ * Apply one preset (a quick-view chip or a hazard-rail button), in a fixed
+ * order (D1 M6, 2026-09-27; found-005):
+ *
+ *   1. The layer set, through the controller (`applyPreset`). Every
+ *      checkbox flip it makes reconciles the cluster claim synchronously
+ *      (the checked-change subscription in `wireSidebar`; the bridge
+ *      notifies in the same turn), and no preset set equals a hazard's
+ *      clean composition, so the display is a custom set when this returns.
+ *   2. The preset's declared `horizon`, if any, through the cluster
+ *      service's `requestHorizon`. On a custom set that write only
+ *      republishes the set at the new horizon. The reverse order would
+ *      re-run a committed hazard's own recipe at the new horizon (the
+ *      service's timeline subscription) and fetch layers step 1 then
+ *      removes.
+ *   3. The explicit preferred basemap, if any.
  */
 function applyViewPreset(preset: ViewPreset): void {
   const map = mapRef;
   if (!map || !controllerRef) return;
   controllerRef.applyPreset(preset);
+  if (preset.horizon !== undefined) {
+    requestHorizon(preset.horizon);
+  }
   if (preset.preferredBasemap) {
     requestBasemapMode(map, preset.preferredBasemap);
   }
 }
 
+/** The one pressed-state subscription the chip row holds (a rebuild
+ * replaces it rather than stacking a second). */
+let presetChipsPressedUnsubscribe: (() => void) | null = null;
+
 /**
+ * Build the question-first preset chip row from `VIEW_PRESETS`. Each chip
+ * is a toggle-button in its markup (`aria-pressed`) but never a lock: its
+ * click applies the preset's layer set, its declared horizon, and any
+ * explicit preferred basemap (`applyViewPreset`), and the visitor stays
+ * free to adjust afterward. The tooltip carries the question the preset
+ * answers.
+ *
+ * Pressed state (D1 M6, 2026-09-27; found-005): every chip always carries
+ * `aria-pressed`, "true" exactly while `isPresetShowing` holds for the
+ * committed shell snapshot (its intended keys equal the preset's layers as
+ * a set, and its horizon equals the preset's declared horizon when it
+ * declares one), "false" otherwise, refreshed on every snapshot publish.
+ * The chips are built at DOM ready, before the URL state is applied and
+ * before the lazy island initializes the cluster service, so they start at
+ * "false" and reflect from the service's first publish: reading the
+ * snapshot here would capture and cache a pre-boot derivation. A publish
+ * sets the snapshot before it notifies, so the read inside the listener
+ * derives nothing extra.
+ *
  * Map-free (2026-09-03 launch ruling section 4): the chips are generated
  * from the static `VIEW_PRESETS` table at DOM ready and stay disabled with
  * a stated reason until the map is wired.
@@ -853,12 +982,15 @@ function buildPresetChips(): void {
   if (!container) return;
   container.innerHTML = '';
 
+  const chips: Array<{ btn: HTMLButtonElement; preset: ViewPreset }> = [];
   for (const preset of VIEW_PRESETS) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'preset-chip';
     btn.textContent = preset.label;
     btn.title = preset.description;
+    btn.setAttribute('aria-pressed', 'false');
+    chips.push({ btn, preset });
     // Preset application (deactivate the non-wanted, activate the wanted,
     // preserving the at-most-one-surface invariant) now lives in the
     // controller; the chip is a thin trigger.
@@ -875,6 +1007,14 @@ function buildPresetChips(): void {
     });
     container.appendChild(btn);
   }
+
+  presetChipsPressedUnsubscribe?.();
+  presetChipsPressedUnsubscribe = onCommittedSnapshotChange(() => {
+    const snapshot = getCommittedSnapshot();
+    for (const { btn, preset } of chips) {
+      btn.setAttribute('aria-pressed', String(isPresetShowing(preset, snapshot)));
+    }
+  });
 }
 
 /**
@@ -1218,23 +1358,70 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
     });
   }
 
+  // The refit on a sidebar toggle (D1 M8, found-029, DDM-P10-T07). Opening or
+  // closing the desktop column changes the map's width; when the camera still
+  // shows the committed target (the ocean, framing or region last committed),
+  // it is refitted to the new canvas, and otherwise (a pan, zoom, pitch or
+  // rotation) the camera keeps its live centre and zoom, the plain resize.
+  // The snapshot is taken synchronously in the click, before the column moves
+  // or the canvas resizes; the refit is camera-only and writes no store and no
+  // URL (the camera is not URL state). Below the desktop breakpoint (the phone
+  // embed exit) the toggle keeps the plain resize.
+  interface SidebarCameraSnapshot {
+    /** The committed target, kept only when the live camera showed it. */
+    readonly target: CameraTarget | null;
+    /** The live camera at the click. */
+    readonly camera: CameraState;
+  }
+  const snapshotSidebarCamera = (): SidebarCameraSnapshot => {
+    const committed = window.matchMedia(SIDEBAR_DESKTOP_QUERY).matches
+      ? committedCameraTarget()
+      : null;
+    const showsCommitted = committed !== null && cameraMatchesTarget(map, committed);
+    return {
+      target: showsCommitted ? committed : null,
+      camera: readCameraState(map)
+    };
+  };
+  // ONE pending timer for both controls: a re-toggle inside the delay clears
+  // it, and its own snapshot decides (the resizeTimer pattern below).
+  let sidebarRefitTimer: number | null = null;
+  const resizeAfterSidebarToggle = (snapshot: SidebarCameraSnapshot): void => {
+    if (sidebarRefitTimer !== null) window.clearTimeout(sidebarRefitTimer);
+    // Allow the CSS grid transition to settle before resizing the map. The
+    // 220 ms delay matches the vanilla baseline; it is kept under reduced
+    // motion too, where the transition itself is instant (a known mismatch,
+    // left as it is by M8).
+    sidebarRefitTimer = window.setTimeout(() => {
+      sidebarRefitTimer = null;
+      map.resize();
+      const { target, camera } = snapshot;
+      // A pan, zoom or pitch during the transition cancels the refit.
+      if (target !== null && cameraStateUnchanged(map, camera)) {
+        fitCameraTarget(map, target, !prefersReducedMotion());
+      }
+    }, 220);
+  };
+
   const collapseBtn = document.getElementById('sidebar-collapse');
   if (collapseBtn) {
     collapseBtn.addEventListener('click', () => {
+      const snapshot = snapshotSidebarCamera();
       const app = document.getElementById('app');
       if (app) app.classList.add('sidebar-collapsed');
+      // An explicit desktop choice (DR-139): the live preference first, then
+      // the write, so the URL carries `sidebar=closed` (replaceState, R5 a).
+      STATE.desktopSidebarClosed = true;
+      pushUrl();
       document.getElementById('sidebar-expand')?.focus();
-      // Allow the CSS grid transition to settle before resizing the
-      // map. The 220 ms delay matches the vanilla baseline.
-      window.setTimeout(() => {
-        map.resize();
-      }, 220);
+      resizeAfterSidebarToggle(snapshot);
     });
   }
 
   const expandBtn = document.getElementById('sidebar-expand');
   if (expandBtn) {
     expandBtn.addEventListener('click', () => {
+      const snapshot = snapshotSidebarCamera();
       const app = document.getElementById('app');
       if (app) app.classList.remove('sidebar-collapsed', 'embed');
       if (!window.matchMedia('(max-width: 720px)').matches) collapseBtn?.focus();
@@ -1253,6 +1440,9 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
       // the full chrome's host is the Brief head. Idempotent (Codex
       // S2/E1 integration finding 2).
       ensureBriefHeadTribalAction();
+      // Expanding also opens the desktop preference, so the write below
+      // drops `sidebar=` (DR-139); the embed exit opens with the key absent.
+      STATE.desktopSidebarClosed = false;
       pushUrl();
       refreshLayersStudioEntry();
       onStudioRouteNeeded?.(getStudioRoute(), 'push');
@@ -1260,9 +1450,7 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
       // at peek (the ratified embed-exit path, D-0.7.0-017); a desktop
       // expand is a no-op inside the helper.
       revealSheetAtPeek();
-      window.setTimeout(() => {
-        map.resize();
-      }, 220);
+      resizeAfterSidebarToggle(snapshot);
     });
   }
 
@@ -1275,6 +1463,27 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
       map.resize();
       resizeTimer = null;
     }, 150);
+  });
+
+  // The desktop sidebar preference across the breakpoint (D1 M7, S2; F5).
+  // A boot below it preserves `sidebar=` without applying it; the FIRST
+  // widening applies the live preference once (the one-shot widen precedent
+  // at main.ts's Fire 3D gate). After that the column follows only explicit
+  // choices, so they survive repeated crossings. Applying writes nothing.
+  const desktopSidebar = window.matchMedia(SIDEBAR_DESKTOP_QUERY);
+  if (!desktopSidebar.matches) {
+    const onWiden = (): void => {
+      if (!desktopSidebar.matches) return;
+      desktopSidebar.removeEventListener('change', onWiden);
+      applyDesktopSidebarPreference();
+    };
+    desktopSidebar.addEventListener('change', onWiden);
+  }
+  // A document restored from the back-forward cache may have missed a
+  // widening while it was frozen: reconcile the column with the LIVE
+  // preference (never with the restored URL, and never with a write).
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) applyDesktopSidebarPreference();
   });
 }
 
@@ -1297,6 +1506,14 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
 function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   const params = parseUrlParams();
   STATE.embed = params.embed;
+  // Seed the desktop sidebar preference FIRST (D1 M7, S2): the store seeds
+  // below can each fire a canonical write through listeners registered
+  // before this function runs, and every write must carry the preference.
+  // An embed has already folded it to open. The inline bootstrap in
+  // index.html applied the same state before first paint; this re-applies
+  // it idempotently at desktop width and leaves a phone untouched.
+  STATE.desktopSidebarClosed = params.sidebarClosed;
+  applyDesktopSidebarPreference();
 
   // Seed the view mode BEFORE the first pushUrl below (selectRegion syncs
   // the URL, and the URL must carry the derived mode from its first write).
@@ -1546,6 +1763,15 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
   let studioModule: typeof import('./island/layers-studio') | null = null;
   let studioPromise: Promise<typeof import('./island/layers-studio')> | null = null;
   let studioOpener: HTMLElement | null = null;
+  let releaseStudioTabTrap: (() => void) | null = null;
+  let releaseStudioEscape: (() => void) | null = null;
+  // DDM-P1-T10: the same createChunkLoader pattern loadIsland uses above,
+  // so a studio chunk that failed once retries a LATER call under a new
+  // `retry=<n>` url instead of replaying the same cached rejection.
+  const loadLayersStudioChunk = createChunkLoader(
+    () => import('./island/layers-studio'),
+    import.meta.url
+  );
 
   const restoreLayersStudioFocus = (opener: HTMLElement | null): void => {
     if (opener?.isConnected) {
@@ -1558,8 +1784,44 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
     mapContainer.focus({ preventScroll: true });
   };
 
+  // found-012: the LAYERS entry's held-chunk feedback. Set synchronously
+  // from `syncStudioRoute`, itself called synchronously from
+  // `enterStudio`'s `notify('push')`, so it paints within one frame of the
+  // press instead of the 2.4 to 3.6 s of recorded silence. Mirrors
+  // view-shell.ts's PLACE equivalent; kept separate (not shared) because
+  // the two doors already keep independent open paths throughout this file
+  // and view-shell.ts.
+  const markLayersStudioEntryPending = (el: HTMLElement | null): void => {
+    if (!el) return;
+    el.setAttribute('aria-busy', 'true');
+    el.classList.add('studio-entry-pending');
+    if (!el.querySelector('.studio-entry-pending-spinner')) {
+      const spinner = document.createElement('span');
+      spinner.className = 'impact-spinner studio-entry-pending-spinner';
+      spinner.setAttribute('aria-hidden', 'true');
+      el.appendChild(spinner);
+    }
+    let status = document.getElementById('layers-studio-entry-status');
+    if (!status) {
+      status = document.createElement('p');
+      status.id = 'layers-studio-entry-status';
+      status.className = 'sr-only';
+      status.setAttribute('role', 'status');
+      status.setAttribute('aria-live', 'polite');
+      document.body.appendChild(status);
+    }
+    status.textContent = 'Opening the LAYERS studio.';
+  };
+
+  const clearLayersStudioEntryPending = (el: HTMLElement | null): void => {
+    if (!el) return;
+    el.removeAttribute('aria-busy');
+    el.classList.remove('studio-entry-pending');
+    el.querySelector('.studio-entry-pending-spinner')?.remove();
+  };
+
   const loadStudio = (root: HTMLElement): void => {
-    const promise = studioPromise ?? import('./island/layers-studio');
+    const promise = studioPromise ?? loadLayersStudioChunk();
     studioPromise = promise;
     // The search half is loaded and caught on its own (DDM-P1-T04), so the
     // failure panel below is reached only by the studio chunk's own
@@ -1584,6 +1846,7 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
         ) {
           return;
         }
+        clearLayersStudioEntryPending(studioOpener);
         const search = searchModule?.buildSearchWiring(map, {
           permittedKinds: ['layer'],
           placeholder: 'Search layers'
@@ -1599,6 +1862,7 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
           !isPhysicallyFramed() &&
           studioRoot === root
         ) {
+          clearLayersStudioEntryPending(studioOpener);
           renderStudioLoadFailure(root, 'layers-studio-failure-heading');
         }
       });
@@ -1627,6 +1891,15 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
       if (studioRoot) {
         const opener = studioOpener;
         studioOpener = null;
+        clearLayersStudioEntryPending(opener);
+        if (releaseStudioTabTrap) {
+          releaseStudioTabTrap();
+          releaseStudioTabTrap = null;
+        }
+        if (releaseStudioEscape) {
+          releaseStudioEscape();
+          releaseStudioEscape = null;
+        }
         if (studioModule) studioModule.unmountLayersStudio(studioRoot);
         studioRoot.remove();
         studioRoot = null;
@@ -1639,6 +1912,9 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
       studioRoot = document.createElement('div');
       studioRoot.id = 'layers-studio-root';
       document.body.appendChild(studioRoot);
+      releaseStudioTabTrap = trapStudioTabFocus(studioRoot);
+      releaseStudioEscape = bindStudioEscape(studioRoot, '.layers-studio-back', backToMap);
+      markLayersStudioEntryPending(studioOpener);
     }
     const root = studioRoot;
     loadStudio(root);
@@ -1672,6 +1948,9 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
   // `layers=` list (D-0.7.0-044).
   onFramingChange(() => {
     syncRegionSelect();
+    // The door follows the camera (D1 M4, found-025): hide it the instant a
+    // framing takes over, and let a later region choice bring it back.
+    updateRegionBriefingTrigger(STATE.currentRegion);
     pushUrl();
   });
   onHazardClusterChange(pushUrl);

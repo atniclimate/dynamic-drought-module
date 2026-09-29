@@ -366,8 +366,9 @@ test.describe('S2 framing= and the legacy links in the browser', () => {
     await waitForLayerSettled(page, 'states');
     const params = new URLSearchParams(await search(page));
     expect(params.get('framing')).toBeNull();
-    // With no framing active, the legacy region emission is unchanged.
-    expect(params.get('region')).toBe('washington_state');
+    // With no framing active, the legacy region emission is unchanged: it
+    // falls back to DEFAULT_REGION, national since DR-109.
+    expect(params.get('region')).toBe('national');
   });
 
   test('a region click clears the minimap framing (one camera vocabulary)', async ({
@@ -399,16 +400,17 @@ test.describe('S2 framing= and the legacy links in the browser', () => {
 
     // The national alias: still a valid region (the camera fit rides
     // REGIONS.national as always), still re-emitted as region=national,
-    // and it produces NO framing token. NOTE the deliberate staging
-    // (Codex S2 finding 1, reconciled): D-0.7.0-041's full
-    // normalization to absence waits on the bare-URL default camera,
-    // because dropping the parameter while a bare URL still boots the
-    // Washington fit would re-camera this legacy link to that retired
-    // default. That precondition still holds today: DEFAULT_REGION in
-    // src/config/regions.ts is 'washington_state' and neither syncUrl
-    // nor pushUrl normalizes region=national to absence. This assertion
-    // flips to expect region absent only when the bare-URL camera stops
-    // defaulting to Washington and the serializer drops the token.
+    // and it produces NO framing token. D-0.7.0-041's staged plan would
+    // have normalized region=national to absence once the bare-URL
+    // default stopped framing Washington; DR-109 (S30D D1, ruling R3
+    // option a) met that precondition and DECLINED the normalization:
+    // region= is written on every canonical URL, national included, so a
+    // link written after the flip stays immune to any future default
+    // change and a deliberate national choice made inside ENSO survives a
+    // reload instead of being overridden by the ENSO zoom camera. This
+    // assertion therefore does not flip to absence; DEFAULT_REGION in
+    // src/config/regions.ts is now 'national' and both syncUrl and pushUrl
+    // keep writing the token regardless.
     await gotoApp(page, '?region=national');
     await expect(regionSelect(page)).toHaveValue('region:national');
     await waitForLayerSettled(page, 'states');

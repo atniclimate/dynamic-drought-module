@@ -99,21 +99,25 @@ test.describe('DEF-2 explicit view=brief on a mobile cold load (390x844)', () =>
 test.describe('DEF-2 one-shot consumption across a desktop-to-mobile crossing', () => {
   test.use({ viewport: { width: 1100, height: 800 } });
 
-  test('desktop sidebar starts closed and can open, close, and reopen', async ({ page }) => {
+  // Changed assertion (DDM-P10-T07 part 1, C4 M1): the desktop sidebar
+  // default flipped from closed to open (index.html no longer ships
+  // `sidebar-collapsed` at boot). This case pinned the old collapsed
+  // default; it now pins the new open default while keeping the same
+  // close / reopen / reload coverage.
+  test('desktop sidebar starts open and can close, reopen, and reload back open', async ({ page }) => {
     await gotoApp(page, '?view=brief');
     const sidebar = page.locator('#sidebar');
+    const collapse = page.locator('#sidebar-collapse');
     const expand = page.locator('#sidebar-expand');
-    await expect(sidebar).toBeHidden();
-    await expand.click();
     await expect(sidebar).toBeVisible();
     await expect(page.locator('#place-studio-entry')).toBeVisible();
-    await page.locator('#sidebar-collapse').click();
+    await collapse.click();
     await expect(sidebar).toBeHidden();
     await expect(expand).toBeFocused();
     await expand.click();
     await expect(sidebar).toBeVisible();
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(sidebar).toBeHidden();
+    await expect(sidebar).toBeVisible();
   });
 
   test('a desktop ?view=brief boot spends the flag: a later crossing to mobile stays map-first closed', async ({

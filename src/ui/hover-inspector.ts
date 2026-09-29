@@ -122,6 +122,16 @@ function collectItems(map: maplibregl.Map, point: maplibregl.Point): InspectItem
   return items;
 }
 
+/**
+ * Whether the loading pill currently occupies the top-centre band
+ * (S30D D1 M10, found-018: the pill yields to nothing, and the hover
+ * inspector, which sits at the same top-centre spot, yields to it).
+ */
+function pillShowing(): boolean {
+  const indicator = document.getElementById('loading-indicator');
+  return indicator !== null && !indicator.hidden;
+}
+
 function render(el: HTMLElement, items: InspectItem[]): void {
   if (items.length === 0) {
     el.hidden = true;
@@ -150,16 +160,37 @@ export function initHoverInspector(map: maplibregl.Map): void {
 
   const flush = (): void => {
     scheduled = false;
-    if (!pending) return;
+    if (!pending || pillShowing()) return;
     render(el, collectItems(map, pending));
   };
 
   map.on('mousemove', (e) => {
     pending = e.point;
+    if (pillShowing()) {
+      el.hidden = true;
+      el.innerHTML = '';
+      return;
+    }
     if (scheduled) return;
     scheduled = true;
     window.requestAnimationFrame(flush);
   });
+
+  // The pointer can sit still while the pill appears (a mode switch, a
+  // fresh boot): watch the pill's own hidden attribute so the inspector
+  // yields the instant it shows, not only on the next mousemove.
+  const pill = document.getElementById('loading-indicator');
+  if (pill) {
+    const pillObserver = new MutationObserver(() => {
+      if (pillShowing()) {
+        el.hidden = true;
+        el.innerHTML = '';
+      } else if (pending) {
+        render(el, collectItems(map, pending));
+      }
+    });
+    pillObserver.observe(pill, { attributes: true, attributeFilter: ['hidden'] });
+  }
 
   // Leaving the map canvas clears the readout so it never lingers with a stale
   // reading once the pointer is gone.

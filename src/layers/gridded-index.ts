@@ -36,10 +36,10 @@
  * publishes the same extent in its own `info.json`:
  * `"bbox": "-128.8,24.4,-66.0,50.3"` (re-verified live on all five windows
  * 2026-09-03). That box excludes Alaska, Hawaii, Puerto Rico and the Pacific
- * territories, so the legend states the limit instead of letting an empty
- * view read as a failure. This is a coverage fact, NOT a layer state: a
- * location outside the box is not a failed fetch, and the layer never
- * repurposes `unavailable` or `no data` to express it.
+ * territories, so the legend states the limit. The layer state follows the
+ * tiles (DR-050 a, DDM-P14-T04): a view straddling the box reads live
+ * (partial), and a view wholly outside it reads unavailable, never live,
+ * because no tile there is proven (NIDIS answers 404 outside the box).
  *
  * No popups: the index color scale is baked into the tiles and they carry no
  * per-feature properties, so there is nothing to query on click. The legend
@@ -74,7 +74,12 @@ import { fetchJsonWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
 import { parseSpiWindowParam, syncSpiWindowParam } from '../state/url';
 import { showLegend, hideLegend, LEGEND_ORDER } from '../ui/legend-registry';
-import { watchRasterTiles, type RasterTileWatch } from '../util/raster-status';
+import {
+  watchRasterTiles,
+  type RasterTileOutcome,
+  type RasterTileWatch
+} from '../util/raster-status';
+import { TILE_PROOF_WATCH } from '../util/raster-proof';
 
 const LAYER_KEY = 'gridded-index';
 const SOURCE_ID = 'gridded-index';
@@ -186,6 +191,21 @@ let currentSlug: string = DEFAULT_PRODUCT;
 
 /** The tile-load honesty watcher (util/raster-status.ts); null when inactive. */
 let tileWatch: RasterTileWatch | null = null;
+/** Its latest verdict on the source on the map; null until a cycle ends. */
+let tileVerdict: RasterTileOutcome | null = null;
+
+/**
+ * A rebuilt source is a fresh evidence slate: the watcher's, the verdict's,
+ * and the pill's. While the layer is active the pill reads loading until the
+ * new source proves a tile, so the previous product's verdict never speaks
+ * for the new one (DDM-P14-T04, found-001).
+ */
+function resetTileProof(): void {
+  tileVerdict = null;
+  if (tileWatch === null) return;
+  tileWatch.reset();
+  registry.setStatus(LAYER_KEY, 'loading');
+}
 
 /**
  * What one product's `info.json` says. The published contract is not uniform:
@@ -436,31 +456,53 @@ function applyProductInfo(map: maplibregl.Map, slug: string): void {
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   map.removeSource(SOURCE_ID);
   addRasterSourceAndLayer(map);
-  tileWatch?.reset();
+  resetTileProof();
 }
 
 /**
- * Add the raster source and layer for the current product. Idempotent: a
- * re-activation with the source already present is a no-op (so the URL-restore
- * path cannot stack duplicates). Raster tiles load lazily through MapLibre, so
- * there is no fetch to await; status goes to `ready` and the tile watcher
- * keeps it honest afterward (degrade on repeated tile failures, heal on the
- * next successful load).
+ * Add the raster source and layer for the current product. Raster tiles load
+ * lazily through MapLibre, so there is no fetch to await, and the status stays
+ * `loading` (set by the layer controller) until tile proof decides it
+ * (DDM-P14-T04, found-001): the shared completeness watch reads `ready` when
+ * the view's tiles all load, `degraded` (live, partial) when some fail, and
+ * `error` (unavailable) when none load or none were requested, which is what a
+ * view wholly outside the CONUS box reads (NIDIS answers 404 there; DR-050 a).
+ * The valid-date sidecar does not gate it: the tiles are the layer.
+ *
+ * Idempotent: a re-activation with the source already present adds nothing (so
+ * the URL-restore path cannot stack duplicates) and keeps the watcher that has
+ * been proving that source, with its evidence, and re-reports its verdict over
+ * the controller's `loading` (loading until its first cycle ends). A rendered
+ * source whose tiles are cached emits no new tile event, so a fresh watcher
+ * would read unavailable on its deadline alone. A source this call rebuilds
+ * (a changed `spi=` window, or one dropped from the map) is proven afresh.
  */
 export async function activate(map: maplibregl.Map): Promise<void> {
   applyUrlWindow(map);
+  const kept = tileWatch !== null && map.getSource(SOURCE_ID) !== undefined;
   addRasterSourceAndLayer(map);
   // The valid date is read alongside the tiles, not before them: the raster
   // renders immediately and the legend's date stamp fills in when the sidecar
   // answers (or says it did not).
   void loadProductInfo(map);
-  tileWatch?.detach();
-  tileWatch = watchRasterTiles(map, SOURCE_ID, (state) => registry.setStatus(LAYER_KEY, state));
+  if (!kept) {
+    tileWatch?.detach();
+    tileVerdict = null;
+    tileWatch = watchRasterTiles(
+      map,
+      SOURCE_ID,
+      (state) => {
+        tileVerdict = state;
+        registry.setStatus(LAYER_KEY, state);
+      },
+      TILE_PROOF_WATCH
+    );
+  }
+  if (tileVerdict !== null) registry.setStatus(LAYER_KEY, tileVerdict);
   showLegend(LAYER_KEY, {
     order: LEGEND_ORDER.surface,
     render: (body) => renderLegendSection(map, body)
   });
-  registry.setStatus(LAYER_KEY, 'ready');
 }
 
 /** Remove the raster layer and source and hide the legend. Symmetric, safe. */
@@ -497,7 +539,7 @@ function setProduct(map: maplibregl.Map, slug: string): void {
   addRasterSourceAndLayer(map);
   // A product swap is a fresh evidence slate; old failures must not count
   // against the new template.
-  tileWatch?.reset();
+  resetTileProof();
   updateLegendLabel();
   // Each window has its own valid date (they are not equally fresh), so the
   // swap re-reads the sidecar and the previous read is abandoned.

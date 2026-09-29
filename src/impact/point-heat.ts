@@ -145,6 +145,9 @@ function parseGridGuidance(
         'NWS returned grid guidance, but none of the heat fields had a populated current or future interval.',
       ...(metadata.office ? { office: metadata.office } : {}),
       ...(metadata.gridId ? { gridId: metadata.gridId } : {}),
+      ...(metadata.gridX !== null && metadata.gridY !== null
+        ? { gridX: metadata.gridX, gridY: metadata.gridY }
+        : {}),
       ...(generatedAt ? { generatedAt } : {}),
       metrics: []
     };
@@ -153,6 +156,9 @@ function parseGridGuidance(
     status: 'ready',
     ...(metadata.office ? { office: metadata.office } : {}),
     ...(metadata.gridId ? { gridId: metadata.gridId } : {}),
+    ...(metadata.gridX !== null && metadata.gridY !== null
+      ? { gridX: metadata.gridX, gridY: metadata.gridY }
+      : {}),
     ...(generatedAt ? { generatedAt } : {}),
     metrics
   };

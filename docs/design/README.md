@@ -55,6 +55,11 @@ named path was confirmed to exist on 2026-09-01.
 - No sovereign-jurisdiction geometry is added or redistributed.
 - Tribal and Treaty representation caveats remain intact, and those outlines
   stay above the condition surfaces (`src/map/layer-order.ts`).
+  - Amended 2026-09-26 (DR-131): a water-quality criterion is quoted only where
+    the state's own designated-use layer covers the reach, never inferred from
+    an agency Tribal or Treaty polygon; every such line adds "Other standards,
+    including Tribal water quality standards, may apply"; DDM never says a
+    reading "exceeds" a standard.
 - One MapLibre map and one exclusive condition surface remain authoritative
   (`src/state/layer-controller.ts`).
 - URL-as-state, Back, reload, legacy links, `?embed=true`, and iframe operation
@@ -69,14 +74,34 @@ named path was confirmed to exist on 2026-09-01.
   boundaries (`src/config/oceans.ts`).
 - No hotspot feed, incident point feed, fire score, synthetic incident, or new
   selected-fire engine is added.
+  - An agency-published polygon product derived from hotspots with a stated
+    method (for example CWFIS Fire M3) is not a hotspot feed under this
+    line; it may be shown as a labeled estimate layer, never as an incident
+    and never counted active (DR-104, 2026-09-25).
+  - Amended 2026-09-26 (DR-128): a model smoke field drawn at the model's
+    heights is neither an incident claim nor a fire score; it is labelled model
+    guidance and its legibility over the perimeters is proven by a pixel test.
+    (Layered beneath the 2026-09-25 DR-104 note above.)
 - Repository-authored text contains no U+2014 em dash.
 
 ### Decisions
 
-- **DDM-UI-002.** `basemap=satellite` means recent NOAA imagery. Wildfire,
-  hazard-fire, and fire-risk request it only on an explicit user action, never
-  during boot or URL restoration (`src/map/satellite.ts`,
-  `src/state/basemap-store.ts`).
+- **DDM-UI-002** (amended 2026-09-25, DR-105). Recent satellite imagery is the
+  product default in every 2D mode, encoded by absence in the URL;
+  `basemap=default` records the explicit off choice and the legacy `satellite`
+  token stays valid. Each mode has its own default view with a legend in real
+  units (Drought and Wildfire GeoColor; Heat clean infrared; ENSO water vapour).
+  The Wildfire 3D scene never requests imagery: its ground is the WHP drape over
+  a greyscale dryness layer. Drought, Heat and ENSO 3D drape a cloud-free image
+  (`src/map/satellite.ts`, `src/state/basemap-store.ts`).
+  - Amended 2026-09-26 (DR-124, DR-133; layered on the 2026-09-25 DR-105
+    amendment above, which gives each mode its own default view with a legend in
+    real units): ENSO's default is GOES-West Clean IR Band 13 in degrees C; the
+    water-vapour mosaic is a console option while its legend is counts;
+    GeoColor's colour-meaning key is the real-units legend for Drought and
+    Wildfire; Heat's Band 13 comes from GOES-West alone with a viewing-geometry
+    sentence; the cloud-free 3D drape is NASA GIBS Blue Marble, August 2004,
+    stated.
 - **DDM-UI-003.** The shell, cluster service, URL sync, and region command are
   reused through named adapters rather than reimplemented per surface
   (`src/ui/island/shell.tsx`, `src/state/cluster-service.ts`).
@@ -89,6 +114,11 @@ named path was confirmed to exist on 2026-09-01.
   WFIGS perimeter source (`src/layers/nifc-fires.ts`).
 - **DDM-UI-007.** HMS smoke density renders through one cool hue and opacity;
   unknown remains explicitly unclassified (`src/layers/hms-smoke.ts`).
+  - Amended 2026-09-26 (DR-128): the HMS presentation is draped and feathered
+    from the issuer's three classes and never draws or states a height
+    (DDM-P5-T08). A separate NOAA HRRR-Smoke model volume may draw smoke at the
+    model's own heights, labelled model guidance with its run and valid time,
+    never blended with HMS and never recolouring it; two products, two clocks.
 - **DDM-UI-008.** Pinned Natural Earth 1:50m physical land and lakes supply
   presentation linework while ATNI-authored subregions stay the click geometry.
   No state or province boundaries are added (`src/config/minimap-geometry.ts`,
@@ -110,6 +140,10 @@ longer matches them: DDM-UI-001 governed EOX 2016 historical imagery, which the
 runtime no longer loads, and DDM-UI-005 deferred a 3D entry point that has
 since shipped as the governed Fire 3D context view.
 
+Amended 2026-09-26 (DR-125): EOX Sentinel-2 cloudless is served (2016 to
+2025), not retired; it is excluded as a non-government issuer, CC BY-NC-SA
+from 2018, with on-map attribution required.
+
 ## Convergence doctrine
 
 DDM is not merely a map. It is an instrument for making claims responsibly
@@ -125,6 +159,11 @@ source claim. It must not broaden the claim's meaning, time, geography,
 completeness, or certainty. `no data`, `unavailable`, `live (partial)`, and a
 verified absence remain different states. A visual summary must carry a path
 to its source, update time, qualification, and provenance.
+
+Amended 2026-09-26 (DR-132): a named display treatment that copies an issuer's
+class to neighbouring pixels up to a stated coastline (the SST coastal fill) is
+a presentation stated in the legend and reviewed like a method, never a new
+value, never a value over land, and never a product of DDM's own.
 
 ### Design for a field instrument
 
@@ -142,14 +181,29 @@ upgrades evidence, turns a representation into an incident claim, or implies a
 forecast. The reduced-motion presentation must communicate the same meaning
 without animation. Urgency comes from clear prioritization, not alarm styling.
 
+Amended 2026-09-26 (DR-092; DR-123): the committed mode's briefing emphasis is
+a tint plus a small "your mode" word, never an edge line and never a hazard
+colour; it marks the reader's mode, not a severity, and rows are never
+reordered. In the Wildfire 3D scene motion belongs to the flame edge on
+issuer-active records only; the perimeter fill holds its colour and a null
+status is static (DR-128).
+
 ### Creativity comes from truthful arrangement
 
 Creative range lives in how governed facts are framed, layered, juxtaposed,
-sequenced, and connected through interaction; it does not extend to inventing
-a severity score, blending hazard claims, implying an all-clear, telling a
-causal story, or adding a capability the sources do not provide. A novel
-arrangement succeeds when it helps a person see a truthful relationship
-sooner.
+sequenced, and connected through interaction; it does not extend to inventing a
+severity score, blending hazard claims, implying an all-clear, telling a causal
+story, or adding a capability the sources do not provide. A novel arrangement
+succeeds when it helps a person see a truthful relationship sooner. A product
+DDM computes from agency data where no agency feed exists (DR-103, 2026-09-25)
+is such an arrangement only when it is labeled as DDM's computation, its inputs
+and method are published in the technical section, it was reviewed before
+shipping, and it states no forecast, probability, causal story or blended score.
+
+Amended 2026-09-26 (DR-117, DR-129; layered after the 2026-09-25 DR-103 sentence
+above): a build-time join that labels road segments by the issuer's own hazard
+class and a sampling of an issuer raster along a perimeter edge are display
+rules over issuer values, labelled so; they compute no new claim.
 
 ### Urgency raises the standard
 

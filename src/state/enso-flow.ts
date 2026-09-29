@@ -1,3 +1,5 @@
+import { normalizeSidebarParam } from './url';
+
 /** Additive ENSO context preferences, independent of the SST date rail. */
 export type EnsoFlowKind = 'off' | 'currents' | 'wind' | 'waves';
 export type EnsoFlowInk = 'light' | 'dark';
@@ -27,6 +29,11 @@ export function writeEnsoFlowParams(params: URLSearchParams, preference: EnsoFlo
 export function syncEnsoFlowParams(preference: EnsoFlowPreference): void {
   const params = new URLSearchParams(window.location.search);
   writeEnsoFlowParams(params, preference);
+  // This writer clones the current query, so it runs the shared sidebar=
+  // normalizer like every other cloning writer (D1 M7, S3). url.ts imports
+  // this module too; the cycle is call-time only (neither module reads the
+  // other while it evaluates).
+  normalizeSidebarParam(params);
   const query = params.toString();
   window.history.replaceState(window.history.state, '', window.location.pathname + (query ? `?${query}` : ''));
 }

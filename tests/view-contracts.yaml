@@ -86,7 +86,7 @@ rows:
       drape and the structures pilot. Power is not among them, since it
       became a catalog layer on 2026-08-19 and is off unless someone asks
       for it (see the two power rows below).
-    url: '?cluster=wildfire'
+    url: '?region=washington_state&cluster=wildfire'
     stub_wildfire: true
     timeout_ms: 150000
     steps:
@@ -105,7 +105,7 @@ rows:
     description: >
       Turning the toggle off returns the flat scene and drops the parameter,
       so a share of the flat view never claims 3D.
-    url: '?cluster=wildfire&fire3d=true'
+    url: '?region=washington_state&cluster=wildfire&fire3d=true'
     stub_wildfire: true
     timeout_ms: 150000
     steps:
@@ -124,7 +124,7 @@ rows:
       Leaving the Fire view exits the scene and hides the control, but the
       preference survives in the URL and re-applies on return. This is the
       contract documented at src/state/fire3d-store.ts:8-13.
-    url: '?cluster=wildfire&fire3d=true'
+    url: '?region=washington_state&cluster=wildfire&fire3d=true'
     stub_wildfire: true
     timeout_ms: 180000
     steps:
@@ -144,7 +144,7 @@ rows:
     description: >
       An ordinary camera write must not drop an unrelated durable parameter
       (the heatday preservation idiom inside syncUrl).
-    url: '?cluster=wildfire&fire3d=true'
+    url: '?region=washington_state&cluster=wildfire&fire3d=true'
     stub_wildfire: true
     timeout_ms: 150000
     steps:
@@ -166,7 +166,7 @@ rows:
       base only; the committed display is 'custom'
       (src/state/cluster-service.ts:351) and the chrome must not claim
       otherwise.
-    url: '?layers=usdm'
+    url: '?region=washington_state&layers=usdm'
     steps: []
     expect:
       cluster_pressed: none
@@ -180,7 +180,7 @@ rows:
     description: >
       An embed has no shell chrome, so the 3D scene must carry its honesty
       note as in-map chrome instead of losing it.
-    url: '?cluster=wildfire&fire3d=true&embed=true'
+    url: '?region=washington_state&cluster=wildfire&fire3d=true&embed=true'
     stub_wildfire: true
     timeout_ms: 150000
     steps:
@@ -199,7 +199,7 @@ rows:
       Fire scene does not turn it on behind the toggle. Before 2026-08-19 it
       rode the scene's own activation and was always on there; one toggle
       now governs it everywhere.
-    url: '?cluster=wildfire'
+    url: '?region=washington_state&cluster=wildfire'
     stub_wildfire: true
     timeout_ms: 150000
     steps:
@@ -226,7 +226,7 @@ rows:
       affected: the legend is written by the power layer itself, and the
       embed chip only renders in embeds, where the layer set is fixed at
       boot and cannot change under it.
-    url: '?cluster=wildfire'
+    url: '?region=washington_state&cluster=wildfire'
     stub_wildfire: true
     timeout_ms: 180000
     steps:
@@ -246,7 +246,7 @@ rows:
       Zoomed out past the gate the layer draws nothing and says so in the
       canonical vocabulary, instead of painting a continental smear that can
       be neither read nor clicked.
-    url: '?cluster=wildfire'
+    url: '?region=washington_state&cluster=wildfire'
     stub_wildfire: true
     timeout_ms: 180000
     steps:
@@ -263,7 +263,7 @@ rows:
       The URL is the whole restorable claim: reloading a shared 3D Fire link
       returns the same committed cluster, the same scene, and the same
       pressed control.
-    url: '?cluster=wildfire&fire3d=true'
+    url: '?region=washington_state&cluster=wildfire&fire3d=true'
     stub_wildfire: true
     timeout_ms: 180000
     steps:

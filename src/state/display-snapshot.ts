@@ -10,11 +10,8 @@ import {
   requestLayerOff,
   requestLayerOnExact
 } from '../ui/layer-toggle-command';
-import {
-  getHazardCluster,
-  getOceanFraming,
-  setHazardCluster
-} from './cluster-store';
+import { getHazardCluster, getOceanFraming } from './cluster-store';
+import { restoreCommittedCluster } from './cluster-service';
 import { getMap } from './map-store';
 import {
   clearEmphasis,
@@ -278,7 +275,16 @@ export function restoreDisplaySnapshot(): DisplaySnapshot | null {
   ecoregionLevelBeforeStudio = null;
 
   syncIntent(snapshot.intentKeys);
-  setHazardCluster(snapshot.cluster, snapshot.ocean);
+  // found-011 (CODEMAP:1749): restore through the cluster service, not the
+  // raw store setter, which only notifies on a VALUE change and misses the
+  // common case where the captured cluster (often Drought, the store's
+  // ever-present default) never actually left the store even though the
+  // studio's clean-display enforcement demoted the service's OWN committed
+  // claim to 'custom' by unchecking a set-aside hazard surface. The
+  // service door forces the re-derivation a real store change would have
+  // triggered either way, so the hazard re-presses on every restore, not
+  // only when the captured cluster differs from whatever it degraded to.
+  restoreCommittedCluster(snapshot.cluster, snapshot.ocean);
   return snapshot;
 }
 

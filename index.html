@@ -15,7 +15,40 @@
        declarations live in src/styles/app.css. No third-party font request. -->
 </head>
 <body class="app-body">
-  <div id="app" class="app-shell sidebar-collapsed">
+  <div id="app" class="app-shell">
+    <script id="ddm-sidebar-boot">
+      /* D1 M7 (DDM-P10-T07, DR-139): apply the URL's chrome before the
+         sidebar below is parsed, so an embed or a desktop sidebar=closed boot
+         never paints an open column while the application module loads. A
+         classic inline script on purpose: a module script is deferred to
+         after parsing, which is the very frame this has to beat. The grammar
+         mirrors src/state/url.ts (parseEmbedParam, parseSidebarParam,
+         SIDEBAR_DESKTOP_QUERY); tests/precedence.spec.ts pins the two
+         together. The runtime (src/ui/sidebar.ts) applies the same state
+         again at boot, so a failure here only costs the early frame. */
+      (function () {
+        try {
+          var app = document.getElementById('app');
+          if (!app) return;
+          var params = new URLSearchParams(window.location.search);
+          var embed = params.get('embed');
+          if (embed === 'true' || embed === '1') {
+            app.classList.add('embed');
+            return;
+          }
+          var sidebar = params.getAll('sidebar');
+          if (
+            sidebar.length === 1 &&
+            sidebar[0] === 'closed' &&
+            window.matchMedia('(min-width: 721px)').matches
+          ) {
+            app.classList.add('sidebar-collapsed');
+          }
+        } catch (err) {
+          /* The runtime applies the same state once it boots. */
+        }
+      })();
+    </script>
 
     <aside id="sidebar" class="sidebar" aria-label="Map controls">
       <!-- The mobile bottom-sheet grabber (0.7.0 U2, D-0.7.0-017). Display
@@ -244,7 +277,7 @@
         <p>Data: OpenStreetMap · NOAA · USGS · BIA · EPA</p>
         <p class="muted">
           <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">atniclimate/dynamic-drought-module</a>
-          · v0.6.26
+          · <span id="footer-version"></span>
         </p>
       </footer>
     </aside>
@@ -286,26 +319,43 @@
              build is still a preview, and hard rule 8 keeps the embed a
              first-class surface rather than one that hides its own status. -->
         <span class="test-preview-badge">Test preview</span>
+        <!-- The desktop column's four fixed slots (S30D D1 M9; rulings R1 a
+             and R2 a; the seat table is src/config/map-chrome.ts): 1 Reset,
+             2 SAT, 3 Help with its drawer, 4 the reserved Share slot. On the
+             desktop shell the stylesheet places each by `data-map-slot` in a
+             four-row grid, so the Brief shell's Share rehost empties slot 4
+             and moves nothing. Share and Reset stay direct children in this
+             source order, which the phone rail (its `order` rules) and the
+             embed stack read unchanged. This span is slot 4's box; it
+             renders only on the desktop shell and never takes a pointer. -->
+        <span class="map-spine-reserve" data-map-slot="4" aria-hidden="true"></span>
         <!-- Stable fallback seat for the one wired Share view button. The
              desktop Brief shell rehosts this exact node; every other surface
-             returns it here beside Reset. -->
+             returns it here, into slot 4. -->
         <span id="share-btn-home" hidden></span>
-        <button id="share-btn" class="overlay-btn" aria-label="Share view" title="Copy embed-ready link to clipboard">
+        <button id="share-btn" class="overlay-btn map-cell" aria-label="Share view: the link restores region or framing, layers, mode and horizon, not the map position or an open briefing" title="The link restores region or framing, layers, mode and horizon, not the map position or an open briefing">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
           <span class="map-control-label">Share view</span>
         </button>
-        <button id="reset-btn" class="overlay-btn" aria-label="Reset map view" title="Reset to selected region bounds">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        <!-- The Reset glyph is Feather rotate-ccw, whose ink spans x 1 to 21
+             of its 24 box. The viewBox starts at x -1 so the ink box is
+             centred on the icon column (it sat 0.83 px left at 20 px). -->
+        <button id="reset-btn" class="overlay-btn map-cell" data-map-slot="1" aria-label="Reset map view" title="Reset to selected region bounds">
+          <svg viewBox="-1 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
           <span class="map-control-label">Reset</span>
         </button>
 
         <!-- Desktop seat for the satellite control (owner direction,
-             2026-08-19). The control is MapLibre's, added bottom-right in
-             src/map/init.ts and moved here by the desktop shell so the
-             three map buttons finally read as the one family the E2 ruling
-             describes. Phones and embeds keep the bottom-right seat their
+             2026-08-19): slot 2. The control is MapLibre's, added
+             bottom-right in src/map/init.ts and moved here by the desktop
+             shell. Phones and embeds keep the bottom-right seat their
              layouts were designed around. -->
-        <div id="basemap-switcher-overlay-host" class="map-overlay-seat"></div>
+        <div id="basemap-switcher-overlay-host" class="map-overlay-seat map-spine-slot" data-map-slot="2"></div>
+        <!-- Desktop seat for help and its Map information drawer: slot 3.
+             src/ui/map-information.ts moves the button and the drawer in
+             together on the desktop shell; phones and embeds keep their
+             homes beside #map-info-home below. -->
+        <div id="map-info-seat" class="map-overlay-seat map-spine-slot" data-map-slot="3"></div>
       </div>
 
       <!-- The mobile hazard rail (0.7.0 mobile shell): the quick hazard
@@ -342,9 +392,14 @@
            observation window). Since 2026-08-31 (owner direction) it also
            carries the license credits: MapLibre's compact attribution
            circle is gone, and the live per-source attribution strings
-           render in this panel's credits line instead. -->
-      <button id="map-info-btn" class="map-info-btn" type="button" aria-label="Map information" title="Map information: active view, sources, credits, and basemap" aria-controls="map-info-panel" aria-expanded="false">
+           render in this panel's credits line instead. On the desktop
+           shell (S30D D1 M9) the button and this panel move together into
+           the column's slot 3, where the button shows the word Help; the
+           span below is their phone and embed home. -->
+      <span id="map-info-home" hidden></span>
+      <button id="map-info-btn" class="map-info-btn map-cell" type="button" aria-label="Map information" title="Map information: active view, sources, credits, and basemap" aria-controls="map-info-panel" aria-expanded="false">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.4a2.7 2.7 0 1 1 3.4 2.6c-.55.18-.9.7-.9 1.28v.62"/><path d="M12 17.2h.01"/></svg>
+        <span class="map-cell-label">Help</span>
       </button>
 
       <section id="map-info-panel" class="map-info-panel" role="region" aria-labelledby="map-info-title" tabindex="-1" hidden>
@@ -363,6 +418,7 @@
         </div>
       </section>
 
+      <div id="copy-toast-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
       <div id="copy-toast" class="copy-toast" hidden>Link copied to clipboard</div>
 
       <!-- Shared bottom overlay dock (H2, 0.6.2): notices and the corner

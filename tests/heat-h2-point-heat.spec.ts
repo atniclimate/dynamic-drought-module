@@ -29,12 +29,14 @@ import type {
   BoundarySelectionContext,
   PointHeatBriefing
 } from '../src/impact/types';
+import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
 import {
   gotoApp,
   layerCheckbox,
   layerPill,
   stubCpcSeasonalTempOutlook,
-  stubHeatRiskCatalog as stubHeatRiskCatalogShared
+  stubHeatRiskCatalog as stubHeatRiskCatalogShared,
+  waitForLayerSettled
 } from './helpers';
 
 /**
@@ -105,7 +107,9 @@ const POINT_PAYLOAD = {
     observationStations: STATIONS_URL,
     forecast: FORECAST_URL,
     cwa: 'TOP',
-    gridId: 'TOP'
+    gridId: 'TOP',
+    gridX: 31,
+    gridY: 80
   }
 };
 
@@ -185,9 +189,16 @@ const OBSERVATION_PAYLOAD = {
 
 const FORECAST_PAYLOAD = {
   properties: {
+    // Real api.weather.gov gridpoint forecast fields (DDM-P2-T11 M2b): the
+    // product's own issue time and each period's own span, so a claim built
+    // from this fixture can state a product date rather than only a fetch
+    // date.
+    updateTime: '2026-07-29T11:00:00+00:00',
     periods: [
       {
         name: 'This Afternoon',
+        startTime: '2026-07-29T12:00:00-06:00',
+        endTime: '2026-07-29T18:00:00-06:00',
         temperature: 91,
         temperatureUnit: 'F',
         shortForecast: 'Sunny'
@@ -605,9 +616,15 @@ test.describe('H2 critical-first surfaces', () => {
     await expect(pointHeat.locator('.point-heat-station')).toContainText(
       'Near Station'
     );
-    const openInterval = pointHeat
-      .locator('.point-heat-series[open] time')
-      .first();
+    // M19: every NWS grid guidance disclosure starts closed, so the series
+    // this case reads from must be opened first (a reader action) rather
+    // than assumed to be the panel's own default-open choice.
+    const heatIndexSeries = pointHeat.locator('.point-heat-series', {
+      hasText: 'Heat index'
+    });
+    await heatIndexSeries.locator('summary').click();
+    await expect(heatIndexSeries).toHaveAttribute('open', '');
+    const openInterval = heatIndexSeries.locator('time').first();
     await expect(openInterval).toHaveAttribute(
       'title',
       '2026-07-30T12:00:00+00:00/PT3H'
@@ -617,6 +634,27 @@ test.describe('H2 critical-first surfaces', () => {
     await expect(
       page.locator('#sheet-report .impact-capability-unavailable')
     ).toHaveCount(0);
+  });
+
+  test('the grid identity line names the NWS office and grid in words', async ({
+    page
+  }) => {
+    await page.clock.setFixedTime('2026-07-29T12:30:00+00:00');
+    await stubBrowserNwsHeat(page);
+    await gotoApp(page, '?select=state:WA');
+
+    const pointHeat = page.locator(
+      '#impact-panel .point-heat[aria-label="Heat at selected point"]'
+    );
+    await expect(pointHeat).toBeVisible();
+    const identity = pointHeat.locator(
+      '.point-heat-card[aria-label="NWS grid guidance"] .point-heat-meta'
+    );
+    // found-023: the office and grid are named in words, never joined by a
+    // bare slash that a reader could mistake for a time zone ('TOP / TOP');
+    // the grid is its cell (the points gridX, gridY), not the office again.
+    await expect(identity).toHaveText('NWS office TOP, grid 31,80');
+    await expect(identity).not.toHaveText(/^[A-Z]+ \/ [A-Z]+$/);
   });
 
   test('embed report exposes the same point heat model without adding URL state', async ({
@@ -764,7 +802,7 @@ test.describe('H2 critical-first surfaces', () => {
       }
     });
     await stubBrowserNwsHeat(page);
-    await gotoApp(page, '?view=console');
+    await gotoApp(page, '?region=washington_state&view=console');
 
     const trigger = page.locator('#region-briefing-btn');
     await trigger.click();
@@ -1095,6 +1133,48 @@ test.describe('H2 near-term HeatRisk claim independent of the map layer (DR-014 
     expect(receipt.identifyCalls.length).toBe(CATALOG_TIMES.length + 1);
   });
 
+  test('with HeatRisk on day 4, every heat claim states the product and valid time it read', async ({
+    page
+  }) => {
+    await stubBrowserNwsHeat(page);
+    await stubHeatRiskCatalog(page);
+    await gotoApp(
+      page,
+      '?embed=true&view=console&layers=heatrisk&heatday=4&select=state:WA'
+    );
+    await expect(layerPill(page, 'heatrisk')).toHaveText('live');
+
+    const heatClaim = page.locator(
+      '#impact-panel .impact-claim-classified',
+      { hasText: 'HeatRisk (Experimental)' }
+    );
+    await expect(heatClaim).toContainText(
+      'value 3, Major, at the selected point for Washington'
+    );
+    await expect(heatClaim).toContainText(
+      'Valid Jul 31, 2026, 12:00 UTC to Aug 1, 2026, 12:00 UTC'
+    );
+
+    // DR-091 (DDM-P2-T11 M2b): every claim in the Heat nearTerm cell (the
+    // only cell HeatRisk and the NWS point forecast may fill, matrix.ts
+    // LANE_PLACEMENT) states the product date it read, through the ONE
+    // shared date line every claim carries (claimDateLine,
+    // src/impact/evidence.ts). A retrieval date alone ("Retrieved ...") only
+    // proves DDM fetched something at some moment; it is not a claim about
+    // when the product it read was itself valid, issued or published, so a
+    // claim that reads a product must show one of those, not Retrieved alone.
+    const cell = page.locator(
+      '.impact-hazard[data-horizon="nearTerm"][data-hazard="heat"]'
+    );
+    const claims = cell.locator('.impact-claim');
+    const claimCount = await claims.count();
+    expect(claimCount).toBeGreaterThan(0);
+    for (let i = 0; i < claimCount; i += 1) {
+      await expect(claims.nth(i).locator('.impact-claim-date')).toHaveText(
+        /^(Valid|Issued|Published) /
+      );
+    }
+  });
 });
 
 test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
@@ -1221,7 +1301,25 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
     page
   }) => {
     await stubBrowserNwsHeat(page);
-    await gotoApp(page, '?view=console&cluster=heat&horizon=season-ahead');
+    // FLIPPED 2026-09-27 (D1 M6, found-009): the deep link this case used,
+    // `?view=console&cluster=heat&horizon=season-ahead`, now boots on
+    // Current Conditions (src/state/url.ts's resolveHorizonForCluster;
+    // pinned by tests/precedence.spec.ts row A6), where HeatRisk is dated
+    // and the time bar shows. The one route left to Extreme Heat at Long
+    // Range is in session: Drought at Long Range, then Extreme Heat, which
+    // keeps the committed horizon (the designed empty-recipe caveat). Every
+    // assertion below is unchanged; only the route in is new. The CPC
+    // Drought Outlook the Long Range step shows is answered locally.
+    await stubCpcDroughtOutlook(page);
+    await gotoApp(page, '?view=console');
+    const longRange = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
+    await longRange.click();
+    await expect(longRange).toHaveAttribute('aria-pressed', 'true');
+    await waitForLayerSettled(page, 'drought');
+    await page.locator('.shell-cluster-btn[data-cluster="heat"]').click();
+    await expect(
+      page.locator('.shell-cluster-btn[data-cluster="heat"]')
+    ).toHaveAttribute('aria-pressed', 'true');
 
     // The map recipe for heat/season-ahead stays empty (clusters.ts is
     // untouched by this task): no dated product is displayed, and the chip

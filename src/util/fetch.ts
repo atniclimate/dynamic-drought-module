@@ -222,25 +222,46 @@ interface SharedJsonRequest {
 const sharedJsonRequests = new Map<string, SharedJsonRequest>();
 
 /**
- * How many shared transports are in flight right now (DR-052 follow-up, the
- * boot-idle seam). A fulfilled entry stays in `sharedJsonRequests` for the
- * page lifetime by design, so "the map is empty" can never mean "nothing is
- * pending" after the first success; this counter can. It rises when a
- * transport is created and falls when its promise settles either way,
- * including an abort from `invalidateSharedJsonRequest`, and never counts a
- * cached fulfilled entry.
+ * Which shared transports are in flight right now, and how many entries per
+ * key (DR-052 follow-up, the boot-idle seam; DDM-P1-T09 step 2). A fulfilled
+ * entry stays in `sharedJsonRequests` for the page lifetime by design, so
+ * "the map is empty" can never mean "nothing is pending" after the first
+ * success; this set can. It is keyed on the in-flight ENTRY object, not the
+ * key string, because `invalidateSharedJsonRequest` plus an immediate
+ * re-request can leave two in-flight entries under one key: deleting by
+ * string on the first settle would under-count the second. An entry is
+ * added when its transport is created and removed exactly once, when its
+ * promise settles either way (success, failure, timeout, or an abort from
+ * `invalidateSharedJsonRequest`); the removal is a `Map.delete` on the
+ * entry's own identity, so a caller that accidentally settled the same entry
+ * twice is a no-op the second time rather than an undercount hidden by a
+ * clamp.
  */
-let pendingSharedTransports = 0;
+const pendingSharedTransportEntries = new Map<SharedJsonRequest, string>();
 const sharedTransportListeners = new Set<() => void>();
 
-function settleSharedTransport(): void {
-  pendingSharedTransports = Math.max(0, pendingSharedTransports - 1);
+function settleSharedTransport(entry: SharedJsonRequest): void {
+  if (!pendingSharedTransportEntries.delete(entry)) return;
   for (const listener of sharedTransportListeners) listener();
 }
 
 /** The number of shared JSON transports still in flight. */
 export function pendingSharedTransportCount(): number {
-  return pendingSharedTransports;
+  return pendingSharedTransportEntries.size;
+}
+
+/**
+ * The pending shared transport keys right now, each with the count of
+ * in-flight entries under it (normally 1; 2 only in the invalidate-then-
+ * re-request window). Read-only: a caller cannot reach the tracker's state
+ * through the returned object.
+ */
+export function pendingSharedTransportKeys(): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const key of pendingSharedTransportEntries.values()) {
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
 }
 
 /**
@@ -291,7 +312,7 @@ export function fetchSharedJsonWithBudget(
       controller,
       consumers: 0,
     };
-    pendingSharedTransports += 1;
+    pendingSharedTransportEntries.set(next, key);
     next.promise = fetchJsonWithBudget(
       url,
       opts,
@@ -300,7 +321,7 @@ export function fetchSharedJsonWithBudget(
     ).then(
       (value) => {
         next.controller = null;
-        settleSharedTransport();
+        settleSharedTransport(next);
         return value;
       },
       (error: unknown) => {
@@ -308,7 +329,7 @@ export function fetchSharedJsonWithBudget(
           sharedJsonRequests.delete(key);
         }
         next.controller = null;
-        settleSharedTransport();
+        settleSharedTransport(next);
         throw error;
       },
     );

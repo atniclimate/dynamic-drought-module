@@ -37,9 +37,9 @@ test.describe('URL legacy links and tolerant reading', () => {
   test('an unknown region value falls back to the default region (policy rule 2)', async ({ page }) => {
     await gotoApp(page, '?region=atlantis');
 
-    // Unknown region resolves to DEFAULT_REGION (washington_state), never
+    // Unknown region resolves to DEFAULT_REGION (national, DR-109), never
     // a blank map, and no phantom region button is invented.
-    await expect(regionSelect(page)).toHaveValue('region:washington_state');
+    await expect(regionSelect(page)).toHaveValue('region:national');
     await expect(regionButton(page, 'atlantis')).toHaveCount(0);
   });
 
@@ -149,7 +149,8 @@ test.describe('URL legacy links and tolerant reading', () => {
     // `select` is a one-shot deep-link command; a malformed value parses
     // to null and is skipped, and the app boots normally.
     await gotoApp(page, '?select=garbage');
-    await expect(regionSelect(page)).toHaveValue('region:washington_state');
+    // DR-109: falls back to the national default, not Washington.
+    await expect(regionSelect(page)).toHaveValue('region:national');
   });
 
   test('the one-shot select parameter is not re-emitted into the URL (policy rule 8)', async ({ page }) => {

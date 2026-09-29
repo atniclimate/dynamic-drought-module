@@ -30,12 +30,48 @@
  * The named exports are a frozen cross-module contract; do not rename them.
  */
 
+import { watchDesktopMapSeat } from './map-control-seat';
+
 /**
  * Map of in-flight load tokens to their text. Insertion order is preserved
  * by JavaScript Maps, so iterating `.values()` and keeping the final value
  * yields the most-recently-added pending text.
  */
 const PENDING_LOADS = new Map<number, string>();
+
+/**
+ * The toast's seat (S30D D1 M10; register found-018; design record
+ * interface-chrome-popups-text.md section 2.5's "found-018" note): on the
+ * desktop shell, outside an embed, the copy toast moves into the bottom
+ * dock as a notice, because the top-centre band belongs to the pill alone
+ * (the pill yields to nothing) and today the toast's own top-centre
+ * position competed with it and with the hover inspector at the same
+ * spot. The SAME node moves (never rebuilt), watched lazily so a page
+ * with no toast yet never touches the DOM for it, and it is a `let` the
+ * module keeps rather than a static index.html marker: `#copy-toast`
+ * already has exactly one home in the markup, so the watcher reads
+ * that home once instead of asking index.html to declare a second one.
+ */
+let toastSeatWatched = false;
+function watchToastSeat(): void {
+  if (toastSeatWatched) return;
+  toastSeatWatched = true;
+  const toast = document.getElementById('copy-toast');
+  const notices = document.getElementById('map-notices');
+  const home = toast?.parentElement ?? null;
+  if (!toast || !notices || !home) return;
+  // Out-of-flow (position: absolute, an explicit z-index): where among its
+  // siblings it sits does not change what is visible, so returning it home
+  // is just "back in that parent" with no ordering to preserve.
+  watchDesktopMapSeat({
+    node: toast,
+    host: notices,
+    home,
+    placeHome: () => {
+      if (toast.parentElement !== home) home.appendChild(toast);
+    }
+  });
+}
 
 /**
  * Monotonic token counter. The first token returned is `1`; tokens are
@@ -73,6 +109,26 @@ export function hideLoading(token: number | null | undefined): void {
 }
 
 /**
+ * The toast's announcement (S30D D1 M13 repair; register found-017): a
+ * dedicated visually hidden status region (`#copy-toast-status`, class
+ * `sr-only`, index.html near :421) exists in the DOM from boot and is
+ * never hidden, so a screen reader has already found it before the first
+ * Share press. `#copy-toast` itself carries no `role` or `aria-live`; the
+ * region is cleared first, then the message is written on the next
+ * microtask, so a repeated identical message (Share pressed twice in a
+ * row) is still a text mutation and still announced. One announcement per
+ * toast, never two.
+ */
+function announceToastStatus(message: string): void {
+  const status = document.getElementById('copy-toast-status');
+  if (!status) return;
+  status.textContent = '';
+  queueMicrotask(() => {
+    status.textContent = message;
+  });
+}
+
+/**
  * Show the toast element with `message` for ~1700 ms, then fade out over
  * 250 ms and set `hidden = true`. Forces a reflow before adding the
  * `.visible` class so the CSS transition runs from the hidden state on
@@ -83,8 +139,10 @@ export function hideLoading(token: number | null | undefined): void {
  * helper can be called unconditionally during boot wiring.
  */
 export function showToast(message: string): void {
+  watchToastSeat();
   const el = document.getElementById('copy-toast');
   if (!el) return;
+  announceToastStatus(message);
   el.textContent = message;
   el.hidden = false;
   // Force reflow so the class transition runs from the hidden state.

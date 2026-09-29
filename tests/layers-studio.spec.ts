@@ -142,4 +142,40 @@ test.describe('minimal LAYERS studio', () => {
     await expect(page.locator('#panel-layers')).toBeVisible();
     expect(new URLSearchParams(await search(page)).get('view')).toBe('console');
   });
+
+  // found-013 (register key: found-013; D1 M18): a Water & Snow station
+  // press used to fly the camera and open the station's popup UNDERNEATH
+  // the full-screen studio overlay, so nothing visible happened. The
+  // curated Ice Harbor Dam station renders without any live network (the
+  // national default's viewport exceeds the discovery area cap, so
+  // src/config/station-registry.ts's discoverStationsForViewport returns
+  // "zoom-in" before issuing any fetch; the curated seed still renders).
+  test('a Water & Snow station press closes the studio and frames the station with its popup open', async ({
+    page
+  }) => {
+    // deriveViewMode (src/state/view-mode.ts) sends a bare `layers=` URL to
+    // CONSOLE, whose surface has no on-screen studio door (#layers-studio-entry
+    // lives only in #brief-display, the Brief surface); an explicit
+    // view=brief keeps the door visible, matching every other case in this
+    // file that opens the studio by pressing it.
+    await gotoApp(page, '?view=brief&layers=telemetry');
+
+    await page.locator('#layers-studio-entry').click();
+    await expect(page.locator(STUDIO)).toBeVisible();
+
+    await page.locator('#telemetry-reveal').click();
+    await page
+      .locator('.telemetry-item', { hasText: 'Ice Harbor Dam' })
+      .click();
+
+    // The visible response: the studio is gone (never merely covered by
+    // it), the station's own marker exists, and its popup is open and
+    // named for the pressed station, not silent.
+    await expect(page.locator(STUDIO)).toHaveCount(0);
+    const marker = page.locator('.telemetry-marker[data-telemetry-station-id="ihr"]');
+    await expect(marker).toHaveCount(1);
+    const popup = page.locator('.maplibregl-popup');
+    await expect(popup).toBeVisible();
+    await expect(popup.locator('.popup-title')).toHaveText('Ice Harbor Dam');
+  });
 });

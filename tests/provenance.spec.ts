@@ -102,7 +102,7 @@ test.describe('Unit D: user-visible provenance', () => {
   test('the AIANNH popup carries every required provenance clause (desktop console)', async ({
     page
   }) => {
-    await gotoApp(page, '?view=console&layers=aiannh');
+    await gotoApp(page, '?region=washington_state&view=console&layers=aiannh');
     await waitForLayerSettled(page, 'aiannh');
 
     await clickMapForPopup(page);
@@ -112,7 +112,7 @@ test.describe('Unit D: user-visible provenance', () => {
   test('the AIAN-LAR popup carries every required clause, in embed mode', async ({ page }) => {
     // Embed is a constrained surface the design calls out: the popup is
     // the provenance carrier there (the sidebar stays collapsed by design).
-    await gotoApp(page, '?embed=true&view=console&layers=bia-reservations');
+    await gotoApp(page, '?region=washington_state&embed=true&view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
     await clickMapForPopup(page);
@@ -144,7 +144,7 @@ test.describe('Unit D: provenance survives the mobile shell (390x844)', () => {
   test('the AIANNH popup opens from a mobile map tap with the full clause set', async ({
     page
   }) => {
-    await gotoApp(page, '?view=console&layers=aiannh');
+    await gotoApp(page, '?region=washington_state&view=console&layers=aiannh');
     await waitForLayerSettled(page, 'aiannh');
 
     // The map-first mobile boot keeps the sheet closed, so the map center

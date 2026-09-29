@@ -148,3 +148,65 @@ test.describe('studio embed isolation at 400x600', () => {
     });
   }
 });
+
+/**
+ * CODEMAP:1749's sibling inferred defect to found-011 (D1 M16): a reading of
+ * `initializeStudioRoute` and the desktop expand control's mount path raised
+ * the possibility that an embed boot's studio-entry history synthesis
+ * (`synthesizeReturnEntry: false`) leaves the expand control's HELD studio
+ * route with no predecessor entry, so Back (`backToMap`'s
+ * `history.back()`) would have nowhere to go. The director's browser gate
+ * (2026-09-28, M16 repair round) ran both cases below against the base
+ * source (no M16 change applied) AND against a break that forced the
+ * inferred defect's own condition, and both passed either way: this does
+ * NOT reproduce. The two cases below now pin that measured, current,
+ * working behaviour as a non-defect (a green receipt, not a fix); neither
+ * `src/state/studio-route.ts` nor `src/ui/sidebar.ts` carries any M16
+ * change for it.
+ */
+test.describe('studio embed isolation at desktop width: the exit-then-Back round trip', () => {
+  test('Back after an embed-exit studio returns to the map view', async ({ page }) => {
+    await stubEmbedDependencies(page);
+    await gotoApp(page, '?embed=true&view=brief&layers=places&studio=place');
+    await expect(page.locator('#place-studio-root')).toHaveCount(0);
+
+    await page.locator('#sidebar-expand').click();
+    const studio = page.locator('#place-studio-root');
+    await expect(studio).toBeVisible();
+    expect(new URL(page.url()).searchParams.get('studio')).toBe('place');
+
+    await studio.getByRole('button', { name: 'Back to map' }).click();
+    await expect(studio).toHaveCount(0);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.has('studio'))
+      .toBe(false);
+  });
+
+  // The M7 carry (director, 2026-09-27 20:31 PDT; Codex's M7 diff review F3):
+  // the same round trip under an explicit sidebar= key. F3's own required
+  // change: "An embed exit must never re-emit closed on a subsequent studio
+  // write or Back." Expanding drops sidebar= regardless of its boot value
+  // (DR-139: "the embed exit opens with the key absent"), so the assertion
+  // is that Back neither strands the studio (the inferred, unreproduced
+  // defect above) nor resurrects the closed preference the boot never
+  // actually applied.
+  test('an embed exit under sidebar=closed then Back returns to the map view with sidebar= still absent', async ({
+    page
+  }) => {
+    await stubEmbedDependencies(page);
+    await gotoApp(page, '?embed=true&sidebar=closed&view=brief&layers=places&studio=place');
+    await expect(page.locator('#place-studio-root')).toHaveCount(0);
+
+    await page.locator('#sidebar-expand').click();
+    const studio = page.locator('#place-studio-root');
+    await expect(studio).toBeVisible();
+    expect(new URL(page.url()).searchParams.has('sidebar')).toBe(false);
+
+    await studio.getByRole('button', { name: 'Back to map' }).click();
+    await expect(studio).toHaveCount(0);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.has('studio'))
+      .toBe(false);
+    expect(new URL(page.url()).searchParams.has('sidebar')).toBe(false);
+  });
+});

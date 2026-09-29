@@ -93,6 +93,16 @@ let activeSourceId: string | null = null;
 let sourceGeneration = 0;
 let frames: readonly HeatRiskFrame[] = [];
 let selectedDay: number | null = null;
+/**
+ * The last day the user selected, held across a deactivate/reactivate pair
+ * within the same page session (the heatday rule). `activate()` re-applies
+ * it only when the URL carries no valid `heatday=` of its own (the URL, when
+ * present and valid, always wins). `deactivate()` deliberately does not
+ * reset this: it is what lets a HeatRisk day survive a round trip out of
+ * Heat (where `heatday=` itself is dropped from the URL, src/state/url.ts)
+ * and back, without a new cross-module store.
+ */
+let rememberedDay: number | null = null;
 let currentHasCoverage: boolean | null = null;
 let listeningForDaySelection = false;
 let coverageMoveMap: maplibregl.Map | null = null;
@@ -452,6 +462,7 @@ function renderFrame(map: maplibregl.Map, day: number): void {
   removeActiveRaster(map);
 
   selectedDay = day;
+  rememberedDay = day;
   syncHeatRiskDayParam(day);
 
   const hasCoverage = mapCenterHasCoverage(map);
@@ -640,11 +651,20 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
     if (signal.aborted) return;
     frames = advertised;
+    // The heatday rule: an explicit, valid `heatday=` on the URL always
+    // wins (a shared link is honored exactly); absent that, the day
+    // remembered from this session's last selection is re-applied (the
+    // restore-on-return half of the rule); absent both, day 1 (today).
     const requestedDay = parseHeatRiskDayParam();
-    const initialDay =
-      requestedDay !== null && requestedDay <= frames.length
+    const validRequestedDay =
+      requestedDay !== null && requestedDay >= 1 && requestedDay <= frames.length
         ? requestedDay
-        : 1;
+        : null;
+    const validRememberedDay =
+      rememberedDay !== null && rememberedDay >= 1 && rememberedDay <= frames.length
+        ? rememberedDay
+        : null;
+    const initialDay = validRequestedDay ?? validRememberedDay ?? 1;
     renderFrame(map, initialDay);
   } catch (err) {
     if (signal.aborted) return;

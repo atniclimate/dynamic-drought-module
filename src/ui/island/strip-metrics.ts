@@ -23,6 +23,7 @@ import { NADM_CATEGORIES, USDM_CATEGORIES } from '../../config/palette';
 import { getLayerDef } from '../../config/layers';
 import { classifyNifcIncidentType } from '../../config/wildfire-presentation';
 import { resolveStatusPillText } from './pill-text';
+import { isChecked } from './bridge';
 
 // ---------------------------------------------------------------------------
 // Layer keys and fill-layer ids
@@ -186,9 +187,19 @@ function pendingMetric(key: string): Metric {
  * `active || loading` tracks the checkbox intent without reaching for
  * DOM. Keeps the button semantics stable across the whole lifecycle
  * (off, loading, ready, zero, error; guardrail spec).
+ *
+ * A key whose activation failed but stays checked (a recipe member of the
+ * committed cluster, D1 M5, 2026-09-27) is not registered active; it counts
+ * as on here so its pressed tile reads the pending "unavailable" state, not
+ * "Layer off". A failed key the controller unchecked stays off.
  */
 function isLayerOn(key: string): boolean {
-  return registry.getActiveKeys().has(key) || registry.getStatus(key) === 'loading';
+  const status = registry.getStatus(key);
+  return (
+    registry.getActiveKeys().has(key) ||
+    status === 'loading' ||
+    (status === 'error' && isChecked(key))
+  );
 }
 
 export function droughtMetric(

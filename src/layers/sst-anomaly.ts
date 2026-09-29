@@ -55,7 +55,13 @@ import { timeline } from '../state/timeline';
 import { fetchBufferedWithBudget, sleepUnlessAborted } from '../util/fetch';
 import { prefersReducedMotion } from '../util/motion';
 import { prefetchAllowed, crossfadeFrames, FRAME_FADE_MS } from '../util/frame-stepper';
-import { watchRasterTiles, type RasterTileWatch } from '../util/raster-status';
+import {
+  RASTER_PROOF_DEADLINE_MS,
+  watchRasterTiles,
+  type RasterTileOutcome,
+  type RasterTileWatch
+} from '../util/raster-status';
+import { TILE_PROOF_WATCH, waitForRasterTileProof } from '../util/raster-proof';
 import { setTimeBar, clearTimeBar } from '../ui/time-bar';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
 import { showToast } from '../ui/overlay';
@@ -89,12 +95,38 @@ const RASTER_OPACITY = 0.78;
 const LOOP_DAYS = 30;
 /** Fixed loop cadence (the steady clock); the crossfade rides inside it. */
 const STEP_MS = 900;
-/** How long a frame may buffer before we advance anyway (pill shows it). */
+/** How long a frame may buffer before the loop advances anyway. The pill
+ * never follows it: the frame's own tile proof decides live (DDM-P14-T04). */
 const BUFFER_TIMEOUT_MS = 6_000;
-const DOMAINS_TIMEOUT_MS = 15_000;
+/**
+ * The DescribeDomains budget (header and body). The time axis is the frame
+ * proof and precedes ready (adapter-matrix M1, row C1), so this read now
+ * sits on the path to the pill's first terminal state; it shares the tile
+ * proof's deadline, which sits below the 10 s boot-idle budget (M8), so a
+ * stalled axis reaches its stated fallback inside a settled boot. It was
+ * 15 s while the latest frame's verdict did not wait for it.
+ */
+const DOMAINS_TIMEOUT_MS = RASTER_PROOF_DEADLINE_MS;
 
 let masterController: AbortController | null = null;
 let tileWatch: RasterTileWatch | null = null;
+/** The default frame watcher's latest verdict; null until a cycle ends. */
+let tileVerdict: RasterTileOutcome | null = null;
+/**
+ * True from the start of an activation until its time axis (DescribeDomains)
+ * has answered, failed, or been read as empty. While it holds, the default
+ * (latest) frame's verdict is recorded but never reported: the frame proof
+ * precedes ready (adapter-matrix M1, row C1), and a link that names a
+ * historical `sst=` date must not read live from the latest frame before
+ * that date is resolved (DDM-P14-T04, review finding C2).
+ */
+let axisPending = false;
+/**
+ * The stamp's statement of a link fallback: the linked `sst=` date the axis
+ * does not list, so the latest frame is shown instead. Null when there is
+ * nothing to state; cleared by the first step to a frame and on deactivate.
+ */
+let restoreNote: string | null = null;
 let pacificHintShown = false;
 
 /** Available dates (ascending YYYY-MM-DD), enumerated from DescribeDomains. */
@@ -110,12 +142,18 @@ let mountedFrames: string[] = [];
 let displayedFrame: string | null = null;
 /** The frame mounted purely as lookahead (opacity 0), or null. */
 let prefetchedFrame: string | null = null;
+/** Each dated frame is its own source, so each proves its own tiles, from the
+ * moment it is mounted (DDM-P14-T04): a lookahead frame that loaded while
+ * hidden is already proven when it is stepped to. Keyed by date. */
+const frameWatches = new Map<string, RasterTileWatch>();
+/** Each mounted frame's latest tile verdict; absent until its first cycle ends. */
+const frameVerdicts = new Map<string, RasterTileOutcome>();
 let playing = false;
 let buffering = false;
 /** Supersede counter (invariant 5). */
 let stepEpoch = 0;
 
-type SstStatus = 'loading' | 'ready' | 'error';
+type SstStatus = 'loading' | RasterTileOutcome;
 
 function reportStatus(state: SstStatus): void {
   registry.setStatus(LAYER_KEY, state);
@@ -207,6 +245,48 @@ export function parseTimeDomain(xml: string, loopDays: number = LOOP_DAYS): stri
   return all.slice(-loopDays);
 }
 
+/**
+ * What the surface shows once its time axis has answered, or failed to.
+ *
+ *   - `latest`: no date was linked, or the linked date is the newest frame,
+ *     which is the latest frame already on the map (the URL canonicalizes
+ *     to no date).
+ *   - `restore`: the linked date is an enumerated historical frame, shown by
+ *     its index; that frame's own tiles decide live.
+ *   - `fallback`: the linked date cannot be shown. Either the axis does not
+ *     list it (`outside-window`: a verified absence, outside the window or a
+ *     gap day), or there is no axis to read it against (`axis-unavailable`:
+ *     a failed, empty or unreadable enumeration). The latest frame is shown,
+ *     the link's date is cleared, and the stamp says which date that was.
+ */
+export type SstRestorePlan =
+  | { readonly kind: 'latest' }
+  | { readonly kind: 'restore'; readonly index: number }
+  | {
+      readonly kind: 'fallback';
+      readonly requested: string;
+      readonly reason: 'outside-window' | 'axis-unavailable';
+    };
+
+/** Decide the restore for a linked `sst=` date against the enumerated dates (ascending). */
+export function planSstRestore(
+  requested: string | null,
+  available: readonly string[]
+): SstRestorePlan {
+  if (requested === null) return { kind: 'latest' };
+  if (available.length === 0) return { kind: 'fallback', requested, reason: 'axis-unavailable' };
+  const index = available.indexOf(requested);
+  if (index === available.length - 1) return { kind: 'latest' };
+  if (index >= 0) return { kind: 'restore', index };
+  return { kind: 'fallback', requested, reason: 'outside-window' };
+}
+
+/** A linked date as a stamp states it: its label for a real calendar day, else verbatim. */
+function linkedDateText(iso: string): string {
+  const ms = isoToMs(iso);
+  return Number.isFinite(ms) && msToIso(ms) === iso ? dateLabel(iso) : iso;
+}
+
 // ---------------------------------------------------------------------------
 // Frame mounting
 // ---------------------------------------------------------------------------
@@ -219,6 +299,23 @@ function frameTileTemplate(date: string): string {
 function mountFrame(map: maplibregl.Map, date: string, opacity: number): void {
   const id = frameSourceId(date);
   if (!map.getSource(id)) {
+    // The frame's own tile proof, attached before the add so no tile of it
+    // can load unseen. It speaks for the surface only while it is the
+    // displayed frame; a lookahead frame records its verdict silently.
+    frameWatches.get(date)?.detach();
+    frameVerdicts.delete(date);
+    frameWatches.set(
+      date,
+      watchRasterTiles(
+        map,
+        id,
+        (state) => {
+          frameVerdicts.set(date, state);
+          if (displayedFrame === date) reportStatus(state);
+        },
+        TILE_PROOF_WATCH
+      )
+    );
     map.addSource(id, {
       type: 'raster',
       tiles: [frameTileTemplate(date)],
@@ -252,36 +349,12 @@ function mountFrame(map: maplibregl.Map, date: string, opacity: number): void {
 
 function unmountFrame(map: maplibregl.Map, date: string): void {
   const id = frameSourceId(date);
+  frameWatches.get(date)?.detach();
+  frameWatches.delete(date);
+  frameVerdicts.delete(date);
   if (map.getLayer(id)) map.removeLayer(id);
   if (map.getSource(id)) map.removeSource(id);
   mountedFrames = mountedFrames.filter((d) => d !== date);
-}
-
-/** Wait until a source's visible tiles are loaded, bounded by a timeout. */
-async function waitForSourceTiles(
-  map: maplibregl.Map,
-  sourceId: string,
-  signal: AbortSignal
-): Promise<void> {
-  if (map.isSourceLoaded(sourceId)) return;
-  await new Promise<void>((resolve) => {
-    let settled = false;
-    const finish = (): void => {
-      if (settled) return;
-      settled = true;
-      map.off('sourcedata', onData);
-      window.clearTimeout(timer);
-      resolve();
-    };
-    const onData = (): void => {
-      if (signal.aborted || map.isSourceLoaded(sourceId)) finish();
-    };
-    // The timeout keeps a dead tile edge from hanging the loop; the tile
-    // watcher's status pill carries the honest loading/error state.
-    const timer = window.setTimeout(finish, BUFFER_TIMEOUT_MS);
-    map.on('sourcedata', onData);
-    onData();
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -305,23 +378,37 @@ async function showFrame(map: maplibregl.Map, index: number): Promise<void> {
   const date = dates[clamped]!;
   const previous = displayedFrame;
   if (previous === date && dateIndex === clamped) return;
+  // A step replaces whatever the link asked for, so its fallback statement
+  // no longer describes the frame on screen.
+  restoreNote = null;
 
   // Already mounted when this frame was the lookahead: mountFrame no-ops
-  // on the source and the buffer wait below resolves immediately.
+  // on the source, the frame's own watcher already holds its verdict, and
+  // the buffer wait below resolves at once.
   mountFrame(map, date, 0);
   displayedFrame = date;
   if (prefetchedFrame === date) prefetchedFrame = null;
 
+  // The pill is this frame's own tile verdict, never the frame it fades
+  // from: loading until the frame's watcher has one. The shared wait below
+  // only paces the loop; it writes no status, so an unproven wait (a dead
+  // tile edge, a timeout) never reads live.
+  const verdict = frameVerdicts.get(date);
   buffering = true;
-  reportStatus('loading');
+  reportStatus(verdict ?? 'loading');
   dateIndex = clamped;
   installTimeBar(map);
-  await waitForSourceTiles(map, frameSourceId(date), signal);
+  await waitForRasterTileProof(
+    map,
+    frameSourceId(date),
+    signal,
+    BUFFER_TIMEOUT_MS,
+    verdict === 'ready' || verdict === 'degraded'
+  );
   if (signal.aborted || myEpoch !== stepEpoch) return;
   buffering = false;
 
   timeline.setSstDate(clamped === dates.length - 1 ? null : date);
-  reportStatus('ready');
 
   const incoming = [
     { layerId: frameSourceId(date), prop: 'raster-opacity', target: RASTER_OPACITY }
@@ -414,18 +501,60 @@ function togglePlay(map: maplibregl.Map): void {
  * stated date breaks the date-honesty rule, so the bar states the absence
  * itself rather than staying down (which read as "no dated product is
  * displayed" while a real field was on the map).
+ *
+ * `linked` is the `sst=` date the link asked for and the layer could not
+ * resolve without an axis; the detail names it, so the fallback is stated
+ * rather than silent (review finding C2). `shown` is the date of a dated
+ * frame already on the map: a prior activation restored or stepped to it
+ * and this activation's own TIME axis (the one that just failed) never ran
+ * before that frame was displayed, so a re-activation is the only way a
+ * frame can already be shown when this call's axis fails. That frame's own
+ * date IS known, so the bar stays dated and stepping alone is disabled,
+ * rather than reading the frame back as undated.
  */
-function installStampOnlyTimeBar(): void {
+function installStampOnlyTimeBar(linked: string | null = null, shown: string | null = null): void {
+  if (shown !== null) {
+    setTimeBar(LAYER_KEY, {
+      ariaLabel: 'Sea surface temperature anomaly date',
+      stamp: {
+        horizon: 'current',
+        headline: `Observed ${dateLabel(shown)}`,
+        detail:
+          "GHRSST MUR daily SST anomaly · the provider's time axis could not be read this session, so stepping stays off",
+        register: 'observed'
+      }
+    });
+    return;
+  }
   setTimeBar(LAYER_KEY, {
     ariaLabel: 'Sea surface temperature anomaly date',
     stamp: {
       horizon: 'current',
       headline: 'Latest available frame · date unavailable from the provider',
       detail:
-        'GHRSST MUR daily SST anomaly · the provider did not answer its time axis this session, so the frame date cannot be stated and stepping stays off',
+        linked === null
+          ? 'GHRSST MUR daily SST anomaly · the provider did not answer its time axis this session, so the frame date cannot be stated and stepping stays off'
+          : `GHRSST MUR daily SST anomaly · the provider's time axis could not be read this session, so the linked date, ${linkedDateText(linked)}, cannot be shown; the latest frame is shown undated and stepping stays off`,
       register: 'observed'
     }
   });
+}
+
+/** The stamp detail for a linked date the enumerated axis does not list. */
+function outsideWindowNote(linked: string): string {
+  return `GHRSST MUR daily SST anomaly · the linked date, ${linkedDateText(linked)}, is not among the ${dates.length} most recent frames the provider lists, so the latest frame is shown`;
+}
+
+/**
+ * End the wait for the time axis: from here the default (latest) frame's
+ * watcher speaks for the surface while no dated frame is displayed, and the
+ * verdict it already holds is reported now. A caller that falls back from a
+ * linked date clears `sst=` BEFORE this, so the pill never reads live while
+ * the link names a frame that is not on the map.
+ */
+function releaseLatestVerdict(): void {
+  axisPending = false;
+  if (displayedFrame === null && tileVerdict !== null) reportStatus(tileVerdict);
 }
 
 function installTimeBar(map: maplibregl.Map): void {
@@ -444,7 +573,8 @@ function installTimeBar(map: maplibregl.Map): void {
       headline: `Observed ${dateLabel(date)}`,
       detail: buffering
         ? 'GHRSST MUR daily SST anomaly · buffering tiles'
-        : 'GHRSST MUR daily SST anomaly · a measured daily field; Play replays real days',
+        : (restoreNote ??
+          'GHRSST MUR daily SST anomaly · a measured daily field; Play replays real days'),
       register: 'observed'
     },
     rail: {
@@ -471,9 +601,25 @@ function installTimeBar(map: maplibregl.Map): void {
 /**
  * Add the SST anomaly raster (the `default` latest frame for instant
  * paint), the Nino 3.4 box, and the legend, then enumerate the TIME axis
- * and stand up the loop controls. Date enumeration failing is not an
- * error for the surface itself: the current field still renders; only the
- * temporal controls stay down (an honest absence, logged).
+ * and stand up the loop controls.
+ *
+ * The time axis is the frame proof and precedes ready (adapter-matrix M1,
+ * row C1; DDM-P14-T04, review finding C2): the pill reads loading until it
+ * answers, even once the latest frame's tiles are proven, so a link that
+ * names a historical `sst=` date never reads live from the latest frame.
+ * Once it answers, a linked historical frame is shown and its own tiles
+ * decide live; otherwise the latest frame's verdict speaks. A linked date
+ * the axis does not list, or an axis that fails or cannot be read, falls
+ * back to the latest frame: `sst=` is cleared first, and the stamp states
+ * which date could not be shown. Enumeration failing is not an error for
+ * the latest frame itself: it still renders on its own tile verdict; only
+ * the temporal controls stay down (an honest absence, logged).
+ *
+ * Worst case to a terminal state (M8): a plain boot is bounded by the
+ * larger of DOMAINS_TIMEOUT_MS and the tile proof's deadline, both below
+ * the 10 s boot-idle budget. A historical link proves its own frame after
+ * the axis answers, so its worst case is the two deadlines in sequence,
+ * above that budget: the declared mismatch.
  */
 export async function activate(map: maplibregl.Map): Promise<void> {
   reportStatus('loading');
@@ -481,8 +627,12 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   if (masterController) masterController.abort();
   masterController = new AbortController();
   const signal = masterController.signal;
+  axisPending = true;
 
   try {
+    // A re-activation over the source its watcher has been proving (no
+    // deactivate between) keeps both; see the watcher below.
+    const kept = tileWatch !== null && map.getSource(SOURCE_ID) !== undefined;
     if (!map.getSource(SOURCE_ID)) {
       map.addSource(SOURCE_ID, {
         type: 'raster',
@@ -504,7 +654,13 @@ export async function activate(map: maplibregl.Map): Promise<void> {
           'raster-opacity': RASTER_OPACITY
         }
       });
-    } else {
+    } else if (displayedFrame === null) {
+      // Only while no dated frame is on screen. A re-activation over a
+      // displayed dated frame (no deactivate between) leaves the latest
+      // frame's layer as the step left it: showFrame hid it once that frame
+      // faded in, and showing it again would paint the latest imagery
+      // beneath the dated one (LATER:163). A step the re-activation aborted
+      // before its fade never hid it, so it is left showing, not forced off.
       map.setLayoutProperty(LAYER_ID, 'visibility', 'visible');
     }
 
@@ -552,8 +708,28 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       });
     }
 
-    tileWatch?.detach();
-    tileWatch = watchRasterTiles(map, SOURCE_ID, reportStatus);
+    // Tile proof for the boot-time `default` (latest) frame: live only once
+    // the view's tiles load, live (partial) when some fail, unavailable when
+    // none load or none were requested (DR-050 a). It speaks for the surface
+    // only after the time axis has answered (axisPending) and until a dated
+    // frame is displayed; that frame's own watcher (mountFrame) speaks from
+    // then on. A kept source keeps its watcher and evidence: a rendered
+    // source whose tiles are cached emits no new tile event, so a fresh
+    // watcher would read unavailable on its deadline alone. A source this
+    // call adds is proven afresh.
+    if (!kept) {
+      tileWatch?.detach();
+      tileVerdict = null;
+      tileWatch = watchRasterTiles(
+        map,
+        SOURCE_ID,
+        (state) => {
+          tileVerdict = state;
+          if (displayedFrame === null && !axisPending) reportStatus(state);
+        },
+        TILE_PROOF_WATCH
+      );
+    }
     activateEnsoFlow(map);
 
     showLegend(LAYER_KEY, {
@@ -574,9 +750,16 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       showToast('Ocean temperature anomaly is global; zoom out toward the equatorial Pacific to see the ENSO signal.');
     }
 
-    reportStatus('ready');
-    // The key can state the surface before the TIME axis resolves; the
-    // observed date follows once installTimeBar runs with real dates.
+    // No `ready` here (DDM-P14-T04, found-001): the status stays `loading`
+    // until a watcher proves the view's tiles. A re-activation over a dated
+    // frame left on the map (it stays mounted until deactivate, and an
+    // earlier axis proved it) re-reports the verdict its watcher already
+    // holds. The latest frame's verdict waits for this activation's time
+    // axis (releaseLatestVerdict). The key can state the surface before the
+    // TIME axis resolves; the observed date follows once installTimeBar runs
+    // with real dates.
+    const held = displayedFrame === null ? undefined : frameVerdicts.get(displayedFrame);
+    if (held) reportStatus(held);
     emitSstSnapshot('ready', null);
   } catch (err) {
     console.warn('[sst-anomaly] activation failed.', err);
@@ -598,33 +781,78 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     dates = parseTimeDomain(xml);
   } catch (err) {
     if (signal.aborted) return;
-    // The surface stays useful without a time axis; say so and stop here.
+    // The surface stays useful without a time axis; say so below.
     console.warn('[sst-anomaly] TIME enumeration failed; Play/step disabled this session.', err);
     dates = [];
-    installStampOnlyTimeBar();
-    return;
   }
 
-  // An empty enumeration is the same user-visible situation as a failed one:
-  // the provider's latest frame is painted with no date to state.
+  // A failed, empty or unreadable enumeration is one user-visible situation
+  // so long as no dated frame is on screen: the provider's latest frame is
+  // painted with no date to state, and a linked date cannot be resolved
+  // without an axis, so the link heals and the stamp names the date it
+  // could not show. A dated frame already on the map (kept from a prior
+  // activation; this activation's own axis just failed, before any restore
+  // of its own could run) keeps its own date and its sst=; only the stamp
+  // changes, to say the axis could not be re-read this time.
   if (dates.length === 0) {
-    installStampOnlyTimeBar();
+    if (displayedFrame !== null) {
+      installStampOnlyTimeBar(null, displayedFrame);
+      releaseLatestVerdict();
+      return;
+    }
+    const plan = planSstRestore(timeline.sstDate, dates);
+    const linked = plan.kind === 'fallback' ? plan.requested : null;
+    if (linked !== null) timeline.setSstDate(null);
+    installStampOnlyTimeBar(linked);
+    releaseLatestVerdict();
     return;
   }
   dateIndex = dates.length - 1;
 
   // URL restore: land PAUSED on the shared frame (never auto-play).
-  const urlDate = timeline.sstDate;
-  if (urlDate !== null) {
-    const idx = dates.indexOf(urlDate);
-    if (idx >= 0 && idx !== dates.length - 1) {
-      await showFrame(map, idx);
-      return; // showFrame installed the bar
-    }
-    // A date outside the window (or a gap day) falls back to the latest
-    // frame; the URL heals on the next timeline sync.
-    timeline.setSstDate(null);
+  const plan = planSstRestore(timeline.sstDate, dates);
+  if (plan.kind === 'restore') {
+    // showFrame makes the linked frame the displayed one before its first
+    // await, so that frame's own watcher speaks from here and the latest
+    // frame's verdict never does.
+    const restoring = showFrame(map, plan.index);
+    axisPending = false;
+    await restoring;
+    return; // showFrame installed the bar
   }
+  if (plan.kind === 'fallback' && displayedFrame !== null) {
+    // A changed axis no longer lists the date this activation kept on
+    // screen (only a prior, re-activated call can have put it there: this
+    // activation's own plan is either 'restore' or this 'fallback', never
+    // both, so its own restore branch above cannot have run first): step
+    // to the newest frame it does list, since the retained frame is no
+    // longer a real position on the new rail. showFrame clears restoreNote
+    // and sst= (the last index) itself, so the fallback note is written
+    // only after it resolves, and the bar is re-installed to pick it up.
+    const stepping = showFrame(map, dates.length - 1);
+    const stepGuardEpoch = stepEpoch;
+    axisPending = false;
+    await stepping;
+    // showFrame's own guard (line 408) governs everything it wrote; this
+    // activation still owns the write below, so it re-checks the same way
+    // before making it: a superseding deactivate, or a newer activate or
+    // showFrame call, must leave neither restoreNote nor the bar changed.
+    if (signal.aborted || stepGuardEpoch !== stepEpoch) return;
+    restoreNote = outsideWindowNote(plan.requested);
+    installTimeBar(map);
+    return;
+  }
+  // The newest date is the latest frame already up (the URL canonicalizes to
+  // no date). A date the axis does not list (outside the window, or a gap
+  // day) falls back to the latest frame and the stamp says so. Either way
+  // the URL heals BEFORE the latest frame's verdict is released. (A dated
+  // frame already on the map, from a re-activation, is not the latest
+  // frame, so the note is never written over it.)
+  if (plan.kind === 'fallback' && displayedFrame === null) {
+    restoreNote = outsideWindowNote(plan.requested);
+  }
+  timeline.setSstDate(null);
+  releaseLatestVerdict();
   installTimeBar(map);
 
   // Politely pre-warm the previous frame so the first step back is instant.
@@ -657,6 +885,8 @@ export function deactivate(map: maplibregl.Map): void {
   }
   tileWatch?.detach();
   tileWatch = null;
+  axisPending = false;
+  restoreNote = null;
   for (const date of [...mountedFrames]) {
     unmountFrame(map, date);
   }

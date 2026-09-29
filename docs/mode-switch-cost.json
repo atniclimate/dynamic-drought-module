@@ -829,6 +829,1524 @@
           ]
         }
       ]
+    },
+    "candidate": {
+      "label": "candidate",
+      "profile": "wa",
+      "commit": "02d97d7",
+      "recordedAt": "2026-09-27T20:04:15.382Z",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "dirty": 0,
+      "switches": [
+        {
+          "id": "drought->heat",
+          "from": "drought",
+          "to": "heat",
+          "requests": 12,
+          "dataRequests": 3,
+          "tileRequests": 9,
+          "quiescentMs": 1806,
+          "pendingAtStart": [
+            "nws-alerts",
+            "heatrisk"
+          ],
+          "counted": [
+            {
+              "url": "https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/1/query?where=prod_type+IN+%28%27Extreme+Heat+Warning%27%2C%27Exc...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/query?where=category%3D1&outFields=name%2Cidp_validtime&returnGeomet...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer?f=json",
+              "n": 1
+            }
+          ],
+          "tiles": [
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-13149614.849955441,5009377.085697312,-12523442.714...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-13149614.849955441,5635549.221409474,-12523442.714...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-13149614.849955441,6261721.357121639,-12523442.714...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-13775786.985667605,5009377.085697312,-13149614.849...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-13775786.985667605,5635549.221409474,-13149614.849...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-13775786.985667605,6261721.357121639,-13149614.849...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-14401959.12137977,5009377.085697312,-13775786.9856...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-14401959.12137977,5635549.221409474,-13775786.9856...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-14401959.12137977,6261721.357121639,-13775786.9856...",
+              "n": 1
+            }
+          ]
+        },
+        {
+          "id": "drought->wildfire",
+          "from": "drought",
+          "to": "wildfire",
+          "requests": 11,
+          "dataRequests": 11,
+          "tileRequests": 0,
+          "quiescentMs": 2029,
+          "pendingAtStart": [
+            "nifc-fires",
+            "hms-smoke"
+          ],
+          "counted": [
+            {
+              "url": "https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query",
+              "n": 9
+            },
+            {
+              "url": "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/NOAA_Satellite_Smoke_Detection_(v1)/FeatureServer/0/query?where=Start+LIKE+%272026270%25%2...",
+              "n": 1
+            },
+            {
+              "url": "https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query?where=1%3D1&outFields=attr_Inci...",
+              "n": 1
+            }
+          ],
+          "tiles": []
+        },
+        {
+          "id": "drought->enso",
+          "from": "drought",
+          "to": "enso",
+          "requests": 34,
+          "dataRequests": 2,
+          "tileRequests": 32,
+          "quiescentMs": 516,
+          "pendingAtStart": [
+            "sst-anomaly"
+          ],
+          "counted": [
+            {
+              "url": "/data/enso-indices.json",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/wmts.cgi?SERVICE=WMTS&REQUEST=DescribeDomains&VERSION=1.0.0&LAYER=GHRSST_L4_MUR_Sea_Surface_Temperature_An...",
+              "n": 1
+            }
+          ],
+          "tiles": [
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/43/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/43/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/43/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/43/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/44/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/44/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/44/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/44/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/45/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/45/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/45/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/45/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/46/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/46/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/46/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/46/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/43/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/43/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/43/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/43/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/44/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/44/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/44/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/44/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/45/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/45/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/45/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/45/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/46/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/46/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/46/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/46/22.png",
+              "n": 1
+            }
+          ]
+        },
+        {
+          "id": "heat->drought",
+          "from": "heat",
+          "to": "drought",
+          "requests": 1,
+          "dataRequests": 1,
+          "tileRequests": 0,
+          "quiescentMs": 877,
+          "pendingAtStart": [
+            "nadm-drought"
+          ],
+          "counted": [
+            {
+              "url": "https://www.ncei.noaa.gov/pub/data/nidis/geojson/na/nadm/NADM-current.geojson",
+              "n": 1
+            }
+          ],
+          "tiles": []
+        },
+        {
+          "id": "heat->wildfire",
+          "from": "heat",
+          "to": "wildfire",
+          "requests": 2,
+          "dataRequests": 2,
+          "tileRequests": 0,
+          "quiescentMs": 3177,
+          "pendingAtStart": [
+            "nifc-fires",
+            "hms-smoke"
+          ],
+          "counted": [
+            {
+              "url": "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/NOAA_Satellite_Smoke_Detection_(v1)/FeatureServer/0/query?where=Start+LIKE+%272026270%25%2...",
+              "n": 1
+            },
+            {
+              "url": "https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query?where=1%3D1&outFields=attr_Inci...",
+              "n": 1
+            }
+          ],
+          "tiles": []
+        },
+        {
+          "id": "heat->enso",
+          "from": "heat",
+          "to": "enso",
+          "requests": 33,
+          "dataRequests": 1,
+          "tileRequests": 32,
+          "quiescentMs": 520,
+          "pendingAtStart": [
+            "sst-anomaly"
+          ],
+          "counted": [
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/wmts.cgi?SERVICE=WMTS&REQUEST=DescribeDomains&VERSION=1.0.0&LAYER=GHRSST_L4_MUR_Sea_Surface_Temperature_An...",
+              "n": 1
+            }
+          ],
+          "tiles": [
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/43/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/43/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/43/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/43/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/44/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/44/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/44/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/44/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/45/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/45/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/45/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/45/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/46/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/46/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/46/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/46/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/43/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/43/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/43/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/43/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/44/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/44/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/44/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/44/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/45/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/45/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/45/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/45/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/46/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/46/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/46/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/46/22.png",
+              "n": 1
+            }
+          ]
+        },
+        {
+          "id": "wildfire->drought",
+          "from": "wildfire",
+          "to": "drought",
+          "requests": 1,
+          "dataRequests": 1,
+          "tileRequests": 0,
+          "quiescentMs": 1125,
+          "pendingAtStart": [
+            "nadm-drought"
+          ],
+          "counted": [
+            {
+              "url": "https://www.ncei.noaa.gov/pub/data/nidis/geojson/na/nadm/NADM-current.geojson",
+              "n": 1
+            }
+          ],
+          "tiles": []
+        },
+        {
+          "id": "wildfire->heat",
+          "from": "wildfire",
+          "to": "heat",
+          "requests": 12,
+          "dataRequests": 3,
+          "tileRequests": 9,
+          "quiescentMs": 1784,
+          "pendingAtStart": [
+            "nws-alerts",
+            "heatrisk"
+          ],
+          "counted": [
+            {
+              "url": "https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/1/query?where=prod_type+IN+%28%27Extreme+Heat+Warning%27%2C%27Exc...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/query?where=category%3D1&outFields=name%2Cidp_validtime&returnGeomet...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer?f=json",
+              "n": 1
+            }
+          ],
+          "tiles": [
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-13149614.849955441,5009377.085697312,-12523442.714...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-13149614.849955441,5635549.221409474,-12523442.714...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-13149614.849955441,6261721.357121639,-12523442.714...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-13775786.985667605,5009377.085697312,-13149614.849...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-13775786.985667605,5635549.221409474,-13149614.849...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-13775786.985667605,6261721.357121639,-13149614.849...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-14401959.12137977,5009377.085697312,-13775786.9856...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-14401959.12137977,5635549.221409474,-13775786.9856...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-14401959.12137977,6261721.357121639,-13775786.9856...",
+              "n": 1
+            }
+          ]
+        },
+        {
+          "id": "wildfire->enso",
+          "from": "wildfire",
+          "to": "enso",
+          "requests": 33,
+          "dataRequests": 1,
+          "tileRequests": 32,
+          "quiescentMs": 682,
+          "pendingAtStart": [
+            "sst-anomaly"
+          ],
+          "counted": [
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/wmts.cgi?SERVICE=WMTS&REQUEST=DescribeDomains&VERSION=1.0.0&LAYER=GHRSST_L4_MUR_Sea_Surface_Temperature_An...",
+              "n": 1
+            }
+          ],
+          "tiles": [
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/43/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/43/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/43/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/43/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/44/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/44/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/44/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/44/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/45/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/45/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/45/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/45/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/46/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/46/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/46/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/7/46/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/43/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/43/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/43/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/43/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/44/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/44/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/44/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/44/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/45/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/45/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/45/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/45/22.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/46/19.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/46/20.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/46/21.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/7/46/22.png",
+              "n": 1
+            }
+          ]
+        },
+        {
+          "id": "enso->drought",
+          "from": "enso",
+          "to": "drought",
+          "requests": 1,
+          "dataRequests": 1,
+          "tileRequests": 0,
+          "quiescentMs": 929,
+          "pendingAtStart": [
+            "nadm-drought"
+          ],
+          "counted": [
+            {
+              "url": "https://www.ncei.noaa.gov/pub/data/nidis/geojson/na/nadm/NADM-current.geojson",
+              "n": 1
+            }
+          ],
+          "tiles": []
+        },
+        {
+          "id": "enso->heat",
+          "from": "enso",
+          "to": "heat",
+          "requests": 12,
+          "dataRequests": 3,
+          "tileRequests": 9,
+          "quiescentMs": 1517,
+          "pendingAtStart": [
+            "nws-alerts",
+            "heatrisk"
+          ],
+          "counted": [
+            {
+              "url": "https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/1/query?where=prod_type+IN+%28%27Extreme+Heat+Warning%27%2C%27Exc...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/query?where=category%3D1&outFields=name%2Cidp_validtime&returnGeomet...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer?f=json",
+              "n": 1
+            }
+          ],
+          "tiles": [
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-13149614.849955441,5009377.085697312,-12523442.714...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-13149614.849955441,5635549.221409474,-12523442.714...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-13149614.849955441,6261721.357121639,-12523442.714...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-13775786.985667605,5009377.085697312,-13149614.849...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-13775786.985667605,5635549.221409474,-13149614.849...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-13775786.985667605,6261721.357121639,-13149614.849...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-14401959.12137977,5009377.085697312,-13775786.9856...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-14401959.12137977,5635549.221409474,-13775786.9856...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-14401959.12137977,6261721.357121639,-13775786.9856...",
+              "n": 1
+            }
+          ]
+        },
+        {
+          "id": "enso->wildfire",
+          "from": "enso",
+          "to": "wildfire",
+          "requests": 2,
+          "dataRequests": 2,
+          "tileRequests": 0,
+          "quiescentMs": 2723,
+          "pendingAtStart": [
+            "nifc-fires",
+            "hms-smoke"
+          ],
+          "counted": [
+            {
+              "url": "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/NOAA_Satellite_Smoke_Detection_(v1)/FeatureServer/0/query?where=Start+LIKE+%272026270%25%2...",
+              "n": 1
+            },
+            {
+              "url": "https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query?where=1%3D1&outFields=attr_Inci...",
+              "n": 1
+            }
+          ],
+          "tiles": []
+        }
+      ]
+    },
+    "conusBaseline": {
+      "label": "baseline",
+      "profile": "conus",
+      "commit": "02d97d7",
+      "recordedAt": "2026-09-27T20:04:15.382Z",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "dirty": 0,
+      "switches": [
+        {
+          "id": "drought->heat",
+          "from": "drought",
+          "to": "heat",
+          "requests": 15,
+          "dataRequests": 3,
+          "tileRequests": 12,
+          "quiescentMs": 1741,
+          "pendingAtStart": [
+            "nws-alerts",
+            "heatrisk"
+          ],
+          "counted": [
+            {
+              "url": "https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/1/query?where=prod_type+IN+%28%27Extreme+Heat+Warning%27%2C%27Exc...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/query?where=category%3D1&outFields=name%2Cidp_validtime&returnGeomet...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer?f=json",
+              "n": 1
+            }
+          ],
+          "tiles": [
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-10018754.171394622,0,-7514065.628545966,2504688.54...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-10018754.171394622,2504688.542848654,-7514065.6285...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-10018754.171394622,5009377.085697312,-7514065.6285...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-12523442.714243278,0,-10018754.171394622,2504688.5...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-12523442.714243278,2504688.542848654,-10018754.171...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-12523442.714243278,5009377.085697312,-10018754.171...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-15028131.257091932,0,-12523442.714243278,2504688.5...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-15028131.257091932,2504688.542848654,-12523442.714...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-15028131.257091932,5009377.085697312,-12523442.714...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-7514065.628545966,0,-5009377.085697312,2504688.542...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-7514065.628545966,2504688.542848654,-5009377.08569...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-7514065.628545966,5009377.085697312,-5009377.08569...",
+              "n": 1
+            }
+          ]
+        },
+        {
+          "id": "drought->wildfire",
+          "from": "drought",
+          "to": "wildfire",
+          "requests": 11,
+          "dataRequests": 11,
+          "tileRequests": 0,
+          "quiescentMs": 3627,
+          "pendingAtStart": [
+            "nifc-fires",
+            "hms-smoke"
+          ],
+          "counted": [
+            {
+              "url": "https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query",
+              "n": 9
+            },
+            {
+              "url": "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/NOAA_Satellite_Smoke_Detection_(v1)/FeatureServer/0/query?where=Start+LIKE+%272026270%25%2...",
+              "n": 1
+            },
+            {
+              "url": "https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query?where=1%3D1&outFields=attr_Inci...",
+              "n": 1
+            }
+          ],
+          "tiles": []
+        },
+        {
+          "id": "drought->enso",
+          "from": "drought",
+          "to": "enso",
+          "requests": 26,
+          "dataRequests": 2,
+          "tileRequests": 24,
+          "quiescentMs": 392,
+          "pendingAtStart": [
+            "sst-anomaly"
+          ],
+          "counted": [
+            {
+              "url": "/data/enso-indices.json",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/wmts.cgi?SERVICE=WMTS&REQUEST=DescribeDomains&VERSION=1.0.0&LAYER=GHRSST_L4_MUR_Sea_Surface_Temperature_An...",
+              "n": 1
+            }
+          ],
+          "tiles": [
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/5/2.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/5/3.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/5/4.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/5/5.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/6/2.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/6/3.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/6/4.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/6/5.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/7/2.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/7/3.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/7/4.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/7/5.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/5/2.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/5/3.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/5/4.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/5/5.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/6/2.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/6/3.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/6/4.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/6/5.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/7/2.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/7/3.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/7/4.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/7/5.png",
+              "n": 1
+            }
+          ]
+        },
+        {
+          "id": "heat->drought",
+          "from": "heat",
+          "to": "drought",
+          "requests": 1,
+          "dataRequests": 1,
+          "tileRequests": 0,
+          "quiescentMs": 961,
+          "pendingAtStart": [
+            "nadm-drought"
+          ],
+          "counted": [
+            {
+              "url": "https://www.ncei.noaa.gov/pub/data/nidis/geojson/na/nadm/NADM-current.geojson",
+              "n": 1
+            }
+          ],
+          "tiles": []
+        },
+        {
+          "id": "heat->wildfire",
+          "from": "heat",
+          "to": "wildfire",
+          "requests": 2,
+          "dataRequests": 2,
+          "tileRequests": 0,
+          "quiescentMs": 4174,
+          "pendingAtStart": [
+            "nifc-fires",
+            "hms-smoke"
+          ],
+          "counted": [
+            {
+              "url": "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/NOAA_Satellite_Smoke_Detection_(v1)/FeatureServer/0/query?where=Start+LIKE+%272026270%25%2...",
+              "n": 1
+            },
+            {
+              "url": "https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query?where=1%3D1&outFields=attr_Inci...",
+              "n": 1
+            }
+          ],
+          "tiles": []
+        },
+        {
+          "id": "heat->enso",
+          "from": "heat",
+          "to": "enso",
+          "requests": 25,
+          "dataRequests": 1,
+          "tileRequests": 24,
+          "quiescentMs": 485,
+          "pendingAtStart": [
+            "sst-anomaly"
+          ],
+          "counted": [
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/wmts.cgi?SERVICE=WMTS&REQUEST=DescribeDomains&VERSION=1.0.0&LAYER=GHRSST_L4_MUR_Sea_Surface_Temperature_An...",
+              "n": 1
+            }
+          ],
+          "tiles": [
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/5/2.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/5/3.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/5/4.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/5/5.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/6/2.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/6/3.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/6/4.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/6/5.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/7/2.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/7/3.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/7/4.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/7/5.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/5/2.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/5/3.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/5/4.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/5/5.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/6/2.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/6/3.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/6/4.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/6/5.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/7/2.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/7/3.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/7/4.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/7/5.png",
+              "n": 1
+            }
+          ]
+        },
+        {
+          "id": "wildfire->drought",
+          "from": "wildfire",
+          "to": "drought",
+          "requests": 1,
+          "dataRequests": 1,
+          "tileRequests": 0,
+          "quiescentMs": 822,
+          "pendingAtStart": [
+            "nadm-drought"
+          ],
+          "counted": [
+            {
+              "url": "https://www.ncei.noaa.gov/pub/data/nidis/geojson/na/nadm/NADM-current.geojson",
+              "n": 1
+            }
+          ],
+          "tiles": []
+        },
+        {
+          "id": "wildfire->heat",
+          "from": "wildfire",
+          "to": "heat",
+          "requests": 15,
+          "dataRequests": 3,
+          "tileRequests": 12,
+          "quiescentMs": 1733,
+          "pendingAtStart": [
+            "nws-alerts",
+            "heatrisk"
+          ],
+          "counted": [
+            {
+              "url": "https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/1/query?where=prod_type+IN+%28%27Extreme+Heat+Warning%27%2C%27Exc...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/query?where=category%3D1&outFields=name%2Cidp_validtime&returnGeomet...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer?f=json",
+              "n": 1
+            }
+          ],
+          "tiles": [
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-10018754.171394622,0,-7514065.628545966,2504688.54...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-10018754.171394622,2504688.542848654,-7514065.6285...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-10018754.171394622,5009377.085697312,-7514065.6285...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-12523442.714243278,0,-10018754.171394622,2504688.5...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-12523442.714243278,2504688.542848654,-10018754.171...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-12523442.714243278,5009377.085697312,-10018754.171...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-15028131.257091932,0,-12523442.714243278,2504688.5...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-15028131.257091932,2504688.542848654,-12523442.714...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-15028131.257091932,5009377.085697312,-12523442.714...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-7514065.628545966,0,-5009377.085697312,2504688.542...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-7514065.628545966,2504688.542848654,-5009377.08569...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-7514065.628545966,5009377.085697312,-5009377.08569...",
+              "n": 1
+            }
+          ]
+        },
+        {
+          "id": "wildfire->enso",
+          "from": "wildfire",
+          "to": "enso",
+          "requests": 25,
+          "dataRequests": 1,
+          "tileRequests": 24,
+          "quiescentMs": 455,
+          "pendingAtStart": [
+            "sst-anomaly"
+          ],
+          "counted": [
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/wmts.cgi?SERVICE=WMTS&REQUEST=DescribeDomains&VERSION=1.0.0&LAYER=GHRSST_L4_MUR_Sea_Surface_Temperature_An...",
+              "n": 1
+            }
+          ],
+          "tiles": [
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/5/2.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/5/3.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/5/4.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/5/5.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/6/2.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/6/3.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/6/4.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/6/5.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/7/2.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/7/3.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/7/4.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/2026-09-24/GoogleMapsCompatible_Level7/4/7/5.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/5/2.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/5/3.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/5/4.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/5/5.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/6/2.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/6/3.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/6/4.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/6/5.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/7/2.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/7/3.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/7/4.png",
+              "n": 1
+            },
+            {
+              "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies/default/default/GoogleMapsCompatible_Level7/4/7/5.png",
+              "n": 1
+            }
+          ]
+        },
+        {
+          "id": "enso->drought",
+          "from": "enso",
+          "to": "drought",
+          "requests": 1,
+          "dataRequests": 1,
+          "tileRequests": 0,
+          "quiescentMs": 866,
+          "pendingAtStart": [
+            "nadm-drought"
+          ],
+          "counted": [
+            {
+              "url": "https://www.ncei.noaa.gov/pub/data/nidis/geojson/na/nadm/NADM-current.geojson",
+              "n": 1
+            }
+          ],
+          "tiles": []
+        },
+        {
+          "id": "enso->heat",
+          "from": "enso",
+          "to": "heat",
+          "requests": 15,
+          "dataRequests": 3,
+          "tileRequests": 12,
+          "quiescentMs": 1728,
+          "pendingAtStart": [
+            "nws-alerts",
+            "heatrisk"
+          ],
+          "counted": [
+            {
+              "url": "https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/1/query?where=prod_type+IN+%28%27Extreme+Heat+Warning%27%2C%27Exc...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/query?where=category%3D1&outFields=name%2Cidp_validtime&returnGeomet...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer?f=json",
+              "n": 1
+            }
+          ],
+          "tiles": [
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-10018754.171394622,0,-7514065.628545966,2504688.54...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-10018754.171394622,2504688.542848654,-7514065.6285...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-10018754.171394622,5009377.085697312,-7514065.6285...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-12523442.714243278,0,-10018754.171394622,2504688.5...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-12523442.714243278,2504688.542848654,-10018754.171...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-12523442.714243278,5009377.085697312,-10018754.171...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-15028131.257091932,0,-12523442.714243278,2504688.5...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-15028131.257091932,2504688.542848654,-12523442.714...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-15028131.257091932,5009377.085697312,-12523442.714...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-7514065.628545966,0,-5009377.085697312,2504688.542...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-7514065.628545966,2504688.542848654,-5009377.08569...",
+              "n": 1
+            },
+            {
+              "url": "https://mapservices.weather.noaa.gov/experimental/rest/services/NWS_HeatRisk/ImageServer/exportImage?bbox=-7514065.628545966,5009377.085697312,-5009377.08569...",
+              "n": 1
+            }
+          ]
+        },
+        {
+          "id": "enso->wildfire",
+          "from": "enso",
+          "to": "wildfire",
+          "requests": 2,
+          "dataRequests": 2,
+          "tileRequests": 0,
+          "quiescentMs": 3880,
+          "pendingAtStart": [
+            "nifc-fires",
+            "hms-smoke"
+          ],
+          "counted": [
+            {
+              "url": "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/NOAA_Satellite_Smoke_Detection_(v1)/FeatureServer/0/query?where=Start+LIKE+%272026270%25%2...",
+              "n": 1
+            },
+            {
+              "url": "https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query?where=1%3D1&outFields=attr_Inci...",
+              "n": 1
+            }
+          ],
+          "tiles": []
+        }
+      ]
     }
   }
 }

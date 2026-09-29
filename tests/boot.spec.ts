@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { gotoApp, layerCheckbox, regionSelect, DEFAULT_ON, ROLE_GROUPS } from './helpers';
 
 /**
@@ -51,7 +53,9 @@ test.describe('boot', () => {
     }
 
     // The default detailed camera is selected in the combined dropdown.
-    await expect(regionSelect(page)).toHaveValue('region:washington_state');
+    // DR-109 (S30D D1): the default region frames the contiguous United
+    // States, not Washington.
+    await expect(regionSelect(page)).toHaveValue('region:national');
 
     // UX-3 framing pass: the sidebar carries domain vocabulary, not GIS jargon.
     const titles = page.locator('.sidebar-scroll .panel-title');
@@ -65,5 +69,21 @@ test.describe('boot', () => {
     // network fetches log their own honest status and are not console errors.)
     const fatal = consoleErrors.filter((t) => /webgl|failed to (compile|link|initialize)/i.test(t));
     expect(fatal, `unexpected fatal console errors:\n${fatal.join('\n')}`).toHaveLength(0);
+  });
+
+  // found-028 / DDM-P0-T14: the footer used to carry a hand-maintained
+  // literal ('v0.6.26' on this branch while package.json already said
+  // '0.7.0'), so a version bump at landing 2 needed a second, easily
+  // forgotten hand edit here. The version is now a build-time constant
+  // (vite.config.ts's `define`, mirroring `__DDM_BUILD_SHA__`) stamped onto
+  // #footer-version by src/main.ts's boot(); this reads package.json itself
+  // with Node's fs, never a hard-coded expectation, so the assertion stays
+  // true across every future bump with no edit here.
+  test("the footer version equals package.json's version", async ({ page }) => {
+    const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as {
+      version: string;
+    };
+    await gotoApp(page);
+    await expect(page.locator('#footer-version')).toHaveText(`v${pkg.version}`);
   });
 });

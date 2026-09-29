@@ -332,7 +332,12 @@ test.describe('U7 British Columbia basin drought display', () => {
     await expect(
       page.locator('#legend-panel [data-legend="usdm"]')
     ).toHaveCount(0);
-    await expect(page.locator('#map-key')).toBeHidden();
+    // Value-only migration (S30D D1 M10; interface-chrome-popups-text.md
+    // section 2.4, "the chip never hides"): with no key eligible the chip
+    // falls back to the committed mode's own word instead of going
+    // `hidden`. The committed mode here is Drought (no `cluster=` param).
+    await expect(page.locator('#map-key')).toBeVisible();
+    await expect(page.locator('#map-key .map-key-chip-label')).toHaveText('Drought');
     expect(bcRequests).toHaveLength(1);
   });
 

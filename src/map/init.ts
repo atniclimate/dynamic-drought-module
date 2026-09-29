@@ -50,12 +50,17 @@ function registerWorkerUrl(): void {
 }
 
 /**
- * Default initial view. The Pacific Northwest (PNW) center sits over the
- * Cascades; the same point as the vanilla Leaflet baseline's `[47, -121]`
- * but expressed in MapLibre's `[longitude, latitude]` order.
+ * Default initial view. DR-109 (S30D D1): the default region is `national`
+ * (`src/config/regions.ts:199`), so first paint frames the contiguous
+ * United States (the midpoint of `REGIONS.national`'s bounds,
+ * `regions.ts:139`) rather than the retired Pacific Northwest center. The
+ * boot's silent region fit (`src/ui/sidebar.ts:1372`) runs synchronously
+ * right after `load` and is unanimated, so this value is what a first-paint
+ * screenshot or the mode-switch measurement actually sees; it must not
+ * flash a PNW frame the fit then jumps away from.
  */
-const DEFAULT_CENTER: [number, number] = [-121, 47];
-const DEFAULT_ZOOM = 7;
+const DEFAULT_CENTER: [number, number] = [-95.95, 36.9];
+const DEFAULT_ZOOM = 3.5;
 // U4a: the zoom floor moved to src/config/regions.ts (MAP_MIN_ZOOM) so the
 // whole-US fit invariant is testable in Node; see the rationale there.
 const DEFAULT_MIN_ZOOM = MAP_MIN_ZOOM;

@@ -142,6 +142,94 @@ test.describe('island and search chunk isolation (DDM-P1-T04)', () => {
     expect(islandRequestUrls.some((url) => new URL(url).searchParams.has('retry'))).toBe(true);
   });
 
+  test('the Layers studio retries after its chunk fails once, under a retry= URL', async ({
+    page
+  }) => {
+    const urls: string[] = [];
+    let attempts = 0;
+    await page.route(/\/layers-studio-[^/?]*\.js(\?|$)/, (route) => {
+      attempts += 1;
+      urls.push(route.request().url());
+      if (attempts === 1) {
+        void route.abort('failed');
+      } else {
+        void route.continue();
+      }
+    });
+
+    await gotoApp(page, '?view=brief&layers=places&studio=layers');
+    await expect(page.locator('#layers-studio-failure-heading')).toBeVisible();
+
+    await page.locator('.layers-studio-back', { hasText: 'Back to map' }).click();
+    await page.locator('#layers-studio-entry').click();
+
+    await expect(
+      page.locator('#layers-studio-root').getByRole('heading', { name: 'Layer studio' })
+    ).toBeVisible();
+    await expect(page.locator('#layers-studio-failure-heading')).toHaveCount(0);
+    expect(urls.some((url) => new URL(url).searchParams.has('retry'))).toBe(true);
+  });
+
+  test('the Place studio retries after its chunk fails once, under a retry= URL', async ({
+    page
+  }) => {
+    const urls: string[] = [];
+    let attempts = 0;
+    await page.route(/\/place-studio-[^/?]*\.js(\?|$)/, (route) => {
+      attempts += 1;
+      urls.push(route.request().url());
+      if (attempts === 1) {
+        void route.abort('failed');
+      } else {
+        void route.continue();
+      }
+    });
+
+    await gotoApp(page, '?view=brief&layers=places&studio=place');
+    await expect(page.locator('#place-studio-failure-heading')).toBeVisible();
+
+    await page.locator('.layers-studio-back', { hasText: 'Back to map' }).click();
+    await page.locator('#place-studio-entry').click();
+
+    await expect(
+      page.locator('#place-studio-root').getByRole('heading', { name: 'Place studio' })
+    ).toBeVisible();
+    await expect(page.locator('#place-studio-failure-heading')).toHaveCount(0);
+    expect(urls.some((url) => new URL(url).searchParams.has('retry'))).toBe(true);
+  });
+
+  test("a held studio chunk shows the entry's pending state within one frame of the press", async ({
+    page
+  }) => {
+    // found-012: on a slow network the studio chunk can take 2.4 to 3.6 s
+    // to mount with nothing visible in the meantime. Hold it indefinitely
+    // (release only once the assertions below have run) so the pending
+    // state must appear BEFORE the chunk ever settles, not once the studio
+    // mounts.
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(/\/layers-studio-[^/?]*\.js(\?|$)/, async (route) => {
+      await gate;
+      await route.continue();
+    });
+
+    await gotoApp(page, '?view=brief&layers=places');
+    const opener = page.locator('#layers-studio-entry');
+    await opener.click();
+
+    await expect(opener).toHaveAttribute('aria-busy', 'true', { timeout: 500 });
+    await expect(opener).toHaveClass(/studio-entry-pending/);
+    await expect(page.locator('#layers-studio-entry-status')).toHaveText(
+      'Opening the LAYERS studio.'
+    );
+
+    release();
+    await expect(page.locator('#layers-studio-root')).toBeVisible();
+    await expect(opener).not.toHaveAttribute('aria-busy', 'true');
+  });
+
   test('a failed search chunk raises no unhandled rejection from any search host', async ({
     page
   }) => {

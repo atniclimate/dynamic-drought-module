@@ -1,5 +1,21 @@
 # Release notes
 
+## v0.8.0
+
+- 2026-09-27: the default view frames the contiguous United States, not the
+  Pacific Northwest. A link or an embed with no `region=` parameter now opens
+  on the national framing; an old link or embed that relied on the prior
+  Washington default is accepted as changed (DR-109). An embedder that wants
+  to keep the Washington framing and the Brief door adds
+  `region=washington_state&view=brief` to its `src`. Reset still returns the
+  camera to whatever region is selected (national by default) and, fixed in
+  the same pass, no longer closes an open briefing or clears a selected
+  place when that region is one of the regions without validated impact
+  synthesis; an explicit change into such a region still closes the
+  briefing.
+- 2026-09-28: the fire perimeter and smoke plume checkboxes now each control
+  only their own layer (the Wildfire mode still shows both).
+
 ## v0.7.0
 
 `v0.7.0` is the package version and, since 2026-09-11, the release tag. It

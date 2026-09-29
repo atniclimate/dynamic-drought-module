@@ -390,14 +390,14 @@ test.describe('DDM-P2-T09: one canonical place reference', () => {
     page
   }) => {
     const waProperties = await captureWaProperties(page, async () => {
-      await gotoApp(page, '?layers=states');
+      await gotoApp(page, '?region=washington_state&layers=states');
       await waitForLayerSettled(page, 'states');
 
       const box = await page.locator('#map').boundingBox();
       if (!box) throw new Error('map container has no box');
       const trigger = page.locator('[data-ddm-impact-trigger]');
-      // DEFAULT_REGION is washington_state (src/config/regions.ts), so the
-      // default camera frames Washington under the viewport center.
+      // Pins region=washington_state (src/config/regions.ts), so the
+      // camera frames Washington under the viewport center.
       await expect(async () => {
         await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
         await expect(trigger).toBeVisible({ timeout: 1500 });
@@ -430,8 +430,12 @@ test.describe('DDM-P2-T09: one canonical place reference', () => {
     // `states` is in the boot set on purpose: the studio's display snapshot
     // turns the reference layer on for its own emphasis and its restore on
     // close turns it back off, so the click door below needs the layer to be
-    // the user's own, not the studio's.
-    await gotoApp(page, '?view=brief&layers=places,states&studio=place');
+    // the user's own, not the studio's. `region=washington_state` pins the
+    // boot camera (DR-109): the click door below clicks the viewport center,
+    // which lies in Washington only under the Washington framing (under the
+    // national default it lands on another state); `view=brief` keeps the
+    // Brief door a raw region= would otherwise route to the console.
+    await gotoApp(page, '?region=washington_state&view=brief&layers=places,states&studio=place');
     await page.locator('#place-type-state').click();
     await page.locator('#place-studio-search').fill('Washington');
     await page.locator('#place-option-state-0').click();
