@@ -19,6 +19,9 @@ import { registry } from '../state/registry';
 import { escapeHtml } from '../util/escape';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
+import { watchDesktopMapSeat } from './map-control-seat';
+import { DETAIL_SECTIONS } from '../config/detail-sections';
+import { getDetailSectionHost } from './detail-section-hosts';
 
 const FRAMES_EVENT = 'ddm:heatrisk-frames';
 const DAY_SELECT_EVENT = 'ddm:heatrisk-day-select';
@@ -806,6 +809,32 @@ export function mountHeatRiskSequence(initial: HeatRiskFrameDetail): void {
       fallbackCache = null;
       void refreshRead();
     });
+    // S30D D1 M11 (design record interface-chrome-popups-text.md section
+    // 2.6, "HeatRisk first"): right after the dock mount above, the SAME
+    // node moves into its Key drawer section on the desktop shell outside
+    // embeds; phones and embeds keep it here in the dock. Never rebuilt,
+    // so DDM-UI-011 (its DOM, focus and delegated click targets survive
+    // redundant raster-status events while an identify read is pending or
+    // cached) holds regardless of which seat it is in.
+    const mountedHost = host;
+    const sectionHost = getDetailSectionHost(
+      DETAIL_SECTIONS['heatrisk-sequence'].homeId
+    );
+    if (sectionHost) {
+      watchDesktopMapSeat({
+        node: mountedHost,
+        host: sectionHost,
+        home: dock,
+        placeHome: () => {
+          if (
+            mountedHost.parentElement !== dock ||
+            mountedHost.nextElementSibling !== foot
+          ) {
+            dock.insertBefore(mountedHost, foot);
+          }
+        }
+      });
+    }
     mounted = true;
   }
   applyFrameDetail(initial);

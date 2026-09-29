@@ -37,6 +37,9 @@ import {
   SPC_FIREWX_CATEGORIES
 } from '../config/palette';
 import { LAYER_DEFS, getDroughtSurfacePresentation } from '../config/layers';
+import { HAZARD_CLUSTERS } from '../config/clusters';
+import { DETAIL_SECTIONS } from '../config/detail-sections';
+import { ensureDetailSectionHosts } from './detail-section-hosts';
 import {
   NIFC_INCIDENT_PRESENTATION,
   USFS_WHP_PRESENTATION,
@@ -200,7 +203,23 @@ function watchMapKeyLayout(host: HTMLElement): MapKeyLayoutWatch {
     const mapBox = document.getElementById('map-container')?.getBoundingClientRect();
     if (content && !content.hidden && mapBox) {
       const contentBox = content.getBoundingClientRect();
-      let available = Math.min(window.innerHeight, mapBox.bottom) - contentBox.top - 16;
+      // S30D D1 M11 repair round: the Key drawer never intersects the
+      // scale bars, but that invariant is already the CSS hard ceiling
+      // at hazard-indicators.css:243 (`max-height: min(55vh, 420px,
+      // var(--map-key-available-height, 55vh))`), not this JS bound. A
+      // scale-bar-aware clamp on `bottomLimit` was tried here and proven
+      // unreachable: with the indicator's content starting about 12px
+      // (indicator top) below the map plus the closed chip's own ~40px,
+      // `available` computed from the plain viewport/dock bottom alone
+      // never drops under the 420px (396px at a 720px-tall viewport)
+      // ceiling at any width and height this app supports, so the
+      // scale bar's own top edge was never the smaller operand and the
+      // clamp never changed what rendered. Dead code is not shipped; the
+      // CSS ceiling alone carries the guarantee, proven by
+      // tests/map-chrome-seats.spec.ts's own "never intersects ... the
+      // scale bars" case.
+      const bottomLimit = Math.min(window.innerHeight, mapBox.bottom);
+      let available = bottomLimit - contentBox.top - 16;
       if (app.classList.contains('embed')) {
         // Embeds keep the key in a bottom-anchored dock. Growing content
         // raises its header and any preceding date stamp or notices, so
@@ -1128,6 +1147,26 @@ export function initMapKey(): void {
   content.setAttribute('role', 'region');
   content.setAttribute('aria-label', 'Map details and key');
 
+  // S30D D1 M11 (the Key drawer): update() below writes the rendered
+  // KeySpec HTML into THIS wrapper, never into `content` itself, so the
+  // drawer's static per-cluster section hosts (index.html, moved in
+  // next) survive every legend re-render instead of being wiped by it.
+  // `display: contents` (app.css) keeps it invisible to layout, so the
+  // legend's own items read exactly as `content`'s direct flex children
+  // did before this split.
+  const legend = document.createElement('div');
+  legend.id = 'map-key-legend';
+  legend.className = 'map-key-legend';
+  content.append(legend);
+
+  // The drawer's section hosts (src/config/detail-sections.ts, built by
+  // src/ui/detail-section-hosts.ts's ensureDetailSectionHosts(): S30D D1
+  // M11 repair round 3, DR-158): built once, only relocated (never
+  // rewritten) here.
+  const drawerSections = ensureDetailSectionHosts();
+  drawerSections.hidden = false;
+  content.append(drawerSections);
+
   const detailsButton = document.createElement('button');
   detailsButton.id = 'map-key-details-toggle';
   detailsButton.className = 'map-key-details-toggle';
@@ -1237,13 +1276,13 @@ export function initMapKey(): void {
       const active = document.activeElement;
       const refocusDaySelect =
         active instanceof HTMLElement &&
-        content.contains(active) &&
+        legend.contains(active) &&
         active.matches('[data-heatrisk-day]');
       rendered = html;
-      content.innerHTML = html;
+      legend.innerHTML = html;
       host.setAttribute('aria-label', spec.ariaLabel);
       if (refocusDaySelect) {
-        const restored = content.querySelector('[data-heatrisk-day]');
+        const restored = legend.querySelector('[data-heatrisk-day]');
         if (restored instanceof HTMLElement) restored.focus();
       }
     }
@@ -1252,9 +1291,24 @@ export function initMapKey(): void {
     // form will use.
     const { eligible } = keyEligibility();
     const nextFamily = resolveMapKeyFamily(eligible);
-    if (nextFamily !== family) setDetailsOpen(false);
+    // S30D D1 M11 (design record section 2.6, "Persistence"): the Key
+    // drawer stays open across a hazard, horizon, loading or selection
+    // change and re-renders for the new state. The automatic close this
+    // used to run on every family change is removed; only the toggle
+    // (detailsButton) and Escape (closeDetailsOnEscape) close it now.
     family = nextFamily;
     host.dataset.keyFamily = family;
+    // The drawer's per-cluster sections (DR-113; src/config/detail-
+    // sections.ts): the COMMITTED cluster decides which static section
+    // host is revealed, never the momentarily-eligible family, so a
+    // section never flashes for a layer that is merely loading under a
+    // different mode.
+    const activeCluster = getHazardCluster();
+    const activeSections = HAZARD_CLUSTERS[activeCluster].detailSections ?? [];
+    for (const def of Object.values(DETAIL_SECTIONS)) {
+      const sectionEl = document.getElementById(def.homeId);
+      if (sectionEl) sectionEl.hidden = !activeSections.includes(def.key);
+    }
     host.dataset.keyMetricTrigger = String(
       family === 'drought' && getViewMode() === 'brief' &&
       !app?.classList.contains('embed') && !app?.classList.contains('sidebar-collapsed') && !widthQuery.matches

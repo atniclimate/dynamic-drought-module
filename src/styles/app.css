@@ -6111,6 +6111,91 @@ a.impact-resource-link::after {
 }
 
 /* ----------------------------------------------------------------------------
+   The Key drawer (left; S30D D1 M11; design record
+   interface-chrome-popups-text.md section 2.6 "Drawers"; DR-113).
+
+   The chip's existing disclosure (#map-key-content) IS the Key drawer: a
+   non-modal region with aria-expanded/aria-controls, Escape-to-trigger
+   and no URL key already (src/ui/map-key.ts), opening beside its own
+   fixed control (the chip) and never covering or moving a persistent
+   seat, so no new positioning is introduced here. This block adds only
+   the entrance motion the right drawer above already uses, mirrored to
+   the left edge with the same --dur-fast/--ease-enter tokens (no new
+   duration or easing value), and the static per-cluster section hosts
+   (src/config/detail-sections.ts) map-key.ts relocates into
+   #map-key-legend's sibling, #map-key-drawer-sections, so they survive
+   every legend re-render.
+   ---------------------------------------------------------------------------- */
+.map-key-legend {
+  display: contents;
+}
+/* hazard-indicators.css ":283" caps every DIRECT child of
+   #map-key .map-key-content at the drawer's own width; #map-key-legend's
+   `display: contents` (above) makes its own children the drawer's real
+   flex items now, so this restates the same cap for them (and for the
+   section wrapper, itself `display: contents` below) at equal
+   specificity, never overriding the original rule, which still holds
+   for any content that is not the legend or the sections. */
+#map-key .map-key-legend > *,
+#map-key .map-key-drawer-sections > * {
+  max-width: 100%;
+}
+@media (min-width: 721px) {
+  .app-shell:not(.embed) #map-key .map-key-content:not([hidden]) {
+    animation: map-key-drawer-in var(--dur-fast) var(--ease-enter);
+  }
+}
+@keyframes map-key-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (min-width: 721px) and (prefers-reduced-motion: reduce) {
+  /* No slide and no fade: aria-expanded and the disclosure glyph carry
+     the meaning (design record section 2.6, "Motion"). */
+  .app-shell:not(.embed) #map-key .map-key-content:not([hidden]) {
+    animation: none;
+  }
+}
+
+.map-key-drawer-sections {
+  display: contents;
+}
+/* Off the desktop shell (phones, the mobile sheet, an embed) a section
+   never renders: every rule below it is desktop-scoped (design record
+   section 2.6, "Persistence" and 2.8), and HeatRisk's own node keeps its
+   dock seat there regardless of this attribute. */
+.map-key-drawer-section {
+  display: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+@media (min-width: 721px) {
+  .app-shell:not(.embed) .map-key-drawer-section[data-detail-section]:not([hidden]) {
+    display: block;
+    padding-top: 7px;
+    border-top: 1px solid var(--line);
+  }
+}
+.map-key-section-fallback {
+  margin: 0;
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+/* The fallback sentence shows exactly while the moved node is absent or
+   hidden (no place selected, or the layer inactive); HeatRisk is the one
+   declared section today. */
+.map-key-drawer-section:has(#heatrisk-sequence:not([hidden])) .map-key-section-fallback {
+  display: none;
+}
+
+/* ----------------------------------------------------------------------------
    The embed corner (FE-18, 2026-08-28)
 
    Embeds keep MapLibre's bottom-right stack (the satellite control above the

@@ -876,11 +876,29 @@ test.describe('the chip, TL-0, the pill and the dock hold their D1 M10 seats', (
       expect(target, 'no cluster mode button found').toBeTruthy();
       gate.hold();
       try {
-        await page.locator(`.shell-cluster-btn[data-cluster="${target!.cluster}"]`).click();
+        // S30D D1 M11 repair (director's reading, confirmed): a real
+        // `.click()` moves the OS pointer onto the mode button, so the
+        // canvas's own `mouseout` listener (src/ui/hover-inspector.ts)
+        // hides the inspector BEFORE the pill ever shows, and the
+        // `pillShowing()` yield this phase means to exercise (M10's
+        // `m10yield` case) never runs. Activating the button from inside
+        // the page (focus, then the DOM `.click()` method) fires the same
+        // click listener with no synthesized mouse movement, so the
+        // pointer stays over the map and only the pill-yield path can be
+        // what clears the inspector below.
+        await page.locator(`.shell-cluster-btn[data-cluster="${target!.cluster}"]`).evaluate(
+          (button) => {
+            if (!(button instanceof HTMLElement)) throw new Error('mode button is not an HTMLElement');
+            button.focus();
+            button.click();
+          }
+        );
         await expect(page.locator('#loading-indicator')).toBeVisible({ timeout: 10_000 });
         // The pointer never moved, so only the MutationObserver on the
-        // pill's `hidden` attribute (not a fresh mousemove) can be what
-        // clears the inspector here.
+        // pill's `hidden` attribute (not a fresh mousemove, and not the
+        // canvas's mouseout listener) can be what clears the inspector
+        // here (found-018's `pillShowing()` yield, src/ui/hover-
+        // inspector.ts; M10's `m10yield` case).
         rects = await transientRects(page);
         expect(rects.pill, 'loading phase: the pill has no box').not.toBeNull();
         expect(rects.inspector, 'loading phase: the inspector should yield while the pill shows').toBeNull();
@@ -942,6 +960,90 @@ test.describe('the chip, TL-0, the pill and the dock hold their D1 M10 seats', (
       ).toBeLessThanOrEqual(dockSeat!.dockBottom + 1);
     } finally {
       gate.release();
+    }
+  });
+});
+
+/**
+ * S30D D1 M11 (register owner-1h; DDM-P10-T11; design record
+ * interface-chrome-popups-text.md section 5, "Drawers"): opening the Key
+ * drawer grows `#map-key` downward from its fixed TL-1 seat, never moving
+ * the column's four slots, and never reaching into the column, the scale
+ * bars, or a dock child.
+ *
+ * Predicted red on the pre-M11 tree: this passes today by coincidence at
+ * most viewports (the pre-existing inline expand already avoids the
+ * column horizontally), but a change here is the exact class of
+ * regression this pins going forward; a genuine drawer-overlap defect
+ * (an unclamped tall drawer reaching the scale bars) is reproduced by
+ * temporarily removing the scale-bar clamp this microtask adds to
+ * `watchMapKeyLayout` (`src/ui/map-key.ts`, the `bottomLimit` local).
+ */
+test.describe('the Key drawer moves no column seat and clears the scale bars and the dock (S30D D1 M11)', () => {
+  test('opening the Key drawer moves no column seat and never intersects the column, the scale bars or a dock child, at 1280 to 2560 wide', async ({
+    page
+  }) => {
+    test.setTimeout(120_000);
+    for (const viewport of DESKTOP_VIEWPORTS) {
+      await page.setViewportSize(viewport);
+      await gotoApp(page, '?view=console');
+      await settleLayout(page);
+
+      const beforeSamples = await sampleSeats(page, `${viewport.width}x${viewport.height}, drawer closed`);
+
+      await page.locator('#map-key-details-toggle').click();
+      await expect(page.locator('#map-key-content')).toBeVisible();
+      await settleLayout(page);
+
+      const afterSamples = await sampleSeats(page, `${viewport.width}x${viewport.height}, drawer open`);
+      expect(
+        seatProblems([...beforeSamples, ...afterSamples]),
+        `${viewport.width}x${viewport.height}: a column seat moved when the Key drawer opened`
+      ).toEqual([]);
+
+      const geometry = await page.evaluate(() => {
+        const box = (el: Element | null) => {
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 || r.height === 0) return null;
+          return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+        };
+        return {
+          drawer: box(document.getElementById('map-key-content')),
+          column: box(document.querySelector('.map-overlay-controls')),
+          scaleBar: box(document.querySelector('.maplibregl-ctrl-bottom-left')),
+          dockChildren: Array.from(document.querySelectorAll('#map-bottom-dock > *'))
+            .map(box)
+            .filter((b): b is NonNullable<typeof b> => b !== null)
+        };
+      });
+      expect(geometry.drawer, `${viewport.width}x${viewport.height}: the open drawer has no box`).not.toBeNull();
+
+      const overlaps = (
+        a: { left: number; top: number; right: number; bottom: number },
+        b: { left: number; top: number; right: number; bottom: number }
+      ): boolean => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+
+      if (geometry.column) {
+        expect(
+          overlaps(geometry.drawer!, geometry.column),
+          `${viewport.width}x${viewport.height}: the drawer intersects the column`
+        ).toBe(false);
+      }
+      if (geometry.scaleBar) {
+        expect(
+          overlaps(geometry.drawer!, geometry.scaleBar),
+          `${viewport.width}x${viewport.height}: the drawer intersects the scale bars`
+        ).toBe(false);
+      }
+      for (const child of geometry.dockChildren) {
+        expect(
+          overlaps(geometry.drawer!, child),
+          `${viewport.width}x${viewport.height}: the drawer intersects a dock child`
+        ).toBe(false);
+      }
+
+      await page.keyboard.press('Escape');
     }
   });
 });

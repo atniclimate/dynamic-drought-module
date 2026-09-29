@@ -176,6 +176,67 @@ test('chipStateFromStatuses composes chipStateForStatus with aggregateChipState'
   assert.equal(chipStateFromStatuses([]), undefined);
 });
 
+/**
+ * S30D D1 M11 (register owner-1h; task DDM-P10-T11; design record
+ * interface-chrome-popups-text.md section 2.6, "Sections for N modes";
+ * DR-113): every HAZARD_CLUSTER_KEYS entry resolves its detailSections,
+ * an ARRAY (possibly empty) whose every key exists in DETAIL_SECTIONS.
+ * The registry itself never names a hazard: each DetailSectionDef's own
+ * shape (key, heading, nodeId, homeId, pointScoped) is checked, and
+ * Heat's declared 'heatrisk-sequence' section is confirmed present (the
+ * one section v1 declares).
+ *
+ * Predicted red on the pre-M11 tree: the module import of
+ * src/config/detail-sections.ts fails (it does not exist), and
+ * `HAZARD_CLUSTERS[mode].detailSections` is `undefined` for every mode
+ * including 'heat' (the field does not exist on HazardClusterDef yet).
+ */
+const { DETAIL_SECTIONS } = await import(
+  new URL('src/config/detail-sections.ts', ROOT).href
+);
+
+test('every HAZARD_CLUSTER_KEYS entry resolves its detailSections (DR-113)', () => {
+  assert.ok(HAZARD_CLUSTER_KEYS.length >= 4, 'the cluster set unexpectedly shrank');
+  let sawHeatSection = false;
+  for (const mode of HAZARD_CLUSTER_KEYS) {
+    const def = HAZARD_CLUSTERS[mode];
+    const sections = def.detailSections ?? [];
+    assert.ok(Array.isArray(sections), `${mode}.detailSections is not an array`);
+    for (const key of sections) {
+      const entry = DETAIL_SECTIONS[key];
+      assert.ok(entry, `${mode} declares detail section '${key}', which DETAIL_SECTIONS does not carry`);
+      assert.equal(entry.key, key);
+      assert.equal(typeof entry.heading, 'string');
+      assert.ok(entry.heading.length > 0, `${key}'s heading is empty`);
+      assert.equal(typeof entry.nodeId, 'string');
+      assert.ok(entry.nodeId.length > 0, `${key}'s nodeId is empty`);
+      assert.equal(typeof entry.homeId, 'string');
+      assert.ok(entry.homeId.length > 0, `${key}'s homeId is empty`);
+      assert.equal(typeof entry.pointScoped, 'boolean');
+      if (mode === 'heat' && key === 'heatrisk-sequence') sawHeatSection = true;
+    }
+  }
+  assert.ok(sawHeatSection, "heat's HeatRisk sequence section (HeatRisk first) did not resolve");
+});
+
+test('map-key.ts carries no cluster literal in its section-visibility path (DR-113)', async () => {
+  const text = await readFile(new URL('src/ui/map-key.ts', ROOT), 'utf8');
+  // The drawer's per-cluster gating reads HAZARD_CLUSTERS[cluster] and
+  // DETAIL_SECTIONS, not a hard-coded cluster name; this is the shape of
+  // a regression that would hard-code 'heat' where the active cluster
+  // belongs.
+  assert.doesNotMatch(
+    text,
+    /activeSections\s*=\s*\[['"]heatrisk-sequence['"]\]/,
+    'the drawer section list is hard-coded instead of read from HAZARD_CLUSTERS[activeCluster].detailSections'
+  );
+  assert.match(
+    text,
+    /HAZARD_CLUSTERS\[activeCluster\]\.detailSections/,
+    'map-key.ts no longer reads detailSections from the active HAZARD_CLUSTERS entry'
+  );
+});
+
 test('map-key.ts derives the chip glyph from registry.getStatus, not from KeySpec text (the retired substring matcher)', async () => {
   const text = await readFile(new URL('src/ui/map-key.ts', ROOT), 'utf8');
   assert.doesNotMatch(

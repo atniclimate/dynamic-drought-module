@@ -84,6 +84,29 @@
 /** Breathing room between a clamped popup edge and the region edge. */
 const EDGE_MARGIN_PX = 12;
 
+/** Clearance a popup keeps past the open Key drawer's right edge (S30D
+ * D1 M11; design record interface-chrome-popups-text.md section 5,
+ * "Drawers": "with the drawer open, a popup committed at x 100 renders
+ * at or beyond the drawer's right edge plus 8 px"). */
+const DRAWER_CLEARANCE_PX = 8;
+
+/**
+ * The X term of a computed `transform`'s 2D matrix (`matrix(a, b, c, d,
+ * tx, ty)`), or 0 when the transform is `none`, unparseable, or carries a
+ * 3D matrix (`matrix3d`, never emitted by the drawer's translateX-only
+ * keyframes). Used to recover an animating element's settled (untranslated)
+ * edge from its live `getBoundingClientRect()` without waiting on the
+ * animation to finish.
+ */
+function currentTranslateX(computedTransform: string): number {
+  if (!computedTransform || computedTransform === 'none') return 0;
+  const match = /^matrix\(([^)]+)\)$/.exec(computedTransform);
+  if (!match) return 0;
+  const parts = match[1]!.split(',').map((part) => Number.parseFloat(part.trim()));
+  const tx = parts[4];
+  return typeof tx === 'number' && Number.isFinite(tx) ? tx : 0;
+}
+
 /**
  * THE CANONICAL TIER TABLE (DG-080-REVIEW r3 finding 1): the ONE
  * authoritative statement of what this module promises at each region
@@ -358,9 +381,35 @@ function containingBounds(popup: HTMLElement): Bounds {
     }
   }
 
+  let leftBound = left + EDGE_MARGIN_PX;
+  // The open Key drawer (S30D D1 M11) occupies the left edge on the
+  // desktop shell outside embeds; a popup committed near it must clear
+  // its right edge plus DRAWER_CLEARANCE_PX, never the plain edge
+  // margin alone. The drawer's entrance motion (app.css:6123-6137,
+  // "map-key-drawer-in") animates its OWN transform, so a popup can
+  // commit while the drawer is still sliding in; getBoundingClientRect
+  // during that animation reads the in-progress paint box, short of the
+  // settled edge by the animation's remaining translateX. Rather than
+  // wait on the animation (never done here), the settled edge is
+  // recovered directly: the drawer's own computed transform is a pure
+  // translateX (the keyframes carry no other component), so subtracting
+  // its current X term from the live rect's right edge always yields the
+  // element's un-translated (settled) right edge, at any animation frame.
+  const drawer = document.getElementById('map-key-content');
+  if (drawer && !drawer.hidden) {
+    const style = getComputedStyle(drawer);
+    if (style.display !== 'none' && style.visibility !== 'hidden') {
+      const drawerBox = drawer.getBoundingClientRect();
+      if (drawerBox.width > 0 && drawerBox.height > 0) {
+        const settledRight = drawerBox.right - currentTranslateX(style.transform);
+        leftBound = Math.max(leftBound, settledRight + DRAWER_CLEARANCE_PX);
+      }
+    }
+  }
+
   return {
     top: top + EDGE_MARGIN_PX,
-    left: left + EDGE_MARGIN_PX,
+    left: leftBound,
     bottom: bottom - EDGE_MARGIN_PX,
     right: right - EDGE_MARGIN_PX
   };
