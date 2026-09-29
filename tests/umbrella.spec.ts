@@ -422,7 +422,10 @@ test.describe('the Brief-door Tribal Nations action', () => {
     await gotoApp(page);
     const action = page.locator('#tribal-nations-brief-action');
     await expect(action).toBeVisible();
-    await expect(action).toHaveAccessibleName('Show Tribal Nations layers');
+    // Both Tribal members (aiannh, bia-reservations) default on (found-006):
+    // a bare boot is the pressed state, so the accessible name reads Hide.
+    await expect(action).toHaveAccessibleName('Hide Tribal Nations layers');
+    await expect(action).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('activating from the Brief action reaches the map on desktop too', async ({ page }) => {

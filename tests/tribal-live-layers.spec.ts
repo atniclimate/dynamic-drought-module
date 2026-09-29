@@ -1195,6 +1195,80 @@ test.describe('DDM-P9-T06: RAWS wind symbol', () => {
   });
 });
 
+/**
+ * found-006 (D1 M14): the Brief-door Tribal Nations control becomes a real
+ * toggle. Boots explicit-empty (`layers=`) so the initial state is
+ * deterministic, mirroring tests/umbrella.spec.ts's own Brief-action cases.
+ */
+test.describe('found-006: the Brief-door Tribal Nations control is a real toggle', () => {
+  test('three presses of the Tribal Nations control give three asserted states with aria-pressed', async ({
+    page
+  }) => {
+    await gotoApp(page, '?view=brief&layers=');
+    const action = page.locator('#tribal-nations-brief-action');
+    const desc = page.locator('#tribal-nations-brief-action-desc');
+    await expect(action).toBeVisible();
+
+    // State 0 (boot): off. The description reads the activate sentence.
+    await expect(action).toHaveAccessibleName('Show Tribal Nations layers');
+    expect(await action.getAttribute('aria-pressed')).toBe('false');
+    await expect(desc).toHaveText('Turns on Tribal Lands and Reservation Boundaries.');
+    await expect
+      .poll(async () => {
+        const layers = await urlLayers(page);
+        return layers.has('aiannh') || layers.has('bia-reservations');
+      })
+      .toBe(false);
+
+    // State 1 (press 1): on. The description switches to the off sentence
+    // (found-006 repair: a pressed toggle's next press turns the set off).
+    await action.click();
+    await expect(action).toHaveAccessibleName('Hide Tribal Nations layers');
+    expect(await action.getAttribute('aria-pressed')).toBe('true');
+    await expect(desc).toHaveText('Turns off Tribal Lands and Reservation Boundaries.');
+    await expect
+      .poll(
+        async () => {
+          const layers = await urlLayers(page);
+          return layers.has('aiannh') && layers.has('bia-reservations');
+        },
+        { timeout: 25_000 }
+      )
+      .toBe(true);
+
+    // State 2 (press 2): off again, proving the control has a real off half.
+    await action.click();
+    await expect(action).toHaveAccessibleName('Show Tribal Nations layers');
+    expect(await action.getAttribute('aria-pressed')).toBe('false');
+    await expect(desc).toHaveText('Turns on Tribal Lands and Reservation Boundaries.');
+    await expect
+      .poll(
+        async () => {
+          const layers = await urlLayers(page);
+          return layers.has('aiannh') || layers.has('bia-reservations');
+        },
+        { timeout: 25_000 }
+      )
+      .toBe(false);
+
+    // State 3 (press 3): on again, proving the toggle round-trips rather
+    // than sticking after the first off.
+    await action.click();
+    await expect(action).toHaveAccessibleName('Hide Tribal Nations layers');
+    expect(await action.getAttribute('aria-pressed')).toBe('true');
+    await expect(desc).toHaveText('Turns off Tribal Lands and Reservation Boundaries.');
+    await expect
+      .poll(
+        async () => {
+          const layers = await urlLayers(page);
+          return layers.has('aiannh') && layers.has('bia-reservations');
+        },
+        { timeout: 25_000 }
+      )
+      .toBe(true);
+  });
+});
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

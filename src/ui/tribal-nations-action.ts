@@ -16,7 +16,7 @@
  */
 
 import { TRIBAL_NATIONS_GROUP } from '../config/layer-groups';
-import { requestLayerOn } from './layer-toggle-command';
+import { requestLayerOff, requestLayerOn } from './layer-toggle-command';
 import { registry } from '../state/registry';
 import { isChecked, onCheckedChange } from './island/bridge';
 
@@ -29,6 +29,42 @@ import { isChecked, onCheckedChange } from './island/bridge';
 export function activateTribalNationsGroup(): void {
   for (const key of TRIBAL_NATIONS_GROUP.buttonActivates) {
     requestLayerOn(key);
+  }
+}
+
+/**
+ * Request the group's action set off, through the same shared door
+ * (found-006: the Brief-door control's off half of its toggle contract).
+ * Already-off members are a guarded no-op, same as the on side.
+ */
+export function deactivateTribalNationsGroup(): void {
+  for (const key of TRIBAL_NATIONS_GROUP.buttonActivates) {
+    requestLayerOff(key);
+  }
+}
+
+/**
+ * Whether every member of the group's action set is currently checked (the
+ * toggle's "pressed" state). Reads the eager bridge intent, the same source
+ * `formatGroupHealth`'s selected count reads, so the pressed state and the
+ * health line can never disagree.
+ */
+export function isTribalNationsGroupOn(): boolean {
+  return TRIBAL_NATIONS_GROUP.buttonActivates.every((key) => isChecked(key));
+}
+
+/**
+ * found-006: the Brief-door control is a real toggle, not a one-shot
+ * activation. Pressed (every member on) turns the whole set off; anything
+ * short of that (off, or partially on from some other door) turns the full
+ * set on, mirroring `activateTribalNationsGroup`'s existing "request the
+ * configured set" contract rather than only completing a partial set.
+ */
+export function toggleTribalNationsGroup(): void {
+  if (isTribalNationsGroupOn()) {
+    deactivateTribalNationsGroup();
+  } else {
+    activateTribalNationsGroup();
   }
 }
 
@@ -87,6 +123,42 @@ export function wireTribalNationsHealth(el: HTMLElement): void {
 }
 
 /**
+ * Keep a toggle button's `aria-pressed` and accessible name mirroring the
+ * group's actual on/off state (found-006: three presses must give three
+ * asserted states, not a static label). "Show" when the set is not fully
+ * on (off, or only partially on from some other door); "Hide" once every
+ * member is on. The visible label (the group's plain name) never changes;
+ * only the accessible name and the pressed state track intent.
+ *
+ * `descEl`, when given, also tracks the state: the pressed description
+ * (`actionOffDescription`, "Turns off...") while every member is on, the
+ * activate description (`actionDescription`, "Turns on...") otherwise. The
+ * Brief-door control is the only host that presents as pressed, so it is
+ * the only host that needs the swap; the repair for the false-while-pressed
+ * "Turns on" text (found-006 repair round).
+ */
+export function wireTribalNationsToggle(
+  button: HTMLButtonElement,
+  descEl?: HTMLElement
+): void {
+  const update = (): void => {
+    const pressed = isTribalNationsGroupOn();
+    button.setAttribute('aria-pressed', String(pressed));
+    button.setAttribute(
+      'aria-label',
+      `${pressed ? 'Hide' : 'Show'} ${TRIBAL_NATIONS_GROUP.label} layers`
+    );
+    if (descEl) {
+      descEl.textContent = pressed
+        ? TRIBAL_NATIONS_GROUP.actionOffDescription
+        : TRIBAL_NATIONS_GROUP.actionDescription;
+    }
+  };
+  update();
+  onCheckedChange(update);
+}
+
+/**
  * Build the compact Brief-door action row: the visible "Tribal Nations"
  * button, its screen-reader effect description, and the visible group
  * health line. The caller owns placement (the impact panel inserts it
@@ -101,14 +173,14 @@ export function buildTribalNationsBriefAction(): HTMLElement {
   button.id = 'tribal-nations-brief-action';
   button.className = 'tribal-nations-brief-action';
   button.textContent = TRIBAL_NATIONS_GROUP.label;
-  button.setAttribute('aria-label', `Show ${TRIBAL_NATIONS_GROUP.label} layers`);
   button.setAttribute('aria-describedby', 'tribal-nations-brief-action-desc');
-  button.addEventListener('click', () => activateTribalNationsGroup());
+  button.addEventListener('click', () => toggleTribalNationsGroup());
 
   const desc = document.createElement('span');
   desc.id = 'tribal-nations-brief-action-desc';
   desc.className = 'sr-only';
-  desc.textContent = TRIBAL_NATIONS_GROUP.actionDescription;
+
+  wireTribalNationsToggle(button, desc);
 
   const health = document.createElement('span');
   health.className = 'tribal-nations-health';

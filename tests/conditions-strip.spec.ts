@@ -9,6 +9,7 @@ import {
 } from './helpers';
 import { stubRecentSatellite } from './satellite-fixture';
 import { SATELLITE_PROBE_BBOX } from '../src/map/satellite';
+import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 
 /**
  * UX-3 conditions strip: a dated at-a-glance summary of the rendered map.
@@ -462,4 +463,27 @@ test.describe('the drought tile swatch (D1 M10)', () => {
       .evaluate((el) => getComputedStyle(el).color);
     expect(valueColor, 'the value text itself is no longer classed').not.toBe(bg);
   });
+});
+
+/**
+ * found-008 (D1 M14): "Conditions in view" offers only the current mode's
+ * surfaces, enumerated from HAZARD_CLUSTER_KEYS (DR-113) rather than a
+ * literal Heat/ENSO/Wildfire list. Before the fix, the drought anchor tile
+ * (a "North American Drought Monitor layer off. Press to show." chip in
+ * every non-drought mode) rendered unconditionally regardless of mode.
+ */
+test.describe('found-008: Conditions in view offers only the current mode\'s surfaces', () => {
+  for (const key of HAZARD_CLUSTER_KEYS) {
+    if (key === 'drought') continue;
+    const token = HAZARD_CLUSTERS[key].urlToken;
+
+    test(`Conditions in view offers no other mode's layer chip in ${key}`, async ({ page }) => {
+      await gotoApp(page, `?cluster=${token}`);
+
+      // The drought family (nadm-drought / usdm / the CPC drought outlook)
+      // is not this mode's own recipe: no "Layer off. Press to show." drought
+      // chip is offered here.
+      await expect(page.locator('.conditions-metric[data-metric="drought"]')).toHaveCount(0);
+    });
+  }
 });

@@ -30,6 +30,14 @@ export interface LayerGroupDef {
   readonly buttonActivates: readonly string[];
   /** One-sentence effect description (the button's aria-describedby). */
   readonly actionDescription: string;
+  /**
+   * One-sentence effect description for a toggle that is currently pressed
+   * (the Brief-door control, whose next press turns the set off; found-006
+   * repair). The catalog umbrella row and the mobile at-hand action stay
+   * activate-only and keep reading `actionDescription` always: they never
+   * present as pressed, so "Turns on" is always true there.
+   */
+  readonly actionOffDescription: string;
 }
 
 export const TRIBAL_NATIONS_GROUP: LayerGroupDef = {
@@ -42,7 +50,8 @@ export const TRIBAL_NATIONS_GROUP: LayerGroupDef = {
   // URL-reachable via ?layers=tribal / ?layers=treaty.
   members: ['aiannh', 'bia-reservations'],
   buttonActivates: ['aiannh', 'bia-reservations'],
-  actionDescription: 'Turns on Tribal Lands and Reservation Boundaries.'
+  actionDescription: 'Turns on Tribal Lands and Reservation Boundaries.',
+  actionOffDescription: 'Turns off Tribal Lands and Reservation Boundaries.'
 };
 
 export const LAYER_GROUPS: readonly LayerGroupDef[] = [TRIBAL_NATIONS_GROUP];
