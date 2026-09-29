@@ -669,6 +669,15 @@ test('a live switch to Wildfire mode emphasizes the fire cell in all three horiz
   await stubBaselineBriefingHosts(page);
   await stubSpcFireOutlook(page, {});
   await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+  // found-089: the default-boot paint can still be mid-repaint the instant
+  // `gotoApp` resolves (`applyActiveHazardEmphasis` re-toggles on every
+  // paint, including the loading paint), so a bare `activeHazardValues`
+  // read right here raced an empty set about 1 run in 8 on base code too.
+  // Settle first, per horizon, on the M20 pattern (waitForSettledHazardRow
+  // above), before reading anything.
+  for (const horizon of HORIZON_KEYS) {
+    await waitForSettledHazardRow(page, 'drought', horizon, SHELL_HAZARD_KEY.drought);
+  }
   expect(new Set(await activeHazardValues(page))).toEqual(new Set(['drought']));
   const orderBefore = await orderedHazardValues(page);
 
@@ -680,6 +689,7 @@ test('a live switch to Wildfire mode emphasizes the fire cell in all three horiz
 
   await expect(page.locator('.impact-hazard-active')).toHaveCount(3);
   for (const horizon of HORIZON_KEYS) {
+    await waitForSettledHazardRow(page, 'wildfire', horizon, SHELL_HAZARD_KEY.wildfire);
     await expect(
       page.locator(`.impact-hazard[data-horizon="${horizon}"][data-hazard="fire"]`)
     ).toHaveClass(/impact-hazard-active/);
@@ -693,6 +703,14 @@ test('a live switch to Wildfire mode emphasizes the fire cell in all three horiz
         page.locator(`.impact-hazard[data-horizon="${horizon}"][data-hazard="${hazard}"]`)
       ).not.toHaveClass(/impact-hazard-active/);
     }
+  }
+  // Re-settle before the fresh, one-round-trip read below: the per-horizon
+  // web-first assertions above already retried to a stable state, but
+  // `applyActiveHazardEmphasis` can still repaint again between the last of
+  // them passing and this `evaluateAll` running, so read only after every
+  // horizon is confirmed settled on 'fire' again.
+  for (const horizon of HORIZON_KEYS) {
+    await waitForSettledHazardRow(page, 'wildfire', horizon, SHELL_HAZARD_KEY.wildfire);
   }
   const active = await activeHazardValues(page);
   expect(active).toHaveLength(3);
