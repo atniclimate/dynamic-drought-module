@@ -4719,10 +4719,10 @@ button.telemetry-item {
   color: var(--fg-2);
   letter-spacing: 0.02em;
 }
-/* The header's icon cluster (close, plus the not-yet-wired mail and print
-   actions beside it). One wrapper keeps the header at exactly two flex
-   children so `justify-content: space-between` still separates the title
-   block from the icons, whatever the cluster's own count. */
+/* The header's icon cluster (mail, print, then close). One wrapper keeps
+   the header at exactly two flex children so `justify-content:
+   space-between` still separates the title block from the icons, whatever
+   the cluster's own count. */
 .impact-panel-actions {
   display: flex;
   align-items: center;
@@ -4748,11 +4748,10 @@ button.telemetry-item {
   color: var(--fg-0);
   border-color: var(--line-strong);
 }
-/* Mail and print: present so the affordance is discoverable, honestly inert
-   (native `disabled`, not aria-disabled) because neither does anything yet.
-   `disabled` also drops them from `getFocusable()`'s
-   `button:not([disabled])` selector for free, so they cannot be tabbed to
-   and the close button stays the panel's one focusable icon today. */
+/* Mail (a real `mailto:` anchor) and print (calls window.print()): real
+   controls, styled like the close button's own icon button so the wired-up
+   cluster reads as one family (owner-1o, D1 M21). `text-decoration: none`
+   only matters for the mail anchor; harmless on the print button. */
 .impact-panel-action {
   flex-shrink: 0;
   display: inline-flex;
@@ -4763,9 +4762,15 @@ button.telemetry-item {
   background: transparent;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  color: var(--fg-3);
-  cursor: not-allowed;
-  opacity: 0.5;
+  color: var(--fg-2);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.impact-panel-action:hover {
+  background: var(--bg-2);
+  color: var(--fg-0);
+  border-color: var(--line-strong);
 }
 
 .impact-panel-body {
@@ -6933,8 +6938,14 @@ a.impact-resource-link::after {
   /* Print legibility: ink on paper, with the hierarchy carried by weight and
      case rather than the dark-theme palette. h5 joined the outline when
      point heat moved inside a horizon (owner ruling B/C) and its two card
-     headings and "Heat sources together" dropped a level to stay under it. */
-  body:has(.impact-panel.open) .impact-panel :is(h2, h3, h4, h5, p, span, div, a) {
+     headings and "Heat sources together" dropped a level to stay under it.
+     li, summary, dd, dt, blockquote, q and cite joined for M21 (owner-1o):
+     every disclosure prints open (see impact-panel-runtime.ts's beforeprint
+     listener), and without these tags their summary and list text kept the
+     dark-theme fg tokens (`.point-heat-series summary`,
+     `.impact-technical-information > summary`, the heat-sources list) on
+     paper. */
+  body:has(.impact-panel.open) .impact-panel :is(h2, h3, h4, h5, p, span, div, a, li, summary, dd, dt, blockquote, q, cite) {
     color: #000;
   }
   body:has(.impact-panel.open) .impact-panel .impact-panel-kicker,

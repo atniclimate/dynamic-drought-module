@@ -39,7 +39,9 @@ import {
   sheetReportHost
 } from './mobile-sheet';
 import { hideLoading, showLoading } from './overlay';
+import { buildShareLink } from './share';
 import { buildTribalNationsBriefAction } from './tribal-nations-action';
+import { postalCodeFromProperties } from '../config/geography';
 
 type ImpactPanelRuntime = typeof import('./impact-panel-runtime');
 type RuntimeLoader = () => Promise<ImpactPanelRuntime>;
@@ -128,14 +130,14 @@ export function ensureImpactPanelShell(): ImpactPanelShell {
         <p class="impact-panel-kind"></p>
       </div>
       <div class="impact-panel-actions">
+        <a class="impact-panel-action impact-panel-action-mail" aria-label="Email this briefing" title="Email this briefing" href="mailto:">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>
+        </a>
+        <button type="button" class="impact-panel-action impact-panel-action-print" aria-label="Print this briefing" title="Print this briefing">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg>
+        </button>
         <button type="button" class="impact-panel-close" aria-label="Close briefing">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-        <button type="button" class="impact-panel-action impact-panel-action-mail" aria-label="Email this briefing" title="Email this briefing (not wired up yet)" disabled>
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>
-        </button>
-        <button type="button" class="impact-panel-action impact-panel-action-print" aria-label="Print this briefing" title="Print this briefing (not wired up yet)" disabled>
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg>
         </button>
       </div>
     </header>
@@ -149,6 +151,13 @@ export function ensureImpactPanelShell(): ImpactPanelShell {
     panel
       .querySelector('.impact-panel-header')
       ?.insertAdjacentElement('afterend', buildTribalNationsBriefAction());
+    const mailAction = panel.querySelector<HTMLAnchorElement>(
+      '.impact-panel-action-mail'
+    );
+    if (mailAction) {
+      mailAction.target = '_blank';
+      mailAction.rel = 'noopener';
+    }
   }
 
   const body = panel.querySelector<HTMLElement>('.impact-panel-body');
@@ -162,6 +171,15 @@ export function ensureImpactPanelShell(): ImpactPanelShell {
   panel
     .querySelector<HTMLButtonElement>('.impact-panel-close')
     ?.addEventListener('click', requestPanelDismiss);
+  // Print calls window.print() exactly once per press (owner-1o, D1 M21);
+  // the disclosure-opening side of printing is a window-level `beforeprint`
+  // listener in impact-panel-runtime.ts, so it fires the same way whether
+  // this control or the browser's own Print starts the print.
+  panel
+    .querySelector<HTMLButtonElement>('.impact-panel-action-print')
+    ?.addEventListener('click', () => {
+      window.print();
+    });
   // Escape is scoped to the panel (IB-16). A document-level listener stayed
   // armed for the whole session and dismissed the briefing from anywhere, so
   // an Escape aimed at another open overlay (the map-information panel keeps
@@ -501,6 +519,44 @@ function clearUnavailableState(): void {
   unavailableSelection = null;
 }
 
+/**
+ * The briefing place's two-letter state postal code, or null when the place
+ * is not a state. Gated on `context.kind` first (never inferred for a
+ * Tribal Nation, an ecoregion or a watershed from `containing.state`, which
+ * answers a different question): the typed briefing place carries a
+ * shareable `select=` token only for a state (src/state/typed-place.ts,
+ * src/state/url.ts's `SelectParam`).
+ */
+function briefingStateCode(context: BoundarySelectionContext): string | null {
+  if (context.kind !== 'state') return null;
+  return postalCodeFromProperties(context.properties) ?? context.containing.state;
+}
+
+/**
+ * Rebuild the Email control's `mailto:` href from the open briefing's title
+ * and place (owner-1o, D1 M21): the subject is the title verbatim; the body
+ * is the title, a blank line, then the share link (the current view's URL,
+ * as Share copies it, plus `select=state:XX` only for a state place; every
+ * other place kind carries no place token and the title already names the
+ * place in words). Called on every open, refresh and unavailable render so
+ * the link is never stale.
+ */
+export function refreshBriefingActions(
+  title: string,
+  context: BoundarySelectionContext | null
+): void {
+  const mail = shell?.panel.querySelector<HTMLAnchorElement>(
+    '.impact-panel-action-mail'
+  );
+  if (!mail) return;
+  const stateCode = context ? briefingStateCode(context) : null;
+  const link = buildShareLink(
+    stateCode ? { kind: 'state', id: stateCode } : undefined
+  );
+  const body = `${title}\n\n${link}`;
+  mail.href = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+}
+
 function renderUnavailable(
   context: BoundarySelectionContext,
   opener: HTMLElement | null
@@ -508,6 +564,7 @@ function renderUnavailable(
   const current = ensureImpactPanelShell();
   current.title.textContent = context.title;
   current.kind.textContent = 'Boundary briefing';
+  refreshBriefingActions(context.title, context);
   current.body.innerHTML = `
     <section class="impact-capability-unavailable" aria-label="Drought impact unavailable">
       <h3 class="impact-section-title">Drought impact unavailable</h3>

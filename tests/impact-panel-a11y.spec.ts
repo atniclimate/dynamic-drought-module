@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 import { URLS } from '../src/config/urls';
-import { gotoApp } from './helpers';
+import { gotoApp, waitForLayerSettled } from './helpers';
 
 /**
  * A minimal NWS point-heat stub (mirrors `stubBrowserNwsHeat` in
@@ -164,7 +164,11 @@ test.describe('impact panel accessibility', () => {
     const lastResource = panel.locator('.impact-resources a[href]').last();
     const technical = panel.locator('.impact-technical-information');
     const summary = technical.locator('summary');
-    const close = panel.locator('.impact-panel-close');
+    // D1 M21: Mail and Print are real, focusable controls now, and Close
+    // moves after them in DOM order (D1.md's M21 Notes), so the header's
+    // first focusable (where the trap wraps a forward Tab from the panel's
+    // last focusable) is Mail, not Close.
+    const mail = panel.locator('.impact-panel-action-mail');
 
     // Resource-catalog hydration replaces the whole body independently of
     // horizon hydration. Wait for the deterministic WA catalog row so that
@@ -179,9 +183,71 @@ test.describe('impact panel accessibility', () => {
     await expect(technical).toHaveJSProperty('open', true);
     await expect(technical.locator('#impact-technical-drought')).toBeVisible();
     await page.keyboard.press('Tab');
-    await expect(close).toBeFocused();
+    await expect(mail).toBeFocused();
     await page.keyboard.press('Shift+Tab');
     await expect(summary).toBeFocused();
+  });
+
+  test('the Email control is a mailto whose subject is the briefing title and whose body carries the share link, with select=state:XX only for a state place', async ({
+    page
+  }) => {
+    await gotoApp(page, '?select=state:WA');
+    const panel = page.locator('#impact-panel');
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+    await expect(panel.locator('#impact-panel-title')).toHaveText('Washington');
+
+    const mail = panel.locator('.impact-panel-action-mail');
+    const href = await mail.getAttribute('href');
+    if (!href || !href.startsWith('mailto:?')) {
+      throw new Error(`expected a wired mailto: href, got ${JSON.stringify(href)}`);
+    }
+    const params = new URLSearchParams(href.slice('mailto:?'.length));
+    expect(params.get('subject')).toBe('Washington');
+
+    const body = params.get('body') ?? '';
+    const lines = body.split('\n');
+    expect(lines[0]).toBe('Washington');
+    expect(lines[1]).toBe('');
+    const shareLink = new URL(lines[2] ?? '');
+    expect(shareLink.searchParams.get('select')).toBe('state:WA');
+  });
+
+  test("a Tribal Nation briefing's mailto carries no place token and names the Nation in words", async ({
+    page
+  }) => {
+    // Opened the way tests/interaction-coordinator.spec.ts opens a
+    // reservation or AIANNH representation's briefing: the two live Tribal
+    // layers over tests/tribal-fixtures.ts's synthetic collision fixtures,
+    // a centre click for the coordinated response, then its briefing door.
+    await gotoApp(page, '?region=washington_state&view=console&layers=aiannh,bia-reservations');
+    await waitForLayerSettled(page, 'aiannh');
+    await waitForLayerSettled(page, 'bia-reservations');
+
+    const box = await page.locator('#map').boundingBox();
+    if (!box) throw new Error('map container has no box');
+    const popup = page.locator('.maplibregl-popup-content');
+    await expect(async () => {
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await expect(popup).toBeVisible({ timeout: 1500 });
+    }).toPass({ timeout: 20_000 });
+    await popup.locator('[data-ddm-impact-trigger]').click();
+
+    const panel = page.locator('#impact-panel');
+    await expect(panel).toBeVisible();
+    const title = (await panel.locator('#impact-panel-title').textContent())?.trim() ?? '';
+    expect(title.length).toBeGreaterThan(0);
+
+    const mail = panel.locator('.impact-panel-action-mail');
+    const href = await mail.getAttribute('href');
+    if (!href || !href.startsWith('mailto:?')) {
+      throw new Error(`expected a wired mailto: href, got ${JSON.stringify(href)}`);
+    }
+    const params = new URLSearchParams(href.slice('mailto:?'.length));
+    expect(params.get('subject')).toBe(title);
+
+    const body = params.get('body') ?? '';
+    expect(body.startsWith(`${title}\n\n`)).toBe(true);
+    expect(body).not.toContain('select=');
   });
 
   test('a region spanning several states shows no briefing trigger (#9)', async ({ page }) => {
