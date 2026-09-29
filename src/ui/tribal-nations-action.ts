@@ -132,10 +132,10 @@ export function wireTribalNationsHealth(el: HTMLElement): void {
  *
  * `descEl`, when given, also tracks the state: the pressed description
  * (`actionOffDescription`, "Turns off...") while every member is on, the
- * activate description (`actionDescription`, "Turns on...") otherwise. The
- * Brief-door control is the only host that presents as pressed, so it is
- * the only host that needs the swap; the repair for the false-while-pressed
- * "Turns on" text (found-006 repair round).
+ * activate description (`actionDescription`, "Turns on...") otherwise. Two
+ * hosts present as pressed, the Brief-door control and its phone at-hand
+ * mirror (found-090), so both pass their description element; the repair
+ * for the false-while-pressed "Turns on" text (found-006 repair round).
  */
 export function wireTribalNationsToggle(
   button: HTMLButtonElement,
