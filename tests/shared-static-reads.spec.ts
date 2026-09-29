@@ -52,12 +52,20 @@ test.describe('DDM-P14-T06: shared static reads', () => {
 
     // `states` is in the boot set so its own activation fetch runs before any
     // studio interaction; `studio=place` mounts the Place studio at boot.
-    await gotoApp(page, '?view=brief&layers=places,states&studio=place');
+    // found-095: the click door below hits the map's centre, so this case is
+    // pinned to the Washington framing (D1 M2's national-pin rule, DR-109);
+    // under the national default the centre is Kansas.
+    await gotoApp(page, '?view=brief&layers=places,states&studio=place&region=washington_state');
 
     // The studio's own bundled-file readers: the state-type list load, then
     // the single-state selection resolve.
     await page.locator('#place-type-state').click();
     await page.locator('#place-studio-search').fill('Washington');
+    // found-095: under the national default (DR-109) the unfiltered list's
+    // first row is Kansas, the centre of the contiguous US, and the click
+    // used to land before the search filtered (the Washington default hid
+    // the race). Wait for the filtered first row before pressing it.
+    await expect(page.locator('#place-option-state-0')).toContainText('Washington');
     await page.locator('#place-option-state-0').click();
     await expect(page.locator('#place-selection-title')).toHaveText('Washington');
 
