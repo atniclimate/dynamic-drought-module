@@ -3,20 +3,25 @@ import { test, expect } from '@playwright/test';
 import { gotoApp, layerCheckbox, urlLayers } from './helpers';
 
 /**
- * U3f1: the wildfire event pair co-activates (D-0.7.0-018).
+ * U3f1 / found-007: the wildfire event pair is INDEPENDENT (the owner's
+ * ruling of 2026-09-28, reversing D-0.7.0-018's catalog coupling).
  *
- * Turning Current Mapped Fire Perimeters (nifc-fires) on through a user toggle
- * also turns on Smoke Plumes (hms-smoke), and the reverse; each stays
- * individually toggleable off. Co-activation is a USER-TOGGLE affordance only:
- * an inbound URL is authoritative, so a deep link naming just one of the pair
- * does NOT co-activate the other (the sharer may have turned it off deliberately).
+ * Checking Current Mapped Fire Perimeters (nifc-fires) turns on exactly that
+ * layer, and checking Smoke Plumes (hms-smoke) turns on exactly that layer;
+ * unchecking either turns off only itself. Neither row carries a partner note.
+ * The Wildfire MODE is a different path and is unchanged: its recipes and the
+ * Fire preset name both layers explicitly, so pressing Wildfire still shows
+ * both. An inbound URL is authoritative, so a deep link restores exactly the
+ * layers it names.
  *
- * Every assertion is on checkbox intent, which the controller writes
- * synchronously through the island bridge, so the specs are independent of
- * whether the live NIFC / HMS fetches succeed in the test environment.
+ * Every assertion is on checkbox intent and `layers=`, which the controller
+ * writes through the island bridge, so the specs are independent of whether
+ * the live NIFC / HMS fetches succeed in the test environment. The checkbox
+ * assertions are the deterministic discriminator: the retired cascade set the
+ * partner's checkbox synchronously inside the same change handler.
  */
-test.describe('U3f1 the wildfire event pair co-activates', () => {
-  test('toggling Current Mapped Fire Perimeters on co-activates Smoke Plumes', async ({
+test.describe('U3f1 the fire perimeters and smoke plumes checkboxes are independent (found-007)', () => {
+  test('checking Current Mapped Fire Perimeters turns on only itself, not Smoke Plumes', async ({
     page
   }) => {
     await gotoApp(page, '?view=console');
@@ -27,10 +32,10 @@ test.describe('U3f1 the wildfire event pair co-activates', () => {
     await layerCheckbox(page, 'nifc-fires').check();
 
     await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();
-    await expect(layerCheckbox(page, 'hms-smoke')).toBeChecked();
+    await expect(layerCheckbox(page, 'hms-smoke')).not.toBeChecked();
   });
 
-  test('toggling Smoke Plumes on co-activates Current Mapped Fire Perimeters (symmetric)', async ({
+  test('checking Smoke Plumes turns on only itself, not Current Mapped Fire Perimeters', async ({
     page
   }) => {
     await gotoApp(page, '?view=console');
@@ -38,13 +43,16 @@ test.describe('U3f1 the wildfire event pair co-activates', () => {
     await layerCheckbox(page, 'hms-smoke').check();
 
     await expect(layerCheckbox(page, 'hms-smoke')).toBeChecked();
-    await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();
+    await expect(layerCheckbox(page, 'nifc-fires')).not.toBeChecked();
   });
 
-  test('each stays individually toggleable off after the pair activates', async ({ page }) => {
+  test('each stays individually toggleable off after both are checked by hand', async ({ page }) => {
     await gotoApp(page, '?view=console');
 
     await layerCheckbox(page, 'nifc-fires').check();
+    // Independence: the first check brought in only itself.
+    await expect(layerCheckbox(page, 'hms-smoke')).not.toBeChecked();
+    await layerCheckbox(page, 'hms-smoke').check();
     await expect(layerCheckbox(page, 'hms-smoke')).toBeChecked();
 
     // Turn only Smoke Plumes back off; Current Mapped Fire Perimeters stays on.
@@ -54,14 +62,14 @@ test.describe('U3f1 the wildfire event pair co-activates', () => {
     await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();
   });
 
-  test('a deep link naming only one of the pair does NOT co-activate the other (URL authoritative)', async ({
+  test('a deep link naming only one of the pair restores only that one (URL authoritative)', async ({
     page
   }) => {
     await gotoApp(page, '?layers=nifc-fires');
 
     await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();
-    // The URL restore path (applyLayerSet) never co-activates: the sharer named
-    // exactly one layer, and that is what the recipient gets.
+    // The URL restore path (applyLayerSet) names its layers exactly: the
+    // sharer named exactly one layer, and that is what the recipient gets.
     await expect(layerCheckbox(page, 'hms-smoke')).not.toBeChecked();
   });
 
@@ -73,68 +81,58 @@ test.describe('U3f1 the wildfire event pair co-activates', () => {
   });
 
   /**
-   * found-007 (D1 M14): each row's visible note and accessible name make
-   * the co-activation coupling explicit, in D1.md's own wording.
+   * found-007 (repurposed from D1 M14's partner-note case): with the pair
+   * independent there is no partner to name, so neither row carries a note
+   * and each row's accessible name starts with its own layer name and never
+   * mentions the other layer.
    */
-  test('each of the fire perimeters and smoke plumes rows names the partner it switches on', async ({
+  test('neither the fire perimeters nor the smoke plumes row carries a partner note; each accessible name is its own layer name', async ({
     page
   }) => {
     await gotoApp(page, '?view=console');
 
-    const fireNote = page.locator('[data-layer-coactivate-note="nifc-fires"]');
-    await expect(fireNote).toHaveText('also turns on Smoke Plumes (HMS)');
-    await expect(layerCheckbox(page, 'nifc-fires')).toHaveAccessibleName(
-      /also turns on Smoke Plumes \(HMS\)/
-    );
+    const fire = layerCheckbox(page, 'nifc-fires');
+    await expect(fire).toHaveAccessibleName(/^Current Mapped Fire Perimeters \(NIFC\)/);
+    await expect(fire).not.toHaveAccessibleName(/also turns on|Smoke Plumes/);
 
-    const smokeNote = page.locator('[data-layer-coactivate-note="hms-smoke"]');
-    await expect(smokeNote).toHaveText('also turns on Current Mapped Fire Perimeters (NIFC)');
-    await expect(layerCheckbox(page, 'hms-smoke')).toHaveAccessibleName(
-      /also turns on Current Mapped Fire Perimeters \(NIFC\)/
-    );
+    const smoke = layerCheckbox(page, 'hms-smoke');
+    await expect(smoke).toHaveAccessibleName(/^Smoke Plumes \(HMS\)/);
+    await expect(smoke).not.toHaveAccessibleName(/also turns on|Current Mapped Fire Perimeters/);
+
+    // Both rows are mounted (the accessible-name reads above waited on them),
+    // so a zero count is a real absence, not an unrendered catalog.
+    await expect(page.locator('[data-layer-coactivate-note]')).toHaveCount(0);
   });
 
   /**
    * found-007's register acceptance ("a test asserts layers= after each of
-   * the four actions"): the Tier 1 choice is asymmetric-with-a-note, not
-   * the register draft's symmetric-off or fully-independent alternatives
-   * (D1.md Notes). This pins today's asymmetric behavior at the URL layer
-   * specifically: checking either member brings both into layers=;
-   * unchecking either drops only itself.
-   *
+   * the four actions"), under the owner's ruling of 2026-09-28: the pair is
+   * fully independent. After each action `layers=` holds exactly the member
+   * the user just left on, and never the other. Each step first waits on the
+   * URL, then reads the partner's checkbox, which the retired cascade set
+   * synchronously, so a coupling cannot pass through a transient URL write.
    */
-  test('layers= reflects the pair asymmetrically after each of the four coupling actions', async ({
+  test('layers= holds only the member the user toggled after each of the four actions (independent pair)', async ({
     page
   }) => {
     await gotoApp(page, '?view=console');
 
-    // Action 1: check nifc-fires. Both enter layers= (symmetric ON).
+    // Action 1: check nifc-fires. Only nifc-fires enters layers=.
     await layerCheckbox(page, 'nifc-fires').check();
+    await expect(layerCheckbox(page, 'hms-smoke')).not.toBeChecked();
     await expect
       .poll(
         async () => {
           const layers = await urlLayers(page);
-          return layers.has('nifc-fires') && layers.has('hms-smoke');
+          return layers.has('nifc-fires') && !layers.has('hms-smoke');
         },
         { timeout: 25_000 }
       )
       .toBe(true);
 
-    // Action 2: uncheck nifc-fires. Only itself drops (asymmetric OFF); the
-    // co-activated partner stays in layers=.
+    // Action 2: uncheck nifc-fires. Neither is in layers=.
     await layerCheckbox(page, 'nifc-fires').uncheck();
-    await expect
-      .poll(
-        async () => {
-          const layers = await urlLayers(page);
-          return !layers.has('nifc-fires') && layers.has('hms-smoke');
-        },
-        { timeout: 25_000 }
-      )
-      .toBe(true);
-
-    // Reset both off before the mirror pair of actions.
-    await layerCheckbox(page, 'hms-smoke').uncheck();
+    await expect(layerCheckbox(page, 'hms-smoke')).not.toBeChecked();
     await expect
       .poll(
         async () => {
@@ -145,25 +143,27 @@ test.describe('U3f1 the wildfire event pair co-activates', () => {
       )
       .toBe(true);
 
-    // Action 3: check hms-smoke. Both enter layers= (symmetric ON, mirrored).
+    // Action 3: check hms-smoke. Only hms-smoke enters layers=.
     await layerCheckbox(page, 'hms-smoke').check();
+    await expect(layerCheckbox(page, 'nifc-fires')).not.toBeChecked();
     await expect
       .poll(
         async () => {
           const layers = await urlLayers(page);
-          return layers.has('nifc-fires') && layers.has('hms-smoke');
+          return !layers.has('nifc-fires') && layers.has('hms-smoke');
         },
         { timeout: 25_000 }
       )
       .toBe(true);
 
-    // Action 4: uncheck hms-smoke. Only itself drops (asymmetric OFF, mirrored).
+    // Action 4: uncheck hms-smoke. Neither is in layers=.
     await layerCheckbox(page, 'hms-smoke').uncheck();
+    await expect(layerCheckbox(page, 'nifc-fires')).not.toBeChecked();
     await expect
       .poll(
         async () => {
           const layers = await urlLayers(page);
-          return layers.has('nifc-fires') && !layers.has('hms-smoke');
+          return !layers.has('nifc-fires') && !layers.has('hms-smoke');
         },
         { timeout: 25_000 }
       )

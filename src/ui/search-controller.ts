@@ -11,8 +11,9 @@
  * Three result kinds:
  *   - place  a state; opens its drought briefing (openStateBriefing).
  *   - layer  a catalog layer; turns it on through the shared toggle command
- *            (which co-activates the wildfire pair, syncs the checkbox, and
- *            respects surface exclusivity, exactly like a catalog toggle).
+ *            (which syncs the checkbox and respects surface exclusivity,
+ *            exactly like a catalog toggle; no layer co-activates a partner
+ *            since DR-168).
  *   - tribal a Tribal land area (LARNAME); locates it live, frames it, lights
  *            it, and opens its briefing (locateTribalLandArea).
  *

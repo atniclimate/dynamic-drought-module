@@ -134,9 +134,11 @@ export const MOBILE_HAZARD_PRESETS: readonly ViewPreset[] = [
     label: 'Fire',
     description: 'Wildfire: recent NOAA GOES GeoColor context; the SPC fire-weather outlook with current mapped fire perimeters, including Wildfire and Prescribed fire, plus independently timed NOAA Hazard Mapping System (HMS) smoke plumes',
     preferredBasemap: 'satellite',
-    // hms-smoke is named explicitly (maintainer ruling 2026-07-15): applyPreset
-    // takes the non-cascading activation path, so coActivateWith alone would
-    // not bring smoke in, and a fire view without smoke is not the full read.
+    // hms-smoke is named explicitly (maintainer ruling 2026-07-15): a fire
+    // view without smoke is not the full read. Naming it is now the only way
+    // the preset brings smoke in: applyPreset takes the non-cascading path,
+    // and since the owner's ruling of 2026-09-28 (found-007) no layer declares
+    // coActivateWith partners, so the two checkboxes are independent.
     layers: ['spc-fire-weather', 'nifc-fires', 'hms-smoke', 'aiannh']
   }
 ];

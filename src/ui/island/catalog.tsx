@@ -138,11 +138,6 @@ function LayerRow({
         >
           {status ? resolveStatusPillText(status, def.noDataLabel) : ''}
         </span>
-        {def.coActivateNote ? (
-          <span class="layer-toggle-note" data-layer-coactivate-note={def.key}>
-            {def.coActivateNote}
-          </span>
-        ) : null}
         {showSource ? <span class="layer-toggle-source">{def.source}</span> : null}
       </span>
     </label>

@@ -20,7 +20,9 @@
  *   - Activation is EXACT (no co-activation cascade): recipes list
  *     their pairs explicitly (both wildfire recipes name nifc-fires and
  *     hms-smoke); the composition below also expands `coActivateWith`
- *     defensively so the committed intent can never under-claim a pair.
+ *     defensively so the committed intent could never under-claim a pair.
+ *     Since the owner's ruling of 2026-09-28 (found-007) no layer declares
+ *     partners, so that expansion is a no-op kept for any future pair.
  *   - The committed temporal horizon lives in the timeline store
  *     (timeline.horizon, added by S3) and persists across cluster
  *     flips: a switch compares the same time.
@@ -138,7 +140,8 @@ const listeners = new Set<() => void>();
  * hazard recipe for the horizon in activation order, with any
  * `coActivateWith` pair expanded defensively (recipes already list
  * their pairs explicitly; the controller cascade is never relied on
- * along this path). For 'drought' at 'current' this composes back to
+ * along this path; no layer declares partners since the owner's ruling
+ * of 2026-09-28, found-007, so the expansion adds nothing today). For 'drought' at 'current' this composes back to
  * exactly the default-on set, so the bare boot and the absent-cluster
  * boot are the same set by construction. An EMPTY recipe (Extreme Heat
  * at season-ahead) honestly yields the reference set alone.
@@ -273,7 +276,8 @@ export function onCommittedSnapshotChange(fn: () => void): () => void {
  * Whether a layer key is a member of the committed cluster's COMPOSITION:
  * the intent `composeClusterIntent` resolved for it, which is the persistent
  * reference set (hillshade, the boundaries, the state hairlines) plus the
- * recipe at the resolved horizon with any `coActivateWith` pair expanded. A
+ * recipe at the resolved horizon with any `coActivateWith` pair expanded
+ * (none today: no layer declares partners since found-007, 2026-09-28). A
  * 'custom' display (including a switch demoted by a reference extra) has no
  * composition.
  *

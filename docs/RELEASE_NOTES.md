@@ -13,6 +13,8 @@
   place when that region is one of the regions without validated impact
   synthesis; an explicit change into such a region still closes the
   briefing.
+- 2026-09-28: the fire perimeter and smoke plume checkboxes now each control
+  only their own layer (the Wildfire mode still shows both).
 
 ## v0.7.0
 
