@@ -182,12 +182,15 @@ export const REGIONS: Record<RegionKey, Region> = {
     // on 2026-07-27; this framing describes source coverage, not a boundary.
     bounds: [[48.2975, -139.0614], [60.0020, -114.0534]],
     padding: 0.4,
-    description: 'Province-wide basin drought-level framing; Canadian briefings are unavailable.',
+    description: 'Province-wide framing; Canadian briefings are unavailable.',
     group: 'canada',
     coverageFamily: 'canada',
+    // DR-160 (2026-09-28): the Province of British Columbia basin edition
+    // is held; this region's upstream coverage is the Canadian Drought
+    // Monitor until the hold lifts.
     sourceEditions: [{
-      source: 'bc-basin',
-      cadence: 'weekly-in-season',
+      source: 'cdm',
+      cadence: 'monthly',
       scope: 'full'
     }]
   }

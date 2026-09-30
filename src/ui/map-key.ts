@@ -327,6 +327,11 @@ function swatchItem(color: string, code: string): string {
 
 function droughtKey(): KeySpec {
   const presentation = getDroughtSurfacePresentation();
+  // DR-160 (2026-09-28): while BC_BASIN_EDITION_HELD is true in
+  // src/config/layers.ts, no writer ever sets edition 'bc-basin'
+  // (src/layers/usdm.ts editionForRegion, src/ui/sidebar.ts selectRegion),
+  // so this branch is unreachable; it stays dormant, not deleted, for the
+  // hold's eventual release.
   if (presentation.edition === 'bc-basin') {
     const date = presentation.sourceDate ?? 'unavailable';
     return {

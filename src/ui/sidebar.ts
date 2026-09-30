@@ -55,6 +55,7 @@
 import * as maplibregl from 'maplibre-gl';
 
 import {
+  BC_BASIN_EDITION_HELD,
   LAYER_DEFS,
   getLayerDef,
   resetDroughtSurfacePresentation,
@@ -635,7 +636,10 @@ function selectRegion(
   }
 
   STATE.currentRegion = key;
-  if (key === 'british_columbia') {
+  // DR-160 (2026-09-28): the basin presentation is held; while
+  // BC_BASIN_EDITION_HELD is true, British Columbia never sets it and
+  // shows the US Drought Monitor presentation like any other region.
+  if (key === 'british_columbia' && !BC_BASIN_EDITION_HELD) {
     setDroughtSurfacePresentation({
       edition: 'bc-basin',
       name: 'British Columbia Basin Drought Levels',

@@ -176,10 +176,12 @@ export const PRODUCTS: Readonly<Record<ProductKey, ProductDef>> = Object.freeze(
     key: 'usdm',
     // The registered `usdm` LayerDef's `source` is a live getter
     // (getDroughtSurfacePresentation) that reads 'NDMC · FeatureServer' by
-    // default and swaps to a British Columbia basin issuer string when that
-    // edition is active (src/config/layers.ts DROUGHT_CONDITIONS_DEF,
-    // src/layers/bc-drought.ts). A ProductDef.issuer is a fixed string, so
-    // this names the default USDM_PRESENTATION issuer; see the microtask 1
+    // default and would swap to a British Columbia basin issuer string when
+    // that edition is active (src/config/layers.ts DROUGHT_CONDITIONS_DEF,
+    // src/layers/bc-drought.ts); that swap is HELD by DR-160 (2026-09-28)
+    // until the Province's written permission or the owner's re-ruling, so
+    // it never fires today. A ProductDef.issuer is a fixed string, so this
+    // names the default USDM_PRESENTATION issuer; see the microtask 1
     // report.
     issuer: 'NDMC · FeatureServer',
     endpointKey: 'usdmFeatureServer',

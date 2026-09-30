@@ -365,7 +365,8 @@ const FEATURE_BUDGETS = [
   },
   {
     key: 'bc-basin-drought',
-    label: 'rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 7.9 kB; Province of British Columbia basin drought levels (measured 3,908,396 bytes and one request with the 0.01-degree generalized query on 2026-07-27)',
+    label: 'HELD by DR-160 (2026-09-28) until the Province\'s written permission or the owner\'s re-ruling; the row and its measurement are kept for the hold\'s eventual release. rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 7.9 kB; Province of British Columbia basin drought levels (measured 3,908,396 bytes and one request with the 0.01-degree generalized query on 2026-07-27)',
+    heldBy: 'DR-160',
     rootModules: ['src/layers/bc-drought.ts'],
     measuredJsGzipKb: 7.9,
     networkBytes: 4_250_000,
@@ -651,6 +652,29 @@ function checkZipDependencyNames(depNames) {
   return findings;
 }
 
+let cachedBcBasinHeld;
+
+/**
+ * DR-160 (2026-09-28): whether the Province of British Columbia basin
+ * drought edition is held, read as a simple text match of
+ * `BC_BASIN_EDITION_HELD`'s line in src/config/layers.ts so this script and
+ * the source constant it mirrors can never disagree (no TypeScript import
+ * seam exists in this plain .mjs checker). Cached for the run; a test
+ * supplies its own `bcBasinHeld` option instead of touching the real file.
+ */
+function isBcBasinEditionHeld() {
+  if (cachedBcBasinHeld !== undefined) return cachedBcBasinHeld;
+  let src;
+  try {
+    src = readFileSync('src/config/layers.ts', 'utf8');
+  } catch {
+    cachedBcBasinHeld = false;
+    return cachedBcBasinHeld;
+  }
+  cachedBcBasinHeld = /\bBC_BASIN_EDITION_HELD\s*=\s*true\b/.test(src);
+  return cachedBcBasinHeld;
+}
+
 function validateBudgets(budgets) {
   const findings = [];
   const invalidKeys = new Set();
@@ -690,7 +714,7 @@ function validateBudgets(budgets) {
  * The checker, pure over a dist directory and a config, so the
  * self-test runs the same code path as the real tree.
  * ------------------------------------------------------------------ */
-function runChecks(distDir, { forbidden, mapExempt, budgets }) {
+function runChecks(distDir, { forbidden, mapExempt, budgets, bcBasinHeld }) {
   const findings = [];
   const report = [];
   const assets = join(distDir, 'assets');
@@ -803,6 +827,24 @@ function runChecks(distDir, { forbidden, mapExempt, budgets }) {
     const jsKb = typeof measuredKb === 'number' ? budgetForMeasurement(measuredKb) : measuredKb;
     const roots = Array.isArray(feature.rootModules) ? feature.rootModules : [];
     const missingRoots = roots.filter((r) => !(r in manifest));
+    // DR-160: a feature marked `heldBy` is neither enforced nor drift while
+    // the source constant it names is true, root(s) missing or not; the
+    // marker is honoured only then, so a released hold (constant flipped to
+    // false) with a stale marker falls straight through to normal
+    // enforcement below instead of silently staying exempt.
+    if (feature.heldBy) {
+      const held = typeof bcBasinHeld === 'boolean' ? bcBasinHeld : isBcBasinEditionHeld();
+      if (held) {
+        report.push(
+          `  ${feature.key}: HELD by ${feature.heldBy} (BC_BASIN_EDITION_HELD is true in src/config/layers.ts); neither enforced nor drift${
+            missingRoots.length
+              ? ` (root module(s) absent from the manifest while held, as expected: ${missingRoots.join(', ')})`
+              : ''
+          }`
+        );
+        continue;
+      }
+    }
     if (missingRoots.length) {
       const msg = `feature ${feature.key}: root module(s) not in the manifest: ${missingRoots.join(', ')}`;
       if (typeof jsKb === 'number') findings.push(`${msg}; an enforced budget with a missing root is drift, not a pass`);
@@ -1032,6 +1074,15 @@ const SELF_TEST_CASES = [
     files: { 'index.html': htmlWith(), '.vite/manifest.json': manifestWith([]), ...CLEAN_ENTRY },
   },
   {
+    // DR-160: a stale `heldBy` marker (source constant false) must NOT
+    // exempt a missing root; it falls straight through to the normal
+    // missing-root drift finding, same as fail-budget-root-missing above.
+    name: 'fail-budget-held-flag-mismatch', kind: 'fail', expect: 'root module',
+    bcBasinHeld: false,
+    budgets: [{ key: 'fx-held', heldBy: 'DR-160', rootModules: ['src/features/nope.ts'], measuredJsGzipKb: 10, ...PENDING_COLS }],
+    files: { 'index.html': htmlWith(), '.vite/manifest.json': manifestWith([]), ...CLEAN_ENTRY },
+  },
+  {
     name: 'fail-budget-no-roots', kind: 'fail', expect: 'root module',
     budgets: [{ key: 'fx', rootModules: [], measuredJsGzipKb: 10, ...PENDING_COLS }],
     files: { 'index.html': htmlWith(), '.vite/manifest.json': manifestWith([]), ...CLEAN_ENTRY },
@@ -1148,6 +1199,15 @@ const SELF_TEST_CASES = [
     },
   },
   {
+    // DR-160: a `heldBy` feature with a missing root, while the source
+    // constant is true, reports HELD (neither enforced nor drift) instead
+    // of the missing-root drift finding fail-budget-root-missing proves.
+    name: 'pass-budget-held-missing-root', kind: 'pass',
+    bcBasinHeld: true,
+    budgets: [{ key: 'fx-held', heldBy: 'DR-160', rootModules: ['src/features/nope.ts'], measuredJsGzipKb: 10, ...PENDING_COLS }],
+    files: { 'index.html': htmlWith(), '.vite/manifest.json': manifestWith([]), ...CLEAN_ENTRY },
+  },
+  {
     name: 'pass-budget-under-closure', kind: 'pass',
     budgets: [{ key: 'fx', rootModules: ['src/features/fixture.ts'], measuredJsGzipKb: 10, ...PENDING_COLS }],
     files: {
@@ -1173,6 +1233,7 @@ const EXPECTED_CASE_NAMES = [
   'fail-forged-vendor-no-pmtiles',
   'fail-vendor-firstparty-share', 'fail-manifest-html-mismatch',
   'fail-no-manifest', 'fail-budget-over', 'fail-budget-root-missing',
+  'fail-budget-held-flag-mismatch',
   'fail-budget-no-roots', 'fail-budget-invalid-value',
   'fail-data-asset-over', 'fail-data-asset-escape',
   'fail-budget-empty-closure', 'fail-budget-zero',
@@ -1182,6 +1243,7 @@ const EXPECTED_CASE_NAMES = [
   'pass-clean-with-lazy-geotiff', 'pass-runtime-exempt',
   'pass-preload-helper-exempt',
   'pass-vendor-allowance', 'pass-budget-under-closure',
+  'pass-budget-held-missing-root',
 ];
 
 function runSelfTest() {
@@ -1300,6 +1362,7 @@ function runSelfTest() {
         forbidden: EAGER_FORBIDDEN,
         mapExempt: MAP_EXEMPT,
         budgets: testCase.budgets ?? [],
+        bcBasinHeld: testCase.bcBasinHeld,
       });
       if (testCase.kind === 'fail') {
         if (findings.length === 0) {

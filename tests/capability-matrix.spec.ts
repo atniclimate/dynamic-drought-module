@@ -8,6 +8,7 @@ import {
   COVERAGE_FAMILY_KEYS,
   COVERAGE_FAMILY_LABELS
 } from '../src/config/capability-matrix';
+import { BC_BASIN_EDITION_HELD } from '../src/config/layers';
 import { regionCapabilityLevel } from '../src/config/region-capability';
 import { REGIONS, type RegionKey } from '../src/config/regions';
 import type {
@@ -216,10 +217,15 @@ test.describe('region capability substrate (T-M0-4, N4a)', () => {
     ]);
     // The basin's fuzzy state membership is deliberately NOT inferred.
     expect(REGIONS.columbia_snake_basin.memberStates).toBeUndefined();
+    // Value-only migration (S30D-N1 U1; DR-160, 2026-09-28): the basin
+    // edition is held, so British Columbia's upstream coverage is the
+    // Canadian Drought Monitor instead. Before: source 'bc-basin',
+    // cadence 'weekly-in-season'. After: source 'cdm', cadence 'monthly'.
+    // A ruling that releases the hold must change this back.
     expect(REGIONS.british_columbia.sourceEditions).toEqual([
       {
-        source: 'bc-basin',
-        cadence: 'weekly-in-season',
+        source: 'cdm',
+        cadence: 'monthly',
         scope: 'full'
       }
     ]);
@@ -230,6 +236,18 @@ test.describe('region capability substrate (T-M0-4, N4a)', () => {
         );
       }
     }
+  });
+
+  // GUARD (DR-160, 2026-09-28): the basin edition is held until the
+  // Province's written permission or the owner's re-ruling. A ruling that
+  // releases the hold must change this test (never mark it false without
+  // one): flip BC_BASIN_EDITION_HELD and give british_columbia back a
+  // 'bc-basin' sourceEditions row.
+  test('the British Columbia basin edition is held (DR-160)', () => {
+    expect(BC_BASIN_EDITION_HELD).toBe(true);
+    expect(
+      REGIONS.british_columbia.sourceEditions.some((edition) => edition.source === 'bc-basin')
+    ).toBe(false);
   });
 
   test('memberStates is populated exactly where enumerable without inference', () => {

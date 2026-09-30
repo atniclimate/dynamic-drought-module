@@ -46,9 +46,9 @@ supported; the note says why).
 
 ### Canada
 
-- **Display** (partial): British Columbia has a validated live basin display, the Canadian Drought Monitor has a committed monthly national snapshot, and the North American Drought Monitor supplies separate continental context; Canadian place catalogs do not ship.
+- **Display** (partial): The Canadian Drought Monitor has a committed monthly national snapshot, and the North American Drought Monitor supplies separate continental context; Canadian place catalogs do not ship.
 - **Selectable place** (none): No Canadian place catalogs are wired.
-- **Drought state** (partial): Province of British Columbia basin levels display with source dates, the Canadian Drought Monitor snapshot displays its month and class occupancy, and the North American Drought Monitor displays its separate consensus month; no edition is blended with another.
+- **Drought state** (partial): The Canadian Drought Monitor snapshot displays its month and class occupancy, and the North American Drought Monitor displays its separate consensus month; no edition is blended with another.
 - **Landscape signature** (none): No Canadian signature inputs.
 - **Impact synthesis** (none): No Canadian briefing support.
 

@@ -9,6 +9,13 @@ import {
   selectRegion
 } from './helpers';
 
+// DR-160 (2026-09-28): the Province of British Columbia basin drought
+// edition is HELD until the Province's written permission or the owner's
+// re-ruling. This file's BC_HOST/BC_PATH/BC_FIXTURE fixtures stay so the
+// tests below can prove the held app never reaches that host; a ruling
+// that releases the hold restores the basin-rendering cases this file
+// used to carry (git history has them).
+
 const BC_HOST = 'services1.arcgis.com';
 const BC_PATH =
   '/xeMpV7tU1t4KD3Ei/arcgis/rest/services/British_Columbia_Drought_Levels_(Edit)_view/FeatureServer/27/query';
@@ -154,14 +161,29 @@ function droughtRow(page: Page) {
     .filter({ has: layerCheckbox(page, 'usdm') });
 }
 
-function conditionsGroup(page: Page) {
-  return page
-    .locator('.layer-group')
-    .filter({ has: page.locator('.layer-group-title-text', { hasText: 'Conditions' }) });
-}
-
 test.describe('U7 British Columbia basin drought display', () => {
-  test('uses only required fields and renders issuer, date, scale, and No update honestly', async ({
+  // DR-160 (2026-09-28): retired, held-module cases (one-line reason each;
+  // never a silent delete):
+  //   - 'uses only required fields and renders issuer, date, scale, and No
+  //     update honestly' (formerly here): validated the bc-drought
+  //     ArcGIS query's field allowlist and the basin swatches/date scale;
+  //     that fetch never fires while held, so replaced below by 'British
+  //     Columbia with the usdm layer makes no request to the Province's
+  //     service and never shows the basin edition'.
+  //   - 'a late British Columbia response cannot replace the region
+  //     selected after it': guarded a stale-fetch race against
+  //     ./bc-drought; that module is never activated while held, so the
+  //     race cannot occur.
+  //   - 'No update popup says not measured and never presents value 99 as
+  //     severity': guarded the bc-drought popup's own wording; nothing
+  //     renders that popup while held.
+  //   - 'failed source is unavailable, not clean no-drought or class
+  //     zero': guarded the bc-drought fetch's failure handling; no such
+  //     fetch happens while held (British Columbia's ordinary usdm
+  //     failure path is covered by the other usdm specs, unaffected by
+  //     this hold).
+
+  test("British Columbia with the usdm layer makes no request to the Province's service and never shows the basin edition", async ({
     page
   }) => {
     const bcRequests: string[] = [];
@@ -174,52 +196,22 @@ test.describe('U7 British Columbia basin drought display', () => {
 
     await expect(regionSelect(page)).toHaveValue('region:british_columbia');
     await expect(layerPill(page, 'usdm')).toHaveText('live');
-    await expect(droughtRow(page)).toContainText(
+
+    const legend = page.locator('#legend-panel [data-legend="usdm"]');
+    await expect(legend).toContainText('U.S. Drought Monitor');
+    await expect(legend).not.toContainText('British Columbia');
+
+    await expect(droughtRow(page)).not.toContainText(
       'British Columbia Basin Drought Levels'
     );
-
-    await conditionsGroup(page)
-      .locator('.layer-group-sources-toggle')
-      .click();
-    await expect(droughtRow(page)).toContainText(
-      'Province of British Columbia · source date 2026-07-23'
+    await expect(page.locator('#map-key .map-key-chip-label')).not.toHaveText(
+      'BC drought'
     );
 
-    const legend = page.locator(
-      '#legend-panel [data-legend="usdm"]'
-    );
-    await expect(legend).toContainText('British Columbia basin drought levels');
-    await expect(legend).toContainText('No update · Not measured right now');
-    await expect(legend).toContainText('source date 2026-07-23');
-    await expect(legend).not.toContainText('U.S. Drought Monitor');
-
-    await expect(page.locator('#time-bar')).toContainText(
-      'Source date Jul 23, 2026'
-    );
-    await expect(page.locator('#time-bar')).toContainText(
-      'No update means not measured right now'
-    );
-    await expect(page.locator('#map-key')).toBeVisible();
-    await expect(page.locator('#map-key-details-toggle')).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.locator('#map-key-content')).toBeHidden();
-    await page.locator('#map-info-btn').click();
-    await expect(page.locator('#map-info-attribution')).toContainText(
-      'Province of British Columbia'
-    );
-    await page.keyboard.press('Escape');
-
-    expect(bcRequests).toHaveLength(1);
-    const query = new URL(bcRequests[0]!);
-    expect(query.searchParams.get('outFields')).toBe(
-      'OBJECTID,BasinName,DroughtLevel,Date_Modified'
-    );
-    expect(query.searchParams.get('outSR')).toBe('4326');
-    expect(query.searchParams.get('f')).toBe('geojson');
-    expect(query.searchParams.has('Comments')).toBe(false);
-    expect(query.searchParams.has('Shape__Area')).toBe(false);
+    expect(bcRequests).toHaveLength(0);
   });
 
-  test('switches United States to British Columbia and back with one issuer visible at a time', async ({
+  test('switching United States to British Columbia and back never shows the basin edition', async ({
     page
   }) => {
     const bcRequests: string[] = [];
@@ -232,11 +224,8 @@ test.describe('U7 British Columbia basin drought display', () => {
 
     await selectRegion(page, 'british_columbia');
     await expect(layerPill(page, 'usdm')).toHaveText('live');
-    await expect(legend).toContainText('Province of British Columbia');
-    await expect(legend).not.toContainText('U.S. Drought Monitor');
-    await expect(page.locator('#time-bar')).not.toContainText(
-      'US Drought Monitor week'
-    );
+    await expect(legend).toContainText('U.S. Drought Monitor');
+    await expect(legend).not.toContainText('Province of British Columbia');
 
     await selectRegion(page, 'washington_state');
     await expect(layerPill(page, 'usdm')).toHaveText('live');
@@ -245,100 +234,7 @@ test.describe('U7 British Columbia basin drought display', () => {
     await expect(page.locator('#map-key')).not.toContainText(
       'Province of British Columbia'
     );
-    expect(bcRequests).toHaveLength(1);
-  });
-
-  test('a late British Columbia response cannot replace the region selected after it', async ({
-    page
-  }) => {
-    const bcRequests: string[] = [];
-    let releaseBc!: () => void;
-    const bcGate = new Promise<void>((resolve) => {
-      releaseBc = resolve;
-    });
-    await routeDroughtSources(page, bcRequests, 200, bcGate);
-
-    await gotoApp(page, '?region=washington_state&layers=usdm&view=console');
-    await expect(layerPill(page, 'usdm')).toHaveText('live');
-    const legend = page.locator('#legend-panel [data-legend="usdm"]');
-
-    await selectRegion(page, 'british_columbia');
-    await expect.poll(() => bcRequests.length).toBe(1);
-    await selectRegion(page, 'washington_state');
-    await expect(layerPill(page, 'usdm')).toHaveText('live');
-    await expect(legend).toContainText('U.S. Drought Monitor');
-
-    releaseBc();
-    await page.waitForTimeout(500);
-    await expect(regionSelect(page)).toHaveValue('region:washington_state');
-    await expect(legend).toContainText('U.S. Drought Monitor');
-    await expect(legend).not.toContainText('Province of British Columbia');
-    await expect(page.locator('#map-key')).not.toContainText(
-      'Province of British Columbia'
-    );
-  });
-
-  test('No update popup says not measured and never presents value 99 as severity', async ({
-    page
-  }) => {
-    const bcRequests: string[] = [];
-    await routeDroughtSources(page, bcRequests);
-    await gotoApp(
-      page,
-      '?region=british_columbia&layers=usdm&view=console'
-    );
-    await expect(layerPill(page, 'usdm')).toHaveText('live');
-
-    const map = page.locator('#map');
-    const box = await map.boundingBox();
-    if (!box) throw new Error('map has no bounding box');
-    const popup = page.locator('.maplibregl-popup-content');
-    const centerX = box.x + box.width / 2;
-    const centerY = box.y + box.height / 2;
-    await expect
-      .poll(
-        async () => {
-          await page.mouse.click(centerX, centerY);
-          await page.waitForTimeout(120);
-          return popup.isVisible();
-        },
-        {
-          timeout: 8000,
-          message: 'British Columbia drought popup never appeared over the basin fill'
-        }
-      )
-      .toBe(true);
-
-    await expect(popup).toContainText('Interior Test Basin: No update');
-    await expect(popup).toContainText('Province of British Columbia');
-    await expect(popup).toContainText('Source date: 2026-07-23');
-    await expect(popup).toContainText('not measured right now');
-    await expect(popup).toContainText('not a drought severity');
-    await expect(popup).not.toContainText('Level 99');
-  });
-
-  test('failed source is unavailable, not clean no-drought or class zero', async ({
-    page
-  }) => {
-    const bcRequests: string[] = [];
-    await routeDroughtSources(page, bcRequests, 503);
-
-    await gotoApp(
-      page,
-      '?region=british_columbia&layers=usdm&view=console'
-    );
-    await expect(layerPill(page, 'usdm')).toHaveText('unavailable');
-    await expect(layerCheckbox(page, 'usdm')).not.toBeChecked();
-    await expect(
-      page.locator('#legend-panel [data-legend="usdm"]')
-    ).toHaveCount(0);
-    // Value-only migration (S30D D1 M10; interface-chrome-popups-text.md
-    // section 2.4, "the chip never hides"): with no key eligible the chip
-    // falls back to the committed mode's own word instead of going
-    // `hidden`. The committed mode here is Drought (no `cluster=` param).
-    await expect(page.locator('#map-key')).toBeVisible();
-    await expect(page.locator('#map-key .map-key-chip-label')).toHaveText('Drought');
-    expect(bcRequests).toHaveLength(1);
+    expect(bcRequests).toHaveLength(0);
   });
 
   test('switching an open United States briefing into British Columbia closes it before print', async ({
@@ -380,12 +276,17 @@ test.describe('U7 British Columbia basin drought display', () => {
     await page.emulateMedia({ media: 'print' });
     await expect(page.locator('#app')).toBeVisible();
     await expect(panel).toBeHidden();
+    // DR-160 (2026-09-28): value-only migration. Before (basin edition):
+    // time-bar 'Source date Jul 23, 2026', legend 'Province of British
+    // Columbia'. After (held; British Columbia shows the US Drought
+    // Monitor's own week, from USDM_FIXTURE's MapDate 2026-07-21): the
+    // time-bar's 'Valid <date>' stamp and the ordinary USDM legend.
     await expect(page.locator('#time-bar')).toContainText(
-      'Source date Jul 23, 2026'
+      'Valid Jul 21, 2026'
     );
     await expect(
       page.locator('#legend-panel [data-legend="usdm"]')
-    ).toContainText('Province of British Columbia');
+    ).toContainText('U.S. Drought Monitor');
     await expect(page.locator('#map-key-content')).toBeHidden();
   });
 
