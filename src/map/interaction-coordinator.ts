@@ -93,6 +93,26 @@ export interface ClickTargetSpec {
     click: CoordinatorClick,
     map: maplibregl.Map
   ): CoordinatedResponse | null;
+  /**
+   * A GROUP-CAPABLE target (D2 supplies one; D1 computes no group,
+   * grouping-contract.md 12.1). The coordinator hands `respond` EVERY
+   * labelled feature of this target's layers under the click, in rendered
+   * order, taken before the first-feature collapse. The target owes the
+   * rest, inside its own lazy chunk: it assembles those features into
+   * sections and dedupes them by resolved group key through
+   * `assembleSections` (src/map/response-sections.ts), so two hits in one
+   * group make ONE section and sections are ordered by key, and it answers
+   * ONE response whose sections sit inside the one popup. A null answer
+   * falls back to `respond` above for the first feature, then to the next
+   * hit.
+   */
+  readonly group?: {
+    respond(
+      features: readonly maplibregl.MapGeoJSONFeature[],
+      click: CoordinatorClick,
+      map: maplibregl.Map
+    ): CoordinatedResponse | null;
+  };
 }
 
 /** One arbitration candidate: a registered spec's first rendered hit. */
@@ -104,6 +124,8 @@ interface Hit {
   readonly kind: InteractionTargetKind;
   /** Rendered order (topmost first): the deterministic same-rank tiebreak. */
   readonly order: number;
+  /** A group-capable target's every labelled feature under the click, in rendered order; null otherwise. */
+  readonly features: maplibregl.MapGeoJSONFeature[] | null;
 }
 
 const specs: ClickTargetSpec[] = [];
@@ -178,6 +200,16 @@ export function registerClickTarget(spec: ClickTargetSpec): void {
   if (spec.layerIds.every((id) => specByLayerId.has(id))) return;
   specs.push(spec);
   for (const id of spec.layerIds) specByLayerId.set(id, spec);
+  // The identify-paths census (M23, tests/identify-paths.spec.ts): each
+  // registered target appended as `kind:layerId,layerId`, space-separated,
+  // DOM only, never read here.
+  const census = document.getElementById('map-container');
+  if (census) {
+    census.setAttribute(
+      'data-ddm-click-targets',
+      `${census.getAttribute('data-ddm-click-targets') ?? ''} ${spec.kind}:${spec.layerIds.join(',')}`.trim()
+    );
+  }
 }
 
 /**
@@ -224,6 +256,11 @@ export function initInteractionCoordinator(map: maplibregl.Map): void {
  */
 export function adoptExternalResponse(popup: maplibregl.Popup): void {
   dismissResponse();
+  // Positive provenance for the identify-paths observer (M23): an adopted
+  // popup is marked here, never inferred from a missing coordinator stamp.
+  // On a first open MapLibre builds the element only when the opener sets
+  // the content, after this 'open' call, so the mark follows in a microtask.
+  queueMicrotask(() => popup.getElement()?.setAttribute('data-ddm-external-response', ''));
   popup.once('close', () => {
     if (currentPopup === popup) currentPopup = null;
   });
@@ -239,6 +276,9 @@ export function resetInteractionCoordinatorForTest(): void {
   sink = null;
   sinkPresented = false;
   sinkSelection = null;
+  // The census stamp follows the registry, so a re-registration after a
+  // reset never appends a stale or duplicate token.
+  document.getElementById('map-container')?.removeAttribute('data-ddm-click-targets');
 }
 
 function handleClick(map: maplibregl.Map, e: maplibregl.MapMouseEvent): void {
@@ -292,21 +332,32 @@ function collectHits(map: maplibregl.Map, point: maplibregl.Point): Hit[] {
   ];
   const features = map.queryRenderedFeatures(box, { layers: present });
   const hits: Hit[] = [];
-  const taken = new Set<ClickTargetSpec>();
+  const taken = new Map<ClickTargetSpec, Hit>();
 
+  // The first-feature collapse per registration. The collection seam sits
+  // before it (tests/interaction-coordinator-collect.test.mjs): a
+  // group-capable target's hit keeps every later labelled feature too.
   for (const [order, feature] of features.entries()) {
     const spec = specByLayerId.get(feature.layer.id);
-    if (!spec || taken.has(spec)) continue;
+    if (!spec) continue;
+    const prior = taken.get(spec);
+    if (prior && !prior.features) continue;
     const label = spec.label(feature);
     if (label === null) continue;
-    taken.add(spec);
-    hits.push({
+    if (prior) {
+      prior.features?.push(feature);
+      continue;
+    }
+    const hit: Hit = {
       spec,
       feature,
       label,
       kind: isSelectedPlace(feature, label) ? 'selected-place' : spec.kind,
-      order
-    });
+      order,
+      features: spec.group ? [feature] : null
+    };
+    taken.set(spec, hit);
+    hits.push(hit);
   }
 
   hits.sort(
@@ -342,7 +393,11 @@ function isSelectedPlace(feature: maplibregl.MapGeoJSONFeature, label: string): 
 /**
  * Commit one hit as the primary response. The full hit list rides along
  * so the disclosure can offer every other candidate, and choosing one
- * re-commits it in place (the former primary joins the disclosure).
+ * re-commits it in place (the former primary joins the disclosure). A
+ * group-capable target answers for every feature under the click first
+ * (ClickTargetSpec.group); its null falls back to its single response for
+ * the first feature, and a hit that declines both drops out and the next
+ * one is tried.
  */
 function commit(
   map: maplibregl.Map,
@@ -350,7 +405,9 @@ function commit(
   primary: Hit,
   click: CoordinatorClick
 ): void {
-  const response = primary.spec.respond(primary.feature, click, map);
+  const response =
+    (primary.features && primary.spec.group?.respond(primary.features, click, map)) ??
+    primary.spec.respond(primary.feature, click, map);
   if (!response) {
     const rest = hits.filter((h) => h !== primary);
     if (rest.length > 0) commit(map, rest, rest[0]!, click);
@@ -399,9 +456,6 @@ function renderPopup(
 ): void {
   dismissResponse();
 
-  const container = document.createElement('div');
-  container.className = 'coordinated-response';
-
   // Split the response into a FROZEN head and a SCROLLING body. The
   // maintainer directive of 2026-07-18 kept the head to title, door, and
   // the feature switcher, with even the agency line scrolling in the
@@ -432,10 +486,19 @@ function renderPopup(
   if (typeof response.content === 'string') raw.innerHTML = response.content;
   else raw.appendChild(response.content);
 
-  const head = document.createElement('div');
-  head.className = 'coordinated-response-head';
-  const body = document.createElement('div');
-  body.className = 'coordinated-response-body';
+  // D1 M23: a FRAMED response (the DOM contract of src/ui/popup-frame.ts,
+  // validated in takeFrame without importing the renderer) keeps its
+  // article as the one real root. Its head and body regions take the
+  // coordinated classes the tier table and the panel host rules read, and
+  // no node moves out of it (listeners and the title stay where the
+  // builder put them). `raw` is then empty, so the legacy class-name split
+  // below moves nothing; that split stays for unmigrated builders until
+  // M26 retires it.
+  const frame = takeFrame(raw);
+  const head = frame?.head ?? document.createElement('div');
+  head.classList.add('coordinated-response-head');
+  const body = frame?.body ?? document.createElement('div');
+  body.classList.add('coordinated-response-body');
 
   // Title first (frozen), if the content carries one. querySelector on the
   // working fragment moves each node out of `raw`, so whatever remains
@@ -452,14 +515,24 @@ function renderPopup(
   if (trigger) head.appendChild(trigger);
   while (raw.firstChild) body.appendChild(raw.firstChild);
 
-  // The escape hatch sits at the foot of the frozen head, below the door.
+  // The escape hatch sits at the foot of the frozen head, below the door
+  // (in a framed head, after the actions slot).
   const others = hits.filter((h) => h !== primary);
   if (others.length > 0) {
     head.appendChild(buildDisclosure(map, hits, others, click));
   }
 
-  container.appendChild(head);
-  container.appendChild(body);
+  const container = frame?.root ?? document.createElement('div');
+  container.classList.add('coordinated-response');
+  // The committed target's layer id, for the identify-paths observer (M23).
+  container.setAttribute('data-ddm-response', primary.feature.layer.id);
+  if (!frame) {
+    container.appendChild(head);
+    container.appendChild(body);
+  }
+  // The sink's title: the legacy title, or the frame's title slot (which
+  // carries the same .popup-title class).
+  const titleNode = title ?? head.querySelector('.popup-title');
 
   if (selection) {
     const context = selection.context;
@@ -479,7 +552,7 @@ function renderPopup(
   if (sink && selection) {
     const presented = sink.present({
       element: container,
-      title: title?.textContent ?? null,
+      title: titleNode?.textContent ?? null,
       placeBearing: true
     });
     if (presented) {
@@ -489,10 +562,15 @@ function renderPopup(
     }
   }
 
+  // One usable close control per sink (D1 M23; DDM-P17-T11): the close
+  // button is forced AFTER a response's own options, which may still set
+  // the offset and the rest (the place label asked for none, places.ts).
+  // A framed card takes the frame's measure on the desktop shell through
+  // `.ddm-popup-framed` (app.css), not MapLibre's 240 px default.
   const popup = new maplibregl.Popup({
-    closeButton: true,
     ...response.popupOptions,
-    className: 'ddm-coordinated-popup',
+    className: frame ? 'ddm-coordinated-popup ddm-popup-framed' : 'ddm-coordinated-popup',
+    closeButton: true,
     closeOnClick: false
   })
     .setLngLat(click.lngLat)
@@ -639,18 +717,52 @@ async function attachConditionDoor(
     dismissResponse();
   });
 
-  // The same head order a place-bearing commit uses: directly after the
-  // title, before the "Other map features here" disclosure.
+  // The same head order a place-bearing commit uses, before the "Other map
+  // features here" disclosure: in a framed head the actions slot (after
+  // the source, PF3); in a legacy head directly after the title.
+  const actions = head.querySelector('[data-popup-slot="actions"]');
   const title = head.querySelector('.popup-title');
-  if (title) title.after(button);
+  if (actions) actions.appendChild(button);
+  else if (title) title.after(button);
   else head.appendChild(button);
+}
+
+/**
+ * The frame's DOM contract, checked without importing its renderer: the
+ * content is exactly one `[data-popup-frame]` root (nothing beside it but
+ * whitespace) whose only child NODES, text included, are the head region,
+ * then the body region (the frame module writes no text between them, so
+ * this is stricter than the identify-paths validator, which also allows
+ * whitespace there). Detaches the root and returns it with its regions; null means
+ * legacy content (a broken frame then renders unframed, which the
+ * identify-paths observer fails once its builder has left the allowance).
+ */
+function takeFrame(raw: HTMLElement): { root: HTMLElement; head: HTMLElement; body: HTMLElement } | null {
+  const root = raw.firstElementChild as HTMLElement | null;
+  const head = root?.children[0] as HTMLElement | undefined;
+  const body = root?.children[1] as HTMLElement | undefined;
+  if (
+    raw.childElementCount !== 1 ||
+    !root?.matches('[data-popup-frame]') ||
+    root.childNodes.length !== 2 ||
+    !head?.matches('[data-popup-region=head]') ||
+    !body?.matches('[data-popup-region=body]') ||
+    raw.textContent?.trim() !== root.textContent?.trim()
+  ) {
+    return null;
+  }
+  root.remove();
+  return { root, head, body };
 }
 
 /**
  * The escape hatch: a quiet disclosure listing every lower-priority
  * hit as a plain button. Native `details` keeps it keyboard and touch
  * reachable; choosing an entry replaces the primary response in place
- * (never a second popup).
+ * (never a second popup). A group-capable target's several groups are
+ * likewise never a second popup: they are sections inside the one
+ * response (ClickTargetSpec.group), and the group hit is one entry here
+ * like any other target.
  */
 function buildDisclosure(
   map: maplibregl.Map,

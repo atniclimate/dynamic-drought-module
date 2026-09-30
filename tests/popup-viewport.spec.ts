@@ -1,5 +1,7 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { awaitQuiescence, gotoApp, waitForLayerSettled } from './helpers';
+import { BIA_ROUTE, routeBoundary, syntheticBiaBody } from './tribal-fixtures';
+import { LEGACY_ALLOWANCE, eligibleBuilders, migratedBuilders } from './identify-paths-manifest';
 import {
   MIN_COMPACT_BODY_REGION_HEIGHT_PX,
   MIN_USABLE_REGION_HEIGHT_PX,
@@ -1645,5 +1647,229 @@ test.describe('found-099: the Key drawer exclusion applies only on the desktop n
     await gotoApp(page, '?embed=true');
     await openKeyDrawer(page);
     await proveMarginNotDrawer(page);
+  });
+});
+
+/**
+ * S30D D1 M23, DDM-P17-T11 (DR-149): the close control owns its own seat
+ * in every coordinated map popup head, at DDM-P17-T07's 24px floor on a
+ * fine pointer and the 44px touch floor on a coarse one, and no head
+ * content (the title's lines, and every later head row) ever sits under
+ * it, at every desktop size the fit specs cover. Measured rectangles, one
+ * read, not asserted from CSS. The long title fills the control's band
+ * with title lines; the one-word title leaves the band to the rows beneath
+ * it, which is what a title-margin-only seat would fail at the coarse
+ * size. The phone size waits for the mobile pass (DR-149, recorded
+ * 2026-09-30): no phone viewport is asserted here, and the phone rules are
+ * unchanged.
+ *
+ * Predicted red at cb836fe (no seat): at the fine size the title block and
+ * its first line reach 8px under the 24px control (the card's 16px right
+ * padding covers only part of it); at the coarse size 28px, and the
+ * one-word title's agency line beneath it intersects the 44px control too.
+ */
+const SEAT_VIEWPORTS = [
+  { width: 1280, height: 720 },
+  { width: 1440, height: 900 },
+  { width: 1920, height: 1080 },
+  { width: 2560, height: 1440 }
+] as const;
+const SEAT_LONG_TITLE =
+  'Synthetic Reservation Fixture With A Deliberately Long Name That Wraps Across Several Head Lines';
+const SEAT_SHORT_TITLE = 'Fixture';
+
+/** The synthetic BIA fixture (tests/tribal-fixtures.ts) under another name. */
+function biaBodyNamed(name: string): unknown {
+  const body = syntheticBiaBody();
+  return {
+    ...body,
+    features: body.features.map((feature) => ({
+      ...feature,
+      properties: { ...feature.properties, LARNAME: name }
+    }))
+  };
+}
+
+interface SeatBox {
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+}
+
+interface SeatRead {
+  readonly close: SeatBox & { readonly width: number; readonly height: number };
+  readonly closeHit: boolean;
+  readonly boxes: ReadonlyArray<SeatBox & { readonly what: string; readonly title: boolean }>;
+}
+
+/** One read of the close control and every head element and text line box. */
+async function readSeat(page: Page): Promise<SeatRead> {
+  return page.evaluate(() => {
+    const content = document.querySelector('.ddm-coordinated-popup .maplibregl-popup-content');
+    const close = content?.querySelector(':scope > .maplibregl-popup-close-button');
+    const head = content?.querySelector('.coordinated-response-head');
+    if (!content || !close || !head) throw new Error('no coordinated popup with a close control and a head');
+    const title = head.querySelector('.popup-title');
+    const box = (r: DOMRect): SeatBox => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+    const boxes: Array<SeatBox & { what: string; title: boolean }> = [];
+    for (const el of Array.from(head.querySelectorAll('*'))) {
+      for (const r of Array.from(el.getClientRects())) {
+        if (r.width > 0 && r.height > 0) {
+          boxes.push({ ...box(r), what: `${el.tagName.toLowerCase()}.${el.getAttribute('class') ?? ''}`, title: title?.contains(el) ?? false });
+        }
+      }
+    }
+    const walker = document.createTreeWalker(head, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = (node.textContent ?? '').trim();
+      if (text === '') continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      for (const r of Array.from(range.getClientRects())) {
+        if (r.width > 0 && r.height > 0) {
+          boxes.push({ ...box(r), what: `text "${text.slice(0, 32)}"`, title: title?.contains(node) ?? false });
+        }
+      }
+    }
+    const c = close.getBoundingClientRect();
+    const hit = document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2);
+    return {
+      close: { ...box(c), width: c.width, height: c.height },
+      closeHit: hit !== null && (hit === close || close.contains(hit)),
+      boxes
+    };
+  });
+}
+
+for (const viewport of SEAT_VIEWPORTS) {
+  for (const coarse of [false, true]) {
+    test.describe(`DDM-P17-T11: the close seat at ${viewport.width}x${viewport.height}, ${coarse ? 'coarse' : 'fine'} pointer`, () => {
+      test.use({ viewport, hasTouch: coarse });
+
+      test('the close control owns its seat: no head content intersects it, long title and one-word title', async ({
+        page
+      }) => {
+        const floor = coarse ? 44 : 24;
+        let larName: string = SEAT_LONG_TITLE;
+        await routeBoundary(page, BIA_ROUTE, (route: Route) =>
+          route.fulfill({ contentType: 'application/geo+json', body: JSON.stringify(biaBodyNamed(larName)) })
+        );
+        for (const name of [SEAT_LONG_TITLE, SEAT_SHORT_TITLE]) {
+          larName = name;
+          await gotoApp(page, '?region=washington_state&view=console&layers=bia-reservations');
+          await waitForLayerSettled(page, 'bia-reservations');
+          const mapBox = await page.locator('#map').boundingBox();
+          expect(mapBox).not.toBeNull();
+          const title = page.locator('.ddm-coordinated-popup .coordinated-response-head .popup-title');
+          await expect(async () => {
+            await page.mouse.click(mapBox!.x + mapBox!.width / 2, mapBox!.y + mapBox!.height / 2);
+            await expect(title).toHaveText(name, { timeout: 1500 });
+          }).toPass({ timeout: 20_000 });
+
+          const seat = await readSeat(page);
+          const c = seat.close;
+          expect(c.width, `the close control is under the ${floor}px floor`).toBeGreaterThanOrEqual(floor - 0.5);
+          expect(c.height, `the close control is under the ${floor}px floor`).toBeGreaterThanOrEqual(floor - 0.5);
+          expect(seat.closeHit, 'the close control is not the element under its own center').toBe(true);
+          const under = seat.boxes
+            .filter(
+              (b) =>
+                Math.min(b.right, c.right) - Math.max(b.left, c.left) > 0.5 &&
+                Math.min(b.bottom, c.bottom) - Math.max(b.top, c.top) > 0.5
+            )
+            .map((b) => b.what);
+          expect(under, `head content under the close control ("${name}")`).toEqual([]);
+          // Not vacuous: the measured content really shares the control's band.
+          if (name === SEAT_LONG_TITLE) {
+            expect(seat.boxes.some((b) => b.title && b.top < c.bottom), 'the title never reached the control band').toBe(true);
+          } else if (coarse) {
+            expect(
+              seat.boxes.some((b) => !b.title && b.top < c.bottom),
+              'no head row below the one-word title reached the 44px control band'
+            ).toBe(true);
+          }
+        }
+      });
+    });
+  }
+}
+
+/**
+ * S30D D1 M23, the N2 brief correction C1: one usable close control per
+ * sink. The place-label target asks for `closeButton: false`
+ * (src/layers/places.ts), and the coordinator used to spread that over its
+ * own `closeButton: true`; it now forces the close control after the
+ * response's options. A synthetic one-place bundle (a long name, so the
+ * wrapped label covers the map centre and a small probe pattern around
+ * it) stands in for the bundled Natural Earth labels.
+ *
+ * Predicted red at cb836fe: the place popup opens with no close control
+ * (count 0).
+ */
+const PLACE_FIXTURE_NAME =
+  'Fixture Place Label With A Name Long Enough To Wrap Over Several Lines';
+
+test.describe('D1 M23 C1: the place-label popup keeps one usable close control', () => {
+  test('a place-label popup opens with exactly one usable close control', async ({ page }) => {
+    await page.route('**/data/us-places.json', (route: Route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          meta: { count: 1 },
+          places: [{ name: PLACE_FIXTURE_NAME, lon: -120.84, lat: 47.29, rank: 0 }]
+        })
+      })
+    );
+    await gotoApp(page, '?region=washington_state&view=console&layers=places');
+    await waitForLayerSettled(page, 'places');
+    const mapBox = await page.locator('#map').boundingBox();
+    expect(mapBox).not.toBeNull();
+    const cx = mapBox!.x + mapBox!.width / 2;
+    const cy = mapBox!.y + mapBox!.height / 2;
+    const probes: ReadonlyArray<readonly [number, number]> = [
+      [0, 0], [0, -24], [0, 24], [-40, 0], [40, 0], [-40, -24], [40, 24], [-40, 24], [40, -24]
+    ];
+    const popup = page.locator('.maplibregl-popup').filter({ has: page.locator('.place-name-popup') });
+    let probe = 0;
+    await expect(async () => {
+      const [dx, dy] = probes[probe++ % probes.length]!;
+      await page.mouse.click(cx + dx, cy + dy);
+      await expect(popup).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 30_000 });
+    await expect(popup.locator('.place-name-popup')).toHaveText(PLACE_FIXTURE_NAME);
+    const close = popup.locator('.maplibregl-popup-close-button');
+    await expect(close).toHaveCount(1);
+    await expectHitTestReachable(close, 'the place-label popup close control');
+    await close.click();
+    await expect(popup).toHaveCount(0);
+  });
+});
+
+/**
+ * The Codex Tier 2 review's PF3 rows (2026-09-27_s30d-d1-tier2-designs.md
+ * :219 and :221), generic over the builders that have left the legacy
+ * allowance (tests/identify-paths-manifest.ts). Only a framed popup moves
+ * the primary source into the head, so the rows bite per migrated builder;
+ * at M23 none has migrated, and the count is asserted so the empty loop is
+ * declared, not accidental. M24 to M26 add each migrated builder's
+ * fixture boot here as they shrink the allowance.
+ */
+test.describe('D1 M23 PF3: framed heads keep the tier promises (generic over migrated builders)', () => {
+  test('sources and caveat remain clickable at FULL and usable-COMPACT boundaries', () => {
+    const migrated = migratedBuilders();
+    expect(migrated.length).toBe(eligibleBuilders().length - LEGACY_ALLOWANCE.length);
+    for (const builder of migrated) {
+      throw new Error(`${builder.id} left LEGACY_ALLOWANCE without a FULL and usable-COMPACT source fixture here`);
+    }
+  });
+
+  test('long desktop heads and panel responses preserve required scrolling and close access', () => {
+    const migrated = migratedBuilders();
+    expect(migrated.length).toBe(eligibleBuilders().length - LEGACY_ALLOWANCE.length);
+    for (const builder of migrated) {
+      throw new Error(`${builder.id} left LEGACY_ALLOWANCE without a long-head and panel fixture here`);
+    }
   });
 });

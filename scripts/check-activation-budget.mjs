@@ -186,6 +186,11 @@ const EAGER_FORBIDDEN = [
     reason: 'DDM-P14-T05 (2026-09-12): LayerDef and SourcedClaim read ProductKey as a type-only import, so this catalog must stay out of the initial static set; a value import would hoist it here.',
   },
   {
+    name: 'popup frame renderer',
+    pattern: /src\/ui\/popup-frame\.ts$/,
+    reason: 'S30D D1 M23 (DDM-P11-T04, the Codex Tier 2 review PF5): the popup frame is imported only by the lazy layer builders; the coordinator validates its DOM contract without importing it, so no import path, direct or transitive, may hoist it into the initial static set.',
+  },
+  {
     name: 'impact briefing cluster panel runtime',
     pattern: /src\/ui\/impact-panel-runtime\.ts$/,
     reason: 'The impact briefing cluster is a first-use cost; its panel runtime must never ride the initial static set.',
@@ -975,6 +980,17 @@ const SELF_TEST_CASES = [
     },
   },
   {
+    // The Codex review's "transitive popup frame in initial closure fails":
+    // the frame rides a shared chunk the entry imports, not the entry itself.
+    name: 'fail-eager-popup-frame-transitive', kind: 'fail', expect: 'popup frame renderer',
+    files: {
+      'index.html': htmlWith('shared-test.js'), '.vite/manifest.json': manifestWith(['_shared-test.js'], SHARED),
+      ...CLEAN_ENTRY,
+      'assets/shared-test.js': 'console.log("shared");',
+      'assets/shared-test.js.map': M(['../../src/map/response-sections.ts', '../../src/ui/popup-frame.ts']),
+    },
+  },
+  {
     name: 'fail-eager-zip', kind: 'fail', expect: 'ZIP library',
     files: {
       'index.html': htmlWith('shared-test.js'), '.vite/manifest.json': manifestWith(['_shared-test.js'], SHARED),
@@ -1228,6 +1244,7 @@ const SELF_TEST_CASES = [
 const EXPECTED_CASE_NAMES = [
   'fail-eager-geotiff', 'fail-eager-landscape', 'fail-eager-zip',
   'fail-eager-impact-briefing-cluster',
+  'fail-eager-popup-frame-transitive',
   'fail-missing-map', 'fail-empty-sources', 'fail-indexed-map',
   'fail-runtime-oversize', 'fail-preload-helper-oversize',
   'fail-forged-vendor-no-pmtiles',

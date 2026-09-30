@@ -193,6 +193,11 @@ function currentTranslateX(computedTransform: string): number {
  *   in the top-right padding. The column is the basis for the FULL
  *   row's scroll-reachable link claim; it is not a promise that every
  *   label fits it without horizontal overflow (the tier table says so).
+ *   Since D1 M23 (DDM-P17-T11) the coordinated HEAD also reserves the
+ *   close control's seat on desktop widths (app.css, "THE CLOSE SEAT"),
+ *   so the head's own column there is narrower by the control's overhang
+ *   past the padding; the body column, which carries the link claim, is
+ *   not, and no boundary number changes.
  *
  * Below either boundary the clamp swaps to the compact presentation
  * (`ddm-popup-compact` in app.css: 6 px by 8 px padding, so 14 by 18 px

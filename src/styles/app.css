@@ -2331,6 +2331,148 @@ button.conditions-metric:hover .conditions-action-hide {
   margin-top: 8px;
 }
 
+/* D1 M23, THE CLOSE SEAT (DDM-P17-T11, DR-149). MapLibre appends the close
+   button LAST inside .maplibregl-popup-content, absolutely positioned in
+   its top-right corner at the pointer floor: 24px on a fine pointer (the
+   close-button rule above), the 44px touch floor on a coarse pointer at
+   desktop widths (the coarse block near the end of this file). The card's
+   own right padding (16px, or 8px compact) covers only part of that, so
+   every coordinated map head reserves the rest as an inline-end band
+   across ALL of its rows: the title and every later row alike, since the
+   44px control reaches the rows beneath the title too. The control stays
+   out of the head's own shrinking and scrolling flow, in its reachable
+   corner; no head child is added (a margin on the title alone would clear
+   its first line only). Desktop widths only: the phone size waits for the
+   mobile pass (DR-149), so every phone rule is unchanged. The panel foot
+   keeps its own close control in its bar (panel-response.tsx). */
+@media (min-width: 721px) {
+  .ddm-coordinated-popup .maplibregl-popup-content {
+    --popup-close-seat: var(--pointer-target);
+  }
+  .ddm-coordinated-popup .coordinated-response-head {
+    padding-inline-end: calc(var(--popup-close-seat) - 16px);
+  }
+  .ddm-coordinated-popup .maplibregl-popup-content.ddm-popup-compact .coordinated-response-head {
+    padding-inline-end: calc(var(--popup-close-seat) - 8px);
+  }
+}
+@media (pointer: coarse) and (min-width: 721px) {
+  .ddm-coordinated-popup .maplibregl-popup-content {
+    --popup-close-seat: var(--touch-target);
+  }
+}
+
+/* D1 M23, THE POPUP FRAME (DDM-P11-T04; src/ui/popup-frame.ts). The
+   coordinator keeps the frame's article as the one real root, so the
+   coordinated flex and scroll rules above apply to it unchanged. A framed
+   card (the coordinator adds .ddm-popup-framed) takes one measure on the
+   desktop shell outside embeds, the only scope where the M9 token block
+   declares --popup-measure: MapLibre's 240px default cap is lifted there
+   and the frame sets its own inline size. On a phone and in an embed no
+   rule here applies, so a framed card keeps MapLibre's 240px cap exactly
+   as every unframed card does. In the panel foot the host caps it. */
+@media (min-width: 721px) {
+  .app-shell:not(.embed) .ddm-popup-framed {
+    max-width: none !important;
+  }
+  .app-shell:not(.embed) .ddm-popup-framed [data-popup-frame] {
+    inline-size: min(var(--popup-measure), calc(100vw - 24px));
+    /* The viewport clamp's own cap on the card still wins. */
+    max-inline-size: 100%;
+  }
+}
+.panel-response-host [data-popup-frame] {
+  max-inline-size: 100%;
+  min-inline-size: 0;
+}
+[data-popup-frame] [data-popup-slot] {
+  margin: 0;
+}
+[data-popup-frame] .popup-agency {
+  font-size: 12px;
+  font-weight: var(--fw-body);
+  color: var(--fg-2);
+  letter-spacing: normal;
+  text-transform: none;
+  margin: 2px 0 6px;
+}
+[data-popup-frame] [data-popup-slot='value'] {
+  font-size: 14px;
+  font-weight: var(--fw-strong);
+  color: var(--fg-0);
+}
+[data-popup-frame] .popup-swatch {
+  display: inline-block;
+  inline-size: 10px;
+  block-size: 10px;
+  margin-inline-end: 6px;
+  background: var(--popup-swatch);
+  outline: 1px solid var(--fg-1);
+  outline-offset: 1px;
+}
+[data-popup-frame] [data-popup-slot='clock'],
+[data-popup-frame] [data-record-slot='clocks'] {
+  font-size: 12px;
+  color: var(--fg-2);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+[data-popup-frame] [data-popup-slot='source'],
+[data-popup-frame] [data-popup-slot='source-fallback'],
+[data-popup-frame] [data-popup-slot='more-links'] {
+  font-size: 12px;
+  margin-top: 4px;
+}
+[data-popup-frame] [data-popup-slot='source'] a,
+[data-popup-frame] [data-popup-slot='source-fallback'] a,
+[data-popup-frame] [data-popup-slot='more-links'] a {
+  font-weight: var(--fw-strong);
+  color: var(--link-on-dark);
+  text-decoration: underline;
+}
+[data-popup-frame] [data-popup-slot='actions']:not(:empty) {
+  margin-top: 8px;
+}
+[data-popup-frame] [data-detail='row'],
+[data-popup-frame] [data-detail='reading'],
+[data-popup-frame] [data-record-slot='sizes'] {
+  display: grid;
+  grid-template-columns: minmax(88px, 36%) 1fr;
+  gap: 2px 8px;
+  margin: 0 0 4px;
+}
+[data-popup-frame] dt {
+  color: var(--fg-3);
+}
+[data-popup-frame] dd {
+  margin: 0;
+  color: var(--fg-1);
+}
+[data-popup-frame] [data-popup-slot='note'] {
+  font-size: 12px;
+  color: var(--fg-1);
+  margin: 0 0 8px;
+}
+[data-popup-frame] .popup-records {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+[data-popup-frame] .popup-records > li + li {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+[data-popup-frame] .popup-records h4,
+[data-popup-frame] [data-popup-section] > h4 {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  color: var(--fg-0);
+}
+[data-popup-frame] [data-record-slot='issuer'],
+[data-popup-frame] [data-group-key] {
+  display: block;
+}
+
 /* Custom telemetry markers */
 .telemetry-marker {
   background: transparent;

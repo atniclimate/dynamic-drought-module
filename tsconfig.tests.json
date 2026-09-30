@@ -11,5 +11,5 @@
     "allowJs": true
   },
   "include": ["tests/**/*.ts", "playwright.config.ts", "playwright.pure.config.ts"],
-  "exclude": ["tests/types/key-typos.ts", "tests/types/context-literal-typo.ts"]
+  "exclude": ["tests/types/key-typos.ts", "tests/types/context-literal-typo.ts", "tests/types/popup-model-invalid.ts"]
 }
