@@ -318,29 +318,15 @@ const SITES = [
     reason:
       'a second STALE_SETTLE_MS proving no deferred render arrives even later than the first window.'
   },
+  // DR-160 (2026-09-28): the two SITES entries formerly here ('a late
+  // British Columbia response cannot replace the region selected after
+  // it' at line 272; 'No update popup says not measured and never
+  // presents value 99 as severity' at line 302) are removed with the
+  // held-module test cases they timed; see
+  // tests/m-breadth-bc-drought.spec.ts for the retirement reasons.
   {
     file: 'm-breadth-bc-drought.spec.ts',
-    line: 272,
-    test: 'a late British Columbia response cannot replace the region selected after it',
-    text: 'await page.waitForTimeout(500);',
-    occurrence: 1,
-    class: 'absence-window',
-    reason:
-      'post-release settle after a held BC request, before reading the recovered region and legend state.'
-  },
-  {
-    file: 'm-breadth-bc-drought.spec.ts',
-    line: 302,
-    test: 'No update popup says not measured and never presents value 99 as severity',
-    text: 'await page.waitForTimeout(120);',
-    occurrence: 1,
-    class: 'input-pacing',
-    reason:
-      'poll-loop click-retry interval waiting for the popup to paint after each synthetic click.'
-  },
-  {
-    file: 'm-breadth-bc-drought.spec.ts',
-    line: 366,
+    line: 267,
     test: 'switching an open United States briefing into British Columbia closes it before print',
     text: 'await page.waitForTimeout(250);',
     occurrence: 1,
@@ -350,7 +336,7 @@ const SITES = [
   },
   {
     file: 'm-breadth-bc-drought.spec.ts',
-    line: 372,
+    line: 273,
     test: 'switching an open United States briefing into British Columbia closes it before print',
     text: 'await page.waitForTimeout(500);',
     occurrence: 1,

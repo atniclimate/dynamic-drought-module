@@ -60,6 +60,7 @@ import {
 import { requestHorizon } from '../state/cluster-service';
 import { USDM_CATEGORIES, USDM_NONE_SWATCH } from '../config/palette';
 import {
+  BC_BASIN_EDITION_HELD,
   resetDroughtSurfacePresentation,
   setDroughtSurfacePresentation
 } from '../config/layers';
@@ -1021,6 +1022,13 @@ let bcModule: BcDroughtModule | null = null;
 let bcPopupsBound = false;
 
 function editionForRegion(region: string | null): DroughtEdition {
+  // DR-160 (2026-09-28): the Province of British Columbia basin edition is
+  // held until the Province's written permission or the owner's
+  // re-ruling. While BC_BASIN_EDITION_HELD is true, this never returns
+  // 'bc-basin', so switchEdition never imports or activates ./bc-drought
+  // and British Columbia shows the US Drought Monitor like any other
+  // region.
+  if (BC_BASIN_EDITION_HELD) return 'usdm';
   return region === 'british_columbia' ? 'bc-basin' : 'usdm';
 }
 

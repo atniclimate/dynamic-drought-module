@@ -55,11 +55,16 @@ export type RegionGroup = 'pnw' | 'explore' | 'canada';
  * upstream while the module's ak-hi droughtState remains 'none').
  *
  *   source   'usdm' = the US Drought Monitor (weekly);
- *            'cdm'  = the Canadian Drought Monitor (monthly). 'cdm' is a
- *            union member for the N6 mixed-edition seam; no shipped region
- *            carries a 'cdm' row today (no claim is made);
+ *            'cdm'  = the Canadian Drought Monitor (monthly); the
+ *            british_columbia region carries a 'cdm' row while DR-160
+ *            holds the edition below;
  *            'bc-basin' = the Province of British Columbia basin drought
- *            levels, updated weekly during the core drought season.
+ *            levels, updated weekly during the core drought season. HELD
+ *            by DR-160 (2026-09-28, `BC_BASIN_EDITION_HELD` in
+ *            src/config/layers.ts) until the Province's written
+ *            permission or the owner's re-ruling; no shipped region
+ *            carries a 'bc-basin' row while the hold stands (no claim is
+ *            made).
  *   scope    'full' when the edition covers the whole identity geography;
  *            'us-portion' when the identity geography deliberately includes
  *            Canadian land the edition does not cover (the Columbia and

@@ -215,6 +215,19 @@ export interface LayerDef {
  */
 export const LIVE_NO_FEATURES_LABEL = 'no features returned for this view';
 
+/**
+ * The Province of British Columbia basin drought-level edition is HELD by
+ * DR-160 (2026-09-28) until the Province's written permission or the
+ * owner's re-ruling: its terms say "you may not reproduce or distribute
+ * them without the prior written permission of the Province". While this
+ * is true, no code path may select, present, or fetch that edition; British
+ * Columbia shows the US Drought Monitor like any other region. This is a
+ * plain text constant so `scripts/check-activation-budget.mjs` can read its
+ * value with a text match instead of importing TypeScript, keeping the two
+ * checks from disagreeing.
+ */
+export const BC_BASIN_EDITION_HELD = true;
+
 export interface DroughtSurfacePresentation {
   readonly edition: 'usdm' | 'bc-basin';
   readonly name: string;

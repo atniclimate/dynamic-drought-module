@@ -151,7 +151,7 @@ export const CAPABILITY_MATRIX: CapabilityMatrix = {
   canada: {
     display: {
       level: 'partial',
-      note: 'British Columbia has a validated live basin display, the Canadian Drought Monitor has a committed monthly national snapshot, and the North American Drought Monitor supplies separate continental context; Canadian place catalogs do not ship.'
+      note: 'The Canadian Drought Monitor has a committed monthly national snapshot, and the North American Drought Monitor supplies separate continental context; Canadian place catalogs do not ship.'
     },
     selectablePlace: {
       level: 'none',
@@ -159,7 +159,7 @@ export const CAPABILITY_MATRIX: CapabilityMatrix = {
     },
     droughtState: {
       level: 'partial',
-      note: 'Province of British Columbia basin levels display with source dates, the Canadian Drought Monitor snapshot displays its month and class occupancy, and the North American Drought Monitor displays its separate consensus month; no edition is blended with another.'
+      note: 'The Canadian Drought Monitor snapshot displays its month and class occupancy, and the North American Drought Monitor displays its separate consensus month; no edition is blended with another.'
     },
     landscapeSignature: {
       level: 'none',
