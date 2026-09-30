@@ -26,7 +26,9 @@ const MODELS: Record<ActiveFlowKind, string> = {
   currents: 'meteofrance_currents', wind: 'gfs_global', waves: 'ncep_gfswave025'
 };
 const SOURCES: Record<ActiveFlowKind, string> = {
-  currents: 'Météo-France / Copernicus SMOC, about 8 km; hourly model output, updated daily',
+  // ledger: copernicus-marine-smoc (cite sheet c23; DR-161): the producer
+  // is Mercator Ocean International, per the product's STAC record.
+  currents: 'Copernicus Marine SMOC (Mercator Ocean International), about 8 km; hourly model output, updated daily',
   wind: 'NOAA GFS, 10 m winds; global model output, updated every six hours',
   waves: 'NOAA GFS Wave, 0.25°; hourly model output, updated every six hours'
 };
@@ -39,6 +41,7 @@ let panel: HTMLElement | null = null;
 let statusNode: HTMLElement | null = null;
 let detailNode: HTMLElement | null = null;
 let sourceNode: HTMLElement | null = null;
+let copernicusNode: HTMLElement | null = null;
 let updateButton: HTMLButtonElement | null = null;
 let desktopSeat: Comment | null = null;
 let mobileQuery: MediaQueryList | null = null;
@@ -159,6 +162,7 @@ async function loadArea(): Promise<void> {
   removeArrows();
   const activeMap = map;
   const kind = preference.kind;
+  if (copernicusNode) copernicusNode.hidden = kind !== 'currents';
   if (!activeMap || kind === 'off') {
     setStatus('off', 'Direction overlay off');
     return;
@@ -267,13 +271,41 @@ function mountControls(): boolean {
   summary.textContent = 'Key & source';
   detailNode = document.createElement('p');
   sourceNode = document.createElement('p');
-  const credit = document.createElement('a');
-  credit.href = 'https://open-meteo.com/en/docs/marine-weather-api';
-  credit.target = '_blank';
-  credit.rel = 'noopener noreferrer';
-  credit.textContent = 'Open-Meteo · CC BY 4.0';
-  details.append(summary, detailNode, sourceNode, credit);
-  panel.append(heading, options, toolbar, statusNode, details);
+  // DR-161 (b), the interim credits until D7 (no acknowledgements row,
+  // DR-115): the Open-Meteo credit with its licence link and the
+  // Copernicus line sit outside the closed "Key & source" disclosure, so
+  // they are visible without interaction; the changes line stays in the
+  // key it describes.
+  const link = (href: string, text: string): HTMLAnchorElement => {
+    const anchor = document.createElement('a');
+    anchor.href = href;
+    anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer';
+    anchor.textContent = text;
+    return anchor;
+  };
+  // ledger: open-meteo-licence (cite sheet c20)
+  const credit = document.createElement('p');
+  credit.className = 'enso-flow-credit';
+  credit.append(
+    link('https://open-meteo.com/', 'Weather data by Open-Meteo.com'),
+    ' · ',
+    link('https://creativecommons.org/licenses/by/4.0/', 'CC BY 4.0')
+  );
+  // ledger: copernicus-marine-smoc (cite sheet c22); currents only
+  copernicusNode = document.createElement('p');
+  copernicusNode.className = 'enso-flow-credit';
+  copernicusNode.append(
+    'Generated using E.U. Copernicus Marine Service Information; ',
+    link('https://doi.org/10.48670/moi-00016', 'https://doi.org/10.48670/moi-00016')
+  );
+  copernicusNode.hidden = preference.kind !== 'currents';
+  // ledger: open-meteo-licence (cite sheet c21), the CC BY changes line
+  const changes = document.createElement('p');
+  changes.textContent =
+    'DDM samples points in the view and draws each as a static direction arrow; no value is interpolated between samples.';
+  details.append(summary, detailNode, sourceNode, changes);
+  panel.append(heading, options, toolbar, statusNode, credit, copernicusNode, details);
   host.replaceChildren(panel);
   updateSelection();
   void loadArea();
@@ -333,5 +365,5 @@ export function deactivateEnsoFlow(): void {
   desktopSeat?.remove();
   desktopSeat = null;
   host = null;
-  panel = statusNode = detailNode = sourceNode = updateButton = null;
+  panel = statusNode = detailNode = sourceNode = copernicusNode = updateButton = null;
 }

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 
+import { ACKNOWLEDGEMENTS, PROVIDERS } from '../src/config/acknowledgements';
 import { SATELLITE_COVERAGE_NOTE } from '../src/map/satellite';
 import { gotoApp, layerCheckbox, search, waitForLayerSettled } from './helpers';
 import {
@@ -212,10 +213,29 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     await gotoApp(page, '?view=console&basemap=satellite');
     // Owner direction 2026-08-31: the credits render in the map-information
     // panel; the attribution control is gone.
+    // Value-only migration (S30D D1 M22, DR-162; design record
+    // acknowledgements-table.md section 4.3): the OpenStreetMap underlay's
+    // credit is on the map itself while it draws, and the NOAA imagery is
+    // credited by its row in the Acknowledgements, reached through the
+    // credits line's pointer.
+    await expect(page.locator('#map-osm-credit')).toBeVisible();
+    await expect(page.locator('#map-osm-credit')).toContainText('OpenStreetMap');
     await page.locator('#map-info-btn').click();
-    const credits = page.locator('#map-info-attribution');
-    await expect(credits).toContainText('NOAA NESDIS GOES GeoColor');
-    await expect(credits).toContainText('OpenStreetMap');
+    await page.locator('#map-info-attribution button[data-open-acknowledgements]').click();
+    // The GOES GeoColor imagery (src/map/satellite.ts, the
+    // `satellite-geocolor` provider) is found by the product it credits:
+    // through its provider link to the rows that credit it, never by an
+    // issuer name alone. The NESDIS Satellite Maps row is that credit.
+    const geoColorRows = PROVIDERS['satellite-geocolor'];
+    expect(geoColorRows).toContain('noaa-nesdis');
+    for (const id of geoColorRows) {
+      await expect(
+        page.locator(`#impact-panel .impact-acknowledgements [data-ack-id="${id}"] .ack-name`)
+      ).toHaveText(ACKNOWLEDGEMENTS[id].name);
+    }
+    await expect(
+      page.locator('#impact-panel .impact-acknowledgements [data-ack-id="noaa-nesdis"] .ack-name')
+    ).toHaveText('NOAA NESDIS Satellite Maps');
     await page.keyboard.press('Escape');
   });
 
@@ -232,8 +252,8 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     await expect.poll(async () => search(page)).toContain('basemap=default');
     await expect(page.locator(IMAGERY_CHIP)).toBeHidden();
     // The default basemap is back on screen (its credit returns).
-    await page.locator('#map-info-btn').click();
-    await expect(page.locator('#map-info-attribution')).toContainText('OpenStreetMap');
-    await page.keyboard.press('Escape');
+    // Value-only migration (S30D D1 M22, DR-162): that credit is on the map.
+    await expect(page.locator('#map-osm-credit')).toBeVisible();
+    await expect(page.locator('#map-osm-credit')).toContainText('OpenStreetMap');
   });
 });

@@ -6065,6 +6065,42 @@ a.impact-resource-link::after {
 }
 .map-info-attribution a { color: var(--fg-1); }
 
+/* The pointer to the acknowledgements (S30D D1 M22; design record
+   acknowledgements-table.md section 4.1): a real button that reads as a
+   link, in the credits line and the sidebar footer. */
+.map-info-ack-link {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg-1);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* The one OpenStreetMap credit on the map (DR-162; found-027): a dock
+   item, so it stacks with the notices and never takes a chrome seat. */
+.map-osm-credit {
+  margin: 0;
+  align-self: flex-end;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-1);
+  color: var(--fg-2);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+.map-osm-credit[hidden] { display: none; }
+/* Phones keep the lower-right thumb zone for the hazard rail, so the
+   credit takes the dock's left edge there. */
+@media (max-width: 720px) {
+  .map-osm-credit { align-self: flex-start; }
+}
+.map-osm-credit a { color: var(--fg-1); }
+.enso-flow-credit { margin: 4px 0 0; font-size: 11px; color: var(--fg-2); }
+.enso-flow-credit[hidden] { display: none; }
+
 /* Help's visible word exists for the desktop column's labelled cell only;
    the phone and embed seats are the round question-mark button, named by
    its aria-label, so the word stays out of their layout. */
@@ -7010,7 +7046,8 @@ a.impact-resource-link::after {
      on one page where the engine allows. */
   .impact-claim,
   .impact-resource,
-  .impact-resource-group {
+  .impact-resource-group,
+  .ack-row {
     break-inside: avoid;
   }
   .impact-horizon-head {
@@ -7351,9 +7388,36 @@ a.impact-resource-link::after {
 .impact-technical-information h4 { margin-bottom: 4px; color: var(--fg-1); }
 .impact-technical-information p { margin-block: 4px 14px; }
 
+/* The acknowledgements section (S30D D1 M22; design record
+   acknowledgements-table.md section 1.3): mirrors Technical information
+   above. Styled text only: the issuer's name at weight 600 in the text
+   token, never an issuer colour or image (DR-101, Q-LOGOS). */
+.impact-acknowledgements {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-strong);
+  color: var(--fg-2);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.impact-acknowledgements > summary {
+  cursor: pointer;
+  color: var(--fg-1);
+  font-weight: 600;
+  padding-block: 6px;
+}
+.impact-acknowledgements h4 { margin: 12px 0 4px; color: var(--fg-1); }
+.impact-acknowledgements .ack-rows { list-style: none; margin: 0; padding: 0; }
+.impact-acknowledgements .ack-row { padding-block: 6px; border-top: 1px solid var(--line); }
+.impact-acknowledgements .ack-row p { margin-block: 2px 6px; overflow-wrap: anywhere; }
+.impact-acknowledgements .ack-name { color: var(--fg-0); font-weight: 600; }
+.impact-acknowledgements a { color: var(--fg-1); }
+.ack-notice-label { color: var(--fg-1); font-weight: 600; }
+
 @media (pointer: coarse), (max-width: 720px) {
   .sidebar-legend-disclosure > summary,
   .impact-technical-information > summary,
+  .impact-acknowledgements > summary,
   .time-bar-feed-details > summary {
     min-height: 44px;
     align-content: center;

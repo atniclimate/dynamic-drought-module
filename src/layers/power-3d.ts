@@ -346,9 +346,39 @@ function showPowerLegend(state: PowerContextState): void {
     POWER_SHARED_QUALIFICATION
   ].join(' ');
 
+  // DR-163 (a), S30D D1 M22: one visible credit naming the federal source
+  // and the Esri host, rendered in the power layer's own key whenever a
+  // power surface draws (each line only while its surface draws).
+  const credits = [
+    // ledger: eia-power-plants; esri-fuc-power-plants-host (cite sheet c04)
+    ...(state.plantsOn
+      ? [
+          `Power plants: Source: U.S. Energy Information Administration (reporting period ${state.periodLabel}), Forms EIA-860/860M, via the Esri Federal User Community (ArcGIS Living Atlas) copy.`
+        ]
+      : []),
+    // ledger: esri-fuc-transmission-lines-host (cite sheet c05; DR-163 cut the OSM clause)
+    ...(state.linesOn
+      ? [
+          'Transmission lines: U.S. Electric Power Transmission Lines (U.S. Government), archived copy last updated 2024-09-30, via the Esri Federal User Community.'
+        ]
+      : [])
+  ];
+
   showLegend(LEGEND_KEY, {
     order: LEGEND_ORDER.event + 4,
-    render: (body) =>
+    render: (body) => {
+      renderPowerSwatches(body);
+      for (const text of credits) {
+        const line = document.createElement('p');
+        line.className = 'legend-note legend-credit';
+        line.dataset['powerCredit'] = '';
+        line.textContent = text;
+        body.append(line);
+      }
+    }
+  });
+
+  function renderPowerSwatches(body: HTMLElement): void {
       renderSwatchLegend(
         body,
         'Power infrastructure',
@@ -376,8 +406,8 @@ function showPowerLegend(state: PowerContextState): void {
             : [])
         ],
         qualification
-      )
-  });
+      );
+  }
 }
 
 async function activateLines(

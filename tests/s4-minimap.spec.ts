@@ -324,7 +324,13 @@ test.describe('S4b minimap', () => {
     await technical.locator('summary').click();
     await expect(technical.locator('#impact-technical-drought')).toContainText('approximate area-weighted mean category index');
     await expect(technical.locator('#impact-technical-drought')).toContainText('not an NADM-issued regional category');
-    await expect(technical).toHaveJSProperty('nextElementSibling', null);
+    // The Acknowledgements section (S30D D1 M22, DDM-P7-T11) is the body's
+    // last element, so the methodology is the last section before it. A
+    // retrying locator assertion: a hydration refresh can replace the
+    // sections above the Acknowledgements while this reads.
+    await expect(
+      page.locator('.impact-technical-information + #impact-acknowledgements:last-child')
+    ).toHaveCount(1);
   });
 
   test('uses the legible Hawaii inset proportions from the desktop rail', async ({

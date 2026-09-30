@@ -27,4 +27,5 @@ glyph endpoint (`https://demotiles.maplibre.org/font/`), which serves
 glyphs generated from the Noto Sans typeface. Noto Sans is licensed
 under the SIL Open Font License 1.1, which permits redistribution and
 bundling. The application points at this directory through the `glyphs`
-template in `src/map/style.ts`.
+template in `src/map/style.ts`. The licence notice for these glyph files
+is `OFL-noto-sans.txt` in this directory (DR-165).

@@ -328,6 +328,11 @@ OpenStreetMap contributors, retrieved live via Overpass for the rivers
 layer: terms not itemized in this repository's documentation beyond
 the source citation.
 
+Overture Maps Foundation: issuer of the bundled central Oregon
+building-footprint extract (buildings theme, release 2026-07-22.0),
+published under the Open Database License (ODbL) 1.0,
+https://opendatacommons.org/licenses/odbl/1-0/.
+
 Live Tribal-geography sources (U.S. Census AIANNH; BIA AIAN-LAR):
 README.md states these are fetched live at view time from the
 publishing federal services, held only in browser session memory,

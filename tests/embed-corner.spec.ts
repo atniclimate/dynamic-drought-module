@@ -113,9 +113,13 @@ for (const [width, height] of SIZES) {
       expect(box.bottom, `${name} crosses the bottom edge`).toBeLessThanOrEqual(height + 0.5);
     }
 
-    // The credits disclosure still opens and still names the base map.
+    // The credits disclosure still opens, and the base map is still named.
+    // Value-only migration (S30D D1 M22, DR-162): the credits line is the
+    // pointer to the Acknowledgements now, and the one OpenStreetMap credit
+    // is on the map itself while the OSM ground draws.
     await credits.click();
-    await expect(page.locator('#map-info-attribution')).toContainText('OpenStreetMap');
+    await expect(page.locator('#map-info-attribution')).toContainText('Acknowledgements');
+    await expect(page.locator('#map-osm-credit')).toContainText('OpenStreetMap');
   });
 
   test(`the ${width}x${height} embed loading pulse leaves Share and Reset alone`, async ({

@@ -35,6 +35,7 @@
 import * as maplibregl from 'maplibre-gl';
 
 import { adoptExternalResponse } from '../map/interaction-coordinator';
+import { DDM_NOTICE_LABEL, RAWS_PUBLIC_VIEW_NOTICE } from '../config/ddm-notice';
 import type { TelemetryFreshness, TelemetryStation } from '../types/station';
 import {
   STATIC_TELEMETRY_STATION_REGISTRY,
@@ -166,6 +167,17 @@ function showStationLegend(): void {
         // rest states a DDM display convention, not an issuer definition.
         'Featured stations keep their own marker colors; open a marker for its source. An arrow on a NIFC RAWS marker is that station\'s served wind: it points into the wind (the direction from which the air is moving), its length scales with the served speed, and the marker\'s popup carries the values and observation time.'
       );
+      // DR-159 (S30D D1 M22): the public-view RAWS notice, verbatim, as
+      // DDM's own notice under DDM's label, never as NIFC's words; the
+      // Impact Briefing's acknowledgements carry the same notice.
+      // ledger: nifc-raws-public-view (cite sheet c01)
+      const notice = document.createElement('p');
+      notice.className = 'legend-note legend-ddm-notice';
+      const label = document.createElement('span');
+      label.className = 'ack-notice-label';
+      label.textContent = `${DDM_NOTICE_LABEL}:`;
+      notice.append(label, ` ${RAWS_PUBLIC_VIEW_NOTICE.text}`);
+      body.append(notice);
     }
   });
 }

@@ -448,10 +448,34 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
     // time, and the map-information credits line renders both, never a
     // blended one (owner direction 2026-08-31: the credits live in the
     // question-mark panel; the attribution control is gone).
+    // Value-only migration (S30D D1 M22; design record
+    // acknowledgements-table.md section 4.3): the credits line is the
+    // pointer now, and the two source attribution strings ('US Census
+    // AIANNH', src/layers/aiannh.ts; 'BIA AIAN-LAR',
+    // src/layers/bia-reservations.ts) no longer render anywhere. Each part
+    // is asserted at its new place: issuer and product together in each
+    // source's own Active sources item ('US Census · AIANNH (live)' and
+    // 'BIA · AIAN-LAR (live)', src/config/layers.ts), two items and never
+    // one blended item; and each issuer's own row in the Acknowledgements,
+    // the Census row naming the AIANNH product it credits (cite sheet c28).
     await page.locator('#map-info-btn').click();
-    const credits = page.locator('#map-info-attribution');
-    await expect(credits).toContainText('US Census AIANNH');
-    await expect(credits).toContainText('BIA AIAN-LAR');
+    const sourceItems = page.locator('#map-info-sources li');
+    const aiannhItem = sourceItems.filter({ hasText: 'US Census · AIANNH (live)' });
+    const biaItem = sourceItems.filter({ hasText: 'BIA · AIAN-LAR (live)' });
+    await expect(aiannhItem).toHaveCount(1);
+    await expect(biaItem).toHaveCount(1);
+    await expect(aiannhItem.filter({ hasText: 'AIAN-LAR' })).toHaveCount(0);
+    await expect(biaItem.filter({ hasText: 'AIANNH' })).toHaveCount(0);
+    await page.locator('#map-info-attribution button[data-open-acknowledgements]').click();
+    const acknowledgements = page.locator('#impact-panel .impact-acknowledgements');
+    const censusRow = acknowledgements.locator('[data-ack-id="census"]');
+    await expect(censusRow.locator('.ack-name')).toHaveText('U.S. Census Bureau');
+    await expect(censusRow).toContainText(
+      'TIGERweb, American Indian, Alaska Native, and Native Hawaiian Areas.'
+    );
+    await expect(acknowledgements.locator('[data-ack-id="bia"] .ack-name')).toHaveText(
+      'Bureau of Indian Affairs'
+    );
     await page.keyboard.press('Escape');
   });
 

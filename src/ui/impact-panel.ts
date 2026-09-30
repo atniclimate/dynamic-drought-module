@@ -98,12 +98,35 @@ let hostSyncArmed = false;
 let lastBriefingTitle: string | null = null;
 let lastBriefingContext: BoundarySelectionContext | null = null;
 
+/**
+ * Whether `el` sits in the hidden content of a closed `<details>` (anywhere
+ * but that disclosure's own summary). Tab skips such content, but it can
+ * still report an `offsetParent`, so the trap below must skip it too or a
+ * closed disclosure's links (the acknowledgements' licence links, S30D D1
+ * M22) become its "last" stop and a forward Tab from the real last stop
+ * leaves the modal.
+ */
+function insideClosedDetails(el: HTMLElement): boolean {
+  for (
+    let details = el.closest('details');
+    details !== null;
+    details = details.parentElement?.closest('details') ?? null
+  ) {
+    if (details.open) continue;
+    const summary = details.querySelector(':scope > summary');
+    if (!summary || !summary.contains(el)) return true;
+  }
+  return false;
+}
+
 /** Visible, keyboard-focusable descendants of the panel, in DOM order. */
 function getFocusable(container: HTMLElement): HTMLElement[] {
   const selector =
     'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
   return Array.from(container.querySelectorAll<HTMLElement>(selector)).filter(
-    (el) => el.offsetParent !== null || el === document.activeElement
+    (el) =>
+      el === document.activeElement ||
+      (el.offsetParent !== null && !insideClosedDetails(el))
   );
 }
 
@@ -599,7 +622,10 @@ export function refreshBriefingActions(
  * change after the briefing settles without any repaint (a sidebar
  * collapse, a horizon switch), so the href `refreshBriefingActions` last
  * baked can be stale by the time the control is activated. A no-op while
- * no briefing has ever rendered (both stay null until the first render).
+ * no briefing has ever rendered (both stay null until the first render),
+ * and while the control is disabled: the acknowledgements-only
+ * presentation (S30D D1 M22, `setMailActionEnabled(false)`) has no
+ * briefing to send, so it must never re-arm the previous briefing's link.
  */
 function rearmMailHref(): void {
   if (lastBriefingTitle === null) return;
@@ -607,6 +633,7 @@ function rearmMailHref(): void {
     '.impact-panel-action-mail'
   );
   if (!mail) return;
+  if (mail.getAttribute('aria-disabled') === 'true') return;
   mail.href = buildMailHref(lastBriefingTitle, lastBriefingContext);
 }
 
@@ -617,6 +644,7 @@ function renderUnavailable(
   const current = ensureImpactPanelShell();
   current.title.textContent = context.title;
   current.kind.textContent = 'Boundary briefing';
+  setMailActionEnabled(true);
   refreshBriefingActions(context.title, context);
   current.body.innerHTML = `
     <section class="impact-capability-unavailable" aria-label="Drought impact unavailable">
@@ -715,6 +743,62 @@ export function openImpactPanelUnavailable(
   currentRuntimeToken = null;
   renderUnavailable(context, active);
   return token;
+}
+
+/**
+ * The Email control has no briefing to send in the acknowledgements-only
+ * presentation (design record acknowledgements-table.md section 1.4), so
+ * the runtime disables it there; every later briefing render re-enables it
+ * on the one shared shell: the runtime's paint and close, and the facade's
+ * unavailable render (a reused shell must never keep a disabled Mail).
+ * `refreshBriefingActions` rebuilds its href on every briefing render.
+ */
+export function setMailActionEnabled(enabled: boolean): void {
+  const mail = shell?.panel.querySelector<HTMLAnchorElement>('.impact-panel-action-mail');
+  if (!mail) return;
+  if (enabled) {
+    mail.removeAttribute('aria-disabled');
+    if (!mail.hasAttribute('href')) mail.setAttribute('href', 'mailto:');
+  } else {
+    mail.setAttribute('aria-disabled', 'true');
+    mail.removeAttribute('href');
+  }
+}
+
+/**
+ * Open the acknowledgements section (S30D D1 M22, DDM-P7-T11; the
+ * map-information pointer's target): the lazy runtime opens the shared
+ * shell in the acknowledgements-only presentation (design record
+ * acknowledgements-table.md section 1.4, ruling R-E a), an explicit user
+ * act that shows no place and starts no hydration. It declares a new
+ * briefing intent first, the way a place open does, so a later place open
+ * wins and an earlier pending one yields. If the runtime chunk fails to
+ * load, the shell names the failure instead of failing silently. `opener`
+ * takes focus back on close.
+ */
+export function openAcknowledgements(opener: HTMLElement | null): void {
+  if (unavailableOpen) {
+    clearUnavailableState();
+    closeImpactPanelShell(false);
+  }
+  invalidatePendingIntent();
+  const intent = briefingIntentSeq;
+  void loadRuntime().then(
+    (loaded) => {
+      if (intent !== briefingIntentSeq) return;
+      loaded.openAcknowledgementsPanel(opener);
+    },
+    () => {
+      if (intent !== briefingIntentSeq) return;
+      const current = ensureImpactPanelShell();
+      current.title.textContent = 'Acknowledgements';
+      current.kind.textContent = 'Every data source this map can show';
+      current.body.innerHTML = `<p class="impact-horizon-note">${UNAVAILABLE_NOTE}</p>`;
+      unavailableOpen = true;
+      unavailableSelection = null;
+      openImpactPanelShell(closeImpactPanel, opener);
+    }
+  );
 }
 
 /** Whether `token` is still the active facade open. */

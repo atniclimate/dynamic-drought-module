@@ -43,6 +43,7 @@ import { getLayerDef } from '../config/layers';
 import { renderClaim } from './claim-render';
 import { renderLandscapeContext } from './landscape-context';
 import { renderMapTechnicalInformation } from './map-technical-information';
+import { renderAcknowledgements } from './acknowledgements';
 import { getLegendSection } from './legend-registry';
 import { requestLayerOn } from './layer-toggle-command';
 import { loadFederalResources, resourcesForIdentity } from '../impact/resource-catalog';
@@ -74,7 +75,8 @@ import {
   ensureImpactPanelShell,
   isImpactPanelShellOpen,
   openImpactPanelShell,
-  refreshBriefingActions
+  refreshBriefingActions,
+  setMailActionEnabled
 } from './impact-panel';
 
 // ---------------------------------------------------------------------------
@@ -754,6 +756,19 @@ function renderBody(
   briefing: ImpactBriefing,
   impactUnavailableNote: string | null
 ): string {
+  return `${renderBriefingSections(briefing, impactUnavailableNote)}
+    ${acknowledgementsHtml()}
+  `;
+}
+
+/**
+ * Every section of the briefing body above the acknowledgements, the part a
+ * hydration refresh re-renders (`refreshOpenBriefing`).
+ */
+function renderBriefingSections(
+  briefing: ImpactBriefing,
+  impactUnavailableNote: string | null
+): string {
   const caveat = briefing.landCaveat
     ? `<p class="impact-land-caveat">${escapeHtml(briefing.landCaveat)}</p>`
     : '';
@@ -798,6 +813,18 @@ function renderBody(
   `;
 }
 
+/**
+ * The acknowledgements section (S30D D1 M22, DDM-P7-T11): the last child
+ * of every briefing body, closed by default. Its rows never depend on
+ * hydration, so the markup is rendered once per runtime and reused, and a
+ * refresh keeps the rendered node itself (`refreshOpenBriefing`).
+ */
+let acknowledgementsMemo: string | null = null;
+function acknowledgementsHtml(): string {
+  acknowledgementsMemo ??= renderAcknowledgements();
+  return acknowledgementsMemo;
+}
+
 /** Write the briefing into the panel chrome. */
 function paint(
   briefing: ImpactBriefing,
@@ -806,6 +833,7 @@ function paint(
   ensurePanel();
   if (titleEl) titleEl.textContent = briefing.landTitle;
   if (kindEl) kindEl.textContent = briefing.landKind;
+  setMailActionEnabled(true);
   refreshBriefingActions(briefing.landTitle, briefing.context);
   if (bodyEl) {
     bodyEl.innerHTML = renderBody(briefing, impactUnavailableNote);
@@ -1009,18 +1037,28 @@ export function getActiveBriefing(): ImpactBriefing | null {
  * `refreshOpenBriefing` carries across its own re-render (M19, generalizing
  * the Technical information-only list): `.impact-technical-information` is a
  * singleton, and each NWS grid metric disclosure carries its own stable
- * `data-metric-key` (renderGridMetric). M22 appends the acknowledgements
- * section's own selector here when it lands.
+ * `data-metric-key` (renderGridMetric). M22 appended the acknowledgements
+ * section, also a singleton; a refresh keeps its node, so the carry only
+ * matters for print's forced opens (the post-render step below).
  */
 const PRESERVED_DISCLOSURE_SELECTOR =
-  '.impact-technical-information, .point-heat-series[data-metric-key]';
+  '.impact-technical-information, .impact-acknowledgements, .point-heat-series[data-metric-key]';
 
 /** A stable identity for one preserved disclosure, survives the re-render
  * that replaces the DOM node itself. */
 function preservedDisclosureKey(details: HTMLDetailsElement): string {
-  return details.classList.contains('impact-technical-information')
-    ? 'technical-information'
-    : `point-heat-series:${details.dataset['metricKey'] ?? ''}`;
+  if (details.classList.contains('impact-technical-information')) return 'technical-information';
+  if (details.classList.contains('impact-acknowledgements')) return 'acknowledgements';
+  return `point-heat-series:${details.dataset['metricKey'] ?? ''}`;
+}
+
+/** The open acknowledgements section's top, relative to the scrolling
+ * body's top, or null when it is closed or absent (M22: a lane settling
+ * above an open section must not push it away mid-read). */
+function openAcknowledgementsOffset(body: HTMLElement): number | null {
+  const section = body.querySelector<HTMLDetailsElement>('.impact-acknowledgements');
+  if (!section?.open) return null;
+  return section.getBoundingClientRect().top - body.getBoundingClientRect().top;
 }
 
 /**
@@ -1048,10 +1086,25 @@ export function refreshOpenBriefing(token: number): void {
       preservedOpen.set(key, details.open);
       if (details.contains(document.activeElement)) focusedDisclosureKey = key;
     });
-  bodyEl.innerHTML = renderBody(
-    activeBriefing,
-    activeImpactUnavailableNote
+  const acknowledgementsOffset = openAcknowledgementsOffset(bodyEl);
+  // The acknowledgements section keeps its node (M22): its rows never depend
+  // on hydration, so only the sections above it are re-rendered, and the
+  // reader's open state and focus in it survive by construction (the node is
+  // never detached, so focus never leaves it).
+  const keptAcknowledgements = bodyEl.querySelector<HTMLDetailsElement>(
+    ':scope > .impact-acknowledgements'
   );
+  if (keptAcknowledgements) {
+    while (bodyEl.firstChild && bodyEl.firstChild !== keptAcknowledgements) {
+      bodyEl.firstChild.remove();
+    }
+    keptAcknowledgements.insertAdjacentHTML(
+      'beforebegin',
+      renderBriefingSections(activeBriefing, activeImpactUnavailableNote)
+    );
+  } else {
+    bodyEl.innerHTML = renderBody(activeBriefing, activeImpactUnavailableNote);
+  }
   bodyEl
     .querySelectorAll<HTMLDetailsElement>(PRESERVED_DISCLOSURE_SELECTOR)
     .forEach((details) => {
@@ -1069,6 +1122,12 @@ export function refreshOpenBriefing(token: number): void {
         details.querySelector('summary')?.focus({ preventScroll: true });
       }
     });
+  // Keep an open acknowledgements section where the reader left it: move
+  // the body's scroll by however far the re-render shifted the section.
+  if (acknowledgementsOffset !== null) {
+    const after = openAcknowledgementsOffset(bodyEl);
+    if (after !== null) bodyEl.scrollTop += after - acknowledgementsOffset;
+  }
   // A refresh landing between beforeprint and afterprint must still show
   // every disclosure open for print. Re-derive the closed set from the
   // just-rendered DOM: the previous `openedForPrint` references are now
@@ -1112,7 +1171,43 @@ export function closeImpactPanel(): void {
     activeController.abort();
     activeController = null;
   }
+  setMailActionEnabled(true);
   closeImpactPanelShell();
+}
+
+/**
+ * Open the acknowledgements section from the map-information pointer
+ * (S30D D1 M22; design record acknowledgements-table.md section 1.4, R-E
+ * a): the shared shell opens in the acknowledgements-only presentation, no
+ * place, no matrix, no hydration and no request, so `getActiveBriefing()`
+ * stays null; close returns focus to `opener`. One path only: with a
+ * briefing open the pointer is unreachable (on the desktop the briefing is
+ * a modal over the Help button; on the phone Help is hidden at the half
+ * detent), and that briefing's own Acknowledgements section, at the end of
+ * its body, opens from its summary.
+ */
+export function openAcknowledgementsPanel(opener: HTMLElement | null): void {
+  // Supersede whatever this runtime showed before, the same way a new
+  // place open does, then render the list alone.
+  if (activeController) {
+    activeController.abort();
+    activeController = null;
+  }
+  openToken++;
+  legendPollGeneration++;
+  activeBriefing = null;
+  activeImpactUnavailableNote = null;
+  if (panelSelection !== null && getPlaceSelection() === panelSelection) {
+    setPlaceSelection(null);
+  }
+  panelSelection = null;
+  setSheetBriefing(null);
+  ensurePanel();
+  if (titleEl) titleEl.textContent = 'Acknowledgements';
+  if (kindEl) kindEl.textContent = 'Every data source this map can show';
+  if (bodyEl) bodyEl.innerHTML = renderAcknowledgements({ open: true });
+  setMailActionEnabled(false);
+  openImpactPanelShell(closeImpactPanel, opener);
 }
 
 /** Register the eager facade's close hook before the first panel opens. */

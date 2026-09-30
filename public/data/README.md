@@ -121,7 +121,7 @@ state-curated set).
   stored in this archive.
 - `structures-central-oregon.pmtiles`: building footprints for the 3D
   Fire view's structures context (Overture Maps Foundation buildings
-  theme, ODbL, release 2026-07-22.0; includes OpenStreetMap and other
+  theme, ODbL (https://opendatacommons.org/licenses/odbl/1-0/), release 2026-07-22.0; includes OpenStreetMap and other
   open sources; extracted by `scripts/extract-overture-buildings.py`,
   baked by `npm run build:structures-tiles`). 189,769 footprints,
   7,950,204 bytes, z13-14, retrieved 2026-08-19 UTC; 72% carry an

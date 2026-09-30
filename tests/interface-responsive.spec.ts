@@ -615,10 +615,12 @@ test.describe('the 2026-08-19 map chrome seats', () => {
     // The license disclosure is still one click away and still says who
     // owns the base map. Burying it to make room for app chrome would be a
     // license problem, not a layout preference.
+    // Value-only migration (S30D D1 M22, DR-162): the one OpenStreetMap
+    // credit is on the map itself now, and the credits line points to the
+    // Acknowledgements.
+    await expect(page.locator('#map-osm-credit')).toContainText('OpenStreetMap');
     await page.locator('#map-info-btn').click();
-    await expect(page.locator('#map-info-attribution')).toContainText(
-      'OpenStreetMap'
-    );
+    await expect(page.locator('#map-info-attribution')).toContainText('Acknowledgements');
     await page.keyboard.press('Escape');
   });
 
@@ -1761,5 +1763,63 @@ test.describe('desktop pointer-target floor, sidebar collapsed 1440x900 (DDM-P17
       failures,
       `pointer targets under 24x24 CSS px with no SC 2.5.8 exception:\n${failures.join('\n')}`
     ).toEqual([]);
+  });
+});
+
+test.describe('the OpenStreetMap credit on the map (S30D D1 M22, found-027, DR-162)', () => {
+  test.use({ viewport: { width: 1280, height: 720 } });
+
+  test('the OSM credit is visible on the map in every default desktop state while an OSM-derived source draws', async ({
+    page
+  }) => {
+    // Brief and Console, the sidebar open and collapsed (found-027's
+    // acceptance): the OSM ground draws on every default boot.
+    const states = ['?view=brief', '?view=console', '?view=brief&sidebar=closed', '?view=console&sidebar=closed'];
+    for (const query of states) {
+      await gotoApp(page, query);
+      await settledLayout(page);
+      const credit = page.locator('#map-osm-credit');
+      await expect(credit, query).toBeVisible();
+      await expect(credit, query).toHaveText('© OpenStreetMap contributors');
+      await expect(credit.locator('a'), query).toHaveAttribute(
+        'href',
+        'https://www.openstreetmap.org/copyright'
+      );
+      const reading = await page.evaluate((seatSelectors) => {
+        const box = (el: Element) => {
+          const r = el.getBoundingClientRect();
+          return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+        };
+        const creditEl = document.querySelector('#map-osm-credit') as HTMLElement;
+        const creditBox = box(creditEl);
+        const map = box(document.querySelector('#map-container') as Element);
+        const cx = (creditBox.left + creditBox.right) / 2;
+        const cy = (creditBox.top + creditBox.bottom) / 2;
+        const hit = document.elementFromPoint(cx, cy);
+        const seats = seatSelectors
+          .flatMap((selector) => Array.from(document.querySelectorAll(selector)))
+          .filter((el) => (el as HTMLElement).offsetParent !== null)
+          .map((el) => ({ id: el.id || el.className.toString(), box: box(el) }));
+        return { creditBox, map, uncovered: hit !== null && creditEl.contains(hit), seats };
+      }, [
+        '.map-overlay-controls > *',
+        '#map-key',
+        '#map-info-btn',
+        '.maplibregl-ctrl-scale',
+        '.test-preview-badge',
+        '#map-chip',
+        '.embed-brand'
+      ]);
+      expect(reading.uncovered, `${query}: something paints over the credit`).toBe(true);
+      expect(reading.creditBox.left, query).toBeGreaterThanOrEqual(reading.map.left);
+      expect(reading.creditBox.right, query).toBeLessThanOrEqual(reading.map.right + 0.5);
+      expect(reading.creditBox.bottom, query).toBeLessThanOrEqual(reading.map.bottom + 0.5);
+      for (const seat of reading.seats) {
+        if (seat.box.width === 0 || seat.box.height === 0) continue;
+        expect(intersects(reading.creditBox, seat.box), `${query}: the credit overlaps ${seat.id}`).toBe(
+          false
+        );
+      }
+    }
   });
 });

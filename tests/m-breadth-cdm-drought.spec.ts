@@ -228,12 +228,21 @@ test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
     await expect(page.locator('#map-key-content')).toBeHidden();
     const legendLicense = legend.getByRole('link', { name: LICENSE_TITLE });
     await expect(legendLicense).toHaveAttribute('href', LICENSE_URL);
+    // Value-only migration (S30D D1 M22; design record
+    // acknowledgements-table.md section 4.3): the OGL-Canada licence link
+    // moved from the credits line into the Acknowledgements' AAFC row,
+    // reached through the credits line's pointer. Its link text there is
+    // the published title with its U+2013 dash (cite sheet c18), so the row
+    // is matched by the licence URL.
     await page.locator('#map-info-btn').click();
+    await page.locator('#map-info-attribution button[data-open-acknowledgements]').click();
     const attributionLicense = page
-      .locator('#map-info-attribution')
-      .getByRole('link', { name: LICENSE_TITLE });
+      .locator('#impact-panel [data-ack-id="aafc"] a')
+      .filter({ hasText: 'Open Government Licence' })
+      .first();
     await expect(attributionLicense).toHaveAttribute('href', LICENSE_URL);
     await page.keyboard.press('Escape');
+    await expect(page.locator('#impact-panel')).toBeHidden();
     expect(upstreamRequests).toEqual([]);
 
     await page.emulateMedia({ media: 'print' });

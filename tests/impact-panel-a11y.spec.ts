@@ -182,8 +182,17 @@ test.describe('impact panel accessibility', () => {
     await page.keyboard.press('Enter');
     await expect(technical).toHaveJSProperty('open', true);
     await expect(technical.locator('#impact-technical-drought')).toBeVisible();
+    // Value-only migration (S30D D1 M22): the Acknowledgements section is
+    // the body's last child now, one Tab stop after Technical information
+    // (design record acknowledgements-table.md section 1.3), so the wrap
+    // to Mail comes one Tab later and Shift+Tab returns through it.
+    const acknowledgements = panel.locator('.impact-acknowledgements > summary');
+    await page.keyboard.press('Tab');
+    await expect(acknowledgements).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(mail).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(acknowledgements).toBeFocused();
     await page.keyboard.press('Shift+Tab');
     await expect(summary).toBeFocused();
   });

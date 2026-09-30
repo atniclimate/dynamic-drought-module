@@ -193,7 +193,14 @@ export async function activate(
   if (!map.getSource(SOURCE_ID)) {
     map.addSource(SOURCE_ID, {
       type: 'geojson',
-      data: emptyFeatureCollection()
+      data: emptyFeatureCollection(),
+      // The waterways are OpenStreetMap data (via Overpass): this source
+      // carries the same one OSM credit the ground does (S30D D1 M22,
+      // DR-162), and src/ui/map-information.ts renders it on the map
+      // while this layer draws.
+      // ledger: osm-overpass-hydrography (cite sheet c03)
+      attribution:
+        '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     });
   }
 

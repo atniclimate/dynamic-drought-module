@@ -218,9 +218,13 @@ test.describe('Embed at 200x600 (minimum-width iframe floor)', () => {
     const infoButton = embedded.locator('#map-info-btn');
     await expect(infoButton).toBeVisible();
     await infoButton.click();
+    // Value-only migration (S30D D1 M22, DR-162): the credits line holds
+    // the pointer to the Acknowledgements, and the OpenStreetMap credit's
+    // link sits on the map itself.
     expect(
-      await embedded.locator('#map-info-attribution a').count()
+      await embedded.locator('#map-info-attribution button[data-open-acknowledgements]').count()
     ).toBeGreaterThan(0);
+    expect(await embedded.locator('#map-osm-credit a').count()).toBeGreaterThan(0);
     await page.keyboard.press('Escape');
 
     for (const selector of [

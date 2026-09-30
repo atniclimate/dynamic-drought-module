@@ -322,7 +322,7 @@ publishing agencies for security reasons, and no authoritative public
 national distribution-circuit dataset exists.
 
 Building structures come from the Overture Maps Foundation buildings theme
-(ODbL), extruded over the terrain from zoom 13: footprints with an
+(ODbL, https://opendatacommons.org/licenses/odbl/1-0/), extruded over the terrain from zoom 13: footprints with an
 issuer-published height rise to it; the rest draw in a visibly dimmer tone
 at a disclosed placeholder height. The committed bake covers the central
 Oregon region framing only; a full Pacific Northwest bake was projected
@@ -567,7 +567,7 @@ Nebraska-Lincoln)
 
 **Overture Maps Foundation**
 
-- Building footprints (central Oregon extract, ODbL)
+- Building footprints (central Oregon extract, ODbL, https://opendatacommons.org/licenses/odbl/1-0/)
 
 **Iowa State University**
 
