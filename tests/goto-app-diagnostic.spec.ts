@@ -103,7 +103,9 @@ test.describe('gotoApp boot-idle diagnostic and the deterministic NADM fixture',
     expect(yearMonthOf(bodies[0])).toBe('202606');
     expect(sentinelFulfillments).toBe(0);
 
-    // The explicit opt-out: `gotoApp` installs no route of its own, so the
+    // The explicit opt-out: this switches the EXISTING context route (the
+    // one the routine boot above already registered) to 'live' mode, whose
+    // handler now calls `route.fallback()` (helpers.ts near :59-66), so the
     // context backstop registered above (the stand-in for a spec's own
     // handler, or the live agency) is what answers.
     await gotoApp(page, '?view=console&layers=nadm-drought&region=british_columbia', {

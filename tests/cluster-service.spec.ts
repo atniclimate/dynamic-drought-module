@@ -599,14 +599,18 @@ test.describe('S3 snapshot revisions and honesty under later changes', () => {
     }
   });
 
-  test('a terminal activation failure that unchecks a recipe member also drops the claim (deliberate honesty)', () => {
+  test('an explicit uncheck after a terminal activation error also drops the claim (deliberate honesty)', () => {
     resetWorld();
     const dispose = initClusterService();
     try {
       requestCluster('wildfire');
       expect(getHazardCluster()).toBe('wildfire');
 
-      // The controller's failure path: terminal error, checkbox off.
+      // A terminal error, then an explicit uncheck: layer-controller.ts's
+      // failActivation (near :221-238) keeps a committed-composition
+      // member's checkbox and on-intent on failure, so this simulates the
+      // user unchecking it themselves, not the controller's own failure
+      // path unchecking it.
       registry.setStatus('nifc-fires', 'error');
       registry.deactivate('nifc-fires');
       setChecked('nifc-fires', false);

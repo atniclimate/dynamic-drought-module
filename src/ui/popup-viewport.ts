@@ -90,6 +90,15 @@ const EDGE_MARGIN_PX = 12;
  * at or beyond the drawer's right edge plus 8 px"). */
 const DRAWER_CLEARANCE_PX = 8;
 
+/** The Key's own desktop-chip breakpoint (src/ui/map-key.ts's
+ * MOBILE_MAP_KEY_QUERY near :120, reused verbatim by its isDesktopChip
+ * predicate near :1239): the drawer exclusion below applies only where
+ * the Key itself limits the always-visible chip to, the desktop shell
+ * outside embeds, never on phone or in an embed where `#map-key-content`
+ * can also be visible. Reused literally rather than inventing a second
+ * breakpoint. */
+const DESKTOP_KEY_DRAWER_QUERY = '(max-width: 720px)';
+
 /**
  * The X term of a computed `transform`'s 2D matrix (`matrix(a, b, c, d,
  * tx, ty)`), or 0 when the transform is `none`, unparseable, or carries a
@@ -395,8 +404,11 @@ function containingBounds(popup: HTMLElement): Bounds {
   // translateX (the keyframes carry no other component), so subtracting
   // its current X term from the live rect's right edge always yields the
   // element's un-translated (settled) right edge, at any animation frame.
+  const isDesktopNonEmbed =
+    !window.matchMedia(DESKTOP_KEY_DRAWER_QUERY).matches &&
+    !document.getElementById('app')?.classList.contains('embed');
   const drawer = document.getElementById('map-key-content');
-  if (drawer && !drawer.hidden) {
+  if (isDesktopNonEmbed && drawer && !drawer.hidden) {
     const style = getComputedStyle(drawer);
     if (style.display !== 'none' && style.visibility !== 'hidden') {
       const drawerBox = drawer.getBoundingClientRect();

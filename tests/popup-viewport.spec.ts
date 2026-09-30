@@ -1075,8 +1075,17 @@ test.describe('DEF-4: the telemetry popup fits a 390px viewport (390x844)', () =
     // popup settles on its honest fallback instead of racing an upstream.
     await page.route('**/ddm-proxy.atniclimate.workers.dev/**', (route) => route.abort('failed'));
     await page.route('**/waterservices.usgs.gov/**', (route) => route.abort('failed'));
+    // The 'ihr' station hydrates through the direct USACE CWMS Data API
+    // (wildcard CORS), not the proxy; without this route the popup would
+    // hydrate LIVE and the honest fallback would never render.
+    await page.route('**/cwms-data.usace.army.mil/**', (route) => route.abort('failed'));
 
-    await gotoApp(page, '?layers=telemetry');
+    // `region=washington_state` pins the camera this case was measured
+    // under (DR-109): the 'ihr' station sits in Washington, and the drag
+    // target below assumes the Washington framing, not the national one.
+    // `layers=` already routes this boot to the console, so the raw
+    // region= changes no door.
+    await gotoApp(page, '?region=washington_state&layers=telemetry');
     await waitForLayerSettled(page, 'telemetry');
 
     // The curated seed markers render without any network (the
@@ -1532,5 +1541,109 @@ test.describe('DDM-P11-T02 clause 3, DR-042 option a: the condition-surface door
     await usStatesRequested;
     await awaitQuiescence(page);
     await expect(popup.locator('[data-ddm-impact-trigger]')).toHaveCount(0);
+  });
+});
+
+/**
+ * found-099 (Codex landed-diff F4): the open Key drawer's left-edge
+ * exclusion (src/ui/popup-viewport.ts's containingBounds, "the drawer
+ * block") is the desktop shell's own rule (the Key's isDesktopChip
+ * predicate, src/ui/map-key.ts near :1239); `#map-key-content` is also
+ * visible on phone and in an embed (map-key.ts near :1143-1145,
+ * :1187-1221), where the plain rule never applies. Before the fix, a
+ * popup near the map's left edge on phone or in an embed with the Key
+ * open either slid to the drawer's right edge plus 8px (a bound with no
+ * meaning off the desktop shell) or, when that bound left no usable
+ * width, had its clamp abandoned outright (containingBounds's EMPTY
+ * tier, popup-viewport.ts near :447).
+ *
+ * Each case commits a synthetic MapLibre-shaped popup (no live geometry
+ * or hydration needed) with a raw anchor placed well left of the map's
+ * own left edge, so the SLIDE mechanism (popup-viewport.ts's `dx`) is
+ * exercised either way: fixed, it pulls the content in to the plain
+ * 12px edge margin; unfixed, it either stops short (still left of the
+ * map, the EMPTY-tier abandonment) or overshoots well past the margin
+ * toward the drawer's own right edge.
+ */
+test.describe('found-099: the Key drawer exclusion applies only on the desktop non-embed shell', () => {
+  async function openKeyDrawer(page: Page): Promise<void> {
+    const toggle = page.locator('#map-key-details-toggle');
+    await expect(toggle).toBeVisible();
+    if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click();
+    await expect(page.locator('#map-key-content')).toBeVisible();
+  }
+
+  /** The same synthetic MapLibre-shaped popup probe map-drawers.spec.ts
+   * uses for this drawer's own clamp cases, with the raw anchor placed
+   * left of the map so an unfixed clamp's SLIDE (or its EMPTY-tier
+   * abandonment) is visible in the settled position. */
+  async function commitLeftProbePopup(page: Page, topPx: number): Promise<void> {
+    await page.evaluate((topPxArg) => {
+      const mapEl = document.querySelector('.maplibregl-map');
+      if (!mapEl) throw new Error('no .maplibregl-map to host the probe popup');
+      const popup = document.createElement('div');
+      popup.className = 'maplibregl-popup maplibregl-popup-anchor-bottom';
+      popup.style.position = 'absolute';
+      popup.style.top = '0';
+      popup.style.left = '0';
+      popup.style.transform = `translate(-100px, ${topPxArg}px)`;
+      popup.style.zIndex = '10';
+      const tip = document.createElement('div');
+      tip.className = 'maplibregl-popup-tip';
+      const content = document.createElement('div');
+      content.className = 'maplibregl-popup-content';
+      content.style.width = '220px';
+      content.textContent =
+        'found-099 drawer-guard probe: content long enough to carry a real width and height.';
+      popup.append(tip, content);
+      mapEl.appendChild(popup);
+    }, topPx);
+  }
+
+  async function proveMarginNotDrawer(page: Page): Promise<void> {
+    const mapBox = await page.locator('#map').boundingBox();
+    expect(mapBox, 'the map lost its bounding box').not.toBeNull();
+    await commitLeftProbePopup(page, mapBox!.height / 2);
+
+    const content = page.locator('.maplibregl-popup-content');
+    await expect(content).toBeVisible();
+    await expect
+      .poll(() => content.evaluate((el) => el.getBoundingClientRect().width > 0))
+      .toBe(true);
+    const cbox = await content.boundingBox();
+    expect(cbox, 'the probe popup content has no box').not.toBeNull();
+    // THE FIX (found-099): the drawer clause never runs off the desktop
+    // non-embed shell, so the SLIDE pulls the raw off-map anchor in to
+    // the plain 12px edge margin only (popup-viewport.ts's EDGE_MARGIN_PX),
+    // never the drawer's own right edge plus 8px, and the clamp is never
+    // abandoned. Predicted red at 531ab66: cbox!.x sits well past this
+    // window (pushed toward the drawer's right edge) or well short of it
+    // (still at the raw -100px anchor, the EMPTY-tier abandonment).
+    expect(
+      cbox!.x,
+      `the popup (left ${cbox!.x}, map left ${mapBox!.x}) is not held at the plain 12px edge margin`
+    ).toBeGreaterThanOrEqual(mapBox!.x + 12 - 2);
+    expect(
+      cbox!.x,
+      `the popup (left ${cbox!.x}, map left ${mapBox!.x}) sits well past the plain edge margin, as if the drawer's own clearance (or an abandoned clamp) still applied`
+    ).toBeLessThanOrEqual(mapBox!.x + 12 + 2);
+  }
+
+  test('at 390x844 (phone, non-embed) with the Key open, a popup near the map left edge keeps the plain margin, not the Key drawer clearance', async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoApp(page);
+    await openKeyDrawer(page);
+    await proveMarginNotDrawer(page);
+  });
+
+  test('in an embed at 390x844 with the Key open, a popup near the map left edge keeps the plain margin, not the Key drawer clearance', async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoApp(page, '?embed=true');
+    await openKeyDrawer(page);
+    await proveMarginNotDrawer(page);
   });
 });
