@@ -212,6 +212,37 @@ test.describe('impact panel accessibility', () => {
     expect(shareLink.searchParams.get('select')).toBe('state:WA');
   });
 
+  test('the Email link carries a URL change made after the briefing settled (found-098)', async ({
+    page
+  }) => {
+    await gotoApp(page, '?select=state:WA');
+    const panel = page.locator('#impact-panel');
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+    await expect(panel.locator('#impact-panel-title')).toHaveText('Washington');
+    await expect(panel.locator('.impact-horizon-loading')).toHaveCount(0);
+    await expect(
+      panel.getByRole('link', { name: 'Agricultural drought relief information' })
+    ).toBeVisible();
+
+    // A durable URL key changes without any briefing re-render: collapsing
+    // the sidebar writes `sidebar=closed` (replaceState, src/ui/sidebar.ts)
+    // and paints nothing inside the panel, so a mailto href baked only at
+    // settle time would miss it.
+    await page.locator('#sidebar-collapse').click();
+    await expect(page).toHaveURL(/sidebar=closed/);
+
+    const mail = panel.locator('.impact-panel-action-mail');
+    await mail.focus();
+    const href = await mail.getAttribute('href');
+    if (!href || !href.startsWith('mailto:?')) {
+      throw new Error(`expected a wired mailto: href, got ${JSON.stringify(href)}`);
+    }
+    const params = new URLSearchParams(href.slice('mailto:?'.length));
+    const body = params.get('body') ?? '';
+    const shareLink = new URL(body.split('\n')[2] ?? '');
+    expect(shareLink.searchParams.get('sidebar')).toBe('closed');
+  });
+
   test("a Tribal Nation briefing's mailto carries no place token and names the Nation in words", async ({
     page
   }) => {

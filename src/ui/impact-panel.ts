@@ -89,6 +89,15 @@ let shellOpener: HTMLElement | null = null;
 let shellHardClose: (() => void) | null = null;
 let hostSyncArmed = false;
 
+/**
+ * The open briefing's title and place context, as last passed to
+ * `refreshBriefingActions` (found-098): held so `rearmMailHref` can rebuild
+ * the Email href from the CURRENT URL just before the control is activated,
+ * without waiting for a render that may never come.
+ */
+let lastBriefingTitle: string | null = null;
+let lastBriefingContext: BoundarySelectionContext | null = null;
+
 /** Visible, keyboard-focusable descendants of the panel, in DOM order. */
 function getFocusable(container: HTMLElement): HTMLElement[] {
   const selector =
@@ -147,16 +156,27 @@ export function ensureImpactPanelShell(): ImpactPanelShell {
 
   const isEmbedBoot =
     document.getElementById('app')?.classList.contains('embed') ?? false;
+  const mailAction = panel.querySelector<HTMLAnchorElement>(
+    '.impact-panel-action-mail'
+  );
   if (isEmbedBoot) {
     panel
       .querySelector('.impact-panel-header')
       ?.insertAdjacentElement('afterend', buildTribalNationsBriefAction());
-    const mailAction = panel.querySelector<HTMLAnchorElement>(
-      '.impact-panel-action-mail'
-    );
     if (mailAction) {
       mailAction.target = '_blank';
       mailAction.rel = 'noopener';
+    }
+  }
+  // Rearm the mailto href just before the control is read (found-098): the
+  // href is a snapshot baked by refreshBriefingActions on the last render or
+  // hydration refresh, so a durable URL key changed afterward without a
+  // repaint (a sidebar collapse, a horizon switch) would otherwise be
+  // missing when the link is followed. Capture phase runs before the
+  // browser reads href for navigation or a screen reader announces it.
+  if (mailAction) {
+    for (const eventType of ['pointerdown', 'focus', 'click'] as const) {
+      mailAction.addEventListener(eventType, rearmMailHref, { capture: true });
     }
   }
 
@@ -533,28 +553,61 @@ function briefingStateCode(context: BoundarySelectionContext): string | null {
 }
 
 /**
- * Rebuild the Email control's `mailto:` href from the open briefing's title
- * and place (owner-1o, D1 M21): the subject is the title verbatim; the body
- * is the title, a blank line, then the share link (the current view's URL,
- * as Share copies it, plus `select=state:XX` only for a state place; every
- * other place kind carries no place token and the title already names the
- * place in words). Called on every open, refresh and unavailable render so
- * the link is never stale.
+ * Build the Email control's `mailto:` href from a briefing's title and
+ * place (owner-1o, D1 M21): the subject is the title verbatim; the body is
+ * the title, a blank line, then the share link (the CURRENT view's URL, as
+ * Share copies it, read fresh by `buildShareLink` at call time, plus
+ * `select=state:XX` only for a state place; every other place kind carries
+ * no place token and the title already names the place in words).
  */
-export function refreshBriefingActions(
+function buildMailHref(
   title: string,
   context: BoundarySelectionContext | null
-): void {
-  const mail = shell?.panel.querySelector<HTMLAnchorElement>(
-    '.impact-panel-action-mail'
-  );
-  if (!mail) return;
+): string {
   const stateCode = context ? briefingStateCode(context) : null;
   const link = buildShareLink(
     stateCode ? { kind: 'state', id: stateCode } : undefined
   );
   const body = `${title}\n\n${link}`;
-  mail.href = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+  return `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+}
+
+/**
+ * Rebuild and apply the Email control's href, and remember the title and
+ * context it was built from. Called on every open, refresh and unavailable
+ * render (found-098): a render is not the only moment the URL can change
+ * while the briefing stays open, so this alone does not keep the link
+ * current; `rearmMailHref` covers the gap by rebuilding it again, from the
+ * same stored title and context, just before the control is activated.
+ */
+export function refreshBriefingActions(
+  title: string,
+  context: BoundarySelectionContext | null
+): void {
+  lastBriefingTitle = title;
+  lastBriefingContext = context;
+  const mail = shell?.panel.querySelector<HTMLAnchorElement>(
+    '.impact-panel-action-mail'
+  );
+  if (!mail) return;
+  mail.href = buildMailHref(title, context);
+}
+
+/**
+ * Rebuild the Email href from the last briefing's title and context,
+ * right before the control is read (found-098): a durable URL key can
+ * change after the briefing settles without any repaint (a sidebar
+ * collapse, a horizon switch), so the href `refreshBriefingActions` last
+ * baked can be stale by the time the control is activated. A no-op while
+ * no briefing has ever rendered (both stay null until the first render).
+ */
+function rearmMailHref(): void {
+  if (lastBriefingTitle === null) return;
+  const mail = shell?.panel.querySelector<HTMLAnchorElement>(
+    '.impact-panel-action-mail'
+  );
+  if (!mail) return;
+  mail.href = buildMailHref(lastBriefingTitle, lastBriefingContext);
 }
 
 function renderUnavailable(
