@@ -410,11 +410,18 @@ export function parseUrlParams(): ParsedUrlParams {
         .filter((s) => s.length > 0);
       layers = new Set(resolveExclusiveSurface(keys));
     }
-  } else if (shell.cluster !== 'drought') {
+  } else if (shell.cluster !== 'drought' || horizon !== 'current') {
     // A cluster boot resolves to the reference default-on set plus the
     // cluster's recipe at the URL's committed horizon. Composing at the
     // shared horizon makes a cluster share reproduce the displayed recipe
     // instead of silently returning to the current-horizon composition.
+    // Drought at a non-current horizon needs this too (found-030): its
+    // recipe swaps to the CPC outlook (`drought`) at weeks-ahead and
+    // season-ahead, and the plain DEFAULT_ON_KEYS fallback below never
+    // reflects that swap. Drought at 'current' keeps the untouched
+    // fallback (DR-109's bare boot is the default view; the composed set
+    // has the same members in a different member order, not a byte match,
+    // so this branch must not widen to cover it).
     layers = new Set(composeClusterIntent(shell.cluster, horizon));
   } else {
     layers = new Set(DEFAULT_ON_KEYS);

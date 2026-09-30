@@ -20,6 +20,7 @@ import {
   syntheticBiaBody
 } from './tribal-fixtures';
 import { HAZARD_CLUSTER_KEYS, HAZARD_CLUSTERS } from '../src/config/clusters';
+import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
 
 /**
  * DDM-P2-T09: the recognized URL parameter vocabulary, read from its own
@@ -715,7 +716,16 @@ const RELOAD_GROUPS: readonly ReloadGroup[] = [
       sidebar: 'closed'
     }
   },
-  { name: 'horizon', query: '?horizon=weeks-ahead', expected: { horizon: 'weeks-ahead' } },
+  {
+    // A bare-cluster boot now composes the Drought recipe at the winning
+    // horizon (found-030), which reaches the CPC outlook layer instead of
+    // the fixture-stubbed North American Drought Monitor, so this reload
+    // case needs the outlook stub too.
+    name: 'horizon',
+    query: '?horizon=weeks-ahead',
+    stubs: stubCpcDroughtOutlook,
+    expected: { horizon: 'weeks-ahead' }
+  },
   {
     name: 'framing',
     query: `?framing=${encodeURIComponent(RELOAD_FRAMING)}&layers=places`,

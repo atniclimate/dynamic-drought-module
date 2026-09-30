@@ -1,5 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
-import { gotoApp, layerCheckbox, layerPill, PILL, urlLayers, search } from './helpers';
+import { gotoApp, layerCheckbox, layerPill, PILL, urlLayers, search, DEFAULT_ON } from './helpers';
+import { TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
+import {
+  stubCpcDroughtOutlook,
+  cpcOutlookFixture,
+  CPC_OUTLOOK_TARGET
+} from './cpc-outlook-fixtures';
 
 /**
  * 0.5.0b temporal axis (critical-review Section 5): the honesty-of-time
@@ -784,5 +790,138 @@ test.describe('DDM-P2-T11 time anchors across a mode switch (the heatday rule)',
     await expect(droughtClaim).toContainText(
       'the U.S. Drought Monitor map dated Jun 30, 2026'
     );
+  });
+});
+
+test.describe('found-030: a Drought boot at an outlook horizon composes the CPC outlook recipe', () => {
+  // Enumerated from clusters.ts (DR-113), never a literal list: the two
+  // horizons whose Drought recipe is the CPC outlook (`current`'s recipe is
+  // the North American Drought Monitor and is deliberately excluded here;
+  // see the pin cases below).
+  const OUTLOOK_HORIZONS = TEMPORAL_HORIZON_KEYS.filter((h) => h !== 'current');
+
+  // The stamp headline the shared stub's fixed fcst_date and per-register
+  // target produce (src/layers/drought.ts's stamp builder), matching the
+  // already-proven strings this file uses above for the same fixture date.
+  const OUTLOOK_HEADLINE: Readonly<Record<string, string>> = {
+    'weeks-ahead': `Issued Jun 30, 2026 · through ${CPC_OUTLOOK_TARGET.monthly}`,
+    'season-ahead': `Issued Jun 30, 2026 · through ${CPC_OUTLOOK_TARGET.seasonal}`
+  };
+
+  for (const horizon of OUTLOOK_HORIZONS) {
+    for (const bootForm of ['no cluster', 'explicit cluster=drought'] as const) {
+      const query =
+        bootForm === 'no cluster'
+          ? `?horizon=${horizon}`
+          : `?cluster=drought&horizon=${horizon}`;
+
+      test(`${bootForm}, horizon=${horizon}: draws the CPC outlook, Drought is pressed, and layers= carries drought`, async ({
+        page
+      }) => {
+        await stubCpcDroughtOutlook(page);
+        await gotoApp(page, query);
+
+        // Predicted red at 531ab66: the Drought fallback ignores the URL's
+        // horizon and always seeds DEFAULT_ON_KEYS, so `drought` stays off
+        // and `nadm-drought` stays on regardless of horizon=.
+        await expect
+          .poll(async () => {
+            const layers = await urlLayers(page);
+            return layers.has('drought') && !layers.has('nadm-drought');
+          })
+          .toBe(true);
+        await expect(layerCheckbox(page, 'drought')).toBeChecked();
+        await expect(layerCheckbox(page, 'nadm-drought')).not.toBeChecked();
+        await expect(
+          page.locator('.shell-cluster-btn[data-cluster="drought"]')
+        ).toHaveAttribute('aria-pressed', 'true');
+
+        // The two outlook horizons render distinct issued content (monthly
+        // versus seasonal target), not merely "some" outlook headline.
+        await expect(
+          page.locator('#time-bar .time-bar-stamp-headline')
+        ).toHaveText(OUTLOOK_HEADLINE[horizon]);
+      });
+    }
+  }
+
+  test('a held CPC outlook response leaves the boot loading, then draws it once released', async ({
+    page
+  }) => {
+    await stubCpcDroughtOutlook(page);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // Registered after stubCpcDroughtOutlook (Playwright prefers the most
+    // recently registered route), so only the monthly register this
+    // horizon actually requests is held; the shared stub still answers the
+    // seasonal register if anything unexpectedly reaches it.
+    await page.route(
+      (url) => url.href.includes('cpc_drought_outlk/MapServer/1/query'),
+      async (route) => {
+        await gate;
+        await route
+          .fulfill({
+            status: 200,
+            contentType: 'application/geo+json',
+            body: JSON.stringify(cpcOutlookFixture(CPC_OUTLOOK_TARGET.monthly))
+          })
+          .catch(() => undefined);
+      }
+    );
+
+    await gotoApp(page, '?horizon=weeks-ahead', { bootIdle: false });
+    await expect(layerPill(page, 'drought')).toHaveText(PILL.loading);
+
+    release();
+    await expect(layerPill(page, 'drought')).toHaveText(PILL.live, {
+      timeout: 25_000
+    });
+    await expect(
+      page.locator('#time-bar .time-bar-stamp-headline')
+    ).toHaveText(OUTLOOK_HEADLINE['weeks-ahead']);
+  });
+
+  test('a bare boot and an explicit current-horizon Drought boot both still write the untouched default set', async ({
+    page
+  }) => {
+    // The diagnosed fix must not touch the `current` horizon: both forms
+    // stay on the DEFAULT_ON_KEYS fallback, exactly as before this unit.
+    await gotoApp(page, '');
+    await expect
+      .poll(async () => {
+        const layers = await urlLayers(page);
+        return (
+          layers.size === DEFAULT_ON.length &&
+          (DEFAULT_ON as readonly string[]).every((key) => layers.has(key))
+        );
+      })
+      .toBe(true);
+
+    await gotoApp(page, '?cluster=drought&horizon=current');
+    await expect
+      .poll(async () => {
+        const layers = await urlLayers(page);
+        return (
+          layers.size === DEFAULT_ON.length &&
+          (DEFAULT_ON as readonly string[]).every((key) => layers.has(key))
+        );
+      })
+      .toBe(true);
+  });
+
+  test('an explicit layers= at an outlook horizon keeps exactly what it names (the legacy-link case)', async ({
+    page
+  }) => {
+    // No CPC outlook stub: an explicit layers= must never reach the outlook
+    // service at all, since composeClusterIntent is never consulted on this
+    // path (src/state/url.ts's `params.has('layers')` branch outranks the
+    // Drought fallback).
+    await gotoApp(page, '?horizon=weeks-ahead&layers=nadm-drought');
+    const layers = await urlLayers(page);
+    expect([...layers]).toEqual(['nadm-drought']);
+    await expect(layerCheckbox(page, 'nadm-drought')).toBeChecked();
+    await expect(layerCheckbox(page, 'drought')).not.toBeChecked();
   });
 });

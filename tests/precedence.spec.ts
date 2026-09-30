@@ -141,7 +141,10 @@ test.describe('precedence: boot, Reset and embed defaults (DR-109)', () => {
     test('temporal tokens resolve first-wins and invalid reads as now', async ({ page }) => {
       // horizon=: a duplicated key resolves via URLSearchParams.get, which
       // returns only the first occurrence (the same rule week, dmode, sst
-      // and outlook follow).
+      // and outlook follow). The bare-cluster boot now composes the Drought
+      // recipe at the winning horizon (found-030), which reaches the CPC
+      // outlook layer, so this boot needs the stub too.
+      await stubCpcDroughtOutlook(page);
       await gotoApp(page, '?horizon=weeks-ahead&horizon=season-ahead');
       expect(new URLSearchParams(await search(page)).get('horizon')).toBe('weeks-ahead');
 

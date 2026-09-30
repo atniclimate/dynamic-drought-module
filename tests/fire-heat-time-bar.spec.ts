@@ -999,6 +999,12 @@ test.describe('DDM-P8-T02: the Extreme Heat screen has a seven-day time control'
     // target is unchanged (Extreme Heat at Season ahead is still the
     // deliberately empty recipe). Every assertion below the horizon
     // press is unchanged.
+    //
+    // 2026-09-29 (S30D-N1 U5): found-030 (the direct
+    // `?cluster=drought&horizon=season-ahead` boot landing NADM instead of
+    // the outlook) is now fixed at `src/state/url.ts`'s composition branch;
+    // the stand-down above stays as written (this case still reaches Season
+    // ahead by pressing the chip, not by asserting the direct-boot URL).
     await stubCommon(page);
     await stubCpcDroughtOutlook(page);
     await gotoApp(page, '?view=brief');
