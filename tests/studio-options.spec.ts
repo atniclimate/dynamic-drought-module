@@ -171,7 +171,17 @@ async function stubEveryStudioLayer(page: Page): Promise<void> {
 }
 
 test.describe('LAYERS studio: every option exercised (owner-1c)', () => {
-  test('every LayerDef row in the Layer studio, enumerated from LAYER_DEFS by role, toggles its layer on the map and in layers=', async ({
+  // 2026-09-30, found-100 (Codex landed-diff review F5): the title was
+  // narrowed from "... toggles its layer on the map and in layers=" because
+  // the case never asserted a map effect. DDM-P10-T08's "on the map or the
+  // URL" is met by the layers= assertions below. A map-effect assertion
+  // needs a read of MapLibre's style membership, and no existing production
+  // seam exposes one (src/main.ts:286-298 guards the map handle with
+  // import.meta.env.DEV; src/state/boot-idle.ts:71-89 exposes no map member).
+  // An uncheck leg is also not added here: unchecking a member of the
+  // committed composition demotes the display to custom
+  // (src/state/cluster-service.ts:512-544), which would change every later row.
+  test('every LayerDef row in the Layer studio, enumerated from LAYER_DEFS by role, checks its box, enters layers= and settles its status pill', async ({
     page
   }) => {
     test.setTimeout(150_000);
