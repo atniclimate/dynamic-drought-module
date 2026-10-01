@@ -1823,3 +1823,109 @@ test.describe('the OpenStreetMap credit on the map (S30D D1 M22, found-027, DR-1
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// found-021 (S30D D1 M27): on desktop each map-information source row shows
+// its name, detail and state as separate cells whose rectangles never touch;
+// at 390x844 the phone rows keep their stacked cards.
+// ---------------------------------------------------------------------------
+
+interface SourceRowReading {
+  readonly text: string;
+  readonly cells: readonly { readonly tag: string; readonly box: Rect }[];
+}
+
+/** Every source row's cells, read in ONE evaluate after the panel settles. */
+async function readSourceRows(page: Page): Promise<SourceRowReading[]> {
+  return page.evaluate(() =>
+    Array.from(document.querySelectorAll('#map-info-sources > li')).map((li) => ({
+      text: (li.textContent ?? '').replace(/\s+/g, ' ').trim(),
+      cells: Array.from(li.children).map((child) => {
+        const r = child.getBoundingClientRect();
+        return {
+          tag: child.className ? `${child.tagName.toLowerCase()}.${child.className}` : child.tagName.toLowerCase(),
+          box: { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height }
+        };
+      })
+    }))
+  );
+}
+
+/** Closed rectangles: a shared edge counts as touching. */
+function touches(a: Rect, b: Rect): boolean {
+  return !(a.right < b.left || b.right < a.left || a.bottom < b.top || b.bottom < a.top);
+}
+
+test.describe('map-information source rows (found-021)', () => {
+  for (const viewport of [
+    { width: 1280, height: 720 },
+    { width: 1440, height: 900 },
+    { width: 2560, height: 1440 }
+  ]) {
+    test(`map-information source rows show name, detail and state as separate non-touching cells on desktop at ${viewport.width}x${viewport.height}`, async ({
+      page
+    }) => {
+      await page.setViewportSize(viewport);
+      await gotoApp(page, '?view=console');
+      await page.locator('#map-info-btn').click();
+      await expect(page.locator('#map-info-panel')).toBeVisible();
+      await expect(page.locator('#map-info-sources > li').first()).toBeVisible();
+      await settledLayout(page);
+
+      const rows = await readSourceRows(page);
+      expect(rows.length, 'the drawer lists its sources').toBeGreaterThan(0);
+      const touching: string[] = [];
+      for (const row of rows) {
+        expect(row.cells.length, `"${row.text}" has a name and a detail`).toBeGreaterThanOrEqual(2);
+        for (let i = 0; i < row.cells.length; i += 1) {
+          for (let j = i + 1; j < row.cells.length; j += 1) {
+            const a = row.cells[i]!;
+            const b = row.cells[j]!;
+            if (touches(a.box, b.box)) {
+              touching.push(
+                `"${row.text}": ${a.tag} ${a.box.left.toFixed(0)}..${a.box.right.toFixed(0)} x ${a.box.top.toFixed(0)}..${a.box.bottom.toFixed(0)} touches ` +
+                  `${b.tag} ${b.box.left.toFixed(0)}..${b.box.right.toFixed(0)} x ${b.box.top.toFixed(0)}..${b.box.bottom.toFixed(0)}`
+              );
+            }
+          }
+        }
+      }
+      expect(touching, touching.join('\n')).toEqual([]);
+    });
+  }
+
+  test('at 390x844 the source rows keep the phone cards: every cell on its own line, left edges shared', async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoApp(page);
+    await page.getByRole('button', { name: 'Map information' }).click();
+    await expect(page.locator('#map-info-panel')).toBeVisible();
+    await expect(page.locator('#map-info-sources > li').first()).toBeVisible();
+    await settledLayout(page);
+
+    const phone = await page.evaluate(() => {
+      const li = document.querySelector('#map-info-sources > li');
+      if (!li) return null;
+      const style = getComputedStyle(li);
+      return {
+        display: style.display,
+        rowGap: style.rowGap,
+        padding: style.padding,
+        columns: style.gridTemplateColumns.trim().split(/\s+/).length
+      };
+    });
+    // The phone block (app.css, max-width: 720px): a one-column grid card,
+    // 2 px between lines, 9 px by 10 px of padding.
+    expect(phone).toEqual({ display: 'grid', rowGap: '2px', padding: '9px 10px', columns: 1 });
+    const rows = await readSourceRows(page);
+    for (const row of rows) {
+      for (let i = 1; i < row.cells.length; i += 1) {
+        const above = row.cells[i - 1]!.box;
+        const cell = row.cells[i]!.box;
+        expect(cell.top, `"${row.text}": cell ${i} sits under the one before it`).toBeGreaterThanOrEqual(above.bottom - 0.5);
+        expect(Math.abs(cell.left - above.left), `"${row.text}": cell ${i} shares the left edge`).toBeLessThanOrEqual(0.5);
+      }
+    }
+  });
+});

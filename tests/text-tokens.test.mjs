@@ -14,7 +14,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { dateTok } from '../src/util/text-tokens.ts';
+import { classTok, dateTok, idTok, qtyTok } from '../src/util/text-tokens.ts';
 
 const NBSP = ' ';
 
@@ -55,4 +55,35 @@ test('single-digit day and hour are still two-digit clock, one-digit day (Intl d
 test('with no timeZone argument the runtime zone is used and still named', () => {
   const result = dateTok('2026-09-26T08:00:00Z');
   assert.match(result, /\d{2}:\d{2} [A-Za-z+\-\d:]+$/, 'a named (or offset) zone trails the token');
+});
+
+// S30D D1 M27: `qtyTok`, `classTok` and `idTok` (interface-chrome-popups-
+// text.md section 4.2). Each ties with U+00A0 and never rewords its input:
+// untying the result (NBSP back to a plain space) gives back exactly the
+// text the app already renders.
+
+const untie = (text) => text.replace(/ /g, ' ');
+
+test('qtyTok ties "9,108 acres" into one U+00A0 token', () => {
+  assert.equal(qtyTok(9108, 'acres'), `9,108${NBSP}acres`);
+  assert.equal(qtyTok(9108, 'acres').includes(' '), false, 'a plain space would let the token break');
+});
+
+test('qtyTok keeps a string amount and the unit exactly as given', () => {
+  assert.equal(qtyTok('9,108', 'acres'), `9,108${NBSP}acres`);
+  assert.equal(untie(qtyTok('about 12.5', 'square miles')), 'about 12.5 square miles');
+  assert.equal(qtyTok(0.25, 'in'), `0.25${NBSP}in`);
+});
+
+test('classTok ties "D1 Moderate" when it fits its slot and leaves a longer label breakable', () => {
+  assert.equal(classTok('D1 Moderate'), `D1${NBSP}Moderate`);
+  assert.equal(classTok('D1 Moderate', 11), `D1${NBSP}Moderate`);
+  assert.equal(classTok('D4 Exceptional Drought', 10), 'D4 Exceptional Drought');
+  assert.equal(untie(classTok('D4 Exceptional Drought')), 'D4 Exceptional Drought');
+});
+
+test('idTok ties an identifier and changes no other character', () => {
+  assert.equal(idTok('HUC 17110005'), `HUC${NBSP}17110005`);
+  assert.equal(idTok('2026-WAOWF-000123'), '2026-WAOWF-000123');
+  assert.equal(untie(idTok('Station 12345 A')), 'Station 12345 A');
 });

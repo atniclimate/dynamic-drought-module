@@ -1037,3 +1037,74 @@ test('the committed-mode row names itself in words and draws no edge line', asyn
     }
   }
 });
+
+// ---------------------------------------------------------------------------
+// found-022 (S30D D1 M27): a briefing chart's labels render at one CSS size
+// at every desktop viewport. The size is read in RENDERED pixels (each SVG
+// text element's bounding box height, which carries the viewBox scale;
+// codex C2), never getComputedStyle(text).fontSize, which stays at the SVG
+// unit size however far the viewBox stretches it. The chart is a real one:
+// a two-point DSCI series answers the WA drought-severity lane (codex C6).
+// ---------------------------------------------------------------------------
+
+test('chart label text renders at a fixed CSS size within 1 px at 1280x720, 1440x900 and 2560x1440', async ({
+  page
+}) => {
+  await stubBaselineBriefingHosts(page);
+  await stubSpcFireOutlook(page, {});
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(start.getDate() - 84);
+  const isoDay = (d: Date): string => d.toISOString().slice(0, 10);
+  // Registered after the generic proxy stub, so it wins for this one call.
+  await page.route('**/proxy?url=*GetDSCI*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        { mapDate: isoDay(start), dsci: 200 },
+        { mapDate: isoDay(end), dsci: 210 }
+      ])
+    })
+  );
+
+  const heights: Record<string, number[]> = {};
+  for (const viewport of [
+    { width: 1280, height: 720 },
+    { width: 1440, height: 900 },
+    { width: 2560, height: 1440 }
+  ]) {
+    await page.setViewportSize(viewport);
+    await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+    const chart = page.locator('#impact-panel .impact-claim-chart svg.ddm-chart[aria-label*="DSCI"]').first();
+    await expect(chart).toBeVisible({ timeout: 15_000 });
+    // Fonts first, outside the read: a read that awaits inside evaluate can
+    // outlive the SVG it resolved when the briefing re-renders its chart,
+    // and a detached SVG measures 0 px. The poll gates on layout only, so a
+    // label size difference still fails the comparison below.
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
+    let reading = { width: 0, texts: [] as number[] };
+    await expect
+      .poll(
+        async () => {
+          reading = await chart.evaluate((svg) => ({
+            width: svg.getBoundingClientRect().width,
+            texts: Array.from(svg.querySelectorAll('text')).map((t) => t.getBoundingClientRect().height)
+          }));
+          return reading.width > 0 && reading.texts.length > 0 && reading.texts.every((h) => h > 0);
+        },
+        { timeout: 10_000, message: `${viewport.width}: a laid-out chart that draws its labels` }
+      )
+      .toBe(true);
+    heights[`${viewport.width}x${viewport.height} (chart ${reading.width.toFixed(0)} px wide)`] = reading.texts;
+  }
+
+  const runs = Object.values(heights);
+  const detail = JSON.stringify(heights);
+  for (let i = 0; i < runs[0]!.length; i += 1) {
+    const sizes = runs.map((run) => run[i]!);
+    expect(Math.max(...sizes) - Math.min(...sizes), `label ${i}: ${detail}`).toBeLessThanOrEqual(1);
+  }
+});

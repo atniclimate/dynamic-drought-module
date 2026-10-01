@@ -5782,6 +5782,18 @@ a.impact-resource-link::after {
 }
 .impact-claim-chart {
   margin: 2px 0 4px;
+  /* found-022 (S30D D1 M27): every briefing chart draws on a 280-unit
+     viewBox (src/ui/charts.ts), and a chart stretched to its column drew
+     its 8-unit labels at a size that grew with the viewport. Capped at
+     1.4 times its drawn width, a chart keeps one label size wherever its
+     column is wider than that, and still shrinks with a narrower column.
+     Desktop and tablet only: the phone sheet is unchanged. */
+  --chart-draw-w: calc(280px * 1.4);
+}
+@media (min-width: 721px) {
+  .impact-claim-chart .ddm-chart {
+    max-inline-size: var(--chart-draw-w);
+  }
 }
 /* Sparkline inside a telemetry popup data block. */
 .popup-data .ddm-chart-fig {
@@ -5808,9 +5820,26 @@ a.impact-resource-link::after {
     text-box: trim-both cap alphabetic;
   }
 }
+/* S30D D1 M27 (owner-1l, DDM-P10-T12): the off and loading state word
+   ("Layer off") is 11px type on a 20px line, so trimmed to its cap line and
+   baseline its text drew below the value's own box. Trimmed to the font's
+   text edges instead, the word sits inside its box. Desktop and tablet only:
+   the phone strip is unchanged. */
+@media (min-width: 721px) {
+  @supports (text-box: trim-both cap alphabetic) {
+    .conditions-metric[data-tone='off'] .conditions-value,
+    .conditions-metric[data-tone='loading'] .conditions-value {
+      text-box: trim-both text;
+      /* Chromium counts the untrimmed half-leading of the 20px line as
+         scrollable overflow; a normal line trims to the same box. */
+      line-height: normal;
+    }
+  }
+}
 
 /* Wrapping quality (progressive). Short one-to-two-line labels balance their
-   rag; footer prose avoids single-word orphans. */
+   rag; footer prose avoids single-word orphans. Kept at every width, so the
+   phone reads as before. */
 .layer-toggle-source,
 .conditions-sublabel,
 .layer-group-hint {
@@ -5818,6 +5847,63 @@ a.impact-resource-link::after {
 }
 .sidebar-footer p {
   text-wrap: pretty;
+}
+
+/* Text registration (S30D D1 M27; DDM-P10-T12; design record
+   interface-chrome-popups-text.md section 4.1, T1 to T7; T8 is the
+   .impact-hazard gutter, already built). Every selector sits inside
+   :where(), so the block carries zero specificity and any authored rule
+   still wins. Desktop and tablet only, outside an embed: the phone and
+   embed layouts are unchanged. The briefing mounts on <body>, outside
+   #app, so the embed test reads the body's direct child. */
+@media (min-width: 721px) {
+  /* T1 prose: no single-word last line (ATNI README:157). The popup
+     description and a condition row's value are sentences of any length
+     (a value can list every fire name), so they take pretty, which holds
+     at any line count. */
+  :where(body:not(:has(> .app-shell.embed)))
+    :where(p, li, dd, figcaption, [data-popup-slot='note'], .map-key-qualification, .shell-summary-primary,
+      .popup-description, .popup-condition-value) {
+    text-wrap: pretty;
+  }
+  /* T2 headings and short labels that may take two lines (README:157):
+     the sidebar layer name, the popup's kind-of-place line and its
+     briefing door among them. */
+  :where(body:not(:has(> .app-shell.embed)))
+    :where(h1, h2, h3, h4, summary, legend, [data-popup-slot='title'], .panel-title, .map-key-label,
+      .shell-time-headline, .heatrisk-sequence-heading, .layer-toggle-name, .popup-agency, .popup-impact-btn) {
+    text-wrap: balance;
+  }
+  /* T3 control labels: one line in their box, never ellipsized or clamped;
+     the fit test (tests/text-registration.spec.ts) proves they fit. The
+     design's min-inline-size: 0 is left out: it would let a flex item
+     shrink below its one-line label, the overflow the fit test forbids.
+     The horizon title is the title span, so "Current Conditions" reads on
+     one line and its button keeps its own sub line. */
+  :where(body:not(:has(> .app-shell.embed)))
+    :where(.map-cell, .map-key-chip-label, .shell-cluster-btn, .shell-horizon-btn-title, .status-pill,
+      .layer-toggle-status, .preset-chip) {
+    white-space: nowrap;
+  }
+  /* T4 measure: 50 to 75 characters, 66 ideal (README:153). */
+  :where(body:not(:has(> .app-shell.embed)))
+    :where(#map-key-content, #map-info-panel, .coordinated-response-body, .impact-panel)
+    :where(p, li, dd) {
+    max-inline-size: 66ch;
+  }
+  /* T5 prose never hyphenates; only identifiers and URLs may break anywhere. */
+  :where(body:not(:has(> .app-shell.embed))) :where(p, li, dd) {
+    hyphens: manual;
+    overflow-wrap: break-word;
+  }
+  :where(body:not(:has(> .app-shell.embed)))
+    :where([data-popup-slot='source'] a, .ack-licence a, .tok-id, code) {
+    overflow-wrap: anywhere;
+  }
+  /* T7 tokens never break inside. */
+  :where(body:not(:has(> .app-shell.embed))) :where(.tok) {
+    white-space: nowrap;
+  }
 }
 
 /* Bottom fade on the sidebar scroller: a row cut by the fold reads as
@@ -6203,7 +6289,7 @@ a.impact-resource-link::after {
   font-size: 10.5px;
   line-height: 1.5;
   color: var(--fg-2);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .map-info-attribution a { color: var(--fg-1); }
 
@@ -6357,6 +6443,43 @@ a.impact-resource-link::after {
      the meaning. */
   .app-shell:not(.embed) .map-overlay-controls .map-info-panel:not([hidden]) {
     animation: none;
+  }
+}
+/* found-021 (S30D D1 M27): on desktop each source row reads as separate
+   cells, never three inline runs whose boxes touch. The name takes the
+   row's whole width; the source detail sits under it with the state at the
+   row's end, and a state too long to share that line (the no-data labels
+   run to 82 characters) drops to a line of its own, so no state can starve
+   the name or the detail of width. Short labels balance their lines. The
+   phone block below the Key drawer section (max-width: 720px) is
+   unchanged. */
+@media (min-width: 721px) {
+  .app-shell:not(.embed) .map-info-sources {
+    display: grid;
+    gap: 6px;
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .app-shell:not(.embed) .map-info-sources li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 12px;
+    row-gap: 2px;
+    text-wrap: balance;
+  }
+  .app-shell:not(.embed) .map-info-sources li > strong {
+    flex: 1 0 100%;
+  }
+  .app-shell:not(.embed) .map-info-sources li > span {
+    flex: 0 1 auto;
+  }
+  .app-shell:not(.embed) .map-info-sources .map-info-source-state {
+    margin-inline-start: auto;
+    font-family: var(--font-display);
+    font-weight: var(--fw-subtitle);
+    text-align: end;
   }
 }
 
@@ -8611,6 +8734,22 @@ a.impact-resource-link::after {
      src/ui/island/minimap.tsx; this rule is presentation only). */
   #app.view-console .shell-minimap-map,
   #app.view-console .shell-minimap-popover-wrap { display: none; }
+  /* S30D D1 M27 (owner-1l): the scale beside "Jump to region" never
+     ellipsizes. It wraps, balanced and right-aligned, inside a two-line
+     reserve every mode shares, so the ENSO reading ("RONI ... · JJA 2026")
+     shows in full and a mode switch never moves the map below it. */
+  .shell-minimap-scale {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    text-wrap: balance;
+    text-align: end;
+    /* 10px, not the base 1 (9px): League Spartan's 9px content area is
+       11px, and on a 9px line the last line's overhang read as overflow
+       past the two-line reserve. The reserve is 20px. */
+    line-height: 10px;
+    min-block-size: 2lh;
+  }
 }
 
 /* The shell panel exists only once its island has mounted; an empty

@@ -337,13 +337,30 @@ function snapshotAge(snap: EnsoSnapshot): SnapshotAge | null {
   return { days: retrievedAge, basis: 'retrieval' };
 }
 
+/**
+ * U+00A0 between "published" and its date (S30D D1 M27, DDM-P10-T12), so a
+ * date never stands alone on the last line of the provenance sentence. Kept
+ * module-local rather than imported from src/util/text-tokens.ts, so this
+ * module's closure takes no new import.
+ */
+const TIE = '\u00a0';
+
+/**
+ * Each hyphen of the date held between U+2060 WORD JOINERs: Chromium breaks
+ * a prose date after its hyphen ("2026-" / "09-04."), so the tie alone could
+ * still leave a date fragment alone on the last line. The hyphen stays the
+ * ASCII one, drawn by Lexend (which has no U+2011 glyph); the joiners are
+ * invisible, and a copy of the sentence carries them.
+ */
+const nbDate = (d: string): string => d.replace(/-/g, '\u2060-\u2060');
+
 function publishedParts(snap: EnsoSnapshot): string[] {
   return [
-    snap.roni.published ? `RONI published ${snap.roni.published}` : null,
-    snap.oni.published ? `ONI published ${snap.oni.published}` : null,
-    snap.nino34?.published ? `analyzed monthly Nino 3.4 published ${snap.nino34.published}` : null,
-    snap.nino34Weekly?.published ? `weekly Nino 3.4 published ${snap.nino34Weekly.published}` : null,
-    snap.soi?.published ? `standardized SOI published ${snap.soi.published}` : null
+    snap.roni.published ? `RONI published${TIE}${nbDate(snap.roni.published)}` : null,
+    snap.oni.published ? `ONI published${TIE}${nbDate(snap.oni.published)}` : null,
+    snap.nino34?.published ? `analyzed monthly Nino 3.4 published${TIE}${nbDate(snap.nino34.published)}` : null,
+    snap.nino34Weekly?.published ? `weekly Nino 3.4 published${TIE}${nbDate(snap.nino34Weekly.published)}` : null,
+    snap.soi?.published ? `standardized SOI published${TIE}${nbDate(snap.soi.published)}` : null
   ].filter((part): part is string => part !== null);
 }
 
