@@ -198,7 +198,8 @@ const DIRECT_BOOT_REASONS = {
 };
 
 /**
- * Modules allowed to create a second Page, with the reason. One entry today.
+ * Modules allowed to create a second Page, with the reason. Three entries
+ * today (the frame census and the PF3 tier rows joined on 2026-10-01).
  * The first one to appear failed this test, which is what it is for: the
  * decision below was made deliberately, at the tripwire, and written down.
  *
@@ -210,6 +211,14 @@ const DIRECT_BOOT_REASONS = {
  * here, so an entry has to say which shape it is.
  */
 const SECOND_PAGE_REASONS = {
+  'tests/identify-paths.spec.ts': {
+    reason:
+      'the D1 M24 to M26 frame census (tests/frame-fixtures.ts): one fresh page in the SAME context per migrated builder, so one fixture\'s page routes and viewport never reach the next. Not a popup: each page is created by the spec and booted by its fixture through gotoApp, which installs the suite stubs; before the first one the spec holds the context offline (holdExternalNetwork, every external request answered 503), so no fixture page reaches a live service.'
+  },
+  'tests/popup-viewport.spec.ts': {
+    reason:
+      'the D1 M23 PF3 tier rows over migrated builders (tests/frame-fixtures.ts): one fresh page in the SAME context per migrated builder, so one fixture\'s page routes and viewport never reach the next. Not a popup: each page is created by the spec and booted by its fixture through gotoApp, which installs the suite stubs; a fixture routes its own data and never clicks an external link (the source links are hit-tested, not followed).'
+  },
   'tests/mode-switch-cost.spec.ts': {
     reason:
       'the DDM-P14-T08 mode-switch measurement (DR-095): one page per FRESH browser.newContext(), not a popup in an existing context, because each of the twelve ordered switches has to be measured from cold caches or the previous switch pays for this one. Every one of those pages boots through gotoApp, so it installs the same satellite, sovereign-boundary and minimap stubs as any other boot in this suite, and no page here reaches a live sovereign-geography service. It passes nifc: live to gotoApp by design (J12), because its recorded baseline measured the live WFIGS reads, so WFIGS (and HMS smoke, which no default stubs) stay live here. The spec runs only in its own chromium-measure project, which CI never invokes.'

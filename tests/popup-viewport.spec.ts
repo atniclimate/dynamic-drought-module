@@ -1,7 +1,8 @@
-import { test, expect, type Page, type Route } from '@playwright/test';
+import { test, expect, type BrowserContext, type Page, type Route } from '@playwright/test';
 import { awaitQuiescence, gotoApp, waitForLayerSettled } from './helpers';
 import { BIA_ROUTE, routeBoundary, syntheticBiaBody } from './tribal-fixtures';
 import { LEGACY_ALLOWANCE, eligibleBuilders, migratedBuilders } from './identify-paths-manifest';
+import { TIER_FIXTURES, type TierFixture } from './frame-fixtures';
 import {
   MIN_COMPACT_BODY_REGION_HEIGHT_PX,
   MIN_USABLE_REGION_HEIGHT_PX,
@@ -1857,19 +1858,36 @@ test.describe('D1 M23 C1: the place-label popup keeps one usable close control',
  * fixture boot here as they shrink the allowance.
  */
 test.describe('D1 M23 PF3: framed heads keep the tier promises (generic over migrated builders)', () => {
-  test('sources and caveat remain clickable at FULL and usable-COMPACT boundaries', () => {
+  // Each migrated builder's fixture (tests/frame-fixtures.ts) runs on a fresh
+  // page, so its routes and viewport never reach the next builder's.
+  async function eachTierFixture(
+    context: BrowserContext,
+    missing: string,
+    run: (fixture: TierFixture, page: Page) => Promise<void>
+  ): Promise<void> {
     const migrated = migratedBuilders();
     expect(migrated.length).toBe(eligibleBuilders().length - LEGACY_ALLOWANCE.length);
     for (const builder of migrated) {
-      throw new Error(`${builder.id} left LEGACY_ALLOWANCE without a FULL and usable-COMPACT source fixture here`);
+      const fixture = TIER_FIXTURES[builder.id];
+      if (!fixture) throw new Error(`${builder.id} left LEGACY_ALLOWANCE without a ${missing} fixture here`);
+      const page = await context.newPage();
+      try {
+        await run(fixture, page);
+      } finally {
+        await page.close();
+      }
     }
+  }
+
+  test('sources and caveat remain clickable at FULL and usable-COMPACT boundaries', async ({ context }) => {
+    test.setTimeout(60_000 + 60_000 * migratedBuilders().length);
+    await eachTierFixture(context, 'FULL and usable-COMPACT source', (fixture, page) =>
+      fixture.sourcesAtTierBoundaries(page)
+    );
   });
 
-  test('long desktop heads and panel responses preserve required scrolling and close access', () => {
-    const migrated = migratedBuilders();
-    expect(migrated.length).toBe(eligibleBuilders().length - LEGACY_ALLOWANCE.length);
-    for (const builder of migrated) {
-      throw new Error(`${builder.id} left LEGACY_ALLOWANCE without a long-head and panel fixture here`);
-    }
+  test('long desktop heads and panel responses preserve required scrolling and close access', async ({ context }) => {
+    test.setTimeout(60_000 + 90_000 * migratedBuilders().length);
+    await eachTierFixture(context, 'long-head and panel', (fixture, page) => fixture.longHeadAndPanel(page));
   });
 });

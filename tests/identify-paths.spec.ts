@@ -16,6 +16,7 @@ import {
 } from './identify-paths-manifest';
 import { serializePopupFrame } from '../src/ui/popup-frame';
 import type { PopupModel } from '../src/ui/popup-frame';
+import { CENSUS_FIXTURES } from './frame-fixtures';
 
 /**
  * S30D D1 M23: "every identify path" (DDM-P11-T04), as the Codex Tier 2
@@ -374,8 +375,12 @@ const CENSUS_BOOTS: readonly (readonly string[])[] = [
 ];
 
 test.describe('identify paths: the census', () => {
-  test('the stamped click targets equal the manifest targets of the activated layers, both ways', async ({ page }) => {
-    test.setTimeout(180_000);
+  test('the stamped click targets equal the manifest targets of the activated layers, both ways', async ({
+    page,
+    context
+  }) => {
+    // The five registration boots, then one minute per migrated builder's fixture.
+    test.setTimeout(180_000 + 60_000 * migratedBuilders().length);
     const booted = new Set(CENSUS_BOOTS.flat());
     expect(
       eligibleBuilders()
@@ -409,15 +414,29 @@ test.describe('identify paths: the census', () => {
     }
     expect(stamped, 'the census read a nonzero number of stamped targets').toBeGreaterThan(0);
 
-    // Builders outside the allowance must yield a frame. None at M23: the
-    // count is asserted so the empty branch is declared, not accidental.
+    // Builders outside the allowance must yield a frame: each migrated
+    // builder runs its click fixture from tests/frame-fixtures.ts, which
+    // asserts window.__ddmFrameCheck on its response (five non-empty head
+    // slots; the frame owns the displayed content). Each fixture gets a
+    // fresh page with the observer installed, so one fixture's routes and
+    // viewport never reach the next, and the context answers any external
+    // request offline. The count is asserted, so an empty loop is declared.
     const migrated = migratedBuilders();
     expect(migrated.length).toBe(eligibleBuilders().length - LEGACY_ALLOWANCE.length);
+    if (migrated.length > 0) await holdExternalNetwork(page);
     for (const builder of migrated) {
-      // M24 to M26: each builder that leaves the allowance adds its click
-      // fixture here and asserts window.__ddmFrameCheck on its response
-      // (five non-empty head slots; the frame owns the displayed content).
-      throw new Error(`${builder.id} left LEGACY_ALLOWANCE without a census click fixture`);
+      const fixture = CENSUS_FIXTURES[builder.id];
+      if (!fixture) throw new Error(`${builder.id} left LEGACY_ALLOWANCE without a census click fixture`);
+      const fixturePage = await context.newPage();
+      try {
+        await fixturePage.addInitScript(installPopupAudit, {
+          legacyLayerIds: legacyLayerIds(),
+          external: LEGACY_ALLOWANCE.includes('telemetry')
+        });
+        await fixture(fixturePage, { clickCenterUntilSeen, readAudit });
+      } finally {
+        await fixturePage.close();
+      }
     }
   });
 });
