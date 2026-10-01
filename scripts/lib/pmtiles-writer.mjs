@@ -12,12 +12,16 @@
  * MapLibre protocol. The runtime contract is identical to a tippecanoe-built
  * bundle, so the generator can be swapped later without touching the app.
  *
- * Scope kept deliberately small for correctness: a single root directory (no
- * leaf directories), clustered layout (tiles written in tile-id order), gzip
- * for both the internal directory and the tiles, and no cross-tile dedup. That
- * covers the few-hundred-to-few-thousand-tile bundles DDM produces; it is not a
- * general-purpose writer. Output is validated by reading it back with the same
- * `pmtiles` reader the browser uses (see build-ecoregion-tiles.mjs).
+ * Scope kept deliberately small for correctness: clustered layout (tiles
+ * written in tile-id order), gzip for the internal directories (and for the
+ * tiles unless the caller says otherwise), and no cross-tile dedup. An archive
+ * whose gzipped directory fits the room the reader's first request leaves after
+ * the header is written with a single root directory, exactly as it always was.
+ * A larger one is written with one level of leaf directories under a root of
+ * RunLength-0 pointers (see `packDirectories`), so a bake can be as deep as it
+ * needs. It is not a general-purpose writer. Output is validated by reading it
+ * back with the same `pmtiles` reader the browser uses (see
+ * build-ecoregion-tiles.mjs and tests/pmtiles-leaf-writer.test.mjs).
  *
  * Reference: PMTiles specification version 3
  * (https://github.com/protomaps/PMTiles/blob/main/spec/v3.md).
@@ -38,21 +42,34 @@ const HEADER_BYTES = 127;
  *
  * The `pmtiles` library (and every other conforming reader) fetches the
  * first 16,384 bytes of an archive and expects the header AND the whole
- * root directory to be inside it. This writer emits a single root
- * directory with one entry per tile, so a bake deep enough to push that
- * directory past the budget produces a file that opens nowhere: the
+ * root directory to be inside it. A root directory with one entry per
+ * tile that passes the budget produces a file that opens nowhere: the
  * reader gunzips a truncated buffer and fails with an unexpected end of
  * file, AFTER the bake has already written the artifact.
  *
- * Measured 2026-08-19 while deepening the transmission bake: at zoom 12
- * (10,069 tiles) the root directory reached 18,678 bytes and the archive
- * was unreadable; at zoom 11 (3,816 tiles) it is 7,399 bytes and reads
- * cleanly. Every other shipped archive sits between 540 and 8,201 bytes.
- * The real fix for deeper bakes is leaf directories, which this writer
- * deliberately does not implement; until then this refuses to write a
- * file no reader can open.
+ * Measured 2026-08-19 while deepening the transmission bake, when this
+ * writer still wrote only a single root: at zoom 12 (10,069 tiles) the
+ * root directory reached 18,678 bytes and the archive was unreadable; at
+ * zoom 11 (3,816 tiles) it is 7,399 bytes and reads cleanly. Every other
+ * shipped archive sits between 540 and 8,201 bytes.
+ *
+ * The capacity rule is therefore header plus root: the gzipped root must be
+ * at most 16,384 - 127 = 16,257 bytes. A directory that fits stays a single
+ * root; one that does not moves its entries into gzipped leaf directories
+ * and keeps only one RunLength-0 pointer per leaf in the root, so the root
+ * fits however many tiles there are.
  */
 const READER_FIRST_REQUEST_BYTES = 16_384;
+
+/**
+ * Entries per leaf directory to start from when a directory needs leaves,
+ * and the factor the leaf size grows by while the root of pointers still
+ * does not fit. A leaf this size is a few kilobytes gzipped, one range
+ * request for the reader; the growth rule only matters for archives of
+ * millions of tiles.
+ */
+const LEAF_ENTRIES_START = 1_024;
+const LEAF_GROWTH = 1.2;
 
 /**
  * Map a tile z/x/y to its PMTiles tile id (Hilbert-curve ordering). This is the
@@ -127,6 +144,62 @@ function serializeDirectory(entries) {
   return Uint8Array.from(out);
 }
 
+/** Split sorted entries into leaves of `leafSize`, gzip each, and build the root of pointers. */
+function buildLeaves(entries, leafSize) {
+  const leafBuffers = [];
+  const pointers = [];
+  let leafOffset = 0;
+  for (let i = 0; i < entries.length; i += leafSize) {
+    const leafGz = Buffer.from(gzipSync(serializeDirectory(entries.slice(i, i + leafSize))));
+    // A RunLength-0 entry points at a leaf: its offset is relative to the start
+    // of the leaf-directories section and its length is the leaf's gzipped length.
+    pointers.push({ tileId: entries[i].tileId, offset: leafOffset, length: leafGz.length, runLength: 0 });
+    leafBuffers.push(leafGz);
+    leafOffset += leafGz.length;
+  }
+  return {
+    rootGz: Buffer.from(gzipSync(serializeDirectory(pointers))),
+    leavesGz: Buffer.concat(leafBuffers),
+    leafCount: pointers.length,
+    leafSize
+  };
+}
+
+/**
+ * Lay out the directories for entries sorted by ascending tile id.
+ *
+ * When the gzipped single root fits `rootCapacity` it is returned as is (no
+ * leaves). Otherwise the entries are cut into consecutive leaves, starting at
+ * 1,024 entries each and growing the leaf size by a factor of 1.2 (rounded up,
+ * never past one leaf holding everything) until the gzipped root of one
+ * pointer per leaf fits. Throws when even one leaf cannot fit the capacity.
+ *
+ * @param {{tileId:number,offset:number,length:number,runLength:number}[]} entries
+ * @param {number} [rootCapacity] gzipped-root byte budget, default the room the
+ *   reader's first request leaves after the header (16,384 - 127).
+ * @returns {{rootGz:Buffer, leavesGz:Buffer, leafCount:number, leafSize:number}}
+ *   leafCount and leafSize are 0 for a single root.
+ */
+export function packDirectories(entries, rootCapacity = READER_FIRST_REQUEST_BYTES - HEADER_BYTES) {
+  const flatGz = Buffer.from(gzipSync(serializeDirectory(entries)));
+  if (flatGz.length <= rootCapacity) {
+    return { rootGz: flatGz, leavesGz: Buffer.alloc(0), leafCount: 0, leafSize: 0 };
+  }
+  if (entries.length > 0) {
+    let leafSize = Math.min(LEAF_ENTRIES_START, entries.length);
+    for (;;) {
+      const packed = buildLeaves(entries, leafSize);
+      if (packed.rootGz.length <= rootCapacity) return packed;
+      if (leafSize >= entries.length) break;
+      leafSize = Math.min(entries.length, Math.ceil(leafSize * LEAF_GROWTH));
+    }
+  }
+  throw new Error(
+    `a root directory for ${entries.length} entries cannot fit ${rootCapacity} bytes, ` +
+      'even with every entry in one leaf directory'
+  );
+}
+
 /** Write a 32-bit signed degree value in PMTiles E7 fixed point. */
 function e7(deg) {
   return Math.round(deg * 1e7);
@@ -145,7 +218,8 @@ function e7(deg) {
  * @param {object} opts.metadata JSON metadata.
  * @param {number} [opts.tileType=1] PMTiles tile type, 1 MVT, 2 PNG.
  * @param {number} [opts.tileCompression=2] PMTiles tile compression enum.
- * @returns {Buffer} the archive bytes.
+ * @returns {Buffer} the archive bytes: header, root directory, metadata, leaf
+ *   directories (none when the root fits), tile data.
  */
 export function writePmtiles({
   tiles,
@@ -163,29 +237,30 @@ export function writePmtiles({
   const entries = [];
   const tileBuffers = [];
   for (const t of tiles) {
+    // A directory is binary-searched by tile id: a reader cannot find tiles in
+    // one that is not strictly ascending, so that layout is refused.
+    if (entries.length > 0 && t.tileId <= entries[entries.length - 1].tileId) {
+      throw new Error(
+        `tile ids must be strictly ascending: ${t.tileId} follows ${entries[entries.length - 1].tileId}`
+      );
+    }
     entries.push({ tileId: t.tileId, offset: runningOffset, length: t.data.length, runLength: 1 });
     tileBuffers.push(t.data);
     runningOffset += t.data.length;
   }
   const tileData = Buffer.concat(tileBuffers);
 
-  const rootDirGz = Buffer.from(gzipSync(serializeDirectory(entries)));
+  // One gzipped root when it fits the room after the header in the reader's
+  // first request; otherwise a root of leaf pointers plus the leaf section.
+  const { rootGz: rootDirGz, leavesGz } = packDirectories(entries);
   const metadataGz = Buffer.from(gzipSync(Buffer.from(JSON.stringify(metadata), 'utf8')));
 
   const rootDirOffset = HEADER_BYTES;
   const rootDirLength = rootDirGz.length;
-  if (rootDirOffset + rootDirLength > READER_FIRST_REQUEST_BYTES) {
-    throw new Error(
-      `root directory would end at byte ${rootDirOffset + rootDirLength}, past the ` +
-        `${READER_FIRST_REQUEST_BYTES}-byte first request every PMTiles reader makes; ` +
-        `${entries.length} tiles is too many for a single root directory. Bake a shallower ` +
-        'max zoom, or teach this writer leaf directories.'
-    );
-  }
   const metadataOffset = rootDirOffset + rootDirLength;
   const metadataLength = metadataGz.length;
   const leafDirOffset = metadataOffset + metadataLength;
-  const leafDirLength = 0;
+  const leafDirLength = leavesGz.length;
   const tileDataOffset = leafDirOffset + leafDirLength;
   const tileDataLength = tileData.length;
 
@@ -218,5 +293,5 @@ export function writePmtiles({
   dv.setInt32(119, e7(center[0]), true); // center lon
   dv.setInt32(123, e7(center[1]), true); // center lat
 
-  return Buffer.concat([header, rootDirGz, metadataGz, tileData]);
+  return Buffer.concat([header, rootDirGz, metadataGz, leavesGz, tileData]);
 }

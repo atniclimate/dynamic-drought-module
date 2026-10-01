@@ -45,11 +45,13 @@ const PNW_CENTER = [-119, 45.5, 5];
  *   z12  6,204,921 bytes  10,069 tiles   root directory  18,678 bytes
  *
  * z12 fits the 8,000,000-byte archive ceiling comfortably, so the limit
- * that stopped it is NOT size: this repository's PMTiles writer emits a
+ * that stopped it is NOT size: this repository's PMTiles writer emitted a
  * single root directory, and at z12 that directory runs past the
  * 16,384-byte first request every PMTiles reader makes, producing a file
- * that opens nowhere. The writer now refuses that outright rather than
- * writing an unreadable archive. Deeper bakes need leaf directories.
+ * that opens nowhere. The writer refused such a root until S30D-N2 W1
+ * (2026-09-30), which splits an oversized root into leaf directories
+ * (scripts/lib/pmtiles-writer.mjs), so a z12 bake is now writable; the
+ * default stays z11 until a re-bake is measured and ruled.
  *
  * Override with `--max-zoom N` to re-measure the ladder; `--dry-run`
  * skips the write.
