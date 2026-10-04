@@ -341,6 +341,125 @@ test('an immediate browser Back still delivers the promised briefing (wave A fin
 });
 
 /**
+ * Click a place option and press browser Back before the page can run one
+ * more frame or timer task, then let time run again once the Back's popstate
+ * has been handled. Preact runs a component's `useEffect` callbacks after the
+ * next frame (requestAnimationFrame, or a short timeout, then a timeout), and
+ * drops them if the component unmounts first; a slow device can land a Back
+ * inside that window. Holding every timer and frame callback the page asks
+ * for in between (and releasing them, minus any it cancelled, after the
+ * popstate) forces that ordering on any machine. Returns the selection title
+ * the studio showed when Back was pressed and how many callbacks were held.
+ */
+async function selectThenBackBeforeNextFrame(
+  page: Page,
+  optionSelector: string
+): Promise<{ readonly titleAtBack: string | null; readonly held: number }> {
+  return page.evaluate(async (selector) => {
+    const option = document.querySelector<HTMLElement>(selector);
+    if (!option) throw new Error(`no place option at ${selector}`);
+    // Start from a quiet frame, so any effect an earlier render queued has run.
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => setTimeout(resolve));
+    });
+
+    const realSetTimeout = window.setTimeout.bind(window);
+    const realClearTimeout = window.clearTimeout.bind(window);
+    const realRequestFrame = window.requestAnimationFrame.bind(window);
+    const realCancelFrame = window.cancelAnimationFrame.bind(window);
+    interface Held {
+      readonly start: () => number;
+      readonly cancel: (id: number) => void;
+      realId: number | null;
+      cancelled: boolean;
+    }
+    const held = new Map<number, Held>();
+    let holding = true;
+    let nextHeldId = -1;
+    const hold = (start: () => number, cancel: (id: number) => void): number => {
+      if (!holding) return start();
+      const id = nextHeldId;
+      nextHeldId -= 1;
+      held.set(id, { start, cancel, realId: null, cancelled: false });
+      return id;
+    };
+    const drop = (id: number | undefined, cancel: (id: number) => void): void => {
+      if (id === undefined) return;
+      const entry = held.get(id);
+      if (!entry) {
+        cancel(id);
+        return;
+      }
+      entry.cancelled = true;
+      if (entry.realId !== null) entry.cancel(entry.realId);
+    };
+    // The wrappers stay installed (passing straight through) after the
+    // release, so a later cancel of a held id still reaches its real timer.
+    window.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) =>
+      hold(
+        () => realSetTimeout(handler, timeout, ...args),
+        realClearTimeout
+      )) as unknown as typeof window.setTimeout;
+    window.clearTimeout = ((id?: number) =>
+      drop(id, realClearTimeout)) as typeof window.clearTimeout;
+    window.requestAnimationFrame = (callback: FrameRequestCallback): number =>
+      hold(() => realRequestFrame(callback), realCancelFrame);
+    window.cancelAnimationFrame = (id: number): void => drop(id, realCancelFrame);
+
+    const popstateHandled = new Promise<void>((resolve) => {
+      // Registered after the app's own popstate listener, so it runs after
+      // the studio route has unmounted the studio.
+      window.addEventListener('popstate', () => resolve(), { once: true });
+    });
+    option.click();
+    // Let the click's render commit (Preact renders in a microtask).
+    await Promise.resolve();
+    await Promise.resolve();
+    const titleAtBack =
+      document.querySelector('#place-selection-title')?.textContent ?? null;
+    window.history.back();
+    await popstateHandled;
+
+    holding = false;
+    const heldCount = held.size;
+    for (const entry of held.values()) {
+      if (!entry.cancelled) entry.realId = entry.start();
+    }
+    return { titleAtBack, held: heldCount };
+  }, optionSelector);
+}
+
+test('a browser Back that lands before the studio has run its selection effects still delivers the briefing (FE-23)', async ({
+  page
+}) => {
+  const gate = await stubRestoreDependencies(page);
+  // The deferred refetch release is not under test here.
+  gate.releaseRestore();
+  await gotoApp(page, '?layers=nifc-fires,states&view=brief');
+  await waitForLayerSettled(page, 'states');
+  await waitForLayerSettled(page, 'nifc-fires');
+  const priorUrl = await currentRepresentation(page);
+
+  await page.locator('#studio-entry-pair #place-studio-entry').click();
+  const studio = page.locator(PLACE_ROOT);
+  await expect(studio).toBeVisible();
+  await studio.getByRole('button', { name: 'States', exact: true }).click();
+  await studio.locator('#place-studio-search').fill('Oregon');
+  const optionSelector = `${PLACE_ROOT} [data-place-kind="state"][data-place-id="OR"]`;
+  await expect(page.locator(optionSelector)).toBeVisible();
+
+  const seen = await selectThenBackBeforeNextFrame(page, optionSelector);
+  expect(seen.titleAtBack, 'the studio showed the selection before Back').toBe('Oregon');
+  expect(seen.held, 'the page queued effect callbacks inside the held window').toBeGreaterThan(0);
+  await expect(studio).toHaveCount(0);
+  expect(await currentRepresentation(page)).toBe(priorUrl);
+
+  const panel = page.locator('#impact-panel');
+  await expect(panel).toBeVisible({ timeout: 15_000 });
+  await expect(panel.locator('.impact-panel-title')).toHaveText('Oregon');
+});
+
+/**
  * A sidebar hazard control is unreachable while the Place studio is open,
  * and unaffected once it is not (D1 M17, DR-169, ratified 2026-09-29,
  * RATIFICATION-8: the owner's read-back "Desktop sidebar inert").
@@ -382,7 +501,9 @@ test.describe('a sidebar hazard command while the Place studio is open (DR-169)'
     // (found on the ancestor, not the button itself), so a real click at
     // its coordinates lands on nothing that can act on it.
     await expect(wildfire).toBeVisible();
-    expect(await page.locator('#app').evaluate((el) => (el as HTMLElement).inert)).toBe(true);
+    // Web-first: the studio applies `inert` in an effect after its first
+    // paint, so a one-shot read just after it becomes visible can see false.
+    await expect(page.locator('#app')).toHaveJSProperty('inert', true);
     await wildfire.click({ force: true });
     await expect(wildfire).toHaveAttribute('aria-pressed', 'false');
     await expect(page).not.toHaveURL(/cluster=wildfire/);

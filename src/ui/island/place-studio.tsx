@@ -825,6 +825,40 @@ async function loadOverlapView(
   };
 }
 
+/**
+ * Whether the durable typed place still names this catalog entry (C3
+ * housekeeping, S30R I6: newest intent wins).
+ */
+function placeStillCurrent(entry: PlaceCatalogEntry): boolean {
+  const place = getTypedPlace();
+  return place !== null && place.kind === entry.kind && place.id === entry.id;
+}
+
+/**
+ * The selected-exit briefing hand-off for an explicit selection the studio
+ * has not resolved yet (wave A finding 2). It chases `pending`, the studio's
+ * own resolution, when there is one; if that was aborted by the unmount
+ * cleanup, or there is none yet, it resolves INDEPENDENTLY (bounded by the
+ * fetch budget). It opens only while the durable typed place still names the
+ * entry (newest intent wins).
+ */
+function chaseBriefingOnReturn(
+  entry: PlaceCatalogEntry,
+  pending: Promise<ResolvedPlaceSelection | null> | null
+): () => void {
+  return () => {
+    const resolveIndependently = (): Promise<ResolvedPlaceSelection | null> =>
+      resolvePlaceSelection(entry, new AbortController().signal);
+    void (pending ? pending.catch(resolveIndependently) : resolveIndependently())
+      .then((resolved) => {
+        if (resolved && placeStillCurrent(entry)) {
+          openImpactPanel(resolved.context);
+        }
+      })
+      .catch(() => undefined);
+  };
+}
+
 function PlaceStudio() {
   const initialSelection = getTypedPlace();
   const [kind, setKind] = useState<TypedPlaceKind>(
@@ -1004,14 +1038,7 @@ function PlaceStudio() {
     // between a newer durable typed place and this effect's deferred cleanup
     // needs this predicate too, so it is hoisted once and reused at every
     // site below that would otherwise apply a stale selection's emphasis.
-    const selectionStillCurrent = (): boolean => {
-      const place = getTypedPlace();
-      return (
-        place !== null &&
-        place.kind === selectionEntry.kind &&
-        place.id === selectionEntry.id
-      );
-    };
+    const selectionStillCurrent = (): boolean => placeStillCurrent(selectionEntry);
 
     // Wave A finding 2: register the return hand-off at resolution START,
     // not completion, so an immediate browser Back (which bypasses
@@ -1021,23 +1048,14 @@ function PlaceStudio() {
     // (bounded by the fetch budget) rather than pinning the studio's
     // aborted chain, and it opens only while the durable typed place
     // still matches (newest intent wins). Once resolution completes
-    // in-studio, the direct registration below replaces this one.
+    // in-studio, the direct registration below replaces this one. The
+    // option's click registered an equivalent action already (FE-23); this
+    // one replaces it so the hand-off shares the studio's own request.
     if (
       explicitSelectionKeyRef.current === selectionKey &&
       coverage.briefable.state === 'available'
     ) {
-      setPlaceStudioReturnAction(() => {
-        void promise
-          .catch(() =>
-            resolvePlaceSelection(selectionEntry, new AbortController().signal)
-          )
-          .then((resolved) => {
-            if (resolved && selectionStillCurrent()) {
-              openImpactPanel(resolved.context);
-            }
-          })
-          .catch(() => undefined);
-      });
+      setPlaceStudioReturnAction(chaseBriefingOnReturn(selectionEntry, promise));
     }
 
     void promise
@@ -1338,13 +1356,21 @@ function PlaceStudio() {
                           explicitSelectionKeyRef.current = selectionKey;
                           setPlaceStudioReturnAction(null);
                           const resolved = resolvedSelectionRef.current;
-                          if (
-                            resolved?.key === selectionKey &&
-                            coverageForEntry(entry).briefable.state === 'available'
-                          ) {
-                            setPlaceStudioReturnAction(() =>
-                              openImpactPanel(resolved.value.context)
-                            );
+                          if (coverageForEntry(entry).briefable.state === 'available') {
+                            // FE-23: register the hand-off in the click's
+                            // own task. The selection effect that would
+                            // otherwise register it runs after the next
+                            // frame, and Preact drops it if a browser Back
+                            // unmounts the studio first (a slow device), so
+                            // the briefing was lost. The effect replaces
+                            // this action with its own once it runs.
+                            if (resolved?.key === selectionKey) {
+                              setPlaceStudioReturnAction(() =>
+                                openImpactPanel(resolved.value.context)
+                              );
+                            } else {
+                              setPlaceStudioReturnAction(chaseBriefingOnReturn(entry, null));
+                            }
                           }
                           setSelectionEntry(entry);
                           setTypedPlace(typedPlaceRef(entry));
