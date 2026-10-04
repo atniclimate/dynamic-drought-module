@@ -825,6 +825,17 @@ function acknowledgementsHtml(): string {
   return acknowledgementsMemo;
 }
 
+/**
+ * The briefing body's acknowledgements section, the very markup `renderBody`
+ * appends, for the eager facade's unavailable fallback (found-108; D1 M22,
+ * DR-159, DR-161 to DR-166: every Impact Briefing ends in this section). The
+ * facade reads it from this runtime once the runtime has loaded, so the
+ * credits table never enters the eager entry.
+ */
+export function briefingAcknowledgementsHtml(): string {
+  return acknowledgementsHtml();
+}
+
 /** Write the briefing into the panel chrome. */
 function paint(
   briefing: ImpactBriefing,
@@ -1118,7 +1129,13 @@ export function refreshOpenBriefing(token: number): void {
       const wasOpen =
         printing && printForcedPreservedKeys.has(key) ? false : captured;
       if (wasOpen !== undefined) details.open = wasOpen;
-      if (key === focusedDisclosureKey) {
+      // Focus stays where the reader left it (found-107): a disclosure whose
+      // node survived the render (the acknowledgements section) still holds
+      // the focused element, a licence link say, so moving focus to its
+      // summary would turn the reader's next Enter into a collapse. Only a
+      // disclosure whose node was replaced lost its focus, and that one
+      // takes it back on its summary.
+      if (key === focusedDisclosureKey && !details.contains(document.activeElement)) {
         details.querySelector('summary')?.focus({ preventScroll: true });
       }
     });

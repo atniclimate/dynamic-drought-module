@@ -646,11 +646,21 @@ function renderUnavailable(
   current.kind.textContent = 'Boundary briefing';
   setMailActionEnabled(true);
   refreshBriefingActions(context.title, context);
+  // Every Impact Briefing ends in the Acknowledgements section (found-108;
+  // D1 M22, DR-159, DR-161 to DR-166). When the lazy runtime has already
+  // loaded (the acknowledgements-only view loaded it, then a later open's
+  // containing-state chunk failed), this fallback appends the same shared
+  // section the runtime's own body appends, read from the runtime, so the
+  // credits table never enters this eager facade. With no runtime loaded
+  // the fallback stays as it was: loading one here is the very import this
+  // path must not make.
+  const acknowledgements = runtime?.briefingAcknowledgementsHtml() ?? '';
   current.body.innerHTML = `
     <section class="impact-capability-unavailable" aria-label="Drought impact unavailable">
       <h3 class="impact-section-title">Drought impact unavailable</h3>
       <p class="impact-horizon-note">${UNAVAILABLE_NOTE}</p>
     </section>
+    ${acknowledgements}
   `;
 
   unavailableOpen = true;

@@ -2,6 +2,7 @@ import { expect, test, type Page, type Request } from '@playwright/test';
 
 import { URLS } from '../src/config/urls';
 import { BASE_URL, BOOT_URLS } from '../src/config/urls-boot';
+import { renderAcknowledgements } from '../src/ui/acknowledgements';
 import { gotoApp, layerPill, waitForLayerSettled } from './helpers';
 import { RAWS_ROUTE, rawsHappyBody } from './fixtures/raws-fixtures';
 import { stubWildfireFeeds } from './wildfire-fixtures';
@@ -63,6 +64,31 @@ function isDataRead(request: Request): boolean {
   const type = request.resourceType();
   return (type === 'fetch' || type === 'xhr') && !isMapGroundRead(request.url());
 }
+
+/**
+ * The row ids, in order, of the one shared acknowledgements section: the
+ * renderer the runtime's briefing body appends (src/ui/acknowledgements.ts
+ * `renderAcknowledgements`, memoized by `acknowledgementsHtml` in
+ * src/ui/impact-panel-runtime.ts), read here from the same renderer.
+ */
+const SHARED_ACK_ROW_IDS = Array.from(
+  renderAcknowledgements().matchAll(/<li class="ack-row" data-ack-id="([^"]+)"/g),
+  (match) => match[1]
+);
+
+/**
+ * Where the reader's focus sits in the open section when the held hydration
+ * lands (found-107): its summary, or a licence link inside it (the row's
+ * licence anchor the print case also reads). A refresh keeps the section's
+ * node, so focus must stay on exactly that element.
+ */
+const HELD_REFRESH_FOCUS = [
+  { title: '', selector: ':scope > summary' },
+  {
+    title: ', with focus on a licence link inside it',
+    selector: '[data-ack-id="aafc"] .ack-licence a'
+  }
+] as const;
 
 test.describe('the acknowledgements pointer and section (D1 M22)', () => {
   test('with no place selected the pointer opens the acknowledgements-only presentation and starts no request', async ({
@@ -139,83 +165,103 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
     ).toBe(true);
   });
 
-  test('a hydration refresh keeps the open section open, focused and in place', async ({ page }) => {
-    // Hold the resource-catalog rehydrate (public/data/resources/): its
-    // landing is the refresh this case releases. `rehydrateResourcesFromCatalog`
-    // (src/ui/impact-panel-runtime.ts) awaits these reads, adds the state and
-    // federal rows ABOVE the section, and then calls `refreshOpenBriefing`,
-    // which re-renders every section above the acknowledgements and keeps
-    // the acknowledgements node itself. tests/report-print.spec.ts holds the
-    // same request the same way to force its mid-print refresh. (NWS reads go
-    // through the Worker proxy, so an api.weather.gov route never matches.)
-    let release: () => void = () => {};
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let heldReads = 0;
-    await page.route(/\/data\/resources\//, async (route) => {
-      heldReads++;
-      await gate;
-      await route.continue();
-    });
-    await gotoApp(page, '?select=state:WA&region=washington_state');
-    const panel = page.locator('#impact-panel');
-    await expect(panel.locator('#impact-panel-title')).toHaveText('Washington', {
-      timeout: 15_000
-    });
-    // The catalog read is in flight and held: its row has not landed yet.
-    await expect.poll(() => heldReads, { timeout: 15_000 }).toBeGreaterThan(0);
-    const catalogRow = panel.getByRole('link', { name: 'Agricultural drought relief information' });
-    await expect(catalogRow).toHaveCount(0);
-    const summary = panel.locator('.impact-acknowledgements > summary');
-    await summary.scrollIntoViewIfNeeded();
-    await summary.focus();
-    await page.keyboard.press('Enter');
-    await expect(panel.locator('.impact-acknowledgements')).toHaveJSProperty('open', true);
-    // Mark the section and the resources section above it in one read.
-    const before = await panel.locator('.impact-panel-body').evaluate((body) => {
-      const section = body.querySelector(':scope > .impact-acknowledgements') as HTMLElement & {
-        __m22Marker?: boolean;
-      };
-      const resources = body.querySelector('.impact-resources') as HTMLElement & {
-        __m22Marker?: boolean;
-      };
-      section.__m22Marker = true;
-      resources.__m22Marker = true;
-      return section.getBoundingClientRect().top - body.getBoundingClientRect().top;
-    });
+  for (const focus of HELD_REFRESH_FOCUS) {
+    test(`a hydration refresh keeps the open section open, focused and in place${focus.title}`, async ({ page }) => {
+      // Hold the resource-catalog rehydrate (public/data/resources/): its
+      // landing is the refresh this case releases. `rehydrateResourcesFromCatalog`
+      // (src/ui/impact-panel-runtime.ts) awaits these reads, adds the state and
+      // federal rows ABOVE the section, and then calls `refreshOpenBriefing`,
+      // which re-renders every section above the acknowledgements and keeps
+      // the acknowledgements node itself. tests/report-print.spec.ts holds the
+      // same request the same way to force its mid-print refresh. (NWS reads go
+      // through the Worker proxy, so an api.weather.gov route never matches.)
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let heldReads = 0;
+      await page.route(/\/data\/resources\//, async (route) => {
+        heldReads++;
+        await gate;
+        await route.continue();
+      });
+      await gotoApp(page, '?select=state:WA&region=washington_state');
+      const panel = page.locator('#impact-panel');
+      await expect(panel.locator('#impact-panel-title')).toHaveText('Washington', {
+        timeout: 15_000
+      });
+      // The catalog read is in flight and held: its row has not landed yet.
+      await expect.poll(() => heldReads, { timeout: 15_000 }).toBeGreaterThan(0);
+      const catalogRow = panel.getByRole('link', { name: 'Agricultural drought relief information' });
+      await expect(catalogRow).toHaveCount(0);
+      const summary = panel.locator('.impact-acknowledgements > summary');
+      await summary.scrollIntoViewIfNeeded();
+      await summary.focus();
+      await page.keyboard.press('Enter');
+      await expect(panel.locator('.impact-acknowledgements')).toHaveJSProperty('open', true);
+      // Put focus where this case's reader is (found-107): the summary that
+      // just opened the section, or a licence link inside it.
+      const target = panel.locator('.impact-acknowledgements').locator(focus.selector);
+      await target.scrollIntoViewIfNeeded();
+      await target.focus();
+      await expect(target).toBeFocused();
+      // Mark the section, the resources section above it and the focused
+      // element in one read.
+      const before = await panel.locator('.impact-panel-body').evaluate((body) => {
+        const section = body.querySelector(':scope > .impact-acknowledgements') as HTMLElement & {
+          __m22Marker?: boolean;
+        };
+        const resources = body.querySelector('.impact-resources') as HTMLElement & {
+          __m22Marker?: boolean;
+        };
+        section.__m22Marker = true;
+        resources.__m22Marker = true;
+        const active = document.activeElement as (Element & { __m22FocusMarker?: boolean }) | null;
+        if (active) active.__m22FocusMarker = true;
+        return section.getBoundingClientRect().top - body.getBoundingClientRect().top;
+      });
 
-    release();
-    // A fresh DOM read, not a sleep: this WA catalog row exists only once the
-    // held rehydrate has landed and `refreshOpenBriefing` re-rendered.
-    await expect(catalogRow).toBeVisible({ timeout: 15_000 });
+      release();
+      // A fresh DOM read, not a sleep: this WA catalog row exists only once the
+      // held rehydrate has landed and `refreshOpenBriefing` re-rendered.
+      await expect(catalogRow).toBeVisible({ timeout: 15_000 });
 
-    // The refresh re-rendered the sections above (the resources node is new)
-    // and kept the acknowledgements node itself (its marker survives), open,
-    // focused and where the reader left it. One read, after the settled row.
-    const after = await panel.locator('.impact-panel-body').evaluate((body) => {
-      const section = body.querySelector(':scope > .impact-acknowledgements') as
-        | (HTMLDetailsElement & { __m22Marker?: boolean })
-        | null;
-      const resources = body.querySelector('.impact-resources') as
-        | (HTMLElement & { __m22Marker?: boolean })
-        | null;
-      return {
-        resourcesReplaced: resources !== null && resources.__m22Marker !== true,
-        sameNode: section?.__m22Marker === true,
-        open: section?.open ?? false,
-        focused: section !== null && section.querySelector('summary') === document.activeElement,
-        offset: section
-          ? section.getBoundingClientRect().top - body.getBoundingClientRect().top
-          : Number.NaN
-      };
+      // The refresh re-rendered the sections above (the resources node is new)
+      // and kept the acknowledgements node itself (its marker survives), open,
+      // focused and where the reader left it. One read, after the settled row.
+      const after = await panel.locator('.impact-panel-body').evaluate((body, selector) => {
+        const section = body.querySelector(':scope > .impact-acknowledgements') as
+          | (HTMLDetailsElement & { __m22Marker?: boolean })
+          | null;
+        const resources = body.querySelector('.impact-resources') as
+          | (HTMLElement & { __m22Marker?: boolean })
+          | null;
+        const active = document.activeElement as (Element & { __m22FocusMarker?: boolean }) | null;
+        return {
+          resourcesReplaced: resources !== null && resources.__m22Marker !== true,
+          sameNode: section?.__m22Marker === true,
+          open: section?.open ?? false,
+          // The very element the reader had focused, not a stand-in.
+          focused:
+            section !== null &&
+            active !== null &&
+            section.querySelector(selector) === active &&
+            active.__m22FocusMarker === true,
+          activeElement: active
+            ? `${active.tagName.toLowerCase()} "${(active.textContent ?? '').trim().slice(0, 60)}"`
+            : '(none)',
+          offset: section
+            ? section.getBoundingClientRect().top - body.getBoundingClientRect().top
+            : Number.NaN
+        };
+      }, focus.selector);
+      expect(after.resourcesReplaced).toBe(true);
+      expect(after.sameNode).toBe(true);
+      expect(after.open).toBe(true);
+      expect(after.focused, `focus after the refresh is on ${after.activeElement}`).toBe(true);
+      expect(Math.abs(after.offset - before)).toBeLessThanOrEqual(1);
     });
-    expect(after.resourcesReplaced).toBe(true);
-    expect(after.sameNode).toBe(true);
-    expect(after.open).toBe(true);
-    expect(after.focused).toBe(true);
-    expect(Math.abs(after.offset - before)).toBeLessThanOrEqual(1);
-  });
+  }
 
   test('print opens the section, prints its licence URLs, and afterprint restores it closed', async ({
     page
@@ -354,7 +400,7 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
     ).toHaveCount(1);
   });
 
-  test('an unavailable briefing opened in the panel the acknowledgements-only view left open has a working Mail control', async ({
+  test('an unavailable briefing opened in the panel the acknowledgements-only view left open has a working Mail control and the shared Acknowledgements section', async ({
     page
   }) => {
     // A Tribal boundary's context carries no state (src/impact/context.ts
@@ -401,6 +447,28 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
     await expect(panel.locator('#impact-panel-title')).not.toHaveText('Acknowledgements');
     await expect(mail).not.toHaveAttribute('aria-disabled', 'true');
     await expect(mail).toHaveAttribute('href', /^mailto:\?subject=/);
+
+    // found-108 (D1 M22, DR-159, DR-161 to DR-166): every Impact Briefing
+    // ends in the Acknowledgements section, this fallback included. The
+    // runtime and its credits table loaded with the acknowledgements-only
+    // view, so the fallback appends the same shared section the normal
+    // body does: one section, the body's last child, closed as a briefing
+    // renders it, with exactly the shared renderer's rows in its order.
+    const credits = await panel.locator('.impact-panel-body').evaluate((body) => {
+      const sections = body.querySelectorAll('.impact-acknowledgements');
+      const section = sections[0] as HTMLDetailsElement | undefined;
+      return {
+        count: sections.length,
+        last: body.lastElementChild?.classList.contains('impact-acknowledgements') ?? false,
+        open: section?.open ?? null,
+        rows: Array.from(section?.querySelectorAll<HTMLElement>('.ack-row') ?? [], (row) => row.dataset['ackId'] ?? '')
+      };
+    });
+    expect(credits.count, 'the unavailable briefing carries one Acknowledgements section').toBe(1);
+    expect(credits.last).toBe(true);
+    expect(credits.open).toBe(false);
+    expect(SHARED_ACK_ROW_IDS.length).toBeGreaterThan(0);
+    expect(credits.rows).toEqual(SHARED_ACK_ROW_IDS);
   });
 
   test("the acknowledgements-only view's disabled Mail stays disabled with no link after a briefing has rendered", async ({

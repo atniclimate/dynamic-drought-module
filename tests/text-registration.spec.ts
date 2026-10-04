@@ -15,6 +15,11 @@
  *
  * Every read is ONE `page.evaluate` after the boot-idle seam, a
  * `whenQuiescent` read and `document.fonts.ready` (tests/text-lines.ts).
+ *
+ * Offline (found-109): every source the visited modes and the WA briefing
+ * read is answered by a stub (`stubModeSources`, `stubBriefingHosts` and
+ * gotoApp's own), and a context backstop fails the case on any other
+ * external request, at the next settle.
  */
 
 import { expect, test, type Page } from '@playwright/test';
@@ -22,7 +27,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { KEY_ELIGIBLE_LABELS } from '../src/config/chip-labels';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 import { NADM_CATEGORIES, USDM_CATEGORIES } from '../src/config/palette';
-import { awaitQuiescence, gotoApp, waitForLayerSettled } from './helpers';
+import { BOOT_URLS } from '../src/config/urls-boot';
+import { awaitQuiescence, gotoApp, stubHeatRiskCatalog, waitForLayerSettled } from './helpers';
 import {
   describeFindings,
   lineCounts,
@@ -31,6 +37,7 @@ import {
   type TextFitFinding,
   type TextLineFinding
 } from './text-lines';
+import { HMS_STUB } from './wildfire-fixtures';
 
 const VIEWPORTS = [
   { width: 1280, height: 720 },
@@ -73,7 +80,116 @@ async function stubBriefingHosts(page: Page): Promise<void> {
   await page.route('**/proxy?*', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
   );
+  // The briefing's CPC 6-10 and 8-14 day outlook point reads go to the NWS
+  // map service directly (src/impact/sources.ts `fetchCpcOutlookClaims`).
+  await page.route(
+    (url) => /\/outlooks\/cpc_(6_10|8_14)_day_outlk\/MapServer\//.test(url.pathname),
+    (route) => route.fulfill({ status: 200, contentType: 'application/geo+json', body: empty })
+  );
 }
+
+/** One pixel, for every raster tile this spec answers (the suite's tile idiom). */
+const ONE_PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64'
+);
+
+/** The OpenStreetMap raster ground's tile host (src/map/style.ts, `BOOT_URLS.basemapOSM`). */
+const OSM_TILE_HOST = new URL(BOOT_URLS.basemapOSM.replace(/\{[xyz]\}/g, '0')).hostname;
+
+/**
+ * Deterministic answers for the map sources the modes this spec visits read
+ * and `gotoApp` does not already answer (found-109). `gotoApp` answers the
+ * sovereign boundaries, the minimap's inputs, NADM, the NIFC WFIGS
+ * perimeters with the minimap's count POSTs, the recent satellite basemap,
+ * and the CPC seasonal and SPC fire outlooks. The rest, by the recipes in
+ * src/config/clusters.ts:
+ * - every mode: the OpenStreetMap ground, one pixel per tile (the suite's
+ *   idiom, tests/layer-cancellation.spec.ts and its peers);
+ * - Wildfire: `hms-smoke` reads the NOAA HMS FeatureServer directly
+ *   (src/layers/hms-smoke.ts), answered with the shared `HMS_STUB`. Not
+ *   `stubWildfireFeeds` whole: its page-level WFIGS route would outrank
+ *   gotoApp's context default and answer the minimap's count POST with a
+ *   FeatureCollection, which reads as an unavailable count;
+ * - Extreme Heat: `heatrisk` and the briefing's HeatRisk catalog read
+ *   (`stubHeatRiskCatalog`); `nws-alerts`, the NWS watch, warning and
+ *   advisory MapServer, empty (tests/studio-options.spec.ts's answer);
+ * - ENSO: `sst-anomaly`, the GIBS GHRSST domain read and its tiles
+ *   (tests/interface-responsive.spec.ts's answer).
+ */
+async function stubModeSources(page: Page): Promise<void> {
+  const emptyCollection = JSON.stringify({ type: 'FeatureCollection', features: [] });
+  await page.route(`https://${OSM_TILE_HOST}/**`, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG })
+  );
+  await page.route(
+    (url) => url.href.includes('NOAA_Satellite_Smoke_Detection'),
+    (route) => route.fulfill({ status: 200, contentType: 'application/geo+json', body: JSON.stringify(HMS_STUB) })
+  );
+  await stubHeatRiskCatalog(page);
+  await page.route('**/WWA/watch_warn_adv/MapServer/1/query**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/geo+json', body: emptyCollection })
+  );
+  await page.route(
+    (url) => url.href.includes('DescribeDomains'),
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'text/xml',
+        body:
+          "<Domains xmlns:ows='http://www.opengis.net/ows/1.1'><DimensionDomain>" +
+          '<ows:Identifier>time</ows:Identifier>' +
+          '<Domain>2026-07-01/2026-07-07/P1D</Domain>' +
+          '<Size>1</Size></DimensionDomain></Domains>'
+      })
+  );
+  await page.route(
+    (url) => url.href.includes('GHRSST_L4_MUR') && url.pathname.endsWith('.png'),
+    (route) => route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG })
+  );
+}
+
+/** The external requests the backstop answered, per page (found-109). */
+const unexpectedRequests = new WeakMap<Page, string[]>();
+
+/**
+ * Hold the external network (found-109; the shape of
+ * tests/identify-paths.spec.ts's `holdExternalNetwork`): a CONTEXT route
+ * registered before the first `gotoApp`. gotoApp's own context stubs,
+ * registered later, are checked first and keep their fixtures, and every
+ * page route (this spec's stubs and gotoApp's) is checked before any context
+ * route, so only a request no stub claimed reaches this one. It answers 503
+ * at once, never the network and never a wait, and records the request; the
+ * case then fails on it at its next settle and again after it ends.
+ */
+async function holdExternalNetwork(page: Page): Promise<void> {
+  const seen: string[] = [];
+  unexpectedRequests.set(page, seen);
+  await page.context().route(
+    (url) => url.protocol.startsWith('http') && url.hostname !== '127.0.0.1' && url.hostname !== 'localhost',
+    (route) => {
+      const request = route.request();
+      seen.push(`${request.method()} ${request.url()}`);
+      return route.fulfill({ status: 503, contentType: 'text/plain', body: 'Synthetic offline response' });
+    }
+  );
+}
+
+/** Fail on any external request the backstop answered so far. */
+function expectNoUnexpectedRequests(page: Page, where: string): void {
+  const seen = [...new Set(unexpectedRequests.get(page) ?? [])];
+  expect(seen, `${where}: an external request no stub answered reached the backstop:\n${seen.join('\n')}`).toEqual([]);
+}
+
+test.beforeEach(async ({ page }) => {
+  await holdExternalNetwork(page);
+  await stubModeSources(page);
+  await stubBriefingHosts(page);
+});
+
+test.afterEach(async ({ page }) => {
+  expectNoUnexpectedRequests(page, 'when the case ended');
+});
 
 async function settle(page: Page): Promise<void> {
   await awaitQuiescence(page);
@@ -81,6 +197,9 @@ async function settle(page: Page): Promise<void> {
     await document.fonts.ready;
     await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
   });
+  // Fail fast (found-109): an unanswered source fails the case at the settle
+  // after it was asked, not at the case's timeout.
+  expectNoUnexpectedRequests(page, 'at a settle');
 }
 
 async function renderedModes(page: Page): Promise<string[]> {
@@ -365,8 +484,12 @@ for (const viewport of VIEWPORTS) {
     test('no block of two or more lines and three or more words ends in a single-word line in the sidebar, the drawers, both popup sinks and the briefing for WA and CONUS', async ({
       page
     }) => {
-      test.setTimeout(240_000);
-      await stubBriefingHosts(page);
+      // Offline and deterministic since found-109, this case's green runs
+      // measured 13.9 to 17.3 s at 1280x720 and 40.9 to 50.6 s at 2560x1440,
+      // the slowest (two runs, one worker, 2026-10-04); 150 s keeps three
+      // times the slowest for a slower renderer or a second worker. A missing
+      // stub fails at the next settle in seconds, not here.
+      test.setTimeout(150_000);
       const findings: TextLineFinding[] = [];
       // Non-vacuity: every scanned root must render and hold measured words,
       // except a root the caller names as optional (CONUS has no briefing).
@@ -459,8 +582,10 @@ for (const viewport of VIEWPORTS) {
     });
 
     test('no chrome label or seat text overflows its box', async ({ page }) => {
-      test.setTimeout(180_000);
-      await stubBriefingHosts(page);
+      // Measured green the same way (found-109): 8.0 to 10.8 s at 1280x720
+      // and 27.9 to 30.1 s at 2560x1440, the slowest; 90 s keeps three times
+      // the slowest.
+      test.setTimeout(90_000);
       const failures: TextFitFinding[] = [];
       // Non-vacuity: every scan must measure at least one visible label, and
       // the named evidence selectors must be measured somewhere in the case.
