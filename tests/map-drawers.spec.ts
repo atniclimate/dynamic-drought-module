@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
-import { gotoApp, search, stubHeatRiskCatalog } from './helpers';
+import { gotoApp, layerPill, PILL, search, stubHeatRiskCatalog } from './helpers';
+import { isNwsWwaRequestUrl, NWS_WWA_EMPTY, nwsWwaStubLog } from './nws-wwa-fixtures';
 
 /**
  * S30D D1 M11 (register item owner-1h; task DDM-P10-T11; design record
@@ -408,5 +409,86 @@ test.describe('the Key drawer (S30D D1 M11)', () => {
     });
     expect(embedSeat.inDock, 'embed: the sequence left the dock').toBe(true);
     expect(embedSeat.inSection, 'embed: the sequence entered the drawer section').toBe(false);
+  });
+});
+
+/**
+ * S30D P2-CI: `cluster=heat` turns the NWS alerts layer on, and the layer
+ * reads NOAA's WWA MapServer with a 15 s budget while `gotoApp` waits 10 s
+ * for boot-idle, so a slow NOAA answer failed the first case above on
+ * GitHub (`pending layer keys = ["nws-alerts"]`). `gotoApp` now answers that
+ * service from `tests/nws-wwa-fixtures.ts`, like NADM and NIFC. These cases
+ * hold the default honest.
+ *
+ * The backstop is a CONTEXT route registered BEFORE the first boot. A later
+ * route outranks an earlier one, so the default (registered inside `gotoApp`)
+ * answers first; the backstop sees only a WWA request that no stub answered,
+ * records it, and answers it with the same empty body so no case touches
+ * NOAA. Predicted red on the pre-change tree: the backstop sees the layer's
+ * one query.
+ */
+function installWwaBackstop(page: Page): Promise<string[]> {
+  const reached: string[] = [];
+  return page
+    .context()
+    .route(
+      (url) => isNwsWwaRequestUrl(url),
+      (route) => {
+        reached.push(route.request().url());
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/geo+json',
+          body: JSON.stringify(NWS_WWA_EMPTY)
+        });
+      }
+    )
+    .then(() => reached);
+}
+
+test.describe('the NWS WWA default stub (S30D P2-CI)', () => {
+  test('a cluster=heat boot answers the WWA MapServer locally: the default stub answers the layer query and none reaches the backstop', async ({
+    page
+  }) => {
+    const reached = await installWwaBackstop(page);
+    await stubHeatRiskCatalog(page);
+    await gotoApp(page, '?view=console&cluster=heat');
+
+    expect(reached, 'WWA requests no stub answered').toEqual([]);
+    const answers = nwsWwaStubLog(page).map((entry) => entry.answer);
+    expect(answers.length, 'the default stub answered the layer query').toBeGreaterThan(0);
+    expect(
+      answers.every((answer) => answer === 'features'),
+      'every answered WWA request was the layer query'
+    ).toBe(true);
+    // The empty answer is the layer's honest "no active alerts" result, not
+    // an error: the pill is the tree's own no-features label.
+    await expect(layerPill(page, 'nws-alerts')).toContainText('no features');
+  });
+
+  test('a spec that routes WWA itself still wins over the default, which then answers nothing', async ({
+    page
+  }) => {
+    const reached = await installWwaBackstop(page);
+    await page.route(
+      (url) => isNwsWwaRequestUrl(url),
+      (route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
+    );
+    await stubHeatRiskCatalog(page);
+    await gotoApp(page, '?view=console&cluster=heat');
+
+    await expect(layerPill(page, 'nws-alerts')).toHaveText(PILL.unavailable);
+    expect(nwsWwaStubLog(page), 'the default answered a routed request').toEqual([]);
+    expect(reached, 'WWA requests no stub answered').toEqual([]);
+  });
+
+  test('the explicit nwsWwa: live opt-out installs a pass-through, so the request reaches whatever route the spec registered earlier', async ({
+    page
+  }) => {
+    const reached = await installWwaBackstop(page);
+    await stubHeatRiskCatalog(page);
+    await gotoApp(page, '?view=console&cluster=heat', { nwsWwa: 'live' });
+
+    expect(reached.length, 'the pass-through reached the earlier route').toBeGreaterThan(0);
+    expect(nwsWwaStubLog(page), 'the default answered under the opt-out').toEqual([]);
   });
 });

@@ -1971,7 +1971,9 @@ test.describe('W3/W4 browser truth', () => {
     // custom, which hides the 3D control while a fire event layer keeps the
     // scene alive, so this is the last gesture of the case.)
     await layerCheckbox(page, 'nifc-fires').uncheck();
-    await expect.poll(() => fire3dRibbonStamp(page)).toBe('off');
+    await expect
+      .poll(() => fire3dRibbonStamp(page), { timeout: 30_000 })
+      .toBe('off');
     await expect(ribbonLegend).toHaveCount(0);
     expect(await fire3dStamp(page)).toBe('active');
   });

@@ -129,7 +129,9 @@ test.describe('mode-switch cost', () => {
         const fromQuery = bootQuery({ urlToken: urlTokenFor(sw.from), profile });
         // J12 opt-out: the recorded baseline (0c27ab1) measured the live WFIGS
         // and NADM reads; the NADM fixture default (b872c7e) came after it.
-        await gotoApp(page, fromQuery, { nifc: 'live', nadm: 'live' });
+        // The NWS WWA default stub (S30D P2-CI) came after the baseline too:
+        // its heat boots measured the live WWA read.
+        await gotoApp(page, fromQuery, { nifc: 'live', nadm: 'live', nwsWwa: 'live' });
         const fromBtn = page.locator(`.shell-cluster-btn[data-cluster="${sw.from}"]`);
         await expect(
           fromBtn,

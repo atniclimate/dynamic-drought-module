@@ -14,6 +14,7 @@ import { stubRecentSatellite } from './satellite-fixture';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
 import { installBoundaryStubs, type BoundaryStubMode } from './tribal-fixtures';
 import { installDefaultNifcStub, type NifcStubMode } from './wildfire-fixtures';
+import { installDefaultNwsWwaStub, type NwsWwaStubMode } from './nws-wwa-fixtures';
 
 const TEST_NADM_SNAPSHOT = {
   type: 'FeatureCollection',
@@ -280,6 +281,24 @@ export interface GotoAppOptions {
    */
   readonly nifc?: NifcStubMode;
   /**
+   * How this boot answers the NOAA NWS WWA watch/warning/advisory MapServer
+   * (S30D P2-CI). Defaults to `fixture`: a fail-closed CONTEXT route in
+   * `tests/nws-wwa-fixtures.ts` (`installDefaultNwsWwaStub`) answers the NWS
+   * alerts layer's one GET query with a valid EMPTY FeatureCollection, so no
+   * boot waits on NOAA. The reason is `cluster=heat` and `layers=nws-alerts`:
+   * the layer's 15 s budget outlasts `gotoApp`'s 10 s boot-idle wait, so a
+   * slow NOAA answer from a CI runner failed tests/map-drawers.spec.ts.
+   * `live` is the explicit opt-out: the context route passes every request
+   * through, to a context route the spec registered earlier or, unrouted, the
+   * live service. A spec that registers its own `page.route` for the WWA
+   * path (a feature body, a delay, a held or failed request) needs neither
+   * option: Playwright checks Page routes before Context routes, so that
+   * handler always wins, whatever the order. A page route that calls
+   * `route.fallback()` now falls through to this stub rather than to the
+   * network.
+   */
+  readonly nwsWwa?: NwsWwaStubMode;
+  /**
    * Wait for the boot-idle seam (`<html data-ddm-boot="idle">`, DR-052
    * follow-up): the map has loaded, every layer the URL asked for has left
    * `loading`, and no shared transport is in flight. Defaults to true, so
@@ -353,6 +372,11 @@ export async function gotoApp(
   // `installDefaultNifcStub`'s own comment for the three request kinds, the
   // opt-out, and why a spec's own `page.route` for WFIGS still wins.
   await installDefaultNifcStub(page, options.nifc ?? 'fixture');
+  // S30D P2-CI: every routine boot answers the NWS WWA MapServer with a valid
+  // empty collection, whatever the query string names, so a `cluster=heat`
+  // boot never waits on NOAA's answer. See `installDefaultNwsWwaStub`'s own
+  // comment for the opt-out and why a spec's own `page.route` still wins.
+  await installDefaultNwsWwaStub(page, options.nwsWwa ?? 'fixture');
   coverFuturePages(page);
   await page.goto(query, { waitUntil: 'domcontentloaded' });
   // DOM READY, and no longer a proxy for a finished boot. The generated
