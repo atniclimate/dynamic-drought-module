@@ -1036,21 +1036,28 @@ export function isNoddRequestUrl(url: URL): boolean {
   return /^s3[.-]/.test(host) && url.pathname.startsWith(`/${NODD_BUCKET}/`);
 }
 
-/** One NODD read the default stub answers from tests/fixtures/flow/ (E1-1's fixtures). */
+/** One NODD object or message the default stub answers from tests/fixtures/flow/ (E1-1's fixtures). */
 interface NoddFixture {
   /** The object key, as a virtual-hosted path without its leading slash. */
   readonly key: string;
-  /** The exact Range header a message read sends, or null for a whole `.idx` GET. */
+  /**
+   * The exact Range header a message read sends (its `.idx` span), or null
+   * for a whole `.idx` object, which is answered to any GET, with or without
+   * a Range, as S3 answers it (`installDefaultNoddStub`).
+   */
   readonly range: string | null;
   /** The fixture file under tests/fixtures/flow/. */
   readonly file: string;
 }
 
 /**
- * Every NODD read with a fixture: the three `.idx` files and the five
- * messages E1-1 cut on 2026-10-05 (cycle 2026-10-05 06Z, f006), each with the
- * key and range its tests/fixtures/flow/reference.json `source` records.
- * A read not listed here is unstubbed (`installDefaultNoddStub`).
+ * Every NODD read with a fixture: the three `.idx` files and the six
+ * messages cut on 2026-10-05 (cycle 2026-10-05 06Z, f006; five by E1-1, the
+ * global.0p25 DIRPW by E2a for found-146), each with the key and range its
+ * tests/fixtures/flow/reference.json `source` records. Both kinds of
+ * src/layers/flow/source.ts read here in full: wind (UGRD and VGRD) and
+ * waves (DIRPW and HTSGW on global.0p25). A read not listed here is
+ * unstubbed (`installDefaultNoddStub`).
  */
 export const NODD_FIXTURES: readonly NoddFixture[] = [
   { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006.idx', range: null, file: 'gfs.t06z.pgrb2.1p00.f006.idx' },
@@ -1058,13 +1065,18 @@ export const NODD_FIXTURES: readonly NoddFixture[] = [
   { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006', range: 'bytes=35077225-35156831', file: 'gfs1p00-VGRD-10m-f006.grib2' },
   { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.global.0p25.f006.grib2.idx', range: null, file: 'gfswave.t06z.global.0p25.f006.grib2.idx' },
   { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.global.0p25.f006.grib2', range: 'bytes=3029161-3457288', file: 'global0p25-HTSGW-f006.grib2' },
+  { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.global.0p25.f006.grib2', range: 'bytes=3968286-4855671', file: 'global0p25-DIRPW-f006.grib2' },
   { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.wcoast.0p16.f006.grib2.idx', range: null, file: 'gfswave.t06z.wcoast.0p16.f006.grib2.idx' },
   { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.wcoast.0p16.f006.grib2', range: 'bytes=65805-75391', file: 'wcoast0p16-HTSGW-f006.grib2' },
   { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.wcoast.0p16.f006.grib2', range: 'bytes=87636-106888', file: 'wcoast0p16-DIRPW-f006.grib2' }
 ];
 
-/** How the default stub answered one NODD request. */
-export type NoddStubAnswer = 'fixture' | 'unstubbed';
+/**
+ * How the default stub answered one NODD request: from a fixture (200 or
+ * 206), 416 for an `.idx` range that starts past the object's end (S3's
+ * answer, not a test failure), or unstubbed (404, and the test fails).
+ */
+export type NoddStubAnswer = 'fixture' | 'unsatisfiable' | 'unstubbed';
 
 /** One NODD request the default stub answered. */
 export interface NoddStubEntry {
@@ -1088,22 +1100,64 @@ function noddKey(url: URL): string {
 }
 
 /**
+ * An `.idx` fixture's bytes as NODD serves them: LF line ends, whatever the
+ * checkout holds (core.autocrlf writes these text files CRLF on Windows).
+ */
+function noddIndexBody(file: string): Buffer {
+  const text = readFileSync(new URL(`./fixtures/flow/${file}`, import.meta.url), 'latin1');
+  return Buffer.from(text.replaceAll('\r\n', '\n'), 'latin1');
+}
+
+/**
+ * How S3 answers a GET on an object of `length` bytes with this Range
+ * header: 200 with no Range, 206 for `bytes=A-B` or `bytes=A-` (the end
+ * clamped to the object), 416 when A is at or past the end. Null for a
+ * Range this stub does not model (suffix, multi-part, B before A), which
+ * is then unstubbed.
+ */
+function noddIndexRead(
+  length: number,
+  range: string | null
+): { readonly status: 200 } | { readonly status: 206; readonly first: number; readonly last: number } | { readonly status: 416 } | null {
+  if (range === null) return { status: 200 };
+  const m = /^bytes=(\d+)-(\d*)$/.exec(range);
+  if (!m) return null;
+  const first = Number(m[1]);
+  const end = m[2] === '' ? Infinity : Number(m[2]);
+  if (end < first) return null;
+  if (first >= length) return { status: 416 };
+  return { status: 206, first, last: Math.min(end, length - 1) };
+}
+
+/**
  * Answer the NODD bucket on the browser CONTEXT on every routine boot
  * (ENSO-FLOW-PLAN E1-5), so no spec reads AWS: without it every ENSO spec
  * would, once the flowing paths read NODD. There is no unexpected-egress
  * host list in this repo, so this route is the guard.
  *
- * FAIL-CLOSED, and LOUD. A GET whose key and Range header match a
- * `NODD_FIXTURES` row is answered from that file: 200 for a whole `.idx`, 206
- * with a `Content-Range` for a message, each with the
- * `Access-Control-Allow-Origin: *` NODD sends. Anything else (another key, a
- * range with no fixture, a whole-message GET, HEAD, a LIST) is answered 404
- * with that same header, as NODD answers a missing key (B-grib.md section
- * 2.1), recorded in `noddStubLog`, and fails the running test through
- * `expect.soft`, naming the method, URL and range: add a fixture row, or
- * route the read in the spec. Like the other suite-wide stubs, a spec's own
- * `page.route` for the bucket wins (Playwright checks Page routes before
- * Context routes). Idempotent per context.
+ * It answers as src/layers/flow/nodd.ts reads (found-146). Every answer
+ * carries the `Access-Control-Allow-Origin: *` NODD sends.
+ * - An `.idx` row (`range: null`) is answered as S3 answers a GET on that
+ *   object: with no Range, 200 and the whole object; with `bytes=A-B` or
+ *   `bytes=A-`, 206 with bytes A to min(B, length - 1) and
+ *   `Content-Range: bytes A-<end>/<length>`, so the reader's capped read
+ *   (`bytes=0-65535` atmos, `bytes=0-4095` wave, longer than either index)
+ *   gets 206 and the whole index; a range starting at or past the end is
+ *   416 with S3's InvalidRange body (logged `unsatisfiable`, not a
+ *   failure: it is S3's answer). The index body is served with LF line
+ *   ends whatever the checkout holds (a Windows checkout with
+ *   core.autocrlf writes these text files CRLF), since NODD serves LF.
+ * - A message row is answered only to a GET whose Range is exactly its
+ *   `.idx` span: 206 with the message.
+ *
+ * FAIL-CLOSED, and LOUD. Anything else (another key, a message range with
+ * no fixture, a whole-message GET, a suffix or multi-part range, HEAD, a
+ * LIST) is answered 404 with that same header, as NODD answers a missing
+ * key (B-grib.md section 2.1), recorded in `noddStubLog`, and fails the
+ * running test through `expect.soft`, naming the method, URL and range: add
+ * a fixture row, or route the read in the spec. Like the other suite-wide
+ * stubs, a spec's own `page.route` for the bucket wins (Playwright checks
+ * Page routes before Context routes). Idempotent per context.
  */
 export async function installDefaultNoddStub(page: Page): Promise<void> {
   const context = page.context();
@@ -1117,12 +1171,56 @@ export async function installDefaultNoddStub(page: Page): Promise<void> {
       const url = new URL(request.url());
       const range = (await request.headerValue('range')) ?? null;
       const key = noddKey(url);
-      const fixture =
-        request.method() === 'GET' && url.search === ''
-          ? NODD_FIXTURES.find((row) => row.key === key && row.range === range)
-          : undefined;
-      log.push({ method: request.method(), url: request.url(), range, answer: fixture ? 'fixture' : 'unstubbed' });
-      if (!fixture) {
+      const get = request.method() === 'GET' && url.search === '';
+      const index = get ? NODD_FIXTURES.find((row) => row.key === key && row.range === null) : undefined;
+      const message =
+        get && range !== null ? NODD_FIXTURES.find((row) => row.key === key && row.range === range) : undefined;
+      const indexBody = index ? noddIndexBody(index.file) : null;
+      const indexRead = indexBody ? noddIndexRead(indexBody.length, range) : null;
+      log.push({
+        method: request.method(),
+        url: request.url(),
+        range,
+        answer:
+          message || (indexRead !== null && indexRead.status !== 416)
+            ? 'fixture'
+            : indexRead !== null
+              ? 'unsatisfiable'
+              : 'unstubbed'
+      });
+      if (indexBody && indexRead) {
+        const headers = { 'access-control-allow-origin': '*', 'accept-ranges': 'bytes' };
+        if (indexRead.status === 200) {
+          await route
+            .fulfill({ status: 200, headers, contentType: 'binary/octet-stream', body: indexBody })
+            .catch(() => undefined);
+        } else if (indexRead.status === 206) {
+          const { first, last } = indexRead;
+          await route
+            .fulfill({
+              status: 206,
+              headers: { ...headers, 'content-range': `bytes ${first}-${last}/${indexBody.length}` },
+              contentType: 'binary/octet-stream',
+              body: indexBody.subarray(first, last + 1)
+            })
+            .catch(() => undefined);
+        } else {
+          await route
+            .fulfill({
+              status: 416,
+              headers: { 'access-control-allow-origin': '*' },
+              contentType: 'application/xml',
+              body:
+                '<?xml version="1.0" encoding="UTF-8"?>\n<Error><Code>InvalidRange</Code>' +
+                `<Message>The requested range is not satisfiable</Message><RangeRequested>${range ?? ''}</RangeRequested>` +
+                `<ActualObjectSize>${indexBody.length}</ActualObjectSize></Error>`
+            })
+            .catch(() => undefined);
+        }
+        return;
+      }
+      const fixture = message;
+      if (!fixture || fixture.range === null) {
         try {
           expect
             .soft(
@@ -1140,12 +1238,6 @@ export async function installDefaultNoddStub(page: Page): Promise<void> {
         return;
       }
       const body = readFileSync(new URL(`./fixtures/flow/${fixture.file}`, import.meta.url));
-      if (fixture.range === null) {
-        await route
-          .fulfill({ status: 200, headers: { 'access-control-allow-origin': '*' }, contentType: 'text/plain', body })
-          .catch(() => undefined);
-        return;
-      }
       const [first, last] = fixture.range.slice('bytes='.length).split('-');
       await route
         .fulfill({

@@ -9,4 +9,8 @@ scripts/landscape/tests/fixtures/soil/* -text
 scripts/landscape/tests/fixtures/terrain-extension/* -text
 scripts/landscape/intermediates/** -text
 public/data/landscape-signature-pnw.json -text
+# The NOAA NODD fixtures are served byte for byte by the routine-boot stub
+# (tests/helpers.ts) and checked by length and hash: no end-of-line conversion.
+tests/fixtures/flow/*.idx -text
+tests/fixtures/flow/reference.json -text
 .githooks/* text eol=lf
