@@ -75,7 +75,8 @@ export async function fetchWithBudget(
  */
 async function readBodyBytes(
   response: Response,
-  signal: AbortSignal
+  signal: AbortSignal,
+  maxBytes = Infinity
 ): Promise<ArrayBuffer | null> {
   if (response.body === null) return null;
 
@@ -99,6 +100,10 @@ async function readBodyBytes(
       if (chunk.done) break;
       chunks.push(chunk.value);
       byteLength += chunk.value.byteLength;
+      if (byteLength > maxBytes) {
+        cancelBody();
+        throw new RangeError();
+      }
     }
 
     const bytes = new Uint8Array(byteLength);
@@ -158,12 +163,21 @@ export async function fetchJsonWithBudget(
  * cancels the stream and rejects with an AbortError, as a header-time abort
  * always did. A null-body status (101, 204, 205, 304) is reconstructed with a
  * null body because the Response constructor refuses a body there.
+ *
+ * `bounds` (optional; ENSO-FLOW-PLAN E1-2, the NODD Range read): the read
+ * stops and rejects with a RangeError as soon as the body passes `maxBytes`,
+ * so a server that ignores Range cannot stream a whole file. With
+ * `expectStatus` as well, any other status rejects with a RangeError at the
+ * headers and the request is aborted, and the body must be exactly `maxBytes`
+ * long (a Range read of a known span), so a short body is refused too.
+ * Without `bounds` the behaviour is unchanged.
  */
 export async function fetchBufferedWithBudget(
   url: string,
   opts: RequestInit | null,
   masterSignal: AbortSignal | null,
-  timeoutMs: number
+  timeoutMs: number,
+  bounds?: { maxBytes: number; expectStatus?: number }
 ): Promise<Response> {
   const ctrl = new AbortController();
   if (masterSignal?.aborted) {
@@ -175,8 +189,16 @@ export async function fetchBufferedWithBudget(
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const response = await fetch(url, { ...(opts ?? {}), signal: ctrl.signal });
-    const body = await readBodyBytes(response, ctrl.signal);
+    const status = bounds?.expectStatus;
+    if (status !== undefined && response.status !== status) {
+      ctrl.abort();
+      throw new RangeError(`HTTP ${response.status}`);
+    }
+    const body = await readBodyBytes(response, ctrl.signal, bounds?.maxBytes);
     if (ctrl.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (status !== undefined && body?.byteLength !== bounds?.maxBytes) {
+      throw new RangeError();
+    }
     const nullBodyStatus =
       response.status === 101 ||
       response.status === 204 ||
