@@ -540,12 +540,18 @@ function recomputeSceneTransport(map: maplibregl.Map): void {
   publishStatus('active', null);
 }
 
+let transportPoll: ReturnType<typeof setInterval> | undefined;
+
 /** Start watching the scene's own sources for load progress. Idempotent;
  * detachTransportWatch is its only counterpart. */
 function attachTransportWatch(map: maplibregl.Map): void {
   if (transportSourceDataListener) return;
   transportSourceDataListener = () => recomputeSceneTransport(map);
   transportIdleListener = () => recomputeSceneTransport(map);
+  // found-130: sourcedata and idle can be coalesced away on a stalled main
+  // thread after the last request ends, so the stamp is also re-read every
+  // 250 ms while the scene is up; it republishes only on a change.
+  transportPoll = setInterval(transportIdleListener, 250);
   map.on('sourcedata', transportSourceDataListener);
   map.on('idle', transportIdleListener);
 }
@@ -557,6 +563,7 @@ function detachTransportWatch(map: maplibregl.Map): void {
   if (transportIdleListener) map.off('idle', transportIdleListener);
   transportSourceDataListener = null;
   transportIdleListener = null;
+  clearInterval(transportPoll);
   sceneTransport = null;
 }
 
@@ -937,7 +944,10 @@ function reconcileSmokeVolume(map: maplibregl.Map): void {
  * Nothing here writes a layer status or a preference: the ribbon follows
  * the perimeter layer and never the other way round.
  */
-function reconcilePerimeterRibbon(map: maplibregl.Map): void {
+function reconcilePerimeterRibbon(
+  map: maplibregl.Map,
+  supersede = true
+): void {
   if (!active || !ribbonModule) return;
   const ribbon = ribbonModule;
   const perimetersOn = registry.getActiveKeys().has(PERIMETER_LAYER_KEY);
@@ -954,8 +964,10 @@ function reconcilePerimeterRibbon(map: maplibregl.Map): void {
     return;
   }
   if (ribbonOn) return;
-  // Each call reads afresh and supersedes a read still out, so the answer
-  // that lands is the one over the perimeters the layer holds now.
+  // A change that does not concern the perimeters (supersede false) leaves
+  // a read already out alone; a perimeter status change supersedes it, so
+  // the answer that lands is the one over the perimeters the layer holds now.
+  if (!supersede && ribbonRead !== null) return;
   void readRibbon(map, ribbon).then((current) => {
     if (current && ribbonOn && active) publishStatus('active', null);
   });
@@ -985,7 +997,7 @@ export function initFire3DController(map: maplibregl.Map): void {
         void activateScene(map);
       } else {
         reconcileSmokeVolume(map);
-        reconcilePerimeterRibbon(map);
+        reconcilePerimeterRibbon(map, false);
       }
     } else if (active || activation !== null) {
       setFire3DActive(map, false);
