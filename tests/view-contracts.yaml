@@ -19,6 +19,8 @@
 # description   one sentence: the contract, not the mechanics
 # url           query string handed to `gotoApp` ('' for a bare boot)
 # stub_wildfire when true, pin NIFC / HMS / SPC / EIA before boot
+# reduced_motion when true, boot with prefers-reduced-motion: reduce (no
+#               wildfire pulse refilling the software renderer's draw queue)
 # timeout_ms    per-row budget; raise it for rows that build terrain
 # steps         ordered actions (see the step vocabulary below)
 # expect        invariants asserted after the last step
@@ -30,6 +32,8 @@
 #   set_layer: { key: <layer>, on: <bool> }
 #   wait_settled: <layer key>        wait for a terminal status pill
 #   wait_fire3d: <active|inactive>   wait for the document stamp
+#   settle_scene: true               drain the draw queue and wait for quiet
+#                                    traffic (needs reduced_motion: true)
 #   zoom_out: <n>                    press the map's own zoom-out key n times
 #   reload: true                     reload at the current URL
 #
@@ -228,6 +232,7 @@ rows:
       boot and cannot change under it.
     url: '?region=washington_state&cluster=wildfire'
     stub_wildfire: true
+    reduced_motion: true
     timeout_ms: 180000
     steps:
       - wait_settled: hms-smoke
@@ -265,11 +270,13 @@ rows:
       pressed control.
     url: '?region=washington_state&cluster=wildfire&fire3d=true'
     stub_wildfire: true
+    reduced_motion: true
     timeout_ms: 180000
     steps:
       - wait_fire3d: active
       - reload: true
       - wait_fire3d: active
+      - settle_scene: true
     expect:
       cluster_pressed: wildfire
       fire3d_stamp: active

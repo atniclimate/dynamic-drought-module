@@ -1329,13 +1329,17 @@ test.describe('M8: the refit on a sidebar toggle (found-029, DDM-P10-T07)', () =
       const panelBefore = await panelState();
       expect(await sidebarTokens(), `${query}: an open boot carries no sidebar=`).toEqual([]);
 
-      const collapsed = await toggleSidebar(page, 'closed');
+      // The oracle makes the settle wait for the camera the case asserts, as
+      // the :1278 case does (GitHub run 37282168792, S30D B3 CI3: on a slow
+      // runner two equal reads came before the refit's flight landed, west
+      // -124.6708 against -125.094; the same assertion below still decides).
+      const collapsed = await toggleSidebar(page, 'closed', closedOracle);
       expect(await withoutSidebar(), `${query}: collapse writes nothing but sidebar=`).toEqual(keysBefore);
       expect(await sidebarTokens(), `${query}: collapse writes sidebar=closed`).toEqual(['closed']);
       expect(await panelState(), `${query}: collapse leaves the briefing alone`).toBe(panelBefore);
       expectSameCamera(collapsed, closedOracle, `${query}: collapse`);
 
-      const expanded = await toggleSidebar(page, 'open');
+      const expanded = await toggleSidebar(page, 'open', openOracle);
       expect(await withoutSidebar(), `${query}: expand writes nothing but sidebar=`).toEqual(keysBefore);
       expect(await sidebarTokens(), `${query}: expand drops sidebar=`).toEqual([]);
       expect(await panelState(), `${query}: expand leaves the briefing alone`).toBe(panelBefore);

@@ -56,6 +56,7 @@ type Step =
   | { set_layer: { key: string; on: boolean } }
   | { wait_settled: string }
   | { wait_fire3d: 'active' | 'inactive' }
+  | { settle_scene: true }
   | { zoom_out: number }
   | { reload: true };
 
@@ -80,6 +81,8 @@ interface Row {
   description: string;
   url: string;
   stub_wildfire?: boolean;
+  /** Run the row with `prefers-reduced-motion: reduce` (S30D B3 CI3). */
+  reduced_motion?: boolean;
   timeout_ms?: number;
   steps: Step[];
   expect: Expectations;
@@ -186,10 +189,98 @@ async function watchPowerLayerReads(page: Page): Promise<PowerReads> {
 }
 
 // ---------------------------------------------------------------------------
+// The 3D scene's startup stall (S30D B3 CI3)
+// ---------------------------------------------------------------------------
+
+/**
+ * The page's own requests, counted on the Node side: a frozen page cannot
+ * report its own traffic, but the browser process can. Same shape as the
+ * helper of the same name in tests/fire3d-mode.spec.ts (each spec stays
+ * self-contained; tests/helpers.ts is not this unit's).
+ */
+interface SceneTraffic {
+  /** Requests started and not yet finished or failed. */
+  open: number;
+  /** Date.now() of the last request start, finish or failure. */
+  lastActivityAt: number;
+}
+
+/** Register BEFORE the first boot. */
+function trackSceneTraffic(page: Page): SceneTraffic {
+  const traffic: SceneTraffic = { open: 0, lastActivityAt: Date.now() };
+  const tracked = new Set<unknown>();
+  const end = (request: unknown): void => {
+    if (!tracked.delete(request)) return;
+    traffic.open -= 1;
+    traffic.lastActivityAt = Date.now();
+  };
+  page.on('request', (request) => {
+    tracked.add(request);
+    traffic.open += 1;
+    traffic.lastActivityAt = Date.now();
+  });
+  page.on('requestfinished', end);
+  page.on('requestfailed', end);
+  return traffic;
+}
+
+/** One 1x1 readback on the map's own context: it returns only when the
+ * software renderer has drawn every frame queued before it. Returns how long
+ * the page was blocked, on the page's clock. */
+function drainDrawQueue(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const started = performance.now();
+    const canvas = document.querySelector('canvas.maplibregl-canvas') as HTMLCanvasElement | null;
+    const gl = (canvas?.getContext('webgl2') ?? canvas?.getContext('webgl')) as WebGLRenderingContext | null;
+    gl?.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+    return Math.round(performance.now() - started);
+  });
+}
+
+/** A drain faster than this found the queue empty (measured 2026-10-05,
+ * reduced motion: 1, 13 and 244 ms once quiet; 1.7 to 2.3 s while the pulse
+ * kept refilling it). */
+const SCENE_DRAIN_EMPTY_MS = 300;
+/** No request started or ended for this long counts as quiet traffic. */
+const SCENE_QUIET_MS = 1500;
+/** Rounds of drain then quiet before the scene is called busy for good
+ * (measured: 2 to 4 rounds under reduced motion at 1x, 4x and 6x CPU). */
+const SCENE_SETTLE_ROUNDS = 8;
+
+/**
+ * Wait until the 3D scene has stopped using the page: drain the draw queue
+ * (the readback returns when the queue is empty, however long that takes),
+ * wait for the network to go quiet, drain again, until a drain finds the
+ * queue empty and nothing was requested since before it began. It decides
+ * from what it can measure and has no wall-clock deadline a slow runner could
+ * decide; it does not read the scene's `transport` stamp (see the
+ * `set_layer` step for why, and tests/fire3d-mode.spec.ts for the same
+ * helper with the measurements).
+ */
+async function waitForSceneToSettle(page: Page, traffic: SceneTraffic): Promise<void> {
+  const rounds: string[] = [];
+  for (let round = 0; round < SCENE_SETTLE_ROUNDS; round += 1) {
+    const startedAt = Date.now();
+    const drainMs = await drainDrawQueue(page);
+    await expect
+      .poll(() => traffic.open <= 0 && Date.now() - traffic.lastActivityAt >= SCENE_QUIET_MS, {
+        message: 'the 3D scene kept requesting tiles',
+        timeout: 30_000,
+        intervals: [250]
+      })
+      .toBe(true);
+    const quietSinceBefore = traffic.lastActivityAt < startedAt;
+    rounds.push(`drain ${drainMs} ms, ${quietSinceBefore ? 'no traffic' : 'traffic'}`);
+    if (drainMs < SCENE_DRAIN_EMPTY_MS && quietSinceBefore) return;
+  }
+  throw new Error(`the 3D scene never went quiet: ${rounds.join('; ')}`);
+}
+
+// ---------------------------------------------------------------------------
 // Steps
 // ---------------------------------------------------------------------------
 
-async function runStep(page: Page, step: Step): Promise<void> {
+async function runStep(page: Page, step: Step, traffic: SceneTraffic): Promise<void> {
   if ('click_cluster' in step) {
     const key = step.click_cluster;
     await page.locator(`.shell-cluster-btn[data-cluster="${key}"]`).click();
@@ -233,20 +324,18 @@ async function runStep(page: Page, step: Step): Promise<void> {
     // inside that stall, and the layer then reports `degraded` for good
     // (src/layers/power-3d.ts syncForZoom). Reproduced locally 2026-10-04: 2
     // reds in 12 runs of this row, the line archive's request answered 206
-    // and aborted 23 ms later. Wait on the scene's own `transport` stamp,
-    // then drain the draw queue the same way that case does.
+    // and aborted 23 ms later.
+    //
+    // P2-CI2 waited on the scene's `transport` stamp for 60 s. GitHub run
+    // 37276902844 froze the page 11.5, 25.8, 10.5 and 15.8 s inside that
+    // wait (retry trace), so the wait ended with the stamp still `streaming`,
+    // twice. S30D B3 CI3 replaced it: drain the draw queue, wait for quiet
+    // traffic counted on the Node side, drain again (waitForSceneToSettle).
+    // It needs a queue that can empty, so a row that uses it runs with
+    // `reduced_motion: true` (the wildfire pulse refills the queue every 500
+    // ms; the row's assertions never read the pulse or the camera path).
     if (step.set_layer.on && (await fire3dStamp(page)) === 'active') {
-      await expect
-        .poll(
-          () => page.evaluate(() => document.documentElement.dataset['ddmFire3dTransport']),
-          { message: 'the 3D scene never reported its tile transport settled', timeout: FIRE3D_STAMP_TIMEOUT_MS }
-        )
-        .toBe('settled');
-      await page.evaluate(() => {
-        const canvas = document.querySelector('canvas.maplibregl-canvas') as HTMLCanvasElement | null;
-        const gl = (canvas?.getContext('webgl2') ?? canvas?.getContext('webgl')) as WebGLRenderingContext | null;
-        gl?.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
-      });
+      await waitForSceneToSettle(page, traffic);
     }
     const box = layerCheckbox(page, step.set_layer.key);
     if (step.set_layer.on) await box.check();
@@ -263,6 +352,17 @@ async function runStep(page: Page, step: Step): Promise<void> {
     await expect
       .poll(() => fire3dStamp(page), { timeout: FIRE3D_STAMP_TIMEOUT_MS })
       .toBe(step.wait_fire3d);
+    return;
+  }
+
+  if ('settle_scene' in step) {
+    // Ride out the scene's startup stall before the reads that follow: every
+    // page read blocks while the software renderer drains its queue, so a
+    // 20 s URL poll or a 10 s attribute read can expire inside it (GitHub
+    // runs 37276902844 and 37282168792: the reloaded-share row's first attempt
+    // failed its 20 s URL poll in both, with page reads blocked 10 to 32 s in
+    // the same shard). The row that uses this step runs reduced motion.
+    await waitForSceneToSettle(page, traffic);
     return;
   }
 
@@ -426,6 +526,8 @@ test.describe('view contracts', () => {
 
       // Before any stub and any boot (see watchPowerLayerReads).
       const power = await watchPowerLayerReads(page);
+      const traffic = trackSceneTraffic(page);
+      if (row.reduced_motion) await page.emulateMedia({ reducedMotion: 'reduce' });
 
       if (row.stub_wildfire) {
         await stubWildfireFeeds(page);
@@ -440,7 +542,7 @@ test.describe('view contracts', () => {
       try {
         await gotoApp(page, row.url);
 
-        for (const step of row.steps ?? []) await runStep(page, step);
+        for (const step of row.steps ?? []) await runStep(page, step, traffic);
 
         await assertExpectations(page, row.expect, power);
       } finally {

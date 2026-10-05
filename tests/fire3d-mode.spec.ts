@@ -1506,24 +1506,98 @@ function fire3dTransportStamp(page: Page): Promise<string | undefined> {
 }
 
 /**
- * Wait until the scene reports every source loaded, then drain the software
- * renderer's draw queue with one 1x1 readback, exactly as the RAWS marker case
- * does (its comment at the `fire3dTransportStamp` wait carries the
- * measurements: the drain blocked 5.8 to 11.9 s on a settled scene). A layer
- * switched on before this starts its first activation inside that stall.
+ * The page's own requests, counted on the Node side. A frozen page cannot
+ * report its own traffic, but the browser process can: this keeps counting
+ * while the page's main thread is blocked (S30D B3 CI3).
  */
-async function waitForSceneToSettle(page: Page): Promise<void> {
-  await expect
-    .poll(() => fire3dTransportStamp(page), {
-      message: 'the 3D scene never reported its tile transport settled',
-      timeout: 60_000
-    })
-    .toBe('settled');
-  await page.evaluate(() => {
+interface SceneTraffic {
+  /** Requests started and not yet finished or failed. */
+  open: number;
+  /** Date.now() of the last request start, finish or failure. */
+  lastActivityAt: number;
+}
+
+/** Register BEFORE the first boot. */
+function trackSceneTraffic(page: Page): SceneTraffic {
+  const traffic: SceneTraffic = { open: 0, lastActivityAt: Date.now() };
+  const tracked = new Set<unknown>();
+  const end = (request: unknown): void => {
+    if (!tracked.delete(request)) return;
+    traffic.open -= 1;
+    traffic.lastActivityAt = Date.now();
+  };
+  page.on('request', (request) => {
+    tracked.add(request);
+    traffic.open += 1;
+    traffic.lastActivityAt = Date.now();
+  });
+  page.on('requestfinished', end);
+  page.on('requestfailed', end);
+  return traffic;
+}
+
+/** One 1x1 readback on the map's own context: it returns only when the
+ * software renderer has drawn every frame queued before it. Returns how long
+ * the page was blocked, on the page's clock. */
+function drainDrawQueue(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const started = performance.now();
     const canvas = document.querySelector('canvas.maplibregl-canvas') as HTMLCanvasElement | null;
     const gl = (canvas?.getContext('webgl2') ?? canvas?.getContext('webgl')) as WebGLRenderingContext | null;
     gl?.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+    return Math.round(performance.now() - started);
   });
+}
+
+/** A drain faster than this found the queue empty (measured 2026-10-05,
+ * reduced motion: 1, 13 and 244 ms once quiet; 1.7 to 2.3 s while the pulse
+ * kept refilling it). */
+const SCENE_DRAIN_EMPTY_MS = 300;
+/** No request started or ended for this long counts as quiet traffic. */
+const SCENE_QUIET_MS = 1500;
+/** Rounds of drain then quiet before the scene is called busy for good
+ * (measured: 2 to 4 rounds under reduced motion at 1x, 4x and 6x CPU). */
+const SCENE_SETTLE_ROUNDS = 8;
+
+/**
+ * Wait until the 3D scene has stopped using the page, so a layer switched on
+ * next starts its first activation outside the scene's startup stall. It
+ * decides from what it can measure instead of from the scene's own
+ * `transport` stamp, and it has no wall-clock deadline that a slow runner
+ * could decide: it drains the software renderer's draw queue (the readback
+ * returns when the queue is empty, however long that takes), then waits for
+ * the network to go quiet, then drains again, until a drain finds the queue
+ * empty and nothing was requested since before it began.
+ *
+ * Why not the stamp (measured 2026-10-05, S30D B3 CI3, in the scratch
+ * diagnostics of that unit): GitHub's retry trace had the page frozen 22.5
+ * and 32.4 s inside the 60 s stamp poll, so the poll could not finish; and in
+ * 1 of 18 local runs the stamp read `streaming` for 180 s over a page with
+ * almost no traffic (REGISTER baseline-007's open question). The RAWS marker
+ * case still waits on the stamp, as before. The drain is the RAWS case's own
+ * recipe (its comment at the `fire3dTransportStamp` wait carries the first
+ * measurements: 5.8 to 11.9 s on a settled scene). It converges only when
+ * nothing refills the queue, so a caller runs with reduced motion (the
+ * wildfire pulse queues a pitch-60 frame every 500 ms: with it, 8 rounds of
+ * 1.7 to 2.3 s drains never converged).
+ */
+async function waitForSceneToSettle(page: Page, traffic: SceneTraffic): Promise<void> {
+  const rounds: string[] = [];
+  for (let round = 0; round < SCENE_SETTLE_ROUNDS; round += 1) {
+    const startedAt = Date.now();
+    const drainMs = await drainDrawQueue(page);
+    await expect
+      .poll(() => traffic.open <= 0 && Date.now() - traffic.lastActivityAt >= SCENE_QUIET_MS, {
+        message: 'the 3D scene kept requesting tiles',
+        timeout: 30_000,
+        intervals: [250]
+      })
+      .toBe(true);
+    const quietSinceBefore = traffic.lastActivityAt < startedAt;
+    rounds.push(`drain ${drainMs} ms, ${quietSinceBefore ? 'no traffic' : 'traffic'}`);
+    if (drainMs < SCENE_DRAIN_EMPTY_MS && quietSinceBefore) return;
+  }
+  throw new Error(`the 3D scene never went quiet: ${rounds.join('; ')}`);
 }
 
 const TOGGLE = '.shell-fire3d-btn';
@@ -2297,6 +2371,19 @@ test('an embed without the flag never activates and never gains it', async ({
     // at 2.1 minutes, red locally and green in CI on retry. Nothing here is
     // slower than the scene-building siblings, so carry their ceiling.
     test.setTimeout(180_000);
+    // Reduced motion, as the RAWS marker case runs (its comment above carries
+    // the pulse measurements; re-measured 2026-10-05, S30D B3 CI3: the
+    // wildfire pulse keeps refilling the software renderer's draw queue, 1.7
+    // to 2.3 s drains that never emptied in 8 rounds, and with it gone the
+    // queue emptied in 2 to 4 rounds at 1x, 4x and 6x CPU). What this case
+    // asserts (the scene survives an extra reference layer, the smoke volume
+    // follows its layer, losing the last fire layer or the cluster exits the
+    // scene) reads stamps and the URL, never the camera path or the pulse
+    // colour, so it does not depend on animation; the animated enter and exit
+    // are the desktop toggle case's, and reduced motion's own is the case
+    // further down.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const traffic = trackSceneTraffic(page);
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
     await gotoApp(page, '?region=washington_state&cluster=wildfire&view=console&fire3d=true');
@@ -2308,13 +2395,15 @@ test('an embed without the flag never activates and never gains it', async ({
     await waitForLayerSettled(page, 'hms-smoke');
 
     // Add one bundled reference layer: the display honestly demotes to a
-    // custom layer set (cluster= leaves the URL) but the scene stays. Wait for
-    // the scene's own startup streaming first: GitHub run 37238546758 saw
-    // `places` (bundled, same origin) never leave loading inside
-    // waitForLayerSettled's 25 s while the scene was still streaming and
-    // drawing, the stall the RAWS marker case documents. This is a new wait on
-    // that fact; no existing timeout grew.
-    await waitForSceneToSettle(page);
+    // custom layer set (cluster= leaves the URL) but the scene stays. Let the
+    // scene finish its startup first: GitHub run 37238546758 saw `places`
+    // (bundled, same origin) never leave loading inside waitForLayerSettled's
+    // 25 s while the scene was still streaming and drawing, the stall the RAWS
+    // marker case documents, and run 37276902844 froze the page 22.5 and 32.4
+    // s inside a 60 s wait on the scene's `transport` stamp. The wait below
+    // drains the draw queue and waits for quiet traffic instead; no timeout
+    // grew.
+    await waitForSceneToSettle(page, traffic);
     await layerCheckbox(page, 'places').check();
     await waitForLayerSettled(page, 'places');
     await expect.poll(async () => search(page)).not.toContain('cluster=');
