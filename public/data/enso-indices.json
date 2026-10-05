@@ -1,5 +1,5 @@
 {
-  "retrieved": "2026-09-28",
+  "retrieved": "2026-10-05",
   "sourceQuotes": [
     {
       "text": "NOAA's Climate Prediction Center, which is part of the National Weather Service, declares the onset of an El Nino episode when the 3-month average sea-surface temperature departure exceeds 0.5 C in the east-central equatorial Pacific [between 5 N-5 S and 170 W-120 W].",
@@ -27,7 +27,7 @@
     "sourceUrl": "https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt",
     "attribution": "NOAA Climate Prediction Center (CPC), public domain U.S. Government work",
     "description": "CPC primary operational ENSO index. The Oceanic Nino Index with the tropical-mean sea surface temperature trend removed; the application leads with its current-conditions state (CPC onset rule) and reports the five-season episode classification beside it.",
-    "published": "2026-09-03",
+    "published": "2026-10-03",
     "state": {
       "conditions": "el-nino",
       "episode": "neutral",
@@ -53,20 +53,14 @@
     },
     "phase": "neutral",
     "latest": {
-      "seas": "JJA",
+      "seas": "JAS",
       "year": 2026,
-      "anom": 1.36,
+      "anom": 1.69,
       "preliminary": true,
       "exceedsThreshold": true,
       "thresholdSide": "above"
     },
     "values": [
-      {
-        "seas": "JAS",
-        "year": 2023,
-        "anom": 0.79,
-        "preliminary": false
-      },
       {
         "seas": "ASO",
         "year": 2023,
@@ -269,12 +263,18 @@
         "seas": "MJJ",
         "year": 2026,
         "anom": 0.97,
-        "preliminary": true
+        "preliminary": false
       },
       {
         "seas": "JJA",
         "year": 2026,
         "anom": 1.36,
+        "preliminary": true
+      },
+      {
+        "seas": "JAS",
+        "year": 2026,
+        "anom": 1.69,
         "preliminary": true
       }
     ]
@@ -284,7 +284,7 @@
     "sourceUrl": "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt",
     "attribution": "NOAA Climate Prediction Center (CPC), public domain U.S. Government work",
     "description": "Three-month running mean of the Nino 3.4 sea surface temperature anomaly, retained as the long historical-continuity comparison behind the operational RONI headline.",
-    "published": "2026-09-03",
+    "published": "2026-10-03",
     "state": {
       "conditions": "el-nino",
       "episode": "neutral",
@@ -310,20 +310,14 @@
     },
     "phase": "neutral",
     "latest": {
-      "seas": "JJA",
+      "seas": "JAS",
       "year": 2026,
-      "anom": 1.8,
+      "anom": 2.16,
       "preliminary": true,
       "exceedsThreshold": true,
       "thresholdSide": "above"
     },
     "values": [
-      {
-        "seas": "JAS",
-        "year": 2023,
-        "anom": 1.25,
-        "preliminary": false
-      },
       {
         "seas": "ASO",
         "year": 2023,
@@ -526,12 +520,18 @@
         "seas": "MJJ",
         "year": 2026,
         "anom": 1.39,
-        "preliminary": true
+        "preliminary": false
       },
       {
         "seas": "JJA",
         "year": 2026,
         "anom": 1.8,
+        "preliminary": true
+      },
+      {
+        "seas": "JAS",
+        "year": 2026,
+        "anom": 2.16,
         "preliminary": true
       }
     ]
@@ -811,22 +811,15 @@
     "description": "Weekly Nino 3.4 sea surface temperature and anomaly on the 1991-2020 base period. Each date is the centre of its week, as the file states on its own first line. Retained as an observed trajectory read and never used as an ENSO phase declaration, which CPC makes from three-month averages.",
     "basePeriod": "1991-2020",
     "dateMeaning": "week centre",
-    "published": "2026-09-28",
+    "published": "2026-10-05",
     "latest": {
       "year": 2026,
       "month": 9,
-      "day": 23,
-      "total": 29.7,
-      "anom": 3.1
+      "day": 30,
+      "total": 29.9,
+      "anom": 3.2
     },
     "values": [
-      {
-        "year": 2025,
-        "month": 10,
-        "day": 1,
-        "total": 26.2,
-        "anom": -0.5
-      },
       {
         "year": 2025,
         "month": 10,
@@ -1167,8 +1160,8 @@
         "year": 2026,
         "month": 9,
         "day": 9,
-        "total": 29.6,
-        "anom": 2.9
+        "total": 29.5,
+        "anom": 2.8
       },
       {
         "year": 2026,
@@ -1183,6 +1176,13 @@
         "day": 23,
         "total": 29.7,
         "anom": 3.1
+      },
+      {
+        "year": 2026,
+        "month": 9,
+        "day": 30,
+        "total": 29.9,
+        "anom": 3.2
       }
     ]
   },
@@ -1191,12 +1191,12 @@
     "sourceUrl": "https://www.cpc.ncep.noaa.gov/data/indices/soi",
     "attribution": "NOAA Climate Prediction Center (CPC), public domain U.S. Government work",
     "description": "Standardized monthly SOI second block, retained only as a supporting ocean-atmosphere agreement flag and never used to drive the ENSO phase.",
-    "published": "2026-09-04",
+    "published": "2026-10-05",
     "block": "standardized",
     "latest": {
       "year": 2026,
-      "month": 8,
-      "value": -1.1
+      "month": 9,
+      "value": -2
     },
     "values": [
       {
@@ -1362,7 +1362,7 @@
       {
         "year": 2026,
         "month": 9,
-        "value": null
+        "value": -2
       },
       {
         "year": 2026,
