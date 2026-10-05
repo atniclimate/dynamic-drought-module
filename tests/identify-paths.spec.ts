@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
+import { parseAst } from 'rolldown/parseAst';
 import { gotoApp, waitForLayerSettled } from './helpers';
 import {
   BUILDERS,
@@ -26,8 +27,11 @@ import { CENSUS_FIXTURES } from './frame-fixtures';
  *      over src/, with COUNTED narrow boundaries (the coordinator's one
  *      construction and one setDOMContent; telemetry.ts's one construction
  *      and one setHTML until M26), a self-check that the scan bites, the
- *      declared no-popup modules, and the frame's laziness (neither the
- *      coordinator nor main.ts imports it).
+ *      declared no-popup modules, and the frame's one caller (S30D
+ *      P1-FRAME: the coordinator's one dynamic import; no static value
+ *      import of popup-frame anywhere in src/, type-only imports allowed; no
+ *      import() with a computed specifier but the retry loader's own; and
+ *      main.ts holds the frame in no form, a type query included).
  *   2. The census: `#map-container[data-ddm-click-targets]`, after boots
  *      that activate every browser-eligible builder, EQUALS the manifest's
  *      targets for the activated layers, both ways; every builder outside
@@ -180,16 +184,207 @@ test.describe('identify paths: the static inventory', () => {
     expect(findings).toEqual([]);
   });
 
-  test('neither interaction-coordinator.ts nor main.ts imports the popup frame', () => {
-    for (const file of ['src/map/interaction-coordinator.ts', 'src/main.ts']) {
-      const code = stripComments(readSource(file));
-      expect(
-        /from\s*['"][^'"]*popup-frame['"]|import\s*\(\s*['"][^'"]*popup-frame['"]\s*\)|import\s*['"][^'"]*popup-frame['"]/.test(code),
-        `${file} imports popup-frame`
-      ).toBe(false);
+  test('the coordinator is the frame\'s one caller: one dynamic import there, and no value import of popup-frame anywhere in src/', () => {
+    // S30D P1-FRAME (2026-10-04): builders hand the coordinator a model and
+    // import only the frame's types; the coordinator loads the frame with one
+    // dynamic import (it sits in the entry graph, so never a static one).
+    const files = sourceFiles().map(repoPath).filter((file) => file !== 'src/ui/popup-frame.ts');
+    const dynamicSites: string[] = [];
+    const valueImports: string[] = [];
+    const unresolvedSites: string[] = [];
+    const retryLoaderSites: string[] = [];
+    for (const file of files) {
+      const found = popupFrameImports(readSource(file), file.endsWith('.tsx') ? 'tsx' : 'ts');
+      for (let i = 0; i < found.dynamic; i++) dynamicSites.push(file);
+      for (let i = 0; i < found.unresolved; i++) unresolvedSites.push(file);
+      for (let i = 0; i < found.retryLoader; i++) retryLoaderSites.push(file);
+      if (found.value > 0) valueImports.push(`${file} (${found.value})`);
     }
+    expect(valueImports, 'a static value import of popup-frame (a type-only import is fine)').toEqual([]);
+    // P1-FRAME repair round 2: an import() the scanner cannot read as static
+    // text could load the frame unseen, so none is allowed in src/ but the
+    // retry loader's own URL import, by its file and its shape (the default
+    // `importUrl = (url) => import(url)` parameter); one of that shape in
+    // another file fails here too.
+    expect(unresolvedSites, 'a dynamic import whose specifier is not static text (it could load popup-frame unseen)').toEqual([]);
+    expect(retryLoaderSites, 'the retry loader\'s one URL import, in src/util/chunk-retry.ts only').toEqual(['src/util/chunk-retry.ts']);
+    expect(dynamicSites, 'exactly one dynamic import of popup-frame in src/, in the coordinator').toEqual(['src/map/interaction-coordinator.ts']);
+    // "In no form", as at HEAD: a type query counts here too.
+    expect(popupFrameImports(readSource('src/main.ts')), 'main.ts imports popup-frame in no form, a type query included').toEqual(counts());
+  });
+
+  test('the popup-frame import scanner tells value, type-only and dynamic imports, type queries and computed imports apart (self-check)', () => {
+    const cases: ReadonlyArray<{ name: string; source: string; want: ReturnType<typeof popupFrameImports> }> = [
+      { name: 'named value import', source: "import { serializePopupFrame } from '../ui/popup-frame';", want: counts({ value: 1, typeOnly: 0, dynamic: 0 }) },
+      { name: 'mixed named import', source: "import {\n  serializePopupFrame,\n  type PopupModel\n} from './popup-frame';", want: counts({ value: 1, typeOnly: 0, dynamic: 0 }) },
+      { name: 'namespace import', source: "import * as frame from '../ui/popup-frame.ts';", want: counts({ value: 1, typeOnly: 0, dynamic: 0 }) },
+      { name: 'default import', source: "import frame from '../ui/popup-frame';", want: counts({ value: 1, typeOnly: 0, dynamic: 0 }) },
+      { name: 'side-effect import', source: "import '../ui/popup-frame';", want: counts({ value: 1, typeOnly: 0, dynamic: 0 }) },
+      { name: 'value re-export', source: "export { serializePopupFrame } from '../ui/popup-frame';", want: counts({ value: 1, typeOnly: 0, dynamic: 0 }) },
+      { name: 'star re-export', source: "export * from '../ui/popup-frame';", want: counts({ value: 1, typeOnly: 0, dynamic: 0 }) },
+      { name: 'type-only import', source: "import type { PopupModel } from '../ui/popup-frame';", want: counts({ value: 0, typeOnly: 1, dynamic: 0 }) },
+      { name: 'type-only value name', source: "import type { PopupModel, serializePopupFrame } from '../ui/popup-frame';", want: counts({ value: 0, typeOnly: 1, dynamic: 0 }) },
+      { name: 'all-type named import', source: "import { type PopupModel, type PopupClock } from '../ui/popup-frame';", want: counts({ value: 0, typeOnly: 1, dynamic: 0 }) },
+      { name: 'type-only re-export', source: "export type { PopupModel } from '../ui/popup-frame';", want: counts({ value: 0, typeOnly: 1, dynamic: 0 }) },
+      { name: 'dynamic import', source: "const load = () => import('../ui/popup-frame');", want: counts({ value: 0, typeOnly: 0, dynamic: 1 }) },
+      { name: 'dynamic import, template literal', source: 'const load = () => import(`../ui/popup-frame`);', want: counts({ value: 0, typeOnly: 0, dynamic: 1 }) },
+      { name: 'type query (no import, counted apart)', source: "let f: typeof import('../ui/popup-frame') | null = null;", want: counts({ value: 0, typeOnly: 0, dynamic: 0, typeQuery: 1 }) },
+      { name: 'commented out', source: "// import { serializePopupFrame } from '../ui/popup-frame';\n/* import('../ui/popup-frame') */", want: counts({ value: 0, typeOnly: 0, dynamic: 0 }) },
+      { name: 'another module', source: "import { serializePopupFrameish } from '../ui/popup-frame-helpers';", want: counts({ value: 0, typeOnly: 0, dynamic: 0 }) },
+      // Negative controls of the P1-FRAME repair round (the Codex diff review,
+      // finding 3): legal syntax with no whitespace is still a value import,
+      // import-shaped text inside a string is no import, and an empty named
+      // clause is no type-only import (the bundler keeps it).
+      { name: 'compact value import (no whitespace)', source: "import{serializePopupFrame}from'../ui/popup-frame';", want: counts({ value: 1, typeOnly: 0, dynamic: 0 }) },
+      { name: 'compact star re-export (no whitespace)', source: "export*from'../ui/popup-frame';", want: counts({ value: 1, typeOnly: 0, dynamic: 0 }) },
+      { name: 'empty named import', source: "import {} from '../ui/popup-frame';", want: counts({ value: 1, typeOnly: 0, dynamic: 0 }) },
+      { name: 'empty named re-export', source: "export {} from '../ui/popup-frame';", want: counts({ value: 1, typeOnly: 0, dynamic: 0 }) },
+      { name: 'import-equals require', source: "import frame = require('../ui/popup-frame');", want: counts({ value: 1, typeOnly: 0, dynamic: 0 }) },
+      { name: 'non-relative specifier (the M23 rule matched any path ending popup-frame)', source: "import { serializePopupFrame } from 'src/ui/popup-frame';", want: counts({ value: 1, typeOnly: 0, dynamic: 0 }) },
+      { name: 'dynamic import text in a string literal', source: "const note = \"import('../ui/popup-frame')\";", want: counts({ value: 0, typeOnly: 0, dynamic: 0 }) },
+      { name: 'static import text in a template literal', source: "const note = `import { serializePopupFrame } from '../ui/popup-frame'`;", want: counts({ value: 0, typeOnly: 0, dynamic: 0 }) },
+      // Negative controls of repair round 2 (the reviewer's confirmation, item
+      // 3): an import() whose specifier is not static text could load the
+      // frame, so it is counted (and fails the rule) wherever it is, except
+      // the retry loader's own URL import, known by its shape; and a type
+      // query is counted, so main.ts's "in no form" sees it.
+      { name: 'computed specifier: a variable', source: "const p = '../ui/popup-frame'; import(p);", want: counts({ unresolved: 1 }) },
+      { name: 'computed specifier: a concatenation', source: "import('../ui/' + 'popup-frame');", want: counts({ unresolved: 1 }) },
+      { name: 'computed specifier: an interpolated template', source: "import(`../ui/${'popup-frame'}`);", want: counts({ unresolved: 1 }) },
+      { name: 'computed specifier naming another module', source: 'const load = (key: string) => import(`../layers/${key}`);', want: counts({ unresolved: 1 }) },
+      { name: 'type query with a qualifier', source: "type Model = import('../ui/popup-frame').PopupModel;", want: counts({ typeQuery: 1 }) },
+      { name: 'the retry loader\'s URL import (its default importUrl parameter)', source: 'export function createChunkLoader<T>(importer: () => Promise<T>, base: string, importUrl: (url: string) => Promise<unknown> = (url) => import(/* @vite-ignore */ url)) {}', want: counts({ retryLoader: 1 }) },
+      { name: 'the retry loader\'s body outside its parameter', source: 'const importUrl = (url: string) => import(/* @vite-ignore */ url);', want: counts({ unresolved: 1 }) },
+      { name: 'the retry loader\'s shape under another parameter name', source: 'export function load(fetchUrl = (url: string) => import(url)) {}', want: counts({ unresolved: 1 }) },
+      { name: 'the retry loader\'s parameter importing another name', source: 'export function load(importUrl = (url: string, other: string) => import(other)) {}', want: counts({ unresolved: 1 }) }
+    ];
+    for (const c of cases) expect(popupFrameImports(c.source), c.name).toEqual(c.want);
+    // A source the parser cannot read fails loudly, never counts as clean.
+    expect(() => popupFrameImports("import { serializePopupFrame from '../ui/popup-frame';"), 'an unparseable source throws').toThrow();
   });
 });
+
+/**
+ * The specifier names the popup frame: any path ending `popup-frame`, with or
+ * without a script extension (the M23 rule matched any specifier ending
+ * `popup-frame`; this keeps that reach and adds the extensions).
+ */
+const FRAME_SPECIFIER = /popup-frame(?:\.[cm]?[jt]sx?)?$/;
+
+type AstNode = { readonly type: string; readonly [key: string]: unknown };
+
+/** A module specifier's static text: a string literal, or a template with no substitution; null otherwise. */
+function specifierText(node: unknown): string | null {
+  const n = node as AstNode | null | undefined;
+  if (n?.type === 'Literal' && typeof n.value === 'string') return n.value;
+  if (n?.type === 'TemplateLiteral' && Array.isArray(n.expressions) && n.expressions.length === 0) {
+    const quasis = n.quasis as ReadonlyArray<{ readonly value: { readonly cooked: string | null } }>;
+    return quasis[0]?.value.cooked ?? null;
+  }
+  return null;
+}
+
+/** Visit every node of an ESTree tree. */
+function walkAst(node: unknown, visit: (n: AstNode) => void): void {
+  if (Array.isArray(node)) {
+    for (const child of node) walkAst(child, visit);
+    return;
+  }
+  if (node === null || typeof node !== 'object') return;
+  const n = node as AstNode;
+  if (typeof n.type === 'string') visit(n);
+  for (const value of Object.values(n)) if (value !== null && typeof value === 'object') walkAst(value, visit);
+}
+
+/**
+ * Count one source's imports of the popup frame by kind: a static VALUE import
+ * (any import, re-export or `import x = require()` the bundler keeps, a bare
+ * side-effect import and an empty `{}` clause included), a TYPE-ONLY one
+ * (`import type`, `export type`, or a named clause whose every specifier is
+ * `type`-marked, which the TypeScript transform elides), and a DYNAMIC
+ * `import()` (a `typeof import()` type query is not one).
+ *
+ * P1-FRAME repair round 1 (the Codex diff review, finding 3): the source is
+ * PARSED (the oxc parser Vite's bundler ships, rolldown/parseAst), not
+ * matched by pattern, so legal syntax without whitespace is still an import,
+ * import-shaped text inside a string, template or comment is none, and a
+ * source the parser cannot read throws instead of counting as clean. A
+ * dynamic import with a COMPUTED specifier is not resolvable here.
+ *
+ * Repair round 2 (the reviewer's confirmation, item 3): so it is COUNTED, as
+ * `unresolved`, since it could load the frame unseen, and the rule fails on
+ * it wherever it is. The one exception is counted apart, as `retryLoader`:
+ * the retry loader's URL import, known by its shape, the default value of an
+ * `importUrl` parameter written `(url) => import(url)` (src/util/chunk-retry.ts;
+ * the rule also pins it to that file). A TYPE QUERY (`typeof import(...)`,
+ * `import(...).Name`) naming the frame is counted apart as `typeQuery`: no
+ * import, but main.ts may hold the frame in no form, as at HEAD.
+ */
+function popupFrameImports(source: string, lang: 'ts' | 'tsx' = 'ts'): FrameImportCounts {
+  const found = counts();
+  const frame = (node: unknown): boolean => FRAME_SPECIFIER.test(specifierText(node) ?? '');
+  const retryLoaderImports = new Set<AstNode>();
+  walkAst(parseAst(source, { lang }), (n) => {
+    if (n.type === 'AssignmentPattern') {
+      // Visited before its value, so the import inside is known by then.
+      const left = n.left as AstNode;
+      const right = n.right as AstNode;
+      const params = right.params as ReadonlyArray<AstNode> | undefined;
+      const body = right.body as AstNode | undefined;
+      const imported = body?.source as AstNode | undefined;
+      if (
+        left.type === 'Identifier' &&
+        left.name === 'importUrl' &&
+        right.type === 'ArrowFunctionExpression' &&
+        params?.length === 1 &&
+        params[0]?.type === 'Identifier' &&
+        body?.type === 'ImportExpression' &&
+        imported?.type === 'Identifier' &&
+        imported.name === params[0].name
+      ) {
+        retryLoaderImports.add(body);
+      }
+    } else if (n.type === 'ImportDeclaration' || n.type === 'ExportNamedDeclaration' || n.type === 'ExportAllDeclaration') {
+      if (!frame(n.source)) return;
+      const kind = n.type === 'ImportDeclaration' ? n.importKind : n.exportKind;
+      const specifiers = (n.specifiers ?? []) as ReadonlyArray<AstNode>;
+      const elided = kind === 'type' || (specifiers.length > 0 && specifiers.every((s) => (s.importKind ?? s.exportKind) === 'type'));
+      if (elided) found.typeOnly += 1;
+      else found.value += 1;
+    } else if (n.type === 'TSImportEqualsDeclaration') {
+      const reference = n.moduleReference as AstNode;
+      if (reference.type !== 'TSExternalModuleReference' || !frame(reference.expression)) return;
+      if (n.importKind === 'type') found.typeOnly += 1;
+      else found.value += 1;
+    } else if (n.type === 'ImportExpression') {
+      if (specifierText(n.source) === null) {
+        if (retryLoaderImports.has(n)) found.retryLoader += 1;
+        else found.unresolved += 1;
+      } else if (frame(n.source)) {
+        found.dynamic += 1;
+      }
+    } else if (n.type === 'TSImportType') {
+      // oxc writes the specifier as `source`; older ESTree-TS shapes as `argument.literal`.
+      const argument = n.argument as AstNode | undefined;
+      if (frame(n.source ?? argument?.literal)) found.typeQuery += 1;
+    }
+  });
+  return found;
+}
+
+interface FrameImportCounts {
+  value: number;
+  typeOnly: number;
+  dynamic: number;
+  typeQuery: number;
+  unresolved: number;
+  retryLoader: number;
+}
+
+/** A count with every kind at zero but the ones given. */
+function counts(some: Partial<FrameImportCounts> = {}): FrameImportCounts {
+  return { value: 0, typeOnly: 0, dynamic: 0, typeQuery: 0, unresolved: 0, retryLoader: 0, ...some };
+}
 
 // ---------------------------------------------------------------------------
 // Browser checks

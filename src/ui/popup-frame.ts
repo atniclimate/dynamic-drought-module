@@ -11,11 +11,14 @@
  * perimeters, or a collection of groups, renders in the same frame with a
  * head derived ONLY from group facts (PF2).
  *
- * LAZY BY CONTRACT: builders import this module; the InteractionCoordinator
- * and main.ts never do (scripts/check-activation-budget.mjs holds it out of
- * the initial static set). The coordinator only validates the DOM contract
- * this module emits: `article[data-popup-frame]` with exactly two regions,
- * `[data-popup-region="head"]` then `[data-popup-region="body"]`.
+ * LAZY BY CONTRACT: the InteractionCoordinator is this module's one value
+ * importer, by a single dynamic import warmed when the first click target
+ * registers; builders hand it a model and import only types from here, and
+ * main.ts never imports it (scripts/check-activation-budget.mjs holds it out
+ * of the initial static set and out of every other feature's activation
+ * closure). The DOM contract it emits: `article[data-popup-frame]` with
+ * exactly two regions, `[data-popup-region="head"]` then
+ * `[data-popup-region="body"]`.
  *
  * ONE ESCAPE BOUNDARY (PF4): `serializePopupFrame` builds the markup string
  * and passes every model string through `escapeHtml` exactly once, at the
@@ -45,7 +48,13 @@ import { dateTok } from '../util/text-tokens';
 
 /** A model the renderer refuses (a caller bug, never a data condition). */
 export class PopupFrameError extends Error {
-  override name = 'PopupFrameError';
+  // Set in the constructor, never as a class field: the build target lowers
+  // a class field through a shared defineProperty helper chunk that the
+  // entry then imports (S30D D1 M24 repair, check:activation).
+  constructor(message?: string) {
+    super(message);
+    this.name = 'PopupFrameError';
+  }
 }
 
 function fail(message: string): never {

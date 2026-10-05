@@ -42,6 +42,11 @@ import { getViewMode, onViewModeChange } from '../state/view-mode';
 import type { LocationIdentity } from '../state/location-identity';
 import { openImpactPanel } from '../ui/impact-panel';
 import { isSheetActive } from '../ui/mobile-sheet';
+// Types only (zero bytes): the frame itself is loaded by the one dynamic
+// import below (S30D P1-FRAME), never statically, since this module sits in
+// the entry graph.
+import type { PopupModel, serializePopupFrame } from '../ui/popup-frame';
+import { createChunkLoader } from '../util/chunk-retry';
 
 /** The click location a response builder receives. */
 export interface CoordinatorClick {
@@ -49,10 +54,33 @@ export interface CoordinatorClick {
   readonly point: maplibregl.Point;
 }
 
-/** What a committed target renders and establishes. */
-export interface CoordinatedResponse {
-  /** Popup content: an HTML string or a prebuilt DOM element. */
-  readonly content: string | HTMLElement;
+/**
+ * What a committed target renders and establishes: EXACTLY ONE of `model`
+ * or `content` (S30D P1-FRAME, 2026-10-04).
+ *
+ * `model` is the popup frame's typed model (src/ui/popup-frame.ts); the
+ * coordinator is the frame's one caller and serializes it, so a layer module
+ * imports only the frame's types. `content` is the legacy answer (an HTML
+ * string or a prebuilt DOM element) that unmigrated builders still give
+ * until M26 retires the path; a framed string there still renders framed.
+ * An answer carrying both or neither is a builder bug the type forbids; at
+ * runtime it is declined like a null answer (the next hit answers), never
+ * a dead click.
+ */
+export type CoordinatedResponse =
+  | (ResponseCommon & {
+      /** Popup content: an HTML string or a prebuilt DOM element. */
+      readonly content: string | HTMLElement;
+      readonly model?: never;
+    })
+  | (ResponseCommon & {
+      /** The frame's model; the coordinator renders `serializePopupFrame(model)`. */
+      readonly model: PopupModel;
+      readonly content?: never;
+    });
+
+/** What every response carries beside its popup content. */
+interface ResponseCommon {
   /**
    * Popup chrome options. `closeOnClick` is always forced off: the
    * coordinator owns dismissal (the next click either replaces the
@@ -134,6 +162,48 @@ let currentPopup: maplibregl.Popup | null = null;
 let initialized = false;
 
 // ---------------------------------------------------------------------------
+// The popup frame's one caller (S30D P1-FRAME, 2026-10-04; a Tier 2 change to
+// the D1 M23 contract). Builders answer a MODEL and the coordinator turns it
+// into the frame's markup, so the 5 kB frame rides no layer's chunk. It is
+// loaded by ONE dynamic import, WARMED when a click target registers, so a
+// click normally finds it loaded and commits synchronously exactly as a
+// legacy answer does. The import goes through createChunkLoader, the layer
+// loader's own recovery (src/config/layers.ts): a failed import() is cached
+// in the module map, so after a failure every later demand (the next
+// registration, the next click) imports the chunk under a new retry URL.
+// Demands while a load is in flight share it (one module record, one
+// request).
+//
+// THE ONE AWAIT: a commit carrying a model that lands before the chunk has
+// resolved records itself as `pendingCommit` and waits. After the wait it
+// does nothing unless it is STILL that record. Every route that supersedes
+// it clears or replaces the record: a later commit (cleared on entry to
+// `commit`, before its builder runs), a dismissal (`dismissResponse`: an
+// empty click, Escape on an open response, a studio route, entering Brief
+// with the mobile sheet active, a station popup adopting the slot, the
+// briefing door), Escape during the wait itself (a handler that lives as long
+// as the wait), the current response closed by its close button (`closed`,
+// the adopted station popup's included), the map's removal, the test reset,
+// and the mobile Brief sheet ACTIVATING with no view-mode change (a resize
+// below the phone breakpoint, an embed transition): activation settles
+// synchronously and resizes the map, and on that resize a commit the sheet
+// would then take is retired, so a sheet that deactivates again before the
+// wait ends cannot hand it back. Nothing is written before the wait: no selection, no emphasis, no
+// dismissal of the response on screen, no sink call.
+// ---------------------------------------------------------------------------
+
+const loadFrameChunk = createChunkLoader(() => import('../ui/popup-frame'), import.meta.url);
+let serializeFrame: typeof serializePopupFrame | null = null;
+/** The waiting commit; `sheetRoute` says whether the mobile Brief sheet would now take it. */
+let pendingCommit: { readonly sheetRoute: () => boolean } | null = null;
+
+function loadFrame(): Promise<void> {
+  return loadFrameChunk().then((frame) => {
+    serializeFrame = frame.serializePopupFrame;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // The swappable response sink (S4c). The sanctioning authority is the S4
 // design record section 3, S4c bullet: "the NEW structured coordinator
 // response sink + the active-cluster-aware response". This file's own
@@ -210,6 +280,10 @@ export function registerClickTarget(spec: ClickTargetSpec): void {
       `${census.getAttribute('data-ddm-click-targets') ?? ''} ${spec.kind}:${spec.layerIds.join(',')}`.trim()
     );
   }
+  // Warm the frame chunk with the first registration (later ones share the
+  // same load; after a failed warm-up a later registration tries again). A
+  // warm-up failure is silent: the click that needs the frame reports it.
+  if (!serializeFrame) loadFrame().catch(() => {});
 }
 
 /**
@@ -236,6 +310,22 @@ export function initInteractionCoordinator(map: maplibregl.Map): void {
   onViewModeChange((mode) => {
     if (mode === 'brief' && isSheetActive()) dismissResponse();
   });
+  // The mobile Brief sheet activating with no view-mode change (a resize, an
+  // embed transition, revealSheetAtPeek) settles synchronously, and its
+  // settle resizes this map before anything else (src/ui/mobile-sheet.ts,
+  // settle; MapLibre fires 'resize' from inside the call): a commit waiting
+  // for the frame that the sheet would now take is retired then and there,
+  // so activation wins and is remembered even if the sheet deactivates again
+  // before the wait ends. Any other resize re-checks the same predicate.
+  map.on('resize', () => {
+    if (pendingCommit?.sheetRoute()) pendingCommit = null;
+  });
+  // The map's removal retires a commit still waiting for the frame: a popup
+  // on the map retires one through its own close, but a first cold click
+  // has no popup yet.
+  map.on('remove', () => {
+    pendingCommit = null;
+  });
 }
 
 /**
@@ -261,10 +351,19 @@ export function adoptExternalResponse(popup: maplibregl.Popup): void {
   // On a first open MapLibre builds the element only when the opener sets
   // the content, after this 'open' call, so the mark follows in a microtask.
   queueMicrotask(() => popup.getElement()?.setAttribute('data-ddm-external-response', ''));
-  popup.once('close', () => {
-    if (currentPopup === popup) currentPopup = null;
-  });
+  popup.once('close', () => closed(popup));
   currentPopup = popup;
+}
+
+/**
+ * The current response's popup closed by a route other than
+ * `dismissResponse` (its close button): the slot empties, and a commit still
+ * waiting for the frame is retired with it (a dismissal wins).
+ */
+function closed(popup: maplibregl.Popup): void {
+  if (currentPopup !== popup) return;
+  currentPopup = null;
+  pendingCommit = null;
 }
 
 /** TEST SEAM: reset module state between jsdom-style unit runs. */
@@ -276,6 +375,10 @@ export function resetInteractionCoordinatorForTest(): void {
   sink = null;
   sinkPresented = false;
   sinkSelection = null;
+  // A waiting commit never outlives a reset, and the frame is forgotten so
+  // the next registration warms it again (a test can then commit cold).
+  pendingCommit = null;
+  serializeFrame = null;
   // The census stamp follows the registry, so a re-registration after a
   // reset never appends a stale or duplicate token.
   document.getElementById('map-container')?.removeAttribute('data-ddm-click-targets');
@@ -398,6 +501,22 @@ function isSelectedPlace(feature: maplibregl.MapGeoJSONFeature, label: string): 
  * (ClickTargetSpec.group); its null falls back to its single response for
  * the first feature, and a hit that declines both drops out and the next
  * one is tried.
+ *
+ * A MODEL answer needs the frame (S30D P1-FRAME). Normally it is already
+ * loaded and the commit finishes synchronously, as a legacy answer does.
+ * If not, the commit waits (THE ONE AWAIT, the block comment at
+ * `loadFrameChunk`), writing nothing first, and finishes only if it is
+ * still the pending commit (Escape meanwhile, or the mobile Brief sheet
+ * activating to take it, retires it). A load that fails, if still pending,
+ * is reported once and dismisses (a click that yields no response
+ * dismisses, as an empty click does); the next click tries the chunk again.
+ * The mobile Brief sheet route paints no popup, so it never waits. A model
+ * the frame refuses throws its PopupFrameError before any selection or
+ * emphasis is written: on a warm commit to the caller, exactly as a
+ * builder's own serializer call did (a caller bug, never a data condition;
+ * M23); after a wait, where no caller can see it, it is reported and
+ * dismissed like a failed load. Only that refusal is caught after a wait: a
+ * failure in the rendering that follows propagates, as it does warm.
  */
 function commit(
   map: maplibregl.Map,
@@ -405,9 +524,12 @@ function commit(
   primary: Hit,
   click: CoordinatorClick
 ): void {
+  // A later commit retires a waiting one before it asks its builder, so even
+  // a builder that throws cannot leave the earlier commit to paint later.
+  pendingCommit = null;
   const response =
-    (primary.features && primary.spec.group?.respond(primary.features, click, map)) ??
-    primary.spec.respond(primary.feature, click, map);
+    answer(primary.features && primary.spec.group?.respond(primary.features, click, map)) ??
+    answer(primary.spec.respond(primary.feature, click, map));
   if (!response) {
     const rest = hits.filter((h) => h !== primary);
     if (rest.length > 0) commit(map, rest, rest[0]!, click);
@@ -415,40 +537,108 @@ function commit(
     return;
   }
 
-  // Selection FIRST, so the outgoing response's close (which clears the
-  // selection only if still current) can never clobber the new subject.
-  // A place-bearing commit OWNS the emphasis state: it lights what the
-  // response supplies and clears a prior subject's emphasis when it
-  // supplies none (an ecoregion response replacing a reservation must
-  // not leave the reservation lit; adversarial finding 3). A non-place
-  // commit deliberately leaves selection and emphasis alone: a selected
-  // briefing place is cleared only by its own explicit control
-  // (D-0.7.0-041; src/ui/view-shell.ts reopenSelectedPlace), so a fire
-  // or condition click beside it never silently drops the subject.
-  let selection: PlaceSelection | null = null;
-  if (response.selection) {
-    selection = { label: response.selection.title, context: response.selection };
-    setPlaceSelection(selection);
-    emphasizePlaces(map, response.emphasis ?? []);
-  }
-
   // The active mobile Brief sheet is its own response surface: a
   // place-bearing tap answers at the half detent (the at-hand block),
   // and no popup paints (the shipped U2 route, moved here from
   // attachImpactTrigger). Non-place responses keep their popups: the
-  // map is the instrument for those.
-  if (selection && response.selection && isSheetActive() && getViewMode() === 'brief') {
-    dismissResponse();
-    openImpactPanel(response.selection);
+  // map is the instrument for those. Decided before the selection writes
+  // below, which it once followed: nothing those writes notify changes
+  // the view mode or the sheet detent, so it is the same decision.
+  const sheetRoute = (): boolean => !!response.selection && isSheetActive() && getViewMode() === 'brief';
+  const sheet = sheetRoute();
+  // The markup, always taken before `finish` writes anything, so a refused
+  // model throws before any write.
+  const markup = (): string | HTMLElement | undefined =>
+    sheet || response.model === undefined ? response.content : serializeFrame!(response.model);
+
+  const finish = (content: string | HTMLElement | undefined): void => {
+    // Selection FIRST, so the outgoing response's close (which clears the
+    // selection only if still current) can never clobber the new subject.
+    // A place-bearing commit OWNS the emphasis state: it lights what the
+    // response supplies and clears a prior subject's emphasis when it
+    // supplies none (an ecoregion response replacing a reservation must
+    // not leave the reservation lit; adversarial finding 3). A non-place
+    // commit deliberately leaves selection and emphasis alone: a selected
+    // briefing place is cleared only by its own explicit control
+    // (D-0.7.0-041; src/ui/view-shell.ts reopenSelectedPlace), so a fire
+    // or condition click beside it never silently drops the subject.
+    let selection: PlaceSelection | null = null;
+    if (response.selection) {
+      selection = { label: response.selection.title, context: response.selection };
+      setPlaceSelection(selection);
+      emphasizePlaces(map, response.emphasis ?? []);
+    }
+
+    if (sheet && response.selection) {
+      dismissResponse();
+      openImpactPanel(response.selection);
+      return;
+    }
+
+    renderPopup(map, response, content!, selection, hits, primary, click);
+  };
+
+  if (response.model === undefined || sheet || serializeFrame) {
+    finish(markup());
     return;
   }
+  const record = { sheetRoute };
+  pendingCommit = record;
+  // Escape during the wait retires the commit: nothing is on screen yet, so
+  // no popup's own Escape handler exists. This one lives exactly as long as
+  // the wait, however it ends, acts only while this commit is still the
+  // waiting one, and swallows nothing.
+  const onEscape = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape' && pendingCommit === record) dismissResponse();
+  };
+  document.addEventListener('keydown', onEscape);
+  loadFrame().finally(() => document.removeEventListener('keydown', onEscape)).then(
+    () => {
+      if (pendingCommit !== record) return;
+      // After the wait no caller sees a throw: a model the frame refuses is
+      // reported and dismissed like a failed load, never left as an
+      // unhandled rejection. The catch covers the serialization only, before
+      // any write; the writes and the rendering after it (sink callbacks
+      // included) stay outside it, so their failure can never dismiss a
+      // newer response.
+      let content: string | HTMLElement | undefined;
+      try {
+        content = markup();
+      } catch (err) {
+        frameFailed(err);
+        return;
+      }
+      finish(content);
+    },
+    (err: unknown) => {
+      if (pendingCommit === record) frameFailed(err);
+    }
+  );
+}
 
-  renderPopup(map, response, selection, hits, primary, click);
+/**
+ * A model commit that cannot paint after its wait (the chunk failed to
+ * load, or the frame refused the model): reported once for a developer,
+ * then dismissed, as a click that yields no response is. No new wording.
+ */
+function frameFailed(err: unknown): void {
+  console.error('[coordinator] the popup frame could not paint this response:', err);
+  dismissResponse();
+}
+
+/**
+ * A target's answer when it carries exactly one of `model` or `content`,
+ * else null: both or neither is a builder bug the type forbids, declined
+ * like a null answer (fail soft: the next hit answers, never a dead click).
+ */
+function answer(response: CoordinatedResponse | null | undefined): CoordinatedResponse | null {
+  return response && (response.model === undefined) !== (response.content === undefined) ? response : null;
 }
 
 function renderPopup(
   map: maplibregl.Map,
   response: CoordinatedResponse,
+  content: string | HTMLElement,
   selection: PlaceSelection | null,
   hits: readonly Hit[],
   primary: Hit,
@@ -483,11 +673,12 @@ function renderPopup(
   // the pre-2026-09-10 shape exactly: only the title and the door move to
   // the head, and its own agency line stays in the body.
   const raw = document.createElement('div');
-  if (typeof response.content === 'string') raw.innerHTML = response.content;
-  else raw.appendChild(response.content);
+  if (typeof content === 'string') raw.innerHTML = content;
+  else raw.appendChild(content);
 
   // D1 M23: a FRAMED response (the DOM contract of src/ui/popup-frame.ts,
-  // validated in takeFrame without importing the renderer) keeps its
+  // validated in takeFrame: a model this coordinator serialized, or a
+  // legacy answer that carries the frame's markup) keeps its
   // article as the one real root. Its head and body regions take the
   // coordinated classes the tier table and the panel host rules read, and
   // no node moves out of it (listeners and the title stay where the
@@ -592,7 +783,7 @@ function renderPopup(
 
   popup.on('close', () => {
     document.removeEventListener('keydown', onEscape);
-    if (currentPopup === popup) currentPopup = null;
+    closed(popup);
     if (selection && getPlaceSelection() === selection) setPlaceSelection(null);
   });
   currentPopup = popup;
@@ -728,7 +919,8 @@ async function attachConditionDoor(
 }
 
 /**
- * The frame's DOM contract, checked without importing its renderer: the
+ * The frame's DOM contract, checked on the markup itself (a model this
+ * module serialized, or a legacy answer's own framed markup): the
  * content is exactly one `[data-popup-frame]` root (nothing beside it but
  * whitespace) whose only child NODES, text included, are the head region,
  * then the body region (the frame module writes no text between them, so
@@ -798,9 +990,11 @@ function buildDisclosure(
  * (the map popup or the installed sink). The sink path clears the
  * response's place selection only if still current, exactly as the
  * popup's close handler does, so a rapid follow-up selection is never
- * clobbered by a late dismissal.
+ * clobbered by a late dismissal. A commit still waiting for the frame is
+ * retired too: a dismissal wins over it.
  */
 export function dismissResponse(): void {
+  pendingCommit = null;
   const popup = currentPopup;
   currentPopup = null;
   popup?.remove();

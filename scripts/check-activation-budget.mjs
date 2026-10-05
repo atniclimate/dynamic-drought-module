@@ -188,7 +188,9 @@ const EAGER_FORBIDDEN = [
   {
     name: 'popup frame renderer',
     pattern: /src\/ui\/popup-frame\.ts$/,
-    reason: 'S30D D1 M23 (DDM-P11-T04, the Codex Tier 2 review PF5): the popup frame is imported only by the lazy layer builders; the coordinator validates its DOM contract without importing it, so no import path, direct or transitive, may hoist it into the initial static set.',
+    // The one row allowed to count it (runChecks, soleFeatureFindings).
+    soleFeature: 'popup-frame',
+    reason: 'S30D P1-FRAME (2026-10-04; it replaced the D1 M23 rule, under which the lazy layer builders imported the frame): the InteractionCoordinator is the frame\'s one caller and loads it with one dynamic import, warmed when the first click target registers; builders hand it a model and import only the frame\'s types. So the frame is in the initial static set never, and in no feature\'s first-activation closure but its own popup-frame row.',
   },
   {
     name: 'impact briefing cluster panel runtime',
@@ -433,6 +435,15 @@ const FEATURE_BUDGETS = [
       path: 'data/power-lines-pnw.pmtiles',
       maxBytes: 8_000_000,
     }],
+  },
+  {
+    key: 'popup-frame',
+    label: 'NEW 2026-10-04 with S30D P1-FRAME, for the owner to ratify at the next landing: the popup frame (src/ui/popup-frame.ts) as its own first-use cost. The InteractionCoordinator is its one caller and loads it with one dynamic import, warmed when the first click target registers; builders hand the coordinator a model and import only the frame\'s types, so the frame rides no other row (the popup frame renderer rule above holds that). Its first-activation closure is the frame chunk plus the shared text-tokens chunk it imports: measured 5.5 kB (5,471 bytes gzip, the frame chunk 5,176 plus text-tokens 295) by the worker gate p1frame-4 on a94eee5 plus this change. The frame fetches nothing, so its network columns are zero.',
+    rootModules: ['src/ui/popup-frame.ts'],
+    measuredJsGzipKb: 5.5,
+    networkBytes: 0,
+    requestCount: 0,
+    dataAssets: [],
   },
 ];
 
@@ -715,6 +726,60 @@ function validateBudgets(budgets) {
   return { findings, invalidKeys };
 }
 
+/**
+ * S30D P1-FRAME (2026-10-04): a forbidden rule that names a `soleFeature`
+ * may ride NO feature's first-activation closure but that row's own. Two
+ * kinds of evidence, either one a finding: the module's own manifest key in
+ * the closure (it kept its own chunk, as a dynamically imported module
+ * does), or a closure chunk whose sourcemap `sources` fold the module in.
+ * A closure chunk the check cannot see into is a finding too (P1-FRAME
+ * repair round 1, the Codex diff review finding 4: a missing, unparseable,
+ * empty or indexed map must never hide the module): only the generated
+ * helpers MAP_EXEMPT already names, under the same raw-size caps, may lack
+ * a map (the entry is never in an activation closure). Only rows declared
+ * in the table are walked; a layer module without a row is held to the
+ * same rule at the source level by tests/identify-paths.spec.ts (no static
+ * value import of the frame anywhere in src/).
+ */
+function soleFeatureFindings(feature, closureKeys, activationFiles, manifest, assets, forbidden, mapExempt) {
+  const findings = [];
+  for (const rule of forbidden) {
+    if (!rule.soleFeature || rule.soleFeature === feature.key) continue;
+    const chunks = new Set();
+    for (const key of closureKeys) {
+      const file = (manifest[key].file ?? '').replace(/^assets\//, '');
+      if (rule.pattern.test(key) && activationFiles.includes(file)) chunks.add(file);
+    }
+    for (const file of activationFiles) {
+      if (chunks.has(file)) continue;
+      const chunkPath = join(assets, file);
+      const mapPath = `${chunkPath}.map`;
+      let blind = null;
+      if (!existsSync(mapPath)) {
+        const ex = mapExempt.find((e) => e.pattern.test(file));
+        const size = existsSync(chunkPath) ? statSync(chunkPath).size : Infinity;
+        if (!ex) blind = 'has no sourcemap';
+        else if (size > ex.maxRawBytes) blind = `has no sourcemap and is ${size} bytes, over its ${ex.maxRawBytes} byte map exemption`;
+      } else {
+        const { sources, error } = validateSourcemap(mapPath);
+        if (error) blind = `sourcemap ${error}`;
+        else if (sources.some((s) => rule.pattern.test(s))) chunks.add(file);
+      }
+      if (blind) {
+        findings.push(
+          `CLOSURE VIOLATION: ${rule.name} cannot be ruled out of feature ${feature.key}'s first-activation closure: chunk ${file} ${blind}; only the ${rule.soleFeature} row may count it, so every chunk of another row's closure must prove its contents.`
+        );
+      }
+    }
+    for (const file of chunks) {
+      findings.push(
+        `CLOSURE VIOLATION: ${rule.name} is in feature ${feature.key}'s first-activation closure (chunk ${file}); only the ${rule.soleFeature} row may count it. ${rule.reason}`
+      );
+    }
+  }
+  return findings;
+}
+
 /* ------------------------------------------------------------------ *
  * The checker, pure over a dist directory and a config, so the
  * self-test runs the same code path as the real tree.
@@ -859,6 +924,7 @@ function runChecks(distDir, { forbidden, mapExempt, budgets, bcBasinHeld }) {
     if (presentRoots.length) {
       const closureKeys = staticClosure(manifest, presentRoots);
       const activationFiles = [...jsFilesOf(manifest, closureKeys)].filter((f) => !initialFiles.has(f));
+      findings.push(...soleFeatureFindings(feature, closureKeys, activationFiles, manifest, assets, forbidden, mapExempt));
       const total = activationFiles.reduce((sum, f) => sum + gz(join(assets, f)), 0);
       const line = `first-activation static closure ${kb(total)} kB gzip across ${activationFiles.length} chunk(s): ${activationFiles.join(', ') || '(none beyond the initial set)'}`;
       if (typeof jsKb === 'number' && missingRoots.length === 0) {
@@ -991,6 +1057,67 @@ const SELF_TEST_CASES = [
     },
   },
   {
+    // S30D P1-FRAME: a layer row whose closure statically imports the frame
+    // (its own chunk, the shape a builder calling the serializer produces).
+    // The frame chunk has no sourcemap here, so its manifest key is the
+    // evidence (the layer's own chunk proves its contents with a map).
+    name: 'fail-popup-frame-in-feature-closure', kind: 'fail', expect: 'popup frame renderer',
+    budgets: [{ key: 'fx', rootModules: ['src/layers/fixture.ts'], measuredJsGzipKb: PENDING, ...PENDING_COLS }],
+    files: {
+      'index.html': htmlWith(),
+      '.vite/manifest.json': manifestWith([], {
+        'src/layers/fixture.ts': { file: 'assets/fixture-layer.js', isDynamicEntry: true, imports: ['src/ui/popup-frame.ts'] },
+        'src/ui/popup-frame.ts': { file: 'assets/popup-frame-test.js', isDynamicEntry: true, imports: [] },
+      }),
+      ...CLEAN_ENTRY,
+      'assets/fixture-layer.js': 'export const layer = true;',
+      'assets/fixture-layer.js.map': M(['../../src/layers/fixture.ts']),
+      'assets/popup-frame-test.js': 'export const frame = true;',
+    },
+  },
+  // S30D P1-FRAME repair round 1 (the Codex diff review, finding 4): a
+  // chunk in another feature's first-activation closure that the check
+  // cannot see into (no map, an unparseable map, an indexed map) is itself
+  // a finding, so a missing or broken map can never hide the frame.
+  ...[
+    ['fail-popup-frame-closure-missing-map', null],
+    ['fail-popup-frame-closure-invalid-map', '{ not json'],
+    ['fail-popup-frame-closure-indexed-map', JSON.stringify({ version: 3, sections: [] })],
+  ].map(([name, map]) => ({
+    name, kind: 'fail', expect: 'popup frame renderer',
+    budgets: [{ key: 'fx', rootModules: ['src/layers/fixture.ts'], measuredJsGzipKb: PENDING, ...PENDING_COLS }],
+    files: {
+      'index.html': htmlWith(),
+      '.vite/manifest.json': manifestWith([], {
+        'src/layers/fixture.ts': { file: 'assets/fixture-layer.js', isDynamicEntry: true, imports: ['_shared-frame.js'] },
+        '_shared-frame.js': { file: 'assets/shared-frame.js' },
+      }),
+      ...CLEAN_ENTRY,
+      'assets/fixture-layer.js': 'export const layer = true;',
+      'assets/fixture-layer.js.map': M(['../../src/layers/fixture.ts']),
+      'assets/shared-frame.js': 'export const shared = true;',
+      ...(map === null ? {} : { 'assets/shared-frame.js.map': map }),
+    },
+  })),
+  {
+    // The frame folded into a shared chunk a layer row imports: no manifest
+    // key of its own, so the chunk's sourcemap is the evidence.
+    name: 'fail-popup-frame-folded-in-feature-closure', kind: 'fail', expect: 'popup frame renderer',
+    budgets: [{ key: 'fx', rootModules: ['src/layers/fixture.ts'], measuredJsGzipKb: PENDING, ...PENDING_COLS }],
+    files: {
+      'index.html': htmlWith(),
+      '.vite/manifest.json': manifestWith([], {
+        'src/layers/fixture.ts': { file: 'assets/fixture-layer.js', isDynamicEntry: true, imports: ['_shared-frame.js'] },
+        '_shared-frame.js': { file: 'assets/shared-frame.js' },
+      }),
+      ...CLEAN_ENTRY,
+      'assets/fixture-layer.js': 'export const layer = true;',
+      'assets/fixture-layer.js.map': M(['../../src/layers/fixture.ts']),
+      'assets/shared-frame.js': 'export const shared = true;',
+      'assets/shared-frame.js.map': M(['../../src/util/escape.ts', '../../src/ui/popup-frame.ts']),
+    },
+  },
+  {
     name: 'fail-eager-zip', kind: 'fail', expect: 'ZIP library',
     files: {
       'index.html': htmlWith('shared-test.js'), '.vite/manifest.json': manifestWith(['_shared-test.js'], SHARED),
@@ -1082,6 +1209,8 @@ const SELF_TEST_CASES = [
       '.vite/manifest.json': manifestWith([], { 'src/features/fixture.ts': { file: 'assets/feature-big.js', isDynamicEntry: true, imports: [] } }),
       ...CLEAN_ENTRY,
       'assets/feature-big.js': BIG_WORDS,
+      // Every chunk of a feature's closure proves its contents (P1-FRAME r1).
+      'assets/feature-big.js.map': M(['../../src/features/fixture.ts']),
     },
   },
   {
@@ -1224,6 +1353,44 @@ const SELF_TEST_CASES = [
     files: { 'index.html': htmlWith(), '.vite/manifest.json': manifestWith([]), ...CLEAN_ENTRY },
   },
   {
+    // S30D P1-FRAME: the frame counted by its own row, and a layer row that
+    // reaches it only through a dynamic import (no static edge) stays clean.
+    name: 'pass-popup-frame-own-row', kind: 'pass',
+    budgets: [
+      { key: 'popup-frame', rootModules: ['src/ui/popup-frame.ts'], measuredJsGzipKb: PENDING, ...PENDING_COLS },
+      { key: 'fx', rootModules: ['src/layers/fixture.ts'], measuredJsGzipKb: PENDING, ...PENDING_COLS },
+    ],
+    files: {
+      'index.html': htmlWith(),
+      '.vite/manifest.json': manifestWith([], {
+        'src/layers/fixture.ts': { file: 'assets/fixture-layer.js', isDynamicEntry: true, imports: [], dynamicImports: ['src/ui/popup-frame.ts'] },
+        'src/ui/popup-frame.ts': { file: 'assets/popup-frame-test.js', isDynamicEntry: true, imports: [] },
+      }),
+      ...CLEAN_ENTRY,
+      'assets/fixture-layer.js': 'export const layer = true;',
+      'assets/fixture-layer.js.map': M(['../../src/layers/fixture.ts']),
+      'assets/popup-frame-test.js': 'export const frame = true;',
+      'assets/popup-frame-test.js.map': M(['../../src/ui/popup-frame.ts']),
+    },
+  },
+  {
+    // The same generated helpers MAP_EXEMPT names for the initial set, under
+    // the same size caps, need no map in a feature's closure either.
+    name: 'pass-popup-frame-closure-exempt-helper', kind: 'pass',
+    budgets: [{ key: 'fx', rootModules: ['src/layers/fixture.ts'], measuredJsGzipKb: PENDING, ...PENDING_COLS }],
+    files: {
+      'index.html': htmlWith(),
+      '.vite/manifest.json': manifestWith([], {
+        'src/layers/fixture.ts': { file: 'assets/fixture-layer.js', isDynamicEntry: true, imports: ['_preload.js'] },
+        '_preload.js': { file: 'assets/preload-helper-test.js' },
+      }),
+      ...CLEAN_ENTRY,
+      'assets/fixture-layer.js': 'export const layer = true;',
+      'assets/fixture-layer.js.map': M(['../../src/layers/fixture.ts']),
+      'assets/preload-helper-test.js': 'const seen = new Map;',
+    },
+  },
+  {
     name: 'pass-budget-under-closure', kind: 'pass',
     budgets: [{ key: 'fx', rootModules: ['src/features/fixture.ts'], measuredJsGzipKb: 10, ...PENDING_COLS }],
     files: {
@@ -1234,7 +1401,10 @@ const SELF_TEST_CASES = [
       }),
       ...CLEAN_ENTRY,
       'assets/feature-big.js': BIG_WORDS,
+      // Every chunk of a feature's closure proves its contents (P1-FRAME r1).
+      'assets/feature-big.js.map': M(['../../src/features/fixture.ts']),
       'assets/feature-shared.js': 'export const shared = true;',
+      'assets/feature-shared.js.map': M(['../../src/util/fetch.ts']),
     },
   },
 ];
@@ -1245,6 +1415,9 @@ const EXPECTED_CASE_NAMES = [
   'fail-eager-geotiff', 'fail-eager-landscape', 'fail-eager-zip',
   'fail-eager-impact-briefing-cluster',
   'fail-eager-popup-frame-transitive',
+  'fail-popup-frame-in-feature-closure', 'fail-popup-frame-folded-in-feature-closure',
+  'fail-popup-frame-closure-missing-map', 'fail-popup-frame-closure-invalid-map',
+  'fail-popup-frame-closure-indexed-map',
   'fail-missing-map', 'fail-empty-sources', 'fail-indexed-map',
   'fail-runtime-oversize', 'fail-preload-helper-oversize',
   'fail-forged-vendor-no-pmtiles',
@@ -1261,6 +1434,7 @@ const EXPECTED_CASE_NAMES = [
   'pass-preload-helper-exempt',
   'pass-vendor-allowance', 'pass-budget-under-closure',
   'pass-budget-held-missing-root',
+  'pass-popup-frame-own-row', 'pass-popup-frame-closure-exempt-helper',
 ];
 
 function runSelfTest() {
