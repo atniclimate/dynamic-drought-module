@@ -761,3 +761,45 @@ test.describe('text registration leaves the phone layout alone (codex C5)', () =
     expect(reading.horizonTitle === null || reading.horizonTitle === 'wrap', `horizon ${reading.horizonTitle}`).toBe(true);
   });
 });
+
+// found-104 (block 5): the HeatRisk moment ("Jul 30, 2026, 12:00 UTC") is one
+// unbreakable token on the map stamp and in the briefing claim.
+for (const viewport of VIEWPORTS.filter((v) => v.width !== 1440)) {
+  test.describe(`HeatRisk moment token at ${viewport.width}x${viewport.height} (found-104)`, () => {
+    test.use({ viewport });
+
+    test('the HeatRisk stamp and briefing claim tie every time to its zone word with U+00A0 and show no orphan', async ({
+      page
+    }) => {
+      test.setTimeout(150_000);
+      const expectTied = (where: string, text: string): void => {
+        const moments = text.match(/\d{2}:\d{2}.UTC/g) ?? [];
+        expect(moments.length, `${where}: no HeatRisk moment found in "${text}"`).toBeGreaterThan(0);
+        for (const m of moments) {
+          expect(m.charCodeAt(5), `${where}: "${m}" joins the time and zone with U+${m.charCodeAt(5).toString(16)}`).toBe(0xa0);
+        }
+      };
+
+      await gotoApp(page, '?view=console&layers=heatrisk');
+      await waitForLayerSettled(page, 'heatrisk');
+      const headline = page.locator('#time-bar .time-bar-stamp-headline');
+      await expect(headline).toContainText('Outlook valid');
+      await settle(page);
+      expectTied('map stamp', (await headline.textContent()) ?? '');
+      expect(
+        (await scanOrphans(page, ['#time-bar .time-bar-stamp-headline'])).findings,
+        'map stamp orphan scan'
+      ).toEqual([]);
+
+      await gotoApp(page, '?view=brief&layers=heatrisk&select=state:WA&region=washington_state');
+      const claim = page.locator('#impact-panel .impact-claim-classified', { hasText: 'HeatRisk (Experimental)' });
+      await expect(claim).toContainText('Valid', { timeout: 20_000 });
+      await settle(page);
+      expectTied('briefing claim', (await claim.textContent()) ?? '');
+      expect(
+        (await scanOrphans(page, ['#impact-panel .impact-claim-classified'])).findings,
+        'briefing claim orphan scan'
+      ).toEqual([]);
+    });
+  });
+}

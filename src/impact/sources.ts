@@ -281,6 +281,7 @@ export function humanDayUtcNoYear(time: number): string {
 // ---------------------------------------------------------------------------
 
 function heatRiskMoment(time: number): string {
+  // found-104: U+00A0 between the time and its zone word, so the zone never wraps alone.
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
@@ -290,7 +291,8 @@ function heatRiskMoment(time: number): string {
     hour12: false,
     timeZone: 'UTC',
     timeZoneName: 'short'
-  }).format(new Date(time));
+  }).format(new Date(time))
+    .replace(/(\d) (?=[A-Z]{2,5}$)/, '$1\u00a0');
 }
 
 /**
