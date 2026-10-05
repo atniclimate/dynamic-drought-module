@@ -269,11 +269,13 @@ export function buildBcDroughtPopupModel(properties: GeoJsonProperties): IssuedM
       : 'Unnamed basin';
   const read = levelRead(values['DroughtLevel']);
   const rawDate: unknown = values['Date_Modified'];
-  const date = formatSourceDate(rawDate);
   // Absent (PF1): missing, null, blank, or neither text nor a finite number
   // (an array or a boolean is never shown as its String(), never 1970).
+  // Decided before any conversion: an object whose coercion throws is
+  // simply absent (Codex block 2 review, P3).
   const absent =
     typeof rawDate === 'string' ? rawDate.trim() === '' : !(typeof rawDate === 'number' && Number.isFinite(rawDate));
+  const date = absent ? '' : formatSourceDate(rawDate);
   const clock: PopupClock = absent
     ? { kind: 'not-stated', label: 'Source date', reason: 'unavailable' }
     : {

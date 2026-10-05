@@ -6,6 +6,17 @@ import { BUILDERS, LEGACY_ALLOWANCE, stripComments } from './identify-paths-mani
 import { serializePopupFrame } from '../src/ui/popup-frame';
 import type { PopupModel } from '../src/ui/popup-frame';
 
+// Codex block 2 review, P2: every external request a fixture does not route
+// (the OSM raster tiles, an unstubbed service) is answered 503 locally, as in
+// popup-viewport.spec.ts's tier dispatcher. Registered first, so gotoApp's
+// context stubs and each fixture's page routes are checked before it.
+test.beforeEach(async ({ context }) => {
+  await context.route(
+    (url) => url.protocol.startsWith('http') && url.hostname !== '127.0.0.1' && url.hostname !== 'localhost',
+    (route) => route.fulfill({ status: 503, contentType: 'text/plain', body: 'Synthetic offline response' })
+  );
+});
+
 /**
  * The M25 surfaces (S30D D1 M25; DDM-P11-T04), moved here from
  * tests/identify-paths.spec.ts's describe "identify paths: the M25 surfaces"
@@ -646,6 +657,15 @@ test.describe('identify paths: the M25 surfaces', () => {
         build: () => bc.buildBcDroughtPopupModel({ BasinName: 'Fixture Basin', DroughtLevel: 2, Date_Modified: false }),
         contains: [notStated('Source date')],
         lacks: ['data-clock-supplied', '1970']
+      },
+      {
+        // Codex block 2 review, P3: absence is decided before any conversion,
+        // so an object whose coercion throws is absent, not an exception.
+        name: 'BC: Date_Modified an object whose coercion throws',
+        build: () =>
+          bc.buildBcDroughtPopupModel({ BasinName: 'Fixture Basin', DroughtLevel: 2, Date_Modified: JSON.parse('{"toString":null}') }),
+        contains: [notStated('Source date')],
+        lacks: ['data-clock-supplied']
       }
     ]);
   });
