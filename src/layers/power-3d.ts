@@ -75,8 +75,8 @@ import {
   showLegend
 } from '../ui/legend-registry';
 import {
-  buildPowerLinePopupHtml,
-  buildPowerPlantPopupHtml
+  buildPowerLinePopupModel,
+  buildPowerPlantPopupModel
 } from '../ui/power-popups';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { probeArchiveHeader } from '../util/pmtiles-probe';
@@ -209,8 +209,9 @@ export function bindPopups(map: maplibregl.Map): void {
       const name = feature.properties?.['Plant_Name'];
       return typeof name === 'string' && name.length > 0 ? name : 'Power plant';
     },
+    // The plant's frame model (S30D D1 M26b), painted by the coordinator.
     respond: (feature) => ({
-      content: buildPowerPlantPopupHtml(feature.properties ?? {})
+      model: buildPowerPlantPopupModel(feature.properties ?? {})
     })
   });
 
@@ -218,8 +219,9 @@ export function bindPopups(map: maplibregl.Map): void {
     kind: 'point-event',
     layerIds: [LINES_LAYER_ID, LINES_UNKNOWN_LAYER_ID],
     label: () => 'Transmission line',
+    // The line's frame model (S30D D1 M26b), painted by the coordinator.
     respond: (feature) => ({
-      content: buildPowerLinePopupHtml(feature.properties ?? {})
+      model: buildPowerLinePopupModel(feature.properties ?? {})
     })
   });
 

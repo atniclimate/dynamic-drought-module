@@ -32,6 +32,7 @@ import type * as maplibregl from 'maplibre-gl';
 import type {
   Feature,
   FeatureCollection,
+  GeoJsonProperties,
   MultiPolygon,
   Polygon
 } from 'geojson';
@@ -44,7 +45,7 @@ import {
 } from '../config/palette';
 import { matchExpression } from '../config/style-expressions';
 import { registerClickTarget } from '../map/interaction-coordinator';
-import { buildNwsAlertPopupHtml } from '../ui/popups';
+import type { IssuedModel, PopupClock } from '../ui/popup-frame';
 import { fetchJsonWithBudget, linkAbort } from '../util/fetch';
 import { isObject } from '../util/guards';
 import { registry } from '../state/registry';
@@ -624,6 +625,73 @@ export function deactivate(map: maplibregl.Map): void {
   emitSnapshot('inactive');
 }
 
+/** The frame's explanation for issuer time text DDM does not parse (PF1; the M25 builders' wording). */
+const SUPPLIED_TIME_EXPLANATION = 'As the issuer states it; DDM does not read it as a full date.';
+
+/**
+ * One alert time as the WWA feature states it (PF1): epoch milliseconds or
+ * date text read as an instant, shown in the viewer's zone with the zone
+ * named (the legacy popup showed local time with no zone, and printed an
+ * empty line for an epoch value); any other text as the issuer supplied it,
+ * never dropped; a missing, blank, or non-text non-numeric value absent.
+ */
+function alertClock(label: 'From' | 'Until', value: unknown): PopupClock | null {
+  if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
+  const ms = typeof value === 'number' ? value : typeof value === 'string' ? Date.parse(value) : NaN;
+  if (Number.isFinite(ms) && new Date(ms).getUTCFullYear() >= 1000) {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    return { kind: 'point', meaning: 'valid', label, at: { precision: 'instant', at: ms, zone } };
+  }
+  if (typeof value !== 'string' && !(typeof value === 'number' && Number.isFinite(value))) return null;
+  return { kind: 'point', meaning: 'valid', label, at: { precision: 'supplied', text: String(value), explanation: SUPPLIED_TIME_EXPLANATION } };
+}
+
+/**
+ * The alert polygon's popup model (S30D D1 M26b; DDM-P11-T04;
+ * interface-chrome-popups-text.md 3.5 row 8). The head: "National Weather
+ * Service alert"; "Issued by: NOAA NWS", with the issuing office where the
+ * feature names one (its leading K dropped, as the legacy popup printed
+ * it); the product name verbatim with the NWS display swatch the map draws
+ * it in; the first present clock of From and Until (the head keeps one
+ * line, DR-179's note for M26's builders; the frame moves Until to the
+ * body's clock slot directly under the head); NWS Active Alerts. The body:
+ * the layer's own description, then NWS Heat Safety. The valid window is
+ * always shown where the feature states it (an alert without its window
+ * would read as a permanent condition), and the link routes to the NWS
+ * active-alerts page rather than the raw Common Alerting Protocol JSON the
+ * feature's `url` attribute carries.
+ */
+export function buildNwsAlertPopupModel(props: GeoJsonProperties): IssuedModel {
+  const p = props ?? {};
+  const prodType = p['prod_type'];
+  // vocab-allow: fallback title for an NWS alert product, upstream data
+  const event = typeof prodType === 'string' && prodType.trim() !== '' ? prodType : 'Weather alert';
+  const wfo = p['wfo'];
+  const office = typeof wfo === 'string' && wfo.trim() !== '' ? wfo.replace(/^K/, '') : null;
+  const swatch = Object.hasOwn(NWS_ALERT_COLORS, event)
+    ? { table: 'NWS_ALERT_COLORS', classKey: event, color: NWS_ALERT_COLORS[event]! }
+    : { table: 'NWS_ALERT_COLORS', classKey: 'default', color: NWS_ALERT_DEFAULT_COLOR };
+  const present = [alertClock('From', p['onset']), alertClock('Until', p['ends']) ?? alertClock('Until', p['expiration'])].filter(
+    (clock): clock is PopupClock => clock !== null
+  );
+  const [first, ...later] = present;
+  return {
+    kind: 'event',
+    // vocab-allow: names the NWS alert product (design record 3.5 row 8), upstream data
+    title: 'National Weather Service alert',
+    issuer: { role: 'issued-by', name: office === null ? 'NOAA NWS' : `NOAA NWS, office ${office}`, productKey: 'nws-alerts' },
+    value: [{ text: event, swatch }],
+    clocks: first === undefined ? [{ kind: 'not-stated', label: 'Until', reason: 'unavailable' }] : [first, ...later],
+    // vocab-allow: names the NWS active-alerts page, upstream product name
+    source: { link: { label: 'NWS Active Alerts', href: 'https://alerts.weather.gov/' } },
+    moreLinks: [{ label: 'NWS Heat Safety', href: 'https://www.weather.gov/safety/heat' }],
+    qualifications: [
+      // vocab-allow: describes the NWS alert products verbatim, upstream data
+      'Active National Weather Service watch, warning, or advisory for extreme heat or fire weather. Polygons are NWS forecast-zone shapes, updated about every five minutes.'
+    ]
+  };
+}
+
 /**
  * Register the fill layer's click target with the InteractionCoordinator
  * (one response per click; D-0.7.0-058 ruling 5) and wire the hover
@@ -638,8 +706,9 @@ export function bindPopups(map: maplibregl.Map): void {
       // vocab-allow: fallback title for an NWS alert product, upstream data
       return typeof event === 'string' && event.trim() !== '' ? event : 'Weather alert';
     },
+    // The alert's frame model (S30D D1 M26b), painted by the coordinator.
     respond: (feature) => ({
-      content: buildNwsAlertPopupHtml(feature.properties ?? null)
+      model: buildNwsAlertPopupModel(feature.properties ?? null)
     })
   });
 

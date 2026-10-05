@@ -36,7 +36,8 @@ import {
 } from '../config/palette';
 import { matchExpression } from '../config/style-expressions';
 import { parseArcGisPolygonFeatureCollection } from '../config/wildfire-presentation';
-import { buildSpcFireWeatherPopupHtml } from '../ui/popups';
+import type { IssuerSwatch } from '../ui/popup-frame';
+import { buildSpcFireWeatherPopupModel } from '../ui/popups';
 import { clearTimeBar, setTimeBar } from '../ui/time-bar';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
@@ -76,6 +77,16 @@ function reportStatus(state: Status): void {
 
 function resolveBeforeId(map: maplibregl.Map): string | undefined {
   return map.getLayer(BEFORE_ID) ? BEFORE_ID : undefined;
+}
+
+/**
+ * The category's swatch, as the map draws it (SPC_FIREWX_CATEGORIES), or
+ * null for a `dn` outside the outlook's categories (its label says so).
+ */
+function categorySwatch(dn: unknown): IssuerSwatch | null {
+  const n = typeof dn === 'number' ? dn : Number(dn);
+  const entry = SPC_FIREWX_CATEGORIES.find((c) => c.dn === n);
+  return entry ? { table: 'SPC_FIREWX_CATEGORIES', classKey: String(entry.dn), color: entry.color } : null;
 }
 
 /** Resolve the display label for a `dn` category value. */
@@ -365,10 +376,12 @@ export function bindPopups(map: maplibregl.Map): void {
     kind: 'condition-surface',
     layerIds: [FILL_LAYER_ID],
     label: (feature) => `${categoryLabel(feature.properties?.['dn'])} fire weather`,
+    // The outlook polygon's frame model (S30D D1 M26b), painted by the
+    // coordinator.
     respond: (feature) => {
       const props: GeoJsonProperties = feature.properties ?? null;
       return {
-        content: buildSpcFireWeatherPopupHtml(categoryLabel(props?.dn), props)
+        model: buildSpcFireWeatherPopupModel(categoryLabel(props?.dn), props, categorySwatch(props?.dn))
       };
     }
   });

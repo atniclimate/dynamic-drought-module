@@ -15,7 +15,7 @@ import { fetchHydrometDaily, hydrometStationValue } from '../util/hydromet';
 import type { HydrometSeries } from '../util/hydromet';
 import { escapeHtml } from '../util/escape';
 import type { PlaceConditions } from './popup-conditions';
-import type { DoorSpec, PopupClock, PopupDetail, PopupModel } from './popup-frame';
+import type { DoorSpec, IssuedModel, IssuerSwatch, PopupClock, PopupDetail, PopupModel } from './popup-frame';
 import {
   fetchUsgsIV,
   extractTimeSeries,
@@ -479,101 +479,70 @@ export function buildTreatyPopupModel(
 }
 
 /**
- * Popup for a National Weather Service (NWS) heat or fire-weather alert
- * polygon from the NOAA Watch/Warning/Advisory MapServer. The valid window is
- * always shown (an alert without its window would read as a permanent
- * condition), and the link routes to the NWS active-alerts page rather than
- * the raw Common Alerting Protocol JSON the feature's `url` attribute carries.
+ * One SPC period field (`valid` or `expire`, `YYYYMMDDHHMM` in UTC) as a
+ * UTC instant, the zone named (the layer's time bar states the same period
+ * in UTC; the legacy popup showed local time with no zone): the calendar
+ * checked (month 1 to 12, the day within its month, leap years respected,
+ * 00:00 to 23:59, a year of at least 1000). Other text, or a finite
+ * number, is shown as the issuer supplied it (the legacy popup printed the
+ * raw string); a missing, blank or other value is absent (null).
  */
-export function buildNwsAlertPopupHtml(props: GeoJsonProperties): string {
-  const p = props ?? {};
-  const event = p.prod_type || 'Weather alert'; // vocab-allow: fallback title for an NWS alert product, upstream data
-  const onset = p.onset || '';
-  const ends = p.ends || p.expiration || '';
-  const wfo = p.wfo || '';
-
-  // vocab-allow: describes the NWS alert products verbatim, upstream data
-  return `
-    <div class="popup-title">${escapeHtml(String(event))}</div>
-    <div class="popup-agency">NOAA NWS · Active Alert</div>
-    ${onset ? `<div class="popup-treaty-meta">From: ${escapeHtml(formatAlertTime(onset))}</div>` : ''}
-    ${ends ? `<div class="popup-treaty-meta">Until: ${escapeHtml(formatAlertTime(ends))}</div>` : ''}
-    ${wfo ? `<div class="popup-treaty-meta">Issued by: NWS office ${escapeHtml(String(wfo).replace(/^K/, ''))}</div>` : ''}
-    <div class="popup-description">Active National Weather Service watch, warning, or advisory for extreme heat or fire weather. Polygons are NWS forecast-zone shapes, updated about every five minutes.</div>
-    <div class="popup-links">
-      <a href="https://alerts.weather.gov/" target="_blank" rel="noopener">NWS Active Alerts</a>
-      <a href="https://www.weather.gov/safety/heat" target="_blank" rel="noopener">NWS Heat Safety</a>
-    </div>
-  `;
-}
-
-/**
- * Format an alert timestamp (ISO 8601 with offset, from the WWA MapServer)
- * as a readable local date and time. Falls back to the raw string when the
- * value does not parse, rather than hiding the window.
- */
-function formatAlertTime(value: unknown): string {
-  if (typeof value !== 'string' || value === '') return '';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  });
-}
-
-/**
- * Popup for a Storm Prediction Center (SPC) Fire Weather Outlook polygon.
- * The category label is resolved from the integer `dn` field by the caller
- * (the palette owns the mapping); the description carries the mandatory
- * honest framing: this is a forecast of fire-WEATHER threat (wind, humidity,
- * fuel dryness), not the NFDRS fire danger rating and not an active fire.
- */
-export function buildSpcFireWeatherPopupHtml(
-  categoryLabel: string,
-  props: GeoJsonProperties
-): string {
-  const p = props ?? {};
-  const valid = formatSpcTime(p.valid);
-  const expire = formatSpcTime(p.expire);
-
-  // vocab-allow: describes the SPC Fire Weather Outlook product, upstream data
-  return `
-    <div class="popup-title">Fire Weather Outlook: ${escapeHtml(categoryLabel)}</div>
-    <div class="popup-agency">NOAA SPC · Day 1 Outlook</div>
-    ${valid ? `<div class="popup-treaty-meta">From: ${escapeHtml(valid)}</div>` : ''}
-    ${expire ? `<div class="popup-treaty-meta">Until: ${escapeHtml(expire)}</div>` : ''}
-    <div class="popup-description">Storm Prediction Center forecast of fire-weather threat: pre-existing fuel dryness combined with forecast wind, relative humidity, and dry lightning. An outlook of conditions favorable for fire, not a fire danger rating and not an active fire.</div>
-    <div class="popup-links">
-      <a href="https://www.spc.noaa.gov/products/fire_wx/" target="_blank" rel="noopener">SPC Fire Weather Outlooks</a>
-    </div>
-  `;
-}
-
-/**
- * Format the SPC `valid` / `expire` field (`YYYYMMDDHHMM`, UTC) as a
- * readable local date and time. Returns the raw string when it does not
- * parse, rather than hiding the window.
- */
-function formatSpcTime(value: unknown): string {
-  if (typeof value !== 'string' || !/^\d{12}$/.test(value)) {
-    return typeof value === 'string' ? value : '';
+function spcClock(label: 'From' | 'Until', value: unknown): PopupClock | null {
+  const text = typeof value === 'string' ? value : typeof value === 'number' && Number.isFinite(value) ? String(value) : null;
+  if (text === null || text.trim() === '') return null;
+  const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(text);
+  if (m) {
+    const [year, month, day, hour, minute] = [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4]), Number(m[5])];
+    const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+    const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+    if (year >= 1000 && days !== undefined && day >= 1 && day <= days && hour <= 23 && minute <= 59) {
+      return {
+        kind: 'point',
+        meaning: 'valid',
+        label,
+        at: { precision: 'instant', at: Date.UTC(year, month - 1, day, hour, minute), zone: 'UTC' }
+      };
+    }
   }
-  const ms = Date.UTC(
-    Number(value.slice(0, 4)),
-    Number(value.slice(4, 6)) - 1,
-    Number(value.slice(6, 8)),
-    Number(value.slice(8, 10)),
-    Number(value.slice(10, 12))
+  return { kind: 'point', meaning: 'valid', label, at: { precision: 'supplied', text, explanation: SUPPLIED_TIME_EXPLANATION } };
+}
+
+/**
+ * The Day 1 Fire Weather Outlook polygon's popup model (S30D D1 M26b;
+ * DDM-P11-T04; interface-chrome-popups-text.md 3.5 row 9). The category
+ * label is resolved from the integer `dn` field by the layer (the palette
+ * owns the mapping), with the swatch the map draws it in, or none for a
+ * value outside the outlook's categories (the label then says so). The
+ * head: "SPC Fire Weather Outlook, Day 1"; "Issued by: NOAA Storm
+ * Prediction Center"; the category; the first present clock of From and
+ * Until (the frame moves Until under the head, DR-179's note for M26's
+ * builders); SPC Fire Weather Outlooks. The body carries the mandatory
+ * honest framing: this is a forecast of fire-WEATHER threat (wind,
+ * humidity, fuel dryness), not the NFDRS fire danger rating and not an
+ * active fire.
+ */
+export function buildSpcFireWeatherPopupModel(
+  categoryLabel: string,
+  props: GeoJsonProperties,
+  swatch: IssuerSwatch | null
+): IssuedModel {
+  const p = props ?? {};
+  const present = [spcClock('From', p['valid']), spcClock('Until', p['expire'])].filter(
+    (clock): clock is PopupClock => clock !== null
   );
-  return new Date(ms).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  });
+  const [first, ...later] = present;
+  return {
+    kind: 'surface',
+    title: 'SPC Fire Weather Outlook, Day 1',
+    issuer: { role: 'issued-by', name: 'NOAA Storm Prediction Center', productKey: 'spc-fire-weather' },
+    value: [swatch === null ? { text: categoryLabel } : { text: categoryLabel, swatch }],
+    clocks: first === undefined ? [{ kind: 'not-stated', label: 'From', reason: 'unavailable' }] : [first, ...later],
+    source: { link: { label: 'SPC Fire Weather Outlooks', href: 'https://www.spc.noaa.gov/products/fire_wx/' } },
+    qualifications: [
+      // vocab-allow: describes the SPC Fire Weather Outlook product, upstream data
+      'Storm Prediction Center forecast of fire-weather threat: pre-existing fuel dryness combined with forecast wind, relative humidity, and dry lightning. An outlook of conditions favorable for fire, not a fire danger rating and not an active fire.'
+    ]
+  };
 }
 
 /**

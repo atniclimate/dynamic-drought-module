@@ -414,15 +414,22 @@ test.describe('Embed at 200x600 (minimum-width iframe floor)', () => {
       .toBe('ok');
 
     // The agency line and the product vintage (From / Until) are rendered,
-    // inside the viewport, and legible (a real text size, not clipped).
-    await expect(content.locator('.popup-title')).toHaveText('Heat Advisory');
-    const agency = content.locator('.popup-agency');
+    // inside the viewport, and legible (a real text size, not clipped). The
+    // alert is a framed card (S30D D1 M26b): the frame's title, the issuer
+    // line naming the office, the product name verbatim in the value slot,
+    // the head clock (From) and Until in the body's more-clocks slot.
+    await expect(content.locator('[data-popup-frame]')).toHaveCount(1);
+    await expect(content.locator('[data-popup-slot="title"]')).toHaveText('National Weather Service alert');
+    const agency = content.locator('[data-popup-slot="issuer"]');
     await expect(agency).toBeVisible();
-    await expect(agency).toHaveText('NOAA NWS · Active Alert');
-    const vintageRows = content.locator('.popup-treaty-meta');
-    await expect(vintageRows.nth(0)).toContainText('From:');
-    await expect(vintageRows.nth(1)).toContainText('Until:');
-    for (const row of [agency, vintageRows.nth(0), vintageRows.nth(1)]) {
+    await expect(agency).toHaveText('Issued by: NOAA NWS, office PDT');
+    await expect(content.locator('[data-popup-slot="value"]')).toHaveText('Heat Advisory');
+    const vintageRows = [content.locator('[data-popup-slot="clock"] > p'), content.locator('[data-popup-slot="more-clocks"] > p')];
+    await expect(vintageRows[0]!).toHaveCount(1);
+    await expect(vintageRows[1]!).toHaveCount(1);
+    await expect(vintageRows[0]!).toContainText('From');
+    await expect(vintageRows[1]!).toContainText('Until');
+    for (const row of [agency, vintageRows[0]!, vintageRows[1]!]) {
       const rowBox = await row.boundingBox();
       expect(rowBox).not.toBeNull();
       expect(rowBox!.x).toBeGreaterThanOrEqual(-1);

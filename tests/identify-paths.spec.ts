@@ -902,9 +902,12 @@ test.describe('identify paths: inert payloads and the shared validator', () => {
 test.describe('identify paths: the observer re-audits later mutations', () => {
   test('a stray node, root text, an emptied title or a removed region marker after the first audit fails; the late door and a telemetry hydration pass', async ({ page }) => {
     await holdExternalNetwork(page);
-    await page.addInitScript(installPopupAudit, { legacyLayerIds: legacyLayerIds(), external: true });
+    // A literal fixture layer id (S30D D1 M26b): the allowance's last entry,
+    // telemetry, has no click targets, so legacyLayerIds() is empty; the
+    // observer is handed this one id as its legacy pass list instead.
+    const layerId = 'fixture-legacy-fill';
+    await page.addInitScript(installPopupAudit, { legacyLayerIds: [layerId], external: true });
     await gotoApp(page, '?region=washington_state&view=console&layers=states');
-    const layerId = legacyLayerIds()[0]!;
     const seenCount = async (): Promise<number> => (await readAudit(page)).seen.length;
 
     // Three map-popup fixtures, shaped as the coordinator and telemetry
@@ -1053,4 +1056,161 @@ test.describe('identify paths: the NIFC and place-label targets yield the frame 
       await FIRE_LABEL_CENSUS_FIXTURES[id]!(page, { clickCenterUntilSeen, readAudit });
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// S30D D1 M26b (block 5; register owner-1k, DDM-P11-T04): the NWS alert, SPC
+// fire weather outlook, power plant and power line targets have left
+// LEGACY_ALLOWANCE. The census above runs their fixtures with every other
+// migrated builder's; these cases run only these four, so their verdict reads
+// on its own. Imported here, beside the cases, so the block is an append.
+// ---------------------------------------------------------------------------
+import { EVENT_STATION_CENSUS_FIXTURES, LINE_SOURCE_STATEMENT } from './frame-fixtures-events-stations';
+
+/**
+ * Red on bd8c1aa once the four allowance lines are deleted: the observer
+ * reports "map: an unframed response for <layer id>, outside the legacy
+ * allowance" and the frame validator finds no [data-popup-frame] root
+ * ("not exactly one frame root").
+ */
+test.describe('identify paths: the NWS, SPC and power targets yield the frame (D1 M26b)', () => {
+  for (const id of ['nws', 'spc', 'power-plant', 'power-line'] as const) {
+    test(`the census yields [data-popup-frame] for the ${id} target`, async ({ page }) => {
+      test.setTimeout(120_000);
+      expect(LEGACY_ALLOWANCE, `${id} has left LEGACY_ALLOWANCE`).not.toContain(id);
+      expect(migratedBuilders().map((b) => b.id), `${id} is a migrated builder`).toContain(id);
+      expect(Object.keys(CENSUS_FIXTURES), `${id} is registered in tests/frame-fixtures.ts`).toContain(id);
+      await holdExternalNetwork(page);
+      await page.addInitScript(installPopupAudit, {
+        legacyLayerIds: legacyLayerIds(),
+        external: LEGACY_ALLOWANCE.includes('telemetry')
+      });
+      await EVENT_STATION_CENSUS_FIXTURES[id]!(page, { clickCenterUntilSeen, readAudit });
+    });
+  }
+});
+
+/** The frame's markup reduced to its text, whitespace (U+00A0 too) collapsed. */
+function frameText(markup: string): string {
+  return markup.replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * The builders' issuer words, printed as the issuer publishes them, on the
+ * models the click coordinator paints (no page). The modules are imported in
+ * the case, so this file still loads where a builder is missing: red on
+ * bd8c1aa ("buildPowerPlantPopupModel is not a function", and the same for
+ * each builder), where the layers still answer the legacy markup.
+ */
+test.describe('identify paths: the NWS, SPC and power models print the issuer words (D1 M26b)', () => {
+  test('a power plant model names capacity, fuel, utility and the reporting month, and states an absent capacity', async () => {
+    const { buildPowerPlantPopupModel } = await import('../src/ui/power-popups');
+    const markup = serializePopupFrame(
+      buildPowerPlantPopupModel({ Plant_Name: 'Synthetic Falls', PrimSource: 'hydroelectric', Total_MW: 24, Utility_Na: 'Synthetic Power', Period: '202502' })
+    );
+    const text = frameText(markup);
+    expect(markup).toContain('data-popup-kind="infrastructure"');
+    expect(text).toContain('Synthetic Falls');
+    expect(text).toContain('Issued by: U.S. EIA · Forms 860/860M');
+    expect(text).toContain('Nameplate capacity: 24 MW');
+    expect(text).toContain('Primary energy source hydroelectric');
+    expect(text).toContain('Utility Synthetic Power');
+    // The issuer's reporting period at month precision, never given a day.
+    expect(markup).toContain('<time datetime="2025-02">');
+    expect(text).toContain('Issuer reporting period Feb 2025');
+    // A nameplate rating is not current output, and the popup says so.
+    expect(text).toContain('rated maximum');
+    expect(markup).toContain('href="https://www.eia.gov/electricity/data/eia860/"');
+
+    // A missing capacity is stated, never read as zero.
+    const absent = frameText(serializePopupFrame(buildPowerPlantPopupModel({ Plant_Name: 'Synthetic Falls', Total_MW: null })));
+    expect(absent).toContain('Nameplate capacity: not published');
+    expect(absent).not.toContain('0 MW');
+    expect(absent).toContain('Issuer reporting period not published');
+  });
+
+  test('a power line model never prints the issuer unknown sentinels and states the archive and its source', async () => {
+    const { buildPowerLinePopupModel } = await import('../src/ui/power-popups');
+    const unknown = serializePopupFrame(
+      buildPowerLinePopupModel({ VOLT_CLASS: 'NOT AVAILABLE', OWNER: 'NOT AVAILABLE', STATUS: 'IN SERVICE', TYPE: 'AC', VOLTAGE: -999999 })
+    );
+    const text = frameText(unknown);
+    // -999999 is the issuer's unknown marker; 'NOT AVAILABLE' is an absence.
+    expect(text).not.toContain('-999999');
+    expect(text).not.toContain('999,999');
+    expect(text).not.toContain('NOT AVAILABLE');
+    expect(text).toContain('Transmission line');
+    expect(text).toContain('Issued by: HIFLD (U.S. Government)');
+    expect(text).toContain('Voltage class: not published');
+    expect(unknown).toContain('<dt>Owner</dt><dd>not published</dd>');
+    expect(unknown).toContain('<dt>Operational status</dt><dd>IN SERVICE</dd>');
+    expect(unknown).toContain('<dt>Type</dt><dd>AC</dd>');
+    // The archive's currency, in the head and in the caveat.
+    expect(unknown).toContain('<time datetime="2024-09-30">');
+    expect(text).toContain('no one maintains it');
+    // No public page: the stated source in the body, linking nowhere.
+    expect(unknown).not.toContain('<a ');
+    expect(unknown).toContain(`<p data-popup-slot="source-fallback">${LINE_SOURCE_STATEMENT}</p>`);
+
+    const known = frameText(
+      serializePopupFrame(buildPowerLinePopupModel({ VOLT_CLASS: '500', OWNER: 'BONNEVILLE POWER ADMINISTRATION', STATUS: 'IN SERVICE', VOLTAGE: 500 }))
+    );
+    expect(known).toContain('Voltage class: 500');
+    expect(known).toContain('Voltage 500 kV');
+    expect(known).toContain('BONNEVILLE POWER ADMINISTRATION');
+  });
+
+  test('an NWS alert model prints the product name verbatim with its swatch, the office, and From and Until with their zone', async () => {
+    const { buildNwsAlertPopupModel } = await import('../src/layers/nws-alerts');
+    const onset = Date.UTC(2026, 7, 11, 15, 0);
+    const markup = serializePopupFrame(
+      buildNwsAlertPopupModel({ prod_type: 'Red Flag Warning', onset, ends: '2026-08-12T20:00:00-07:00', wfo: 'KSEW' })
+    );
+    const text = frameText(markup);
+    expect(markup).toContain('data-popup-kind="event"');
+    expect(text).toContain('National Weather Service alert');
+    expect(text).toContain('Issued by: NOAA NWS, office SEW');
+    expect(text).toContain('Red Flag Warning');
+    expect(markup).toContain('data-swatch-table="NWS_ALERT_COLORS" data-swatch-class="Red Flag Warning" style="--popup-swatch: #ff1493"');
+    // An epoch onset is read (the legacy popup printed an empty From line for it).
+    expect(markup).toContain(`<time datetime="${new Date(onset).toISOString()}">`);
+    expect(markup).toContain(`<time datetime="${new Date('2026-08-12T20:00:00-07:00').toISOString()}">`);
+    expect(text).toMatch(/From Aug 1[01], 2026, \d\d:\d\d \S+/);
+    expect(text).toMatch(/Until Aug 1[23], 2026, \d\d:\d\d \S+/);
+    expect(markup).toContain('href="https://alerts.weather.gov/"');
+    expect(markup).toContain('href="https://www.weather.gov/safety/heat"');
+
+    // Issuer time text DDM does not read is shown as supplied; no office, no office line.
+    const odd = frameText(serializePopupFrame(buildNwsAlertPopupModel({ prod_type: 'Heat Advisory', ends: 'Tonight' })));
+    expect(odd).toContain('Issued by: NOAA NWS ');
+    expect(odd).not.toContain('office');
+    expect(odd).toContain('Until Tonight As the issuer states it; DDM does not read it as a full date.');
+  });
+
+  test('an SPC outlook model prints the category word verbatim with its swatch and the valid period in UTC', async () => {
+    const { buildSpcFireWeatherPopupModel } = await import('../src/ui/popups');
+    const markup = serializePopupFrame(
+      buildSpcFireWeatherPopupModel('Extremely Critical', { dn: 10, valid: '202610051200', expire: '202610061200' }, {
+        table: 'SPC_FIREWX_CATEGORIES',
+        classKey: '10',
+        color: '#ff00ff'
+      })
+    );
+    const text = frameText(markup);
+    expect(markup).toContain('data-popup-kind="surface"');
+    expect(text).toContain('SPC Fire Weather Outlook, Day 1');
+    expect(text).toContain('Issued by: NOAA Storm Prediction Center');
+    expect(text).toContain('Extremely Critical');
+    expect(markup).toContain('data-swatch-class="10"');
+    expect(markup).toContain('<time datetime="2026-10-05T12:00:00.000Z">');
+    expect(text).toContain('From Oct 5, 2026, 12:00 UTC');
+    expect(text).toContain('Until Oct 6, 2026, 12:00 UTC');
+    expect(text).toContain('not a fire danger rating and not an active fire');
+
+    // An unknown category keeps its honest label and no swatch; odd time text is shown as supplied.
+    const odd = serializePopupFrame(buildSpcFireWeatherPopupModel('Category 7', { dn: 7, valid: '2026-10-05', expire: null }, null));
+    expect(odd).not.toContain('popup-swatch');
+    expect(frameText(odd)).toContain('From 2026-10-05 As the issuer states it; DDM does not read it as a full date.');
+    expect(frameText(odd)).not.toContain('Until');
+  });
 });

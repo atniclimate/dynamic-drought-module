@@ -1961,3 +1961,108 @@ test.describe('D1 M26a: the NIFC popup at the widest desktop seat', () => {
     expect(read!.card.bottom, `the card ends on screen (${size})`).toBeLessThanOrEqual(read!.viewport.h + 1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// S30D D1 M26b (block 5; register owner-1k, DDM-P11-T04): the NWS alert, SPC
+// fire weather outlook, power plant and power line popups through the frame.
+// Imported here, beside the cases, so the block is an append.
+// ---------------------------------------------------------------------------
+import {
+  EVENT_STATION_TIER_FIXTURES,
+  bootEventStation,
+  clickUntilEventStationResponse,
+  headSlotLines,
+  type EventStationId
+} from './frame-fixtures-events-stations';
+
+const M26B_IDS: readonly EventStationId[] = ['nws', 'spc', 'power-plant', 'power-line'];
+
+/**
+ * ONE catch-all external-request backstop on the context, before the first
+ * page boots (the PF3 rows' own isolation above): gotoApp's context stubs and
+ * each fixture's page routes are checked first; anything else is answered 503.
+ */
+async function holdM26bNetwork(context: BrowserContext): Promise<void> {
+  await context.route(
+    (url) => url.protocol.startsWith('http') && url.hostname !== '127.0.0.1' && url.hostname !== 'localhost',
+    (route) => route.fulfill({ status: 503, contentType: 'text/plain', body: 'Synthetic offline response' })
+  );
+}
+
+/**
+ * The director's rule for M26's builders (DR-179's dated note on D1.md :142,
+ * under DR-177): each head slot holds one line at the narrowest desktop
+ * measure (the title two); anything longer moves to a named body slot. The
+ * frame takes one 304px measure (--popup-measure) on every desktop seat, so
+ * 1280x720 reads it. A head with no source link (the power line) has no
+ * source slot; its stated source is in the body. Red on bd8c1aa: the legacy
+ * cards are no frame, so there is no head slot to measure.
+ */
+test.describe('D1 M26b: the NWS, SPC and power heads hold one line per slot', () => {
+  test('at 1280x720 each NWS, SPC and power head slot holds one line (the title two)', async ({ context }) => {
+    test.setTimeout(60_000 + 60_000 * M26B_IDS.length);
+    await holdM26bNetwork(context);
+    for (const id of M26B_IDS) {
+      const page = await context.newPage();
+      try {
+        await page.setViewportSize({ width: 1280, height: 720 });
+        await bootEventStation(page, id);
+        await clickUntilEventStationResponse(page, id);
+        // The response is one framed card (so red on the legacy cards names the
+        // missing frame, not the late door).
+        await expect(page.locator('.maplibregl-popup [data-popup-frame]'), `${id}: the response is a framed card`).toHaveCount(1);
+        // The late door lands after the paint and joins the head; the card is
+        // read once it holds still.
+        await expect(page.locator(FRAMED_LATE_DOOR), `${id}: the late door in the actions slot`).toBeVisible({ timeout: 10_000 });
+        await settleCard(page);
+        const lines = await headSlotLines(page);
+        expect(lines, `${id}: the response is a framed card with a head`).not.toBeNull();
+        expect(lines!['title'], `${id}: the title takes one or two lines`).toBeGreaterThanOrEqual(1);
+        expect(lines!['title'], `${id}: the title takes one or two lines`).toBeLessThanOrEqual(2);
+        for (const slot of ['issuer', 'value', 'clock'] as const) {
+          expect(lines![slot], `${id}: the ${slot} slot holds one line`).toBe(1);
+        }
+        if (id === 'power-line') expect(lines!['source'], 'power-line: no head source (the stated source is in the body)').toBeUndefined();
+        else expect(lines!['source'], `${id}: the source slot holds one line`).toBe(1);
+      } finally {
+        await page.close();
+      }
+    }
+  });
+});
+
+/**
+ * The PF3 tier rows above run every registered fixture; these two run only
+ * the four M26b fixtures, so their verdict reads on its own (the M26a census
+ * pattern). The tallest of the four cards (the power line: four detail rows,
+ * its caveat and its stated source) is read at 1280x720 inside the long-head
+ * row. Red on bd8c1aa: the legacy cards are no frame (no source-fallback
+ * slot at the tier boundaries; "the card is a frame" at the desktop seats).
+ */
+test.describe('D1 M26b: the NWS, SPC and power fixtures keep the PF3 tier promises on their own', () => {
+  async function eachM26bFixture(context: BrowserContext, run: (fixture: TierFixture, page: Page) => Promise<void>): Promise<void> {
+    await holdM26bNetwork(context);
+    for (const id of M26B_IDS) {
+      expect(LEGACY_ALLOWANCE, `${id} has left LEGACY_ALLOWANCE`).not.toContain(id);
+      const fixture = EVENT_STATION_TIER_FIXTURES[id];
+      expect(fixture, `${id}: a tier fixture`).toBeDefined();
+      expect(TIER_FIXTURES[id], `${id} is registered in tests/frame-fixtures.ts`).toBe(fixture);
+      const page = await context.newPage();
+      try {
+        await run(fixture!, page);
+      } finally {
+        await page.close();
+      }
+    }
+  }
+
+  test('the NWS, SPC and power sources and caveats remain clickable at FULL and usable-COMPACT boundaries', async ({ context }) => {
+    test.setTimeout(60_000 + 60_000 * M26B_IDS.length);
+    await eachM26bFixture(context, (fixture, page) => fixture.sourcesAtTierBoundaries(page));
+  });
+
+  test('the NWS, SPC and power long desktop heads and panel responses keep their scrolling and close access', async ({ context }) => {
+    test.setTimeout(60_000 + 90_000 * M26B_IDS.length);
+    await eachM26bFixture(context, (fixture, page) => fixture.longHeadAndPanel(page));
+  });
+});
