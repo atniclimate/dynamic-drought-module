@@ -24,8 +24,9 @@ export interface CensusHelpers {
 
 /**
  * Boots its builder's layer, clicks until the audit has seen the builder's
- * response, and asserts window.__ddmFrameCheck on it (five non-empty head
- * slots; the frame root owns the displayed content) and no audit violation.
+ * response, and asserts window.__ddmFrameCheck on it (four non-empty head
+ * slots plus a link-bearing head source or the body's stated reason; the
+ * frame root owns the displayed content) and no audit violation.
  * The observer is already installed as an init script when it runs.
  */
 export type CensusFixture = (page: Page, h: CensusHelpers) => Promise<void>;
