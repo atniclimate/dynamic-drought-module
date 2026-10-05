@@ -509,7 +509,15 @@ import {
   syncSpiWindowParam,
   syncUrl
 } from '../src/state/url';
-import { syncEnsoFlowParams } from '../src/state/enso-flow';
+import {
+  parseEnsoFlowParams,
+  syncEnsoFlowParams,
+  writeEnsoFlowParams,
+  type EnsoFlowKind
+} from '../src/state/enso-flow';
+import * as ensoFlowState from '../src/state/enso-flow';
+import { readFileSync } from 'node:fs';
+import type { HazardClusterDef, HazardClusterKey } from '../src/config/clusters';
 import { fullSiteLayersStudioUrl, fullSitePlaceStudioUrl } from '../src/state/studio-route';
 import { FRAMINGS } from '../src/config/framings';
 import { installFakeBrowser } from './map-harness';
@@ -947,5 +955,134 @@ test.describe('D1 M13: the Share control states its own restore contract (found-
     // above), and the briefing place does not reopen (select= was already
     // gone from the copied link).
     await expect(page.locator('#impact-panel')).toBeHidden();
+  });
+});
+
+/**
+ * ENSO-FLOW-PLAN E1-5 (block E1): the `flow=off` token and the `flowDefault`
+ * cluster field (C-fit.md 1.4). A mode whose definition carries `flowDefault`
+ * opens with that kind when its link names no `flow=`; `flow=off` is the new
+ * token that keeps it off, written only where that default is on. Block E1
+ * sets `flowDefault` on no cluster, so ENSO still opens with flow off; the
+ * default-on cases here pass a synthetic cluster table or an explicit
+ * default, never a real cluster's.
+ */
+test.describe('E1-5: flow=off and the flowDefault cluster field', () => {
+  /** Parse, then write back over the same query, as the cloning writer does. */
+  function roundTrip(query: string, modeDefault: EnsoFlowKind): {
+    readonly kind: EnsoFlowKind;
+    readonly ink: string;
+    readonly written: string;
+  } {
+    const params = new URLSearchParams(query);
+    const preference = parseEnsoFlowParams(params, modeDefault);
+    writeEnsoFlowParams(params, preference, modeDefault);
+    return { kind: preference.kind, ink: preference.ink, written: params.toString() };
+  }
+
+  test('flow=off parses and round-trips where the mode default is on', () => {
+    // Default on (DR-111's wind, precedence.md 2.4): no flow= key opens it.
+    expect(parseEnsoFlowParams(new URLSearchParams('cluster=enso'), 'wind')).toEqual({ kind: 'wind', ink: 'light' });
+    // flow=off parses to off and is written back as itself.
+    expect(roundTrip('cluster=enso&flow=off', 'wind')).toEqual({
+      kind: 'off',
+      ink: 'light',
+      written: 'cluster=enso&flow=off'
+    });
+    // A second round trip is stable.
+    expect(roundTrip(roundTrip('cluster=enso&flow=off', 'wind').written, 'wind').written).toBe('cluster=enso&flow=off');
+    // flowink is not carried beside flow=off (nothing draws to ink).
+    expect(roundTrip('cluster=enso&flow=off&flowink=dark', 'wind').written).toBe('cluster=enso&flow=off');
+    // The default kind writes no flow key, so a boot with no key stays clean;
+    // its ink still round-trips.
+    expect(roundTrip('cluster=enso', 'wind').written).toBe('cluster=enso');
+    expect(roundTrip('cluster=enso&flow=wind&flowink=dark', 'wind')).toEqual({
+      kind: 'wind',
+      ink: 'dark',
+      written: 'cluster=enso&flowink=dark'
+    });
+    expect(roundTrip('cluster=enso&flowink=dark', 'wind')).toEqual({
+      kind: 'wind',
+      ink: 'dark',
+      written: 'cluster=enso&flowink=dark'
+    });
+    // Another kind is still named (every 2026-09-13 link keeps its kind).
+    expect(roundTrip('cluster=enso&flow=currents', 'wind').written).toBe('cluster=enso&flow=currents');
+    expect(roundTrip('cluster=enso&flow=waves', 'wind').written).toBe('cluster=enso&flow=waves');
+    // Where the default is off, flow=off is off and is never written.
+    expect(roundTrip('layers=sst-anomaly&flow=off', 'off')).toEqual({
+      kind: 'off',
+      ink: 'light',
+      written: 'layers=sst-anomaly'
+    });
+    expect(roundTrip('layers=sst-anomaly&flow=wind', 'off').written).toBe('layers=sst-anomaly&flow=wind');
+  });
+
+  test('a duplicate or unknown flow resolves to off', () => {
+    const offInputs = [
+      'flow=wind&flow=waves',
+      'flow=wind&flow=wind',
+      'flow=rainbow',
+      'flow=',
+      'flow=OFF',
+      'flow=Wind',
+      'flow=off&flow=wind'
+    ];
+    for (const input of offInputs) {
+      // Where the default is on, the writer rewrites it as flow=off
+      // (moving-paths section 12), so the link keeps meaning off.
+      expect(roundTrip(`cluster=enso&${input}`, 'wind'), `${input} beside a default-on mode`).toEqual({
+        kind: 'off',
+        ink: 'light',
+        written: 'cluster=enso&flow=off'
+      });
+      // Where the default is off, it resolves to off and is dropped.
+      expect(roundTrip(`layers=sst-anomaly&${input}`, 'off'), `${input} where the default is off`).toEqual({
+        kind: 'off',
+        ink: 'light',
+        written: 'layers=sst-anomaly'
+      });
+    }
+  });
+
+  test('flowDefault is read from the cluster definition, never a cluster literal', () => {
+    const withDefault = (
+      key: HazardClusterKey,
+      flowDefault: HazardClusterDef['flowDefault']
+    ): Record<HazardClusterKey, HazardClusterDef> => ({
+      ...HAZARD_CLUSTERS,
+      [key]: { ...HAZARD_CLUSTERS[key], flowDefault }
+    });
+
+    // Block E1 sets it on no cluster: ENSO still opens with flow off, and an
+    // off ENSO link writes no flow=off.
+    for (const key of HAZARD_CLUSTER_KEYS) {
+      expect(HAZARD_CLUSTERS[key].flowDefault, `${key} carries no flowDefault in block E1`).toBeUndefined();
+    }
+    expect(ensoFlowState.ensoFlowModeDefault(new URLSearchParams('cluster=enso'))).toBe('off');
+    expect(parseEnsoFlowParams(new URLSearchParams('cluster=enso'))).toEqual({ kind: 'off', ink: 'light' });
+    const enso = new URLSearchParams('cluster=enso');
+    writeEnsoFlowParams(enso, { kind: 'off', ink: 'light' });
+    expect(enso.toString()).toBe('cluster=enso');
+
+    // The field decides, whichever cluster carries it.
+    const ensoWind = withDefault('enso', 'wind');
+    expect(ensoFlowState.ensoFlowModeDefault(new URLSearchParams('cluster=enso'), ensoWind)).toBe('wind');
+    expect(ensoFlowState.ensoFlowModeDefault(new URLSearchParams('cluster=wildfire'), ensoWind)).toBe('off');
+    expect(ensoFlowState.ensoFlowModeDefault(new URLSearchParams(''), ensoWind)).toBe('off');
+    // layers= outranks cluster= (parseShellParams): a granular display is no mode.
+    expect(ensoFlowState.ensoFlowModeDefault(new URLSearchParams('cluster=enso&layers=sst-anomaly'), ensoWind)).toBe('off');
+    const wildfireWaves = withDefault('wildfire', 'waves');
+    expect(ensoFlowState.ensoFlowModeDefault(new URLSearchParams('cluster=wildfire'), wildfireWaves)).toBe('waves');
+    expect(ensoFlowState.ensoFlowModeDefault(new URLSearchParams('cluster=enso'), wildfireWaves)).toBe('off');
+    // Drought's URL truth is absence, so a default on Drought reads from no token.
+    expect(ensoFlowState.ensoFlowModeDefault(new URLSearchParams('view=console'), withDefault('drought', 'currents'))).toBe('currents');
+
+    // And no cluster literal stands in for the field in the state module.
+    const source = readFileSync(new URL('../src/state/enso-flow.ts', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/.*$/gm, '$1');
+    expect(source).toContain('flowDefault');
+    expect(source).not.toMatch(/['"`](?:enso|drought|wildfire|heat)['"`]/);
   });
 });

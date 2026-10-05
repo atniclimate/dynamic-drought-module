@@ -9,6 +9,7 @@
  */
 
 import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { expect, type BrowserContext, type Page, type Locator, type Route } from '@playwright/test';
 import { stubRecentSatellite } from './satellite-fixture';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
@@ -377,6 +378,12 @@ export async function gotoApp(
   // boot never waits on NOAA's answer. See `installDefaultNwsWwaStub`'s own
   // comment for the opt-out and why a spec's own `page.route` still wins.
   await installDefaultNwsWwaStub(page, options.nwsWwa ?? 'fixture');
+  // ENSO-FLOW-PLAN E1-5: every routine boot answers the NOAA NODD GFS bucket
+  // from tests/fixtures/flow/, and an unstubbed NODD read is answered 404 and
+  // fails the spec (`installDefaultNoddStub`'s own comment). The ENSO flowing
+  // paths read that bucket at runtime; without this every ENSO spec would
+  // read AWS, and the repo has no egress host list to catch it.
+  await installDefaultNoddStub(page);
   coverFuturePages(page);
   await page.goto(query, { waitUntil: 'domcontentloaded' });
   // DOM READY, and no longer a proxy for a finished boot. The generated
@@ -1007,4 +1014,151 @@ export async function awaitQuiescence(page: Page, budgetMs = 10_000): Promise<Dd
   }, budgetMs);
   if (outcome.ok) return outcome.snapshot;
   throw new Error(`awaitQuiescence: ${outcome.message}`, { cause: outcome.snapshot ?? null });
+}
+
+// ---------------------------------------------------------------------------
+// NOAA NODD (the GFS bucket the ENSO flowing paths read)
+// ---------------------------------------------------------------------------
+
+/**
+ * The NOAA Open Data Dissemination bucket the ENSO wind and wave paths read
+ * at runtime by `.idx` GET and one Range GET per GRIB2 message
+ * (ENSO-FLOW-PLAN section 2.2; B-grib.md). Matched as the bucket's whole
+ * host family: the virtual-hosted name, its regional and dualstack forms,
+ * and the path-style form on any S3 endpoint.
+ */
+export const NODD_BUCKET = 'noaa-gfs-bdp-pds';
+
+export function isNoddRequestUrl(url: URL): boolean {
+  const host = url.hostname;
+  if (!host.endsWith('.amazonaws.com')) return false;
+  if (host.startsWith(`${NODD_BUCKET}.s3.`) || host.startsWith(`${NODD_BUCKET}.s3-`)) return true;
+  return /^s3[.-]/.test(host) && url.pathname.startsWith(`/${NODD_BUCKET}/`);
+}
+
+/** One NODD read the default stub answers from tests/fixtures/flow/ (E1-1's fixtures). */
+interface NoddFixture {
+  /** The object key, as a virtual-hosted path without its leading slash. */
+  readonly key: string;
+  /** The exact Range header a message read sends, or null for a whole `.idx` GET. */
+  readonly range: string | null;
+  /** The fixture file under tests/fixtures/flow/. */
+  readonly file: string;
+}
+
+/**
+ * Every NODD read with a fixture: the three `.idx` files and the five
+ * messages E1-1 cut on 2026-10-05 (cycle 2026-10-05 06Z, f006), each with the
+ * key and range its tests/fixtures/flow/reference.json `source` records.
+ * A read not listed here is unstubbed (`installDefaultNoddStub`).
+ */
+export const NODD_FIXTURES: readonly NoddFixture[] = [
+  { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006.idx', range: null, file: 'gfs.t06z.pgrb2.1p00.f006.idx' },
+  { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006', range: 'bytes=34998139-35077224', file: 'gfs1p00-UGRD-10m-f006.grib2' },
+  { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006', range: 'bytes=35077225-35156831', file: 'gfs1p00-VGRD-10m-f006.grib2' },
+  { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.global.0p25.f006.grib2.idx', range: null, file: 'gfswave.t06z.global.0p25.f006.grib2.idx' },
+  { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.global.0p25.f006.grib2', range: 'bytes=3029161-3457288', file: 'global0p25-HTSGW-f006.grib2' },
+  { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.wcoast.0p16.f006.grib2.idx', range: null, file: 'gfswave.t06z.wcoast.0p16.f006.grib2.idx' },
+  { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.wcoast.0p16.f006.grib2', range: 'bytes=65805-75391', file: 'wcoast0p16-HTSGW-f006.grib2' },
+  { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.wcoast.0p16.f006.grib2', range: 'bytes=87636-106888', file: 'wcoast0p16-DIRPW-f006.grib2' }
+];
+
+/** How the default stub answered one NODD request. */
+export type NoddStubAnswer = 'fixture' | 'unstubbed';
+
+/** One NODD request the default stub answered. */
+export interface NoddStubEntry {
+  readonly method: string;
+  readonly url: string;
+  readonly range: string | null;
+  readonly answer: NoddStubAnswer;
+}
+
+const noddStubLogs = new WeakMap<BrowserContext, NoddStubEntry[]>();
+
+/** Every NODD request the default stub answered in this page's context, in order. */
+export function noddStubLog(page: Page): readonly NoddStubEntry[] {
+  return noddStubLogs.get(page.context()) ?? [];
+}
+
+/** The object key a NODD URL names, in either addressing style. */
+function noddKey(url: URL): string {
+  const path = decodeURIComponent(url.pathname).replace(/^\//, '');
+  return url.hostname.startsWith(`${NODD_BUCKET}.`) ? path : path.slice(NODD_BUCKET.length + 1);
+}
+
+/**
+ * Answer the NODD bucket on the browser CONTEXT on every routine boot
+ * (ENSO-FLOW-PLAN E1-5), so no spec reads AWS: without it every ENSO spec
+ * would, once the flowing paths read NODD. There is no unexpected-egress
+ * host list in this repo, so this route is the guard.
+ *
+ * FAIL-CLOSED, and LOUD. A GET whose key and Range header match a
+ * `NODD_FIXTURES` row is answered from that file: 200 for a whole `.idx`, 206
+ * with a `Content-Range` for a message, each with the
+ * `Access-Control-Allow-Origin: *` NODD sends. Anything else (another key, a
+ * range with no fixture, a whole-message GET, HEAD, a LIST) is answered 404
+ * with that same header, as NODD answers a missing key (B-grib.md section
+ * 2.1), recorded in `noddStubLog`, and fails the running test through
+ * `expect.soft`, naming the method, URL and range: add a fixture row, or
+ * route the read in the spec. Like the other suite-wide stubs, a spec's own
+ * `page.route` for the bucket wins (Playwright checks Page routes before
+ * Context routes). Idempotent per context.
+ */
+export async function installDefaultNoddStub(page: Page): Promise<void> {
+  const context = page.context();
+  if (noddStubLogs.has(context)) return;
+  const log: NoddStubEntry[] = [];
+  noddStubLogs.set(context, log);
+  await context.route(
+    (url) => isNoddRequestUrl(url),
+    async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      const range = (await request.headerValue('range')) ?? null;
+      const key = noddKey(url);
+      const fixture =
+        request.method() === 'GET' && url.search === ''
+          ? NODD_FIXTURES.find((row) => row.key === key && row.range === range)
+          : undefined;
+      log.push({ method: request.method(), url: request.url(), range, answer: fixture ? 'fixture' : 'unstubbed' });
+      if (!fixture) {
+        try {
+          expect
+            .soft(
+              `${request.method()} ${request.url()} range=${range ?? 'none'}`,
+              'unstubbed NODD request (tests/helpers.ts NODD_FIXTURES): answered 404'
+            )
+            .toBe('a NODD read with a fixture');
+        } catch {
+          // No test is running (a request after teardown): the 404 and the
+          // log still stand.
+        }
+        await route
+          .fulfill({ status: 404, headers: { 'access-control-allow-origin': '*' }, contentType: 'application/xml', body: '' })
+          .catch(() => undefined);
+        return;
+      }
+      const body = readFileSync(new URL(`./fixtures/flow/${fixture.file}`, import.meta.url));
+      if (fixture.range === null) {
+        await route
+          .fulfill({ status: 200, headers: { 'access-control-allow-origin': '*' }, contentType: 'text/plain', body })
+          .catch(() => undefined);
+        return;
+      }
+      const [first, last] = fixture.range.slice('bytes='.length).split('-');
+      await route
+        .fulfill({
+          status: 206,
+          headers: {
+            'access-control-allow-origin': '*',
+            'accept-ranges': 'bytes',
+            'content-range': `bytes ${first}-${last}/*`
+          },
+          contentType: 'binary/octet-stream',
+          body
+        })
+        .catch(() => undefined);
+    }
+  );
 }

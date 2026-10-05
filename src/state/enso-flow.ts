@@ -1,3 +1,4 @@
+import { HAZARD_CLUSTERS, type HazardClusterDef } from '../config/clusters';
 import { normalizeSidebarParam } from './url';
 
 /** Additive ENSO context preferences, independent of the SST date rail. */
@@ -9,21 +10,60 @@ export interface EnsoFlowPreference {
   readonly ink: EnsoFlowInk;
 }
 
-export function parseEnsoFlowParams(params: URLSearchParams): EnsoFlowPreference {
+/**
+ * The flow kind a display opens with when its link names no `flow=`: the
+ * mode's own `flowDefault` (src/config/clusters.ts; DR-111, precedence.md
+ * 2.4), read from the cluster definition and never from a mode literal
+ * (DR-113). `layers=` outranks `cluster=` (url.ts `parseShellParams`), and a
+ * granular display is no mode, so it has no default. No `cluster=` is the
+ * cluster whose URL truth is absence (a null `urlToken`); an unknown token
+ * names no cluster and has no default. `clusters` is a parameter only so a
+ * test can supply a table.
+ */
+export function ensoFlowModeDefault(
+  params: URLSearchParams,
+  clusters: Readonly<Record<string, HazardClusterDef>> = HAZARD_CLUSTERS
+): EnsoFlowKind {
+  if (params.has('layers')) return 'off';
+  const token = params.get('cluster');
+  return Object.values(clusters).find((def) => def.urlToken === token)?.flowDefault ?? 'off';
+}
+
+/**
+ * No `flow=` opens the mode default; one known kind, `off` included, is that
+ * kind; a duplicate or unknown `flow=` is off (C-fit.md 1.4).
+ */
+export function parseEnsoFlowParams(
+  params: URLSearchParams,
+  modeDefault: EnsoFlowKind = ensoFlowModeDefault(params)
+): EnsoFlowPreference {
   const values = params.getAll('flow');
   const value = values.length === 1 ? values[0] : null;
-  const kind = value === 'currents' || value === 'wind' || value === 'waves' ? value : 'off';
+  const kind =
+    values.length === 0
+      ? modeDefault
+      : value === 'currents' || value === 'wind' || value === 'waves'
+        ? value
+        : 'off';
   const inks = params.getAll('flowink');
   return { kind, ink: inks.length === 1 && inks[0] === 'dark' ? 'dark' : 'light' };
 }
 
-export function writeEnsoFlowParams(params: URLSearchParams, preference: EnsoFlowPreference): void {
+/**
+ * The mode default is written as absence; `flow=off` is written only where
+ * that default is on, so an off link keeps meaning off (moving-paths
+ * section 12).
+ */
+export function writeEnsoFlowParams(
+  params: URLSearchParams,
+  preference: EnsoFlowPreference,
+  modeDefault: EnsoFlowKind = ensoFlowModeDefault(params)
+): void {
+  const { kind } = preference;
   params.delete('flow');
   params.delete('flowink');
-  if (preference.kind !== 'off') {
-    params.set('flow', preference.kind);
-    if (preference.ink === 'dark') params.set('flowink', 'dark');
-  }
+  if (kind !== modeDefault) params.set('flow', kind);
+  if (kind !== 'off' && preference.ink === 'dark') params.set('flowink', 'dark');
 }
 
 export function syncEnsoFlowParams(preference: EnsoFlowPreference): void {

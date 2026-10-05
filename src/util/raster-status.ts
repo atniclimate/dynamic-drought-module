@@ -26,15 +26,22 @@
  * `degraded` (live, partial), none `error`. A tile request opens a cycle and
  * arms the deadline (the first cycle is open from attach). The view is
  * read when the map idles, when the source settles, on the first frame after
- * a camera move while no cycle is open, and at the deadline, where the
- * found-042 floor holds while a tile of the view is still in flight. Known
- * limit (DDM-P14-T04 C1, carried OPEN to D2 under DR-143, DDM-P1-T11): the
- * deadline reads once and leaves its cycle open, so on a map that does not
- * idle (the 3D scene) a later return to cached tiles is not read again
- * until the next idle or settle; the ordinary 2D map does recover there. A
+ * a camera move, and at the deadline, where the found-042 floor holds while a
+ * tile of the view is still in flight.
+ *
+ * A map that never idles (the 3D scene; a continuously repainting map, which
+ * the ENSO flowing paths will run: MapLibre fires `'idle'` only from a frame
+ * that leaves no repaint pending) must still close its cycles (ENSO-FLOW-PLAN
+ * E1-5; DDM-P14-T04 C1, carried OPEN to D2 under DR-143, DDM-P1-T11). Three
+ * closes need no idle: the source settling (`sourcedata` with the source
+ * loaded), the first frame after a camera move whose view has settled (every
+ * tile of it loaded or failed, none in flight: a return to cached tiles), and
+ * the deadline when it finds the view settled. A deadline that finds a tile
+ * still in flight reads with the floor and leaves its cycle open, so the next
+ * settle or settled post-move frame reads the view again. A
  * held view whose tiles all fail after the deadline is a different case:
  * MapLibre fires no event for a 404 and no idle follows an all-404 view
- * (:192-193 below; tests/raster-current-view.spec.ts:193-195), so the 2D
+ * (:215-216 below; tests/raster-current-view.spec.ts:193-195), so the 2D
  * map gets no idle either, and a live (partial) verdict can persist over
  * the all-failed view until the next interaction on any map. Without a
  * tile manager the verdict falls back to the cycle's request sets, which
@@ -147,31 +154,47 @@ export function watchRasterTiles(
     deadlineTimer = null;
   };
 
+  // [tiles, loaded, in flight] for this source on the map now, or undefined.
+  // MapLibre INTERNAL, read behind a guard: `map.style.tileManagers`
+  // (MapLibre 6.6, node_modules/maplibre-gl/src/tile/tile_manager.ts). Its
+  // ids are the view's ideal tiles and the fallbacks retained for them,
+  // whether fetched or restored from the out-of-view cache, which fires no
+  // event; a loaded tile that leaves goes to that cache silently. In flight
+  // means neither loaded nor errored.
+  const readView = (): [number, number, number] | undefined => {
+    try {
+      const manager = map.style.tileManagers[sourceId];
+      const ids = manager.getIds();
+      return [
+        ids.length,
+        ids.filter((id) => manager.getTileByID(id)?.hasData()).length,
+        ids.filter((id) => {
+          const state = manager.getTileByID(id)?.state;
+          return state !== 'loaded' && state !== 'errored';
+        }).length
+      ];
+    } catch {
+      // No style, a removed source, a test double, or a MapLibre that moved
+      // any of it: the request sets decide, as before the view was read.
+      return undefined;
+    }
+  };
+
+  // A view with tiles, none of them in flight: settled evidence, which an
+  // open cycle otherwise waits for idle to read. Without a tile manager this
+  // is never true, so the request-set fallback keeps waiting for idle.
+  const viewSettled = (): boolean => {
+    const view = readView();
+    return view !== undefined && view[0] > 0 && view[2] === 0;
+  };
+
   const reportCompleteness = (
     emptyCycleOutcome: EmptyCycleOutcome = 'error',
     floorAtPartial = false
   ): void => {
-    // [tiles, loaded] for this source on the map now. MapLibre INTERNAL, read
-    // behind a guard: `map.style.tileManagers` (MapLibre 6.6,
-    // node_modules/maplibre-gl/src/tile/tile_manager.ts). Its ids are the
-    // view's ideal tiles and the fallbacks retained for them, whether fetched
-    // or restored from the out-of-view cache, which fires no event; a loaded
-    // tile that leaves goes to that cache silently.
-    let view: [number, number] | undefined;
-    // Tiles of the view still in flight: neither loaded nor errored.
-    let inFlight = 0;
-    try {
-      const manager = map.style.tileManagers[sourceId];
-      const ids = manager.getIds();
-      view = [ids.length, ids.filter((id) => manager.getTileByID(id)?.hasData()).length];
-      inFlight = ids.filter((id) => {
-        const state = manager.getTileByID(id)?.state;
-        return state !== 'loaded' && state !== 'errored';
-      }).length;
-    } catch {
-      // No style, a removed source, a test double, or a MapLibre that moved
-      // any of it: the request sets decide, as before the view was read.
-    }
+    const read = readView();
+    const view: [number, number] | undefined = read && [read[0], read[1]];
+    const inFlight = read?.[2] ?? 0;
     // Outside a cycle, an empty view (a hidden source) keeps its verdict.
     if (!requestCycleActive && !view?.[0]) return;
     const [total, loaded] = view ?? [requestedTiles.size, successfulTiles.size];
@@ -216,6 +239,10 @@ export function watchRasterTiles(
       // An open cycle at its deadline: an empty view reads `error`, never the
       // idle outcome, and the found-042 floor holds after a rendered frame.
       reportCompleteness('error', rendered);
+      // A settled view is the whole evidence: close the cycle here rather than
+      // wait for an idle a repainting map never sends, so the next camera move
+      // reads its own view (E1-5). A tile still in flight keeps it open.
+      if (viewSettled()) requestCycleActive = false;
     }, deadlineMs);
   };
 
@@ -255,10 +282,15 @@ export function watchRasterTiles(
   // opens no cycle, so read the view once it is current: at `moveend` the
   // manager still holds the old view (a jump fires `moveend` before the next
   // frame updates the tile managers), so read on that frame's `render`. A
-  // move that requested tiles opened a cycle, and its end decides.
+  // move that requested tiles opened a cycle, and its end decides. A cycle
+  // still open from before the move (a deadline that found a tile in flight,
+  // whose tiles then left the view) is closed on that frame once the view
+  // has settled, because only idle would close it otherwise and a
+  // repainting map never idles (E1-5).
   const onRender = (): void => {
     map.off('render', onRender);
     if (!requestCycleActive) reportCompleteness();
+    else if (viewSettled()) finishRequestCycle();
   };
 
   const onMoveEnd = (): void => {
