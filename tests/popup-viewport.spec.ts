@@ -1844,14 +1844,14 @@ test.describe('D1 M23 C1: the place-label popup keeps one usable close control',
     const probes: ReadonlyArray<readonly [number, number]> = [
       [0, 0], [0, -24], [0, 24], [-40, 0], [40, 0], [-40, -24], [40, 24], [-40, 24], [40, -24]
     ];
-    const popup = page.locator('.maplibregl-popup').filter({ has: page.locator('.place-name-popup') });
+    const popup = page.locator('.maplibregl-popup').filter({ has: page.locator('[data-ddm-response="us-places-labels"]') });
     let probe = 0;
     await expect(async () => {
       const [dx, dy] = probes[probe++ % probes.length]!;
       await page.mouse.click(cx + dx, cy + dy);
       await expect(popup).toBeVisible({ timeout: 1000 });
     }).toPass({ timeout: 30_000 });
-    await expect(popup.locator('.place-name-popup')).toHaveText(PLACE_FIXTURE_NAME);
+    await expect(popup.locator('[data-popup-slot="title"]')).toHaveText(PLACE_FIXTURE_NAME);
     const close = popup.locator('.maplibregl-popup-close-button');
     await expect(close).toHaveCount(1);
     await expectHitTestReachable(close, 'the place-label popup close control');
@@ -1916,5 +1916,48 @@ test.describe('D1 M23 PF3: framed heads keep the tier promises (generic over mig
   test('long desktop heads and panel responses preserve required scrolling and close access', async ({ context }) => {
     test.setTimeout(60_000 + 90_000 * migratedBuilders().length);
     await eachTierFixture(context, 'long-head and panel', (fixture, page) => fixture.longHeadAndPanel(page));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S30D D1 M26a (block 4; register owner-1k, DDM-P11-T04): the NIFC perimeter
+// popup and the place-label popup through the frame. Imported here, beside
+// the cases, so the block is an append.
+// ---------------------------------------------------------------------------
+import {
+  FRAMED_LATE_DOOR,
+  bootFireLabel,
+  clickUntilFireLabelResponse,
+  expectHeadVisibleBodyScrolls,
+  readCard,
+  settleCard
+} from './frame-fixtures-fires-labels';
+
+/**
+ * D1.md 2.3 item 3 (r3-1:f3): at 2560x1440 the legacy NIFC popup was a
+ * 240 x 998 card under MapLibre's 240 px cap, its agency line, sizes, fire
+ * context and notes all in one column. Red on 4c2afb4: the card is 240 px
+ * wide and is no frame.
+ */
+test.describe('D1 M26a: the NIFC popup at the widest desktop seat', () => {
+  test.use({ viewport: { width: 2560, height: 1440 } });
+
+  test('at 2560x1440 a NIFC popup keeps its head visible and scrolls only its body inside the tier', async ({ page }) => {
+    await bootFireLabel(page, 'nifc', { variant: 'long' });
+    await clickUntilFireLabelResponse(page, 'nifc');
+    // The late door lands after the paint (DR-042 a) and grows the head:
+    // read the card at its longest, held still across two frames.
+    await expect(page.locator('.maplibregl-popup .maplibregl-popup-content [data-ddm-impact-trigger]')).toBeVisible({ timeout: 10_000 });
+    await settleCard(page);
+    const read = await readCard(page);
+    expect(read, 'a NIFC response card').not.toBeNull();
+    const size = `${Math.round(read!.card.width)} x ${Math.round(read!.card.height)}`;
+    expect(read!.card.width, `the card keeps MapLibre's 240 px cap (${size})`).toBeGreaterThan(240);
+    expect(read!.compact, `the FULL tier at 2560x1440 (${size})`).toBe(false);
+    expectHeadVisibleBodyScrolls(read, `nifc at 2560x1440 (${size})`);
+    await expect(page.locator(FRAMED_LATE_DOOR)).toHaveCount(1);
+    // The whole card sits on screen: nothing scrolls but the body.
+    expect(read!.card.top, `the card starts on screen (${size})`).toBeGreaterThanOrEqual(-1);
+    expect(read!.card.bottom, `the card ends on screen (${size})`).toBeLessThanOrEqual(read!.viewport.h + 1);
   });
 });

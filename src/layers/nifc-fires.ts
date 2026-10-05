@@ -86,7 +86,7 @@ import {
 } from '../config/wildfire-presentation';
 import { mapRendererClass, type RendererClass } from '../map/gl-capability';
 import { registerClickTarget } from '../map/interaction-coordinator';
-import { escapeHtml } from '../util/escape';
+import type { IssuedModel, IssuerSwatch, PopupClock, PopupDetail, RecordBlock, RecordSize } from '../ui/popup-frame';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { prefersReducedMotion } from '../util/motion';
 import { dateTok } from '../util/text-tokens';
@@ -99,7 +99,7 @@ import {
   setTimeBar,
   timeBarOwner
 } from '../ui/time-bar';
-import { buildFireContextHtml } from '../impact/fire-context';
+import { readFireContext, type FireContext } from '../impact/fire-context';
 
 const LAYER_KEY = 'nifc-fires';
 const SOURCE_ID = 'nifc-fires';
@@ -946,69 +946,168 @@ function pickIncidentName(props: GeoJsonProperties): string {
   return 'Mapped Fire Perimeter';
 }
 
-/**
- * Format a WFIGS date field. Like NDMC, ESRI ImageServer feature outputs
- * use milliseconds-since-epoch integers; we render `YYYY-MM-DD` in UTC.
- */
-function formatDate(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '';
-  const ms = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(ms)) return '';
-  const d = new Date(ms);
-  if (Number.isNaN(d.getTime())) return '';
-  const yyyy = d.getUTCFullYear();
-  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(d.getUTCDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+/** The frame's explanation for issuer time text DDM does not parse (PF1; the M25 builders' wording). */
+const SUPPLIED_TIME_EXPLANATION = 'As the issuer states it; DDM does not read it as a full date.';
+
+/** Hectares per acre (grouping-contract.md section 4, "Conversion shown"). */
+const HECTARES_PER_ACRE = 0.40468564224;
+
+/** A finite number from a WFIGS numeric field, or null for a missing, blank or non-numeric value. */
+function finiteNumber(value: unknown): number | null {
+  if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
+  const num = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  return Number.isFinite(num) ? num : null;
+}
+
+/** Whole units, thousands-separated (sub-acre precision exceeds typical perimeter accuracy). */
+function wholeUnits(value: number): string {
+  return value.toLocaleString('en-US', { maximumFractionDigits: 0 });
 }
 
 /**
- * Format a numeric acreage value. WFIGS exposes `attr_IncidentSize` and
- * `poly_GISAcres` as floats; we round to whole acres for display since
- * sub-acre precision exceeds typical perimeter accuracy.
+ * A WFIGS size field in its issuer unit (acres) first, with the "about"
+ * hectare conversion rounded to whole units (grouping-contract.md 12.1 slot
+ * 3), under the field's own name; null when the field carries no size.
  */
-function formatAcres(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '';
-  const num = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(num)) return '';
-  return num.toLocaleString(undefined, { maximumFractionDigits: 0 });
+function sizeRow(label: string, value: unknown): RecordSize | null {
+  const acres = finiteNumber(value);
+  if (acres === null) return null;
+  return { label, text: `${wholeUnits(acres)} acres (about ${wholeUnits(acres * HECTARES_PER_ACRE)} ha)` };
 }
 
 /**
- * Build the popup HTML for a mapped NIFC perimeter. Kept in-file for
- * M9 (the M5 popups module is being written concurrently and we do not
- * want to fight over `src/ui/popups.ts`).
+ * The discovery time as the WFIGS date field states it: epoch milliseconds
+ * read as a UTC instant (the zone named; the old popup cut it to its UTC
+ * date). A missing, blank or non-text, non-numeric value is absent (null);
+ * other text is shown as supplied, never silently dropped (PF1).
  */
-function buildNifcPopupHtml(props: GeoJsonProperties): string {
+function discoveredClock(value: unknown): PopupClock | null {
+  if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
+  const ms = finiteNumber(value);
+  if (ms !== null && new Date(ms).getUTCFullYear() >= 1000) {
+    return { kind: 'point', meaning: 'discovered', label: 'Discovered', at: { precision: 'instant', at: ms, zone: 'UTC' } };
+  }
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  return { kind: 'point', meaning: 'discovered', label: 'Discovered', at: { precision: 'supplied', text: String(value), explanation: SUPPLIED_TIME_EXPLANATION } };
+}
+
+/** The class the map draws the perimeter as (DDM-UI-006), with its own swatch. */
+function classSwatch(value: unknown): IssuerSwatch {
+  const cls = classifyNifcIncidentType(value);
+  const color =
+    cls === 'wildfire'
+      ? NIFC_INCIDENT_PRESENTATION.wildfire.fillColor
+      : cls === 'prescribed'
+        ? NIFC_INCIDENT_PRESENTATION.prescribed.fillColor
+        : NIFC_INCIDENT_PRESENTATION.other.lineColor;
+  return { table: 'NIFC_INCIDENT_PRESENTATION', classKey: cls, color };
+}
+
+/** The record's text field, trimmed, or null when missing or blank. */
+function textField(value: unknown): string | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const text = String(value).trim();
+  return text === '' ? null : text;
+}
+
+/**
+ * The record key (grouping-contract.md section 4): the UniqueFireIdentifier
+ * trimmed and uppercased; else the IRWIN id, braces removed and lowercased,
+ * as `nifc:irwin:<guid>`. A record that carries neither (a stub) has no
+ * key across responses: names and OBJECTIDs are never keys (item 3 and
+ * section 5.1), so the stub is keyed on its feature id inside this one
+ * response (section 4's "key plus OBJECTID within one response") under a
+ * prefix that says it is unkeyed, `nifc:unkeyed:<id>`, or `nifc:unkeyed`
+ * when the response gives the feature no id. Section 5.2's
+ * `nifc:geom:<hash>` is the grouping read's key over its generalized
+ * coordinates; a clicked feature carries only its tile-clipped rendering.
+ */
+function recordKey(ufi: string | null, irwin: string | null, featureId: string | number | undefined): string {
+  if (ufi !== null) return `nifc:${ufi.toUpperCase()}`;
+  if (irwin !== null) return `nifc:irwin:${irwin.replace(/[{}]/g, '').toLowerCase()}`;
+  const id = typeof featureId === 'number' ? (Number.isFinite(featureId) ? String(featureId) : '') : (featureId ?? '').trim();
+  return id === '' ? 'nifc:unkeyed' : `nifc:unkeyed:${id}`;
+}
+
+/**
+ * The mapped NIFC perimeter's popup model (S30D D1 M26a; DDM-P11-T04;
+ * interface-chrome-popups-text.md 3.4 and 3.5 row 7): an event head (the
+ * incident name, the issuer, the class the map draws with its swatch, the
+ * discovery time, NIFC Open Data), then ONE record block (grouping-contract
+ * 12.1) that names each size field, the fire-in-context rows with their own
+ * issuer and clock, and the existing notes. No status word is printed: the
+ * NIFC status wording waits on its ddm-cite verdict (D1.md:429), and the
+ * popup printed none before. `featureId` is the clicked feature's id inside
+ * its response, read only to key a record with no identifier (`recordKey`).
+ */
+export function buildNifcPopupModel(
+  props: GeoJsonProperties,
+  context: FireContext,
+  retrievedAt: number | null,
+  featureId?: string | number
+): IssuedModel {
   const p = props ?? {};
   const incidentName = pickIncidentName(p);
-  const type = nifcIncidentTypeLabel(p.attr_IncidentTypeCategory);
-  const acres = formatAcres(
-    p.attr_IncidentSize ?? p.poly_GISAcres
-  );
-  const discovered = formatDate(p.attr_FireDiscoveryDateTime);
+  const ufi = textField(p.attr_UniqueFireIdentifier);
+  const irwin = textField(p.attr_IrwinID);
   const stateRaw = p.attr_POOState;
   // POOState arrives as `US-XX`; trim the prefix for readable display.
   const state =
-    typeof stateRaw === 'string' && stateRaw.startsWith('US-')
-      ? stateRaw.slice(3)
-      : (stateRaw ?? '');
+    typeof stateRaw === 'string' && stateRaw.startsWith('US-') ? stateRaw.slice(3) : textField(stateRaw) ?? '';
 
-  return `
-    <div class="popup-title">${escapeHtml(incidentName)}</div>
-    <div class="popup-agency">NIFC WFIGS - Mapped Perimeter</div>
-    ${type ? `<div class="popup-treaty-meta">Type: ${escapeHtml(type)}</div>` : ''}
-    ${acres ? `<div class="popup-treaty-meta">Size: ${escapeHtml(acres)} acres</div>` : ''}
-    ${discovered ? `<div class="popup-treaty-meta">Discovered: ${escapeHtml(discovered)}</div>` : ''}
-    ${state ? `<div class="popup-treaty-meta">State: ${escapeHtml(String(state))}</div>` : ''}
-    <div class="popup-description">Perimeter sourced from the National Interagency Fire Center (NIFC) Wildland Fire Interagency Geospatial Services (WFIGS) feed. The service is checked for updates approximately every five minutes during active operations; individual perimeter age can differ.</div>
-    <div class="popup-description">${escapeHtml(NIFC_GENERALIZATION_NOTE)}</div>
-    <div class="popup-description">Strategic context only, not tactical fire operations, evacuation, or parcel decisions.</div>
-    <div class="popup-links">
-      <a href="https://data-nifc.opendata.arcgis.com/" target="_blank" rel="noopener">NIFC Open Data</a>
-      <a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>
-    </div>
-  `;
+  const discovered = discoveredClock(p.attr_FireDiscoveryDateTime);
+  // The layer's last successful browser check (the time bar's own words),
+  // in the viewer's zone, named.
+  const retrieved: PopupClock | null =
+    retrievedAt === null
+      ? null
+      : {
+          kind: 'point',
+          meaning: 'retrieved',
+          label: 'Last successful browser check',
+          at: { precision: 'instant', at: retrievedAt, zone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' }
+        };
+  const present = [discovered, retrieved].filter((c): c is PopupClock => c !== null);
+  const [firstPresent, ...laterPresent] = present;
+  const recordClocks: readonly [PopupClock, ...PopupClock[]] =
+    firstPresent === undefined ? [{ kind: 'not-stated', label: 'Discovered', reason: 'unavailable' }] : [firstPresent, ...laterPresent];
+
+  const record: RecordBlock = {
+    key: recordKey(ufi, irwin, featureId),
+    issuer: 'nifc',
+    identifier: ufi ?? incidentName,
+    ...(ufi === null ? {} : { name: incidentName }),
+    sizes: [sizeRow('Reported size', p.attr_IncidentSize), sizeRow('Mapped perimeter area', p.poly_GISAcres)].filter(
+      (row): row is RecordSize => row !== null
+    ),
+    clocks: recordClocks,
+    links: []
+  };
+
+  const details: PopupDetail[] = [];
+  if (state !== '') details.push({ kind: 'row', label: 'State', text: state });
+  details.push(...context.details);
+
+  return {
+    kind: 'event',
+    title: incidentName,
+    issuer: { role: 'issued-by', name: 'NIFC WFIGS (United States)', productKey: 'nifc-fires' },
+    value: [{ text: nifcIncidentTypeLabel(p.attr_IncidentTypeCategory), swatch: classSwatch(p.attr_IncidentTypeCategory) }],
+    // The head keeps the first present clock (the discovery time where the
+    // record states one); the record block carries every clock.
+    clocks: [recordClocks[0]],
+    conditions: [context.drought],
+    details,
+    records: [record],
+    source: { link: { label: 'NIFC Open Data', href: 'https://data-nifc.opendata.arcgis.com/' } },
+    moreLinks: [{ label: 'InciWeb', href: 'https://inciweb.wildfire.gov/' }],
+    qualifications: [
+      'Perimeter sourced from the National Interagency Fire Center (NIFC) Wildland Fire Interagency Geospatial Services (WFIGS) feed. The service is checked for updates approximately every five minutes during active operations; individual perimeter age can differ.',
+      NIFC_GENERALIZATION_NOTE,
+      'Strategic context only, not tactical fire operations, evacuation, or parcel decisions.',
+      context.note
+    ]
+  };
 }
 
 /**
@@ -1024,12 +1123,17 @@ export function bindPopups(map: maplibregl.Map): void {
     label: (feature) => pickIncidentName(feature.properties ?? {}),
     // B1 fire-in-context: the incident metadata, then a composed read of the
     // drought class beneath the clicked point and the nearest telemetry
-    // stations. The context block composes existing surfaces only; it does not
+    // stations. The context rows compose existing surfaces only; they do not
     // compute a fire outlook or combine the sources into a risk class.
     respond: (feature, click, m) => ({
-      content:
-        buildNifcPopupHtml(feature.properties ?? {}) +
-        buildFireContextHtml(m, click.point, click.lngLat)
+      model: buildNifcPopupModel(
+        feature.properties ?? {},
+        readFireContext(m, click.point, click.lngLat),
+        lastLoaded?.fetchedAt ?? null,
+        // The feature's id inside this response (ArcGIS writes OBJECTID):
+        // the stub record's response-scoped key, never a cross-response one.
+        feature.id
+      )
     })
   });
 

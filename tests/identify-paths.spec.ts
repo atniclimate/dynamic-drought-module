@@ -1022,3 +1022,35 @@ test.describe('identify paths: the observer re-audits later mutations', () => {
       .toBeGreaterThanOrEqual(2);
   });
 });
+
+// ---------------------------------------------------------------------------
+// S30D D1 M26a (block 4; register owner-1k, DDM-P11-T04): the NIFC perimeter
+// (with its fire context) and the place-label targets have left
+// LEGACY_ALLOWANCE. The census above runs their fixtures with every other
+// migrated builder's; this case runs only these two, so their verdict reads
+// on its own. Imported here, beside the case, so the block is an append.
+// ---------------------------------------------------------------------------
+import { FIRE_LABEL_CENSUS_FIXTURES } from './frame-fixtures-fires-labels';
+
+/**
+ * Red on 4c2afb4 once the 'nifc' and 'places' allowance lines are deleted:
+ * the observer reports "map: an unframed response for nifc-fires-fill (or
+ * us-places-labels), outside the legacy allowance" and the frame validator
+ * finds no [data-popup-frame] root ("not exactly one frame root").
+ */
+test.describe('identify paths: the NIFC and place-label targets yield the frame (D1 M26a)', () => {
+  for (const id of ['nifc', 'places'] as const) {
+    test(`the census yields [data-popup-frame] for the ${id} target`, async ({ page }) => {
+      test.setTimeout(120_000);
+      expect(LEGACY_ALLOWANCE, `${id} has left LEGACY_ALLOWANCE`).not.toContain(id);
+      expect(migratedBuilders().map((b) => b.id), `${id} is a migrated builder`).toContain(id);
+      expect(Object.keys(CENSUS_FIXTURES), `${id} is registered in tests/frame-fixtures.ts`).toContain(id);
+      await holdExternalNetwork(page);
+      await page.addInitScript(installPopupAudit, {
+        legacyLayerIds: legacyLayerIds(),
+        external: LEGACY_ALLOWANCE.includes('telemetry')
+      });
+      await FIRE_LABEL_CENSUS_FIXTURES[id]!(page, { clickCenterUntilSeen, readAudit });
+    });
+  }
+});

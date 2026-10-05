@@ -29,6 +29,7 @@ import type { FeatureCollection } from 'geojson';
 import { URLS } from '../config/urls';
 import { PLACE_LABEL_COLOR, PLACE_LABEL_HALO } from '../config/palette';
 import { registerClickTarget } from '../map/interaction-coordinator';
+import type { IssuedModel, PopupClock } from '../ui/popup-frame';
 import { fetchBufferedWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 
@@ -49,14 +50,35 @@ interface PlaceRow {
   readonly lon: number;
   readonly lat: number;
   readonly rank: number;
+  /**
+   * The GNIS feature id of a row the build renamed to its GNIS/BGN official
+   * form (D-0.7.0-030, scripts/build-places.mjs:17-24); absent on a row that
+   * keeps its Natural Earth spelling.
+   */
+  readonly gnis?: string;
 }
 
+/**
+ * The name form's source for a renamed row, in the crosswalk's own words
+ * (scripts/data/hi-gnis-crosswalk.json `_source`, the file the bundle's
+ * `meta.naming` names). Natural Earth does not publish these forms, so the
+ * popup never credits them to Natural Earth alone (plan_rules 3).
+ */
+const GNIS_NAME_SOURCE = 'USGS Geographic Names Information System (GNIS), Board on Geographic Names official forms';
+
 interface PlacesBundle {
-  readonly meta?: { readonly count?: number };
+  readonly meta?: { readonly count?: number; readonly retrieved?: unknown };
   readonly places?: readonly PlaceRow[];
 }
 
 let masterController: AbortController | null = null;
+
+/**
+ * The date the bundle's builder retrieved the Natural Earth points
+ * (`meta.retrieved`, scripts/build-places.mjs), as a UTC `YYYY-MM-DD`, or
+ * null when the bundle records none. Read at activation.
+ */
+let bundleRetrieved: string | null = null;
 
 function reportStatus(state: Status): void {
   registry.setStatus(LAYER_KEY, state);
@@ -94,6 +116,11 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   }
   if (signal.aborted) return;
 
+  const retrieved = bundle.meta?.retrieved;
+  const ymd = typeof retrieved === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(retrieved) : null;
+  bundleRetrieved =
+    ymd !== null && Number(ymd[2]) >= 1 && Number(ymd[2]) <= 12 && Number(ymd[3]) >= 1 && Number(ymd[3]) <= 31 ? ymd[0] : null;
+
   const rows = bundle.places ?? [];
   if (rows.length === 0) {
     reportStatus('no-data');
@@ -105,7 +132,9 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     features: rows.map((p) => ({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [p.lon, p.lat] },
-      properties: { name: p.name, rank: p.rank }
+      // `gnis` rides only on a renamed row, so the popup can name the name
+      // form's own source.
+      properties: typeof p.gnis === 'string' && p.gnis !== '' ? { name: p.name, rank: p.rank, gnis: p.gnis } : { name: p.name, rank: p.rank }
     }))
   };
 
@@ -153,14 +182,51 @@ export function deactivate(map: maplibregl.Map): void {
 }
 
 /**
+ * The place label's popup model (S30D D1 M26a; DDM-P11-T04;
+ * interface-chrome-popups-text.md 3.5 row 19): the name as bundled, the
+ * label's issuer, "Populated place", the bundle's retrieval date (the
+ * bundle names no Natural Earth edition) and the Natural Earth source. A name
+ * label is not a claim, so the body carries nothing more (LATER.md:124 keeps
+ * retiring this popup for later), except for a row the build renamed to its
+ * GNIS/BGN official form (`gnis`, its GNIS feature id; the shipped bundle
+ * has two, Līhuʻe and Wahiawā): Natural Earth does not publish that form, so
+ * one body row names the form's own source, distinct from the point's issuer
+ * (plan_rules 3; the block 4 review, R4-1).
+ */
+export function buildPlaceLabelModel(name: string, retrieved: string | null, gnis: string | null): IssuedModel {
+  const clock: PopupClock =
+    retrieved === null
+      ? { kind: 'not-stated', label: 'Retrieved on', reason: 'not recorded' }
+      : { kind: 'point', meaning: 'retrieved', label: 'Retrieved on', at: { precision: 'date', date: retrieved } };
+  return {
+    kind: 'label',
+    title: name,
+    issuer: { role: 'issued-by', name: 'Natural Earth (populated places)', productKey: 'places' },
+    value: [{ text: 'Populated place' }],
+    clocks: [clock],
+    details:
+      gnis === null
+        ? []
+        : [
+            // DRAFT (DR-draft, block 4 M26a): pending owner read
+            { kind: 'row', label: 'Name from', text: GNIS_NAME_SOURCE }
+          ],
+    source: {
+      link: { label: 'Natural Earth', href: 'https://www.naturalearthdata.com/downloads/10m-cultural-vectors/10m-populated-places/' }
+    }
+  };
+}
+
+/**
  * A tap or click on a place label opens a small popup carrying the
  * OFFICIAL name as real DOM text (D-0.7.0-030 condition 5, tightened by
  * the stage-5 adversarial major 3: the hover inspector is pointer-only
  * and aria-hidden, so it is not an accessible surface). The popup gives
  * touch and pointer users, and a screen reader once the popup is open, a
- * semantic rendering of the okina and macron forms. Full keyboard
- * reachability of canvas features is the 0.9.0 Section 508 audit's scope
- * (TODO), recorded rather than half-solved here.
+ * semantic rendering of the okina and macron forms (the frame writes the
+ * title as escaped text). Full keyboard reachability of canvas features is
+ * the 0.9.0 Section 508 audit's scope (TODO), recorded rather than
+ * half-solved here.
  */
 export function bindPopups(map: maplibregl.Map): void {
   registerClickTarget({
@@ -175,12 +241,11 @@ export function bindPopups(map: maplibregl.Map): void {
     respond: (feature) => {
       const name = feature.properties?.['name'];
       if (typeof name !== 'string' || name.trim() === '') return null;
-      const el = document.createElement('div');
-      el.className = 'place-name-popup';
-      el.textContent = name;
+      const gnis = feature.properties?.['gnis'];
+      // The coordinator forces its own close control (D1 M23 C1).
       return {
-        content: el,
-        popupOptions: { closeButton: false, offset: 10 }
+        model: buildPlaceLabelModel(name, bundleRetrieved, typeof gnis === 'string' && gnis !== '' ? gnis : null),
+        popupOptions: { offset: 10 }
       };
     }
   });

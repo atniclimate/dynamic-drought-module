@@ -978,3 +978,53 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
     ).toHaveLength(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// S30D D1 M26a (block 4; register owner-1k, DDM-P11-T04; grouping-contract.md
+// 12.1 and interface-chrome-popups-text.md 3.4, "a singleton NIFC perimeter
+// renders as kind event with one record block, which names today's unnamed
+// Size"). Imported here, beside the case, so the block is an append.
+// ---------------------------------------------------------------------------
+import {
+  NIFC_FIXTURE_NAME,
+  NIFC_FIXTURE_UFI,
+  NIFC_SIZE_ROWS,
+  bootFireLabel,
+  clickUntilFireLabelResponse
+} from './frame-fixtures-fires-labels';
+
+test.describe('D1 M26a: the NIFC perimeter popup through the frame', () => {
+  /**
+   * Red on 4c2afb4: the legacy popup prints "Size: 9,108 acres" (the
+   * reported attr_IncidentSize, or poly_GISAcres when it is missing) under
+   * one label that never says which field it shows, and has no record block.
+   */
+  test('a NIFC perimeter popup names its size fields in one record block', async ({ page }) => {
+    await bootFireLabel(page, 'nifc');
+    await clickUntilFireLabelResponse(page, 'nifc');
+    const content = page.locator('.maplibregl-popup .maplibregl-popup-content');
+    await expect(content.locator('.popup-title')).toHaveText(NIFC_FIXTURE_NAME);
+    // No size anywhere under an unnamed "Size" label.
+    await expect(content, 'an unnamed Size').not.toContainText(/\bSize:/);
+
+    const frame = content.locator(':scope > [data-popup-frame]');
+    await expect(frame).toHaveCount(1);
+    await expect(frame).toHaveAttribute('data-popup-kind', 'event');
+    const records = frame.locator(':scope > [data-popup-region="body"] > ol.popup-records > li[data-record-key]');
+    await expect(records, 'one record block').toHaveCount(1);
+    const record = records.first();
+    await expect(record).toHaveAttribute('data-record-issuer', 'nifc');
+    await expect(record).toHaveAttribute('data-record-key', `nifc:${NIFC_FIXTURE_UFI}`);
+    await expect(record.locator('[data-record-slot="issuer"]')).toHaveText('NIFC WFIGS (United States)');
+    await expect(record.locator('[data-record-identifier]')).toHaveText(NIFC_FIXTURE_UFI);
+    // Every size field named, in its issuer unit first with its conversion; never summed.
+    const sizes = record.locator('[data-record-slot="sizes"]');
+    await expect(sizes.locator('dt')).toHaveText(NIFC_SIZE_ROWS.map(([label]) => label));
+    await expect(sizes.locator('dd')).toHaveText(NIFC_SIZE_ROWS.map(([, text]) => text));
+    // The sizes stand only in the record block.
+    await expect(frame.getByText(/\bacres\b/)).toHaveCount(NIFC_SIZE_ROWS.length);
+    // No status word is printed: the NIFC status wording waits on its
+    // ddm-cite verdict (D1.md:429), and the legacy popup printed none.
+    await expect(record.locator('[data-record-slot="status"]')).toHaveCount(0);
+  });
+});

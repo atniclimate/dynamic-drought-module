@@ -55,12 +55,10 @@ export const BUILDERS: readonly BuilderEntry[] = [
 ];
 
 export const LEGACY_ALLOWANCE: readonly string[] = [
-  'nifc',
   'nws',
   'spc',
   'power-plant',
   'power-line',
-  'places',
   'telemetry'
 ];
 

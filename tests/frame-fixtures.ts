@@ -10,6 +10,7 @@
 import type { Page } from '@playwright/test';
 import { PLACE_CENSUS_FIXTURES, PLACE_TIER_FIXTURES } from './frame-fixtures-places';
 import { SURFACE_CENSUS_FIXTURES, SURFACE_TIER_FIXTURES } from './frame-fixtures-surfaces';
+import { FIRE_LABEL_CENSUS_FIXTURES, FIRE_LABEL_TIER_FIXTURES } from './frame-fixtures-fires-labels';
 
 /**
  * The census spec's own helpers, handed to each fixture (a spec file exports
@@ -41,10 +42,12 @@ export interface TierFixture {
 
 export const CENSUS_FIXTURES: Readonly<Record<string, CensusFixture>> = {
   ...PLACE_CENSUS_FIXTURES,
-  ...SURFACE_CENSUS_FIXTURES
+  ...SURFACE_CENSUS_FIXTURES,
+  ...FIRE_LABEL_CENSUS_FIXTURES
 };
 
 export const TIER_FIXTURES: Readonly<Record<string, TierFixture>> = {
   ...PLACE_TIER_FIXTURES,
-  ...SURFACE_TIER_FIXTURES
+  ...SURFACE_TIER_FIXTURES,
+  ...FIRE_LABEL_TIER_FIXTURES
 };
