@@ -111,12 +111,28 @@ interface SstSnapshotEventDetail {
   readonly date: string | null;
 }
 
+/**
+ * The SST map's direction arrows (src/layers/enso-flow.ts), found-115 and
+ * DR-188: their own status, model valid time and qualifications, in the
+ * words their panel shows, for a drawer row under the SST key. The arrows'
+ * module answers ENSO_FLOW_SNAPSHOT_REQUEST_EVENT with its current state,
+ * because this lazy chunk can start after the arrows have loaded.
+ */
+interface EnsoFlowSnapshotEventDetail {
+  readonly status: 'inactive' | 'off' | 'loading' | 'live' | 'live (partial)' | 'no data' | 'unavailable';
+  readonly label: string;
+  readonly line: string;
+  readonly notes: readonly string[];
+}
+
 const HEATRISK_FRAMES_EVENT = 'ddm:heatrisk-frames';
 const HEATRISK_DAY_SELECT_EVENT = 'ddm:heatrisk-day-select';
 const CDM_SNAPSHOT_EVENT = 'ddm:cdm-snapshot';
 const NADM_SNAPSHOT_EVENT = 'ddm:nadm-snapshot';
 const NWS_SNAPSHOT_EVENT = 'ddm:nws-products-snapshot';
 const SST_SNAPSHOT_EVENT = 'ddm:sst-snapshot';
+const ENSO_FLOW_SNAPSHOT_EVENT = 'ddm:enso-flow-snapshot';
+const ENSO_FLOW_SNAPSHOT_REQUEST_EVENT = 'ddm:enso-flow-snapshot-request';
 const MOBILE_MAP_KEY_QUERY = '(max-width: 720px)';
 const MOBILE_MAP_KEY_HEIGHT_PROPERTY = '--mobile-map-key-height';
 const DESKTOP_LOADING_TOP_PROPERTY = '--desktop-loading-top';
@@ -129,6 +145,7 @@ let cdmClasses: CdmSnapshotEventDetail['classes'] = [];
 let cdmLicense: CdmSnapshotEventDetail['license'] = null;
 let nadmMonth: string | null = null;
 let sstObservedDate: string | null = null;
+let ensoFlowSnapshot: EnsoFlowSnapshotEventDetail | null = null;
 let heatRiskHasCoverage: boolean | null = null;
 let nwsSnapshotStatus: NwsSnapshotEventDetail['status'] = 'inactive';
 let nwsSnapshotAsOf: number | null = null;
@@ -381,12 +398,14 @@ function sstKey(): KeySpec {
     : '';
   const first = SST_ANOMALY_SCALE[0]!;
   const last = SST_ANOMALY_SCALE.at(-1)!;
+  const flow = ensoFlowRow();
   return {
     label: 'Ocean temperature',
     ariaLabel:
       `Ocean temperature anomaly key, ${first.label.toLowerCase()} through ${last.label.toLowerCase()}, a qualitative scale.` +
       observed +
-      ' NASA GIBS GHRSST MUR SST anomaly.',
+      ' NASA GIBS GHRSST MUR SST anomaly.' +
+      flow.ariaLabel,
     itemsHtml:
       (sstObservedDate
         ? `<span class="map-key-item" data-sst-observed>Observed ${escapeHtml(
@@ -396,7 +415,29 @@ function sstKey(): KeySpec {
       '<span class="map-key-scale" data-sst-anomaly-key>' +
       SST_ANOMALY_SCALE.map((entry) => swatchItem(entry.color, entry.label)).join('') +
       '</span>' +
-      '<span class="map-key-item" data-sst-attribution>NASA GIBS GHRSST MUR</span>'
+      '<span class="map-key-item" data-sst-attribution>NASA GIBS GHRSST MUR</span>' +
+      flow.html
+  };
+}
+
+/**
+ * The direction arrows' own row, after the SST attribution and apart from
+ * the SST "Observed" row: two products, two clocks (docs/design/README.md,
+ * DDM-UI-007). Every word is the arrows' module's own; this only joins them.
+ * No row while the arrows are off or their layer is inactive.
+ */
+function ensoFlowRow(): { readonly html: string; readonly ariaLabel: string } {
+  const flow = ensoFlowSnapshot;
+  if (!flow || flow.status === 'inactive' || flow.status === 'off') return { html: '', ariaLabel: '' };
+  // DRAFT (DR-draft, block 5 P3-ENSOKEY): pending owner read (DRAFT-W1, the
+  // composition "<label> · <status line>" then the qualification sentences).
+  const status = `${flow.label} · ${flow.line}`;
+  const notes = flow.notes.join(' ');
+  return {
+    html:
+      `<span class="map-key-item" data-enso-flow="status">${escapeHtml(status)}</span>` +
+      (notes ? `<span class="map-key-qualification" data-enso-flow="notes">${escapeHtml(notes)}</span>` : ''),
+    ariaLabel: ` ${status}.`
   };
 }
 
@@ -1289,6 +1330,7 @@ export function initMapKey(): void {
     host.removeEventListener('keydown', closeDetailsOnEscape);
     document.removeEventListener('focusin', onFocusIn);
     document.removeEventListener('focusout', onFocusOut);
+    window.removeEventListener(ENSO_FLOW_SNAPSHOT_EVENT, onEnsoFlowSnapshot);
   };
 
   const update = (): void => {
@@ -1472,6 +1514,13 @@ export function initMapKey(): void {
     sstObservedDate = detail.status === 'ready' ? detail.date : null;
     update();
   });
+  const onEnsoFlowSnapshot = (event: Event): void => {
+    const detail = (event as CustomEvent<EnsoFlowSnapshotEventDetail>).detail;
+    if (!detail) return;
+    ensoFlowSnapshot = detail;
+    update();
+  };
+  window.addEventListener(ENSO_FLOW_SNAPSHOT_EVENT, onEnsoFlowSnapshot);
   disposeMapKeyTimeBarSpec = onTimeBarSpecChange(update);
   // A framing click never fires a registry event (D-0.7.0-039: camera-only,
   // no layer write), so without this the coverage caution above would only
@@ -1494,5 +1543,9 @@ export function initMapKey(): void {
   registry.on('status-change', () => {
     update();
   });
+  // The arrows may have loaded before this chunk did (a boot with `flow=`
+  // in the URL): ask once for their state; nothing answers while inactive.
+  ensoFlowSnapshot = null;
+  window.dispatchEvent(new Event(ENSO_FLOW_SNAPSHOT_REQUEST_EVENT));
   update();
 }

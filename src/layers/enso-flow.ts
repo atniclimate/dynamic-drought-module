@@ -32,6 +32,31 @@ const SOURCES: Record<ActiveFlowKind, string> = {
   wind: 'NOAA GFS, 10 m winds; global model output, updated every six hours',
   waves: 'NOAA GFS Wave, 0.25°; hourly model output, updated every six hours'
 };
+/** Sentences the panel and the map key's drawer row share, one source each. */
+const CALM_NOTE = 'Arrows show travel direction only, with equal lengths; still water or calm wind has no arrow. Missing cells have no arrow and do not imply calm conditions.';
+const TIMING_NOTE = 'This is model context, independently timed from the observed SST map.';
+const LOADING_NOTE = 'Loading up to 40 source grid cells for this area.';
+const FAILED_NOTE = 'No direction or calm condition is inferred from a failed request.';
+type FlowStatus = 'off' | 'loading' | 'live' | 'live (partial)' | 'no data' | 'unavailable';
+/**
+ * found-115 (DR-188): the arrows draw wherever `flow=` and the SST layer are
+ * on, but this panel sits in the sidebar, which an embed and a closed sidebar
+ * hide. Each panel status change also goes to the map key's drawer, carrying
+ * the panel's own words (label, status line, qualification sentences) so the
+ * key composes and never re-types them. The key is a lazy chunk that can
+ * start after the arrows (a boot with `flow=` in the URL), so while active
+ * this module answers its one request with the current snapshot.
+ */
+interface FlowSnapshot {
+  readonly status: FlowStatus | 'inactive';
+  readonly label: string;
+  readonly line: string;
+  readonly notes: readonly string[];
+}
+const SNAPSHOT_EVENT = 'ddm:enso-flow-snapshot';
+const SNAPSHOT_REQUEST_EVENT = 'ddm:enso-flow-snapshot-request';
+const INACTIVE: FlowSnapshot = { status: 'inactive', label: '', line: '', notes: [] };
+let snapshot: FlowSnapshot = INACTIVE;
 const cache = new Map<string, { stored: number; frame: FlowFrame }>();
 let map: maplibregl.Map | null = null;
 let controller: AbortController | null = null;
@@ -55,9 +80,19 @@ function removeArrows(): void {
   if (map.getSource(SOURCE)) map.removeSource(SOURCE);
 }
 
-function setStatus(status: string, text: string): void {
+function publish(next: FlowSnapshot): void {
+  snapshot = next;
+  window.dispatchEvent(new CustomEvent(SNAPSHOT_EVENT, { detail: next }));
+}
+
+function replaySnapshot(): void {
+  publish(snapshot);
+}
+
+function setStatus(status: FlowStatus, text: string, kind: EnsoFlowKind, notes: readonly string[] = []): void {
   if (panel) panel.dataset['status'] = status;
   if (statusNode) statusNode.textContent = text;
+  publish({ status, label: LABELS[kind], line: text, notes });
 }
 
 function dateLabel(time: number): string {
@@ -145,12 +180,12 @@ function presentFrame(data: FlowFrame, kind: ActiveFlowKind): void {
   frame = data;
   paintArrows();
   const status = data.points.length === 0 ? 'no data' : data.missing > 0 ? 'live (partial)' : 'live';
-  setStatus(status, `${status} · Model valid ${dateLabel(data.time)}`);
+  const coverage = `${data.points.length} of ${data.total} sampled cells have data.`;
+  setStatus(status, `${status} · Model valid ${dateLabel(data.time)}`, kind, [coverage, CALM_NOTE, TIMING_NOTE]);
   if (detailNode) {
     const values = data.points.map((p) => p.value);
     const range = values.length ? `${Math.min(...values).toFixed(1)} to ${Math.max(...values).toFixed(1)} ${kind === 'waves' ? 'm significant wave height' : 'm/s'}. ` : '';
-    detailNode.textContent = `${data.points.length} of ${data.total} sampled cells have data. ${range}` +
-      'Arrows show travel direction only, with equal lengths; still water or calm wind has no arrow. Missing cells have no arrow and do not imply calm conditions. Move the map and choose Update area for new samples.';
+    detailNode.textContent = `${coverage} ${range}${CALM_NOTE} Move the map and choose Update area for new samples.`;
   }
 }
 
@@ -164,18 +199,18 @@ async function loadArea(): Promise<void> {
   const kind = preference.kind;
   if (copernicusNode) copernicusNode.hidden = kind !== 'currents';
   if (!activeMap || kind === 'off') {
-    setStatus('off', 'Direction overlay off');
+    setStatus('off', 'Direction overlay off', kind);
     return;
   }
   const positions = samplePositions(activeMap);
   const url = requestUrl(kind, positions);
   const cached = cache.get(url);
-  if (sourceNode) sourceNode.textContent = `${SOURCES[kind]}, via Open-Meteo. The API supplies 15-minute valid instants by interpolating model output. This is model context, independently timed from the observed SST map. The response does not supply the model issue time. It is unsuitable for coastal navigation.`;
+  if (sourceNode) sourceNode.textContent = `${SOURCES[kind]}, via Open-Meteo. The API supplies 15-minute valid instants by interpolating model output. ${TIMING_NOTE} The response does not supply the model issue time. It is unsuitable for coastal navigation.`;
   if (cached && Date.now() - cached.stored < CACHE_MS) { presentFrame(cached.frame, kind); return; }
   const owned = new AbortController();
   controller = owned;
-  setStatus('loading', 'loading · Model direction samples');
-  if (detailNode) detailNode.textContent = 'Loading up to 40 source grid cells for this area.';
+  setStatus('loading', 'loading · Model direction samples', kind, [LOADING_NOTE]);
+  if (detailNode) detailNode.textContent = LOADING_NOTE;
   try {
     const json = await fetchJsonWithBudget(url, { credentials: 'omit' }, owned.signal, 12_000);
     if (owned.signal.aborted || generation !== epoch || map !== activeMap) return;
@@ -188,8 +223,8 @@ async function loadArea(): Promise<void> {
     presentFrame(result, kind);
   } catch {
     if (owned.signal.aborted || generation !== epoch) return;
-    setStatus('unavailable', 'unavailable · Direction samples did not load');
-    if (detailNode) detailNode.textContent = 'Choose Update area to try again. No direction or calm condition is inferred from a failed request.';
+    setStatus('unavailable', 'unavailable · Direction samples did not load', kind, [FAILED_NOTE]);
+    if (detailNode) detailNode.textContent = `Choose Update area to try again. ${FAILED_NOTE}`;
   }
 }
 
@@ -334,6 +369,7 @@ export function activateEnsoFlow(activeMap: maplibregl.Map): void {
   preference = parseEnsoFlowParams(new URLSearchParams(window.location.search));
   map.on('moveend', onMoveEnd);
   window.addEventListener('popstate', onPopState);
+  window.addEventListener(SNAPSHOT_REQUEST_EVENT, replaySnapshot);
   if (!mountControls()) {
     observer = new MutationObserver(() => {
       if (mountControls()) { observer?.disconnect(); observer = null; }
@@ -355,10 +391,13 @@ export function deactivateEnsoFlow(): void {
   cancelEnsoFlowLoad();
   map?.off('moveend', onMoveEnd);
   window.removeEventListener('popstate', onPopState);
+  window.removeEventListener(SNAPSHOT_REQUEST_EVENT, replaySnapshot);
   removeArrows();
   map = null;
   frame = null;
   if (host) { host.replaceChildren(); host.hidden = true; }
+  // The drawer row leaves with the panel, never before it nor after it.
+  if (snapshot.status !== 'inactive') publish(INACTIVE);
   mobileQuery?.removeEventListener('change', seatControls);
   mobileQuery = null;
   if (host && desktopSeat?.parentNode) desktopSeat.after(host);
