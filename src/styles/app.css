@@ -4808,6 +4808,16 @@ button.conditions-metric:hover .conditions-action-hide {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* The canvas ring (S30D D1 M28; interface-chrome-popups-text.md 2.7,
+   "Visible focus"): the chrome's 2 px ring in inset form, on keyboard
+   focus only, so a pointer press on the map never draws it. Desktop shell
+   outside embeds, where the map chrome rules apply (section 2.8). */
+@media (min-width: 721px) {
+  .app-shell:not(.embed) #map .maplibregl-canvas:focus-visible {
+    outline: 2px solid var(--focus-inner);
+    outline-offset: -2px;
+  }
+}
 
 /* Make the .telemetry-item button match its prior <div> presentation. */
 button.telemetry-item {

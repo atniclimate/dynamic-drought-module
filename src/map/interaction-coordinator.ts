@@ -379,6 +379,7 @@ export function resetInteractionCoordinatorForTest(): void {
   // the next registration warms it again (a test can then commit cold).
   pendingCommit = null;
   serializeFrame = null;
+  focusBeforeCommit = null;
   // The census stamp follows the registry, so a re-registration after a
   // reset never appends a stale or duplicate token.
   document.getElementById('map-container')?.removeAttribute('data-ddm-click-targets');
@@ -386,6 +387,7 @@ export function resetInteractionCoordinatorForTest(): void {
 
 function handleClick(map: maplibregl.Map, e: maplibregl.MapMouseEvent): void {
   if (getStudioRoute() !== null) return;
+  noteFocusBeforeCommit();
   const hits = collectHits(map, e.point);
   const click: CoordinatorClick = { lngLat: e.lngLat, point: e.point };
   if (hits.length === 0) {
@@ -393,6 +395,38 @@ function handleClick(map: maplibregl.Map, e: maplibregl.MapMouseEvent): void {
     return;
   }
   commit(map, hits, hits[0]!, click);
+}
+
+// ---------------------------------------------------------------------------
+// Focus return (S30D D1 M28; interface-chrome-popups-text.md section 2.7,
+// the focus table, P3). A popup that closes while focus is inside it hands
+// focus back to the element focused before the commit, when that element
+// is still connected and visible, otherwise to the canvas; never to the
+// page. A replacement in place (the "Other map features here" switcher, a
+// re-commit) keeps the first commit's element and returns nothing, since
+// the new popup takes focus on open. Focus that already left the popup for
+// a real element (a pointer press elsewhere, the briefing door) stays there.
+// ---------------------------------------------------------------------------
+
+let focusBeforeCommit: Element | null = null;
+let replacingPopup = false;
+
+/** Remember what had focus as a commit starts, unless it is inside the response it replaces. */
+function noteFocusBeforeCommit(): void {
+  const active = document.activeElement;
+  if (!currentPopup?.getElement()?.contains(active)) focusBeforeCommit = active;
+}
+
+function returnFocus(map: maplibregl.Map): void {
+  const active = document.activeElement;
+  if (active && active !== document.body) return;
+  const before = focusBeforeCommit;
+  focusBeforeCommit = null;
+  const target =
+    before instanceof HTMLElement && before.isConnected && before.getClientRects().length > 0
+      ? before
+      : map.getCanvas();
+  target.focus({ preventScroll: true });
 }
 
 /**
@@ -644,7 +678,12 @@ function renderPopup(
   primary: Hit,
   click: CoordinatorClick
 ): void {
-  dismissResponse();
+  replacingPopup = true;
+  try {
+    dismissResponse();
+  } finally {
+    replacingPopup = false;
+  }
 
   // Split the response into a FROZEN head and a SCROLLING body. The
   // maintainer directive of 2026-07-18 kept the head to title, door, and
@@ -781,10 +820,23 @@ function renderPopup(
   };
   document.addEventListener('keydown', onEscape);
 
+  // Focus return (M28): whether focus is inside the popup. MapLibre has
+  // already focused its first control on open; a removal while focused
+  // fires focusout with no target, which leaves the flag set.
+  const popupElement = popup.getElement() as HTMLElement | null;
+  let focusInside = popupElement?.contains(document.activeElement) ?? false;
+  popupElement?.addEventListener('focusin', () => {
+    focusInside = true;
+  });
+  popupElement?.addEventListener('focusout', (e) => {
+    if (e.relatedTarget instanceof Node && !popupElement.contains(e.relatedTarget)) focusInside = false;
+  });
+
   popup.on('close', () => {
     document.removeEventListener('keydown', onEscape);
     closed(popup);
     if (selection && getPlaceSelection() === selection) setPlaceSelection(null);
+    if (focusInside && !replacingPopup) returnFocus(map);
   });
   currentPopup = popup;
 

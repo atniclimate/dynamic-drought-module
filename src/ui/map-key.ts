@@ -1216,15 +1216,70 @@ export function initMapKey(): void {
   };
   widthQuery.addEventListener('change', onWidthChange);
   const toggleDetails = (): void => setDetailsOpen(!detailsOpen);
+  /** The visible chip: the docked drought tile while it is the trigger, else the key toggle. */
+  const chip = (): HTMLElement | null =>
+    host.dataset.keyMetricTrigger === 'true'
+      ? document.querySelector<HTMLElement>('.conditions-metric[data-metric="drought"][data-layer-on="true"]')
+      : detailsButton;
   const closeDetailsOnEscape = (event: KeyboardEvent): void => {
     if (event.key !== 'Escape' || !detailsOpen) return;
     setDetailsOpen(false);
-    const metric = document.querySelector<HTMLElement>('.conditions-metric[data-metric="drought"][data-layer-on="true"]');
-    (host.dataset.keyMetricTrigger === 'true' ? metric : detailsButton)?.focus();
+    chip()?.focus();
   };
   detailsButton.addEventListener('click', toggleDetails);
   window.addEventListener('ddm:toggle-map-key-details', toggleDetails);
   host.addEventListener('keydown', closeDetailsOnEscape);
+
+  // S30D D1 M28 (interface-chrome-popups-text.md 2.7, the focus table).
+  // Two hand-offs, each acting only while focus was on a node that has now
+  // gone (removed, or hidden under it) and has moved nowhere else; focus a
+  // person moves themselves (a pointer press on a mode button, a click on
+  // the page) is never taken back.
+  // - A focused drawer control that disappears (a re-render, or its section
+  //   hidden on a mode change, such as a HeatRisk day cell on leaving Heat)
+  //   hands focus to the drawer heading (`tabindex="-1"`) while the drawer
+  //   is open, otherwise to the chip (P2).
+  // - The chip's two nodes, the key toggle and the docked drought tile,
+  //   swap: the shown node takes focus (section 2.4; found-088).
+  // Each runs from a focusout with no next target (a removal) and again
+  // after every update, which is where a node is hidden or swapped.
+  const handOff = (lost: HTMLElement | null, next: () => HTMLElement | null): HTMLElement | null => {
+    const active = document.activeElement;
+    if (!lost || (active !== lost && active !== document.body && active !== null)) return lost;
+    if (lost.isConnected && lost.getClientRects().length > 0) return active === lost ? lost : null;
+    const target = next();
+    if (target && target !== lost && target.getClientRects().length > 0) {
+      target.focus({ preventScroll: true });
+      return target;
+    }
+    return lost;
+  };
+  let drawerFocus: HTMLElement | null = null;
+  let chipFocus: HTMLElement | null = null;
+  const drawerHeading = (): HTMLElement | null => {
+    const heading = detailsOpen ? legend.querySelector<HTMLElement>('.map-key-label') : null;
+    if (heading) heading.tabIndex = -1;
+    return heading ?? chip();
+  };
+  const handOffLostFocus = (): void => {
+    drawerFocus = handOff(drawerFocus, drawerHeading);
+    chipFocus = handOff(chipFocus, chip);
+  };
+  const onFocusIn = (event: FocusEvent): void => {
+    const target = event.target as HTMLElement;
+    drawerFocus = content.contains(target) ? target : null;
+    chipFocus =
+      target === detailsButton || target.matches?.('#conditions-strip-dock .conditions-metric[data-metric="drought"]')
+        ? target
+        : null;
+  };
+  const onFocusOut = (event: FocusEvent): void => {
+    if (!event.relatedTarget && (event.target === drawerFocus || event.target === chipFocus)) {
+      queueMicrotask(handOffLostFocus);
+    }
+  };
+  document.addEventListener('focusin', onFocusIn);
+  document.addEventListener('focusout', onFocusOut);
 
   disposeMapKeyOverflow = () => {
     appPresentationObserver.disconnect();
@@ -1232,6 +1287,8 @@ export function initMapKey(): void {
     window.removeEventListener('ddm:toggle-map-key-details', toggleDetails);
     window.removeEventListener('ddm:whp-shade', onWhpShade);
     host.removeEventListener('keydown', closeDetailsOnEscape);
+    document.removeEventListener('focusin', onFocusIn);
+    document.removeEventListener('focusout', onFocusOut);
   };
 
   const update = (): void => {
@@ -1350,6 +1407,7 @@ export function initMapKey(): void {
     reflectInteraction();
     host.hidden = false;
     layout.schedule();
+    handOffLostFocus();
   };
 
   host.addEventListener('change', (event) => {
