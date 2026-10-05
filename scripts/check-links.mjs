@@ -32,6 +32,9 @@ const FILES = [
   'src/config/urls-boot.ts',
   'src/impact/resources.ts',
   'src/impact/sources.ts',
+  // The CPC 6-10 and 8-14 day point read moved out of sources.ts into its own
+  // lazy module (S30D P3-TRUTH); its source link stays under the live check.
+  'src/impact/cpc-extended.ts',
   'src/impact/hydrate.ts',
   'src/impact/enso.ts',
   'src/ui/popups.ts'

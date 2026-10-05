@@ -493,7 +493,7 @@ export function extractUrls(source) {
  * src/ui/island/place-studio.tsx; the USDM `DM` and NIFC identity fields in
  * src/impact/sources.ts; the WBD template in src/state/watershed-geometry.ts
  * (same as place-catalog's). NOT covered: the CPC 6-10 and 8-14 day point
- * query in src/impact/sources.ts passes `cat,prob` as a function argument
+ * query in src/impact/cpc-extended.ts passes `cat,prob` as a function argument
  * the extractor does not see, and the WBD HUC code field is a template
  * token reported as unchecked.
  */
@@ -549,7 +549,7 @@ export const OUT_FIELDS_SENDERS_COVERED_ELSEWHERE = Object.freeze({
   'src/state/watershed-geometry.ts':
     'NOT extracted (the template is a positional argument to geometryParams); byte-identical to the place-catalog template today',
   'src/impact/sources.ts':
-    'NOT extracted (positional arguments to esriPointQuery and esriEnvelopeQuery): USDM DM and the NIFC identity fields are subsets of their rows today; the CPC 6-10 and 8-14 day point query (cat,prob) has no row. F6 (S20 fix round, DDM-P7-T03): seven new SPC Day 1-8 Fire Weather Outlook layer queries added here. Layer 4 (Day 2 categorical: dn,valid,expire) has no probe row of its own (its field list is byte-identical to the spcFireWeatherOutlookMapServer/1 row already probed via src/layers/spc-fire-weather.ts, just a separate declaration). Layers 8, 11, 14, 17, 20, 23 (Days 3-8 probabilistic: dn,label,label2,valid,expire,issue) share one field constant (SPC_PROBABILISTIC_OUT_FIELDS); layer 8 alone is now extracted and probed live below (fields:spcFireWeatherOutlookMapServer/8), and a drift in that shared constant is caught once for all six.',
+    'NOT extracted (positional arguments to esriPointQuery and esriEnvelopeQuery): USDM DM and the NIFC identity fields are subsets of their rows today; the CPC 6-10 and 8-14 day point query (cat,prob) now lives in src/impact/cpc-extended.ts and has no row. F6 (S20 fix round, DDM-P7-T03): seven new SPC Day 1-8 Fire Weather Outlook layer queries added here. Layer 4 (Day 2 categorical: dn,valid,expire) has no probe row of its own (its field list is byte-identical to the spcFireWeatherOutlookMapServer/1 row already probed via src/layers/spc-fire-weather.ts, just a separate declaration). Layers 8, 11, 14, 17, 20, 23 (Days 3-8 probabilistic: dn,label,label2,valid,expire,issue) share one field constant (SPC_PROBABILISTIC_OUT_FIELDS); layer 8 alone is now extracted and probed live below (fields:spcFireWeatherOutlookMapServer/8), and a drift in that shared constant is caught once for all six.',
   'src/ui/heatrisk-sequence.ts':
     "the briefing's independent HeatRisk catalog read (DDM-P7-T05) queries the same nwsHeatRisk catalog with the same outFields (name, idp_validtime) as src/layers/heatrisk.ts, whose probe row covers the fields; the two parsers are kept identical by cross-reference comments",
 });

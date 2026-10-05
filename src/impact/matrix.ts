@@ -190,6 +190,9 @@ export interface MatrixLaneResult {
   readonly claims: readonly SourcedClaim[];
   readonly ok: boolean;
   readonly note?: string;
+  /** An `ok` lane that answered only in part (`SourceResult.partial`): its
+   * claims stand, and the cells it feeds read live (partial), never live. */
+  readonly partial?: boolean;
 }
 
 /** The lanes settled so far, keyed by lane. An absent key is still in flight. */
@@ -269,6 +272,7 @@ export function fillCell(cell: HazardCell, results: MatrixLaneResults): void {
   const notes: string[] = [];
   let settled = 0;
   let answered = 0;
+  let incomplete = false;
 
   for (const lane of lanes) {
     const result = results.get(lane);
@@ -276,6 +280,14 @@ export function fillCell(cell: HazardCell, results: MatrixLaneResults): void {
     settled += 1;
     if (result.ok) {
       answered += 1;
+      // A lane that answered only in part (one CPC window, some SPC days)
+      // keeps its claims and brings its own note: the read did not establish
+      // everything it asked for, so the cell must not read live (plan rule
+      // 6's "live (partial)"; S30D P3-TRUTH).
+      if (result.partial === true) {
+        incomplete = true;
+        if (result.note) notes.push(result.note);
+      }
       for (const claim of result.claims) {
         if (claimBelongs(claim, lane, cell.horizon, cell.hazard)) {
           claims.push(claim);
@@ -299,7 +311,7 @@ export function fillCell(cell: HazardCell, results: MatrixLaneResults): void {
     // Every lane settled and the cell has nothing to say. That is an honest
     // absence, never a live cell with an empty body.
     cell.status = 'unavailable';
-  } else if (answered === lanes.length) {
+  } else if (answered === lanes.length && !incomplete) {
     cell.status = 'ready';
   } else {
     cell.status = 'partial';
@@ -309,7 +321,13 @@ export function fillCell(cell: HazardCell, results: MatrixLaneResults): void {
   if (note !== null) {
     cell.note = note;
   } else if (cell.status === 'unavailable') {
-    cell.note = CELL_ABSENCE[cell.horizon][cell.hazard];
+    // S30D P3-TRUTH (repair round 2): the absence sentence states established
+    // emptiness, so a cell whose reads were incomplete (a lane that answered
+    // `partial` with nothing to state, and no note of its own) never says it.
+    // It states no sentence: the empty note also keeps the renderer's own
+    // fallback ("No source answered ...") off it, which would be false, since
+    // that lane answered. The wording for this case is the owner's to give.
+    cell.note = incomplete ? '' : CELL_ABSENCE[cell.horizon][cell.hazard];
   } else {
     delete cell.note;
   }

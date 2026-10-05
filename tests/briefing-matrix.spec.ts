@@ -86,7 +86,18 @@ function emptyHorizons(): Record<HorizonKey, Horizon> {
   };
 }
 
-/** One answered lane whose single claim names the lane as its issuer. */
+/**
+ * A distinct valid date per lane (S30D P3-TRUTH, the second verifier's "weak
+ * tests" finding: every lane used to carry the same '2026-09-03', so a cell
+ * holding another lane's clock could not be told apart). Derived from the
+ * lane's position in MATRIX_LANE_KEYS, so a new lane gets its own day.
+ */
+const LANE_VALID_DATE: Readonly<Record<MatrixLaneKey, string>> = Object.fromEntries(
+  MATRIX_LANE_KEYS.map((lane, index) => [lane, `2026-09-${String(index + 1).padStart(2, '0')}`])
+) as Record<MatrixLaneKey, string>;
+
+/** One answered lane whose single claim names the lane as its issuer and
+ * carries the lane's own valid date. */
 function lanePayload(lane: MatrixLaneKey): MatrixLaneResult {
   return {
     ok: true,
@@ -96,7 +107,7 @@ function lanePayload(lane: MatrixLaneKey): MatrixLaneResult {
         source: lane,
         product: LANE_PRODUCT[lane],
         evidence: 'analyzed',
-        dates: { valid: '2026-09-03' }
+        dates: { valid: LANE_VALID_DATE[lane] }
       })
     ]
   };
@@ -164,6 +175,10 @@ test('a settled cell with no claim always names what is missing', () => {
 test('no cell inherits another hazard issuer or clock', () => {
   const horizons = emptyHorizons();
   applyMatrix(horizons, allLanesAnswered());
+  // Twelve lanes, twelve distinct clocks: the clock check below is only a
+  // check if no two lanes share a day.
+  expect(new Set(Object.values(LANE_VALID_DATE)).size).toBe(MATRIX_LANE_KEYS.length);
+  let checked = 0;
   for (const cell of everyCell(horizons)) {
     const declared = lanesForCell(cell.horizon, cell.hazard);
     for (const claim of cell.claims) {
@@ -171,8 +186,20 @@ test('no cell inherits another hazard issuer or clock', () => {
         declared.includes(claim.source as MatrixLaneKey),
         `${cell.horizon}:${cell.hazard} holds a claim issued by ${claim.source}`
       ).toBe(true);
+      // The clock, per claim: the claim's valid date is its own lane's, and
+      // that lane is one declared for this cell.
+      expect(
+        claim.dates?.valid,
+        `${cell.horizon}:${cell.hazard} claim from ${claim.source} wears another lane's clock`
+      ).toBe(LANE_VALID_DATE[claim.source as MatrixLaneKey]);
+      expect(
+        declared.map((lane) => LANE_VALID_DATE[lane]),
+        `${cell.horizon}:${cell.hazard} holds a clock no declared lane carries`
+      ).toContain(claim.dates?.valid);
+      checked += 1;
     }
   }
+  expect(checked, 'setup: the answered matrix holds claims to check').toBeGreaterThan(0);
 });
 
 // Was four cells until DDM-P12-T02 (DR-031 a) wired the CPC weekly Nino 3.4
@@ -586,6 +613,117 @@ test('the Days 3-8 probabilistic reads: 0.40, 0.70 and the live "Probability Too
   // sentence, with the serial comma the verdict's own (c) sentence uses.
   await expect(cell).toContainText(
     'SPC Day 3-8 Fire Weather Outlook: no area is drawn over this point for Days 5, 6, and 7.'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// S30D P3-TRUTH: the rendered pill never says more than the reads
+// established. The model-level proofs, through the real fetchers, are
+// tests/briefing-truth.test.mjs; these cases prove the rendered cell.
+// ---------------------------------------------------------------------------
+
+function cellAt(page: Page, horizon: HorizonKey, hazard: string): ReturnType<Page['locator']> {
+  return page.locator(`.impact-hazard[data-horizon="${horizon}"][data-hazard="${hazard}"]`);
+}
+
+test('P3-TRUTH: an SPC read with one failed day renders live (partial), keeping every day that answered', async ({
+  page
+}) => {
+  await stubBaselineBriefingHosts(page);
+  await stubSpcFireOutlook(page, {
+    1: [spcFeature({ dn: 8, valid: '202609091700', expire: '202609101200' })]
+  });
+  // Day 3 (layer 8) fails. A page route outranks the context route
+  // `stubSpcFireOutlook` installs.
+  await page.route('**/SPC_firewx/MapServer/8/query?*', (route) =>
+    route.fulfill({ status: 503, contentType: 'application/json', body: '{}' })
+  );
+  await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+
+  const cell = cellAt(page, 'nearTerm', 'fire');
+  await expect(cell.locator('.impact-hazard-pill')).toHaveText('live (partial)');
+  await expect(cell).toContainText(
+    'SPC Day 1 Fire Weather Outlook: Critical risk from wind and relative humidity at this point'
+  );
+  await expect(cell).toContainText(
+    'SPC Day 3-8 Fire Weather Outlook: no area is drawn over this point for Days 4, 5, 6, 7, and 8.'
+  );
+  await expect(cell).not.toContainText('SPC Day 3 Fire Weather Outlook');
+});
+
+test('P3-TRUTH: a CPC read with the 8-14 day window failed renders live (partial) with the 6-10 day claim and the window note', async ({
+  page
+}) => {
+  await stubBaselineBriefingHosts(page);
+  await stubSpcFireOutlook(page, {});
+  const outlook = (cat: string, prob: number): string =>
+    collection([
+      {
+        type: 'Feature',
+        geometry: null,
+        properties: {
+          cat,
+          prob,
+          fcst_date: Date.UTC(2026, 8, 1),
+          start_date: Date.UTC(2026, 8, 7),
+          end_date: Date.UTC(2026, 8, 11)
+        }
+      }
+    ]);
+  await page.route('**/cpc_6_10_day_outlk/MapServer/*/query?*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/geo+json',
+      body: /\/MapServer\/0\/query/.test(route.request().url())
+        ? outlook('Above', 50)
+        : outlook('Below', 40)
+    })
+  );
+  await page.route('**/cpc_8_14_day_outlk/MapServer/*/query?*', (route) =>
+    route.fulfill({ status: 503, contentType: 'application/json', body: '{}' })
+  );
+  await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+
+  const cell = cellAt(page, 'nearTerm', 'drought');
+  await expect(cell.locator('.impact-hazard-pill')).toHaveText('live (partial)');
+  await expect(cell).toContainText(
+    'CPC 6-10 day outlook: above-normal temperature (50% odds), below-normal precipitation (40% odds).'
+  );
+  await expect(cell.locator('.impact-horizon-note')).toHaveText(
+    'One CPC outlook window did not respond.'
+  );
+  await expect(cell).not.toContainText('CPC 8-14 day outlook');
+});
+
+test('P3-TRUTH: a fire-only NWS alerts answer renders the Heat cell live with its absence claim, never unavailable', async ({
+  page
+}) => {
+  await stubBaselineBriefingHosts(page);
+  await stubSpcFireOutlook(page, {});
+  // Registered after the baseline stub, so it outranks it; matches the
+  // direct and the Worker-proxied form of the alerts URL alike.
+  await page.route(
+    (url) => decodeURIComponent(url.href).includes('https://api.weather.gov/alerts/active?'),
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: collection([
+          // vocab-allow: a verbatim NWS product name, quoted fixture data
+          { type: 'Feature', geometry: null, properties: { event: 'Red Flag Warning' } }
+        ])
+      })
+  );
+  await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+
+  const heat = cellAt(page, 'current', 'heat');
+  await expect(heat.locator('.impact-hazard-pill')).toHaveText('live');
+  await expect(heat).toContainText(
+    'NWS reports no active extreme-heat alert at the selected point.'
+  );
+  await expect(heat).not.toContainText('No NWS active alerts read is available');
+  await expect(cellAt(page, 'current', 'fire')).toContainText(
+    'A fire-weather alert is in effect here: Red Flag Warning.'
   );
 });
 

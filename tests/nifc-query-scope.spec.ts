@@ -493,6 +493,43 @@ function bboxesOverlap(
   return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
 }
 
+/** Even-odd point-in-polygon over every ring of a Polygon's coordinates (a
+ * hole flips the answer back to outside). Written here, independent of the
+ * product's `src/util/point-in-polygon.ts`. */
+function pointInRings(lng: number, lat: number, rings: ReadonlyArray<ReadonlyArray<readonly number[]>>): boolean {
+  let inside = false;
+  for (const ring of rings) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+      const [xi, yi] = ring[i] as [number, number];
+      const [xj, yj] = ring[j] as [number, number];
+      if (yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+  }
+  return inside;
+}
+
+/**
+ * Whether a fixture Polygon meets the place rectangle, decided without the
+ * product's overlap code (repair round 1: the helper must not ask the code it
+ * checks). True when a vertex of the polygon lies in the rectangle, or the
+ * rectangle's centre lies on the polygon's ground. That is exact for this
+ * file's fixtures (axis-aligned squares wholly inside or outside a state
+ * rectangle, and a ring whose hole holds the rectangle); it is NOT a general
+ * overlap test (two shapes crossing like a plus sign would read false), so
+ * the case below also pins the expected set as literals.
+ */
+function fixtureMeetsRectangle(
+  geometry: { readonly coordinates: unknown },
+  bbox: readonly [number, number, number, number]
+): boolean {
+  const rings = geometry.coordinates as ReadonlyArray<ReadonlyArray<readonly number[]>>;
+  const [west, south, east, north] = bbox;
+  const vertexInside = rings.some((ring) =>
+    ring.some(([lng, lat]) => lng! >= west && lng! <= east && lat! >= south && lat! <= north)
+  );
+  return vertexInside || pointInRings((west + east) / 2, (south + north) / 2, rings);
+}
+
 /**
  * The BRIEFING's own counting rule (director's fix, C3 report): every
  * mapped incident whose geometry intersects the place bbox, wildfire,
@@ -503,6 +540,14 @@ function bboxesOverlap(
  * function's own dedupe rule: a feature with no usable identifier is never
  * deduped against another (kept individually), matching
  * `mergeByStableIdentifier` in `src/util/bbox.ts`.
+ *
+ * S30D P3-TRUTH: "intersects" means the GEOMETRY meets the rectangle (what
+ * the network path's `esriSpatialRelIntersects` envelope query answers), so
+ * after the cheap bounding-box rejection the expectation also asks an
+ * independent fixture-geometry check (`fixtureMeetsRectangle` above, not the
+ * product's overlap code). Before this, the helper restated the
+ * bounding-box predicate the product used, so it could not catch a
+ * perimeter whose box met the place while its ground did not.
  */
 function briefingIncidentTypes(
   features: ReadonlyArray<{
@@ -515,6 +560,7 @@ function briefingIncidentTypes(
   const types: unknown[] = [];
   for (const feature of features) {
     if (!bboxesOverlap(coordinatesBbox(feature.geometry), bbox)) continue;
+    if (!fixtureMeetsRectangle(feature.geometry, bbox)) continue;
     const id = feature.properties['attr_UniqueFireIdentifier'];
     if (typeof id === 'string' || typeof id === 'number') {
       if (seen.has(id)) continue;
@@ -590,6 +636,39 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
             poly_IncidentName: 'Synthetic Prescribed Unit'
           },
           geometry: PNW_POLYGON(-119.5, 46.3)
+        },
+        // S30D P3-TRUTH: a ring perimeter whose HOLE holds the whole of
+        // Washington's briefing rectangle ([-124.76, 45.54] to [-116.92,
+        // 49.00], with more than half a degree to spare on every side). Its
+        // bounding box contains the place, its ground touches none of it, so
+        // the briefing must not count it (the real overlap gives zero).
+        {
+          type: 'Feature',
+          properties: {
+            attr_UniqueFireIdentifier: 'P3TRUTH-RING',
+            attr_IncidentTypeCategory: 'WF',
+            attr_ActiveFireCandidate: 1,
+            poly_IncidentName: 'Synthetic Ring Around Washington'
+          },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-127, 43],
+                [-114, 43],
+                [-114, 51.5],
+                [-127, 51.5],
+                [-127, 43]
+              ],
+              [
+                [-126, 44.5],
+                [-126, 50.5],
+                [-115.5, 50.5],
+                [-115.5, 44.5],
+                [-126, 44.5]
+              ]
+            ]
+          }
         }
       ]
     };
@@ -631,6 +710,22 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
     // The wider rule's proof: a Prescribed-fire, inactive record is in the
     // expected set (it would not be under the minimap's active-only filter).
     expect(expectedTypes).toContain('RX');
+    // S30D P3-TRUTH setup guard: the ring's bounding box DOES meet the
+    // place's (so a box-only rule would count it), while the expectation,
+    // computed from the real overlap, leaves it out.
+    const ring = CASE_A_STUB.features.at(-1)!;
+    expect(ring.properties.poly_IncidentName).toBe('Synthetic Ring Around Washington');
+    expect(bboxesOverlap(coordinatesBbox(ring.geometry), WASHINGTON_BRIEFING_BBOX)).toBe(true);
+    expect(expectedTypes).toHaveLength(
+      CASE_A_STUB.features.filter((feature) =>
+        bboxesOverlap(coordinatesBbox(feature.geometry), WASHINGTON_BRIEFING_BBOX)
+      ).length - 1
+    );
+    // The expected set as literals (repair round 1), so the expectation does
+    // not rest on any geometry code at all: Synthetic Butte (WF) and the
+    // Prescribed unit (RX) lie inside Washington; Synthetic Ridge lies south
+    // of it; the ring's hole holds it.
+    expect(expectedTypes).toEqual(['WF', 'RX']);
     const expectedText = buildNifcAreaPerimeterClaim(expectedTypes);
 
     const claim = currentFireCell(page).locator('.impact-claim').first();

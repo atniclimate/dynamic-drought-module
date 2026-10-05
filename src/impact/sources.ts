@@ -30,14 +30,14 @@ import {
   buildNifcAreaPerimeterClaim
 } from '../config/wildfire-presentation';
 import {
-  bboxIntersects,
   loadServiceEnvelopePieces,
-  mergeByStableIdentifier
+  mergeByStableIdentifier,
+  serviceBboxPieces
 } from '../util/bbox';
 import { naiveBboxSuggestsAntimeridianCrossing } from '../util/antimeridian';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
-import { cpcOutlookBarsSvg, trendLineSvg, type TrendPoint } from '../ui/charts';
+import { trendLineSvg, type TrendPoint } from '../ui/charts';
 import { categoryImpact } from './category-impacts';
 import { makeClaim, todayIso } from './evidence';
 import { contextStateFips, contextStateName } from './resources';
@@ -49,6 +49,7 @@ import {
   nwsCoordinate,
   type NwsRequestSession
 } from './nws-point';
+import type { Geometry, Polygon } from 'geojson';
 import type {
   BoundarySelectionContext,
   HeatSourceRead,
@@ -60,14 +61,21 @@ export interface SourceResult {
   readonly claims: SourcedClaim[];
   /** True if the fetch completed (even if it found nothing); false on error. */
   readonly ok: boolean;
-  /** Optional honest note shown when `ok` is false. */
+  /** Optional honest note shown when `ok` is false, or when `partial` is true. */
   readonly note?: string;
+  /**
+   * True when the fetch answered only in part: some of its reads failed, the
+   * claims it did establish stand, and `note` (when the fetcher has one) says
+   * what is missing. Still `ok`; the briefing cell it feeds reads live
+   * (partial), never live (`fillCell` in matrix.ts; S30D P3-TRUTH).
+   */
+  readonly partial?: boolean;
   /** Optional typed heat read used by the cross-source comparison. */
   readonly heatRead?: HeatSourceRead;
 }
 
 const TIMEOUT_MS = 10_000;
-const GEOJSON_ACCEPT = { Accept: 'application/geo+json, application/json' };
+export const GEOJSON_ACCEPT = { Accept: 'application/geo+json, application/json' };
 
 /** Round a coordinate to 4 decimals; the NWS API rejects more precision. */
 function round4(n: number): number {
@@ -75,11 +83,40 @@ function round4(n: number): number {
 }
 
 /**
+ * S30D P3-TRUTH (repair round 2): a lazy chunk a read waits on, bounded.
+ * Resolves the load's value, or `null` when the briefing aborts, when
+ * `TIMEOUT_MS` (the per-request budget every read here already has) passes
+ * first, or when the load rejects. A rejection is logged (`what` names the
+ * load) unless the briefing was cancelled, which is never a defect.
+ */
+function settleLazy<T>(
+  load: () => Promise<T>,
+  signal: AbortSignal,
+  what: string
+): Promise<T | null> {
+  return new Promise((resolve) => {
+    const finish = (value: T | null): void => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', stop);
+      resolve(value);
+    };
+    const stop = (): void => finish(null);
+    const timer = setTimeout(stop, TIMEOUT_MS);
+    signal.addEventListener('abort', stop, { once: true });
+    if (signal.aborted) stop();
+    load().then(finish, (err: unknown) => {
+      if (!signal.aborted) console.warn(`[impact] ${what} failed.`, err);
+      finish(null);
+    });
+  });
+}
+
+/**
  * Build an Environmental Systems Research Institute (ESRI) FeatureServer
  * point-intersect query. The shared keys (where, inSR, spatialRel,
  * returnGeometry, f) are baked in; the caller supplies the `outFields`.
  */
-function esriPointQuery(lng: number, lat: number, outFields: string): URLSearchParams {
+export function esriPointQuery(lng: number, lat: number, outFields: string): URLSearchParams {
   return new URLSearchParams({
     where: '1=1',
     geometry: `${round4(lng)},${round4(lat)}`,
@@ -117,7 +154,7 @@ function esriEnvelopeQuery(envelope: string, outFields: string, recordCount?: nu
  * timeout remain active through response-body consumption. Callers keep their
  * own `signal.aborted` re-check immediately after, before touching the panel.
  */
-async function fetchJson(
+export async function fetchJson(
   url: string,
   headers: Record<string, string>,
   signal: AbortSignal,
@@ -136,7 +173,7 @@ async function fetchJson(
  * envelope as an empty result and asserting `no data` (an outage must never
  * become a positive finding of absence).
  */
-class EsriServiceError extends Error {
+export class EsriServiceError extends Error {
   /** The service's own message text, verbatim; logged with the failure. */
   readonly serviceMessage: string;
 
@@ -176,7 +213,7 @@ function esriErrorMessage(json: unknown): string | null {
  * Throws `EsriServiceError` on an HTTP 200 error envelope (see above); no
  * retry is attempted, so the existing per-call budget still bounds the work.
  */
-function featuresOf(json: unknown): unknown[] {
+export function featuresOf(json: unknown): unknown[] {
   const serviceMessage = esriErrorMessage(json);
   if (serviceMessage !== null) throw new EsriServiceError(serviceMessage);
   return isObject(json) && Array.isArray(json.features) ? json.features : [];
@@ -188,20 +225,20 @@ function featuresOf(json: unknown): unknown[] {
  * a service that never answered. `service` is the subject of the sentence,
  * for example "The U.S. Drought Monitor".
  */
-function upstreamNote(err: unknown, service: string): string {
+export function upstreamNote(err: unknown, service: string): string {
   return err instanceof EsriServiceError
     ? `${service} is unavailable: it answered with an error rather than data.`
     : `${service} did not respond.`;
 }
 
 /** An epoch-millisecond upstream Date field, or null when absent or unusable. */
-function epochField(value: unknown): number | null {
+export function epochField(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
   return value;
 }
 
 /** The UTC calendar day of an instant, ISO 8601, for a claim's `dates`. */
-function isoDayUtc(time: number): string {
+export function isoDayUtc(time: number): string {
   return new Date(time).toISOString().slice(0, 10);
 }
 
@@ -221,7 +258,7 @@ function isoDayFromUpstream(value: unknown): string | undefined {
  * midnights, so the day is read in UTC; a local read would show the previous
  * day for every viewer west of Greenwich.
  */
-function humanDayUtc(time: number): string {
+export function humanDayUtc(time: number): string {
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
@@ -231,7 +268,7 @@ function humanDayUtc(time: number): string {
 }
 
 /** "Aug 25", for the start of a span whose end carries the shared year. */
-function humanDayUtcNoYear(time: number): string {
+export function humanDayUtcNoYear(time: number): string {
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
@@ -791,38 +828,12 @@ function localDayFromEpoch(epochMs: number): string {
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
-/** Walk a GeoJSON geometry's coordinates into a `[west, south, east, north]`
- * bounding box, or null for a geometry with no positional coordinates. A
- * small local copy of `impact/context.ts`'s `geometryBbox` rather than an
- * import: `src/layers/nifc-fires.ts` features never cross the antimeridian
- * in practice (WFIGS perimeters are compact, single-country incidents), and
- * this keeps the fast path independent of the boundary-context chunk rather
- * than growing this file's own first-activation closure to reach it. */
-function polygonFeatureBbox(
-  geometry: { readonly coordinates?: unknown } | null | undefined
-): readonly [number, number, number, number] | null {
-  if (!geometry) return null;
-  let west = Infinity;
-  let south = Infinity;
-  let east = -Infinity;
-  let north = -Infinity;
-  const visit = (node: unknown): void => {
-    if (!Array.isArray(node)) return;
-    if (typeof node[0] === 'number' && typeof node[1] === 'number') {
-      const [lng, lat] = node as [number, number];
-      if (lng < west) west = lng;
-      if (lng > east) east = lng;
-      if (lat < south) south = lat;
-      if (lat > north) north = lat;
-      return;
-    }
-    for (const child of node) visit(child);
-  };
-  visit(geometry.coordinates);
-  if (!Number.isFinite(west) || !Number.isFinite(south) || !Number.isFinite(east) || !Number.isFinite(north)) {
-    return null;
-  }
-  return [west, south, east, north];
+/** One service piece as the NIFC envelope query sends it, rounded to 4
+ * decimals; the loaded-collection read tests this same rectangle. */
+function serviceRectangle(
+  piece: readonly [number, number, number, number]
+): [number, number, number, number] {
+  return [round4(piece[0]), round4(piece[1]), round4(piece[2]), round4(piece[3])];
 }
 
 /** Coverage-envelope containment for a plain bbox: `src/layers/nifc-fires.ts`'s
@@ -871,22 +882,49 @@ function bboxCoveredByEnvelope(
 async function nifcClaimFromLoadedCollection(
   requestBbox: readonly [number, number, number, number]
 ): Promise<SourceResult | null> {
-  if (requestBbox[0] >= requestBbox[2] || requestBbox[1] >= requestBbox[3]) return null;
-  const status = registry.getStatus('nifc-fires');
-  if (status !== 'ready' && status !== 'degraded') return null;
+  // S30D P3-TRUTH (repair round 2): this read tests the ONE rectangle the
+  // network read below sends the service, normalized and split by
+  // `serviceBboxPieces` and rounded by `serviceRectangle`, so a perimeter
+  // edge the service's rounding reaches counts on both paths alike. A
+  // rectangle the service would split in two (an antimeridian crossing,
+  // encoded or unwrapped) or that rounds to no area declines.
+  const pieces = serviceBboxPieces(requestBbox);
+  if (pieces.length !== 1) return null;
+  const [west, south, east, north] = serviceRectangle(pieces[0]);
+  if (west >= east || south >= north) return null;
 
   const { loadedNifcCollection } = await import('../layers/nifc-fires');
   const loaded = loadedNifcCollection();
   if (loaded === null) return null;
-  if (!bboxCoveredByEnvelope(loaded.envelope, requestBbox)) return null;
+  if (!bboxCoveredByEnvelope(loaded.envelope, [west, south, east, north])) return null;
 
-  const candidates = loaded.collection.features.filter((feature) => {
-    if (!isObject(feature) || !isObject(feature.properties)) return false;
-    const featureBbox = polygonFeatureBbox(
-      feature.geometry as { readonly coordinates?: unknown } | null | undefined
-    );
-    return featureBbox !== null && bboxIntersects(featureBbox, requestBbox);
-  });
+  // S30D P3-TRUTH: a perimeter counts when its GEOMETRY meets the place's
+  // query rectangle, the predicate the network read's
+  // `esriSpatialRelIntersects` envelope query applies, so the two paths
+  // answer alike for one place. The bounding-box test this used alone
+  // counted a place sitting in a perimeter's hole, in the empty corner of a
+  // diagonal fire's box, or between the parts of a multipolygon. It stays
+  // the cheap rejection, now inside `geometriesOverlap` itself (its
+  // whole-geometry box test, then one per ring, before any ray cast), which
+  // replaced this file's own bbox walker and kept the briefing's
+  // first-activation closure under its line. The overlap test (the one
+  // `src/state/minimap-wildfire.ts` runs on this same collection) is reached
+  // through a dynamic import, like the layer module above, so it never joins
+  // that closure; against a four-vertex rectangle its cost is linear in the
+  // perimeter's vertices, which the layer's server-side generalization
+  // already bounds. A feature that is not a Polygon or MultiPolygon is never
+  // counted (that function's conservative false).
+  const { geometriesOverlap } = await import('../util/polygon-overlap');
+  const rectangle: Polygon = {
+    type: 'Polygon',
+    coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]]
+  };
+  const candidates = loaded.collection.features.filter(
+    (feature) =>
+      isObject(feature) &&
+      isObject(feature.properties) &&
+      geometriesOverlap(feature.geometry as Geometry | null, rectangle)
+  );
   // Same dedupe rule as the network path's `mergeByStableIdentifier(pages,
   // ...)` call below, applied to one "page" (the loaded collection has no
   // pagination of its own).
@@ -970,9 +1008,23 @@ export async function fetchNifcClaims(
   // case, and every existing lane-timing assumption), this never touches a
   // promise and falls straight into the unchanged network read below in the
   // same tick, exactly as before this task.
-  const nifcLayerStatus = registry.getStatus('nifc-fires');
-  if (nifcLayerStatus === 'ready' || nifcLayerStatus === 'degraded') {
-    const fromCollection = await nifcClaimFromLoadedCollection(requestBbox);
+  //
+  // S30D P3-TRUTH (repair round 2): only a COMPLETE loaded collection
+  // answers. The layer reports `degraded` for a transfer-limited (truncated)
+  // response, and its getter carries no completeness, so a degraded
+  // collection could state an absence or a count over perimeters it never
+  // received; the network read answers instead. The fast path's two lazy
+  // loads (the layer module and the overlap test) are bounded by
+  // `settleLazy`: a load that fails, a defect it throws (logged), or a load
+  // still pending at the deadline declines like any other decline, and a
+  // briefing abort settles this read with no late claim and no request.
+  if (registry.getStatus('nifc-fires') === 'ready') {
+    const fromCollection = await settleLazy(
+      () => nifcClaimFromLoadedCollection(requestBbox),
+      signal,
+      'NIFC loaded-perimeters read'
+    );
+    if (signal.aborted) return { claims: [], ok: false };
     if (fromCollection !== null) return fromCollection;
   }
 
@@ -981,7 +1033,7 @@ export async function fetchNifcClaims(
       requestBbox,
       signal,
       async (piece, siblingSignal) => {
-        const envelope = piece.map(round4).join(',');
+        const envelope = serviceRectangle(piece).join(',');
         const query = esriEnvelopeQuery(
           envelope,
           'attr_UniqueFireIdentifier,attr_IncidentName,attr_IncidentTypeCategory',
@@ -1119,15 +1171,24 @@ export async function fetchNwsAlertClaims(
         })
       );
     }
-    if (heat.length > 0) {
+    // S30D P3-TRUTH: a fire-only answer read the heat products too, and
+    // found none in effect. The Heat row then carries the same absence
+    // sentence the heat comparison states (`heatText`), never an empty cell
+    // that `fillCell` would call unavailable. (The mirror, a heat-only answer
+    // and the Fire row, needs a fire-only absence sentence the tree does not
+    // have yet; see the P3-TRUTH report.)
+    if (heat.length > 0 || fire.length > 0) {
       claims.push(
         makeClaim({
           // The former tail, "and drought-dried soils amplify it", asserted a
           // drought-to-heat coupling: the class of claim ruling D-0.8.0-047
           // removed from the USDM category ladder. It is removed here too
           // (DWH-07); do not reintroduce a DDM-inferred drought-to-heat link.
-          // vocab-allow: reports the NWS alert products in effect, upstream data
-          text: `An extreme-heat alert is in effect here: ${heat.join(', ')}. Heat raises drinking-water demand and human-health stress.`,
+          text:
+            heat.length > 0
+              // vocab-allow: reports the NWS alert products in effect, upstream data
+              ? `An extreme-heat alert is in effect here: ${heat.join(', ')}. Heat raises drinking-water demand and human-health stress.`
+              : heatText,
           ...alertShared,
           hazards: ['heat']
         })
@@ -1167,209 +1228,24 @@ export async function fetchNwsAlertClaims(
 // Near-term: CPC 6-10 day and 8-14 day outlooks (probability tilt)
 // ---------------------------------------------------------------------------
 
-interface OutlookValue {
-  readonly cat: string;
-  readonly prob: number;
-  /** `fcst_date`: when CPC issued the outlook, epoch ms; null when absent. */
-  readonly issued: number | null;
-  /** `start_date`: first day of the valid window, epoch ms. */
-  readonly validFrom: number | null;
-  /** `end_date`: last day of the valid window, epoch ms (inclusive). */
-  readonly validTo: number | null;
-}
-
 /**
- * The fields the extended-range outlook layers publish that the briefing can
- * state honestly: the tercile category and its probability, plus the issuance
- * and the valid window the service already sends with them (FSPEC-03). All
- * three date fields are epoch-millisecond UTC Date fields.
- */
-const CPC_OUT_FIELDS = 'cat,prob,fcst_date,start_date,end_date';
-
-/** Query one CPC outlook layer (0 = temperature, 1 = precipitation) at a point. */
-async function fetchCpcLayer(
-  base: string,
-  layer: 0 | 1,
-  lng: number,
-  lat: number,
-  signal: AbortSignal
-): Promise<OutlookValue | null> {
-  const url = `${base}/${layer}/query?${esriPointQuery(lng, lat, CPC_OUT_FIELDS).toString()}`;
-  const json: unknown = await fetchJson(url, GEOJSON_ACCEPT, signal);
-  const f = featuresOf(json)[0] ?? null;
-  if (!isObject(f) || !isObject(f.properties)) return null;
-  const cat = f.properties.cat;
-  const prob = f.properties.prob;
-  if (typeof cat !== 'string') return null;
-  return {
-    cat,
-    prob: typeof prob === 'number' ? prob : NaN,
-    issued: epochField(f.properties.fcst_date),
-    validFrom: epochField(f.properties.start_date),
-    validTo: epochField(f.properties.end_date)
-  };
-}
-
-/**
- * "Issued Sep 1, 2026; valid Sep 7 to Sep 11, 2026." from whichever of the
- * three date fields the service returned, and the empty string when it
- * returned none. An outlook must never state a window it was not given, so
- * each half is omitted independently rather than inferred from the other.
- */
-function outlookValiditySentence(v: OutlookValue | null): string {
-  if (!v) return '';
-  const parts: string[] = [];
-  if (v.issued !== null) parts.push(`Issued ${humanDayUtc(v.issued)}`);
-  if (v.validFrom !== null && v.validTo !== null) {
-    const sameYear =
-      new Date(v.validFrom).getUTCFullYear() === new Date(v.validTo).getUTCFullYear();
-    const from = sameYear ? humanDayUtcNoYear(v.validFrom) : humanDayUtc(v.validFrom);
-    parts.push(`valid ${from} to ${humanDayUtc(v.validTo)}`);
-  } else if (v.validFrom !== null) {
-    parts.push(`valid from ${humanDayUtc(v.validFrom)}`);
-  } else if (v.validTo !== null) {
-    parts.push(`valid through ${humanDayUtc(v.validTo)}`);
-  }
-  return parts.length > 0 ? ` ${parts.join('; ')}.` : '';
-}
-
-/**
- * Render a category and probability into a lean phrase for one variable.
- * `EC` (Equal Chances) is CPC's own statement that no forecast tool favors
- * any tercile, which is a different claim from a near-normal tilt (the
- * issuer's own glossary: "areas where equal chances of experiencing
- * below-normal, normal, or above-normal conditions are possible";
- * ddm-science-verifier EC verdict, 2026-09-09). It is never folded into
- * `Normal`'s "near-normal" phrase. A category code that is none of the
- * four the issuer's service carries renders nothing rather than invent a
- * tilt: `leanPhrase` returning `null` here already leaves the claim to the
- * surviving variable, or drops the window if neither answers (see the
- * `parts.filter` call above this function's caller).
- */
-function leanPhrase(v: OutlookValue | null, variable: string): string | null {
-  if (!v) return null;
-  const odds = Number.isFinite(v.prob) ? ` (${v.prob}% odds)` : '';
-  if (v.cat === 'Above') return `above-normal ${variable}${odds}`;
-  if (v.cat === 'Below') return `below-normal ${variable}${odds}`;
-  if (v.cat === 'Normal') return `near-normal ${variable}`;
-  if (v.cat === 'EC') {
-    return `equal chances of above-, near-, or below-normal ${variable} (no CPC-favored category)`;
-  }
-  return null;
-}
-
-/** Drought-and-fire interpretation of a temperature and precipitation lean. */
-function outlookInterpretation(temp: OutlookValue | null, precip: OutlookValue | null): string {
-  if (temp?.cat === 'Above' && precip?.cat === 'Below') {
-    return 'This hotter, drier tilt worsens near-term dryness and raises fire and heat risk.';
-  }
-  if (temp?.cat === 'Below' && precip?.cat === 'Above') {
-    return 'This cooler, wetter tilt eases near-term dryness.';
-  }
-  return '';
-}
-
-/**
- * Query the CPC 6-10 day and 8-14 day temperature and precipitation outlooks at
- * the point and surface each window's probability tilt as an outlook claim. The
- * lean is stated as a probability, never a deterministic value (the honest
- * outlook rule), and each claim carries the issuance and the valid window the
- * service publishes alongside the category. A window whose fetches fail is
- * skipped; the result is ok when at least one window resolved.
+ * The CPC 6-10 and 8-14 day outlook read at the point, which lives in
+ * `./cpc-extended` (S30D P3-TRUTH, repair round 2) and is reached through a
+ * dynamic import, as the ENSO read is (`loadEnsoClaims`, hydrate.ts), so its
+ * code stays out of the briefing's first-activation closure. The import is
+ * bounded by `settleLazy`: a briefing abort settles it as an aborted read,
+ * and a chunk that failed to load, or did not load within `TIMEOUT_MS`, read
+ * nothing at all, so the result is incomplete with no claim and no note.
+ * The cell then states no sentence: never the absence sentence (nothing was
+ * established) and never "did not respond" (no request was made).
  */
 export async function fetchCpcOutlookClaims(
   context: BoundarySelectionContext,
   signal: AbortSignal
 ): Promise<SourceResult> {
-  const { lng, lat } = context.lngLat;
-  const source = 'NOAA CPC extended-range outlooks';
-  const sourceUrl = 'https://www.cpc.ncep.noaa.gov/';
-
-  const windows: Array<{ label: string; base: string }> = [
-    { label: '6-10 day', base: URLS.cpc610OutlookMapServer },
-    { label: '8-14 day', base: URLS.cpc814OutlookMapServer }
-  ];
-
-  // Each settled claim carries its window's ordinal so chronological order
-  // never depends on the display copy (a wording change must not reorder).
-  const settled: Array<{ readonly ordinal: number; readonly claim: SourcedClaim }> = [];
-  let anyFailed = false;
-  // The first error-envelope answer seen across both windows, kept so a host
-  // that answered with an error is not reported as one that never answered
-  // (FSPEC-01). The per-variable catches below swallow the rejection to keep
-  // the sibling variable, so the envelope has to be recorded on the way past.
-  let serviceError: EsriServiceError | null = null;
-  const keepServiceError = (err: unknown): null => {
-    if (err instanceof EsriServiceError && serviceError === null) serviceError = err;
-    return null;
-  };
-  await Promise.all(
-    windows.map(async ({ label, base }, ordinal) => {
-      try {
-        // Fetch temperature and precipitation independently so one variable's
-        // HTTP failure does not discard the other; a window still emits the
-        // variable that succeeded (graceful degradation, honest-feedback rule).
-        const [temp, precip] = await Promise.all([
-          fetchCpcLayer(base, 0, lng, lat, signal).catch(keepServiceError),
-          fetchCpcLayer(base, 1, lng, lat, signal).catch(keepServiceError)
-        ]);
-        if (signal.aborted) return;
-        const parts = [leanPhrase(temp, 'temperature'), leanPhrase(precip, 'precipitation')].filter(
-          (p): p is string => p !== null
-        );
-        if (parts.length === 0) {
-          anyFailed = true;
-          return;
-        }
-        if (!temp || !precip) anyFailed = true;
-        const interp = outlookInterpretation(temp, precip);
-        // The two variables are layers of ONE issuance, so they carry the same
-        // fcst_date, start_date and end_date; whichever answered speaks for the
-        // window. An outlook claim with no forecast period is the one kind that
-        // must never lack one (DWH-06), so the dates are stated in the sentence
-        // and the issuance also dates the claim.
-        const dated = temp ?? precip;
-        const validity = outlookValiditySentence(dated);
-        const issued = dated?.issued ?? null;
-        // Foreground the temperature tercile bar (the heat-relevant variable).
-        const chartSvg = temp
-          ? cpcOutlookBarsSvg({ variable: 'temperature', cat: temp.cat, prob: temp.prob, window: label })
-          : undefined;
-        settled.push({
-          ordinal,
-          claim: makeClaim({
-            text: `CPC ${label} outlook: ${parts.join(', ')}.${interp ? ' ' + interp : ''}${validity}`,
-            source,
-            sourceUrl,
-            product: 'cpcExtended',
-            evidence: 'outlook',
-            dates:
-              issued === null
-                ? { retrieved: todayIso() }
-                : { issued: isoDayUtc(issued), retrieved: todayIso() },
-            uncertainty: { kind: 'categorical', text: 'stated as tercile odds (above, near, or below normal), not a deterministic value' },
-            ...(chartSvg ? { chartSvg } : {})
-          })
-        });
-      } catch (err) {
-        if (!signal.aborted) console.warn(`[impact] CPC ${label} outlook failed.`, err);
-        anyFailed = true;
-      }
-    })
-  );
-
+  const cpc = await settleLazy(() => import('./cpc-extended'), signal, 'CPC extended-range outlook load');
   if (signal.aborted) return { claims: [], ok: false };
-  // Keep windows in chronological order (6-10 then 8-14) regardless of which
-  // promise settled first, by the declared window ordinal (never by text).
-  const claims = settled.sort((a, b) => a.ordinal - b.ordinal).map((s) => s.claim);
-  if (claims.length === 0) {
-    return {
-      claims: [],
-      ok: false,
-      note: upstreamNote(serviceError, 'The CPC extended-range outlooks')
-    };
-  }
-  return { claims, ok: true, ...(anyFailed ? { note: 'One CPC outlook window did not respond.' } : {}) };
+  return cpc ? cpc.readCpcOutlookClaims(context, signal) : { claims: [], ok: true, partial: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -1745,9 +1621,9 @@ function joinDayList(days: readonly number[]): string {
  * never unavailable), and the live undocumented "Probability Too Low" value
  * is stated as a DDM-convention reading, never as no data and never as an
  * invented risk category. A day whose own query failed contributes no claim
- * (never a false "no area" reading of an outage); the whole lane reads
- * unavailable naming the product only when every one of the eight queries
- * failed. This never speaks for the 2023 Wildfire Hazard Potential raster,
+ * (never a false "no area" reading of an outage) and leaves the lane
+ * partial; the whole lane reads unavailable naming the product only when
+ * every one of the eight queries failed. This never speaks for the 2023 Wildfire Hazard Potential raster,
  * which is not a forecast and is not read here.
  */
 export async function fetchSpcFireOutlookClaims(
@@ -1784,6 +1660,10 @@ export async function fetchSpcFireOutlookClaims(
   if (day1Claim) claims.push(day1Claim);
   const day2Claim = spcCategoricalClaim(2, day2, source);
   if (day2Claim) claims.push(day2Claim);
+  // S30D P3-TRUTH: a day that answered with a value this briefing cannot read
+  // (an unrecognized `dn` here, an unrecognized label below) is dropped
+  // rather than invented, and the read is then incomplete, like a failed day.
+  let unreadable = (day1.ok && !day1Claim) || (day2.ok && !day2Claim);
 
   const noFeatureDays: number[] = [];
   for (let i = 0; i < SPC_PROBABILISTIC_DAYS.length; i += 1) {
@@ -1842,6 +1722,7 @@ export async function fetchSpcFireOutlookClaims(
       // send; dropped rather than invented, and never folded into the
       // "no area" sentence below (an area WAS drawn here, just not one of
       // the three verified values).
+      unreadable = true;
       console.warn(
         `[impact] SPC Day ${day} outlook returned an unrecognized label; dropped rather than invented.`,
         label
@@ -1875,15 +1756,13 @@ export async function fetchSpcFireOutlookClaims(
     };
   }
 
-  // F5 (S20 fix round): a per-layer failure is NOT surfaced to the reader
-  // here, on purpose for now. `fillCell` (src/impact/matrix.ts:262-310, not
-  // granted to this lane) collects a lane's `note` only when the whole lane
-  // answers `ok: false`; an `ok: true` lane's note is silently dropped, so a
-  // note reporting a partial outage on this path would never reach the DOM
-  // (the same gap exists for `fetchCpcOutlookClaims` above, which this
-  // lane's round 1 copied without noticing). Handed off rather than fixed
-  // here: see the report's Handoffs section.
-  return { claims, ok: true };
+  // F5 (S20 fix round) closed by S30D P3-TRUTH: a day whose own query failed,
+  // or whose answer could not be read, leaves the read partial, so the days
+  // that answered stand and the cell reads live (partial), never live
+  // (`fillCell` honours `partial`). No note rides with it yet: the tree has
+  // no sentence for some SPC days failing (the whole-lane note above would be
+  // false here), so the proposed text is in the P3-TRUTH report for the owner.
+  return { claims, ok: true, ...(unreadable || allOutcomes.some((o) => !o.ok) ? { partial: true } : {}) };
 }
 
 // ---------------------------------------------------------------------------
