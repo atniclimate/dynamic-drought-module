@@ -75,13 +75,17 @@ export interface LayerControllerView {
  *     for surface-role layers.
  *   - `deactivate` turns a layer off.
  *   - `applyPreset` makes the active set equal a preset's layer list.
- *   - `applyLayerSet` activates a set of keys (the URL/default boot path).
+ *   - `applyLayerSet` activates a set of keys: the URL/default boot path,
+ *     boot-only and called once. It skips every key any command has ever
+ *     set (`desiredOn` is only ever added to), so a later caller would
+ *     silently skip every layer a person has touched.
  *   - `ensureActive` is fire-and-forget activation (void, not awaited).
  */
 export interface LayerController {
   activate(key: string, cascade?: boolean): Promise<void>;
   deactivate(key: string): void;
   applyPreset(preset: ViewPreset): void;
+  /** Boot-only, call once: skips every key a command has already set. */
   applyLayerSet(keys: Iterable<string>): Promise<void>;
   ensureActive(key: string): void;
 }
@@ -550,12 +554,29 @@ export function createLayerController(
    * a user-initiated toggle, and `Promise.allSettled` lets a single slow or
    * failing layer not delay the rest. The URL parser guarantees at most one
    * surface in the set, so no exclusivity pass is needed here.
+   *
+   * The boot runs this only once the lazy island settles, after the controls
+   * already work (found-114, S30D P3-BOOT). A key whose intent a command has
+   * recorded since then (a preset chip, the hazard rail, a toggle, a studio)
+   * belongs to that newer command, on or off, and is skipped: the boot applies
+   * its captured set as the person has since left it, so a surface they
+   * replaced never returns beside their choice, and a key their command kept
+   * checked still activates. The exclusivity holds too, since a command that
+   * turns any surface on has already turned the boot's surface off. With no
+   * command in the window no key has an intent yet, and every key activates
+   * exactly as before, with one automatic exception: a `studio=place` deep
+   * link whose Place studio mounts first records off intent for the surface
+   * its clean display sets aside (src/state/display-snapshot.ts,
+   * `beginPlaceStudioDisplay`). The end state is the same; that surface is
+   * simply no longer started and then cancelled here. Boot-only and called
+   * once: `desiredOn` is never cleared, so a second caller would skip every
+   * key a person has ever touched.
    */
   async function applyLayerSet(keys: Iterable<string>): Promise<void> {
     const tasks: Array<Promise<void>> = [];
     for (const key of keys) {
       const def = getLayerDef(key);
-      if (!def) continue;
+      if (!def || desiredOn.has(key)) continue;
       view.setCheckbox(key, true);
       tasks.push(activateWithIndicator(def));
     }
