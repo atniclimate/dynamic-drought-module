@@ -21,8 +21,8 @@ import {
   renderSwatchLegend,
   showLegend
 } from '../ui/legend-registry';
+import type { IssuedModel, PopupClock } from '../ui/popup-frame';
 import { clearTimeBar, setTimeBar } from '../ui/time-bar';
-import { escapeHtml } from '../util/escape';
 import {
   fetchSharedJsonWithBudget,
   invalidateSharedJsonRequest
@@ -229,22 +229,58 @@ export function deactivate(map: maplibregl.Map): void {
   dispatchSnapshot('inactive', null);
 }
 
-function popupHtml(properties: GeoJsonProperties): string {
+/** The frame's explanation for issuer time text DDM does not parse (PF1). */
+const SUPPLIED_TIME_EXPLANATION = 'As the issuer states it; DDM does not read it as a full date.';
+
+/** The product page (drought.gov; the 2026-09-29 c25 citation batch). */
+const NADM_PRODUCT_PAGE = 'https://www.drought.gov/data-maps-tools/north-american-drought-monitor-nadm';
+
+/**
+ * The NADM polygon's popup model (D1 M25; the frame's surface head). The
+ * consensus month is the loaded snapshot's (`YYYY-MM`, month precision:
+ * never a day). The product page is the primary source; the raw GeoJSON
+ * this layer reads is a more link only.
+ */
+export function buildNadmPopupModel(properties: GeoJsonProperties, sourceMonth: string | null): IssuedModel {
   const rawCategory = String(properties?.['DROUGHTCAT'] ?? '').toLowerCase();
   const categoryIndex = CLASS_CODES.indexOf(rawCategory as ClassCode);
   const category = categoryIndex >= 0 ? NADM_CATEGORIES[categoryIndex] : null;
-  const sourceMonth = activeSnapshot?.month ?? null;
-  return `
-    <div class="popup-title">${escapeHtml(category ? `${category.code} · ${category.label}` : 'Unknown class')}</div>
-    <div class="popup-agency">North American Drought Monitor · tri-national consensus product</div>
-    <div class="popup-treaty-meta">Consensus month: ${escapeHtml(sourceMonth ? monthLabel(sourceMonth) : 'unavailable')}</div>
-    <div class="popup-description">Monthly continental context, published 2 to 3 weeks after month-end. This product is not blended with a United States, Canadian, or provincial drought edition.</div>
-    <div class="popup-treaty-meta">The source publishes no country or issuing-agency attribute for this polygon. No issuer is inferred from its location.</div>
-    <div class="popup-treaty-meta">Areas without a polygon have no coverage from this source; they are not assigned class zero.</div>
-    <div class="popup-links">
-      <a href="${escapeHtml(URLS.nadmCurrentGeojson)}" target="_blank" rel="noopener">North American Drought Monitor source</a>
-    </div>
-  `;
+  const month: PopupClock =
+    sourceMonth === null || sourceMonth.trim() === ''
+      ? { kind: 'not-stated', label: 'Consensus month', reason: 'unavailable' }
+      : {
+          kind: 'point',
+          meaning: 'month',
+          label: 'Consensus month',
+          at: /^\d{4}-(0[1-9]|1[0-2])$/.test(sourceMonth)
+            ? { precision: 'month', month: sourceMonth }
+            : { precision: 'supplied', text: sourceMonth, explanation: SUPPLIED_TIME_EXPLANATION }
+        };
+  return {
+    kind: 'surface',
+    title: 'North American Drought Monitor',
+    issuer: {
+      role: 'issued-by',
+      name: 'North American Drought Monitor · tri-national consensus product',
+      productKey: 'nadm-drought'
+    },
+    value: [
+      category
+        ? {
+            text: `${category.code} · ${category.label}`,
+            swatch: { table: 'NADM_CATEGORIES', classKey: category.code, color: category.color }
+          }
+        : { text: 'Unknown class' }
+    ],
+    clocks: [month],
+    source: { link: { label: 'North American Drought Monitor', href: NADM_PRODUCT_PAGE } },
+    moreLinks: [{ label: 'North American Drought Monitor source', href: URLS.nadmCurrentGeojson }],
+    qualifications: [
+      'Monthly continental context, published 2 to 3 weeks after month-end. This product is not blended with a United States, Canadian, or provincial drought edition.',
+      'The source publishes no country or issuing-agency attribute for this polygon. No issuer is inferred from its location.',
+      'Areas without a polygon have no coverage from this source; they are not assigned class zero.'
+    ]
+  };
 }
 
 export function bindPopups(map: maplibregl.Map): void {
@@ -259,7 +295,7 @@ export function bindPopups(map: maplibregl.Map): void {
         : null;
     },
     respond: (feature) => ({
-      content: popupHtml(feature.properties ?? {})
+      model: buildNadmPopupModel(feature.properties ?? {}, activeSnapshot?.month ?? null)
     })
   });
   map.on('mouseenter', FILL_ID, () => {

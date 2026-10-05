@@ -29,10 +29,11 @@ import {
   HMS_OVERVIEW_QUALIFICATION,
   buildHmsSmokeFillPaint,
   parseArcGisPolygonFeatureCollection,
+  resolveHmsDensityClass,
   resolveHmsDensityPresentation
 } from '../config/wildfire-presentation';
 import { registerClickTarget } from '../map/interaction-coordinator';
-import { escapeHtml } from '../util/escape';
+import type { ClockAbsent, ClockValue, IssuedModel, PopupClock } from '../ui/popup-frame';
 import type { LayerActivation } from '../config/layers';
 import { fetchJsonWithBudget, linkAbort } from '../util/fetch';
 import { registry } from '../state/registry';
@@ -91,15 +92,30 @@ function julianDayUtc(date: Date): string {
   return `${date.getUTCFullYear()}${String(dayOfYear).padStart(3, '0')}`;
 }
 
-/** Parse an HMS "YYYYDDD HHMM" string into a short human label ("Jul 6, 12:00 UTC"). */
-function formatHmsTime(value: unknown): string {
-  if (typeof value !== 'string') return '';
-  const m = /^(\d{4})(\d{3})\s+(\d{2})(\d{2})$/.exec(value.trim());
-  if (!m) return value;
-  const [, year, doy, hh, mm] = m;
-  const date = new Date(Date.UTC(Number(year), 0, Number(doy), Number(hh), Number(mm)));
-  if (Number.isNaN(date.getTime())) return value;
-  return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}, ${hh}:${mm} UTC`;
+/** The frame's explanation for issuer time text DDM does not parse (PF1). */
+const SUPPLIED_TIME_EXPLANATION = 'As the issuer states it; DDM does not read it as a full date.';
+
+/**
+ * Read an HMS "YYYYDDD HHMM" string as a UTC instant (PF1), the year at
+ * least 1000 (Date.UTC reads years 0 to 99 as 1900 to 1999), the day of
+ * year checked against that year (1 to 365, or 366 in a leap year) and the
+ * time against 0000 to 2359. A missing, null or blank value, or one that is
+ * neither text nor a finite number, is absent; any other value is shown as
+ * the issuer supplied it, never silently dropped.
+ */
+function readHmsTime(value: unknown): ClockValue | ClockAbsent {
+  const raw = typeof value === 'string' ? value : typeof value === 'number' && Number.isFinite(value) ? String(value) : null;
+  if (raw === null || raw.trim() === '') {
+    return { precision: 'absent', reason: 'unavailable' };
+  }
+  const m = /^(\d{4})(\d{3})\s+(\d{2})(\d{2})$/.exec(raw.trim());
+  const supplied: ClockValue = { precision: 'supplied', text: raw, explanation: SUPPLIED_TIME_EXPLANATION };
+  if (!m) return supplied;
+  const [year, doy, hh, mm] = [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])];
+  if (year < 1000) return supplied;
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  if (doy < 1 || doy > (leap ? 366 : 365) || hh > 23 || mm > 59) return supplied;
+  return { precision: 'instant', at: Date.UTC(year, 0, doy, hh, mm), zone: 'UTC' };
 }
 
 /**
@@ -255,23 +271,40 @@ export function deactivate(map: maplibregl.Map): void {
   hideLegend(LAYER_KEY);
 }
 
-function buildHmsPopupHtml(props: GeoJsonProperties): string {
-  const density = resolveHmsDensityPresentation(props?.['Density']);
+/**
+ * The smoke plume's popup model (D1 M25; the frame's surface head): the
+ * density class on its single hue (unknown stays unclassified), the
+ * observed window at UTC instants, the detecting satellite as a row.
+ */
+export function buildHmsPopupModel(props: GeoJsonProperties): IssuedModel {
+  const densityClass = resolveHmsDensityClass(props?.['Density']);
+  const density = HMS_DENSITY_PRESENTATION[densityClass];
   const satellite = typeof props?.['Satellite'] === 'string' ? props['Satellite'] : '';
-  const start = formatHmsTime(props?.['Start']);
-  const end = formatHmsTime(props?.['End_']);
+  const start = readHmsTime(props?.['Start']);
+  const end = readHmsTime(props?.['End_']);
+  const observed: PopupClock =
+    start.precision === 'absent' && end.precision === 'absent'
+      ? { kind: 'not-stated', label: 'Observed', reason: 'unavailable' }
+      : { kind: 'window', meaning: 'observed', from: { label: 'Observed', at: start }, until: { label: 'to', at: end } };
 
-  return `
-    <div class="popup-title">${escapeHtml(density.popupLabel)}</div>
-    <div class="popup-agency">NOAA Hazard Mapping System</div>
-    ${satellite ? `<div class="popup-treaty-meta">Detected by: ${escapeHtml(satellite)}</div>` : ''}
-    ${start ? `<div class="popup-treaty-meta">Observed: ${escapeHtml(start)}${end ? ` to ${escapeHtml(end)}` : ''}</div>` : ''}
-    <div class="popup-description">Analyst-drawn smoke plume from GOES satellite imagery. Density classes describe apparent smoke thickness (Light, Medium, Heavy), not ground-level air quality; check local air quality observations for exposure decisions.</div>
-    <div class="popup-description">Strategic context only, not tactical fire operations or evacuation guidance.</div>
-    <div class="popup-links">
-      <a href="https://www.ospo.noaa.gov/products/land/hms.html" target="_blank" rel="noopener">NOAA OSPO Hazard Mapping System</a>
-    </div>
-  `;
+  return {
+    kind: 'surface',
+    title: 'HMS smoke analysis',
+    issuer: { role: 'issued-by', name: 'NOAA NESDIS Office of Satellite and Product Operations', productKey: 'hms-smoke' },
+    value: [
+      {
+        text: density.popupLabel,
+        swatch: { table: 'HMS_DENSITY_PRESENTATION', classKey: densityClass, color: density.color }
+      }
+    ],
+    clocks: [observed],
+    details: satellite.trim() === '' ? [] : [{ kind: 'row', label: 'Detected by', text: satellite }],
+    source: { link: { label: 'NOAA OSPO Hazard Mapping System', href: 'https://www.ospo.noaa.gov/products/land/hms.html' } },
+    qualifications: [
+      'Analyst-drawn smoke plume from GOES satellite imagery. Density classes describe apparent smoke thickness (Light, Medium, Heavy), not ground-level air quality; check local air quality observations for exposure decisions.',
+      'Strategic context only, not tactical fire operations or evacuation guidance.'
+    ]
+  };
 }
 
 /**
@@ -296,7 +329,7 @@ export function bindPopups(map: maplibregl.Map): void {
       ).popupLabel;
     },
     respond: (feature) => ({
-      content: buildHmsPopupHtml(feature.properties ?? {})
+      model: buildHmsPopupModel(feature.properties ?? {})
     })
   });
 

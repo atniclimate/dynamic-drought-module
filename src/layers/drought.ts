@@ -43,7 +43,7 @@ import { requestLayerOn } from '../ui/layer-toggle-command';
 import { timeline, horizonForOutlookRange, type OutlookRange } from '../state/timeline';
 import { requestHorizon } from '../state/cluster-service';
 import { fetchJsonWithBudget } from '../util/fetch';
-import { escapeHtml } from '../util/escape';
+import type { ClockValue, IssuedModel, PopupClock } from '../ui/popup-frame';
 import { ensureHatchImages, hatchImageId } from '../util/hatch';
 import { hideLoading, showLoading } from '../ui/overlay';
 import { DROUGHT_COLORS } from '../config/palette';
@@ -621,30 +621,105 @@ const OUTLOOK_CLASS_COPY: Readonly<Record<string, string>> = {
   Removal: 'Existing drought is favored to end within the outlook period.'
 };
 
-function buildOutlookPopupHtml(props: GeoJsonProperties): string {
+/** Each drawn outlook class's legend colour key (OUTLOOK_LEGEND's pairs). */
+const OUTLOOK_CLASS_COLOR_KEY: Readonly<Record<string, string>> = {
+  Persistence: 'PERSISTS',
+  Development: 'DEVELOPS',
+  Improvement: 'IMPROVES',
+  Removal: 'REMOVAL'
+};
+
+/** The frame's explanation for issuer time text DDM does not parse (PF1). */
+const SUPPLIED_TIME_EXPLANATION = 'As the issuer states it; DDM does not read it as a full date.';
+
+const OUTLOOK_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+
+/** Present issuer text as supplied (PF1: its raw text kept, never read as a date). */
+function suppliedClock(text: string): ClockValue {
+  return { precision: 'supplied', text, explanation: SUPPLIED_TIME_EXPLANATION };
+}
+
+/**
+ * `fcst_date` ('MM/DD/YYYY') at date precision by pure string work, the
+ * calendar checked (month 1 to 12, the day within that month, leap years
+ * respected); anything else as supplied. Never `new Date()` on it.
+ */
+function issuedClock(fcstDate: string): ClockValue {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(fcstDate.trim());
+  if (!m) return suppliedClock(fcstDate);
+  const month = Number(m[1]);
+  const day = Number(m[2]);
+  const year = Number(m[3]);
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  if (days === undefined || day < 1 || day > days) return suppliedClock(fcstDate);
+  return { precision: 'date', date: `${m[3]}-${m[1]}-${m[2]}` };
+}
+
+/**
+ * `target`, the valid-through label as issued: month precision only for
+ * exactly "Mon YYYY" ('Jul 2026'); any other label ('September 30' names
+ * no year) as supplied, never given an invented year.
+ */
+function validThroughClock(target: string): ClockValue {
+  const m = /^([A-Z][a-z]{2}) (\d{4})$/.exec(target);
+  const index = m ? OUTLOOK_MONTHS.indexOf(m[1] as (typeof OUTLOOK_MONTHS)[number]) : -1;
+  if (!m || index < 0) return suppliedClock(target);
+  return { precision: 'month', month: `${m[2]}-${String(index + 1).padStart(2, '0')}` };
+}
+
+/**
+ * A present issuer field as text, or null (PF1): text or a finite number
+ * is read; a missing, null or blank value, or anything else (an array, an
+ * object, a boolean), is absent, never its String().
+ */
+function statedText(value: unknown): string | null {
+  const text = typeof value === 'string' ? value : typeof value === 'number' && Number.isFinite(value) ? String(value) : null;
+  return text === null || text.trim() === '' ? null : text;
+}
+
+/** The outlook polygon's popup model (D1 M25; the frame's surface head). */
+export function buildOutlookPopupModel(props: GeoJsonProperties, range: OutlookRange): IssuedModel {
   const p = props ?? {};
   const cls = typeof p['outlook'] === 'string' ? p['outlook'] : '';
-  const issued = typeof p['fcst_date'] === 'string' ? humanIssueDate(p['fcst_date']) : '';
-  const target = typeof p['target'] === 'string' ? p['target'] : '';
-  const copy = OUTLOOK_CLASS_COPY[cls] ?? 'CPC drought outlook class.';
+  const issued = statedText(p['fcst_date']);
+  const target = statedText(p['target']);
+  const copy = Object.hasOwn(OUTLOOK_CLASS_COPY, cls) ? OUTLOOK_CLASS_COPY[cls]! : 'CPC drought outlook class.';
   const title = cls === 'Persistence' ? 'Drought persists'
     : cls === 'Development' ? 'Drought develops'
     : cls === 'Improvement' ? 'Drought improves'
     : cls === 'Removal' ? 'Drought removal likely'
     : 'Drought outlook';
+  const colorKey = Object.hasOwn(OUTLOOK_CLASS_COLOR_KEY, cls) ? OUTLOOK_CLASS_COLOR_KEY[cls]! : null;
+  const color = colorKey !== null && Object.hasOwn(DROUGHT_COLORS, colorKey) ? DROUGHT_COLORS[colorKey]! : null;
+  const clocks: [PopupClock, ...PopupClock[]] = [
+    issued === null
+      ? { kind: 'not-stated', label: 'Issued', reason: 'unavailable' }
+      : { kind: 'point', meaning: 'issued', label: 'Issued', at: issuedClock(issued) }
+  ];
+  if (target !== null) {
+    clocks.push({ kind: 'point', meaning: 'valid', label: 'Valid through', at: validThroughClock(target) });
+  }
 
-  // vocab-allow: names the CPC outlook (an upstream forecast product) and disclaims outcomes
-  return `
-    <div class="popup-title">${escapeHtml(title)}</div>
-    <div class="popup-agency">NOAA CPC ${escapeHtml(rangeName(timeline.outlookRange))} Drought Outlook</div>
-    ${issued ? `<div class="popup-treaty-meta">Issued: ${escapeHtml(issued)}</div>` : ''}
-    ${target ? `<div class="popup-treaty-meta">Valid through: ${escapeHtml(target)}</div>` : ''}
-    <div class="popup-description">${escapeHtml(copy)} This is a forecast register: a shift in odds, not a forecast of outcomes.</div>
-    <div class="popup-links">
-      <a href="https://www.cpc.ncep.noaa.gov/products/expert_assessment/sdo_summary.php" target="_blank" rel="noopener">CPC Drought Outlook</a>
-      <a href="https://www.drought.gov/" target="_blank" rel="noopener">Drought.gov</a>
-    </div>
-  `;
+  return {
+    kind: 'surface',
+    title: `NOAA CPC ${rangeName(range)} Drought Outlook`,
+    issuer: { role: 'issued-by', name: 'NOAA Climate Prediction Center', productKey: 'drought' },
+    value: [
+      colorKey !== null && color !== null
+        ? { text: title, swatch: { table: 'DROUGHT_COLORS', classKey: colorKey, color } }
+        : { text: title }
+    ],
+    clocks,
+    source: {
+      link: { label: 'CPC Drought Outlook', href: 'https://www.cpc.ncep.noaa.gov/products/expert_assessment/sdo_summary.php' }
+    },
+    moreLinks: [{ label: 'Drought.gov', href: 'https://www.drought.gov/' }],
+    qualifications: [
+      // vocab-allow: names the CPC outlook (an upstream forecast product) and disclaims outcomes
+      `${copy} This is a forecast register: a shift in odds, not a forecast of outcomes.`
+    ]
+  };
 }
 
 /**
@@ -663,7 +738,7 @@ export function bindPopups(map: maplibregl.Map): void {
         : 'Drought outlook';
     },
     respond: (feature) => ({
-      content: buildOutlookPopupHtml(feature.properties ?? {})
+      model: buildOutlookPopupModel(feature.properties ?? {}, timeline.outlookRange)
     })
   });
   map.on('mouseenter', FILL_LAYER_ID, () => {

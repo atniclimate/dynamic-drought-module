@@ -48,7 +48,7 @@ import type { GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
 import { registerClickTarget } from '../map/interaction-coordinator';
-import { escapeHtml } from '../util/escape';
+import type { ClockValue, IssuedModel, IssuerSwatch, PopupClock } from '../ui/popup-frame';
 import { fetchBufferedWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
 import { getCurrentRegion, onRegionChange } from '../state/region-store';
@@ -923,26 +923,69 @@ function formatDate(value: unknown): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function buildUsdmPopupHtml(props: GeoJsonProperties): string {
+/** The frame's explanation for issuer time text DDM does not parse (PF1). */
+const SUPPLIED_TIME_EXPLANATION = 'As the issuer states it; DDM does not read it as a full date.';
+
+/**
+ * The only inputs that read as absent (PF1): a missing, null or blank
+ * value, and anything that is neither text nor a finite number (`false`
+ * is never epoch zero, so never January 1, 1970).
+ */
+function isAbsent(value: unknown): boolean {
+  if (typeof value === 'string') return value.trim() === '';
+  return !(typeof value === 'number' && Number.isFinite(value));
+}
+
+/**
+ * An NDMC date field at date precision (PF1): `formatDate`'s UTC
+ * `YYYY-MM-DD`, or, for a present value it cannot read, the issuer's raw
+ * text as supplied. Never called on an absent value.
+ */
+function usdmDateClock(value: unknown): ClockValue {
+  const date = formatDate(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(date)
+    ? { precision: 'date', date }
+    : { precision: 'supplied', text: String(value), explanation: SUPPLIED_TIME_EXPLANATION };
+}
+
+/** The USDM swatch for a drawn category, none for an unknown one. */
+function usdmSwatch(dm: unknown): IssuerSwatch | undefined {
+  if (typeof dm !== 'number' || !Number.isInteger(dm) || dm < 0 || dm > 4) return undefined;
+  const entry = USDM_CATEGORIES[dm]!;
+  return { table: 'USDM_CATEGORIES', classKey: entry.code, color: entry.color };
+}
+
+/** The weekly USDM polygon's popup model (D1 M25; the frame's surface head). */
+export function buildUsdmPopupModel(props: GeoJsonProperties): IssuedModel {
   const p = props ?? {};
   const dm = (p.DM ?? p.dm) as unknown;
-  const category = formatCategoryLabel(dm);
-  const mapDate = formatDate(p.MapDate ?? p.mapDate);
-  const validStart = formatDate(p.ValidStart ?? p.ValidStartDate ?? p.validStart);
-  const validEnd = formatDate(p.ValidEnd ?? p.ValidEndDate ?? p.validEnd);
-
-  return `
-    <div class="popup-title">${escapeHtml(category)}</div>
-    <div class="popup-agency">U.S. Drought Monitor (NDMC / NOAA / USDA)</div>
-    ${mapDate ? `<div class="popup-treaty-meta">Map date: ${escapeHtml(mapDate)}</div>` : ''}
-    ${validStart && validEnd ? `<div class="popup-treaty-meta">Valid: ${escapeHtml(validStart)} to ${escapeHtml(validEnd)}</div>` : ''}
-    <div class="popup-description">${escapeHtml(categoryImpact(dm))}</div>
-    <div class="popup-treaty-meta">Updated weekly each Thursday.</div>
-    <div class="popup-links">
-      <a href="https://droughtmonitor.unl.edu/" target="_blank" rel="noopener">U.S. Drought Monitor</a>
-      <a href="https://www.drought.gov/" target="_blank" rel="noopener">Drought.gov</a>
-    </div>
-  `;
+  const mapDate: unknown = p.MapDate ?? p.mapDate;
+  const validStart: unknown = p.ValidStart ?? p.ValidStartDate ?? p.validStart;
+  const validEnd: unknown = p.ValidEnd ?? p.ValidEndDate ?? p.validEnd;
+  const swatch = usdmSwatch(dm);
+  const clocks: PopupClock[] = [
+    isAbsent(mapDate)
+      ? { kind: 'not-stated', label: 'Map date', reason: 'unavailable' }
+      : { kind: 'point', meaning: 'map-date', label: 'Map date', at: usdmDateClock(mapDate) }
+  ];
+  if (!isAbsent(validStart) || !isAbsent(validEnd)) {
+    clocks.push({
+      kind: 'window',
+      meaning: 'valid',
+      from: { label: 'Valid', at: isAbsent(validStart) ? { precision: 'absent', reason: 'unavailable' } : usdmDateClock(validStart) },
+      until: { label: 'to', at: isAbsent(validEnd) ? { precision: 'absent', reason: 'unavailable' } : usdmDateClock(validEnd) }
+    });
+  }
+  return {
+    kind: 'surface',
+    title: 'U.S. Drought Monitor',
+    issuer: { role: 'issued-by', name: 'NDMC, NOAA, USDA', productKey: 'usdm' },
+    value: [swatch ? { text: formatCategoryLabel(dm), swatch } : { text: formatCategoryLabel(dm) }],
+    clocks: clocks as [PopupClock, ...PopupClock[]],
+    source: { link: { label: 'U.S. Drought Monitor', href: 'https://droughtmonitor.unl.edu/' } },
+    moreLinks: [{ label: 'Drought.gov', href: 'https://www.drought.gov/' }],
+    qualifications: [categoryImpact(dm), 'Updated weekly each Thursday.']
+  };
 }
 
 /** Plain-language read of a signed change class delta. */
@@ -955,19 +998,38 @@ function changeLabel(dn: unknown): string {
   return `${dir} ${steps} ${steps === 1 ? 'category' : 'categories'}`;
 }
 
-function buildChangePopupHtml(props: GeoJsonProperties): string {
+/**
+ * The change swatch the map draws for a class delta: the same steps as
+ * `changeColorExpression` over a numeric `DN`; none for an unknown class.
+ */
+function changeSwatch(dn: unknown): IssuerSwatch | undefined {
+  if (typeof dn !== 'number' || !Number.isInteger(dn)) return undefined;
+  const classKey: keyof typeof CHANGE_COLORS =
+    dn <= -2 ? 'improved2' : dn === -1 ? 'improved1' : dn === 0 ? 'same' : dn === 1 ? 'worsened1' : 'worsened2';
+  return { table: 'CHANGE_COLORS', classKey, color: CHANGE_COLORS[classKey] };
+}
+
+/** The change-map polygon's popup model (D1 M25; the frame's surface head). */
+export function buildUsdmChangePopupModel(props: GeoJsonProperties): IssuedModel {
   const p = props ?? {};
-  const mapDate = formatDate(p.MapDate);
-  // vocab-allow: honesty disclaimer, denies being a forecast
-  return `
-    <div class="popup-title">${escapeHtml(changeLabel(p.DN))}</div>
-    <div class="popup-agency">U.S. Drought Monitor change map (via drought.gov)</div>
-    ${mapDate ? `<div class="popup-treaty-meta">Through: ${escapeHtml(mapDate)}</div>` : ''}
-    <div class="popup-description">How the drought category moved over the window, not where it stands. Observed analysis, not a forecast.</div>
-    <div class="popup-links">
-      <a href="https://droughtmonitor.unl.edu/Maps/ChangeMaps.aspx" target="_blank" rel="noopener">USDM Change Maps</a>
-    </div>
-  `;
+  const mapDate: unknown = p.MapDate;
+  const swatch = changeSwatch(p.DN);
+  return {
+    kind: 'surface',
+    title: 'U.S. Drought Monitor change',
+    issuer: { role: 'issued-by', name: 'NDMC, NOAA, USDA (via drought.gov)', productKey: 'usdm' },
+    value: [swatch ? { text: changeLabel(p.DN), swatch } : { text: changeLabel(p.DN) }],
+    clocks: [
+      isAbsent(mapDate)
+        ? { kind: 'not-stated', label: 'Through', reason: 'unavailable' }
+        : { kind: 'point', meaning: 'through', label: 'Through', at: usdmDateClock(mapDate) }
+    ],
+    source: { link: { label: 'USDM Change Maps', href: 'https://droughtmonitor.unl.edu/Maps/ChangeMaps.aspx' } },
+    qualifications: [
+      // vocab-allow: honesty disclaimer, denies being a forecast
+      'How the drought category moved over the window, not where it stands. Observed analysis, not a forecast.'
+    ]
+  };
 }
 
 /**
@@ -985,7 +1047,7 @@ function bindUsdmPopups(map: maplibregl.Map): void {
     layerIds: [...USDM_FILL_LAYER_IDS],
     label: (feature) => formatCategoryLabel((feature.properties ?? {}).DM ?? (feature.properties ?? {}).dm),
     respond: (feature) => ({
-      content: buildUsdmPopupHtml(feature.properties ?? {})
+      model: buildUsdmPopupModel(feature.properties ?? {})
     })
   });
   registerClickTarget({
@@ -993,7 +1055,7 @@ function bindUsdmPopups(map: maplibregl.Map): void {
     layerIds: [CHANGE_FILL],
     label: (feature) => changeLabel((feature.properties ?? {}).DN),
     respond: (feature) => ({
-      content: buildChangePopupHtml(feature.properties ?? {})
+      model: buildUsdmChangePopupModel(feature.properties ?? {})
     })
   });
 

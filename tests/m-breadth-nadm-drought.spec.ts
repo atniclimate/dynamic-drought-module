@@ -138,7 +138,7 @@ test.describe('North American Drought Monitor continental context', () => {
     await expect(popup).toContainText(
       'North American Drought Monitor · tri-national consensus product'
     );
-    await expect(popup).toContainText('Consensus month: June 2026');
+    await expect(popup).toContainText('Consensus month Jun 2026');
     await expect(popup).toContainText(
       'source publishes no country or issuing-agency attribute'
     );

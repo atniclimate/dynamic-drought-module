@@ -291,10 +291,9 @@ test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
 
     const popup = page.locator('.maplibregl-popup-content');
     await expect(popup).toContainText('D2');
-    await expect(popup).toContainText(
-      'Canadian Drought Monitor · Agriculture and Agri-Food Canada'
-    );
-    await expect(popup).toContainText('Month: June 2026');
+    await expect(popup.locator('[data-popup-slot="title"]')).toHaveText('Canadian Drought Monitor');
+    await expect(popup.locator('[data-popup-slot="issuer"]')).toHaveText('Issued by: Agriculture and Agri-Food Canada');
+    await expect(popup).toContainText('Month Jun 2026');
     await expect(popup).toContainText(
       'not blended with a United States or provincial product'
     );

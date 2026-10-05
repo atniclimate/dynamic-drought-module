@@ -19,8 +19,8 @@ import {
   renderSwatchLegend,
   showLegend
 } from '../ui/legend-registry';
+import type { IssuedModel, PopupClock } from '../ui/popup-frame';
 import { clearTimeBar, setTimeBar } from '../ui/time-bar';
-import { escapeHtml } from '../util/escape';
 import { fetchBufferedWithBudget } from '../util/fetch';
 
 const LAYER_KEY = 'cdm-drought';
@@ -397,22 +397,47 @@ export function deactivate(map: maplibregl.Map): void {
   dispatchSnapshot('inactive', null);
 }
 
-function popupHtml(properties: GeoJsonProperties): string {
+/** The frame's explanation for issuer time text DDM does not parse (PF1). */
+const SUPPLIED_TIME_EXPLANATION = 'As the issuer states it; DDM does not read it as a full date.';
+
+/**
+ * The CDM polygon's popup model (D1 M25; the frame's surface head). The
+ * month is the committed artifact's (`YYYY-MM`, month precision: never a
+ * day). The dataset is the primary source; the licence link stays a more
+ * link (its sentence lives in Acknowledgements, DR-106).
+ */
+export function buildCdmPopupModel(properties: GeoJsonProperties, month: string | null): IssuedModel {
   const dm = Number(properties?.['dm']);
-  const code =
-    Number.isInteger(dm) && dm >= 0 && dm <= 4 ? CLASS_CODES[dm]! : 'Unknown';
-  const month = activeArtifact?.month ?? null;
-  return `
-    <div class="popup-title">${escapeHtml(code)}</div>
-    <div class="popup-agency">Canadian Drought Monitor · Agriculture and Agri-Food Canada</div>
-    <div class="popup-treaty-meta">Month: ${escapeHtml(month ? monthLabel(month) : 'unavailable')}</div>
-    <div class="popup-description">Monthly Canadian Drought Monitor classification. This feature is not blended with a United States or provincial product.</div>
-    <div class="popup-treaty-meta">Areas without a polygon are not assigned class zero by this artifact.</div>
-    <div class="popup-links">
-      <a href="${DATASET_URL}" target="_blank" rel="noopener">Canadian Drought Monitor source</a>
-      <a href="${LICENSE_URL}" target="_blank" rel="noopener">${LICENSE_TITLE}</a>
-    </div>
-  `;
+  const known = Number.isInteger(dm) && dm >= 0 && dm <= 4;
+  const code = known ? CLASS_CODES[dm]! : 'Unknown';
+  const clock: PopupClock =
+    month === null || month.trim() === ''
+      ? { kind: 'not-stated', label: 'Month', reason: 'unavailable' }
+      : {
+          kind: 'point',
+          meaning: 'month',
+          label: 'Month',
+          at: /^\d{4}-(0[1-9]|1[0-2])$/.test(month)
+            ? { precision: 'month', month }
+            : { precision: 'supplied', text: month, explanation: SUPPLIED_TIME_EXPLANATION }
+        };
+  return {
+    kind: 'surface',
+    title: 'Canadian Drought Monitor',
+    issuer: { role: 'issued-by', name: 'Agriculture and Agri-Food Canada', productKey: 'cdm-drought' },
+    value: [
+      known
+        ? { text: code, swatch: { table: 'CLASS_COLORS', classKey: code, color: CLASS_COLORS[dm]! } }
+        : { text: code }
+    ],
+    clocks: [clock],
+    source: { link: { label: 'Canadian Drought Monitor source', href: DATASET_URL } },
+    moreLinks: [{ label: LICENSE_TITLE, href: LICENSE_URL }],
+    qualifications: [
+      'Monthly Canadian Drought Monitor classification. This feature is not blended with a United States or provincial product.',
+      'Areas without a polygon are not assigned class zero by this artifact.'
+    ]
+  };
 }
 
 export function bindPopups(map: maplibregl.Map): void {
@@ -426,7 +451,7 @@ export function bindPopups(map: maplibregl.Map): void {
         : null;
     },
     respond: (feature) => ({
-      content: popupHtml(feature.properties ?? {})
+      model: buildCdmPopupModel(feature.properties ?? {}, activeArtifact?.month ?? null)
     })
   });
   map.on('mouseenter', FILL_ID, () => {
