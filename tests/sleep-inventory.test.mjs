@@ -95,16 +95,10 @@ const REASON_CLASSES = Object.freeze([
 
 /** @type {ReadonlyArray<{file: string, line: number, test: string, text: string, occurrence: number, class: ReasonClass, reason: string}>} */
 const SITES = [
-  {
-    file: 'cluster-controller-integration.spec.ts',
-    line: 183,
-    test: 'rapid A -> B -> A through the shell: stale first-generation work never corrupts the settled display',
-    text: 'await page.waitForTimeout(500);',
-    occurrence: 1,
-    class: 'absence-window',
-    reason:
-      'post-release settle so a stale, superseded generation cannot (wrongly) land before the assertion.'
-  },
+  // cluster-controller-integration.spec.ts:183 was an absence-window; S30D
+  // P3-STALE (found-124) replaced it with a wait on every held request's
+  // outcome (delivered and finished, or aborted by the page), so the case no
+  // longer contains a `waitForTimeout` call to declare here.
   // deployment-subpath.spec.ts:65 was seam-observable-non-tile; migrated
   // onto `awaitQuiescence` (tests/deployment-subpath.spec.ts) and so no
   // longer contains a `waitForTimeout` call to declare here.

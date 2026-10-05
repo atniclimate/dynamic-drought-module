@@ -212,7 +212,7 @@ test.describe('S3 requestCluster (the transaction)', () => {
       expect(timeline.horizon).toBe('season-ahead');
       expect(getCommittedSnapshot().horizon).toBe('season-ahead');
       expect(getCommittedSnapshot().intendedKeys.has('drought')).toBe(true);
-      expect(getCommittedSnapshot().intendedKeys.has('usdm')).toBe(false);
+      expect(getCommittedSnapshot().intendedKeys.has('nadm-drought')).toBe(false);
       // The timeline owns the horizon-to-register mapping.
       expect(timeline.outlookRange).toBe('seasonal');
       timeline.setHorizon('weeks-ahead');
@@ -306,7 +306,9 @@ test.describe('S3 requestCluster (the transaction)', () => {
         expect(getLayerDef(entry.key)?.role).toBe('reference');
       }
       expect(registry.getActiveKeys().has('heatrisk')).toBe(false);
-      expect(registry.getActiveKeys().has('usdm')).toBe(false);
+      // The Drought surface the horizon change activated (the CPC outlook
+      // at season-ahead) is gone: the Heat press deactivated it.
+      expect(registry.getActiveKeys().has('drought')).toBe(false);
       expect(getHazardCluster()).toBe('heat');
     } finally {
       dispose();
@@ -327,7 +329,7 @@ test.describe('S3 requestCluster (the transaction)', () => {
       requestCluster('wildfire');
       expect(registry.getActiveKeys().has('nifc-fires')).toBe(true);
       expect(registry.getActiveKeys().has('hms-smoke')).toBe(true);
-      expect(registry.getActiveKeys().has('usdm')).toBe(false);
+      expect(registry.getActiveKeys().has('nadm-drought')).toBe(false);
       // ...and the reference extra survives (never deactivated)...
       expect(registry.getActiveKeys().has('hydrography')).toBe(true);
       expect(checkedKeys().has('hydrography')).toBe(true);
@@ -440,14 +442,15 @@ test.describe('S3 snapshot revisions and honesty under later changes', () => {
       const before = getCommittedSnapshot();
 
       // A late status write for the dropped drought surface (the old
-      // generation resolving after the switch).
-      registry.setStatus('usdm', 'error');
+      // generation resolving after the switch): at the current horizon the
+      // Drought surface is nadm-drought.
+      registry.setStatus('nadm-drought', 'error');
       const after = getCommittedSnapshot();
       expect(after.revision).toBe(before.revision);
-      expect(after.summary.caveat ?? '').not.toContain('US Drought Monitor');
-      expect(after.statuses.has('usdm')).toBe(false);
+      expect(after.summary.caveat ?? '').not.toContain('North American Drought Monitor');
+      expect(after.statuses.has('nadm-drought')).toBe(false);
       // Clean up the stray status.
-      registry.deactivate('usdm');
+      registry.deactivate('nadm-drought');
     } finally {
       dispose();
     }
@@ -472,13 +475,22 @@ test.describe('S3 snapshot revisions and honesty under later changes', () => {
     }
   });
 
-  test('deferred activations: rapid cluster switching drops stale generations and every snapshot stays coherent (DG-080 finding 5)', () => {
-    // The named async-race pressure point: a DEFERRED controller whose
-    // per-key activations settle out of order, mirroring the real
-    // controller's observable behavior (loading at request; active +
-    // terminal status only when the op settles; a settle superseded by
-    // a newer per-key request or deactivate is DROPPED, the real
-    // per-key generation guard). The synchronous harness above cannot
+  test('deferred activations: the service stays coherent under a controller that drops stale settles, A -> B -> A (DG-080 finding 5; the real controller drop is proved in tests/stale-generation.test.mjs)', () => {
+    // WHAT THIS PROVES: the cluster SERVICE (intent, claim, snapshot
+    // revisions) stays coherent when the controller below it settles
+    // activations out of order. The controller here is a test-local fake
+    // whose `settle` carries the stale drop itself (a settle superseded by
+    // a newer per-key request or deactivate is dropped), so this case
+    // cannot fail when the production drop breaks; it is not the proof of
+    // that drop. The proof of the real controller's drop (the abort at off
+    // intent, the per-key operation chain, the intent generation) is
+    // tests/stale-generation.test.mjs, which runs the production
+    // `createLayerController` under these same service transactions, and the
+    // browser case in tests/cluster-controller-integration.spec.ts.
+    //
+    // The pressure point: a DEFERRED controller whose per-key activations
+    // settle out of order (loading at request; active + terminal status
+    // only when the op settles). The synchronous harness above cannot
     // exercise this; here the old generation writes late, including for
     // a key that has become intended AGAIN under a newer generation.
     resetWorld();
@@ -546,7 +558,9 @@ test.describe('S3 snapshot revisions and honesty under later changes', () => {
       // The OLD generations resolve late, after the same keys became
       // intended again under newer generations: every one is dropped.
       for (const op of [...staleFire, ...staleDrought]) settle(op);
-      expect(registry.getActiveKeys().has('usdm')).toBe(false);
+      // The surface the Drought press switched to at the current horizon
+      // is nadm-drought (clusters.ts recipes.current), not usdm.
+      expect(registry.getActiveKeys().has('nadm-drought')).toBe(false);
       expect(registry.getActiveKeys().has('nifc-fires')).toBe(false);
       expect(getCommittedSnapshot().statuses.get('nifc-fires')).toBe('loading');
       // No published snapshot has EVER claimed the pair displayed.
@@ -559,7 +573,7 @@ test.describe('S3 snapshot revisions and honesty under later changes', () => {
       for (const op of freshFire) settle(op);
       expect(registry.getActiveKeys().has('nifc-fires')).toBe(true);
       expect(registry.getActiveKeys().has('hms-smoke')).toBe(true);
-      expect(registry.getActiveKeys().has('usdm')).toBe(false);
+      expect(registry.getActiveKeys().has('nadm-drought')).toBe(false);
 
       // Final checked intent is exactly the wildfire composition.
       expect([...checkedKeys()].sort()).toEqual(
