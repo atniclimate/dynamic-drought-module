@@ -282,16 +282,21 @@ async function readPerimeterCollection(
  * Returns false (nothing added) when the perimeter source is absent or
  * holds no wildfire-class geometry; the caller treats that as a non-fatal
  * partial degrade.
+ *
+ * The signal is required: the caller aborts it on a scene exit, on the
+ * perimeter layer going off, and on a newer read, and nothing here writes
+ * to the map once it is aborted.
  */
 export async function activatePerimeterRibbon(
   map: maplibregl.Map,
-  signal?: AbortSignal
+  signal: AbortSignal
 ): Promise<boolean> {
+  if (signal.aborted) return false;
   if (map.getSource(RIBBON_SOURCE_ID)) return true;
   const collection = await readPerimeterCollection(map);
-  // A teardown or a superseded activation while the read was in flight: do
-  // not render into a scene that no longer wants one.
-  if (signal?.aborted) return false;
+  // A teardown, the layer going off, or a newer read while this one was in
+  // flight: do not render into a scene that no longer wants this answer.
+  if (signal.aborted) return false;
   if (!collection) return false;
   if (map.getSource(RIBBON_SOURCE_ID)) return true;
 

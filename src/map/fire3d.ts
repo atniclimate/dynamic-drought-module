@@ -280,6 +280,10 @@ let smokeModule: typeof import('../layers/hms-smoke-volume') | null = null;
 let ribbonOn = false;
 let ribbonModule: typeof import('../layers/nifc-perimeter-ribbon') | null =
   null;
+/** The ribbon read in flight, or null. Every teardown, the perimeter layer
+ * going off, and a newer read abort it: `getData()` answers with what the
+ * flat source held when it was asked, so only the newest read is current. */
+let ribbonRead: AbortController | null = null;
 let contextModule: typeof import('./fire3d-context') | null = null;
 let contextKeys: readonly string[] = [];
 /** Mirrors Fire3DStatus.transport; null while inactive, set from the first
@@ -580,7 +584,9 @@ function rollbackScene(map: maplibregl.Map): void {
   contextKeys = [];
   contextEmbedLines = [];
   // The ribbon owns its own derived source, so its teardown cannot strand
-  // the flat perimeter layer's; the guard is defensive only.
+  // the flat perimeter layer's; the guard is defensive only. A read still
+  // out is withdrawn first, so it cannot raise the ribbon after this.
+  cancelRibbonRead();
   if (ribbonModule) ribbonModule.deactivatePerimeterRibbon(map);
   ribbonOn = false;
   if (smokeVolumeOn && smokeModule) {
@@ -652,6 +658,39 @@ async function resolveFire3DTerrainUrl(
 
 function warnComponent(component: string, error: unknown): void {
   console.warn(`[fire3d] ${component} failed.`, error);
+}
+
+function cancelRibbonRead(): void {
+  if (ribbonRead) {
+    ribbonRead.abort();
+    ribbonRead = null;
+  }
+}
+
+/**
+ * One ribbon read, superseding any read still out. Returns true when this
+ * read was still the current one after its await (`ribbonOn` then holds its
+ * answer), false when a teardown, the perimeter layer going off, or a newer
+ * read took over; the ribbon module itself writes nothing to the map once
+ * the signal is aborted.
+ */
+async function readRibbon(
+  map: maplibregl.Map,
+  ribbon: typeof import('../layers/nifc-perimeter-ribbon')
+): Promise<boolean> {
+  cancelRibbonRead();
+  const read = new AbortController();
+  ribbonRead = read;
+  let on = false;
+  try {
+    on = await ribbon.activatePerimeterRibbon(map, read.signal);
+  } catch (err) {
+    warnComponent('ribbon activation', err);
+  }
+  if (ribbonRead !== read) return false;
+  ribbonRead = null;
+  ribbonOn = on;
+  return true;
 }
 
 async function activateScene(map: maplibregl.Map): Promise<void> {
@@ -789,14 +828,7 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
     warnComponent('ribbon import', err);
   }
   if (myGeneration !== generation || !active) return;
-  if (ribbonModule) {
-    try {
-      ribbonOn = await ribbonModule.activatePerimeterRibbon(map, signal);
-    } catch (err) {
-      ribbonOn = false;
-      warnComponent('ribbon activation', err);
-    }
-  }
+  if (ribbonModule) await readRibbon(map, ribbonModule);
   if (myGeneration !== generation || !active) return;
 
   // W-CTX: the issuer-published context layers ride their own lazy chunk
@@ -909,26 +941,24 @@ function reconcilePerimeterRibbon(map: maplibregl.Map): void {
   if (!active || !ribbonModule) return;
   const ribbon = ribbonModule;
   const perimetersOn = registry.getActiveKeys().has(PERIMETER_LAYER_KEY);
-  if (ribbonOn && !perimetersOn) {
+  if (!perimetersOn) {
+    // A read still out would otherwise land after this and raise the ribbon
+    // over a layer that is gone: withdraw it, then take down what stands.
+    const readOut = ribbonRead !== null;
+    cancelRibbonRead();
+    if (!ribbonOn && !readOut) return;
     ribbon.deactivatePerimeterRibbon(map);
+    if (!ribbonOn) return;
     ribbonOn = false;
     publishStatus('active', null);
     return;
   }
-  if (ribbonOn || !perimetersOn) return;
-  const myGeneration = generation;
-  void ribbon
-    .activatePerimeterRibbon(map)
-    .then((on) => {
-      // A teardown or a newer activation while the read was in flight owns
-      // the scene now; leave its state alone.
-      if (myGeneration !== generation || !active || !on) return;
-      ribbonOn = true;
-      publishStatus('active', null);
-    })
-    .catch((err: unknown) => {
-      warnComponent('ribbon activation', err);
-    });
+  if (ribbonOn) return;
+  // Each call reads afresh and supersedes a read still out, so the answer
+  // that lands is the one over the perimeters the layer holds now.
+  void readRibbon(map, ribbon).then((current) => {
+    if (current && ribbonOn && active) publishStatus('active', null);
+  });
 }
 
 /**
