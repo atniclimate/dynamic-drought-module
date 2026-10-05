@@ -55,12 +55,6 @@ export const BUILDERS: readonly BuilderEntry[] = [
 ];
 
 export const LEGACY_ALLOWANCE: readonly string[] = [
-  'state',
-  'tribal',
-  'bia',
-  'aiannh',
-  'treaty',
-  'ecoregion',
   'nifc',
   'nws',
   'spc',
@@ -225,9 +219,13 @@ export function scanPopupSites(file: string, source: string): SiteScan {
   // follow (the Codex r2 and r3 re-checks, finding 2); src has none. The
   // clause grammar does not matter: every `from 'maplibre-gl'` belongs to
   // the nearest `import` or `export` keyword before it, and one that belongs
-  // to an `export` other than `export type` is a problem.
+  // to an `export` other than `export type` is a problem. Keywords are read
+  // with every quoted string blanked (found-106): a quoted export name that
+  // spells a keyword (`export * as "import"`, `export { Popup as "import" }`)
+  // is a string, never the statement's keyword.
+  const unquoted = code.replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`/g, (s) => ' '.repeat(s.length));
   for (const m of code.matchAll(/\bfrom\s*['"]maplibre-gl['"]/g)) {
-    const keywords = [...code.slice(0, m.index).matchAll(/\b(?:import|export)\b/g)];
+    const keywords = [...unquoted.slice(0, m.index).matchAll(/\b(?:import|export)\b/g)];
     const statement = keywords[keywords.length - 1];
     if (statement?.[0] === 'export' && !/^export\s+type\b/.test(code.slice(statement.index))) {
       problems.push(`${file}: a maplibre-gl value re-export (a barrel)`);

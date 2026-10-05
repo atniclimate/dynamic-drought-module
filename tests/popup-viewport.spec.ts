@@ -194,7 +194,9 @@ test.describe('DEF-3: the coordinated popup is contained and its tail reachable 
     await body.evaluate((el) => {
       el.scrollTop = el.scrollHeight;
     });
-    const links = popup.locator('.popup-links a');
+    // The body's source links (D1 M24: the framed BIA body carries the more
+    // link and the primary source again, PF3).
+    const links = popup.locator('.coordinated-response-body a[href]');
     await expect(links).toHaveCount(2);
     for (const link of await links.all()) {
       expectWithinViewport(await link.boundingBox(), viewport, 'popup source link');
@@ -322,7 +324,7 @@ test.describe('DEF-3 finding 1: mobile side panel geometry (390x844, touch)', ()
     await body.evaluate((el) => {
       el.scrollTop = el.scrollHeight;
     });
-    const links = popup.locator('.popup-links a');
+    const links = popup.locator('.coordinated-response-body a[href]');
     await expect(links).toHaveCount(2);
     for (const link of await links.all()) {
       await link.evaluate((element) =>
@@ -447,7 +449,9 @@ test.describe('DEF-3 finding 1: a small embed iframe and both size floors', () =
     await body.evaluate((el) => {
       el.scrollTop = el.scrollHeight;
     });
-    for (const link of await popup.locator('.popup-links a').all()) {
+    // Counted first, so an unmatched selector cannot pass the loop vacuously.
+    await expect(popup.locator('.coordinated-response-body a[href]')).toHaveCount(2);
+    for (const link of await popup.locator('.coordinated-response-body a[href]').all()) {
       await expectHitTestReachable(link, 'popup source link in the small embed');
     }
     await expectHitTestReachable(
@@ -501,7 +505,8 @@ test.describe('DEF-3 finding 1: a small embed iframe and both size floors', () =
       await body.evaluate((el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 1),
       'the compact body could not be scrolled to its end'
     ).toBe(true);
-    for (const link of await popup.locator('.popup-links a').all()) {
+    await expect(popup.locator('.coordinated-response-body a[href]')).toHaveCount(2);
+    for (const link of await popup.locator('.coordinated-response-body a[href]').all()) {
       await link.evaluate((el) => el.scrollIntoView({ block: 'nearest' }));
       await expectHitTestReachable(link, 'popup source link at the height floor');
     }
@@ -596,7 +601,8 @@ test.describe('DEF-3 r2 finding 1: compact tier, empty-region recovery, sub-chro
       await body.evaluate((el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 1),
       'the compact body could not be scrolled to its end'
     ).toBe(true);
-    for (const link of await popup.locator('.popup-links a').all()) {
+    await expect(popup.locator('.coordinated-response-body a[href]')).toHaveCount(2);
+    for (const link of await popup.locator('.coordinated-response-body a[href]').all()) {
       await link.evaluate((el) => el.scrollIntoView({ block: 'nearest' }));
       await expectHitTestReachable(link, 'popup source link in the compact band');
     }
@@ -1368,7 +1374,7 @@ test.describe('DDM-P11-T02 clause 2: the popup is dismissable and keyboard-trave
       const isDoor = await door.evaluate((el) => el === document.activeElement).catch(() => false);
       if (isDoor) reachedDoor = true;
       const isLink = await page.evaluate(
-        () => document.activeElement?.closest('.popup-links a') !== null
+        () => document.activeElement?.closest('.coordinated-response-body a[href]') !== null
       );
       if (isLink) reachedLink = true;
       if (reachedDoor && reachedLink) break;
@@ -1422,10 +1428,16 @@ test.describe('DDM-P11-T02 clause 3: the door names the place it opens a briefin
     const door = head.locator('[data-ddm-impact-trigger]');
     await expect(door).toBeVisible();
     // Head order: title, then the door (this fixture has no collision, so
-    // no "Other map features here" disclosure follows).
+    // no "Other map features here" disclosure follows). Since D1 M24 the
+    // door sits in the frame's actions slot, a head child after the title.
     const order = await head.evaluate((el) =>
       [...el.children].map((c) =>
-        c.matches('.popup-title') ? 'title' : c.matches('[data-ddm-impact-trigger]') ? 'door' : 'other'
+        c.matches('.popup-title')
+          ? 'title'
+          : c.matches('[data-ddm-impact-trigger]') ||
+              (c.matches('[data-popup-slot="actions"]') && c.querySelector(':scope > [data-ddm-impact-trigger]'))
+            ? 'door'
+            : 'other'
       )
     );
     expect(order.indexOf('door')).toBeGreaterThan(order.indexOf('title'));
@@ -1867,6 +1879,21 @@ test.describe('D1 M23 PF3: framed heads keep the tier promises (generic over mig
   ): Promise<void> {
     const migrated = migratedBuilders();
     expect(migrated.length).toBe(eligibleBuilders().length - LEGACY_ALLOWANCE.length);
+    // Network-isolated (the Codex review of M24 round 1, finding 2): ONE
+    // catch-all external-request backstop on the context, installed BEFORE
+    // the first fresh page boots (the census installs the same 503 backstop
+    // on its context before its first boot, tests/identify-paths.spec.ts
+    // holdExternalNetwork, and its fixture pages share that context).
+    // gotoApp's context stubs, registered later, are
+    // checked first and keep their fixtures; each fixture's page routes are
+    // checked before both. Any other external request (the OSM raster tiles,
+    // an unstubbed service) is answered 503 with a synthetic text body, so no
+    // live service decides a result, for M24's place fixtures and for every
+    // batch module TIER_FIXTURES spreads.
+    await context.route(
+      (url) => url.protocol.startsWith('http') && url.hostname !== '127.0.0.1' && url.hostname !== 'localhost',
+      (route) => route.fulfill({ status: 503, contentType: 'text/plain', body: 'Synthetic offline response' })
+    );
     for (const builder of migrated) {
       const fixture = TIER_FIXTURES[builder.id];
       if (!fixture) throw new Error(`${builder.id} left LEGACY_ALLOWANCE without a ${missing} fixture here`);

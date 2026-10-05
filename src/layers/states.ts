@@ -30,7 +30,7 @@ import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
 import { STATE_OUTLINE_COLOR } from '../config/palette';
-import { buildStatePopupHtml } from '../ui/popups';
+import { buildStatePopupModel } from '../ui/popups';
 import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
 import { buildBoundaryContext, resolveBoundaryTitle } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
@@ -303,7 +303,7 @@ export function bindPopups(map: maplibregl.Map): void {
     respond: (feature, click, map) => {
       const props: GeoJsonProperties = feature.properties ?? null;
       return {
-        content: buildStatePopupHtml(props, buildPlaceConditionsHtml(map, click.point, feature.geometry)),
+        model: buildStatePopupModel(props, buildPlaceConditionsHtml(map, click.point, feature.geometry)),
         selection: buildBoundaryContext('state', props, feature.geometry, click.lngLat),
         // An id-less feature clears any prior emphasis (the old
         // emphasizePlace contract) rather than lighting an unknown one.

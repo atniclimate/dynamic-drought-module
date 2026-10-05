@@ -113,19 +113,23 @@ test.describe('InteractionCoordinator: one click, one response', () => {
     );
 
     // Frozen-head layout, AMENDED by the owner 2026-09-10 (superseding the
-    // 2026-07-18 maintainer directive this comment used to describe): the
-    // head now carries the title, then the one-line "kind of place"
-    // (.popup-agency), then the Conditions block (.popup-conditions,
-    // src/ui/popup-conditions.ts), then the briefing door, then the
-    // features switcher, in that order. The boundary detail (acres,
+    // 2026-07-18 maintainer directive this comment used to describe) and
+    // carried by the popup frame since D1 M24 (src/ui/popup-frame.ts): the
+    // head carries the title, then the issuer line with its role
+    // (.popup-agency, the alias the frame keeps), then the value slot that
+    // holds the Conditions line (src/ui/popup-conditions.ts; each condition's
+    // full row stands first in the body since the owner's 2026-10-01
+    // "present-only head"), then the clock
+    // and the source, then the actions slot holding the briefing door, then
+    // the features switcher, in that order. The boundary detail (acres,
     // classification, and the like) and the representation caveat still
     // scroll in the body, not the head -- that part of the old directive
     // stands.
     const head = popup.locator('.coordinated-response-head');
     await expect(head.locator('.popup-title')).toHaveText('Synthetic Reservation Fixture');
     await expect(head.locator('.popup-agency')).toBeVisible();
-    await expect(head.locator('.popup-conditions')).toBeVisible();
-    await expect(head.locator('[data-ddm-impact-trigger]')).toBeVisible();
+    await expect(head.locator('[data-popup-slot="value"]')).toBeVisible();
+    await expect(head.locator('[data-popup-slot="actions"] [data-ddm-impact-trigger]')).toBeVisible();
     await expect(head.locator('.popup-other-features')).toBeVisible();
     const headOrder = await head.evaluate((el) =>
       [...el.children].map((c) =>
@@ -133,20 +137,31 @@ test.describe('InteractionCoordinator: one click, one response', () => {
           ? 'title'
           : c.matches('.popup-agency')
             ? 'agency'
-            : c.matches('.popup-conditions')
+            : c.matches('[data-popup-slot="value"]')
               ? 'conditions'
-              : c.matches('[data-ddm-impact-trigger]')
-                ? 'briefing'
-                : c.matches('.popup-other-features')
-                  ? 'features'
-                  : c.tagName.toLowerCase()
+              : c.matches('[data-popup-slot="clock"]')
+                ? 'clock'
+                : c.matches('[data-popup-slot="source"]')
+                  ? 'source'
+                  : c.matches('[data-popup-slot="actions"]') && c.querySelector('[data-ddm-impact-trigger]')
+                    ? 'briefing'
+                    : c.matches('.popup-other-features')
+                      ? 'features'
+                      : c.tagName.toLowerCase()
       )
     );
-    expect(headOrder).toEqual(['title', 'agency', 'conditions', 'briefing', 'features']);
+    expect(headOrder).toEqual(['title', 'agency', 'conditions', 'clock', 'source', 'briefing', 'features']);
+    // The head fits (S30D block 3, the director's Tier 2 call): the head's
+    // clock slot keeps the FIRST clock only (the LAR publication year); the
+    // reservation's retrieval stamp stands in the body's more-clocks slot.
+    await expect(head.locator('[data-popup-slot="clock"] [data-clock-meaning]')).toHaveCount(1);
+    await expect(head.locator('[data-popup-slot="clock"]')).toContainText('LAR definitions published');
+    await expect(head).not.toContainText('Retrieved on');
+    await expect(popup.locator('.coordinated-response-body [data-popup-slot="more-clocks"]')).toContainText('Retrieved on');
     // The boundary meta and the descriptive caveat still scroll in the
-    // body, not the frozen head.
-    await expect(popup.locator('.coordinated-response-body .popup-description')).toHaveCount(1);
-    await expect(head.locator('.popup-description')).toHaveCount(0);
+    // body, not the frozen head: one representation note, none in the head.
+    await expect(popup.locator('.coordinated-response-body [data-popup-slot="note"][data-representation]')).toHaveCount(1);
+    await expect(head.locator('[data-popup-slot="note"]')).toHaveCount(0);
   });
 
   test('choosing a disclosure entry replaces the response in place; the former primary joins the list', async ({
@@ -417,7 +432,7 @@ test.describe('the Conditions block never claims an absence it did not read', ()
     // quiet sky from a broken pipe.
     await bootWithAlerts(page, (route) => route.abort());
 
-    const conditions = page.locator('.maplibregl-popup-content .popup-conditions');
+    const conditions = page.locator('.maplibregl-popup-content [data-popup-slot="value"]');
     await expect(conditions).toBeVisible();
     // An activation that never succeeded leaves no active key and no
     // rendered fill, so the alerts row itself is absent; what must NOT
@@ -426,6 +441,17 @@ test.describe('the Conditions block never claims an absence it did not read', ()
     await expect(conditions).not.toContainText('No active');
     await expect(conditions).not.toContainText('No condition layer');
     await expect(conditions).toContainText('could not be read');
+    // The condition rows stand in the body's conditions slot (D1 M24), so the
+    // same two false sentences are refused there too: the head line and every
+    // body condition row, read once after the head line has settled.
+    const said = (
+      await page
+        .locator('.maplibregl-popup-content')
+        .locator('[data-popup-slot="value"], [data-popup-slot="conditions"]')
+        .allTextContents()
+    ).join(' ');
+    expect(said, 'a condition slot claims an absence it did not read').not.toContain('No active');
+    expect(said, 'a condition slot says no layer was asked for').not.toContain('No condition layer');
   });
 
   test('a successful empty read scopes its absence to the products actually requested', async ({
@@ -443,9 +469,12 @@ test.describe('the Conditions block never claims an absence it did not read', ()
       })
     );
 
-    const conditions = page.locator('.maplibregl-popup-content .popup-conditions');
+    // The condition rows stand in the body's conditions slot (D1 M24, the
+    // owner's present-only head); a confirmed zero is not named in the head.
+    const conditions = page.locator('.maplibregl-popup-content [data-popup-slot="conditions"]');
     await expect(conditions).toBeVisible();
-    const alertRow = conditions.locator('.popup-condition-row', {
+    await expect(page.locator('.maplibregl-popup-content [data-popup-slot="value"]')).not.toContainText('NWS alert');
+    const alertRow = conditions.locator('[data-value-row]', {
       hasText: 'NWS alert'
     });
     await expect(alertRow).toHaveCount(1);
@@ -554,9 +583,11 @@ test.describe('the Conditions block attributes an alert only where it touches th
     // polygon test doing its work.
     await bootWithNotchAlert(page, 'rectangle');
 
-    const conditions = page.locator('.maplibregl-popup-content .popup-conditions');
+    // The row in the body's conditions slot; its label, present, in the head.
+    const conditions = page.locator('.maplibregl-popup-content [data-popup-slot="conditions"]');
     await expect(conditions).toBeVisible();
-    const alertRow = conditions.locator('.popup-condition-row', { hasText: 'NWS alert' });
+    await expect(page.locator('.maplibregl-popup-content [data-popup-slot="value"]')).toContainText('NWS alert');
+    const alertRow = conditions.locator('[data-value-row]', { hasText: 'NWS alert' });
     await expect(alertRow).toContainText('Red Flag Warning');
     // The place-wide scope is stated, so a reader never reads a box query as a
     // measurement at the pixel they clicked.
@@ -574,9 +605,11 @@ test.describe('the Conditions block attributes an alert only where it touches th
   }) => {
     await bootWithNotchAlert(page, 'concave');
 
-    const conditions = page.locator('.maplibregl-popup-content .popup-conditions');
+    // The row in the body's conditions slot; an absence is never named in the head.
+    const conditions = page.locator('.maplibregl-popup-content [data-popup-slot="conditions"]');
     await expect(conditions).toBeVisible();
-    const alertRow = conditions.locator('.popup-condition-row', { hasText: 'NWS alert' });
+    await expect(page.locator('.maplibregl-popup-content [data-popup-slot="value"]')).not.toContainText('NWS alert');
+    const alertRow = conditions.locator('[data-value-row]', { hasText: 'NWS alert' });
     // The row still exists: the layer read cleanly and found nothing HERE,
     // which is a confirmed zero and must be said, not omitted.
     await expect(alertRow).toHaveCount(1);

@@ -370,6 +370,8 @@ export interface FramedRead {
   readonly values: readonly string[];
   readonly swatches: readonly string[];
   readonly clocks: readonly ClockRead[];
+  /** The body's more-clocks slot (S30D block 3): every clock after the first. */
+  readonly moreClocks: readonly ClockRead[];
   readonly source: { readonly label: string; readonly href: string } | null;
   readonly fallback: { readonly label: string; readonly href: string } | null;
   readonly moreLinks: readonly { readonly label: string; readonly href: string }[];
@@ -391,6 +393,14 @@ export async function readFramedResponse(page: Page): Promise<FramedRead | null>
       const a = scope?.querySelector('a');
       return a ? { label: norm(a.textContent) ?? '', href: a.getAttribute('href') ?? '' } : null;
     };
+    const readClock = (p: Element) => ({
+      label: norm(p.querySelector('.popup-clock-label')?.textContent),
+      time: norm(p.querySelector('time')?.textContent),
+      datetime: p.querySelector('time')?.getAttribute('datetime') ?? null,
+      supplied: norm(p.querySelector('[data-clock-supplied]')?.textContent),
+      explanation: norm(p.querySelector('[data-clock-explanation]')?.textContent),
+      reason: norm(p.querySelector('[data-clock-reason]')?.textContent)
+    });
     return {
       response: root.getAttribute('data-ddm-response'),
       title: norm(head.querySelector(':scope > [data-popup-slot="title"]')?.textContent),
@@ -399,14 +409,10 @@ export async function readFramedResponse(page: Page): Promise<FramedRead | null>
       swatches: Array.from(head.querySelectorAll(':scope > [data-popup-slot="value"] .popup-swatch')).map(
         (el) => el.getAttribute('data-swatch-class') ?? ''
       ),
-      clocks: Array.from(head.querySelectorAll(':scope > [data-popup-slot="clock"] > p')).map((p) => ({
-        label: norm(p.querySelector('.popup-clock-label')?.textContent),
-        time: norm(p.querySelector('time')?.textContent),
-        datetime: p.querySelector('time')?.getAttribute('datetime') ?? null,
-        supplied: norm(p.querySelector('[data-clock-supplied]')?.textContent),
-        explanation: norm(p.querySelector('[data-clock-explanation]')?.textContent),
-        reason: norm(p.querySelector('[data-clock-reason]')?.textContent)
-      })),
+      clocks: Array.from(head.querySelectorAll(':scope > [data-popup-slot="clock"] > p')).map(readClock),
+      // The head fits (S30D block 3): the head keeps the first clock; any
+      // later clock stands, words unchanged, in the body's more-clocks slot.
+      moreClocks: Array.from(body.querySelectorAll(':scope > [data-popup-slot="more-clocks"] > p')).map(readClock),
       source: link(head.querySelector(':scope > [data-popup-slot="source"]')),
       fallback: link(body.querySelector(':scope > [data-popup-slot="source-fallback"]')),
       moreLinks: Array.from(body.querySelectorAll(':scope > [data-popup-slot="more-links"] a')).map((a) => ({

@@ -18,6 +18,7 @@ import {
 import { serializePopupFrame } from '../src/ui/popup-frame';
 import type { PopupModel } from '../src/ui/popup-frame';
 import { CENSUS_FIXTURES } from './frame-fixtures';
+import { MAP_ROOT, PANEL_ROOT, PLACE_FRAME_FIXTURES, bootPlace, expectPlaceFields } from './frame-fixtures-places';
 
 /**
  * S30D D1 M23: "every identify path" (DDM-P11-T04), as the Codex Tier 2
@@ -156,6 +157,10 @@ test.describe('identify paths: the static inventory', () => {
       { name: 'a namespace barrel with a Unicode alias (the r3 re-check)', source: "export * as mlπ from 'maplibre-gl';" },
       { name: 'a namespace barrel with a string alias (the r3 re-check)', source: "export * as \"ml\" from 'maplibre-gl';" },
       { name: 'a named Popup barrel', source: "export {\n  Popup as P\n} from 'maplibre-gl';" },
+      // found-106: a quoted export name that spells a keyword is a string,
+      // never the statement's keyword, so both barrels are still flagged.
+      { name: 'a namespace barrel whose string alias spells import (found-106)', source: "export * as \"import\" from 'maplibre-gl';" },
+      { name: 'a named Popup barrel whose string alias spells import (found-106)', source: "export { Popup as \"import\" } from 'maplibre-gl';" },
       { name: 'an optional-call setter', source: 'popup.setHTML?.(x);' },
       { name: 'a setter through call', source: 'popup.setHTML.call(popup, x);' },
       { name: 'a destructured setter', source: 'const { setHTML } = popup;\nsetHTML(x);' }
@@ -454,6 +459,16 @@ function installPopupAudit(allow: { legacyLayerIds: string[]; external: boolean 
     }
     for (const slot of slots) {
       const el = head.querySelector(`:scope > [data-popup-slot="${slot}"]`);
+      if (slot === 'source' && !el) {
+        // The head fits (S30D block 3): a feature with no source link has no
+        // head source slot; its stated reason stands, linking nowhere, in the
+        // body's source-fallback slot.
+        const fallback = body.querySelector(':scope > [data-popup-slot="source-fallback"]');
+        if (!fallback || (fallback.textContent ?? '').trim() === '' || fallback.querySelector('a[href]')) {
+          return 'no head source and no stated no-source reason in the body';
+        }
+        continue;
+      }
       if (!el || (el.textContent ?? '').trim() === '') return `the head slot ${slot} is missing or empty`;
     }
     return null;
@@ -611,14 +626,21 @@ test.describe('identify paths: the census', () => {
 
     // Builders outside the allowance must yield a frame: each migrated
     // builder runs its click fixture from tests/frame-fixtures.ts, which
-    // asserts window.__ddmFrameCheck on its response (five non-empty head
-    // slots; the frame owns the displayed content). Each fixture gets a
-    // fresh page with the observer installed, so one fixture's routes and
-    // viewport never reach the next, and the context answers any external
-    // request offline. The count is asserted, so an empty loop is declared.
+    // asserts window.__ddmFrameCheck on its response (the four non-empty
+    // head slots, and a link-bearing head source or, with no link, the
+    // body's stated no-source reason; the frame owns the displayed content).
+    // Each fixture gets a fresh page with the observer installed, so one
+    // fixture's routes and viewport never reach the next; each boots through
+    // gotoApp's stubs. Network isolation: every fixture page opens in THIS
+    // context, so the catch-all 503 backstop holdExternalNetwork installed
+    // on the context above, before the first boot, answers each fixture
+    // page's unrouted external requests too; gotoApp's context stubs,
+    // registered later, and each fixture's page routes keep precedence over
+    // it. (A second backstop registered here, after those boots, would
+    // outrank gotoApp's context stubs, which is why none is added.) The
+    // count is asserted, so an empty loop is declared.
     const migrated = migratedBuilders();
     expect(migrated.length).toBe(eligibleBuilders().length - LEGACY_ALLOWANCE.length);
-    if (migrated.length > 0) await holdExternalNetwork(page);
     for (const builder of migrated) {
       const fixture = CENSUS_FIXTURES[builder.id];
       if (!fixture) throw new Error(`${builder.id} left LEGACY_ALLOWANCE without a census click fixture`);
@@ -636,6 +658,79 @@ test.describe('identify paths: the census', () => {
   });
 });
 
+/**
+ * S30D D1 M24: "every place-kind click target yields the frame" (D1.md:424),
+ * in BOTH sinks (the Codex Tier 2 review :220, "frame root owns content in
+ * map and panel sinks": a missing or empty marker, a lost title
+ * announcement, host overflow or detached regions must fail). One test per
+ * place builder of tests/frame-fixtures-places.ts (never migratedBuilders():
+ * the surfaces have no panel sink). Each part boots offline with the
+ * observer installed, so a response is audited as it appears, then the ONE
+ * validator (window.__ddmFrameCheck) runs on the displayed root and the
+ * builder's named fields are read from it.
+ *
+ * Red on a94eee5 once the six allowance lines are deleted: the observer
+ * reports "map: an unframed response for <layer id>, outside the legacy
+ * allowance" and no [data-popup-frame] root is displayed.
+ */
+function frameVerdict(selector: string): string | null {
+  const root = document.querySelector(selector);
+  const sink = root?.parentElement;
+  const check = (window as unknown as AuditWindow).__ddmFrameCheck;
+  if (!root || !sink) return `no framed response at ${selector}`;
+  return check ? check(root, sink) : 'the observer is not installed';
+}
+
+test.describe('identify paths: every place builder yields the frame in both sinks (D1 M24)', () => {
+  for (const fixture of Object.values(PLACE_FRAME_FIXTURES)) {
+    test(`${fixture.id} yields the frame in the map popup and the panel foot`, async ({ page }) => {
+      test.setTimeout(180_000);
+      expect(migratedBuilders().map((b) => b.id), `${fixture.id} has left LEGACY_ALLOWANCE`).toContain(fixture.id);
+      await holdExternalNetwork(page);
+      await page.addInitScript(installPopupAudit, {
+        legacyLayerIds: legacyLayerIds(),
+        external: LEGACY_ALLOWANCE.includes('telemetry')
+      });
+      await fixture.prepare(page);
+      for (const target of fixture.targets) {
+        const label = `${fixture.id} ${target.layerId}`;
+        // The map sink (console).
+        await bootPlace(page, fixture, target, 'console');
+        await clickCenterUntilSeen(page, `map:${target.layerId}`);
+        expect((await readAudit(page)).violations, `${label}: map audit`).toEqual([]);
+        expect(await page.evaluate(frameVerdict, MAP_ROOT), `${label}: map frame check`).toBeNull();
+        await expectPlaceFields(page.locator(MAP_ROOT), target.expected, `${label} map`);
+        if (!target.panel) continue;
+
+        // The panel-foot sink (desktop Brief).
+        await bootPlace(page, fixture, target, 'brief');
+        await clickCenterUntilSeen(page, `panel:${target.layerId}`);
+        expect((await readAudit(page)).violations, `${label}: panel audit`).toEqual([]);
+        expect(await page.evaluate(frameVerdict, PANEL_ROOT), `${label}: panel frame check`).toBeNull();
+        const title = await expectPlaceFields(page.locator(PANEL_ROOT), target.expected, `${label} panel`);
+        // The sink's title announcement is built from the frame's title slot
+        // (src/ui/island/panel-response.tsx).
+        await expect(page.locator('#panel-response [aria-live="polite"]')).toHaveText(
+          `Map selection response: ${title}. The response is at the foot of the panel.`
+        );
+        // The host caps the frame: neither the frame nor its content runs past the host.
+        const fit = await page.evaluate((selector) => {
+          const frame = document.querySelector(selector);
+          const host = frame?.parentElement;
+          if (!frame || !host) return null;
+          const f = frame.getBoundingClientRect();
+          const h = host.getBoundingClientRect();
+          return { left: f.left - h.left, right: h.right - f.right, overflow: host.scrollWidth - host.clientWidth };
+        }, PANEL_ROOT);
+        expect(fit, `${label}: the panel host`).not.toBeNull();
+        expect(fit!.left, `${label}: the frame starts outside the host`).toBeGreaterThanOrEqual(-0.5);
+        expect(fit!.right, `${label}: the frame runs past the host`).toBeGreaterThanOrEqual(-0.5);
+        expect(fit!.overflow, `${label}: the host overflows`).toBeLessThanOrEqual(1);
+      }
+    });
+  }
+});
+
 test.describe('identify paths: the observer over both sinks', () => {
   test('the observer passes only framed responses, stamped allowance responses and the adopted external popup', async ({
     page
@@ -647,8 +742,9 @@ test.describe('identify paths: the observer over both sinks', () => {
       external: LEGACY_ALLOWANCE.includes('telemetry')
     });
 
-    // The map sink: a coordinated (legacy, allowance) response. Each boot
-    // re-runs the init script, so each part reads its own audit.
+    // The map sink: a coordinated FRAMED response (BIA left the allowance at
+    // D1 M24), audited through __ddmFrameCheck. Each boot re-runs the init
+    // script, so each part reads its own audit.
     await gotoApp(page, '?region=washington_state&view=console&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
     await clickCenterUntilSeen(page, 'map:bia-reservations-fill');

@@ -255,3 +255,84 @@ test('map-key.ts derives the chip glyph from registry.getStatus, not from KeySpe
     'map-key.ts no longer derives the chip state from the registry-backed chipStateFromKeys helper'
   );
 });
+
+/**
+ * S30D D1 M24 (register owner-1k; task DDM-P11-T04; D1.md:145, "The place
+ * Conditions block reads a per-cluster `placeConditionRow` (DR-113)"; the
+ * director's Tier 1 call 3, 2026-10-01): every HAZARD_CLUSTER_KEYS entry
+ * DECLARES its placeConditionRow as an own property; a non-null value is a
+ * row the table carries (with its layer keys); a null is deferred with a
+ * recorded reason (ENSO's row moves to the ocean sprint, the owner's answer
+ * of 2026-10-01); the block's row list is the table-ordered union of the
+ * declared rows; and src/ui/popup-conditions.ts carries no literal row list
+ * and no cluster-key literal (the block is mode-agnostic: a row is listed
+ * whenever its layer is on).
+ *
+ * Predicted red on a94eee5: the module import of
+ * src/config/place-condition-rows.ts fails (ERR_MODULE_NOT_FOUND).
+ */
+const { PLACE_CONDITION_ROWS, PLACE_CONDITION_ROW_KEYS, PLACE_CONDITION_ROW_DEFERRED, placeConditionRowKeys } =
+  await import(new URL('src/config/place-condition-rows.ts', ROOT).href);
+
+test('every HAZARD_CLUSTER_KEYS entry resolves a placeConditionRow (DR-113)', async () => {
+  assert.ok(HAZARD_CLUSTER_KEYS.length >= 4, 'the cluster set unexpectedly shrank');
+  assert.ok(PLACE_CONDITION_ROW_KEYS.length > 0, 'the place-condition row table is empty');
+  const declared = [];
+  for (const mode of HAZARD_CLUSTER_KEYS) {
+    const def = HAZARD_CLUSTERS[mode];
+    assert.ok(
+      Object.prototype.hasOwnProperty.call(def, 'placeConditionRow'),
+      `${mode} does not declare a placeConditionRow (a row key, or null with a deferral)`
+    );
+    const row = def.placeConditionRow;
+    if (row === null) {
+      const reason = Object.prototype.hasOwnProperty.call(PLACE_CONDITION_ROW_DEFERRED, mode)
+        ? PLACE_CONDITION_ROW_DEFERRED[mode]
+        : undefined;
+      assert.equal(typeof reason, 'string', `${mode} has no placeConditionRow and no recorded deferral`);
+      assert.ok(reason.trim().length > 0, `${mode}'s deferral reason is empty`);
+      continue;
+    }
+    assert.ok(
+      Object.prototype.hasOwnProperty.call(PLACE_CONDITION_ROWS, row),
+      `${mode} names place-condition row '${row}', which PLACE_CONDITION_ROWS does not carry`
+    );
+    const entry = PLACE_CONDITION_ROWS[row];
+    assert.equal(entry.key, row);
+    assert.ok(Array.isArray(entry.layerKeys) && entry.layerKeys.length > 0, `${row} reads no layer`);
+    for (const key of entry.layerKeys) assert.equal(typeof key, 'string');
+    declared.push(row);
+  }
+  // A deferral is recorded only for a mode that really declares none.
+  for (const mode of Object.keys(PLACE_CONDITION_ROW_DEFERRED)) {
+    assert.ok(HAZARD_CLUSTER_KEYS.includes(mode), `a deferral names '${mode}', which is not a mode`);
+    assert.equal(HAZARD_CLUSTERS[mode].placeConditionRow, null, `${mode} has a row and a deferral`);
+  }
+  // The block's rows: the union of the declared rows, in table order.
+  const union = PLACE_CONDITION_ROW_KEYS.filter((key) => declared.includes(key));
+  assert.deepEqual(placeConditionRowKeys(HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS), union);
+  // Mode-agnostic and N-mode: a synthetic table of any size enumerates the same way.
+  const synthetic = { a: { placeConditionRow: union[union.length - 1] }, b: { placeConditionRow: null }, c: { placeConditionRow: union[0] } };
+  assert.deepEqual(placeConditionRowKeys(synthetic, ['a', 'b', 'c']), union.length > 1 ? [union[0], union[union.length - 1]] : [union[0]]);
+  assert.deepEqual(placeConditionRowKeys(synthetic, ['b']), []);
+
+  const text = await readFile(new URL('src/ui/popup-conditions.ts', ROOT), 'utf8');
+  const code = text.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:'"`])\/\/[^\n]*/g, '$1');
+  assert.doesNotMatch(
+    code,
+    /\[\s*NADM_KEY\s*,\s*USDM_KEY\s*,\s*ALERTS_KEY\s*,\s*FIRES_KEY\s*\]/,
+    'the literal condition-layer list is back in popup-conditions.ts (derive it from the declared rows)'
+  );
+  // The NIFC incident-type class 'wildfire' (src/config/wildfire-presentation.ts
+  // classifyNifcIncidentType) shares a spelling with a cluster key and is not
+  // one; its one comparison is set aside before the cluster-literal scan.
+  const clusterScan = code.replace(/classifyNifcIncidentType\([^)]*\)\s*===\s*'wildfire'/g, '');
+  for (const mode of HAZARD_CLUSTER_KEYS) {
+    assert.doesNotMatch(
+      clusterScan,
+      new RegExp(`['"\`]${mode}['"\`]`),
+      `popup-conditions.ts carries the cluster-key literal '${mode}' (DR-113: read the cluster table)`
+    );
+  }
+  assert.match(code, /placeConditionRowKeys\(/, 'popup-conditions.ts does not assemble its rows from placeConditionRowKeys');
+});

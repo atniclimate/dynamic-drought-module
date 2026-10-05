@@ -15,6 +15,7 @@ import { fetchHydrometDaily, hydrometStationValue } from '../util/hydromet';
 import type { HydrometSeries } from '../util/hydromet';
 import { escapeHtml } from '../util/escape';
 import type { PlaceConditions } from './popup-conditions';
+import type { DoorSpec, PopupClock, PopupDetail, PopupModel } from './popup-frame';
 import {
   fetchUsgsIV,
   extractTimeSeries,
@@ -100,10 +101,109 @@ export function buildImpactTriggerButtonHtml(
  * reservation popups, which carry the identical parse-and-format idiom.
  */
 function formatAcres(raw: unknown): string {
-  if (raw === '' || raw === null || raw === undefined) return '';
-  const n = Number(raw);
+  const text = featureText(raw);
+  if (text === undefined || text.trim() === '') return '';
+  const n = Number(text);
   return Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '';
 }
+
+/**
+ * A feature property as display text: a string as given, a finite number in
+ * its plain form, and anything else (an object, a boolean, NaN) absent.
+ * Never `String()` on an arbitrary issuer value, which throws for one whose
+ * `toString` is not callable, `{ toString: null }` (the Codex diff review of
+ * D1 M24; rule C1: a builder never throws because of a feature's data).
+ */
+function featureText(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return undefined;
+}
+
+/** The first candidate that is present, non-blank text (the `||` chain's precedence), else ''. */
+function firstText(candidates: readonly unknown[]): string {
+  for (const candidate of candidates) {
+    const text = featureText(candidate);
+    if (text !== undefined && text.trim() !== '') return text;
+  }
+  return '';
+}
+
+// =============================================================================
+// D1 M24: the place builders render through the popup frame
+// =============================================================================
+
+/*
+ * S30D D1 M24 (DDM-P11-T04; DR-139; interface-chrome-popups-text.md 3.5 rows
+ * 1 to 6; the Codex Tier 2 review's PF1, PF3 and PF4). Each place builder
+ * returns the frame's typed MODEL, and its layer answers `model:` (S30D
+ * P1-FRAME, draft DR-178): the InteractionCoordinator is the frame's one
+ * caller and serializes it, so this module imports only the frame's types.
+ * One frame root, no wrapping markup, every string escaped once at the
+ * frame's boundary. The head is the title, the boundary issuer with its role
+ * ("Boundary from" or "Supplied by this deployment"), ONE value line naming
+ * the conditions present (or the block's sentence), the boundary's own clock,
+ * its source and the briefing door; the body carries the condition rows
+ * first (each naming its own issuer, so the boundary issuer never reads as
+ * the source of a condition), then the detail rows, the representation
+ * caveat (verbatim, one note) and the source again. A builder never throws
+ * because of a feature's data: a blank title falls to the builder's fallback, a blank detail is left out,
+ * and a date the data supplies that does not validate is shown as supplied.
+ * Only a constant this module owns (a link, a caveat) can make the frame
+ * refuse a model.
+ */
+
+/**
+ * The explanation the owner approved on 2026-10-01 for a time the issuer or
+ * the layer supplied that DDM does not read as a full date.
+ */
+export const SUPPLIED_TIME_EXPLANATION = 'As the issuer states it; DDM does not read it as a full date.';
+
+/** The first present, non-blank candidate as given (the `||` chain's precedence), else the fallback. */
+function placeTitle(candidates: readonly unknown[], fallback: string): string {
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const value = featureText(candidate);
+    if (value === undefined) continue;
+    if (value.trim() !== '') return value;
+  }
+  return fallback;
+}
+
+/** One detail row, or none when the value is absent, blank or not text (the old `${x ? ... : ''}` rows). */
+function detailRow(label: string, value: unknown): PopupDetail[] {
+  if (!value) return [];
+  const text = featureText(value);
+  return text === undefined || text.trim() === '' ? [] : [{ kind: 'row', label, text }];
+}
+
+/** The briefing door: one label in every mode; the pulse only when a real warning earned it. */
+function placeDoor(place: string, conditions: PlaceConditions): readonly [DoorSpec] {
+  return [
+    conditions.hasWarning && conditions.warningLabel !== null
+      ? { kind: 'briefing', place, warningLabel: conditions.warningLabel }
+      : { kind: 'briefing', place }
+  ];
+}
+
+/** A YYYY-MM-DD calendar date (month 1 to 12, day within its month, leap years respected), or null. */
+function calendarDate(text: string): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  return days !== undefined && day >= 1 && day <= days ? `${match[1]}-${match[2]}-${match[3]}` : null;
+}
+
+/** The not-stated edition of deployer-supplied data (owner-approved wording, 2026-10-01). */
+const DEPLOYER_EDITION: PopupClock = {
+  kind: 'not-stated',
+  label: 'Edition',
+  reason: "This deployment's own data states no edition."
+};
 
 // =============================================================================
 // M3: static popup factories
@@ -115,28 +215,37 @@ function formatAcres(raw: unknown): string {
  * III ecoregion (Level IV is a finer subdivision of Level III). Ecoregions are a
  * landscape representation, not a jurisdiction, so no sovereignty caveat applies.
  */
-export function buildEcoregionPopupHtml(
+export function buildEcoregionPopupModel(
   name: string,
   conditions: PlaceConditions,
   opts?: { level?: 'III' | 'IV'; parentL3?: string }
-): string {
+): PopupModel {
   const level = opts?.level ?? 'III';
-  const agency = level === 'IV' ? 'EPA · Level IV Ecoregion' : 'EPA · Level III Ecoregion';
-  const withinHtml =
-    level === 'IV' && opts?.parentL3
-      ? `<div class="popup-treaty-meta">Within: ${escapeHtml(opts.parentL3)} (Level III)</div>`
-      : '';
-  return `
-    <div class="popup-title">${escapeHtml(name)}</div>
-    <div class="popup-agency">${agency}</div>
-    ${conditions.html}
-    ${buildImpactTriggerButtonHtml(name, { pulse: conditions.hasWarning, warningLabel: conditions.warningLabel })}
-    ${withinHtml}
-    <div class="popup-description">Ecoregions denote areas of general similarity in ecosystems and in the type, quality, and quantity of environmental resources.</div>
-    <div class="popup-links">
-      <a href="https://www.epa.gov/eco-research/level-iii-and-iv-ecoregions-continental-united-states" target="_blank" rel="noopener">EPA Ecoregions</a>
-    </div>
-  `;
+  const title = placeTitle([name], 'Ecoregion');
+  return {
+    kind: 'place',
+    title,
+    issuer: {
+      role: 'boundary-from',
+      name: level === 'IV' ? 'U.S. EPA (Omernik Level IV)' : 'U.S. EPA (Omernik Level III)',
+      productKey: 'ecoregions'
+    },
+    value: conditions.head,
+    conditions: conditions.rows,
+    // The 2012 delineation (src/layers/ecoregions.ts LEVEL_NOTE).
+    clocks: [{ kind: 'point', meaning: 'edition', label: 'Delineation', at: { precision: 'year', year: '2012' } }],
+    source: {
+      link: {
+        label: 'EPA Ecoregions',
+        href: 'https://www.epa.gov/eco-research/level-iii-and-iv-ecoregions-continental-united-states'
+      }
+    },
+    details: level === 'IV' && opts?.parentL3 ? detailRow('Within', `${opts.parentL3} (Level III)`) : [],
+    qualifications: [
+      'Ecoregions denote areas of general similarity in ecosystems and in the type, quality, and quantity of environmental resources.'
+    ],
+    actions: placeDoor(title, conditions)
+  };
 }
 
 /**
@@ -152,23 +261,31 @@ export function buildEcoregionPopupHtml(
  * representations have their own layers and popups (aiannh,
  * bia-reservations), each naming its actual agency.
  */
-export function buildTribalPopupHtml(props: GeoJsonProperties, conditions: PlaceConditions): string {
+export function buildTribalPopupModel(props: GeoJsonProperties, conditions: PlaceConditions): PopupModel {
   const p = props ?? {};
-  const name = p.LARName || p.LARNAME || p.NAME || p.name || p.TRIBE || p.RESERV_NAM || 'Tribal Land Area';
-  const govt = p.LARGovernment || p.GOVT || p.tribe || '';
-  const type = p.LARType || p.TYPE || '';
+  const name = placeTitle([p.LARName, p.LARNAME, p.NAME, p.name, p.TRIBE, p.RESERV_NAM], 'Tribal Land Area');
+  const govt = firstText([p.LARGovernment, p.GOVT, p.tribe]);
+  const type = firstText([p.LARType, p.TYPE]);
   const acresStr = formatAcres(p.GISAcres || p.ACRES || '');
 
-  return `
-    <div class="popup-title">${escapeHtml(String(name))}</div>
-    <div class="popup-agency">Tribal Lands (deployer data)</div>
-    ${conditions.html}
-    ${buildImpactTriggerButtonHtml(String(name), { pulse: conditions.hasWarning, warningLabel: conditions.warningLabel })}
-    ${govt ? `<div class="popup-description"><strong>Government:</strong> ${escapeHtml(String(govt))}</div>` : ''}
-    ${type ? `<div class="popup-treaty-meta">Type: ${escapeHtml(String(type))}</div>` : ''}
-    ${acresStr ? `<div class="popup-treaty-meta">Acres: ${escapeHtml(acresStr)}</div>` : ''}
-    <div class="popup-description">This boundary comes from data supplied by this deployment's operator under its own authorization (see data/README.md in the deployed module). It is a representation, not a definitive depiction of Tribal jurisdiction; Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority.</div>
-  `;
+  // The deployer slot (PF4; plan_rules 7): its source is its stated reason,
+  // and no slot links anywhere, least of all to the polygons.
+  return {
+    kind: 'place',
+    title: name,
+    issuer: { role: 'supplied-by-deployment', productKey: 'tribal' },
+    value: conditions.head,
+    conditions: conditions.rows,
+    clocks: [DEPLOYER_EDITION],
+    source: { none: "No public source page: this layer is supplied by this deployment's operator." },
+    details: [...detailRow('Government', govt), ...detailRow('Type', type), ...detailRow('Acres', acresStr)],
+    representation: {
+      product: 'tribal',
+      variant: 'deployer',
+      text: "This boundary comes from data supplied by this deployment's operator under its own authorization (see data/README.md in the deployed module). It is a representation, not a definitive depiction of Tribal jurisdiction; Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority."
+    },
+    actions: placeDoor(name, conditions)
+  };
 }
 
 /**
@@ -183,28 +300,57 @@ export function buildTribalPopupHtml(props: GeoJsonProperties, conditions: Place
  * legal, survey, or jurisdictional truth. Tribal sovereignty and a Tribe's
  * own understanding of its territory are matters of sovereign authority.
  */
-export function buildBiaReservationPopupHtml(props: GeoJsonProperties, conditions: PlaceConditions): string {
+export function buildBiaReservationPopupModel(props: GeoJsonProperties, conditions: PlaceConditions): PopupModel {
   const p = props ?? {};
-  const name = p.LARNAME || p.LARName || p.NAME || p.name || 'Reservation land area';
-  const classification = p.CLASSIFICATION || p.Classification || '';
-  const region = p.REGION || p.Region || '';
+  const name = placeTitle([p.LARNAME, p.LARName, p.NAME, p.name], 'Reservation land area');
+  const classification = firstText([p.CLASSIFICATION, p.Classification]);
+  const region = firstText([p.REGION, p.Region]);
   const acresStr = formatAcres(p.GISACRES ?? p.GISAcres ?? p.ACRES ?? '');
-  const retrievedOn = p.__DDM_RETRIEVED_ON || 'not recorded';
+  // The layer's own browser retrieval stamp (src/layers/bia-reservations.ts,
+  // a UTC YYYY-MM-DD); missing, blank or not text reads 'not recorded', as before.
+  const retrievedRaw: unknown = p.__DDM_RETRIEVED_ON;
+  const retrievedText = retrievedRaw ? featureText(retrievedRaw) : undefined;
+  const retrievedOn = retrievedText === undefined || retrievedText.trim() === '' ? 'not recorded' : retrievedText;
+  const retrievedDate = retrievedOn === 'not recorded' ? null : calendarDate(retrievedOn);
+  const retrieved: PopupClock =
+    retrievedOn === 'not recorded'
+      ? { kind: 'not-stated', label: 'Retrieved on', reason: 'not recorded' }
+      : {
+          kind: 'point',
+          meaning: 'retrieved',
+          label: 'Retrieved on',
+          at:
+            retrievedDate === null
+              ? { precision: 'supplied', text: retrievedOn, explanation: SUPPLIED_TIME_EXPLANATION }
+              : { precision: 'date', date: retrievedDate }
+        };
 
-  return `
-    <div class="popup-title">${escapeHtml(String(name))}</div>
-    <div class="popup-agency">BIA · AIAN Land Area Representation</div>
-    ${conditions.html}
-    ${buildImpactTriggerButtonHtml(String(name), { pulse: conditions.hasWarning, warningLabel: conditions.warningLabel })}
-    ${classification ? `<div class="popup-treaty-meta">Classification: ${escapeHtml(String(classification))}</div>` : ''}
-    ${region ? `<div class="popup-treaty-meta">BIA region: ${escapeHtml(String(region))}</div>` : ''}
-    ${acresStr ? `<div class="popup-treaty-meta">Acres: ${escapeHtml(acresStr)}</div>` : ''}
-    <div class="popup-description">This boundary is from the Bureau of Indian Affairs (BIA) American Indian and Alaska Native Land Area Representation (AIAN-LAR). Land Area Representation (LAR) feature definitions were last published in 2019. The live BIA service separately reports continuing spatial-accuracy and attribute updates. Retrieved on ${escapeHtml(String(retrievedOn))}. The layer is BIA-authoritative for BIA mission use only. This representation is for illustrative, reference, and statistical use, not legal, survey, or jurisdictional truth. It is requested live from the BIA service when the layer needs it, held only in this browser session's memory, and not bundled by this module. Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority. No federal dataset maps every Tribal Nation; absence from this layer is not absence of a Nation or of its rights.</div>
-    <div class="popup-links">
-      <a href="https://biamaps.geoplatform.gov/" target="_blank" rel="noopener">BIA GeoPlatform</a>
-      <a href="https://onemap-bia-geospatial.hub.arcgis.com/" target="_blank" rel="noopener">BIA OneMap</a>
-    </div>
-  `;
+  return {
+    kind: 'place',
+    title: name,
+    issuer: { role: 'boundary-from', name: 'BIA (AIAN Land Area Representation)', productKey: 'bia-reservations' },
+    value: conditions.head,
+    conditions: conditions.rows,
+    clocks: [
+      { kind: 'point', meaning: 'published', label: 'LAR definitions published', at: { precision: 'year', year: '2019' } },
+      retrieved
+    ],
+    source: { link: { label: 'BIA GeoPlatform', href: 'https://biamaps.geoplatform.gov/' } },
+    moreLinks: [{ label: 'BIA OneMap', href: 'https://onemap-bia-geospatial.hub.arcgis.com/' }],
+    details: [
+      ...detailRow('Classification', classification),
+      ...detailRow('BIA region', region),
+      ...detailRow('Acres', acresStr)
+    ],
+    // ONE note, verbatim (the Codex Tier 2 review :176: "caveat as short
+    // notes" means lossless segmentation, never shortening).
+    representation: {
+      product: 'bia-reservations',
+      variant: 'lar',
+      text: `This boundary is from the Bureau of Indian Affairs (BIA) American Indian and Alaska Native Land Area Representation (AIAN-LAR). Land Area Representation (LAR) feature definitions were last published in 2019. The live BIA service separately reports continuing spatial-accuracy and attribute updates. Retrieved on ${retrievedOn}. The layer is BIA-authoritative for BIA mission use only. This representation is for illustrative, reference, and statistical use, not legal, survey, or jurisdictional truth. It is requested live from the BIA service when the layer needs it, held only in this browser session's memory, and not bundled by this module. Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority. No federal dataset maps every Tribal Nation; absence from this layer is not absence of a Nation or of its rights.`
+    },
+    actions: placeDoor(name, conditions)
+  };
 }
 
 /**
@@ -253,10 +399,10 @@ function resolveAiannhSubtype(code: string): { label: string; isLegal: boolean }
  * distinct, separately labeled representation and is never blended with the
  * BIA AIAN-LAR layer (the architectural-review HIGH constraint).
  */
-export function buildAiannhPopupHtml(props: GeoJsonProperties, conditions: PlaceConditions): string {
+export function buildAiannhPopupModel(props: GeoJsonProperties, conditions: PlaceConditions): PopupModel {
   const p = props ?? {};
-  const name = p.NAME || p.BASENAME || p.name || 'Tribal land area';
-  const code = String(p.AIANNHCC || p.aiannhcc || '');
+  const name = placeTitle([p.NAME, p.BASENAME, p.name], 'Tribal land area');
+  const code = firstText([p.AIANNHCC, p.aiannhcc]);
   const subtype = resolveAiannhSubtype(code);
   // The user-visible provenance sentence (umbrella build Unit D): publisher,
   // fetched-live-not-bundled, vintage, and the jurisdiction caveat, on the
@@ -278,46 +424,58 @@ export function buildAiannhPopupHtml(props: GeoJsonProperties, conditions: Place
       ? "This is a US Census Bureau representation of Tribal land (vintage January 1, 2025), requested live from the Census TIGERweb service when the layer needs it, held only in this browser session's memory, and not bundled by this module, for general spatial reference. It is a representation, not a definitive depiction of Tribal jurisdiction; Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority. No federal dataset maps every Tribal Nation; absence from this layer is not absence of a Nation or of its rights."
       : "This is a US Census Bureau statistical geography (vintage January 1, 2025), requested live from the Census TIGERweb service when the layer needs it, held only in this browser session's memory, and not bundled by this module, for tabulation and general spatial reference. A statistical area is not a reservation, not trust land, and not a depiction of Tribal jurisdiction or land ownership; Tribal sovereignty and a Tribe's own understanding of its territory are matters of sovereign authority. No federal dataset maps every Tribal Nation; absence from this layer is not absence of a Nation or of its rights.";
 
-  return `
-    <div class="popup-title">${escapeHtml(String(name))}</div>
-    <div class="popup-agency">US Census Bureau · AIANNH (live)</div>
-    ${conditions.html}
-    ${buildImpactTriggerButtonHtml(String(name), { pulse: conditions.hasWarning, warningLabel: conditions.warningLabel })}
-    <div class="popup-treaty-meta">Type: ${escapeHtml(subtype.label)}</div>
-    <div class="popup-description">${caveat}</div>
-    <div class="popup-links">
-      <a href="https://www.census.gov/programs-surveys/geography.html" target="_blank" rel="noopener">US Census geography</a>
-    </div>
-  `;
+  return {
+    kind: 'place',
+    title: name,
+    issuer: { role: 'boundary-from', name: 'U.S. Census Bureau (AIANNH)', productKey: 'aiannh' },
+    value: conditions.head,
+    conditions: conditions.rows,
+    // The vintage every caveat branch states.
+    clocks: [{ kind: 'point', meaning: 'edition', label: 'Vintage', at: { precision: 'date', date: '2025-01-01' } }],
+    source: { link: { label: 'US Census geography', href: 'https://www.census.gov/programs-surveys/geography.html' } },
+    details: detailRow('Type', subtype.label),
+    // The branch's own approved variant, verbatim (PF4: AIANNH's distinct branches).
+    representation: { product: 'aiannh', variant: isOtsa ? 'otsa' : subtype.isLegal ? 'legal' : 'statistical', text: caveat },
+    actions: placeDoor(name, conditions)
+  };
 }
 
-export function buildTreatyPopupHtml(
+export function buildTreatyPopupModel(
   props: GeoJsonProperties,
   featureName: string,
   conditions: PlaceConditions
-): string {
+): PopupModel {
   const p = props ?? {};
-  const year = p.treaty_year || p.TREATY_DAT || p.TREATY_DATE || p.SIGNED_DAT || p.YEAR_SIGNED || p.year || '';
-  const dataTribe = p.tribe || p.TRIBE_NAME || p.TRIBE || '';
-  const entry = pickTreatyEntry(featureName);
+  const title = placeTitle([featureName], 'Treaty Area');
+  const year = firstText([p.treaty_year, p.TREATY_DAT, p.TREATY_DATE, p.SIGNED_DAT, p.YEAR_SIGNED, p.year]);
+  const dataTribe = firstText([p.tribe, p.TRIBE_NAME, p.TRIBE]);
+  const entry = pickTreatyEntry(title);
   // Prefer the formal Tribe name from TREATY_COLORS over the (possibly
   // abbreviated) value in the source GeoJSON; fall back to the source value
   // for Treaty-location keys signed by multiple Tribes.
-  const tribe: string = (entry && entry.tribe) || String(dataTribe || '');
+  const tribe: string = (entry && entry.tribe) || dataTribe;
 
-  return `
-    <div class="popup-title">${escapeHtml(featureName)}</div>
-    <div class="popup-agency">Historical Treaty Area</div>
-    ${conditions.html}
-    ${buildImpactTriggerButtonHtml(featureName, { pulse: conditions.hasWarning, warningLabel: conditions.warningLabel })}
-    ${year ? `<div class="popup-treaty-meta">Signed: ${escapeHtml(String(year))}</div>` : ''}
-    ${tribe ? `<div class="popup-treaty-meta">Tribe: ${escapeHtml(tribe)}</div>` : ''}
-    <div class="popup-description">Agency polygons are a representation of Treaty cession areas, not a definitive depiction of Tribal jurisdiction. Treaty rights and Tribal sovereignty are matters of sovereign authority.</div>
-    <div class="popup-links">
-      <a href="https://wisaard.dahp.wa.gov/" target="_blank" rel="noopener">WA DAHP WISAARD</a>
-      <a href="https://native-land.ca/" target="_blank" rel="noopener">Native Land Digital</a>
-    </div>
-  `;
+  // As designed (interface-chrome-popups-text.md 3.5 row 5; the owner's
+  // "As designed (Recommended)", 2026-10-01): the issuer is the publisher
+  // the product catalog names (src/config/products.ts treaty), the Treaty
+  // year is a row and never a clock, and the caveat is carried verbatim.
+  return {
+    kind: 'place',
+    title,
+    issuer: { role: 'boundary-from', name: 'deployer · bundled GeoJSON', productKey: 'treaty' },
+    value: conditions.head,
+    conditions: conditions.rows,
+    clocks: [DEPLOYER_EDITION],
+    source: { link: { label: 'WA DAHP WISAARD', href: 'https://wisaard.dahp.wa.gov/' } },
+    moreLinks: [{ label: 'Native Land Digital', href: 'https://native-land.ca/' }],
+    details: [...detailRow('Signed', year), ...detailRow('Tribe', tribe)],
+    representation: {
+      product: 'treaty',
+      variant: 'agency-representation',
+      text: 'Agency polygons are a representation of Treaty cession areas, not a definitive depiction of Tribal jurisdiction. Treaty rights and Tribal sovereignty are matters of sovereign authority.'
+    },
+    actions: placeDoor(title, conditions)
+  };
 }
 
 /**
@@ -424,22 +582,31 @@ function formatSpcTime(value: unknown): string {
  * boundaries (no sovereignty caveat applies); the generalization note keeps
  * the coarse 1:20,000,000 source honest.
  */
-export function buildStatePopupHtml(props: GeoJsonProperties, conditions: PlaceConditions): string {
+export function buildStatePopupModel(props: GeoJsonProperties, conditions: PlaceConditions): PopupModel {
   const p = props ?? {};
-  const name = p.NAME || p.name || 'State';
-  const postal = p.STUSPS || '';
+  const name = placeTitle([p.NAME, p.name], 'State');
+  const postal = firstText([p.STUSPS]);
 
-  return `
-    <div class="popup-title">${escapeHtml(String(name))}</div>
-    <div class="popup-agency">US Census Bureau · State Boundary</div>
-    ${conditions.html}
-    ${buildImpactTriggerButtonHtml(String(name), { pulse: conditions.hasWarning, warningLabel: conditions.warningLabel })}
-    ${postal ? `<div class="popup-treaty-meta">Postal code: ${escapeHtml(String(postal))}</div>` : ''}
-    <div class="popup-description">State boundary from the United States Census Bureau cartographic boundary file (1:20,000,000 generalization); a reference frame for conditions and resources, not a survey-grade line.</div>
-    <div class="popup-links">
-      <a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html" target="_blank" rel="noopener">Census cartographic boundary files</a>
-    </div>
-  `;
+  return {
+    kind: 'place',
+    title: name,
+    issuer: { role: 'boundary-from', name: 'U.S. Census Bureau (cartographic boundary)', productKey: 'states' },
+    value: conditions.head,
+    conditions: conditions.rows,
+    // The bundled 2023 cartographic boundary file (scripts/build-states.mjs).
+    clocks: [{ kind: 'point', meaning: 'edition', label: 'Edition', at: { precision: 'year', year: '2023' } }],
+    source: {
+      link: {
+        label: 'Census cartographic boundary files',
+        href: 'https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html'
+      }
+    },
+    details: detailRow('Postal code', postal),
+    qualifications: [
+      'State boundary from the United States Census Bureau cartographic boundary file (1:20,000,000 generalization); a reference frame for conditions and resources, not a survey-grade line.'
+    ],
+    actions: placeDoor(name, conditions)
+  };
 }
 
 // =============================================================================

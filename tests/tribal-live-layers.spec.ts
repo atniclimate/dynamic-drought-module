@@ -137,7 +137,7 @@ async function expectNoPopupAtMapCenter(page: Page): Promise<void> {
 }
 
 /** The three exact AIANNH popup descriptions, copied verbatim from
- * `buildAiannhPopupHtml` (src/ui/popups.ts) so a paraphrase cannot pass.
+ * `buildAiannhPopupModel` (src/ui/popups.ts) so a paraphrase cannot pass.
  * D-0.7.0-059 (research 4c, maintainer-approved): the Oklahoma Tribal
  * Statistical Area (D6) branch carries its own McGirt-aware wording, and
  * every branch ends with the absence-is-not-absence line. */
@@ -233,12 +233,15 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
       await clickMapForPopup(page);
 
       // Exact field-by-field contract (never fragments on the whole popup):
-      // the agency line, the Type line, and the full caveat paragraph, all
-      // copied verbatim from src/ui/popups.ts.
+      // the issuer line (the frame's .popup-agency alias, since D1 M24), the
+      // Type row, and the full caveat paragraph as the frame's one
+      // representation note, all copied verbatim from src/ui/popups.ts.
       const popup = page.locator('.maplibregl-popup-content');
-      await expect(popup.locator('.popup-agency')).toHaveText('US Census Bureau · AIANNH (live)');
-      await expect(popup.locator('.popup-treaty-meta')).toHaveText(`Type: ${subtype.label}`);
-      await expect(popup.locator('.popup-description')).toHaveText(
+      await expect(popup.locator('.popup-agency')).toHaveText('Boundary from: U.S. Census Bureau (AIANNH)');
+      const typeRow = popup.locator('[data-detail="row"]', { has: page.locator('dt', { hasText: /^Type$/ }) });
+      await expect(typeRow).toHaveCount(1);
+      await expect(typeRow.locator('dd')).toHaveText(subtype.label);
+      await expect(popup.locator('[data-popup-slot="note"][data-representation^="aiannh:"]')).toHaveText(
         subtype.code === 'D6'
           ? AIANNH_OTSA_DESCRIPTION
           : subtype.legal

@@ -108,8 +108,10 @@ const NAMED_FIELDS: readonly NamedFieldRow[] = [
       swatches: ['D2'],
       // MapDate Date.UTC(2026, 7, 11) under America/Los_Angeles: a
       // date-only clock never shifts a day (D1.md item 8).
-      clocks: [
-        clockLine('Map date', { time: 'Aug 11, 2026', datetime: '2026-08-11' }),
+      // The head keeps the first clock; the valid window stands in the body's
+      // more-clocks slot, words unchanged (S30D block 3, the head fits).
+      clocks: [clockLine('Map date', { time: 'Aug 11, 2026', datetime: '2026-08-11' })],
+      moreClocks: [
         clockLine('Valid', { time: 'Aug 11, 2026', datetime: '2026-08-11' }),
         clockLine('to', { time: 'Aug 17, 2026', datetime: '2026-08-17' })
       ],
@@ -186,10 +188,8 @@ const NAMED_FIELDS: readonly NamedFieldRow[] = [
       issuer: 'Issued by: NOAA Climate Prediction Center',
       values: ['Drought persists'],
       swatches: ['PERSISTS'],
-      clocks: [
-        clockLine('Issued', { time: 'Jun 30, 2026', datetime: '2026-06-30' }),
-        clockLine('Valid through', { supplied: 'September 30', explanation: SUPPLIED_EXPLANATION })
-      ],
+      clocks: [clockLine('Issued', { time: 'Jun 30, 2026', datetime: '2026-06-30' })],
+      moreClocks: [clockLine('Valid through', { supplied: 'September 30', explanation: SUPPLIED_EXPLANATION })],
       source: CPC_SOURCE,
       fallback: CPC_SOURCE,
       moreLinks: [DROUGHT_GOV],
@@ -206,10 +206,8 @@ const NAMED_FIELDS: readonly NamedFieldRow[] = [
       issuer: 'Issued by: NOAA Climate Prediction Center',
       values: ['Drought persists'],
       swatches: ['PERSISTS'],
-      clocks: [
-        clockLine('Issued', { time: 'Jun 30, 2026', datetime: '2026-06-30' }),
-        clockLine('Valid through', { time: 'Jul 2026', datetime: '2026-07' })
-      ],
+      clocks: [clockLine('Issued', { time: 'Jun 30, 2026', datetime: '2026-06-30' })],
+      moreClocks: [clockLine('Valid through', { time: 'Jul 2026', datetime: '2026-07' })],
       source: CPC_SOURCE,
       fallback: CPC_SOURCE,
       moreLinks: [DROUGHT_GOV],
@@ -312,6 +310,7 @@ test.describe('identify paths: the M25 surfaces', () => {
           values: read!.values,
           swatches: read!.swatches,
           clocks: read!.clocks,
+          moreClocks: read!.moreClocks,
           source: read!.source,
           fallback: read!.fallback,
           moreLinks: read!.moreLinks,
@@ -319,7 +318,8 @@ test.describe('identify paths: the M25 surfaces', () => {
           notes: read!.notes
         },
         row.name
-      ).toEqual(row.expected);
+        // A row with one clock has no more-clocks slot (S30D block 3).
+      ).toEqual({ moreClocks: [], ...row.expected });
     }
   });
 

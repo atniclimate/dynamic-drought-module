@@ -68,7 +68,8 @@ const clusterRecipeTypo: HazardClusterDef = {
     current: ['nifc-fires-typo'], // TYPO: should be 'nifc-fires'
     'weeks-ahead': [],
     'season-ahead': []
-  }
+  },
+  placeConditionRow: null
 };
 
 // Referenced so `noUnusedLocals` cannot add a fifth, unrelated error that

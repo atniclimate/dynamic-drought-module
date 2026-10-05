@@ -196,7 +196,14 @@ export interface ChartDetail {
   readonly attribution?: string;
 }
 
-/** The briefing door (the same button src/ui/popups.ts builds today). */
+/**
+ * The briefing door. ONE label in every mode (S30D D1 M24; D1.md:145):
+ * "Open the Impact Briefing for <place>". `warningLabel`, set only when a
+ * real issuer warning earned it at this place, adds the pulse class and is
+ * never printed: its words already stand in the value row that earned it
+ * (interface-chrome-popups-text.md 3.3, "The door pulse"), so the pulse is
+ * decoration and the door never renames itself by mode.
+ */
 export interface DoorSpec {
   readonly kind: 'briefing';
   readonly place: string;
@@ -290,6 +297,13 @@ interface FrameCore {
   readonly title: string;
   readonly value: readonly [ValueRow, ...ValueRow[]];
   readonly clocks: readonly [PopupClock, ...PopupClock[]];
+  /**
+   * Condition rows read at a place (D1 M24, the owner's "Body slot",
+   * 2026-10-01): each a full value row (its text, clock and list verbatim),
+   * rendered FIRST in the body, before the detail rows, so the head keeps one
+   * value line and never scrolls at desktop sizes (PF3).
+   */
+  readonly conditions?: readonly ValueRow[];
   readonly details?: readonly PopupDetail[];
   readonly qualifications?: readonly string[];
   readonly records?: readonly [RecordBlock, ...RecordBlock[]];
@@ -388,9 +402,12 @@ function anchor(label: string, href: string): string {
 
 /** A builder-supplied link: an invalid one is a caller bug and throws. */
 function requiredLink(link: PopupLink): string {
-  const href = checkPopupHref(link?.href);
-  if (href === null) fail(`not an https link: ${String(link?.href)}`);
-  return anchor(stated(link.label, 'a link label'), href);
+  // Each field read once (found-106): the message names the value validated.
+  const rawHref = link?.href;
+  const label = link?.label;
+  const href = checkPopupHref(rawHref);
+  if (href === null) fail(`not an https link: ${String(rawHref)}`);
+  return anchor(stated(label, 'a link label'), href);
 }
 
 // ---------------------------------------------------------------------------
@@ -619,10 +636,9 @@ function doorHtml(door: DoorSpec): string {
   const warningLabel = door?.warningLabel;
   if (kind !== 'briefing') fail('unknown door kind');
   const place = text(stated(doorPlace, 'a door place'));
+  // The pulse only; the warning's words live in its value row (DoorSpec).
   const pulse = warningLabel !== undefined;
-  const label = pulse
-    ? `${text(warningLabel)} - Open the Impact Briefing for ${place}`
-    : `Open the Impact Briefing for ${place}`;
+  const label = `Open the Impact Briefing for ${place}`;
   return `<button type="button" class="${pulse ? 'popup-impact-btn popup-impact-btn--pulse' : 'popup-impact-btn'}" data-ddm-impact-trigger>${label}</button>`;
 }
 
@@ -737,7 +753,8 @@ function head(slots: {
   readonly issuer: string;
   readonly value: string;
   readonly clocks: string;
-  readonly source: string;
+  /** The head's source; null omits the slot (a feature with no link, S30D block 3). */
+  readonly source: string | null;
   readonly actions: string;
 }): string {
   return (
@@ -746,7 +763,7 @@ function head(slots: {
     `<p class="popup-agency" data-popup-slot="issuer">${slots.issuer}</p>` +
     `<div data-popup-slot="value">${slots.value}</div>` +
     `<div data-popup-slot="clock">${slots.clocks}</div>` +
-    `<p data-popup-slot="source">${slots.source}</p>` +
+    (slots.source === null ? '' : `<p data-popup-slot="source">${slots.source}</p>`) +
     `<div data-popup-slot="actions">${slots.actions}</div>` +
     `</div>`
   );
@@ -771,6 +788,7 @@ interface FeatureSnap {
   readonly none: string | undefined;
   readonly value: readonly ValueRow[];
   readonly clocks: readonly PopupClock[];
+  readonly conditions: readonly ValueRow[];
   readonly details: readonly PopupDetail[];
   readonly qualifications: readonly string[];
   readonly records: readonly RecordSnap[];
@@ -805,6 +823,7 @@ function snapshotFeature(model: FeatureModel, kind: string): FeatureSnap {
     none: (source as { readonly none?: string }).none,
     value: listOf(model.value, 'value rows'),
     clocks: listOf(model.clocks, 'clocks'),
+    conditions: listOf(model.conditions, 'condition rows'),
     details: listOf(model.details, 'details'),
     qualifications: listOf(model.qualifications, 'qualifications'),
     notices: listOf(model.notices, 'notices'),
@@ -866,6 +885,14 @@ function featureFrame(model: FeatureModel, kind: string): string {
   const moreLinks = deployer ? '' : s.moreLinks.map(requiredLink).join(' ');
   const records = deployer ? [] : s.records;
   const caveat = s.caveat;
+  // THE HEAD FITS (S30D block 3, the director's Tier 2 call applying the
+  // owner's present-only head, RATIFICATION-10, and the G1 A5 rule): the head
+  // prints a source only when it is a link (a stated no-source reason stands
+  // in the body's source-fallback slot, where it always printed), and keeps
+  // the FIRST clock; any later clock moves, its words unchanged, to the body's
+  // `more-clocks` slot right after the conditions.
+  const headSource = !deployer && s.link !== undefined ? source : null;
+  const [firstClock, ...laterClocks] = s.clocks;
 
   return (
     `<article data-popup-frame data-popup-kind="${escapeHtml(s.kind)}" data-popup-product="${escapeHtml(s.product)}">` +
@@ -873,11 +900,15 @@ function featureFrame(model: FeatureModel, kind: string): string {
       title: text(stated(s.title, 'a title')),
       issuer,
       value: s.value.map(valueRowHtml).join(''),
-      clocks: s.clocks.map(clockHtml).join(''),
-      source,
+      clocks: clockHtml(firstClock as PopupClock),
+      source: headSource,
       actions: s.actions.map(doorHtml).join('')
     }) +
     `<div data-popup-region="body">` +
+    (s.conditions.length > 0
+      ? `<div data-popup-slot="conditions">${s.conditions.map(valueRowHtml).join('')}</div>`
+      : '') +
+    (laterClocks.length > 0 ? `<div data-popup-slot="more-clocks">${laterClocks.map(clockHtml).join('')}</div>` : '') +
     (s.details.length > 0 ? `<div data-popup-slot="rows">${s.details.map(detailHtml).join('')}</div>` : '') +
     (records.length > 0 ? recordsHtml(records) : '') +
     (caveat ? noteHtml(caveat.text, ` data-representation="${escapeHtml(`${caveat.product}:${caveat.variant}`)}"`) : '') +

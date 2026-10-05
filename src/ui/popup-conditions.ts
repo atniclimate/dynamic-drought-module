@@ -65,16 +65,36 @@
  * is place-wide and not a reading at the clicked pixel; the bare-point
  * fallback, which cannot be place-scoped, keeps saying "here" because for
  * it that is the true scope.
+ *
+ * TYPED ROWS (S30D D1 M24; DDM-P11-T04; design record
+ * interface-chrome-popups-text.md 3.5, "The Conditions block"). The block
+ * returns value rows for the popup frame (src/ui/popup-frame.ts), one per
+ * condition, each with its own words naming its own issuer, and a clock
+ * only where the read feature carries the issuer's own date (NADM's
+ * consensus month, USDM's map date); no date is fabricated. Which rows
+ * exist is the cluster table's (`placeConditionRow`, DR-113,
+ * src/config/place-condition-rows.ts): the block enumerates every
+ * cluster's declared row and lists one whenever its layer is on, in table
+ * order, so no mode literal and no literal layer list live here.
  */
 import type * as maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties, Geometry } from 'geojson';
 
 import { registry } from '../state/registry';
 import { timeline } from '../state/timeline';
+import { getHazardCluster } from '../state/cluster-store';
 import { USDM_CATEGORIES, NADM_CATEGORIES } from '../config/palette';
+import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../config/clusters';
+import { getLayerDef } from '../config/layers';
+import { PLACE_CONDITION_ROW_DEFERRED, PLACE_CONDITION_ROWS, placeConditionRowKeys } from '../config/place-condition-rows';
+import type { PlaceConditionRowKey } from '../config/place-condition-rows';
 import { classifyNifcIncidentType } from '../config/wildfire-presentation';
-import { escapeHtml } from '../util/escape';
+import type { LayerStatus } from '../types/layer';
+import { normalizeNadmYearMonth } from '../util/nadm-collection';
 import { geometriesOverlap } from '../util/polygon-overlap';
+import { dateTok } from '../util/text-tokens';
+import type { PopupClock, SixStateWord, ValueRow } from './popup-frame';
+import { SUPPLIED_TIME_EXPLANATION } from './popups';
 
 /** A `queryRenderedFeatures` region: a bare point, or a screen-space box. */
 type QueryRegion = maplibregl.PointLike | [maplibregl.PointLike, maplibregl.PointLike];
@@ -132,6 +152,49 @@ const FIRES_FILL = 'nifc-fires-fill';
  * (status flips to `loading` synchronously), not only once it resolves. */
 function isLayerOn(key: string): boolean {
   return registry.getActiveKeys().has(key) || registry.getStatus(key) === 'loading';
+}
+
+/**
+ * Whether a switched-on layer holds a COMPLETE read (draft DR-179): its
+ * registry status is one of the two verified complete values, `ready` (the
+ * service answered in full) or `no-data` (it answered with nothing, a verified
+ * absence; AGENTS.md rule 6). Read through that whitelist: `loading`,
+ * `degraded` ("live (partial)", a truncated answer), `error` (a failed read or
+ * refresh, which can keep the old fill on the map) and a status not yet
+ * written are all incomplete, and an incomplete read never answers for an
+ * absence. Completeness is kept apart from presence: a row can report a
+ * condition its partial read did find, and still not be complete.
+ */
+function isReadComplete(key: string): boolean {
+  const status = registry.getStatus(key);
+  return status === 'ready' || status === 'no-data';
+}
+
+/** The six layer-state words (popup-frame.ts SixStateWord) for each registry status, the sidebar's own mapping (src/ui/island/pill-text.ts). */
+const STATE_WORD: Readonly<Record<LayerStatus, SixStateWord>> = {
+  loading: 'loading',
+  ready: 'live',
+  degraded: 'live (partial)',
+  error: 'unavailable',
+  'no-data': 'no data',
+  'zoom-in': 'zoom in to load'
+};
+
+/**
+ * The row for a switched-on drought or wildfire layer whose read here is not
+ * complete and found nothing present: the layer's own name as the sidebar
+ * shows it (src/config/layers.ts) and its six-state word, never an absence
+ * sentence (no such layer has a sentence of its own for this state; the NWS
+ * row keeps its three). A status not yet written reads 'loading', as the
+ * map key's chip reads it (src/config/chip-state.ts).
+ */
+function unreadRow(label: string, key: string): MarkedRow {
+  const status = registry.getStatus(key);
+  return {
+    row: { label, text: getLayerDef(key)?.name ?? label, state: status === undefined ? 'loading' : STATE_WORD[status] },
+    present: false,
+    complete: false
+  };
 }
 
 /** Every [lng, lat] vertex of a Polygon or MultiPolygon's rings, flattened.
@@ -206,9 +269,18 @@ function screenBoxForGeometry(
 }
 
 export interface PlaceConditions {
-  /** The `.popup-conditions` block, always non-empty: an honest "nothing
-   * mapped is active" line when every condition layer is off. */
-  readonly html: string;
+  /**
+   * The head's ONE value line (the frame's value slot): the labels of the
+   * conditions present at the place, or the block's sentence when none is
+   * (the owner's "present-only head", 2026-10-01).
+   */
+  readonly head: readonly [ValueRow];
+  /**
+   * Every condition row, in table order, for the frame's body conditions
+   * slot; empty when no condition layer is listed. Each row's text names its
+   * own issuer.
+   */
+  readonly rows: readonly ValueRow[];
   /**
    * True only when a REAL issuer-published warning-class condition covers
    * the clicked point: an active NWS product whose name ends "Warning"
@@ -223,14 +295,93 @@ export interface PlaceConditions {
    * The verbatim upstream product name (or, for a fire perimeter, the
    * plain "Mapped wildfire perimeter" legend phrase this app already uses
    * in `src/config/wildfire-presentation.ts`) that set `hasWarning`, or
-   * null when `hasWarning` is false. `buildImpactTriggerButtonHtml` shows
-   * this ON the door instead of a DDM-authored word for the condition
-   * (accessibility clause d, and the surface-vocabulary doctrine: DDM
-   * never calls its own read "a warning"; only the issuer's own product
-   * name earns that word). The first one found when more than one
-   * warning-tier condition covers the point.
+   * null when `hasWarning` is false. Since D1 M24 the door no longer
+   * prints it (one label in every mode; src/ui/popup-frame.ts DoorSpec):
+   * the condition's own words stand in the value row that earned it, so
+   * colour is still never the only carrier (accessibility clause d). The
+   * first one found when more than one warning-tier condition covers the
+   * point.
    */
   readonly warningLabel: string | null;
+}
+
+/**
+ * The explanation the owner approved on 2026-10-01 for a time the issuer
+ * supplied that DDM does not read as a full date (one copy, in
+ * src/ui/popups.ts): the text is shown as supplied, never parsed into a
+ * date it might not mean.
+ */
+const SUPPLIED_EXPLANATION = SUPPLIED_TIME_EXPLANATION;
+
+/**
+ * A rendered feature's property as text: a string as given, a finite number
+ * in its plain form, anything else ''. Never `String()` on an arbitrary
+ * value, which throws for `{ toString: null }` (rule C1; the Codex diff
+ * review of D1 M24).
+ */
+function propText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
+}
+
+/** Missing, null or blank: an absence, never a supplied value. */
+function isAbsent(value: unknown): boolean {
+  return value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
+}
+
+/** The issuer's own value, kept as supplied (an object is shown as its JSON). */
+function suppliedText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  return typeof value === 'object' && value !== null ? (JSON.stringify(value) ?? String(value)) : String(value);
+}
+
+/**
+ * NADM's consensus month from the read feature's `YEAR_MONTH` ("YYYYMM",
+ * src/util/nadm-collection.ts `normalizeNadmYearMonth`), at month
+ * precision; the label is the NADM popup's own (src/layers/nadm-drought.ts
+ * "Consensus month"). Absent: no clock. Present but not a valid YYYYMM:
+ * shown as supplied, never parsed.
+ */
+function nadmMonthClock(raw: unknown): PopupClock | undefined {
+  if (isAbsent(raw)) return undefined;
+  const month = normalizeNadmYearMonth(raw);
+  return {
+    kind: 'point',
+    meaning: 'month',
+    label: 'Consensus month',
+    at:
+      month === null
+        ? { precision: 'supplied', text: suppliedText(raw), explanation: SUPPLIED_EXPLANATION }
+        : { precision: 'month', month }
+  };
+}
+
+/**
+ * USDM's `MapDate` (milliseconds since the epoch, as the FeatureServer
+ * emits it; src/layers/usdm.ts `formatDate`) as a UTC calendar date, the
+ * day the USDM popup itself shows under "Map date". Absent: no clock.
+ * Anything that is not a finite epoch inside the four-digit years: shown
+ * as supplied.
+ */
+function usdmMapDateClock(raw: unknown): PopupClock | undefined {
+  if (isAbsent(raw)) return undefined;
+  const ms =
+    typeof raw === 'number' ? raw : typeof raw === 'string' && /^-?\d+$/.test(raw.trim()) ? Number(raw.trim()) : NaN;
+  const day = Number.isFinite(ms) ? new Date(ms) : null;
+  const year = day === null ? NaN : day.getUTCFullYear();
+  const date =
+    day !== null && year >= 1000 && year <= 9999
+      ? `${year}-${String(day.getUTCMonth() + 1).padStart(2, '0')}-${String(day.getUTCDate()).padStart(2, '0')}`
+      : null;
+  return {
+    kind: 'point',
+    meaning: 'map-date',
+    label: 'Map date',
+    at:
+      date === null
+        ? { precision: 'supplied', text: suppliedText(raw), explanation: SUPPLIED_EXPLANATION }
+        : { precision: 'date', date }
+  };
 }
 
 function readDm(props: GeoJsonProperties): number | null {
@@ -240,29 +391,52 @@ function readDm(props: GeoJsonProperties): number | null {
   return Number.isInteger(n) ? n : null;
 }
 
+/** A row with its clock only when there is one (exact optional properties). */
+function withClock(row: ValueRow, clock: PopupClock | undefined): ValueRow {
+  return clock === undefined ? row : { ...row, clock };
+}
+
 /** The drought category beneath the clicked point, NADM preferred when its
  * layer is active (matches the conditions-strip's own precedence in
  * `src/ui/island/strip-metrics.ts` `droughtMetric`), else USDM. Omitted
- * entirely (returns null) when neither drought layer is on. */
-function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): string | null {
-  if (isLayerOn(NADM_KEY) && map.getLayer(NADM_FILL)) {
+ * entirely (returns null) when neither drought layer is on. A layer that is
+ * on but has no fill yet, or whose read is not complete and found no
+ * category here, gives its state row, never an absence (draft DR-179). */
+function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): MarkedRow | null {
+  if (isLayerOn(NADM_KEY)) {
+    if (!map.getLayer(NADM_FILL)) return unreadRow('Drought', NADM_KEY);
+    const complete = isReadComplete(NADM_KEY);
     const feats = map.queryRenderedFeatures(point, { layers: [NADM_FILL] });
     let maxIndex = -1;
+    let maxProps: GeoJsonProperties = null;
     for (const f of feats) {
-      const raw = String(f.properties?.['DROUGHTCAT'] ?? '').toUpperCase();
+      const raw = propText(f.properties?.['DROUGHTCAT']).toUpperCase();
       const index = NADM_CATEGORIES.findIndex((c) => c.code === raw);
-      if (index > maxIndex) maxIndex = index;
+      if (index > maxIndex) {
+        maxIndex = index;
+        maxProps = f.properties ?? null;
+      }
     }
     const category = maxIndex >= 0 ? NADM_CATEGORIES[maxIndex] : undefined;
-    return category
-      ? conditionRow(
-          'Drought',
-          `${category.code} ${category.label} (North American Drought Monitor)`
-        )
-      : conditionRow('Drought', 'No drought category polygon here (North American Drought Monitor).');
+    if (category) {
+      return reported(
+        withClock(
+          {
+            label: 'Drought',
+            text: `${category.code} ${category.label} (North American Drought Monitor)`
+          },
+          nadmMonthClock(maxProps?.['YEAR_MONTH'])
+        ),
+        complete
+      );
+    }
+    return complete
+      ? unreported({ label: 'Drought', text: 'No drought category polygon here (North American Drought Monitor).' }, true)
+      : unreadRow('Drought', NADM_KEY);
   }
 
   if (isLayerOn(USDM_KEY)) {
+    const complete = isReadComplete(USDM_KEY);
     // The change register displays `usdm-change-fill` and HIDES both frame
     // slots (src/layers/usdm.ts, showChange), while leaving the slot layers
     // in the style. Querying the slots in that mode therefore returns nothing
@@ -273,29 +447,51 @@ function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): string | 
     // src/ui/island/strip-metrics.ts: no absolute category is invented from
     // change data, and no absence is claimed from a hidden layer.
     if (timeline.usdmMode !== 'absolute') {
-      return conditionRow(
-        'Drought',
-        'The map is showing the U.S. Drought Monitor change register, so no current category is displayed at this point.'
+      // The register note establishes neither presence nor absence (the
+      // card read no current category here), so it never counts as a
+      // complete read: it can never select "Nothing mapped here" (the Codex
+      // review of dbf5e1fa, P2 1).
+      return unreported(
+        {
+          label: 'Drought',
+          text: 'The map is showing the U.S. Drought Monitor change register, so no current category is displayed at this point.'
+        },
+        false
       );
     }
     const presentFills = USDM_FILLS.filter((id) => map.getLayer(id));
-    if (presentFills.length === 0) return null;
+    if (presentFills.length === 0) return unreadRow('Drought', USDM_KEY);
     const feats = map.queryRenderedFeatures(point, { layers: [...presentFills] });
     let maxDm = -1;
+    let maxProps: GeoJsonProperties = null;
     for (const f of feats) {
       const dm = readDm(f.properties);
-      if (dm !== null && dm > maxDm) maxDm = dm;
+      // Only a D0-D4 index is a category; any other DM is not one, so a
+      // switched-on layer always answers a row (never the nothing-on line).
+      if (dm !== null && dm < USDM_CATEGORIES.length && dm > maxDm) {
+        maxDm = dm;
+        maxProps = f.properties ?? null;
+      }
     }
-    if (maxDm < 0) {
-      return conditionRow(
-        'Drought',
-        'No D0-D4 category polygon here (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.'
-      );
+    const cat = maxDm >= 0 ? USDM_CATEGORIES[maxDm] : undefined;
+    if (cat === undefined) {
+      return complete
+        ? unreported(
+            {
+              label: 'Drought',
+              text: 'No D0-D4 category polygon here (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.'
+            },
+            true
+          )
+        : unreadRow('Drought', USDM_KEY);
     }
-    const cat = maxDm < USDM_CATEGORIES.length ? USDM_CATEGORIES[maxDm] : undefined;
-    return cat
-      ? conditionRow('Drought', `${cat.code} ${cat.label} (U.S. Drought Monitor, NDMC/NOAA/USDA)`)
-      : null;
+    return reported(
+      withClock(
+        { label: 'Drought', text: `${cat.code} ${cat.label} (U.S. Drought Monitor, NDMC/NOAA/USDA)` },
+        usdmMapDateClock(maxProps?.['MapDate'] ?? maxProps?.['mapDate'])
+      ),
+      complete
+    );
   }
 
   return null;
@@ -324,6 +520,41 @@ function isNwsWarningTier(prodType: string): boolean {
   return /warning$/i.test(prodType.trim());
 }
 
+/**
+ * A row as its builder made it, with two separate marks. `present`: whether it
+ * REPORTS something at the place (a drought category, an active alert, a
+ * touching perimeter); an absence, a register note or a not-read state is
+ * never present (the owner's "present-only head", 2026-10-01). `complete`:
+ * whether the layer it read holds a complete read here (`isReadComplete`; no
+ * fill in the style is never complete), apart from presence (draft DR-179).
+ * The builder that writes the row marks both; nothing downstream parses a
+ * row's text to decide.
+ */
+interface MarkedRow {
+  readonly row: ValueRow;
+  readonly present: boolean;
+  readonly complete: boolean;
+}
+
+/** A row that reports a condition at the place. */
+function reported(row: ValueRow, complete: boolean): MarkedRow {
+  return { row, present: true, complete };
+}
+
+/** A row that reports no condition at the place (an absence, a register note, a not-read state). */
+function unreported(row: ValueRow, complete: boolean): MarkedRow {
+  return { row, present: false, complete };
+}
+
+/** One row builder's answer: its rows (possibly none) and its warning. */
+interface RowResult {
+  readonly rows: readonly MarkedRow[];
+  readonly hasWarning: boolean;
+  readonly warningLabel: string | null;
+}
+
+const NO_ROWS: RowResult = { rows: [], hasWarning: false, warningLabel: null };
+
 /** Every distinct active NWS alert polygon covering the clicked point
  * (fire-weather and heat share one layer, distinguished by `prod_type`),
  * each its own row so a Heat Advisory and a Red Flag Warning covering the
@@ -335,20 +566,25 @@ function alertRows(
   region: QueryRegion,
   place: Geometry | null,
   scope: ClaimScope
-): { rows: string[]; hasWarning: boolean; warningLabel: string | null } {
-  if (!isLayerOn(ALERTS_KEY) || !map.getLayer(ALERTS_FILL)) {
-    return { rows: [], hasWarning: false, warningLabel: null };
+): RowResult {
+  if (!isLayerOn(ALERTS_KEY)) {
+    return NO_ROWS;
   }
+  // Switched on with no fill in the style yet (the first read has not
+  // arrived): nothing was read here, so the state sentence below answers,
+  // never the nothing-on line (the Codex review of round 1, B2).
+  const hasFill = Boolean(map.getLayer(ALERTS_FILL));
+  const complete = hasFill && isReadComplete(ALERTS_KEY);
 
   // Retrieved by the place's box, kept only where the alert actually touches
   // the place: see the ATTRIBUTION FIX in this module's header.
-  const feats = touchingPlace(map.queryRenderedFeatures(region, { layers: [ALERTS_FILL] }), place);
-  const seen = new Map<string, { prodType: string; ends: string | null }>();
+  const feats = hasFill ? touchingPlace(map.queryRenderedFeatures(region, { layers: [ALERTS_FILL] }), place) : [];
+  const seen = new Map<string, { prodType: string; ends: unknown }>();
   for (const f of feats) {
-    const prodType = String(f.properties?.['prod_type'] ?? '').trim();
+    const prodType = propText(f.properties?.['prod_type']).trim();
     if (prodType === '') continue;
-    const endsRaw = f.properties?.['ends'] ?? f.properties?.['expiration'] ?? null;
-    seen.set(prodType, { prodType, ends: endsRaw === null ? null : String(endsRaw) });
+    const endsRaw: unknown = f.properties?.['ends'] ?? f.properties?.['expiration'] ?? null;
+    seen.set(prodType, { prodType, ends: endsRaw });
   }
 
   if (seen.size === 0) {
@@ -364,8 +600,8 @@ function alertRows(
     // 'no-data' is a CONFIRMED zero: the service answered and published
     // nothing, which is exactly the state an absence sentence is for. Only
     // the states that mean "not read" (loading, live partial, unavailable)
-    // withhold the claim.
-    if (status !== 'ready' && status !== 'no-data') {
+    // withhold the claim, and so does a layer with no fill yet.
+    if (!complete) {
       const where = scopePhrase(scope);
       const value =
         status === 'loading'
@@ -374,7 +610,7 @@ function alertRows(
             ? `The response was incomplete, so this card cannot rule one out ${where}.`
             : `Unavailable, so this card cannot say whether one is active ${where}.`;
       // vocab-allow: names the NWS watch/warning/advisory product category (src/layers/nws-alerts.ts), matching that module's own description
-      return { rows: [conditionRow('NWS alert', value)], hasWarning: false, warningLabel: null };
+      return { rows: [unreported({ label: 'NWS alert', text: value }, false)], hasWarning: false, warningLabel: null };
     }
     return {
       // The absence must not reach further than the query did. This layer
@@ -387,7 +623,7 @@ function alertRows(
       // already uses ("No active requested National Weather Service
       // products", nws-alerts.ts).
       // vocab-allow: names the NWS watch/warning/advisory product category (src/layers/nws-alerts.ts), matching that module's own description, and scopes the absence to the products actually requested
-      rows: [conditionRow('NWS alert', noRequestedAlert(scope))],
+      rows: [unreported({ label: 'NWS alert', text: noRequestedAlert(scope) }, true)],
       hasWarning: false,
       warningLabel: null
     };
@@ -395,7 +631,7 @@ function alertRows(
 
   let hasWarning = false;
   let warningLabel: string | null = null;
-  const rows = [...seen.values()].map(({ prodType, ends }) => {
+  const rows = [...seen.values()].map(({ prodType, ends }): MarkedRow => {
     if (isNwsWarningTier(prodType)) {
       hasWarning = true;
       warningLabel ??= prodType;
@@ -404,9 +640,28 @@ function alertRows(
     // The scope rides on the product name, so a reader is never left to assume
     // a place-wide read was taken at the pixel they clicked.
     const named = `${prodType} ${scopePhrase(scope)}`;
-    const value = until ? `${named}, until ${until} (NOAA NWS)` : `${named} (NOAA NWS)`;
+    const value = until.kind === 'instant' ? `${named}, until ${until.text} (NOAA NWS)` : `${named} (NOAA NWS)`;
     // vocab-allow: names the NWS alert product category (src/layers/nws-alerts.ts); the value is the issuer's own verbatim product name
-    return conditionRow('NWS alert', value);
+    const row: ValueRow = { label: 'NWS alert', text: value };
+    // A window end the issuer supplied in a form DDM does not read as a full
+    // date is shown as supplied, with the approved explanation, never parsed
+    // (the cover note's rule C1); the "Until" label is the NWS alert popup's
+    // own (src/ui/popups.ts buildNwsAlertPopupHtml).
+    // An active product at the place: a present row, from a complete read or not.
+    return reported(
+      until.kind === 'supplied'
+        ? {
+            ...row,
+            clock: {
+              kind: 'point',
+              meaning: 'valid',
+              label: 'Until',
+              at: { precision: 'supplied', text: until.text, explanation: SUPPLIED_EXPLANATION }
+            }
+          }
+        : row,
+      complete
+    );
   });
   return { rows, hasWarning, warningLabel };
 }
@@ -418,7 +673,7 @@ function pickIncidentName(props: GeoJsonProperties): string {
   const p = props ?? {};
   for (const candidate of [p.attr_IncidentName, p.poly_IncidentName, p.IncidentName, p.incidentName]) {
     if (candidate === null || candidate === undefined) continue;
-    const s = String(candidate).trim();
+    const s = propText(candidate).trim();
     if (s !== '') return s;
   }
   return 'Mapped fire perimeter';
@@ -429,14 +684,20 @@ function pickIncidentName(props: GeoJsonProperties): string {
  * filters to WF/CX, and `classifyNifcIncidentType` re-checks defensively,
  * exactly as `strip-metrics.ts` `firesMetric` does). Omitted entirely when
  * the fires layer is off; a confirmed zero renders one honest "none"
- * row. */
+ * row. A read that is not complete (no fill yet, still loading, a truncated
+ * load reporting 'degraded' "live (partial)" at src/layers/nifc-fires.ts, or
+ * unavailable) and found no perimeter here gives the layer's state row, never
+ * that absence (draft DR-179). The fire names are a list, one item per name,
+ * never one joined sentence (D1.md:145). */
 function fireRow(
   map: maplibregl.Map,
   region: QueryRegion,
   place: Geometry | null,
   scope: ClaimScope
-): { row: string; hasWarning: boolean; warningLabel: string | null } | null {
-  if (!isLayerOn(FIRES_KEY) || !map.getLayer(FIRES_FILL)) return null;
+): RowResult {
+  if (!isLayerOn(FIRES_KEY)) return NO_ROWS;
+  if (!map.getLayer(FIRES_FILL)) return { rows: [unreadRow('Wildfire', FIRES_KEY)], hasWarning: false, warningLabel: null };
+  const complete = isReadComplete(FIRES_KEY);
 
   // Retrieved by the place's box, kept only where the perimeter actually
   // touches the place: see the ATTRIBUTION FIX in this module's header.
@@ -449,60 +710,147 @@ function fireRow(
 
   if (feats.length === 0) {
     return {
-      row: conditionRow('Wildfire', `No mapped wildfire perimeter ${scopePhrase(scope)} (NIFC WFIGS).`),
+      rows: [
+        complete
+          ? unreported({ label: 'Wildfire', text: `No mapped wildfire perimeter ${scopePhrase(scope)} (NIFC WFIGS).` }, true)
+          : unreadRow('Wildfire', FIRES_KEY)
+      ],
       hasWarning: false,
       warningLabel: null
     };
   }
 
   const names = [...new Set(feats.map((f) => pickIncidentName(f.properties)))];
-  const value = `Active mapped perimeter ${scopePhrase(scope)}: ${names.join(', ')} (NIFC WFIGS).`;
+  const row: ValueRow = { label: 'Wildfire', text: `Active mapped perimeter ${scopePhrase(scope)} (NIFC WFIGS)`, items: names };
   // The plain legend phrase this app already uses for a real WF/CX
   // perimeter (src/config/wildfire-presentation.ts NIFC_INCIDENT_PRESENTATION.wildfire.legendLabel), not a DDM-authored "warning" word.
-  return { row: conditionRow('Wildfire', value), hasWarning: true, warningLabel: 'Mapped wildfire perimeter' };
+  return { rows: [reported(row, complete)], hasWarning: true, warningLabel: 'Mapped wildfire perimeter' };
 }
 
-/** Format an alert `ends`/`expiration` timestamp the same readable way
- * `src/ui/popups.ts` `formatAlertTime` does for the same field (restated,
- * not imported; that helper is module-private). Falls back to the raw
- * string when it does not parse, never hides the window. */
-function formatWhen(value: string | null): string {
-  if (value === null || value === '') return '';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+/** The days in a month of the proleptic Gregorian calendar (leap years respected). */
+function daysInMonth(year: number, month: number): number {
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  return [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1] ?? 0;
 }
 
-function conditionRow(label: string, value: string): string {
-  return `
-    <div class="popup-condition-row">
-      <span class="popup-condition-label">${escapeHtml(label)}</span>
-      <span class="popup-condition-value">${escapeHtml(value)}</span>
-    </div>`;
+/** An ISO 8601 date and time WITH its zone or offset ("Z", "+hh:mm", "-hhmm"). */
+const ZONED_ISO = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(Z|[+-]\d{2}:?\d{2})$/;
+
+/**
+ * The instant an ISO 8601 timestamp with a zone or offset names, by
+ * calendar validation and arithmetic (never `new Date()` on issuer text);
+ * null for anything else, a zoneless timestamp included.
+ */
+function zonedIsoInstant(value: string): number | null {
+  const match = ZONED_ISO.exec(value.trim());
+  if (!match) return null;
+  const [year, month, day, hour, minute] = [match[1], match[2], match[3], match[4], match[5]].map(Number) as [
+    number,
+    number,
+    number,
+    number,
+    number
+  ];
+  const second = Number(match[6] ?? '0');
+  const millis = Number((match[7] ?? '0').padEnd(3, '0').slice(0, 3));
+  // A year below 1000 is not read: Date.UTC maps 0 to 99 onto 1900 to 1999,
+  // so '0099-01-01T00:00:00Z' would print as 1999 (the Codex diff review). It
+  // is kept as supplied text, the four-digit floor usdmMapDateClock keeps.
+  if (year < 1000) return null;
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return null;
+  if (hour > 23 || minute > 59 || second > 59) return null;
+  const zone = match[8] ?? 'Z';
+  let offsetMinutes = 0;
+  if (zone !== 'Z') {
+    const hours = Number(zone.slice(1, 3));
+    const minutes = Number(zone.slice(-2));
+    if (hours > 23 || minutes > 59) return null;
+    offsetMinutes = (zone.startsWith('-') ? -1 : 1) * (hours * 60 + minutes);
+  }
+  const at = Date.UTC(year, month - 1, day, hour, minute, second, millis) - offsetMinutes * 60_000;
+  return Number.isFinite(at) ? at : null;
 }
 
 /**
- * Build the `.popup-conditions` block for a boundary popup at the clicked
- * screen point. `point` is the click's screen-pixel position, used
- * point-exact for drought (matching `fire-context.ts`'s convention: a
- * boundary always outranks the lowest-ranked `condition-surface` kind, so
- * the exact pixel is always reachable there). `geometry` is the CLICKED
- * FEATURE's own GeoJSON geometry, when the caller has it; alerts and fires
- * are read against ITS screen-space bounding box instead of the bare
- * point (see the REACHABILITY FINDING in this module's header) so that a
- * real warning covering the place, not only the exact pixel, is not
- * missed, and are then intersected against that same geometry so that a
- * warning inside the box but outside the place is not attributed to it
- * (see the ATTRIBUTION FIX). Falls back to the bare point when no geometry
- * is given or it is not a polygon, in which case the rows say "here"
- * because the pixel is then the whole of what was read.
+ * An alert `ends`/`expiration` value as the card shows it. An ISO 8601
+ * timestamp with its zone or offset, or the epoch milliseconds the layer
+ * itself accepts as an issuer time (src/layers/nws-alerts.ts
+ * `issuerTimeMs`), is an instant, written through `dateTok` with its zone
+ * named; any other present value is kept as supplied (the card says so),
+ * and an absent one is no window at all.
+ */
+function formatWhen(
+  value: unknown
+): { readonly kind: 'instant'; readonly text: string } | { readonly kind: 'supplied'; readonly text: string } | { readonly kind: 'none' } {
+  if (isAbsent(value)) return { kind: 'none' };
+  const at = typeof value === 'number' ? value : typeof value === 'string' ? zonedIsoInstant(value) : null;
+  if (at !== null && isDateInstant(at)) return { kind: 'instant', text: dateTok(at) };
+  return { kind: 'supplied', text: suppliedText(value) };
+}
+
+/** The largest epoch magnitude a JavaScript Date holds (ECMA-262 TimeClip), in milliseconds. */
+const MAX_DATE_MS = 8.64e15;
+
+/**
+ * Whether epoch milliseconds name an instant a Date can hold. A finite number
+ * outside that range (the Codex diff review's `1e20`) passes a finiteness
+ * check and would make `dateTok` throw on an Invalid Date, so it is kept as
+ * supplied text instead (rule C1), never formatted.
+ */
+function isDateInstant(ms: number): boolean {
+  return Number.isFinite(ms) && Math.abs(ms) <= MAX_DATE_MS && !Number.isNaN(new Date(ms).getTime());
+}
+
+/** Where a row builder reads (see `buildPlaceConditionsHtml` below). */
+interface RowContext {
+  readonly map: maplibregl.Map;
+  readonly point: maplibregl.PointLike;
+  readonly region: QueryRegion;
+  readonly place: Geometry | null;
+  readonly scope: ClaimScope;
+}
+
+/** Each declared row's label, as its builder writes it (a row key with no label fails tsc). */
+const ROW_LABEL: Readonly<Record<PlaceConditionRowKey, string>> = {
+  drought: 'Drought',
+  // vocab-allow: names the NWS alert product category (src/layers/nws-alerts.ts), the alert rows' own label
+  'nws-alerts': 'NWS alert',
+  'wildfire-perimeter': 'Wildfire'
+};
+
+/** One builder per declared row (a row key with no builder fails tsc). */
+const ROW_BUILDERS: Readonly<Record<PlaceConditionRowKey, (context: RowContext) => RowResult>> = {
+  drought: ({ map, point }) => {
+    const row = droughtRow(map, point);
+    return row === null ? NO_ROWS : { rows: [row], hasWarning: false, warningLabel: null };
+  },
+  'nws-alerts': ({ map, region, place, scope }) => alertRows(map, region, place, scope),
+  'wildfire-perimeter': ({ map, region, place, scope }) => fireRow(map, region, place, scope)
+};
+
+/**
+ * Build the Conditions rows for a boundary popup at the clicked screen
+ * point. `point` is the click's screen-pixel position, used point-exact
+ * for drought (matching `fire-context.ts`'s convention: a boundary always
+ * outranks the lowest-ranked `condition-surface` kind, so the exact pixel
+ * is always reachable there). `geometry` is the CLICKED FEATURE's own
+ * GeoJSON geometry, when the caller has it; alerts and fires are read
+ * against ITS screen-space bounding box instead of the bare point (see the
+ * REACHABILITY FINDING in this module's header) so that a real warning
+ * covering the place, not only the exact pixel, is not missed, and are
+ * then intersected against that same geometry so that a warning inside the
+ * box but outside the place is not attributed to it (see the ATTRIBUTION
+ * FIX). Falls back to the bare point when no geometry is given or it is
+ * not a polygon, in which case the rows say "here" because the pixel is
+ * then the whole of what was read. The name is kept for its six callers;
+ * the result is typed rows for the popup frame (D1 M24).
  */
 export function buildPlaceConditionsHtml(
   map: maplibregl.Map,
   point: maplibregl.PointLike,
   geometry?: Geometry | null
 ): PlaceConditions {
-  const rows: string[] = [];
+  const rowsByKey: (readonly MarkedRow[])[] = [];
   let hasWarning = false;
   let warningLabel: string | null = null;
   // The box and the polygon it was drawn around travel together: the box
@@ -514,22 +862,15 @@ export function buildPlaceConditionsHtml(
   const place: Geometry | null = box === null ? null : (geometry ?? null);
   const scope: ClaimScope = place === null ? 'point' : 'area';
 
-  const drought = droughtRow(map, point);
-  if (drought) rows.push(drought);
-
-  const alerts = alertRows(map, region, place, scope);
-  rows.push(...alerts.rows);
-  if (alerts.hasWarning) {
-    hasWarning = true;
-    warningLabel ??= alerts.warningLabel;
-  }
-
-  const fire = fireRow(map, region, place, scope);
-  if (fire) {
-    rows.push(fire.row);
-    if (fire.hasWarning) {
+  // Every cluster's declared row, in table order (DR-113): the block is
+  // mode-agnostic, so a row is listed whenever its layer is on.
+  const rowKeys = placeConditionRowKeys(HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS);
+  for (const key of rowKeys) {
+    const result = ROW_BUILDERS[key]({ map, point, region, place, scope });
+    rowsByKey.push(result.rows);
+    if (result.hasWarning) {
       hasWarning = true;
-      warningLabel ??= fire.warningLabel;
+      warningLabel ??= result.warningLabel;
     }
   }
 
@@ -539,26 +880,85 @@ export function buildPlaceConditionsHtml(
   // sidebar shows one enabled and unavailable. That is the same overstatement
   // as a false all-clear, one level up: it describes the map rather than the
   // reader's own request. Named separately here, and never merged into the
-  // genuinely-nothing-on case below.
-  const enabledButUnread = [NADM_KEY, USDM_KEY, ALERTS_KEY, FIRES_KEY].filter((key) => {
+  // genuinely-nothing-on case below. The layers checked are the declared
+  // rows' own (PLACE_CONDITION_ROWS), never a second list kept here.
+  const enabledButUnread = rowKeys.flatMap((key) => PLACE_CONDITION_ROWS[key].layerKeys).filter((key) => {
     if (isLayerOn(key)) return false;
     const status = registry.getStatus(key);
     return status === 'error' || status === 'degraded';
   });
 
-  const body =
-    rows.length > 0
-      ? rows.join('')
-      : enabledButUnread.length > 0
-        ? conditionRow(
-            'Conditions',
-            'A condition layer is switched on but could not be read, so this card cannot describe conditions here.'
-          )
-        : conditionRow(
-          'Conditions',
-          // vocab-allow: names the layer this card checked (src/layers/nws-alerts.ts), matching that layer's own name; not a DDM-computed judgement
-          'No condition layer (drought, NWS alerts, or wildfire perimeters) is currently active on the map.'
-        );
+  // When other rows are listed, the head below promises each layer's state
+  // in the body, so a layer asked for that failed to activate states its own
+  // there, in table order: its sidebar name and its six-state word (the
+  // unread-row pattern; the Codex review of dbf5e1fa, P2 2). With no other
+  // row the head keeps its own "could not be read" sentence and lists none.
+  const listed = rowsByKey.some((own) => own.length > 0);
+  const rows: MarkedRow[] = rowKeys.flatMap((key, i) => {
+    const own = rowsByKey[i] ?? [];
+    if (!listed || own.length > 0) return own;
+    return PLACE_CONDITION_ROWS[key].layerKeys
+      .filter((layerKey) => enabledButUnread.includes(layerKey))
+      .map((layerKey) => unreadRow(ROW_LABEL[key], layerKey));
+  });
 
-  return { html: `<div class="popup-conditions">${body}</div>`, hasWarning, warningLabel };
+  // The head's ONE value line (the owner's "present-only head", 2026-10-01;
+  // read completeness kept apart from presence, draft DR-179). In order:
+  //   (a) the existing labels of the rows that report something at the
+  //       place, in table order, each once;
+  //   (b) nothing present, and every switched-on condition layer holds a
+  //       complete read here: DDM's owner-approved statement;
+  //   (c) nothing present, and a switched-on layer's read is loading,
+  //       incomplete or unavailable (a layer with no fill yet included), or a
+  //       layer asked for failed to activate beside the rows listed: the
+  //       not-yet-read line;
+  //   (d) no row listed at all: the block's existing sentences, each in its
+  //       own case (a layer asked for and unread; nothing switched on).
+  // A switched-on layer always lists a row, so (d)'s nothing-on sentence
+  // never shows while one is on. Every row itself goes to the body, verbatim.
+  const presentLabels = [
+    ...new Set(rows.filter((marked) => marked.present).flatMap((marked) => (marked.row.label === undefined ? [] : [marked.row.label])))
+  ];
+  const everyReadComplete = enabledButUnread.length === 0 && rows.every((marked) => marked.complete);
+  // A mode whose cluster declares no place row yet (DR-113: read from the
+  // cluster table through the committed mode, never a mode name).
+  // The interim line is for a DEFERRED row (draft DR-180): the committed
+  // mode declares none and its deferral is recorded with its reason.
+  const mode = getHazardCluster();
+  const modeHasNoRow = HAZARD_CLUSTERS[mode].placeConditionRow === null && Object.hasOwn(PLACE_CONDITION_ROW_DEFERRED, mode);
+  const head: readonly [ValueRow] =
+    presentLabels.length > 0
+      ? [{ text: presentLabels.join(' · ') }]
+      : rows.length > 0
+        ? everyReadComplete
+          ? [{ text: "Nothing mapped here on the active condition layers; each layer's reading is below." }]
+          : // DRAFT wording by the director, draft DR-179, pending the owner's
+            // read-back (RATIFICATION-11 row 6, "Not sure"); verbatim as drafted.
+            [{ text: "Not every condition layer has been read here yet; each layer's state is below." }]
+        : enabledButUnread.length > 0
+          ? [
+              {
+                label: 'Conditions',
+                text: 'A condition layer is switched on but could not be read, so this card cannot describe conditions here.'
+              }
+            ]
+          : modeHasNoRow
+            ? [
+                {
+                  label: 'Conditions',
+                  // DRAFT wording, draft DR-180, pending the owner's read-back:
+                  // the interim line until the ocean sprint gives this mode its
+                  // row; exactly as recorded, no period added.
+                  text: 'No condition layer for this mode is currently active'
+                }
+              ]
+            : [
+                {
+                  label: 'Conditions',
+                  // vocab-allow: names the layer this card checked (src/layers/nws-alerts.ts), matching that layer's own name; not a DDM-computed judgement
+                  text: 'No condition layer (drought, NWS alerts, or wildfire perimeters) is currently active on the map.'
+                }
+              ];
+
+  return { head, rows: rows.map((marked) => marked.row), hasWarning, warningLabel };
 }

@@ -28,7 +28,7 @@ import { ECOREGION_COLORS, ECOREGION_DEFAULT_COLOR } from '../config/palette';
 import { matchExpression } from '../config/style-expressions';
 import { URLS } from '../config/urls';
 import { firstLayerIdAbove, BOTTOM_STACK_IDS } from '../map/layer-order';
-import { buildEcoregionPopupHtml } from '../ui/popups';
+import { buildEcoregionPopupModel } from '../ui/popups';
 import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
 import { buildBoundaryContext } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
@@ -163,7 +163,7 @@ export function bindPopups(map: maplibregl.Map): void {
       const parentL3 = level === 'IV' ? pickL3Name(props) : null;
       const conditions = buildPlaceConditionsHtml(respondMap, click.point, feature.geometry);
       return {
-        content: buildEcoregionPopupHtml(name, conditions, parentL3 ? { level, parentL3 } : { level }),
+        model: buildEcoregionPopupModel(name, conditions, parentL3 ? { level, parentL3 } : { level }),
         selection: buildBoundaryContext('ecoregion', props, feature.geometry, click.lngLat, name)
       };
     }

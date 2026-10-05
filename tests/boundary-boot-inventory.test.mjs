@@ -213,7 +213,7 @@ const DIRECT_BOOT_REASONS = {
 const SECOND_PAGE_REASONS = {
   'tests/identify-paths.spec.ts': {
     reason:
-      'the D1 M24 to M26 frame census (tests/frame-fixtures.ts): one fresh page in the SAME context per migrated builder, so one fixture\'s page routes and viewport never reach the next. Not a popup: each page is created by the spec and booted by its fixture through gotoApp, which installs the suite stubs; before the first one the spec holds the context offline (holdExternalNetwork, every external request answered 503), so no fixture page reaches a live service.'
+      'the D1 M24 to M26 frame census (tests/frame-fixtures.ts): one fresh page in the SAME context per migrated builder, so one fixture\'s page routes and viewport never reach the next. Not a popup: each page is created by the spec and booted by its fixture through gotoApp, which installs the suite stubs (the same stub story as the census boots before them), and each fixture routes its own data.'
   },
   'tests/popup-viewport.spec.ts': {
     reason:

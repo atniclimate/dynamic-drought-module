@@ -2411,6 +2411,7 @@ button.conditions-metric:hover .conditions-action-hide {
   outline-offset: 1px;
 }
 [data-popup-frame] [data-popup-slot='clock'],
+[data-popup-frame] [data-popup-slot='more-clocks'],
 [data-popup-frame] [data-record-slot='clocks'] {
   font-size: 12px;
   color: var(--fg-2);
@@ -2429,8 +2430,19 @@ button.conditions-metric:hover .conditions-action-hide {
   color: var(--link-on-dark);
   text-decoration: underline;
 }
+/* The head fits (S30D block 3, the director's Tier 2 call): the door sits
+   closer under the source, and its button drops the shared top and bottom
+   margin and two pixels of block padding inside a frame. */
 [data-popup-frame] [data-popup-slot='actions']:not(:empty) {
-  margin-top: 8px;
+  margin-top: 4px;
+}
+[data-popup-frame] .popup-impact-btn {
+  margin: 0;
+  padding-block: 6px;
+}
+/* The later clocks, moved from the head, under the condition rows. */
+[data-popup-frame] [data-popup-slot='more-clocks'] {
+  margin: 0 0 8px;
 }
 [data-popup-frame] [data-detail='row'],
 [data-popup-frame] [data-detail='reading'],
@@ -2471,6 +2483,50 @@ button.conditions-metric:hover .conditions-action-hide {
 [data-popup-frame] [data-record-slot='issuer'],
 [data-popup-frame] [data-group-key] {
   display: block;
+}
+
+/* D1 M24: value rows (DDM-P11-T04; src/ui/popup-conditions.ts), the head's
+   one value line and the body's condition rows alike. A place frame lists
+   one row per condition in its body, each naming its own issuer in its
+   text; the row's label reads as a quiet caption above it, a fire row's
+   names are a compact list, and a row's own clock sits under its text. */
+[data-popup-frame] [data-value-row] + [data-value-row] {
+  margin-top: 4px;
+}
+[data-popup-frame] [data-value-row] .popup-value-label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: var(--fw-body);
+  color: var(--fg-2);
+}
+[data-popup-frame] [data-value-row] ul {
+  margin: 2px 0 0;
+  padding-inline-start: 16px;
+}
+[data-popup-frame] [data-value-row] [data-clock-meaning] {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: var(--fw-body);
+  color: var(--fg-2);
+}
+/* A layer's state word (one of the six) beside its name, when its read here
+   is not complete (draft DR-179): quiet, as the row's clock is. */
+[data-popup-frame] [data-value-row] [data-state] {
+  font-weight: var(--fw-body);
+  color: var(--fg-2);
+}
+/* The condition rows stand first in the body (the owner's present-only
+   head, 2026-10-01), set off from the detail rows beneath them. */
+[data-popup-frame] [data-popup-slot='conditions'] {
+  margin: 0 0 8px;
+}
+/* A value row is a sentence of any length, so above the phone width and
+   outside an embed it takes the M27 prose rule (no single-word last line),
+   in the same zero-specificity form as that block (D1 M27 T1). */
+@media (min-width: 721px) {
+  :where(body:not(:has(> .app-shell.embed))) :where([data-popup-frame] [data-value-row]) {
+    text-wrap: pretty;
+  }
 }
 
 /* Custom telemetry markers */

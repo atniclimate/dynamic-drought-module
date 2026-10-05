@@ -38,6 +38,7 @@
 
 import type { LayerKey } from './layers';
 import type { DetailSectionKey } from './detail-sections';
+import type { PlaceConditionRowKey } from './place-condition-rows';
 
 export type HazardClusterKey = 'drought' | 'wildfire' | 'heat' | 'enso';
 
@@ -101,6 +102,14 @@ export interface HazardClusterDef {
    * section host revealed.
    */
   readonly detailSections?: readonly DetailSectionKey[];
+  /**
+   * The row this cluster contributes to a place popup's Conditions block
+   * (S30D D1 M24; DR-113; src/config/place-condition-rows.ts), or null when
+   * its row is deferred with a reason recorded in
+   * PLACE_CONDITION_ROW_DEFERRED. REQUIRED, so a new mode cannot be added
+   * without deciding it.
+   */
+  readonly placeConditionRow: PlaceConditionRowKey | null;
 }
 
 export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
@@ -120,7 +129,8 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       // the register within it.
       'weeks-ahead': ['drought'],
       'season-ahead': ['drought']
-    }
+    },
+    placeConditionRow: 'drought'
   },
   wildfire: {
     title: 'Wildfire',
@@ -141,7 +151,8 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       'weeks-ahead': ['spc-fire-weather', 'nifc-fires', 'hms-smoke'],
       // Long horizon: the static potential read becomes eligible.
       'season-ahead': ['usfs-whp']
-    }
+    },
+    placeConditionRow: 'wildfire-perimeter'
   },
   heat: {
     title: 'Extreme Heat',
@@ -163,7 +174,10 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
     },
     // HeatRisk first (S30D D1 M11): the seven-day point sequence is
     // Heat's one Key drawer section.
-    detailSections: ['heatrisk-sequence']
+    detailSections: ['heatrisk-sequence'],
+    // HeatRisk has no verified per-point read (src/ui/popup-conditions.ts),
+    // so Heat's place row is the active NWS heat and fire weather products.
+    placeConditionRow: 'nws-alerts'
   },
   enso: {
     title: 'ENSO',
@@ -179,7 +193,11 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       current: ['sst-anomaly'],
       'weeks-ahead': ['sst-anomaly'],
       'season-ahead': ['sst-anomaly']
-    }
+    },
+    // Deferred, not absent: ENSO's place row (the sea surface temperature
+    // anomaly) moves to the ocean sprint the owner asked for on 2026-10-01
+    // (PLACE_CONDITION_ROW_DEFERRED in src/config/place-condition-rows.ts).
+    placeConditionRow: null
   }
 };
 

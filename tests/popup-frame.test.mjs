@@ -241,6 +241,99 @@ test('every string is escaped (an injected img onerror stays inert)', () => {
   assert.ok(group.includes(`data-record-key="${ESCAPED_PAYLOAD}"`));
 });
 
+/**
+ * S30D D1 M24 (D1.md:145, "every briefing door names the place it opens,
+ * with one label in every mode"; design record 3.3 "The door pulse": the
+ * warning is printed as words in the value row that earned it, so the pulse
+ * is decoration). Red on a94eee5: a warning door reads
+ * "Fixture warning - Open the Impact Briefing for Fixture Place".
+ */
+test('the briefing door keeps one label whatever its warning, and pulses only with a warning', () => {
+  const doorOf = (html) => {
+    const match = /<button type="button" class="([^"]*)" data-ddm-impact-trigger>([^<]*)<\/button>/.exec(html);
+    assert.ok(match, 'the frame carries one briefing door');
+    return { className: match[1], label: match[2] };
+  };
+  const plain = doorOf(serializePopupFrame(surface({ actions: [{ kind: 'briefing', place: 'Fixture Place' }] })));
+  const warned = doorOf(
+    serializePopupFrame(surface({ actions: [{ kind: 'briefing', place: 'Fixture Place', warningLabel: 'Fixture warning' }] }))
+  );
+  assert.equal(plain.label, 'Open the Impact Briefing for Fixture Place');
+  assert.equal(warned.label, plain.label, 'a warning renames the door');
+  assert.equal(plain.className, 'popup-impact-btn');
+  assert.equal(warned.className, 'popup-impact-btn popup-impact-btn--pulse');
+  // The warning label's escape path: whatever it carries never reaches the
+  // markup, raw or escaped; only the pulse class says a warning earned it.
+  const injected = serializePopupFrame(surface({ actions: [{ kind: 'briefing', place: 'Fixture Place', warningLabel: PAYLOAD }] }));
+  assert.equal(injected.includes('<img'), false);
+  assert.equal(injected.includes(ESCAPED_PAYLOAD), false, 'the warning label reached the door markup');
+  assert.equal(doorOf(injected).label, 'Open the Impact Briefing for Fixture Place');
+  assert.equal(doorOf(injected).className, 'popup-impact-btn popup-impact-btn--pulse');
+});
+
+/**
+ * found-106 (REGISTER.yaml:3427): "requiredLink builds its rejection message
+ * from the value it validated." Red on a94eee5: the message re-reads the
+ * href, so a getter that answers 'javascript:x' then 'https://example.org/'
+ * is validated on the first answer and reported with the second, and is
+ * read twice.
+ */
+test('requiredLink names the value it validated (found-106)', () => {
+  let reads = 0;
+  const shifting = {
+    label: 'Fixture source',
+    get href() {
+      reads += 1;
+      return reads === 1 ? 'javascript:x' : 'https://example.org/';
+    }
+  };
+  assert.throws(
+    () => serializePopupFrame(surface({ source: { link: shifting } })),
+    (err) => err instanceof PopupFrameError && err.message === 'not an https link: javascript:x'
+  );
+  assert.equal(reads, 1, 'requiredLink read the href more than once');
+});
+
+/**
+ * S30D D1 M24 (the owner's "Body slot, present-only head", 2026-10-01; PF3:
+ * the normal desktop head shows without scrolling): condition rows are full
+ * value rows rendered FIRST in the body, ahead of the detail rows, each
+ * through the same row renderer and the same one escaping boundary as the
+ * head's value line. No conditions, no slot.
+ */
+test('condition rows render first in the body, never in the head, escaped once', () => {
+  const clock = { kind: 'point', meaning: 'month', label: 'Consensus month', at: { precision: 'month', month: '2026-08' } };
+  const html = serializePopupFrame(
+    surface({
+      value: [{ text: 'Drought · Wildfire' }],
+      conditions: [
+        { label: 'Drought', text: 'D1 Moderate drought (North American Drought Monitor)', clock },
+        { label: 'Wildfire', text: 'Active mapped perimeter in this area (NIFC WFIGS)', items: ['Fixture Creek', 'Fixture Ridge'] }
+      ],
+      details: [{ kind: 'row', label: 'Postal code', text: 'FX' }]
+    })
+  );
+  const head = headOf(html);
+  const body = bodyOf(html);
+  assert.equal(head.includes('data-popup-slot="conditions"'), false, 'the conditions slot is in the head');
+  assert.equal([...head.matchAll(/<div data-value-row>/g)].length, 1, 'the head carries one value line');
+  assert.ok(body.startsWith('<div data-popup-slot="conditions">'), body.slice(0, 120));
+  assert.ok(body.indexOf('data-popup-slot="conditions"') < body.indexOf('data-popup-slot="rows"'));
+  assert.equal([...body.matchAll(/<div data-value-row>/g)].length, 2);
+  assert.ok(body.includes('<ul><li>Fixture Creek</li><li>Fixture Ridge</li></ul>'));
+  assert.ok(body.includes(`<p data-clock-meaning="month"><span class="popup-clock-label">Consensus month</span> <time datetime="2026-08">Aug${NBSP}2026</time></p>`), body);
+  // The same escaping boundary: a payload in a condition row stays inert.
+  const injected = serializePopupFrame(surface({ conditions: [{ label: PAYLOAD, text: PAYLOAD, items: [PAYLOAD], issuer: PAYLOAD }] }));
+  assert.equal(injected.includes('<img'), false);
+  assert.equal(injected.split(ESCAPED_PAYLOAD).length - 1, 4);
+  // Validated as rows: a blank row text is refused, a non-list refused.
+  assert.throws(() => serializePopupFrame(surface({ conditions: [{ text: '  ' }] })), PopupFrameError);
+  assert.throws(() => serializePopupFrame(surface({ conditions: 'Drought' })), PopupFrameError);
+  // No condition rows: no slot at all.
+  assert.equal(serializePopupFrame(surface()).includes('data-popup-slot="conditions"'), false);
+  assert.equal(serializePopupFrame(surface({ conditions: [] })).includes('data-popup-slot="conditions"'), false);
+});
+
 test('links are https only', () => {
   for (const href of ['http://droughtmonitor.unl.edu/', 'javascript:alert(1)', 'data:text/html,x', '//droughtmonitor.unl.edu/']) {
     assert.throws(
@@ -261,12 +354,50 @@ test('not-stated clocks and none sources print their reasons', () => {
   );
   const head = textOf(headOf(html));
   assert.ok(head.includes('Edition Fixture reason: the issuer states no edition.'), head);
-  assert.ok(head.includes('Fixture reason: no public source page.'), head);
+  // S30D block 3 (the head fits): a stated no-source reason is printed in the
+  // body's source-fallback slot only; the head has no source slot without a link.
+  assert.equal(head.includes('Fixture reason: no public source page.'), false, head);
+  assert.equal(slotsIn(headOf(html)).includes('source'), false, headOf(html));
+  assert.ok(textOf(bodyOf(html)).endsWith('Fixture reason: no public source page.'), textOf(bodyOf(html)));
   assert.equal(hrefsIn(html).length, 0);
   for (const bad of [{ kind: 'not-stated', label: 'Edition', reason: ' ' }]) {
     assert.throws(() => serializePopupFrame(surface({ clocks: [bad] })), PopupFrameError);
   }
   assert.throws(() => serializePopupFrame(surface({ source: { none: '' } })), PopupFrameError);
+});
+
+test('the head fits: a source prints in the head only as a link, and only the first clock stays in the head', () => {
+  // S30D block 3, the director's Tier 2 call (the owner's present-only head,
+  // RATIFICATION-10; the G1 A5 rule). Red before it: the head printed the
+  // stated no-source reason and every clock.
+  const second = { kind: 'point', meaning: 'retrieved', label: 'Retrieved on', at: { precision: 'date', date: '2026-10-05' } };
+  const third = { kind: 'not-stated', label: 'Edition', reason: 'Fixture reason: the issuer states no edition.' };
+  const html = serializePopupFrame(
+    surface({
+      clocks: [surface().clocks[0], second, third],
+      source: { none: 'Fixture reason: no public source page.' },
+      conditions: [{ label: 'Drought', text: 'Fixture condition row' }],
+      details: [{ kind: 'row', label: 'Fixture', text: 'Fixture detail' }]
+    })
+  );
+  const head = headOf(html);
+  const body = bodyOf(html);
+  assert.deepEqual(slotsIn(head), ['title', 'issuer', 'value', 'clock', 'actions']);
+  assert.equal(textOf(head).includes('Fixture reason: no public source page.'), false, textOf(head));
+  assert.equal(head.match(/data-clock-meaning=/g)?.length, 1, head);
+  assert.ok(textOf(head).includes(`Map date Sep${NBSP}22,${NBSP}2026`), textOf(head));
+  // The later clocks, words unchanged and in order, right after the conditions.
+  assert.deepEqual(slotsIn(body).slice(0, 3), ['conditions', 'more-clocks', 'rows']);
+  const more = /<div data-popup-slot="more-clocks">([\s\S]*?)<\/div><div data-popup-slot="rows">/.exec(body);
+  assert.ok(more, body);
+  assert.equal(textOf(more[1]), `Retrieved on Oct${NBSP}5,${NBSP}2026 Edition Fixture reason: the issuer states no edition.`);
+  // The reason still prints once, in the body's source-fallback slot.
+  assert.equal(html.split('Fixture reason: no public source page.').length - 1, 1);
+  assert.ok(/<p data-popup-slot="source-fallback">Fixture reason: no public source page\.<\/p>/.test(body), body);
+  // One clock and a link: the head keeps its source, and no more-clocks slot.
+  const plain = serializePopupFrame(surface());
+  assert.deepEqual(slotsIn(headOf(plain)), ['title', 'issuer', 'value', 'clock', 'source', 'actions']);
+  assert.equal(plain.includes('data-popup-slot="more-clocks"'), false);
 });
 
 test('date-only clocks never shift a day under America/Los_Angeles and America/Vancouver', () => {
@@ -285,9 +416,12 @@ test('date-only clocks never shift a day under America/Los_Angeles and America/V
           ]
         })
       );
+      // The head keeps the first clock; the second stands in the body's
+      // more-clocks slot (S30D block 3, the head fits).
       const head = headOf(html);
+      const body = bodyOf(html);
       assert.ok(head.includes(`<time datetime="2026-09-26">Sep${NBSP}26,${NBSP}2026</time>`), head);
-      assert.ok(head.includes(`<time datetime="2026-01">Jan${NBSP}2026</time>`), head);
+      assert.ok(body.includes(`<time datetime="2026-01">Jan${NBSP}2026</time>`), body);
     }
   } finally {
     if (original === undefined) delete process.env.TZ;
@@ -391,14 +525,17 @@ test('clock precision preserves years, months, observed windows and supplied tar
       ]
     })
   );
+  // The head keeps the first clock; the later three stand, words unchanged, in
+  // the body's more-clocks slot (S30D block 3, the head fits).
   const head = headOf(html);
+  const later = bodyOf(html);
   assert.ok(head.includes('<time datetime="2019">2019</time>'), 'a year stays a year');
-  assert.ok(head.includes(`<time datetime="2026-06">Jun${NBSP}2026</time>`), 'a month stays a month');
-  assert.ok(head.includes('data-clock-meaning="observed"'), 'an observed window keeps its meaning');
-  assert.ok(head.includes(`<time datetime="2026-09-26T15:00:00.000Z">Sep${NBSP}26,${NBSP}2026,${NBSP}15:00${NBSP}UTC</time>`), head);
-  assert.ok(textOf(head).includes('End Fixture reason: the issuer gave no end.'), 'an absent endpoint states its reason');
-  assert.ok(textOf(head).includes('Valid through September 30 Fixture: as the issuer states it.'));
-  assert.equal(/datetime="2019-|datetime="2026-06-/.test(head), false, 'no day was fabricated');
+  assert.ok(later.includes(`<time datetime="2026-06">Jun${NBSP}2026</time>`), 'a month stays a month');
+  assert.ok(later.includes('data-clock-meaning="observed"'), 'an observed window keeps its meaning');
+  assert.ok(later.includes(`<time datetime="2026-09-26T15:00:00.000Z">Sep${NBSP}26,${NBSP}2026,${NBSP}15:00${NBSP}UTC</time>`), later);
+  assert.ok(textOf(later).includes('End Fixture reason: the issuer gave no end.'), 'an absent endpoint states its reason');
+  assert.ok(textOf(later).includes('Valid through September 30 Fixture: as the issuer states it.'));
+  assert.equal(/datetime="2019-|datetime="2026-06-/.test(html), false, 'no day was fabricated');
   // Never fabricate a zone: an instant without one is rejected.
   const noZone = { kind: 'point', meaning: 'issued', label: 'Issued', at: { precision: 'instant', at: 0, zone: '' } };
   assert.throws(() => serializePopupFrame(surface({ clocks: [noZone] })), PopupFrameError);
