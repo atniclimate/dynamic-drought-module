@@ -36,6 +36,7 @@
 import type * as maplibregl from 'maplibre-gl';
 
 import { pointHasHeatRiskCoverage } from './heatrisk-coverage';
+import type { LayerActivation } from '../config/layers';
 import { URLS } from '../config/urls';
 import { registry } from '../state/registry';
 import {
@@ -45,7 +46,7 @@ import {
 import { hideLegend, LEGEND_ORDER, showLegend } from '../ui/legend-registry';
 import { hideLoading, showLoading } from '../ui/overlay';
 import { clearTimeBar, setTimeBar, type TimeBarStamp } from '../ui/time-bar';
-import { fetchJsonWithBudget } from '../util/fetch';
+import { fetchJsonWithBudget, linkAbort } from '../util/fetch';
 import { isObject } from '../util/guards';
 import {
   watchRasterTiles,
@@ -139,10 +140,10 @@ function emitFrames(status: FrameEventStatus): void {
   );
 }
 
-function replaceMasterController(): AbortSignal {
+function replaceMasterController(): AbortController {
   masterController?.abort();
   masterController = new AbortController();
-  return masterController.signal;
+  return masterController;
 }
 
 // ---------------------------------------------------------------------------
@@ -602,10 +603,20 @@ function stopListeningForDaySelection(): void {
  * frame. Missing or inconsistent metadata reports `error`; there is no
  * fallback that guesses a date.
  */
-export async function activate(map: maplibregl.Map): Promise<void> {
+export async function activate(
+  map: maplibregl.Map,
+  activation?: LayerActivation
+): Promise<void> {
   if (activeMap === map && frames.length > 0) return;
 
-  const signal = replaceMasterController();
+  // The controller-owned attempt signal joins the private controller, so an
+  // off intent aborts the held metadata or catalog read at that moment and
+  // not at the 10 s budget behind the queued teardown (plan rule 5). The
+  // link lasts only while this activation reads; `renderFrame` below
+  // replaces the private controller for the frame's life.
+  const master = replaceMasterController();
+  const signal = master.signal;
+  const unlink = linkAbort(master, activation?.signal ?? null);
   // A re-activation supersedes any frame statement still standing; the
   // controller's own indicator covers the enumeration below, and
   // `renderFrame` opens a fresh one for the frame it draws.
@@ -627,6 +638,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       signal,
       FETCH_TIMEOUT_MS
     );
+    if (signal.aborted) return;
     const extent = extractTimeExtent(metadataJson);
     if (extent === null) {
       console.warn('[heatrisk] service metadata carried no usable time extent.');
@@ -641,6 +653,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       signal,
       FETCH_TIMEOUT_MS
     );
+    if (signal.aborted) return;
     const advertised = extractFrames(catalogJson, extent);
     if (advertised === null) {
       console.warn('[heatrisk] catalog carried no consistent granule times.');
@@ -649,7 +662,6 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       return;
     }
 
-    if (signal.aborted) return;
     frames = advertised;
     // The heatday rule: an explicit, valid `heatday=` on the URL always
     // wins (a shared link is honored exactly); absent that, the day
@@ -671,6 +683,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     console.warn('[heatrisk] source qualification fetch failed.', err);
     reportStatus('error');
     emitFrames('error');
+  } finally {
+    unlink();
   }
 }
 

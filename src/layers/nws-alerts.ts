@@ -22,8 +22,10 @@
  * than inventing its own.
  *
  * Cancellation (the cancellation invariant): master abort controller
- * superseded on each `activate`, aborted on `deactivate`, fetch through
- * `fetchJsonWithBudget`, late responses dropped.
+ * superseded on each `activate`, aborted on `deactivate` and, while the first
+ * read is in flight, by the controller's `LayerActivation.signal` at the
+ * moment off intent is recorded; fetch through `fetchJsonWithBudget`, late
+ * responses dropped.
  */
 
 import type * as maplibregl from 'maplibre-gl';
@@ -34,6 +36,7 @@ import type {
   Polygon
 } from 'geojson';
 
+import type { LayerActivation } from '../config/layers';
 import { URLS } from '../config/urls';
 import {
   NWS_ALERT_COLORS,
@@ -42,7 +45,7 @@ import {
 import { matchExpression } from '../config/style-expressions';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import { buildNwsAlertPopupHtml } from '../ui/popups';
-import { fetchJsonWithBudget } from '../util/fetch';
+import { fetchJsonWithBudget, linkAbort } from '../util/fetch';
 import { isObject } from '../util/guards';
 import { registry } from '../state/registry';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
@@ -557,13 +560,22 @@ function onVisibilityChange(): void {
  * no active heat or fire-weather alerts anywhere is a legitimate (and good)
  * result, not an error.
  */
-export async function activate(map: maplibregl.Map): Promise<void> {
+export async function activate(
+  map: maplibregl.Map,
+  activation?: LayerActivation
+): Promise<void> {
   if (activeMap === map && map.getSource(SOURCE_ID)) return;
 
   // Supersede any prior in-flight fetch before starting a new one.
   if (masterController) masterController.abort();
   masterController = new AbortController();
   const signal = masterController.signal;
+  // The controller-owned attempt signal joins the private controller, so an
+  // off intent aborts the held first read at that moment and not at the 15 s
+  // budget behind the queued teardown (plan rule 5). The link lasts only
+  // while the first read is in flight; later refreshes are aborted by
+  // `deactivate`, as before.
+  const unlink = linkAbort(masterController, activation?.signal ?? null);
   activeMap = map;
   refreshInFlight = false;
   lastRefreshStartedAt = 0;
@@ -577,7 +589,11 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   document.removeEventListener('visibilitychange', onVisibilityChange);
   document.addEventListener('visibilitychange', onVisibilityChange);
   emitSnapshot('loading');
-  await refreshSnapshot(map, signal, true);
+  try {
+    await refreshSnapshot(map, signal, true);
+  } finally {
+    unlink();
+  }
 }
 
 /**

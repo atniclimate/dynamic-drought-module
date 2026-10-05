@@ -48,7 +48,9 @@ import { expect, test, type Page, type Route } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { HAZARD_CLUSTERS, type HazardClusterKey } from '../src/config/clusters';
 import {
+  awaitQuiescence,
   gotoApp,
   layerCheckbox,
   layerPill,
@@ -57,6 +59,7 @@ import {
   urlLayers,
   waitForLayerSettled
 } from './helpers';
+import { isNwsWwaRequestUrl, NWS_WWA_EMPTY } from './nws-wwa-fixtures';
 import {
   AIANNH_ROUTE,
   BIA_ROUTE,
@@ -499,5 +502,230 @@ test.describe('DDM-P1-T02: a late response cannot render after intent changes', 
     await page.waitForTimeout(STALE_SETTLE_MS);
     await expect(aiannh).not.toBeChecked();
     await expect(layerPill(page, 'aiannh')).toHaveText('');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S30D P3-CANCEL (found-117; plan rule 5): HeatRisk and the NWS alerts abort
+// their held activation reads when a mode switch records off intent
+// ---------------------------------------------------------------------------
+
+const HEATRISK_SERVICE_PATH = '/experimental/rest/services/NWS_HeatRisk/ImageServer';
+const HEATRISK_FIRST_TIME = 1_785_153_600_000;
+const HEATRISK_DAY_MS = 24 * 60 * 60 * 1000;
+const HEATRISK_TIMES = Array.from(
+  { length: 7 },
+  (_, index) => HEATRISK_FIRST_TIME + index * HEATRISK_DAY_MS
+);
+
+/** What the page asked the HeatRisk service for, by kind, in order. */
+interface HeatRiskRequests {
+  readonly metadata: string[];
+  readonly catalog: string[];
+  readonly exportImage: string[];
+}
+
+/**
+ * Answer the HeatRisk ImageServer locally. With `held`, the service metadata
+ * read (`?f=json`, the activation's first request) is held until released;
+ * the catalog and the raster export are always answered at once, and logged,
+ * so a request that should never be issued shows as a log entry.
+ */
+async function routeHeatRiskService(page: Page, held: Held | null): Promise<HeatRiskRequests> {
+  const requests: HeatRiskRequests = { metadata: [], catalog: [], exportImage: [] };
+  const metadataBody = JSON.stringify({
+    timeInfo: { timeExtent: [HEATRISK_TIMES[0], HEATRISK_TIMES[6]] }
+  });
+  await page.route(
+    (url) => url.pathname.startsWith(HEATRISK_SERVICE_PATH),
+    async (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname.endsWith('/query')) {
+        requests.catalog.push(url.href);
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            features: HEATRISK_TIMES.map((validTime, index) => ({
+              attributes: { name: `HeatRisk_${index + 1}_Mercator`, idp_validtime: validTime }
+            }))
+          })
+        });
+        return;
+      }
+      if (url.pathname.endsWith('/exportImage')) {
+        requests.exportImage.push(url.href);
+        await route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG });
+        return;
+      }
+      if (url.pathname.endsWith('/ImageServer')) {
+        requests.metadata.push(url.href);
+        if (held) {
+          held.releases.push(fulfilLater(route, metadataBody, 'application/json'));
+          return;
+        }
+        await route.fulfill({ status: 200, contentType: 'application/json', body: metadataBody });
+        return;
+      }
+      await route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 400, message: 'Unknown test HeatRisk request' } })
+      });
+    }
+  );
+  return requests;
+}
+
+/** The cluster keys the rail renders, in button order. */
+async function renderedClusters(page: Page): Promise<string[]> {
+  return page
+    .locator('.shell-cluster-btn')
+    .evaluateAll((buttons) => buttons.map((button) => button.getAttribute('data-cluster') ?? ''));
+}
+
+function clusterShowsLayer(cluster: string, layerKey: string): boolean {
+  const def = (HAZARD_CLUSTERS as Record<string, (typeof HAZARD_CLUSTERS)[HazardClusterKey]>)[cluster];
+  return Object.values(def?.recipes ?? {}).some((recipe) => recipe.some((key) => key === layerKey));
+}
+
+/**
+ * A rendered mode that shows `layerKey` (to switch into) and one that shows
+ * neither layer in `layerKeys` (to switch away to), both read from the
+ * cluster table and the rail, never from a literal list of modes.
+ */
+async function modesAround(
+  page: Page,
+  layerKey: string,
+  layerKeys: readonly string[]
+): Promise<{ readonly into: string; readonly away: string }> {
+  const rendered = await renderedClusters(page);
+  const into = rendered.find((cluster) => clusterShowsLayer(cluster, layerKey));
+  const away = rendered.find((cluster) => layerKeys.every((key) => !clusterShowsLayer(cluster, key)));
+  if (into === undefined || away === undefined) {
+    throw new Error(`no rendered mode shows ${layerKey}, or none shows none of ${layerKeys.join(', ')}`);
+  }
+  return { into, away };
+}
+
+/**
+ * Record, from now on, every legend section for `legendKeys` and every
+ * "Loading HeatRisk..." frame indicator the page ever adds, even one removed
+ * again within the same task, but only when `legendKeys` names heatrisk: a
+ * case that watches the alerts claims nothing about HeatRisk, whose partner
+ * frame in the same mode may legitimately still be loading, and whose
+ * pending indicator the page re-renders whenever another load settles
+ * (S30D block 3: two records before the switch and one after it, from a
+ * single frame begun before the watch). The module's late path draws them
+ * and the controller's undo removes them, so the end state alone cannot tell
+ * a prompt cancellation from a late render that was cleaned up.
+ */
+async function watchDrawn(page: Page, legendKeys: readonly string[]): Promise<void> {
+  await page.evaluate((keys) => {
+    const store = window as unknown as { __cancelDrawn: string[] };
+    store.__cancelDrawn = [];
+    const watchesHeatRisk = keys.includes('heatrisk');
+    const inspect = (node: Node): void => {
+      if (watchesHeatRisk && (node.textContent ?? '').includes('Loading HeatRisk...')) {
+        store.__cancelDrawn.push('indicator');
+      }
+      if (!(node instanceof Element)) return;
+      for (const key of keys) {
+        const selector = `.legend-section[data-legend="${key}"]`;
+        if (node.matches(selector) || node.querySelector(selector)) {
+          store.__cancelDrawn.push(`legend:${key}`);
+        }
+      }
+    };
+    new MutationObserver((records) => {
+      for (const record of records) {
+        record.addedNodes.forEach(inspect);
+        if (record.type === 'characterData') inspect(record.target);
+      }
+    }).observe(document.body, { childList: true, subtree: true, characterData: true });
+  }, legendKeys);
+}
+
+async function readDrawn(page: Page): Promise<string[]> {
+  return page.evaluate(() => (window as unknown as { __cancelDrawn?: string[] }).__cancelDrawn ?? []);
+}
+
+test.describe('S30D P3-CANCEL: a mode switch aborts the activation reads of HeatRisk and the alerts', () => {
+  test('HeatRisk: a mode switch aborts the held metadata read, issues no catalog or export request and draws nothing', async ({
+    page
+  }) => {
+    await stubCommon(page);
+    const held = makeHeld();
+    const requests = await routeHeatRiskService(page, held);
+    const failures = watchFailures(page, (url) => new URL(url).pathname.endsWith('/ImageServer'));
+
+    await gotoApp(page, '?view=console');
+    const { into, away } = await modesAround(page, 'heatrisk', ['heatrisk', 'nws-alerts']);
+    await page.locator(`.shell-cluster-btn[data-cluster="${into}"]`).click();
+    await expect.poll(() => held.releases.length, { timeout: 30_000 }).toBeGreaterThan(0);
+    await expect(layerPill(page, 'heatrisk')).toHaveText('loading...');
+    expect(requests.catalog).toHaveLength(0);
+
+    await watchDrawn(page, ['heatrisk']);
+    const offAt = Date.now();
+    await page.locator(`.shell-cluster-btn[data-cluster="${away}"]`).click();
+
+    // THE assertion: the held metadata read is aborted well inside the 10 s
+    // budget it would otherwise have run out behind the queued teardown.
+    await expectAbortedWithin(failures, offAt);
+
+    // Release the aborted read LAST: nothing may follow it.
+    held.releaseAll();
+    await expect(layerPill(page, 'heatrisk')).toHaveText('', { timeout: 10_000 });
+    await awaitQuiescence(page);
+    expect(requests.metadata).toHaveLength(1);
+    expect(requests.catalog).toHaveLength(0);
+    expect(requests.exportImage).toHaveLength(0);
+    expect(await readDrawn(page)).toEqual([]);
+    await expect(page.locator('.legend-section[data-legend="heatrisk"]')).toHaveCount(0);
+    await expect(page.locator('#map-key [data-key-loading="heatrisk"]')).toHaveCount(0);
+    await expect(page.locator('#loading-indicator')).not.toContainText('HeatRisk');
+    expect((await urlLayers(page)).has('heatrisk')).toBe(false);
+  });
+
+  test('NWS alerts: a mode switch aborts the held WWA read and its legend and key row never appear', async ({
+    page
+  }) => {
+    await stubCommon(page);
+    // HeatRisk shares the mode: answer it at once so only the alerts read is held.
+    const heatRisk = await routeHeatRiskService(page, null);
+    const held = makeHeld();
+    const wwaRequests: string[] = [];
+    // A page route outranks the suite's context default (tests/nws-wwa-fixtures.ts).
+    await page.route(
+      (url) => isNwsWwaRequestUrl(url),
+      (route) => {
+        wwaRequests.push(route.request().url());
+        held.releases.push(fulfilLater(route, JSON.stringify(NWS_WWA_EMPTY)));
+      }
+    );
+    const failures = watchFailures(page, (url) => isNwsWwaRequestUrl(new URL(url)));
+
+    await gotoApp(page, '?view=console');
+    const { into, away } = await modesAround(page, 'nws-alerts', ['nws-alerts']);
+    await page.locator(`.shell-cluster-btn[data-cluster="${into}"]`).click();
+    await expect.poll(() => held.releases.length, { timeout: 30_000 }).toBeGreaterThan(0);
+    await expect(layerPill(page, 'nws-alerts')).toHaveText('loading...');
+
+    await watchDrawn(page, ['nws-alerts']);
+    const offAt = Date.now();
+    await page.locator(`.shell-cluster-btn[data-cluster="${away}"]`).click();
+    await expectAbortedWithin(failures, offAt);
+
+    held.releaseAll();
+    await expect(layerPill(page, 'nws-alerts')).toHaveText('', { timeout: 10_000 });
+    await awaitQuiescence(page);
+    expect(wwaRequests).toHaveLength(1);
+    expect(await readDrawn(page)).toEqual([]);
+    await expect(page.locator('.legend-section[data-legend="nws-alerts"]')).toHaveCount(0);
+    await expect(page.locator('#map-key [data-key-loading="nws-alerts"]')).toHaveCount(0);
+    expect((await urlLayers(page)).has('nws-alerts')).toBe(false);
+    // The partner HeatRisk, answered at once, was not held by this case.
+    expect(heatRisk.metadata.length).toBeGreaterThan(0);
   });
 });
