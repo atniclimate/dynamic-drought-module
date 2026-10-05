@@ -98,6 +98,27 @@ interface RowProps extends CatalogProps {
  * so an island remount does not re-bury an in-use row. */
 const revealedThisSession = new Set<string>();
 
+/* Mirrors `.layer-toggle-source` in app.css (not owned here) without taking
+ * that class: collapsed groups must render no `.layer-toggle-source`. */
+const COVERAGE_STYLE = {
+  fontSize: '10.5px',
+  color: 'var(--fg-2)',
+  display: 'block',
+  marginTop: '2px',
+  letterSpacing: '0.02em'
+} as const;
+
+/**
+ * found-066: the terrain-shading row is on by default over CONUS while only
+ * the bundled Pacific Northwest archive draws, so the row carries the coverage
+ * tail of its existing source line ("... Pacific Northwest bake only") without
+ * the Sources disclosure. The words are the registry's own, not new text.
+ */
+function coverageCue(source: string): string | null {
+  const tail = source.split(' \u00b7 ').pop();
+  return tail && tail !== source ? tail : null;
+}
+
 function LayerRow({
   def,
   controller,
@@ -110,6 +131,7 @@ function LayerRow({
   const id = `${studio ? 'studio-' : ''}layer-toggle-${def.key}`;
   const isOn = checked.value.get(def.key) ?? false;
   const status = statuses.value.get(def.key);
+  const coverage = def.key === 'hillshade' ? coverageCue(def.source) : null;
 
   const onChange = (event: Event): void => {
     const on = (event.currentTarget as HTMLInputElement).checked;
@@ -138,7 +160,13 @@ function LayerRow({
         >
           {status ? resolveStatusPillText(status, def.noDataLabel) : ''}
         </span>
-        {showSource ? <span class="layer-toggle-source">{def.source}</span> : null}
+        {showSource ? (
+          <span class="layer-toggle-source">{def.source}</span>
+        ) : coverage ? (
+          <span class="layer-toggle-coverage" style={COVERAGE_STYLE}>
+            {coverage}
+          </span>
+        ) : null}
       </span>
     </label>
   );
