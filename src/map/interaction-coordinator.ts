@@ -30,6 +30,7 @@
 import * as maplibregl from 'maplibre-gl';
 
 import { interactionRank } from '../config/interaction-ranks';
+import { keyboardIdentifyEnabled } from '../config/map-chrome';
 import type { InteractionTargetKind } from '../config/interaction-ranks';
 import type { BoundaryKind, BoundarySelectionContext, ContainingPlaces } from '../impact/types';
 import { isStateCode } from '../config/state-codes';
@@ -297,6 +298,7 @@ export function initInteractionCoordinator(map: maplibregl.Map): void {
   map.on('click', (e) => {
     handleClick(map, e);
   });
+  if (keyboardIdentifyEnabled()) bindKeyboardIdentify(map);
   // A studio owns the screen: entering one dismisses any open response
   // (the PLACE studio is a left-side route on desktop, so a lingering
   // popup would stay visibly painted on the exposed map and reappear
@@ -383,6 +385,35 @@ export function resetInteractionCoordinatorForTest(): void {
   // The census stamp follows the registry, so a re-registration after a
   // reset never appends a stale or duplicate token.
   document.getElementById('map-container')?.removeAttribute('data-ddm-click-targets');
+}
+
+/**
+ * Keyboard identify (S30D D1 M28; interface-chrome R3 a), behind
+ * KEYBOARD_IDENTIFY in src/config/map-chrome.ts. Enter or Space on the
+ * focused canvas commits a coordinator click at the canvas centre, the
+ * point the focus-only cross marks (app.css), through the same collection
+ * and `commit` a pointer click takes, so arbitration, sinks and dismissal
+ * are unchanged. MapLibre's own keyboard handler binds neither key. The
+ * popup takes focus on open (MapLibre focusAfterOpen) and Escape returns
+ * it to the canvas (focus return, below). A place response the panel-foot
+ * sink takes keeps that sink's own rule: it appears without moving focus
+ * and is announced by its live region (panel-response.tsx).
+ */
+function bindKeyboardIdentify(map: maplibregl.Map): void {
+  const canvas = map.getCanvas();
+  map.getContainer().setAttribute('data-ddm-keyboard-identify', '');
+  canvas.addEventListener('keydown', (e) => {
+    if ((e.key !== 'Enter' && e.key !== ' ') || e.repeat || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) {
+      return;
+    }
+    e.preventDefault();
+    if (getStudioRoute() !== null) return;
+    noteFocusBeforeCommit();
+    const point = new maplibregl.Point(canvas.clientWidth / 2, canvas.clientHeight / 2);
+    const hits = collectHits(map, point);
+    if (hits.length === 0) dismissResponse();
+    else commit(map, hits, hits[0]!, { lngLat: map.unproject(point), point });
+  });
 }
 
 function handleClick(map: maplibregl.Map, e: maplibregl.MapMouseEvent): void {

@@ -4817,6 +4817,29 @@ button.conditions-metric:hover .conditions-action-hide {
     outline: 2px solid var(--focus-inner);
     outline-offset: -2px;
   }
+  /* Keyboard identify's centre cross (M28; ruling R3 a), only while the
+     KEYBOARD_IDENTIFY flag has bound it (`data-ddm-keyboard-identify`, set
+     by the coordinator): a static 16 px T0 cross on a #010B13 casing at the
+     point Enter identifies, under :focus-visible only. No animation and no
+     transition, so reduced motion changes nothing. */
+  .app-shell:not(.embed) #map[data-ddm-keyboard-identify]:has(> .maplibregl-canvas-container > .maplibregl-canvas:focus-visible)::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 1;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    pointer-events: none;
+    background:
+      linear-gradient(var(--focus-inner), var(--focus-inner)) center / 2px 14px no-repeat,
+      linear-gradient(var(--focus-inner), var(--focus-inner)) center / 14px 2px no-repeat,
+      linear-gradient(var(--focus-outer), var(--focus-outer)) center / 4px 16px no-repeat,
+      linear-gradient(var(--focus-outer), var(--focus-outer)) center / 16px 4px no-repeat;
+    animation: none;
+    transition: none;
+  }
 }
 
 /* Make the .telemetry-item button match its prior <div> presentation. */

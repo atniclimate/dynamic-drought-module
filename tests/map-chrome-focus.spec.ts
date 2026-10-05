@@ -288,3 +288,143 @@ test.describe('map chrome focus (S30D D1 M28)', () => {
     await expect(page.locator('.maplibregl-canvas')).toBeFocused();
   });
 });
+
+/*
+ * KEYBOARD IDENTIFY (interface-chrome R3 a; RULINGS.md F; D1.md section 9
+ * item 3), Tier 2. It ships behind `KEYBOARD_IDENTIFY` in
+ * src/config/map-chrome.ts, which stays FALSE. The cases that need it on
+ * set the test seam `window.__ddmKeyboardIdentify = true` before boot
+ * (`forceKeyboardIdentify`); no shipped page sets it. This section and the
+ * flag leave together.
+ */
+
+/** Set the keyboard-identify test seam before the app's own scripts run. */
+async function forceKeyboardIdentify(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    (window as unknown as { __ddmKeyboardIdentify?: boolean }).__ddmKeyboardIdentify = true;
+  });
+}
+
+/** The `#map::after` centre cross, as computed. */
+async function readCross(page: Page): Promise<{
+  content: string;
+  display: string;
+  width: string;
+  height: string;
+  backgroundImage: string;
+  animationName: string;
+  transitionDuration: string;
+}> {
+  return page.evaluate(() => {
+    const cs = getComputedStyle(document.getElementById('map')!, '::after');
+    return {
+      content: cs.content,
+      display: cs.display,
+      width: cs.width,
+      height: cs.height,
+      backgroundImage: cs.backgroundImage,
+      animationName: cs.animationName,
+      transitionDuration: cs.transitionDuration
+    };
+  });
+}
+
+function crossShown(cross: { content: string; display: string }): boolean {
+  return cross.content !== 'none' && cross.content !== 'normal' && cross.display !== 'none';
+}
+
+
+test.describe('keyboard identify behind KEYBOARD_IDENTIFY (S30D D1 M28)', () => {
+  test('Enter on the focused canvas opens the frame for the centre with focus inside, and Escape returns focus to the canvas', async ({
+    page
+  }) => {
+    await forceKeyboardIdentify(page);
+    await bootCollision(page);
+
+    const canvas = page.locator('.maplibregl-canvas');
+    const popup = page.locator('.maplibregl-popup');
+    await expect(async () => {
+      await canvas.focus();
+      await page.keyboard.press('Enter');
+      await expect(popup).toHaveCount(1, { timeout: 1500 });
+    }).toPass({ timeout: 20_000 });
+
+    // The frame for the centre: the coordinator's framed response, with focus inside it.
+    await expect(popup.locator('[data-popup-frame]')).toHaveCount(1);
+    await expect.poll(() => popup.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+
+    await page.keyboard.press('Escape');
+    await expect(popup).toHaveCount(0);
+    await expect(canvas).toBeFocused();
+
+    // Space does the same.
+    await page.keyboard.press('Space');
+    await expect(popup).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await expect(canvas).toBeFocused();
+  });
+
+  test('with the shipped KEYBOARD_IDENTIFY (false), Enter and Space on the focused canvas open nothing', async ({ page }) => {
+    await bootCollision(page);
+    // Prove the centre is identifiable right now (a pointer click answers),
+    // then close it, so a missing keyboard answer cannot be a paint delay.
+    await clickCentreForPopup(page);
+    await page.keyboard.press('Escape');
+    const popup = page.locator('.maplibregl-popup');
+    await expect(popup).toHaveCount(0);
+
+    const canvas = page.locator('.maplibregl-canvas');
+    await canvas.focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Space');
+    // A keyboard commit is synchronous with the keydown (the frame is warm
+    // after the pointer commit above), so nothing has painted by now.
+    expect(await popup.count()).toBe(0);
+    await expect(canvas).toBeFocused();
+    await expect(page.locator('#map')).not.toHaveAttribute('data-ddm-keyboard-identify', /.*/);
+    expect(crossShown(await readCross(page)), 'no centre cross while the flag is off').toBe(false);
+  });
+
+  test('the centre cross shows only under :focus-visible and never under reduced motion change', async ({ page }) => {
+    await forceKeyboardIdentify(page);
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await gotoApp(page, '?view=console&sidebar=closed');
+    const canvas = page.locator('.maplibregl-canvas');
+
+    expect(crossShown(await readCross(page)), 'no cross before focus').toBe(false);
+
+    // Pointer focus (mousedown on the canvas) is :focus but not :focus-visible.
+    // The press ends as a drag, so no click commits.
+    const box = await page.locator('#map').boundingBox();
+    if (!box) throw new Error('the map has no box');
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await expect(canvas).toBeFocused();
+    expect(await canvas.evaluate((el) => el.matches(':focus-visible'))).toBe(false);
+    expect(crossShown(await readCross(page)), 'no cross under pointer focus').toBe(false);
+    await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2 + 40, { steps: 4 });
+    await page.mouse.up();
+
+    // Keyboard focus: from the chip, Shift+Tab reaches the canvas.
+    await page.locator('#map-key-details-toggle').focus();
+    await page.keyboard.press('Shift+Tab');
+    await expect(canvas).toBeFocused();
+    expect(await canvas.evaluate((el) => el.matches(':focus-visible'))).toBe(true);
+    const shown = await readCross(page);
+    expect(crossShown(shown), 'the cross shows under :focus-visible').toBe(true);
+    expect(shown.width).toBe('16px');
+    expect(shown.height).toBe('16px');
+    expect(shown.animationName).toBe('none');
+    expect(shown.transitionDuration).toBe('0s');
+
+    // Reduced motion changes nothing about it: the same static cross.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    expect(await readCross(page)).toEqual(shown);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    expect(await readCross(page)).toEqual(shown);
+
+    // Focus leaves: the cross goes.
+    await page.keyboard.press('Tab');
+    expect(crossShown(await readCross(page)), 'no cross once the canvas loses focus').toBe(false);
+  });
+});

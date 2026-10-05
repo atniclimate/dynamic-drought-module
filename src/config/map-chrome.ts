@@ -336,3 +336,30 @@ export function dockSeatRect(
     height: bottom
   };
 }
+
+/*
+ * ----------------------------------------------------------------------
+ * M28: KEYBOARD IDENTIFY (interface-chrome-popups-text.md section 2.7,
+ * ruling R3 a; RULINGS.md F; D1.md section 9 item 3). Tier 2: Enter or
+ * Space on the focused map canvas commits a coordinator click at the
+ * centre (src/map/interaction-coordinator.ts, bindKeyboardIdentify), and a
+ * static centre cross marks the point under :focus-visible (app.css). It
+ * ships DISABLED until Codex and the owner's NVDA check clear it (DR-148,
+ * DR-172), and is removable on its own: set this to false (it is), then
+ * revert its commit. Its row moves to src/config/input-mapping.ts in D4.
+ * ----------------------------------------------------------------------
+ */
+export const KEYBOARD_IDENTIFY = false;
+
+/**
+ * Whether keyboard identify is on for this page: the flag, or the browser
+ * test seam `window.__ddmKeyboardIdentify === true`, which a spec sets
+ * before boot (tests/map-chrome-focus.spec.ts, `forceKeyboardIdentify`).
+ * No shipped page sets the seam. Read once, when the coordinator binds.
+ */
+export function keyboardIdentifyEnabled(): boolean {
+  return (
+    KEYBOARD_IDENTIFY ||
+    (globalThis as { __ddmKeyboardIdentify?: unknown }).__ddmKeyboardIdentify === true
+  );
+}
