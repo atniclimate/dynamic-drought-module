@@ -281,7 +281,13 @@ async function countFromLoadedNifcCollection(
 
   const { loadedNifcCollection } = await import('../layers/nifc-fires');
   const loaded = loadedNifcCollection();
-  if (loaded === null) return null;
+  // The status check above ran before the import; a refresh can publish a
+  // truncated collection in between, so completeness is read from this
+  // snapshot itself (S30D P3-MINIMAP, found-129; the briefing's reader does
+  // the same, src/impact/sources.ts). A set the service truncated can omit
+  // perimeters: neither its zero nor its count is exact, so the framing
+  // takes its count-only POST.
+  if (loaded === null || loaded.truncated) return null;
   if (!bboxCoveredByEnvelope(loaded.envelope, bbox)) return null;
 
   const frame = framingGeometry(key);
