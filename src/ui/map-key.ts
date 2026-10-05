@@ -123,6 +123,14 @@ interface EnsoFlowSnapshotEventDetail {
   readonly label: string;
   readonly line: string;
   readonly notes: readonly string[];
+  /**
+   * E1-4 (ENSO-FLOW-PLAN.md; C-fit.md 1.6): the flowing paths' motion state
+   * (src/layers/flow/motion-loop.ts `MotionState`). Present only where the
+   * paths can move; it alone decides whether the Pause button is offered.
+   */
+  readonly motion?: 'moving' | 'paused' | 'reduced' | 'held' | 'none';
+  /** E1-4: the issuer credit, in the publisher's words, shown as its own item. */
+  readonly provenance?: string;
 }
 
 const HEATRISK_FRAMES_EVENT = 'ddm:heatrisk-frames';
@@ -133,6 +141,8 @@ const NWS_SNAPSHOT_EVENT = 'ddm:nws-products-snapshot';
 const SST_SNAPSHOT_EVENT = 'ddm:sst-snapshot';
 const ENSO_FLOW_SNAPSHOT_EVENT = 'ddm:enso-flow-snapshot';
 const ENSO_FLOW_SNAPSHOT_REQUEST_EVENT = 'ddm:enso-flow-snapshot-request';
+/** The Pause button's request; src/layers/flow/motion-loop.ts MOTION_REQUEST_EVENT. */
+const ENSO_FLOW_MOTION_REQUEST_EVENT = 'ddm:enso-flow-motion-request';
 const MOBILE_MAP_KEY_QUERY = '(max-width: 720px)';
 const MOBILE_MAP_KEY_HEIGHT_PROPERTY = '--mobile-map-key-height';
 const DESKTOP_LOADING_TOP_PROPERTY = '--desktop-loading-top';
@@ -433,12 +443,74 @@ function ensoFlowRow(): { readonly html: string; readonly ariaLabel: string } {
   // composition "<label> · <status line>" then the qualification sentences).
   const status = `${flow.label} · ${flow.line}`;
   const notes = flow.notes.join(' ');
+  // E1-4: the credit is its own text item, as data-sst-attribution is for
+  // the SST; the words are the publisher's, never typed here.
+  const provenance = flow.provenance ?? '';
   return {
     html:
       `<span class="map-key-item" data-enso-flow="status">${escapeHtml(status)}</span>` +
+      (provenance ? `<span class="map-key-item" data-enso-flow="provenance">${escapeHtml(provenance)}</span>` : '') +
       (notes ? `<span class="map-key-qualification" data-enso-flow="notes">${escapeHtml(notes)}</span>` : ''),
-    ariaLabel: ` ${status}.`
+    ariaLabel: ` ${status}.` + (provenance ? ` ${provenance}.` : '')
   };
+}
+
+/**
+ * The flowing paths' Pause toggle (E1-4). Built once by initMapKey and only
+ * shown, hidden and re-pressed here, never re-created. The icon swaps
+ * (two bars while the lines move, a play triangle while they hold still);
+ * the accessible name stays constant (APG button pattern) and stays apart
+ * from the time bar's own "Pause" and "Play" for the SST days.
+ */
+function buildFlowPauseButton(): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.id = 'map-key-flow-pause';
+  button.className = 'map-key-flow-pause';
+  // DRAFT (DR-draft, block E1 E1-4): pending owner read
+  // DRAFT wording (DR-177): "Pause motion", the flowing paths' toggle name,
+  // on ENSO-FLOW-PLAN.md question 6's read-back list.
+  button.setAttribute('aria-label', 'Pause motion');
+  button.setAttribute('aria-pressed', 'false');
+  button.hidden = true;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('width', '14');
+  svg.setAttribute('height', '14');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const bars = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  bars.setAttribute('class', 'map-key-flow-pause-bars');
+  bars.setAttribute('d', 'M4 3h3v10H4zM9 3h3v10H9z');
+  const play = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  play.setAttribute('class', 'map-key-flow-pause-play');
+  play.setAttribute('d', 'M4.5 2.5 13 8l-8.5 5.5z');
+  svg.append(bars, play);
+  button.append(svg);
+  return button;
+}
+
+/**
+ * Show the toggle only while the paths' snapshot reports motion, and press
+ * it while they are paused or still under reduced motion. `held` (the SST
+ * days playing, a hidden tab) is no one's pause, so it reads unpressed.
+ */
+function syncFlowPause(
+  host: HTMLElement,
+  button: HTMLButtonElement,
+  flow: EnsoFlowSnapshotEventDetail | null
+): void {
+  const motion =
+    flow && flow.status !== 'inactive' && flow.status !== 'off' && flow.motion && flow.motion !== 'none'
+      ? flow.motion
+      : null;
+  button.hidden = motion === null;
+  if (motion === null) {
+    delete host.dataset.flowMotion;
+    return;
+  }
+  host.dataset.flowMotion = motion;
+  button.setAttribute('aria-pressed', String(motion === 'paused' || motion === 'reduced'));
 }
 
 function formatHeatRiskDate(validTime: number): string {
@@ -1221,7 +1293,15 @@ export function initMapKey(): void {
   detailsButton.setAttribute('aria-expanded', 'false');
   const chipGrammar = buildChipGrammar(detailsButton);
 
-  host.replaceChildren(detailsButton, content);
+  // E1-4 (ENSO-FLOW-PLAN.md; C-fit.md 1.8; WCAG 2.2.2): the flowing paths'
+  // Pause, one native toggle in the collapsed header right after the chip,
+  // outside #map-key-legend (rewritten on every update) so it is built once
+  // and keeps focus across key updates. Its name never changes; aria-pressed
+  // carries the state, read only from the paths' own snapshot. Hidden until
+  // a snapshot reports motion (nothing does before E2-1 wires the paths).
+  const pauseButton = buildFlowPauseButton();
+
+  host.replaceChildren(detailsButton, pauseButton, content);
   host.dataset.keyDetailsOpen = 'false';
 
   const widthQuery = window.matchMedia(MOBILE_MAP_KEY_QUERY);
@@ -1268,6 +1348,11 @@ export function initMapKey(): void {
     chip()?.focus();
   };
   detailsButton.addEventListener('click', toggleDetails);
+  pauseButton.addEventListener('click', () => {
+    window.dispatchEvent(new CustomEvent(ENSO_FLOW_MOTION_REQUEST_EVENT, {
+      detail: { paused: pauseButton.getAttribute('aria-pressed') !== 'true' }
+    }));
+  });
   window.addEventListener('ddm:toggle-map-key-details', toggleDetails);
   host.addEventListener('keydown', closeDetailsOnEscape);
 
@@ -1310,7 +1395,8 @@ export function initMapKey(): void {
     const target = event.target as HTMLElement;
     drawerFocus = content.contains(target) ? target : null;
     chipFocus =
-      target === detailsButton || target.matches?.('#conditions-strip-dock .conditions-metric[data-metric="drought"]')
+      target === detailsButton || target === pauseButton ||
+      target.matches?.('#conditions-strip-dock .conditions-metric[data-metric="drought"]')
         ? target
         : null;
   };
@@ -1436,6 +1522,7 @@ export function initMapKey(): void {
       chipGrammar.state.title = '';
     }
     detailsButton.setAttribute('aria-label', `${detailsOpen ? 'Close' : 'Open'} ${keyLabel} details and key`);
+    syncFlowPause(host, pauseButton, ensoFlowSnapshot);
     // A MIRROR of the owning layer's own declared register (never
     // computed from the pressed horizon chip, never invented for a
     // layer, such as WHP, that declares none): src/ui/time-bar.ts is

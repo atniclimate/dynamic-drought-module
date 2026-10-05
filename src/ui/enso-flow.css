@@ -97,3 +97,72 @@
     min-height: 44px;
   }
 }
+
+/* E1-4 (ENSO-FLOW-PLAN.md; C-fit.md 1.8): the flowing paths' Pause toggle
+   in the map key's collapsed header, after the chip. The key host turns
+   into a two-column grid only while the toggle shows (data-flow-motion,
+   set by src/ui/map-key.ts), so every other key keeps its layout exactly.
+   The target is at least 24 x 24 CSS px (SC 2.5.8), 40 px on touch. */
+#app #map-key[data-flow-motion]:not([hidden]) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+#map-key[data-flow-motion] > .map-key-details-toggle {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+#map-key[data-flow-motion] > .map-key-content {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+#map-key > .map-key-flow-pause {
+  grid-column: 2;
+  grid-row: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  margin: 0 6px;
+  padding: 0;
+  color: var(--fg-1, #e2e8f0);
+  background: transparent;
+  border: 1px solid var(--line-strong, #334155);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#map-key > .map-key-flow-pause[hidden] {
+  display: none;
+}
+
+#map-key > .map-key-flow-pause:focus-visible {
+  outline: 2px solid var(--accent, #22d3ee);
+  outline-offset: 2px;
+}
+
+#map-key > .map-key-flow-pause svg {
+  fill: currentColor;
+}
+
+#map-key > .map-key-flow-pause .map-key-flow-pause-play,
+#map-key > .map-key-flow-pause[aria-pressed='true'] .map-key-flow-pause-bars {
+  display: none;
+}
+
+#map-key > .map-key-flow-pause[aria-pressed='true'] .map-key-flow-pause-play {
+  display: inline;
+}
+
+@media (pointer: coarse), (max-width: 720px) {
+  #map-key > .map-key-flow-pause {
+    width: 40px;
+    height: 40px;
+    margin: 0 0 0 6px;
+  }
+}
