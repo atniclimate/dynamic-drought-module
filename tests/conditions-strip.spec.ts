@@ -303,6 +303,10 @@ test.describe('UX-3 conditions strip', () => {
 
     const tile = page.locator('.conditions-metric[data-metric="drought"]');
     const beforeUrl = page.url();
+    // The layers settle before the strip reads them: wait for the reading itself, or a late
+    // reading ("-" then "D2") is taken for a change made by the click (1 in 30 on 2026-10-04).
+    await expect(tile).not.toHaveAttribute('data-tone', 'loading');
+    await expect(tile.locator('.conditions-value')).not.toHaveText('-');
     const beforeReading = await tile.locator('.conditions-value').textContent();
     await expect(tile).toHaveAttribute('aria-expanded', 'false');
     await tile.click();
