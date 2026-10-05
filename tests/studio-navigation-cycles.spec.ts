@@ -52,10 +52,10 @@ async function expectStudioSealed(page: Page, moment: string): Promise<void> {
     'aria-hidden',
     'true'
   );
-  expect(
-    await page.locator('#app').evaluate((el) => (el as HTMLElement).inert),
+  await expect(
+    page.locator('#app'),
     `${moment}: #app is not inert behind the studio`
-  ).toBe(true);
+  ).toHaveJSProperty('inert', true);
 }
 
 /** And must hand it back, every time, not only the first time. */

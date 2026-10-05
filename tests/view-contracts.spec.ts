@@ -119,6 +119,73 @@ async function urlParam(page: Page, name: string): Promise<string | null> {
 }
 
 // ---------------------------------------------------------------------------
+// The power layer's reads (S30D P2-CI2)
+// ---------------------------------------------------------------------------
+
+/** The ArcGIS service name the layer's live plants query carries (src/config/urls.ts). */
+const POWER_PLANTS_SERVICE = 'Power_Plants_in_the_US';
+/** The bundled transmission-line archive the layer probes first, same origin. */
+const POWER_LINES_ARCHIVE = 'power-lines-pnw.pmtiles';
+
+/**
+ * What the power layer asked for during one case. `unanswered` is the point:
+ * the layer's status is `ready` only when BOTH its reads succeed
+ * (src/layers/power-3d.ts syncForZoom), so a plants request that reached the
+ * network instead of a fixture would decide the status by a live service.
+ * The rest is evidence for a red: which half degraded, and when.
+ */
+interface PowerReads {
+  /** Plants requests no stub answered (the context backstop below caught them). */
+  readonly unanswered: string[];
+  /** Every response or failure on the bundled line archive and the plants service, with elapsed ms and Range. */
+  readonly archive: string[];
+  /** The layer's own console warnings, which name the read that failed. */
+  readonly warnings: string[];
+  /** The power pill's raw status word each time it changed, with elapsed ms. */
+  readonly timeline: string[];
+}
+
+/**
+ * Register BEFORE the first boot. A page route outranks a context route
+ * (tests/helpers.ts GotoAppOptions), so this context route is reached only by
+ * a plants request that `stubWildfireFeeds` (or any page route) did not
+ * answer: it is recorded and refused, so a missing or shadowed stub fails as
+ * a named, deterministic failure instead of a live read that a runner's
+ * network decides.
+ */
+async function watchPowerLayerReads(page: Page): Promise<PowerReads> {
+  const reads: PowerReads = { unanswered: [], archive: [], warnings: [], timeline: [] };
+  await page.context().route(
+    (url) => url.href.includes(POWER_PLANTS_SERVICE),
+    (route) => {
+      reads.unanswered.push(route.request().url());
+      return route.abort('failed');
+    }
+  );
+  const began = Date.now();
+  const stamp = (): string => `+${Date.now() - began}ms`;
+  const readName = (url: string): string | null =>
+    url.includes(POWER_LINES_ARCHIVE) ? 'line archive' : url.includes(POWER_PLANTS_SERVICE) ? 'plants' : null;
+  page.on('response', (response) => {
+    const name = readName(response.url());
+    if (name === null) return;
+    const range = response.request().headers()['range'] ?? 'no range';
+    reads.archive.push(`${stamp()} ${name} ${response.status()} ${range}`);
+  });
+  page.on('requestfailed', (request) => {
+    const name = readName(request.url());
+    if (name === null) return;
+    reads.archive.push(`${stamp()} ${name} failed ${request.failure()?.errorText ?? 'unknown'}`);
+  });
+  page.on('console', (message) => {
+    if (message.text().includes('[power-3d]')) {
+      reads.warnings.push(`${stamp()} ${message.text().slice(0, 300)}`);
+    }
+  });
+  return reads;
+}
+
+// ---------------------------------------------------------------------------
 // Steps
 // ---------------------------------------------------------------------------
 
@@ -156,6 +223,31 @@ async function runStep(page: Page, step: Step): Promise<void> {
   }
 
   if ('set_layer' in step) {
+    // A layer switched on while the 3D scene is up must not start its first
+    // read inside the scene's own startup stall (S30D P2-CI2). The scene
+    // publishes 'active' while terrain, the drape and the structures are
+    // still streaming, and on the software renderer the draw queue then
+    // blocks the page for up to about 12 s (tests/fire3d-mode.spec.ts, the
+    // RAWS marker case, measured 5.8 to 11.9 s). The power layer's own 10 s
+    // archive probe (src/util/pmtiles-probe.ts PROBE_TIMEOUT_MS) can expire
+    // inside that stall, and the layer then reports `degraded` for good
+    // (src/layers/power-3d.ts syncForZoom). Reproduced locally 2026-10-04: 2
+    // reds in 12 runs of this row, the line archive's request answered 206
+    // and aborted 23 ms later. Wait on the scene's own `transport` stamp,
+    // then drain the draw queue the same way that case does.
+    if (step.set_layer.on && (await fire3dStamp(page)) === 'active') {
+      await expect
+        .poll(
+          () => page.evaluate(() => document.documentElement.dataset['ddmFire3dTransport']),
+          { message: 'the 3D scene never reported its tile transport settled', timeout: FIRE3D_STAMP_TIMEOUT_MS }
+        )
+        .toBe('settled');
+      await page.evaluate(() => {
+        const canvas = document.querySelector('canvas.maplibregl-canvas') as HTMLCanvasElement | null;
+        const gl = (canvas?.getContext('webgl2') ?? canvas?.getContext('webgl')) as WebGLRenderingContext | null;
+        gl?.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+      });
+    }
     const box = layerCheckbox(page, step.set_layer.key);
     if (step.set_layer.on) await box.check();
     else await box.uncheck();
@@ -205,7 +297,8 @@ async function runStep(page: Page, step: Step): Promise<void> {
 
 async function assertExpectations(
   page: Page,
-  wanted: Expectations
+  wanted: Expectations,
+  power: PowerReads
 ): Promise<void> {
   if (wanted.cluster_pressed) {
     if (
@@ -292,11 +385,19 @@ async function assertExpectations(
   for (const [key, status] of Object.entries(wanted.layer_status ?? {})) {
     // The RAW status word rides the pill as a CSS class, which is the
     // stable contract now that the displayed text varies per layer.
+    const polledSince = Date.now();
+    let lastWord = '';
     await expect
       .poll(
         async () => {
           const cls = (await layerPill(page, key).getAttribute('class')) ?? '';
-          return cls.split(/\s+/);
+          const tokens = cls.split(/\s+/);
+          const word = tokens.filter((token) => token !== 'layer-toggle-status').join(' ');
+          if (key === 'power-infrastructure' && word !== lastWord) {
+            lastWord = word;
+            power.timeline.push(`+${Date.now() - polledSince}ms ${word || 'no status class'}`);
+          }
+          return tokens;
         },
         { message: `layer ${key} status`, timeout: FIRE3D_STAMP_TIMEOUT_MS }
       )
@@ -323,6 +424,9 @@ test.describe('view contracts', () => {
         description: row.description
       });
 
+      // Before any stub and any boot (see watchPowerLayerReads).
+      const power = await watchPowerLayerReads(page);
+
       if (row.stub_wildfire) {
         await stubWildfireFeeds(page);
         // Every `stub_wildfire: true` row either enters the 3D scene or
@@ -333,11 +437,35 @@ test.describe('view contracts', () => {
         // own comment in wildfire-fixtures.ts).
         await stubDeepTerrainArchive(page);
       }
-      await gotoApp(page, row.url);
+      try {
+        await gotoApp(page, row.url);
 
-      for (const step of row.steps ?? []) await runStep(page, step);
+        for (const step of row.steps ?? []) await runStep(page, step);
 
-      await assertExpectations(page, row.expect);
+        await assertExpectations(page, row.expect, power);
+      } finally {
+        // The evidence for WHICH power read degraded and when. Rows that never
+        // touch the power layer record nothing and attach nothing.
+        const evidence = [
+          ...power.timeline.map((entry) => `status ${entry}`),
+          ...power.archive.map((entry) => `request ${entry}`),
+          ...power.warnings
+        ];
+        if (evidence.length > 0) {
+          // The list reporter prints stdout, the annotation rides the JSON report.
+          console.log(`[${row.id}] power-layer-reads: ${evidence.join(' | ')}`);
+          test.info().annotations.push({
+            type: 'power-layer-reads',
+            description: evidence.join(' | ')
+          });
+        }
+        expect
+          .soft(
+            power.unanswered,
+            'a power plants request reached the network: no stub answered it, so a live service decided the layer status'
+          )
+          .toEqual([]);
+      }
     });
   }
 });

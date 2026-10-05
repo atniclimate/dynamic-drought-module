@@ -630,8 +630,9 @@ test.describe('PS-BRIEF return hand-off composes with a sidebar hazard closed by
     // DR-169: the button stays on screen (the sidebar column is never
     // covered at this width) but the whole #app is now inert, so a real
     // click at its coordinates lands on nothing that can act on it; only a
-    // forced click proves it changes nothing.
-    expect(await page.locator('#app').evaluate((el) => (el as HTMLElement).inert)).toBe(true);
+    // forced click proves it changes nothing. Web-first: the studio applies
+    // `inert` in an effect after its first render (see studio-restore.spec.ts).
+    await expect(page.locator('#app')).toHaveJSProperty('inert', true);
     await wildfire.click({ force: true });
     await expect(wildfire).toHaveAttribute('aria-pressed', 'false');
     await expect(page).not.toHaveURL(/cluster=wildfire/);
@@ -668,7 +669,8 @@ test.describe('PS-BRIEF return hand-off composes with a sidebar hazard closed by
 
     const wildfire = page.locator('.shell-cluster-btn[data-cluster="wildfire"]');
     await expect(wildfire).toBeVisible();
-    expect(await page.locator('#app').evaluate((el) => (el as HTMLElement).inert)).toBe(true);
+    // Web-first: the studio applies `inert` in an effect after its first render.
+    await expect(page.locator('#app')).toHaveJSProperty('inert', true);
     await wildfire.click({ force: true });
     await expect(wildfire).toHaveAttribute('aria-pressed', 'false');
     await expect(page).not.toHaveURL(/cluster=wildfire/);

@@ -1505,6 +1505,27 @@ function fire3dTransportStamp(page: Page): Promise<string | undefined> {
   );
 }
 
+/**
+ * Wait until the scene reports every source loaded, then drain the software
+ * renderer's draw queue with one 1x1 readback, exactly as the RAWS marker case
+ * does (its comment at the `fire3dTransportStamp` wait carries the
+ * measurements: the drain blocked 5.8 to 11.9 s on a settled scene). A layer
+ * switched on before this starts its first activation inside that stall.
+ */
+async function waitForSceneToSettle(page: Page): Promise<void> {
+  await expect
+    .poll(() => fire3dTransportStamp(page), {
+      message: 'the 3D scene never reported its tile transport settled',
+      timeout: 60_000
+    })
+    .toBe('settled');
+  await page.evaluate(() => {
+    const canvas = document.querySelector('canvas.maplibregl-canvas') as HTMLCanvasElement | null;
+    const gl = (canvas?.getContext('webgl2') ?? canvas?.getContext('webgl')) as WebGLRenderingContext | null;
+    gl?.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+  });
+}
+
 const TOGGLE = '.shell-fire3d-btn';
 
 // The evidence captures below render the live scene, including the
@@ -2287,7 +2308,13 @@ test('an embed without the flag never activates and never gains it', async ({
     await waitForLayerSettled(page, 'hms-smoke');
 
     // Add one bundled reference layer: the display honestly demotes to a
-    // custom layer set (cluster= leaves the URL) but the scene stays.
+    // custom layer set (cluster= leaves the URL) but the scene stays. Wait for
+    // the scene's own startup streaming first: GitHub run 37238546758 saw
+    // `places` (bundled, same origin) never leave loading inside
+    // waitForLayerSettled's 25 s while the scene was still streaming and
+    // drawing, the stall the RAWS marker case documents. This is a new wait on
+    // that fact; no existing timeout grew.
+    await waitForSceneToSettle(page);
     await layerCheckbox(page, 'places').check();
     await waitForLayerSettled(page, 'places');
     await expect.poll(async () => search(page)).not.toContain('cluster=');

@@ -1163,31 +1163,58 @@ test.describe('M8: the refit on a sidebar toggle (found-029, DDM-P10-T07)', () =
   const pageNow = (page: Page): Promise<number> => page.evaluate(() => performance.now());
 
   /** Poll until the footprint reads the same value twice in a row, no earlier
-   * than SETTLE_FLOOR_MS after `since` (page clock). */
-  async function settledBounds(page: Page, since: number): Promise<Bounds> {
-    const reads: { previous: string | null; settled: string | null } = {
+   * than SETTLE_FLOOR_MS after `since` (page clock). With `oracle`, the two
+   * equal reads must also be the oracle's camera (ORACLE_TOLERANCE_DEG per
+   * edge): the refit's flight is driven by the map's render loop, so on a
+   * slow runner two reads 250 ms apart can match BEFORE a frame has moved the
+   * camera (s4-shell M8, GitHub run 37235148587: west -126.6329 against
+   * -126.0567, flaky once). Waiting for the fact the case asserts, not for
+   * the camera to stop, is the same assertion retried; a camera that never
+   * reaches the oracle still ends in `expectSameCamera` naming the edge, with
+   * the last stable read. */
+  async function settledBounds(page: Page, since: number, oracle?: Bounds): Promise<Bounds> {
+    const reads: { previous: string | null; settled: string | null; lastStable: string | null } = {
       previous: null,
-      settled: null
+      settled: null,
+      lastStable: null
     };
-    await expect
-      .poll(
-        async () => {
-          const [now, raw] = await page.evaluate(
-            (selector) =>
-              [
-                performance.now(),
-                document.querySelector(selector)?.getAttribute('data-bounds') ?? null
-              ] as const,
-            FOOTPRINT
-          );
-          const stable = raw !== null && raw === reads.previous && now - since >= SETTLE_FLOOR_MS;
-          reads.previous = raw;
-          if (stable) reads.settled = raw;
-          return stable;
-        },
-        { intervals: [250], timeout: 15_000, message: 'the viewport footprint settles' }
-      )
-      .toBe(true);
+    const atOracle =(raw: string): boolean => {
+      if (oracle === undefined) return true;
+      const read = parseBounds(raw);
+      return (['west', 'south', 'east', 'north'] as const).every(
+        (edge) => Math.abs(read[edge] - oracle[edge]) <= ORACLE_TOLERANCE_DEG
+      );
+    };
+    try {
+      await expect
+        .poll(
+          async () => {
+            const [now, raw] = await page.evaluate(
+              (selector) =>
+                [
+                  performance.now(),
+                  document.querySelector(selector)?.getAttribute('data-bounds') ?? null
+                ] as const,
+              FOOTPRINT
+            );
+            const stable = raw !== null && raw === reads.previous && now - since >= SETTLE_FLOOR_MS;
+            reads.previous = raw;
+            if (stable) reads.lastStable = raw;
+            if (stable && atOracle(raw)) {
+              reads.settled = raw;
+              return true;
+            }
+            return false;
+          },
+          { intervals: [250], timeout: 15_000, message: 'the viewport footprint settles' }
+        )
+        .toBe(true);
+    } catch (error) {
+      // Never reached the oracle: hand the caller the last stable read so its
+      // `expectSameCamera` fails naming the edge and both values.
+      if (oracle === undefined || reads.lastStable === null) throw error;
+      return parseBounds(reads.lastStable);
+    }
     return parseBounds(reads.settled!);
   }
 
@@ -1197,7 +1224,11 @@ test.describe('M8: the refit on a sidebar toggle (found-029, DDM-P10-T07)', () =
     return settledBounds(page, 0);
   }
 
-  async function toggleSidebar(page: Page, to: 'closed' | 'open'): Promise<Bounds> {
+  async function toggleSidebar(
+    page: Page,
+    to: 'closed' | 'open',
+    oracle?: Bounds
+  ): Promise<Bounds> {
     const since = await pageNow(page);
     await page.locator(to === 'closed' ? '#sidebar-collapse' : '#sidebar-expand').click();
     if (to === 'closed') {
@@ -1205,7 +1236,7 @@ test.describe('M8: the refit on a sidebar toggle (found-029, DDM-P10-T07)', () =
     } else {
       await expect(page.locator('#app')).not.toHaveClass(/\bsidebar-collapsed\b/);
     }
-    return settledBounds(page, since);
+    return settledBounds(page, since, oracle);
   }
 
   function expectSameCamera(actual: Bounds, oracle: Bounds, label: string): void {
@@ -1256,20 +1287,20 @@ test.describe('M8: the refit on a sidebar toggle (found-029, DDM-P10-T07)', () =
       // From a closed boot: expanding narrows the canvas. Before M8 the
       // resize kept the closed zoom, so the region's west and east edges fell
       // outside the remaining map area.
-      const expanded = await toggleSidebar(page, 'open');
+      const expanded = await toggleSidebar(page, 'open', openOracle);
       expectSameCamera(expanded, openOracle, `${key}: expand from a closed boot`);
       expectInside(box, expanded, `${key}: expand from a closed boot`);
-      const collapsedAgain = await toggleSidebar(page, 'closed');
+      const collapsedAgain = await toggleSidebar(page, 'closed', closedOracle);
       expectSameCamera(collapsedAgain, closedOracle, `${key}: collapse after the expand`);
       expectInside(box, collapsedAgain, `${key}: collapse after the expand`);
 
       // From an open boot: collapsing widens the canvas; the refit fills the
       // wider area exactly as a closed boot frames it.
       await boot(page, `?region=${key}`);
-      const collapsed = await toggleSidebar(page, 'closed');
+      const collapsed = await toggleSidebar(page, 'closed', closedOracle);
       expectSameCamera(collapsed, closedOracle, `${key}: collapse from an open boot`);
       expectInside(box, collapsed, `${key}: collapse from an open boot`);
-      const reopened = await toggleSidebar(page, 'open');
+      const reopened = await toggleSidebar(page, 'open', openOracle);
       expectSameCamera(reopened, openOracle, `${key}: expand after the collapse`);
       expectInside(box, reopened, `${key}: expand after the collapse`);
     }

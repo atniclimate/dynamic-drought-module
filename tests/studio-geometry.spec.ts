@@ -212,8 +212,12 @@ test('the sidebar stays visible but inert while a studio is open at 1025px and w
 
   // Inert on it or an ancestor (D1 M17 brief): this build marks the whole
   // #app inert, which #sidebar inherits as a descendant.
-  const appInert = await page.locator('#app').evaluate((el) => (el as HTMLElement).inert);
-  expect(appInert, 'the veil ancestor (#app) is not inert while a studio is open').toBe(true);
+  // Web-first: the studio applies `inert` in an effect after its first
+  // render, so the studio root can be visible a beat before the veil is up.
+  await expect(
+    page.locator('#app'),
+    'the veil ancestor (#app) is not inert while a studio is open'
+  ).toHaveJSProperty('inert', true);
 
   // A click on a sidebar mode button changes nothing: force bypasses
   // Playwright's own actionability pre-check so the real browser hit-test

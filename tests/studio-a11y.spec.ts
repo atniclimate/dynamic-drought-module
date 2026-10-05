@@ -74,7 +74,7 @@ test.describe('studio focus and geometry', () => {
     // #map-container (what the studio visually covers) and #sidebar
     // (what it does not) alike.
     await expect(page.locator('#app')).toHaveAttribute('aria-hidden', 'true');
-    expect(await page.locator('#app').evaluate((el) => (el as HTMLElement).inert)).toBe(true);
+    await expect(page.locator('#app')).toHaveJSProperty('inert', true);
     // The sidebar stays visible on screen (still where it always sits,
     // sidebarWidth unchanged) but is reachable through neither a click
     // nor script focus while the veil is up.
@@ -83,8 +83,11 @@ test.describe('studio focus and geometry', () => {
     await expect(page.locator('#sidebar-collapse')).not.toBeFocused();
 
     await page.locator(`${PLACE_ROOT} #place-studio-back`).click();
-    // Closed: the veil lifts and the sidebar is reachable again.
-    expect(await page.locator('#app').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
+    // Closed: the veil lifts and the sidebar is reachable again. Web-first:
+    // the Back button only calls history.back(), so the popstate that
+    // unmounts the studio and lifts the veil arrives after the click
+    // returns, and no wait on the studio root precedes this read.
+    await expect(page.locator('#app')).toHaveJSProperty('inert', false);
     await page.locator('#sidebar-collapse').focus();
     await expect(page.locator('#sidebar-collapse')).toBeFocused();
 
@@ -94,7 +97,7 @@ test.describe('studio focus and geometry', () => {
     expect(layersBox?.width).toBe(1280 - sidebarWidth);
     expect(layersBox?.height).toBe(900);
     await expect(page.locator('#app')).toHaveAttribute('aria-hidden', 'true');
-    expect(await page.locator('#app').evaluate((el) => (el as HTMLElement).inert)).toBe(true);
+    await expect(page.locator('#app')).toHaveJSProperty('inert', true);
   });
 
   test('mobile PLACE remains full-screen and restores its sheet opener', async ({ page }) => {
