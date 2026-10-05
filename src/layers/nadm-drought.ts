@@ -229,9 +229,6 @@ export function deactivate(map: maplibregl.Map): void {
   dispatchSnapshot('inactive', null);
 }
 
-/** The frame's explanation for issuer time text DDM does not parse (PF1). */
-const SUPPLIED_TIME_EXPLANATION = 'As the issuer states it; DDM does not read it as a full date.';
-
 /** The product page (drought.gov; the 2026-09-29 c25 citation batch). */
 const NADM_PRODUCT_PAGE = 'https://www.drought.gov/data-maps-tools/north-american-drought-monitor-nadm';
 
@@ -246,16 +243,9 @@ export function buildNadmPopupModel(properties: GeoJsonProperties, sourceMonth: 
   const categoryIndex = CLASS_CODES.indexOf(rawCategory as ClassCode);
   const category = categoryIndex >= 0 ? NADM_CATEGORIES[categoryIndex] : null;
   const month: PopupClock =
-    sourceMonth === null || sourceMonth.trim() === ''
+    sourceMonth === null
       ? { kind: 'not-stated', label: 'Consensus month', reason: 'unavailable' }
-      : {
-          kind: 'point',
-          meaning: 'month',
-          label: 'Consensus month',
-          at: /^\d{4}-(0[1-9]|1[0-2])$/.test(sourceMonth)
-            ? { precision: 'month', month: sourceMonth }
-            : { precision: 'supplied', text: sourceMonth, explanation: SUPPLIED_TIME_EXPLANATION }
-        };
+      : { kind: 'point', meaning: 'month', label: 'Consensus month', at: { precision: 'month', month: sourceMonth } };
   return {
     kind: 'surface',
     title: 'North American Drought Monitor',

@@ -522,9 +522,10 @@ test.describe('identify paths: the M25 surfaces', () => {
         contains: [noSwatch('Unknown class'), notStated('Consensus month')]
       },
       {
-        name: 'NADM: a month that is not a calendar month',
-        build: () => nadm.buildNadmPopupModel({ DROUGHTCAT: 'd1' }, '2026-13'),
-        contains: [supplied('2026-13')]
+        name: 'NADM: the loaded snapshot month (always YYYY-MM) renders as the month time line',
+        build: () => nadm.buildNadmPopupModel({ DROUGHTCAT: 'd1' }, '2026-06'),
+        contains: [`<span class="popup-clock-label">Consensus month</span> <time datetime="2026-06">Jun${NBSP}2026</time>`],
+        lacks: ['data-clock-supplied']
       },
       {
         name: 'CDM: an unknown class and a blank month',
