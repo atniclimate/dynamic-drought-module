@@ -785,7 +785,8 @@ function loadPerimeters(features, status = 'ready') {
   globalThis.__p3truthLoadedNifc = {
     collection: collection(features),
     envelope: null,
-    fetchedAt: Date.UTC(2026, 9, 4, 12)
+    fetchedAt: Date.UTC(2026, 9, 4, 12),
+    truncated: status === 'degraded'
   };
 }
 
@@ -821,6 +822,29 @@ test('a DEGRADED (transfer-limited) loaded collection is never reused for a coun
       () => sources.fetchNifcClaims(place(-117.3, 40.4, bbox), signal())
     );
     assert.ok(requests.some(isWfigs), 'a truncated collection declines; the service is asked');
+    assert.equal(result.claims[0].text, ONE_WILDFIRE, 'never "No current mapped NIFC fire perimeters intersect ..."');
+  } finally {
+    clearPerimeters();
+  }
+});
+
+test('a refresh that publishes a truncated collection after the ready check is never reused: the network read answers', async () => {
+  // Codex block 1 review, P1: the status reads `ready` at the guard, and by
+  // the time the layer module's import resolves a refresh has replaced the
+  // collection with a transfer-limited one. The snapshot carries `truncated`.
+  loadPerimeters([wildfire('FAR-1', DONUT)], 'ready');
+  globalThis.__p3truthLoadedNifc = { ...globalThis.__p3truthLoadedNifc, truncated: true };
+  const requests = [];
+  try {
+    const bbox = [-117.5, 40.2, -117.1, 40.6];
+    const result = await withFetch(
+      (url) => {
+        requests.push(url);
+        return jsonResponse(NET_WILDFIRE);
+      },
+      () => sources.fetchNifcClaims(place(-117.3, 40.4, bbox), signal())
+    );
+    assert.ok(requests.some(isWfigs), 'a truncated snapshot declines even under a ready status; the service is asked');
     assert.equal(result.claims[0].text, ONE_WILDFIRE, 'never "No current mapped NIFC fire perimeters intersect ..."');
   } finally {
     clearPerimeters();

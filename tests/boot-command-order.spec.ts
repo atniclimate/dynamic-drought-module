@@ -11,6 +11,11 @@ import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
 import { emptyCollectionBody, routeGeojson } from './tribal-fixtures';
 import { MOBILE_HAZARD_PRESETS, VIEW_PRESETS, type ViewPreset } from '../src/config/presets';
 
+const ONE_PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64'
+);
+
 /**
  * found-114 (S30D unit P3-BOOT): a command a person gives while the page is
  * still finishing its boot wins; the deferred boot never re-applies its own
@@ -62,6 +67,10 @@ const TERMINAL: ReadonlySet<string> = new Set(['ready', 'degraded', 'error', 'no
 
 /** Answer every source a commanded mode may start, so no live agency decides a result. */
 async function stubModeSources(page: Page): Promise<void> {
+  // The initial style's OSM raster basemap (Codex block 1 review, P2).
+  await page.route('https://tile.openstreetmap.org/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG })
+  );
   await stubHeatRiskCatalog(page);
   await stubCpcDroughtOutlook(page);
   const empty = emptyCollectionBody();

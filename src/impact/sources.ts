@@ -895,7 +895,10 @@ async function nifcClaimFromLoadedCollection(
 
   const { loadedNifcCollection } = await import('../layers/nifc-fires');
   const loaded = loadedNifcCollection();
-  if (loaded === null) return null;
+  // The caller's `ready` check ran before the import above; a refresh can
+  // publish a truncated collection in between, so completeness is read from
+  // this snapshot itself (Codex block 1 review, P1).
+  if (loaded === null || loaded.truncated) return null;
   if (!bboxCoveredByEnvelope(loaded.envelope, [west, south, east, north])) return null;
 
   // S30D P3-TRUTH: a perimeter counts when its GEOMETRY meets the place's

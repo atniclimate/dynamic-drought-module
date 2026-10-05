@@ -468,17 +468,22 @@ let lastAppliedStatus: Extract<NifcStatus, 'ready' | 'degraded' | 'no-data'> | n
  * own service query. A `null` envelope means the collection came from the
  * unscoped national fallback (`resolveQueryEnvelope` found no `getBounds`)
  * and therefore covers every view. Returns `null` before any successful load.
+ * `truncated` travels with the collection (S30D block 1): a reader that
+ * states an absence or a count checks it on the same snapshot, never the
+ * layer status read before an await, which a refresh can change in between.
  */
 let lastLoaded: {
   readonly collection: FeatureCollection;
   readonly envelope: QueryEnvelope | null;
   readonly fetchedAt: number;
+  readonly truncated: boolean;
 } | null = null;
 
 export function loadedNifcCollection(): {
   readonly collection: FeatureCollection;
   readonly envelope: QueryEnvelope | null;
   readonly fetchedAt: number;
+  readonly truncated: boolean;
 } | null {
   return lastLoaded;
 }
@@ -821,7 +826,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
 
   const coverageEnvelope = envelope ? toCoverageEnvelope(envelope) : null;
   cache = coverageEnvelope ? { envelope: coverageEnvelope, geojson, truncated } : null;
-  lastLoaded = { collection: geojson, envelope: coverageEnvelope, fetchedAt: Date.now() };
+  lastLoaded = { collection: geojson, envelope: coverageEnvelope, fetchedAt: Date.now(), truncated };
   freshnessState = 'current';
   if (freshnessTimer !== null) clearTimeout(freshnessTimer);
   freshnessTimer = setTimeout(() => {
