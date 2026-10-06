@@ -126,6 +126,11 @@ function replaySnapshot(): void {
   publish(snapshot);
 }
 
+function announceFlowStatus(text: string): void {
+  const live = document.getElementById('layer-status-live');
+  if (live) live.textContent = text;
+}
+
 function setStatus(
   status: FlowStatus, text: string, kind: EnsoFlowKind, notes: readonly string[] = [],
   extra: Pick<FlowSnapshot, 'motion' | 'provenance'> = {}
@@ -136,6 +141,11 @@ function setStatus(
   if (next.status === snapshot.status && next.label === snapshot.label && next.line === snapshot.line &&
       next.motion === snapshot.motion && next.provenance === snapshot.provenance &&
       next.notes.join('\n') === snapshot.notes.join('\n')) return;
+  if (next.status !== snapshot.status || next.label !== snapshot.label || next.line !== snapshot.line) {
+    // The shell's one announcer stays exposed when the panel and Key are hidden.
+    // Snapshot replay and motion-only repaints must not announce the same words again.
+    announceFlowStatus(status === 'off' ? text : `${next.label} · ${next.line}`);
+  }
   publish(next);
 }
 
@@ -519,7 +529,6 @@ function mountControls(): boolean {
   toolbar.append(label, updateButton);
   statusNode = document.createElement('p');
   statusNode.className = 'enso-flow-status';
-  statusNode.setAttribute('role', 'status');
   const details = document.createElement('details');
   const summary = document.createElement('summary');
   summary.textContent = 'Key & source';
@@ -542,7 +551,15 @@ function onMoveEnd(): void {
   paintArrows();
   if (frame && statusNode) {
     const status = frame.points.length === 0 ? 'no data' : frame.missing ? 'live (partial)' : 'live';
-    statusNode.textContent = `${status} · Model valid ${dateLabel(frame.time)} · Update area to resample`;
+    const text = `${status} · Model valid ${dateLabel(frame.time)} · Update area to resample`;
+    if (statusNode.textContent === text) return;
+    statusNode.textContent = text;
+    // Preserve the panel's existing prompt only where its control can be used.
+    // The Key keeps its source status without an unavailable resample instruction.
+    if (updateButton && updateButton.getClientRects().length > 0 &&
+        !updateButton.closest('[inert], [aria-hidden="true"]')) {
+      announceFlowStatus(`${LABELS.currents} · ${text}`);
+    }
   }
 }
 

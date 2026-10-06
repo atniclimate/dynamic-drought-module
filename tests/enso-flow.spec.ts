@@ -179,7 +179,8 @@ async function modelValid(page: Page, seconds: number): Promise<string> {
 const DRAWER_SURFACES = [
   { name: 'a desktop embed', width: 1280, height: 800, query: '&embed=true' },
   { name: 'the desktop shell with the sidebar closed', width: 1280, height: 800, query: '&sidebar=closed' },
-  { name: 'a 390x844 phone with the Layers sheet not showing', width: 390, height: 844, query: '' }
+  { name: 'a 390x844 phone with the Layers sheet not showing', width: 390, height: 844, query: '' },
+  { name: 'a 390x844 phone embed', width: 390, height: 844, query: '&embed=true' }
 ] as const;
 
 for (const surface of DRAWER_SURFACES) {
@@ -215,6 +216,115 @@ for (const surface of DRAWER_SURFACES) {
     await expect(flowStatus(page)).not.toContainText('Observed');
     await expect(flowNotes(page)).not.toContainText('Observed');
   });
+}
+
+type FlowAnnouncement = { id: string; text: string; exposed: boolean };
+type AnnouncementWindow = Window & { __flowAnnouncements: FlowAnnouncement[] };
+
+/** Observe real live-region writes from boot, including while both visual readers are hidden. */
+async function watchFlowAnnouncements(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const entries: FlowAnnouncement[] = [];
+    (window as AnnouncementWindow).__flowAnnouncements = entries;
+    const exposed = (region: Element): boolean => {
+      if (region.getAttribute('aria-live') === 'off') return false;
+      for (let node: Element | null = region; node; node = node.parentElement) {
+        const style = getComputedStyle(node);
+        if (node.hasAttribute('hidden') || node.hasAttribute('inert') || node.getAttribute('aria-hidden') === 'true' ||
+            style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return false;
+      }
+      // Clipping a sr-only live region does not remove it from the accessibility tree.
+      return true;
+    };
+    new MutationObserver((records) => {
+      for (const record of records) {
+        const target = record.target instanceof Element ? record.target : record.target.parentElement;
+        const region = target?.closest('[role="status"], [aria-live="polite"], [aria-live="assertive"]');
+        if (!region) continue;
+        const text = record.type === 'characterData' ? record.target.textContent ?? ''
+          : Array.from(record.addedNodes, (node) => node.textContent ?? '').join('');
+        if (text) entries.push({ id: region.id || region.className, text, exposed: exposed(region) });
+      }
+    }).observe(document, { childList: true, characterData: true, subtree: true });
+  });
+}
+
+async function flowAnnouncements(page: Page, line: string): Promise<FlowAnnouncement[]> {
+  return page.evaluate((text) => (window as AnnouncementWindow).__flowAnnouncements.filter((entry) =>
+    entry.text === text || entry.text === `Ocean currents · ${text}`), line);
+}
+
+const ANNOUNCEMENT_SURFACES = [
+  { name: 'the open desktop shell', width: 1280, height: 800, query: '', panelVisible: true },
+  ...DRAWER_SURFACES.map((surface) => ({ ...surface, panelVisible: false }))
+];
+
+for (const surface of ANNOUNCEMENT_SURFACES) {
+  for (const outcome of ['live', 'unavailable'] as const) {
+    test(`found-141 ${surface.name}: loading and ${outcome} use one exposed announcement route`, async ({ page }) => {
+      await page.setViewportSize({ width: surface.width, height: surface.height });
+      await page.clock.setFixedTime(LIVE_CLOCK);
+      await watchFlowAnnouncements(page);
+      await stubSst(page);
+      let held: Route | null = null;
+      await page.route(FLOW_ROUTE, (route) => { held = route; });
+      await gotoApp(page, `?cluster=enso&ocean=pacific&flow=currents&basemap=default${surface.query}`);
+      await expect.poll(() => held !== null).toBe(true);
+      const panel = page.locator('.enso-flow');
+      await expect(panel).toHaveAttribute('data-status', 'loading');
+      if (surface.panelVisible) await expect(panel).toBeVisible();
+      else await expect(panel).toBeHidden();
+      await expect(page.locator('#map-key-content')).toBeHidden();
+
+      const loading = 'loading · Model direction samples';
+      await expect.poll(async () => (await flowAnnouncements(page, loading)).length).toBeGreaterThan(0);
+      expect.soft(await flowAnnouncements(page, loading)).toEqual([
+        { id: 'layer-status-live', text: `Ocean currents · ${loading}`, exposed: true }
+      ]);
+      // Even an open panel and a subsequently opened Key are plain readers of the same state.
+      expect.soft(await panel.locator('.enso-flow-status').getAttribute('role')).toBeNull();
+      expect.soft(await panel.locator('.enso-flow-status').getAttribute('aria-live')).toBeNull();
+
+      if (outcome === 'live') await respond(held!, false, LIVE_CLOCK);
+      else await held!.abort('failed');
+      await expect(panel).toHaveAttribute('data-status', outcome);
+      const terminal = outcome === 'live' ? `live · Model valid ${await modelValid(page, LIVE_CLOCK / 1000)}`
+        : 'unavailable · Direction samples did not load';
+      await expect.poll(async () => (await flowAnnouncements(page, terminal)).length).toBeGreaterThan(0);
+      expect.soft(await flowAnnouncements(page, terminal)).toEqual([
+        { id: 'layer-status-live', text: `Ocean currents · ${terminal}`, exposed: true }
+      ]);
+      if (outcome === 'live') {
+        // The existing panel-only resample prompt keeps its announcement on a
+        // visible panel; a hidden control must not acquire a spoken instruction.
+        const box = (await page.locator('#map').boundingBox())!;
+        const cx = box.x + box.width / 2;
+        const cy = box.y + box.height / 2;
+        await page.mouse.move(cx, cy);
+        await page.mouse.down();
+        await page.mouse.move(cx - 60, cy - 30, { steps: 5 });
+        await page.mouse.up();
+        const resample = `${terminal} · Update area to resample`;
+        await expect(panel.locator('.enso-flow-status')).toHaveText(resample);
+        expect.soft(await flowAnnouncements(page, resample)).toEqual(surface.panelVisible ? [
+          { id: 'layer-status-live', text: `Ocean currents · ${resample}`, exposed: true }
+        ] : []);
+      }
+      await openKeyDrawer(page);
+      await expect(flowStatus(page)).toHaveText(`Ocean currents · ${terminal}`);
+      expect.soft(await flowStatus(page).getAttribute('role')).toBeNull();
+      expect.soft(await flowStatus(page).getAttribute('aria-live')).toBeNull();
+      // Opening the visual reader must not replay either announcement.
+      expect.soft(await flowAnnouncements(page, loading)).toHaveLength(1);
+      expect.soft(await flowAnnouncements(page, terminal)).toHaveLength(1);
+      await test.info().attach('flow-announcement-routes', {
+        contentType: 'application/json', body: Buffer.from(JSON.stringify({ surface, outcome,
+          loading: await flowAnnouncements(page, loading), terminal: await flowAnnouncements(page, terminal),
+          resample: await flowAnnouncements(page, `${terminal} · Update area to resample`)
+        }, null, 2))
+      });
+    });
+  }
 }
 
 test('found-115 a Key that starts after the arrows have loaded still reads their state (a boot with flow= in the URL)', async ({ page }) => {
