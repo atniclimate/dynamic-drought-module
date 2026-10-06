@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from './offline-test';
-import { gotoApp, layerCheckbox, waitForLayerSettled } from './helpers';
+import { gotoApp, layerCheckbox, layerPill, waitForLayerSettled } from './helpers';
 import { AIANNH_ROUTE, routeGeojson } from './tribal-fixtures';
 import { HAZARD_CLUSTERS, type HazardClusterKey } from '../src/config/clusters';
 import {
@@ -108,6 +108,8 @@ test.describe('place popups: the briefing door', () => {
         await button.click();
         await expect(button).toHaveAttribute('aria-pressed', 'true');
         for (const key of [...recipe, 'bia-reservations']) await waitForLayerSettled(page, key);
+        const firesOn = recipe.includes('nifc-fires');
+        if (firesOn) await expect(layerPill(page, 'nifc-fires')).toHaveClass(/\bready\b/);
         // The reservation outranks the other places under the centre once its
         // fill has painted; a response for a place painted earlier is closed
         // and the click retried (the tests/interaction-coordinator.spec.ts
@@ -119,7 +121,28 @@ test.describe('place popups: the briefing door', () => {
             await page.locator('.maplibregl-popup-close-button').click();
             throw new Error(`the primary was "${got}", waiting for "${BIA_TITLE}" to paint`);
           }
+          if (firesOn) {
+            // found-149: a ready fetch can precede the perimeter's first paint.
+            // The real place response proves that its rendered intersection
+            // includes our fixture before the separate pulse click below.
+            // This readiness probe never reads the pulse class.
+            try {
+              const names = await framed
+                .locator('[data-popup-slot="conditions"] [data-value-row]', { hasText: 'Wildfire' })
+                .locator('li')
+                .allTextContents();
+              expect(names.map((name) => name.trim())).toEqual([DOOR_FIRE]);
+            } finally {
+              await page.locator('.maplibregl-popup-close-button').click();
+            }
+          }
         }).toPass({ timeout: 30_000 });
+        if (firesOn) {
+          // No camera or fixture change: the final click reads the same place.
+          // A missing pulse still fails below after this positive precondition.
+          const framed = await clickCentreUntilFramed(page, MAP_ROOT);
+          await expect(framed.locator('[data-popup-slot="title"]')).toHaveText(BIA_TITLE);
+        }
         const root = page.locator(MAP_ROOT);
         const door = root.locator('[data-popup-slot="actions"] [data-ddm-impact-trigger]');
         await expect(door).toHaveCount(1);
@@ -128,7 +151,6 @@ test.describe('place popups: the briefing door', () => {
         // (the mode whose recipe turns the WFIGS layer on): the head names
         // the Wildfire condition, and its words stand in the Wildfire row,
         // first in the body (the owner's present-only head, 2026-10-01).
-        const firesOn = recipe.includes('nifc-fires');
         if (firesOn) {
           pulsed += 1;
           await expect(door).toHaveClass(/popup-impact-btn--pulse/);

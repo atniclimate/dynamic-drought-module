@@ -777,6 +777,9 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
 
     const geojsonQueries: string[] = [];
     const countGeometries: string[] = [];
+    let holdRefresh = false;
+    let releaseRefresh = (): void => undefined;
+    const refreshHeld = new Promise<void>((resolve) => { releaseRefresh = resolve; });
     await page.route(
       (url) =>
         url.href.includes('WFIGS_Interagency_Perimeters_Current') && url.pathname.endsWith('/query'),
@@ -785,6 +788,7 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
         if (request.method() === 'POST') {
           const body = new URLSearchParams(request.postData() ?? '');
           countGeometries.push(body.get('geometry') ?? '');
+          if (holdRefresh) await refreshHeld;
           return route.fulfill({
             status: 200,
             contentType: 'application/json',
@@ -813,6 +817,8 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
     // 'drought' (src/state/url.ts's `parseShellParams`).
     await gotoApp(page, '?view=brief&cluster=wildfire&region=hawaii');
     await waitForLayerSettled(page, 'nifc-fires');
+    const minimap = page.locator('.shell-minimap-canvas');
+    await expect(minimap).toHaveAttribute('data-wildfire-status', 'live-partial');
     expect(geojsonQueries, "the layer's own boot query, fit to the Hawaii camera").toHaveLength(1);
 
     // The minimap's first mount races the layer's own boot activation (both
@@ -830,14 +836,26 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
     // the minimap's remount saw `ready` or `loading` was therefore a race; on
     // `loading` the Hawaii framing correctly took its count-only POST, which
     // this case stubs as `{ count: 0 }`, and read below-threshold.
-    countGeometries.length = 0;
     await page.locator('.view-switch [data-view="console"]').click();
     await expect(page.locator('.view-switch [data-view="console"]')).toHaveAttribute(
       'aria-pressed',
       'true'
     );
-    await page.locator('.view-switch [data-view="brief"]').click();
-    await expect(layerPill(page, 'nifc-fires')).toHaveClass(/ready/);
+    countGeometries.length = 0;
+    holdRefresh = true;
+    try {
+      await page.locator('.view-switch [data-view="brief"]').click();
+      await expect(layerPill(page, 'nifc-fires')).toHaveClass(/\bready\b/);
+      // found-156: stale attributes survive until the view effect reruns.
+      // A newly held count read and loading snapshot prove this refresh ran;
+      // the initial mount's requests all finished before the Console click.
+      await expect.poll(() => countGeometries.length).toBeGreaterThan(0);
+      await expect(minimap).toHaveAttribute('data-wildfire-status', 'loading');
+    } finally {
+      holdRefresh = false;
+      releaseRefresh();
+    }
+    await expect(minimap).toHaveAttribute('data-wildfire-status', 'live-partial');
 
     const expectedCount = HAWAII_STUB.features.filter((feature) =>
       matchesMinimapActiveFilter(feature.properties)
@@ -915,8 +933,12 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
     // is 'none' for every place outside the 'pnw' family (WA, OR, ID) or
     // 'ak-hi', so a Florida briefing never renders the twelve-cell horizon
     // matrix this case reads at all (a product capability boundary, not a
-    // bug); Oregon keeps the matrix while still sitting outside Washington's
-    // loaded envelope.
+    // bug); Oregon keeps the matrix while extending beyond the sub-state
+    // Central Oregon framing's loaded envelope.
+    const VIEWPORT_STUB = {
+      type: 'FeatureCollection',
+      features: [NIFC_STUB.features[0]!]
+    };
     const OREGON_BRIEFING_STUB = {
       type: 'FeatureCollection',
       features: [
@@ -931,6 +953,7 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
         }
       ]
     };
+    const viewportQueries: string[] = [];
     const briefingQueries: string[] = [];
     await page.route(
       (url) =>
@@ -955,34 +978,34 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
           });
           return;
         }
-        // The perimeters layer's own viewport-scoped read (boot and any
-        // re-query a later camera fit triggers); its own correctness is
-        // proven by the "viewport scoping" describe above.
+        // A populated viewport collection, separate from the briefing answer.
+        viewportQueries.push(request.url());
         await route.fulfill({
           status: 200,
           contentType: 'application/geo+json',
-          body: JSON.stringify(NIFC_STUB)
+          body: JSON.stringify(VIEWPORT_STUB)
         });
       }
     );
 
-    // `select=state:OR` (tests/briefing-matrix.spec.ts's own deep-link
-    // pattern, `?select=state:WA`) opens Oregon's briefing unconditionally
-    // at boot (src/state/deep-link.ts's `applyDeepLink` passes no
-    // `summaryFirst`, unlike the sidebar search-box selection
-    // `search-fit.spec.ts` documents), combined with `layers=` at ONE boot.
-    // The briefing's own NIFC read runs synchronously inside that same
-    // deep-link call, before its `map.fitBounds` animation, `moveend`, and
-    // the layer's 400 ms re-query debounce could possibly land, so this
-    // case's outside-the-envelope outcome does not depend on whichever of
-    // the layer's boot activation or the deep link wins their own race
-    // (only case (a) above needs the layer settled first for that reason).
-    // `region=washington_state` pins the loaded envelope to Washington (the
-    // framing this case was written for, DR-109): under the national default
-    // the layer's boot envelope covers Oregon too, so the briefing would
-    // rightly read the collection and this case would prove nothing about
-    // an OUTSIDE place.
-    await gotoApp(page, '?region=washington_state&view=brief&layers=nifc-fires,places&select=state:OR');
+    // found-153: a deep link fits Oregon before the lazy briefing runtime
+    // opens. Its viewport re-query could therefore replace the original
+    // Washington collection and correctly count both old fixture polygons.
+    // Central Oregon's region door opens the containing state with fit:false
+    // (sidebar.ts), preserving the smaller, already-ready loaded envelope.
+    await gotoApp(page, '?region=central_oregon&view=console&layers=nifc-fires,places');
+    await expect(layerPill(page, 'nifc-fires')).toHaveClass(/\bready\b/);
+    expect(viewportQueries, 'one populated viewport read before opening the briefing').toHaveLength(1);
+    expect(VIEWPORT_STUB.features).toHaveLength(1);
+    const viewportEnvelope = (new URL(viewportQueries[0]!).searchParams.get('geometry') ?? '').split(',').map(Number);
+    expect(viewportEnvelope).toHaveLength(4);
+    expect(viewportEnvelope.every(Number.isFinite)).toBe(true);
+    const [west, south, east, north] = viewportEnvelope as [number, number, number, number];
+    expect(west).toBeLessThan(east);
+    expect(south).toBeLessThan(north);
+    expect(bboxesOverlap(coordinatesBbox(VIEWPORT_STUB.features[0]!.geometry), [west, south, east, north])).toBe(true);
+    await page.locator('#region-briefing-btn').click();
+    await expect(page.locator('#impact-panel-title')).toHaveText('Oregon');
 
     const expectedText = buildNifcAreaPerimeterClaim(
       OREGON_BRIEFING_STUB.features.map((feature) => feature.properties.attr_IncidentTypeCategory)
@@ -994,6 +1017,20 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
       briefingQueries,
       'a place outside the loaded envelope issues its own bounded read, never a false zero from the collection'
     ).toHaveLength(1);
+    const briefingParams = new URL(briefingQueries[0]!).searchParams;
+    expect(briefingParams.get('resultRecordCount')).toBe(String(NIFC_AREA_QUERY_RECORD_CAP));
+    const selectionEnvelope = (briefingParams.get('geometry') ?? '').split(',').map(Number);
+    expect(selectionEnvelope).toHaveLength(4);
+    expect(selectionEnvelope.every(Number.isFinite)).toBe(true);
+    const [selectionWest, selectionSouth, selectionEast, selectionNorth] = selectionEnvelope as [number, number, number, number];
+    expect(selectionWest).toBeLessThan(selectionEast);
+    expect(selectionSouth).toBeLessThan(selectionNorth);
+    expect(
+      selectionWest < west || selectionSouth < south || selectionEast > east || selectionNorth > north,
+      'the whole-state selection extends beyond the ready viewport collection'
+    ).toBe(true);
+    expect(viewportQueries, 'the region door did not replace the loaded viewport collection').toHaveLength(1);
+    await expect(layerPill(page, 'nifc-fires')).toHaveClass(/\bready\b/);
   });
 });
 
