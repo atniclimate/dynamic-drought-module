@@ -225,7 +225,7 @@ type AnnouncementWindow = Window & { __flowAnnouncements: FlowAnnouncement[] };
 async function watchFlowAnnouncements(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const entries: FlowAnnouncement[] = [];
-    (window as AnnouncementWindow).__flowAnnouncements = entries;
+    (window as unknown as AnnouncementWindow).__flowAnnouncements = entries;
     const exposed = (region: Element): boolean => {
       if (region.getAttribute('aria-live') === 'off') return false;
       for (let node: Element | null = region; node; node = node.parentElement) {
@@ -250,7 +250,7 @@ async function watchFlowAnnouncements(page: Page): Promise<void> {
 }
 
 async function flowAnnouncements(page: Page, line: string): Promise<FlowAnnouncement[]> {
-  return page.evaluate((text) => (window as AnnouncementWindow).__flowAnnouncements.filter((entry) =>
+  return page.evaluate((text) => (window as unknown as AnnouncementWindow).__flowAnnouncements.filter((entry) =>
     entry.text === text || entry.text === `Ocean currents · ${text}`), line);
 }
 
