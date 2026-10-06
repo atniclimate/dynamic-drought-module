@@ -205,6 +205,131 @@ function raced(promise, ms, label) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
+// Capture the production timers so deadline checks do not sleep or depend on
+// machine load. Fetch body timers have been cleared by the time decode posts.
+async function controlledDecode(run, { throwOnPost = false } = {}) {
+  const originalSet = globalThis.setTimeout;
+  const originalClear = globalThis.clearTimeout;
+  const timers = new Map();
+  globalThis.setTimeout = (callback, delay) => {
+    const handle = {};
+    timers.set(handle, { callback, delay });
+    return handle;
+  };
+  globalThis.clearTimeout = (handle) => timers.delete(handle);
+  let posted;
+  const ready = new Promise((resolve) => { posted = resolve; });
+  const activation = new AbortController();
+  let request;
+  let terminated = 0;
+  const fake = {
+    onmessage: null,
+    onerror: null,
+    onmessageerror: null,
+    postMessage(value) {
+      request = value;
+      posted();
+      if (throwOnPost) throw new Error('post failed');
+    },
+    terminate() { terminated++; }
+  };
+  const pending = read('wind', noddStub(), { signal: activation.signal, createWorker: () => fake });
+  // Observe rejection immediately, including a synchronous postMessage failure.
+  const outcome = pending.then((field) => ({ field }), (error) => ({ error }));
+  try {
+    await ready;
+    await run({ fake, timers, activation, outcome, request: () => request, terminated: () => terminated });
+  } finally {
+    activation.abort();
+    // A deliberately broken decoder can ignore cancellation after clearing its
+    // own handlers. Let cleanup microtasks finish without wedging the test suite.
+    await Promise.race([outcome, new Promise((resolve) => setImmediate(resolve))]);
+    globalThis.setTimeout = originalSet;
+    globalThis.clearTimeout = originalClear;
+  }
+}
+
+function assertDecodeReleased(probe) {
+  assert.equal(probe.terminated(), 1, 'the Worker is terminated exactly once');
+  assert.equal(probe.timers.size, 0, 'no decode timer remains');
+  for (const handler of ['onmessage', 'onerror', 'onmessageerror']) {
+    assert.equal(probe.fake[handler], null, `${handler} is released`);
+  }
+}
+
+test('a decoder factory failure releases the activation link without starting a read', async () => {
+  const activation = new AbortController();
+  const listeners = new Set();
+  const signal = activation.signal;
+  const add = signal.addEventListener.bind(signal);
+  const remove = signal.removeEventListener.bind(signal);
+  signal.addEventListener = (type, listener, ...args) => {
+    if (type === 'abort') listeners.add(listener);
+    add(type, listener, ...args);
+  };
+  signal.removeEventListener = (type, listener, ...args) => {
+    if (type === 'abort') listeners.delete(listener);
+    remove(type, listener, ...args);
+  };
+  const stub = noddStub();
+  try {
+    const error = await read('wind', stub, {
+      signal,
+      createWorker() { throw new Error('Worker could not start'); }
+    }).catch((error) => error);
+    assert.equal(listeners.size, 0, 'the failed activation retains no abort listener');
+    assert.ok(error instanceof FlowUnavailableError && error.reason === 'failed');
+    assert.equal(stub.calls.length, 0, 'no network read begins without a Worker');
+  } finally {
+    activation.abort();
+  }
+});
+
+test('a silent decoder reaches the existing read deadline and releases all handlers', async () => {
+  await controlledDecode(async (probe) => {
+    assert.equal(probe.timers.size, 1, 'one completion deadline follows the completed network reads');
+    const deadline = [...probe.timers.values()][0];
+    assert.equal(deadline.delay, nodd.FLOW_READ_BUDGET_MS);
+    const lateMessage = probe.fake.onmessage;
+    deadline.callback();
+    const { error } = await probe.outcome;
+    assert.ok(error instanceof FlowUnavailableError);
+    assert.equal(error.reason, 'failed');
+    assertDecodeReleased(probe);
+    lateMessage({ get data() { throw new Error('a settled decoder must ignore queued replies'); } });
+    probe.activation.abort();
+    assertDecodeReleased(probe);
+  });
+});
+
+for (const completion of ['messageerror', 'error', 'abort', 'success', 'refused', 'post throws', 'null reply', 'undefined reply']) {
+  test(`decoder ${completion} settles once and clears its deadline and handlers`, async () => {
+    await controlledDecode(async (probe) => {
+      const deadline = [...probe.timers.values()][0];
+      if (completion === 'messageerror') {
+        assert.equal(typeof probe.fake.onmessageerror, 'function', 'messageerror is handled');
+        probe.fake.onmessageerror({});
+      } else if (completion === 'error') probe.fake.onerror({});
+      else if (completion === 'abort') probe.activation.abort();
+      else if (completion === 'success') probe.fake.onmessage({ data: { ok: true, packet: decodeFrame(probe.request()) } });
+      else if (completion === 'refused') probe.fake.onmessage({ data: { ok: false, error: 'invalid frame' } });
+      else if (completion === 'null reply') probe.fake.onmessage({ data: null });
+      else if (completion === 'undefined reply') probe.fake.onmessage({ data: undefined });
+      const { field, error } = await probe.outcome;
+      if (completion === 'success') assert.equal(field.kind, 'wind');
+      else if (completion === 'abort') assert.equal(error.name, 'AbortError');
+      else {
+        assert.ok(error instanceof FlowUnavailableError);
+        assert.equal(error.reason, completion === 'refused' ? 'refused' : 'failed');
+      }
+      assertDecodeReleased(probe);
+      // An already queued timeout cannot change the settled result or release twice.
+      deadline?.callback();
+      assertDecodeReleased(probe);
+    }, { throwOnPost: completion === 'post throws' });
+  });
+}
+
 const read = (kind, stub, opts = {}) =>
   withFetch(stub, () =>
     readFlowFrame(kind, {

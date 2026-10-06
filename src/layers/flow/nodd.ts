@@ -23,7 +23,8 @@
  *    body is refused). Content-Range and ETag are not readable cross-origin;
  *    integrity is the 206, the exact length, and the decoder's section 0
  *    length and closing `7777`.
- * 5. Decode in a module Worker (./decode-worker), which checks, rotates,
+ * 5. Decode in a module Worker (./decode-worker) within a 12 s completion budget.
+ *    The Worker checks, rotates,
  *    crops and quantizes; the main thread builds the FlowField and stamps
  *    run, valid time and staleAfter = cycle + 24 h, and refuses a frame past
  *    it.
@@ -50,7 +51,7 @@ const CYCLE_MS = 6 * HOUR;
 /** The newest cycle's earliest observed arrival on NODD (B-grib.md section 2.3). */
 const PUBLISH_LAG_MS = 3.5 * HOUR;
 
-/** The complete-body budget of each read (the existing 12 s ENSO read budget). */
+/** The budget of each complete-body read and decoder completion (the existing 12 s ENSO read budget). */
 export const FLOW_READ_BUDGET_MS = 12_000;
 /** Cycle tries in all: the candidate and two 6 h step-backs. */
 export const MAX_CYCLE_TRIES = 3;
@@ -160,6 +161,7 @@ export function locateMessage(
 /** The decode Worker as the reader uses it (a real module Worker satisfies it). */
 export interface DecodeWorkerLike {
   onmessage: ((event: MessageEvent<DecodeReply>) => void) | null;
+  onmessageerror: ((event: MessageEvent) => void) | null;
   onerror: ((event: ErrorEvent) => void) | null;
   postMessage(message: DecodeRequest, transfer: Transferable[]): void;
   terminate(): void;
@@ -262,19 +264,39 @@ function ranged(url: string, start: number, end: number, signal: AbortSignal, ex
 
 function decodeIn(worker: DecodeWorkerLike, request: DecodeRequest, signal: AbortSignal): Promise<FlowPacket> {
   return new Promise((resolve, reject) => {
-    const onAbort = (): void => reject(abortError());
+    let settled = false;
+    const finish = (complete: () => void): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal.removeEventListener('abort', onAbort);
+      worker.onmessage = worker.onerror = worker.onmessageerror = null;
+      try {
+        complete();
+      } catch (error) {
+        reject(error);
+      }
+    };
+    const onAbort = (): void => finish(() => reject(abortError()));
+    const fail = (): void => finish(() => reject(new FlowUnavailableError('failed', 'the flow decode Worker failed')));
+    const timer = setTimeout(fail, FLOW_READ_BUDGET_MS);
     signal.addEventListener('abort', onAbort, { once: true });
     worker.onmessage = (event) => {
-      signal.removeEventListener('abort', onAbort);
-      const reply = event.data;
-      if (reply.ok) resolve(reply.packet);
-      else reject(new FlowUnavailableError('refused', reply.error));
+      finish(() => {
+        const reply = event.data;
+        if (reply.ok) resolve(reply.packet);
+        else reject(new FlowUnavailableError('refused', reply.error));
+      });
     };
-    worker.onerror = () => {
-      signal.removeEventListener('abort', onAbort);
-      reject(new FlowUnavailableError('failed', 'the flow decode Worker failed'));
-    };
-    worker.postMessage(request, [...request.messages]);
+    worker.onerror = worker.onmessageerror = fail;
+    if (signal.aborted) onAbort();
+    else {
+      try {
+        worker.postMessage(request, [...request.messages]);
+      } catch (error) {
+        finish(() => reject(error));
+      }
+    }
   });
 }
 
@@ -290,8 +312,9 @@ export async function readFlowFrame(kind: FlowKind, options: FlowReadOptions): P
   const source = FLOW_SOURCES[kind];
   const ctrl = new AbortController();
   const unlink = linkAbort(ctrl, signal);
-  const worker = (options.createWorker ?? moduleWorker)();
+  let worker: DecodeWorkerLike | undefined;
   try {
+    worker = (options.createWorker ?? moduleWorker)();
     const t = now();
     let cycle = candidateCycle(t);
     for (let tries = 1; ; tries++) {
@@ -337,7 +360,7 @@ export async function readFlowFrame(kind: FlowKind, options: FlowReadOptions): P
     // 206, or a body longer or shorter than the span asked for.
     throw new FlowUnavailableError(reason, `${kind} read: ${e instanceof Error ? `${e.name} ${e.message}` : String(e)}`);
   } finally {
-    worker.terminate();
+    worker?.terminate();
     ctrl.abort();
     unlink();
   }
