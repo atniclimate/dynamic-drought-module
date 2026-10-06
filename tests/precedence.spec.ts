@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { isExternalHttp } from './offline-test';
+import { test, expect } from './offline-test';
 import {
   gotoApp,
   regionSelect,
@@ -216,7 +217,7 @@ test.describe('precedence: boot, Reset and embed defaults (DR-109)', () => {
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Frame, Page, Route } from '@playwright/test';
+import type { Frame, Page, Route } from './offline-test';
 import {
   SIDEBAR_DESKTOP_QUERY,
   normalizeSidebarParam,
@@ -280,6 +281,7 @@ async function installPagesMount(page: Page): Promise<void> {
     const mountedPath = requested.pathname.slice(PAGES_MOUNT.length - 1) || '/';
     const previewUrl = new URL(`${mountedPath}${requested.search}`, requested.origin);
     try {
+      if (isExternalHttp(new URL(route.request().url()))) return route.fallback();
       const response = await route.fetch({ url: previewUrl.href });
       await route.fulfill({ response });
     } catch {

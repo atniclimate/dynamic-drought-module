@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import { expect, test } from './offline-test';
+import type { Page } from './offline-test';
 
 import { gotoApp, PILL } from './helpers';
 import { routeAllTribalFixtures } from './tribal-fixtures';

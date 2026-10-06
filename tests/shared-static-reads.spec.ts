@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { continueLocalRoute } from './offline-test';
+import { expect, test, type Page } from './offline-test';
 
 import { gotoApp, waitForLayerSettled } from './helpers';
 
@@ -30,7 +31,7 @@ function ensoCurrentCell(page: Page) {
 
 /**
  * Installs a request counter on `pattern` that fulfils every request from
- * the real static file (`route.continue()`, never a fixture body), and
+ * the real static file (`continueLocalRoute(route)`, never a fixture body), and
  * counts every intercepted request, not every completed fulfilment, so a
  * request this spec later holds open still counts before it releases.
  */
@@ -38,7 +39,7 @@ function countRequests(page: Page, pattern: string): () => number {
   let count = 0;
   void page.route(pattern, (route) => {
     count += 1;
-    void route.continue();
+    void continueLocalRoute(route);
   });
   return () => count;
 }
@@ -123,7 +124,7 @@ test.describe('DDM-P14-T06: shared static reads', () => {
     await page.route(US_STATES_PATTERN, async (route) => {
       usStatesCount += 1;
       if (armed) await gate;
-      await route.continue();
+      await continueLocalRoute(route);
     });
 
     // No `states` layer here: the first us-states request must be the

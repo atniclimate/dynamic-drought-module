@@ -12,7 +12,7 @@ import {
   type Locator,
   type Page,
   type Route
-} from '@playwright/test';
+} from './offline-test';
 
 import { gotoApp, NODD_FIXTURES, noddStubLog } from './helpers';
 
@@ -302,12 +302,13 @@ function expectNoEscape(aborted: readonly string[], label: string): void {
 /** A fresh context booted into ENSO with `flow`, every host routed, the instruments armed. */
 async function boot(browser: Browser, options: BootOptions): Promise<Booted> {
   const context = await browser.newContext({
+    serviceWorkers: 'block',
     viewport: options.viewport ?? VIEWPORT,
     deviceScaleFactor: options.dpr ?? 1,
     reducedMotion: options.reduced ? 'reduce' : 'no-preference'
   });
-  const page = await context.newPage();
   const aborted = await installBackstop(context);
+  const page = await context.newPage();
   await page.route('https://tile.openstreetmap.org/**', (route: Route) =>
     route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG }));
   await page.clock.setFixedTime(LIVE_CLOCK);
@@ -713,9 +714,9 @@ test.describe('flow measure (ENSO-FLOW-PLAN 4.2 and 4.4)', () => {
     interface Seen { url: string; status: number; encoded: number; dataLength: number; bodyBytes: number }
     const perKind: Record<string, unknown> = {};
     for (const flow of ['wind', 'waves'] as const) {
-      const context = await browser.newContext({ viewport: VIEWPORT });
-      const page = await context.newPage();
+      const context = await browser.newContext({ viewport: VIEWPORT, serviceWorkers: 'block' });
       const aborted = await installBackstop(context);
+      const page = await context.newPage();
       try {
         await page.route('https://tile.openstreetmap.org/**', (route: Route) =>
           route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG }));
@@ -817,9 +818,9 @@ test.describe('flow measure (ENSO-FLOW-PLAN 4.2 and 4.4)', () => {
     };
 
     async function waveRead(rateMbit: number): Promise<{ rateMbit: number; wallMs: number; status: string; bytes: number }> {
-      const context = await browser.newContext({ viewport: VIEWPORT });
-      const page = await context.newPage();
+      const context = await browser.newContext({ viewport: VIEWPORT, serviceWorkers: 'block' });
       const aborted = await installBackstop(context);
+      const page = await context.newPage();
       try {
         await page.route('https://tile.openstreetmap.org/**', (route: Route) =>
           route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG }));

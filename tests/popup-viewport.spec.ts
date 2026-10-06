@@ -1,4 +1,4 @@
-import { test, expect, type BrowserContext, type Page, type Route } from '@playwright/test';
+import { test, expect, type BrowserContext, type Page, type Route } from './offline-test';
 import { awaitQuiescence, gotoApp, waitForLayerSettled } from './helpers';
 import { BIA_ROUTE, routeBoundary, syntheticBiaBody } from './tribal-fixtures';
 import { LEGACY_ALLOWANCE, eligibleBuilders, migratedBuilders } from './identify-paths-manifest';
@@ -936,7 +936,7 @@ test.describe('DEF-4 finding 1: viewport resize while telemetry hydration is in 
     // when the viewport shrinks, and it settles on the honest fallback
     // (content growth) afterward, so the growth re-clamp runs against the
     // NEW bounds.
-    const delayedAbort = async (route: import('@playwright/test').Route): Promise<void> => {
+    const delayedAbort = async (route: import('./offline-test').Route): Promise<void> => {
       await new Promise((resolve) => setTimeout(resolve, 1500));
       await route.abort('failed');
     };

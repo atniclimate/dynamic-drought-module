@@ -97,7 +97,7 @@
  * fixture makes it not matter.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './offline-test';
 import { gotoApp, waitForLayerSettled } from './helpers';
 import { AIANNH_ROUTE, BIA_ROUTE, routeGeojson } from './tribal-fixtures';
 

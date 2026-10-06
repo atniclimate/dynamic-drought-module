@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { isExternalHttp } from './offline-test';
+import { expect, test, type Page } from './offline-test';
 
 import { gotoApp } from './helpers';
 
@@ -91,6 +92,7 @@ test.describe('glyphs', () => {
       const requested = new URL(route.request().url());
       const mountedPath = requested.pathname.slice(SUBPATH.length) || '/';
       const previewUrl = new URL(`${mountedPath}${requested.search}`, requested.origin);
+      if (isExternalHttp(new URL(route.request().url()))) return route.fallback();
       const response = await route.fetch({ url: previewUrl.href });
       await route.fulfill({ response });
     });

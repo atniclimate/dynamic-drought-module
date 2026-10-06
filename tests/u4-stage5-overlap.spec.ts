@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './offline-test';
 
 import { gotoApp, layerCheckbox } from './helpers';
 import { stubRecentSatellite } from './satellite-fixture';
@@ -11,13 +11,13 @@ import { stubRecentSatellite } from './satellite-fixture';
  * without placing a card over the map.
  */
 
-async function box(page: import('@playwright/test').Page, selector: string) {
+async function box(page: import('./offline-test').Page, selector: string) {
   const b = await page.locator(selector).boundingBox();
   if (!b) throw new Error(`${selector} has no box`);
   return b;
 }
 
-async function boxes(page: import('@playwright/test').Page, selector: string) {
+async function boxes(page: import('./offline-test').Page, selector: string) {
   return page.locator(selector).evaluateAll((elements) =>
     elements.map((element) => {
       const rect = element.getBoundingClientRect();

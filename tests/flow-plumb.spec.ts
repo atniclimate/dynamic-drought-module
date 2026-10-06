@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page, type Route } from './offline-test';
 
 import type { FlowKind } from '../src/layers/flow/field';
 import { locateMessage } from '../src/layers/flow/nodd';

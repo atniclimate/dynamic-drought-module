@@ -1,4 +1,5 @@
-import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
+import { continueLocalRoute } from './offline-test';
+import { expect, test, type Locator, type Page, type Route } from './offline-test';
 import { HAZARD_CLUSTERS } from '../src/config/clusters';
 import { gotoApp, layerCheckbox, noddStubLog, search } from './helpers';
 
@@ -228,7 +229,7 @@ test('found-115 a Key that starts after the arrows have loaded still reads their
   await page.route(/\/assets\/map-key-[^/?]+\.js(?:\?|$)/, async (route) => {
     keyRequested = true;
     await arrowsLive;
-    await route.continue();
+    await continueLocalRoute(route);
   });
   await gotoApp(page, '?cluster=enso&ocean=pacific&flow=currents&embed=true');
   await expect(page.locator('.enso-flow')).toHaveAttribute('data-status', 'live');

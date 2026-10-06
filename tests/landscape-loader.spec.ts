@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './offline-test';
 
 import {
   isLandscapeBundle,

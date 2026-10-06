@@ -1,5 +1,6 @@
-import { test, expect } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import { continueLocalRoute } from './offline-test';
+import { test, expect } from './offline-test';
+import type { Page } from './offline-test';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 import { URLS } from '../src/config/urls';
 import { gotoApp, waitForLayerSettled } from './helpers';
@@ -363,7 +364,7 @@ test.describe('impact panel accessibility', () => {
     // test's toggle below, rather than racing it.
     await page.route(/\/data\/resources\//, async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 300));
-      await route.continue();
+      await continueLocalRoute(route);
     });
     await gotoApp(page, '?select=state:WA');
 

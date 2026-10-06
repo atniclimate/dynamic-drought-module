@@ -170,6 +170,7 @@ export default defineConfig({
 
   use: {
     baseURL: BASE_URL,
+    serviceWorkers: 'block',
     // Locally, traces and screenshots are captured only when something goes
     // wrong, so the tree stays clean on a green run (they land in gitignored
     // `test-results/`). CI is DELIBERATELY NOT the same (2026-08-29,

@@ -22,7 +22,7 @@
  * external request, at the next settle.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './offline-test';
 
 import { KEY_ELIGIBLE_LABELS } from '../src/config/chip-labels';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';

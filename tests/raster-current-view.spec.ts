@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page, type Route } from './offline-test';
 
 import { RASTER_PROOF_DEADLINE_MS } from '../src/util/raster-status';
 import { gotoApp, layerPill, PILL, selectRegion } from './helpers';

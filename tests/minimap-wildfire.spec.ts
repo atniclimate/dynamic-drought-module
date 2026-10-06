@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './offline-test';
 
 import { FRAMING_KEYS } from '../src/config/framings';
 import { MINIMAP_WHP } from '../src/config/minimap-whp';

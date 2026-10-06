@@ -16,7 +16,7 @@
  * pure by construction (no DOM, no fetches, no application state).
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './offline-test';
 
 import { makeClaim } from '../src/impact/evidence';
 import {

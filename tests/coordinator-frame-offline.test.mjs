@@ -9,7 +9,7 @@ const setups = [];
 globalThis.__coordinatorOfflineSetups = setups;
 registerHooks({
   resolve(specifier, context, nextResolve) {
-    if (specifier === '@playwright/test' || specifier === './helpers') {
+    if (specifier === './offline-test' || specifier === './helpers') {
       return { url: `offline-proof:${specifier}`, shortCircuit: true };
     }
     if (specifier.startsWith('.') && !/\.[a-z]+$/i.test(specifier) && context.parentURL?.endsWith('.ts')) {
@@ -19,9 +19,9 @@ registerHooks({
     return nextResolve(specifier, context);
   },
   load(url, context, nextLoad) {
-    if (url === 'offline-proof:@playwright/test') {
+    if (url === 'offline-proof:./offline-test') {
       return { format: 'module', shortCircuit: true, source:
-        'export const test = { beforeEach: (fn) => globalThis.__coordinatorOfflineSetups.push(fn), describe() {} }; export const expect = () => {};' };
+        'export const test = { beforeEach: (fn) => globalThis.__coordinatorOfflineSetups.push(fn), describe() {} }; export const expect = () => {}; export const continueLocalRoute = () => {}; export const isExternalHttp = () => true;' };
     }
     if (url === 'offline-proof:./helpers') {
       return { format: 'module', shortCircuit: true, source:

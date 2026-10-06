@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './offline-test';
 
 import { parsePmtilesHeader, probeArchiveHeader } from '../src/util/pmtiles-probe';
 import { pmtilesHeaderResponse, pmtilesObjectSize, pmtilesV3Header } from './map-harness';

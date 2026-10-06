@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './offline-test';
 import { gotoApp, layerCheckbox, layerPill, PILL, urlLayers, search, DEFAULT_ON } from './helpers';
 import { TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
 import {
@@ -392,7 +392,7 @@ async function stubHeatRisk(
   page: Page,
   raster: (
     time: number,
-    route: import('@playwright/test').Route
+    route: import('./offline-test').Route
   ) => Promise<void>
 ): Promise<void> {
   await page.route('https://tile.openstreetmap.org/**', (route) =>

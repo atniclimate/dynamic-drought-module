@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test, expect } from '@playwright/test';
+import { test, expect } from './offline-test';
 import { gotoApp, waitForLayerSettled } from './helpers';
 import { BUILDERS, LEGACY_ALLOWANCE, stripComments } from './identify-paths-manifest';
 import { serializePopupFrame } from '../src/ui/popup-frame';

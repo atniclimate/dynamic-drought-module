@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './offline-test';
 import { LAYER_GROUPS, TRIBAL_NATIONS_GROUP } from '../src/config/layer-groups';
 import { LAYER_DEFS } from '../src/config/layers';
 

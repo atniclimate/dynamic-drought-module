@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './offline-test';
 import { FLOW_VARIABLES, normalizeFlowLongitude, parseFlowFrame } from '../src/layers/enso-flow-data';
 import { parseEnsoFlowParams, writeEnsoFlowParams } from '../src/state/enso-flow';
 

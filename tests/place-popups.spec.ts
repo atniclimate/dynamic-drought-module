@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Route } from '@playwright/test';
+import { test, expect, type Page, type Route } from './offline-test';
 import { gotoApp, layerCheckbox, waitForLayerSettled } from './helpers';
 import { AIANNH_ROUTE, routeGeojson } from './tribal-fixtures';
 import { HAZARD_CLUSTERS, type HazardClusterKey } from '../src/config/clusters';

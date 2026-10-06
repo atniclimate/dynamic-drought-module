@@ -1,4 +1,4 @@
-import { test, expect, type Locator } from '@playwright/test';
+import { test, expect, type Locator } from './offline-test';
 import { gotoApp } from './helpers';
 
 type Box = NonNullable<Awaited<ReturnType<Locator['boundingBox']>>>;

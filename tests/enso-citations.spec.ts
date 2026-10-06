@@ -34,7 +34,7 @@
  * snapshot's `roni.state` block, which `readState` returns as-is, so each
  * fixture selects one tendency branch without reaching into the module.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './offline-test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 

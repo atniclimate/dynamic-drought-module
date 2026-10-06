@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './offline-test';
 
 import type { RegionKey } from '../src/config/regions';
 import { placeRefFromBoundary } from '../src/config/entities';

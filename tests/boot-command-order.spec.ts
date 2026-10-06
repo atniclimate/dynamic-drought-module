@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
+import { continueLocalRoute } from './offline-test';
+import { test, expect, type Page } from './offline-test';
 
 import {
   awaitQuiescence,
@@ -106,7 +107,7 @@ async function bootWithHeldIsland(
   });
   await page.route(ISLAND_CHUNK, async (route) => {
     await held;
-    await route.continue();
+    await continueLocalRoute(route);
   });
   // Settled into a value at once, so a failure while the command runs is
   // never an unhandled rejection; it is rethrown below.

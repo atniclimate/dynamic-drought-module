@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './offline-test';
 
 import { LAYER_KEYS, LAYER_DEFS, getLayerDef, resolveExclusiveSurface } from '../src/config/layers';
 import { PRESET_KEYS, MOBILE_HAZARD_PRESETS, VIEW_PRESETS } from '../src/config/presets';

@@ -1,4 +1,4 @@
-import { expect, test, type Route } from '@playwright/test';
+import { expect, test, type Route } from './offline-test';
 
 import { gotoApp } from './helpers';
 

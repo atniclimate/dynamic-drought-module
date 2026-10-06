@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './offline-test';
 
 import { resolveCanonicalGeography } from '../src/config/geography';
 import type { CanonicalGeography } from '../src/config/geography';

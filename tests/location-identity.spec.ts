@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './offline-test';
 import type * as maplibregl from 'maplibre-gl';
 
 import { resolveLocationIdentity } from '../src/state/location-identity';

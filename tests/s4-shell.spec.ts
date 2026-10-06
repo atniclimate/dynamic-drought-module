@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { continueLocalRoute } from './offline-test';
+import { test, expect } from './offline-test';
 import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
 import { TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
 import { HORIZON_CHROME, SHELL_HORIZON_KEY } from '../src/impact/horizon-chrome';
@@ -43,7 +44,7 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 958, height: 935
       // The layer controller's module load is the observable pending phase.
       sstModuleRequests += 1;
       await gates.get('enso')!.promise;
-      await route.continue();
+      await continueLocalRoute(route);
     });
     await page.route('https://tile.openstreetmap.org/**', (route) =>
       route.fulfill({ status: 200, contentType: 'image/png', body: pixel }));
@@ -395,7 +396,7 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
     ]
   };
 
-  async function routeCpcOutlook(page: import('@playwright/test').Page): Promise<void> {
+  async function routeCpcOutlook(page: import('./offline-test').Page): Promise<void> {
     await page.route(
       (url) => url.href.includes('cpc_drought_outlk/MapServer'),
       (route) =>
@@ -673,7 +674,7 @@ test.describe('S4 r2: custom-composition horizon honesty and the failed range sw
    * Monthly layer, MapServer/4 the Seasonal (RANGE_LAYER_INDEX in
    * src/layers/drought.ts). */
   async function routeCpcPerRange(
-    page: import('@playwright/test').Page,
+    page: import('./offline-test').Page,
     seasonal: 'ok' | 'fail',
     onSeasonalAttempt?: () => void
   ): Promise<void> {
@@ -1088,7 +1089,7 @@ test.describe('S4 r4: off intent during activation reaches the abort path (DG-08
 
 // D1 M8 imports. Import declarations are hoisted, so appending them beside the
 // describe that uses them keeps the cases above byte-identical (append only).
-import type { Page } from '@playwright/test';
+import type { Page } from './offline-test';
 import { REGIONS, regionToMapLibreBounds } from '../src/config/regions';
 import type { RegionKey } from '../src/config/regions';
 

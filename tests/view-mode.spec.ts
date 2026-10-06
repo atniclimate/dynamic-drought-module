@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { continueLocalRoute } from './offline-test';
+import { test, expect } from './offline-test';
 import { gotoApp, search, urlLayers } from './helpers';
 import { stubRecentSatellite } from './satellite-fixture';
 import { routeAllTribalFixtures } from './tribal-fixtures';
@@ -111,7 +112,7 @@ test.describe('U1 the two doors (view mode)', () => {
         first = false;
         await boundaryGate;
       }
-      await route.continue();
+      await continueLocalRoute(route);
     });
 
     try {

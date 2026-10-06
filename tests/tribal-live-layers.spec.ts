@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './offline-test';
 import {
   gotoApp,
   layerCheckbox,
@@ -784,7 +784,7 @@ test.describe('DDM-P9-T05: RAWS popup readings', () => {
    * live latency, never the reason a RAWS-focused case is slow or flaky.
    */
   async function abortOtherDiscoverySources(page: Page): Promise<void> {
-    const abort = (route: import('@playwright/test').Route): unknown => route.abort('failed');
+    const abort = (route: import('./offline-test').Route): unknown => route.abort('failed');
     await page.route('**/waterservices.usgs.gov/**', abort);
     await page.route('**/wcc.sc.egov.usda.gov/**', abort);
     await page.route('**/api.tidesandcurrents.noaa.gov/**', abort);
@@ -956,7 +956,7 @@ test.describe('DDM-P9-T05: RAWS popup readings', () => {
  */
 test.describe('DDM-P9-T06: RAWS wind symbol', () => {
   async function abortOtherDiscoverySources(page: Page): Promise<void> {
-    const abort = (route: import('@playwright/test').Route): unknown => route.abort('failed');
+    const abort = (route: import('./offline-test').Route): unknown => route.abort('failed');
     await page.route('**/waterservices.usgs.gov/**', abort);
     await page.route('**/wcc.sc.egov.usda.gov/**', abort);
     await page.route('**/api.tidesandcurrents.noaa.gov/**', abort);

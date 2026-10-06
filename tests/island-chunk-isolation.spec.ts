@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
+import { continueLocalRoute } from './offline-test';
+import { test, expect, type Page } from './offline-test';
 
 import {
   gotoApp,
@@ -115,7 +116,7 @@ test.describe('island and search chunk isolation (DDM-P1-T04)', () => {
       if (islandRequestCount === 1) {
         void route.abort('failed');
       } else {
-        void route.continue();
+        void continueLocalRoute(route);
       }
     });
 
@@ -153,7 +154,7 @@ test.describe('island and search chunk isolation (DDM-P1-T04)', () => {
       if (attempts === 1) {
         void route.abort('failed');
       } else {
-        void route.continue();
+        void continueLocalRoute(route);
       }
     });
 
@@ -181,7 +182,7 @@ test.describe('island and search chunk isolation (DDM-P1-T04)', () => {
       if (attempts === 1) {
         void route.abort('failed');
       } else {
-        void route.continue();
+        void continueLocalRoute(route);
       }
     });
 
@@ -212,7 +213,7 @@ test.describe('island and search chunk isolation (DDM-P1-T04)', () => {
     });
     await page.route(/\/layers-studio-[^/?]*\.js(\?|$)/, async (route) => {
       await gate;
-      await route.continue();
+      await continueLocalRoute(route);
     });
 
     await gotoApp(page, '?view=brief&layers=places');

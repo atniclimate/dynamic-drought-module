@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { test, expect, type Page, type Route } from '@playwright/test';
+import { test, expect, type Page, type Route } from './offline-test';
 import { parseAst } from 'rolldown/parseAst';
 import { gotoApp, waitForLayerSettled } from './helpers';
 import {

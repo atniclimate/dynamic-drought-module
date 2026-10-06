@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './offline-test';
 import { PNG } from 'pngjs';
 
 import { HAZARD_CLUSTERS } from '../src/config/clusters';
@@ -45,7 +45,7 @@ interface HeatRouteOptions {
   readonly metadataTimeInfo?: unknown;
   readonly rasterResponse?: (
     time: number,
-    route: import('@playwright/test').Route
+    route: import('./offline-test').Route
   ) => Promise<void> | void;
 }
 

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './offline-test';
 import { gotoApp, layerCheckbox, waitForLayerSettled } from './helpers';
 
 /**
@@ -13,7 +13,7 @@ import { gotoApp, layerCheckbox, waitForLayerSettled } from './helpers';
  */
 
 /** The data-legend keys of the rendered sections, in DOM (visual) order. */
-async function sectionKeys(page: import('@playwright/test').Page): Promise<(string | null)[]> {
+async function sectionKeys(page: import('./offline-test').Page): Promise<(string | null)[]> {
   return page.$$eval('#legend-sections .legend-section', (els) =>
     els.map((e) => e.getAttribute('data-legend'))
   );

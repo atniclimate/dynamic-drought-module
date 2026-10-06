@@ -1,4 +1,4 @@
-import { test, expect, type Browser } from '@playwright/test';
+import { test, expect, installOfflineBackstop, type Browser } from './offline-test';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -42,6 +42,9 @@ import {
  * `docs/` unless `DDM_MEASURE_LABEL` is `baseline` or `candidate`; a bare
  * run still prints its numbers and, when a baseline is already committed,
  * still checks that no switch's data-read count rose.
+ * All external responses now come from fixtures or the offline backstop.
+ * Label these runs as offline when comparing them with the historical
+ * live-feed baseline: response-dependent follow-up requests can differ.
  *
  * The write decision runs through `writePolicy` (DDM-P14-T08 provenance
  * guard): a `baseline` or `candidate` run on a clean tree (`git status
@@ -122,16 +125,13 @@ test.describe('mode-switch cost', () => {
       // Diagnostics name the profile too; the recorded `id` stays the
       // switch id, the key `compareRuns` and `renderReport` match on.
       const where = `${profile} ${id}`;
-      const context = await browser.newContext({ viewport: VIEWPORT });
+      const context = await browser.newContext({ viewport: VIEWPORT, serviceWorkers: 'block' });
       try {
+        await installOfflineBackstop(context);
         const page = await context.newPage();
 
         const fromQuery = bootQuery({ urlToken: urlTokenFor(sw.from), profile });
-        // J12 opt-out: the recorded baseline (0c27ab1) measured the live WFIGS
-        // and NADM reads; the NADM fixture default (b872c7e) came after it.
-        // The NWS WWA default stub (S30D P2-CI) came after the baseline too:
-        // its heat boots measured the live WWA read.
-        await gotoApp(page, fromQuery, { nifc: 'live', nadm: 'live', nwsWwa: 'live' });
+        await gotoApp(page, fromQuery);
         const fromBtn = page.locator(`.shell-cluster-btn[data-cluster="${sw.from}"]`);
         await expect(
           fromBtn,

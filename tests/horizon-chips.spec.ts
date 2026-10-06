@@ -38,7 +38,7 @@
  * ENSO snapshot, routed through `page.route`, with the other briefing lanes
  * stubbed empty so this file depends on no live agency.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './offline-test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 

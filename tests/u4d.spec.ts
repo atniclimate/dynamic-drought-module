@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './offline-test';
 
 import { ACKNOWLEDGEMENTS, PROVIDERS } from '../src/config/acknowledgements';
 import { SATELLITE_COVERAGE_NOTE } from '../src/map/satellite';

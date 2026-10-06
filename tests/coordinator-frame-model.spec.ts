@@ -1,4 +1,6 @@
-import { test, expect, type Page } from '@playwright/test';
+import { isExternalHttp } from './offline-test';
+import { continueLocalRoute } from './offline-test';
+import { test, expect, type Page } from './offline-test';
 import { gotoApp, waitForLayerSettled } from './helpers';
 import { serializePopupFrame } from '../src/ui/popup-frame';
 import type { PopupModel } from '../src/ui/popup-frame';
@@ -153,6 +155,7 @@ async function bootModelTarget(page: Page, query: string, answers: readonly Answ
   await page.route(
     (url) => BIA_CHUNK.test(url.pathname),
     async (route) => {
+      if (isExternalHttp(new URL(route.request().url()))) return route.fallback();
       const response = await route.fetch();
       const body = await response.text();
       const sites = body.match(BIA_REGISTRATION)?.length ?? 0;
@@ -195,7 +198,7 @@ async function gateFrameChunk(page: Page, mode: 'hold' | 'fail'): Promise<FrameG
       // `failing` is read at release, so a held request can also be failed.
       await released;
       if (gate.failing) await route.abort('failed');
-      else await route.continue();
+      else await continueLocalRoute(route);
     }
   );
   return gate;

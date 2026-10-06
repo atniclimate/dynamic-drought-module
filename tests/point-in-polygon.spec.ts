@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './offline-test';
 import type { FeatureCollection, Geometry } from 'geojson';
 
 import { pointInPolygonGeometry } from '../src/util/point-in-polygon';

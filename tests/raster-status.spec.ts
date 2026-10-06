@@ -1,4 +1,5 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { continueLocalRoute } from './offline-test';
+import { expect, test, type Page, type Route } from './offline-test';
 import type * as maplibregl from 'maplibre-gl';
 import { readFileSync } from 'node:fs';
 
@@ -857,7 +858,7 @@ test.describe('tile-proven raster readiness in the browser (DDM-P14-T04, found-0
       // read starts later. Only the tile reads are held, never the probe.
       const range = route.request().headers()['range'] ?? '';
       if (!range.startsWith('bytes=0-')) await gate.held;
-      await route.continue().catch(() => undefined);
+      await continueLocalRoute(route).catch(() => undefined);
     });
     await gotoApp(page, '?view=console&layers=hillshade&region=washington_state', {
       bootIdle: false
@@ -884,7 +885,7 @@ test.describe('tile-proven raster readiness in the browser (DDM-P14-T04, found-0
       // elsewhere) is held.
       const range = route.request().headers()['range'] ?? '';
       if (!range.startsWith('bytes=0-')) await gate.held;
-      await route.continue().catch(() => undefined);
+      await continueLocalRoute(route).catch(() => undefined);
     });
     await gotoApp(page, '?view=console&layers=hillshade&region=national', {
       bootIdle: false

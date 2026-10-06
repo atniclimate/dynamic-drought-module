@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './offline-test';
 import { readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 

@@ -1,4 +1,5 @@
-import { expect, test, type Page, type Request } from '@playwright/test';
+import { continueLocalRoute } from './offline-test';
+import { expect, test, type Page, type Request } from './offline-test';
 
 import { URLS } from '../src/config/urls';
 import { BASE_URL, BOOT_URLS } from '../src/config/urls-boot';
@@ -183,7 +184,7 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
       await page.route(/\/data\/resources\//, async (route) => {
         heldReads++;
         await gate;
-        await route.continue();
+        await continueLocalRoute(route);
       });
       await gotoApp(page, '?select=state:WA&region=washington_state');
       const panel = page.locator('#impact-panel');

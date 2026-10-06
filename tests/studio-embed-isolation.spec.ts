@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './offline-test';
 
 import { FRAMINGS, type FramingKey } from '../src/config/framings';
 import { gotoApp } from './helpers';

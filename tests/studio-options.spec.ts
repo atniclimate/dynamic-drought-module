@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './offline-test';
 
 import { LAYER_DEFS, LAYER_ROLE_ORDER } from '../src/config/layers';
 import { gotoApp, urlLayers } from './helpers';

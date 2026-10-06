@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test';
+import { isExternalHttp } from './offline-test';
+import { expect, test } from './offline-test';
 
 import { awaitQuiescence, ROLE_GROUPS } from './helpers';
 import { stubRecentSatellite } from './satellite-fixture';
@@ -20,6 +21,7 @@ test('the production artifact boots from the GitHub Pages subpath', async ({
       `${mountedPath}${requested.search}`,
       requested.origin,
     );
+    if (isExternalHttp(new URL(route.request().url()))) return route.fallback();
     const response = await route.fetch({ url: previewUrl.href });
     await route.fulfill({ response });
   });

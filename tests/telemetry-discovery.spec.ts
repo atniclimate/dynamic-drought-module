@@ -1,9 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './offline-test';
 import { PILL, gotoApp, layerCheckbox, layerPill, waitForLayerSettled } from './helpers';
 
 const SEED_STATION_IDS = ['ihr', 'bono3', 'snotel_791'] as const;
 
-function seedMarker(page: import('@playwright/test').Page, id: string) {
+function seedMarker(page: import('./offline-test').Page, id: string) {
   return page.locator(`.telemetry-marker[data-telemetry-station-id="${id}"]`);
 }
 

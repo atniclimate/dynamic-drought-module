@@ -1,5 +1,6 @@
-import { test, expect } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import { continueLocalRoute } from './offline-test';
+import { test, expect } from './offline-test';
+import type { Page } from './offline-test';
 import { URLS } from '../src/config/urls';
 import { gotoApp } from './helpers';
 
@@ -230,7 +231,7 @@ test.describe('U1 the report in print', () => {
     });
     await page.route(/\/data\/resources\//, async (route) => {
       await resourcesHeld;
-      await route.continue();
+      await continueLocalRoute(route);
     });
 
     await gotoApp(page, '?select=state:WA');

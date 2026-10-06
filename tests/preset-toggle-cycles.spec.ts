@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
+import { expect, test, type Locator, type Page, type Route } from './offline-test';
 
 import { TEMPORAL_HORIZON_KEYS, type TemporalHorizonKey } from '../src/config/clusters';
 import { VIEW_PRESETS, type ViewPreset } from '../src/config/presets';

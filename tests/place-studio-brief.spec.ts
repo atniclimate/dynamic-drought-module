@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './offline-test';
 import type { FeatureCollection, MultiPolygon, Polygon } from 'geojson';
 
 import { createBriefingSkeleton } from '../src/impact/briefing';

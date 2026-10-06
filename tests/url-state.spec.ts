@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test';
-import type { Page, Response } from '@playwright/test';
+import { test, expect } from './offline-test';
+import type { Page, Response } from './offline-test';
 import { placeRefFromBoundary } from '../src/config/entities';
 import {
   gotoApp,
@@ -522,7 +522,7 @@ import { fullSiteLayersStudioUrl, fullSitePlaceStudioUrl } from '../src/state/st
 import { FRAMINGS } from '../src/config/framings';
 import { installFakeBrowser } from './map-harness';
 import { stubHeatRiskCatalog } from './helpers';
-import type { Route } from '@playwright/test';
+import type { Route } from './offline-test';
 
 /** Inbound sidebar= forms and whether the one emitted form survives a write. */
 const SIDEBAR_INBOUND: ReadonlyArray<{ readonly query: string; readonly kept: boolean }> = [

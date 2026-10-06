@@ -1,4 +1,4 @@
-import { test, expect, type Locator, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from './offline-test';
 import { PNG } from 'pngjs';
 import {
   MAP_CELL_ANATOMY,

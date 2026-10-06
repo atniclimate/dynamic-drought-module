@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test';
-import type { Page, Response } from '@playwright/test';
+import { test, expect } from './offline-test';
+import type { Page, Response } from './offline-test';
 
 import { placeRefFromBoundary } from '../src/config/entities';
 import { gotoApp, layerCheckbox } from './helpers';

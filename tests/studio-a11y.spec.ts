@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test';
+import { continueLocalRoute } from './offline-test';
+import { expect, test } from './offline-test';
 
 import { gotoApp } from './helpers';
 
@@ -183,7 +184,7 @@ test.describe('studio focus and geometry', () => {
     const chunkPattern = /\/place-studio-[^/?]*\.js(\?|$)/;
     await page.route(chunkPattern, async (route) => {
       await gate;
-      await route.continue();
+      await continueLocalRoute(route);
     });
 
     await page.setViewportSize({ width: 1280, height: 900 });

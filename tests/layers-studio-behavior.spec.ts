@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './offline-test';
 
 import { STATUS_PILL_TEXT } from '../src/ui/island/pill-text';
 import { gotoApp, search, urlLayers } from './helpers';

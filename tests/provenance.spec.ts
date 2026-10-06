@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './offline-test';
 import { gotoApp, waitForLayerSettled } from './helpers';
 import { caveatFor } from '../src/impact/context';
 import { buildTribeCatalogEntries } from '../src/config/place-catalog';

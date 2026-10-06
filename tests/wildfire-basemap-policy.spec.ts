@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './offline-test';
 
 import { HAZARD_CLUSTERS } from '../src/config/clusters';
 import {

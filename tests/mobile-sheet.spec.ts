@@ -1,4 +1,4 @@
-import { test, expect, type Locator } from '@playwright/test';
+import { test, expect, type Locator } from './offline-test';
 import { gotoApp, waitForLayerSettled } from './helpers';
 
 async function rect(locator: Locator): Promise<{ x: number; y: number; width: number; height: number }> {

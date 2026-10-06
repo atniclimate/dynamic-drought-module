@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { continueLocalRoute } from './offline-test';
+import { expect, test, type Page } from './offline-test';
 
 import {
   HAZARD_CLUSTERS,
@@ -484,7 +485,7 @@ test.describe('found-087: a layer whose chunk failed once loads on a later re-ch
       if (chunkRequests.length === 1) {
         void route.abort();
       } else {
-        void route.continue();
+        void continueLocalRoute(route);
       }
     });
     await gotoApp(page, '?layers=');

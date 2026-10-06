@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './offline-test';
 
 import {
   gotoApp,
@@ -206,7 +206,7 @@ test.describe('S2 cluster boot composition (Node)', () => {
  * cannot be dropped by a live-agency outage mid-spec (smoke-suite
  * doctrine: never couple to live values).
  */
-async function stubWildfireRecipe(page: import('@playwright/test').Page): Promise<void> {
+async function stubWildfireRecipe(page: import('./offline-test').Page): Promise<void> {
   const empty = JSON.stringify({ type: 'FeatureCollection', features: [] });
   await page.route('**/WFIGS_Interagency_Perimeters_Current/**', (route) =>
     route.fulfill({ contentType: 'application/geo+json', body: empty })

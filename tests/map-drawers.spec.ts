@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './offline-test';
 import { gotoApp, layerPill, PILL, search, stubHeatRiskCatalog } from './helpers';
 import { isNwsWwaRequestUrl, NWS_WWA_EMPTY, nwsWwaStubLog } from './nws-wwa-fixtures';
 

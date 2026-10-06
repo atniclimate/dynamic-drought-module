@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './offline-test';
 import type * as maplibregl from 'maplibre-gl';
 import type { Polygon } from 'geojson';
 

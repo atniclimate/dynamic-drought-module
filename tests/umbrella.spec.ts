@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './offline-test';
 import {
   gotoApp,
   layerCheckbox,
@@ -264,7 +264,7 @@ test.describe('the Tribal Nations umbrella (console catalog)', () => {
 
 test.describe('URL intent durability (the final-pass finding 1 pair)', () => {
   /** Gate both live routes open so no activation can settle. */
-  async function holdAllTribal(page: import('@playwright/test').Page): Promise<() => void> {
+  async function holdAllTribal(page: import('./offline-test').Page): Promise<() => void> {
     const releases: Array<() => void> = [];
     const hold = async (pattern: string, body: unknown): Promise<void> => {
       const gate = new Promise<void>((resolve) => releases.push(resolve));
@@ -340,11 +340,11 @@ test.describe('partial-outage visibility (the final-pass finding 2)', () => {
   const BRIEF_HEALTH =
     '.tribal-nations-brief-row:not(.tribal-nations-at-hand-row) .tribal-nations-health';
 
-  async function oneAgencyDown(page: import('@playwright/test').Page): Promise<void> {
+  async function oneAgencyDown(page: import('./offline-test').Page): Promise<void> {
     await routeGeojsonPair(page);
     await routeBoundary(page, BIA_ROUTE, (route) => route.abort('failed'));
   }
-  async function routeGeojsonPair(page: import('@playwright/test').Page): Promise<void> {
+  async function routeGeojsonPair(page: import('./offline-test').Page): Promise<void> {
     await routeBoundary(page, AIANNH_ROUTE, (route) =>
       route.fulfill({
         contentType: 'application/geo+json',

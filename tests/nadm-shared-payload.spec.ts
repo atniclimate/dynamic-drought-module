@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './offline-test';
 
 import { validateNadmSnapshot } from '../src/layers/nadm-drought';
 import { deriveMinimapDroughtSnapshot } from '../src/state/minimap-drought';

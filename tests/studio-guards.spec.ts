@@ -1,4 +1,5 @@
-import { expect, test, type Frame, type Page } from '@playwright/test';
+import { continueLocalRoute } from './offline-test';
+import { expect, test, type Frame, type Page } from './offline-test';
 import type { FeatureCollection } from 'geojson';
 
 import { gotoApp, search } from './helpers';
@@ -144,7 +145,7 @@ test.describe('studio route guards', () => {
         if (chunkAttempts <= 1) {
           await route.abort('failed');
         } else {
-          await route.continue();
+          await continueLocalRoute(route);
         }
       });
 
@@ -216,7 +217,7 @@ test.describe('studio route guards', () => {
         if (chunkAttempts <= 1) {
           await route.abort('failed');
         } else {
-          await route.continue();
+          await continueLocalRoute(route);
         }
       });
 

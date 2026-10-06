@@ -141,6 +141,11 @@ const LIVE_BOUNDARY_ALLOWANCE = {
  * `routeAllTribalFixtures` or `routeBoundary` for exactly that reason).
  */
 const DIRECT_BOOT_REASONS = {
+  'tests/offline-boundary.spec.ts': {
+    sites: 5,
+    reason:
+      'the routing regression navigates only to its own loopback text sentinel and about:blank; no application boots, and it installs the boundary and minimap stubs before navigation as well as inheriting the global offline context'
+  },
   'tests/helpers.ts': {
     sites: 1,
     reason:
@@ -221,7 +226,7 @@ const SECOND_PAGE_REASONS = {
   },
   'tests/mode-switch-cost.spec.ts': {
     reason:
-      'the DDM-P14-T08 mode-switch measurement (DR-095): one page per FRESH browser.newContext(), not a popup in an existing context, because each of the twelve ordered switches has to be measured from cold caches or the previous switch pays for this one. Every one of those pages boots through gotoApp, so it installs the same satellite, sovereign-boundary and minimap stubs as any other boot in this suite, and no page here reaches a live sovereign-geography service. It passes nifc: live to gotoApp by design (J12), because its recorded baseline measured the live WFIGS reads, so WFIGS (and HMS smoke, which no default stubs) stay live here. The spec runs only in its own chromium-measure project, which CI never invokes.'
+      'the DDM-P14-T08 mode-switch measurement (DR-095): one page per FRESH browser.newContext(), not a popup in an existing context, because each of the twelve ordered switches has to be measured from cold caches or the previous switch pays for this one. Every one of those pages boots through gotoApp, so it installs the same satellite, sovereign-boundary and minimap stubs as any other boot in this suite, and no page here reaches a live sovereign-geography service. It installs the offline context backstop before page creation and uses the default deterministic feed fixtures. The spec runs only in its own chromium-measure project, which CI never invokes.'
   },
   'tests/flow-measure.spec.ts': {
     reason:

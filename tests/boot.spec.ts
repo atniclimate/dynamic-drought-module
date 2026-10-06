@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './offline-test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gotoApp, layerCheckbox, regionSelect, DEFAULT_ON, ROLE_GROUPS } from './helpers';

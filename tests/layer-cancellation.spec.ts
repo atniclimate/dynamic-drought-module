@@ -1,3 +1,4 @@
+import { continueLocalRoute } from './offline-test';
 /**
  * The layer cancellation seam, and the acceptance sentence of DDM-P1-T02
  * (`docs/ROADMAP.yaml`, phase DDM-P1):
@@ -44,7 +45,7 @@
  * bound used here: under every budget, and over any honest teardown cost on
  * a slow CI runner.
  */
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page, type Route } from './offline-test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -348,13 +349,13 @@ test.describe('DDM-P1-T02: held PMTiles requests abort promptly', () => {
         const start = Number(/bytes=(\d+)-/.exec(range)?.[1] ?? -1);
         if (start >= tileDataOffset) {
           held.releases.push(() => {
-            void route.continue().catch(() => {
+            void continueLocalRoute(route).catch(() => {
               /* aborted by the page: cancellation won */
             });
           });
           return;
         }
-        void route.continue();
+        void continueLocalRoute(route);
       }
     );
     const failures = watchFailures(page, (url) => url.endsWith(ECOREGIONS_ARCHIVE));

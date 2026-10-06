@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Route } from '@playwright/test';
+import { test, expect, type Page, type Route } from './offline-test';
 
 import { HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 import { gotoApp, layerCheckbox, layerPill, search } from './helpers';

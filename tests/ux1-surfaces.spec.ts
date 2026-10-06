@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './offline-test';
 import {
   gotoApp,
   layerCheckbox,
@@ -129,7 +129,7 @@ test.describe('UX-1 role groups and exclusive surfaces', () => {
 test.describe('U3a catalog regroup', () => {
   // The Place group is located via the always-rendered states row (the
   // deployer slot rows left the default catalog with Unit I, D-0.7.0-038).
-  const placeGroup = (page: import('@playwright/test').Page) =>
+  const placeGroup = (page: import('./offline-test').Page) =>
     page.locator('.layer-group').filter({ has: page.locator('input[data-layer-key="states"]') });
 
   test('group headings carry an active count that tracks toggles', async ({ page }) => {

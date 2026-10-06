@@ -1,5 +1,14 @@
-import { test, expect, type Page } from '@playwright/test';
-import { gotoApp, waitForLayerSettled } from './helpers';
+import { test, expect, type Page } from './offline-test';
+import {
+  gotoApp,
+  layerCheckbox,
+  layerPill,
+  PILL,
+  search,
+  stubHeatRiskCatalog,
+  urlLayers,
+  waitForLayerSettled
+} from './helpers';
 import { BIA_ROUTE, NOTCH_BOUNDS, concaveBiaBody, routeGeojson } from './tribal-fixtures';
 
 /**
@@ -413,7 +422,7 @@ test.describe('the Conditions block never claims an absence it did not read', ()
    * query with `body`, and open the reservation popup. */
   async function bootWithAlerts(
     page: Page,
-    fulfil: (route: import('@playwright/test').Route) => Promise<void> | void
+    fulfil: (route: import('./offline-test').Route) => Promise<void> | void
   ): Promise<void> {
     await page.route((url) => url.pathname.endsWith(WWA_QUERY), fulfil);
     await gotoApp(page, '?region=washington_state&view=console&layers=aiannh,bia-reservations,nws-alerts');
@@ -425,12 +434,26 @@ test.describe('the Conditions block never claims an absence it did not read', ()
   test('a condition layer that failed to load is named as unread, never as nothing here and never as nothing asked for', async ({
     page
   }) => {
-    // The refresh-failure path clears the displayed snapshot and reports
-    // `error` while KEEPING the fill layer and the active key
-    // (src/layers/nws-alerts.ts), so a reader that asks only "is the layer
-    // on and does its fill exist" sees an empty query and cannot tell a
-    // quiet sky from a broken pipe.
-    await bootWithAlerts(page, (route) => route.abort());
+    // A failed member of a committed mode stays checked. A custom layers=
+    // boot instead unchecks a failed activation, so it cannot establish the
+    // switched-on-but-unread precondition this case protects.
+    await page.route((url) => url.pathname.endsWith(WWA_QUERY), (route) => route.abort());
+    await stubHeatRiskCatalog(page);
+    await gotoApp(page, '?region=washington_state&view=console&cluster=heat');
+    await waitForLayerSettled(page, 'aiannh');
+    await waitForLayerSettled(page, 'bia-reservations');
+    await waitForLayerSettled(page, 'nws-alerts');
+    await expect(layerCheckbox(page, 'nws-alerts')).toBeChecked();
+    await expect(layerPill(page, 'nws-alerts')).toHaveClass(/\berror\b/);
+    await expect(layerPill(page, 'nws-alerts')).toHaveText(PILL.unavailable);
+    await expect(page.locator('.shell-cluster-btn[data-cluster="heat"]')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    const params = new URLSearchParams(await search(page));
+    expect(params.get('cluster')).toBe('heat');
+    expect(params.has('layers')).toBe(false);
+    await clickCenterUntilPrimary(page, 'Synthetic Reservation Fixture');
 
     const conditions = page.locator('.maplibregl-popup-content [data-popup-slot="value"]');
     await expect(conditions).toBeVisible();
@@ -452,6 +475,27 @@ test.describe('the Conditions block never claims an absence it did not read', ()
     ).join(' ');
     expect(said, 'a condition slot claims an absence it did not read').not.toContain('No active');
     expect(said, 'a condition slot says no layer was asked for').not.toContain('No condition layer');
+  });
+
+  test('a failed custom condition layer is unchecked and is not described as switched on', async ({
+    page
+  }) => {
+    // Keep the original custom boot and its one-other-feature collision
+    // assertion: a stored error alone must not imply current layer intent.
+    await bootWithAlerts(page, (route) => route.abort());
+    await waitForLayerSettled(page, 'nws-alerts');
+    await expect(layerCheckbox(page, 'nws-alerts')).not.toBeChecked();
+    await expect(layerPill(page, 'nws-alerts')).toHaveClass(/\berror\b/);
+    await expect(layerPill(page, 'nws-alerts')).toHaveText(PILL.unavailable);
+    expect((await urlLayers(page)).has('nws-alerts')).toBe(false);
+
+    const conditions = page.locator('.maplibregl-popup-content [data-popup-slot="value"]');
+    await expect(conditions).toBeVisible();
+    await expect(conditions.locator('.popup-value-text')).toHaveText(
+      'No condition layer (drought, NWS alerts, or wildfire perimeters) is currently active on the map.'
+    );
+    await expect(conditions).not.toContainText('could not be read');
+    await expect(conditions).not.toContainText('No active');
   });
 
   test('a successful empty read scopes its absence to the products actually requested', async ({

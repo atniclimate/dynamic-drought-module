@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
+import { expect, test, type Locator, type Page, type Route } from './offline-test';
 
 import * as ensoFlowData from '../src/layers/enso-flow-data';
 import { locateMessage } from '../src/layers/flow/nodd';

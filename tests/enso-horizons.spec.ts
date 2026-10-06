@@ -20,7 +20,7 @@
  * without it (an older build, which must still load), and a snapshot past
  * HARD_STALE_DAYS, where the claim is withheld the way the tendency claim is.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './offline-test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 

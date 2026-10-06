@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './offline-test';
 import {
   MAP_CHROME_SEATS,
   MAP_CHROME_TABLET_BAND,

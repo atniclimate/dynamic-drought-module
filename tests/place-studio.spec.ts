@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Response } from '@playwright/test';
+import { test, expect, type Page, type Response } from './offline-test';
 
 import { placeRefFromBoundary } from '../src/config/entities';
 import { parseStudioParam } from '../src/state/url';

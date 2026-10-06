@@ -30,7 +30,7 @@
  * heat cases: a ready day, a day whose tiles never load (unavailable), and a
  * window the service has not advanced (every period ended).
  */
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page, type Route } from './offline-test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 

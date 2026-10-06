@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './offline-test';
 
 import { TRIBAL_NATIONS_PROVENANCE_NOTE } from '../src/config/provenance';
 import { parseStudioParam } from '../src/state/url';

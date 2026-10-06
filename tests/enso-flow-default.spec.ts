@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './offline-test';
 
 import { HAZARD_CLUSTERS } from '../src/config/clusters';
 import { syncUrl } from '../src/state/url';

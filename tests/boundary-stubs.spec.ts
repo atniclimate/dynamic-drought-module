@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Route } from '@playwright/test';
+import { test, expect, type Page, type Route } from './offline-test';
 
 import { gotoApp, layerPill, waitForLayerSettled } from './helpers';
 import { BOUNDARY_HOSTS, boundaryStubLog, isBoundaryRequestUrl } from './tribal-fixtures';

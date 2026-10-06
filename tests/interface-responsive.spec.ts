@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './offline-test';
 
 import { SST_ANOMALY_SCALE } from '../src/config/palette';
 import { gotoApp } from './helpers';

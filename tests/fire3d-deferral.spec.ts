@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './offline-test';
 
 import { gotoApp } from './helpers';
 import { stubDeepTerrainArchive, stubWildfireFeeds } from './wildfire-fixtures';
@@ -34,7 +34,7 @@ import { stubDeepTerrainArchive, stubWildfireFeeds } from './wildfire-fixtures';
 const FIRE3D_CHUNK_PATTERN =
   /\/assets\/fire3d-(?!context-|presentation-)[A-Za-z0-9_-]+\.js(?:[?#]|$)/;
 
-function fire3dStamp(page: import('@playwright/test').Page): Promise<string | undefined> {
+function fire3dStamp(page: import('./offline-test').Page): Promise<string | undefined> {
   return page.evaluate(() => document.documentElement.dataset['ddmFire3d']);
 }
 

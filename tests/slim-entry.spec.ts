@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { continueLocalRoute } from './offline-test';
+import { test, expect } from './offline-test';
 import { gotoApp, search } from './helpers';
 
 const PANEL_RUNTIME_PRIMARY =
@@ -156,7 +157,7 @@ test.describe('lazy impact briefing cluster', () => {
     await page.route(PANEL_RUNTIME_PRIMARY, async (route) => {
       markRuntimeStarted();
       await runtimeRelease;
-      await route.continue();
+      await continueLocalRoute(route);
     });
 
     await gotoApp(page, '?select=state:WA');

@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './offline-test';
 import { build } from 'rolldown';
 import { fileURLToPath } from 'node:url';
 import { gotoApp } from './helpers';
