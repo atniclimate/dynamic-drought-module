@@ -44,6 +44,8 @@ import {
   HILLSHADE_EXAGGERATION
 } from '../config/palette';
 import { firstLayerIdAbove, BOTTOM_STACK_IDS } from '../map/layer-order';
+import type { LayerActivation } from '../config/layers';
+import { linkAbort } from '../util/fetch';
 import { probeArchiveHeader } from '../util/pmtiles-probe';
 import type { PmtilesHeader } from '../util/pmtiles-probe';
 import { isObject } from '../util/guards';
@@ -160,7 +162,10 @@ function addHillshadeLayer(map: maplibregl.Map): void {
  * stayed invisible on the map while the pill still read `ready`
  * (review finding C6).
  */
-export async function activate(map: maplibregl.Map): Promise<void> {
+export async function activate(
+  map: maplibregl.Map,
+  activation?: LayerActivation
+): Promise<void> {
   if (map.getSource(SOURCE_ID)) {
     if (!map.getLayer(LAYER_ID)) {
       try {
@@ -178,6 +183,11 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   if (masterController) masterController.abort();
   masterController = new AbortController();
   const signal = masterController.signal;
+  // The controller-owned attempt signal joins the private controller, so an
+  // off intent aborts the held archive read at that moment and not at the
+  // queued teardown behind the probe budget (plan rule 5, found-131). The
+  // link lasts only while the read is held.
+  const unlink = linkAbort(masterController, activation?.signal ?? null);
 
   reportStatus('loading');
 
@@ -189,6 +199,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     console.warn('[hillshade] the terrain archive is unreachable or invalid.', err);
     reportStatus('error');
     return;
+  } finally {
+    unlink();
   }
   if (signal.aborted) return;
 
