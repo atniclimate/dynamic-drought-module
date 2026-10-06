@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Route } from '@playwright/test';
 import { parseAst } from 'rolldown/parseAst';
 import { gotoApp, waitForLayerSettled } from './helpers';
 import {
@@ -16,8 +16,8 @@ import {
   stripComments
 } from './identify-paths-manifest';
 import { serializePopupFrame } from '../src/ui/popup-frame';
-import type { PopupModel } from '../src/ui/popup-frame';
-import { CENSUS_FIXTURES } from './frame-fixtures';
+import type { IssuedModel, PopupModel } from '../src/ui/popup-frame';
+import { CENSUS_FIXTURES, type CensusFixture } from './frame-fixtures';
 import { MAP_ROOT, PANEL_ROOT, PLACE_FRAME_FIXTURES, bootPlace, expectPlaceFields } from './frame-fixtures-places';
 
 /**
@@ -26,8 +26,9 @@ import { MAP_ROOT, PANEL_ROOT, PLACE_FRAME_FIXTURES, bootPlace, expectPlaceField
  *
  *   1. An import-aware inventory of Popup construction and content setters
  *      over src/, with COUNTED narrow boundaries (the coordinator's one
- *      construction and one setDOMContent; telemetry.ts's one construction
- *      and one setHTML until M26), a self-check that the scan bites, the
+ *      construction and two setDOMContent, its own popup and the adopted
+ *      station popup's first framed paint; telemetry.ts's one construction
+ *      and, since M26c, no setter), a self-check that the scan bites, the
  *      declared no-popup modules, and the frame's one caller (S30D
  *      P1-FRAME: the coordinator's one dynamic import; no static value
  *      import of popup-frame anywhere in src/, type-only imports allowed; no
@@ -584,6 +585,34 @@ const CENSUS_BOOTS: readonly (readonly string[])[] = [
   ['spc-fire-weather']
 ];
 
+/** The adopted station popup's displayed frame root. */
+const STATION_ROOT = '.maplibregl-popup[data-ddm-external-response] .maplibregl-popup-content > [data-popup-frame]';
+
+/**
+ * The external builders' census fixtures (S30D D1 M26c). The telemetry
+ * station popup has no click target: a station is a DOM marker whose popup
+ * MapLibre opens and the coordinator adopts, so its fixture opens the
+ * curated Ice Harbor Dam marker (it renders with no network) and asserts the
+ * frame on the adopted popup, first as painted and again after the live read
+ * fails offline and the frame repaints with the unavailable state.
+ */
+const EXTERNAL_CENSUS_FIXTURES: Readonly<Record<string, CensusFixture>> = {
+  telemetry: async (page, h) => {
+    await gotoApp(page, '?region=washington_state&view=console&layers=telemetry');
+    await waitForLayerSettled(page, 'telemetry');
+    const marker = page.locator('.telemetry-marker[data-telemetry-station-id="ihr"]');
+    await expect(marker).toHaveCount(1);
+    await expect(async () => {
+      await marker.click();
+      await expect.poll(async () => (await h.readAudit(page)).seen, { timeout: 1500 }).toContain('map:external');
+    }).toPass({ timeout: 20_000 });
+    expect(await page.evaluate(frameVerdict, STATION_ROOT), 'the adopted station popup as painted').toBeNull();
+    await expect(page.locator(`${STATION_ROOT} [data-popup-slot="value"] [data-state]`)).toHaveText('unavailable', { timeout: 20_000 });
+    expect(await page.evaluate(frameVerdict, STATION_ROOT), 'the adopted station popup after its read failed').toBeNull();
+    expect((await h.readAudit(page)).violations).toEqual([]);
+  }
+};
+
 test.describe('identify paths: the census', () => {
   test('the stamped click targets equal the manifest targets of the activated layers, both ways', async ({
     page,
@@ -642,7 +671,9 @@ test.describe('identify paths: the census', () => {
     const migrated = migratedBuilders();
     expect(migrated.length).toBe(eligibleBuilders().length - LEGACY_ALLOWANCE.length);
     for (const builder of migrated) {
-      const fixture = CENSUS_FIXTURES[builder.id];
+      // An external builder has no click target, so its fixture opens its own
+      // popup; it lives beside the census (EXTERNAL_CENSUS_FIXTURES, M26c).
+      const fixture = builder.path === 'external' ? EXTERNAL_CENSUS_FIXTURES[builder.id] : CENSUS_FIXTURES[builder.id];
       if (!fixture) throw new Error(`${builder.id} left LEGACY_ALLOWANCE without a census click fixture`);
       const fixturePage = await context.newPage();
       try {
@@ -824,6 +855,23 @@ const GROUP_MODEL: PopupModel = {
   }
 };
 
+/** A station popup as the coordinator paints it before the live read lands (M26c). */
+const STATION_MODEL: IssuedModel = {
+  kind: 'station',
+  title: 'Fixture Station',
+  issuer: { role: 'issued-by', name: 'Fixture agency', productKey: 'telemetry' },
+  value: [{ text: 'Fixture live data', state: 'loading' }],
+  clocks: [{ kind: 'not-stated', label: 'As of', reason: 'loading' }],
+  source: { link: { label: 'Fixture station page', href: 'https://waterdata.usgs.gov/' } }
+};
+
+/** The same station once its read landed: a genuine zero with its own issuer and time. */
+const HYDRATED_STATION_MODEL: IssuedModel = {
+  ...STATION_MODEL,
+  value: [{ label: 'Fixture gauge', text: '0 ft', issuer: 'Fixture service' }],
+  clocks: [{ kind: 'point', meaning: 'observed', label: 'As of', at: { precision: 'instant', at: Date.UTC(2026, 9, 4, 17, 0), zone: 'UTC' } }]
+};
+
 test.describe('identify paths: inert payloads and the shared validator', () => {
   test('text and attribute payloads stay inert, and the frame validator accepts a frame and rejects an empty marker', async ({
     page
@@ -902,19 +950,21 @@ test.describe('identify paths: inert payloads and the shared validator', () => {
 test.describe('identify paths: the observer re-audits later mutations', () => {
   test('a stray node, root text, an emptied title or a removed region marker after the first audit fails; the late door and a telemetry hydration pass', async ({ page }) => {
     await holdExternalNetwork(page);
-    // A literal fixture layer id (S30D D1 M26b): the allowance's last entry,
-    // telemetry, has no click targets, so legacyLayerIds() is empty; the
-    // observer is handed this one id as its legacy pass list instead.
+    // A literal fixture layer id (S30D D1 M26b): the allowance is empty since
+    // M26c, so legacyLayerIds() is empty; the observer is handed this one id
+    // as its legacy pass list, so the legacy re-audit path keeps its proof.
+    // The adopted external popup takes the allowance's own answer (none
+    // since M26c): it must be framed.
     const layerId = 'fixture-legacy-fill';
-    await page.addInitScript(installPopupAudit, { legacyLayerIds: [layerId], external: true });
+    await page.addInitScript(installPopupAudit, { legacyLayerIds: [layerId], external: LEGACY_ALLOWANCE.includes('telemetry') });
     await gotoApp(page, '?region=washington_state&view=console&layers=states');
     const seenCount = async (): Promise<number> => (await readAudit(page)).seen.length;
 
     // Three map-popup fixtures, shaped as the coordinator and telemetry
     // present them: a framed coordinated response, a legacy (allowance)
-    // coordinated response, and an adopted external popup.
+    // coordinated response, and an adopted external popup (framed, M26c).
     await page.evaluate(
-      ({ framed, layer }) => {
+      ({ framed, station, layer }) => {
         const popup = (html: string, fixture: string, external = false): HTMLElement => {
           const el = document.createElement('div');
           el.className = 'maplibregl-popup';
@@ -933,12 +983,12 @@ test.describe('identify paths: the observer re-audits later mutations', () => {
           `<div class="coordinated-response" data-ddm-response="${layer}"><div class="coordinated-response-head"><h3 class="popup-title">Fixture legacy title</h3></div><div class="coordinated-response-body"><p>Fixture body</p></div></div>`,
           'legacy'
         );
-        const externalPopup = popup('<div class="fixture-telemetry">Fixture skeleton</div>', 'external', true);
+        const externalPopup = popup(station, 'external', true);
         const host = document.createElement('div');
         host.append(framedPopup, legacyPopup, externalPopup);
         document.body.appendChild(host);
       },
-      { framed: serializePopupFrame(PAYLOAD_MODEL), layer: layerId }
+      { framed: serializePopupFrame(PAYLOAD_MODEL), station: serializePopupFrame(STATION_MODEL), layer: layerId }
     );
     await expect
       .poll(async () => (await readAudit(page)).seen.filter((s) => s === `map:${layerId}` || s === 'map:external').length)
@@ -947,10 +997,11 @@ test.describe('identify paths: the observer re-audits later mutations', () => {
 
     // The two legitimate later changes: the late briefing door (the framed
     // actions slot; the legacy head directly after the title) and a
-    // telemetry hydration of the adopted popup. Each is audited again and
-    // none reports a violation.
+    // telemetry hydration of the adopted popup (the coordinator replaces the
+    // frame root whole with the hydrated model's, M26c). Each is audited
+    // again and none reports a violation.
     const before = await seenCount();
-    await page.evaluate(() => {
+    await page.evaluate((hydratedStation) => {
       const door = (): HTMLButtonElement => {
         const button = document.createElement('button');
         button.type = 'button';
@@ -961,12 +1012,24 @@ test.describe('identify paths: the observer re-audits later mutations', () => {
       };
       document.querySelector('[data-fixture="framed"] [data-popup-slot="actions"]')!.appendChild(door());
       document.querySelector('[data-fixture="legacy"] .popup-title')!.after(door());
-      const hydrated = document.createElement('p');
-      hydrated.textContent = 'Fixture hydrated reading';
-      document.querySelector('[data-fixture="external"] .fixture-telemetry')!.appendChild(hydrated);
-    });
+      const template = document.createElement('template');
+      template.innerHTML = hydratedStation;
+      document.querySelector('[data-fixture="external"] [data-popup-frame]')!.replaceWith(template.content.firstElementChild!);
+    }, serializePopupFrame(HYDRATED_STATION_MODEL));
     await expect.poll(seenCount, { message: 'each later change is audited again' }).toBeGreaterThanOrEqual(before + 3);
     expect((await readAudit(page)).violations, 'the late door and a hydration are legitimate').toEqual([]);
+    await expect(page.locator('[data-fixture="external"] [data-popup-slot="value"]')).toContainText('Fixture gauge 0 ft');
+
+    // An adopted popup that loses its frame (the legacy station markup the
+    // allowance carried until M26c) is re-audited and failed.
+    await page.evaluate(() => {
+      document.querySelector('[data-fixture="external"] [data-popup-frame]')!.replaceWith(
+        Object.assign(document.createElement('div'), { className: 'popup-title', textContent: 'Fixture unframed station' })
+      );
+    });
+    await expect
+      .poll(async () => (await readAudit(page)).violations)
+      .toEqual(['map: an unframed adopted external popup outside the legacy allowance']);
 
     // A stray node inside the already-audited frame: re-audited and failed.
     await page.evaluate(() => {
@@ -1212,5 +1275,232 @@ test.describe('identify paths: the NWS, SPC and power models print the issuer wo
     expect(odd).not.toContain('popup-swatch');
     expect(frameText(odd)).toContain('From 2026-10-05 As the issuer states it; DDM does not read it as a full date.');
     expect(frameText(odd)).not.toContain('Until');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S30D D1 M26c (block 6; register owner-1k, DDM-P11-T04): the telemetry
+// station popup, the last builder outside the frame, renders through it. The
+// station marker's popup stays MapLibre's and stays adopted (row 20 of
+// interface-chrome-popups-text.md 3.5); telemetry.ts hands the coordinator a
+// model, the coordinator paints it, and the live read repaints the whole
+// frame (head value, head clock, state word and body together). Imported
+// here, beside the cases, so the block is an append.
+// ---------------------------------------------------------------------------
+import type { TelemetryStation } from '../src/types/station';
+
+/** A CWMS timeseries window with one reading at 2026-10-04 17:00 UTC (the shape src/util/cwms.ts parses). */
+function cwmsBody(value: number): string {
+  return JSON.stringify({ units: 'ft', values: [[Date.UTC(2026, 9, 4, 17, 0), value, 0]] });
+}
+
+test.describe('identify paths: the telemetry station popup joins the frame (D1 M26c)', () => {
+  /**
+   * Red on 44fda65 (the allowance emptied): the adopted station popup is the
+   * legacy skeleton, so the observer reports "map: an unframed adopted
+   * external popup outside the legacy allowance" and the frame validator
+   * finds no frame root.
+   */
+  test('the unmigrated list is empty and every click target yields the frame', async ({ page }) => {
+    test.setTimeout(120_000);
+    expect(LEGACY_ALLOWANCE, 'the unmigrated list').toEqual([]);
+    expect(legacyLayerIds()).toEqual([]);
+    expect(migratedBuilders().map((b) => b.id)).toEqual(eligibleBuilders().map((b) => b.id));
+    // Every eligible builder has its census fixture: a click target's in
+    // tests/frame-fixtures.ts, the external station popup's beside the census.
+    expect(
+      eligibleBuilders()
+        .filter((b) => (b.path === 'external' ? EXTERNAL_CENSUS_FIXTURES : CENSUS_FIXTURES)[b.id] === undefined)
+        .map((b) => b.id),
+      'an eligible builder without a census fixture'
+    ).toEqual([]);
+    // The click targets run in the census above; the external path runs here
+    // on its own, so its verdict reads alone.
+    await holdExternalNetwork(page);
+    await page.addInitScript(installPopupAudit, { legacyLayerIds: legacyLayerIds(), external: LEGACY_ALLOWANCE.includes('telemetry') });
+    await EXTERNAL_CENSUS_FIXTURES['telemetry']!(page, { clickCenterUntilSeen, readAudit });
+  });
+
+  /**
+   * The Codex Tier 2 review's row (2026-09-27_s30d-d1-tier2-designs.md :215,
+   * :142): a skeleton-only migration would leave the head at loading, and an
+   * old read must not mutate a reopened response. The station's live reads
+   * are held; the first open is closed while its read is held, the station is
+   * reopened, the first read answers late with a value no response may show,
+   * and the current read answers. Red on 44fda65: no frame root is ever
+   * displayed in the adopted popup.
+   */
+  test('telemetry updates head and body consistently and rejects obsolete hydration', async ({ page }) => {
+    test.setTimeout(120_000);
+    await holdExternalNetwork(page);
+    await page.addInitScript(installPopupAudit, { legacyLayerIds: legacyLayerIds(), external: LEGACY_ALLOWANCE.includes('telemetry') });
+    // Every head value a station popup showed, in order, from the first byte.
+    await page.addInitScript(() => {
+      const values: string[] = [];
+      (window as unknown as { __ddmStationValues: string[] }).__ddmStationValues = values;
+      new MutationObserver(() => {
+        for (const slot of Array.from(document.querySelectorAll('.maplibregl-popup [data-popup-kind="station"] [data-popup-slot="value"]'))) {
+          const text = (slot.textContent ?? '').replace(/\s+/g, ' ').trim();
+          if (values[values.length - 1] !== text) values.push(text);
+        }
+      }).observe(document, { childList: true, subtree: true, characterData: true });
+    });
+    let holding = false;
+    const held: Route[] = [];
+    await page.route('**/cwms-data.usace.army.mil/**', async (route) => {
+      if (holding) held.push(route);
+      else await route.fulfill({ status: 200, contentType: 'application/json', body: cwmsBody(75.5) });
+    });
+    await gotoApp(page, '?region=washington_state&view=console&layers=telemetry');
+    await waitForLayerSettled(page, 'telemetry');
+    const marker = page.locator('.telemetry-marker[data-telemetry-station-id="ihr"]');
+    await expect(marker).toHaveCount(1);
+    const root = page.locator(STATION_ROOT);
+    const head = root.locator(':scope > [data-popup-region="head"]');
+    const body = root.locator(':scope > [data-popup-region="body"]');
+    const headValue = head.locator(':scope > [data-popup-slot="value"]');
+
+    holding = true;
+    const open = async (reads: number): Promise<void> => {
+      await expect(async () => {
+        if ((await root.count()) === 0) await marker.click();
+        await expect(root).toBeVisible({ timeout: 1500 });
+      }).toPass({ timeout: 20_000 });
+      // The frame paints at once, its head stating the read is loading.
+      await expect(headValue.locator('[data-state]')).toHaveText('loading');
+      await expect(head.locator(':scope > [data-popup-slot="clock"]')).toContainText('As of loading');
+      await expect.poll(() => held.length, { message: 'each open asks for its own live read' }).toBe(reads);
+    };
+
+    await open(1);
+    await page.locator('.maplibregl-popup[data-ddm-external-response] .maplibregl-popup-close-button').click();
+    await expect(root).toHaveCount(0);
+    await open(2);
+    await page.evaluate((selector) => {
+      (window as unknown as { __ddmLoadingRoot: Element | null }).__ddmLoadingRoot = document.querySelector(selector);
+    }, STATION_ROOT);
+
+    // The closed open's read answers late (its request was aborted with the
+    // close, so the answer may find no request); then the current read.
+    await held[0]!.fulfill({ status: 200, contentType: 'application/json', body: cwmsBody(111.11) }).catch(() => {});
+    await held[1]!.fulfill({ status: 200, contentType: 'application/json', body: cwmsBody(222.22) });
+
+    await expect(headValue).toContainText('Forebay 222.22 ft');
+    // Head and body come from one model: one frame root, the loading root
+    // gone whole, no state word left anywhere, the head clock the reading's
+    // own time, the retrieval time in the body.
+    await expect(page.locator('.maplibregl-popup[data-ddm-external-response] [data-popup-frame]')).toHaveCount(1);
+    expect(await page.evaluate(() => (window as unknown as { __ddmLoadingRoot: Element | null }).__ddmLoadingRoot?.isConnected)).toBe(false);
+    await expect(root.locator('[data-state]')).toHaveCount(0);
+    await expect(head.locator(':scope > [data-popup-slot="clock"] time')).toHaveAttribute('datetime', '2026-10-04T17:00:00.000Z');
+    await expect(body.locator(':scope > [data-popup-slot="more-clocks"]')).toContainText('Retrieved on');
+    await expect(body.locator(':scope > [data-popup-slot="source-fallback"] a')).toHaveAttribute('href', 'https://www.nwd-wc.usace.army.mil/dd/common/dataquery/www/');
+    expect(await page.evaluate(frameVerdict, STATION_ROOT)).toBeNull();
+
+    // The obsolete read never reached any response.
+    const values = await page.evaluate(() => (window as unknown as { __ddmStationValues: string[] }).__ddmStationValues);
+    expect(values.filter((v) => v.includes('111.11')), `the head values shown: ${JSON.stringify(values)}`).toEqual([]);
+    expect(values[values.length - 1]).toContain('222.22');
+    expect((await readAudit(page)).violations).toEqual([]);
+  });
+
+  test('a station model states loading, custody, unavailable and no data, keeps a genuine zero with each reading\'s own time and its sparkline, and keeps the RAWS words', async () => {
+    const { buildTelemetryPopupModel, rawsStationRead } = await import('../src/ui/popups');
+    const { stationCustody } = await import('../src/config/station-registry');
+    const base = {
+      name: 'Fixture Snow Course',
+      coords: [47, -121] as const,
+      region: 'cascades',
+      type: 'snotel',
+      agency: 'NRCS',
+      color: '#06b6d4',
+      description: 'Fixture station description.',
+      links: [
+        { label: 'Fixture script link', url: 'javascript:alert(1)' },
+        { label: 'Fixture userinfo link', url: 'https://user:pw@example.org/' },
+        { label: 'Fixture station page', url: 'https://wcc.sc.egov.usda.gov/' },
+        { label: 'Fixture report', url: 'https://www.nrcs.usda.gov/' }
+      ]
+    };
+    const live: TelemetryStation = { ...base, id: 'fixture-snotel', awdbStation: '999:WA:SNTL' };
+
+    // Before its live read lands: the six-state word, and the station page.
+    const loading = serializePopupFrame(buildTelemetryPopupModel(live));
+    expect(loading).toContain('data-popup-kind="station" data-popup-product="telemetry"');
+    expect(frameText(loading)).toContain('Fixture Snow Course Issued by: NRCS');
+    expect(loading).toContain('<span data-state>loading</span>');
+    expect(loading).toContain('<p data-popup-slot="source"><a href="https://wcc.sc.egov.usda.gov/" target="_blank" rel="noopener">Fixture station page</a></p>');
+    expect(loading).toContain('<a href="https://www.nrcs.usda.gov/" target="_blank" rel="noopener">Fixture report</a>');
+    expect(loading).not.toContain('javascript:');
+    expect(loading).not.toContain('user:pw');
+    expect(frameText(loading)).toContain('Fixture station description.');
+
+    // A station DDM does not read in the browser is never left loading.
+    const coops: TelemetryStation = { ...base, id: 'fixture-coops', noaaCoopsId: '9440910' };
+    const custody = stationCustody(coops);
+    expect(custody, 'the fixture station has a custody network').not.toBeNull();
+    const custodyMarkup = serializePopupFrame(buildTelemetryPopupModel(coops));
+    expect(custodyMarkup).not.toContain('data-state');
+    expect(frameText(custodyMarkup)).toContain('Live readings open at the source link below.');
+    expect(frameText(custodyMarkup)).toContain(`Updates ${custody!.cadence}`);
+
+    // A failed read and a read with no values, each with its state word.
+    const unavailable = serializePopupFrame(buildTelemetryPopupModel(live, { kind: 'unavailable' }));
+    expect(unavailable).toContain('<span data-state>unavailable</span>');
+    expect(frameText(unavailable)).toContain('Live data unavailable in-browser. Open the source link for current values.');
+    // A station with no public page (every viewport-discovered SNOTEL and
+    // SCAN station carries `links: []`) never points to a source link (the
+    // block 6 review, B6b): its failed read says only the first sentence.
+    const noPage = serializePopupFrame(buildTelemetryPopupModel({ ...live, id: 'fixture-no-page', links: [] }, { kind: 'unavailable' }));
+    expect(frameText(noPage)).toContain('This station lists no public page.');
+    expect(frameText(noPage)).toContain('Live data unavailable in-browser.');
+    expect(frameText(noPage)).not.toContain('source link');
+    const none = serializePopupFrame(buildTelemetryPopupModel(live, { kind: 'no data', text: 'No recent NRCS values for this station.' }));
+    expect(none).toContain('<span data-state>no data</span>');
+    expect(frameText(none)).toContain('No recent NRCS values for this station.');
+
+    // A genuine zero, each reading with its own issuer and time, the stale
+    // note on the reading past its window, the retrieval time, the chart.
+    const zero = serializePopupFrame(
+      buildTelemetryPopupModel(live, {
+        kind: 'live',
+        retrievedAt: Date.UTC(2026, 9, 5, 16, 0),
+        readings: [
+          { label: 'Snow water equivalent', text: '0 in', issuer: 'NRCS AWDB', observed: { precision: 'date', date: '2026-10-04' } },
+          { label: 'Snow depth', text: '0 in', issuer: 'NRCS AWDB', observed: { precision: 'date', date: '2026-10-03' }, stale: true }
+        ],
+        chart: { data: [0, 0, 1.5], title: 'Snow water equivalent over the past 7 days (NRCS SNOTEL)', unit: 'in', source: 'NRCS AWDB, past 7 days' }
+      })
+    );
+    const split = zero.indexOf('<div data-popup-region="body">');
+    const zeroHead = zero.slice(0, split);
+    const zeroBody = zero.slice(split);
+    expect(frameText(zeroHead)).toContain('Snow water equivalent 0 in NRCS AWDB');
+    expect(zeroHead).toContain('<time datetime="2026-10-04">');
+    expect(zeroHead).not.toContain('data-state');
+    expect(zeroBody).toContain('<dl data-detail="reading"><dt>Snow depth</dt><dd>0 in (stale) <span data-reading-issuer>NRCS AWDB</span>');
+    expect(zeroBody).toContain('<time datetime="2026-10-03">');
+    expect(frameText(zeroBody)).toContain('Retrieved on');
+    expect(zeroBody).toContain('data-popup-chart="station-sparkline" data-chart-values="0,0,1.5" data-chart-unit="in"');
+
+    // The RAWS readings keep the issuer's words (DDM-P9-T05, DDM-P9-T06).
+    const rawsMarkup = (read: ReturnType<typeof rawsStationRead>): string =>
+      frameText(serializePopupFrame(buildTelemetryPopupModel({ ...base, id: 'fixture-raws', agency: 'NIFC RAWS', rawsStationId: '999' }, read)));
+    const conditions = {
+      relativeHumidity: '21 %',
+      windSpeed: '5 mph',
+      windDirection: '295 degrees',
+      windGustSpeed: null,
+      windGustDirection: null,
+      fuelMoisture: null,
+      observedAtIso: '2026-10-04T17:00:00Z'
+    };
+    const happy = rawsMarkup(rawsStationRead(conditions, Date.UTC(2026, 9, 5, 16, 0)));
+    expect(happy).toContain('Relative humidity 21 % NIFC RAWS');
+    expect(happy).toContain('Wind 5 mph from 295 degrees NIFC RAWS');
+    expect(happy).toContain('Fuel moisture Station reported none NIFC RAWS');
+    const peak = rawsMarkup(rawsStationRead({ ...conditions, windSpeed: '3 mph', windDirection: null, windGustSpeed: '11 mph', windGustDirection: '212 degrees' }, 0));
+    expect(peak).toContain('Wind 3 mph, peak 11 mph from 212 degrees over the previous 60 minutes');
+    expect(rawsMarkup(rawsStationRead(null, 0))).toContain('No recent NIFC RAWS values for this station.');
   });
 });

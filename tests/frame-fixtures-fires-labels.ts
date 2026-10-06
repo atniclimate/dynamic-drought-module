@@ -488,13 +488,20 @@ function tierFixture(id: FireLabelId): TierFixture {
         await page.keyboard.press('Escape');
         await expect(popup).toHaveCount(0);
         await clickUntilFireLabelResponse(page, id);
-        // The late door lands after the paint (DR-042 a; every click here is
-        // inside Washington) and grows the head; wait for it, then for the
-        // card to hold still, and read once.
-        await expect(page.locator(FRAMED_LATE_DOOR), `${id} at ${seat.width}x${seat.height}: the late door in the actions slot`).toBeVisible({
-          timeout: 10_000
-        });
+        // The NIFC card's late door lands after the paint (DR-042 a; every
+        // click here is inside Washington) and grows the head; wait for it,
+        // then for the card to hold still, and read once. A place label is
+        // offered no late door (found-139, M26c): the card holds still and
+        // carries none.
+        if (id === 'nifc') {
+          await expect(page.locator(FRAMED_LATE_DOOR), `${id} at ${seat.width}x${seat.height}: the late door in the actions slot`).toBeVisible({
+            timeout: 10_000
+          });
+        }
         await settleCard(page);
+        if (id === 'places') {
+          await expect(page.locator(FRAMED_LATE_DOOR), `${id} at ${seat.width}x${seat.height}: no late door on a place label`).toHaveCount(0);
+        }
         const at = `${id} at ${seat.width}x${seat.height}`;
         expectHeadVisibleBodyScrolls(await readCard(page), at);
         await expect

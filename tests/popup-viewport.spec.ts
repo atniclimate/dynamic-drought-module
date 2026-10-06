@@ -972,12 +972,13 @@ test.describe('DEF-4 finding 1: viewport resize while telemetry hydration is in 
     // that happens the retry below re-opens it (its hydration then runs
     // wholly at the new viewport, which still exercises growth-after-
     // resize). Either way the popup we assert on carries the honest
-    // fallback, which arrived AFTER the clamp bounds changed.
+    // fallback, which arrived AFTER the clamp bounds changed (since D1 M26c
+    // the framed card's unavailable state, which repaints the frame whole).
     await expect(async () => {
       if ((await popup.count()) === 0) {
         await marker.click();
       }
-      await expect(popup.locator('.popup-data-error')).toBeVisible({ timeout: 4000 });
+      await expect(popup.locator('[data-popup-frame] [data-popup-slot="value"] [data-state]')).toHaveText('unavailable', { timeout: 4000 });
     }).toPass({ timeout: 30_000 });
 
     const vp = page.viewportSize()!;
@@ -2064,5 +2065,77 @@ test.describe('D1 M26b: the NWS, SPC and power fixtures keep the PF3 tier promis
   test('the NWS, SPC and power long desktop heads and panel responses keep their scrolling and close access', async ({ context }) => {
     test.setTimeout(60_000 + 90_000 * M26B_IDS.length);
     await eachM26bFixture(context, (fixture, page) => fixture.longHeadAndPanel(page));
+  });
+});
+
+/**
+ * found-139 (block 4 M26a, carried to M26c, the coordinator's unit): a place
+ * label names a populated place, which is no briefing subject, and the
+ * coordinator's late door (DR-042 option a) opens the briefing for the place
+ * the tap resolves instead (the containing Tribal land or state), so a
+ * Washington town's label offered "Open the Impact Briefing for Washington",
+ * a door to a place the label does not name. The late door is skipped for a
+ * label response. The case first lets the condition response at the same
+ * point earn its late door (so the resolution path is warm and quick), then
+ * switches to the label through "Other map features here", where an unfixed
+ * coordinator appends the containing state's door within a few tasks.
+ *
+ * Red on 44fda65: the label popup's door reads "Open the Impact Briefing for
+ * Washington".
+ */
+const LABEL_DOOR_PLACE = 'Fixture Label Town With A Name Long Enough To Wrap Over Several Lines';
+
+test.describe('found-139: a place label popup offers no door to another place', () => {
+  test("a place label popup's door names the place it opens", async ({ page }) => {
+    test.setTimeout(90_000);
+    await stubBroadCondition(page);
+    await page.route('**/data/us-places.json', (route: Route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ meta: { count: 1 }, places: [{ name: LABEL_DOOR_PLACE, lon: -120.84, lat: 47.29, rank: 0 }] })
+      })
+    );
+    await gotoApp(page, '?region=washington_state&view=console&layers=places,nadm-drought');
+    await waitForLayerSettled(page, 'places');
+    await waitForLayerSettled(page, 'nadm-drought');
+
+    const mapBox = await page.locator('#map').boundingBox();
+    expect(mapBox).not.toBeNull();
+    const cx = mapBox!.x + mapBox!.width / 2;
+    const cy = mapBox!.y + mapBox!.height / 2;
+    const probes: ReadonlyArray<readonly [number, number]> = [
+      [0, 0], [0, -24], [0, 24], [-40, 0], [40, 0], [-40, -24], [40, 24], [-40, 24], [40, -24]
+    ];
+    const popup = page.locator('.maplibregl-popup-content');
+    const label = popup.locator('[data-ddm-response="us-places-labels"]');
+    const condition = popup.locator('[data-ddm-response="nadm-drought-fill"]');
+    // The label (a point event) outranks the condition surface beneath it.
+    let probe = 0;
+    await expect(async () => {
+      const [dx, dy] = probes[probe++ % probes.length]!;
+      await page.mouse.click(cx + dx, cy + dy);
+      await expect(label).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 30_000 });
+    await expect(label.locator('[data-popup-slot="title"]')).toHaveText(LABEL_DOOR_PLACE);
+
+    // The condition at the same point earns its late door, naming the state.
+    await popup.locator('.popup-other-features > summary').click();
+    await popup.locator('.popup-other-item').first().click();
+    await expect(condition).toBeVisible();
+    await expect(condition.locator('[data-ddm-impact-trigger]')).toContainText('Washington', { timeout: 10_000 });
+
+    // Back to the label, re-committed in place.
+    await popup.locator('.popup-other-features > summary').click();
+    await popup.locator('.popup-other-item', { hasText: LABEL_DOOR_PLACE }).click();
+    await expect(label).toBeVisible();
+    // Everything the door's resolution waits on is already loaded: let the
+    // page settle, then two frames and a task, before reading the doors.
+    await awaitQuiescence(page);
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0)))));
+    const doors = (await label.locator('[data-ddm-impact-trigger]').allTextContents()).map((t) => t.trim());
+    expect(doors.filter((door) => !door.includes(LABEL_DOOR_PLACE)), 'a label popup door naming another place').toEqual([]);
+    // The fix chosen: a label response is offered no late door at all.
+    expect(doors).toEqual([]);
   });
 });

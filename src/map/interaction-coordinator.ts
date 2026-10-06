@@ -62,8 +62,9 @@ export interface CoordinatorClick {
  * `model` is the popup frame's typed model (src/ui/popup-frame.ts); the
  * coordinator is the frame's one caller and serializes it, so a layer module
  * imports only the frame's types. `content` is the legacy answer (an HTML
- * string or a prebuilt DOM element) that unmigrated builders still give
- * until M26 retires the path; a framed string there still renders framed.
+ * string or a prebuilt DOM element), which no builder gives since D1 M26c;
+ * a framed string there still renders framed, and an unframed one renders
+ * whole in the body (the class-name split is retired).
  * An answer carrying both or neither is a builder bug the type forbids; at
  * runtime it is declined like a null answer (the next hit answers), never
  * a dead click.
@@ -282,8 +283,17 @@ export function registerClickTarget(spec: ClickTargetSpec): void {
     );
   }
   // Warm the frame chunk with the first registration (later ones share the
-  // same load; after a failed warm-up a later registration tries again). A
-  // warm-up failure is silent: the click that needs the frame reports it.
+  // same load; after a failed warm-up a later registration tries again).
+  warmPopupFrame();
+}
+
+/**
+ * Warm the frame chunk: from a click target's registration, and from the
+ * station layer's activation (its markers register no target, M26c), so a
+ * first click or a first station popup normally paints at once. A warm-up
+ * failure is silent: the paint that needs the frame reports it.
+ */
+export function warmPopupFrame(): void {
   if (!serializeFrame) loadFrame().catch(() => {});
 }
 
@@ -345,16 +355,96 @@ export function initInteractionCoordinator(map: maplibregl.Map): void {
  * marker's later-registered one), and the adopted popup then occupies
  * the single response slot so the next commit or empty click retires
  * it like any other response.
+ *
+ * Since D1 M26c the adopter paints only through the returned handle: it
+ * hands a MODEL, and the coordinator, the frame's one caller, paints the
+ * frame into the adopted popup (`paintAdopted`).
  */
-export function adoptExternalResponse(popup: maplibregl.Popup): void {
+export function adoptExternalResponse(popup: maplibregl.Popup): ExternalResponse {
   dismissResponse();
-  // Positive provenance for the identify-paths observer (M23): an adopted
-  // popup is marked here, never inferred from a missing coordinator stamp.
-  // On a first open MapLibre builds the element only when the opener sets
-  // the content, after this 'open' call, so the mark follows in a microtask.
-  queueMicrotask(() => popup.getElement()?.setAttribute('data-ddm-external-response', ''));
-  popup.once('close', () => closed(popup));
+  const token = {};
+  adoption = token;
+  popup.once('close', () => {
+    if (adoption === token) adoption = null;
+    closed(popup);
+  });
   currentPopup = popup;
+  return { paint: (model, mount) => paintAdopted(popup, token, model, mount) };
+}
+
+/** What an adopter paints through (D1 M26c). */
+export interface ExternalResponse {
+  /**
+   * Paint the adopted popup with the frame of `model`, head and body
+   * together, then run `mount` on the painted frame root (a lazy builder's
+   * own drawing, PF1). Ignored once this adoption is no longer the current
+   * response: closed, replaced, dismissed, or the popup adopted again.
+   */
+  paint(model: PopupModel, mount?: (root: HTMLElement) => void): void;
+}
+
+/** The current adoption's token; null when no adopted popup is the response. */
+let adoption: object | null = null;
+
+/**
+ * Paint an adoption's model (D1 M26c). The first paint sets the popup's
+ * content (MapLibre then builds its element); a repaint (the live read, or
+ * a reopen over the last paint) replaces the frame root whole, and focus
+ * that was on a control inside it moves to the same control in the new one.
+ * The adopted card takes the coordinated classes, so the tier table, the
+ * close seat and the framed measure hold for it as for the coordinator's own
+ * popup. A paint that lands before the frame chunk waits for it, and after
+ * the wait paints only if its adoption is still current; a chunk that fails,
+ * or a model the frame refuses after the wait, is reported and dismissed as
+ * a commit's is (`frameFailed`). A model refused warm throws to the adopter
+ * (a caller bug, as for a click target).
+ */
+function paintAdopted(
+  popup: maplibregl.Popup,
+  token: object,
+  model: PopupModel,
+  mount: ((root: HTMLElement) => void) | undefined
+): void {
+  if (adoption !== token) return;
+  if (!serializeFrame) {
+    loadFrame().then(
+      () => {
+        try {
+          paintAdopted(popup, token, model, mount);
+        } catch (err) {
+          frameFailed(err);
+        }
+      },
+      (err: unknown) => {
+        if (adoption === token) frameFailed(err);
+      }
+    );
+    return;
+  }
+  const holder = document.createElement('div');
+  holder.innerHTML = serializeFrame(model);
+  const frame = takeFrame(holder);
+  if (!frame) return;
+  const { root } = frame;
+  root.classList.add('coordinated-response');
+  frame.head.classList.add('coordinated-response-head');
+  frame.body.classList.add('coordinated-response-body');
+  const previous = popup.getElement()?.querySelector('.maplibregl-popup-content > [data-popup-frame]');
+  if (previous) {
+    const controls = 'a[href],button';
+    const at = Array.from(previous.querySelectorAll(controls)).indexOf(document.activeElement as Element);
+    previous.replaceWith(root);
+    if (at >= 0) (root.querySelectorAll<HTMLElement>(controls)[at] ?? root.querySelector<HTMLElement>(controls))?.focus({ preventScroll: true });
+  } else {
+    popup.setDOMContent(root);
+  }
+  // MapLibre rebuilds the card on each open, so the classes and the
+  // identify-paths observer's positive provenance mark (M23) follow every
+  // paint, never a microtask (a first open has no element until it paints).
+  popup.addClassName('ddm-coordinated-popup');
+  popup.addClassName('ddm-popup-framed');
+  popup.getElement()?.setAttribute('data-ddm-external-response', '');
+  mount?.(root);
 }
 
 /**
@@ -373,6 +463,7 @@ export function resetInteractionCoordinatorForTest(): void {
   specs.length = 0;
   specByLayerId.clear();
   currentPopup = null;
+  adoption = null;
   initialized = false;
   sink = null;
   sinkPresented = false;
@@ -716,64 +807,32 @@ function renderPopup(
     replacingPopup = false;
   }
 
-  // Split the response into a FROZEN head and a SCROLLING body. The
-  // maintainer directive of 2026-07-18 kept the head to title, door, and
-  // the feature switcher, with even the agency line scrolling in the
-  // body; the owner amended that on 2026-09-10 ("a change from a prior
-  // opinion"): a place popup is now a conditions card, not only an
-  // identity card, so its succinct identity AND its conditions belong
-  // where they are always visible. The head, top to bottom, is now: the
-  // title, the one-line "kind of place" (`.popup-agency`) when the
-  // content carries a `.popup-conditions` block (see below), that
-  // Conditions block itself (`src/ui/popup-conditions.ts`), THEN the
-  // briefing door, THEN the "Other map features here" switcher. The
-  // boundary detail (acres, classification, treaty year, and the like)
-  // and the representation caveat stay in the scrolling body, below the
-  // fold, exactly where the owner asked for them NOT to lead the card.
-  // Body scrolling never moves the head (the body, not the card, is the
-  // scroll container via .ddm-coordinated-popup); whether the head is
-  // VISIBLE at a given popup size is governed solely by the canonical
-  // tier table in src/ui/popup-viewport.ts, which does not promise head
-  // visibility in every tier.
+  // A FROZEN head and a SCROLLING body. Body scrolling never moves the head
+  // (the body, not the card, is the scroll container via
+  // .ddm-coordinated-popup); whether the head is VISIBLE at a given popup
+  // size is governed solely by the canonical tier table in
+  // src/ui/popup-viewport.ts, which does not promise head visibility in
+  // every tier.
   //
-  // A response that carries no `.popup-conditions` block (the NWS alert
-  // and SPC Fire Weather Outlook popups, the NIFC perimeter popup, and
-  // the telemetry-station skeleton) is NOT a place-identity card in the
-  // owner's sense -- the map feature itself IS the subject -- so it keeps
-  // the pre-2026-09-10 shape exactly: only the title and the door move to
-  // the head, and its own agency line stays in the body.
+  // D1 M23: a FRAMED response (the DOM contract of src/ui/popup-frame.ts,
+  // validated in takeFrame: a model this coordinator serialized, or an
+  // answer that carries the frame's markup) keeps its article as the one
+  // real root. Its head and body regions take the coordinated classes the
+  // tier table and the panel host rules read, and no node moves out of it
+  // (listeners and the title stay where the builder put them). Every
+  // builder answers a model since D1 M26c, which retired the legacy
+  // class-name split (the title, the kind-of-place line, the Conditions
+  // block and the door lifted out of unframed markup into the head): an
+  // unframed answer, which no builder gives, renders whole in the body
+  // under an empty head, and the identify-paths observer fails it.
   const raw = document.createElement('div');
   if (typeof content === 'string') raw.innerHTML = content;
   else raw.appendChild(content);
-
-  // D1 M23: a FRAMED response (the DOM contract of src/ui/popup-frame.ts,
-  // validated in takeFrame: a model this coordinator serialized, or a
-  // legacy answer that carries the frame's markup) keeps its
-  // article as the one real root. Its head and body regions take the
-  // coordinated classes the tier table and the panel host rules read, and
-  // no node moves out of it (listeners and the title stay where the
-  // builder put them). `raw` is then empty, so the legacy class-name split
-  // below moves nothing; that split stays for unmigrated builders until
-  // M26 retires it.
   const frame = takeFrame(raw);
   const head = frame?.head ?? document.createElement('div');
   head.classList.add('coordinated-response-head');
   const body = frame?.body ?? document.createElement('div');
   body.classList.add('coordinated-response-body');
-
-  // Title first (frozen), if the content carries one. querySelector on the
-  // working fragment moves each node out of `raw`, so whatever remains
-  // falls through to the body.
-  const title = raw.querySelector('.popup-title');
-  if (title) head.appendChild(title);
-  const conditions = raw.querySelector('.popup-conditions');
-  if (conditions) {
-    const agency = raw.querySelector('.popup-agency');
-    if (agency) head.appendChild(agency);
-    head.appendChild(conditions);
-  }
-  const trigger = raw.querySelector('[data-ddm-impact-trigger]');
-  if (trigger) head.appendChild(trigger);
   while (raw.firstChild) body.appendChild(raw.firstChild);
 
   // The escape hatch sits at the foot of the frozen head, below the door
@@ -791,9 +850,8 @@ function renderPopup(
     container.appendChild(head);
     container.appendChild(body);
   }
-  // The sink's title: the legacy title, or the frame's title slot (which
-  // carries the same .popup-title class).
-  const titleNode = title ?? head.querySelector('.popup-title');
+  // The sink's title: the frame's title slot (.popup-title).
+  const titleNode = head.querySelector('.popup-title');
 
   if (selection) {
     const context = selection.context;
@@ -879,7 +937,12 @@ function renderPopup(
   // races the paint above (the popup is already on screen) and never
   // routes straight to the briefing (only a person clicking the door
   // opens it); see `attachConditionDoor`.
-  if (!selection) {
+  //
+  // found-139 (M26c): never for a place LABEL. A label names a populated
+  // place, which is no briefing subject, so the door would open the
+  // briefing for the containing Tribal land or state: a door to a place
+  // the label does not name ("for Washington" on a Washington town).
+  if (!selection && container.getAttribute('data-popup-kind') !== 'label') {
     void attachConditionDoor(map, popup, head, click);
   }
 }
@@ -992,13 +1055,10 @@ async function attachConditionDoor(
   });
 
   // The same head order a place-bearing commit uses, before the "Other map
-  // features here" disclosure: in a framed head the actions slot (after
-  // the source, PF3); in a legacy head directly after the title.
+  // features here" disclosure: the frame's actions slot (after the source,
+  // PF3).
   const actions = head.querySelector('[data-popup-slot="actions"]');
-  const title = head.querySelector('.popup-title');
-  if (actions) actions.appendChild(button);
-  else if (title) title.after(button);
-  else head.appendChild(button);
+  (actions ?? head).appendChild(button);
 }
 
 /**

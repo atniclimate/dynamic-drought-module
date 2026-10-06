@@ -11,11 +11,11 @@
  *
  * LEGACY_ALLOWANCE is the ONE finite allowance for unframed responses,
  * read by the census, the observer and both sinks alike (PF6): full at
- * M23, each of M24, M25 and M26 deletes the lines of the builders it
- * migrates, and it is empty at M26. A builder outside it must render
- * through the frame (src/ui/popup-frame.ts). The held BC builder has no
- * line in it: it is never browser-eligible while DR-160 holds, so there is
- * nothing for M26 to empty.
+ * M23, each of M24, M25 and M26 deleted the lines of the builders it
+ * migrated, and it is empty since M26c (the telemetry station popup, the
+ * last line). Every builder must render through the frame
+ * (src/ui/popup-frame.ts). The held BC builder never had a line: it is
+ * never browser-eligible while DR-160 holds.
  */
 
 export interface BuilderEntry {
@@ -54,9 +54,7 @@ export const BUILDERS: readonly BuilderEntry[] = [
   { id: 'telemetry', layerKey: 'telemetry', path: 'external', targets: [] }
 ];
 
-export const LEGACY_ALLOWANCE: readonly string[] = [
-  'telemetry'
-];
+export const LEGACY_ALLOWANCE: readonly string[] = [];
 
 /** The browser-eligible builders: every builder but a held one. */
 export function eligibleBuilders(): readonly BuilderEntry[] {
@@ -101,15 +99,18 @@ export const NO_POPUP_SITES: SiteCounts = { constructions: 0, setHTML: 0, setDOM
 
 /**
  * The only files allowed a Popup construction or a content-setter mention,
- * each COUNTED; every other src file allows none. At cb836fe plus M23 the
- * setter mentions in src are exactly two: the coordinator's `.setDOMContent(container)`
- * and telemetry.ts's `popup.setHTML(buildTelemetryPopupSkeleton(station))`.
+ * each COUNTED; every other src file allows none. Since M26c the setter
+ * mentions in src are exactly two, both the coordinator's `setDOMContent`:
+ * its own popup's content, and the adopted station popup's first framed
+ * paint (a repaint replaces the frame root in place). telemetry.ts sets no
+ * content at all: it constructs the marker's popup and hands the
+ * coordinator a model.
  */
 export const POPUP_BOUNDARIES: Readonly<Record<string, SiteCounts>> = {
-  'src/map/interaction-coordinator.ts': { constructions: 1, setHTML: 0, setDOMContent: 1, setText: 0 },
+  'src/map/interaction-coordinator.ts': { constructions: 1, setHTML: 0, setDOMContent: 2, setText: 0 },
   // The adopted station popup, the one producer outside the registration
-  // path; M26 moves its content through the frame.
-  'src/layers/telemetry.ts': { constructions: 1, setHTML: 1, setDOMContent: 0, setText: 0 }
+  // path: its construction only (the marker binds it).
+  'src/layers/telemetry.ts': { constructions: 1, setHTML: 0, setDOMContent: 0, setText: 0 }
 };
 
 export function stripComments(source: string): string {

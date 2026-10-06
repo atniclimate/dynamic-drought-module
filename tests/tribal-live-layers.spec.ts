@@ -757,7 +757,23 @@ test.describe('DDM-P2-T10: one AIAN-LAR request serves a Nation\'s geometry and 
  * the curated Ice Harbor Dam station first (mirrors
  * tests/telemetry-raws-gate.spec.ts), which the fixture's coordinates sit
  * inside.
+ *
+ * Since S30D D1 M26c the station popup renders through the popup frame: the
+ * first reading (relative humidity) is the head's value row, the other two
+ * are body reading rows, each a frame row holding its label, the served
+ * text verbatim and its issuer; the six-state word of a failed read sits in
+ * the head's value slot.
  */
+
+/** One RAWS reading row of the framed station popup, by its label (the head value row or a body reading row). */
+function rawsReading(popup: ReturnType<Page['locator']>, label: string) {
+  return popup.locator('[data-popup-frame] :is([data-value-row], [data-detail="reading"])', { hasText: label });
+}
+
+/** The framed station popup's value slot state word (the six-state word of a read that did not complete). */
+function readState(popup: ReturnType<Page['locator']>) {
+  return popup.locator('[data-popup-frame] [data-popup-slot="value"] [data-state]');
+}
 test.describe('DDM-P9-T05: RAWS popup readings', () => {
   /**
    * Flying into the RAWS viewport cap fires EVERY discovery source at once
@@ -804,27 +820,31 @@ test.describe('DDM-P9-T05: RAWS popup readings', () => {
     await expect(marker).toHaveCount(1, { timeout: 20_000 });
 
     const popup = page.locator('.maplibregl-popup');
-    const humidityRow = popup.locator('.popup-data-row', { hasText: 'Relative humidity' });
+    const humidityRow = rawsReading(popup, 'Relative humidity');
     await expect(async () => {
       await marker.click();
       await expect(humidityRow).toBeVisible({ timeout: 2_000 });
     }).toPass({ timeout: 15_000 });
 
     await expect(humidityRow).toContainText('21 %');
-    const windRow = popup.locator('.popup-data-row', { hasText: 'Wind' });
+    const windRow = rawsReading(popup, 'Wind');
     await expect(windRow).toContainText('5 mph from 295 degrees');
-    const fuelRow = popup.locator('.popup-data-row', { hasText: 'Fuel moisture' });
+    const fuelRow = rawsReading(popup, 'Fuel moisture');
     await expect(fuelRow).toContainText('7.3 (unk)');
 
     // The observation time is the FIXTURE'S served ObservedDate, never the
-    // wall clock: the same conversion the runtime uses
-    // (src/ui/popups.ts renderRawsRows), so a locale mismatch between the
-    // test process and the browser would fail this honestly rather than by
-    // coincidence.
-    const expectedAsOf = new Date(RAWS_FIXTURE_OBSERVED_MS).toLocaleString();
-    const asOfRow = popup.locator('.popup-data-row', { hasText: 'As of' });
-    await expect(asOfRow).toContainText(expectedAsOf);
-    await expect(asOfRow).toContainText('NIFC RAWS');
+    // wall clock, and it is NIFC RAWS's (the old shared "As of ... (NIFC
+    // RAWS)" row): since D1 M26c each reading names its issuer and carries
+    // its own observation time, machine-readable in its <time datetime>
+    // (the frame shows it with its zone named), so a conversion that drifted
+    // from the served value fails here honestly rather than by coincidence.
+    const expectedAt = new Date(RAWS_FIXTURE_OBSERVED_MS).toISOString();
+    await expect(popup.locator('[data-popup-frame] [data-popup-region="head"] [data-popup-slot="clock"] time')).toHaveAttribute('datetime', expectedAt);
+    await expect(humidityRow.locator('[data-value-issuer]')).toHaveText('NIFC RAWS');
+    for (const row of [windRow, fuelRow]) {
+      await expect(row.locator('[data-reading-issuer]')).toHaveText('NIFC RAWS');
+      await expect(row.locator('time')).toHaveAttribute('datetime', expectedAt);
+    }
   });
 
   test('a field the service affirmatively reports as null reads "Station reported none", the others stay real', async ({
@@ -843,16 +863,16 @@ test.describe('DDM-P9-T05: RAWS popup readings', () => {
     await expect(marker).toHaveCount(1, { timeout: 20_000 });
 
     const popup = page.locator('.maplibregl-popup');
-    const fuelRow = popup.locator('.popup-data-row', { hasText: 'Fuel moisture' });
+    const fuelRow = rawsReading(popup, 'Fuel moisture');
     await expect(async () => {
       await marker.click();
       await expect(fuelRow).toBeVisible({ timeout: 2_000 });
     }).toPass({ timeout: 15_000 });
 
     await expect(fuelRow).toContainText('Station reported none');
-    const humidityRow = popup.locator('.popup-data-row', { hasText: 'Relative humidity' });
+    const humidityRow = rawsReading(popup, 'Relative humidity');
     await expect(humidityRow).toContainText('94 %');
-    const windRow = popup.locator('.popup-data-row', { hasText: 'Wind' });
+    const windRow = rawsReading(popup, 'Wind');
     await expect(windRow).toContainText('0 mph');
   });
 
@@ -886,7 +906,7 @@ test.describe('DDM-P9-T05: RAWS popup readings', () => {
     const popup = page.locator('.maplibregl-popup');
     await expect(async () => {
       await marker.click();
-      await expect(popup.locator('.popup-data-error')).toBeVisible({ timeout: 2_000 });
+      await expect(readState(popup)).toHaveText('unavailable', { timeout: 2_000 });
     }).toPass({ timeout: 15_000 });
 
     await expect(popup).not.toContainText('Station reported none');
@@ -919,7 +939,7 @@ test.describe('DDM-P9-T05: RAWS popup readings', () => {
     const popup = page.locator('.maplibregl-popup');
     await expect(async () => {
       await marker.click();
-      await expect(popup.locator('.popup-data-error')).toBeVisible({ timeout: 2_000 });
+      await expect(readState(popup)).toHaveText('unavailable', { timeout: 2_000 });
     }).toPass({ timeout: 15_000 });
 
     await expect(popup).not.toContainText('Station reported none');
@@ -1045,7 +1065,7 @@ test.describe('DDM-P9-T06: RAWS wind symbol', () => {
     await expect(windGlyph(page)).toHaveCount(0);
 
     const popup = page.locator('.maplibregl-popup');
-    const windRow = popup.locator('.popup-data-row', { hasText: 'Wind' });
+    const windRow = rawsReading(popup, 'Wind');
     await expect(async () => {
       await marker.click();
       await expect(windRow).toBeVisible({ timeout: 2_000 });
@@ -1081,7 +1101,7 @@ test.describe('DDM-P9-T06: RAWS wind symbol', () => {
     await expect(glyph).toHaveAttribute('width', '20');
 
     const popup = page.locator('.maplibregl-popup');
-    const windRow = popup.locator('.popup-data-row', { hasText: 'Wind' });
+    const windRow = rawsReading(popup, 'Wind');
     await expect(async () => {
       await marker.click();
       await expect(windRow).toBeVisible({ timeout: 2_000 });
@@ -1107,7 +1127,7 @@ test.describe('DDM-P9-T06: RAWS wind symbol', () => {
     await expect(windGlyph(page)).toHaveCount(0);
 
     const popup = page.locator('.maplibregl-popup');
-    const windRow = popup.locator('.popup-data-row', { hasText: 'Wind' });
+    const windRow = rawsReading(popup, 'Wind');
     await expect(async () => {
       await marker.click();
       await expect(windRow).toBeVisible({ timeout: 2_000 });
@@ -1136,7 +1156,7 @@ test.describe('DDM-P9-T06: RAWS wind symbol', () => {
     await expect(windGlyph(page)).toHaveCount(0);
 
     const popup = page.locator('.maplibregl-popup');
-    const windRow = popup.locator('.popup-data-row', { hasText: 'Wind' });
+    const windRow = rawsReading(popup, 'Wind');
     await expect(async () => {
       await marker.click();
       await expect(windRow).toBeVisible({ timeout: 2_000 });

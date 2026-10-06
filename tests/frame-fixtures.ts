@@ -2,7 +2,8 @@
  * The frame-fixture registry (S30D D1 M24 to M26; DDM-P11-T04). Each builder
  * batch that leaves LEGACY_ALLOWANCE (tests/identify-paths-manifest.ts) adds
  * its fixtures to its own module, so parallel batches never edit one hunk:
- * the places (M24), the surfaces (M25), the events and stations (M26). The
+ * the places (M24), the surfaces (M25), the events and stations (M26), the
+ * telemetry station popup's tier fixture (M26c). The
  * census in tests/identify-paths.spec.ts and the PF3 tier rows in
  * tests/popup-viewport.spec.ts dispatch through these two records, keyed by
  * the manifest's builder id.
@@ -12,6 +13,7 @@ import { PLACE_CENSUS_FIXTURES, PLACE_TIER_FIXTURES } from './frame-fixtures-pla
 import { SURFACE_CENSUS_FIXTURES, SURFACE_TIER_FIXTURES } from './frame-fixtures-surfaces';
 import { FIRE_LABEL_CENSUS_FIXTURES, FIRE_LABEL_TIER_FIXTURES } from './frame-fixtures-fires-labels';
 import { EVENT_STATION_CENSUS_FIXTURES, EVENT_STATION_TIER_FIXTURES } from './frame-fixtures-events-stations';
+import { TELEMETRY_TIER_FIXTURES } from './frame-fixtures-telemetry';
 
 /**
  * The census spec's own helpers, handed to each fixture (a spec file exports
@@ -52,5 +54,9 @@ export const TIER_FIXTURES: Readonly<Record<string, TierFixture>> = {
   ...PLACE_TIER_FIXTURES,
   ...SURFACE_TIER_FIXTURES,
   ...FIRE_LABEL_TIER_FIXTURES,
-  ...EVENT_STATION_TIER_FIXTURES
+  ...EVENT_STATION_TIER_FIXTURES,
+  // The station popup (M26c): an adopted external popup with no click
+  // target, so it has a tier fixture here and its census fixture beside the
+  // census (tests/identify-paths.spec.ts EXTERNAL_CENSUS_FIXTURES).
+  ...TELEMETRY_TIER_FIXTURES
 };

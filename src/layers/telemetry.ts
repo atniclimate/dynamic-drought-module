@@ -3,25 +3,25 @@
  * with the v0.1.1 popup race-fix preserved).
  *
  * Each station in `TELEMETRY_STATIONS` becomes a `maplibregl.Marker` with a
- * small color-coded dot. Clicking a marker opens a `maplibregl.Popup` whose
- * static skeleton (title, agency, description, links) is rendered immediately
- * and whose live data slot (United States Geological Survey (USGS)
- * Instantaneous Values (IV) for `usgsSite` stations, an honest "not available
- * in-browser" message for Natural Resources Conservation Service (NRCS)
- * Air-Water Database (AWDB) Snow Telemetry (SNOTEL) stations) is hydrated
- * asynchronously.
+ * small color-coded dot. Clicking a marker opens its `maplibregl.Popup`,
+ * which the InteractionCoordinator adopts as the one response and paints
+ * through the popup frame (S30D D1 M26c): first the station's model as it
+ * stands before its live read (the loading state, or the custody cadence of
+ * a station DDM does not read in the browser), then, once the live read
+ * lands, the hydrated model, whole (src/ui/popups.ts
+ * `buildTelemetryPopupModel`, `hydrateTelemetryPopup`).
  *
  * Critical port behavior preserved from v0.1.1:
  *   - Per-marker AbortController stored externally via `WeakMap` (MapLibre's
  *     `Marker` does not support arbitrary custom properties as cleanly as
  *     Leaflet's marker did).
- *   - The popup `close` event aborts the in-flight USGS fetch so a re-open
- *     within ~8 seconds does not race two fetches into a re-created slot.
- *   - `hydrateTelemetryPopupData(...)` and the internal USGS fetch thread the
- *     signal end-to-end; both check `signal.aborted` before writing into the
- *     slot.
- *   - Every interpolated value in the popup is escaped via `escapeHtml`; only
- *     `https://` URLs are rendered as anchors.
+ *   - The popup `close` event aborts the in-flight read so a re-open within
+ *     ~8 seconds does not race two reads into the reopened popup: an aborted
+ *     read returns no model, and the coordinator refuses a paint for an
+ *     adoption that is no longer current.
+ *   - The read threads the signal end-to-end.
+ *   - Every model string is escaped once by the frame; only https links
+ *     without userinfo reach it.
  *
  * Coordinates note: the `TelemetryStation.coords` tuple is `[latitude,
  * longitude]` to match the bounding-box convention used elsewhere in the
@@ -34,7 +34,7 @@
 
 import * as maplibregl from 'maplibre-gl';
 
-import { adoptExternalResponse } from '../map/interaction-coordinator';
+import { adoptExternalResponse, warmPopupFrame } from '../map/interaction-coordinator';
 import { DDM_NOTICE_LABEL, RAWS_PUBLIC_VIEW_NOTICE } from '../config/ddm-notice';
 import type { TelemetryFreshness, TelemetryStation } from '../types/station';
 import {
@@ -50,10 +50,7 @@ import type {
   StationRegistryEntry,
   ViewportBounds
 } from '../types/station-network';
-import {
-  buildTelemetryPopupSkeleton,
-  hydrateTelemetryPopupData
-} from '../ui/popups';
+import { buildTelemetryPopupModel, hydrateTelemetryPopup } from '../ui/popups';
 import { registry } from '../state/registry';
 import {
   LEGEND_ORDER,
@@ -137,6 +134,9 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   }
 
   reportStatus('loading');
+  // The station popups paint through the popup frame and register no click
+  // target, so the layer warms the frame itself (D1 M26c).
+  warmPopupFrame();
 
   ensureMoveendHandler(map);
   await runDiscoveryForCurrentViewport(map);
@@ -570,17 +570,17 @@ function clearMarkers(): void {
  * after replacing markers in place; today the only call site is `activate`.
  *
  * On `open`:
- *   1. Abort any prior controller for this marker (defensive; handles the
+ *   1. Hand the popup to the coordinator, which adopts it as the response.
+ *   2. Abort any prior controller for this marker (defensive; handles the
  *      "user opened, closed, reopened within ~8s" race the v0.1.1 review
- *      flagged).
- *   2. Create a fresh `AbortController` and stash it in the WeakMap.
- *   3. Set the popup HTML to the skeleton.
- *   4. Resolve the popup's DOM element and call `hydrateTelemetryPopupData`
- *      with the fresh signal.
+ *      flagged) and stash a fresh one in the WeakMap.
+ *   3. Paint the station's first model through the adoption.
+ *   4. Read the live values with the fresh signal and paint the hydrated
+ *      model, unless the read was aborted.
  *
  * On `close`:
- *   1. Abort and clear the controller so any in-flight USGS fetch can no
- *      longer write into a slot that is about to be detached from the DOM.
+ *   1. Abort and clear the controller so an in-flight read can no longer
+ *      paint the popup.
  */
 export function bindPopups(_map: maplibregl.Map): void {
   for (const marker of activeMarkers) {
@@ -597,9 +597,9 @@ export function bindPopups(_map: maplibregl.Map): void {
       // station is the table's top point-event, so the marker popup
       // WINS: adopting it dismisses any coordinator response committed
       // for the same click and occupies the single response slot.
-      adoptExternalResponse(popup);
+      const response = adoptExternalResponse(popup);
 
-      // Abort any prior in-flight fetch from a popup that the user opened
+      // Abort any prior in-flight read from a popup that the user opened
       // and dismissed quickly.
       const prior = abortControllers.get(marker);
       if (prior) prior.abort();
@@ -607,13 +607,25 @@ export function bindPopups(_map: maplibregl.Map): void {
       const controller = new AbortController();
       abortControllers.set(marker, controller);
 
-      popup.setHTML(buildTelemetryPopupSkeleton(station));
-
-      // `getElement()` returns the popup's outer DOM container once the
-      // popup is added to the map (which `marker.setPopup` + open guarantee).
-      const container = popup.getElement();
-      if (!container) return;
-      void hydrateTelemetryPopupData(station, container, controller.signal);
+      // The frame paints at once (D1 M26c); the live read repaints it whole.
+      response.paint(buildTelemetryPopupModel(station));
+      void hydrateTelemetryPopup(station, controller.signal)
+        .then((hydrated) => {
+          if (hydrated && !controller.signal.aborted) response.paint(hydrated.model, hydrated.mount);
+        })
+        .catch((err: unknown) => {
+          // A hydrated model the frame refuses (a builder bug, never a data
+          // condition) must not leave the head loading: report it and paint
+          // the unavailable state. `paint` ignores it once this adoption is
+          // no longer current (closed, replaced or reopened).
+          console.error('[telemetry] the station popup could not paint its live read:', err);
+          if (controller.signal.aborted) return;
+          try {
+            response.paint(buildTelemetryPopupModel(station, { kind: 'unavailable' }));
+          } catch (fallback) {
+            console.error('[telemetry] the station popup could not paint its unavailable state:', fallback);
+          }
+        });
     });
 
     popup.on('close', () => {

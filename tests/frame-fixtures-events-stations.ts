@@ -2,7 +2,8 @@
  * The NWS alert, SPC fire weather outlook, power plant and power line
  * builders' frame fixtures (S30D D1 M26b, block 5; register owner-1k,
  * DDM-P11-T04), keyed by the manifest's builder id; see
- * tests/frame-fixtures.ts. M26c registers the station builder's own module.
+ * tests/frame-fixtures.ts. M26c registers the station builder's own module
+ * (tests/frame-fixtures-telemetry.ts), which reuses the tier helpers here.
  *
  * Each fixture routes its own deterministic data (page routes win over
  * gotoApp's context stubs and the census's offline context route), boots
@@ -430,13 +431,17 @@ export const EVENT_STATION_CENSUS_FIXTURES: Readonly<Record<string, CensusFixtur
 // The PF3 tier fixtures (the M25 and M26a pattern, tests/frame-fixtures-fires-labels.ts)
 // ---------------------------------------------------------------------------
 
-/** src/ui/popup-viewport.ts: MIN_USABLE_REGION_HEIGHT_PX, MIN_USABLE_REGION_WIDTH_PX, MIN_COMPACT_BODY_REGION_HEIGHT_PX. */
-const FULL_HEIGHT_PX = 91;
-const USABLE_WIDTH_PX = 88;
-const COMPACT_BODY_HEIGHT_PX = 47;
+/**
+ * src/ui/popup-viewport.ts: MIN_USABLE_REGION_HEIGHT_PX, MIN_USABLE_REGION_WIDTH_PX, MIN_COMPACT_BODY_REGION_HEIGHT_PX.
+ * Exported with the three helpers below for the station builder's tier
+ * fixture (tests/frame-fixtures-telemetry.ts, M26c).
+ */
+export const FULL_HEIGHT_PX = 91;
+export const USABLE_WIDTH_PX = 88;
+export const COMPACT_BODY_HEIGHT_PX = 47;
 
 /** The embed's reachable region: the viewport and the map rect, inset by the clamp's 12px margin. */
-async function embedRegion(page: Page): Promise<{ top: number; left: number; bottom: number; right: number; h: number; w: number }> {
+export async function embedRegion(page: Page): Promise<{ top: number; left: number; bottom: number; right: number; h: number; w: number }> {
   const map = await page.locator('#map').boundingBox();
   if (!map) throw new Error('the map has no bounding box');
   const vp = page.viewportSize()!;
@@ -452,7 +457,7 @@ async function embedRegion(page: Page): Promise<{ top: number; left: number; bot
  * its window, then hit-test that line STRICTLY (the target or inside it,
  * never an ancestor). The external link is never followed.
  */
-async function bodyLineReachable(target: Locator, edge: 'first' | 'last'): Promise<string> {
+export async function bodyLineReachable(target: Locator, edge: 'first' | 'last'): Promise<string> {
   return target.evaluate((el, which) => {
     const body = el.closest('[data-popup-region="body"]');
     if (!(body instanceof HTMLElement)) return 'not inside the body region';
@@ -479,7 +484,7 @@ async function bodyLineReachable(target: Locator, edge: 'first' | 'last'): Promi
 }
 
 /** The element under the target's own centre is the target or inside it. */
-async function strictHit(target: Locator): Promise<string> {
+export async function strictHit(target: Locator): Promise<string> {
   return target.evaluate((el) => {
     const r = el.getBoundingClientRect();
     if (r.width <= 0 || r.height <= 0) return 'no box';
