@@ -1221,6 +1221,7 @@ export function openAcknowledgementsPanel(opener: HTMLElement | null): void {
   setSheetBriefing(null);
   ensurePanel();
   if (titleEl) titleEl.textContent = 'Acknowledgements';
+  // DRAFT wording (DR-177): source-directory description pending owner read.
   if (kindEl) kindEl.textContent = 'Every data source this map can show';
   if (bodyEl) bodyEl.innerHTML = renderAcknowledgements({ open: true });
   setMailActionEnabled(false);

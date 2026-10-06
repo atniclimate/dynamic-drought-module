@@ -27,14 +27,12 @@
  * no userinfo, the exact host where one is mandated). `renderPopupFrame` is
  * the thin DOM wrapper for a builder that wants an element.
  *
- * WORDS: the only strings this module writes are the ratified ones: the
- * four issuer role prefixes (interface-chrome-popups-text.md 3.3), the
- * group head, notices and footer (grouping-contract.md 12.1, and 3.4 of the
- * chrome record for the issuer statement, the computed clock and the
- * per-record source), the record issuer names (12.1 slot 1) and the
- * briefing door's existing label (src/ui/popups.ts
- * buildImpactTriggerButtonHtml). Every other visible string is the
- * builder's, from the issuer.
+ * WORDS: the four issuer role prefixes follow interface-chrome-popups-text.md
+ * 3.3. The group head, notices and footer follow grouping-contract.md 12.1
+ * and chrome record 3.4; pending group wording is marked DRAFT below.
+ * The record issuer names follow 12.1 slot 1, and the briefing door keeps
+ * its existing label (src/ui/popups.ts buildImpactTriggerButtonHtml).
+ * Every other visible string is the builder's, from the issuer.
  *
  * Node-importable: no DOM at module level, no product catalog value
  * (ProductKey is a type-only import; src/config/products.ts is eager-
@@ -957,6 +955,7 @@ function checkGroup(group: GroupSnap): GroupSnap {
 }
 
 function groupTitle(group: GroupSnap): string {
+  // DRAFT wording (DR-177)
   return `Overlapping agency fire perimeters (${group.records.length} records)`;
 }
 
@@ -967,6 +966,7 @@ function groupFrame(input: readonly GroupInput[], kind: 'group' | 'collection'):
 
   const issuers = (Object.keys(GROUP_ISSUERS) as GroupIssuerKey[]).filter((key) => groups.some((g) => g.issuers.includes(key)));
   const times = [...new Set(groups.map((g) => formatTimeOfDay(g.computedAt, g.zone)))];
+  // DRAFT wording (DR-177)
   const footer = times
     .map((at) => noteHtml(`Grouping computed by DDM from the agencies' perimeters at ${at}. DDM states no combined name, size or status.`, ' data-group-footer'))
     .join('');
@@ -978,6 +978,7 @@ function groupFrame(input: readonly GroupInput[], kind: 'group' | 'collection'):
     head({
       title: groups.map((g) => `<span data-group-key="${escapeHtml(g.groupKey)}">${text(groupTitle(g))}</span>`).join(' '),
       issuer: text(`${ROLE_PREFIX['computed-by-ddm-from']} ${issuers.map((key) => GROUP_ISSUERS[key].short).join(' and ')} perimeters`),
+      // DRAFT wording (DR-177)
       value: `<div data-value-row><span class="popup-value-text">${text('Overlapping agency perimeters counted as one fire area.')}</span></div>`,
       clocks: times.map((at) => clockLine('computed', 'Grouping computed', text(at))).join(''),
       source: `<span data-source="per-record">${text('Source: per record')}</span>`,

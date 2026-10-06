@@ -1,7 +1,6 @@
 /**
  * The acknowledgements rows (S30D D1 M22; task DDM-P7-T11; register items
- * owner-1r-credits and found-027; design record
- * planning/2026-09-25-desktop-pass/design/acknowledgements-table.md sections
+ * owner-1r-credits and found-027; M22 acknowledgements design sections
  * 1.8 to 2.4, as amended by DR-147, DR-159 and DR-160 to DR-166).
  *
  * One row per issuer. Every `src/config/products.ts` product names its rows
@@ -12,7 +11,7 @@
  *
  * THE WORDS RULE (DR-147). A credit, changes or notice sentence here is the
  * cited text exactly as the M22 cite batch (workflow wf_f7e3c5f0-9ec,
- * planning/references/register.yaml clause_verdicts_2026_09_29) recorded it;
+ * source-reference ledger clause verdicts dated 2026-09-29) recorded it;
  * `citeId` names the ledger slug it was recorded under, and a sentence with
  * a null `citeId` never renders. A row with no cited sentence renders the
  * issuer's name alone (DR-166, Q20: a REQUESTED or COURTESY credit still

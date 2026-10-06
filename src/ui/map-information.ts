@@ -229,8 +229,10 @@ export function initMapInformation(): void {
     host.replaceChildren(lead, pointer, tail);
     pointerButtons.push(pointer);
   };
+  // DRAFT wording (DR-177)
   buildPointer(attribution, 'Credits for every data source are in ', '.');
   const footerCredits = document.getElementById('footer-credits');
+  // DRAFT wording (DR-177)
   if (footerCredits) buildPointer(footerCredits, 'Data sources and credits: ', '');
   const onPointerClick = (event: MouseEvent): void => {
     const pointer = event.currentTarget as HTMLButtonElement;

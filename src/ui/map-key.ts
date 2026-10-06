@@ -439,7 +439,7 @@ function sstKey(): KeySpec {
 function ensoFlowRow(): { readonly html: string; readonly ariaLabel: string } {
   const flow = ensoFlowSnapshot;
   if (!flow || flow.status === 'inactive' || flow.status === 'off') return { html: '', ariaLabel: '' };
-  // DRAFT (DR-draft, block 5 P3-ENSOKEY): pending owner read (DRAFT-W1, the
+  // DRAFT wording (DR-177): pending owner read (DRAFT-W1, the
   // composition "<label> · <status line>" then the qualification sentences).
   const status = `${flow.label} · ${flow.line}`;
   const notes = flow.notes.join(' ');

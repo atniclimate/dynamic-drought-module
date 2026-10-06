@@ -802,6 +802,7 @@ export function openAcknowledgements(opener: HTMLElement | null): void {
       if (intent !== briefingIntentSeq) return;
       const current = ensureImpactPanelShell();
       current.title.textContent = 'Acknowledgements';
+      // DRAFT wording (DR-177): source-directory description pending owner read.
       current.kind.textContent = 'Every data source this map can show';
       current.body.innerHTML = `<p class="impact-horizon-note">${UNAVAILABLE_NOTE}</p>`;
       unavailableOpen = true;

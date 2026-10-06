@@ -416,6 +416,7 @@ function renderCredits(kind: EnsoFlowKind): void {
   copernicus.hidden = kind !== 'currents';
   creditNode.replaceChildren(credit, copernicus);
   // ledger: open-meteo-licence (cite sheet c21), the CC BY changes line
+  // DRAFT wording (DR-177)
   changesNode.textContent =
     'DDM samples points in the view and draws each as a static direction arrow; no value is interpolated between samples.';
   changesNode.hidden = false;

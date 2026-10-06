@@ -208,7 +208,7 @@ export function buildPlaceLabelModel(name: string, retrieved: string | null, gni
       gnis === null
         ? []
         : [
-            // DRAFT (DR-draft, block 4 M26a): pending owner read
+            // DRAFT wording (DR-177): M26a name-source label pending owner read.
             { kind: 'row', label: 'Name from', text: GNIS_NAME_SOURCE }
           ],
     source: {
