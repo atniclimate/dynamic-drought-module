@@ -359,6 +359,138 @@ function stationPopup() {
   };
 }
 
+/** A controlled DOM shape for the real serializer's already-validated frame.
+ * This supplies regions and focusable controls, not an HTML parser or a layout
+ * claim. The browser frame cases still own markup parsing and popup geometry.
+ */
+async function withAdoptedFrameDom(run) {
+  const createElement = document.createElement;
+  const frames = [];
+  document.createElement = () => {
+    const holder = new FakeElement();
+    Object.defineProperty(holder, 'innerHTML', { set(value) {
+      rendered.push(value);
+      assert.match(value, /^<article[^>]*data-popup-frame/);
+      const root = new FakeElement();
+      root.matches = (selector) => selector === '[data-popup-frame]';
+      const head = root.appendChild(new FakeElement());
+      head.matches = (selector) => selector === '[data-popup-region=head]';
+      const body = root.appendChild(new FakeElement());
+      body.matches = (selector) => selector === '[data-popup-region=body]';
+      const controls = [head.appendChild(new FakeElement()), body.appendChild(new FakeElement())];
+      root.querySelectorAll = () => controls;
+      root.querySelector = () => controls[0];
+      root.replaceWith = (replacement) => {
+        const parent = root.parentNode;
+        const at = parent.childNodes.indexOf(root);
+        parent.childNodes[at] = replacement;
+        replacement.parentNode = parent;
+        root.parentNode = null;
+        if (root.contains(document.activeElement)) document.activeElement = document.body;
+      };
+      holder.appendChild(root);
+      frames.push({ root, head, body, controls });
+    } });
+    return holder;
+  };
+  try { await run(frames); }
+  finally { document.createElement = createElement; }
+}
+
+function framedStationPopup() {
+  const popup = stationPopup();
+  popup.setContentCalls = 0;
+  popup.classes = new Set();
+  popup.setDOMContent = (root) => {
+    popup.setContentCalls++;
+    const content = popup.paintElement();
+    content.appendChild(root);
+    popup.getElement().querySelector = (selector) => selector === '.maplibregl-popup-content > [data-popup-frame]'
+      ? content.firstElementChild : null;
+    return popup;
+  };
+  popup.addClassName = (name) => { popup.classes.add(name); return popup; };
+  return popup;
+}
+
+test('an adopted cold frame waits, then decorates and mounts exactly once', async () => {
+  const { map } = harness({});
+  const popup = framedStationPopup();
+  const mounted = [];
+  await withAdoptedFrameDom(async (frames) => {
+    coordinator.adoptExternalResponse(popup, map, document.body).paint(MODEL, (root) => mounted.push(root));
+    assert.equal(popup.getElement(), null, 'no DOM before the lazy frame resolves');
+    assert.deepEqual(mounted, []);
+    await settle();
+    assert.equal(frames.length, 1);
+    assert.deepEqual(mounted, [frames[0].root]);
+    assert.equal(popup.setContentCalls, 1);
+    assert.equal(frames[0].root.classList.contains('coordinated-response'), true);
+    assert.equal(frames[0].head.classList.contains('coordinated-response-head'), true);
+    assert.equal(frames[0].body.classList.contains('coordinated-response-body'), true);
+    assert.deepEqual([...popup.classes], ['ddm-coordinated-popup', 'ddm-popup-framed']);
+    assert.equal(popup.getElement().getAttribute('data-ddm-external-response'), '');
+  });
+  popup.remove();
+});
+
+test('a replaced cold adoption never paints or mounts after its frame resolves', async () => {
+  const { map } = harness({});
+  const old = framedStationPopup();
+  const current = framedStationPopup();
+  const mounted = [];
+  await withAdoptedFrameDom(async (frames) => {
+    const retired = coordinator.adoptExternalResponse(old, map, document.body);
+    retired.paint(MODEL, () => mounted.push('old'));
+    coordinator.adoptExternalResponse(current, map, document.body).paint(SECOND_MODEL, () => mounted.push('current'));
+    await settle();
+    retired.paint(MODEL, () => mounted.push('late-old'));
+    assert.equal(old.removes, 1);
+    assert.equal(old.setContentCalls, 0);
+    assert.equal(frames.length, 1);
+    assert.deepEqual(rendered, [serializePopupFrame(SECOND_MODEL)]);
+    assert.deepEqual(mounted, ['current']);
+  });
+  current.remove();
+});
+
+test('adopted hydration replaces the root, retains control-index focus and mounts each new frame once', async () => {
+  const { map, ready } = harness({ warmup: [{ model: MODEL }] }, { warm: true });
+  await ready;
+  const popup = framedStationPopup();
+  const mounted = [];
+  await withAdoptedFrameDom(async (frames) => {
+    const response = coordinator.adoptExternalResponse(popup, map, document.body);
+    response.paint(MODEL, (root) => mounted.push(root));
+    assert.equal(frames.length, 1, 'warm paint remains synchronous');
+    frames[0].controls[1].focus();
+    response.paint(SECOND_MODEL, (root) => mounted.push(root));
+    assert.equal(frames.length, 2);
+    assert.equal(popup.setContentCalls, 1, 'hydration replaces only the existing frame root');
+    assert.equal(frames[0].root.isConnected, false);
+    assert.equal(frames[1].root.isConnected, true);
+    assert.equal(document.activeElement, frames[1].controls[1]);
+    assert.deepEqual(mounted, frames.map((frame) => frame.root));
+    assert.equal(popup.getElement().getAttribute('data-ddm-external-response'), '');
+  });
+  popup.remove();
+});
+
+test('an adopted warm model refusal throws before DOM or mount work', async () => {
+  const { map, ready } = harness({ warmup: [{ model: MODEL }] }, { warm: true });
+  await ready;
+  const popup = framedStationPopup();
+  const mounted = [];
+  await withAdoptedFrameDom(async (frames) => {
+    const response = coordinator.adoptExternalResponse(popup, map, document.body);
+    assert.throws(() => response.paint(REFUSED_MODEL, (root) => mounted.push(root)), { name: 'PopupFrameError' });
+    assert.deepEqual(frames, []);
+    assert.deepEqual(mounted, []);
+    assert.equal(popup.setContentCalls, 0);
+  });
+  popup.remove();
+});
+
 test('Escape closes an adopted station before its lazy frame paints and retires the late paint', async () => {
   const { map } = harness({});
   const marker = document.body.appendChild(new FakeElement());

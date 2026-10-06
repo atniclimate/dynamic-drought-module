@@ -100,14 +100,15 @@ export const NO_POPUP_SITES: SiteCounts = { constructions: 0, setHTML: 0, setDOM
 /**
  * The only files allowed a Popup construction or a content-setter mention,
  * each COUNTED; every other src file allows none. Since M26c the setter
- * mentions in src are exactly two, both the coordinator's `setDOMContent`:
- * its own popup's content, and the adopted station popup's first framed
- * paint (a repaint replaces the frame root in place). telemetry.ts sets no
- * content at all: it constructs the marker's popup and hands the
+ * mentions in src are exactly two: the coordinator sets its own popup's
+ * content; its lazy frame helper sets the adopted station popup's first
+ * framed paint (a repaint replaces the frame root in place). telemetry.ts
+ * sets no content at all: it constructs the marker's popup and hands the
  * coordinator a model.
  */
 export const POPUP_BOUNDARIES: Readonly<Record<string, SiteCounts>> = {
-  'src/map/interaction-coordinator.ts': { constructions: 1, setHTML: 0, setDOMContent: 2, setText: 0 },
+  'src/map/interaction-coordinator.ts': { constructions: 1, setHTML: 0, setDOMContent: 1, setText: 0 },
+  'src/ui/popup-frame.ts': { constructions: 0, setHTML: 0, setDOMContent: 1, setText: 0 },
   // The adopted station popup, the one producer outside the registration
   // path: its construction only (the marker binds it).
   'src/layers/telemetry.ts': { constructions: 1, setHTML: 0, setDOMContent: 0, setText: 0 }

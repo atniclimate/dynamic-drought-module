@@ -39,6 +39,7 @@
  * forbidden and would otherwise ride every builder chunk).
  */
 
+import type { Popup } from 'maplibre-gl';
 import type { ProductKey } from '../config/products';
 import type { SparklineOptions } from './charts';
 import { escapeHtml } from '../util/escape';
@@ -1015,4 +1016,32 @@ export function renderPopupFrame(model: PopupModel): HTMLElement {
   const root = template.content.firstElementChild;
   if (!(root instanceof HTMLElement)) fail('the frame serialized to no element');
   return root;
+}
+
+/** Paint the coordinator's validated adopted frame without loading DOM work eagerly. */
+export function paintAdoptedPopupFrame(
+  popup: Popup,
+  frame: { readonly root: HTMLElement; readonly head: HTMLElement; readonly body: HTMLElement },
+  mount?: (root: HTMLElement) => void
+): void {
+  const { root } = frame;
+  root.classList.add('coordinated-response');
+  frame.head.classList.add('coordinated-response-head');
+  frame.body.classList.add('coordinated-response-body');
+  const previous = popup.getElement()?.querySelector('.maplibregl-popup-content > [data-popup-frame]');
+  if (previous) {
+    const controls = 'a[href],button';
+    const at = Array.from(previous.querySelectorAll(controls)).indexOf(document.activeElement as Element);
+    previous.replaceWith(root);
+    if (at >= 0) (root.querySelectorAll<HTMLElement>(controls)[at] ?? root.querySelector<HTMLElement>(controls))?.focus({ preventScroll: true });
+  } else {
+    popup.setDOMContent(root);
+  }
+  // MapLibre rebuilds the card on each open, so the classes and the
+  // identify-paths observer's positive provenance mark (M23) follow every
+  // paint, never a microtask (a first open has no element until it paints).
+  popup.addClassName('ddm-coordinated-popup');
+  popup.addClassName('ddm-popup-framed');
+  popup.getElement()?.setAttribute('data-ddm-external-response', '');
+  mount?.(root);
 }

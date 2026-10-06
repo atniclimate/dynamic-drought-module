@@ -26,8 +26,8 @@ import { MAP_ROOT, PANEL_ROOT, PLACE_FRAME_FIXTURES, bootPlace, expectPlaceField
  *
  *   1. An import-aware inventory of Popup construction and content setters
  *      over src/, with COUNTED narrow boundaries (the coordinator's one
- *      construction and two setDOMContent, its own popup and the adopted
- *      station popup's first framed paint; telemetry.ts's one construction
+ *      construction and own popup setter; the lazy frame's adopted station
+ *      first-paint setter; telemetry.ts's one construction
  *      and, since M26c, no setter), a self-check that the scan bites, the
  *      declared no-popup modules, and the frame's one caller (S30D
  *      P1-FRAME: the coordinator's one dynamic import; no static value
@@ -94,7 +94,7 @@ function readSource(path: string): string {
 }
 
 test.describe('identify paths: the static inventory', () => {
-  test('no Popup construction or content setter outside the counted coordinator and telemetry boundaries', () => {
+  test('no Popup construction or content setter outside the counted coordinator, frame and telemetry boundaries', () => {
     const files = sourceFiles().map(repoPath);
     expect(files.length, 'the scan reached src/').toBeGreaterThan(100);
     for (const boundary of Object.keys(POPUP_BOUNDARIES)) {

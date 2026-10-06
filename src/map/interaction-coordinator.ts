@@ -46,7 +46,7 @@ import { isSheetActive } from '../ui/mobile-sheet';
 // Types only (zero bytes): the frame itself is loaded by the one dynamic
 // import below (S30D P1-FRAME), never statically, since this module sits in
 // the entry graph.
-import type { PopupModel, serializePopupFrame } from '../ui/popup-frame';
+import type { PopupModel, serializePopupFrame, paintAdoptedPopupFrame } from '../ui/popup-frame';
 import { createChunkLoader } from '../util/chunk-retry';
 
 /** The click location a response builder receives. */
@@ -196,12 +196,14 @@ let initialized = false;
 
 const loadFrameChunk = createChunkLoader(() => import('../ui/popup-frame'), import.meta.url);
 let serializeFrame: typeof serializePopupFrame | null = null;
+let paintAdoptedFrame: typeof paintAdoptedPopupFrame | null = null;
 /** The waiting commit; `sheetRoute` says whether the mobile Brief sheet would now take it. */
 let pendingCommit: { readonly sheetRoute: () => boolean } | null = null;
 
 function loadFrame(): Promise<void> {
   return loadFrameChunk().then((frame) => {
     serializeFrame = frame.serializePopupFrame;
+    paintAdoptedFrame = frame.paintAdoptedPopupFrame;
   });
 }
 
@@ -439,26 +441,7 @@ function paintAdopted(
   holder.innerHTML = serializeFrame(model);
   const frame = takeFrame(holder);
   if (!frame) return;
-  const { root } = frame;
-  root.classList.add('coordinated-response');
-  frame.head.classList.add('coordinated-response-head');
-  frame.body.classList.add('coordinated-response-body');
-  const previous = popup.getElement()?.querySelector('.maplibregl-popup-content > [data-popup-frame]');
-  if (previous) {
-    const controls = 'a[href],button';
-    const at = Array.from(previous.querySelectorAll(controls)).indexOf(document.activeElement as Element);
-    previous.replaceWith(root);
-    if (at >= 0) (root.querySelectorAll<HTMLElement>(controls)[at] ?? root.querySelector<HTMLElement>(controls))?.focus({ preventScroll: true });
-  } else {
-    popup.setDOMContent(root);
-  }
-  // MapLibre rebuilds the card on each open, so the classes and the
-  // identify-paths observer's positive provenance mark (M23) follow every
-  // paint, never a microtask (a first open has no element until it paints).
-  popup.addClassName('ddm-coordinated-popup');
-  popup.addClassName('ddm-popup-framed');
-  popup.getElement()?.setAttribute('data-ddm-external-response', '');
-  mount?.(root);
+  paintAdoptedFrame!(popup, frame, mount);
 }
 
 /**
@@ -486,6 +469,7 @@ export function resetInteractionCoordinatorForTest(): void {
   // the next registration warms it again (a test can then commit cold).
   pendingCommit = null;
   serializeFrame = null;
+  paintAdoptedFrame = null;
   focusBeforeCommit = null;
   // The census stamp follows the registry, so a re-registration after a
   // reset never appends a stale or duplicate token.
