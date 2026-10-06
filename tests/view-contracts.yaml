@@ -34,6 +34,9 @@
 #   wait_fire3d: <active|inactive>   wait for the document stamp
 #   settle_scene: true               drain the draw queue and wait for quiet
 #                                    traffic (needs reduced_motion: true)
+#   hold_first_power_probe: <ms>     hold the power layer's first line archive
+#                                    header read for <ms> (past its 10 s probe
+#                                    budget) before letting it through
 #   zoom_out: <n>                    press the map's own zoom-out key n times
 #   reload: true                     reload at the current URL
 #
@@ -89,7 +92,7 @@ rows:
       URL, and brings up the context layers the mode owns: the WHP hazard
       drape and the structures pilot. Power is not among them, since it
       became a catalog layer on 2026-08-19 and is off unless someone asks
-      for it (see the two power rows below).
+      for it (see the power rows below).
     url: '?region=washington_state&cluster=wildfire'
     stub_wildfire: true
     timeout_ms: 150000
@@ -245,6 +248,33 @@ rows:
         power-infrastructure: ready
       fire3d_stamp: active
       url_layers_include: [power-infrastructure]
+
+  - id: a-slow-first-power-read-still-reaches-ready-while-the-scene-streams
+    description: >
+      Power switched on while the 3D scene is still streaming reaches live
+      even when its first archive read takes longer than the layer's own
+      probe budget: the layer reads its missing half again instead of
+      reporting partial for good (found-125). The held read stands in for
+      the software renderer's startup stall, which on a loaded machine or
+      GitHub's runner keeps the page busy past the 10 s probe budget, so this
+      row is red on a build that never reads again whatever the machine's
+      speed, and the row above covers the same switch with the stall the
+      machine actually produces.
+    url: '?region=washington_state&cluster=wildfire'
+    stub_wildfire: true
+    reduced_motion: true
+    timeout_ms: 180000
+    steps:
+      - wait_settled: hms-smoke
+      - fire3d: on
+      - wait_fire3d: active
+      - hold_first_power_probe: 12000
+      - set_layer: { key: power-infrastructure, on: true }
+    expect:
+      layers_checked: [power-infrastructure]
+      layer_status:
+        power-infrastructure: ready
+      fire3d_stamp: active
 
   - id: power-below-its-zoom-gate-says-zoom-in-to-load
     description: >

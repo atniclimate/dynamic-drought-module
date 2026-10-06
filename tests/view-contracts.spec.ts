@@ -57,6 +57,7 @@ type Step =
   | { wait_settled: string }
   | { wait_fire3d: 'active' | 'inactive' }
   | { settle_scene: true }
+  | { hold_first_power_probe: number }
   | { zoom_out: number }
   | { reload: true };
 
@@ -280,7 +281,12 @@ async function waitForSceneToSettle(page: Page, traffic: SceneTraffic): Promise<
 // Steps
 // ---------------------------------------------------------------------------
 
-async function runStep(page: Page, step: Step, traffic: SceneTraffic): Promise<void> {
+async function runStep(
+  page: Page,
+  step: Step,
+  traffic: SceneTraffic,
+  power: PowerReads
+): Promise<void> {
   if ('click_cluster' in step) {
     const key = step.click_cluster;
     await page.locator(`.shell-cluster-btn[data-cluster="${key}"]`).click();
@@ -314,28 +320,28 @@ async function runStep(page: Page, step: Step, traffic: SceneTraffic): Promise<v
   }
 
   if ('set_layer' in step) {
-    // A layer switched on while the 3D scene is up must not start its first
-    // read inside the scene's own startup stall (S30D P2-CI2). The scene
-    // publishes 'active' while terrain, the drape and the structures are
-    // still streaming, and on the software renderer the draw queue then
-    // blocks the page for up to about 12 s (tests/fire3d-mode.spec.ts, the
-    // RAWS marker case, measured 5.8 to 11.9 s). The power layer's own 10 s
-    // archive probe (src/util/pmtiles-probe.ts PROBE_TIMEOUT_MS) can expire
-    // inside that stall, and the layer then reports `degraded` for good
-    // (src/layers/power-3d.ts syncForZoom). Reproduced locally 2026-10-04: 2
-    // reds in 12 runs of this row, the line archive's request answered 206
-    // and aborted 23 ms later.
-    //
-    // P2-CI2 waited on the scene's `transport` stamp for 60 s. GitHub run
-    // 37276902844 froze the page 11.5, 25.8, 10.5 and 15.8 s inside that
-    // wait (retry trace), so the wait ended with the stamp still `streaming`,
-    // twice. S30D B3 CI3 replaced it: drain the draw queue, wait for quiet
-    // traffic counted on the Node side, drain again (waitForSceneToSettle).
-    // It needs a queue that can empty, so a row that uses it runs with
-    // `reduced_motion: true` (the wildfire pulse refills the queue every 500
-    // ms; the row's assertions never read the pulse or the camera path).
+    // A layer switched on while the 3D scene is up starts its first read
+    // inside the scene's own startup stall, ON PURPOSE (S30D B6-POWER,
+    // found-125). The scene publishes 'active' while terrain, the drape and
+    // the structures are still streaming, and on the software renderer the
+    // draw queue then blocks the page for up to about 12 s
+    // (tests/fire3d-mode.spec.ts, the RAWS marker case, measured 5.8 to
+    // 11.9 s), long enough for the power layer's 10 s archive probe
+    // (src/util/pmtiles-probe.ts PROBE_TIMEOUT_MS) to expire. Until B6-POWER
+    // that left the layer `degraded` for good, so P2-CI2 and then B3 CI3 made
+    // this step wait for the scene to settle first; on GitHub that wait was
+    // itself the red (run 37317297848: "the 3D scene kept requesting tiles",
+    // found-093). The layer now reads its missing half again after a slow
+    // first read (src/layers/power-3d.ts RETRY_DELAYS_MS), so the step
+    // switches the layer on at once and the row's `layer_status` asserts the
+    // recovery a person sees. The scene's transport stamp at that moment is
+    // recorded beside the power evidence, so a red says whether the switch
+    // really landed inside the streaming window.
     if (step.set_layer.on && (await fire3dStamp(page)) === 'active') {
-      await waitForSceneToSettle(page, traffic);
+      const transport = await page.evaluate(
+        () => document.documentElement.dataset['ddmFire3dTransport'] ?? 'unset'
+      );
+      power.timeline.push(`switched on in 3D, scene transport ${transport}`);
     }
     const box = layerCheckbox(page, step.set_layer.key);
     if (step.set_layer.on) await box.check();
@@ -363,6 +369,31 @@ async function runStep(page: Page, step: Step, traffic: SceneTraffic): Promise<v
     // failed its 20 s URL poll in both, with page reads blocked 10 to 32 s in
     // the same shard). The row that uses this step runs reduced motion.
     await waitForSceneToSettle(page, traffic);
+    return;
+  }
+
+  if ('hold_first_power_probe' in step) {
+    // The startup stall made deterministic (found-125): the FIRST header read
+    // of the bundled line archive (the probe's exact 127-byte Range) is held
+    // for longer than the probe's 10 s budget, then handed on to the preview
+    // server. The probe has given up by then, so its first read fails exactly
+    // as a starved page makes it fail, on any machine; every later read,
+    // including MapLibre's own tile reads, passes untouched.
+    const holdMs = step.hold_first_power_probe;
+    let held = false;
+    await page.route(
+      (url) => url.href.includes(POWER_LINES_ARCHIVE),
+      async (route) => {
+        const range = route.request().headers()['range'];
+        if (held || range !== 'bytes=0-126') return route.fallback();
+        held = true;
+        power.timeline.push(`holding the first line archive probe ${holdMs} ms`);
+        await new Promise((resolve) => setTimeout(resolve, holdMs));
+        // The page aborted the request when its budget ran out; Playwright
+        // then refuses the hand-off, which is the expected outcome here.
+        await route.fallback().catch(() => undefined);
+      }
+    );
     return;
   }
 
@@ -542,7 +573,7 @@ test.describe('view contracts', () => {
       try {
         await gotoApp(page, row.url);
 
-        for (const step of row.steps ?? []) await runStep(page, step, traffic);
+        for (const step of row.steps ?? []) await runStep(page, step, traffic, power);
 
         await assertExpectations(page, row.expect, power);
       } finally {

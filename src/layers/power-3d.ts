@@ -94,6 +94,15 @@ const PLANTS_CLUSTER_LAYER_ID = 'power-plants-clusters';
 const PLANTS_CLUSTER_COUNT_LAYER_ID = 'power-plants-cluster-count';
 const LEGEND_KEY = 'power-context';
 const PLANTS_TIMEOUT_MS = 15_000;
+/**
+ * After a build that left a half missing, read that half again after each
+ * of these delays in turn (found-125). A first read that starts inside the
+ * 3D scene's startup stall can outlive its budget only because the page was
+ * busy, and nothing used to read it again, so the layer said partial until
+ * someone toggled it. Bounded: three more reads at most, then the partial
+ * (or unavailable) state stands.
+ */
+const RETRY_DELAYS_MS: readonly number[] = [5_000, 15_000, 45_000];
 
 /** The self-hosted fontstack; MapLibre's implicit default is not hosted. */
 const GLYPH_FONT = 'Noto Sans Regular';
@@ -119,6 +128,9 @@ let controller: AbortController | null = null;
 let zoomWatcher: (() => void) | null = null;
 /** The last status written, so a camera move cannot re-announce it. */
 let lastStatus: LayerStatus | null = null;
+/** The pending re-read of a missing half, and how many this build has used. */
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+let retriesUsed = 0;
 
 function plantsQueryUrl(): string {
   const params = new URLSearchParams({
@@ -192,6 +204,7 @@ export function deactivate(map: maplibregl.Map): void {
  * `deactivate`, so a slow EIA read stops immediately.
  */
 export function cancelActivation(): void {
+  clearTimeout(retryTimer);
   controller?.abort();
   controller = null;
 }
@@ -272,9 +285,11 @@ export function bindPopups(map: maplibregl.Map): void {
  * Reconcile the layer with the current camera. Called on activation and on
  * every settled camera move; idempotent, and safe to re-enter because a
  * newer call aborts the older one's in-flight work through the shared
- * controller.
+ * controller. `retry` is the timed re-read of a half the last build could
+ * not draw (RETRY_DELAYS_MS): it reads only what is missing and keeps the
+ * partial or unavailable status it is trying to lift until it succeeds.
  */
-async function syncForZoom(map: maplibregl.Map): Promise<void> {
+async function syncForZoom(map: maplibregl.Map, retry = false): Promise<void> {
   if (map.getZoom() < POWER_MIN_ZOOM) {
     // Nothing is drawn below the gate (every layer carries the same
     // minzoom), so the legend must not claim otherwise, and the composed
@@ -286,18 +301,26 @@ async function syncForZoom(map: maplibregl.Map): Promise<void> {
     return;
   }
   const built = getPowerContextState();
-  if (built !== null) {
+  if (built !== null && !retry) {
     // Already built and still above the gate: an ordinary pan must not
     // re-render the legend or re-announce the status.
     setStatusOnce(built.linesOn && built.plantsOn ? 'ready' : 'degraded');
     return;
   }
 
+  // A fresh build earns a fresh set of re-reads.
+  if (!retry) retriesUsed = 0;
   const signal = renewSignal();
-  setStatusOnce('loading');
-  const state = await buildSurfaces(map, signal);
+  if (!retry) setStatusOnce('loading');
+  const state = await buildSurfaces(map, signal, built);
   // A newer sync (or a teardown) superseded this one; it owns the outcome.
   if (signal.aborted) return;
+  if (!state?.linesOn || !state.plantsOn) {
+    const delay = RETRY_DELAYS_MS[retriesUsed++];
+    if (delay !== undefined) {
+      retryTimer = setTimeout(() => void syncForZoom(map, true), delay);
+    }
+  }
   if (state === null) {
     setStatusOnce('error');
     return;
@@ -308,6 +331,7 @@ async function syncForZoom(map: maplibregl.Map): Promise<void> {
 }
 
 function renewSignal(): AbortSignal {
+  clearTimeout(retryTimer);
   controller?.abort();
   controller = new AbortController();
   return controller.signal;
@@ -326,15 +350,19 @@ function setStatusOnce(status: LayerStatus): void {
 }
 
 /**
- * Add lines (baked) and plants (live) independently. Returns the
- * activation state, or null when both sources failed.
+ * Add lines (baked) and plants (live) independently, skipping a half that
+ * `prev` already drew. Returns the activation state, or null when both
+ * sources failed.
  */
 async function buildSurfaces(
   map: maplibregl.Map,
-  signal: AbortSignal
+  signal: AbortSignal,
+  prev: PowerContextState | null
 ): Promise<PowerContextState | null> {
-  const linesOn = await activateLines(map, signal);
-  const periodLabel = await activatePlants(map, signal);
+  const linesOn = prev?.linesOn || (await activateLines(map, signal));
+  const periodLabel = prev?.plantsOn
+    ? prev.periodLabel
+    : await activatePlants(map, signal);
   const plantsOn = periodLabel !== null;
   if (!linesOn && !plantsOn) return null;
   return { linesOn, plantsOn, periodLabel };
