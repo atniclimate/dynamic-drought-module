@@ -193,6 +193,19 @@ const EAGER_FORBIDDEN = [
     reason: 'S30D P1-FRAME (2026-10-04; it replaced the D1 M23 rule, under which the lazy layer builders imported the frame): the InteractionCoordinator is the frame\'s one caller and loads it with one dynamic import, warmed when the first click target registers; builders hand it a model and import only the frame\'s types. So the frame is in the initial static set never, and in no feature\'s first-activation closure but its own popup-frame row.',
   },
   {
+    name: 'flow paths renderer',
+    pattern: /src\/layers\/flow\/(?:ribbon-layer|advect|still|ink|motion-loop)\.ts$/,
+    // The one row allowed to count it (runChecks, soleFeatureFindings).
+    soleFeature: 'enso-flow-paths',
+    reason: 'ENSO-FLOW-PLAN E2-2 (2026-10-05): the flowing paths\' renderer (the WebGL2 ribbon layer, the advection, the still form, the ink table and the motion clock) is the lazy flow chunk, reached by one dynamic import in src/layers/enso-flow.ts and counted by the enso-flow-paths row alone. It is in the initial static set never, and in no other feature\'s first-activation closure.',
+  },
+  {
+    name: 'flow paths decoder',
+    pattern: /src\/layers\/flow\/(?:grib2|jpx|decode-worker)\.ts$/,
+    soleFeature: 'enso-flow-paths',
+    reason: 'ENSO-FLOW-PLAN E2-2 (2026-10-05): DDM\'s own GRIB2 and JPEG 2000 decoder runs in the flow Worker (src/layers/flow/decode-worker.ts), a root of the enso-flow-paths row. It is in the initial static set never, and in no other feature\'s first-activation closure.',
+  },
+  {
     name: 'impact briefing cluster panel runtime',
     pattern: /src\/ui\/impact-panel-runtime\.ts$/,
     reason: 'The impact briefing cluster is a first-use cost; its panel runtime must never ride the initial static set.',
@@ -443,6 +456,18 @@ const FEATURE_BUDGETS = [
     measuredJsGzipKb: 5.5,
     networkBytes: 0,
     requestCount: 0,
+    dataAssets: [],
+  },
+  {
+    key: 'enso-flow-paths',
+    label: 'NEW, measured 2026-10-05, for the owner to ratify at the next landing (ENSO-FLOW-PLAN Q1, DR-184 pattern): the ENSO flowing paths (wind streaks, wave crest marks and their still form) as their own first-use cost. src/layers/enso-flow.ts reaches the chunk with one dynamic import, so it rides no other row (the flow paths renderer and flow paths decoder rules above hold that). Its first-activation closure is the flow chunk (flow-BejF4yQP.js, 14,360 bytes gzip), the shared time-bar chunk it imports (2,552) and the decode Worker bundle (decode-worker-B-SLxx84.js, 9,470, which has no manifest entry and is resolved by its name and sourcemap): measured 26.4 kB (26,382 bytes gzip) by npm run build && npm run check:activation on the E2-1 tree (local base 14b0d9e) plus this change; a standalone rolldown build gzipped the Worker at 9,532 bytes and the chunk (time-bar folded in) at 14,822. Network columns are the larger kind, waves: three requests (the .idx 1,005 bytes, DIRPW 887,386, HTSGW 428,128) and 1,316,519 bytes, measured from CDP Network.dataReceived in tests/flow-measure.spec.ts; wind is three requests and 198,399 bytes (39,706 + 79,086 + 79,607). The paths fetch nothing else.',
+    // Two roots: the flow chunk (src/layers/enso-flow.ts reaches it with one dynamic import) and the decode Worker, which
+    // src/layers/flow/nodd.ts starts with `new Worker(new URL(...))`. A Worker chunk has no static edge from the flow
+    // chunk, so it is declared here beside the chunk root, as the fire3d row declares its dynamically imported roots.
+    rootModules: ['src/layers/flow/index.ts', 'src/layers/flow/decode-worker.ts'],
+    measuredJsGzipKb: 26.4,
+    networkBytes: 1_316_519,
+    requestCount: 3,
     dataAssets: [],
   },
 ];
@@ -727,6 +752,28 @@ function validateBudgets(budgets) {
 }
 
 /**
+ * ENSO-FLOW-PLAN E2-2: the dist bundle of a Worker root (`assets/<stem>-<hash>.js`,
+ * stem = the root file's name without its extension), or null. Proven two ways,
+ * never by name alone: exactly one chunk has that stem and its sourcemap lists
+ * the root among its `sources`.
+ */
+function workerBundleFor(root, assets, manifestFiles) {
+  if (!existsSync(assets)) return null;
+  const stem = root.split('/').pop().replace(/\.[^.]+$/, '');
+  const proven = readdirSync(assets).filter((f) => {
+    // Vite never lists a Worker bundle in the manifest, so a file that IS some
+    // manifest entry's `file` (a shared chunk named after the stem, say) is a
+    // page chunk, never the Worker: a root that lost its manifest key by being
+    // folded into one stays drift.
+    if (manifestFiles.has(f)) return false;
+    if (!f.startsWith(`${stem}-`) || !f.endsWith('.js') || !existsSync(join(assets, `${f}.map`))) return false;
+    const { sources } = validateSourcemap(join(assets, `${f}.map`));
+    return Array.isArray(sources) && sources.some((s) => s.endsWith(`/${root}`));
+  });
+  return proven.length === 1 ? proven[0] : null;
+}
+
+/**
  * S30D P1-FRAME (2026-10-04): a forbidden rule that names a `soleFeature`
  * may ride NO feature's first-activation closure but that row's own. Two
  * kinds of evidence, either one a finding: the module's own manifest key in
@@ -743,6 +790,15 @@ function validateBudgets(budgets) {
  */
 function soleFeatureFindings(feature, closureKeys, activationFiles, manifest, assets, forbidden, mapExempt) {
   const findings = [];
+  // ENSO-FLOW-PLAN E2-2: a second and third sole-feature rule (the flow
+  // renderer and decoder, owned by enso-flow-paths) share one blind-chunk
+  // finding per chunk, naming every rule the chunk cannot be ruled out of,
+  // so the pinned P1-FRAME cases (every finding carries "popup frame
+  // renderer") still hold: a blind chunk could hide any of them.
+  const governed = forbidden.filter((rule) => rule.soleFeature && rule.soleFeature !== feature.key);
+  const governedNames = governed.map((rule) => rule.name).join(', ');
+  const governedOwners = [...new Set(governed.map((rule) => rule.soleFeature))].join(' and ');
+  const blindReported = new Set();
   for (const rule of forbidden) {
     if (!rule.soleFeature || rule.soleFeature === feature.key) continue;
     const chunks = new Set();
@@ -765,9 +821,10 @@ function soleFeatureFindings(feature, closureKeys, activationFiles, manifest, as
         if (error) blind = `sourcemap ${error}`;
         else if (sources.some((s) => rule.pattern.test(s))) chunks.add(file);
       }
-      if (blind) {
+      if (blind && !blindReported.has(file)) {
+        blindReported.add(file);
         findings.push(
-          `CLOSURE VIOLATION: ${rule.name} cannot be ruled out of feature ${feature.key}'s first-activation closure: chunk ${file} ${blind}; only the ${rule.soleFeature} row may count it, so every chunk of another row's closure must prove its contents.`
+          `CLOSURE VIOLATION: ${governedNames} cannot be ruled out of feature ${feature.key}'s first-activation closure: chunk ${file} ${blind}; only the ${governedOwners} row(s) may count them, so every chunk of another row's closure must prove its contents.`
         );
       }
     }
@@ -896,7 +953,17 @@ function runChecks(distDir, { forbidden, mapExempt, budgets, bcBasinHeld }) {
     const measuredKb = feature.measuredJsGzipKb;
     const jsKb = typeof measuredKb === 'number' ? budgetForMeasurement(measuredKb) : measuredKb;
     const roots = Array.isArray(feature.rootModules) ? feature.rootModules : [];
-    const missingRoots = roots.filter((r) => !(r in manifest));
+    // ENSO-FLOW-PLAN E2-2: a Worker started with `new Worker(new URL(...))`
+    // is bundled on its own and has no manifest entry, so a root absent from
+    // the manifest may still be a Worker bundle proven by name and sourcemap.
+    const workerBundles = new Map();
+    const manifestFiles = new Set(Object.values(manifest).map((entry) => String(entry.file ?? '').replace(/^assets\//, '')));
+    for (const r of roots) {
+      if (r in manifest) continue;
+      const bundle = workerBundleFor(r, assets, manifestFiles);
+      if (bundle) workerBundles.set(r, bundle);
+    }
+    const missingRoots = roots.filter((r) => !(r in manifest) && !workerBundles.has(r));
     // DR-160: a feature marked `heldBy` is neither enforced nor drift while
     // the source constant it names is true, root(s) missing or not; the
     // marker is honoured only then, so a released hold (constant flipped to
@@ -921,9 +988,9 @@ function runChecks(distDir, { forbidden, mapExempt, budgets, bcBasinHeld }) {
       else report.push(`  ${feature.key}: ${msg} (declared, not enforced)`);
     }
     const presentRoots = roots.filter((r) => r in manifest);
-    if (presentRoots.length) {
+    if (presentRoots.length || workerBundles.size) {
       const closureKeys = staticClosure(manifest, presentRoots);
-      const activationFiles = [...jsFilesOf(manifest, closureKeys)].filter((f) => !initialFiles.has(f));
+      const activationFiles = [...new Set([...jsFilesOf(manifest, closureKeys), ...workerBundles.values()])].filter((f) => !initialFiles.has(f));
       findings.push(...soleFeatureFindings(feature, closureKeys, activationFiles, manifest, assets, forbidden, mapExempt));
       const total = activationFiles.reduce((sum, f) => sum + gz(join(assets, f)), 0);
       const line = `first-activation static closure ${kb(total)} kB gzip across ${activationFiles.length} chunk(s): ${activationFiles.join(', ') || '(none beyond the initial set)'}`;
@@ -1118,6 +1185,46 @@ const SELF_TEST_CASES = [
     },
   },
   {
+    // ENSO-FLOW-PLAN E2-2: the flow renderer rides a shared chunk the entry
+    // imports (the shape one static import from eager code would produce).
+    name: 'fail-eager-flow-renderer-transitive', kind: 'fail', expect: 'flow paths renderer',
+    files: {
+      'index.html': htmlWith('shared-test.js'), '.vite/manifest.json': manifestWith(['_shared-test.js'], SHARED),
+      ...CLEAN_ENTRY,
+      'assets/shared-test.js': 'console.log("shared");',
+      'assets/shared-test.js.map': M(['../../src/layers/enso-flow.ts', '../../src/layers/flow/ribbon-layer.ts']),
+    },
+  },
+  {
+    // The same for the decoder: grib2 and jpx are the Worker's, never eager.
+    name: 'fail-eager-flow-decoder-transitive', kind: 'fail', expect: 'flow paths decoder',
+    files: {
+      'index.html': htmlWith('shared-test.js'), '.vite/manifest.json': manifestWith(['_shared-test.js'], SHARED),
+      ...CLEAN_ENTRY,
+      'assets/shared-test.js': 'console.log("shared");',
+      'assets/shared-test.js.map': M(['../../src/layers/flow/grib2.ts', '../../src/layers/flow/jpx.ts']),
+    },
+  },
+  {
+    // Another row's first-activation closure folds the decoder in (a static
+    // import from a layer that is not the flow chunk): only enso-flow-paths
+    // may count it, and the sourcemap is the evidence.
+    name: 'fail-flow-decoder-in-feature-closure', kind: 'fail', expect: 'flow paths decoder',
+    budgets: [{ key: 'fx', rootModules: ['src/layers/fixture.ts'], measuredJsGzipKb: PENDING, ...PENDING_COLS }],
+    files: {
+      'index.html': htmlWith(),
+      '.vite/manifest.json': manifestWith([], {
+        'src/layers/fixture.ts': { file: 'assets/fixture-layer.js', isDynamicEntry: true, imports: ['_shared-flow.js'] },
+        '_shared-flow.js': { file: 'assets/shared-flow.js' },
+      }),
+      ...CLEAN_ENTRY,
+      'assets/fixture-layer.js': 'export const layer = true;',
+      'assets/fixture-layer.js.map': M(['../../src/layers/fixture.ts']),
+      'assets/shared-flow.js': 'export const shared = true;',
+      'assets/shared-flow.js.map': M(['../../src/util/escape.ts', '../../src/layers/flow/decode-worker.ts']),
+    },
+  },
+  {
     name: 'fail-eager-zip', kind: 'fail', expect: 'ZIP library',
     files: {
       'index.html': htmlWith('shared-test.js'), '.vite/manifest.json': manifestWith(['_shared-test.js'], SHARED),
@@ -1211,6 +1318,55 @@ const SELF_TEST_CASES = [
       'assets/feature-big.js': BIG_WORDS,
       // Every chunk of a feature's closure proves its contents (P1-FRAME r1).
       'assets/feature-big.js.map': M(['../../src/features/fixture.ts']),
+    },
+  },
+  {
+    // ENSO-FLOW-PLAN E2-2: a Worker root has no manifest entry; its bundle is
+    // counted once proven, so a Worker that grows past the budget fails it.
+    name: 'fail-budget-worker-root-counted', kind: 'fail', expect: 'kB budget',
+    budgets: [{ key: 'fx', rootModules: ['src/features/fixture.ts', 'src/features/fixture-worker.ts'], measuredJsGzipKb: 0.05, ...PENDING_COLS }],
+    files: {
+      'index.html': htmlWith(),
+      '.vite/manifest.json': manifestWith([], { 'src/features/fixture.ts': { file: 'assets/feature-small.js', isDynamicEntry: true, imports: [] } }),
+      ...CLEAN_ENTRY,
+      'assets/feature-small.js': 'export const s = 1;',
+      'assets/feature-small.js.map': M(['../../src/features/fixture.ts']),
+      'assets/fixture-worker-abc123.js': BIG_WORDS,
+      'assets/fixture-worker-abc123.js.map': M(['../../src/features/fixture-worker.ts']),
+    },
+  },
+  {
+    // A chunk with the Worker's stem whose sourcemap does not list the root
+    // proves nothing: the root stays missing (drift), never silently counted.
+    name: 'fail-budget-worker-root-unproven', kind: 'fail', expect: 'root module',
+    budgets: [{ key: 'fx', rootModules: ['src/features/fixture.ts', 'src/features/fixture-worker.ts'], measuredJsGzipKb: 10, ...PENDING_COLS }],
+    files: {
+      'index.html': htmlWith(),
+      '.vite/manifest.json': manifestWith([], { 'src/features/fixture.ts': { file: 'assets/feature-small.js', isDynamicEntry: true, imports: [] } }),
+      ...CLEAN_ENTRY,
+      'assets/feature-small.js': 'export const s = 1;',
+      'assets/feature-small.js.map': M(['../../src/features/fixture.ts']),
+      'assets/fixture-worker-abc123.js': 'export const w = 1;',
+      'assets/fixture-worker-abc123.js.map': M(['../../src/features/other.ts']),
+    },
+  },
+  {
+    // Review of E2-2: a root that lost its manifest key by becoming a shared
+    // chunk (listed in the manifest under its own key, file named after the
+    // stem) is drift, never a Worker bundle: Vite never lists a Worker bundle.
+    name: 'fail-budget-worker-root-shared-chunk', kind: 'fail', expect: 'root module',
+    budgets: [{ key: 'fx', rootModules: ['src/features/fixture.ts', 'src/features/fixture-worker.ts'], measuredJsGzipKb: 10, ...PENDING_COLS }],
+    files: {
+      'index.html': htmlWith(),
+      '.vite/manifest.json': manifestWith([], {
+        'src/features/fixture.ts': { file: 'assets/feature-small.js', isDynamicEntry: true, imports: ['_fixture-worker-abc123.js'] },
+        '_fixture-worker-abc123.js': { file: 'assets/fixture-worker-abc123.js' },
+      }),
+      ...CLEAN_ENTRY,
+      'assets/feature-small.js': 'export const s = 1;',
+      'assets/feature-small.js.map': M(['../../src/features/fixture.ts']),
+      'assets/fixture-worker-abc123.js': 'export const w = 1;',
+      'assets/fixture-worker-abc123.js.map': M(['../../src/features/fixture-worker.ts']),
     },
   },
   {
@@ -1374,6 +1530,33 @@ const SELF_TEST_CASES = [
     },
   },
   {
+    // ENSO-FLOW-PLAN E2-2: the flow chunk and the decode Worker counted by
+    // their own row, with a layer that reaches the chunk only dynamically.
+    name: 'pass-flow-paths-own-row', kind: 'pass',
+    budgets: [
+      { key: 'enso-flow-paths', rootModules: ['src/layers/flow/index.ts', 'src/layers/flow/decode-worker.ts'], measuredJsGzipKb: PENDING, ...PENDING_COLS },
+      { key: 'fx', rootModules: ['src/layers/fixture.ts'], measuredJsGzipKb: PENDING, ...PENDING_COLS },
+    ],
+    files: {
+      'index.html': htmlWith(),
+      '.vite/manifest.json': manifestWith([], {
+        'src/layers/fixture.ts': { file: 'assets/fixture-layer.js', isDynamicEntry: true, imports: [], dynamicImports: ['src/layers/flow/index.ts'] },
+        'src/layers/flow/index.ts': { file: 'assets/flow-test.js', isDynamicEntry: true, imports: ['_flow-shared.js'] },
+        '_flow-shared.js': { file: 'assets/flow-shared.js' },
+        'src/layers/flow/decode-worker.ts': { file: 'assets/decode-worker-test.js', isDynamicEntry: true, imports: [] },
+      }),
+      ...CLEAN_ENTRY,
+      'assets/fixture-layer.js': 'export const layer = true;',
+      'assets/fixture-layer.js.map': M(['../../src/layers/fixture.ts']),
+      'assets/flow-test.js': 'export const flow = true;',
+      'assets/flow-test.js.map': M(['../../src/layers/flow/index.ts', '../../src/layers/flow/ribbon-layer.ts']),
+      'assets/flow-shared.js': 'export const shared = true;',
+      'assets/flow-shared.js.map': M(['../../src/layers/flow/field.ts']),
+      'assets/decode-worker-test.js': 'export const worker = true;',
+      'assets/decode-worker-test.js.map': M(['../../src/layers/flow/decode-worker.ts', '../../src/layers/flow/grib2.ts', '../../src/layers/flow/jpx.ts']),
+    },
+  },
+  {
     // The same generated helpers MAP_EXEMPT names for the initial set, under
     // the same size caps, need no map in a feature's closure either.
     name: 'pass-popup-frame-closure-exempt-helper', kind: 'pass',
@@ -1388,6 +1571,19 @@ const SELF_TEST_CASES = [
       'assets/fixture-layer.js': 'export const layer = true;',
       'assets/fixture-layer.js.map': M(['../../src/layers/fixture.ts']),
       'assets/preload-helper-test.js': 'const seen = new Map;',
+    },
+  },
+  {
+    name: 'pass-budget-worker-root-resolved', kind: 'pass',
+    budgets: [{ key: 'fx', rootModules: ['src/features/fixture.ts', 'src/features/fixture-worker.ts'], measuredJsGzipKb: 10, ...PENDING_COLS }],
+    files: {
+      'index.html': htmlWith(),
+      '.vite/manifest.json': manifestWith([], { 'src/features/fixture.ts': { file: 'assets/feature-small.js', isDynamicEntry: true, imports: [] } }),
+      ...CLEAN_ENTRY,
+      'assets/feature-small.js': 'export const s = 1;',
+      'assets/feature-small.js.map': M(['../../src/features/fixture.ts']),
+      'assets/fixture-worker-abc123.js': 'export const w = 1;',
+      'assets/fixture-worker-abc123.js.map': M(['../../src/features/fixture-worker.ts']),
     },
   },
   {
@@ -1418,6 +1614,8 @@ const EXPECTED_CASE_NAMES = [
   'fail-popup-frame-in-feature-closure', 'fail-popup-frame-folded-in-feature-closure',
   'fail-popup-frame-closure-missing-map', 'fail-popup-frame-closure-invalid-map',
   'fail-popup-frame-closure-indexed-map',
+  'fail-eager-flow-renderer-transitive', 'fail-eager-flow-decoder-transitive',
+  'fail-flow-decoder-in-feature-closure',
   'fail-missing-map', 'fail-empty-sources', 'fail-indexed-map',
   'fail-runtime-oversize', 'fail-preload-helper-oversize',
   'fail-forged-vendor-no-pmtiles',
@@ -1435,6 +1633,10 @@ const EXPECTED_CASE_NAMES = [
   'pass-vendor-allowance', 'pass-budget-under-closure',
   'pass-budget-held-missing-root',
   'pass-popup-frame-own-row', 'pass-popup-frame-closure-exempt-helper',
+  'pass-flow-paths-own-row',
+  'fail-budget-worker-root-counted', 'fail-budget-worker-root-unproven',
+  'fail-budget-worker-root-shared-chunk',
+  'pass-budget-worker-root-resolved',
 ];
 
 function runSelfTest() {

@@ -222,6 +222,10 @@ const SECOND_PAGE_REASONS = {
   'tests/mode-switch-cost.spec.ts': {
     reason:
       'the DDM-P14-T08 mode-switch measurement (DR-095): one page per FRESH browser.newContext(), not a popup in an existing context, because each of the twelve ordered switches has to be measured from cold caches or the previous switch pays for this one. Every one of those pages boots through gotoApp, so it installs the same satellite, sovereign-boundary and minimap stubs as any other boot in this suite, and no page here reaches a live sovereign-geography service. It passes nifc: live to gotoApp by design (J12), because its recorded baseline measured the live WFIGS reads, so WFIGS (and HMS smoke, which no default stubs) stay live here. The spec runs only in its own chromium-measure project, which CI never invokes.'
+  },
+  'tests/flow-measure.spec.ts': {
+    reason:
+      'the ENSO-FLOW-PLAN E2-2 flow measurement (section 4.2): one page per FRESH browser.newContext(), not a popup in an existing context, because every condition is measured three times from a cold page and one condition must not pay for the previous one. Every page boots through gotoApp, so it installs the same satellite, boundary, minimap, NADM, NIFC, NWS and NOAA NODD suite stubs as any boot here; the spec adds its own Open-Meteo, SST and basemap-tile routes and a context backstop that aborts and logs any other host, so no page reaches a live service. The spec runs only in the chromium-measure project, which CI never invokes.'
   }
 };
 
@@ -267,6 +271,11 @@ const UNROUTE_REASONS = {
     sites: 1,
     reason:
       'replaces its own satellite tile fixture with an aborting handler for the tile-failure path, in the module that owns that route'
+  },
+  'tests/flow-wire.spec.ts': {
+    sites: 1,
+    reason:
+      'the off-intent case holds the two NODD message ranges with its own page.route for the NODD bucket (the .idx falls through to the suite stub), then page.unroute drops that one holding route so the same page can read wind again from the suite-wide NODD stub and show a moving field; the route it removes is its own, the context-level suite stub is never touched'
   }
 };
 

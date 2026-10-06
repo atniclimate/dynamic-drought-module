@@ -2,7 +2,10 @@
  * Config-level proof (DDM-P15-T08, ROADMAP.yaml DDM-P15-T08 clause 4):
  * `npm test` and `npm run test:serial` cannot collect
  * tests/mode-switch-cost.spec.ts, and `npm run measure:mode-switch` collects
- * nothing else.
+ * nothing else. Since ENSO-FLOW-PLAN E2-2 the same holds for the flowing
+ * paths' tests/flow-measure.spec.ts and `npm run measure:flow`: both specs
+ * live in the chromium-measure project (MEASURE_SPECS), so each script names
+ * its own spec.
  *
  * package.json's `test` and `test:serial` used to be bare `playwright test`
  * invocations, which collect every project, including `chromium-measure`
@@ -71,6 +74,33 @@ test('measure:mode-switch names only chromium-measure', async () => {
   );
 });
 
+/*
+ * ENSO-FLOW-PLAN E2-2: the flowing paths' measure spec joins MEASURE_SPECS
+ * (playwright.config.ts), so the chromium-measure project now holds two
+ * specs and each `measure:*` script must name its own spec, or running one
+ * measurement would run (and, for the mode-switch spec, possibly write the
+ * committed docs record of) the other.
+ */
+const MEASURE_SCRIPTS = [
+  ['measure:mode-switch', 'tests/mode-switch-cost.spec.ts'],
+  ['measure:flow', 'tests/flow-measure.spec.ts']
+];
+
+function specArgsIn(script) {
+  return [...script.matchAll(/(?:^|\s)(tests\/\S+\.spec\.ts)(?=\s|$)/g)].map((m) => m[1]);
+}
+
+test('measure:mode-switch and measure:flow each name only chromium-measure and only their own spec', async () => {
+  const pkg = await readPkg();
+  for (const [name, spec] of MEASURE_SCRIPTS) {
+    const script = pkg.scripts[name];
+    assert.ok(script, `${name} script is missing`);
+    assert.deepEqual(projectFlagsIn(script), ['chromium-measure'], `${name} must name only chromium-measure`);
+    assert.deepEqual(specArgsIn(script), [spec], `${name} must name only ${spec}`);
+  }
+  assert.match(pkg.scripts['measure:flow'], /--workers=1/, 'measure:flow runs one worker (one measurement at a time)');
+});
+
 /**
  * Resolve the Playwright CLI from this project's own installed
  * `@playwright/test` package: the same doctrine
@@ -86,12 +116,13 @@ function resolvePlaywrightCli() {
   return join(dirname(pkgPath), binRelative);
 }
 
-function listSpecs(projectFlags) {
+function listSpecs(projectFlags, files = []) {
   const cli = resolvePlaywrightCli();
   const started = Date.now();
   const result = spawnSync(
     process.execPath,
-    [cli, 'test', '--list', ...projectFlags.flatMap((p) => ['--project', p])],
+    // Files before --project: the CLI's --project takes every argument after it.
+    [cli, 'test', '--list', ...files, ...projectFlags.flatMap((p) => ['--project', p])],
     { cwd: ROOT, encoding: 'utf8', windowsHide: true, timeout: 30_000 }
   );
   const elapsedMs = Date.now() - started;
@@ -119,7 +150,11 @@ test('playwright test --list with the test script projects never lists mode-swit
   assert.equal(hit, undefined, `mode-switch-cost.spec.ts is collected by the test script's own projects: ${hit}`);
 });
 
-test('playwright test --list --project=chromium-measure lists mode-switch-cost.spec.ts and nothing else', () => {
+test('playwright test --list --project=chromium-measure lists the two measure specs and nothing else', () => {
+  // E2-2: this case used to say "mode-switch-cost.spec.ts and nothing else".
+  // The project now holds the flowing paths' measure spec too (MEASURE_SPECS),
+  // so the assertion it still makes is the one it guards: the measure project
+  // collects exactly the measure specs and no ordinary spec.
   const { lines, elapsedMs } = listSpecs(['chromium-measure']);
   console.log(`playwright --list (chromium-measure) took ${elapsedMs}ms`);
   const specLines = lines.filter((line) => line.trim().startsWith('['));
@@ -127,8 +162,33 @@ test('playwright test --list --project=chromium-measure lists mode-switch-cost.s
   for (const line of specLines) {
     assert.match(
       line,
-      /mode-switch-cost\.spec\.ts/,
-      `chromium-measure listed a spec other than mode-switch-cost.spec.ts: ${line}`
+      /mode-switch-cost\.spec\.ts|flow-measure\.spec\.ts/,
+      `chromium-measure listed a spec that is not a measure spec: ${line}`
     );
+  }
+  assert.ok(specLines.some((l) => /mode-switch-cost\.spec\.ts/.test(l)), 'chromium-measure lists the mode-switch spec');
+  assert.ok(specLines.some((l) => /flow-measure\.spec\.ts/.test(l)), 'chromium-measure lists the flow spec');
+});
+
+test('playwright test --list with the test script projects never lists flow-measure.spec.ts', () => {
+  const { lines, elapsedMs } = listSpecs(THREE_PROJECTS);
+  console.log(`playwright --list (${THREE_PROJECTS.join(',')}, flow) took ${elapsedMs}ms`);
+  const hit = lines.find((line) => line.includes('flow-measure.spec.ts'));
+  assert.equal(hit, undefined, `flow-measure.spec.ts is collected by the test script's own projects: ${hit}`);
+});
+
+test('measure:mode-switch collects only the mode-switch spec and measure:flow only the flow spec', async () => {
+  const pkg = await readPkg();
+  for (const [name, spec] of MEASURE_SCRIPTS) {
+    const script = pkg.scripts[name];
+    assert.ok(script, `${name} script is missing`);
+    // The script's own project and spec arguments, as the CLI would receive them.
+    const { lines, elapsedMs } = listSpecs(projectFlagsIn(script), specArgsIn(script));
+    console.log(`playwright --list (${name}) took ${elapsedMs}ms`);
+    const specLines = lines.filter((line) => line.trim().startsWith('['));
+    assert.ok(specLines.length > 0, `${name} collects no tests at all`);
+    for (const line of specLines) {
+      assert.ok(line.includes(spec.replace('tests/', '')), `${name} collected a spec other than ${spec}: ${line}`);
+    }
   }
 });

@@ -85,7 +85,13 @@ const INTERACTION_SPECS = [
 // CI: browser-suite.yml:220 fans the workflow out over a fixed three-project
 // matrix (chromium, chromium-interaction, chromium-3d) that never names
 // `chromium-measure`, so a CI checkout is never dirtied by this spec.
-const MEASURE_SPECS = ['**/mode-switch-cost.spec.ts'];
+//
+// ENSO-FLOW-PLAN E2-2: the flowing paths' measure spec (frame rate, CPU,
+// bytes and wall time in a browser, fixtures only) joins it, so it is never
+// collected by `chromium` (MEASURE_SPECS is that project's testIgnore) or by
+// CI, and is run by `npm run measure:flow` alone. Without this line the spec
+// would be collected by no project.
+const MEASURE_SPECS = ['**/mode-switch-cost.spec.ts', '**/flow-measure.spec.ts'];
 
 // MapLibre GL needs a WebGL2 context. Headless Chromium has no GPU, so force
 // ANGLE over SwiftShader (a pure-software GL implementation) and allow it

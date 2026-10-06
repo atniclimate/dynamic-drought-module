@@ -48,6 +48,83 @@ function pinnedCaseNames() {
   return [...block[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
 }
 
+/*
+ * ENSO-FLOW-PLAN E2-2 (FLOW-MEASURE): the flowing paths' lazy chunk is a
+ * feature row of its own, `enso-flow-paths`, and the renderer and the decoder
+ * are `soleFeature: 'enso-flow-paths'` forbidden rules, so they ride the
+ * initial static set never and no other row's closure. The titles below are
+ * the plan's. Each reads the script's pinned inventory (the script fails its
+ * own self-test unless its case table is exactly that inventory), so a case
+ * present here is a case that ran.
+ */
+function selfTest() {
+  const run = spawnSync(process.execPath, [SCRIPT, '--self-test'], { encoding: 'utf8' });
+  assert.equal(run.status, 0, `${run.stdout}${run.stderr}`);
+  return run;
+}
+
+test('fail-eager-flow-renderer-transitive', () => {
+  selfTest();
+  assert.ok(
+    pinnedCaseNames().includes('fail-eager-flow-renderer-transitive'),
+    'the self-test ran the case: the flow renderer folded into a chunk the entry imports'
+  );
+});
+
+test('fail-eager-flow-decoder-transitive', () => {
+  selfTest();
+  const names = pinnedCaseNames();
+  assert.ok(
+    names.includes('fail-eager-flow-decoder-transitive'),
+    'the self-test ran the case: the flow decoder folded into a chunk the entry imports'
+  );
+  assert.ok(names.includes('fail-flow-decoder-in-feature-closure'), 'the decoder in another row\'s closure fails');
+  assert.ok(names.includes('pass-flow-paths-own-row'), 'the decoder and renderer counted by their own row are clean');
+});
+
+test('a root folded into a manifest-listed shared chunk is drift, never a Worker bundle', () => {
+  selfTest();
+  const names = pinnedCaseNames();
+  for (const name of ['fail-budget-worker-root-shared-chunk', 'fail-budget-worker-root-unproven', 'fail-budget-worker-root-counted', 'pass-budget-worker-root-resolved']) {
+    assert.ok(names.includes(name), `the self-test ran the Worker-root case ${name}`);
+  }
+});
+
+/** The `enso-flow-paths` row's text: from its key to its own dataAssets line. */
+function flowPathsRow() {
+  const source = readFileSync(SCRIPT, 'utf8');
+  const start = source.indexOf("key: 'enso-flow-paths'");
+  assert.ok(start > 0, 'FEATURE_BUDGETS has an enso-flow-paths row');
+  const end = source.indexOf('dataAssets:', start);
+  assert.ok(end > start, 'the row ends in its dataAssets column');
+  return source.slice(start, end);
+}
+
+test('the enso-flow-paths row declares the Worker root', () => {
+  const row = flowPathsRow();
+  const roots = /rootModules:\s*\[([^\]]*)\]/.exec(row);
+  assert.ok(roots, 'the row declares rootModules');
+  const declared = [...roots[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  assert.deepEqual(
+    declared,
+    ['src/layers/flow/index.ts', 'src/layers/flow/decode-worker.ts'],
+    'the chunk root and the decode Worker root, and nothing else'
+  );
+});
+
+test('the enso-flow-paths row is a provisional, measured row: a number, the label, and the network columns', () => {
+  const row = flowPathsRow();
+  const measured = /measuredJsGzipKb:\s*([^,\n]+),/.exec(row);
+  assert.ok(measured && /^\d+(?:\.\d+)?$/.test(measured[1].trim()), `the row carries a measured gzip figure, not pending: ${measured?.[1]}`);
+  assert.match(
+    row,
+    /label:\s*'NEW, measured 2026-\d\d-\d\d, for the owner to ratify at the next landing \(ENSO-FLOW-PLAN Q1, DR-184 pattern\)/,
+    'the label names the measurement date and the owner\'s ratification'
+  );
+  assert.match(row, /networkBytes:\s*[\d_]+,/, 'networkBytes is a number');
+  assert.match(row, /requestCount:\s*3,/, 'the larger kind (waves) reads three requests');
+});
+
 test('the activation gate self-test passes, its popup-frame sole-feature cases included', () => {
   const run = spawnSync(process.execPath, [SCRIPT, '--self-test'], { encoding: 'utf8' });
   assert.equal(run.status, 0, `${run.stdout}${run.stderr}`);
