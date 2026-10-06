@@ -1297,19 +1297,13 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
     }
   });
 
-  test('(d) the Heat season-ahead chip stays disabled with its reason, and #map-key and #time-bar carry no seasonal product', async ({
+  test('(d) DR-190 returns Heat to Current; its Long Range chip stays disabled and carries no seasonal product', async ({
     page
   }) => {
     await stubBrowserNwsHeat(page);
-    // FLIPPED 2026-09-27 (D1 M6, found-009): the deep link this case used,
-    // `?view=console&cluster=heat&horizon=season-ahead`, now boots on
-    // Current Conditions (src/state/url.ts's resolveHorizonForCluster;
-    // pinned by tests/precedence.spec.ts row A6), where HeatRisk is dated
-    // and the time bar shows. The one route left to Extreme Heat at Long
-    // Range is in session: Drought at Long Range, then Extreme Heat, which
-    // keeps the committed horizon (the designed empty-recipe caveat). Every
-    // assertion below is unchanged; only the route in is new. The CPC
-    // Drought Outlook the Long Range step shows is answered locally.
+    await stubHeatRiskCatalogShared(page);
+    // DR-190 makes this in-session switch agree with found-009's boot:
+    // the destination commits Current and the actual HeatRisk product.
     await stubCpcDroughtOutlook(page);
     await gotoApp(page, '?view=console');
     const longRange = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
@@ -1321,17 +1315,18 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
       page.locator('.shell-cluster-btn[data-cluster="heat"]')
     ).toHaveAttribute('aria-pressed', 'true');
 
-    // The map recipe for heat/season-ahead stays empty (clusters.ts is
-    // untouched by this task): no dated product is displayed, and the chip
-    // is disabled with its reason (DDM-P8-T03, DR-017 a: an empty map
-    // recipe disables the chip even when it is the committed horizon); the
-    // briefing's seasonal claim (this task) does not enable it.
-    await expect(page.locator('#shell-time .shell-time-empty')).toHaveText(
-      'No dated product is displayed.'
-    );
+    await expect(page.locator('.shell-horizon-btn[data-horizon="current"]'))
+      .toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => new URL(page.url()).searchParams.get('horizon')).toBeNull();
+    await expect(layerCheckbox(page, 'heatrisk')).toBeChecked();
+    await expect(layerPill(page, 'heatrisk')).toHaveClass(/\bready\b/);
+    await expect(page.locator('#shell-time')).toHaveAttribute('data-has-spec', 'true');
+    await expect(page.locator('#shell-time .shell-time-empty')).toHaveCount(0);
+    await expect(page.locator('#time-bar .time-bar-stamp-detail')).toContainText('NWS HeatRisk');
     await expect(page.locator('#time-bar')).toBeHidden();
     const chip = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
     await expect(chip).toBeVisible();
+    await expect(chip).toHaveAttribute('aria-pressed', 'false');
     await expect(chip).toHaveAttribute('aria-disabled', 'true');
     await expect(chip).toHaveAttribute(
       'title',

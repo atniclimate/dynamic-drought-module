@@ -10,9 +10,10 @@ import {
   requestOcean
 } from '../src/state/cluster-service';
 import { LAYER_DEFS, getLayerDef } from '../src/config/layers';
-import { HAZARD_CLUSTERS } from '../src/config/clusters';
+import { HAZARD_CLUSTER_KEYS, HAZARD_CLUSTERS, TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
 import { registry } from '../src/state/registry';
 import { timeline } from '../src/state/timeline';
+import { parseUrlParams } from '../src/state/url';
 import {
   getHazardCluster,
   getOceanFraming,
@@ -285,33 +286,70 @@ test.describe('S3 requestCluster (the transaction)', () => {
     }
   });
 
-  test('the empty recipe: heat at season-ahead commits references only plus the honest caveat, no faked surface', () => {
+  test('DR-190: an unsupported mode switch commits Current and its recipe in one revision', () => {
     resetWorld();
     const dispose = initClusterService();
+    let unsubscribe = () => {};
     try {
       timeline.setHorizon('season-ahead');
-      // The horizon change itself re-resolves the committed drought
-      // cluster at season-ahead (its own transaction, covered by the
-      // horizon-coherence spec below); this test asserts only what the
-      // HEAT transaction activates.
+      requestCluster('wildfire');
+      expect(getCommittedSnapshot().horizon).toBe('season-ahead');
+      const revisions: ReturnType<typeof getCommittedSnapshot>[] = [];
+      unsubscribe = onCommittedSnapshotChange(() => revisions.push(getCommittedSnapshot()));
       activationLog.length = 0;
       requestCluster('heat');
 
       const snapshot = getCommittedSnapshot();
-      expect([...snapshot.intendedKeys].sort()).toEqual([...REFERENCE_KEYS].sort());
-      expect(snapshot.summary.primary).toContain('No verified Extreme Heat surface');
-      // NOTHING with a surface or event role was activated.
-      for (const entry of activationLog) {
-        if (entry.op !== 'activate') continue;
-        expect(getLayerDef(entry.key)?.role).toBe('reference');
-      }
-      expect(registry.getActiveKeys().has('heatrisk')).toBe(false);
-      // The Drought surface the horizon change activated (the CPC outlook
-      // at season-ahead) is gone: the Heat press deactivated it.
+      expect(revisions).toHaveLength(1);
+      expect(revisions[0]).toBe(snapshot);
+      expect(snapshot.horizon).toBe('current');
+      expect(timeline.horizon).toBe('current');
+      expect([...snapshot.intendedKeys].sort()).toEqual(
+        [...composeClusterIntent('heat', 'current')].sort()
+      );
+      expect(snapshot.summary.primary).toContain('HeatRisk');
+      expect(registry.getActiveKeys().has('heatrisk')).toBe(true);
+      expect(registry.getActiveKeys().has('usfs-whp')).toBe(false);
       expect(registry.getActiveKeys().has('drought')).toBe(false);
       expect(getHazardCluster()).toBe('heat');
     } finally {
+      unsubscribe();
       dispose();
+      timeline.reset();
+    }
+  });
+
+  test('DR-190: every mode switch resolves the same horizon and recipe as its shared link', () => {
+    const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+    try {
+      for (const cluster of HAZARD_CLUSTER_KEYS) {
+        for (const horizon of TEMPORAL_HORIZON_KEYS) {
+          resetWorld();
+          // Set the held horizon before subscribing: this case isolates the
+          // destination transaction from the preceding mode's capability.
+          timeline.setHorizon(horizon);
+          Object.defineProperty(globalThis, 'window', {
+            configurable: true,
+            value: { location: { search: `?cluster=${cluster}&horizon=${horizon}` } }
+          });
+          const boot = parseUrlParams();
+          const dispose = initClusterService();
+          try {
+            requestCluster(cluster);
+            const snapshot = getCommittedSnapshot();
+            const moment = `${cluster} from ${horizon}`;
+            expect(snapshot.horizon, moment).toBe(boot.horizon);
+            expect(timeline.horizon, moment).toBe(boot.horizon);
+            expect([...snapshot.intendedKeys].sort(), moment).toEqual([...boot.layers].sort());
+            expect([...checkedKeys()].sort(), moment).toEqual([...boot.layers].sort());
+          } finally {
+            dispose();
+          }
+        }
+      }
+    } finally {
+      if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow);
+      else Reflect.deleteProperty(globalThis, 'window');
       timeline.reset();
     }
   });

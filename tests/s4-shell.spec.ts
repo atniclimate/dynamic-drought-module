@@ -220,22 +220,13 @@ test.describe('S4a desktop shell boot', () => {
     }
   });
 
-  test('the empty heat/season-ahead recipe is disabled with its reason and yields the honest no-surface primary', async ({
+  test('DR-190: switching to Heat returns to Current while Long Range stays disabled with its reason', async ({
     page
   }) => {
-    // DDM-P8-T03 (DR-017 a): the season-ahead chip is disabled for an
-    // empty recipe, so a click on it never lands here.
-    // FLIPPED 2026-09-27 (D1 M6, found-009): the deep link this case used,
-    // `?cluster=heat&horizon=season-ahead`, now boots on Current Conditions
-    // (src/state/url.ts's resolveHorizonForCluster; pinned by
-    // tests/precedence.spec.ts row A6), so it no longer reaches this state.
-    // The one route left is in session: Drought at Long Range, then
-    // Extreme Heat, which keeps the committed horizon (the designed
-    // empty-recipe caveat, tests/cluster-service.spec.ts's "the empty
-    // recipe" case). Every assertion below is unchanged; only the route in
-    // is new. The CPC Drought Outlook the Long Range step shows is answered
-    // locally.
+    // DR-190 supersedes the in-session empty recipe: mode switches now
+    // resolve the destination horizon exactly as found-009's deep links do.
     await stubCpcDroughtOutlook(page);
+    await stubHeatRiskCatalog(page);
     await gotoApp(page, '?view=console');
     const season = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
     await season.click();
@@ -245,10 +236,13 @@ test.describe('S4a desktop shell boot', () => {
     await expect(
       page.locator('.shell-cluster-btn[data-cluster="heat"]')
     ).toHaveAttribute('aria-pressed', 'true');
-    await expect(season).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('#shell-summary-primary')).toHaveText(
-      'No verified Extreme Heat surface is available at this horizon; showing reference layers only.'
-    );
+    await expect(season).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('.shell-horizon-btn[data-horizon="current"]'))
+      .toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => new URL(page.url()).searchParams.get('horizon')).toBeNull();
+    await expect(layerCheckbox(page, 'heatrisk')).toBeChecked();
+    await expect(layerPill(page, 'heatrisk')).toHaveClass(/\bready\b/);
+    await expect(page.locator('#shell-summary-primary')).toContainText('HeatRisk');
     await expect(season).toHaveAttribute('aria-disabled', 'true');
     // DDM-P8-T03 step 3 stop rule: the always-visible `.shell-horizon-note`
     // line was reverted (interface-responsive.spec.ts's 900x675 tablet

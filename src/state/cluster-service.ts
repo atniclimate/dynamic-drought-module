@@ -24,8 +24,9 @@
  *     Since the owner's ruling of 2026-09-28 (found-007) no layer declares
  *     partners, so that expansion is a no-op kept for any future pair.
  *   - The committed temporal horizon lives in the timeline store
- *     (timeline.horizon, added by S3) and persists across cluster
- *     flips: a switch compares the same time.
+ *     (timeline.horizon, added by S3) and persists across cluster flips
+ *     when the destination can show it; otherwise it resolves to Current
+ *     (DR-190), using the same capability rule as a shared-link boot.
  *   - The frozen facades (layer-controller, registry, the config
  *     tables, the types) are composed, never modified.
  *
@@ -59,7 +60,7 @@
  *     an old-horizon recipe.
  */
 
-import { HAZARD_CLUSTERS } from '../config/clusters';
+import { HAZARD_CLUSTERS, TEMPORAL_HORIZON_KEYS } from '../config/clusters';
 import type { HazardClusterKey, TemporalHorizonKey } from '../config/clusters';
 import { DEFAULT_ON_KEYS, LAYER_DEFS, getLayerDef } from '../config/layers';
 import type { FramingKey } from '../config/framings';
@@ -75,7 +76,7 @@ import {
 } from './cluster-store';
 import { getFraming, onFramingChange } from './framing-store';
 import { registry } from './registry';
-import { timeline } from './timeline';
+import { horizonSurfaceSignature, timeline } from './timeline';
 import { checkedSnapshot, isChecked } from '../ui/island/bridge';
 import { requestLayerOff, requestLayerOnExact } from '../ui/layer-toggle-command';
 
@@ -97,7 +98,7 @@ export interface CommittedShellSnapshot {
   /** The committed cluster, or 'custom' once the granular intent has
    * diverged from any cluster's composition (D-0.7.0-044). */
   readonly cluster: HazardClusterKey | 'custom';
-  /** The committed temporal horizon (persists across cluster flips). */
+  /** The committed temporal horizon (retained when the next cluster supports it). */
   readonly horizon: TemporalHorizonKey;
   /** The active camera framing, or null for the ALL state. */
   readonly framing: FramingKey | null;
@@ -309,14 +310,36 @@ function onKeys(): Set<string> {
 }
 
 /**
+ * The horizon a cluster can distinctly show. Shared-link boots (found-009)
+ * and mode switches (DR-190) use the same capability read as the shell's
+ * chips: an empty recipe or a signature repeated from an earlier horizon
+ * resolves to Current. The ordered config covers every mode and horizon.
+ * Custom layer sets keep their own horizon and do not use this resolver.
+ */
+export function resolveHorizonForCluster(
+  cluster: HazardClusterKey,
+  horizon: TemporalHorizonKey
+): TemporalHorizonKey {
+  if (horizon === 'current') return 'current';
+  const signature = horizonSurfaceSignature(cluster, horizon);
+  if (signature === null) return 'current';
+  const idx = TEMPORAL_HORIZON_KEYS.indexOf(horizon);
+  for (let i = 0; i < idx; i++) {
+    const earlier = TEMPORAL_HORIZON_KEYS[i];
+    if (earlier !== undefined && horizonSurfaceSignature(cluster, earlier) === signature) {
+      return 'current';
+    }
+  }
+  return horizon;
+}
+
+/**
  * Resolve, apply, and commit a hazard cluster (the S3 transaction):
  *
- *   1. Read the committed horizon from the timeline (it persists across
- *      cluster flips; the switch compares the same time).
+ *   1. Resolve the timeline's horizon for the destination cluster. Retain
+ *      a supported horizon; otherwise commit Current (DR-190).
  *   2. Resolve the intent: the persistent reference set union the
- *      horizon recipe (pairs expanded). An empty recipe commits the
- *      reference set plus an honest summary caveat, never a silently
- *      substituted surface.
+ *      resolved horizon recipe (pairs expanded).
  *   3. Deactivate the old display's exclusive non-reference members
  *      (currently-on keys outside the new intent) through the toggle
  *      door. Reference-role keys are NEVER deactivated here.
@@ -351,7 +374,7 @@ function applyCluster(
   requestedOcean: OceanKey | null,
 ): void {
   selectedHazard = key;
-  const horizon = timeline.horizon;
+  const horizon = resolveHorizonForCluster(key, timeline.horizon);
   const intent = composeClusterIntent(key, horizon);
   const intentSet: ReadonlySet<string> = new Set(intent);
   applying = true;
@@ -371,6 +394,9 @@ function applyCluster(
       }
       requestLayerOff(onKey);
     }
+    // Resolve the register before destination activation; the apply lock
+    // keeps the timeline subscription from publishing an intermediate recipe.
+    timeline.setHorizon(horizon);
     // A composition member whose activation failed stays checked (D1 M5,
     // found-073; see isCommittedCompositionKey), so requestLayerOnExact
     // alone would skip it as

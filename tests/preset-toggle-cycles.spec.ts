@@ -3,7 +3,7 @@ import { expect, test, type Locator, type Page, type Route } from './offline-tes
 import { TEMPORAL_HORIZON_KEYS, type TemporalHorizonKey } from '../src/config/clusters';
 import { VIEW_PRESETS, type ViewPreset } from '../src/config/presets';
 import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
-import { gotoApp, layerCheckbox, search, urlLayers, waitForLayerSettled } from './helpers';
+import { gotoApp, layerCheckbox, search, stubHeatRiskCatalog, urlLayers, waitForLayerSettled } from './helpers';
 import { emptyCollectionBody } from './tribal-fixtures';
 
 /**
@@ -367,6 +367,46 @@ function horizonParamFor(key: TemporalHorizonKey): string | null {
   return key === 'current' ? null : key;
 }
 
+for (const [key, expectedHorizon] of [
+  ['this-week', 'current'],
+  ['fire-risk', 'weeks-ahead'],
+  ['whose-land', undefined]
+] as const) {
+  test(`DR-191: ${key} declares ${expectedHorizon ?? 'no horizon override'}`, () => {
+    expect(presetNamed(key).horizon).toBe(expectedHorizon);
+  });
+}
+
+test.describe('DR-191: quick views carry their chosen horizon from Season ahead', () => {
+  for (const [key, expectedHorizon] of [
+    ['this-week', 'current'],
+    ['fire-risk', 'weeks-ahead'],
+    ['whose-land', 'season-ahead']
+  ] as const) {
+    test(`Season ahead then ${key} agrees across the horizon, quick view, layer intent and URL`, async ({ page }) => {
+      await stubCpcDroughtOutlook(page);
+      await stubFireProducts(page);
+      await stubHeatRiskCatalog(page);
+      await gotoApp(page, '?view=console');
+
+      const seasonAhead = presetNamed('season-ahead');
+      await tapPreset(page, seasonAhead, 'before the quick view switch');
+      await expectPresetAtRest(page, seasonAhead, 'before the quick view switch');
+      await expect(horizonChip(page, 'season-ahead')).toHaveAttribute('aria-pressed', 'true');
+
+      const target = presetNamed(key);
+      await tapPreset(page, target, `Season ahead then ${key}`);
+      await expectPresetAtRest(page, target, `after ${key}`);
+      await expect(horizonChip(page, expectedHorizon)).toHaveAttribute('aria-pressed', 'true');
+      await expectOnlyPresetPressed(page, target, `after ${key}`);
+      await expect
+        .poll(async () => new URLSearchParams(await search(page)).get('horizon'))
+        .toBe(horizonParamFor(expectedHorizon));
+      await expectNoChipPressedAndDisabled(page, `after ${key}`);
+    });
+  }
+});
+
 test.describe('D1 M6: a quick view that names a time commits it and reads pressed (found-005)', () => {
   test('Season ahead then Right now sets horizon=current, presses Right now alone, and leaves no horizon chip pressed and disabled', async ({
     page
@@ -460,6 +500,8 @@ test.describe('D1 M6: a quick view that names a time commits it and reads presse
 
     await stubCpcDroughtOutlook(page);
     await stubStationValueSources(page);
+    await stubFireProducts(page);
+    await stubHeatRiskCatalog(page);
 
     for (const { preset, declared, start } of walks) {
       const moment = `${preset.label} from ${start}`;

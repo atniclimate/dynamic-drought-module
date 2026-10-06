@@ -49,7 +49,7 @@ import type { EvidenceClass } from '../src/impact/types';
 import { renderClaim } from '../src/ui/claim-render';
 import { HAZARD_CLUSTER_KEYS, HAZARD_CLUSTERS, TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
 import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
-import { gotoApp, layerCheckbox, layerPill, PILL, search, stubHeatRiskCatalog, urlLayers } from './helpers';
+import { gotoApp, layerCheckbox, layerPill, PILL, search, stubHeatRiskCatalog, urlLayers, waitForLayerSettled } from './helpers';
 
 const SNAPSHOT_PATH = join(process.cwd(), 'public', 'data', 'enso-indices.json');
 
@@ -382,6 +382,48 @@ const DISABLED_CHIPS: ReadonlySet<string> = new Set([
   'enso:season-ahead'
 ]);
 const CLUSTER_KEYS = ['drought', 'wildfire', 'heat', 'enso'] as const;
+
+test.describe('DR-190: a mode switch and its shared link show the same horizon', () => {
+  for (const [destination, expectedHorizon, product] of [
+    ['heat', 'current', 'heatrisk'],
+    ['drought', 'season-ahead', 'drought']
+  ] as const) {
+    test(`Wildfire Long Range to ${destination} resolves before and after reload`, async ({ page }) => {
+      await stubWildfireProducts(page);
+      await stubHeatRiskCatalog(page);
+      await stubCpcDroughtOutlook(page);
+      await gotoApp(page, '?view=console&cluster=wildfire&horizon=season-ahead');
+      await expect(page.locator('.shell-horizon-btn[data-horizon="season-ahead"]'))
+        .toHaveAttribute('aria-pressed', 'true');
+      await waitForLayerSettled(page, 'usfs-whp');
+
+      await page.locator(`.shell-cluster-btn[data-cluster="${destination}"]`).click();
+      const expectedUrlHorizon = expectedHorizon === 'current' ? null : expectedHorizon;
+      await expect(page.locator(`.shell-horizon-btn[data-horizon="${expectedHorizon}"]`))
+        .toHaveAttribute('aria-pressed', 'true');
+      await expect.poll(() => new URL(page.url()).searchParams.get('horizon')).toBe(expectedUrlHorizon);
+      await expect(layerCheckbox(page, product)).toBeChecked();
+      await waitForLayerSettled(page, product);
+      await expect(page.locator('.shell-horizon-btn[aria-pressed="true"][aria-disabled="true"]'))
+        .toHaveCount(0);
+      const checked = await page.locator('#layer-toggles input[data-layer-key]:checked')
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-layer-key')).sort());
+
+      await page.reload();
+      await expect(page.locator(`.shell-cluster-btn[data-cluster="${destination}"]`))
+        .toHaveAttribute('aria-pressed', 'true');
+      await expect(page.locator(`.shell-horizon-btn[data-horizon="${expectedHorizon}"]`))
+        .toHaveAttribute('aria-pressed', 'true');
+      await expect.poll(() => new URL(page.url()).searchParams.get('horizon')).toBe(expectedUrlHorizon);
+      await expect.poll(() => page.locator('#layer-toggles input[data-layer-key]:checked')
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-layer-key')).sort()))
+        .toEqual(checked);
+      await waitForLayerSettled(page, product);
+      await expect(page.locator('.shell-horizon-btn[aria-pressed="true"][aria-disabled="true"]'))
+        .toHaveCount(0);
+    });
+  }
+});
 
 test.describe('DDM-P8-T03 clause 1: every horizon chip either changes the map or says why not', () => {
   test('a chip with no distinct map surface is aria-disabled with a reason', async ({

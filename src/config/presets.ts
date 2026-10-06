@@ -155,7 +155,8 @@ export const VIEW_PRESETS: readonly ViewPreset[] = [
     key: 'this-week',
     label: 'This week',
     description: 'The days ahead: published National Weather Service HeatRisk heat-impact levels for the selected date, with active heat and fire-weather notices',
-    layers: ['heatrisk', 'nws-alerts', 'aiannh']
+    layers: ['heatrisk', 'nws-alerts', 'aiannh'],
+    horizon: 'current'
   },
   {
     key: 'season-ahead',
@@ -171,7 +172,8 @@ export const VIEW_PRESETS: readonly ViewPreset[] = [
     description: 'Fire weather threat: recent NOAA GOES GeoColor context; the SPC Day 1 fire-weather outlook with current mapped fire perimeters, including Wildfire and Prescribed fire, plus independently timed NOAA Hazard Mapping System (HMS) smoke plumes',
     preferredBasemap: 'satellite',
     // Explicit hms-smoke for the same non-cascading reason as hazard-fire.
-    layers: ['spc-fire-weather', 'nifc-fires', 'hms-smoke', 'aiannh']
+    layers: ['spc-fire-weather', 'nifc-fires', 'hms-smoke', 'aiannh'],
+    horizon: 'weeks-ahead'
   },
   {
     key: 'whose-land',

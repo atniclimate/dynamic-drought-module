@@ -892,21 +892,14 @@ test.describe('DDM-P8-T02: the Extreme Heat screen has a seven-day time control'
     expect(last.detail).toContain('Day 7 of 7');
   });
 
-  test('long range: no heat surface exists, and the time row says so rather than borrowing a stamp', async ({
+  test('DR-190: switching to Heat from Long Range commits Current and the dated HeatRisk stamp', async ({
     page
   }) => {
     await page.clock.setFixedTime(CLOCK_IN_WINDOW);
     await stubCommon(page);
     await stubHeat(page);
-    // FLIPPED 2026-09-27 (D1 M6, found-009): the deep link this case used,
-    // `?view=console&cluster=heat&horizon=season-ahead`, now boots on
-    // Current Conditions (src/state/url.ts's resolveHorizonForCluster;
-    // pinned by tests/precedence.spec.ts row A6), where HeatRisk is dated.
-    // The one route left to Extreme Heat at Long Range is in session:
-    // Drought at Long Range, then Extreme Heat, which keeps the committed
-    // horizon (the designed empty-recipe caveat). Every assertion below is
-    // unchanged; only the route in is new. The CPC Drought Outlook the Long
-    // Range step shows is answered locally.
+    // DR-190 supersedes the old empty in-session recipe. The mode horizon
+    // becomes Current; HeatRisk still states its own dated product period.
     await stubCpcDroughtOutlook(page);
     await gotoApp(page, '?view=console');
     const season = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
@@ -919,92 +912,30 @@ test.describe('DDM-P8-T02: the Extreme Heat screen has a seven-day time control'
       .toBe('heat');
     await expect
       .poll(() => new URL(page.url()).searchParams.get('horizon'))
-      .toBe('season-ahead');
+      .toBeNull();
 
-    // The season-ahead heat recipe is deliberately empty
-    // (src/config/clusters.ts): nothing is displayed, so no stamp may claim
-    // a period. The compact WHEN row's honest empty state is the statement.
-    await expect(page.locator('#shell-time .shell-time-empty')).toHaveText(
-      'No dated product is displayed.'
-    );
+    await expect(page.locator('.shell-horizon-btn[data-horizon="current"]'))
+      .toHaveAttribute('aria-pressed', 'true');
+    await expect(season).toHaveAttribute('aria-pressed', 'false');
+    await expect(season).toHaveAttribute('aria-disabled', 'true');
+    await expect(layerPill(page, 'heatrisk')).toHaveText(PILL.live);
+    await expect(page.locator('#shell-time')).toHaveAttribute('data-has-spec', 'true');
+    await expect(page.locator('#shell-time .shell-time-empty')).toHaveCount(0);
+    await expect(page.locator('#time-bar .time-bar-stamp-detail')).toContainText('NWS HeatRisk');
+    await expect(page.locator('#time-bar .time-bar-stamp-headline')).toContainText('2026');
     const detailsDoor = page.locator('#shell-time-more');
     await expect(detailsDoor).toBeVisible();
-    await expect(detailsDoor).toBeDisabled();
-    await expect(detailsDoor).toHaveAttribute('title', 'No dated product is displayed.');
+    await expect(detailsDoor).toBeEnabled();
     await expect(detailsDoor).toHaveAttribute('aria-expanded', 'false');
     await expect(page.locator('#time-bar')).toBeHidden();
-    await expect(layerPill(page, 'heatrisk')).toHaveText('');
   });
 
   test('a closed focused time door hands focus to its stable row when the owning surface stands down', async ({
     page
   }) => {
-    // Value-migrated 2026-09-28 (M12 repair, the director's door rule):
-    // WHP (Wildfire, Season ahead) used to own this door, but WHP is a
-    // static single-period edition (`periodCount`, time-popover.tsx: no
-    // rail, no modes) and found-015's rule now hides that kind of door
-    // instead of leaving it enabled and focusable, so it can no longer
-    // host this case. This test is a FOCUS contract, not a WHP contract
-    // (the comment two lines below always said so): any door that starts
-    // enabled and stands down still needs to hand focus back to its row.
-    //
-    // RE-MIGRATED 2026-09-28 (director gate CMD10, the same day): the
-    // first migration picked ENSO's SST anomaly at Season ahead, but
-    // ENSO's three recipes are the identical single layer at every horizon
-    // (`HAZARD_CLUSTERS.enso.recipes`, src/config/clusters.ts:163-170), so
-    // `horizonSurfaceSignature('enso','season-ahead')` equals the 'current'
-    // signature (src/state/timeline.ts:266-276, the "same recipe, no
-    // `drought` layer" case) and BOTH `resolveHorizonForCluster` at boot
-    // (src/state/url.ts:346-361) and the chip's own
-    // `horizonDisabledReason` (src/ui/island/shell.tsx:272-302) collapse
-    // it to Current Conditions: the URL never actually carried
-    // `horizon=season-ahead` for ENSO, so it read back null after the
-    // Heat press. Drought's CPC outlook does not have this problem: its
-    // `season-ahead` recipe is the same `['drought']` array as
-    // `weeks-ahead`'s, but `horizonSurfaceSignature` folds in
-    // `outlookRangeForHorizon` for any recipe naming the `drought` layer
-    // (timeline.ts:271-274, "the one register-sensitive surface"), so
-    // `weeks-ahead` ('drought|monthly'), `season-ahead` ('drought|seasonal')
-    // and `current` ('nadm-drought') are three genuinely distinct
-    // signatures: none collapses, and the outlook's `modes` (Monthly /
-    // Seasonal, `periodCount` = 2) gives it a real door the same way SST's
-    // rail did.
-    //
-    // RE-MIGRATED AGAIN 2026-09-28 (director gate CMD6, the delta run): a
-    // direct `?cluster=drought&horizon=season-ahead` boot still lands one
-    // period (NADM, no rail/modes), a SEPARATE bug from the ENSO one, and
-    // NOT this test's to fix: it is REGISTER found-030 (P1, owned by D2;
-    // when D2 fixes it, this case may boot the outlook directly again).
-    // Trace: `src/state/url.ts:413-420` composes
-    // the boot's SEEDED CHECKBOX set (`parseUrlParams().layers`, read by
-    // `src/ui/sidebar.ts:1930-1934` BEFORE `applyUrlStateSync` runs) at the
-    // URL's horizon for every cluster EXCEPT Drought (`shell.cluster !==
-    // 'drought'`); for Drought (the url-token-less default) it always
-    // seeds `DEFAULT_ON_KEYS` (the CURRENT-horizon composition, NADM)
-    // regardless of `horizon=`. That seeded set then disagrees with
-    // `composeClusterIntent('drought','season-ahead')` (the outlook
-    // layer), so `reconcileClusterWithLayerIntent`
-    // (src/state/cluster-service.ts:483-515) reads the mismatch as a
-    // customization and demotes the display to 'custom' before the
-    // outlook layer ever activates; only NADM (one period) ends up
-    // mounted. The RUNTIME path does not share this bug:
-    // `requestHorizon`'s `committedCluster === null` branch
-    // (cluster-service.ts:438-459) drives `timeline.setHorizon` THEN
-    // `requestCluster`, which composes and activates the outlook layer
-    // correctly at the new horizon (the same path the already-passing
-    // case "the current NADM view switches to the monthly outlook in one
-    // gesture" at :435 already proves). So this case now boots plainly
-    // (Drought, Current, the product default) and reaches Season ahead by
-    // pressing the real chip, the way a visitor would. The stand-down
-    // target is unchanged (Extreme Heat at Season ahead is still the
-    // deliberately empty recipe). Every assertion below the horizon
-    // press is unchanged.
-    //
-    // 2026-09-29 (S30D-N1 U5): found-030 (the direct
-    // `?cluster=drought&horizon=season-ahead` boot landing NADM instead of
-    // the outlook) is now fixed at `src/state/url.ts`'s composition branch;
-    // the stand-down above stays as written (this case still reaches Season
-    // ahead by pressing the chip, not by asserting the direct-boot URL).
+    // DR-190 makes a switch to Heat date-bearing, so it can no longer
+    // stand down this door. Turn off the CPC layer directly instead; all
+    // focus-return and stable-row geometry assertions remain the same.
     await stubCommon(page);
     await stubCpcDroughtOutlook(page);
     await gotoApp(page, '?view=brief');
@@ -1024,14 +955,13 @@ test.describe('DDM-P8-T02: the Extreme Heat screen has a seven-day time control'
     const before = await row.boundingBox();
     expect(before).not.toBeNull();
 
-    // Activate the real hazard door without a pointer gesture, so focus stays
+    // Turn off the real layer without a pointer gesture, so focus stays
     // on More time while the layer controller's queued fade and teardown
     // clear the CPC outlook's TimeBarSpec asynchronously. This isolates the
     // component contract: no intervening control receives focus before the
     // owner stands down.
-    await page
-      .locator('.shell-cluster-btn[data-cluster="heat"]')
-      .evaluate((button) => (button as HTMLButtonElement).click());
+    await layerCheckbox(page, 'drought')
+      .evaluate((checkbox) => (checkbox as HTMLInputElement).click());
 
     await expect(row).toHaveAttribute('data-has-spec', 'false');
     await expect(door).toBeDisabled();
@@ -1039,7 +969,10 @@ test.describe('DDM-P8-T02: the Extreme Heat screen has a seven-day time control'
     await expect(row).toBeFocused();
     await expect
       .poll(() => new URL(page.url()).searchParams.get('cluster'))
-      .toBe('heat');
+      .toBeNull();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('layers')?.split(',').includes('drought'))
+      .toBe(false);
     await expect
       .poll(() => new URL(page.url()).searchParams.get('horizon'))
       .toBe('season-ahead');
