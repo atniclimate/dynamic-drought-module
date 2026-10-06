@@ -1950,57 +1950,6 @@ button.conditions-metric:hover .conditions-action-hide {
   color: var(--fg-1);
   margin: 0 0 10px;
 }
-.popup-data {
-  background: var(--bg-0);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  margin-bottom: 10px;
-  font-family: var(--font-body);
-  font-feature-settings: 'tnum' 1, 'lnum' 1;
-  font-size: 11.5px;
-  font-weight: var(--fw-body);
-}
-.popup-data-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 2px 0;
-  color: var(--fg-1);
-}
-.popup-data-row + .popup-data-row {
-  border-top: 1px dashed var(--line);
-}
-.popup-data-label {
-  color: var(--fg-2);
-  letter-spacing: 0.02em;
-}
-.popup-data-value {
-  color: var(--fg-0);
-  font-weight: var(--fw-strong);
-  text-align: right;
-}
-.popup-data-loading {
-  font-family: var(--font-body);
-  font-size: 11px;
-  font-weight: var(--fw-body);
-  color: var(--fg-2);
-  padding: 6px 0;
-}
-.popup-data-error {
-  font-size: 11px;
-  color: var(--warn);
-  padding: 6px 0;
-  line-height: 1.4;
-}
-/* The honest note under a discovered station's custody block: no live value is
-   fetched in-browser, so the popup states the cadence and points to the link. */
-.popup-data-note {
-  font-size: 10.5px;
-  color: var(--fg-3);
-  margin-top: 6px;
-  line-height: 1.35;
-}
 
 /* Fire-in-context block (0.4.0 B1): a composed read appended to a NIFC
    perimeter popup (drought class beneath, nearest stations). Composition only,
@@ -5883,12 +5832,6 @@ a.impact-resource-link::after {
   .impact-claim-chart .ddm-chart {
     max-inline-size: var(--chart-draw-w);
   }
-}
-/* Sparkline inside a telemetry popup data block. */
-.popup-data .ddm-chart-fig {
-  margin-top: 8px;
-  border-top: 1px dashed var(--line);
-  padding-top: 6px;
 }
 
 /* ----------------------------------------------------------------------------
