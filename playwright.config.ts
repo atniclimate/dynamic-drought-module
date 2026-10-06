@@ -110,6 +110,17 @@ const CHROMIUM_USE = {
   }
 };
 
+// Explicit owner measurement only. Flags request a native renderer; the flow
+// measure spec checks the actual map renderer before accepting GPU evidence.
+// Unset, 0, and every value except the exact token 1 retain the software path.
+const MEASURE_USE = process.env['DDM_MEASURE_NATIVE_GPU'] === '1' ? {
+  browserName: 'chromium' as const,
+  headless: false,
+  launchOptions: {
+    args: ['--use-gl=angle', '--use-angle=d3d11', '--disable-frame-rate-limit']
+  }
+} : CHROMIUM_USE;
+
 export default defineConfig({
   testDir: './tests',
 
@@ -264,7 +275,7 @@ export default defineConfig({
       name: 'chromium-measure',
       testMatch: MEASURE_SPECS,
       testIgnore: ['**/*.test.mjs'],
-      use: CHROMIUM_USE
+      use: MEASURE_USE
     }
   ],
 

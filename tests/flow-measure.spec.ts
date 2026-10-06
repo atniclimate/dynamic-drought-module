@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
+import type { Map as MlMap } from 'maplibre-gl';
 
 import {
   expect,
@@ -35,8 +36,9 @@ import { gotoApp, NODD_FIXTURES, noddStubLog } from './helpers';
  * - Headless Chromium here runs ANGLE over SwiftShader, a software GL. When
  *   the recorded WEBGL_debug_renderer_info string names SwiftShader or
  *   llvmpipe, every frame-rate figure carries the label SOFTWARE_GL_LABEL;
- *   only the CPU columns are judged against the plan's bars. Headed runs on
- *   the owner's Iris Xe are the director's, not this spec's.
+ *   only the CPU columns are judged against the plan's bars. The explicit
+ *   DDM_MEASURE_NATIVE_GPU=1 project option requests a headed native renderer;
+ *   map-backed measurements reject an unknown or software renderer on that path.
  * - "Flow CPU per step". A production build exposes no per-step timer (the
  *   ribbon layer's `stats.lastStepMs` has no page handle), so the CPU figure
  *   is read from the CDP sampling profiler: every sample whose stack has a
@@ -87,6 +89,7 @@ const SAMPLING_INTERVAL_US = 200;
 const NETWORK_FLOOR = { rateMbit: 1.6, latencyMs: 150 };
 /** nodd.ts FLOW_READ_BUDGET_MS: the complete-body budget of each read. */
 const READ_BUDGET_MS = 12_000;
+const NATIVE_GPU_REQUESTED = process.env['DDM_MEASURE_NATIVE_GPU'] === '1';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
@@ -103,7 +106,7 @@ function record(key: string, value: unknown): void {
   results[key] = value;
 }
 
-test.afterAll(() => {
+function writeResults(): void {
   mkdirSync(OUT_DIR, { recursive: true });
   const file = join(OUT_DIR, 'flow-measure.json');
   let merged: Json = {};
@@ -113,7 +116,9 @@ test.afterAll(() => {
     merged = {};
   }
   writeFileSync(file, `${JSON.stringify({ ...merged, ...results, writtenAt: new Date().toISOString() }, null, 2)}\n`);
-});
+}
+
+test.afterAll(writeResults);
 
 function median(values: readonly number[]): number {
   if (values.length === 0) return Number.NaN;
@@ -255,6 +260,8 @@ interface BootOptions {
   readonly reduced?: boolean;
   /** Stored Pause choice carried into the page (sessionStorage), the still form from the first frame. */
   readonly storedPause?: boolean;
+  /** Only the paired-pan case installs a map observer and start/stop collector. */
+  readonly pairedPan?: boolean;
   readonly flow: 'off' | 'currents' | 'wind' | 'waves';
 }
 
@@ -315,6 +322,7 @@ async function boot(browser: Browser, options: BootOptions): Promise<Booted> {
   await stubSst(page);
   const openMeteoCalls = await stubOpenMeteo(page);
   await page.addInitScript(INSTRUMENTS);
+  if (options.pairedPan) await page.addInitScript(PAN_INSTRUMENTS);
   if (options.storedPause) {
     await page.addInitScript(() => {
       try {
@@ -330,7 +338,40 @@ async function boot(browser: Browser, options: BootOptions): Promise<Booted> {
   // its own choice above.
   await gotoApp(page, `?cluster=enso&ocean=pacific&flow=${options.flow}`, { flowMotion: 'live' });
   await waitFlowReady(page, options.flow);
+  if (NATIVE_GPU_REQUESTED) {
+    try {
+      const renderer = await actualMapRenderer(page);
+      expect(knownHardwareRenderer(renderer), `native GPU requested; actual map renderer: ${JSON.stringify(renderer)}`).toBe(true);
+    } catch (error) {
+      await context.close();
+      throw error;
+    }
+  }
   return { context, page, cdp, aborted, openMeteoCalls };
+}
+
+interface MapRenderer {
+  readonly renderer: string | null;
+  readonly vendor: string | null;
+}
+
+async function actualMapRenderer(page: Page): Promise<MapRenderer> {
+  return page.evaluate(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>('#map canvas.maplibregl-canvas');
+    const gl = canvas?.getContext('webgl2');
+    const info = gl?.getExtension('WEBGL_debug_renderer_info');
+    return info && gl ? {
+      renderer: String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)),
+      vendor: String(gl.getParameter(info.UNMASKED_VENDOR_WEBGL))
+    } : { renderer: null, vendor: null };
+  });
+}
+
+function knownHardwareRenderer(value: MapRenderer): boolean {
+  if (!value.renderer || !value.vendor) return false;
+  const text = `${value.vendor} ${value.renderer}`;
+  if (/unknown|unavailable|swiftshader|llvmpipe|softpipe|lavapipe|software|microsoft basic|\bwarp\b/i.test(text)) return false;
+  return /\b(intel|nvidia|amd|ati technologies|apple|qualcomm|adreno|arm|mali|radeon|geforce)\b/i.test(value.renderer);
 }
 
 async function rendererString(page: Page): Promise<string> {
@@ -500,6 +541,248 @@ const panMotion: Motion = async (page, untilMs) => {
     direction = -direction;
   }
 };
+
+type PanFlow = 'off' | 'wind';
+interface PanFrames {
+  readonly startedAtMs: number;
+  readonly endedAtMs: number;
+  readonly intervalsMs: readonly number[];
+  readonly longTasks: readonly { startTimeMs: number; durationMs: number }[];
+  readonly longTaskSupported: boolean;
+}
+interface PanWindow extends Window {
+  __panMaps: MlMap[];
+  __beginPan: () => void;
+  __endPan: () => PanFrames;
+}
+
+/** Passive instrumentation only, installed for the paired-pan case. */
+const PAN_INSTRUMENTS = (): void => {
+  const holder = window as unknown as PanWindow;
+  const maps: MlMap[] = [];
+  holder.__panMaps = maps;
+  Object.defineProperty(Object.prototype, '_onWindowOnline', {
+    configurable: true,
+    set(this: MlMap, value: unknown) {
+      Object.defineProperty(this, '_onWindowOnline', { configurable: true, enumerable: true, writable: true, value });
+      maps.push(this);
+    }
+  });
+  let stop: (() => PanFrames) | null = null;
+  holder.__beginPan = () => {
+    if (stop) throw new Error('paired pan collector is already active');
+    const startedAtMs = performance.now();
+    let lastFrame: number | null = null;
+    let raf = 0;
+    const intervalsMs: number[] = [];
+    const longTasks: Array<{ startTimeMs: number; durationMs: number }> = [];
+    const take = (entries: readonly PerformanceEntry[]): void => {
+      for (const entry of entries) {
+        if (entry.startTime >= startedAtMs) longTasks.push({ startTimeMs: entry.startTime, durationMs: entry.duration });
+      }
+    };
+    const longTaskSupported = PerformanceObserver.supportedEntryTypes.includes('longtask');
+    const observer = longTaskSupported ? new PerformanceObserver((list) => take(list.getEntries())) : null;
+    observer?.observe({ entryTypes: ['longtask'] });
+    const frame = (now: number): void => {
+      if (lastFrame !== null) intervalsMs.push(now - lastFrame);
+      lastFrame = now;
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    stop = () => {
+      const endedAtMs = performance.now();
+      cancelAnimationFrame(raf);
+      if (observer) take(observer.takeRecords());
+      observer?.disconnect();
+      stop = null;
+      return { startedAtMs, endedAtMs, intervalsMs, longTasks, longTaskSupported };
+    };
+  };
+  holder.__endPan = () => {
+    if (!stop) throw new Error('paired pan collector was not started');
+    return stop();
+  };
+};
+
+interface PanCamera {
+  readonly longitude: number;
+  readonly latitude: number;
+  readonly zoom: number;
+  readonly bearing: number;
+  readonly pitch: number;
+  readonly canvas: readonly [number, number];
+}
+
+async function panCamera(page: Page): Promise<PanCamera> {
+  return page.evaluate(() => {
+    const map = (window as unknown as PanWindow).__panMaps.find((candidate) => candidate.getContainer().id === 'map')!;
+    const center = map.getCenter();
+    return {
+      longitude: center.lng, latitude: center.lat, zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch(),
+      canvas: [map.getCanvas().clientWidth, map.getCanvas().clientHeight] as const
+    };
+  });
+}
+
+async function panCameraSettles(page: Page): Promise<void> {
+  await expect.poll(() => page.evaluate(() => {
+    const map = (window as unknown as PanWindow).__panMaps.find((candidate) => candidate.getContainer().id === 'map')!;
+    return !map.isMoving() && map.loaded();
+  }), { timeout: 30_000 }).toBe(true);
+}
+
+const PAN_DIRECTIONS = [1, -1, 1, -1] as const;
+const PAN_DISTANCE_PX = 500;
+const PAN_STEPS = 24;
+// An identical stationary hold before release avoids velocity-dependent coast.
+// This is input protocol time, not a performance or responsiveness limit.
+const PAN_RELEASE_HOLD_MS = 200;
+
+async function completedPans(page: Page): Promise<PanCamera[]> {
+  const box = await mapBox(page);
+  const cy = box.y + box.height / 2;
+  const ends: PanCamera[] = [];
+  for (const direction of PAN_DIRECTIONS) {
+    const before = await panCamera(page);
+    const cx = box.x + box.width / 2 - direction * PAN_DISTANCE_PX / 2;
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx + direction * PAN_DISTANCE_PX, cy, { steps: PAN_STEPS });
+    await hold(page, PAN_RELEASE_HOLD_MS);
+    await page.mouse.up();
+    await panCameraSettles(page);
+    const after = await panCamera(page);
+    expect(after.longitude, 'the completed physical drag moved the actual camera').not.toBe(before.longitude);
+    ends.push(after);
+  }
+  return ends;
+}
+
+interface PageMetric { readonly name: string; readonly value: number }
+async function pageMetrics(cdp: CDPSession): Promise<readonly PageMetric[]> {
+  const result = await cdp.send('Performance.getMetrics') as { metrics: PageMetric[] };
+  return result.metrics;
+}
+
+function taskSeconds(metrics: readonly PageMetric[]): number {
+  const value = metrics.find((metric) => metric.name === 'TaskDuration')?.value;
+  if (value === undefined || !Number.isFinite(value) || value < 0) throw new Error('TaskDuration is missing or invalid');
+  return value;
+}
+
+interface PanFlowState {
+  readonly status: string | null;
+  readonly kind: string | null;
+  readonly form: string | null;
+  readonly motion: string | null;
+  readonly drawn: string | null;
+  readonly steps: number | null;
+}
+
+async function readPanFlowState(page: Page): Promise<PanFlowState> {
+  return page.evaluate(() => {
+    const panel = document.querySelector<HTMLElement>('.enso-flow');
+    const steps = panel?.getAttribute('data-flow-steps');
+    return {
+      status: panel?.getAttribute('data-status') ?? null,
+      kind: panel?.querySelector<HTMLElement>('[data-flow-kind][aria-pressed="true"]')?.dataset['flowKind'] ?? null,
+      form: panel?.getAttribute('data-flow-form') ?? null,
+      motion: panel?.getAttribute('data-flow-motion') ?? null,
+      drawn: panel?.getAttribute('data-flow-drawn') ?? null,
+      steps: steps && /^\d+$/.test(steps) ? Number(steps) : null
+    };
+  });
+}
+
+interface PanRun {
+  readonly flow: PanFlow;
+  readonly renderer: MapRenderer;
+  readonly label: string;
+  readonly initialCamera: PanCamera;
+  readonly gestureEnds: readonly PanCamera[];
+  readonly frames: PanFrames;
+  readonly hostElapsedMs: number;
+  readonly metricsBefore: readonly PageMetric[];
+  readonly metricsAfter: readonly PageMetric[];
+  readonly taskDurationThreadMs: number;
+  readonly flowBefore: PanFlowState;
+  readonly flowAfter: PanFlowState;
+}
+
+async function measureCompletedPans(browser: Browser, flow: PanFlow): Promise<PanRun> {
+  const { page, cdp, context, aborted } = await boot(browser, { flow, pairedPan: true });
+  try {
+    if (flow === 'wind') {
+      await expect(panelOf(page)).toHaveAttribute('data-flow-form', 'moving');
+      await expect(panelOf(page)).toHaveAttribute('data-flow-motion', 'moving');
+    } else {
+      await expect(panelOf(page)).toHaveAttribute('data-status', 'off');
+      await expect(panelOf(page)).toHaveAttribute('data-flow-form', 'none');
+    }
+    await hold(page, WARM_UP_MS);
+    await panCameraSettles(page);
+    // Wait for a real map render after sources/camera have settled. Continuous
+    // wind repaint is not map movement and is not required to become idle.
+    await page.evaluate(() => new Promise<void>((resolve) => {
+      const map = (window as unknown as PanWindow).__panMaps.find((candidate) => candidate.getContainer().id === 'map')!;
+      map.once('render', () => resolve());
+      map.triggerRepaint();
+    }));
+    const initialCamera = await panCamera(page);
+    const renderer = await actualMapRenderer(page);
+    const label = isSoftwareGl(renderer.renderer ?? '') ? SOFTWARE_GL_LABEL : knownHardwareRenderer(renderer) ? 'hardware renderer' : 'unverified renderer';
+    const intendedState = flow === 'wind'
+      ? { status: 'live', kind: 'wind', form: 'moving', motion: 'moving', drawn: 'wind' }
+      : { status: 'off', kind: 'off', form: 'none', motion: 'none', drawn: '' };
+    // Snapshot outside the metric bracket, after warmup and after completed pans.
+    // A transient pause while dragging is allowed; a failed or stopped arm is not.
+    const flowBefore = await readPanFlowState(page);
+    expect(flowBefore, 'the intended arm is present after warmup').toMatchObject(intendedState);
+    if (flow === 'wind') {
+      expect(Number.isSafeInteger(flowBefore.steps), 'wind exposes its actual step counter').toBe(true);
+      expect(flowBefore.steps!).toBeGreaterThanOrEqual(0);
+    }
+    // CDP threadTicks measures renderer main-thread running time. TaskDuration
+    // covers all tasks in this page, including our instruments and MapLibre;
+    // it excludes worker/GPU/other-process work and is not isolated flow CPU.
+    await cdp.send('Performance.enable', { timeDomain: 'threadTicks' });
+    try {
+      const metricsBefore = await pageMetrics(cdp);
+      const hostStartedAt = performance.now();
+      await page.evaluate(() => (window as unknown as PanWindow).__beginPan());
+      const gestureEnds = await completedPans(page);
+      await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      const frames = await page.evaluate(() => (window as unknown as PanWindow).__endPan());
+      const hostElapsedMs = performance.now() - hostStartedAt;
+      const metricsAfter = await pageMetrics(cdp);
+      const flowAfter = await readPanFlowState(page);
+      expect(flowAfter, 'the intended arm remains after the completed pans').toMatchObject(intendedState);
+      if (flow === 'wind') {
+        expect(Number.isSafeInteger(flowAfter.steps), 'wind retains its actual step counter').toBe(true);
+        expect(flowAfter.steps! - flowBefore.steps!, 'moving wind advanced during the arm').toBeGreaterThan(0);
+      }
+      const taskDurationThreadMs = (taskSeconds(metricsAfter) - taskSeconds(metricsBefore)) * 1000;
+      expect(gestureEnds).toHaveLength(PAN_DIRECTIONS.length);
+      expect(frames.longTaskSupported, 'long-task instrumentation is available').toBe(true);
+      expect(frames.intervalsMs.length, 'the pan recorded frame intervals').toBeGreaterThan(0);
+      expect(frames.intervalsMs.every((value) => Number.isFinite(value) && value > 0)).toBe(true);
+      expect(taskDurationThreadMs, 'renderer task time is monotonic').toBeGreaterThanOrEqual(0);
+      expect(noddStubLog(page).filter((entry) => entry.answer === 'unstubbed'), 'no unstubbed NODD read').toEqual([]);
+      expectNoEscape(aborted, `paired-pan-${flow}`);
+      return { flow, renderer, label, initialCamera, gestureEnds, frames, hostElapsedMs, metricsBefore, metricsAfter, taskDurationThreadMs, flowBefore, flowAfter };
+    } finally {
+      await cdp.send('Performance.disable');
+    }
+  } finally {
+    await context.close();
+  }
+}
+
+function samePanCamera(actual: PanCamera, expected: PanCamera): void {
+  expect(actual.canvas).toEqual(expected.canvas);
+  for (const key of ['longitude', 'latitude', 'zoom', 'bearing', 'pitch'] as const) expect(actual[key]).toBeCloseTo(expected[key], 8);
+}
 
 /** Wheel notches in, then out, until `untilMs`. */
 const zoomMotion: Motion = async (page, untilMs) => {
@@ -900,6 +1183,64 @@ test.describe('flow measure (ENSO-FLOW-PLAN 4.2 and 4.4)', () => {
     });
     expect(Number.isNaN(failing), 'a rate below the passing one failed the 12 s budget').toBe(false);
     expect(passing, 'the bracket closes').toBeGreaterThan(failing);
+  });
+
+  test('records paired completed pans with wind and flow off', async ({ browser }) => {
+    test.setTimeout(60 * 60_000);
+    const pairs: Array<{
+      order: readonly PanFlow[];
+      arms: Partial<Record<PanFlow, PanRun>>;
+      difference: Record<string, number> | null;
+    }> = [];
+    const report = {
+      complete: false,
+      nativeGpuRequested: NATIVE_GPU_REQUESTED,
+      viewport: VIEWPORT,
+      warmUpMs: WARM_UP_MS,
+      protocol: { directions: PAN_DIRECTIONS, distancePx: PAN_DISTANCE_PX, mouseSteps: PAN_STEPS, stationaryReleaseHoldMs: PAN_RELEASE_HOLD_MS },
+      timeDomain: 'threadTicks',
+      cpuScope: 'CDP Performance.TaskDuration: renderer main-thread running time for all page tasks, including MapLibre and instrumentation; excludes workers, GPU and other processes.',
+      differenceScope: 'Wind minus off for identical completed pointer inputs and matching camera endpoints. Additional page cost, not isolated flow-code CPU. Frame quantile differences describe these samples, not paired individual frames.',
+      pairs
+    };
+    // Persist before starting an arm, including when teardown never runs.
+    // Every completed arm also survives a later interrupted measurement.
+    record('pairedPan', report);
+    writeResults();
+    const orders: readonly (readonly PanFlow[])[] = [['off', 'wind'], ['wind', 'off']];
+    for (let repeat = 0; repeat < RUNS; repeat++) {
+      for (const order of orders) {
+        const pair: typeof pairs[number] = { order, arms: {}, difference: null };
+        pairs.push(pair);
+        for (const flow of order) {
+          pair.arms[flow] = await measureCompletedPans(browser, flow);
+          writeResults();
+        }
+        const off = pair.arms.off!;
+        const wind = pair.arms.wind!;
+        samePanCamera(wind.initialCamera, off.initialCamera);
+        expect(wind.renderer, 'both arms use the same actual renderer').toEqual(off.renderer);
+        for (let i = 0; i < PAN_DIRECTIONS.length; i++) samePanCamera(wind.gestureEnds[i]!, off.gestureEnds[i]!);
+        const summary = (run: PanRun): Record<string, number> => ({
+          taskDurationThreadMs: run.taskDurationThreadMs,
+          taskDurationPerGestureMs: run.taskDurationThreadMs / run.gestureEnds.length,
+          hostElapsedMs: run.hostElapsedMs,
+          pageElapsedMs: run.frames.endedAtMs - run.frames.startedAtMs,
+          rafMedianMs: median(run.frames.intervalsMs),
+          rafP95Ms: percentile(run.frames.intervalsMs, 0.95),
+          longTaskCount: run.frames.longTasks.length,
+          longTaskTotalMs: run.frames.longTasks.reduce((sum, entry) => sum + entry.durationMs, 0),
+          longTaskMaxMs: Math.max(0, ...run.frames.longTasks.map((entry) => entry.durationMs))
+        });
+        const offSummary = summary(off);
+        const windSummary = summary(wind);
+        pair.difference = Object.fromEntries(Object.keys(windSummary).map((key) => [key, windSummary[key]! - offSummary[key]!]));
+        writeResults();
+        console.log(`flow-measure paired-pan ${pairs.length} ${order.join(' then ')}: ${JSON.stringify(pair.difference)}`);
+      }
+    }
+    report.complete = true;
+    writeResults();
   });
 
   test('records frame rate, render rate, CPU, long tasks and heap for every condition', async ({ browser }) => {
