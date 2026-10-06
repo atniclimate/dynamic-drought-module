@@ -521,8 +521,10 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     // review fix). Either way the status stays live and never reads wave marks.
     const NO_MODEL_POINT = "No model point falls inside this view; zoom out to see the model's values.";
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
-    await expect(panel(page)).toHaveAttribute('data-flow-form', 'arrows');
-    const features = Number(await panel(page).getAttribute('data-flow-features'));
+    const featureStamp = await panel(page).getAttribute('data-flow-features');
+    expect(featureStamp).toMatch(/^\d+$/);
+    const features = Number(featureStamp);
+    expect(Number.isInteger(features) && features >= 0).toBe(true);
     const status = panel(page).locator('.enso-flow-status');
     await expect(status).toContainText('live · Model run ');
     await expect(status).not.toContainText('wave marks');
@@ -530,17 +532,19 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(flowStatus(page)).toContainText('Atmospheric currents · live · Model run ');
     if (features > 0) {
       await expect(panel(page)).toHaveAttribute('data-flow-form', 'arrows');
+      await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'wind');
       await expect(flowNotes(page)).toContainText(FLOW_WORDS.pastGrid);
     } else {
-      // The form stays `arrows` with no features: nothing is drawn, and the sentence says why.
-      await expect(panel(page)).toHaveAttribute('data-flow-form', 'arrows');
+      // Native output is empty; the diagnostic stamps must agree with its count.
+      await expect(panel(page)).toHaveAttribute('data-flow-form', 'none');
+      await expect(panel(page)).toHaveAttribute('data-flow-drawn', '');
       await expect(panel(page)).toHaveAttribute('data-flow-features', '0');
       await expect(flowNotes(page)).toContainText(NO_MODEL_POINT);
     }
     await expect(flowNotes(page)).not.toContainText(FLOW_WORDS.waveBox);
   });
 
-  test('waves zoomed in inside the crop (z12) read live with node arrows, never outside the wave marks area', async ({ page }) => {
+  test('waves zoomed in inside the crop (z12) read live with honest native-output stamps, never outside the wave marks area', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.clock.setFixedTime(LIVE_CLOCK);
@@ -549,7 +553,12 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await gotoApp(page, '?cluster=enso&select=state:HI&flow=waves');
     await expect(panel(page)).toHaveAttribute('data-status', /^live/);
     await zoomInSteps(page, 6);
-    await expect(panel(page)).toHaveAttribute('data-flow-form', 'arrows');
+    const featureStamp = await panel(page).getAttribute('data-flow-features');
+    expect(featureStamp).toMatch(/^\d+$/);
+    const features = Number(featureStamp);
+    expect(Number.isInteger(features) && features >= 0).toBe(true);
+    await expect(panel(page)).toHaveAttribute('data-flow-form', features > 0 ? 'arrows' : 'none');
+    await expect(panel(page)).toHaveAttribute('data-flow-drawn', features > 0 ? 'waves' : '');
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
     const status = panel(page).locator('.enso-flow-status');
     await expect(status).not.toContainText(FLOW_WORDS.outside);

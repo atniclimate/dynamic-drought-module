@@ -105,10 +105,13 @@ function removeArrows(): void {
 /** The panel's stamps of what the flow view draws, for the specs and the key. */
 function stampForm(state: FlowViewState | null, kind: EnsoFlowKind): void {
   if (!panel) return;
-  panel.dataset['flowForm'] = state?.form ?? 'none';
+  const form = state?.form ?? 'none';
+  // Moving paths draw on the GPU; only native forms require GeoJSON features.
+  const drawn = form === 'moving' || (form !== 'none' && (state?.features ?? 0) > 0);
+  panel.dataset['flowForm'] = drawn ? form : 'none';
   panel.dataset['flowMotion'] = state?.motion ?? 'none';
   panel.dataset['flowFeatures'] = String(state?.features ?? 0);
-  panel.dataset['flowDrawn'] = state && state.form !== 'none' ? kind : '';
+  panel.dataset['flowDrawn'] = drawn ? kind : '';
 }
 
 function disposeFlowView(): void {
