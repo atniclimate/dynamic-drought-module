@@ -144,7 +144,9 @@ export const FLOW_WORDS = {
   // DRAFT wording (DR-177): C-fit DRAFT 13 (moving-paths section 7).
   pastGrid: "Zoomed in past the model grid: showing the values at the model's own points.",
   // DRAFT wording (DR-177): past the grid with no model node inside the view (block E2b review P1); nothing is drawn.
-  noModelPoint: "No model point falls inside this view; zoom out to see the model's values."
+  noModelPoint: "No model point falls inside this view; zoom out to see the model's values.",
+  // DRAFT wording (DR-177): actual grid points can have calm or masked values.
+  noNodeDirection: 'Model points fall inside this view, but none has a direction mark.'
 } as const;
 
 /** The parts of the flow view's state (src/layers/flow/index.ts FlowViewState) the form note reads. */
@@ -154,6 +156,7 @@ export interface FlowFormState {
   readonly hold: string | null;
   readonly rebuildFailed: boolean;
   readonly nodesInView: boolean;
+  readonly features: number;
 }
 
 /**
@@ -163,7 +166,10 @@ export interface FlowFormState {
  * the lines hold still. The moving form needs no note.
  */
 export function flowFormNote(state: FlowFormState): string | null {
-  if (state.form === 'arrows') return state.nodesInView ? FLOW_WORDS.pastGrid : FLOW_WORDS.noModelPoint;
+  if (state.form === 'arrows') {
+    if (!state.nodesInView) return FLOW_WORDS.noModelPoint;
+    return state.features > 0 ? FLOW_WORDS.pastGrid : FLOW_WORDS.noNodeDirection;
+  }
   if (state.form !== 'still') return null;
   if (state.rebuildFailed) return FLOW_WORDS.rebuildFailed;
   if (state.hold === 'context') return FLOW_WORDS.context;

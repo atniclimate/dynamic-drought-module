@@ -88,6 +88,46 @@ function view(lon, lat, zoom, w = 1440, h = 900) {
 /** The Pacific framing at 1440x900 (it crosses 180). */
 const PACIFIC = view(-145, 26, 3);
 
+test('model-node presence includes calm and masked nodes without inventing a direction', () => {
+  for (const valid of [true, false]) {
+    const f = gridField('wind', GLOBAL_1P00, () => [0, 0, 0, valid]);
+    for (const longitude of [-120, 240]) {
+      const nodeView = view(longitude, 45, 12, 390, 844);
+      assert.equal(still.hasModelNodeInView(f, nodeView), true, `node ${longitude}, valid=${valid}`);
+      assert.deepEqual(still.nodeArrows(f, nodeView), []);
+    }
+    assert.equal(still.hasModelNodeInView(f, view(-120.5, 45.5, 12, 390, 844)), false);
+  }
+});
+
+test('model-node presence respects the wave crop and its equivalent longitude', () => {
+  const f = gridField('waves', WAVE_CROP, () => [0, 0, 0, false]);
+  for (const longitude of [165, -195, -150, 210, -100, 260]) {
+    assert.equal(still.hasModelNodeInView(f, view(longitude, 30, 12, 390, 844)), true, `crop node ${longitude}`);
+  }
+  for (const longitude of [164, -99, -80]) {
+    assert.equal(still.hasModelNodeInView(f, view(longitude, 30, 12, 390, 844)), false, `outside ${longitude}`);
+  }
+  assert.equal(still.hasModelNodeInView(f, view(-150.125, 30.125, 14, 390, 844)), false, 'between crop nodes');
+});
+
+test('model-node presence tests the actual rotated view, not just its bounding box', () => {
+  const f = gridField('wind', GLOBAL_1P00, () => [0, 0, 0]);
+  const nodeX = mercX(-120);
+  const nodeY = mercY(45);
+  const d = 1 / 360;
+  const diamond = (offset) => {
+    const x = nodeX + offset * d;
+    const y = nodeY + offset * d;
+    return {
+      c: new Float64Array([x, y - 0.5 * d, x + 0.5 * d, y, x, y + 0.5 * d, x - 0.5 * d, y]),
+      worldSize: 512 * 2 ** 12, cssW: 390, cssH: 844
+    };
+  };
+  assert.equal(still.hasModelNodeInView(f, diamond(0)), true, 'node inside rotated quad');
+  assert.equal(still.hasModelNodeInView(f, diamond(0.4)), false, 'node in bounding box but outside quad');
+});
+
 test('the still form is deterministic for one seed and view', () => {
   const f = windField();
   const a = still.buildStillForm(f, PACIFIC, 'still');

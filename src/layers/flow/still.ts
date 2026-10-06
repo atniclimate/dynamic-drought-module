@@ -163,12 +163,8 @@ function stillMarks(field: FlowField, view: ViewQuad, seed: number, densityFacto
   return out;
 }
 
-/**
- * Past the grid: one arrow per valid node in view, anchored on the node and
- * pointing the way the field moves (TO), in the class ink and width. The
- * node's own values, nothing interpolated.
- */
-export function nodeArrows(field: FlowField, view: ViewQuad): StillFeature[] {
+/** Grid nodes inside the actual view, before any mask or direction filtering. */
+function* modelNodesInView(field: FlowField, view: ViewQuad): Generator<readonly [number, number, number]> {
   const g = field.grid;
   const c = view.c;
   let minX = Infinity;
@@ -189,12 +185,8 @@ export function nodeArrows(field: FlowField, view: ViewQuad): StillFeature[] {
   const rowLast = Math.min(g.ny - 1, Math.floor((g.lat0 - latMin) / g.dlat + 1e-9));
   const kFirst = Math.ceil((lonMin - g.lon0) / g.dlon - 1e-9);
   const kLast = Math.floor((lonMax - g.lon0) / g.dlon + 1e-9);
-  const out: StillFeature[] = [];
-  const half = NODE_ARROW_PX / 2 / view.worldSize;
-  const head = NODE_ARROW_HEAD_PX / view.worldSize;
   for (let row = rowFirst; row <= rowLast; row++) {
     for (let k = kFirst; k <= kLast; k++) {
-      if (out.length >= MAX_NODE_ARROWS) return out;
       let column = k;
       if (g.wrapsLon) column = ((k % g.nx) + g.nx) % g.nx;
       else {
@@ -202,12 +194,6 @@ export function nodeArrows(field: FlowField, view: ViewQuad): StillFeature[] {
         column = ((k % Math.round(360 / g.dlon)) + Math.round(360 / g.dlon)) % Math.round(360 / g.dlon);
         if (column > g.nx - 1) continue;
       }
-      const i = row * g.nx + column;
-      if (field.mask[i] !== 1) continue;
-      const u = field.u[i] as number;
-      const v = field.v[i] as number;
-      const norm = Math.hypot(u, v);
-      if (norm < 1e-6) continue;
       const [lonNode, lat] = nodeLonLat(g, column, row);
       // Unwrap the node's x into the view's range.
       let x = mercX(lonNode);
@@ -215,20 +201,45 @@ export function nodeArrows(field: FlowField, view: ViewQuad): StillFeature[] {
       while (x > maxX + 1e-9) x -= 1;
       const y = mercY(lat);
       if (!insideView(view, x, y)) continue;
-      const tx = u / norm;
-      const ty = -v / norm;
-      const cls = classOf(field.kind, field.magnitude[i] as number);
-      const tipX = x + tx * half;
-      const tipY = y + ty * half;
-      const wing = (ang: number): number[] => {
-        const ca = Math.cos(ang);
-        const sa = Math.sin(ang);
-        return [lonOf(tipX - (tx * ca - ty * sa) * head), latOf(tipY - (tx * sa + ty * ca) * head)];
-      };
-      const w = FLOW_CORE_WIDTH_PX[cls];
-      out.push(feature([[lonOf(x - tx * half), latOf(y - ty * half)], [lonOf(tipX), latOf(tipY)]], { role: 'mark', cls, piece: 2, w }));
-      out.push(feature([wing(Math.PI / 6), [lonOf(tipX), latOf(tipY)], wing(-Math.PI / 6)], { role: 'mark', cls, piece: 3, w }));
+      yield [row * g.nx + column, x, y];
     }
+  }
+}
+
+/** Whether a model node exists in view, including calm and masked nodes. */
+export function hasModelNodeInView(field: FlowField, view: ViewQuad): boolean {
+  return modelNodesInView(field, view).next().done === false;
+}
+
+/**
+ * Past the grid: one arrow per valid node in view, anchored on the node and
+ * pointing the way the field moves (TO), in the class ink and width. The
+ * node's own values, nothing interpolated.
+ */
+export function nodeArrows(field: FlowField, view: ViewQuad): StillFeature[] {
+  const out: StillFeature[] = [];
+  const half = NODE_ARROW_PX / 2 / view.worldSize;
+  const head = NODE_ARROW_HEAD_PX / view.worldSize;
+  for (const [i, x, y] of modelNodesInView(field, view)) {
+    if (out.length >= MAX_NODE_ARROWS) return out;
+    if (field.mask[i] !== 1) continue;
+    const u = field.u[i] as number;
+    const v = field.v[i] as number;
+    const norm = Math.hypot(u, v);
+    if (norm < 1e-6) continue;
+    const tx = u / norm;
+    const ty = -v / norm;
+    const cls = classOf(field.kind, field.magnitude[i] as number);
+    const tipX = x + tx * half;
+    const tipY = y + ty * half;
+    const wing = (ang: number): number[] => {
+      const ca = Math.cos(ang);
+      const sa = Math.sin(ang);
+      return [lonOf(tipX - (tx * ca - ty * sa) * head), latOf(tipY - (tx * sa + ty * ca) * head)];
+    };
+    const w = FLOW_CORE_WIDTH_PX[cls];
+    out.push(feature([[lonOf(x - tx * half), latOf(y - ty * half)], [lonOf(tipX), latOf(tipY)]], { role: 'mark', cls, piece: 2, w }));
+    out.push(feature([wing(Math.PI / 6), [lonOf(tipX), latOf(tipY)], wing(-Math.PI / 6)], { role: 'mark', cls, piece: 3, w }));
   }
   return out;
 }

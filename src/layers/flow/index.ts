@@ -29,7 +29,7 @@ import { type FlowField, MERCATOR_MAX_LAT, isStale, latOf, lonOf, mercY } from '
 import type { FlowInkName } from './ink';
 import { type MotionHold, type MotionLoop, type MotionState, createMotionLoop, listenMotionRequests } from './motion-loop';
 import { FlowRibbonLayer, viewQuadOf } from './ribbon-layer';
-import { STILL_LAYER_IDS, STILL_SOURCE_ID, buildStillForm, nodeArrows, stillLayers } from './still';
+import { STILL_LAYER_IDS, STILL_SOURCE_ID, buildStillForm, hasModelNodeInView, nodeArrows, stillLayers } from './still';
 
 export { readFlowFrame, FlowUnavailableError, candidateCycle, forecastHourFor, MAX_CYCLE_TRIES } from './nodd';
 export { isStale } from './field';
@@ -329,8 +329,10 @@ export function mountFlowView(map: MlMap, field: FlowField, options: FlowViewOpt
         // none does, nothing is drawn (an arrow off screen helps no one, and
         // an arrow at the view centre would be a value at a point that is not
         // a model point, Q16), and the panel says so.
-        nodesInView = nodeArrows(field, view).length > 0;
-        if (nodesInView) data = buildStillForm(field, widenedQuad(field, view), 'arrows');
+        nodesInView = hasModelNodeInView(field, view);
+        // A calm or masked point is still a model point. Draw neighbours only
+        // when an in-view node actually has a direction mark of its own.
+        if (nodeArrows(field, view).length > 0) data = buildStillForm(field, widenedQuad(field, view), 'arrows');
       } else if (form === 'still') data = buildStillForm(field, view, 'still', { densityFactor: reach.densityFactor });
     } else {
       stopLoop();

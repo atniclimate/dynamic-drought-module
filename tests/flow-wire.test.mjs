@@ -273,6 +273,31 @@ test('wind zoomed in onto a grid node draws that node\'s arrow in view, and says
   flow.dispose();
 });
 
+for (const condition of ['calm', 'masked']) {
+  test(`an in-view ${condition} model node is present even when it has no direction mark`, () => {
+    const field = uniform('wind', GLOBAL_1P00);
+    const index = 45 * GLOBAL_1P00.nx + 240; // 45 N, 120 W
+    if (condition === 'calm') {
+      field.u[index] = 0;
+      field.v[index] = 0;
+      field.magnitude[index] = 0;
+    } else field.mask[index] = 0;
+    const map = fakeMap(-120, 45, 10);
+    const flow = mount(map, field);
+    try {
+      assert.equal(flow.state.coverage, 'covered', 'valid neighbours keep the surrounding model cells covered');
+      assert.equal(flow.state.form, 'arrows');
+      assert.equal(flow.state.nodesInView, true, 'geometric node presence does not depend on mask or velocity');
+      assert.equal(flow.state.features, 0, 'neighbouring arrows outside the view are not presented as an in-view value');
+      assert.equal(featuresInView(map), 0);
+      assert.equal(flowFormNote(flow.state), FLOW_WORDS.noNodeDirection);
+      assert.equal(typeof FLOW_WORDS.noNodeDirection, 'string');
+      assert.notEqual(flowFormNote(flow.state), FLOW_WORDS.noModelPoint);
+      assert.notEqual(flowFormNote(flow.state), FLOW_WORDS.pastGrid);
+    } finally { flow.dispose(); }
+  });
+}
+
 // The block review's P1 case, as a passing assertion: past the grid with no
 // model node inside the view, nothing is drawn and no string claims arrows.
 test('past the grid with no model node inside the view, nothing draws and no flow string claims arrows are showing (z10 to z14, Portland, Pendleton, Anchorage)', () => {
