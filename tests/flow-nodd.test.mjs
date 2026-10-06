@@ -305,6 +305,86 @@ test('the .idx line match refuses a wrong d=, a wrong STEP and a last-line messa
 // The reads
 // ---------------------------------------------------------------------------
 
+/** Synthetic offsets are inspected only: a message fetch throws before returning a body. */
+function offsetProbe(kind, offsets) {
+  const lines = FLOW_SOURCES[kind].messages.map(
+    (message, i) => `${i + 1}:${offsets[i]}:d=2026100506:${message.variable}:${message.level}:6 hour fcst:`
+  );
+  lines.push(`3:${offsets[2]}:d=2026100506:OTHER:surface:6 hour fcst:`);
+  const ranges = [];
+  const stub = {
+    fetchImpl: async (url, init) => {
+      if (String(url).endsWith('.idx')) return new Response(lines.join('\n'), { status: 206 });
+      ranges.push(new Headers(init.headers).get('range'));
+      // Never let the old, uncapped reader reach its Uint8Array allocation.
+      throw new RangeError('the range probe stops before a body or allocation');
+    }
+  };
+  return { stub, ranges };
+}
+
+test('invalid index offsets are refused before any message fetch or decode', async () => {
+  for (const offsets of [
+    [-1, 10, 20],
+    ['', 10, 20],
+    ['1.5', 10, 20],
+    ['0x10', 20, 30],
+    ['1e1', 20, 30],
+    [0, 0, 20],
+    [0, Number.MAX_SAFE_INTEGER + 1, Number.MAX_SAFE_INTEGER + 2]
+  ]) {
+    const probe = offsetProbe('wind', offsets);
+    const w = inProcessWorker({ hold: true });
+    await assert.rejects(read('wind', probe.stub, { createWorker: w.make }),
+      (e) => e instanceof FlowUnavailableError && e.reason === 'refused');
+    assert.deepEqual(probe.ranges, [], `invalid offsets ${JSON.stringify(offsets)} never reach fetch`);
+    assert.equal(w.record.posted, 0, 'invalid offsets never reach the decoder');
+    assert.equal(w.record.terminated, true, 'the reader releases its worker');
+  }
+});
+
+// Safety ceilings admit several times the recorded NOAA message sizes while
+// bounding concurrent bodies independently of every number supplied by the index.
+const READ_LIMITS = {
+  wind: { message: 512 * 1024, frame: 768 * 1024 },
+  waves: { message: 4 * 1024 * 1024, frame: 6 * 1024 * 1024 }
+};
+
+test('each kind refuses an oversized message before any range fetch or decode', async () => {
+  for (const [kind, limit] of Object.entries(READ_LIMITS)) {
+    for (const lengths of [[limit.message + 1, 1], [1, limit.message + 1], [2 ** 31, 1]]) {
+      const probe = offsetProbe(kind, [0, lengths[0], lengths[0] + lengths[1]]);
+      const w = inProcessWorker({ hold: true });
+      await assert.rejects(read(kind, probe.stub, { createWorker: w.make }),
+        (e) => e instanceof FlowUnavailableError && e.reason === 'refused');
+      assert.deepEqual(probe.ranges, [], `${kind} oversized message ${lengths} never reaches fetch`);
+      assert.equal(w.record.posted, 0, 'an oversized span never reaches the decoder');
+      assert.equal(w.record.terminated, true);
+    }
+  }
+});
+
+test('each kind refuses the aggregate frame ceiling before either range starts', async () => {
+  for (const [kind, limit] of Object.entries(READ_LIMITS)) {
+    const probe = offsetProbe(kind, [0, limit.message, limit.frame + 1]);
+    await assert.rejects(read(kind, probe.stub),
+      (e) => e instanceof FlowUnavailableError && e.reason === 'refused');
+    assert.deepEqual(probe.ranges, [], `${kind} individually valid spans exceed the frame ceiling`);
+  }
+});
+
+test('each kind admits the exact message and aggregate boundaries without allocating probe bodies', async () => {
+  for (const [kind, limit] of Object.entries(READ_LIMITS)) {
+    const probe = offsetProbe(kind, [0, limit.message, limit.frame]);
+    await assert.rejects(read(kind, probe.stub),
+      (e) => e instanceof FlowUnavailableError && e.reason === 'refused');
+    assert.deepEqual(probe.ranges, [
+      `bytes=0-${limit.message - 1}`,
+      `bytes=${limit.message}-${limit.frame - 1}`
+    ], `${kind} inclusive ceilings allow both bounded requests`);
+  }
+});
+
 test('every read sends credentials omit and a Range header, never HEAD', async () => {
   const wind = noddStub();
   await read('wind', wind);
@@ -370,6 +450,26 @@ test('a frame past cycle + 24 h is refused', async () => {
 // ---------------------------------------------------------------------------
 
 const { fetchBoundedWithBudget } = nodd;
+
+test('the bounded helper refuses invalid or excessive capacity before fetch', async () => {
+  const calls = [];
+  const stub = { fetchImpl: async () => {
+    calls.push('fetch');
+    throw new RangeError('capacity probe prevents every body allocation');
+  } };
+  await withFetch(stub, async () => {
+    for (const maxBytes of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY,
+      Number.MAX_SAFE_INTEGER + 1, 4 * 1024 * 1024 + 1, 2 ** 31]) {
+      await assert.rejects(fetchBoundedWithBudget('/range.grib2', null, null, 5000, { maxBytes }),
+        { name: 'RangeError' });
+      assert.equal(calls.length, 0, `capacity ${maxBytes} is refused before fetch`);
+    }
+    // Reaching fetch proves the inclusive bound, without allocating the ceiling.
+    await assert.rejects(fetchBoundedWithBudget('/range.grib2', null, null, 5000,
+      { maxBytes: 4 * 1024 * 1024 }), { name: 'RangeError' });
+    assert.equal(calls.length, 1, 'the exact helper ceiling is admitted');
+  });
+});
 
 /**
  * A fetch stub whose body is a stream the test controls (the

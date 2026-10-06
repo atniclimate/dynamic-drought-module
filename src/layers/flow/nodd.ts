@@ -55,6 +55,18 @@ export const FLOW_READ_BUDGET_MS = 12_000;
 /** Cycle tries in all: the candidate and two 6 h step-backs. */
 export const MAX_CYCLE_TRIES = 3;
 
+/**
+ * Fixed transport ceilings, independent of the untrusted index. The committed
+ * 2026-10-05 06Z fixtures carry 79,086/79,607 B wind messages and
+ * 887,386/428,128 B global wave messages. These ceilings leave several times
+ * those sizes for packing variation while bounding each read and their sum.
+ */
+const MAX_FLOW_READ_BYTES = 4 * 1024 * 1024;
+const FLOW_BYTE_LIMITS: Readonly<Record<FlowKind, { readonly message: number; readonly frame: number }>> = {
+  wind: { message: 512 * 1024, frame: 768 * 1024 },
+  waves: { message: MAX_FLOW_READ_BYTES, frame: 6 * 1024 * 1024 }
+};
+
 export type FlowUnavailableReason =
   /** The `.idx` answered 404 on every try. */
   | 'not-published'
@@ -129,9 +141,17 @@ export function locateMessage(
   const step = forecastHour === 0 ? 'anl' : `${forecastHour} hour fcst`;
   if (f[5] !== step) refuse(`${name} is "${f[5]}", not "${step}"`);
   if (hit === lines.length - 1) refuse(`${name} is the last .idx line, so its end is unknown`);
-  const start = Number(f[1]);
-  const next = Number((lines[hit + 1] as string).split(':')[1]);
-  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(next) || next <= start) {
+  const startText = f[1] ?? '';
+  const nextText = (lines[hit + 1] as string).split(':')[1] ?? '';
+  const start = Number(startText);
+  const next = Number(nextText);
+  if (
+    !/^\d+$/.test(startText) ||
+    !/^\d+$/.test(nextText) ||
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(next) ||
+    next <= start
+  ) {
     refuse(`${name} has no valid byte span`);
   }
   return { start, end: next - 1 };
@@ -181,6 +201,9 @@ export async function fetchBoundedWithBudget(
 ): Promise<Response> {
   if (masterSignal?.aborted) throw abortError();
   const { maxBytes, expectStatus } = bounds;
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > MAX_FLOW_READ_BYTES) {
+    throw new RangeError('invalid flow response capacity');
+  }
   const ctrl = new AbortController();
   const { signal } = ctrl;
   const unlink = linkAbort(ctrl, masterSignal);
@@ -287,6 +310,14 @@ export async function readFlowFrame(kind: FlowKind, options: FlowReadOptions): P
       if (idxBytes.byteLength >= source.idxMaxBytes) refuse(`the ${kind} .idx fills its ${source.idxMaxBytes} B cap`);
       const idx = new TextDecoder().decode(idxBytes);
       const spans = source.messages.map((message) => locateMessage(idx, message, cycle, forecastHour));
+      const limit = FLOW_BYTE_LIMITS[kind];
+      let frameBytes = 0;
+      for (const { start, end } of spans) {
+        const bytes = end - start + 1;
+        if (bytes > limit.message) refuse(`the ${kind} message exceeds its ${limit.message} B cap`);
+        frameBytes += bytes;
+        if (frameBytes > limit.frame) refuse(`the ${kind} frame exceeds its ${limit.frame} B cap`);
+      }
       const responses = await Promise.all(
         spans.map(({ start, end }) => ranged(meta.sourceUrl, start, end, ctrl.signal, true))
       );
