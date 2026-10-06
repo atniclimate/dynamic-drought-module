@@ -1370,34 +1370,93 @@ test.describe('M8: the refit on a sidebar toggle (found-029, DDM-P10-T07)', () =
   test('a pan during the transition cancels refit', async ({ page }) => {
     const before = await boot(page, '?region=washington_state');
     const point = await mapPoint(page);
-    // The page's own clock times the collapse click and the first dragging
-    // move, so a slow run fails on the timing it could not meet rather than
-    // passing or failing on the product.
-    const timings = page.evaluate(
-      () =>
-        new Promise<{ click: number; move: number }>((resolve) => {
-          let click = -1;
-          document.getElementById('sidebar-collapse')?.addEventListener(
-            'click',
-            () => {
-              click = performance.now();
-            },
-            { capture: true, once: true }
-          );
-          const onMove = (event: MouseEvent): void => {
-            if (click < 0 || event.buttons === 0) return;
-            window.removeEventListener('mousemove', onMove, true);
-            resolve({ click, move: performance.now() });
-          };
-          window.addEventListener('mousemove', onMove, true);
-        })
-    );
-    const since = await pageNow(page);
+    // found-133 and found-101: the case used to bound the time between the
+    // collapse click and the first dragging move at 180 ms of the 220 ms
+    // refit delay, counted across Playwright round trips. A slow runner spent
+    // 235 to 246 ms there and the bound could not tell a late drag from a
+    // broken cancellation. The 220 ms refit timer (src/ui/sidebar.ts,
+    // resizeAfterSidebarToggle) is now held, by this page only, from the
+    // click until the case releases it: the drag therefore begins inside the
+    // refit's delay by construction on any runner, with no bound to miss.
+    // Three facts keep it honest: the click armed exactly one 220 ms timer
+    // and it had not run; real (trusted) dragging moves reached the page and
+    // moved the camera before the release; and the timer, once released,
+    // decides exactly as it would have (the refit fires or is cancelled by
+    // the app's own cameraStateUnchanged check, which the case asserts).
+    await page.evaluate(() => {
+      const w = window as unknown as {
+        __refitHold: {
+          armed: boolean;
+          held: Array<() => void>;
+          fired: number;
+          trustedDragMoves: number;
+          release: () => void;
+        };
+      };
+      const realSetTimeout = window.setTimeout.bind(window);
+      const hold = {
+        armed: false,
+        held: [] as Array<() => void>,
+        fired: 0,
+        trustedDragMoves: 0,
+        release: (): void => {
+          const run = hold.held.splice(0);
+          for (const callback of run) {
+            hold.fired += 1;
+            callback();
+          }
+        }
+      };
+      w.__refitHold = hold;
+      window.addEventListener(
+        'mousemove',
+        (event: MouseEvent) => {
+          if (event.isTrusted && event.buttons !== 0) hold.trustedDragMoves += 1;
+        },
+        true
+      );
+      window.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+        if (hold.armed && timeout === 220 && typeof handler === 'function') {
+          hold.held.push(() => (handler as (...a: unknown[]) => void)(...args));
+          return -hold.held.length;
+        }
+        return realSetTimeout(handler, timeout, ...args);
+      }) as typeof window.setTimeout;
+      hold.armed = true;
+    });
     await page.locator('#sidebar-collapse').click();
-    await drag(page, point, -160, 80);
-    const { click, move } = await timings;
-    expect(move - click, 'the drag began inside the 220 ms transition').toBeLessThan(180);
     await expect(page.locator('#app')).toHaveClass(/\bsidebar-collapsed\b/);
+    const armed = await page.evaluate(() => {
+      const hold = (window as unknown as { __refitHold: { armed: boolean; held: unknown[] } }).__refitHold;
+      hold.armed = false;
+      return hold.held.length;
+    });
+    expect(armed, 'the collapse click armed exactly one 220 ms refit timer, held and not yet run').toBe(1);
+
+    const readBounds = (): Promise<string> =>
+      page.evaluate((selector) => document.querySelector(selector)?.getAttribute('data-bounds') ?? '', FOOTPRINT);
+    const dragStart = await readBounds();
+    await drag(page, point, -160, 80);
+    await expect
+      .poll(
+        () => readBounds(),
+        { message: 'the real drag moved the camera while the refit timer was still held', timeout: 15_000 }
+      )
+      .not.toBe(dragStart);
+    const mid = await page.evaluate(() => {
+      const hold = (
+        window as unknown as { __refitHold: { held: unknown[]; fired: number; trustedDragMoves: number } }
+      ).__refitHold;
+      return { held: hold.held.length, fired: hold.fired, trustedDragMoves: hold.trustedDragMoves };
+    });
+    expect(mid.trustedDragMoves, 'real dragging mouse moves reached the page').toBeGreaterThan(0);
+    expect(mid, 'the refit timer was still held when the drag moved the camera').toMatchObject({
+      held: 1,
+      fired: 0
+    });
+
+    const since = await pageNow(page);
+    await page.evaluate(() => (window as unknown as { __refitHold: { release: () => void } }).__refitHold.release());
 
     const after = await settledBounds(page, since);
     expect(spanChange(after, before), 'no refit: the vertical span keeps the pre-toggle zoom').toBeLessThanOrEqual(
