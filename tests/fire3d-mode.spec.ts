@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { Map as MlMap } from 'maplibre-gl';
 
 import { expect, test, type Page, type Route } from './offline-test';
 
@@ -2187,6 +2188,56 @@ test.describe('W3/W4 browser truth', () => {
     );
     await expect(ribbonLegend).toHaveCount(0);
     expect(await fire3dStamp(page)).toBe('active');
+  });
+
+  test('unchecking perimeters removes a ribbon whose pulse is advancing', async ({ page }) => {
+    test.setTimeout(180_000);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    // Observe the actual map constructor, as in flow-wire. Its methods and
+    // animation loop are left intact; there is no production test handle.
+    type RibbonWindow = Window & { __ribbonMaps: MlMap[] };
+    await page.addInitScript(() => {
+      const maps: MlMap[] = [];
+      (window as unknown as RibbonWindow).__ribbonMaps = maps;
+      Object.defineProperty(Object.prototype, '_onWindowOnline', {
+        configurable: true,
+        set(this: MlMap, value: unknown) {
+          Object.defineProperty(this, '_onWindowOnline', { configurable: true, enumerable: true, writable: true, value });
+          maps.push(this);
+        }
+      });
+    });
+    await stubWildfireFeeds(page);
+    await stubDeepTerrainArchive(page);
+    await routeBasemapTiles(page);
+    await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
+    await stampReaches(page, fire3dStamp, 'active', 30_000, 'the animated scene never stamped active');
+    await layerSettles(page, 'nifc-fires');
+    await stampReaches(page, fire3dRibbonStamp, 'on', 30_000, 'the animated ribbon never stamped on');
+    const ribbonLegend = page.locator('.legend-section[data-legend="nifc-perimeter-ribbon"]');
+    await expect(ribbonLegend).toHaveCount(1);
+    await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();
+
+    const paint = (): Promise<string | null> => page.evaluate((layerId) => {
+      const map = (window as unknown as RibbonWindow).__ribbonMaps.find((candidate) => candidate.getContainer().id === 'map')!;
+      if (!map.getLayer(layerId)) return null;
+      const color = map.getPaintProperty(layerId, 'fill-extrusion-color');
+      return color === undefined ? null : JSON.stringify(color);
+    }, PERIMETER_RIBBON_LAYER_IDS[0]!);
+    const firstPaint = await untilAnswered(paint, (value) => value !== null, 30_000, 'the ribbon has no paint');
+    await untilAnswered(paint, (value) => value !== null && value !== firstPaint, 30_000, 'the ribbon pulse did not advance');
+
+    // The gesture is meaningful only after live animation is observed. This
+    // covers functional removal, not a frame-time or responsiveness budget.
+    await layerCheckbox(page, 'nifc-fires').uncheck();
+    await stampReaches(page, fire3dRibbonStamp, 'off', 30_000, 'the animated ribbon outlived its perimeter layer');
+    await expect(layerCheckbox(page, 'nifc-fires')).not.toBeChecked();
+    await expect(ribbonLegend).toHaveCount(0);
+    expect(await fire3dStamp(page)).toBe('active');
+    await untilAnswered(() => page.evaluate((ids) => {
+      const map = (window as unknown as RibbonWindow).__ribbonMaps.find((candidate) => candidate.getContainer().id === 'map')!;
+      return ids.some((id) => map.getLayer(id) !== undefined);
+    }, [...PERIMETER_RIBBON_LAYER_IDS]), (anyRibbonLayer) => !anyRibbonLayer, 30_000, 'a ribbon layer survived uncheck');
   });
 
   test('a shared fire3d link boots active and ordinary URL writes preserve the flag', async ({
