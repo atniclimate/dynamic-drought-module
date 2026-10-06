@@ -1,29 +1,40 @@
 /**
- * Opt-in ENSO model context. Samples actual source grid cells; it does not
- * invent trajectories between cells or blend the field into the SST colors.
- * One user action fetches at most 40 locations, with a complete-body 12 s
- * budget. Panning never fetches. Cached frames live for ten minutes.
+ * Opt-in ENSO model context (ENSO-FLOW-PLAN E2-1; C-fit.md 1.2).
+ *
+ * - Wind and waves draw NOAA GFS 10 m wind and GFS-Wave peak direction as
+ *   flowing paths (or their still form), read at runtime from NOAA's public
+ *   NODD bucket by the lazy flow chunk (src/layers/flow/index.ts), which
+ *   this module reaches through one dynamic import() and nothing else. A
+ *   decoded frame is kept on the CPU for ten minutes, keyed by kind, grid,
+ *   cycle and forecast hour, so an SST re-activate reads nothing again.
+ *   Past cycle + 24 h a frame is never drawn. Panning never fetches.
+ * - Ocean currents keep the interim Open-Meteo sample: at most 40 fixed grid
+ *   cells per user action, a complete-body 12 s budget, static arrows, and
+ *   the DR-161 credits (owner question 4).
  */
 import type * as maplibregl from 'maplibre-gl';
-import { OPEN_METEO_MARINE_URL, OPEN_METEO_WEATHER_URL } from '../config/enso-flow-urls';
+import { OPEN_METEO_MARINE_URL } from '../config/enso-flow-urls';
 import { reassertThematicOrder } from '../map/layer-order';
 import {
   parseEnsoFlowParams, syncEnsoFlowParams,
   type EnsoFlowKind, type EnsoFlowPreference
 } from '../state/enso-flow';
 import { fetchJsonWithBudget } from '../util/fetch';
-import { FLOW_VARIABLES, normalizeFlowLongitude, parseFlowFrame, type ActiveFlowKind, type FlowFrame } from './enso-flow-data';
+import {
+  FLOW_VARIABLES, FLOW_WORDS, dateLabel, flowFormNote, flowLiveLine, flowStaleLine, normalizeFlowLongitude, parseFlowFrame,
+  type ActiveFlowKind, type FlowFieldKind, type FlowFrame
+} from './enso-flow-data';
+import type { FlowField, FlowView, FlowViewState } from './flow/index';
 import '../ui/enso-flow.css';
 
 const SOURCE = 'enso-flow';
 const CASING = 'enso-flow-casing';
 const ARROWS = 'enso-flow-arrows';
 const CACHE_MS = 10 * 60 * 1000;
+/** Decoded frames kept at once (a wave frame is about 1.3 MB on the CPU). */
+const FIELD_CACHE_SIZE = 4;
 const LABELS: Record<EnsoFlowKind, string> = {
   off: 'Off', currents: 'Ocean currents', wind: 'Atmospheric currents', waves: 'Ocean waves'
-};
-const MODELS: Record<ActiveFlowKind, string> = {
-  currents: 'meteofrance_currents', wind: 'gfs_global', waves: 'ncep_gfswave025'
 };
 const SOURCES: Record<ActiveFlowKind, string> = {
   // ledger: copernicus-marine-smoc (cite sheet c23; DR-161): the producer
@@ -37,27 +48,37 @@ const CALM_NOTE = 'Arrows show travel direction only, with equal lengths; still 
 const TIMING_NOTE = 'This is model context, independently timed from the observed SST map.';
 const LOADING_NOTE = 'Loading up to 40 source grid cells for this area.';
 const FAILED_NOTE = 'No direction or calm condition is inferred from a failed request.';
+const NAVIGATION_NOTE = 'It is unsuitable for coastal navigation.';
 type FlowStatus = 'off' | 'loading' | 'live' | 'live (partial)' | 'no data' | 'unavailable';
+type FlowModule = typeof import('./flow/index');
 /**
- * found-115 (DR-188): the arrows draw wherever `flow=` and the SST layer are
- * on, but this panel sits in the sidebar, which an embed and a closed sidebar
- * hide. Each panel status change also goes to the map key's drawer, carrying
- * the panel's own words (label, status line, qualification sentences) so the
- * key composes and never re-types them. The key is a lazy chunk that can
- * start after the arrows (a boot with `flow=` in the URL), so while active
- * this module answers its one request with the current snapshot.
+ * found-115 (DR-188): the overlay draws wherever `flow=` and the SST layer
+ * are on, but this panel sits in the sidebar, which an embed and a closed
+ * sidebar hide. Each panel status change also goes to the map key's drawer,
+ * carrying the panel's own words (label, status line, qualification
+ * sentences) so the key composes and never re-types them. The key is a lazy
+ * chunk that can start after the overlay (a boot with `flow=` in the URL),
+ * so while active this module answers its one request with the current
+ * snapshot. E1-4's two fields go live here for wind and waves: `provenance`
+ * (the owner's credit, as its own text item) and `motion` (which alone
+ * decides whether the key offers Pause motion).
  */
 interface FlowSnapshot {
   readonly status: FlowStatus | 'inactive';
   readonly label: string;
   readonly line: string;
   readonly notes: readonly string[];
+  readonly motion?: FlowViewState['motion'];
+  readonly provenance?: string;
 }
 const SNAPSHOT_EVENT = 'ddm:enso-flow-snapshot';
 const SNAPSHOT_REQUEST_EVENT = 'ddm:enso-flow-snapshot-request';
 const INACTIVE: FlowSnapshot = { status: 'inactive', label: '', line: '', notes: [] };
 let snapshot: FlowSnapshot = INACTIVE;
 const cache = new Map<string, { stored: number; frame: FlowFrame }>();
+const fieldCache = new Map<string, { stored: number; field: FlowField }>();
+let flowModule: Promise<FlowModule> | null = null;
+let flowView: FlowView | null = null;
 let map: maplibregl.Map | null = null;
 let controller: AbortController | null = null;
 let observer: MutationObserver | null = null;
@@ -66,7 +87,8 @@ let panel: HTMLElement | null = null;
 let statusNode: HTMLElement | null = null;
 let detailNode: HTMLElement | null = null;
 let sourceNode: HTMLElement | null = null;
-let copernicusNode: HTMLElement | null = null;
+let creditNode: HTMLElement | null = null;
+let changesNode: HTMLElement | null = null;
 let updateButton: HTMLButtonElement | null = null;
 let desktopSeat: Comment | null = null;
 let mobileQuery: MediaQueryList | null = null;
@@ -80,6 +102,21 @@ function removeArrows(): void {
   if (map.getSource(SOURCE)) map.removeSource(SOURCE);
 }
 
+/** The panel's stamps of what the flow view draws, for the specs and the key. */
+function stampForm(state: FlowViewState | null, kind: EnsoFlowKind): void {
+  if (!panel) return;
+  panel.dataset['flowForm'] = state?.form ?? 'none';
+  panel.dataset['flowMotion'] = state?.motion ?? 'none';
+  panel.dataset['flowFeatures'] = String(state?.features ?? 0);
+  panel.dataset['flowDrawn'] = state && state.form !== 'none' ? kind : '';
+}
+
+function disposeFlowView(): void {
+  flowView?.dispose();
+  flowView = null;
+  stampForm(null, 'off');
+}
+
 function publish(next: FlowSnapshot): void {
   snapshot = next;
   window.dispatchEvent(new CustomEvent(SNAPSHOT_EVENT, { detail: next }));
@@ -89,16 +126,17 @@ function replaySnapshot(): void {
   publish(snapshot);
 }
 
-function setStatus(status: FlowStatus, text: string, kind: EnsoFlowKind, notes: readonly string[] = []): void {
+function setStatus(
+  status: FlowStatus, text: string, kind: EnsoFlowKind, notes: readonly string[] = [],
+  extra: Pick<FlowSnapshot, 'motion' | 'provenance'> = {}
+): void {
   if (panel) panel.dataset['status'] = status;
   if (statusNode) statusNode.textContent = text;
-  publish({ status, label: LABELS[kind], line: text, notes });
-}
-
-function dateLabel(time: number): string {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC', timeZoneName: 'short'
-  }).format(time);
+  const next: FlowSnapshot = { status, label: LABELS[kind], line: text, notes, ...extra };
+  if (next.status === snapshot.status && next.label === snapshot.label && next.line === snapshot.line &&
+      next.motion === snapshot.motion && next.provenance === snapshot.provenance &&
+      next.notes.join('\n') === snapshot.notes.join('\n')) return;
+  publish(next);
 }
 
 /** Arrow geometry is screen-sized at the settled camera, anchored on the
@@ -126,16 +164,15 @@ function arrowData(activeMap: maplibregl.Map, data: FlowFrame): GeoJSON.FeatureC
   return { type: 'FeatureCollection', features };
 }
 
+/** The interim ocean-current arrows (DR-161), the only Open-Meteo drawing left. */
 function paintArrows(): void {
-  if (!map || !frame || preference.kind === 'off') return;
+  if (!map || !frame || preference.kind !== 'currents') return;
   const data = arrowData(map, frame);
   const source = map.getSource(SOURCE) as maplibregl.GeoJSONSource | undefined;
   if (source) source.setData(data);
   else map.addSource(SOURCE, {
     type: 'geojson', data,
-    attribution: preference.kind === 'currents'
-      ? '<a href="https://open-meteo.com/">Open-Meteo</a> · Météo-France / Copernicus · CC BY 4.0'
-      : '<a href="https://open-meteo.com/">Open-Meteo</a> · NOAA GFS · CC BY 4.0'
+    attribution: '<a href="https://open-meteo.com/">Open-Meteo</a> · Météo-France / Copernicus · CC BY 4.0'
   });
   const light = preference.ink === 'light';
   for (const [id, width, color] of [
@@ -167,26 +204,221 @@ function samplePositions(activeMap: maplibregl.Map): readonly [number, number][]
   return [...positions.values()];
 }
 
-function requestUrl(kind: ActiveFlowKind, positions: readonly (readonly [number, number])[]): string {
+function currentsUrl(positions: readonly (readonly [number, number])[]): string {
   const params = new URLSearchParams({
     latitude: positions.map((p) => p[1]).join(','), longitude: positions.map((p) => p[0]).join(','),
-    current: FLOW_VARIABLES[kind].join(','), models: MODELS[kind], cell_selection: 'nearest',
+    current: FLOW_VARIABLES.currents.join(','), models: 'meteofrance_currents', cell_selection: 'nearest',
     timeformat: 'unixtime', wind_speed_unit: 'ms'
   });
-  return `${kind === 'wind' ? OPEN_METEO_WEATHER_URL : OPEN_METEO_MARINE_URL}?${params}`;
+  return `${OPEN_METEO_MARINE_URL}?${params}`;
 }
 
-function presentFrame(data: FlowFrame, kind: ActiveFlowKind): void {
+function presentFrame(data: FlowFrame): void {
   frame = data;
   paintArrows();
   const status = data.points.length === 0 ? 'no data' : data.missing > 0 ? 'live (partial)' : 'live';
   const coverage = `${data.points.length} of ${data.total} sampled cells have data.`;
-  setStatus(status, `${status} · Model valid ${dateLabel(data.time)}`, kind, [coverage, CALM_NOTE, TIMING_NOTE]);
+  setStatus(status, `${status} · Model valid ${dateLabel(data.time)}`, 'currents', [coverage, CALM_NOTE, TIMING_NOTE]);
   if (detailNode) {
     const values = data.points.map((p) => p.value);
-    const range = values.length ? `${Math.min(...values).toFixed(1)} to ${Math.max(...values).toFixed(1)} ${kind === 'waves' ? 'm significant wave height' : 'm/s'}. ` : '';
+    const range = values.length ? `${Math.min(...values).toFixed(1)} to ${Math.max(...values).toFixed(1)} m/s. ` : '';
     detailNode.textContent = `${coverage} ${range}${CALM_NOTE} Move the map and choose Update area for new samples.`;
   }
+}
+
+async function loadCurrents(activeMap: maplibregl.Map, generation: number): Promise<void> {
+  const positions = samplePositions(activeMap);
+  const url = currentsUrl(positions);
+  const cached = cache.get(url);
+  if (sourceNode) sourceNode.textContent = `${SOURCES.currents}, via Open-Meteo. The API supplies 15-minute valid instants by interpolating model output. ${TIMING_NOTE} The response does not supply the model issue time. ${NAVIGATION_NOTE}`;
+  if (cached && Date.now() - cached.stored < CACHE_MS) { presentFrame(cached.frame); return; }
+  const owned = new AbortController();
+  controller = owned;
+  setStatus('loading', 'loading · Model direction samples', 'currents', [LOADING_NOTE]);
+  if (detailNode) detailNode.textContent = LOADING_NOTE;
+  try {
+    const json = await fetchJsonWithBudget(url, { credentials: 'omit' }, owned.signal, 12_000);
+    if (owned.signal.aborted || generation !== epoch || map !== activeMap) return;
+    const result = parseFlowFrame(json, 'currents', positions.length);
+    // Reject an implausible timestamp; a valid model time is not the browser
+    // retrieval time, nor permission to silently display a stale field.
+    if (Math.abs(Date.now() - result.time) > 48 * 60 * 60 * 1000) throw new Error('No recent model time.');
+    cache.set(url, { stored: Date.now(), frame: result });
+    while (cache.size > 6) cache.delete(cache.keys().next().value!);
+    presentFrame(result);
+  } catch {
+    if (owned.signal.aborted || generation !== epoch) return;
+    setStatus('unavailable', 'unavailable · Direction samples did not load', 'currents', [FAILED_NOTE]);
+    if (detailNode) detailNode.textContent = `Choose Update area to try again. ${FAILED_NOTE}`;
+  }
+}
+
+function loadFlowModule(): Promise<FlowModule> {
+  flowModule ??= import('./flow/index').catch((error: unknown) => {
+    flowModule = null;
+    throw error;
+  });
+  return flowModule;
+}
+
+const fieldKey = (kind: FlowFieldKind, cycle: number, forecastHour: number): string =>
+  `${kind}|${kind === 'wind' ? 'gfs-1p00' : 'gfswave-global-0p25'}|${cycle}|${forecastHour}`;
+
+/**
+ * A held frame the reader would read now: one of the cycles it would try
+ * (the candidate and its step-backs, each at its own forecast hour), kept
+ * less than ten minutes, and inside its 24-hour limit.
+ */
+function cachedField(flow: FlowModule, kind: FlowFieldKind, now: number): FlowField | null {
+  let cycle = flow.candidateCycle(now);
+  for (let tries = 0; tries < flow.MAX_CYCLE_TRIES; tries++, cycle -= 6 * 3_600_000) {
+    const key = fieldKey(kind, cycle, flow.forecastHourFor(kind, cycle, now));
+    const held = fieldCache.get(key);
+    if (!held) continue;
+    if (now - held.stored >= CACHE_MS || flow.isStale(held.field, now)) { fieldCache.delete(key); continue; }
+    return held.field;
+  }
+  return null;
+}
+
+function storeField(field: FlowField): void {
+  const { cycle, forecastHour } = field.meta;
+  if (cycle === null || forecastHour === null) return;
+  fieldCache.set(fieldKey(field.kind, cycle, forecastHour), { stored: Date.now(), field });
+  while (fieldCache.size > FIELD_CACHE_SIZE) fieldCache.delete(fieldCache.keys().next().value!);
+}
+
+/** The notes of a drawn wind or wave frame, in the order the drawer reads them. */
+function fieldNotes(kind: FlowFieldKind, state: FlowViewState): string[] {
+  const form = flowFormNote(state);
+  const notes: string[] = kind === 'wind'
+    ? [FLOW_WORDS.pace, FLOW_WORDS.instant, FLOW_WORDS.modelOutput, FLOW_WORDS.bins.wind, FLOW_WORDS.binsNote, TIMING_NOTE]
+    : [FLOW_WORDS.waves, FLOW_WORDS.mask, FLOW_WORDS.modelOutput, FLOW_WORDS.bins.waves, FLOW_WORDS.binsNote, TIMING_NOTE];
+  // The wave crop's box sentence is the waves' alone; a global grid has no outside.
+  if (kind === 'waves' && state.coverage === 'partial') notes.unshift(FLOW_WORDS.waveBox);
+  if (form) notes.unshift(form);
+  return notes;
+}
+
+function presentStale(kind: FlowFieldKind, field: FlowField): void {
+  disposeFlowView();
+  const { cycle, forecastHour } = field.meta;
+  if (cycle !== null && forecastHour !== null) fieldCache.delete(fieldKey(kind, cycle, forecastHour));
+  setStatus('unavailable', flowStaleLine(kind, field.meta.cycle ?? field.meta.validTime), kind, [FAILED_NOTE]);
+  if (detailNode) detailNode.textContent = FAILED_NOTE;
+}
+
+function presentFieldState(kind: FlowFieldKind, field: FlowField, state: FlowViewState): void {
+  stampForm(state, kind);
+  if (state.stale) {
+    presentStale(kind, field);
+    return;
+  }
+  const provenance = FLOW_WORDS.provenance;
+  if (state.coverage === 'masked' || state.coverage === 'outside') {
+    // "Outside the area the wave marks cover" is said for waves only (the
+    // wave crop); src/layers/flow/index.ts never reports it for a global grid.
+    const masked = state.coverage === 'masked' || kind !== 'waves';
+    const notes = [masked ? FLOW_WORDS.mask : FLOW_WORDS.waveBox, TIMING_NOTE];
+    setStatus('no data', `no data · ${masked ? FLOW_WORDS.noOcean : FLOW_WORDS.outside}`, kind, notes, { motion: 'none', provenance });
+    if (detailNode) detailNode.textContent = notes.join(' ');
+    return;
+  }
+  const status = kind === 'waves' && state.coverage === 'partial' ? 'live (partial)' : 'live';
+  const notes = fieldNotes(kind, state);
+  setStatus(status, flowLiveLine(status, field.meta.cycle ?? field.meta.validTime, field.meta.validTime), kind, notes, {
+    motion: state.motion, provenance
+  });
+  if (detailNode) detailNode.textContent = notes.join(' ');
+}
+
+async function loadField(activeMap: maplibregl.Map, kind: FlowFieldKind, generation: number): Promise<void> {
+  if (sourceNode) sourceNode.textContent = `${SOURCES[kind]}. ${TIMING_NOTE} ${NAVIGATION_NOTE}`;
+  const owned = new AbortController();
+  controller = owned;
+  setStatus('loading', `loading · ${FLOW_WORDS.loading[kind]}`, kind);
+  if (detailNode) detailNode.textContent = TIMING_NOTE;
+  const current = (): boolean => !owned.signal.aborted && generation === epoch && map === activeMap;
+  try {
+    const flow = await loadFlowModule();
+    if (!current()) return;
+    let field = cachedField(flow, kind, Date.now());
+    if (!field) {
+      field = await flow.readFlowFrame(kind, { signal: owned.signal });
+      if (!current()) return;
+      storeField(field);
+    }
+    if (controller === owned) controller = null;
+    if (flow.isStale(field, Date.now())) {
+      presentStale(kind, field);
+      return;
+    }
+    const drawn = field;
+    flowView = flow.mountFlowView(activeMap, drawn, {
+      ink: preference.ink,
+      onState: (state) => { if (generation === epoch) presentFieldState(kind, drawn, state); },
+      onRender: (count, steps) => {
+        if (!panel) return;
+        panel.dataset['flowRenders'] = String(count);
+        panel.dataset['flowSteps'] = String(steps);
+      }
+    });
+    presentFieldState(kind, drawn, flowView.state);
+  } catch {
+    if (!current()) return;
+    disposeFlowView();
+    setStatus('unavailable', `unavailable · ${FLOW_WORDS.unavailable[kind]}`, kind, [FAILED_NOTE]);
+    if (detailNode) detailNode.textContent = FAILED_NOTE;
+  }
+}
+
+/** The credit line under the controls: the owner's words for wind and waves, the DR-161 credits for currents. */
+function renderCredits(kind: EnsoFlowKind): void {
+  if (!creditNode || !changesNode) return;
+  const link = (href: string, text: string): HTMLAnchorElement => {
+    const anchor = document.createElement('a');
+    anchor.href = href;
+    anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer';
+    anchor.textContent = text;
+    return anchor;
+  };
+  if (kind === 'wind' || kind === 'waves') {
+    // The owner's credit as text (RATIFICATION-11 row 15): no link, no emblem, no attribution line.
+    const provenance = document.createElement('p');
+    provenance.className = 'enso-flow-credit';
+    provenance.dataset['ensoFlowProvenance'] = '';
+    provenance.textContent = FLOW_WORDS.provenance;
+    creditNode.replaceChildren(provenance);
+    changesNode.replaceChildren();
+    changesNode.hidden = true;
+    return;
+  }
+  // DR-161 (b), the interim credits (no acknowledgements row, DR-115): the
+  // Open-Meteo credit with its licence link and the Copernicus line sit
+  // outside the closed "Key & source" disclosure, so they are visible
+  // without interaction; the changes line stays in the key it describes.
+  // ledger: open-meteo-licence (cite sheet c20)
+  const credit = document.createElement('p');
+  credit.className = 'enso-flow-credit';
+  credit.append(
+    link('https://open-meteo.com/', 'Weather data by Open-Meteo.com'),
+    ' · ',
+    link('https://creativecommons.org/licenses/by/4.0/', 'CC BY 4.0')
+  );
+  // ledger: copernicus-marine-smoc (cite sheet c22); currents only
+  const copernicus = document.createElement('p');
+  copernicus.className = 'enso-flow-credit';
+  copernicus.append(
+    'Generated using E.U. Copernicus Marine Service Information; ',
+    link('https://doi.org/10.48670/moi-00016', 'https://doi.org/10.48670/moi-00016')
+  );
+  copernicus.hidden = kind !== 'currents';
+  creditNode.replaceChildren(credit, copernicus);
+  // ledger: open-meteo-licence (cite sheet c21), the CC BY changes line
+  changesNode.textContent =
+    'DDM samples points in the view and draws each as a static direction arrow; no value is interpolated between samples.';
+  changesNode.hidden = false;
 }
 
 async function loadArea(): Promise<void> {
@@ -195,44 +427,29 @@ async function loadArea(): Promise<void> {
   const generation = ++epoch;
   frame = null;
   removeArrows();
+  // The old field leaves before the new one is read, so two never draw at once.
+  disposeFlowView();
   const activeMap = map;
   const kind = preference.kind;
-  if (copernicusNode) copernicusNode.hidden = kind !== 'currents';
+  renderCredits(kind);
+  updateSelection();
   if (!activeMap || kind === 'off') {
     setStatus('off', 'Direction overlay off', kind);
     return;
   }
-  const positions = samplePositions(activeMap);
-  const url = requestUrl(kind, positions);
-  const cached = cache.get(url);
-  if (sourceNode) sourceNode.textContent = `${SOURCES[kind]}, via Open-Meteo. The API supplies 15-minute valid instants by interpolating model output. ${TIMING_NOTE} The response does not supply the model issue time. It is unsuitable for coastal navigation.`;
-  if (cached && Date.now() - cached.stored < CACHE_MS) { presentFrame(cached.frame, kind); return; }
-  const owned = new AbortController();
-  controller = owned;
-  setStatus('loading', 'loading · Model direction samples', kind, [LOADING_NOTE]);
-  if (detailNode) detailNode.textContent = LOADING_NOTE;
-  try {
-    const json = await fetchJsonWithBudget(url, { credentials: 'omit' }, owned.signal, 12_000);
-    if (owned.signal.aborted || generation !== epoch || map !== activeMap) return;
-    const result = parseFlowFrame(json, kind, positions.length);
-    // Reject an implausible timestamp; a valid model time is not the browser
-    // retrieval time, nor permission to silently display a stale field.
-    if (Math.abs(Date.now() - result.time) > 48 * 60 * 60 * 1000) throw new Error('No recent model time.');
-    cache.set(url, { stored: Date.now(), frame: result });
-    while (cache.size > 6) cache.delete(cache.keys().next().value!);
-    presentFrame(result, kind);
-  } catch {
-    if (owned.signal.aborted || generation !== epoch) return;
-    setStatus('unavailable', 'unavailable · Direction samples did not load', kind, [FAILED_NOTE]);
-    if (detailNode) detailNode.textContent = `Choose Update area to try again. ${FAILED_NOTE}`;
-  }
+  if (kind === 'currents') await loadCurrents(activeMap, generation);
+  else await loadField(activeMap, kind, generation);
 }
 
 function updateSelection(): void {
   for (const button of panel?.querySelectorAll<HTMLButtonElement>('[data-flow-kind]') ?? []) {
     button.setAttribute('aria-pressed', String(button.dataset['flowKind'] === preference.kind));
   }
-  if (updateButton) updateButton.disabled = preference.kind === 'off';
+  if (updateButton) {
+    updateButton.disabled = preference.kind === 'off';
+    // A global grid needs no resampling on pan (C-fit.md 1.2): currents only.
+    updateButton.hidden = preference.kind === 'wind' || preference.kind === 'waves';
+  }
   const details = panel?.querySelector('details');
   if (details) details.hidden = preference.kind === 'off';
 }
@@ -291,6 +508,7 @@ function mountControls(): boolean {
     preference = { ...preference, ink: ink.value === 'dark' ? 'dark' : 'light' };
     syncEnsoFlowParams(preference);
     paintArrows();
+    flowView?.setInk(preference.ink);
   });
   label.append(ink);
   updateButton = document.createElement('button');
@@ -306,48 +524,20 @@ function mountControls(): boolean {
   summary.textContent = 'Key & source';
   detailNode = document.createElement('p');
   sourceNode = document.createElement('p');
-  // DR-161 (b), the interim credits until D7 (no acknowledgements row,
-  // DR-115): the Open-Meteo credit with its licence link and the
-  // Copernicus line sit outside the closed "Key & source" disclosure, so
-  // they are visible without interaction; the changes line stays in the
-  // key it describes.
-  const link = (href: string, text: string): HTMLAnchorElement => {
-    const anchor = document.createElement('a');
-    anchor.href = href;
-    anchor.target = '_blank';
-    anchor.rel = 'noopener noreferrer';
-    anchor.textContent = text;
-    return anchor;
-  };
-  // ledger: open-meteo-licence (cite sheet c20)
-  const credit = document.createElement('p');
-  credit.className = 'enso-flow-credit';
-  credit.append(
-    link('https://open-meteo.com/', 'Weather data by Open-Meteo.com'),
-    ' · ',
-    link('https://creativecommons.org/licenses/by/4.0/', 'CC BY 4.0')
-  );
-  // ledger: copernicus-marine-smoc (cite sheet c22); currents only
-  copernicusNode = document.createElement('p');
-  copernicusNode.className = 'enso-flow-credit';
-  copernicusNode.append(
-    'Generated using E.U. Copernicus Marine Service Information; ',
-    link('https://doi.org/10.48670/moi-00016', 'https://doi.org/10.48670/moi-00016')
-  );
-  copernicusNode.hidden = preference.kind !== 'currents';
-  // ledger: open-meteo-licence (cite sheet c21), the CC BY changes line
-  const changes = document.createElement('p');
-  changes.textContent =
-    'DDM samples points in the view and draws each as a static direction arrow; no value is interpolated between samples.';
-  details.append(summary, detailNode, sourceNode, changes);
-  panel.append(heading, options, toolbar, statusNode, credit, copernicusNode, details);
+  creditNode = document.createElement('div');
+  changesNode = document.createElement('p');
+  details.append(summary, detailNode, sourceNode, changesNode);
+  panel.append(heading, options, toolbar, statusNode, creditNode, details);
   host.replaceChildren(panel);
+  stampForm(null, 'off');
   updateSelection();
   void loadArea();
   return true;
 }
 
 function onMoveEnd(): void {
+  // Wind and waves rebuild in their own view (src/layers/flow/index.ts).
+  if (preference.kind !== 'currents') return;
   paintArrows();
   if (frame && statusNode) {
     const status = frame.points.length === 0 ? 'no data' : frame.missing ? 'live (partial)' : 'live';
@@ -378,11 +568,17 @@ export function activateEnsoFlow(activeMap: maplibregl.Map): void {
   }
 }
 
-/** Abort immediately when layer intent changes; serialized teardown follows. */
+/**
+ * Abort immediately when layer intent changes; serialized teardown follows.
+ * Every read (the sample, the NODD `.idx` and ranges) is aborted, the decode
+ * Worker ends with its read, and the motion loop stops with no further
+ * repaint; no map layer is touched here.
+ */
 export function cancelEnsoFlowLoad(): void {
   epoch += 1;
   controller?.abort();
   controller = null;
+  flowView?.halt();
   observer?.disconnect();
   observer = null;
 }
@@ -393,6 +589,7 @@ export function deactivateEnsoFlow(): void {
   window.removeEventListener('popstate', onPopState);
   window.removeEventListener(SNAPSHOT_REQUEST_EVENT, replaySnapshot);
   removeArrows();
+  disposeFlowView();
   map = null;
   frame = null;
   if (host) { host.replaceChildren(); host.hidden = true; }
@@ -404,5 +601,5 @@ export function deactivateEnsoFlow(): void {
   desktopSeat?.remove();
   desktopSeat = null;
   host = null;
-  panel = statusNode = detailNode = sourceNode = copernicusNode = updateButton = null;
+  panel = statusNode = detailNode = sourceNode = creditNode = changesNode = updateButton = null;
 }

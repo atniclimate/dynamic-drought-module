@@ -99,23 +99,36 @@ function sessionStore(): Storage | null {
 
 type Choice = 'paused' | 'playing' | null;
 
+/**
+ * The viewer's choice in memory, for this page load, beside sessionStorage.
+ * Where storage is blocked or throws (a private window, blocked site data)
+ * it is the only copy, and it outlives any one loop: the flow view disposes
+ * its loop when the view leaves the moving form and makes a new one when it
+ * returns, and a Pause must survive that (WCAG 2.2.2; block E2b review P2).
+ */
+let memoryChoice: Choice = null;
+
 function readChoice(storage: () => Storage | null): Choice {
   try {
-    const value = storage()?.getItem(MOTION_STORAGE_KEY);
+    const store = storage();
+    if (!store) return memoryChoice;
+    const value = store.getItem(MOTION_STORAGE_KEY);
     return value === 'paused' || value === 'playing' ? value : null;
   } catch {
-    return null;
+    return memoryChoice;
   }
 }
 
 function writeChoice(storage: () => Storage | null, choice: Choice): void {
+  memoryChoice = choice;
   try {
     const store = storage();
     if (!store) return;
     if (choice) store.setItem(MOTION_STORAGE_KEY, choice);
     else store.removeItem(MOTION_STORAGE_KEY);
   } catch {
-    // Private windows and blocked storage keep the choice for this load only.
+    // Private windows and blocked storage keep the choice in memory only,
+    // for this page load (memoryChoice), across every loop it makes.
   }
 }
 

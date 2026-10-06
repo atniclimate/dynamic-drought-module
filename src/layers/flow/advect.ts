@@ -209,7 +209,13 @@ export function markCount(view: ViewQuad, densityFactor: number): number {
  * so time spent paused or hidden never comes back as a burst of steps.
  */
 export class FlowClock {
-  private last = -1;
+  // Fields are `declare`d and set in the constructor, so no class field is
+  // lowered and no class-field helper is bundled (see grib2.ts GribError).
+  declare private last: number;
+
+  constructor() {
+    this.last = -1;
+  }
 
   /** Steps due at `nowS` (seconds). The first call after a resume returns 1. */
   due(nowS: number): number {
@@ -343,32 +349,48 @@ const stepPoint = new Float64Array(2);
  * never draws a line across the view.
  */
 export class Particles {
-  readonly field: FlowField;
-  readonly pace: Pace;
-  private readonly rng: Rng;
-  capacity = 0;
-  count = 0;
-  x = new Float64Array(0);
-  y = new Float64Array(0);
-  age = new Float32Array(0);
-  life = new Float32Array(0);
-  gen = new Uint32Array(0);
-  cls = new Uint8Array(0);
-  alive = new Uint8Array(0);
-  ring = new Float32Array(0);
+  // `declare`d and set in the constructor: no lowered class field (FlowClock).
+  declare readonly field: FlowField;
+  declare readonly pace: Pace;
+  declare private readonly rng: Rng;
+  declare capacity: number;
+  declare count: number;
+  declare x: Float64Array;
+  declare y: Float64Array;
+  declare age: Float32Array;
+  declare life: Float32Array;
+  declare gen: Uint32Array;
+  declare cls: Uint8Array;
+  declare alive: Uint8Array;
+  declare ring: Float32Array;
   /** The slot the last step wrote. */
-  head = SLOTS - 1;
+  declare head: number;
   /** The Mercator origin the ring positions are relative to. */
-  originX = 0;
-  originY = 0;
+  declare originX: number;
+  declare originY: number;
   /** Set when the whole ring must be uploaded (reset, rebase, growth). */
-  ringDirty = true;
-  private nextGen = 1;
+  declare ringDirty: boolean;
+  declare private nextGen: number;
 
   constructor(field: FlowField, pace: Pace, rng: Rng = Math.random) {
     this.field = field;
     this.pace = pace;
     this.rng = rng;
+    this.capacity = 0;
+    this.count = 0;
+    this.x = new Float64Array(0);
+    this.y = new Float64Array(0);
+    this.age = new Float32Array(0);
+    this.life = new Float32Array(0);
+    this.gen = new Uint32Array(0);
+    this.cls = new Uint8Array(0);
+    this.alive = new Uint8Array(0);
+    this.ring = new Float32Array(0);
+    this.head = SLOTS - 1;
+    this.originX = 0;
+    this.originY = 0;
+    this.ringDirty = true;
+    this.nextGen = 1;
   }
 
   /** Set the count for the view and density; capacity grows in powers of two up to 4,096. */
@@ -534,25 +556,38 @@ export function ribbonCoverage(particles: Particles, view: ViewQuad, coreWidths:
  * y1 relative to the origin, class, alpha.
  */
 export class CrestMarks {
-  readonly field: FlowField;
-  private readonly rng: Rng;
-  readonly x = new Float64Array(MAX_MARKS);
-  readonly y = new Float64Array(MAX_MARKS);
-  readonly age = new Float32Array(MAX_MARKS);
-  readonly alive = new Uint8Array(MAX_MARKS);
+  // `declare`d and set in the constructor: no lowered class field (FlowClock).
+  declare readonly field: FlowField;
+  declare private readonly rng: Rng;
+  declare readonly x: Float64Array;
+  declare readonly y: Float64Array;
+  declare readonly age: Float32Array;
+  declare readonly alive: Uint8Array;
   /** The travel direction (Mercator, unit) and class of each mark at its last committed step. */
-  readonly dirX = new Float32Array(MAX_MARKS);
-  readonly dirY = new Float32Array(MAX_MARKS);
-  readonly cls = new Uint8Array(MAX_MARKS);
-  readonly segs = new Float32Array(MAX_MARKS * 2 * 6);
-  count = 0;
-  segCount = 0;
-  originX = 0;
-  originY = 0;
+  declare readonly dirX: Float32Array;
+  declare readonly dirY: Float32Array;
+  declare readonly cls: Uint8Array;
+  declare readonly segs: Float32Array;
+  declare count: number;
+  declare segCount: number;
+  declare originX: number;
+  declare originY: number;
 
   constructor(field: FlowField, rng: Rng = Math.random) {
     this.field = field;
     this.rng = rng;
+    this.x = new Float64Array(MAX_MARKS);
+    this.y = new Float64Array(MAX_MARKS);
+    this.age = new Float32Array(MAX_MARKS);
+    this.alive = new Uint8Array(MAX_MARKS);
+    this.dirX = new Float32Array(MAX_MARKS);
+    this.dirY = new Float32Array(MAX_MARKS);
+    this.cls = new Uint8Array(MAX_MARKS);
+    this.segs = new Float32Array(MAX_MARKS * 2 * 6);
+    this.count = 0;
+    this.segCount = 0;
+    this.originX = 0;
+    this.originY = 0;
   }
 
   setCount(view: ViewQuad, densityFactor: number): void {

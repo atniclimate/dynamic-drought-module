@@ -178,6 +178,12 @@ export interface RibbonLayerOptions {
   readonly densityFactor?: number;
   /** Clock in seconds; defaults to performance.now() / 1000. */
   readonly now?: () => number;
+  /**
+   * Called once if rebuilding the programs after a context restore throws
+   * (moving-paths section 14): the layer stops for good and draws nothing,
+   * so the caller shows the still form and says why.
+   */
+  readonly onRebuildFailed?: (error: unknown) => void;
 }
 
 export interface RibbonStats {
@@ -200,37 +206,57 @@ interface GpuState {
 }
 
 export class FlowRibbonLayer implements CustomLayerInterface {
-  readonly id: string;
-  readonly type = 'custom' as const;
-  readonly renderingMode = '2d' as const;
-  readonly field: FlowField;
-  readonly particles: Particles | null;
-  readonly marks: CrestMarks | null;
-  readonly stats: RibbonStats = { steps: 0, renders: 0, lastStepMs: 0 };
+  // Fields are `declare`d and set in the constructor, so the es2020 build
+  // lowers no class field and bundles no class-field helper (block E2 E2-1;
+  // see grib2.ts GribError).
+  declare readonly id: string;
+  declare readonly type: 'custom';
+  declare readonly renderingMode: '2d';
+  declare readonly field: FlowField;
+  declare readonly particles: Particles | null;
+  declare readonly marks: CrestMarks | null;
+  declare readonly stats: RibbonStats;
   /** Bumped on each context loss; a rebuild happens once per epoch. */
-  gpuEpoch = 0;
-  private ink: FlowInkName;
-  private densityFactor: number;
-  private readonly now: () => number;
-  private readonly clock = new FlowClock();
-  private map: MlMap | null = null;
-  private gpu: GpuState | null = null;
-  private view: ViewQuad | null = null;
-  private lastZoom = Number.NaN;
-  private running = false;
-  private needsReset = true;
-  private readonly onLost = (): void => {
-    // The context is gone: drop handles without deleting (deletes would fail), keep CPU state.
-    this.gpu = null;
-    this.gpuEpoch++;
-  };
+  declare gpuEpoch: number;
+  declare private ink: FlowInkName;
+  declare private densityFactor: number;
+  declare private readonly now: () => number;
+  declare private readonly clock: FlowClock;
+  declare private map: MlMap | null;
+  declare private gpu: GpuState | null;
+  declare private view: ViewQuad | null;
+  declare private lastZoom: number;
+  declare private running: boolean;
+  declare private needsReset: boolean;
+  /** Set once a rebuild after a context restore throws; the layer then stays still for good. */
+  declare private failed: boolean;
+  declare private readonly onRebuildFailed: ((error: unknown) => void) | undefined;
+  declare private readonly onLost: () => void;
 
   constructor(options: RibbonLayerOptions) {
     this.id = options.id;
+    this.type = 'custom';
+    this.renderingMode = '2d';
     this.field = options.field;
+    this.stats = { steps: 0, renders: 0, lastStepMs: 0 };
+    this.gpuEpoch = 0;
     this.ink = options.ink ?? 'light';
     this.densityFactor = options.densityFactor ?? 1;
     this.now = options.now ?? ((): number => performance.now() / 1000);
+    this.clock = new FlowClock();
+    this.map = null;
+    this.gpu = null;
+    this.view = null;
+    this.lastZoom = Number.NaN;
+    this.running = false;
+    this.needsReset = true;
+    this.failed = false;
+    this.onRebuildFailed = options.onRebuildFailed;
+    this.onLost = (): void => {
+      // The context is gone: drop handles without deleting (deletes would fail), keep CPU state.
+      this.gpu = null;
+      this.gpuEpoch++;
+    };
     const pace = paceFor(this.field.kind);
     this.particles = this.field.kind === 'wind' ? new Particles(this.field, pace) : null;
     this.marks = this.field.kind === 'waves' ? new CrestMarks(this.field) : null;
@@ -240,8 +266,14 @@ export class FlowRibbonLayer implements CustomLayerInterface {
     return this.running;
   }
 
+  /** True once a rebuild after a context restore threw: the still form stands instead. */
+  get rebuildFailed(): boolean {
+    return this.failed;
+  }
+
   /** Start or stop motion. Starting resets ages and the clock, so nothing bursts. */
   setRunning(on: boolean): void {
+    if (on && this.failed) return;
     if (on && !this.running) {
       this.needsReset = true;
       this.clock.resume();
@@ -264,6 +296,21 @@ export class FlowRibbonLayer implements CustomLayerInterface {
     canvas.addEventListener('webglcontextlost', this.onLost);
     this.build(gl);
     this.needsReset = true;
+  }
+
+  /**
+   * Let go of `map` without MapLibre's onRemove: for a layer MapLibre has
+   * already dropped from its style (a lost context destroys the style, and
+   * custom layers are not restored) or never finished adding. It removes the
+   * canvas listener, so nothing on the map keeps this layer or its field
+   * alive, and drops the GL handles without deleting them (the context that
+   * owned them is gone or not ours to touch).
+   */
+  detach(map: MlMap): void {
+    map.getCanvas().removeEventListener('webglcontextlost', this.onLost);
+    this.running = false;
+    this.gpu = null;
+    this.map = null;
   }
 
   onRemove(map: MlMap, gl: WebGL2RenderingContext): void {
@@ -403,8 +450,20 @@ export class FlowRibbonLayer implements CustomLayerInterface {
   render(gl: WebGL2RenderingContext, options: CustomRenderMethodInput): void {
     this.stats.renders++;
     const map = this.map;
-    if (!map || !this.running || gl.isContextLost()) return;
-    if (!this.gpu || this.gpu.gl !== gl) this.build(gl); // restored context: rebuild from CPU state
+    if (!map || !this.running || this.failed || gl.isContextLost()) return;
+    if (!this.gpu || this.gpu.gl !== gl) {
+      // Restored context: rebuild from CPU state. A throw here must not
+      // escape into MapLibre's render: the layer stops and reports it once.
+      try {
+        this.build(gl);
+      } catch (error) {
+        this.failed = true;
+        this.running = false;
+        this.gpu = null;
+        this.onRebuildFailed?.(error);
+        return;
+      }
+    }
     const g = this.gpu as GpuState;
     if (!this.advance(gl, map)) return;
     const ringMode = this.particles !== null;

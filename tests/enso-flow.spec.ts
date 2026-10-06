@@ -1,8 +1,18 @@
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
-import { gotoApp, layerCheckbox, search } from './helpers';
+import { HAZARD_CLUSTERS } from '../src/config/clusters';
+import { gotoApp, layerCheckbox, noddStubLog, search } from './helpers';
 
 const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 const FLOW_ROUTE = /^https:\/\/(?:marine-api|api)\.open-meteo\.com\/v1\//;
+const NODD_ROUTE = /^https:\/\/noaa-gfs-bdp-pds\.s3\.amazonaws\.com\//;
+/**
+ * ENSO-FLOW-PLAN E2-1: wind and waves read NOAA NODD, answered by
+ * tests/helpers.ts from the 2026-10-05 06Z f006 fixtures. A case that turns
+ * either on fixes the page clock here, where the reader asks for exactly that
+ * frame (candidate cycle 06Z, forecast hour 6 for both kinds). Only ocean
+ * currents still read Open-Meteo.
+ */
+const LIVE_CLOCK = Date.UTC(2026, 9, 5, 12, 30);
 
 async function stubSst(page: Page): Promise<void> {
   await page.route((url) => url.href.includes('DescribeDomains'), (route) => route.fulfill({
@@ -13,44 +23,54 @@ async function stubSst(page: Page): Promise<void> {
     (route) => route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
 }
 
-function payload(url: URL, missing = false): unknown[] {
+function payload(url: URL, missing = false, now = Date.now()): unknown[] {
   const latitudes = url.searchParams.get('latitude')!.split(',').map(Number);
   const longitudes = url.searchParams.get('longitude')!.split(',').map(Number);
   const [valueKey, directionKey] = url.searchParams.get('current')!.split(',') as [string, string];
-  const time = Math.floor(Date.now() / 900_000) * 900;
+  const time = Math.floor(now / 900_000) * 900;
   return latitudes.map((latitude, i) => ({ latitude, longitude: longitudes[i],
     current_units: { time: 'unixtime', [valueKey]: valueKey === 'wave_height' ? 'm' : 'm/s', [directionKey]: '°' },
     current: { time, interval: 900, [valueKey]: missing ? null : 2, [directionKey]: missing ? null : 90 }
   }));
 }
 
-async function respond(route: Route, missing = false): Promise<void> {
-  await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload(new URL(route.request().url()), missing)) });
+async function respond(route: Route, missing = false, now = Date.now()): Promise<void> {
+  await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload(new URL(route.request().url()), missing, now)) });
 }
 
 test('all three ENSO overlays remain bounded, independently timed, and preserve color through reload', async ({ page }) => {
+  await page.clock.setFixedTime(LIVE_CLOCK);
   await stubSst(page);
   const calls: URL[] = [];
-  await page.route(FLOW_ROUTE, async (route) => { calls.push(new URL(route.request().url())); await respond(route); });
+  await page.route(FLOW_ROUTE, async (route) => { calls.push(new URL(route.request().url())); await respond(route, false, LIVE_CLOCK); });
   await gotoApp(page, '?cluster=enso&ocean=pacific&view=brief&basemap=default');
   const panel = page.locator('.enso-flow');
   await expect(panel).toBeVisible();
-  expect(calls).toHaveLength(0);
+  // The ENSO boot reads flow iff the cluster's flowDefault is set (E2-4 sets it;
+  // read from the cluster definition, never a literal of this case).
+  const flowDefault = Object.values(HAZARD_CLUSTERS).find((def) => def.urlToken === 'enso')?.flowDefault;
+  expect(noddStubLog(page).length > 0, `NODD reads at an ENSO boot with flowDefault ${flowDefault ?? 'unset'}`)
+    .toBe(flowDefault === 'wind' || flowDefault === 'waves');
+  expect(calls).toHaveLength(flowDefault === 'currents' ? 1 : 0);
+  const before = calls.length;
   for (const kind of ['currents', 'wind', 'waves']) {
     await panel.locator(`[data-flow-kind="${kind}"]`).click();
-    await expect(panel).toHaveAttribute('data-status', 'live');
+    // The wave crop ends at 165 E and 100 W, inside this Pacific view's edges.
+    await expect(panel).toHaveAttribute('data-status', kind === 'waves' ? /^live/ : 'live');
     await expect(panel.locator('.enso-flow-status')).toContainText('Model valid');
     expect(new URLSearchParams(await search(page)).get('flow')).toBe(kind);
   }
-  expect(calls).toHaveLength(3);
-  expect(calls.map((url) => url.searchParams.get('models'))).toEqual(['meteofrance_currents', 'gfs_global', 'ncep_gfswave025']);
+  // Only ocean currents read Open-Meteo; wind and waves read the NODD fixtures.
+  expect(calls).toHaveLength(before + 1);
+  expect(calls.map((url) => url.searchParams.get('models')).slice(before)).toEqual(['meteofrance_currents']);
   for (const url of calls) expect(url.searchParams.get('latitude')!.split(',').length).toBeLessThanOrEqual(40);
+  expect(noddStubLog(page).every((entry) => entry.answer === 'fixture')).toBe(true);
   await panel.getByLabel('Direction arrow color').selectOption('dark');
   expect(new URLSearchParams(await search(page)).get('flowink')).toBe('dark');
   await page.reload();
   await expect(panel.locator('[data-flow-kind="waves"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(panel.getByLabel('Direction arrow color')).toHaveValue('dark');
-  await expect(panel).toHaveAttribute('data-status', 'live');
+  await expect(panel).toHaveAttribute('data-status', /^live/);
   await page.locator('.view-switch [data-view="console"]').click();
   await expect(panel).toBeVisible();
   await expect(panel.getByLabel('Direction arrow color')).toHaveValue('dark');
@@ -67,7 +87,9 @@ test('turning an ENSO overlay off aborts its held request and drops the late res
   await page.route(FLOW_ROUTE, (route) => { held = route; });
   await gotoApp(page, '?cluster=enso&ocean=pacific&view=brief&basemap=default');
   const panel = page.locator('.enso-flow');
-  await panel.locator('[data-flow-kind="wind"]').click();
+  // Ocean currents, the one kind still sampled from Open-Meteo (wind and
+  // waves: tests/flow-wire.spec.ts "off intent aborts every range").
+  await panel.locator('[data-flow-kind="currents"]').click();
   await expect.poll(() => held !== null).toBe(true);
   const failed = page.waitForEvent('requestfailed', (req) => FLOW_ROUTE.test(req.url()));
   await panel.locator('[data-flow-kind="off"]').click();
@@ -86,13 +108,15 @@ test('marine no-data and network failure remain separate from a successful direc
   await expect(panel).toHaveAttribute('data-status', 'no data');
   await panel.locator('summary').click();
   await expect(panel).toContainText('0 of 40 sampled cells have data');
-  await page.route(FLOW_ROUTE, (route) => route.abort('failed'));
+  // Waves read NOAA NODD now (ENSO-FLOW-PLAN E2-1): the network failure is the bucket's.
+  await page.route(NODD_ROUTE, (route) => route.abort('failed'));
   await panel.locator('[data-flow-kind="waves"]').click();
   await expect(panel).toHaveAttribute('data-status', 'unavailable');
   await expect(panel).toContainText('No direction or calm condition is inferred');
 });
 
 test('the same ENSO controls move into the mobile Layers glass panel and return to desktop', async ({ page }) => {
+  await page.clock.setFixedTime(LIVE_CLOCK);
   await stubSst(page);
   await page.route(FLOW_ROUTE, (route) => respond(route));
   await page.setViewportSize({ width: 721, height: 844 });
@@ -118,6 +142,9 @@ test('the same ENSO controls move into the mobile Layers glass panel and return 
  * and qualifications as one more row of the SST key. Every case below
  * first reads `[data-enso-flow="status"]`, so on code without the row it
  * fails on that missing node, never on a stub or a selector of its own.
+ * Since ENSO-FLOW-PLAN E2-1 these cases ride ocean currents, the one kind
+ * still sampled from Open-Meteo, whose sampled-cell words they pin; the
+ * wind and wave rows are tests/flow-wire.spec.ts's.
  */
 const FLOW_ROW = '#map-key [data-enso-flow]';
 
@@ -161,7 +188,7 @@ for (const surface of DRAWER_SURFACES) {
       served = (body[0] as { current: { time: number } }).current.time;
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     });
-    await gotoApp(page, `?cluster=enso&ocean=pacific&flow=wind${surface.query}`);
+    await gotoApp(page, `?cluster=enso&ocean=pacific&flow=currents${surface.query}`);
     // The defect's premise: the arrows load while their own panel is off screen.
     const panel = page.locator('.enso-flow');
     await expect(panel).toHaveAttribute('data-status', 'live');
@@ -169,7 +196,7 @@ for (const surface of DRAWER_SURFACES) {
     await openKeyDrawer(page);
     const valid = await modelValid(page, served!);
     await expect(flowStatus(page)).toBeVisible();
-    await expect(flowStatus(page)).toHaveText(`Atmospheric currents · live · Model valid ${valid}`);
+    await expect(flowStatus(page)).toHaveText(`Ocean currents · live · Model valid ${valid}`);
     await expect(flowNotes(page)).toBeVisible();
     await expect(flowNotes(page)).toContainText(/^\d+ of \d+ sampled cells have data\. /);
     await expect(flowNotes(page)).toContainText('Arrows show travel direction only, with equal lengths; still water or calm wind has no arrow.');
@@ -200,13 +227,13 @@ test('found-115 a Key that starts after the arrows have loaded still reads their
     await arrowsLive;
     await route.continue();
   });
-  await gotoApp(page, '?cluster=enso&ocean=pacific&flow=waves&embed=true');
+  await gotoApp(page, '?cluster=enso&ocean=pacific&flow=currents&embed=true');
   await expect(page.locator('.enso-flow')).toHaveAttribute('data-status', 'live');
   await expect.poll(() => keyRequested).toBe(true);
   await expect(page.locator('#map-key-details-toggle')).toHaveCount(0);
   release();
   await openKeyDrawer(page);
-  await expect(flowStatus(page)).toContainText('Ocean waves · live · Model valid ');
+  await expect(flowStatus(page)).toContainText('Ocean currents · live · Model valid ');
   await expect(flowNotes(page)).toContainText('Missing cells have no arrow and do not imply calm conditions.');
 });
 
@@ -215,37 +242,38 @@ test("found-115 the Key drawer reads the arrows' loading, failed and no-data wor
   await stubSst(page);
   let held: Route | null = null;
   await page.route(FLOW_ROUTE, (route) => { held = route; });
-  await gotoApp(page, '?cluster=enso&ocean=pacific&flow=wind&embed=true');
+  await gotoApp(page, '?cluster=enso&ocean=pacific&flow=currents&embed=true');
   await expect.poll(() => held !== null).toBe(true);
   await openKeyDrawer(page);
-  await expect(flowStatus(page)).toHaveText('Atmospheric currents · loading · Model direction samples');
+  await expect(flowStatus(page)).toHaveText('Ocean currents · loading · Model direction samples');
   await expect(flowNotes(page)).toHaveText('Loading up to 40 source grid cells for this area.');
   await held!.abort('failed');
-  await expect(flowStatus(page)).toHaveText('Atmospheric currents · unavailable · Direction samples did not load');
+  await expect(flowStatus(page)).toHaveText('Ocean currents · unavailable · Direction samples did not load');
   await expect(flowNotes(page)).toHaveText('No direction or calm condition is inferred from a failed request.');
   // The newest handler runs first, so this one answers every later read.
   await page.route(FLOW_ROUTE, (route) => respond(route, true));
   await page.reload();
   await openKeyDrawer(page);
-  await expect(flowStatus(page)).toContainText('Atmospheric currents · no data · Model valid ');
+  await expect(flowStatus(page)).toContainText('Ocean currents · no data · Model valid ');
   await expect(flowNotes(page)).toContainText(/^0 of \d+ sampled cells have data\. /);
   await expect(flowNotes(page)).toContainText('Missing cells have no arrow and do not imply calm conditions.');
 });
 
 test("found-115 the arrows' Key drawer row follows the open panel: none while off, the panel's words while on, kept through a pan, gone with the SST layer", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
+  await page.clock.setFixedTime(LIVE_CLOCK);
   await stubSst(page);
-  await page.route(FLOW_ROUTE, (route) => respond(route));
+  await page.route(FLOW_ROUTE, (route) => respond(route, false, LIVE_CLOCK));
   await gotoApp(page, '?cluster=enso&ocean=pacific&view=console&basemap=default');
   const panel = page.locator('.enso-flow');
   const panelStatus = panel.locator('.enso-flow-status');
   await expect(panel).toBeVisible();
   await openKeyDrawer(page);
   await expect(page.locator(FLOW_ROW)).toHaveCount(0);
-  await panel.locator('[data-flow-kind="waves"]').click();
+  await panel.locator('[data-flow-kind="currents"]').click();
   await expect(panel).toHaveAttribute('data-status', 'live');
   const line = (await panelStatus.textContent())!;
-  await expect(flowStatus(page)).toHaveText(`Ocean waves · ${line}`);
+  await expect(flowStatus(page)).toHaveText(`Ocean currents · ${line}`);
   const panelText = (await panel.textContent())!;
   const notes = (await flowNotes(page).textContent())!;
   for (const sentence of notes.split(/(?<=\.)\s+/)) expect(panelText, 'the key re-types no sentence').toContain(sentence);
@@ -257,12 +285,13 @@ test("found-115 the arrows' Key drawer row follows the open panel: none while of
   await page.mouse.move(cx - 60, cy - 30, { steps: 5 });
   await page.mouse.up();
   await expect(panelStatus).toContainText('Update area to resample');
-  await expect(flowStatus(page)).toHaveText(`Ocean waves · ${line}`);
+  await expect(flowStatus(page)).toHaveText(`Ocean currents · ${line}`);
   await panel.locator('[data-flow-kind="off"]').click();
   await expect(panel).toHaveAttribute('data-status', 'off');
   await expect(page.locator(FLOW_ROW)).toHaveCount(0);
   await panel.locator('[data-flow-kind="wind"]').click();
-  await expect(flowStatus(page)).toContainText('Atmospheric currents · live · Model valid ');
+  await expect(flowStatus(page)).toContainText('Atmospheric currents · live · Model run ');
+  await expect(flowStatus(page)).toContainText(' · Model valid ');
   await layerCheckbox(page, 'sst-anomaly').uncheck();
   await expect(page.locator(FLOW_ROW)).toHaveCount(0);
 });

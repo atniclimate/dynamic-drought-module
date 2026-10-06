@@ -22,8 +22,9 @@
 
 export type JpxErrorCode = 'truncated' | 'unsupported' | 'size' | 'corrupt';
 
+// A `declare`d field set in the constructor: no lowered class field (see grib2.ts GribError).
 export class JpxError extends Error {
-  readonly code: JpxErrorCode;
+  declare readonly code: JpxErrorCode;
   constructor(code: JpxErrorCode, message: string) {
     super(message);
     this.name = 'JpxError';

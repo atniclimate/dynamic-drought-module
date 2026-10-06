@@ -235,6 +235,25 @@ test.describe('layer-order: thematic reassert (E1 deliverable 2)', () => {
     ]);
   });
 
+  test('ENSO-FLOW-PLAN E2-1: flow-paths and the still ids take the old ENSO arrow seat, above the SST and below every outline', () => {
+    const idx = (id: string): number => CONDITION_SURFACE_IDS.indexOf(id);
+    const flowIds = ['flow-still-casing', 'flow-still', 'flow-still-marks', 'flow-paths'];
+    for (const id of flowIds) {
+      expect(idx(id), `${id} is in the condition band`).toBeGreaterThanOrEqual(0);
+      expect(idx(id), `${id} sits above the SST and the Nino box`).toBeGreaterThan(idx('nino34-box-label'));
+      expect(idx(id), `${id} sits below heatrisk, as the old arrows did`).toBeLessThan(idx('heatrisk'));
+    }
+    // The still layers paint casing first, and the interim current arrows keep their seat.
+    expect(flowIds.map(idx)).toEqual([...flowIds.map(idx)].sort((a, b) => a - b));
+    expect(idx('enso-flow-arrows')).toBeGreaterThan(idx('nino34-box-label'));
+    expect(idx('enso-flow-arrows')).toBeLessThan(idx('heatrisk'));
+    // A late custom layer is re-seated under the Tribal outlines and the labels.
+    const map = fakeMap(['background', 'basemap', 'sst-anomaly', 'tribal-lands-outline', 'us-places-labels', 'flow-paths', 'flow-still']);
+    reassertThematicOrder(map as never);
+    reassertLabelOrder(map as never);
+    expect(map.order()).toEqual(['background', 'basemap', 'sst-anomaly', 'flow-still', 'flow-paths', 'tribal-lands-outline', 'us-places-labels']);
+  });
+
   test('idempotent: a second pass changes nothing', () => {
     const map = fakeMap([
       'background',

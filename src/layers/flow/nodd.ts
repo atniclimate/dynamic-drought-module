@@ -65,12 +65,21 @@ export type FlowUnavailableReason =
   /** The network, the budget or the Worker failed. */
   | 'failed';
 
-export class FlowUnavailableError extends Error {
+/**
+ * The class body declares no field, so the es2020 build lowers none and
+ * bundles no class-field helper (block E2 E2-1). The field's type comes from
+ * the merged interface rather than a `declare` field, because the Playwright
+ * specs load this module through a transform that refuses `declare` fields.
+ */
+export interface FlowUnavailableError {
   readonly reason: FlowUnavailableReason;
+}
+// biome-ignore lint/suspicious/noUnsafeDeclarationMerging: the interface only types `reason`, which the constructor always sets.
+export class FlowUnavailableError extends Error {
   constructor(reason: FlowUnavailableReason, message: string) {
     super(message);
     this.name = 'FlowUnavailableError';
-    this.reason = reason;
+    (this as { reason: FlowUnavailableReason }).reason = reason;
   }
 }
 

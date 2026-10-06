@@ -56,8 +56,14 @@ export type GribErrorCode =
   /** The template 5.40 JPEG 2000 codestream is refused (the message says why). */
   | 'jpeg2000';
 
+// Class fields in src/layers/flow/ are `declare`d and set in the constructor,
+// so the es2020 build lowers no class field and needs no class-field helper
+// (block E2 E2-1: such a helper split out of the eager chunks without a
+// sourcemap). nodd.ts, which the Playwright specs import, types its one
+// field through a merged interface instead, since their transform refuses
+// `declare` fields; a module a spec starts importing must do the same.
 export class GribError extends Error {
-  readonly code: GribErrorCode;
+  declare readonly code: GribErrorCode;
   constructor(code: GribErrorCode, message: string) {
     super(message);
     this.name = 'GribError';
