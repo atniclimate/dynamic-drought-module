@@ -77,7 +77,9 @@
   line-height: 1.5;
 }
 
+/* At least 24 x 24 CSS px on desktop (SC 2.5.8, found-020); 44 px on touch below. */
 .enso-flow summary {
+  min-height: 24px;
   cursor: pointer;
   align-content: center;
 }
