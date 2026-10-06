@@ -631,7 +631,7 @@ export function syncUrl(state: UrlSyncState): void {
   if (state.studio === 'layers' || state.studio === 'place') {
     params.set('studio', state.studio);
   }
-  if (state.layers.has('sst-anomaly') || state.cluster === 'enso') {
+  if (state.layers.has('sst-anomaly') || (state.cluster && HAZARD_CLUSTERS[state.cluster].flowDefault !== undefined)) {
     // A link with no `flow=` means the default of the mode it names. The link
     // being replaced names the mode being left, so a switch INTO a mode that
     // has a default reads the absent key as that new default (ENSO opens with

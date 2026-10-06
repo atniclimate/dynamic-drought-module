@@ -63,7 +63,7 @@
     "test:third-party-notices": "node --test tests/third-party-notices.test.mjs",
     "test:hillshade-abort": "node --test tests/hillshade-abort.test.mjs",
     "test:layer-set-boot-only": "node --test tests/layer-set-boot-only.test.mjs",
-    "test:flow-wire": "node --test tests/flow-wire.test.mjs tests/enso-flow-announcement.test.mjs tests/enso-flow-stamps.test.mjs",
+    "test:flow-wire": "node --test tests/flow-wire.test.mjs tests/enso-flow-announcement.test.mjs tests/enso-flow-stamps.test.mjs tests/flow-mode-url.test.mjs",
     "test:browser-offline": "node --test tests/browser-offline.test.mjs",
     "test:coordinator-frame-offline": "node --test tests/coordinator-frame-offline.test.mjs",
     "test:report": "playwright show-report",
